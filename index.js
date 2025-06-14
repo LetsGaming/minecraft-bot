@@ -1,7 +1,7 @@
 import { Client, Collection, GatewayIntentBits } from "discord.js";
 import { readdirSync, statSync } from "fs";
 import path from "path";
-import config from "./config.json"
+import config from "./config.json" assert { type: 'json' };
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 client.commands = new Collection();
