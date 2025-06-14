@@ -1,11 +1,11 @@
 import { SlashCommandBuilder } from "discord.js";
-import { paginateEmbed } from "../utils/embed.js";
+import { paginateEmbed } from "../../utils/embed.js";
 import {
   findPlayer,
   loadStats,
   flattenStats,
   filterStats,
-} from "../utils/statUtils.js";
+} from "../../utils/statUtils.js";
 
 const REACTIONS = {
   PREV: "◀️",
