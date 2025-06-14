@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import config from "../../config.json" assert { type: "json" };
+import config from "../config.json" assert { type: "json" };
 
 /**
  * Find a player object from whitelist by playerName (case insensitive)
