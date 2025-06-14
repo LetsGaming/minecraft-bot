@@ -1,11 +1,24 @@
-import { Client, Collection, GatewayIntentBits } from "discord.js";
+import {
+  Client,
+  Collection,
+  GatewayIntentBits,
+  REST,
+  Routes,
+} from "discord.js";
 import { readdirSync, statSync } from "fs";
 import path from "path";
-import config from "./config.json" assert { type: 'json' };
+import config from "./config.json" assert { type: "json" };
+import { fileURLToPath } from "url";
 
+// ESM __dirname fix
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Create client
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 client.commands = new Collection();
 
+// Recursively load all .js command files
 function getCommandFiles(dir) {
   let files = [];
   for (const file of readdirSync(dir)) {
@@ -20,23 +33,36 @@ function getCommandFiles(dir) {
 }
 
 async function loadCommands() {
-  const commandFiles = getCommandFiles("./commands");
+  const commandFiles = getCommandFiles(path.join(__dirname, "commands"));
 
   for (const file of commandFiles) {
-    // Use absolute path for import
     const command = await import(path.resolve(file));
     if (command.data && command.execute) {
       client.commands.set(command.data.name, command);
     } else {
-      console.warn(
-        `Skipping file ${file} - missing 'data' or 'execute' export.`
-      );
+      console.warn(`Skipping file ${file} - missing 'data' or 'execute'.`);
     }
+  }
+}
+
+async function registerGlobalCommands() {
+  const commands = client.commands.map((cmd) => cmd.data.toJSON());
+  const rest = new REST({ version: "10" }).setToken(config.token);
+
+  try {
+    console.log("Registering global slash commands...");
+    await rest.put(Routes.applicationCommands(config.clientId), {
+      body: commands,
+    });
+    console.log("✅ Global slash commands registered.");
+  } catch (err) {
+    console.error("❌ Failed to register commands:", err);
   }
 }
 
 (async () => {
   await loadCommands();
+  await registerGlobalCommands();
 
   client.once("ready", () => {
     console.log(`Bot is ready as ${client.user.tag}`);
@@ -52,19 +78,17 @@ async function loadCommands() {
       await command.execute(interaction);
     } catch (err) {
       console.error(err);
+      const errorMsg = {
+        content: "❌ There was an error while executing this command.",
+        ephemeral: true,
+      };
       if (interaction.replied || interaction.deferred) {
-        await interaction.followUp({
-          content: "❌ Error executing command.",
-          ephemeral: true,
-        });
+        await interaction.followUp(errorMsg);
       } else {
-        await interaction.reply({
-          content: "❌ Error executing command.",
-          ephemeral: true,
-        });
+        await interaction.reply(errorMsg);
       }
     }
   });
 
-  client.login(config.token);
+  await client.login(config.token);
 })();
