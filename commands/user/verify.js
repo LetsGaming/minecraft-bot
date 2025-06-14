@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from "discord.js";
 import fetch from "node-fetch";
-import { whitelistUser } from "../utils/whitelist.js";
+import { whitelistUser } from "../../utils/whitelist.js";
 
 export const data = new SlashCommandBuilder()
   .setName("verify")

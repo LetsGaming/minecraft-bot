@@ -1,5 +1,6 @@
 {
     "token": "DISCORD_APP_TOKEN",
     "linuxUser": "username",
-    "screenSession": "session_name"
+    "screenSession": "session_name",
+    "serverDir": "/path/to/minecraft/server"
 }

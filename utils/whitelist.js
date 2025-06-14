@@ -1,17 +1,17 @@
-import { exec } from "child_process";
-const config = require("../config.json");
+import { sendToServer } from "./sendToServer.js";
 
-export function whitelistUser(username) {
-  return new Promise((resolve) => {
-    const cmd = `sudo -u ${config.linuxUser} screen -S ${config.screenSession} -X stuff "/whitelist add ${username}$(printf '\\r')"`;
-
-    exec(cmd, (error, stdout, stderr) => {
-      if (error) {
-        console.error(stderr);
-        resolve(false);
-      } else {
-        resolve(true);
-      }
-    });
-  });
+/**
+ * Adds a user to the Minecraft whitelist.
+ *
+ * @param {string} username
+ * @returns {Promise<boolean>}
+ */
+export async function whitelistUser(username) {
+  try {
+    await sendToServer(`/whitelist add ${username}`);
+    return true;
+  } catch (err) {
+    console.error("Whitelist error:", err.stderr || err.error);
+    return false;
+  }
 }
