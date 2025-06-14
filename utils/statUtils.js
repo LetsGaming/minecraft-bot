@@ -71,49 +71,70 @@ export function filterStats(statsArray, filterStat) {
   filterStat = filterStat.toLowerCase();
 
   function tokenize(str) {
-    return str.toLowerCase().split(/[_\-\s]+/);
+    return str.toLowerCase().split(/[:._\-\s]+/);
   }
 
-  // Simple similarity score between token and filterStat:
-  // 1 if exact match,
-  // fraction if token startsWith filterStat,
-  // 0 else.
   function scoreToken(token, filter) {
     if (token === filter) return 1;
     if (token.startsWith(filter)) return filter.length / token.length;
     return 0;
   }
 
-  // Compute score for a stat
-  function scoreStat(stat) {
-    const tokens = [
-      ...tokenize(stat.fullKey),
-      ...tokenize(stat.category),
-      ...tokenize(stat.key),
-    ];
+  const filterTokens = tokenize(filterStat);
 
-    let maxScore = 0;
-    for (const token of tokens) {
-      const s = scoreToken(token, filterStat);
-      if (s > maxScore) maxScore = s;
+  // Scoring function, with category exact match boosting
+  function scoreStat(stat) {
+    const categoryTokens = tokenize(stat.category);
+    const keyTokens = tokenize(stat.key);
+
+    // If filter matches category exactly (all filter tokens match category tokens)
+    // AND filter is single token or matches exactly the category tokens combined,
+    // score is max (1) for all stats in that category
+    // This covers case: filter 'killed' matches category 'killed' but not 'killed_by'
+
+    if (
+      filterTokens.length === 1 &&
+      categoryTokens.length === 1 &&
+      filterTokens[0] === categoryTokens[0]
+    ) {
+      return 1; // full category match, full score
     }
-    return maxScore;
+
+    // Otherwise, score category and key tokens separately,
+    // category tokens get higher weight (0.7), key tokens less (0.3)
+    // so matching category is preferred but keys can refine search
+
+    let maxCategoryScore = 0;
+    for (const catToken of categoryTokens) {
+      for (const fToken of filterTokens) {
+        const s = scoreToken(catToken, fToken);
+        if (s > maxCategoryScore) maxCategoryScore = s;
+      }
+    }
+
+    let maxKeyScore = 0;
+    for (const keyToken of keyTokens) {
+      for (const fToken of filterTokens) {
+        const s = scoreToken(keyToken, fToken);
+        if (s > maxKeyScore) maxKeyScore = s;
+      }
+    }
+
+    // Weighted combined score
+    return 0.7 * maxCategoryScore + 0.3 * maxKeyScore;
   }
 
-  // Attach scores, filter out zero scores
+  // Calculate scores for all stats
   const scored = statsArray
     .map((stat) => ({ stat, score: scoreStat(stat) }))
     .filter(({ score }) => score > 0);
 
   if (scored.length === 0) return [];
 
-  // Find max score
+  // Find max score and filter by 80% threshold
   const maxScore = Math.max(...scored.map(({ score }) => score));
-
-  // Threshold: keep those with score >= 80% of maxScore
   const threshold = maxScore * 0.8;
 
-  // Filter by threshold and sort descending
   return scored
     .filter(({ score }) => score >= threshold)
     .sort((a, b) => b.score - a.score)
