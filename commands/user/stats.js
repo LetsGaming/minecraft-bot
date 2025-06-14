@@ -1,16 +1,15 @@
 import { SlashCommandBuilder } from "discord.js";
-import { paginateEmbed } from "../../utils/embed.js";
+import {
+  createPaginatedEmbed,
+  createPaginationButtons,
+  handlePagination,
+} from "../../utils/embed.js";
 import {
   findPlayer,
   loadStats,
   flattenStats,
   filterStats,
 } from "../../utils/statUtils.js";
-
-const REACTIONS = {
-  PREV: "◀️",
-  NEXT: "▶️",
-};
 
 export const data = new SlashCommandBuilder()
   .setName("stats")
@@ -29,7 +28,7 @@ export const data = new SlashCommandBuilder()
   );
 
 export async function execute(interaction) {
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply();
 
   const playerName = interaction.options.getString("player");
   const filterStat = interaction.options.getString("stat");
@@ -58,75 +57,30 @@ export async function execute(interaction) {
       );
     }
 
-    let currentPage = 0;
-    const totalPages = Math.ceil(flattened.length / 20);
+    // Convert to {name, value} format for embed utility
+    const items = flattened.map((stat) => ({
+      name: stat.key.replace("minecraft:", ""),
+      value: `\`${stat.value.toLocaleString()}\``,
+    }));
 
-    const initialEmbed = paginateEmbed(
+    const initialEmbed = createPaginatedEmbed(
       `📊 Stats for ${playerName}`,
-      flattened,
-      currentPage,
-      (stat) => ({
-        name: stat.key.replace("minecraft:", ""),
-        value: `\`${stat.value.toLocaleString()}\``,
-        inline: true,
-      }),
-      { itemsPerPage: 20 }
+      items,
+      0
     );
+    const buttons = createPaginationButtons(0, Math.ceil(items.length / 25));
 
-    await interaction.editReply({
-      content: "Loading stats...",
-    });
-
-    const message = await interaction.followUp({
+    // Send initial reply with embed + buttons
+    const message = await interaction.editReply({
       embeds: [initialEmbed],
+      components: [buttons],
       fetchReply: true,
     });
 
-    if (totalPages > 1) {
-      await message.react(REACTIONS.PREV);
-      await message.react(REACTIONS.NEXT);
+    if (items.length > 25) {
+      // Enable pagination handling only if multiple pages exist
+      await handlePagination(message, interaction, `📊 Stats for ${playerName}`, items);
     }
-
-    const filter = (reaction, user) =>
-      [REACTIONS.PREV, REACTIONS.NEXT].includes(reaction.emoji.name) &&
-      user.id === interaction.user.id;
-
-    const collector = message.createReactionCollector({
-      filter,
-      time: 120000,
-      dispose: true,
-    });
-
-    collector.on("collect", async (reaction) => {
-      if (reaction.emoji.name === REACTIONS.PREV) {
-        currentPage = currentPage > 0 ? currentPage - 1 : totalPages - 1;
-      } else if (reaction.emoji.name === REACTIONS.NEXT) {
-        currentPage = currentPage < totalPages - 1 ? currentPage + 1 : 0;
-      }
-
-      const newEmbed = paginateEmbed(
-        `📊 Stats for ${playerName}`,
-        flattened,
-        currentPage,
-        (stat) => ({
-          name: stat.key.replace("minecraft:", ""),
-          value: `\`${stat.value.toLocaleString()}\``,
-          inline: true,
-        }),
-        { itemsPerPage: 20 }
-      );
-
-      try {
-        await message.edit({ embeds: [newEmbed] });
-        await reaction.users.remove(interaction.user.id);
-      } catch (err) {
-        console.error("Failed to update stats embed page:", err);
-      }
-    });
-
-    collector.on("end", () => {
-      message.reactions.removeAll().catch(() => {});
-    });
   } catch (err) {
     console.error(err);
     return interaction.editReply("❌ Failed to retrieve stats.");
