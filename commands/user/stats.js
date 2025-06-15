@@ -1,6 +1,5 @@
 import { SlashCommandBuilder } from "discord.js";
 import {
-  createPaginatedEmbed,
   createPaginationButtons,
   handlePagination,
 } from "../../utils/embed.js";
@@ -9,6 +8,7 @@ import {
   loadStats,
   flattenStats,
   filterStats,
+  createStatsEmbeds,
 } from "../../utils/statUtils.js";
 
 export const data = new SlashCommandBuilder()
@@ -24,20 +24,7 @@ export const data = new SlashCommandBuilder()
     option
       .setName("stat")
       .setDescription("Optional stat category or specific stat ID")
-      .setRequired(false)
   );
-
-const categoryLabels = {
-  used: "Used",
-  mined: "Mined",
-  picked_up: "Picked Up",
-  dropped: "Dropped",
-  broken: "Broken",
-  crafted: "Crafted",
-  custom: "Custom",
-  killed: "Killed",
-  killed_by: "Killed By",
-};
 
 export async function execute(interaction) {
   await interaction.deferReply();
@@ -69,60 +56,17 @@ export async function execute(interaction) {
       );
     }
 
-    // Group stats by category
-    const groupedItems = flattened.reduce((groups, stat) => {
-      // Remove "minecraft:" prefix from category
-      const rawCategory = stat.category.replace("minecraft:", "");
-      if (!groups[rawCategory]) groups[rawCategory] = [];
-
-      // Format stat name: remove prefix, replace underscores with spaces
-      const prettyStatName = stat.key
-        .replace("minecraft:", "")
-        .replace(/_/g, " ");
-
-      groups[rawCategory].push({
-        name: prettyStatName,
-        value: `\`${stat.value.toLocaleString()}\``,
-      });
-
-      return groups;
-    }, {});
-
-    // Flatten grouped items into an array with category headers
-    const paginatedItems = [];
-
-    for (const [category, stats] of Object.entries(groupedItems)) {
-      const prettyCategory = categoryLabels[category] || category;
-      paginatedItems.push({
-        name: `== ${prettyCategory} ==`,
-        value: "\u200b", // zero-width space for embed formatting
-      });
-      paginatedItems.push(...stats);
-    }
-
-    const initialEmbed = createPaginatedEmbed(
-      `📊 Stats for ${playerName}`,
-      paginatedItems,
-      0
-    );
-    const buttons = createPaginationButtons(
-      0,
-      Math.ceil(paginatedItems.length / 25)
-    );
+    const embeds = createStatsEmbeds(`📊 Stats for ${playerName}`, flattened);
+    const buttons = createPaginationButtons(0, embeds.length);
 
     const message = await interaction.editReply({
-      embeds: [initialEmbed],
+      embeds: [embeds[0]],
       components: [buttons],
       fetchReply: true,
     });
 
-    if (paginatedItems.length > 25) {
-      await handlePagination(
-        message,
-        interaction,
-        `📊 Stats for ${playerName}`,
-        paginatedItems
-      );
+    if (embeds.length > 1) {
+      await handlePagination(message, interaction, embeds);
     }
   } catch (err) {
     console.error(err);

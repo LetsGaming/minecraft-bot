@@ -1,6 +1,56 @@
 import fs from "fs";
 import path from "path";
 import config from "../config.json" assert { type: "json" };
+import { createEmbed } from "./embed.js";
+
+const ITEMS_PER_PAGE = 25;
+
+/**
+ * Creates paginated embeds grouped by category.
+ * @param {string} title
+ * @param {Array<{ category: string, key: string, value: number }>} stats
+ * @returns {{ embeds: EmbedBuilder[], buttons: ActionRowBuilder }}
+ */
+export function createStatsEmbeds(title, stats) {
+  const grouped = {};
+
+  for (const stat of stats) {
+    const categoryName = stat.category.replace("minecraft:", "").toUpperCase();
+    if (!grouped[categoryName]) grouped[categoryName] = [];
+    grouped[categoryName].push(stat);
+  }
+
+  const embeds = [];
+  const sortedCategories = Object.keys(grouped).sort();
+
+  for (const category of sortedCategories) {
+    const statList = grouped[category];
+    const totalPages = Math.ceil(statList.length / ITEMS_PER_PAGE);
+
+    for (let page = 0; page < totalPages; page++) {
+      const embed = createEmbed({
+        title: `${title} — ${category} (Page ${page + 1}/${totalPages})`,
+      });
+
+      const pageItems = statList.slice(
+        page * ITEMS_PER_PAGE,
+        (page + 1) * ITEMS_PER_PAGE
+      );
+
+      for (const item of pageItems) {
+        embed.addFields({
+          name: item.key.replace("minecraft:", ""),
+          value: `\`${item.value.toLocaleString()}\``,
+          inline: true,
+        });
+      }
+
+      embeds.push(embed);
+    }
+  }
+
+  return embeds;
+}
 
 /**
  * Find a player object from whitelist by playerName (case insensitive)
