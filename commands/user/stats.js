@@ -52,7 +52,7 @@ export async function execute(interaction) {
       );
     }
 
-    const embed = buildStatsEmbed(stats, username);
+    const embed = buildStatsEmbed(flattened, playerName);
     await interaction.reply({ embeds: [embed] });
   } catch (err) {
     console.error(err);
