@@ -70,7 +70,6 @@ export function filterStats(statsArray, filterStat) {
 
   filterStat = filterStat.toLowerCase();
 
-  // --- Tokenization and scoring ---
   function tokenize(str) {
     return str.toLowerCase().split(/[:._\-\s]+/);
   }
@@ -84,43 +83,33 @@ export function filterStats(statsArray, filterStat) {
 
   const filterTokens = tokenize(filterStat);
 
-  // --- Exact match by category ---
-  const exactCategoryMatches = statsArray.filter(
-    (stat) => stat.category.toLowerCase() === filterStat
-  );
-  if (exactCategoryMatches.length > 0) return exactCategoryMatches;
+  // ---- Step 1: score unique categories only ----
+  const categorySet = new Set(statsArray.map((s) => s.category));
+  let bestCategory = null;
+  let bestScore = 0;
 
-  // --- Score categories ---
-  const categoryScores = new Map(); // category -> score
+  for (const category of categorySet) {
+    const tokens = tokenize(category);
+    let categoryScore = 0;
 
-  for (const stat of statsArray) {
-    const cat = stat.category;
-    const tokens = tokenize(cat);
-
-    let maxTokenScore = 0;
     for (const fToken of filterTokens) {
       for (const token of tokens) {
-        maxTokenScore = Math.max(maxTokenScore, scoreToken(token, fToken));
+        categoryScore = Math.max(categoryScore, scoreToken(token, fToken));
       }
     }
 
-    // Store highest score for each category only once
-    if (!categoryScores.has(cat) || categoryScores.get(cat) < maxTokenScore) {
-      categoryScores.set(cat, maxTokenScore);
+    if (categoryScore > bestScore) {
+      bestCategory = category;
+      bestScore = categoryScore;
     }
   }
 
-  // --- Pick best matching category (if score high enough) ---
-  const [bestCategory, bestScore] = [...categoryScores.entries()].reduce(
-    (best, current) => (current[1] > best[1] ? current : best),
-    ["", 0]
-  );
-
+  // ---- Step 2: return matching category if score is good enough ----
   if (bestScore >= 0.6) {
-    return statsArray.filter((stat) => stat.category === bestCategory);
+    return statsArray.filter((s) => s.category === bestCategory);
   }
 
-  // --- Fallback: score individual stats ---
+  // ---- Step 3: fallback to stat-level scoring ----
   const scoredStats = statsArray.map((stat) => {
     const values = [stat.fullKey, stat.category, stat.key];
     let best = 0;
