@@ -34,11 +34,13 @@ function groupStatsByCategory(stats) {
   const result = {};
 
   for (const [statPath, value] of Object.entries(stats)) {
-    const parts = statPath.split(".");
-    if (parts.length < 3) continue;
+    const [namespace, ...rest] = statPath.split(".");
+    if (!namespace || rest.length === 0) continue;
 
-    const category = parts[1];
-    const statName = parts.slice(2).join(".");
+    const [domain, category] = namespace.split(":");
+    if (!domain || !category) continue;
+
+    const statName = rest.join(".");
 
     if (!result[category]) result[category] = [];
     result[category].push([statName, value]);
