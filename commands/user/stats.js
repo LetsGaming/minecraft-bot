@@ -4,8 +4,12 @@ import {
   loadStats,
   flattenStats,
   filterStats,
-  buildStatsEmbed,
+  buildStatsEmbeds,
 } from "../../utils/statUtils.js";
+import {
+  createPaginationButtons,
+  handlePagination,
+} from "../../utils/embed.js";
 
 export const data = new SlashCommandBuilder()
   .setName("stats")
@@ -52,8 +56,19 @@ export async function execute(interaction) {
       );
     }
 
-    const embed = buildStatsEmbed(flattened, playerName);
-    await interaction.editReply({ embeds: [embed] });
+    const embeds = buildStatsEmbeds(statObj, playerName);
+
+    if (embeds.length === 1) {
+      await interaction.editReply({ embeds });
+    } else {
+      const message = await interaction.editReply({
+        embeds: [embeds[0]],
+        components: [createPaginationButtons(0, embeds.length)],
+        fetchReply: true,
+      });
+
+      await handlePagination(message, interaction, embeds);
+    }
   } catch (err) {
     console.error(err);
     return interaction.editReply("❌ Failed to retrieve stats.");
