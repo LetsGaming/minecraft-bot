@@ -70,6 +70,13 @@ export function filterStats(statsArray, filterStat) {
 
   filterStat = filterStat.toLowerCase();
 
+  // Step 1: check for exact category match
+  const exactCategoryMatches = statsArray.filter(
+    (stat) => stat.category.toLowerCase() === filterStat
+  );
+  if (exactCategoryMatches.length > 0) return exactCategoryMatches;
+
+  // Helper to split strings into searchable tokens
   function tokenize(str) {
     return str.toLowerCase().split(/[:._\-\s]+/);
   }
@@ -82,27 +89,10 @@ export function filterStats(statsArray, filterStat) {
 
   const filterTokens = tokenize(filterStat);
 
-  // Scoring function, with category exact match boosting
+  // Score each stat entry
   function scoreStat(stat) {
     const categoryTokens = tokenize(stat.category);
     const keyTokens = tokenize(stat.key);
-
-    // If filter matches category exactly (all filter tokens match category tokens)
-    // AND filter is single token or matches exactly the category tokens combined,
-    // score is max (1) for all stats in that category
-    // This covers case: filter 'killed' matches category 'killed' but not 'killed_by'
-
-    if (
-      filterTokens.length === 1 &&
-      categoryTokens.length === 1 &&
-      filterTokens[0] === categoryTokens[0]
-    ) {
-      return 1; // full category match, full score
-    }
-
-    // Otherwise, score category and key tokens separately,
-    // category tokens get higher weight (0.7), key tokens less (0.3)
-    // so matching category is preferred but keys can refine search
 
     let maxCategoryScore = 0;
     for (const catToken of categoryTokens) {
@@ -120,18 +110,16 @@ export function filterStats(statsArray, filterStat) {
       }
     }
 
-    // Weighted combined score
+    // Combine with weight: category (0.7) and key (0.3)
     return 0.7 * maxCategoryScore + 0.3 * maxKeyScore;
   }
 
-  // Calculate scores for all stats
   const scored = statsArray
     .map((stat) => ({ stat, score: scoreStat(stat) }))
     .filter(({ score }) => score > 0);
 
   if (scored.length === 0) return [];
 
-  // Find max score and filter by 80% threshold
   const maxScore = Math.max(...scored.map(({ score }) => score));
   const threshold = maxScore * 0.8;
 
