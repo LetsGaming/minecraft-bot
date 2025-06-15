@@ -27,6 +27,18 @@ export const data = new SlashCommandBuilder()
       .setRequired(false)
   );
 
+const categoryLabels = {
+  used: "Used",
+  mined: "Mined",
+  picked_up: "Picked Up",
+  dropped: "Dropped",
+  broken: "Broken",
+  crafted: "Crafted",
+  custom: "Custom",
+  killed: "Killed",
+  killed_by: "Killed By",
+};
+
 export async function execute(interaction) {
   await interaction.deferReply();
 
@@ -57,29 +69,60 @@ export async function execute(interaction) {
       );
     }
 
-    // Convert to {name, value} format for embed utility
-    const items = flattened.map((stat) => ({
-      name: stat.key.replace("minecraft:", ""),
-      value: `\`${stat.value.toLocaleString()}\``,
-    }));
+    // Group stats by category
+    const groupedItems = flattened.reduce((groups, stat) => {
+      // Remove "minecraft:" prefix from category
+      const rawCategory = stat.category.replace("minecraft:", "");
+      if (!groups[rawCategory]) groups[rawCategory] = [];
+
+      // Format stat name: remove prefix, replace underscores with spaces
+      const prettyStatName = stat.key
+        .replace("minecraft:", "")
+        .replace(/_/g, " ");
+
+      groups[rawCategory].push({
+        name: prettyStatName,
+        value: `\`${stat.value.toLocaleString()}\``,
+      });
+
+      return groups;
+    }, {});
+
+    // Flatten grouped items into an array with category headers
+    const paginatedItems = [];
+
+    for (const [category, stats] of Object.entries(groupedItems)) {
+      const prettyCategory = categoryLabels[category] || category;
+      paginatedItems.push({
+        name: `== ${prettyCategory} ==`,
+        value: "\u200b", // zero-width space for embed formatting
+      });
+      paginatedItems.push(...stats);
+    }
 
     const initialEmbed = createPaginatedEmbed(
       `📊 Stats for ${playerName}`,
-      items,
+      paginatedItems,
       0
     );
-    const buttons = createPaginationButtons(0, Math.ceil(items.length / 25));
+    const buttons = createPaginationButtons(
+      0,
+      Math.ceil(paginatedItems.length / 25)
+    );
 
-    // Send initial reply with embed + buttons
     const message = await interaction.editReply({
       embeds: [initialEmbed],
       components: [buttons],
       fetchReply: true,
     });
 
-    if (items.length > 25) {
-      // Enable pagination handling only if multiple pages exist
-      await handlePagination(message, interaction, `📊 Stats for ${playerName}`, items);
+    if (paginatedItems.length > 25) {
+      await handlePagination(
+        message,
+        interaction,
+        `📊 Stats for ${playerName}`,
+        paginatedItems
+      );
     }
   } catch (err) {
     console.error(err);
