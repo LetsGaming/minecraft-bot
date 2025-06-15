@@ -3,6 +3,13 @@ import path from "path";
 import config from "../config.json" assert { type: "json" };
 import { createEmbed } from "../utils/embed.js";
 
+function humanizeKey(rawKey) {
+  return rawKey
+    .replace(/^minecraft:/, "")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 export function buildStatsEmbeds(statsArray, username) {
   const embeds = [];
   let currentEmbed = createEmbed({
@@ -11,7 +18,7 @@ export function buildStatsEmbeds(statsArray, username) {
   let totalChars = currentEmbed.data.title.length;
   let fieldCount = 0;
 
-  // Group by category
+  // Group stats by category
   const categoryMap = new Map();
   for (const stat of statsArray) {
     if (!stat.category || stat.value == null) continue;
@@ -21,42 +28,66 @@ export function buildStatsEmbeds(statsArray, username) {
     categoryMap.get(stat.category).push(stat);
   }
 
-  // Sort categories alphabetically
   const sortedCategories = Array.from(categoryMap.keys()).sort();
 
   for (const category of sortedCategories) {
-    const entries = categoryMap.get(category);
+    const stats = categoryMap.get(category);
+    const lines = stats.map(s => `• ${humanizeKey(s.key)}: ${s.value}`);
 
-    // Format as bullet list
-    const lines = entries
-      .filter(s => s.key && s.value != null)
-      .map(s => `• **${s.key}**: ${s.value}`);
+    let fieldIndex = 1;
+    let buffer = "";
 
-    // Skip empty fields
-    if (lines.length === 0) continue;
+    for (const line of lines) {
+      if ((buffer + line + "\n").length > 1024) {
+        // Finalize current field
+        const fieldTitle = fieldIndex === 1 ? humanizeKey(category) : `${humanizeKey(category)} (${fieldIndex})`;
 
-    const fieldValue = lines.join("\n").slice(0, 1024);
-    const fieldName = category.slice(0, 256); // Discord max for field name
+        if (fieldCount >= 25 || totalChars + fieldTitle.length + buffer.length > 6000) {
+          embeds.push(currentEmbed);
+          currentEmbed = createEmbed({
+            title: `Stats for ${username} (continued)`,
+          });
+          totalChars = currentEmbed.data.title.length;
+          fieldCount = 0;
+        }
 
-    const fieldLength = fieldName.length + fieldValue.length;
+        currentEmbed.addFields({
+          name: fieldTitle,
+          value: buffer.trim(),
+          inline: false,
+        });
 
-    if (fieldCount >= 25 || totalChars + fieldLength >= 6000) {
-      embeds.push(currentEmbed);
-      currentEmbed = createEmbed({
-        title: `Stats for ${username} (continued)`,
-      });
-      totalChars = currentEmbed.data.title.length;
-      fieldCount = 0;
+        totalChars += fieldTitle.length + buffer.length;
+        fieldCount++;
+        fieldIndex++;
+        buffer = "";
+      }
+
+      buffer += line + "\n";
     }
 
-    currentEmbed.addFields({
-      name: fieldName,
-      value: fieldValue,
-      inline: false,
-    });
+    // Push remaining lines in buffer
+    if (buffer.length > 0) {
+      const fieldTitle = fieldIndex === 1 ? humanizeKey(category) : `${humanizeKey(category)} (${fieldIndex})`;
 
-    totalChars += fieldLength;
-    fieldCount += 1;
+      if (fieldCount >= 25 || totalChars + fieldTitle.length + buffer.length > 6000) {
+        embeds.push(currentEmbed);
+        currentEmbed = createEmbed({
+          title: `Stats for ${username} (continued)`,
+        });
+        totalChars = currentEmbed.data.title.length;
+        fieldCount = 0;
+      }
+
+      currentEmbed.addFields({
+        name: fieldTitle,
+        value: buffer.trim(),
+        inline: false,
+      });
+
+      totalChars += fieldTitle.length + buffer.length;
+      fieldCount++;
+    }
   }
 
   if (fieldCount > 0) {
