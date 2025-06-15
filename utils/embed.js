@@ -15,15 +15,27 @@ export function createEmbed({ title, color = 0x00bfff, timestamp = true }) {
 export function createPaginationButtons(page, totalPages) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
+      .setCustomId("first")
+      .setLabel("⏮️")
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(page <= 0),
+
+    new ButtonBuilder()
       .setCustomId("prev")
-      .setLabel("Previous")
+      .setLabel("◀️")
       .setStyle(ButtonStyle.Primary)
       .setDisabled(page <= 0),
 
     new ButtonBuilder()
       .setCustomId("next")
-      .setLabel("Next")
+      .setLabel("▶️")
       .setStyle(ButtonStyle.Primary)
+      .setDisabled(page >= totalPages - 1),
+
+    new ButtonBuilder()
+      .setCustomId("last")
+      .setLabel("⏭️")
+      .setStyle(ButtonStyle.Secondary)
       .setDisabled(page >= totalPages - 1)
   );
 }
@@ -34,7 +46,7 @@ export async function handlePagination(message, interaction, embeds) {
 
   const collector = message.createMessageComponentCollector({
     componentType: ComponentType.Button,
-    time: 60_000, // 60 seconds
+    time: 60_000,
   });
 
   collector.on("collect", async (i) => {
@@ -45,8 +57,20 @@ export async function handlePagination(message, interaction, embeds) {
       });
     }
 
-    if (i.customId === "prev" && page > 0) page--;
-    if (i.customId === "next" && page < totalPages - 1) page++;
+    switch (i.customId) {
+      case "first":
+        page = 0;
+        break;
+      case "prev":
+        if (page > 0) page--;
+        break;
+      case "next":
+        if (page < totalPages - 1) page++;
+        break;
+      case "last":
+        page = totalPages - 1;
+        break;
+    }
 
     await i.update({
       embeds: [embeds[page]],
