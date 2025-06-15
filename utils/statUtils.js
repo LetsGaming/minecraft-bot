@@ -10,7 +10,12 @@ function humanizeKey(rawKey) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-export function buildStatsEmbeds(statsArray, username) {
+/**
+ * @param {Array} stats - Flattened and filtered stats
+ * @param {string} username
+ * @returns {Array} embeds
+ */
+export function buildStatsEmbeds(stats, username) {
   const embeds = [];
   let currentEmbed = createEmbed({
     title: `Stats for ${username}`,
@@ -18,59 +23,33 @@ export function buildStatsEmbeds(statsArray, username) {
   let totalChars = currentEmbed.data.title.length;
   let fieldCount = 0;
 
-  // Group stats by category
-  const categoryMap = new Map();
-  for (const stat of statsArray) {
-    if (!stat.category || stat.value == null) continue;
-    if (!categoryMap.has(stat.category)) {
-      categoryMap.set(stat.category, []);
-    }
-    categoryMap.get(stat.category).push(stat);
-  }
+  const grouped = groupByCategory(stats);
 
-  const sortedCategories = Array.from(categoryMap.keys()).sort();
+  for (const [category, entries] of Object.entries(grouped)) {
+    const lines = entries.map(
+      s => `• ${humanizeKey(s.key)}: ${s.value.toLocaleString()}`
+    );
 
-  for (const category of sortedCategories) {
-    const stats = categoryMap.get(category);
-    const lines = stats.map(s => `• ${humanizeKey(s.key)}: ${s.value}`);
+    let index = 0;
+    let chunkNumber = 1;
 
-    let fieldIndex = 1;
-    let buffer = "";
+    while (index < lines.length) {
+      const remaining = lines.length - index;
+      const chunk = [];
+      let chunkLength = 0;
 
-    for (const line of lines) {
-      if ((buffer + line + "\n").length > 1024) {
-        // Finalize current field
-        const fieldTitle = fieldIndex === 1 ? humanizeKey(category) : `${humanizeKey(category)} (${fieldIndex})`;
-
-        if (fieldCount >= 25 || totalChars + fieldTitle.length + buffer.length > 6000) {
-          embeds.push(currentEmbed);
-          currentEmbed = createEmbed({
-            title: `Stats for ${username} (continued)`,
-          });
-          totalChars = currentEmbed.data.title.length;
-          fieldCount = 0;
-        }
-
-        currentEmbed.addFields({
-          name: fieldTitle,
-          value: buffer.trim(),
-          inline: false,
-        });
-
-        totalChars += fieldTitle.length + buffer.length;
-        fieldCount++;
-        fieldIndex++;
-        buffer = "";
+      // Fill chunk without exceeding 1024 chars
+      while (index < lines.length && chunkLength + lines[index].length + 1 < 1024) {
+        chunk.push(lines[index]);
+        chunkLength += lines[index].length + 1;
+        index++;
       }
 
-      buffer += line + "\n";
-    }
+      const name = chunkNumber === 1 ? humanizeKey(category) : `${humanizeKey(category)} (${chunkNumber})`;
+      const value = chunk.join('\n');
+      const fieldLength = name.length + value.length;
 
-    // Push remaining lines in buffer
-    if (buffer.length > 0) {
-      const fieldTitle = fieldIndex === 1 ? humanizeKey(category) : `${humanizeKey(category)} (${fieldIndex})`;
-
-      if (fieldCount >= 25 || totalChars + fieldTitle.length + buffer.length > 6000) {
+      if (fieldCount >= 25 || totalChars + fieldLength >= 6000) {
         embeds.push(currentEmbed);
         currentEmbed = createEmbed({
           title: `Stats for ${username} (continued)`,
@@ -80,13 +59,14 @@ export function buildStatsEmbeds(statsArray, username) {
       }
 
       currentEmbed.addFields({
-        name: fieldTitle,
-        value: buffer.trim(),
-        inline: false,
+        name,
+        value,
+        inline: chunk.length <= 3 && chunkLength <= 100, // Inline short categories
       });
 
-      totalChars += fieldTitle.length + buffer.length;
+      totalChars += fieldLength;
       fieldCount++;
+      chunkNumber++;
     }
   }
 
@@ -97,20 +77,15 @@ export function buildStatsEmbeds(statsArray, username) {
   return embeds;
 }
 
-/**
- * Find a player object from whitelist by playerName (case insensitive)
- * @param {string} playerName
- * @returns {object|null} player object or null if not found
- */
-export function findPlayer(playerName) {
-  const whitelistPath = path.resolve(config.serverDir, "whitelist.json");
-  if (!fs.existsSync(whitelistPath)) return null;
-
-  const whitelist = JSON.parse(fs.readFileSync(whitelistPath, "utf-8"));
-  const player = whitelist.find(
-    (p) => p.name.toLowerCase() === playerName.toLowerCase()
-  );
-  return player ?? null;
+function groupByCategory(stats) {
+  const grouped = {};
+  for (const stat of stats) {
+    if (!grouped[stat.category]) {
+      grouped[stat.category] = [];
+    }
+    grouped[stat.category].push(stat);
+  }
+  return grouped;
 }
 
 /**
