@@ -56,7 +56,7 @@ export async function execute(interaction) {
       );
     }
 
-    const embeds = buildStatsEmbeds(statObj, playerName);
+    const embeds = buildStatsEmbeds(flattened, playerName);
 
     if (embeds.length === 1) {
       await interaction.editReply({ embeds });
