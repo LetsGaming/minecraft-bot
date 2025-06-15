@@ -80,9 +80,13 @@ export function buildStatsEmbeds(stats, username) {
   // Set correct titles now that all pages are known
   const totalPages = embeds.length;
   for (let i = 0; i < totalPages; i++) {
-    embeds[i].data.title = `Stats for ${username} (Page ${
+    const embed = embeds[i];
+    embed.data.title = `Stats for ${username} (Page ${
       i + 1
     }/${totalPages})`;
+    embed.setFooter({
+      text: `Total stats: ${stats.length} | Page ${i + 1}/${totalPages}`,
+    });
   }
 
   return embeds;
