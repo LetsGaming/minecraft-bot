@@ -3,7 +3,7 @@ import path from "path";
 import config from "../config.json" assert { type: "json" };
 import { createEmbed } from "../utils/embed.js";
 
-export function buildStatsEmbeds(stats, username) {
+export function buildStatsEmbeds(statsArray, username) {
   const embeds = [];
   let currentEmbed = createEmbed({
     title: `Stats for ${username}`,
@@ -11,28 +11,36 @@ export function buildStatsEmbeds(stats, username) {
   let totalChars = currentEmbed.data.title.length;
   let fieldCount = 0;
 
-  const categories = groupStatsByCategory(stats);
+  // Group by category
+  const categoryMap = new Map();
+  for (const stat of statsArray) {
+    if (!stat.category || stat.value == null) continue;
+    if (!categoryMap.has(stat.category)) {
+      categoryMap.set(stat.category, []);
+    }
+    categoryMap.get(stat.category).push(stat);
+  }
 
-  for (const [category, entries] of Object.entries(categories)) {
-    const lines = entries.map(
-      ([statName, value]) => `• **${statName}**: ${value}`
-    );
+  // Sort categories alphabetically
+  const sortedCategories = Array.from(categoryMap.keys()).sort();
 
-    // If no entries for this category, skip or add fallback text
+  for (const category of sortedCategories) {
+    const entries = categoryMap.get(category);
+
+    // Format as bullet list
+    const lines = entries
+      .filter(s => s.key && s.value != null)
+      .map(s => `• **${s.key}**: ${s.value}`);
+
+    // Skip empty fields
     if (lines.length === 0) continue;
 
-    const fieldValue = lines.join("\n").slice(0, 1024); // truncate to Discord limit
-    const fieldName = category;
+    const fieldValue = lines.join("\n").slice(0, 1024);
+    const fieldName = category.slice(0, 256); // Discord max for field name
 
-    // If fieldValue is empty or whitespace, use fallback text to avoid errors
-    const safeFieldValue =
-      fieldValue.trim().length > 0 ? fieldValue : "No stats available";
+    const fieldLength = fieldName.length + fieldValue.length;
 
-    const fieldLength = fieldName.length + safeFieldValue.length;
-
-    // Check if adding this field would exceed Discord limits
     if (fieldCount >= 25 || totalChars + fieldLength >= 6000) {
-      // Save current embed and start a new one
       embeds.push(currentEmbed);
       currentEmbed = createEmbed({
         title: `Stats for ${username} (continued)`,
@@ -43,7 +51,7 @@ export function buildStatsEmbeds(stats, username) {
 
     currentEmbed.addFields({
       name: fieldName,
-      value: safeFieldValue,
+      value: fieldValue,
       inline: false,
     });
 
@@ -51,32 +59,11 @@ export function buildStatsEmbeds(stats, username) {
     fieldCount += 1;
   }
 
-  // Push last embed
   if (fieldCount > 0) {
     embeds.push(currentEmbed);
   }
 
   return embeds;
-}
-
-
-function groupStatsByCategory(stats) {
-  const result = {};
-
-  for (const [statPath, value] of Object.entries(stats)) {
-    const [namespace, ...rest] = statPath.split(".");
-    if (!namespace || rest.length === 0) continue;
-
-    const [domain, category] = namespace.split(":");
-    if (!domain || !category) continue;
-
-    const statName = rest.join(".");
-
-    if (!result[category]) result[category] = [];
-    result[category].push([statName, value]);
-  }
-
-  return result;
 }
 
 /**
