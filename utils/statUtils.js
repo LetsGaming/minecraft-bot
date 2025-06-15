@@ -10,16 +10,9 @@ function humanizeKey(rawKey) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-/**
- * @param {Array} stats - Flattened and filtered stats
- * @param {string} username
- * @returns {Array} embeds
- */
 export function buildStatsEmbeds(stats, username) {
   const embeds = [];
-  let currentEmbed = createEmbed({
-    title: `Stats for ${username}`,
-  });
+  let currentEmbed = createEmbed({ title: `Stats for ${username}` });
   let totalChars = currentEmbed.data.title.length;
   let fieldCount = 0;
 
@@ -27,33 +20,35 @@ export function buildStatsEmbeds(stats, username) {
 
   for (const [category, entries] of Object.entries(grouped)) {
     const lines = entries.map(
-      s => `• ${humanizeKey(s.key)}: ${s.value.toLocaleString()}`
+      (s) => `• ${humanizeKey(s.key)}: ${s.value.toLocaleString()}`
     );
 
     let index = 0;
     let chunkNumber = 1;
 
     while (index < lines.length) {
-      const remaining = lines.length - index;
       const chunk = [];
       let chunkLength = 0;
 
-      // Fill chunk without exceeding 1024 chars
-      while (index < lines.length && chunkLength + lines[index].length + 1 < 1024) {
+      while (
+        index < lines.length &&
+        chunkLength + lines[index].length + 1 < 1024
+      ) {
         chunk.push(lines[index]);
         chunkLength += lines[index].length + 1;
         index++;
       }
 
-      const name = chunkNumber === 1 ? humanizeKey(category) : `${humanizeKey(category)} (${chunkNumber})`;
-      const value = chunk.join('\n');
+      const name =
+        chunkNumber === 1
+          ? humanizeKey(category)
+          : `${humanizeKey(category)} (${chunkNumber})`;
+      const value = chunk.join("\n");
       const fieldLength = name.length + value.length;
 
       if (fieldCount >= 25 || totalChars + fieldLength >= 6000) {
         embeds.push(currentEmbed);
-        currentEmbed = createEmbed({
-          title: `Stats for ${username} (continued)`,
-        });
+        currentEmbed = createEmbed({ title: `PLACEHOLDER` });
         totalChars = currentEmbed.data.title.length;
         fieldCount = 0;
       }
@@ -61,7 +56,7 @@ export function buildStatsEmbeds(stats, username) {
       currentEmbed.addFields({
         name,
         value,
-        inline: chunk.length <= 3 && chunkLength <= 100, // Inline short categories
+        inline: chunk.length <= 3 && chunkLength <= 100,
       });
 
       totalChars += fieldLength;
@@ -70,8 +65,17 @@ export function buildStatsEmbeds(stats, username) {
     }
   }
 
+  // Push final embed
   if (fieldCount > 0) {
     embeds.push(currentEmbed);
+  }
+
+  // Now set correct titles with page numbers
+  const totalPages = embeds.length;
+  for (let i = 0; i < totalPages; i++) {
+    embeds[i].data.title = `Stats for ${username} (Page ${
+      i + 1
+    }/${totalPages})`;
   }
 
   return embeds;
