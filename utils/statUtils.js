@@ -10,10 +10,18 @@ function humanizeKey(rawKey) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+/**
+ * Builds an array of embeds for displaying player stats.
+ * Each embed contains fields grouped by category,
+ * with a maximum of 2 fields per embed.
+ * The embeds are paginated if there are too many fields.
+ * @param {Array} stats - Array of stats objects with keys: fullKey, category, key, value
+ * @param {string} username - The player's username to display in the embed title
+ * @return {Array} Array of embed objects ready for Discord
+ */
 export function buildStatsEmbeds(stats, username) {
   const embeds = [];
-  let currentEmbed = createEmbed({ title: `Stats for ${username}` });
-  let totalChars = currentEmbed.data.title.length;
+  let currentEmbed = createEmbed({ title: "PLACEHOLDER" });
   let fieldCount = 0;
 
   const grouped = groupByCategory(stats);
@@ -30,6 +38,7 @@ export function buildStatsEmbeds(stats, username) {
       const chunk = [];
       let chunkLength = 0;
 
+      // Build a chunk under 1024 characters
       while (
         index < lines.length &&
         chunkLength + lines[index].length + 1 < 1024
@@ -44,12 +53,11 @@ export function buildStatsEmbeds(stats, username) {
           ? humanizeKey(category)
           : `${humanizeKey(category)} (${chunkNumber})`;
       const value = chunk.join("\n");
-      const fieldLength = name.length + value.length;
 
-      if (fieldCount >= 25 || totalChars + fieldLength >= 6000) {
+      // If 2 fields already added, push the embed and start a new one
+      if (fieldCount >= 2) {
         embeds.push(currentEmbed);
-        currentEmbed = createEmbed({ title: `PLACEHOLDER` });
-        totalChars = currentEmbed.data.title.length;
+        currentEmbed = createEmbed({ title: "PLACEHOLDER" });
         fieldCount = 0;
       }
 
@@ -59,18 +67,17 @@ export function buildStatsEmbeds(stats, username) {
         inline: chunk.length <= 3 && chunkLength <= 100,
       });
 
-      totalChars += fieldLength;
       fieldCount++;
       chunkNumber++;
     }
   }
 
-  // Push final embed
+  // Push the last embed if it has content
   if (fieldCount > 0) {
     embeds.push(currentEmbed);
   }
 
-  // Now set correct titles with page numbers
+  // Set correct titles now that all pages are known
   const totalPages = embeds.length;
   for (let i = 0; i < totalPages; i++) {
     embeds[i].data.title = `Stats for ${username} (Page ${
