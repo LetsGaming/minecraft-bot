@@ -1,14 +1,10 @@
 import { SlashCommandBuilder } from "discord.js";
 import {
-  createPaginationButtons,
-  handlePagination,
-} from "../../utils/embed.js";
-import {
   findPlayer,
   loadStats,
   flattenStats,
   filterStats,
-  createStatsEmbeds,
+  buildStatsEmbed,
 } from "../../utils/statUtils.js";
 
 export const data = new SlashCommandBuilder()
@@ -56,18 +52,8 @@ export async function execute(interaction) {
       );
     }
 
-    const embeds = createStatsEmbeds(`📊 Stats for ${playerName}`, flattened);
-    const buttons = createPaginationButtons(0, embeds.length);
-
-    const message = await interaction.editReply({
-      embeds: [embeds[0]],
-      components: [buttons],
-      fetchReply: true,
-    });
-
-    if (embeds.length > 1) {
-      await handlePagination(message, interaction, embeds);
-    }
+    const embed = buildStatsEmbed(stats, username);
+    await interaction.reply({ embeds: [embed] });
   } catch (err) {
     console.error(err);
     return interaction.editReply("❌ Failed to retrieve stats.");
