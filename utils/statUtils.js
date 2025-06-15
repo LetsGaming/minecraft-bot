@@ -8,7 +8,12 @@ export function buildStatsEmbed(stats, username) {
     title: `Stats for ${username}`,
   });
 
-  const categories = groupStatsByCategory(stats);
+  // Convert filtered array back to object if necessary
+  const normalizedStats = Array.isArray(stats)
+    ? Object.fromEntries(stats.map((s) => [s.fullKey, s.value]))
+    : stats;
+
+  const categories = groupStatsByCategory(normalizedStats);
 
   for (const [category, entries] of Object.entries(categories)) {
     const lines = entries.map(
@@ -17,7 +22,7 @@ export function buildStatsEmbed(stats, username) {
 
     embed.addFields({
       name: category,
-      value: lines.join("\n"),
+      value: lines.join("\n").slice(0, 1024), // Discord max field length
       inline: false,
     });
   }
