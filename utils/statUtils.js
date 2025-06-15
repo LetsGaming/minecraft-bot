@@ -70,12 +70,6 @@ export function filterStats(statsArray, filterStat) {
 
   filterStat = filterStat.toLowerCase();
 
-  // Step 1: exact category match
-  const exactCategoryMatches = statsArray.filter(
-    (stat) => stat.category.toLowerCase() === filterStat
-  );
-  if (exactCategoryMatches.length > 0) return exactCategoryMatches;
-
   // --- Helpers ---
   function tokenize(str) {
     return str.toLowerCase().split(/[:._\-\s]+/);
@@ -84,13 +78,22 @@ export function filterStats(statsArray, filterStat) {
   function scoreToken(token, filter) {
     if (token === filter) return 1;
     if (token.startsWith(filter)) return filter.length / token.length;
+    if (token.includes(filter)) return filter.length / (2 * token.length);
     return 0;
   }
 
   const filterTokens = tokenize(filterStat);
 
-  function scoreCategory(category) {
-    const tokens = tokenize(category);
+  // Exact category match
+  const exactCategoryMatches = statsArray.filter(
+    (stat) => stat.category.toLowerCase() === filterStat
+  );
+  if (exactCategoryMatches.length > 0) return exactCategoryMatches;
+
+  // Score categories
+  const allCategories = [...new Set(statsArray.map((s) => s.category))];
+  const categoryScores = allCategories.map((cat) => {
+    const tokens = tokenize(cat);
     let best = 0;
     for (const fToken of filterTokens) {
       for (const token of tokens) {
@@ -98,22 +101,34 @@ export function filterStats(statsArray, filterStat) {
         if (s > best) best = s;
       }
     }
-    return best;
+    return { category: cat, score: best };
+  });
+
+  const maxCategoryScore = Math.max(...categoryScores.map((c) => c.score));
+  const bestCategory = categoryScores.find((c) => c.score === maxCategoryScore);
+
+  if (bestCategory?.score >= 0.5) {
+    return statsArray.filter((stat) => stat.category === bestCategory.category);
   }
 
-  // Step 2: find best-matching category
-  const allCategories = [...new Set(statsArray.map((s) => s.category))];
-  const categoryScores = allCategories.map((cat) => ({
-    category: cat,
-    score: scoreCategory(cat),
-  }));
+  // No good category match → fallback to scoring individual stats
+  const scoredStats = statsArray.map((stat) => {
+    const values = [stat.fullKey, stat.category, stat.key];
+    let best = 0;
+    for (const fToken of filterTokens) {
+      for (const val of values) {
+        const tokens = tokenize(val);
+        for (const token of tokens) {
+          const s = scoreToken(token, fToken);
+          if (s > best) best = s;
+        }
+      }
+    }
+    return { ...stat, score: best };
+  });
 
-  const maxScore = Math.max(...categoryScores.map((c) => c.score));
-  if (maxScore === 0) return [];
-
-  const bestMatch = categoryScores.find((c) => c.score === maxScore);
-  const bestCategory = bestMatch.category;
-
-  // Step 3: return all stats from best-matching category
-  return statsArray.filter((stat) => stat.category === bestCategory);
+  // Filter by score threshold
+  const filtered = scoredStats.filter((s) => s.score >= 0.4);
+  // Sort descending by score
+  return filtered.sort((a, b) => b.score - a.score);
 }
