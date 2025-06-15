@@ -53,7 +53,7 @@ export async function execute(interaction) {
     }
 
     const embed = buildStatsEmbed(flattened, playerName);
-    await interaction.reply({ embeds: [embed] });
+    await interaction.editReply({ embeds: [embed] });
   } catch (err) {
     console.error(err);
     return interaction.editReply("❌ Failed to retrieve stats.");
