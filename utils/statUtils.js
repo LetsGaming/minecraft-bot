@@ -68,8 +68,17 @@ export function flattenStats(allStats) {
 export function filterStats(statsArray, filterStat) {
   if (!filterStat) return statsArray;
 
-  filterStat = filterStat.toLowerCase();
+  const filter = filterStat.toLowerCase();
 
+  // ---- Hardcoded disambiguation ----
+  if (filter === "killed") {
+    return statsArray.filter((s) => s.category === "minecraft:killed");
+  }
+  if (filter === "killed_by") {
+    return statsArray.filter((s) => s.category === "minecraft:killed_by");
+  }
+
+  // ---- Tokenizer and Scoring Helpers ----
   function tokenize(str) {
     return str.toLowerCase().split(/[:._\-\s]+/);
   }
@@ -81,13 +90,13 @@ export function filterStats(statsArray, filterStat) {
     return 0;
   }
 
-  const filterTokens = tokenize(filterStat);
-
-  // ---- Step 1: score unique categories only ----
+  const filterTokens = tokenize(filter);
   const categorySet = new Set(statsArray.map((s) => s.category));
+
   let bestCategory = null;
   let bestScore = 0;
 
+  // ---- Step 1: Category scoring ----
   for (const category of categorySet) {
     const tokens = tokenize(category);
     let categoryScore = 0;
@@ -104,12 +113,12 @@ export function filterStats(statsArray, filterStat) {
     }
   }
 
-  // ---- Step 2: return matching category if score is good enough ----
+  // ---- Step 2: Use best category if good enough ----
   if (bestScore >= 0.6) {
     return statsArray.filter((s) => s.category === bestCategory);
   }
 
-  // ---- Step 3: fallback to stat-level scoring ----
+  // ---- Step 3: Fallback to stat-level scoring ----
   const scoredStats = statsArray.map((stat) => {
     const values = [stat.fullKey, stat.category, stat.key];
     let best = 0;
