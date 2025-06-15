@@ -17,16 +17,21 @@ export function buildStatsEmbeds(stats, username) {
     const lines = entries.map(
       ([statName, value]) => `• **${statName}**: ${value}`
     );
-    const fieldValue = lines.join("\n");
+
+    // If no entries for this category, skip or add fallback text
+    if (lines.length === 0) continue;
+
+    const fieldValue = lines.join("\n").slice(0, 1024); // truncate to Discord limit
     const fieldName = category;
 
-    const fieldLength = fieldName.length + fieldValue.length;
+    // If fieldValue is empty or whitespace, use fallback text to avoid errors
+    const safeFieldValue =
+      fieldValue.trim().length > 0 ? fieldValue : "No stats available";
+
+    const fieldLength = fieldName.length + safeFieldValue.length;
 
     // Check if adding this field would exceed Discord limits
-    if (
-      fieldCount >= 25 ||
-      totalChars + fieldLength >= 6000
-    ) {
+    if (fieldCount >= 25 || totalChars + fieldLength >= 6000) {
       // Save current embed and start a new one
       embeds.push(currentEmbed);
       currentEmbed = createEmbed({
@@ -38,7 +43,7 @@ export function buildStatsEmbeds(stats, username) {
 
     currentEmbed.addFields({
       name: fieldName,
-      value: fieldValue.slice(0, 1024), // Discord field value limit
+      value: safeFieldValue,
       inline: false,
     });
 
