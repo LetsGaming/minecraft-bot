@@ -6,9 +6,33 @@ import {
   ComponentType,
 } from "discord.js";
 
-export function createEmbed({ title, color = 0x00bfff, timestamp = true }) {
+/**
+ * Creates a customizable embed.
+ * @param {object} options - Options for the embed.
+ * @param {string} options.title - The title of the embed.
+ * @param {string} [options.description] - The description text.
+ * @param {number} [options.color=0x00bfff] - The embed color.
+ * @param {object} [options.footer] - Footer object with a `text` property.
+ * @param {Date|string|number|boolean} [options.timestamp=true] - A Date or true to use current time, false to omit.
+ * @returns {EmbedBuilder} - The constructed embed.
+ */
+export function createEmbed({
+  title,
+  description,
+  color = 0x00bfff,
+  footer,
+  timestamp = true,
+}) {
   const embed = new EmbedBuilder().setTitle(title).setColor(color);
-  if (timestamp) embed.setTimestamp();
+
+  if (description) embed.setDescription(description);
+  if (footer?.text) embed.setFooter(footer);
+  if (timestamp === true) {
+    embed.setTimestamp(); // current time
+  } else if (timestamp instanceof Date || typeof timestamp === "number" || typeof timestamp === "string") {
+    embed.setTimestamp(timestamp); // specific date or timestamp
+  }
+
   return embed;
 }
 
