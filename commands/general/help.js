@@ -50,14 +50,24 @@ export async function execute(interaction) {
     embeds.push(embed);
   }
 
-  const message = await interaction.reply({
+  // Send the reply without deprecated fetchReply
+  await interaction.reply({
     embeds: [embeds[0]],
     components: totalPages > 1 ? [createPaginationButtons(0, totalPages)] : [],
     ephemeral: true,
-    fetchReply: true,
   });
 
-  if (totalPages > 1) {
+  // Fetch the reply manually
+  let message;
+  try {
+    message = await interaction.fetchReply();
+  } catch (err) {
+    console.warn("Could not fetch interaction reply:", err.message);
+    return;
+  }
+
+  // Handle pagination only if multiple pages and reply fetched
+  if (totalPages > 1 && message) {
     await handlePagination(message, interaction, embeds);
   }
 }

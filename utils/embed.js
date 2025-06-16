@@ -72,20 +72,24 @@ export async function handlePagination(message, interaction, embeds) {
         break;
     }
 
-    await i.update({
-      embeds: [embeds[page]],
-      components: [createPaginationButtons(page, totalPages)],
-    });
+    try {
+      await i.update({
+        embeds: [embeds[page]],
+        components: [createPaginationButtons(page, totalPages)],
+      });
+    } catch (err) {
+      console.warn("Failed to update page during pagination:", err.message);
+    }
   });
 
   collector.on("end", async () => {
+    // Don't try to edit ephemeral messages after timeout — they're gone
+    if (interaction.ephemeral) return;
+
     try {
       await message.edit({ components: [] });
     } catch (err) {
-      console.warn(
-        "Failed to remove buttons after pagination timeout:",
-        err.message
-      );
+      console.warn("Failed to remove buttons after pagination timeout:", err.message);
     }
   });
 }
