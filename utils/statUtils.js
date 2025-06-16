@@ -167,8 +167,9 @@ export function loadAllStats() {
  * @returns {Array}
  */
 export function flattenStats(allStats) {
+  const stats = allStats.stats ? allStats.stats : allStats;
   const flattened = [];
-  for (const category in allStats) {
+  for (const category in stats) {
     const group = allStats[category];
     for (const key in group) {
       flattened.push({
