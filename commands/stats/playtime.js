@@ -41,7 +41,7 @@ export async function execute(interaction) {
 
     // Find exactly the "play_time" stat in "minecraft:custom" category
     const playTimeStat = flattened.find(
-      (stat) => stat.key === "play_time" && stat.category === "minecraft:custom"
+      (stat) => stat.key === "minecraft:play_time" && stat.category === "minecraft:custom"
     );
 
     if (!playTimeStat) {
