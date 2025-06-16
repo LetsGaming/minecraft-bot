@@ -7,6 +7,7 @@ import {
   formatPlaytime,
 } from "../../utils/statUtils.js";
 import { createEmbed } from "../../utils/embed.js";
+import config from "../../config.json" assert { type: "json" };
 
 export const data = new SlashCommandBuilder()
   .setName("top")
