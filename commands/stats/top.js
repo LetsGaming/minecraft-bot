@@ -20,7 +20,7 @@ export const data = new SlashCommandBuilder()
       .setRequired(true)
       .addChoices(
         { name: "Playtime", value: "playtime" },
-        { name: "Kills", value: "kills" },
+        { name: "Mob Kills", value: "mob_kills" },
         { name: "Deaths", value: "deaths" }
       )
   );
@@ -114,23 +114,23 @@ function getStatValue(flatStats, statKey) {
     case "playtime":
       // play_time under minecraft:custom category
       const playtimeStat = flatStats.find(
-        (s) => s.category === "minecraft:custom" && s.key === "play_time"
+        (s) =>
+          s.category === "minecraft:custom" && s.key === "minecraft:play_time"
       );
       return playtimeStat ? playtimeStat.value : 0;
 
-    case "kills":
+    case "mob_kills":
       // sum all keys under minecraft:killed category
-      return flatStats
-        .filter((s) => s.category === "minecraft:killed")
-        .reduce((sum, stat) => sum + stat.value, 0);
+      const mobKills = flatStats.find(
+        (s) =>
+          s.category === "minecraft:custom" && s.key === "minecraft:mob_kills"
+      );
+      return mobKills ? mobKills.value : 0;
 
     case "deaths":
       // Try to find the single stat for deaths under minecraft:custom or minecraft:stats
       const deathStat = flatStats.find(
-        (s) =>
-          (s.category === "minecraft:custom" ||
-            s.category === "minecraft:stats") &&
-          (s.key === "deaths" || s.key === "minecraft:deaths")
+        (s) => s.category === "minecraft:custom" && s.key === "minecraft:deaths"
       );
       return deathStat ? deathStat.value : 0;
 
