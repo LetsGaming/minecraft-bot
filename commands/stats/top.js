@@ -1,4 +1,6 @@
 import { SlashCommandBuilder } from "discord.js";
+import fs from "fs";
+import path from "path";
 import {
   loadAllStats,
   flattenStats,
