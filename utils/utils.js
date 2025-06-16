@@ -17,3 +17,17 @@ export function findPlayer(playerName) {
   );
   return player ?? null;
 }
+
+export function deleteStats(uuid) {
+  const statsPath = path.resolve(
+    config.serverDir,
+    "world",
+    "stats",
+    `${uuid}.json`
+  );
+  if (fs.existsSync(statsPath)) {
+    fs.unlinkSync(statsPath);
+    return true;
+  }
+  return false;
+}

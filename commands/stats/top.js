@@ -8,6 +8,7 @@ import {
 } from "../../utils/statUtils.js";
 import { createEmbed } from "../../utils/embed.js";
 import config from "../../config.json" assert { type: "json" };
+import { deleteStats } from "../../utils/utils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("top")
@@ -60,6 +61,11 @@ export async function execute(interaction) {
       // Get player name from whitelist by UUID
       const playerObj = whitelist.find((p) => p.uuid === uuid);
       const playerName = playerObj ? playerObj.name : "Unknown";
+
+      if (playerName === "Unknown") {
+        deleteStats(uuid); // Clean up stats for unknown players
+        continue; // Skip unknown players
+      }
 
       leaderboard.push({
         name: playerName,
