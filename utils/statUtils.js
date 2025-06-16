@@ -11,7 +11,7 @@ function humanizeKey(rawKey) {
 }
 
 export function formatPlaytime(ticks) {
-  if (typeof ticks !== "number" || ticks < 0) return "0s";
+  if (typeof ticks !== "number" || ticks <= 0) return "0s";
   const seconds = Math.floor(ticks / 20); // Convert ticks to seconds
   const days = Math.floor(seconds / 86400);
   const hours = Math.floor((seconds % 86400) / 3600);

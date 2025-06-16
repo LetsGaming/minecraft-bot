@@ -51,7 +51,7 @@ export async function execute(interaction) {
     }
 
     // Get the total playtime value (seconds), or 0 if not found
-    const totalPlaytime = playTimeStat?.value ?? 0;
+    const totalPlaytime = playTimeStat.value ?? 0;
 
     // Format the total playtime into hours and minutes
     const totalPlaytimeFormatted = formatPlaytime(totalPlaytime);
