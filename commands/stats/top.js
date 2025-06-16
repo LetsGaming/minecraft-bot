@@ -50,16 +50,10 @@ export async function execute(interaction) {
 
     for (const [uuid, stats] of Object.entries(allStats)) {
       const flat = flattenStats(stats.stats);
-      console.log(`Processing stats for UUID: ${uuid}`);
-      console.log(`Flattened stats:`, flat);
       let statValue = getStatValue(flat, statKey);
 
       // For deaths, include zero values; for others, skip zero values
       if (statKey !== "deaths" && statValue === 0) continue;
-      if (statKey === "playtime") {
-        // Convert playtime from seconds to a more readable format
-        statValue = formatPlaytime(statValue);
-      }
 
       // Get player name from whitelist by UUID
       const playerObj = whitelist.find((p) => p.uuid === uuid);
@@ -84,6 +78,13 @@ export async function execute(interaction) {
       leaderboard.sort((a, b) => a.value - b.value);
     } else {
       leaderboard.sort((a, b) => b.value - a.value);
+    }
+
+    if (statKey.toLowerCase() === "playtime") {
+      // Format playtime for display, replacing value with formatted string
+      leaderboard.forEach((p) => {
+        p.value = formatPlaytime(p.value);
+      });
     }
 
     // Limit to top 10 players
