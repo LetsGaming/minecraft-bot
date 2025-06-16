@@ -1,7 +1,12 @@
-import { SlashCommandBuilder, EmbedBuilder } from "discord.js";
+import { SlashCommandBuilder } from "discord.js";
 import fs from "fs";
 import path from "path";
 import config from "../../config.json" assert { type: "json" };
+import {
+  createEmbed,
+  createPaginationButtons,
+  handlePagination,
+} from "../../utils/embed.js";
 
 export const data = new SlashCommandBuilder()
   .setName("whitelisted")
@@ -17,32 +22,42 @@ export async function execute(interaction) {
     const players = JSON.parse(rawData);
 
     if (!Array.isArray(players) || players.length === 0) {
-      return interaction.editReply("No players found in whitelist.");
-    }
-
-    const usernames = players.map(p => p.name).sort((a, b) => a.localeCompare(b));
-    const chunks = [];
-
-    // Split into x-name chunks to avoid hitting embed field limits
-    const maxFields = 10; // Max fields per embed
-    for (let i = 0; i < usernames.length; i += maxFields) {
-      chunks.push(usernames.slice(i, i + maxFields));
-    }
-
-    const embed = new EmbedBuilder()
-      .setTitle("Whitelisted Minecraft Players")
-      .setColor(0x00bfff)
-      .setFooter({ text: `Total: ${usernames.length}` })
-      .setTimestamp();
-
-    chunks.forEach((chunk, index) => {
-      embed.addFields({
-        name: `Page ${index + 1}`,
-        value: chunk.join(", "),
+      return interaction.editReply({
+        content: "No players found in whitelist.",
       });
+    }
+
+    const usernames = players
+      .map((p) => p.name)
+      .sort((a, b) => a.localeCompare(b));
+
+    const chunkSize = 20; // number of names per page
+    const totalPages = Math.ceil(usernames.length / chunkSize);
+    const embeds = [];
+
+    for (let i = 0; i < totalPages; i++) {
+      const page = usernames.slice(i * chunkSize, (i + 1) * chunkSize);
+      const embed = createEmbed({
+        title: `📃 Whitelisted Minecraft Players`,
+      })
+        .addFields({
+          name: `Page ${i + 1}`,
+          value: page.join(", "),
+        })
+        .setFooter({ text: `Total: ${usernames.length}` });
+
+      embeds.push(embed);
+    }
+
+    const message = await interaction.editReply({
+      embeds: [embeds[0]],
+      components: totalPages > 1 ? [createPaginationButtons(0, totalPages)] : [],
+      fetchReply: true,
     });
 
-    await interaction.editReply({ embeds: [embed] });
+    if (totalPages > 1) {
+      await handlePagination(message, interaction, embeds);
+    }
   } catch (err) {
     console.error(err);
     await interaction.editReply("❌ Failed to read the whitelist.");
