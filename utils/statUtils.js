@@ -81,9 +81,7 @@ export function buildStatsEmbeds(stats, username) {
   const totalPages = embeds.length;
   for (let i = 0; i < totalPages; i++) {
     const embed = embeds[i];
-    embed.data.title = `Stats for ${username} (Page ${
-      i + 1
-    }/${totalPages})`;
+    embed.data.title = `Stats for ${username} (Page ${i + 1}/${totalPages})`;
     embed.setFooter({
       text: `Total stats: ${stats.length} | Page ${i + 1}/${totalPages}`,
     });
@@ -104,22 +102,6 @@ function groupByCategory(stats) {
 }
 
 /**
- * Find a player object from whitelist by playerName (case insensitive)
- * @param {string} playerName
- * @returns {object|null} player object or null if not found
- */
-export function findPlayer(playerName) {
-  const whitelistPath = path.resolve(config.serverDir, "whitelist.json");
-  if (!fs.existsSync(whitelistPath)) return null;
-
-  const whitelist = JSON.parse(fs.readFileSync(whitelistPath, "utf-8"));
-  const player = whitelist.find(
-    (p) => p.name.toLowerCase() === playerName.toLowerCase()
-  );
-  return player ?? null;
-}
-
-/**
  * Load and parse stats JSON for given UUID
  * @param {string} uuid
  * @returns {object|null} parsed stats JSON or null if not found
@@ -135,6 +117,29 @@ export function loadStats(uuid) {
 
   const statsFile = JSON.parse(fs.readFileSync(statsPath, "utf-8"));
   return statsFile;
+}
+
+/**
+ * Load all stats files from the server directory
+ * @returns {object} all stats grouped by UUID
+ */
+export function loadAllStats() {
+  const statsDir = path.resolve(config.serverDir, "world", "stats");
+  if (!fs.existsSync(statsDir)) return {};
+
+  const allStats = {};
+  const files = fs.readdirSync(statsDir);
+
+  for (const file of files) {
+    if (file.endsWith(".json")) {
+      const uuid = file.slice(0, -5); // Remove .json extension
+      const statsPath = path.join(statsDir, file);
+      const statsFile = JSON.parse(fs.readFileSync(statsPath, "utf-8"));
+      allStats[uuid] = statsFile;
+    }
+  }
+
+  return allStats;
 }
 
 /**

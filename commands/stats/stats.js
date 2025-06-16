@@ -1,11 +1,11 @@
 import { SlashCommandBuilder } from "discord.js";
 import {
-  findPlayer,
   loadStats,
   flattenStats,
   filterStats,
   buildStatsEmbeds,
 } from "../../utils/statUtils.js";
+import { findPlayer } from "../../utils/utils.js";
 import {
   createPaginationButtons,
   handlePagination,
