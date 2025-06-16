@@ -1,5 +1,9 @@
 import { SlashCommandBuilder } from "discord.js";
-import {loadStats, flattenStats } from "../../utils/statUtils.js";
+import {
+  loadStats,
+  flattenStats,
+  formatPlaytime,
+} from "../../utils/statUtils.js";
 import { findPlayer } from "../../utils/utils.js";
 import { createEmbed } from "../../utils/embed.js";
 
@@ -49,11 +53,13 @@ export async function execute(interaction) {
     // Get the total playtime value (seconds), or 0 if not found
     const totalPlaytime = playTimeStat?.value ?? 0;
 
-    // Convert total playtime (seconds) to HH:MM:SS format
-    const hours = Math.floor(totalPlaytime / 3600);
-    const minutes = Math.floor((totalPlaytime % 3600) / 60);
-    const seconds = totalPlaytime % 60;
-    const totalPlaytimeFormatted = `${hours}h ${minutes}m ${seconds}s`;
+    // Format the total playtime into hours and minutes
+    const totalPlaytimeFormatted = formatPlaytime(totalPlaytime);
+    if (!totalPlaytimeFormatted) {
+      return interaction.editReply(
+        `❌ Unable to format playtime for \`${playerName}\`.`
+      );
+    }
 
     // Create the embed with playtime information
     const embed = createEmbed({

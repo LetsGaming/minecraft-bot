@@ -10,6 +10,17 @@ function humanizeKey(rawKey) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+export function formatPlaytime(ticks) {
+  if (typeof ticks !== "number" || ticks < 0) return "0s";
+  const seconds = Math.floor(ticks / 20); // Convert ticks to seconds
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+
+  return `${days}d ${hours}h ${minutes}m ${secs}s`;
+}
+
 /**
  * Builds an array of embeds for displaying player stats.
  * Each embed contains fields grouped by category,

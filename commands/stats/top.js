@@ -1,5 +1,9 @@
 import { SlashCommandBuilder } from "discord.js";
-import { loadAllStats, flattenStats } from "../../utils/statUtils.js";
+import {
+  loadAllStats,
+  flattenStats,
+  formatPlaytime,
+} from "../../utils/statUtils.js";
 import { createEmbed } from "../../utils/embed.js";
 
 export const data = new SlashCommandBuilder()
@@ -41,10 +45,14 @@ export async function execute(interaction) {
     for (const [uuid, stats] of Object.entries(allStats)) {
       const flat = flattenStats(stats);
 
-      const statValue = getStatValue(flat, statKey);
+      let statValue = getStatValue(flat, statKey);
 
       // For deaths, include zero values; for others, skip zero values
       if (statKey !== "deaths" && statValue === 0) continue;
+      if (statKey === "playtime") {
+        // Convert playtime from seconds to a more readable format
+        statValue = formatPlaytime(statValue);
+      }
 
       // Get player name from whitelist by UUID
       const playerObj = whitelist.find((p) => p.uuid === uuid);
