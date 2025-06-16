@@ -2,6 +2,7 @@ import { SlashCommandBuilder } from "discord.js";
 import {
   loadStats,
   flattenStats,
+  findPlayTimeStat,
   formatPlaytime,
 } from "../../utils/statUtils.js";
 import { findPlayer } from "../../utils/utils.js";
@@ -40,9 +41,7 @@ export async function execute(interaction) {
     const flattened = flattenStats(statsFile.stats);
 
     // Find exactly the "play_time" stat in "minecraft:custom" category
-    const playTimeStat = flattened.find(
-      (stat) => stat.key === "minecraft:play_time" && stat.category === "minecraft:custom"
-    );
+    const playTimeStat = findPlayTimeStat(flattened);
 
     if (!playTimeStat) {
       return interaction.editReply(

@@ -4,6 +4,8 @@ import path from "path";
 import {
   loadAllStats,
   flattenStats,
+  filterStats,
+  findPlayTimeStat,
   formatPlaytime,
 } from "../../utils/statUtils.js";
 import { createEmbed } from "../../utils/embed.js";
@@ -113,26 +115,36 @@ function getStatValue(flatStats, statKey) {
   switch (statKey.toLowerCase()) {
     case "playtime":
       // play_time under minecraft:custom category
-      const playtimeStat = flatStats.find(
-        (s) =>
-          s.category === "minecraft:custom" && s.key === "minecraft:play_time"
-      );
-      return playtimeStat ? playtimeStat.value : 0;
+      const playtimeStat = findPlayTimeStat(flatStats);
+      if (playtimeStat) {
+        // Return playtime in seconds
+        return playtimeStat;
+      } else {
+        // If no playtime stat found, return 0
+        return 0;
+      }
 
     case "mob_kills":
       // sum all keys under minecraft:killed category
-      const mobKills = flatStats.find(
-        (s) =>
-          s.category === "minecraft:custom" && s.key === "minecraft:mob_kills"
-      );
-      return mobKills ? mobKills.value : 0;
+      const mobKills = filterStats(flatStats, "mob_kills");
+      if (mobKills.length > 0) {
+        // If multiple mob kill stats, sum them
+        return mobKills.reduce((sum, s) => sum + s.value, 0);
+      } else {
+        // If no specific mob kill stat, return 0
+        return 0;
+      }
 
     case "deaths":
       // Try to find the single stat for deaths under minecraft:custom or minecraft:stats
-      const deathStat = flatStats.find(
-        (s) => s.category === "minecraft:custom" && s.key === "minecraft:deaths"
-      );
-      return deathStat ? deathStat.value : 0;
+      const deathStat = filterStats(flatStats, "deaths");
+      if (deathStat.length > 0) {
+        // If multiple death stats, sum them
+        return deathStat.reduce((sum, s) => sum + s.value, 0);
+      } else {
+        // If no specific death stat, return 0
+        return 0;
+      }
 
     default:
       // fallback: try exact key match in any category

@@ -21,6 +21,14 @@ export function formatPlaytime(ticks) {
   return `${days}d ${hours}h ${minutes}m ${secs}s`;
 }
 
+export function findPlayTimeStat(flattenedStats) {
+  const playtime = flattenedStats.find(
+    (stat) =>
+      stat.key === "minecraft:play_time" && stat.category === "minecraft:custom"
+  );
+  return playtime ? playtime.value : 0;
+}
+
 /**
  * Builds an array of embeds for displaying player stats.
  * Each embed contains fields grouped by category,
