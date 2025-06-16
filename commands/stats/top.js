@@ -50,7 +50,8 @@ export async function execute(interaction) {
 
     for (const [uuid, stats] of Object.entries(allStats)) {
       const flat = flattenStats(stats);
-
+      console.log(`Processing stats for UUID: ${uuid}`);
+      console.log(`Flattened stats:`, flat);
       let statValue = getStatValue(flat, statKey);
 
       // For deaths, include zero values; for others, skip zero values
