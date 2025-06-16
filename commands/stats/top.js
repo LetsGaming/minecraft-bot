@@ -49,7 +49,7 @@ export async function execute(interaction) {
     const leaderboard = [];
 
     for (const [uuid, stats] of Object.entries(allStats)) {
-      const flat = flattenStats(stats);
+      const flat = flattenStats(stats.stats);
       console.log(`Processing stats for UUID: ${uuid}`);
       console.log(`Flattened stats:`, flat);
       let statValue = getStatValue(flat, statKey);
