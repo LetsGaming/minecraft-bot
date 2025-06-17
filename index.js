@@ -65,9 +65,14 @@ async function registerGlobalCommands() {
   await loadCommands();
   await registerGlobalCommands();
 
-  client.once("ready", () => {
+  client.once("ready", async () => {
     console.log(`Bot is ready as ${client.user.tag}`);
-    watchForLinkCodes(client);
+    try {
+      await watchForLinkCodes(client);
+      console.log("✅ Started watching for link codes.");
+    } catch (err) {
+      console.error("❌ Failed to start log watcher:", err);
+    }
   });
 
   client.on("interactionCreate", async (interaction) => {

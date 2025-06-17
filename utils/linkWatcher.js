@@ -1,11 +1,11 @@
-import fs from "fs";
+import fs from "fs/promises";
+import fsSync from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import readline from "readline";
 import config from "../config.json" assert { type: "json" };
 import { loadJson, saveJson } from "./utils.js";
 
-// Get __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -13,53 +13,102 @@ const codesPath = path.resolve(__dirname, "../data/linkCodes.json");
 const linkedPath = path.resolve(__dirname, "../data/linkedAccounts.json");
 const logFile = path.join(config.serverDir, "logs", "latest.log");
 
-// Call this on startup
-export function watchForLinkCodes(client) {
-  let lastSize = 0;
+const LINK_CODE_REGEX = /\[.+?\]: <(.+?)> !link ([A-Z0-9]{6})/;
 
-  setInterval(() => {
-    const stats = fs.statSync(logFile);
-    if (stats.size < lastSize) lastSize = 0; // log rollover
-    if (stats.size === lastSize) return;
+let lastSize = 0;
+let codes = {};
+let linked = {};
+let codesDirty = false;
+let linkedDirty = false;
 
-    const stream = fs.createReadStream(logFile, {
-      start: lastSize,
-      end: stats.size,
-    });
-
-    const rl = readline.createInterface({ input: stream });
-    rl.on("line", (line) => handleLogLine(line, client));
-
-    lastSize = stats.size;
-  }, 3000);
+// Load data at startup
+async function loadData() {
+  codes = await loadJson(codesPath).catch(() => ({}));
+  linked = await loadJson(linkedPath).catch(() => ({}));
 }
 
-function handleLogLine(line, client) {
-  const match = line.match(/\[.+?\]: <(.+?)> !link ([A-Z0-9]{6})/);
+// Save data if changed
+async function saveData() {
+  if (codesDirty) {
+    await saveJson(codesPath, codes);
+    codesDirty = false;
+  }
+  if (linkedDirty) {
+    await saveJson(linkedPath, linked);
+    linkedDirty = false;
+  }
+}
+
+// Handle each line from the log file
+async function handleLogLine(line, client) {
+  const match = LINK_CODE_REGEX.exec(line);
   if (!match) return;
 
-  const [_, username, code] = match;
-  const codes = loadJson(codesPath);
+  const [, username, code] = match;
 
   if (!(code in codes)) return;
+
   if (Date.now() > codes[code].expires) {
     delete codes[code];
-    saveJson(codesPath, codes);
+    codesDirty = true;
     return;
   }
 
   const { discordId } = codes[code];
-  const linked = loadJson(linkedPath);
   linked[discordId] = username;
-  saveJson(linkedPath, linked);
+  linkedDirty = true;
 
   delete codes[code];
-  saveJson(codesPath, codes);
+  codesDirty = true;
+
+  // Save changes asynchronously, but don't block line handling
+  saveData().catch(console.error);
 
   const user = client.users.cache.get(discordId);
   if (user) {
     user.send(`✅ Successfully linked to Minecraft user **${username}**.`);
   }
 
-  console.log(`Linked ${discordId} ⇄ ${username}`);
+  console.log(`Linked ${discordId} to ${username}`);
+}
+
+export async function watchForLinkCodes(client) {
+  await loadData();
+
+  // Initialize lastSize
+  try {
+    const stats = await fs.stat(logFile);
+    lastSize = stats.size;
+  } catch {
+    lastSize = 0;
+  }
+
+  // Watch the log file for changes
+  fsSync.watch(logFile, async (eventType) => {
+    if (eventType !== "change") return;
+
+    try {
+      const stats = await fs.stat(logFile);
+
+      // Reset if file truncated or rotated
+      if (stats.size < lastSize) lastSize = 0;
+
+      if (stats.size === lastSize) return;
+
+      const stream = fsSync.createReadStream(logFile, {
+        start: lastSize,
+        end: stats.size - 1, // end is inclusive
+      });
+
+      const rl = readline.createInterface({ input: stream });
+
+      for await (const line of rl) {
+        await handleLogLine(line, client);
+      }
+
+      lastSize = stats.size;
+    } catch (err) {
+      console.error("Error reading log file:", err);
+    }
+  });
 }
