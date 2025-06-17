@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from "discord.js";
 import fetch from "node-fetch";
-import { whitelistUser } from "../utils/whitelist.js";
+import { sendToServer } from "../utils/server.js";
 
 export const data = new SlashCommandBuilder()
   .setName("verify")
@@ -30,5 +30,21 @@ export async function execute(interaction) {
   } catch (err) {
     console.error(err);
     await interaction.editReply(`❌ An unexpected error occurred.`);
+  }
+}
+
+/**
+ * Adds a user to the Minecraft whitelist.
+ *
+ * @param {string} username
+ * @returns {Promise<boolean>}
+ */
+export async function whitelistUser(username) {
+  try {
+    await sendToServer(`/whitelist add ${username}`);
+    return true;
+  } catch (err) {
+    console.error("Whitelist error:", err.stderr || err.error);
+    return false;
   }
 }

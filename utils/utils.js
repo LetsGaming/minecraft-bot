@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import config from "../config.json" assert { type: "json" };
+import { sendToServer } from "../../utils/sendToServer";
 
 /**
  * Find a player object from whitelist by playerName (case insensitive)
@@ -30,4 +31,25 @@ export function deleteStats(uuid) {
     return true;
   }
   return false;
+}
+
+export async function getPlayerCount() {
+  await sendToServer("/list");
+  const logFile = path.join(config.serverDir, "logs", "latest.log");
+  const logContent = fs.readFileSync(logFile, "utf-8");
+  const list = logContent
+    .split("\n")
+    .reverse()
+    .find(
+      (line) => line.includes("There are") && line.includes("players online")
+    );
+  const onlinePlayers = list.match(
+    /There are (\d+) of a max of (\d+) players online/
+  );
+  const playerCount = onlinePlayers ? onlinePlayers[1] : "unknown";
+  const maxPlayers = onlinePlayers ? onlinePlayers[2] : "unknown";
+  return {
+    playerCount,
+    maxPlayers,
+  };
 }

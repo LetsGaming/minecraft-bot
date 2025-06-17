@@ -10,6 +10,11 @@ function humanizeKey(rawKey) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+/**
+ * Format playtime in ticks to a human-readable string
+ * @param {number} ticks - The playtime in ticks (1 tick = 1/20 second)
+ * @return {string} Formatted playtime string like "1d 2h 3m 4s"
+ * */
 export function formatPlaytime(ticks) {
   if (typeof ticks !== "number" || ticks <= 0) return "0s";
   const seconds = Math.floor(ticks / 20); // Convert ticks to seconds
@@ -46,9 +51,13 @@ export function buildStatsEmbeds(stats, username) {
   const grouped = groupByCategory(stats);
 
   for (const [category, entries] of Object.entries(grouped)) {
-    const lines = entries.map(
-      (s) => `• ${humanizeKey(s.key)}: ${s.value.toLocaleString()}`
-    );
+    const lines = entries.map((s) => {
+      const isTime = s.key.toLowerCase().includes("time");
+      const displayValue = isTime
+        ? formatPlaytime(parseInt(s.value, 10))
+        : s.value.toLocaleString();
+      return `• ${humanizeKey(s.key)}: ${displayValue}`;
+    });
 
     let index = 0;
     let chunkNumber = 1;
