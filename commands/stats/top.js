@@ -1,6 +1,4 @@
 import { SlashCommandBuilder } from "discord.js";
-import fs from "fs";
-import path from "path";
 import {
   loadAllStats,
   flattenStats,
@@ -9,8 +7,7 @@ import {
   formatPlaytime,
 } from "../../utils/statUtils.js";
 import { createEmbed } from "../../utils/embed.js";
-import config from "../../config.json" assert { type: "json" };
-import { deleteStats } from "../../utils/utils.js";
+import { deleteStats, loadWhitelist } from "../../utils/utils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("top")
@@ -39,12 +36,10 @@ export async function execute(interaction) {
     }
 
     // Load whitelist once to map UUID to player name
-    const whitelistPath = path.resolve(config.serverDir, "whitelist.json");
-    let whitelist = [];
-    if (fs.existsSync(whitelistPath)) {
-      whitelist = JSON.parse(fs.readFileSync(whitelistPath, "utf-8"));
+    const whitelist = loadWhitelist();
+    if (!whitelist || whitelist.length === 0) {
+      return interaction.editReply("❌ No players found in the whitelist.");
     }
-
     // Extract player info and relevant stat value
     const leaderboard = [];
 

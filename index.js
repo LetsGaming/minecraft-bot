@@ -9,6 +9,7 @@ import { readdirSync, statSync } from "fs";
 import path from "path";
 import config from "./config.json" assert { type: "json" };
 import { fileURLToPath } from "url";
+import { watchForLinkCodes } from "./commands/connection/linkWatcher";
 
 // ESM __dirname fix
 const __filename = fileURLToPath(import.meta.url);
@@ -66,6 +67,7 @@ async function registerGlobalCommands() {
 
   client.once("ready", () => {
     console.log(`Bot is ready as ${client.user.tag}`);
+    watchForLinkCodes(client);
   });
 
   client.on("interactionCreate", async (interaction) => {

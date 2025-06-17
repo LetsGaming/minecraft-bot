@@ -7,19 +7,19 @@ import {
   createPaginationButtons,
   handlePagination,
 } from "../../utils/embed.js";
+import { loadWhitelist } from "../../utils/utils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("whitelisted")
-  .setDescription("List all players who have been whitelisted on the Minecraft server");
+  .setDescription(
+    "List all players who have been whitelisted on the Minecraft server"
+  );
 
 export async function execute(interaction) {
   await interaction.deferReply();
 
-  const cachePath = path.resolve(config.serverDir, "whitelist.json");
-
   try {
-    const rawData = fs.readFileSync(cachePath, "utf-8");
-    const players = JSON.parse(rawData);
+    const players = loadWhitelist();
 
     if (!Array.isArray(players) || players.length === 0) {
       return interaction.editReply({
@@ -51,7 +51,8 @@ export async function execute(interaction) {
 
     const message = await interaction.editReply({
       embeds: [embeds[0]],
-      components: totalPages > 1 ? [createPaginationButtons(0, totalPages)] : [],
+      components:
+        totalPages > 1 ? [createPaginationButtons(0, totalPages)] : [],
       fetchReply: true,
     });
 

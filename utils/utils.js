@@ -9,10 +9,10 @@ import { sendToServer } from "../../utils/sendToServer";
  * @returns {object|null} player object or null if not found
  */
 export function findPlayer(playerName) {
-  const whitelistPath = path.resolve(config.serverDir, "whitelist.json");
-  if (!fs.existsSync(whitelistPath)) return null;
-
-  const whitelist = JSON.parse(fs.readFileSync(whitelistPath, "utf-8"));
+  const whitelist = loadWhitelist();
+  if (!whitelist || whitelist.length === 0) {
+    return null;
+  }
   const player = whitelist.find(
     (p) => p.name.toLowerCase() === playerName.toLowerCase()
   );
@@ -33,10 +33,28 @@ export function deleteStats(uuid) {
   return false;
 }
 
-export async function getPlayerCount() {
-  await sendToServer("/list");
+export function getLatestLogs(lines = null) {
   const logFile = path.join(config.serverDir, "logs", "latest.log");
   const logContent = fs.readFileSync(logFile, "utf-8");
+
+  if (lines) {
+    const logLines = logContent.split("\n");
+    return logLines.slice(-lines);
+  }
+
+  return logContent;
+}
+
+export async function getPlayerCount() {
+  await sendToServer("/list");
+
+  const logContent = getLatestLogs(100);
+  if (!logContent) {
+    return {
+      playerCount: "unknown",
+      maxPlayers: "unknown",
+    };
+  }
   const list = logContent
     .split("\n")
     .reverse()
@@ -52,4 +70,27 @@ export async function getPlayerCount() {
     playerCount,
     maxPlayers,
   };
+}
+
+export function loadWhitelist() {
+  const whitelistPath = path.resolve(config.serverDir, "whitelist.json");
+  const whitelist = loadJson(whitelistPath);
+  if (!Array.isArray(whitelist)) {
+    console.error("Whitelist is not an array or does not exist.");
+    return null;
+  }
+  if (whitelist.length === 0) {
+    console.warn("Whitelist is empty.");
+    return null;
+  }
+  return whitelist;
+}
+
+export function loadJson(file) {
+  if (!fs.existsSync(file)) return {};
+  return JSON.parse(fs.readFileSync(file, "utf-8"));
+}
+
+export function saveJson(file, data) {
+  fs.writeFileSync(file, JSON.stringify(data, null, 2));
 }
