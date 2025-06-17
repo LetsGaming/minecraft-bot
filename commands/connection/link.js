@@ -1,6 +1,5 @@
 import { SlashCommandBuilder } from "discord.js";
-import fs from "fs";
-import path from "path";
+import {loadJson, saveJson} from "../../utils/utils"
 
 const codesPath = "./data/linkCodes.json"; // adjust if needed
 
@@ -40,10 +39,9 @@ function generateCode(length = 6) {
 }
 
 function loadCodes() {
-  if (!fs.existsSync(codesPath)) return {};
-  return JSON.parse(fs.readFileSync(codesPath, "utf-8"));
+  return loadJson(codesPath);
 }
 
 function saveCodes(codes) {
-  fs.writeFileSync(codesPath, JSON.stringify(codes, null, 2));
+  saveJson(codesPath, codes);
 }
