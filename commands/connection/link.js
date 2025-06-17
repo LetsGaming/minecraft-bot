@@ -54,5 +54,11 @@ function loadCodes() {
 }
 
 function saveCodes(codes) {
+  // Ensure parent directory exists
+  const dir = path.dirname(codesPath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
   saveJson(codesPath, codes);
 }
