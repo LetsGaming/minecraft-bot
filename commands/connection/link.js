@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from "discord.js";
-import {loadJson, saveJson} from "../../utils/utils"
+import { loadJson, saveJson } from "../../utils/utils.js";
 
 const codesPath = "./data/linkCodes.json"; // adjust if needed
 
