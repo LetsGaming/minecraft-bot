@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
-import config from '../../config.json' assert { type: 'json' };
+import config from '../config.json' assert { type: 'json' };
 
 const codesPath = './data/linkCodes.json';
 const linkedPath = './data/linkedAccounts.json';
