@@ -3,6 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import readline from "readline";
 import config from "../config.json" assert { type: "json" };
+import { loadJson, saveJson } from "./utils.js";
 
 // Get __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
