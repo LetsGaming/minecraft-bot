@@ -1,5 +1,6 @@
 import { SlashCommandBuilder } from "discord.js";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import { loadJson, saveJson } from "../../utils/utils.js";
 
