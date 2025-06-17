@@ -1,12 +1,13 @@
 import { SlashCommandBuilder } from "discord.js";
 import fetch from "node-fetch";
-import { sendToServer } from "../utils/server.js";
+import { sendToServer } from "../utils/sendToServer.js";
 
 export const data = new SlashCommandBuilder()
   .setName("verify")
   .setDescription("Verify a Minecraft username and whitelist it")
-  .addStringOption(option =>
-    option.setName("username")
+  .addStringOption((option) =>
+    option
+      .setName("username")
       .setDescription("Minecraft username to verify")
       .setRequired(true)
   );
@@ -16,7 +17,9 @@ export async function execute(interaction) {
   await interaction.deferReply();
 
   try {
-    const res = await fetch(`https://api.mojang.com/users/profiles/minecraft/${username}`);
+    const res = await fetch(
+      `https://api.mojang.com/users/profiles/minecraft/${username}`
+    );
     if (res.status !== 200) {
       return interaction.editReply(`❌ Username **${username}** not found.`);
     }
