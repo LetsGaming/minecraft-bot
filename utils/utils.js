@@ -36,10 +36,10 @@ export function deleteStats(uuid) {
 export function getLatestLogs(lines = null) {
   const logFile = path.join(config.serverDir, "logs", "latest.log");
   const logContent = fs.readFileSync(logFile, "utf-8");
+  const logLines = logContent.split("\n");
 
   if (lines) {
-    const logLines = logContent.split("\n");
-    return logLines.slice(-lines);
+    return logLines.slice(-lines).join("\n"); // 👈 always return a string
   }
 
   return logContent;
