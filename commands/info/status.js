@@ -1,8 +1,8 @@
 import { SlashCommandBuilder } from "discord.js";
-import { createEmbed } from "../../utils/embed";
-import { execCommand } from "../../shell/execCommand";
+import { createEmbed } from "../../utils/embed.js";
+import { execCommand } from "../../shell/execCommand.js";
 import config from "../../config.json" assert { type: "json" };
-import { getPlayerCount } from "../../utils/utils";
+import { getPlayerCount } from "../../utils/utils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("status")
