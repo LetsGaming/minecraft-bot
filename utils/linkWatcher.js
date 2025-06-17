@@ -34,7 +34,7 @@ export function watchForLinkCodes(client) {
 }
 
 function handleLogLine(line, client) {
-  const match = line.match(/\[.+?\]: (.+?): !link ([A-Z0-9]{6})/);
+  const match = line.match(/\[.+?\]: <(.+?)> !link ([A-Z0-9]{6})/);
   if (!match) return;
 
   const [_, username, code] = match;
