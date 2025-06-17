@@ -1,11 +1,16 @@
-import fs from 'fs';
-import path from 'path';
-import readline from 'readline';
-import config from '../config.json' assert { type: 'json' };
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import readline from "readline";
+import config from "../config.json" assert { type: "json" };
 
-const codesPath = './data/linkCodes.json';
-const linkedPath = './data/linkedAccounts.json';
-const logFile = path.join(config.serverDir, 'logs', 'latest.log');
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const codesPath = path.resolve(__dirname, "../data/linkCodes.json");
+const linkedPath = path.resolve(__dirname, "../data/linkedAccounts.json");
+const logFile = path.join(config.serverDir, "logs", "latest.log");
 
 // Call this on startup
 export function watchForLinkCodes(client) {
@@ -18,11 +23,11 @@ export function watchForLinkCodes(client) {
 
     const stream = fs.createReadStream(logFile, {
       start: lastSize,
-      end: stats.size
+      end: stats.size,
     });
 
     const rl = readline.createInterface({ input: stream });
-    rl.on('line', (line) => handleLogLine(line, client));
+    rl.on("line", (line) => handleLogLine(line, client));
 
     lastSize = stats.size;
   }, 3000);
@@ -57,5 +62,3 @@ function handleLogLine(line, client) {
 
   console.log(`Linked ${discordId} ⇄ ${username}`);
 }
-
-

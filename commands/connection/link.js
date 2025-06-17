@@ -1,7 +1,13 @@
 import { SlashCommandBuilder } from "discord.js";
+import path from "path";
+import { fileURLToPath } from "url";
 import { loadJson, saveJson } from "../../utils/utils.js";
 
-const codesPath = "./data/linkCodes.json"; // adjust if needed
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const codesPath = path.resolve(__dirname, "../../data/linkCodes.json");
 
 export const data = new SlashCommandBuilder()
   .setName("link")
@@ -39,6 +45,10 @@ function generateCode(length = 6) {
 }
 
 function loadCodes() {
+  if (!fs.existsSync(codesPath)) {
+    saveCodes({});
+    return {};
+  }
   return loadJson(codesPath);
 }
 
