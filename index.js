@@ -9,7 +9,7 @@ import { readdirSync, statSync } from "fs";
 import path from "path";
 import config from "./config.json" assert { type: "json" };
 import { fileURLToPath } from "url";
-import { watchForLinkCodes } from "./utils/linkWatcher";
+import { watchForLinkCodes } from "./utils/linkWatcher.js";
 
 // ESM __dirname fix
 const __filename = fileURLToPath(import.meta.url);
