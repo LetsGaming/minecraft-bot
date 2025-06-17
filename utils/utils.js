@@ -48,7 +48,7 @@ export function getLatestLogs(lines = null) {
 export async function getPlayerCount() {
   await sendToServer("/list");
 
-  const logContent = getLatestLogs(100);
+  const logContent = getLatestLogs(10);
   if (!logContent) {
     return {
       playerCount: "unknown",

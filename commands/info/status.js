@@ -56,12 +56,9 @@ async function getServerStatus() {
   }
 
   const { playerCount, maxPlayers } = await getPlayerCount();
-
-  const isValidCount =
-    typeof playerCount === "number" && typeof maxPlayers === "number";
-  if (!isValidCount) {
+  if (playerCount === null || maxPlayers === null) {
     return {
-      status: "Online",
+      status: "Online (Player count unknown)",
       playerCount: 0,
       maxPlayers: "Unknown",
     };
