@@ -21,25 +21,17 @@ export async function execute(interaction) {
     const embed = createEmbed({
       title: "Minecraft Server Status",
       description: `Server is currently **${status.status}**`,
-      fields: [
-        {
-          name: "Player Count",
-          value: `${status.playerCount}/${status.maxPlayers}`,
-          inline: true,
-        },
-        {
-          name: "Bot Ping",
-          value: `${botPing}ms`,
-          inline: true,
-        },
-        {
-          name: "Round Trip Time",
-          value: `${roundTrip}ms`,
-          inline: true,
-        },
-      ],
       footer: { text: `Requested by ${interaction.user.tag}` },
     });
+    embed.addFields(
+      {
+        name: "Player Count",
+        value: `${status.playerCount}/${status.maxPlayers}`,
+        inline: true,
+      },
+      { name: "Bot Ping", value: `${botPing}ms`, inline: true },
+      { name: "Round Trip Time", value: `${roundTrip}ms`, inline: true }
+    );
     await interaction.editReply({ embeds: [embed] });
   } catch (err) {
     console.error(err);
@@ -48,10 +40,14 @@ export async function execute(interaction) {
 }
 
 async function getServerStatus() {
-  const screenCmd = `sudo -u ${config.linuxUser} screen -list | grep ${config.screenSession}`;
-  const screenSessionAlive = await execCommand(screenCmd);
+  const screenCmd = `sudo -u ${config.linuxUser} screen -list`;
+  const output = await execCommand(screenCmd);
 
-  if (!screenSessionAlive) {
+  const isRunning = new RegExp(`\\b\\d+\\.${config.screenSession}\\b`).test(
+    output
+  );
+
+  if (!isRunning) {
     return {
       status: "Offline",
       playerCount: 0,

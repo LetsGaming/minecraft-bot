@@ -15,10 +15,10 @@ export async function execCommand(command) {
 
     if (stdout) console.log(`[stdout] ${stdout.trim()}`);
     if (stderr) console.warn(`[stderr] ${stderr.trim()}`);
+
+    return stdout.trim();
   } catch (error) {
     console.error(`[execCommand error]`, error);
-    throw new Error(
-      `Command failed: ${command}\n${error.stderr || error.message}`
-    );
+    return null;
   }
 }
