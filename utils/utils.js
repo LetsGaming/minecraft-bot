@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import config from "../config.json" assert { type: "json" };
-import { sendToServer } from "../../utils/sendToServer.js";
+import { sendToServer } from "./sendToServer.js";
 
 /**
  * Find a player object from whitelist by playerName (case insensitive)
