@@ -30,13 +30,13 @@ export async function execute(interaction) {
   const statKey = interaction.options.getString("stat");
 
   try {
-    const allStats = await loadAllStats(); // returns { uuid: statsJson }
+    const allStats = loadAllStats(); // returns { uuid: statsJson }
     if (!allStats || Object.keys(allStats).length === 0) {
       return interaction.editReply("❌ No player stats found.");
     }
 
     // Load whitelist once to map UUID to player name
-    const whitelist = loadWhitelist();
+    const whitelist = await loadWhitelist();
     if (!whitelist || whitelist.length === 0) {
       return interaction.editReply("❌ No players found in the whitelist.");
     }
@@ -55,7 +55,7 @@ export async function execute(interaction) {
       const playerName = playerObj ? playerObj.name : "Unknown";
 
       if (playerName === "Unknown") {
-        deleteStats(uuid); // Clean up stats for unknown players
+        await deleteStats(uuid); // Clean up stats for unknown players
         continue; // Skip unknown players
       }
 

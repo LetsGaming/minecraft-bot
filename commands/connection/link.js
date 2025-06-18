@@ -20,7 +20,7 @@ export async function execute(interaction) {
   const code = generateCode();
   const expires = Date.now() + 5 * 60 * 1000; // 5 minutes
 
-  const codes = loadCodes();
+  const codes = await loadCodes();
   codes[code] = {
     discordId: userId,
     expires,
@@ -45,20 +45,20 @@ function generateCode(length = 6) {
     .join("");
 }
 
-function loadCodes() {
+async function loadCodes() {
   if (!fs.existsSync(codesPath)) {
-    saveCodes({});
+    await saveCodes({});
     return {};
   }
-  return loadJson(codesPath);
+  return await loadJson(codesPath);
 }
 
-function saveCodes(codes) {
+async function saveCodes(codes) {
   // Ensure parent directory exists
   const dir = path.dirname(codesPath);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
 
-  saveJson(codesPath, codes);
+  await saveJson(codesPath, codes);
 }

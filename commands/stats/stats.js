@@ -33,7 +33,7 @@ export async function execute(interaction) {
   const filterStat = interaction.options.getString("stat");
 
   try {
-    const player = findPlayer(playerName);
+    const player = await findPlayer(playerName);
     if (!player) {
       return interaction.editReply(
         `❌ Player \`${playerName}\` not found in whitelist.`

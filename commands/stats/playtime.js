@@ -24,7 +24,7 @@ export async function execute(interaction) {
   const playerName = interaction.options.getString("player");
 
   try {
-    const player = findPlayer(playerName);
+    const player = await findPlayer(playerName);
     if (!player) {
       return interaction.editReply(
         `❌ Player \`${playerName}\` not found in whitelist.`

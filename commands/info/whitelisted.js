@@ -1,7 +1,4 @@
 import { SlashCommandBuilder } from "discord.js";
-import fs from "fs";
-import path from "path";
-import config from "../../config.json" assert { type: "json" };
 import {
   createEmbed,
   createPaginationButtons,
@@ -19,7 +16,7 @@ export async function execute(interaction) {
   await interaction.deferReply();
 
   try {
-    const players = loadWhitelist();
+    const players = await loadWhitelist();
 
     if (!Array.isArray(players) || players.length === 0) {
       return interaction.editReply({
