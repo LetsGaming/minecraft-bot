@@ -1,3 +1,4 @@
+import path from "path";
 import { loadJson, saveJson, getRootDir } from "./utils.js";
 
 export const LINKED_ACCOUNTS_PATH = path.resolve(
