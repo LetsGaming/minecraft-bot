@@ -1,7 +1,7 @@
 import { SlashCommandBuilder, MessageFlags } from "discord.js";
 import { fileURLToPath } from "url";
 import path from "path";
-import { loadJson, saveJson } from "../../utils/utils.js";
+import { getOnlinePlayers, loadJson, saveJson } from "../../utils/utils.js";
 import { sendToServer } from "../../utils/sendToServer.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -68,6 +68,13 @@ export async function execute(interaction) {
 
     return interaction.reply({
       content: `⏳ You can claim your next reward in ${hours}h ${minutes}m.`,
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  if (!getOnlinePlayers().includes(linkedUsername)) {
+    return interaction.reply({
+      content: "❌ You must be online in Minecraft to claim daily rewards.",
       flags: MessageFlags.Ephemeral,
     });
   }

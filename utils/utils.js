@@ -96,6 +96,29 @@ export async function getPlayerCount() {
 }
 
 /**
+ * Get a list of online players from the latest logs
+ * @returns {Promise<string[]>} Array of player names
+ */
+export async function getOnlinePlayers() {
+  await sendToServer("/list");
+
+  const logContent = await getLatestLogs(10);
+  if (!logContent) return [];
+
+  const list = logContent
+    .split("\n")
+    .reverse()
+    .find(
+      (line) => line.includes("There are") && line.includes("players online")
+    );
+
+  const match = list?.match(/There are \d+ players online: (.+)/);
+  if (!match || !match[1]) return [];
+
+  return match[1].split(",").map((name) => name.trim());
+}
+
+/**
  * Load and optionally cache the whitelist
  * @param {boolean} forceReload If true, bypass cache and reload from disk
  * @returns {Promise<object[]|null>}
