@@ -4,6 +4,7 @@ import {
   GatewayIntentBits,
   REST,
   Routes,
+  MessageFlags
 } from "discord.js";
 import { readdirSync, statSync } from "fs";
 import path from "path";
@@ -87,7 +88,7 @@ async function registerGlobalCommands() {
       console.error(err);
       const errorMsg = {
         content: "❌ There was an error while executing this command.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral
       };
       if (interaction.replied || interaction.deferred) {
         await interaction.followUp(errorMsg);

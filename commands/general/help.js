@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from "discord.js";
+import { SlashCommandBuilder, MessageFlags } from "discord.js";
 import {
   createEmbed,
   createPaginationButtons,
@@ -54,7 +54,7 @@ export async function execute(interaction) {
   await interaction.reply({
     embeds: [embeds[0]],
     components: totalPages > 1 ? [createPaginationButtons(0, totalPages)] : [],
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
   });
 
   // Fetch the reply manually

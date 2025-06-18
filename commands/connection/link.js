@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from "discord.js";
+import { SlashCommandBuilder, MessageFlags } from "discord.js";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
@@ -31,7 +31,7 @@ export async function execute(interaction) {
 
   await interaction.reply({
     content: `🧩 To link your Minecraft account, join the server and type:\n\`!link ${code}\`\n(This code expires in 5 minutes)`,
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
   });
 }
 

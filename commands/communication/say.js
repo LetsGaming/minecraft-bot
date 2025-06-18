@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from "discord.js";
+import { SlashCommandBuilder, MessageFlags } from "discord.js";
 import { sendToServer } from "../../utils/sendToServer.js";
 
 export const data = new SlashCommandBuilder()
@@ -17,7 +17,7 @@ export async function execute(interaction) {
 
   const mcMessage = `${discordUsername}: ${message}`;
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
     await sendToServer(`/say ${mcMessage}`);
