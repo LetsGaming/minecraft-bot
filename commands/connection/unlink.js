@@ -1,13 +1,8 @@
 import { SlashCommandBuilder, MessageFlags } from "discord.js";
-import path from "path";
-import { fileURLToPath } from "url";
-import { loadJson, saveJson } from "../../utils/utils.js";
-
-// Get __dirname equivalent in ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const codesPath = path.resolve(__dirname, "../../data/linkCodes.json");
+import {
+  loadLinkedAccounts,
+  saveLinkedAccounts,
+} from "../../utils/linkUtils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("unlink")
@@ -16,32 +11,20 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction) {
   const userId = interaction.user.id;
 
-  // Load existing codes
-  let codes = await loadJson(codesPath).catch(() => ({}));
-  if (!codes) {
-    codes = {};
-  }
-
-  // Find the code for this user
-  const codeEntry = Object.entries(codes).find(
-    ([, entry]) => entry.discordId === userId && !entry.confirmed
-  );
-
-  if (!codeEntry) {
+  const linkedAccounts = await loadLinkedAccounts().catch(() => ({}));
+  if (!(userId in linkedAccounts)) {
     return interaction.reply({
-      content: "❌ You have no active link to unlink.",
+      content:
+        "❌ Your Discord account is not linked to any Minecraft account.",
       flags: MessageFlags.Ephemeral,
     });
   }
 
-  const [code] = codeEntry;
-
-  // Remove the code from the store
-  delete codes[code];
-  await saveJson(codesPath, codes);
-
-  await interaction.reply({
-    content: `✅ Your Discord account has been unlinked from Minecraft. Code \`${code}\` is now invalid.`,
+  delete linkedAccounts[userId];
+  await saveLinkedAccounts(linkedAccounts);
+  return interaction.reply({
+    content:
+      "✅ Your Discord account has been successfully unlinked from your Minecraft account.",
     flags: MessageFlags.Ephemeral,
   });
 }

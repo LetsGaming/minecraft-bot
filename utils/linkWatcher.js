@@ -1,16 +1,16 @@
 import fs from "fs/promises";
 import fsSync from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
 import readline from "readline";
 import config from "../config.json" assert { type: "json" };
-import { loadJson, saveJson } from "./utils.js";
+import { loadJson } from "./utils.js";
+import {
+  LINK_CODES_PATH,
+  LINKED_ACCOUNTS_PATH,
+  saveLinkCodes,
+  saveLinkedAccounts,
+} from "./linkUtils.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const codesPath = path.resolve(__dirname, "../data/linkCodes.json");
-const linkedPath = path.resolve(__dirname, "../data/linkedAccounts.json");
 const logFile = path.join(config.serverDir, "logs", "latest.log");
 
 const LINK_CODE_REGEX = /\[.+?\]: <(.+?)> !link ([A-Z0-9]{6})/;
@@ -23,18 +23,18 @@ let linkedDirty = false;
 
 // Load data at startup
 async function loadData() {
-  codes = await loadJson(codesPath).catch(() => ({}));
-  linked = await loadJson(linkedPath).catch(() => ({}));
+  codes = await loadJson(LINK_CODES_PATH).catch(() => ({}));
+  linked = await loadJson(LINKED_ACCOUNTS_PATH).catch(() => ({}));
 }
 
 // Save data if changed
 async function saveData() {
   if (codesDirty) {
-    await saveJson(codesPath, codes);
+    await saveLinkCodes(codes);
     codesDirty = false;
   }
   if (linkedDirty) {
-    await saveJson(linkedPath, linked);
+    await saveLinkedAccounts(linked);
     linkedDirty = false;
   }
 }

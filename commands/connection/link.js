@@ -1,14 +1,5 @@
 import { SlashCommandBuilder, MessageFlags } from "discord.js";
-import path from "path";
-import fs from "fs";
-import { fileURLToPath } from "url";
-import { loadJson, saveJson } from "../../utils/utils.js";
-
-// Get __dirname equivalent in ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const codesPath = path.resolve(__dirname, "../../data/linkCodes.json");
+import { loadLinkCodes, saveLinkCodes } from "../../utils/linkUtils";
 
 export const data = new SlashCommandBuilder()
   .setName("link")
@@ -20,14 +11,14 @@ export async function execute(interaction) {
   const code = generateCode();
   const expires = Date.now() + 5 * 60 * 1000; // 5 minutes
 
-  const codes = await loadCodes();
+  const codes = await loadLinkCodes();
   codes[code] = {
     discordId: userId,
     expires,
     confirmed: false,
   };
 
-  saveCodes(codes);
+  await saveLinkCodes(codes);
 
   await interaction.reply({
     content: `🧩 To link your Minecraft account, join the server and type:\n\`!link ${code}\`\n(This code expires in 5 minutes)`,
@@ -43,22 +34,4 @@ function generateCode(length = 6) {
         .toUpperCase()
     )
     .join("");
-}
-
-async function loadCodes() {
-  if (!fs.existsSync(codesPath)) {
-    await saveCodes({});
-    return {};
-  }
-  return await loadJson(codesPath);
-}
-
-async function saveCodes(codes) {
-  // Ensure parent directory exists
-  const dir = path.dirname(codesPath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-
-  await saveJson(codesPath, codes);
 }

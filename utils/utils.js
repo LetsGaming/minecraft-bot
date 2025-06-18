@@ -1,5 +1,5 @@
 import fs from "fs";
-import { promises as fsPromises } from "fs";
+import { promises as fsPromises, existsSync } from "fs";
 import path from "path";
 import readline from "readline";
 import config from "../config.json" assert { type: "json" };
@@ -142,6 +142,55 @@ export async function loadWhitelist(forceReload = false) {
   return whitelistCache;
 }
 
+/**
+ * Walks up from `startDir` until it finds a directory
+ * containing `markerFilename`. Returns the directory path,
+ * or `process.cwd()` if no marker is ever found.
+ */
+function findUpward(startDir, markerFilename) {
+  let dir = startDir;
+  while (true) {
+    // If we find the marker here, we’re done.
+    if (existsSync(path.join(dir, markerFilename))) {
+      return dir;
+    }
+    // Otherwise go up one level
+    const parent = path.dirname(dir);
+    // If we can’t go any further up, give up
+    if (parent === dir) {
+      return startDir;
+    }
+    dir = parent;
+  }
+}
+
+// Ensure parent directory exists
+export async function ensureDir(filePath) {
+  const dir = path.dirname(filePath);
+  if (!existsSync(dir)) {
+    await fsPromises.mkdir(dir, { recursive: true });
+  }
+  return dir;
+}
+
+/**
+ * Returns the “project root” directory by looking for a
+ * package.json (or .git folder) upwards from cwd.
+ */
+export function getRootDir() {
+  // Start search from the current working directory
+  const start = process.cwd();
+
+  // Look first for a package.json…
+  const pkgRoot = findUpward(start, "package.json");
+  if (pkgRoot !== start) {
+    return pkgRoot;
+  }
+
+  // If does not exists, just return cwd
+  return start;
+}
+
 const jsonCache = new Map();
 
 /**
@@ -174,7 +223,7 @@ export async function loadJson(file) {
  * @returns {Promise<void>}
  */
 export async function saveJson(file, data) {
-  await fsPromises.mkdir(path.dirname(file), { recursive: true });
+  await ensureDir(file);
   await fsPromises.writeFile(file, JSON.stringify(data, null, 2));
 
   const { mtimeMs } = await fsPromises.stat(file);

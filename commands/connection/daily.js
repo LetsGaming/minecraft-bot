@@ -1,18 +1,18 @@
 import { SlashCommandBuilder, MessageFlags } from "discord.js";
-import { fileURLToPath } from "url";
 import path from "path";
-import { getOnlinePlayers, loadJson, saveJson } from "../../utils/utils.js";
+import {
+  getOnlinePlayers,
+  loadJson,
+  saveJson,
+  getRootDir,
+} from "../../utils/utils.js";
 import { sendToServer } from "../../utils/sendToServer.js";
+import { isLinked, getLinkedAccount } from "../../utils/linkUtils.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const baseDir = getRootDir();
 
-const linkedPath = path.resolve(__dirname, "../../data/linkedAccounts.json");
-const dailyRewardsPath = path.resolve(
-  __dirname,
-  "../../data/dailyRewards.json"
-);
-const claimedPath = path.resolve(__dirname, "../../data/claimedDaily.json");
+const dailyRewardsPath = path.resolve(baseDir, "data", "dailyRewards.json");
+const claimedPath = path.resolve(baseDir, "data", "claimedDaily.json");
 
 const DAILY_COOLDOWN = 24 * 60 * 60 * 1000; // 24 hours in ms
 const MAX_STREAK = 35;
@@ -31,16 +31,7 @@ export async function execute(interaction) {
     });
   }
 
-  const linkedAccounts = await loadJson(linkedPath).catch(() => ({}));
-  const linkedUsername = linkedAccounts[userId];
-
-  if (!linkedUsername) {
-    return interaction.reply({
-      content:
-        "❌ Your Discord account is not linked to any Minecraft account.",
-      flags: MessageFlags.Ephemeral,
-    });
-  }
+  const linkedUsername = await getLinkedAccount(userId);
 
   const [dailyRewards, claimedDaily] = await Promise.all([
     loadJson(dailyRewardsPath).catch(() => ({})),
@@ -106,11 +97,6 @@ export async function execute(interaction) {
   if (bonus) await giveReward(linkedUsername, bonus);
 
   return interaction.reply({ content: responseLines.join("\n") });
-}
-
-async function isLinked(userId) {
-  const linked = await loadJson(linkedPath).catch(() => ({}));
-  return userId in linked;
 }
 
 function chooseWeighted(pool) {
