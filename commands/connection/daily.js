@@ -1,7 +1,7 @@
 import { SlashCommandBuilder, MessageFlags } from "discord.js";
 import { fileURLToPath } from "url";
 import path from "path";
-import { loadJson, saveJson } from "./utils.js";
+import { loadJson, saveJson } from "../../utils/jsonUtils.js";
 import { sendToServer } from "../../utils/sendToServer.js";
 
 const __filename = fileURLToPath(import.meta.url);
