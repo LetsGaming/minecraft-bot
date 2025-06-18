@@ -71,8 +71,9 @@ export async function execute(interaction) {
       flags: MessageFlags.Ephemeral,
     });
   }
-
-  if (!getOnlinePlayers().includes(linkedUsername)) {
+  // Check if player is online
+  const onlinePlayers = await getOnlinePlayers();
+  if (onlinePlayers.includes(linkedUsername)) {
     return interaction.reply({
       content: "❌ You must be online in Minecraft to claim daily rewards.",
       flags: MessageFlags.Ephemeral,
