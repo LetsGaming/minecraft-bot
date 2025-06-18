@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, MessageFlags } from "discord.js";
 
-import { getLinkedAccount } from "../../utils/linkUtils";
+import { getLinkedAccount } from "../../utils/linkUtils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("linkstatus")

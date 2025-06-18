@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, MessageFlags } from "discord.js";
-import { loadLinkCodes, saveLinkCodes } from "../../utils/linkUtils";
+import { loadLinkCodes, saveLinkCodes } from "../../utils/linkUtils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("link")
