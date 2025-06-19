@@ -3,7 +3,6 @@ import { promises as fsPromises, existsSync } from "fs";
 import path from "path";
 import readline from "readline";
 import config from "../config.json" assert { type: "json" };
-import { sendToServer } from "./sendToServer.js";
 import { execCommand } from "../shell/execCommand.js";
 
 let whitelistCache = null;
@@ -240,4 +239,15 @@ export async function isScreenRunning() {
   );
 
   return isRunning;
+}
+
+/**
+ * Sends a command to the Minecraft server screen session.
+ *
+ * @param {string} command - The command to send (without newline)
+ * @returns {Promise<void>}
+ */
+export async function sendToServer(command) {
+  const fullCommand = `sudo -u ${config.linuxUser} screen -S ${config.screenSession} -X stuff "${command}$(printf '\\r')"`;
+  await execCommand(fullCommand);
 }

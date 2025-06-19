@@ -10,7 +10,7 @@ import {
   createPaginationButtons,
   handlePagination,
   createErrorEmbed,
-} from "../../utils/embed.js";
+} from "../../utils/embedUtils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("stats")

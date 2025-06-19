@@ -3,7 +3,7 @@ import {
   createEmbed,
   createPaginationButtons,
   handlePagination,
-} from "../../utils/embed.js";
+} from "../../utils/embedUtils.js";
 import { loadWhitelist } from "../../utils/utils.js";
 
 export const data = new SlashCommandBuilder()

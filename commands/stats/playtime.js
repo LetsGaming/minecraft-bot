@@ -6,7 +6,7 @@ import {
   formatPlaytime,
 } from "../../utils/statUtils.js";
 import { findPlayer } from "../../utils/utils.js";
-import { createEmbed, createErrorEmbed } from "../../utils/embed.js";
+import { createEmbed, createErrorEmbed } from "../../utils/embedUtils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("playtime")

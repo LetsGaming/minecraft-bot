@@ -5,10 +5,10 @@ import {
   loadJson,
   saveJson,
   getRootDir,
+  sendToServer
 } from "../../utils/utils.js";
-import { sendToServer } from "../../utils/sendToServer.js";
 import { isLinked, getLinkedAccount } from "../../utils/linkUtils.js";
-import { createErrorEmbed } from "../../utils/embed.js";
+import { createErrorEmbed } from "../../utils/embedUtils.js";
 
 const baseDir = getRootDir();
 

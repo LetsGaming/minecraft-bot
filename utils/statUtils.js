@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import config from "../config.json" assert { type: "json" };
-import { createEmbed } from "../utils/embed.js";
+import { createEmbed } from "../utils/embedUtils.js";
 
 function humanizeKey(rawKey) {
   return rawKey

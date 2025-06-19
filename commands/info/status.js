@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from "discord.js";
-import { createEmbed } from "../../utils/embed.js";
+import { createEmbed } from "../../utils/embedUtils.js";
 import { getPlayerCount, isScreenRunning } from "../../utils/utils.js";
 
 export const data = new SlashCommandBuilder()

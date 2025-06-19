@@ -6,7 +6,7 @@ import {
   findPlayTimeStat,
   formatPlaytime,
 } from "../../utils/statUtils.js";
-import { createEmbed, createErrorEmbed } from "../../utils/embed.js";
+import { createEmbed, createErrorEmbed } from "../../utils/embedUtils.js";
 import { deleteStats, loadWhitelist } from "../../utils/utils.js";
 
 export const data = new SlashCommandBuilder()

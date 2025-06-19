@@ -1,7 +1,7 @@
 import { SlashCommandBuilder } from "discord.js";
 import fetch from "node-fetch";
-import { sendToServer } from "../utils/sendToServer.js";
-import { createErrorEmbed } from "../utils/embed.js";
+import { sendToServer } from "../utils/utils.js";
+import { createErrorEmbed } from "../utils/embedUtils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("verify")
