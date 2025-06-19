@@ -81,7 +81,7 @@ export async function execute(interaction) {
   await saveJson(path.join(dataDir, "claimedDaily.json"), claimed);
 
   return interaction.reply(
-    response(reward, bonus, currentStreak, longestStreak, bonusStreak)
+    response(reward, bonus, currentStreak, bonusStreak)
   );
 }
 
@@ -122,11 +122,10 @@ function pick(pool) {
   return pool[0];
 }
 
-function response(reward, bonus, cs, ls, bs) {
+function response(reward, bonus, cs, bs) {
   const lines = [`🎁 **${fmt(reward)}**`];
   if (bonus) lines.push(`🔥 **${bs}-day bonus:** ${fmt(bonus)}`);
   lines.push(`📈 Streak: ${cs} days`);
-  lines.push(`🏆 Longest: ${ls} days`);
   return { content: lines.join("\n") };
 }
 

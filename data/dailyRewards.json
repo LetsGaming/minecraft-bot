@@ -16,11 +16,6 @@
             "weight": 6
         },
         {
-            "item": "experience_bottle",
-            "amount": 16,
-            "weight": 5
-        },
-        {
             "item": "block_of_lapis_lazuli",
             "amount": 16,
             "weight": 5
@@ -39,6 +34,11 @@
             "item": "name_tag",
             "amount": 1,
             "weight": 3
+        },
+        {
+            "item": "experience_bottle",
+            "amount": 16,
+            "weight": 2.5
         },
         {
             "item": "golden_apple",
