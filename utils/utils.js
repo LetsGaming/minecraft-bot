@@ -112,7 +112,9 @@ export async function getOnlinePlayers() {
       (line) => line.includes("There are") && line.includes("players online")
     );
 
-  const match = list?.match(/There are \d+ players online: (.+)/);
+  const match = list?.match(
+    /There are \d+ of a max of \d+ players online: (.+)/
+  );
   if (!match || !match[1]) return [];
 
   return match[1].split(",").map((name) => name.trim());
