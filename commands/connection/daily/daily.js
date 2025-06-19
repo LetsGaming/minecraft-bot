@@ -6,9 +6,9 @@ import {
   saveJson,
   getRootDir,
   sendToServer
-} from "../../utils/utils.js";
-import { isLinked, getLinkedAccount } from "../../utils/linkUtils.js";
-import { createErrorEmbed } from "../../utils/embedUtils.js";
+} from "../../../utils/utils.js";
+import { isLinked, getLinkedAccount } from "../../../utils/linkUtils.js";
+import { createErrorEmbed } from "../../../utils/embedUtils.js";
 
 const baseDir = getRootDir();
 

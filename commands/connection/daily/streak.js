@@ -1,7 +1,7 @@
 import path from "path";
 import { SlashCommandBuilder, MessageFlags } from "discord.js";
-import { getRootDir, loadJson } from "../../utils/utils.js";
-import { createErrorEmbed } from "../../utils/embedUtils.js";
+import { getRootDir, loadJson } from "../../../utils/utils.js";
+import { createErrorEmbed } from "../../../utils/embedUtils.js";
 
 const baseDir = getRootDir();
 const claimedPath = path.resolve(baseDir, "data", "claimedDaily.json");
