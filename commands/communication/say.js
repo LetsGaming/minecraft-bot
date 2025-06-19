@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, MessageFlags } from "discord.js";
-import { sendToServer } from "../utils/utils.js";
+import { sendToServer } from "../../utils/utils.js";
 import { createErrorEmbed } from "../../utils/embedUtils.js";
 
 export const data = new SlashCommandBuilder()
