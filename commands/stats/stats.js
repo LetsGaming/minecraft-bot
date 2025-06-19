@@ -9,6 +9,7 @@ import { findPlayer } from "../../utils/utils.js";
 import {
   createPaginationButtons,
   handlePagination,
+  createErrorEmbed,
 } from "../../utils/embed.js";
 
 export const data = new SlashCommandBuilder()
@@ -35,25 +36,37 @@ export async function execute(interaction) {
   try {
     const player = await findPlayer(playerName);
     if (!player) {
-      return interaction.editReply(
-        `❌ Player \`${playerName}\` not found in whitelist.`
-      );
+      const errEmbd = createErrorEmbed(`Player \`${playerName}\` not found.`, {
+        footer: { text: "Player Not Found" },
+        timestamp: new Date(),
+      });
+      return interaction.editReply({ embeds: [errEmbd] });
     }
 
     const statsFile = loadStats(player.uuid);
     if (!statsFile) {
-      return interaction.editReply(
-        `❌ Stats file not found for \`${playerName}\`.`
+      const errEmbd = createErrorEmbed(
+        `Stats file not found for \`${playerName}\`.`,
+        {
+          footer: { text: "Stats File Not Found" },
+          timestamp: new Date(),
+        }
       );
+      return interaction.editReply({ embeds: [errEmbd] });
     }
 
     let flattened = flattenStats(statsFile.stats);
     flattened = filterStats(flattened, filterStat);
 
     if (flattened.length === 0) {
-      return interaction.editReply(
-        `❌ No stats found matching \`${filterStat}\`.`
+      const errEmbd = createErrorEmbed(
+        `No stats found matching \`${filterStat}\`.`,
+        {
+          footer: { text: "Stats Not Found" },
+          timestamp: new Date(),
+        }
       );
+      return interaction.editReply({ embeds: [errEmbd] });
     }
 
     const embeds = buildStatsEmbeds(flattened, playerName);

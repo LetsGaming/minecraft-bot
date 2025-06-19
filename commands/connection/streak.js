@@ -1,6 +1,7 @@
 import path from "path";
 import { SlashCommandBuilder, MessageFlags } from "discord.js";
 import { getRootDir, loadJson } from "../../utils/utils.js";
+import { createErrorEmbed } from "../../utils/embed.js";
 
 const baseDir = getRootDir();
 const claimedPath = path.resolve(baseDir, "data", "claimedDaily.json");
@@ -15,14 +16,21 @@ export async function execute(interaction) {
 
   // Placeholder for actual streak logic
   const userId = interaction.user.id;
-  const streakData = await getStreakData(userId); // Implement this function to fetch streak data
+  const streakData = await getStreakData(userId);
 
   if (!streakData) {
-    return interaction.editReply("❌ No streak data found for your account.");
+    const errorEmbed = createErrorEmbed(
+      "No streak data found for your account.",
+      {
+        footer: { text: "Streak Data Not Found" },
+        timestamp: new Date(),
+      }
+    );
+    return interaction.editReply({ embeds: [errorEmbed] });
   }
 
   const { currentStreak, longestStreak, bonusStreak } = streakData;
-  const nextBonus = await getNextBonusStreak(bonusStreak); 
+  const nextBonus = await getNextBonusStreak(bonusStreak);
 
   await interaction.editReply(
     `📅 **Daily Streak Information**\n` +

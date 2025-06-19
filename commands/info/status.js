@@ -1,8 +1,6 @@
 import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embed.js";
-import { execCommand } from "../../shell/execCommand.js";
-import config from "../../config.json" assert { type: "json" };
-import { getPlayerCount } from "../../utils/utils.js";
+import { getPlayerCount, isScreenRunning } from "../../utils/utils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("status")
@@ -27,7 +25,7 @@ export async function execute(interaction) {
       {
         name: "Player Count",
         value: `${status.playerCount}/${status.maxPlayers}`,
-        inline: true,
+        inline: false,
       },
       { name: "Bot Ping", value: `${botPing}ms`, inline: true },
       { name: "Round Trip Time", value: `${roundTrip}ms`, inline: true }
@@ -40,12 +38,7 @@ export async function execute(interaction) {
 }
 
 async function getServerStatus() {
-  const screenCmd = `sudo -u ${config.linuxUser} screen -list`;
-  const output = await execCommand(screenCmd);
-
-  const isRunning = new RegExp(`\\b\\d+\\.${config.screenSession}\\b`).test(
-    output
-  );
+  const isRunning = await isScreenRunning();
 
   if (!isRunning) {
     return {
@@ -59,7 +52,7 @@ async function getServerStatus() {
   if (playerCount === null || maxPlayers === null) {
     return {
       status: "Online (Player count unknown)",
-      playerCount: 0,
+      playerCount: "Unknown",
       maxPlayers: "Unknown",
     };
   }

@@ -6,7 +6,7 @@ import {
   findPlayTimeStat,
   formatPlaytime,
 } from "../../utils/statUtils.js";
-import { createEmbed } from "../../utils/embed.js";
+import { createEmbed, createErrorEmbed } from "../../utils/embed.js";
 import { deleteStats, loadWhitelist } from "../../utils/utils.js";
 
 export const data = new SlashCommandBuilder()
@@ -32,13 +32,24 @@ export async function execute(interaction) {
   try {
     const allStats = loadAllStats(); // returns { uuid: statsJson }
     if (!allStats || Object.keys(allStats).length === 0) {
-      return interaction.editReply("❌ No player stats found.");
+      const errorEmbed = createErrorEmbed("No player stats found.", {
+        footer: { text: "Stats Not Found" },
+        timestamp: new Date(),
+      });
+      return interaction.editReply({ embeds: [errorEmbed] });
     }
 
     // Load whitelist once to map UUID to player name
     const whitelist = await loadWhitelist();
     if (!whitelist || whitelist.length === 0) {
-      return interaction.editReply("❌ No players found in the whitelist.");
+      const errorEmbed = createErrorEmbed(
+        "No players found in the whitelist.",
+        {
+          footer: { text: "Whitelist Not Found" },
+          timestamp: new Date(),
+        }
+      );
+      return interaction.editReply({ embeds: [errorEmbed] });
     }
     // Extract player info and relevant stat value
     const leaderboard = [];
@@ -65,7 +76,11 @@ export async function execute(interaction) {
       });
     }
     if (leaderboard.length === 0) {
-      return interaction.editReply(`❌ No stats found for "${statKey}".`);
+      const errorEmbed = createErrorEmbed(`No stats found for "${statKey}".`, {
+        footer: { text: "Stats Not Found" },
+        timestamp: new Date(),
+      });
+      return interaction.editReply({ embeds: [errorEmbed] });
     }
 
     // Sort leaderboard descending except for deaths which is ascending (optional)

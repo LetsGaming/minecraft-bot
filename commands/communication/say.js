@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, MessageFlags } from "discord.js";
 import { sendToServer } from "../../utils/sendToServer.js";
+import { createErrorEmbed } from "../../utils/embed.js";
 
 export const data = new SlashCommandBuilder()
   .setName("say")
@@ -24,6 +25,13 @@ export async function execute(interaction) {
     await interaction.editReply(`✅ Sent to Minecraft: "${mcMessage}"`);
   } catch (err) {
     console.error(err);
-    await interaction.editReply("❌ Failed to send message to Minecraft.");
+    const errorEmbed = createErrorEmbed(
+      `Failed to send message to Minecraft: ${err.message}`,
+      {
+        footer: { text: "Communication Error" },
+        timestamp: new Date(),
+      }
+    );
+    await interaction.editReply({ embeds: [errorEmbed] });
   }
 }

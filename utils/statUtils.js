@@ -35,6 +35,20 @@ export function findPlayTimeStat(flattenedStats) {
 }
 
 /**
+ * Format a distance value in centimeters to a human-readable string
+ * @param {number} value - The distance in centimeters
+ * @return {string} Formatted distance string like "1km 234.56m"
+  */
+export function formatDistance(value) {
+  const totalMeters = value / 100;
+  const kilometers = Math.floor(totalMeters / 1000);
+  const meters = (totalMeters % 1000).toFixed(2);
+
+  displayValue = `${kilometers}km ${meters}m`;
+  return displayValue;
+}
+
+/**
  * Builds an array of embeds for displaying player stats.
  * Each embed contains fields grouped by category,
  * with a maximum of 2 fields per embed.
@@ -52,10 +66,21 @@ export function buildStatsEmbeds(stats, username) {
 
   for (const [category, entries] of Object.entries(grouped)) {
     const lines = entries.map((s) => {
-      const isTime = s.key.toLowerCase().includes("time");
-      const displayValue = isTime
-        ? formatPlaytime(parseInt(s.value, 10))
-        : s.value.toLocaleString();
+      const key = s.key.toLowerCase();
+      const value = parseInt(s.value, 10);
+
+      const isTime = key.includes("time");
+      const isDistance = key.includes("one_cm");
+
+      let displayValue;
+      if (isTime) {
+        displayValue = formatPlaytime(value);
+      } else if (isDistance) {
+        displayValue = formatDistance(value);
+      } else {
+        displayValue = value.toLocaleString();
+      }
+
       return `• ${humanizeKey(s.key)}: ${displayValue}`;
     });
 

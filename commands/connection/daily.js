@@ -8,6 +8,7 @@ import {
 } from "../../utils/utils.js";
 import { sendToServer } from "../../utils/sendToServer.js";
 import { isLinked, getLinkedAccount } from "../../utils/linkUtils.js";
+import { createErrorEmbed } from "../../utils/embed.js";
 
 const baseDir = getRootDir();
 
@@ -25,8 +26,15 @@ export async function execute(interaction) {
   const userId = interaction.user.id;
 
   if (!(await isLinked(userId))) {
+    const errorEmbed = createErrorEmbed(
+      "You must link your Discord account to a Minecraft account first.",
+      {
+        footer: { text: "Link Required" },
+        timestamp: new Date(),
+      }
+    );
     return interaction.reply({
-      content: "❌ You must link your Discord account to claim daily rewards.",
+      embeds: [errorEmbed],
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -39,8 +47,16 @@ export async function execute(interaction) {
   ]);
 
   if (!dailyRewards || !Object.keys(dailyRewards).length) {
+    const errorEmbed = createErrorEmbed(
+      "Daily rewards data is not available. Please contact an admin.",
+      {
+        footer: { text: "Data Error" },
+        timestamp: new Date(),
+      }
+    );
     return interaction.reply({
-      content: "❌ No daily rewards are configured.",
+      embeds: [errorEmbed],
+      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -55,9 +71,16 @@ export async function execute(interaction) {
   }
 
   const onlinePlayers = await getOnlinePlayers();
-  if (onlinePlayers.includes(linkedUsername)) {
+  if (!onlinePlayers.includes(linkedUsername)) {
+    const errorEmbed = createErrorEmbed(
+      `You must be online in Minecraft to claim your daily reward.`,
+      {
+        footer: { text: "Online Requirement" },
+        timestamp: new Date(),
+      }
+    );
     return interaction.reply({
-      content: "❌ You must be online in Minecraft to claim daily rewards.",
+      embeds: [errorEmbed],
       flags: MessageFlags.Ephemeral,
     });
   }

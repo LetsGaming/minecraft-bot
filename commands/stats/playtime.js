@@ -6,7 +6,7 @@ import {
   formatPlaytime,
 } from "../../utils/statUtils.js";
 import { findPlayer } from "../../utils/utils.js";
-import { createEmbed } from "../../utils/embed.js";
+import { createEmbed, createErrorEmbed } from "../../utils/embed.js";
 
 export const data = new SlashCommandBuilder()
   .setName("playtime")
@@ -26,16 +26,26 @@ export async function execute(interaction) {
   try {
     const player = await findPlayer(playerName);
     if (!player) {
-      return interaction.editReply(
-        `❌ Player \`${playerName}\` not found in whitelist.`
+      const errorEmbed = createErrorEmbed(
+        `Player \`${playerName}\` not found.`,
+        {
+          footer: { text: "Player Not Found" },
+          timestamp: new Date(),
+        }
       );
+      return interaction.editReply({ embeds: [errorEmbed] });
     }
 
     const statsFile = loadStats(player.uuid);
     if (!statsFile) {
-      return interaction.editReply(
-        `❌ Stats file not found for \`${playerName}\`.`
+      const errorEmbed = createErrorEmbed(
+        `Stats file not found for \`${playerName}\`.`,
+        {
+          footer: { text: "Stats File Not Found" },
+          timestamp: new Date(),
+        }
       );
+      return interaction.editReply({ embeds: [errorEmbed] });
     }
 
     const flattened = flattenStats(statsFile.stats);
@@ -44,9 +54,14 @@ export async function execute(interaction) {
     const playTimeStat = findPlayTimeStat(flattened);
 
     if (!playTimeStat) {
-      return interaction.editReply(
-        `❌ Playtime stat not found for \`${playerName}\`.`
+      const errorEmbed = createErrorEmbed(
+        `Playtime stat not found for \`${playerName}\`.`,
+        {
+          footer: { text: "Playtime Stat Not Found" },
+          timestamp: new Date(),
+        }
       );
+      return interaction.editReply({ embeds: [errorEmbed] });
     }
 
     // Get the total playtime value (seconds), or 0 if not found
@@ -55,9 +70,14 @@ export async function execute(interaction) {
     // Format the total playtime into hours and minutes
     const totalPlaytimeFormatted = formatPlaytime(totalPlaytime);
     if (!totalPlaytimeFormatted) {
-      return interaction.editReply(
-        `❌ Unable to format playtime for \`${playerName}\`.`
+      const errorEmbed = createErrorEmbed(
+        `Unable to format playtime for \`${playerName}\`.`,
+        {
+          footer: { text: "Playtime Formatting Error" },
+          timestamp: new Date(),
+        }
       );
+      return interaction.editReply({ embeds: [errorEmbed] });
     }
 
     // Create the embed with playtime information

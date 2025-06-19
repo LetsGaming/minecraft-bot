@@ -12,8 +12,7 @@ export async function execute(interaction) {
   const linkedAccount = await getLinkedAccount(userId);
   if (!linkedAccount) {
     return interaction.reply({
-      content:
-        "❌ Your Discord account is not linked to any Minecraft account.",
+      content: "❌ Your Discord account is not linked to any Minecraft account.",
       flags: MessageFlags.Ephemeral,
     });
   }

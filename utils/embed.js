@@ -28,14 +28,87 @@ export function createEmbed({
   if (description) embed.setDescription(description);
   if (footer?.text) embed.setFooter(footer);
   if (timestamp === true) {
-    embed.setTimestamp(); // current time
-  } else if (timestamp instanceof Date || typeof timestamp === "number" || typeof timestamp === "string") {
-    embed.setTimestamp(timestamp); // specific date or timestamp
+    embed.setTimestamp();
+  } else if (
+    timestamp instanceof Date ||
+    typeof timestamp === "number" ||
+    typeof timestamp === "string"
+  ) {
+    embed.setTimestamp(timestamp);
   }
 
   return embed;
 }
 
+/**
+ * Adds multiple fields to an embed from a plain array.
+ * @param {EmbedBuilder} embed - The embed to modify.
+ * @param {Array} fields - Array of field objects: { name, value, inline }.
+ * @returns {EmbedBuilder}
+ */
+export function addFieldsBulk(embed, fields = []) {
+  if (!Array.isArray(fields)) return embed;
+  return embed.addFields(fields);
+}
+
+/**
+ * Shortcut for a standardized error embed.
+ */
+export function createErrorEmbed(message, { footer, timestamp = true } = {}) {
+  return createEmbed({
+    title: "❌ Error",
+    description: message,
+    color: 0xff5555,
+    footer,
+    timestamp,
+  });
+}
+
+/**
+ * Shortcut for a standardized success embed.
+ */
+export function createSuccessEmbed(message, { footer, timestamp = true } = {}) {
+  return createEmbed({
+    title: "✅ Success",
+    description: message,
+    color: 0x55ff55,
+    footer,
+    timestamp,
+  });
+}
+
+/**
+ * Shortcut for a standardized info embed.
+ */
+export function createInfoEmbed(message, { footer, timestamp = true } = {}) {
+  return createEmbed({
+    title: "ℹ️ Info",
+    description: message,
+    color: 0x3498db,
+    footer,
+    timestamp,
+  });
+}
+
+/**
+ * Embed with thumbnail image.
+ */
+export function createEmbedWithThumbnail({
+  title,
+  description,
+  thumbnail,
+  color = 0x00bfff,
+  footer,
+  timestamp = true,
+}) {
+  const embed = createEmbed({ title, description, color, footer, timestamp });
+  if (thumbnail) embed.setThumbnail(thumbnail);
+  return embed;
+}
+
+/**
+ * Generates pagination buttons based on current page state.
+ */
 export function createPaginationButtons(page, totalPages) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -64,6 +137,9 @@ export function createPaginationButtons(page, totalPages) {
   );
 }
 
+/**
+ * Handles pagination interaction for a message using embed pages.
+ */
 export async function handlePagination(message, interaction, embeds) {
   let page = 0;
   const totalPages = embeds.length;
@@ -107,13 +183,14 @@ export async function handlePagination(message, interaction, embeds) {
   });
 
   collector.on("end", async () => {
-    // Don't try to edit ephemeral messages after timeout — they're gone
     if (interaction.ephemeral) return;
-
     try {
       await message.edit({ components: [] });
     } catch (err) {
-      console.warn("Failed to remove buttons after pagination timeout:", err.message);
+      console.warn(
+        "Failed to remove buttons after pagination timeout:",
+        err.message
+      );
     }
   });
 }

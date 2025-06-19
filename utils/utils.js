@@ -4,6 +4,7 @@ import path from "path";
 import readline from "readline";
 import config from "../config.json" assert { type: "json" };
 import { sendToServer } from "./sendToServer.js";
+import { execCommand } from "../shell/execCommand.js";
 
 let whitelistCache = null;
 
@@ -228,4 +229,15 @@ export async function saveJson(file, data) {
 
   const { mtimeMs } = await fsPromises.stat(file);
   jsonCache.set(file, { mtimeMs, data });
+}
+
+export async function isScreenRunning() {
+  const screenCmd = `sudo -u ${config.linuxUser} screen -list`;
+  const output = await execCommand(screenCmd);
+
+  const isRunning = new RegExp(`\\b\\d+\\.${config.screenSession}\\b`).test(
+    output
+  );
+
+  return isRunning;
 }

@@ -1,6 +1,7 @@
 import { SlashCommandBuilder } from "discord.js";
 import fetch from "node-fetch";
 import { sendToServer } from "../utils/sendToServer.js";
+import { createErrorEmbed } from "../utils/embed.js";
 
 export const data = new SlashCommandBuilder()
   .setName("verify")
@@ -21,12 +22,26 @@ export async function execute(interaction) {
       `https://api.mojang.com/users/profiles/minecraft/${username}`
     );
     if (res.status !== 200) {
-      return interaction.editReply(`❌ Username **${username}** not found.`);
+      const errEmbd = createErrorEmbed(
+        `Username **${username}** not found. Please check the spelling and try again.`,
+        {
+          footer: { text: "Mojang API Error" },
+          timestamp: new Date(),
+        }
+      );
+      return interaction.editReply({ embeds: [errEmbd] });
     }
 
     const success = await whitelistUser(username);
     if (!success) {
-      return interaction.editReply(`❌ Failed to whitelist **${username}**.`);
+      const errEmbd = createErrorEmbed(
+        `Failed to whitelist **${username}**.`,
+        {
+          footer: { text: "Whitelist Error" },
+          timestamp: new Date(),
+        }
+      );
+      return interaction.editReply({ embeds: [errEmbd] });
     }
 
     await interaction.editReply(`✅ **${username}** has been whitelisted.`);
