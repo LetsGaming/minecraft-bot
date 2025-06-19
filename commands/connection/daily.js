@@ -45,24 +45,15 @@ export async function execute(interaction) {
   }
 
   const now = Date.now();
-  const userClaimData = claimedDaily[userId] ?? {
-    lastClaim: 0,
-    streak: 0,
-    rewards: [],
-  };
+  const userClaimData = getUserClaimData(claimedDaily, userId);
+
   const timeSinceLastClaim = now - userClaimData.lastClaim;
 
-  if (timeSinceLastClaim < DAILY_COOLDOWN) {
-    const remainingMs = DAILY_COOLDOWN - timeSinceLastClaim;
-    const hours = Math.floor(remainingMs / 3600000);
-    const minutes = Math.floor((remainingMs % 3600000) / 60000);
-
-    return interaction.reply({
-      content: `⏳ You can claim your next reward in ${hours}h ${minutes}m.`,
-      flags: MessageFlags.Ephemeral,
-    });
+  if (isClaimTooSoon(timeSinceLastClaim)) {
+    const msg = getCooldownMessage(timeSinceLastClaim);
+    return interaction.reply({ content: msg, flags: MessageFlags.Ephemeral });
   }
-  // Check if player is online
+
   const onlinePlayers = await getOnlinePlayers();
   if (onlinePlayers.includes(linkedUsername)) {
     return interaction.reply({
@@ -71,32 +62,91 @@ export async function execute(interaction) {
     });
   }
 
-  // Reset streak if last claim was more than 48 hours ago
-  let streak =
-    timeSinceLastClaim > 48 * 60 * 60 * 1000 ? 1 : userClaimData.streak + 1;
-  if (streak > MAX_STREAK) streak = 0;
+  const streakBroken = isStreakBroken(timeSinceLastClaim);
+  const { currentStreak, bonusStreak, longestStreak } = updateStreaks(
+    userClaimData,
+    streakBroken
+  );
 
   const reward = chooseWeighted(dailyRewards.default);
-  const bonus = dailyRewards.streakBonuses?.[streak];
+  const bonus = dailyRewards.streakBonuses?.[bonusStreak];
 
-  const responseLines = [`🎁 You received: **${formatReward(reward)}**`];
-  if (bonus)
-    responseLines.push(
-      `🔥 **${streak}-day streak bonus:** ${formatReward(bonus)}`
-    );
+  await processReward(linkedUsername, reward, bonus);
 
   claimedDaily[userId] = {
     lastClaim: now,
-    streak,
+    currentStreak,
+    bonusStreak,
+    longestStreak,
     rewards: [...userClaimData.rewards, { date: now, reward, bonus }],
   };
-
   await saveJson(claimedPath, claimedDaily);
 
-  await giveReward(linkedUsername, reward);
-  if (bonus) await giveReward(linkedUsername, bonus);
+  const response = buildResponse(
+    reward,
+    bonus,
+    currentStreak,
+    longestStreak,
+    bonusStreak
+  );
+  return interaction.reply({ content: response });
+}
 
-  return interaction.reply({ content: responseLines.join("\n") });
+function getUserClaimData(claimedDaily, userId) {
+  return (
+    claimedDaily[userId] ?? {
+      lastClaim: 0,
+      currentStreak: 0,
+      bonusStreak: 0,
+      longestStreak: 0,
+      rewards: [],
+    }
+  );
+}
+
+function isClaimTooSoon(timeSinceLastClaim) {
+  return timeSinceLastClaim < DAILY_COOLDOWN;
+}
+
+function getCooldownMessage(timeSinceLastClaim) {
+  const remainingMs = DAILY_COOLDOWN - timeSinceLastClaim;
+  const hours = Math.floor(remainingMs / 3600000);
+  const minutes = Math.floor((remainingMs % 3600000) / 60000);
+  return `⏳ You can claim your next reward in ${hours}h ${minutes}m.`;
+}
+
+function isStreakBroken(timeSinceLastClaim) {
+  return timeSinceLastClaim > 48 * 60 * 60 * 1000;
+}
+
+function updateStreaks(data, streakBroken) {
+  const currentStreak = streakBroken ? 1 : data.currentStreak + 1;
+  let bonusStreak = streakBroken ? 1 : data.bonusStreak + 1;
+  if (bonusStreak > MAX_STREAK) bonusStreak = 1;
+  const longestStreak = Math.max(data.longestStreak || 0, currentStreak);
+  return { currentStreak, bonusStreak, longestStreak };
+}
+
+function buildResponse(
+  reward,
+  bonus,
+  currentStreak,
+  longestStreak,
+  bonusStreak
+) {
+  const lines = [`🎁 You received: **${formatReward(reward)}**`];
+  if (bonus)
+    lines.push(
+      `🔥 **${bonusStreak}-day bonus streak:** ${formatReward(bonus)}`
+    );
+  lines.push(`📈 Current Streak: ${currentStreak} days`);
+  lines.push(`🏆 Longest Streak: ${longestStreak} days`);
+  return lines.join("\n");
+}
+
+async function processReward(player, reward, bonus) {
+  await giveReward(player, reward);
+  if (bonus) await giveReward(player, bonus);
 }
 
 function chooseWeighted(pool) {
@@ -114,7 +164,7 @@ function chooseWeighted(pool) {
 
 function formatReward(reward) {
   const name = reward.item?.replace(/^minecraft:/, "") || "???";
-  return `${reward.amount ?? 1}x \`${name}\``;
+  return `${reward.amount ?? 1}x ${name}`;
 }
 
 async function giveReward(minecraftPlayer, reward) {
@@ -129,6 +179,6 @@ async function giveReward(minecraftPlayer, reward) {
   const item = reward.item.startsWith("minecraft:")
     ? reward.item
     : `minecraft:${reward.item}`;
-  const cmd = `/give ${minecraftPlayer} ${item} ${reward.amount ?? 1}`;
-  await sendToServer(cmd, "minecraft", "dailyReward");
+  const cmd = `give ${minecraftPlayer} ${item} ${reward.amount ?? 1}`;
+  await sendToServer(cmd);
 }
