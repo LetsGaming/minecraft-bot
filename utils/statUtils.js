@@ -44,7 +44,7 @@ export function formatDistance(value) {
   const kilometers = Math.floor(totalMeters / 1000);
   const meters = (totalMeters % 1000).toFixed(2);
 
-  displayValue = `${kilometers}km ${meters}m`;
+  const displayValue = `${kilometers}km ${meters}m`;
   return displayValue;
 }
 
