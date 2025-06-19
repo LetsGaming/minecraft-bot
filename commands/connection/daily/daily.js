@@ -5,203 +5,138 @@ import {
   loadJson,
   saveJson,
   getRootDir,
-  sendToServer
+  sendToServer,
 } from "../../../utils/utils.js";
 import { isLinked, getLinkedAccount } from "../../../utils/linkUtils.js";
 import { createErrorEmbed } from "../../../utils/embedUtils.js";
 
 const baseDir = getRootDir();
-
-const dailyRewardsPath = path.resolve(baseDir, "data", "dailyRewards.json");
-const claimedPath = path.resolve(baseDir, "data", "claimedDaily.json");
-
-const DAILY_COOLDOWN = 24 * 60 * 60 * 1000; // 24 hours in ms
+const dataDir = path.resolve(baseDir, "data");
+const DAILY_COOLDOWN = 24 * 60 * 60 * 1000;
 const MAX_STREAK = 35;
 
 export const data = new SlashCommandBuilder()
   .setName("daily")
-  .setDescription("Claim your daily reward | Linked required");
+  .setDescription("Claim your daily reward | Link required");
 
 export async function execute(interaction) {
   const userId = interaction.user.id;
-
   if (!(await isLinked(userId))) {
-    const errorEmbed = createErrorEmbed(
-      "You must link your Discord account to a Minecraft account first.",
-      {
-        footer: { text: "Link Required" },
-        timestamp: new Date(),
-      }
+    return interaction.reply(
+      error("You must link your Discord account first.", "Link Required")
     );
-    return interaction.reply({
-      embeds: [errorEmbed],
-      flags: MessageFlags.Ephemeral,
-    });
   }
 
-  const linkedUsername = await getLinkedAccount(userId);
-
-  const [dailyRewards, claimedDaily] = await Promise.all([
-    loadJson(dailyRewardsPath).catch(() => ({})),
-    loadJson(claimedPath).catch(() => ({})),
+  const username = await getLinkedAccount(userId);
+  const [rewardsCfg = {}, claimed = {}] = await Promise.all([
+    loadJson(path.join(dataDir, "dailyRewards.json")).catch(() => ({})),
+    loadJson(path.join(dataDir, "claimedDaily.json")).catch(() => ({})),
   ]);
 
-  if (!dailyRewards || !Object.keys(dailyRewards).length) {
-    const errorEmbed = createErrorEmbed(
-      "Daily rewards data is not available. Please contact an admin.",
-      {
-        footer: { text: "Data Error" },
-        timestamp: new Date(),
-      }
+  if (!rewardsCfg.default?.length) {
+    return interaction.reply(
+      error("Daily rewards data unavailable.", "Data Error")
     );
-    return interaction.reply({
-      embeds: [errorEmbed],
-      flags: MessageFlags.Ephemeral,
-    });
   }
 
   const now = Date.now();
-  const userClaimData = getUserClaimData(claimedDaily, userId);
+  const userData = claimed[userId] || {
+    lastClaim: 0,
+    currentStreak: 0,
+    bonusStreak: 0,
+    longestStreak: 0,
+    rewards: [],
+  };
+  const delta = now - userData.lastClaim;
 
-  const timeSinceLastClaim = now - userClaimData.lastClaim;
-
-  if (isClaimTooSoon(timeSinceLastClaim)) {
-    const msg = getCooldownMessage(timeSinceLastClaim);
-    return interaction.reply({ content: msg, flags: MessageFlags.Ephemeral });
-  }
-
-  const onlinePlayers = await getOnlinePlayers();
-  if (!onlinePlayers.includes(linkedUsername)) {
-    const errorEmbed = createErrorEmbed(
-      `You must be online in Minecraft to claim your daily reward.`,
-      {
-        footer: { text: "Online Requirement" },
-        timestamp: new Date(),
-      }
-    );
+  if (delta < DAILY_COOLDOWN) {
     return interaction.reply({
-      embeds: [errorEmbed],
+      content: cooldownMsg(DAILY_COOLDOWN - delta),
       flags: MessageFlags.Ephemeral,
     });
   }
 
-  const streakBroken = isStreakBroken(timeSinceLastClaim);
-  const { currentStreak, bonusStreak, longestStreak } = updateStreaks(
-    userClaimData,
-    streakBroken
+  if (!(await getOnlinePlayers()).includes(username)) {
+    return interaction.reply(
+      error("You must be online in Minecraft to claim.", "Online Requirement")
+    );
+  }
+
+  const { currentStreak, bonusStreak, longestStreak } = calcStreak(
+    userData,
+    delta
   );
+  const reward = pick(rewardsCfg.default);
+  const bonus = rewardsCfg.streakBonuses?.[bonusStreak] || null;
+  await give(username, reward);
+  if (bonus) await give(username, bonus);
 
-  const reward = chooseWeighted(dailyRewards.default);
-  const bonus = dailyRewards.streakBonuses?.[bonusStreak];
-
-  await processReward(linkedUsername, reward, bonus);
-
-  claimedDaily[userId] = {
+  claimed[userId] = {
     lastClaim: now,
     currentStreak,
     bonusStreak,
     longestStreak,
-    rewards: [...userClaimData.rewards, { date: now, reward, bonus }],
+    rewards: [...userData.rewards, { date: now, reward, bonus }],
   };
-  await saveJson(claimedPath, claimedDaily);
+  await saveJson(path.join(dataDir, "claimedDaily.json"), claimed);
 
-  const response = buildResponse(
-    reward,
-    bonus,
-    currentStreak,
-    longestStreak,
-    bonusStreak
-  );
-  return interaction.reply({ content: response });
-}
-
-function getUserClaimData(claimedDaily, userId) {
-  return (
-    claimedDaily[userId] ?? {
-      lastClaim: 0,
-      currentStreak: 0,
-      bonusStreak: 0,
-      longestStreak: 0,
-      rewards: [],
-    }
+  return interaction.reply(
+    response(reward, bonus, currentStreak, longestStreak, bonusStreak)
   );
 }
 
-function isClaimTooSoon(timeSinceLastClaim) {
-  return timeSinceLastClaim < DAILY_COOLDOWN;
-}
+// helpers
+const error = (msg, footer) => ({
+  embeds: [
+    createErrorEmbed(msg, { footer: { text: footer }, timestamp: new Date() }),
+  ],
+  flags: MessageFlags.Ephemeral,
+});
+const cooldownMsg = (ms) => {
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  return `⏳ Next claim in ${h}h ${m}m.`;
+};
 
-function getCooldownMessage(timeSinceLastClaim) {
-  const remainingMs = DAILY_COOLDOWN - timeSinceLastClaim;
-  const hours = Math.floor(remainingMs / 3600000);
-  const minutes = Math.floor((remainingMs % 3600000) / 60000);
-  return `⏳ You can claim your next reward in ${hours}h ${minutes}m.`;
-}
-
-function isStreakBroken(timeSinceLastClaim) {
-  return timeSinceLastClaim > 48 * 60 * 60 * 1000;
-}
-
-function updateStreaks(data, streakBroken) {
-  const currentStreak = streakBroken ? 1 : data.currentStreak + 1;
-  let bonusStreak = streakBroken ? 1 : data.bonusStreak + 1;
-  if (bonusStreak > MAX_STREAK) bonusStreak = 1;
-  const longestStreak = Math.max(data.longestStreak || 0, currentStreak);
-  return { currentStreak, bonusStreak, longestStreak };
-}
-
-function buildResponse(
-  reward,
-  bonus,
-  currentStreak,
-  longestStreak,
-  bonusStreak
+function calcStreak(
+  { lastClaim, currentStreak, bonusStreak, longestStreak },
+  delta
 ) {
-  const lines = [`🎁 You received: **${formatReward(reward)}**`];
-  if (bonus)
-    lines.push(
-      `🔥 **${bonusStreak}-day bonus streak:** ${formatReward(bonus)}`
-    );
-  lines.push(`📈 Current Streak: ${currentStreak} days`);
-  lines.push(`🏆 Longest Streak: ${longestStreak} days`);
-  return lines.join("\n");
+  const broken = delta > 2 * DAILY_COOLDOWN;
+  const cs = broken ? 1 : currentStreak + 1;
+  const bs = broken ? 1 : Math.min(bonusStreak + 1, MAX_STREAK);
+  return {
+    currentStreak: cs,
+    bonusStreak: bs,
+    longestStreak: Math.max(longestStreak, cs),
+  };
 }
 
-async function processReward(player, reward, bonus) {
-  await giveReward(player, reward);
-  if (bonus) await giveReward(player, bonus);
-}
-
-function chooseWeighted(pool) {
-  const totalWeight = pool.reduce((sum, { weight = 1 }) => sum + weight, 0);
-  const rand = Math.random() * totalWeight;
-  let cumulative = 0;
-
+function pick(pool) {
+  const total = pool.reduce((sum, { weight = 1 }) => sum + weight, 0);
+  let r = Math.random() * total;
   for (const item of pool) {
-    cumulative += item.weight ?? 1;
-    if (rand < cumulative) return item;
+    r -= item.weight || 1;
+    if (r < 0) return item;
   }
-
-  return pool[0]; // fallback
+  return pool[0];
 }
 
-function formatReward(reward) {
-  const name = reward.item?.replace(/^minecraft:/, "") || "???";
-  return `${reward.amount ?? 1}x ${name}`;
+function response(reward, bonus, cs, ls, bs) {
+  const lines = [`🎁 **${fmt(reward)}**`];
+  if (bonus) lines.push(`🔥 **${bs}-day bonus:** ${fmt(bonus)}`);
+  lines.push(`📈 Streak: ${cs} days`);
+  lines.push(`🏆 Longest: ${ls} days`);
+  return { content: lines.join("\n") };
 }
 
-async function giveReward(minecraftPlayer, reward) {
-  if (!minecraftPlayer || !reward?.item) {
-    console.error("Invalid parameters for giving reward:", {
-      minecraftPlayer,
-      reward,
-    });
-    return;
-  }
+function fmt({ item = "???", amount = 1 }) {
+  return `${amount}x ${item.replace(/^minecraft:/, "")}`;
+}
 
-  const item = reward.item.startsWith("minecraft:")
-    ? reward.item
-    : `minecraft:${reward.item}`;
-  const cmd = `give ${minecraftPlayer} ${item} ${reward.amount ?? 1}`;
-  await sendToServer(cmd);
+async function give(player, { item, amount = 1 }) {
+  if (!player || !item)
+    return console.error("Invalid reward params", { player, item });
+  const name = item.startsWith("minecraft:") ? item : `minecraft:${item}`;
+  await sendToServer(`give ${player} ${name} ${amount}`);
 }
