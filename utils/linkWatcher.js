@@ -2,14 +2,13 @@ import fs from "fs/promises";
 import fsSync from "fs";
 import path from "path";
 import readline from "readline";
-import config from "../config.json" assert { type: "json" };
-import { loadJson } from "./utils.js";
 import {
-  LINK_CODES_PATH,
-  LINKED_ACCOUNTS_PATH,
+  loadLinkCodes,
+  loadLinkedAccounts,
   saveLinkCodes,
   saveLinkedAccounts,
 } from "./linkUtils.js";
+import config from "../config.json" assert { type: "json" };
 
 const logFile = path.join(config.serverDir, "logs", "latest.log");
 
@@ -23,8 +22,8 @@ let linkedDirty = false;
 
 // Load data at startup
 async function loadData() {
-  codes = await loadJson(LINK_CODES_PATH).catch(() => ({}));
-  linked = await loadJson(LINKED_ACCOUNTS_PATH).catch(() => ({}));
+  codes = await loadLinkCodes().catch(() => ({}));
+  linked = await loadLinkedAccounts().catch(() => ({}));
 }
 
 // Save data if changed
@@ -48,9 +47,15 @@ async function handleLogLine(line, client) {
 
   if (!(code in codes)) return;
 
+  const user = client.users.cache.get(discordId);
   if (Date.now() > codes[code].expires) {
     delete codes[code];
     codesDirty = true;
+    if (user) {
+      user.send(
+        `❌ Link code **${code}** has expired. Please request a new one.`
+      );
+    }
     return;
   }
 
@@ -64,7 +69,6 @@ async function handleLogLine(line, client) {
   // Save changes asynchronously, but don't block line handling
   saveData().catch(console.error);
 
-  const user = client.users.cache.get(discordId);
   if (user) {
     user.send(`✅ Successfully linked to Minecraft user **${username}**.`);
   }
