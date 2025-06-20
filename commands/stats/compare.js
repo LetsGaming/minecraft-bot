@@ -4,7 +4,6 @@ import {
   flattenStats,
   filterStats,
   buildStatsEmbeds,
-  findPlayer,
 } from "../../utils/statUtils.js";
 import {
   createPaginationButtons,
@@ -12,6 +11,7 @@ import {
   createErrorEmbed,
   createInfoEmbed,
 } from "../../utils/embedUtils.js";
+import { findPlayer } from "../../utils/utils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("compare")
