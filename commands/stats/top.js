@@ -30,7 +30,7 @@ export async function execute(interaction) {
   const statKey = interaction.options.getString("stat");
 
   try {
-    const allStats = loadAllStats(); // returns { uuid: statsJson }
+    const allStats = await loadAllStats(); // returns { uuid: statsJson }
     if (!allStats || Object.keys(allStats).length === 0) {
       const errorEmbed = createErrorEmbed("No player stats found.", {
         footer: { text: "Stats Not Found" },

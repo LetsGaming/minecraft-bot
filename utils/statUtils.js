@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import config from "../config.json" assert { type: "json" };
+import { loadJson } from "./utils.js";
 import { createEmbed } from "../utils/embedUtils.js";
 
 function humanizeKey(rawKey) {
@@ -38,7 +39,7 @@ export function findPlayTimeStat(flattenedStats) {
  * Format a distance value in centimeters to a human-readable string
  * @param {number} value - The distance in centimeters
  * @return {string} Formatted distance string like "1km 234.56m"
-  */
+ */
 export function formatDistance(value) {
   const totalMeters = value / 100;
   const kilometers = Math.floor(totalMeters / 1000);
@@ -159,16 +160,20 @@ function groupByCategory(stats) {
  * @param {string} uuid
  * @returns {object|null} parsed stats JSON or null if not found
  */
-export function loadStats(uuid) {
+export async function loadStats(uuid) {
   const statsPath = path.resolve(
     config.serverDir,
     "world",
     "stats",
     `${uuid}.json`
   );
-  if (!fs.existsSync(statsPath)) return null;
 
-  const statsFile = JSON.parse(fs.readFileSync(statsPath, "utf-8"));
+  const statsFile = await loadJson(statsPath);
+  if (!statsFile) {
+    console.warn(`Stats file not found for UUID: ${uuid}`);
+    return null;
+  }
+
   return statsFile;
 }
 
@@ -176,23 +181,23 @@ export function loadStats(uuid) {
  * Load all stats files from the server directory
  * @returns {object} all stats grouped by UUID
  */
-export function loadAllStats() {
+export async function loadAllStats() {
   const statsDir = path.resolve(config.serverDir, "world", "stats");
   if (!fs.existsSync(statsDir)) return {};
 
-  const allStats = {};
-  const files = fs.readdirSync(statsDir);
+  const files = await fsPromises.readdir(statsDir);
+  const statFiles = files.filter((file) => file.endsWith(".json"));
 
-  for (const file of files) {
-    if (file.endsWith(".json")) {
-      const uuid = file.slice(0, -5); // Remove .json extension
+  const results = await Promise.all(
+    statFiles.map(async (file) => {
+      const uuid = file.slice(0, -5);
       const statsPath = path.join(statsDir, file);
-      const statsFile = JSON.parse(fs.readFileSync(statsPath, "utf-8"));
-      allStats[uuid] = statsFile;
-    }
-  }
+      const data = await loadJson(statsPath);
+      return [uuid, data];
+    })
+  );
 
-  return allStats;
+  return Object.fromEntries(results);
 }
 
 /**

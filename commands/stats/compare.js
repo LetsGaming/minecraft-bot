@@ -4,6 +4,7 @@ import {
   flattenStats,
   filterStats,
   buildStatsEmbeds,
+  findPlayer,
 } from "../../utils/statUtils.js";
 import {
   createPaginationButtons,
@@ -42,9 +43,11 @@ export async function execute(interaction) {
   const filterStat = interaction.options.getString("stat");
 
   try {
+    const player1Data = await findPlayer(player1);
+    const player2Data = await findPlayer(player2);
     // Load stats for both players
-    const stats1 = await loadStats(player1);
-    const stats2 = await loadStats(player2);
+    const stats1 = await loadStats(player1Data.uuid);
+    const stats2 = await loadStats(player2Data.uuid);
 
     if (!stats1 || !stats2) {
       const errEmbd = createErrorEmbed(

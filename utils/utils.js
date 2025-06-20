@@ -1,7 +1,6 @@
-import fs from "fs";
+import { exec } from "child_process";
 import { promises as fsPromises, existsSync } from "fs";
 import path from "path";
-import readline from "readline";
 import config from "../config.json" assert { type: "json" };
 import { execCommand } from "../shell/execCommand.js";
 
@@ -42,28 +41,45 @@ export async function deleteStats(uuid) {
   }
 }
 
+let lastListOutput = null;
+let lastListTime = 0;
+
+/**
+ * Get the latest server list output, caching it for 500ms
+ * @returns {Promise<string>}
+ * This function sends a "/list" command to the server
+ * and returns the latest output.
+ * If called again within 500ms,
+ * it returns the cached output instead.
+ */
+async function getListOutput() {
+  const now = Date.now();
+  if (now - lastListTime < 500 && lastListOutput) return lastListOutput;
+
+  await sendToServer("/list");
+  const output = await getLatestLogs(10);
+
+  lastListOutput = output;
+  lastListTime = now;
+  return output;
+}
+
 /**
  * Read the latest server logs
  * @param {number|null} lines Number of lines from the end to read (like tail)
  * @returns {Promise<string>}
  */
-export async function getLatestLogs(lines = null) {
-  const logFile = path.join(config.serverDir, "logs", "latest.log");
-
-  if (lines == null) {
-    return fsPromises.readFile(logFile, "utf-8");
-  }
-
-  const fileStream = fs.createReadStream(logFile);
-  const rl = readline.createInterface({ input: fileStream });
-  const buffer = [];
-
-  for await (const line of rl) {
-    buffer.push(line);
-    if (buffer.length > lines) buffer.shift();
-  }
-
-  return buffer.join("\n");
+export function getLatestLogs(lines = 10) {
+  return new Promise((resolve, reject) => {
+    exec(
+      `tail -n ${lines} latest.log`,
+      { cwd: path.join(config.serverDir, "logs") },
+      (err, stdout) => {
+        if (err) return reject(err);
+        resolve(stdout);
+      }
+    );
+  });
 }
 
 /**
@@ -71,9 +87,7 @@ export async function getLatestLogs(lines = null) {
  * @returns {Promise<{playerCount: string, maxPlayers: string}>}
  */
 export async function getPlayerCount() {
-  await sendToServer("/list");
-
-  const logContent = await getLatestLogs(10);
+  const logContent = await getListOutput();
   if (!logContent) {
     return {
       playerCount: "unknown",
@@ -100,9 +114,7 @@ export async function getPlayerCount() {
  * @returns {Promise<string[]>} Array of player names
  */
 export async function getOnlinePlayers() {
-  await sendToServer("/list");
-
-  const logContent = await getLatestLogs(10);
+  const logContent = await getListOutput();
   if (!logContent) return [];
 
   const list = logContent

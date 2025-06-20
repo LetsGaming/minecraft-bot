@@ -36,7 +36,7 @@ export async function execute(interaction) {
       return interaction.editReply({ embeds: [errorEmbed] });
     }
 
-    const statsFile = loadStats(player.uuid);
+    const statsFile = await loadStats(player.uuid);
     if (!statsFile) {
       const errorEmbed = createErrorEmbed(
         `Stats file not found for \`${playerName}\`.`,
