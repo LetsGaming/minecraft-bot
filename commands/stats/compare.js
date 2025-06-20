@@ -75,14 +75,15 @@ export async function execute(interaction) {
       return interaction.editReply({ embeds: [infoEmbd] });
     }
 
-    const message = await interaction.editReply({
-      embeds: [embeds[0]],
-      components:
-        totalPages > 1 ? [createPaginationButtons(0, totalPages)] : [],
-      fetchReply: true,
-    });
+    if (embeds.length === 1) {
+      await interaction.editReply({ embeds });
+    } else {
+      const message = await interaction.editReply({
+        embeds: [embeds[0]],
+        components: [createPaginationButtons(0, embeds.length)],
+        fetchReply: true,
+      });
 
-    if (totalPages > 1) {
       await handlePagination(message, interaction, embeds);
     }
   } catch (error) {
