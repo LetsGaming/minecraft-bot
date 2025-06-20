@@ -75,11 +75,16 @@ export async function execute(interaction) {
       return interaction.editReply({ embeds: [infoEmbd] });
     }
 
-    // Create pagination buttons
-    const buttons = createPaginationButtons(embeds.length);
+    const message = await interaction.editReply({
+      embeds: [embeds[0]],
+      components:
+        totalPages > 1 ? [createPaginationButtons(0, totalPages)] : [],
+      fetchReply: true,
+    });
 
-    // Send initial reply with embeds and buttons
-    await handlePagination(interaction, embeds, buttons);
+    if (totalPages > 1) {
+      await handlePagination(message, interaction, embeds);
+    }
   } catch (error) {
     console.error("Error comparing players:", error);
     return interaction.editReply({
