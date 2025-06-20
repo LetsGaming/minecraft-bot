@@ -80,9 +80,7 @@ export async function execute(interaction) {
   };
   await saveJson(path.join(dataDir, "claimedDaily.json"), claimed);
 
-  return interaction.reply(
-    response(reward, bonus, currentStreak, bonusStreak)
-  );
+  return interaction.reply(response(reward, bonus, currentStreak, bonusStreak));
 }
 
 // helpers
@@ -95,7 +93,15 @@ const error = (msg, footer) => ({
 const cooldownMsg = (ms) => {
   const h = Math.floor(ms / 3600000);
   const m = Math.floor((ms % 3600000) / 60000);
-  return `⏳ Next claim in ${h}h ${m}m.`;
+  const readyAt = new Date(Date.now() + ms);
+  return `⏳ Next claim in ${h}h ${m}m. | Ready at ${readyAt.toLocaleTimeString(
+    "en-GB",
+    {
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "Europe/Berlin", // CEST in summer, CET in winter
+    }
+  )}`;
 };
 
 function calcStreak(
