@@ -4,7 +4,7 @@ import config from "../config.json" assert { type: "json" };
 import { loadJson } from "./utils.js";
 import { createEmbed } from "../utils/embedUtils.js";
 
-function humanizeKey(rawKey) {
+export function humanizeKey(rawKey) {
   return rawKey
     .replace(/^minecraft:/, "")
     .replace(/_/g, " ")
