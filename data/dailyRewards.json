@@ -16,7 +16,7 @@
             "weight": 6
         },
         {
-            "item": "block_of_lapis_lazuli",
+            "item": "lapis_block",
             "amount": 16,
             "weight": 5
         },
@@ -56,24 +56,29 @@
             "weight": 1
         },
         {
-            "item": "netherite_ingot",
-            "amount": 1,
-            "weight": 0.5
-        },
-        {
             "item": "elytra",
             "amount": 1,
             "weight": 0.3
         },
         {
-            "item": "block_of_netherite",
+            "item": "netherite_ingot",
             "amount": 1,
             "weight": 0.2
+        },
+        {
+            "item": "totem_of_undying",
+            "amount": 1,
+            "weight": 0.15
         },
         {
             "item": "beacon",
             "amount": 1,
             "weight": 0.1
+        },
+        {
+            "item": "block_of_netherite",
+            "amount": 1,
+            "weight": 0.02
         }
     ],
     "streakBonuses": {
