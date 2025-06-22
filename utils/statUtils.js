@@ -1,4 +1,5 @@
 import fs from "fs";
+import { promises as fsPromises } from "fs";
 import path from "path";
 import config from "../config.json" assert { type: "json" };
 import { loadJson } from "./utils.js";
@@ -70,8 +71,8 @@ export function buildStatsEmbeds(stats, username) {
       const key = s.key.toLowerCase();
       const value = parseInt(s.value, 10);
 
-      const isTime = key.includes("time");
-      const isDistance = key.includes("one_cm");
+      const isTime = /(_time|Time)$/.test(key);
+      const isDistance = /one_cm$/.test(key);
 
       let displayValue;
       if (isTime) {
