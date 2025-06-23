@@ -57,6 +57,8 @@ async function getListOutput() {
   if (now - lastListTime < 500 && lastListOutput) return lastListOutput;
 
   await sendToServer("/list");
+  // Wait a moment to ensure the server has processed the command
+  await new Promise((resolve) => setTimeout(resolve, 100));
   const output = await getLatestLogs(10);
 
   lastListOutput = output;
@@ -69,10 +71,11 @@ async function getListOutput() {
  * @param {number|null} lines Number of lines from the end to read (like tail)
  * @returns {Promise<string>}
  */
+const logFile = path.join(config.serverDir, "logs", "latest.log");
 export function getLatestLogs(lines = 10) {
   return new Promise((resolve, reject) => {
     exec(
-      `tail -n ${lines} latest.log`,
+      `tail -n ${lines} "${logFile}"`,
       { cwd: path.join(config.serverDir, "logs") },
       (err, stdout) => {
         if (err) return reject(err);
