@@ -1,7 +1,7 @@
 {
     "default": [
         {
-            "item": "block_of_coal",
+            "item": "coal_block",
             "amount": 6,
             "weight": 8
         },
@@ -11,7 +11,7 @@
             "weight": 7
         },
         {
-            "item": "block_of_gold",
+            "item": "gold_block",
             "amount": 6,
             "weight": 6
         },
@@ -76,7 +76,7 @@
             "weight": 0.1
         },
         {
-            "item": "block_of_netherite",
+            "item": "netherite_block",
             "amount": 1,
             "weight": 0.02
         }
@@ -115,7 +115,7 @@
             "amount": 1
         },
         "35": {
-            "item": "block_of_netherite",
+            "item": "netherite_block",
             "amount": 1
         }
     }
