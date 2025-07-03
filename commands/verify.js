@@ -1,7 +1,7 @@
 import { SlashCommandBuilder } from "discord.js";
 import fetch from "node-fetch";
 import { sendToServer } from "../utils/utils.js";
-import { createErrorEmbed } from "../utils/embedUtils.js";
+import { createErrorEmbed, createSuccessEmbed } from "../utils/embedUtils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("verify")
@@ -44,7 +44,7 @@ export async function execute(interaction) {
       return interaction.editReply({ embeds: [errEmbd] });
     }
 
-    await interaction.editReply(`✅ **${username}** has been whitelisted.`);
+    await interaction.editReply({ embeds: [createSuccessEmbed(`✅ **${username}** has been whitelisted.`, { footer: { text: "Whitelist Success" }, timestamp: new Date() })] });
   } catch (err) {
     console.error(err);
     await interaction.editReply(`❌ An unexpected error occurred.`);
