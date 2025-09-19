@@ -87,6 +87,7 @@ export function getLatestLogs(lines = 10) {
 
 /**
  * Ask the server for player count and parse from logs
+ * Works for both old (1.12 and below) and new (1.13+) formats
  * @returns {Promise<{playerCount: string, maxPlayers: string}>}
  */
 export async function getPlayerCount() {
@@ -98,14 +99,25 @@ export async function getPlayerCount() {
     };
   }
 
-  const list = logContent
-    .split("\n")
-    .reverse()
-    .find(
-      (line) => line.includes("There are") && line.includes("players online")
-    );
+  const lines = logContent.split("\n").reverse();
+  const listLine = lines.find(
+    (line) => line.includes("There are") && line.includes("players online")
+  );
 
-  const match = list?.match(/There are (\d+) of a max of (\d+) players online/);
+  if (!listLine) {
+    return {
+      playerCount: "unknown",
+      maxPlayers: "unknown",
+    };
+  }
+
+  // Match both formats:
+  // "There are X of a max of Y players online"
+  // "There are X/Y players online"
+  const match =
+    listLine.match(/There are (\d+) of a max of (\d+) players online/) ||
+    listLine.match(/There are (\d+)\/(\d+) players online/);
+
   return {
     playerCount: match?.[1] ?? "unknown",
     maxPlayers: match?.[2] ?? "unknown",
@@ -114,25 +126,43 @@ export async function getPlayerCount() {
 
 /**
  * Get a list of online players from the latest logs
+ * Works for both old (1.12 and below) and new (1.13+) formats
  * @returns {Promise<string[]>} Array of player names
  */
 export async function getOnlinePlayers() {
   const logContent = await getListOutput();
   if (!logContent) return [];
 
-  const list = logContent
-    .split("\n")
-    .reverse()
-    .find(
-      (line) => line.includes("There are") && line.includes("players online")
-    );
-
-  const match = list?.match(
-    /There are \d+ of a max of \d+ players online: (.+)/
+  const lines = logContent.split("\n");
+  // Find the line with "There are ... players online"
+  const idx = lines.findIndex(
+    (line) => line.includes("There are") && line.includes("players online")
   );
-  if (!match || !match[1]) return [];
+  if (idx === -1) return [];
 
-  return match[1].split(",").map((name) => name.trim());
+  const listLine = lines[idx];
+
+  // Try inline format first (1.13+)
+  const inlineMatch = listLine.match(
+    /There are \d+(?:\/\d+| of a max of \d+) players online:\s*(.+)/
+  );
+  if (inlineMatch && inlineMatch[1]) {
+    return inlineMatch[1]
+      .split(",")
+      .map((name) => name.trim())
+      .filter(Boolean);
+  }
+
+  // Otherwise, check the *next line* for older versions
+  const nextLine = lines[idx + 1];
+  if (nextLine && !nextLine.includes("DedicatedServer")) {
+    return nextLine
+      .split(",")
+      .map((name) => name.trim())
+      .filter(Boolean);
+  }
+
+  return [];
 }
 
 /**
@@ -157,6 +187,21 @@ export async function loadWhitelist(forceReload = false) {
 
   whitelistCache = data;
   return whitelistCache;
+}
+
+export async function getLevelName() {
+  const propsPath = path.resolve(config.serverDir, "server.properties");
+  try {
+    const content = await fsPromises.readFile(propsPath, "utf-8");
+    const match = content.match(/^level-name\s*=\s*(.+)$/m);
+    if (match) {
+      return match[1].trim();
+    }
+  } catch (err) {
+    console.warn(`Could not read server.properties: ${err.message}`);
+  }
+  // Default fallback if nothing found
+  return "world";
 }
 
 /**

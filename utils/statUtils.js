@@ -2,7 +2,7 @@ import fs from "fs";
 import { promises as fsPromises } from "fs";
 import path from "path";
 import config from "../config.json" assert { type: "json" };
-import { loadJson } from "./utils.js";
+import { getLevelName, loadJson } from "./utils.js";
 import { createEmbed } from "../utils/embedUtils.js";
 
 export function humanizeKey(rawKey) {
@@ -156,18 +156,31 @@ function groupByCategory(stats) {
   return grouped;
 }
 
+async function getStatsPath(uuid = null) {
+  const levelName = await getLevelName() || "world";
+  if(uuid) {
+    return path.resolve(
+      config.serverDir,
+      levelName,
+      "stats",
+      `${uuid}.json`
+    );
+  } else {
+    return path.resolve(
+      config.serverDir,
+      levelName,
+      "stats"
+    );
+  }
+}
+
 /**
  * Load and parse stats JSON for given UUID
  * @param {string} uuid
  * @returns {object|null} parsed stats JSON or null if not found
  */
 export async function loadStats(uuid) {
-  const statsPath = path.resolve(
-    config.serverDir,
-    "world",
-    "stats",
-    `${uuid}.json`
-  );
+  const statsPath = await getStatsPath(uuid);
 
   const statsFile = await loadJson(statsPath);
   if (!statsFile) {
@@ -183,9 +196,12 @@ export async function loadStats(uuid) {
  * @returns {object} all stats grouped by UUID
  */
 export async function loadAllStats() {
-  const statsDir = path.resolve(config.serverDir, "world", "stats");
-  if (!fs.existsSync(statsDir)) return {};
-
+  const statsDir = await getStatsPath();
+  if (!fs.existsSync(statsDir)) {
+    console.error(`Stats directory does not exist: ${statsDir}`);
+    return {};
+  }
+  
   const files = await fsPromises.readdir(statsDir);
   const statFiles = files.filter((file) => file.endsWith(".json"));
 
