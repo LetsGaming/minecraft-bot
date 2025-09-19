@@ -1,4 +1,4 @@
-import { getListOutput, stripLogPrefix } from "./utils";
+import { getListOutput, stripLogPrefix } from "./utils.js";
 const LOOKAHEAD_LINES = 5; // how many lines to look ahead for player names after the count line
 
 /**

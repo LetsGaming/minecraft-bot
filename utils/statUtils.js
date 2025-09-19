@@ -201,7 +201,7 @@ export async function loadAllStats() {
     console.error(`Stats directory does not exist: ${statsDir}`);
     return {};
   }
-  
+
   const files = await fsPromises.readdir(statsDir);
   const statFiles = files.filter((file) => file.endsWith(".json"));
 
@@ -218,58 +218,58 @@ export async function loadAllStats() {
 }
 
 /**
- * Flatten the nested stats object into array of {fullKey, category, key, value}
+ * Flatten Minecraft stats into array of { fullKey, category, key, value }
+ * Works for both older flat and newer nested formats.
  * @param {object} allStats
  * @returns {Array}
  */
 export function flattenStats(allStats) {
   const flattened = [];
-  for (const category in allStats) {
-    const group = allStats[category];
-    for (const key in group) {
-      flattened.push({
-        fullKey: `${category}.${key}`,
-        category,
-        key,
-        value: group[key],
-      });
+
+  function recurse(obj, parentKey = "") {
+    for (const k in obj) {
+      const value = obj[k];
+      const fullKey = parentKey ? `${parentKey}.${k}` : k;
+
+      if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+        // nested object → recurse
+        recurse(value, fullKey);
+      } else {
+        // leaf value → push
+        const category = parentKey || k.split(".")[0] || "unknown";
+        const key = k;
+        flattened.push({ fullKey, category, key, value });
+      }
     }
   }
+
+  recurse(allStats);
   return flattened;
 }
 
 /**
- * Filter stats by a search string matching fullKey, category, or key,
- * returning only the closest matches based on a simple similarity score.
- *
+ * Filter stats by a search string (matching fullKey, category, or key)
+ * Returns best matches sorted by simple similarity score
  * @param {Array} statsArray
  * @param {string} filterStat
- * @returns {Array} filtered and sorted by best match score (descending)
  */
 export function filterStats(statsArray, filterStat) {
   if (!filterStat) return statsArray;
 
   const filter = filterStat.toLowerCase();
 
-  // ---- Hardcoded disambiguation ----
-  if (filter === "killed") {
-    return statsArray.filter((s) => s.category === "minecraft:killed");
-  }
-  if (filter === "killed_by") {
-    return statsArray.filter((s) => s.category === "minecraft:killed_by");
-  }
+  // Hardcoded disambiguation
+  if (filter === "killed") return statsArray.filter((s) => s.category === "minecraft:killed");
+  if (filter === "killed_by") return statsArray.filter((s) => s.category === "minecraft:killed_by");
 
-  // ---- Tokenizer and Scoring Helpers ----
-  function tokenize(str) {
-    return str.toLowerCase().split(/[:._\-\s]+/);
-  }
+  const tokenize = (str) => str.toLowerCase().split(/[:._\-\s]+/);
 
-  function scoreToken(token, filter) {
+  const scoreToken = (token, filter) => {
     if (token === filter) return 1;
     if (token.startsWith(filter)) return filter.length / token.length;
     if (token.includes(filter)) return filter.length / (2 * token.length);
     return 0;
-  }
+  };
 
   const filterTokens = tokenize(filter);
   const categorySet = new Set(statsArray.map((s) => s.category));
@@ -277,7 +277,7 @@ export function filterStats(statsArray, filterStat) {
   let bestCategory = null;
   let bestScore = 0;
 
-  // ---- Step 1: Category scoring ----
+  // Step 1: Category scoring
   for (const category of categorySet) {
     const tokens = tokenize(category);
     let categoryScore = 0;
@@ -294,12 +294,10 @@ export function filterStats(statsArray, filterStat) {
     }
   }
 
-  // ---- Step 2: Use best category if good enough ----
-  if (bestScore >= 0.6) {
-    return statsArray.filter((s) => s.category === bestCategory);
-  }
+  // Step 2: Use best category if good enough
+  if (bestScore >= 0.6) return statsArray.filter((s) => s.category === bestCategory);
 
-  // ---- Step 3: Fallback to stat-level scoring ----
+  // Step 3: Fallback to stat-level scoring
   const scoredStats = statsArray.map((stat) => {
     const values = [stat.fullKey, stat.category, stat.key];
     let best = 0;
