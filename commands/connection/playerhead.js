@@ -7,7 +7,8 @@ import {
   ComponentType,
 } from "discord.js";
 import { getLinkedAccount } from "../../utils/linkUtils.js";
-import { getOnlinePlayers, sendToServer } from "../../utils/utils.js";
+import { sendToServer } from "../../utils/utils.js";
+import { getOnlinePlayers } from "../../utils/playerUtils.js";
 import {
   createErrorEmbed,
   createEmbedWithThumbnail,

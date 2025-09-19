@@ -1,6 +1,7 @@
 import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embedUtils.js";
-import { getPlayerCount, isScreenRunning } from "../../utils/utils.js";
+import { isScreenRunning } from "../../utils/utils.js";
+import { getPlayerCount } from "../../utils/playerUtils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("status")

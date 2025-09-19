@@ -52,7 +52,7 @@ let lastListTime = 0;
  * If called again within 500ms,
  * it returns the cached output instead.
  */
-async function getListOutput() {
+export async function getListOutput() {
   const now = Date.now();
   if (now - lastListTime < 500 && lastListOutput) return lastListOutput;
 
@@ -86,83 +86,35 @@ export function getLatestLogs(lines = 10) {
 }
 
 /**
- * Ask the server for player count and parse from logs
- * Works for both old (1.12 and below) and new (1.13+) formats
- * @returns {Promise<{playerCount: string, maxPlayers: string}>}
+ * Strip the typical Minecraft server log prefix from a line.
+ * Examples:
+ * "[11:44:26] [Server thread/INFO] [net.minecraft.server.dedicated.DedicatedServer]: LetsGamingDE"
+ * "[12:00:00] [Server thread/INFO]: player1, player2"
+ * "Saved the world"
+ * becomes:
+ * "LetsGamingDE", "player1, player2", "Saved the world"
+ *
+ * @param {string} line - a single line from the server log
+ * @returns {string} the line content with the log prefix removed
  */
-export async function getPlayerCount() {
-  const logContent = await getListOutput();
-  if (!logContent) {
-    return {
-      playerCount: "unknown",
-      maxPlayers: "unknown",
-    };
-  }
+export function stripLogPrefix(line) {
+  if (!line) return "";
 
-  const lines = logContent.split("\n").reverse();
-  const listLine = lines.find(
-    (line) => line.includes("There are") && line.includes("players online")
-  );
+  // 1) Try standard Minecraft prefix with "]:" (most common)
+  const sep = "]: ";
+  let idx = line.lastIndexOf(sep);
+  if (idx !== -1) return line.slice(idx + sep.length).trim();
 
-  if (!listLine) {
-    return {
-      playerCount: "unknown",
-      maxPlayers: "unknown",
-    };
-  }
+  // 2) Try without the space after "]"
+  idx = line.lastIndexOf("]:");
+  if (idx !== -1) return line.slice(idx + 2).replace(/^[:\s]+/, "").trim();
 
-  // Match both formats:
-  // "There are X of a max of Y players online"
-  // "There are X/Y players online"
-  const match =
-    listLine.match(/There are (\d+) of a max of (\d+) players online/) ||
-    listLine.match(/There are (\d+)\/(\d+) players online/);
+  // 3) Fallback to last ": " in the line
+  idx = line.lastIndexOf(": ");
+  if (idx !== -1) return line.slice(idx + 2).trim();
 
-  return {
-    playerCount: match?.[1] ?? "unknown",
-    maxPlayers: match?.[2] ?? "unknown",
-  };
-}
-
-/**
- * Get a list of online players from the latest logs
- * Works for both old (1.12 and below) and new (1.13+) formats
- * @returns {Promise<string[]>} Array of player names
- */
-export async function getOnlinePlayers() {
-  const logContent = await getListOutput();
-  if (!logContent) return [];
-
-  const lines = logContent.split("\n");
-  // Find the line with "There are ... players online"
-  const idx = lines.findIndex(
-    (line) => line.includes("There are") && line.includes("players online")
-  );
-  if (idx === -1) return [];
-
-  const listLine = lines[idx];
-
-  // Try inline format first (1.13+)
-  const inlineMatch = listLine.match(
-    /There are \d+(?:\/\d+| of a max of \d+) players online:\s*(.+)/
-  );
-  if (inlineMatch && inlineMatch[1]) {
-    return inlineMatch[1]
-      .split(",")
-      .map((name) => name.trim())
-      .filter(Boolean);
-  }
-
-  // Otherwise, check the *next line* for older versions
-  const nextLine = lines[idx + 1];
-  if (nextLine && !nextLine.includes("DedicatedServer")) {
-    return nextLine
-      .split(",")
-      .map((name) => name.trim())
-      .filter(Boolean);
-  }
-
-  return [];
+  // 4) Nothing to strip, return trimmed line
+  return line.trim();
 }
 
 /**

@@ -1,12 +1,12 @@
 import { SlashCommandBuilder, MessageFlags } from "discord.js";
 import path from "path";
 import {
-  getOnlinePlayers,
   loadJson,
   saveJson,
   getRootDir,
   sendToServer,
 } from "../../../utils/utils.js";
+import { getOnlinePlayers } from "../../../utils/playerUtils.js";
 import { isLinked, getLinkedAccount } from "../../../utils/linkUtils.js";
 import { createErrorEmbed } from "../../../utils/embedUtils.js";
 
