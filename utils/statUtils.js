@@ -28,11 +28,20 @@ export function formatPlaytime(ticks) {
   return `${days}d ${hours}h ${minutes}m ${secs}s`;
 }
 
+/**
+ * Find the playtime stat across both new and old formats.
+ * @param {Array} flattenedStats - array from flattenStats()
+ * @returns {number} playtime value (ticks) or 0 if not found
+ */
 export function findPlayTimeStat(flattenedStats) {
+  if (!flattenedStats || flattenedStats.length === 0) return 0;
+
   const playtime = flattenedStats.find(
     (stat) =>
-      stat.key === "minecraft:play_time" && stat.category === "minecraft:custom"
+      (stat.key === "minecraft:play_time" && stat.category === "minecraft:custom") ||
+      stat.fullKey === "stat.playOneMinute"
   );
+
   return playtime ? playtime.value : 0;
 }
 
