@@ -92,7 +92,7 @@ export async function execute(interaction) {
   } catch (error) {
     console.error("Error comparing players:", error);
     return interaction.editReply({
-      content: "An error occurred while comparing players.",
+      embeds: [createErrorEmbed("❌ An error occurred while comparing players.")],
     });
   }
 }

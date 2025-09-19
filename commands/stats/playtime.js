@@ -89,6 +89,6 @@ export async function execute(interaction) {
     await interaction.editReply({ embeds: [embed] });
   } catch (err) {
     console.error(err);
-    await interaction.editReply(`❌ An unexpected error occurred.`);
+    await interaction.editReply({embeds: [createErrorEmbed("An unexpected error occurred.", { footer: { text: "Playtime Error" }, timestamp: new Date() })]});
   }
 }

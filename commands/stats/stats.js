@@ -55,7 +55,7 @@ export async function execute(interaction) {
       return interaction.editReply({ embeds: [errEmbd] });
     }
 
-    let flattened = flattenStats(statsFile.stats);
+    let flattened = flattenStats(statsFile.stats ? statsFile.stats : statsFile);
     flattened = filterStats(flattened, filterStat);
 
     if (flattened.length === 0) {
@@ -84,6 +84,6 @@ export async function execute(interaction) {
     }
   } catch (err) {
     console.error(err);
-    return interaction.editReply("❌ Failed to retrieve stats.");
+    return createErrorEmbed('Failed to retrieve stats.');
   }
 }

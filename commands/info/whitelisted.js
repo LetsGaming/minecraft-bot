@@ -1,6 +1,7 @@
 import { SlashCommandBuilder } from "discord.js";
 import {
   createEmbed,
+  createErrorEmbed,
   createPaginationButtons,
   handlePagination,
 } from "../../utils/embedUtils.js";
@@ -58,6 +59,6 @@ export async function execute(interaction) {
     }
   } catch (err) {
     console.error(err);
-    await interaction.editReply("❌ Failed to read the whitelist.");
+    await interaction.editReply({embeds: [createErrorEmbed("Failed to read the Whitelist.")]});
   }
 }
