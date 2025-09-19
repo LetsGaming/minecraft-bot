@@ -157,20 +157,11 @@ function groupByCategory(stats) {
 }
 
 async function getStatsPath(uuid = null) {
-  const levelName = await getLevelName() || "world";
-  if(uuid) {
-    return path.resolve(
-      config.serverDir,
-      levelName,
-      "stats",
-      `${uuid}.json`
-    );
+  const levelName = (await getLevelName()) || "world";
+  if (uuid) {
+    return path.resolve(config.serverDir, levelName, "stats", `${uuid}.json`);
   } else {
-    return path.resolve(
-      config.serverDir,
-      levelName,
-      "stats"
-    );
+    return path.resolve(config.serverDir, levelName, "stats");
   }
 }
 
@@ -218,32 +209,47 @@ export async function loadAllStats() {
 }
 
 /**
- * Flatten Minecraft stats into array of { fullKey, category, key, value }
- * Works for both older flat and newer nested formats.
+ * Flatten stats into an array of { fullKey, category, key, value }
+ * Works for both older flat format and newer nested format.
  * @param {object} allStats
  * @returns {Array}
  */
 export function flattenStats(allStats) {
   const flattened = [];
 
-  function recurse(obj, parentKey = "") {
-    for (const k in obj) {
-      const value = obj[k];
-      const fullKey = parentKey ? `${parentKey}.${k}` : k;
+  // Check if keys are flat (older format)
+  const isFlatFormat = Object.keys(allStats).some((k) => k.includes("."));
 
-      if (value !== null && typeof value === "object" && !Array.isArray(value)) {
-        // nested object → recurse
-        recurse(value, fullKey);
-      } else {
-        // leaf value → push
-        const category = parentKey || k.split(".")[0] || "unknown";
-        const key = k;
-        flattened.push({ fullKey, category, key, value });
+  if (isFlatFormat) {
+    for (const fullKey in allStats) {
+      const value = allStats[fullKey];
+      const parts = fullKey.split("."); // e.g., stat.useItem.minecraft.bow
+      let category = parts.slice(0, 2).join("."); // e.g., stat.useItem
+      let key = parts.slice(2).join("."); // e.g., minecraft.bow
+
+      // Handle special keys without 'stat.' prefix (like reaper.kill)
+      if (!fullKey.startsWith("stat.")) {
+        category = parts[0]; // e.g., reaper
+        key = parts.slice(1).join(".");
+      }
+
+      flattened.push({ fullKey, category, key, value });
+    }
+  } else {
+    // New nested format
+    for (const category in allStats) {
+      const group = allStats[category];
+      for (const key in group) {
+        flattened.push({
+          fullKey: `${category}.${key}`,
+          category,
+          key,
+          value: group[key],
+        });
       }
     }
   }
 
-  recurse(allStats);
   return flattened;
 }
 
@@ -259,8 +265,15 @@ export function filterStats(statsArray, filterStat) {
   const filter = filterStat.toLowerCase();
 
   // Hardcoded disambiguation
-  if (filter === "killed") return statsArray.filter((s) => s.category === "minecraft:killed");
-  if (filter === "killed_by") return statsArray.filter((s) => s.category === "minecraft:killed_by");
+  if (filter === "killed")
+    return statsArray.filter(
+      (s) => s.category.includes("kill") || s.category === "minecraft:killed"
+    );
+  if (filter === "killed_by")
+    return statsArray.filter(
+      (s) =>
+        s.category.includes("KilledBy") || s.category === "minecraft:killed_by"
+    );
 
   const tokenize = (str) => str.toLowerCase().split(/[:._\-\s]+/);
 
@@ -295,7 +308,8 @@ export function filterStats(statsArray, filterStat) {
   }
 
   // Step 2: Use best category if good enough
-  if (bestScore >= 0.6) return statsArray.filter((s) => s.category === bestCategory);
+  if (bestScore >= 0.6)
+    return statsArray.filter((s) => s.category === bestCategory);
 
   // Step 3: Fallback to stat-level scoring
   const scoredStats = statsArray.map((stat) => {
