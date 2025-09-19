@@ -55,7 +55,7 @@ export async function execute(interaction) {
     const leaderboard = [];
 
     for (const [uuid, stats] of Object.entries(allStats)) {
-      const flat = flattenStats(stats.stats);
+      const flat = flattenStats(stats);
       let statValue = getStatValue(flat, statKey);
 
       // For deaths, include zero values; for others, skip zero values
@@ -118,7 +118,7 @@ export async function execute(interaction) {
     await interaction.editReply({ embeds: [embed] });
   } catch (err) {
     console.error(err);
-    await interaction.editReply("❌ An unexpected error occurred.");
+    await interaction.editReply({embeds: [createErrorEmbed("An error occurred while retrieving the leaderboard.")]});
   }
 }
 

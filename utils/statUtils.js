@@ -211,10 +211,11 @@ export async function loadAllStats() {
 /**
  * Flatten stats into an array of { fullKey, category, key, value }
  * Works for both older flat format and newer nested format.
- * @param {object} allStats
+ * @param {object} statsFile 
  * @returns {Array}
  */
-export function flattenStats(allStats) {
+export function flattenStats(statsFile) {
+  let allStats = statsFile.stats ? statsFile.stats : statsFile;
   const flattened = [];
 
   // Check if keys are flat (older format)

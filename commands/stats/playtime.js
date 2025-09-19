@@ -48,7 +48,7 @@ export async function execute(interaction) {
       return interaction.editReply({ embeds: [errorEmbed] });
     }
 
-    const flattened = flattenStats(statsFile.stats);
+    const flattened = flattenStats(statsFile);
 
     // Find exactly the "play_time" stat in "minecraft:custom" category
     const playTimeStat = findPlayTimeStat(flattened);

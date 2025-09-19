@@ -55,7 +55,7 @@ export async function execute(interaction) {
       return interaction.editReply({ embeds: [errEmbd] });
     }
 
-    let flattened = flattenStats(statsFile.stats ? statsFile.stats : statsFile);
+    let flattened = flattenStats(statsFile);
     flattened = filterStats(flattened, filterStat);
 
     if (flattened.length === 0) {

@@ -60,8 +60,8 @@ export async function execute(interaction) {
     }
 
     // Flatten and filter stats
-    let flattened1 = flattenStats(stats1.stats);
-    let flattened2 = flattenStats(stats2.stats);
+    let flattened1 = flattenStats(stats1);
+    let flattened2 = flattenStats(stats2);
 
     if (filterStat) {
       flattened1 = filterStats(flattened1, filterStat);
