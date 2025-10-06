@@ -13,13 +13,17 @@ import config from "../config.json" assert { type: "json" };
 const logFile = path.join(config.serverDir, "logs", "latest.log");
 const logsDir = path.dirname(logFile);
 
-const LINK_CODE_REGEX = /\[.+?\]: <(.+?)> !link ([A-Z0-9]{6})/;
+// Allow lowercase codes and usernames with underscores or dots
+const LINK_CODE_REGEX = /\[.+?\]: <([^>]+)> !link ([A-Za-z0-9]{6})/;
 
 let lastSize = 0;
 let codes = {};
 let linked = {};
 let codesDirty = false;
 let linkedDirty = false;
+let reading = false;
+let saving = false;
+let pendingSave = false;
 
 async function loadData() {
   codes = await loadLinkCodes().catch(() => ({}));
@@ -27,13 +31,30 @@ async function loadData() {
 }
 
 async function saveData() {
-  if (codesDirty) {
-    await saveLinkCodes(codes);
-    codesDirty = false;
+  if (saving) {
+    // Another save is in progress — mark that we need another save afterwards
+    pendingSave = true;
+    return;
   }
-  if (linkedDirty) {
-    await saveLinkedAccounts(linked);
-    linkedDirty = false;
+
+  saving = true;
+  try {
+    if (codesDirty) {
+      await saveLinkCodes(codes);
+      codesDirty = false;
+    }
+    if (linkedDirty) {
+      await saveLinkedAccounts(linked);
+      linkedDirty = false;
+    }
+  } catch (err) {
+    console.error("Error saving data:", err);
+  } finally {
+    saving = false;
+    if (pendingSave) {
+      pendingSave = false;
+      await saveData(); // handle any pending save
+    }
   }
 }
 
@@ -48,9 +69,12 @@ async function handleLogLine(line, client) {
   const { discordId, expires } = entry;
   const user = client.users.cache.get(discordId);
 
+  // Expired code
   if (Date.now() > expires) {
     delete codes[code];
     codesDirty = true;
+    await saveData();
+
     if (user) {
       user
         .send(`❌ Link code **${code}** has expired. Please request a new one.`)
@@ -59,12 +83,13 @@ async function handleLogLine(line, client) {
     return;
   }
 
+  // Valid link
   linked[discordId] = username;
   linkedDirty = true;
   delete codes[code];
   codesDirty = true;
 
-  saveData().catch(console.error);
+  await saveData();
 
   if (user) {
     user
@@ -119,20 +144,26 @@ export async function watchForLinkCodes(client) {
 
   fsSync.watch(logsDir, async (eventType, filename) => {
     if (filename !== "latest.log") return;
+    if (reading) return; // prevent overlapping reads
 
-    if (eventType === "rename") {
-      // Probably deleted or rotated
-      try {
-        await fs.access(logFile);
-        console.log("ℹ️ latest.log reappeared after rename/rotation");
-        lastSize = 0;
-      } catch {
-        return; // still missing, wait for next event
+    reading = true;
+    try {
+      if (eventType === "rename") {
+        // Probably deleted or rotated
+        try {
+          await fs.access(logFile);
+          console.log("ℹ️ latest.log reappeared after rename/rotation");
+          lastSize = 0;
+        } catch {
+          return; // still missing, wait for next event
+        }
       }
-    }
 
-    if (eventType === "change") {
-      await readNewLines(client);
+      if (eventType === "change") {
+        await readNewLines(client);
+      }
+    } finally {
+      reading = false;
     }
   });
 
