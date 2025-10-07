@@ -35,14 +35,14 @@ async function handleNetherportalCommand(match) {
       targetZ = Math.floor(z * 8);
       message = `To link this portal in the Overworld, go to X: ${targetX}, Z: ${targetZ}`;
     } else {
-      message = "⚠️ You must be in the Overworld or Nether for this command to work.";
+      message = "! You must be in the Overworld or Nether for this command to work.";
     }
 
     // Whisper the message to the player
     await sendToServer(`/msg ${username} ${message}`);
   } catch (err) {
     console.error(`Error processing !netherportal for ${username}:`, err);
-    await sendToServer(`/msg ${username} ❌ Error calculating portal coordinates.`);
+    await sendToServer(`/msg ${username} X Error calculating portal coordinates.`);
   }
 }
 
