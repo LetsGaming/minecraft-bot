@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from "discord.js";
 import { createEmbed, createErrorEmbed } from "../../utils/embedUtils.js";
-import { getRootDir, loadJson } from "../../utils/utils";
+import { getRootDir, loadJson } from "../../utils/utils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("map")
