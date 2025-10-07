@@ -18,7 +18,11 @@ export async function execute(interaction) {
     return;
   }
 
-  const embed = createEmbed("World Seed", `The world seed is: \`${seed}\``);
+  const embed = createEmbed({
+    title: "World Seed",
+    description: `The server's world seed is:\n\`${seed}\``,
+    footer: { text: `Requested by ${interaction.user.tag}` },
+  });
 
   await interaction.editReply({ embeds: [embed] });
 }
