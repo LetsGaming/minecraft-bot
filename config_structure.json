@@ -3,5 +3,11 @@
     "clientId": "DISCORD_CLIENT_ID",
     "linuxUser": "username",
     "screenSession": "session_name",
-    "serverDir": "/path/to/minecraft/server"
+    "serverDir": "/path/to/minecraft/server",
+
+    "commands": {
+        "seed": {
+            "enabled": true
+        }
+    }
 }

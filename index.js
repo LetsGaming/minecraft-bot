@@ -39,7 +39,11 @@ async function loadCommands() {
 
   for (const file of commandFiles) {
     const command = await import(path.resolve(file));
-    if (command.data && command.execute) {
+
+    // Check if command is enabled
+    const enabled = config.commands?.[command.data.name]?.enabled ?? true;
+
+    if (command.data && command.execute && enabled) {
       client.commands.set(command.data.name, command);
     } else {
       console.warn(`Skipping file ${file} - missing 'data' or 'execute'.`);
