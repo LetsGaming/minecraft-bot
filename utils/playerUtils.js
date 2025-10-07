@@ -53,6 +53,14 @@ export async function getPlayerCoords(playerName) {
   return { x, y, z };
 }
 
+export async function getPlayerDimension(playerName) {
+  await sendToServer(`/data get entity ${playerName} Dimension`);
+  await new Promise(r => setTimeout(r, 100));
+  const output = await getLatestLogs(10);
+  const match = output.match(/"minecraft:([^"]+)"/);
+  return match ? match[1] : "unknown";
+}
+
 /**
  * Main parser: parse a block of log content and return counts + player list
  */

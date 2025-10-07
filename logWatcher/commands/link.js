@@ -1,10 +1,10 @@
+import { registerLogCommand } from "../logWatcher.js";
 import {
   loadLinkCodes,
   loadLinkedAccounts,
   saveLinkCodes,
   saveLinkedAccounts,
 } from "../../utils/linkUtils.js";
-import { registerLogCommand } from "./logWatcher.js";
 
 let codes = {};
 let linked = {};
