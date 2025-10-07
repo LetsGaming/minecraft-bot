@@ -1,3 +1,4 @@
+import path from "path";
 import { SlashCommandBuilder } from "discord.js";
 import { createEmbed, createErrorEmbed } from "../../utils/embedUtils.js";
 import { getRootDir, loadJson } from "../../utils/utils.js";
