@@ -15,9 +15,7 @@ async function handleNetherportalCommand(match) {
     const coords = await getPlayerCoords(username);
 
     if (!coords) {
-      await sendToServer(
-        `/tellraw ${username} {"text":"X Could not get your position. Make sure you're online.","color":"red"}`
-      );
+      await sendToServer(`/msg ${username} ❌ Could not get your position. Make sure you're online.`);
       return;
     }
 
@@ -37,17 +35,14 @@ async function handleNetherportalCommand(match) {
       targetZ = Math.floor(z * 8);
       message = `To link this portal in the Overworld, go to X: ${targetX}, Z: ${targetZ}`;
     } else {
-      message = "! You must be in the Overworld or Nether for this command to work.";
+      message = "⚠️ You must be in the Overworld or Nether for this command to work.";
     }
 
-    await sendToServer(
-      `/tellraw ${username} {"text":"${message}","color":"gold"}`
-    );
+    // Whisper the message to the player
+    await sendToServer(`/msg ${username} ${message}`);
   } catch (err) {
     console.error(`Error processing !netherportal for ${username}:`, err);
-    await sendToServer(
-      `/tellraw ${username} {"text":"X Error calculating portal coordinates.","color":"red"}`
-    );
+    await sendToServer(`/msg ${username} ❌ Error calculating portal coordinates.`);
   }
 }
 
