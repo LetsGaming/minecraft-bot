@@ -53,12 +53,23 @@ export async function getPlayerCoords(playerName) {
   return { x, y, z };
 }
 
+/**
+ * Get the current dimension of a player by their in-game name
+ * @param {string} playerName - The in-game name of the player
+ * @returns {Promise<string>} The player's current dimension (e.g., "overworld", "nether", "the_end")
+ */
 export async function getPlayerDimension(playerName) {
+  // Send command to get the player's current dimension
   await sendToServer(`/data get entity ${playerName} Dimension`);
-  await new Promise(r => setTimeout(r, 100));
+
+  // Wait a short moment for the server to log the output
+  await new Promise((resolve) => setTimeout(resolve, 100));
+
   const output = await getLatestLogs(10);
+
+  // Parse output like: "minecraft:overworld"
   const match = output.match(/"minecraft:([^"]+)"/);
-  return match ? match[1] : "unknown";
+  return match ? match[1] : "overworld"; // default to overworld if parsing fails
 }
 
 /**
