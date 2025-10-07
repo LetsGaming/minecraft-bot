@@ -6,6 +6,10 @@
     "serverDir": "/path/to/minecraft/server",
 
     "commands": {
+        "map": {
+            "enabled": false,
+            "url": "http://example.com/map"
+        },
         "seed": {
             "enabled": true
         }

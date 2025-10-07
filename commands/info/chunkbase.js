@@ -3,8 +3,8 @@ import { createEmbed, createErrorEmbed } from "../../utils/embedUtils.js";
 import { getSeed } from "../../utils/utils.js";
 
 export const data = new SlashCommandBuilder()
-  .setName("seed")
-  .setDescription("Get information about the server's world seed");
+  .setName("chunkbase")
+  .setDescription("Get a link to the Chunkbase map for the server's world seed");
 
 export async function execute(interaction) {
   await interaction.deferReply();
@@ -19,12 +19,11 @@ export async function execute(interaction) {
   }
 
   const embed = createEmbed({
-    title: "World Seed",
-    description: `The server's world seed is:\n\`${seed}\``,
+    title: "Chunkbase Map",
+    description: `You can view the Chunkbase map for the server's world seed [here](https://www.chunkbase.com/apps/seed-map#seed=${seed}).`,
     footer: { text: `Requested by ${interaction.user.tag}` },
   });
 
   await interaction.editReply({ embeds: [embed] });
 }
-
 
