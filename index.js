@@ -71,11 +71,11 @@ async function registerGlobalCommands() {
   await registerGlobalCommands();
 
   client.once("ready", async () => {
-    console.log(`Bot is ready as ${client.user.tag} \n`);
+    console.log(`Bot is ready as ${client.user.tag} \n\n`);
 
     try {
       await initMinecraftCommands(client);
-    console.log("✅ Minecraft commands initialized.");
+    console.log("✅ Minecraft commands initialized. \n\n");
     } catch (err) {
       console.error("❌ Failed to initialize Minecraft commands:", err);
     }
