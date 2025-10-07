@@ -71,7 +71,7 @@ async function registerGlobalCommands() {
   await registerGlobalCommands();
 
   client.once("ready", async () => {
-    console.log(`Bot is ready as ${client.user.tag}`);
+    console.log(`Bot is ready as ${client.user.tag} \n`);
 
     try {
       await initMinecraftCommands(client);

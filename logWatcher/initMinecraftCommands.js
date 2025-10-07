@@ -49,13 +49,13 @@ export async function initMinecraftCommands(client) {
       }
 
       await commandModule.init();
-      console.log(`✅ Initialized Minecraft command: ${commandName}`);
+      console.log(`✅ Initialized Minecraft command: ${commandName} \n`);
     } catch (err) {
       console.error(`❌ Failed to load Minecraft command from ${file}:`, err);
     }
   }
 
-  console.log("✅ All Minecraft commands initialized");
+  console.log("✅ All Minecraft commands initialized \n");
 
   await watchServerLog(client);
 }
