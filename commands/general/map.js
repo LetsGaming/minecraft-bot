@@ -32,5 +32,6 @@ async function getUrl() {
   const root = await getRootDir();
   const configPath = path.join(root, "config.json");
   const config = await loadJson(configPath);
-  return config.commands.map.url || null;
+  const url = config?.commands?.map?.url || null;
+  return url;
 }
