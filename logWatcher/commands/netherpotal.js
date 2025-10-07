@@ -12,7 +12,6 @@ async function handleNetherportalCommand(match) {
   const [, username] = match;
 
   try {
-    const dimension = await getPlayerDimension(username);
     const coords = await getPlayerCoords(username);
 
     if (!coords) {
@@ -21,6 +20,8 @@ async function handleNetherportalCommand(match) {
       );
       return;
     }
+
+    const dimension = await getPlayerDimension(username);
 
     const { x, z } = coords;
     let targetX, targetZ, message;
