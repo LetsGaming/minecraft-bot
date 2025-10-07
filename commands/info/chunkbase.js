@@ -36,7 +36,7 @@ export async function execute(interaction) {
   if (linkedUsername) {
     try {
       const playerCoords = await getPlayerCoords(linkedUsername);
-      coordsParam = `&coords=${Math.floor(playerCoords.x)}%2C${Math.floor(playerCoords.z)}`;
+      coordsParam = `&x=${Math.floor(playerCoords.x)}&z=${Math.floor(playerCoords.z)}`;
     } catch (err) {
       console.warn(`Failed to get player coords for ${linkedUsername}:`, err.message);
     }
