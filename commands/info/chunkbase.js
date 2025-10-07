@@ -1,7 +1,8 @@
 import { SlashCommandBuilder } from "discord.js";
 import { createEmbed, createErrorEmbed } from "../../utils/embedUtils.js";
-import { getSeed, sendToServer, getLatestLogs } from "../../utils/utils.js";
+import { getSeed } from "../../utils/utils.js";
 import { getLinkedAccount } from "../../utils/linkUtils.js";
+import { getPlayerCoords } from "../../utils/playerUtils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("chunkbase")
@@ -53,18 +54,3 @@ export async function execute(interaction) {
   await interaction.editReply({ embeds: [embed] });
 }
 
-async function getPlayerCoords(playerName) {
-  await sendToServer(`/data get entity ${playerName} Pos`);
-  await new Promise((resolve) => setTimeout(resolve, 100));
-
-  const output = await getLatestLogs(10);
-  const regex = /\[([\d.+-]+)d,\s*([\d.+-]+)d,\s*([\d.+-]+)d\]/;
-  const match = output.match(regex);
-
-  if (!match) {
-    throw new Error("Could not parse coordinates from server output.");
-  }
-
-  const [_, x, y, z] = match.map(Number);
-  return { x, y, z };
-}

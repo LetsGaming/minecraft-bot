@@ -10,7 +10,7 @@ import { readdirSync, statSync } from "fs";
 import path from "path";
 import config from "./config.json" assert { type: "json" };
 import { fileURLToPath } from "url";
-import { watchForLinkCodes } from "./utils/linkWatcher.js";
+import { initMinecraftCommands } from "./logWatcher/initMinecraftCommands.js";
 
 // ESM __dirname fix
 const __filename = fileURLToPath(import.meta.url);
@@ -72,11 +72,12 @@ async function registerGlobalCommands() {
 
   client.once("ready", async () => {
     console.log(`Bot is ready as ${client.user.tag}`);
+
     try {
-      await watchForLinkCodes(client);
-      console.log("✅ Started watching for link codes.");
+      await initMinecraftCommands(client);
+    console.log("✅ Minecraft commands initialized.");
     } catch (err) {
-      console.error("❌ Failed to start log watcher:", err);
+      console.error("❌ Failed to initialize Minecraft commands:", err);
     }
   });
 

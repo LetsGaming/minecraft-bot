@@ -1,4 +1,4 @@
-import { getListOutput, stripLogPrefix } from "./utils.js";
+import { getListOutput, stripLogPrefix, sendToServer, getLatestLogs } from "./utils.js";
 const LOOKAHEAD_LINES = 5; // how many lines to look ahead for player names after the count line
 
 /**
@@ -29,6 +29,28 @@ export async function getOnlinePlayers() {
   if (!logContent) return [];
   const parsed = parseListOutput(logContent);
   return parsed.players ?? [];
+}
+
+/**
+ * Get the coordinates of a player by their in-game name
+ * @param {string} playerName - The in-game name of the player
+ * @returns {Promise<{x: number, y: number, z: number}>} The player's coordinates
+ * @throws Will throw an error if the coordinates cannot be retrieved or parsed
+ */
+export async function getPlayerCoords(playerName) {
+  await sendToServer(`/data get entity ${playerName} Pos`);
+  await new Promise((resolve) => setTimeout(resolve, 100));
+
+  const output = await getLatestLogs(10);
+  const regex = /\[([\d.+-]+)d,\s*([\d.+-]+)d,\s*([\d.+-]+)d\]/;
+  const match = output.match(regex);
+
+  if (!match) {
+    throw new Error("Could not parse coordinates from server output.");
+  }
+
+  const [_, x, y, z] = match.map(Number);
+  return { x, y, z };
 }
 
 /**
