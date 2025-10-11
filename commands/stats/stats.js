@@ -5,7 +5,7 @@ import {
   filterStats,
   buildStatsEmbeds,
 } from "../../utils/statUtils.js";
-import { findPlayer } from "../../utils/utils.js";
+import { findPlayer, playerOption } from "../../utils/utils.js";
 import {
   createPaginationButtons,
   handlePagination,
@@ -15,12 +15,7 @@ import {
 export const data = new SlashCommandBuilder()
   .setName("stats")
   .setDescription("Show Minecraft stats for a player")
-  .addStringOption((option) =>
-    option
-      .setName("player")
-      .setDescription("Minecraft player name")
-      .setRequired(true)
-  )
+  .addStringOption(async (option) => await playerOption(option))
   .addStringOption((option) =>
     option
       .setName("stat")

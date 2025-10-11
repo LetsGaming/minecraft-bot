@@ -12,11 +12,34 @@ let whitelistCache = null;
  * @returns {Promise<object|null>} player object or null if not found
  */
 export async function findPlayer(playerName) {
-  const whitelist = await loadWhitelist();
-  if (!whitelist) return null;
-
+  const names = await getPlayerNames();
   const lowerName = playerName.toLowerCase();
-  return whitelist.find((p) => p.name.toLowerCase() === lowerName) ?? null;
+  const index = names.findIndex((n) => n.toLowerCase() === lowerName);
+  if (index === -1) return null;
+
+  const whitelist = await loadWhitelist();
+  return whitelist[index] || null;
+}
+
+/** Get all player names from the whitelist
+ * @returns {Promise<string[]>}
+ */
+export async function getPlayerNames() {
+  const whitelist = await loadWhitelist();
+  return whitelist ? whitelist.map((p) => p.name) : [];
+}
+
+/** Add a player option to a SlashCommandBuilder with choices from whitelist
+ * @param {import("discord.js").SlashCommandStringOption} option
+ * @returns {Promise<import("discord.js").SlashCommandStringOption>}
+ */
+export async function playerOption(option) {
+  const names = await getPlayerNames();
+  return option
+    .setName("player")
+    .setDescription("Minecraft player name")
+    .setRequired(true)
+    .addChoices(...names.map((n) => ({ name: n, value: n })));
 }
 
 /**
