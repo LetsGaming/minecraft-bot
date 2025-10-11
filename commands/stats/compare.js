@@ -14,7 +14,7 @@ import {
   createErrorEmbed,
   createInfoEmbed,
 } from "../../utils/embedUtils.js";
-import { findPlayer, getPlayerNames } from "../../utils/utils.js";
+import { findPlayer, getPlayerNames } from "../../utils/playerUtils.js";
 
 const PLAYER_NAMES = await getPlayerNames();
 

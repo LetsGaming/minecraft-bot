@@ -5,13 +5,19 @@ import {
   findPlayTimeStat,
   formatPlaytime,
 } from "../../utils/statUtils.js";
-import { findPlayer, playerOption } from "../../utils/utils.js";
+import { findPlayer, PLAYER_NAMES } from "../../utils/playerUtils.js";
 import { createEmbed, createErrorEmbed } from "../../utils/embedUtils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("playtime")
   .setDescription("Show total playtime for a player")
-  .addStringOption(async (option) => await playerOption(option));
+  .addStringOption((option) =>
+    option
+      .setName("player")
+      .setDescription("Minecraft player name")
+      .setRequired(true)
+      .addChoices(...PLAYER_NAMES)
+  );
 
 export async function execute(interaction) {
   await interaction.deferReply();

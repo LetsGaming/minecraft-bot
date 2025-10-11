@@ -1,5 +1,30 @@
-import { getListOutput, stripLogPrefix, sendToServer, getLatestLogs } from "./utils.js";
+import { getListOutput, stripLogPrefix, sendToServer, getLatestLogs, loadWhitelist } from "./utils.js";
 const LOOKAHEAD_LINES = 5; // how many lines to look ahead for player names after the count line
+
+export const PLAYER_NAMES = (await getPlayerNames()).map(n => ({ name: n, value: n }));
+
+/**
+ * Find a player object from whitelist by playerName (case insensitive)
+ * @param {string} playerName
+ * @returns {Promise<object|null>} player object or null if not found
+ */
+export async function findPlayer(playerName) {
+  const names = await getPlayerNames();
+  const lowerName = playerName.toLowerCase();
+  const index = names.findIndex((n) => n.toLowerCase() === lowerName);
+  if (index === -1) return null;
+
+  const whitelist = await loadWhitelist();
+  return whitelist[index] || null;
+}
+
+/** Get all player names from the whitelist
+ * @returns {Promise<string[]>}
+ */
+export async function getPlayerNames() {
+  const whitelist = await loadWhitelist();
+  return whitelist ? whitelist.map((p) => p.name) : [];
+}
 
 /**
  * Ask the server for player count and parse from logs
