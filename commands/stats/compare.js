@@ -26,14 +26,14 @@ export const data = new SlashCommandBuilder()
       .setName("player1")
       .setDescription("First player name")
       .setRequired(true)
-      .addChoices(...PLAYER_NAMES.map((name) => [name, name]))
+      .addChoices(...PLAYER_NAMES.map((name) => ({ name, value: name })))
   )
   .addStringOption((option) =>
     option
       .setName("player2")
       .setDescription("Second player name")
       .setRequired(true)
-      .addChoices(...PLAYER_NAMES.map((name) => [name, name]))
+      .addChoices(...PLAYER_NAMES.map((name) => ({ name, value: name })))
   )
   .addStringOption((option) =>
     option
@@ -73,7 +73,12 @@ export async function execute(interaction) {
     }
 
     // Build comparison embeds
-    const embeds = buildComparisonEmbeds(flattened1, flattened2, player1, player2);
+    const embeds = buildComparisonEmbeds(
+      flattened1,
+      flattened2,
+      player1,
+      player2
+    );
 
     if (embeds.length === 0) {
       const infoEmbd = createInfoEmbed(
@@ -96,7 +101,9 @@ export async function execute(interaction) {
   } catch (error) {
     console.error("Error comparing players:", error);
     return interaction.editReply({
-      embeds: [createErrorEmbed("❌ An error occurred while comparing players.")],
+      embeds: [
+        createErrorEmbed("❌ An error occurred while comparing players."),
+      ],
     });
   }
 }
@@ -106,7 +113,7 @@ export function buildComparisonEmbeds(flat1, flat2, name1, name2) {
   let currentEmbed = createEmbed({ title: "PLACEHOLDER" });
   let fieldCount = 0;
 
-  const statMap2 = new Map(flat2.map(stat => [stat.fullKey, stat]));
+  const statMap2 = new Map(flat2.map((stat) => [stat.fullKey, stat]));
   const combined = [];
 
   for (const s1 of flat1) {
@@ -132,7 +139,9 @@ export function buildComparisonEmbeds(flat1, flat2, name1, name2) {
       formatted2 = value2.toLocaleString();
     }
 
-    const line = `• ${humanizeKey(s1.key)}:\n> ${name1}: ${formatted1}\n> ${name2}: ${formatted2}`;
+    const line = `• ${humanizeKey(
+      s1.key
+    )}:\n> ${name1}: ${formatted1}\n> ${name2}: ${formatted2}`;
     combined.push({ category: s1.category, line });
   }
 
@@ -186,7 +195,9 @@ export function buildComparisonEmbeds(flat1, flat2, name1, name2) {
   const totalPages = embeds.length;
   for (let i = 0; i < totalPages; i++) {
     const embed = embeds[i];
-    embed.data.title = `Stat Comparison: ${name1} vs ${name2} (Page ${i + 1}/${totalPages})`;
+    embed.data.title = `Stat Comparison: ${name1} vs ${name2} (Page ${
+      i + 1
+    }/${totalPages})`;
     embed.setFooter({
       text: `Shared stats: ${combined.length} | Page ${i + 1}/${totalPages}`,
     });
