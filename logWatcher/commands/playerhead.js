@@ -1,7 +1,8 @@
 import { registerLogCommand } from "../logWatcher.js";
 import { sendToServer } from "../../utils/utils.js";
 
-const PLAYERHEAD_REGEX = /\[.+?\]: <([^>]+)> !chunkbase (\w{1,16})/;
+// Example log: [12:34:56] [Server thread/INFO]: <[AFK] PlayerName> !playerhead TargetPlayer
+const PLAYERHEAD_REGEX = /\[.+?\]: <(?:\[AFK\]\s*)?([^>]+)> !playerhead (\w{1,16})/;
 
 /**
  * Handles the !playerhead Minecraft chat command and gives it as an item to the player.

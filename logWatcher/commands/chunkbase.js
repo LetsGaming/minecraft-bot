@@ -6,7 +6,7 @@ import {
 } from "../../utils/playerUtils.js";
 
 // Example log: [12:34:56] [Server thread/INFO]: <PlayerName> !chunkbase
-const CHUNKBASE_REGEX = /\[.+?\]: <([^>]+)> !chunkbase/;
+const CHUNKBASE_REGEX = /\[.+?\]: <(?:\[AFK\]\s*)?([^>]+)> !chunkbase/;
 
 /**
  * Handles the !chunkbase Minecraft chat command.
@@ -20,7 +20,7 @@ async function handleChunkbaseCommand(match) {
     return;
   }
 
-  const dimension = getPlayerDimension(user) || "overworld";
+  const dimension = await getPlayerDimension(user) || "overworld";
   const playerCoords = await getPlayerCoords(user);
 
   let coordsParam = "";

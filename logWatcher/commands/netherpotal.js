@@ -3,7 +3,7 @@ import { getPlayerCoords, getPlayerDimension } from "../../utils/playerUtils.js"
 import { sendToServer } from "../../utils/utils.js";
 
 // Example log: [18:32:15] [Server thread/INFO]: <LetsGamingDE> !netherportal
-const NETHERPORTAL_REGEX = /\[.+?\]: <([^>]+)> !netherportal/;
+const NETHERPORTAL_REGEX = /\[.+?\]: <(?:\[AFK\]\s*)?([^>]+)> !netherportal/;
 
 /**
  * Handles the !netherportal Minecraft chat command.

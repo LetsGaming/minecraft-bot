@@ -14,7 +14,7 @@ let saving = false;
 let pendingSave = false;
 
 // Regex for: [time] [Server thread/INFO]: <User> !link CODE123
-const LINK_CODE_REGEX = /\[.+?\]: <([^>]+)> !link ([A-Za-z0-9]{6})/;
+const LINK_CODE_REGEX = /\[.+?\]: <(?:\[AFK\]\s*)?([^>]+)> !link ([A-Za-z0-9]{6})/;
 
 async function loadData() {
   codes = await loadLinkCodes().catch(() => ({}));
