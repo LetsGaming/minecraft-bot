@@ -144,6 +144,11 @@ export async function getLevelName() {
 }
 
 export async function getSeed() {
+  // check if seed is enabled in config
+  if(!config.commands.seed.enabled) {
+    return null;
+  }
+
   await sendToServer("/seed");
   // Wait a moment to ensure the server has processed the command
   await new Promise((resolve) => setTimeout(resolve, 100));
