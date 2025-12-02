@@ -33,23 +33,9 @@ async function handleChunkbaseCommand(match) {
 
   const baseUrl = `https://www.chunkbase.com/apps/seed-map?seed=${seed}&dimension=${dimension}${coordsParam}`;
 
-  const tellrawJson = JSON.stringify([
-    {
-      text: "Chunkbase map",
-      color: "yellow",
-    },
-    {
-      text: " [Click here]",
-      color: "aqua",
-      underlined: true,
-      clickEvent: {
-        action: "open_url",
-        value: baseUrl,
-      },
-    },
-  ]);
-
-  await sendToServer(`/tellraw ${user} ${tellrawJson}`);
+  await sendToServer(
+    `/tellraw ${user} ["",{text:"See your location on Chunkbase",color:"black"},{text:"Click here",color:"gold",click_event:{action:"open_url",url:"${baseUrl}"}}]`
+  );
 }
 
 export function init() {

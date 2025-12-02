@@ -96,7 +96,7 @@ export async function execute(interaction) {
     }
 
     await sendToServer(
-      `give ${username} player_head[profile={name:"${playerHeadName}"}]`
+      `give ${linkedUsername} player_head[profile={name:"${playerHeadName}"}]`
     );
     return i.reply({
       content: `✅ Given ${mcname}'s head to ${linkedUsername}.`,
