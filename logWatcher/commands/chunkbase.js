@@ -11,9 +11,6 @@ const CHUNKBASE_REGEX = /\[.+?\]: <(?:\[AFK\]\s*)?([^>]+)> !chunkbase/;
 /**
  * Handles the !chunkbase Minecraft chat command.
  */
-/**
- * Handles the !chunkbase Minecraft chat command.
- */
 async function handleChunkbaseCommand(match) {
   const user = match[1];
 
@@ -23,7 +20,7 @@ async function handleChunkbaseCommand(match) {
     return;
   }
 
-  const dimension = await getPlayerDimension(user) || "overworld";
+  const dimension = (await getPlayerDimension(user)) || "overworld";
   const playerCoords = await getPlayerCoords(user);
 
   let coordsParam = "";
@@ -34,13 +31,12 @@ async function handleChunkbaseCommand(match) {
     )}`;
   }
 
-  const baseUrl = `https://www.chunkbase.com/apps/seed-map#seed=${seed}&dimension=${dimension}${coordsParam}`;
+  const baseUrl = `https://www.chunkbase.com/apps/seed-map?seed=${seed}&dimension=${dimension}${coordsParam}`;
 
-  // Build clickable tellraw message
   const tellrawJson = JSON.stringify([
     {
       text: "Chunkbase map",
-      color: "yellow"
+      color: "yellow",
     },
     {
       text: " [Click here]",
@@ -48,9 +44,9 @@ async function handleChunkbaseCommand(match) {
       underlined: true,
       clickEvent: {
         action: "open_url",
-        value: baseUrl
-      }
-    }
+        value: baseUrl,
+      },
+    },
   ]);
 
   await sendToServer(`/tellraw ${user} ${tellrawJson}`);

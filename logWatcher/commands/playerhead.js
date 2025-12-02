@@ -23,7 +23,7 @@ async function handlePlayerheadCommand(match) {
 
   // Give the player the head item
   await sendToServer(
-    `give ${username} minecraft:player_head{SkullOwner:"${playerHeadName}"}`
+    `give ${username} player_head[profile={name:"${playerHeadName}"}]`
   );
 }
 

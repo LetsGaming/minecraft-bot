@@ -62,7 +62,9 @@ export async function execute(interaction) {
     components: [row],
   });
 
-  const collector = interaction.channel.createMessageComponentCollector({
+  const replyMessage = await interaction.fetchReply();
+
+  const collector = replyMessage.createMessageComponentCollector({
     componentType: ComponentType.Button,
     time: 30_000,
   });
@@ -94,7 +96,7 @@ export async function execute(interaction) {
     }
 
     await sendToServer(
-      `/give ${linkedUsername} minecraft:player_head{SkullOwner:"${mcname}"}`
+      `give ${username} player_head[profile={name:"${playerHeadName}"}]`
     );
     return i.reply({
       content: `✅ Given ${mcname}'s head to ${linkedUsername}.`,
