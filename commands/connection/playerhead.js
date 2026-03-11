@@ -17,10 +17,13 @@ import {
 export const data = new SlashCommandBuilder()
   .setName("playerhead")
   .setDescription(
-    "Get a player's head as an item (if you're linked and online)"
+    "Get a player's head as an item (if you're linked and online)",
   )
   .addStringOption((opt) =>
-    opt.setName("mcname").setDescription("Minecraft username").setRequired(true)
+    opt
+      .setName("mcname")
+      .setDescription("Minecraft username")
+      .setRequired(true),
   );
 
 export async function execute(interaction) {
@@ -28,7 +31,7 @@ export async function execute(interaction) {
   const userId = interaction.user.id;
 
   const res = await fetch(
-    `https://api.mojang.com/users/profiles/minecraft/${mcname}` // Mojang API to get UUID by username
+    `https://api.mojang.com/users/profiles/minecraft/${mcname}`, // Mojang API to get UUID by username
   );
   if (!res.ok) {
     return interaction.reply({
@@ -96,7 +99,7 @@ export async function execute(interaction) {
     }
 
     await sendToServer(
-      `give ${linkedUsername} player_head[profile={name:"${playerHeadName}"}]`
+      `give ${linkedUsername} player_head[profile={name:"${playerHeadName}"}]`,
     );
     return i.reply({
       content: `✅ Given ${mcname}'s head to ${linkedUsername}.`,

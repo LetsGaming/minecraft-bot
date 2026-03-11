@@ -13,6 +13,12 @@ let linkedDirty = false;
 let saving = false;
 let pendingSave = false;
 
+export const COMMAND_INFO = {
+  command: "!link <code>",
+  description:
+    "Link your Minecraft account to your Discord account using the provided code",
+};
+
 // Regex for: [time] [Server thread/INFO]: <User> !link CODE123
 const LINK_CODE_REGEX = /\[.+?\]: <(?:\[AFK\]\s*)?([^>]+)> !link ([A-Za-z0-9]{6})/;
 

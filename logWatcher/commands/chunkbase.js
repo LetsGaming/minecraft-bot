@@ -5,6 +5,12 @@ import {
   getPlayerDimension,
 } from "../../utils/playerUtils.js";
 
+export const COMMAND_INFO = {
+  command: "!chunkbase",
+  description:
+    "Get a link to the Chunkbase map for the server's world seed and your current location",
+};
+
 // Example log: [12:34:56] [Server thread/INFO]: <PlayerName> !chunkbase
 const CHUNKBASE_REGEX = /\[.+?\]: <(?:\[AFK\]\s*)?([^>]+)> !chunkbase/;
 
@@ -27,11 +33,11 @@ async function handleChunkbaseCommand(match) {
 
   if (playerCoords) {
     coordsParam = `&x=${Math.floor(playerCoords.x)}&z=${Math.floor(
-      playerCoords.z
+      playerCoords.z,
     )}`;
   }
 
-  const baseUrl = `https://www.chunkbase.com/apps/seed-map?seed=${seed}&dimension=${dimension}${coordsParam}`;
+  const baseUrl = `https://www.chunkbase.com/apps/seed-map#seed=${seed}&dimension=${dimension}${coordsParam}`;
 
   const tellRaw = [
     "",
@@ -46,7 +52,13 @@ async function handleChunkbaseCommand(match) {
     },
   ];
 
-  await sendToServer(`/tellraw ${user} ${JSON.stringify(tellRaw)}`);
+  const jsonTellRaw = JSON.stringify(tellRaw);
+
+  const command = `/tellraw ${user} ${jsonTellRaw}`;
+
+  console.log(`Executing command: ${command}`);
+
+  await sendToServer(command);
 }
 
 export function init() {

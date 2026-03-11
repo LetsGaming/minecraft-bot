@@ -1,8 +1,14 @@
 import { registerLogCommand } from "../logWatcher.js";
 import { sendToServer } from "../../utils/utils.js";
 
+export const COMMAND_INFO = {
+  command: "!playerhead <player>",
+  description: "Get the player head of any Minecraft player",
+};
+
 // Example log: [12:34:56] [Server thread/INFO]: <[AFK] PlayerName> !playerhead TargetPlayer
-const PLAYERHEAD_REGEX = /\[.+?\]: <(?:\[AFK\]\s*)?([^>]+)> !playerhead (\w{1,16})/;
+const PLAYERHEAD_REGEX =
+  /\[.+?\]: <(?:\[AFK\]\s*)?([^>]+)> !playerhead (\w{1,16})/;
 
 /**
  * Handles the !playerhead Minecraft chat command and gives it as an item to the player.
@@ -13,17 +19,17 @@ async function handlePlayerheadCommand(match) {
 
   // check if player exists
   const res = await fetch(
-    `https://api.mojang.com/users/profiles/minecraft/${playerHeadName}` // Mojang API to get UUID by username
+    `https://api.mojang.com/users/profiles/minecraft/${playerHeadName}`, // Mojang API to get UUID by username
   );
   if (!res.ok) {
     await sendToServer(
-      `/msg ${username} Player \`${playerHeadName}\` not found.`
+      `/msg ${username} Player \`${playerHeadName}\` not found.`,
     );
   }
 
   // Give the player the head item
   await sendToServer(
-    `give ${username} player_head[profile={name:"${playerHeadName}"}]`
+    `give ${username} player_head[profile={name:"${playerHeadName}"}]`,
   );
 }
 

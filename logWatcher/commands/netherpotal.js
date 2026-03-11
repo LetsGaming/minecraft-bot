@@ -1,6 +1,15 @@
 import { registerLogCommand } from "../logWatcher.js";
-import { getPlayerCoords, getPlayerDimension } from "../../utils/playerUtils.js";
+import {
+  getPlayerCoords,
+  getPlayerDimension,
+} from "../../utils/playerUtils.js";
 import { sendToServer } from "../../utils/utils.js";
+
+export const COMMAND_INFO = {
+  command: "!netherportal",
+  description:
+    "Get the coordinates to link a Nether portal between the Overworld and Nether based on your current location",
+};
 
 // Example log: [18:32:15] [Server thread/INFO]: <LetsGamingDE> !netherportal
 const NETHERPORTAL_REGEX = /\[.+?\]: <(?:\[AFK\]\s*)?([^>]+)> !netherportal/;
@@ -15,7 +24,9 @@ async function handleNetherportalCommand(match) {
     const coords = await getPlayerCoords(username);
 
     if (!coords) {
-      await sendToServer(`/msg ${username} ❌ Could not get your position. Make sure you're online.`);
+      await sendToServer(
+        `/msg ${username} ❌ Could not get your position. Make sure you're online.`,
+      );
       return;
     }
 
@@ -35,14 +46,17 @@ async function handleNetherportalCommand(match) {
       targetZ = Math.floor(z * 8);
       message = `To link this portal in the Overworld, go to X: ${targetX}, Z: ${targetZ}`;
     } else {
-      message = "! You must be in the Overworld or Nether for this command to work.";
+      message =
+        "! You must be in the Overworld or Nether for this command to work.";
     }
 
     // Whisper the message to the player
     await sendToServer(`/msg ${username} ${message}`);
   } catch (err) {
     console.error(`Error processing !netherportal for ${username}:`, err);
-    await sendToServer(`/msg ${username} X Error calculating portal coordinates.`);
+    await sendToServer(
+      `/msg ${username} X Error calculating portal coordinates.`,
+    );
   }
 }
 
