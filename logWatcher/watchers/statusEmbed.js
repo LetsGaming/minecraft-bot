@@ -51,16 +51,26 @@ async function buildStatusEmbed() {
     if (server.useRcon) {
       try {
         const tps = await server.getTps();
-        if (tps?.tps1m !== null && tps?.tps1m !== undefined) {
-          const emoji = tps.tps1m >= 18 ? "🟢" : tps.tps1m >= 15 ? "🟡" : "🔴";
-          tpsLine = `\nTPS: ${emoji} ${tps.tps1m.toFixed(1)}`;
+
+        // Check if tps exists and tps1m is a valid, finite number
+        if (tps && Number.isFinite(tps.tps1m)) {
+          const tpsVal = tps.tps1m;
+          const emoji = tpsVal >= 18 ? "🟢" : tpsVal >= 15 ? "🟡" : "🔴";
+
+          // Formatting the line
+          tpsLine = `\nTPS: ${emoji} ${tpsVal.toFixed(1)}`;
+        } else {
+          // Optional: Handle the error state or log the raw response for debugging
+          console.warn("TPS data unavailable or unparseable:", tps?.raw);
+          tpsLine = "\nTPS: ⚪ Data Unavailable";
         }
-      } catch { /* server might not support tps */ }
+      } catch {
+        /* server might not support tps */
+      }
     }
 
-    const playerList = players.length > 0
-      ? `\nOnline: ${players.join(", ")}`
-      : "";
+    const playerList =
+      players.length > 0 ? `\nOnline: ${players.join(", ")}` : "";
 
     fields.push({
       name: server.id,
@@ -93,7 +103,10 @@ async function updateGuildStatus(client, guildId, channelId, state) {
   try {
     channel = await client.channels.fetch(channelId);
   } catch {
-    log.warn("status", `Channel ${channelId} not accessible for guild ${guildId}`);
+    log.warn(
+      "status",
+      `Channel ${channelId} not accessible for guild ${guildId}`,
+    );
     return;
   }
   if (!channel) return;
@@ -109,7 +122,10 @@ async function updateGuildStatus(client, guildId, channelId, state) {
       return;
     } catch {
       // Message was deleted or not found — send a new one
-      log.info("status", `Status message missing for guild ${guildId}, creating new one`);
+      log.info(
+        "status",
+        `Status message missing for guild ${guildId}, creating new one`,
+      );
     }
   }
 
@@ -118,7 +134,10 @@ async function updateGuildStatus(client, guildId, channelId, state) {
     const msg = await channel.send({ embeds: [embed] });
     state[guildId] = { channelId, messageId: msg.id };
     await saveState(state);
-    log.info("status", `Created status embed in channel ${channelId} for guild ${guildId}`);
+    log.info(
+      "status",
+      `Created status embed in channel ${channelId} for guild ${guildId}`,
+    );
   } catch (err) {
     log.error("status", `Failed to send status embed: ${err.message}`);
   }
@@ -130,8 +149,9 @@ async function updateGuildStatus(client, guildId, channelId, state) {
  * The bot sends a message once, then edits it on interval — no manual setup needed.
  */
 export function startStatusEmbed(client, guildConfigs) {
-  const guildsWithStatus = Object.entries(guildConfigs)
-    .filter(([, cfg]) => cfg.statusEmbed?.channelId);
+  const guildsWithStatus = Object.entries(guildConfigs).filter(
+    ([, cfg]) => cfg.statusEmbed?.channelId,
+  );
 
   if (guildsWithStatus.length === 0) {
     log.info("status", "No status embed channels configured, skipping");
@@ -142,7 +162,12 @@ export function startStatusEmbed(client, guildConfigs) {
     try {
       const state = await loadState();
       for (const [guildId, gcfg] of guildsWithStatus) {
-        await updateGuildStatus(client, guildId, gcfg.statusEmbed.channelId, state);
+        await updateGuildStatus(
+          client,
+          guildId,
+          gcfg.statusEmbed.channelId,
+          state,
+        );
       }
     } catch (err) {
       log.error("status", `Update failed: ${err.message}`);
@@ -155,6 +180,9 @@ export function startStatusEmbed(client, guildConfigs) {
   // Then update on interval
   const timer = setInterval(update, UPDATE_INTERVAL_MS);
 
-  log.info("status", `Status embed active for ${guildsWithStatus.length} guild(s)`);
+  log.info(
+    "status",
+    `Status embed active for ${guildsWithStatus.length} guild(s)`,
+  );
   return timer;
 }
