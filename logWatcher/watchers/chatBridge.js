@@ -27,13 +27,19 @@ export function registerChatBridge(logWatcher, client, guildConfigs) {
           .setColor(0x55ff55)
           .setTimestamp();
 
-        if (Object.keys(guildConfigs).length > 1 || Object.keys(logWatcher.server.config).length > 1) {
+        if (
+          Object.keys(guildConfigs).length > 1 ||
+          Object.keys(logWatcher.server.config).length > 1
+        ) {
           embed.setFooter({ text: serverId });
         }
 
         await channel.send({ embeds: [embed] });
       } catch (err) {
-        log.error("chatBridge", `Failed to send to guild ${guildId}: ${err.message}`);
+        log.error(
+          "chatBridge",
+          `Failed to send to guild ${guildId}: ${err.message}`,
+        );
       }
     }
   });

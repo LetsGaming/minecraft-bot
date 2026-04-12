@@ -20,13 +20,20 @@ import { startDowntimeMonitor } from "./watchers/downtimeMonitor.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let botConfig = {};
-try { botConfig = JSON.parse(readFileSync(path.resolve(process.cwd(), "config.json"), "utf-8")); } catch { /* */ }
+try {
+  botConfig = JSON.parse(
+    readFileSync(path.resolve(process.cwd(), "config.json"), "utf-8"),
+  );
+} catch {
+  /* */
+}
 
 function getCommandFiles(dir) {
   let files = [];
   for (const file of readdirSync(dir)) {
     const fullPath = path.join(dir, file);
-    if (statSync(fullPath).isDirectory()) files = files.concat(getCommandFiles(fullPath));
+    if (statSync(fullPath).isDirectory())
+      files = files.concat(getCommandFiles(fullPath));
     else if (file.endsWith(".js")) files.push(fullPath);
   }
   return files;
@@ -94,5 +101,8 @@ export async function initMinecraftCommands(client) {
   // ── 6. Downtime monitor ──
   startDowntimeMonitor(instances, client, guildConfigs);
 
-  log.info("init", `${instances.length} server(s) initialized with all watchers`);
+  log.info(
+    "init",
+    `${instances.length} server(s) initialized with all watchers`,
+  );
 }

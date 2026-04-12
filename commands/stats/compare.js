@@ -16,7 +16,6 @@ import {
 } from "../../utils/embedUtils.js";
 import { findPlayer } from "../../utils/playerUtils.js";
 
-
 export const data = new SlashCommandBuilder()
   .setName("compare")
   .setDescription("Compare stats of two players")
@@ -25,20 +24,20 @@ export const data = new SlashCommandBuilder()
       .setName("player1")
       .setDescription("First player name")
       .setRequired(true)
-      .setAutocomplete(true)
+      .setAutocomplete(true),
   )
   .addStringOption((option) =>
     option
       .setName("player2")
       .setDescription("Second player name")
       .setRequired(true)
-      .setAutocomplete(true)
+      .setAutocomplete(true),
   )
   .addStringOption((option) =>
     option
       .setName("stat")
       .setDescription("Optional stat category or specific stat ID")
-      .setRequired(false)
+      .setRequired(false),
   );
 
 export async function execute(interaction) {
@@ -57,7 +56,7 @@ export async function execute(interaction) {
 
     if (!stats1 || !stats2) {
       const errEmbd = createErrorEmbed(
-        `Stats file not found for one or both players: \`${player1}\`, \`${player2}\`.`
+        `Stats file not found for one or both players: \`${player1}\`, \`${player2}\`.`,
       );
       return interaction.editReply({ embeds: [errEmbd] });
     }
@@ -76,12 +75,12 @@ export async function execute(interaction) {
       flattened1,
       flattened2,
       player1,
-      player2
+      player2,
     );
 
     if (embeds.length === 0) {
       const infoEmbd = createInfoEmbed(
-        `No stats found for \`${player1}\` and \`${player2}\`.`
+        `No stats found for \`${player1}\` and \`${player2}\`.`,
       );
       return interaction.editReply({ embeds: [infoEmbd] });
     }
@@ -139,7 +138,7 @@ export function buildComparisonEmbeds(flat1, flat2, name1, name2) {
     }
 
     const line = `• ${humanizeKey(
-      s1.key
+      s1.key,
     )}:\n> ${name1}: ${formatted1}\n> ${name2}: ${formatted2}`;
     combined.push({ category: s1.category, line });
   }

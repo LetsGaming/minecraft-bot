@@ -3,7 +3,8 @@ import { log } from "../../utils/logger.js";
 
 // Minecraft death messages always contain a player name followed by a death reason
 // Common patterns: "Player was slain by Zombie", "Player fell from a high place", etc.
-const DEATH_REGEX = /\[.+?\].*:\s+(\w+)\s+(was slain|was shot|was killed|drowned|burned|fell|hit the ground|went off with a bang|blew up|was blown up|tried to swim|was impaled|was squished|was pummeled|was fireballed|starved|suffocated|was poked|experienced kinetic|was doomed|walked into|was pricked|died|withered away|was stung|was obliterated|was squashed|didn't want to live|was frozen|was skewered)/i;
+const DEATH_REGEX =
+  /\[.+?\].*:\s+(\w+)\s+(was slain|was shot|was killed|drowned|burned|fell|hit the ground|went off with a bang|blew up|was blown up|tried to swim|was impaled|was squished|was pummeled|was fireballed|starved|suffocated|was poked|experienced kinetic|was doomed|walked into|was pricked|died|withered away|was stung|was obliterated|was squashed|didn't want to live|was frozen|was skewered)/i;
 
 export function registerDeathWatcher(logWatcher, client, guildConfigs) {
   const serverId = logWatcher.server.id;
@@ -30,7 +31,8 @@ export function registerDeathWatcher(logWatcher, client, guildConfigs) {
           .setColor(0x8b0000)
           .setTimestamp();
 
-        if (Object.keys(guildConfigs).length > 1) embed.setFooter({ text: serverId });
+        if (Object.keys(guildConfigs).length > 1)
+          embed.setFooter({ text: serverId });
 
         await channel.send({ embeds: [embed] });
       } catch (err) {

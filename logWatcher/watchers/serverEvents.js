@@ -11,7 +11,15 @@ export function registerServerEventWatcher(logWatcher, client, guildConfigs) {
 
   logWatcher.register(START_REGEX, async () => {
     startTimes.set(serverId, new Date());
-    await notifyEvent(client, guildConfigs, serverId, "start", "🟢 Server Started", 0x55ff55, "Server is now online and ready for players.");
+    await notifyEvent(
+      client,
+      guildConfigs,
+      serverId,
+      "start",
+      "🟢 Server Started",
+      0x55ff55,
+      "Server is now online and ready for players.",
+    );
   });
 
   logWatcher.register(STOP_REGEX, async () => {
@@ -24,11 +32,27 @@ export function registerServerEventWatcher(logWatcher, client, guildConfigs) {
       uptimeMsg = `\nUptime: ${h}h ${m}m`;
       startTimes.delete(serverId);
     }
-    await notifyEvent(client, guildConfigs, serverId, "stop", "🔴 Server Stopped", 0xff5555, `Server is shutting down.${uptimeMsg}`);
+    await notifyEvent(
+      client,
+      guildConfigs,
+      serverId,
+      "stop",
+      "🔴 Server Stopped",
+      0xff5555,
+      `Server is shutting down.${uptimeMsg}`,
+    );
   });
 }
 
-async function notifyEvent(client, guildConfigs, serverId, event, title, color, description) {
+async function notifyEvent(
+  client,
+  guildConfigs,
+  serverId,
+  event,
+  title,
+  color,
+  description,
+) {
   for (const [, gcfg] of Object.entries(guildConfigs)) {
     const notif = gcfg.notifications;
     if (!notif?.channelId || !notif.events?.includes(event)) continue;
@@ -43,7 +67,8 @@ async function notifyEvent(client, guildConfigs, serverId, event, title, color, 
         .setColor(color)
         .setTimestamp();
 
-      if (Object.keys(guildConfigs).length > 1) embed.setFooter({ text: serverId });
+      if (Object.keys(guildConfigs).length > 1)
+        embed.setFooter({ text: serverId });
 
       await channel.send({ embeds: [embed] });
     } catch (err) {

@@ -8,15 +8,39 @@ export function registerJoinLeaveWatcher(logWatcher, client, guildConfigs) {
   const serverId = logWatcher.server.id;
 
   logWatcher.register(JOIN_REGEX, async (match) => {
-    await notify(client, guildConfigs, serverId, match[1], "join", 0x55ff55, "joined the server");
+    await notify(
+      client,
+      guildConfigs,
+      serverId,
+      match[1],
+      "join",
+      0x55ff55,
+      "joined the server",
+    );
   });
 
   logWatcher.register(LEAVE_REGEX, async (match) => {
-    await notify(client, guildConfigs, serverId, match[1], "leave", 0xff5555, "left the server");
+    await notify(
+      client,
+      guildConfigs,
+      serverId,
+      match[1],
+      "leave",
+      0xff5555,
+      "left the server",
+    );
   });
 }
 
-async function notify(client, guildConfigs, serverId, player, event, color, text) {
+async function notify(
+  client,
+  guildConfigs,
+  serverId,
+  player,
+  event,
+  color,
+  text,
+) {
   for (const [guildId, gcfg] of Object.entries(guildConfigs)) {
     const notif = gcfg.notifications;
     if (!notif?.channelId) continue;
@@ -32,7 +56,8 @@ async function notify(client, guildConfigs, serverId, player, event, color, text
         .setColor(color)
         .setTimestamp();
 
-      if (Object.keys(guildConfigs).length > 1) embed.setFooter({ text: serverId });
+      if (Object.keys(guildConfigs).length > 1)
+        embed.setFooter({ text: serverId });
 
       await channel.send({ embeds: [embed] });
     } catch (err) {

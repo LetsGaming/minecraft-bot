@@ -31,7 +31,7 @@ function generateCode(length = 6) {
     .map(() =>
       Math.floor(Math.random() * 36)
         .toString(36)
-        .toUpperCase()
+        .toUpperCase(),
     )
     .join("");
 }

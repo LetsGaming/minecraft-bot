@@ -1,18 +1,37 @@
 import { exec } from "child_process";
 import { promises as fsPromises, existsSync } from "fs";
 import path from "path";
-import { getServerConfig, sendToServer, isServerRunning, getServerSeed } from "./server.js";
+import {
+  getServerConfig,
+  sendToServer,
+  isServerRunning,
+  getServerSeed,
+} from "./server.js";
 
 let whitelistCache = null;
 
 export async function deleteStats(uuid) {
   const cfg = getServerConfig();
-  const statsPath = path.resolve(cfg.serverDir, "world", "stats", `${uuid}.json`);
-  try { await fsPromises.rm(statsPath); return true; }
-  catch (err) { if (err.code === "ENOENT") return false; return false; }
+  const statsPath = path.resolve(
+    cfg.serverDir,
+    "world",
+    "stats",
+    `${uuid}.json`,
+  );
+  try {
+    await fsPromises.rm(statsPath);
+    return true;
+  } catch (err) {
+    if (err.code === "ENOENT") return false;
+    return false;
+  }
 }
 
-export { sendToServer, isServerRunning as isScreenRunning, getServerSeed as getSeed };
+export {
+  sendToServer,
+  isServerRunning as isScreenRunning,
+  getServerSeed as getSeed,
+};
 
 let lastListOutput = null;
 let lastListTime = 0;
@@ -21,7 +40,7 @@ export async function getListOutput() {
   const now = Date.now();
   if (now - lastListTime < 500 && lastListOutput) return lastListOutput;
   await sendToServer("/list");
-  await new Promise(r => setTimeout(r, 200));
+  await new Promise((r) => setTimeout(r, 200));
   const output = await getLatestLogs(10);
   lastListOutput = output;
   lastListTime = now;
@@ -46,7 +65,11 @@ export function stripLogPrefix(line) {
   let idx = line.lastIndexOf(sep);
   if (idx !== -1) return line.slice(idx + sep.length).trim();
   idx = line.lastIndexOf("]:");
-  if (idx !== -1) return line.slice(idx + 2).replace(/^[:\s]+/, "").trim();
+  if (idx !== -1)
+    return line
+      .slice(idx + 2)
+      .replace(/^[:\s]+/, "")
+      .trim();
   idx = line.lastIndexOf(": ");
   if (idx !== -1) return line.slice(idx + 2).trim();
   return line.trim();
@@ -70,7 +93,9 @@ export async function getLevelName() {
     const content = await fsPromises.readFile(propsPath, "utf-8");
     const match = content.match(/^level-name\s*=\s*(.+)$/m);
     if (match) return match[1].trim();
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return "world";
 }
 
@@ -105,7 +130,9 @@ export async function loadJson(file) {
     const data = JSON.parse(raw);
     jsonCache.set(file, { mtimeMs, data });
     return data;
-  } catch { return {}; }
+  } catch {
+    return {};
+  }
 }
 
 export async function saveJson(file, data) {

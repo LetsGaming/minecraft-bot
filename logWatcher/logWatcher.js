@@ -13,7 +13,11 @@ const POLL_INTERVAL_MS = 1000;
 export class LogWatcher {
   constructor(serverInstance) {
     this.server = serverInstance;
-    this.logFile = path.join(serverInstance.config.serverDir, "logs", "latest.log");
+    this.logFile = path.join(
+      serverInstance.config.serverDir,
+      "logs",
+      "latest.log",
+    );
     this.logsDir = path.dirname(this.logFile);
     this.lastSize = 0;
     this.reading = false;
@@ -35,7 +39,9 @@ export class LogWatcher {
     try {
       const stats = await fs.stat(this.logFile);
       this.lastSize = stats.size;
-    } catch { this.lastSize = 0; }
+    } catch {
+      this.lastSize = 0;
+    }
 
     // Primary: fs.watch (fast, event-driven)
     try {
@@ -52,14 +58,23 @@ export class LogWatcher {
     }
 
     // Fallback: polling (catches anything fs.watch misses)
-    this._pollTimer = setInterval(() => this._processChanges("change"), POLL_INTERVAL_MS);
+    this._pollTimer = setInterval(
+      () => this._processChanges("change"),
+      POLL_INTERVAL_MS,
+    );
 
     log.info(this.server.id, `Watching ${this.logFile}`);
   }
 
   stop() {
-    if (this._fsWatcher) { this._fsWatcher.close(); this._fsWatcher = null; }
-    if (this._pollTimer) { clearInterval(this._pollTimer); this._pollTimer = null; }
+    if (this._fsWatcher) {
+      this._fsWatcher.close();
+      this._fsWatcher = null;
+    }
+    if (this._pollTimer) {
+      clearInterval(this._pollTimer);
+      this._pollTimer = null;
+    }
   }
 
   async _processChanges(event) {
@@ -67,11 +82,17 @@ export class LogWatcher {
     this.reading = true;
     try {
       if (event === "rename") {
-        try { await fs.access(this.logFile); this.lastSize = 0; }
-        catch { return; }
+        try {
+          await fs.access(this.logFile);
+          this.lastSize = 0;
+        } catch {
+          return;
+        }
       }
       await this._readNewLines();
-    } finally { this.reading = false; }
+    } finally {
+      this.reading = false;
+    }
   }
 
   async _readNewLines() {
@@ -81,7 +102,8 @@ export class LogWatcher {
       if (stats.size === this.lastSize) return;
 
       const stream = fsSync.createReadStream(this.logFile, {
-        start: this.lastSize, end: stats.size - 1,
+        start: this.lastSize,
+        end: stats.size - 1,
       });
       const rl = readline.createInterface({ input: stream });
 
@@ -89,15 +111,21 @@ export class LogWatcher {
         for (const { regex, handler } of this.watchers) {
           const match = regex.exec(line);
           if (match) {
-            try { await handler(match, this.client, this.server); }
-            catch (err) { log.error(this.server.id, `Log handler error: ${err.message}`); }
+            try {
+              await handler(match, this.client, this.server);
+            } catch (err) {
+              log.error(this.server.id, `Log handler error: ${err.message}`);
+            }
           }
         }
       }
       this.lastSize = stats.size;
     } catch (err) {
-      if (err.code === "ENOENT") { this.lastSize = 0; }
-      else { log.error(this.server.id, `Log read error: ${err.message}`); }
+      if (err.code === "ENOENT") {
+        this.lastSize = 0;
+      } else {
+        log.error(this.server.id, `Log read error: ${err.message}`);
+      }
     }
   }
 }
@@ -107,4 +135,6 @@ const _globalWatchers = [];
 export function registerLogCommand(regex, handler) {
   _globalWatchers.push({ regex, handler });
 }
-export function getGlobalWatchers() { return _globalWatchers; }
+export function getGlobalWatchers() {
+  return _globalWatchers;
+}

@@ -14,7 +14,10 @@ function parseVariablesTxt(filePath) {
     const m = line.match(/^(\w+)=(.*)$/);
     if (!m) continue;
     let v = m[2].trim();
-    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))
+    if (
+      (v.startsWith('"') && v.endsWith('"')) ||
+      (v.startsWith("'") && v.endsWith("'"))
+    )
       v = v.slice(1, -1);
     vars[m[1]] = v;
   }
@@ -24,7 +27,9 @@ function parseVariablesTxt(filePath) {
 function resolveServerConfig(raw) {
   // Try to read variables.txt from scripts dir
   const scriptDir = raw.scriptDir || raw.serverDir;
-  const varsFile = scriptDir ? path.join(scriptDir, "..", "common", "variables.txt") : null;
+  const varsFile = scriptDir
+    ? path.join(scriptDir, "..", "common", "variables.txt")
+    : null;
   const sv = varsFile ? parseVariablesTxt(varsFile) : {};
 
   return {
@@ -106,5 +111,5 @@ export function getServerIds() {
 
 /** Get all server IDs as Discord choices */
 export function getServerChoices() {
-  return getServerIds().map(id => ({ name: id, value: id }));
+  return getServerIds().map((id) => ({ name: id, value: id }));
 }

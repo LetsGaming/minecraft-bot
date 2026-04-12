@@ -20,12 +20,12 @@ export const data = new SlashCommandBuilder()
       .setName("player")
       .setDescription("Minecraft player name")
       .setRequired(true)
-      .setAutocomplete(true)
+      .setAutocomplete(true),
   )
   .addStringOption((option) =>
     option
       .setName("stat")
-      .setDescription("Optional stat category or specific stat ID")
+      .setDescription("Optional stat category or specific stat ID"),
   );
 
 export async function execute(interaction) {
@@ -51,7 +51,7 @@ export async function execute(interaction) {
         {
           footer: { text: "Stats File Not Found" },
           timestamp: new Date(),
-        }
+        },
       );
       return interaction.editReply({ embeds: [errEmbd] });
     }
@@ -65,7 +65,7 @@ export async function execute(interaction) {
         {
           footer: { text: "Stats Not Found" },
           timestamp: new Date(),
-        }
+        },
       );
       return interaction.editReply({ embeds: [errEmbd] });
     }
@@ -85,6 +85,6 @@ export async function execute(interaction) {
     }
   } catch (err) {
     console.error(err);
-    return createErrorEmbed('Failed to retrieve stats.');
+    return createErrorEmbed("Failed to retrieve stats.");
   }
 }

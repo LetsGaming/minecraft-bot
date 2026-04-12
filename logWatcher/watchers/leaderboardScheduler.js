@@ -1,11 +1,18 @@
 import path from "path";
 import { loadConfig } from "../../config.js";
 import { buildLeaderboard } from "../../utils/statUtils.js";
-import { takeSnapshot, getSnapshotClosestTo } from "../../utils/snapshotUtils.js";
+import {
+  takeSnapshot,
+  getSnapshotClosestTo,
+} from "../../utils/snapshotUtils.js";
 import { loadJson, saveJson, getRootDir } from "../../utils/utils.js";
 import { log } from "../../utils/logger.js";
 
-const SCHEDULE_PATH = path.resolve(getRootDir(), "data", "leaderboardSchedule.json");
+const SCHEDULE_PATH = path.resolve(
+  getRootDir(),
+  "data",
+  "leaderboardSchedule.json",
+);
 const CHECK_INTERVAL_MS = 60 * 60 * 1000; // Check every hour
 const SNAPSHOT_INTERVAL_MS = 60 * 60 * 1000; // Snapshot every hour
 
@@ -53,9 +60,14 @@ export function startLeaderboardScheduler(client, guildConfigs) {
   setTimeout(() => takeSnapshot().catch(() => {}), 10000);
 
   // ── Leaderboard posting: only if any guild has it configured ──
-  const hasAnyConfig = Object.values(guildConfigs).some(g => g.leaderboard?.channelId);
+  const hasAnyConfig = Object.values(guildConfigs).some(
+    (g) => g.leaderboard?.channelId,
+  );
   if (!hasAnyConfig) {
-    log.info("leaderboard", "No leaderboard channels configured, scheduler inactive (snapshots still running)");
+    log.info(
+      "leaderboard",
+      "No leaderboard channels configured, scheduler inactive (snapshots still running)",
+    );
     return snapshotTimer;
   }
 
@@ -68,9 +80,15 @@ export function startLeaderboardScheduler(client, guildConfigs) {
   }, CHECK_INTERVAL_MS);
 
   // Also check once shortly after startup to catch any missed posts
-  setTimeout(() => checkAndPost(client, guildConfigs, globalInterval).catch(() => {}), 30000);
+  setTimeout(
+    () => checkAndPost(client, guildConfigs, globalInterval).catch(() => {}),
+    30000,
+  );
 
-  log.info("leaderboard", `Scheduler active (snapshots + posting every ${CHECK_INTERVAL_MS / 60000}min)`);
+  log.info(
+    "leaderboard",
+    `Scheduler active (snapshots + posting every ${CHECK_INTERVAL_MS / 60000}min)`,
+  );
   return { snapshotTimer, postTimer };
 }
 
@@ -85,7 +103,10 @@ async function checkAndPost(client, guildConfigs, globalInterval) {
     const interval = lb.interval || globalInterval;
     const intervalMs = INTERVAL_MS[interval];
     if (!intervalMs) {
-      log.warn("leaderboard", `Unknown interval "${interval}" for guild ${guildId}, skipping`);
+      log.warn(
+        "leaderboard",
+        `Unknown interval "${interval}" for guild ${guildId}, skipping`,
+      );
       continue;
     }
 
@@ -95,7 +116,10 @@ async function checkAndPost(client, guildConfigs, globalInterval) {
     try {
       const channel = await client.channels.fetch(lb.channelId);
       if (!channel) {
-        log.warn("leaderboard", `Channel ${lb.channelId} not found for guild ${guildId}`);
+        log.warn(
+          "leaderboard",
+          `Channel ${lb.channelId} not found for guild ${guildId}`,
+        );
         continue;
       }
 
@@ -110,7 +134,9 @@ async function checkAndPost(client, guildConfigs, globalInterval) {
 
       if (snapshot) {
         opts.baseline = snapshot.players;
-        const snapshotAge = Math.round((now - snapshot.timestamp) / (60 * 60 * 1000));
+        const snapshotAge = Math.round(
+          (now - snapshot.timestamp) / (60 * 60 * 1000),
+        );
         footer = `${periodLabel} leaderboard · based on last ${snapshotAge}h of data`;
       } else {
         footer = `${periodLabel} leaderboard · no snapshot available, showing all-time`;
@@ -124,9 +150,15 @@ async function checkAndPost(client, guildConfigs, globalInterval) {
       schedule[guildId] = now;
       await saveSchedule(schedule);
 
-      log.info("leaderboard", `Posted ${interval} leaderboard for guild ${guildId}`);
+      log.info(
+        "leaderboard",
+        `Posted ${interval} leaderboard for guild ${guildId}`,
+      );
     } catch (err) {
-      log.error("leaderboard", `Failed to post for guild ${guildId}: ${err.message}`);
+      log.error(
+        "leaderboard",
+        `Failed to post for guild ${guildId}: ${err.message}`,
+      );
     }
   }
 }

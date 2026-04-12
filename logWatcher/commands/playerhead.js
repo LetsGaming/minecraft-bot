@@ -6,12 +6,18 @@ const cmd = defineCommand({
   args: ["player"],
   cooldown: 15,
   handler: async (username, { player }, client, server) => {
-    const res = await fetch(`https://api.mojang.com/users/profiles/minecraft/${player}`);
+    const res = await fetch(
+      `https://api.mojang.com/users/profiles/minecraft/${player}`,
+    );
     if (!res.ok) {
-      await server.sendCommand(`/msg ${username} Player "${player}" not found.`);
+      await server.sendCommand(
+        `/msg ${username} Player "${player}" not found.`,
+      );
       return;
     }
-    await server.sendCommand(`/give ${username} player_head[profile={name:"${player}"}]`);
+    await server.sendCommand(
+      `/give ${username} player_head[profile={name:"${player}"}]`,
+    );
   },
 });
 export const { init, COMMAND_INFO } = cmd;

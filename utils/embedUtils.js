@@ -133,7 +133,7 @@ export function createPaginationButtons(page, totalPages) {
       .setCustomId("last")
       .setLabel("⏭️")
       .setStyle(ButtonStyle.Secondary)
-      .setDisabled(page >= totalPages - 1)
+      .setDisabled(page >= totalPages - 1),
   );
 }
 
@@ -189,7 +189,7 @@ export async function handlePagination(message, interaction, embeds) {
     } catch (err) {
       console.warn(
         "Failed to remove buttons after pagination timeout:",
-        err.message
+        err.message,
       );
     }
   });

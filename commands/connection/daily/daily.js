@@ -23,7 +23,7 @@ export async function execute(interaction) {
   const userId = interaction.user.id;
   if (!(await isLinked(userId))) {
     return interaction.reply(
-      error("You must link your Discord account first.", "Link Required")
+      error("You must link your Discord account first.", "Link Required"),
     );
   }
 
@@ -35,7 +35,7 @@ export async function execute(interaction) {
 
   if (!rewardsCfg.default?.length) {
     return interaction.reply(
-      error("Daily rewards data unavailable.", "Data Error")
+      error("Daily rewards data unavailable.", "Data Error"),
     );
   }
 
@@ -58,13 +58,13 @@ export async function execute(interaction) {
 
   if (!(await getOnlinePlayers()).includes(username)) {
     return interaction.reply(
-      error("You must be online in Minecraft to claim.", "Online Requirement")
+      error("You must be online in Minecraft to claim.", "Online Requirement"),
     );
   }
 
   const { currentStreak, bonusStreak, longestStreak } = calcStreak(
     userData,
-    delta
+    delta,
   );
   const reward = pick(rewardsCfg.default);
   const bonus = rewardsCfg.streakBonuses?.[bonusStreak] || null;
@@ -100,13 +100,13 @@ const cooldownMsg = (ms) => {
       hour: "2-digit",
       minute: "2-digit",
       timeZone: "Europe/Berlin", // CEST in summer, CET in winter
-    }
+    },
   )}`;
 };
 
 function calcStreak(
   { lastClaim, currentStreak, bonusStreak, longestStreak },
-  delta
+  delta,
 ) {
   const broken = delta > 2 * DAILY_COOLDOWN;
   const cs = broken ? 1 : currentStreak + 1;

@@ -10,7 +10,7 @@ import { loadWhitelist } from "../../utils/utils.js";
 export const data = new SlashCommandBuilder()
   .setName("whitelisted")
   .setDescription(
-    "List all players who have been whitelisted on the Minecraft server"
+    "List all players who have been whitelisted on the Minecraft server",
   );
 
 export async function execute(interaction) {
@@ -59,6 +59,8 @@ export async function execute(interaction) {
     }
   } catch (err) {
     console.error(err);
-    await interaction.editReply({embeds: [createErrorEmbed("Failed to read the Whitelist.")]});
+    await interaction.editReply({
+      embeds: [createErrorEmbed("Failed to read the Whitelist.")],
+    });
   }
 }

@@ -16,7 +16,7 @@ export const data = new SlashCommandBuilder()
       .setName("player")
       .setDescription("Minecraft player name")
       .setRequired(true)
-      .setAutocomplete(true)
+      .setAutocomplete(true),
   );
 
 export async function execute(interaction) {
@@ -32,7 +32,7 @@ export async function execute(interaction) {
         {
           footer: { text: "Player Not Found" },
           timestamp: new Date(),
-        }
+        },
       );
       return interaction.editReply({ embeds: [errorEmbed] });
     }
@@ -44,7 +44,7 @@ export async function execute(interaction) {
         {
           footer: { text: "Stats File Not Found" },
           timestamp: new Date(),
-        }
+        },
       );
       return interaction.editReply({ embeds: [errorEmbed] });
     }
@@ -60,7 +60,7 @@ export async function execute(interaction) {
         {
           footer: { text: "Playtime Stat Not Found" },
           timestamp: new Date(),
-        }
+        },
       );
       return interaction.editReply({ embeds: [errorEmbed] });
     }
@@ -76,7 +76,7 @@ export async function execute(interaction) {
         {
           footer: { text: "Playtime Formatting Error" },
           timestamp: new Date(),
-        }
+        },
       );
       return interaction.editReply({ embeds: [errorEmbed] });
     }
@@ -90,6 +90,13 @@ export async function execute(interaction) {
     await interaction.editReply({ embeds: [embed] });
   } catch (err) {
     console.error(err);
-    await interaction.editReply({embeds: [createErrorEmbed("An unexpected error occurred.", { footer: { text: "Playtime Error" }, timestamp: new Date() })]});
+    await interaction.editReply({
+      embeds: [
+        createErrorEmbed("An unexpected error occurred.", {
+          footer: { text: "Playtime Error" },
+          timestamp: new Date(),
+        }),
+      ],
+    });
   }
 }

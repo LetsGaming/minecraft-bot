@@ -24,7 +24,13 @@ async function saveAudit(audit) {
  * @param {string} serverId - Server the player was whitelisted on
  * @param {string} [uuid] - Mojang UUID if available
  */
-export async function recordAdd(username, discordTag, discordId, serverId, uuid = null) {
+export async function recordAdd(
+  username,
+  discordTag,
+  discordId,
+  serverId,
+  uuid = null,
+) {
   const audit = await loadAudit();
   const key = username.toLowerCase();
 

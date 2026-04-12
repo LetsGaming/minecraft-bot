@@ -18,14 +18,17 @@ export const LEADERBOARD_STATS = {
   },
   mob_kills: {
     label: "Mob Kills",
-    extract: (flat) => flat.filter(s => s.category === "minecraft:killed").reduce((sum, s) => sum + s.value, 0),
+    extract: (flat) =>
+      flat
+        .filter((s) => s.category === "minecraft:killed")
+        .reduce((sum, s) => sum + s.value, 0),
     format: (v) => v.toLocaleString(),
     sortAscending: false,
   },
   deaths: {
     label: "Deaths",
     extract: (flat) => {
-      const d = flat.find(s => s.key === "minecraft:deaths");
+      const d = flat.find((s) => s.key === "minecraft:deaths");
       return d?.value || 0;
     },
     format: (v) => v.toLocaleString(),
@@ -33,14 +36,17 @@ export const LEADERBOARD_STATS = {
   },
   mined: {
     label: "Blocks Mined",
-    extract: (flat) => flat.filter(s => s.category === "minecraft:mined").reduce((sum, s) => sum + s.value, 0),
+    extract: (flat) =>
+      flat
+        .filter((s) => s.category === "minecraft:mined")
+        .reduce((sum, s) => sum + s.value, 0),
     format: (v) => v.toLocaleString(),
     sortAscending: false,
   },
   walked: {
     label: "Distance Walked",
     extract: (flat) => {
-      const w = flat.find(s => s.key === "minecraft:walk_one_cm");
+      const w = flat.find((s) => s.key === "minecraft:walk_one_cm");
       return w?.value || 0;
     },
     format: (v) => formatDistance(v),
@@ -59,12 +65,15 @@ export const LEADERBOARD_STATS = {
  * @param {string} [options.periodLabel] - Label like "Weekly" to show in the embed title
  * @returns {Promise<{embed: EmbedBuilder, entries: Array}>}
  */
-export async function buildLeaderboard(statKey, { limit = 10, baseline = null, periodLabel = null } = {}) {
+export async function buildLeaderboard(
+  statKey,
+  { limit = 10, baseline = null, periodLabel = null } = {},
+) {
   const def = LEADERBOARD_STATS[statKey];
   if (!def) throw new Error(`Unknown stat: ${statKey}`);
 
   const allStats = await loadAllStats();
-  const whitelist = await loadWhitelist() || [];
+  const whitelist = (await loadWhitelist()) || [];
 
   const uuidToName = {};
   for (const p of whitelist) uuidToName[p.uuid] = p.name;
@@ -95,7 +104,9 @@ export async function buildLeaderboard(statKey, { limit = 10, baseline = null, p
     entries.push({ name, value, formatted: def.format(value) });
   }
 
-  entries.sort((a, b) => def.sortAscending ? a.value - b.value : b.value - a.value);
+  entries.sort((a, b) =>
+    def.sortAscending ? a.value - b.value : b.value - a.value,
+  );
 
   const top = entries.slice(0, limit);
   const medals = ["🥇", "🥈", "🥉"];
@@ -147,8 +158,9 @@ export function findPlayTimeStat(flattenedStats) {
 
   const playtime = flattenedStats.find(
     (stat) =>
-      (stat.key === "minecraft:play_time" && stat.category === "minecraft:custom") ||
-      stat.fullKey === "stat.playOneMinute"
+      (stat.key === "minecraft:play_time" &&
+        stat.category === "minecraft:custom") ||
+      stat.fullKey === "stat.playOneMinute",
   );
 
   return playtime ? playtime.value : 0;
@@ -277,7 +289,12 @@ function groupByCategory(stats) {
 async function getStatsPath(uuid = null) {
   const levelName = (await getLevelName()) || "world";
   if (uuid) {
-    return path.resolve(getServerConfig().serverDir, levelName, "stats", `${uuid}.json`);
+    return path.resolve(
+      getServerConfig().serverDir,
+      levelName,
+      "stats",
+      `${uuid}.json`,
+    );
   } else {
     return path.resolve(getServerConfig().serverDir, levelName, "stats");
   }
@@ -320,7 +337,7 @@ export async function loadAllStats() {
       const statsPath = path.join(statsDir, file);
       const data = await loadJson(statsPath);
       return [uuid, data];
-    })
+    }),
   );
 
   return Object.fromEntries(results);
@@ -329,7 +346,7 @@ export async function loadAllStats() {
 /**
  * Flatten stats into an array of { fullKey, category, key, value }
  * Works for both older flat format and newer nested format.
- * @param {object} statsFile 
+ * @param {object} statsFile
  * @returns {Array}
  */
 export function flattenStats(statsFile) {
@@ -386,12 +403,12 @@ export function filterStats(statsArray, filterStat) {
   // Hardcoded disambiguation
   if (filter === "killed")
     return statsArray.filter(
-      (s) => s.category.includes("kill") || s.category === "minecraft:killed"
+      (s) => s.category.includes("kill") || s.category === "minecraft:killed",
     );
   if (filter === "killed_by")
     return statsArray.filter(
       (s) =>
-        s.category.includes("KilledBy") || s.category === "minecraft:killed_by"
+        s.category.includes("KilledBy") || s.category === "minecraft:killed_by",
     );
 
   const tokenize = (str) => str.toLowerCase().split(/[:._\-\s]+/);

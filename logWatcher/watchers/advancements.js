@@ -4,7 +4,8 @@ import { log } from "../../utils/logger.js";
 // "[time] [Server thread/INFO]: Player has made the advancement [Advancement Name]"
 // "[time] [Server thread/INFO]: Player has completed the challenge [Challenge Name]"
 // "[time] [Server thread/INFO]: Player has reached the goal [Goal Name]"
-const ADV_REGEX = /\[.+?\].*:\s+(\w+) has (?:made the advancement|completed the challenge|reached the goal) \[(.+?)\]/;
+const ADV_REGEX =
+  /\[.+?\].*:\s+(\w+) has (?:made the advancement|completed the challenge|reached the goal) \[(.+?)\]/;
 
 export function registerAdvancementWatcher(logWatcher, client, guildConfigs) {
   const serverId = logWatcher.server.id;
@@ -25,12 +26,15 @@ export function registerAdvancementWatcher(logWatcher, client, guildConfigs) {
 
         const embed = new EmbedBuilder()
           .setAuthor({ name: player, iconURL: head })
-          .setTitle(isChallenge ? "🏆 Challenge Complete!" : "⭐ Advancement Made!")
+          .setTitle(
+            isChallenge ? "🏆 Challenge Complete!" : "⭐ Advancement Made!",
+          )
           .setDescription(`**${advancement}**`)
           .setColor(isChallenge ? 0xa020f0 : 0x55ff55)
           .setTimestamp();
 
-        if (Object.keys(guildConfigs).length > 1) embed.setFooter({ text: serverId });
+        if (Object.keys(guildConfigs).length > 1)
+          embed.setFooter({ text: serverId });
 
         await channel.send({ embeds: [embed] });
       } catch (err) {

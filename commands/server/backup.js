@@ -9,15 +9,30 @@ import path from "path";
 export const data = new SlashCommandBuilder()
   .setName("backup")
   .setDescription("Show backup status for a server")
-  .addStringOption(o => o.setName("server").setDescription("Server instance").setAutocomplete(true));
+  .addStringOption((o) =>
+    o.setName("server").setDescription("Server instance").setAutocomplete(true),
+  );
 
 export const execute = withErrorHandling(async (interaction) => {
   const serverId = interaction.options.getString("server");
-  const server = serverId ? getServerInstance(serverId) : getGuildServer(interaction.guild?.id);
+  const server = serverId
+    ? getServerInstance(serverId)
+    : getGuildServer(interaction.guild?.id);
   if (!server) throw new Error("Server not found.");
 
-  const backupsBase = path.resolve(server.config.serverDir, "..", "backups", server.config.screenSession);
-  const dirs = ["hourly", "archives/daily", "archives/weekly", "archives/monthly", "archives/update"];
+  const backupsBase = path.resolve(
+    server.config.serverDir,
+    "..",
+    "backups",
+    server.config.screenSession,
+  );
+  const dirs = [
+    "hourly",
+    "archives/daily",
+    "archives/weekly",
+    "archives/monthly",
+    "archives/update",
+  ];
 
   const fields = [];
   let totalSize = 0;
@@ -26,7 +41,9 @@ export const execute = withErrorHandling(async (interaction) => {
     const fullDir = path.join(backupsBase, dir);
     if (!fs.existsSync(fullDir)) continue;
 
-    const files = fs.readdirSync(fullDir).filter(f => f.endsWith(".tar.zst") || f.endsWith(".tar.gz"));
+    const files = fs
+      .readdirSync(fullDir)
+      .filter((f) => f.endsWith(".tar.zst") || f.endsWith(".tar.gz"));
     if (files.length === 0) continue;
 
     files.sort().reverse();

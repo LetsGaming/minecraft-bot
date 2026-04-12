@@ -4,12 +4,12 @@ import { loadJson, saveJson, getRootDir } from "./utils.js";
 export const LINKED_ACCOUNTS_PATH = path.resolve(
   getRootDir(),
   "data",
-  "linkedAccounts.json"
+  "linkedAccounts.json",
 );
 export const LINK_CODES_PATH = path.resolve(
   getRootDir(),
   "data",
-  "linkCodes.json"
+  "linkCodes.json",
 );
 
 export async function loadLinkedAccounts() {

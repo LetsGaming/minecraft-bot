@@ -36,7 +36,10 @@ export function suppressAlerts(serverId, graceMs = 5 * 60 * 1000) {
   state.suppressUntil = Date.now() + graceMs;
   state.consecutiveFailures = 0;
   state.alerted = false;
-  log.info("downtime", `Alerts suppressed for ${serverId} (${graceMs / 1000}s grace)`);
+  log.info(
+    "downtime",
+    `Alerts suppressed for ${serverId} (${graceMs / 1000}s grace)`,
+  );
 }
 
 /**
@@ -46,8 +49,9 @@ export function suppressAlerts(serverId, graceMs = 5 * 60 * 1000) {
  * Sends a recovery notification when the server comes back online.
  */
 export function startDowntimeMonitor(servers, client, guildConfigs) {
-  const guildsWithAlerts = Object.entries(guildConfigs)
-    .filter(([, cfg]) => cfg.downtimeAlerts?.channelId);
+  const guildsWithAlerts = Object.entries(guildConfigs).filter(
+    ([, cfg]) => cfg.downtimeAlerts?.channelId,
+  );
 
   if (guildsWithAlerts.length === 0) {
     log.info("downtime", "No downtime alert channels configured, skipping");
@@ -64,7 +68,10 @@ export function startDowntimeMonitor(servers, client, guildConfigs) {
     }
   }, CHECK_INTERVAL_MS);
 
-  log.info("downtime", `Monitor active for ${servers.length} server(s), alerting ${guildsWithAlerts.length} guild(s)`);
+  log.info(
+    "downtime",
+    `Monitor active for ${servers.length} server(s), alerting ${guildsWithAlerts.length} guild(s)`,
+  );
   return timer;
 }
 
@@ -132,12 +139,19 @@ async function checkServer(server, client, guildsWithAlerts) {
         });
       }
 
-      log.warn("downtime", `${server.id} down (${state.consecutiveFailures} consecutive failures)`);
+      log.warn(
+        "downtime",
+        `${server.id} down (${state.consecutiveFailures} consecutive failures)`,
+      );
     }
   }
 }
 
-async function sendAlert(client, channelId, { title, description, color, serverId }) {
+async function sendAlert(
+  client,
+  channelId,
+  { title, description, color, serverId },
+) {
   try {
     const channel = await client.channels.fetch(channelId);
     if (!channel) return;

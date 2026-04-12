@@ -13,7 +13,7 @@ export async function execute(interaction) {
   const url = await getUrl();
   if (!url) {
     const errorEmbed = createErrorEmbed(
-      "The map URL is not configured. Please contact the server administrator."
+      "The map URL is not configured. Please contact the server administrator.",
     );
     await interaction.editReply({ embeds: [errorEmbed] });
     return;

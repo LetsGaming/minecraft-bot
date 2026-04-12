@@ -1,5 +1,15 @@
-import { getListOutput, stripLogPrefix, getLatestLogs, loadWhitelist } from "./utils.js";
-import { sendToServer, getPlayerData, getServerConfig, getServerList } from "./server.js";
+import {
+  getListOutput,
+  stripLogPrefix,
+  getLatestLogs,
+  loadWhitelist,
+} from "./utils.js";
+import {
+  sendToServer,
+  getPlayerData,
+  getServerConfig,
+  getServerList,
+} from "./server.js";
 
 const LOOKAHEAD_LINES = 5;
 
@@ -8,7 +18,7 @@ let _playerNamesCache = null;
 
 export async function getPlayerNamesChoices() {
   const names = await getPlayerNames();
-  return names.map(n => ({ name: n, value: n }));
+  return names.map((n) => ({ name: n, value: n }));
 }
 
 /**
@@ -17,7 +27,7 @@ export async function getPlayerNamesChoices() {
 export async function findPlayer(playerName) {
   const names = await getPlayerNames();
   const lowerName = playerName.toLowerCase();
-  const index = names.findIndex(n => n.toLowerCase() === lowerName);
+  const index = names.findIndex((n) => n.toLowerCase() === lowerName);
   if (index === -1) return null;
   const whitelist = await loadWhitelist();
   return whitelist[index] || null;
@@ -28,7 +38,7 @@ export async function findPlayer(playerName) {
  */
 export async function getPlayerNames() {
   const whitelist = await loadWhitelist();
-  return whitelist ? whitelist.map(p => p.name) : [];
+  return whitelist ? whitelist.map((p) => p.name) : [];
 }
 
 /**
@@ -45,7 +55,10 @@ export async function getPlayerCount() {
   const logContent = await getListOutput();
   if (!logContent) return { playerCount: "unknown", maxPlayers: "unknown" };
   const parsed = parseListOutput(logContent);
-  return { playerCount: parsed.playerCount ?? "unknown", maxPlayers: parsed.maxPlayers ?? "unknown" };
+  return {
+    playerCount: parsed.playerCount ?? "unknown",
+    maxPlayers: parsed.maxPlayers ?? "unknown",
+  };
 }
 
 /**
@@ -72,12 +85,15 @@ export async function getPlayerCoords(playerName) {
 
   if (response) {
     // RCON returns the data directly
-    const match = response.match(/\[([\d.+-]+)d,\s*([\d.+-]+)d,\s*([\d.+-]+)d\]/);
-    if (match) return { x: Number(match[1]), y: Number(match[2]), z: Number(match[3]) };
+    const match = response.match(
+      /\[([\d.+-]+)d,\s*([\d.+-]+)d,\s*([\d.+-]+)d\]/,
+    );
+    if (match)
+      return { x: Number(match[1]), y: Number(match[2]), z: Number(match[3]) };
   }
 
   // Screen fallback — command was sent, check logs
-  await new Promise(r => setTimeout(r, 150));
+  await new Promise((r) => setTimeout(r, 150));
   const output = await getLatestLogs(10);
   const match = output.match(/\[([\d.+-]+)d,\s*([\d.+-]+)d,\s*([\d.+-]+)d\]/);
   if (!match) return null;
@@ -96,7 +112,7 @@ export async function getPlayerDimension(playerName) {
   }
 
   // Screen fallback
-  await new Promise(r => setTimeout(r, 150));
+  await new Promise((r) => setTimeout(r, 150));
   const output = await getLatestLogs(10);
   const match = output.match(/"minecraft:([^"]+)"/);
   return match ? match[1] : "overworld";
@@ -105,10 +121,12 @@ export async function getPlayerDimension(playerName) {
 // ── Log parsing (screen fallback) ──
 
 export function parseListOutput(logContent) {
-  if (!logContent) return { playerCount: "unknown", maxPlayers: "unknown", players: [] };
+  if (!logContent)
+    return { playerCount: "unknown", maxPlayers: "unknown", players: [] };
   const lines = logContent.split(/\r?\n/);
   const idx = findLastPlayerLine(lines);
-  if (idx === -1) return { playerCount: "unknown", maxPlayers: "unknown", players: [] };
+  if (idx === -1)
+    return { playerCount: "unknown", maxPlayers: "unknown", players: [] };
   const counts = parseCounts(lines[idx]);
   const inlinePlayers = parseInlinePlayers(lines[idx]);
   if (inlinePlayers) return { ...counts, players: inlinePlayers };
@@ -118,7 +136,8 @@ export function parseListOutput(logContent) {
 
 function findLastPlayerLine(lines) {
   for (let i = lines.length - 1; i >= 0; i--) {
-    if (lines[i].includes("There are") && lines[i].includes("players online")) return i;
+    if (lines[i].includes("There are") && lines[i].includes("players online"))
+      return i;
   }
   return -1;
 }
@@ -126,7 +145,9 @@ function findLastPlayerLine(lines) {
 function parseCounts(line) {
   const content = stripLogPrefix(line);
   const match =
-    content.match(/There are\s+(\d+)\s*of a max of\s*(\d+)\s*players online/i) ||
+    content.match(
+      /There are\s+(\d+)\s*of a max of\s*(\d+)\s*players online/i,
+    ) ||
     content.match(/There are\s+(\d+)\s*\/\s*(\d+)\s*players online/i) ||
     content.match(/There are\s+(\d+)\s*players online/i);
   return {
@@ -139,18 +160,40 @@ function parseInlinePlayers(line) {
   const content = stripLogPrefix(line);
   const match = content.match(/players online\s*:\s*(.*)$/i);
   if (!match?.[1]) return null;
-  return match[1].split(",").map(s => s.trim().replace(/§./g, "")).filter(Boolean);
+  return match[1]
+    .split(",")
+    .map((s) => s.trim().replace(/§./g, ""))
+    .filter(Boolean);
 }
 
 function parseNextLinesPlayers(lines, startIdx) {
-  for (let j = startIdx + 1; j < Math.min(lines.length, startIdx + LOOKAHEAD_LINES); j++) {
+  for (
+    let j = startIdx + 1;
+    j < Math.min(lines.length, startIdx + LOOKAHEAD_LINES);
+    j++
+  ) {
     const raw = lines[j];
     if (!raw) continue;
     let candidate = stripLogPrefix(raw);
     if (!candidate) continue;
     const lower = candidate.toLowerCase();
-    if (["saving", "starting", "stopping", "backup", "joined the game", "left the game", "players online"].some(k => lower.includes(k))) continue;
-    if (/^[\w,\- ]+$/.test(candidate)) return candidate.split(",").map(s => s.trim().replace(/§./g, "")).filter(Boolean);
+    if (
+      [
+        "saving",
+        "starting",
+        "stopping",
+        "backup",
+        "joined the game",
+        "left the game",
+        "players online",
+      ].some((k) => lower.includes(k))
+    )
+      continue;
+    if (/^[\w,\- ]+$/.test(candidate))
+      return candidate
+        .split(",")
+        .map((s) => s.trim().replace(/§./g, ""))
+        .filter(Boolean);
   }
   return [];
 }

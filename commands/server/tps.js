@@ -16,42 +16,47 @@ export const execute = withErrorHandling(async (interaction) => {
   const server = serverId
     ? getServerInstance(serverId)
     : getGuildServer(interaction.guild?.id);
-
   if (!server) throw new Error("Server not found.");
+
   if (!server.useRcon) throw new Error("TPS monitoring requires RCON.");
 
   const tps = await server.getTps();
+  if (!tps) throw new Error("Could not retrieve TPS. Server may be offline.");
 
-  // 1. Check if the response exists and contains a valid number
-  if (!tps || typeof tps.tps1m !== "number" || isNaN(tps.tps1m)) {
-    throw new Error(
-      `Could not parse TPS data. Raw response: ${tps?.raw || "No response"}`,
-    );
-  }
-
-  const { tps1m, tps5m, tps15m, raw } = tps;
-
-  // 2. Logic for color and emoji based on valid numbers
-  const tpsColor = tps1m >= 18 ? 0x55ff55 : tps1m >= 15 ? 0xffaa00 : 0xff5555;
-  const emoji = tps1m >= 18 ? "🟢" : tps1m >= 15 ? "🟡" : "🔴";
+  const tpsColor =
+    tps.tps1m >= 18 ? 0x55ff55 : tps.tps1m >= 15 ? 0xffaa00 : 0xff5555;
+  const emoji = tps.tps1m >= 18 ? "🟢" : tps.tps1m >= 15 ? "🟡" : "🔴";
 
   const embed = createEmbed({
     title: `${emoji} TPS — ${server.id}`,
     color: tpsColor,
   });
 
-  // 3. Display fields if all timeframes are valid numbers
-  if (Number.isFinite(tps5m) && Number.isFinite(tps15m)) {
+  if (tps.tps5m !== undefined) {
+    // Paper/Spigot/Purpur: 1m, 5m, 15m averages
     embed.addFields(
-      { name: "1 min", value: tps1m.toFixed(1), inline: true },
-      { name: "5 min", value: tps5m.toFixed(1), inline: true },
-      { name: "15 min", value: tps15m.toFixed(1), inline: true },
+      { name: "1 min", value: `${tps.tps1m.toFixed(1)}`, inline: true },
+      { name: "5 min", value: `${tps.tps5m.toFixed(1)}`, inline: true },
+      { name: "15 min", value: `${tps.tps15m.toFixed(1)}`, inline: true },
     );
+  } else if (tps.mspt !== undefined) {
+    // Vanilla: TPS derived from MSPT + percentiles
+    embed.addFields(
+      { name: "TPS", value: `${tps.tps1m.toFixed(1)}`, inline: true },
+      { name: "MSPT", value: `${tps.mspt.toFixed(1)}ms`, inline: true },
+    );
+    if (tps.p50 !== undefined) {
+      embed.addFields({
+        name: "Tick Timing",
+        value: `P50: ${tps.p50.toFixed(1)}ms · P95: ${tps.p95.toFixed(1)}ms · P99: ${tps.p99.toFixed(1)}ms`,
+        inline: false,
+      });
+    }
   } else {
-    embed.setDescription(`Current TPS: **${tps1m.toFixed(1)}**`);
+    embed.setDescription(`Current TPS: **${tps.tps1m.toFixed(1)}**`);
   }
 
-  if (raw) embed.setFooter({ text: raw.slice(0, 100) });
+  if (tps.raw) embed.setFooter({ text: tps.raw.slice(0, 100) });
 
   await interaction.editReply({ embeds: [embed] });
 });

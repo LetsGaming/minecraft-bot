@@ -12,7 +12,9 @@ async function loadAllCommandInfo() {
     try {
       const mod = await import(`./${file}`);
       if (mod.COMMAND_INFO) commands.push(mod.COMMAND_INFO);
-    } catch { /* skip */ }
+    } catch {
+      /* skip */
+    }
   }
   return commands;
 }
@@ -26,7 +28,9 @@ const cmd = defineCommand({
     const commands = await loadAllCommandInfo();
     await server.sendCommand(`/msg ${username} Available commands:`);
     for (const c of commands) {
-      await server.sendCommand(`/msg ${username}  ${c.command} - ${c.description}`);
+      await server.sendCommand(
+        `/msg ${username}  ${c.command} - ${c.description}`,
+      );
     }
   },
 });

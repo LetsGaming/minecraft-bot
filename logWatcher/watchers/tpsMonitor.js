@@ -17,20 +17,12 @@ export function startTpsMonitor(serverInstance, client, guildConfigs) {
   const timer = setInterval(async () => {
     try {
       const tps = await serverInstance.getTps();
-
-      // Robust check: Ensure tps1m is a real number before proceeding
-      if (!tps || typeof tps.tps1m !== "number" || isNaN(tps.tps1m)) return;
+      if (!tps || tps.tps1m === null) return;
 
       if (tps.tps1m < threshold) {
         const lastWarn = warned.get(serverInstance.id) || 0;
-        if (Date.now() - lastWarn < 300000) return;
+        if (Date.now() - lastWarn < 300000) return; // Don't spam — max once per 5 min
         warned.set(serverInstance.id, Date.now());
-
-        // Destructure and provide defaults to prevent .toFixed() from crashing
-        const { tps1m, tps5m, tps15m } = tps;
-        const safe1m = tps1m.toFixed(1);
-        const safe5m = typeof tps5m === "number" ? tps5m.toFixed(1) : safe1m;
-        const safe15m = typeof tps15m === "number" ? tps15m.toFixed(1) : safe1m;
 
         for (const [, gcfg] of Object.entries(guildConfigs)) {
           const tpsAlert = gcfg.tpsAlerts;
@@ -44,17 +36,43 @@ export function startTpsMonitor(serverInstance, client, guildConfigs) {
 
             const embed = new EmbedBuilder()
               .setTitle("⚠️ Low TPS Warning")
-              .setDescription(
-                `Server **${serverInstance.id}** TPS has dropped below ${threshold}`,
-              )
-              .addFields(
-                { name: "1 min", value: safe1m, inline: true },
-                { name: "5 min", value: safe5m, inline: true },
-                { name: "15 min", value: safe15m, inline: true },
-              )
-              .setColor(tps1m < 10 ? 0xff0000 : 0xffaa00)
+              .setDescription(`Server TPS has dropped below ${threshold}`)
+              .setColor(tps.tps1m < 10 ? 0xff0000 : 0xffaa00)
               .setTimestamp()
               .setFooter({ text: serverInstance.id });
+
+            if (tps.tps5m !== undefined) {
+              embed.addFields(
+                {
+                  name: "1 min",
+                  value: `${tps.tps1m.toFixed(1)}`,
+                  inline: true,
+                },
+                {
+                  name: "5 min",
+                  value: `${tps.tps5m.toFixed(1)}`,
+                  inline: true,
+                },
+                {
+                  name: "15 min",
+                  value: `${tps.tps15m.toFixed(1)}`,
+                  inline: true,
+                },
+              );
+            } else {
+              embed.addFields({
+                name: "TPS",
+                value: `${tps.tps1m.toFixed(1)}`,
+                inline: true,
+              });
+              if (tps.mspt !== undefined) {
+                embed.addFields({
+                  name: "MSPT",
+                  value: `${tps.mspt.toFixed(1)}ms`,
+                  inline: true,
+                });
+              }
+            }
 
             await channel.send({ embeds: [embed] });
           } catch (err) {
@@ -62,12 +80,8 @@ export function startTpsMonitor(serverInstance, client, guildConfigs) {
           }
         }
       }
-    } catch (err) {
-      // Log the error so you know if RCON is timing out
-      log.error(
-        "tps",
-        `Monitor loop error for ${serverInstance.id}: ${err.message}`,
-      );
+    } catch {
+      /* server might be down */
     }
   }, interval);
 

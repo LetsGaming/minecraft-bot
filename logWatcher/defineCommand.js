@@ -14,19 +14,31 @@ const cooldowns = new Map(); // "commandName:username" -> timestamp
  *     handler: async (username, args, client, server) => { ... }
  *   });
  */
-export function defineCommand({ name, aliases = [], description, args = [], cooldown = 0, handler }) {
-  const allNames = [name, ...aliases].map(n => n.replace(/^!/, ""));
-  const escapedNames = allNames.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+export function defineCommand({
+  name,
+  aliases = [],
+  description,
+  args = [],
+  cooldown = 0,
+  handler,
+}) {
+  const allNames = [name, ...aliases].map((n) => n.replace(/^!/, ""));
+  const escapedNames = allNames.map((n) =>
+    n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+  );
   const namePattern = escapedNames.join("|");
 
   const argsPattern = args.map(() => "\\s+(\\S+)").join("");
 
   const regex = new RegExp(
-    `\\[.+?\\]: <(?:\\[AFK\\]\\s*)?([^>]+)> !(${namePattern})${argsPattern}`
+    `\\[.+?\\]: <(?:\\[AFK\\]\\s*)?([^>]+)> !(${namePattern})${argsPattern}`,
   );
 
   const commandInfo = {
-    command: args.length > 0 ? `!${name} ${args.map(a => `<${a}>`).join(" ")}` : `!${name}`,
+    command:
+      args.length > 0
+        ? `!${name} ${args.map((a) => `<${a}>`).join(" ")}`
+        : `!${name}`,
     description: description || `No description for !${name}`,
   };
 
@@ -42,7 +54,9 @@ export function defineCommand({ name, aliases = [], description, args = [], cool
         if (elapsed < cooldown) {
           const remaining = Math.ceil(cooldown - elapsed);
           const srv = server || { sendCommand: async () => {} };
-          await srv.sendCommand(`/msg ${username} Please wait ${remaining}s before using !${name} again.`);
+          await srv.sendCommand(
+            `/msg ${username} Please wait ${remaining}s before using !${name} again.`,
+          );
           return;
         }
         cooldowns.set(key, Date.now());

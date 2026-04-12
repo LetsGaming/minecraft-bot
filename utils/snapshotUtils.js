@@ -38,7 +38,10 @@ export async function takeSnapshot() {
   const filePath = path.join(SNAPSHOTS_DIR, `${timestamp}.json`);
   await fsPromises.writeFile(filePath, JSON.stringify({ timestamp, players }));
 
-  log.info("snapshots", `Snapshot taken (${Object.keys(players).length} players)`);
+  log.info(
+    "snapshots",
+    `Snapshot taken (${Object.keys(players).length} players)`,
+  );
 
   await cleanupSnapshots();
 
@@ -54,9 +57,9 @@ export async function getSnapshotClosestTo(targetTimestamp) {
 
   const files = await fsPromises.readdir(SNAPSHOTS_DIR);
   const timestamps = files
-    .filter(f => f.endsWith(".json"))
-    .map(f => parseInt(f.replace(".json", ""), 10))
-    .filter(t => !isNaN(t))
+    .filter((f) => f.endsWith(".json"))
+    .map((f) => parseInt(f.replace(".json", ""), 10))
+    .filter((t) => !isNaN(t))
     .sort((a, b) => a - b);
 
   if (timestamps.length === 0) return null;
@@ -87,9 +90,9 @@ export async function cleanupSnapshots() {
 
   const files = await fsPromises.readdir(SNAPSHOTS_DIR);
   const entries = files
-    .filter(f => f.endsWith(".json"))
-    .map(f => ({ file: f, timestamp: parseInt(f.replace(".json", ""), 10) }))
-    .filter(e => !isNaN(e.timestamp))
+    .filter((f) => f.endsWith(".json"))
+    .map((f) => ({ file: f, timestamp: parseInt(f.replace(".json", ""), 10) }))
+    .filter((e) => !isNaN(e.timestamp))
     .sort((a, b) => a.timestamp - b.timestamp);
 
   if (entries.length === 0) return;
@@ -116,7 +119,7 @@ export async function cleanupSnapshots() {
       if (e.timestamp < maxAge) toDelete.push(e);
     }
 
-    const remaining = dayEntries.filter(e => e.timestamp >= maxAge);
+    const remaining = dayEntries.filter((e) => e.timestamp >= maxAge);
 
     // For completed days (older than 24h), keep only the latest snapshot
     if (remaining.length > 1 && remaining[0].timestamp < oneDayAgo) {

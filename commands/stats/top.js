@@ -10,10 +10,12 @@ const choices = Object.entries(LEADERBOARD_STATS).map(([key, def]) => ({
 export const data = new SlashCommandBuilder()
   .setName("top")
   .setDescription("Show top players by a stat")
-  .addStringOption(o => o
-    .setName("stat")
-    .setDescription("Stat to rank by (default: playtime)")
-    .addChoices(...choices));
+  .addStringOption((o) =>
+    o
+      .setName("stat")
+      .setDescription("Stat to rank by (default: playtime)")
+      .addChoices(...choices),
+  );
 
 export const execute = withErrorHandling(async (interaction) => {
   const stat = interaction.options.getString("stat") || "playtime";

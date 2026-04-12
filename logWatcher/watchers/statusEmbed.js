@@ -51,18 +51,9 @@ async function buildStatusEmbed() {
     if (server.useRcon) {
       try {
         const tps = await server.getTps();
-
-        // Check if tps exists and tps1m is a valid, finite number
-        if (tps && Number.isFinite(tps.tps1m)) {
-          const tpsVal = tps.tps1m;
-          const emoji = tpsVal >= 18 ? "🟢" : tpsVal >= 15 ? "🟡" : "🔴";
-
-          // Formatting the line
-          tpsLine = `\nTPS: ${emoji} ${tpsVal.toFixed(1)}`;
-        } else {
-          // Optional: Handle the error state or log the raw response for debugging
-          console.warn("TPS data unavailable or unparseable:", tps?.raw);
-          tpsLine = "\nTPS: ⚪ Data Unavailable";
+        if (tps?.tps1m !== null && tps?.tps1m !== undefined) {
+          const emoji = tps.tps1m >= 18 ? "🟢" : tps.tps1m >= 15 ? "🟡" : "🔴";
+          tpsLine = `\nTPS: ${emoji} ${tps.tps1m.toFixed(1)}`;
         }
       } catch {
         /* server might not support tps */

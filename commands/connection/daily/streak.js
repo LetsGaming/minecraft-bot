@@ -24,7 +24,7 @@ export async function execute(interaction) {
       {
         footer: { text: "Streak Data Not Found" },
         timestamp: new Date(),
-      }
+      },
     );
     return interaction.editReply({ embeds: [errorEmbed] });
   }
@@ -36,7 +36,7 @@ export async function execute(interaction) {
     `📅 **Daily Streak Information**\n` +
       `**Current Streak:** ${currentStreak} days\n` +
       `**Longest Streak:** ${longestStreak} days\n` +
-      `**Next Bonus Streak:** ${nextBonus.streak} days `
+      `**Next Bonus Streak:** ${nextBonus.streak} days `,
   );
 }
 
