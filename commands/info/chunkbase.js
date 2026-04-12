@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from "discord.js";
 import { createEmbed, createErrorEmbed } from "../../utils/embedUtils.js";
-import { getSeed } from "../../utils/utils.js";
+import { getServerSeed } from "../../utils/server.js";
 import { getLinkedAccount } from "../../utils/linkUtils.js";
 import { getPlayerCoords } from "../../utils/playerUtils.js";
 
@@ -22,10 +22,9 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction) {
   await interaction.deferReply();
 
-  const seed = await getSeed();
+  const seed = await getServerSeed();
   if (!seed) {
-    const errorEmbed = createErrorEmbed("Could not retrieve the world seed.");
-    await interaction.editReply({ embeds: [errorEmbed] });
+    await interaction.editReply({ embeds: [createErrorEmbed("Could not retrieve the world seed.")] });
     return;
   }
 
@@ -37,7 +36,9 @@ export async function execute(interaction) {
   if (linkedUsername) {
     try {
       const playerCoords = await getPlayerCoords(linkedUsername);
-      coordsParam = `&x=${Math.floor(playerCoords.x)}&z=${Math.floor(playerCoords.z)}`;
+      if (playerCoords) {
+        coordsParam = `&x=${Math.floor(playerCoords.x)}&z=${Math.floor(playerCoords.z)}`;
+      }
     } catch (err) {
       console.warn(`Failed to get player coords for ${linkedUsername}:`, err.message);
     }
@@ -47,10 +48,9 @@ export async function execute(interaction) {
 
   const embed = createEmbed({
     title: "Chunkbase Map",
-    description: `You can view the Chunkbase map for the server's world seed [here](${baseUrl}).`,
+    description: `View the seed map on Chunkbase: [Open Map](${baseUrl})`,
     footer: { text: `Requested by ${interaction.user.tag}` },
   });
 
   await interaction.editReply({ embeds: [embed] });
 }
-

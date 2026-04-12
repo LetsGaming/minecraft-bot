@@ -1,13 +1,16 @@
 import path from "path";
 import { fileURLToPath } from "url";
-import { readdirSync, statSync } from "fs";
-import config from "../config.json" assert { type: "json" };
-
+import { readdirSync, statSync, readFileSync } from "fs";
 import { watchServerLog } from "./logWatcher.js";
 
-// Convert import.meta.url to a usable directory path
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Load bot config for command enable/disable settings
+let botConfig = {};
+try {
+  botConfig = JSON.parse(readFileSync(path.resolve(process.cwd(), "config.json"), "utf-8"));
+} catch { /* ignore if missing */ }
 
 /**
  * Recursively get all .js files in a directory
@@ -37,25 +40,24 @@ export async function initMinecraftCommands(client) {
       const commandModule = await import(path.resolve(file));
 
       if (typeof commandModule.init !== "function") {
-        console.warn(`Skipping file ${file} - missing 'init' export.`);
+        console.warn(`Skipping ${file} — no init() export.`);
         continue;
       }
 
       const commandName = path.basename(file, ".js");
-      const enabled = config.commands?.[commandName]?.enabled ?? true;
+      const enabled = botConfig.commands?.[commandName]?.enabled ?? true;
       if (!enabled) {
-        console.log(`Skipping disabled command: ${commandName}`);
+        console.log(`⏭ Skipping disabled command: ${commandName}`);
         continue;
       }
 
       await commandModule.init();
-      console.log(`✅ Initialized Minecraft command: ${commandName} \n\n`);
+      console.log(`✅ Loaded !${commandName}`);
     } catch (err) {
-      console.error(`❌ Failed to load Minecraft command from ${file}:`, err);
+      console.error(`❌ Failed to load ${file}:`, err);
     }
   }
 
-  console.log("✅ All Minecraft commands initialized \n\n");
-
+  console.log("✅ All in-game commands initialized\n");
   await watchServerLog(client);
 }

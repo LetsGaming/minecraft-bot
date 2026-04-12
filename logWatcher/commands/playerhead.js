@@ -1,42 +1,24 @@
-import { registerLogCommand } from "../logWatcher.js";
-import { sendToServer } from "../../utils/utils.js";
+import { defineCommand } from "../defineCommand.js";
+import { sendToServer } from "../../utils/server.js";
 
-export const COMMAND_INFO = {
-  command: "!playerhead <player>",
+const cmd = defineCommand({
+  name: "playerhead",
   description: "Get the player head of any Minecraft player",
-};
-
-// Example log: [12:34:56] [Server thread/INFO]: <[AFK] PlayerName> !playerhead TargetPlayer
-const PLAYERHEAD_REGEX =
-  /\[.+?\]: <(?:\[AFK\]\s*)?([^>]+)> !playerhead (\w{1,16})/;
-
-/**
- * Handles the !playerhead Minecraft chat command and gives it as an item to the player.
- */
-async function handlePlayerheadCommand(match) {
-  const username = match[1];
-  const playerHeadName = match[2];
-
-  // check if player exists
-  const res = await fetch(
-    `https://api.mojang.com/users/profiles/minecraft/${playerHeadName}`, // Mojang API to get UUID by username
-  );
-  if (!res.ok) {
-    await sendToServer(
-      `/msg ${username} Player \`${playerHeadName}\` not found.`,
+  args: ["player"],
+  handler: async (username, { player }) => {
+    // Validate the player exists via Mojang API
+    const res = await fetch(
+      `https://api.mojang.com/users/profiles/minecraft/${player}`
     );
-  }
+    if (!res.ok) {
+      await sendToServer(`/msg ${username} Player "${player}" not found.`);
+      return; // ← Fixed: was missing, proceeded to give head even on error
+    }
 
-  // Give the player the head item
-  await sendToServer(
-    `give ${username} player_head[profile={name:"${playerHeadName}"}]`,
-  );
-}
+    await sendToServer(
+      `/give ${username} player_head[profile={name:"${player}"}]`
+    );
+  },
+});
 
-/**
- * Initializes the !playerhead watcher.
- */
-export function init() {
-  registerLogCommand(PLAYERHEAD_REGEX, handlePlayerheadCommand);
-  console.log("🔥 !playerhead command handler registered");
-}
+export const { init, COMMAND_INFO } = cmd;

@@ -14,9 +14,8 @@ import {
   createErrorEmbed,
   createInfoEmbed,
 } from "../../utils/embedUtils.js";
-import { findPlayer, getPlayerNames } from "../../utils/playerUtils.js";
+import { findPlayer } from "../../utils/playerUtils.js";
 
-const PLAYER_NAMES = await getPlayerNames();
 
 export const data = new SlashCommandBuilder()
   .setName("compare")
@@ -26,14 +25,14 @@ export const data = new SlashCommandBuilder()
       .setName("player1")
       .setDescription("First player name")
       .setRequired(true)
-      .addChoices(...PLAYER_NAMES.map((name) => ({ name, value: name })))
+      .setAutocomplete(true)
   )
   .addStringOption((option) =>
     option
       .setName("player2")
       .setDescription("Second player name")
       .setRequired(true)
-      .addChoices(...PLAYER_NAMES.map((name) => ({ name, value: name })))
+      .setAutocomplete(true)
   )
   .addStringOption((option) =>
     option

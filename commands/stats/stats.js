@@ -5,7 +5,7 @@ import {
   filterStats,
   buildStatsEmbeds,
 } from "../../utils/statUtils.js";
-import { findPlayer, PLAYER_NAMES } from "../../utils/playerUtils.js";
+import { findPlayer, getPlayerNamesChoices } from "../../utils/playerUtils.js";
 import {
   createPaginationButtons,
   handlePagination,
@@ -20,7 +20,7 @@ export const data = new SlashCommandBuilder()
       .setName("player")
       .setDescription("Minecraft player name")
       .setRequired(true)
-      .addChoices(...PLAYER_NAMES)
+      .setAutocomplete(true)
   )
   .addStringOption((option) =>
     option

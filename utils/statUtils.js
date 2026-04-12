@@ -1,7 +1,7 @@
 import fs from "fs";
 import { promises as fsPromises } from "fs";
 import path from "path";
-import config from "../config.json" assert { type: "json" };
+import { getServerConfig } from "./server.js";
 import { getLevelName, loadJson } from "./utils.js";
 import { createEmbed } from "../utils/embedUtils.js";
 
@@ -168,9 +168,9 @@ function groupByCategory(stats) {
 async function getStatsPath(uuid = null) {
   const levelName = (await getLevelName()) || "world";
   if (uuid) {
-    return path.resolve(config.serverDir, levelName, "stats", `${uuid}.json`);
+    return path.resolve(getServerConfig().serverDir, levelName, "stats", `${uuid}.json`);
   } else {
-    return path.resolve(config.serverDir, levelName, "stats");
+    return path.resolve(getServerConfig().serverDir, levelName, "stats");
   }
 }
 

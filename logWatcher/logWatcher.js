@@ -2,9 +2,9 @@ import fs from "fs/promises";
 import fsSync from "fs";
 import path from "path";
 import readline from "readline";
-import config from "../config.json" assert { type: "json" };
+import { getServerConfig } from "../utils/server.js";
 
-const logFile = path.join(config.serverDir, "logs", "latest.log");
+const logFile = path.join(getServerConfig().serverDir, "logs", "latest.log");
 const logsDir = path.dirname(logFile);
 
 let lastSize = 0;

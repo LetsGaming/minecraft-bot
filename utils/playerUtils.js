@@ -1,55 +1,63 @@
-import { getListOutput, stripLogPrefix, sendToServer, getLatestLogs, loadWhitelist } from "./utils.js";
-const LOOKAHEAD_LINES = 5; // how many lines to look ahead for player names after the count line
+import { getListOutput, stripLogPrefix, getLatestLogs, loadWhitelist } from "./utils.js";
+import { sendToServer, getPlayerData, getServerConfig, getServerList } from "./server.js";
 
-export const PLAYER_NAMES = (await getPlayerNames()).map(n => ({ name: n, value: n }));
+const LOOKAHEAD_LINES = 5;
+
+// Lazy-loaded player names (no more top-level await crash)
+let _playerNamesCache = null;
+
+export async function getPlayerNamesChoices() {
+  const names = await getPlayerNames();
+  return names.map(n => ({ name: n, value: n }));
+}
 
 /**
- * Find a player object from whitelist by playerName (case insensitive)
- * @param {string} playerName
- * @returns {Promise<object|null>} player object or null if not found
+ * Find a player object from whitelist by name (case insensitive)
  */
 export async function findPlayer(playerName) {
   const names = await getPlayerNames();
   const lowerName = playerName.toLowerCase();
-  const index = names.findIndex((n) => n.toLowerCase() === lowerName);
+  const index = names.findIndex(n => n.toLowerCase() === lowerName);
   if (index === -1) return null;
-
   const whitelist = await loadWhitelist();
   return whitelist[index] || null;
 }
 
-/** Get all player names from the whitelist
- * @returns {Promise<string[]>}
+/**
+ * Get all player names from the whitelist
  */
 export async function getPlayerNames() {
   const whitelist = await loadWhitelist();
-  return whitelist ? whitelist.map((p) => p.name) : [];
+  return whitelist ? whitelist.map(p => p.name) : [];
 }
 
 /**
- * Ask the server for player count and parse from logs
- * @returns {Promise<{playerCount: string, maxPlayers: string}>}
+ * Get player count — uses RCON when available
  */
 export async function getPlayerCount() {
-  const logContent = await getListOutput();
-  if (!logContent) {
-    return {
-      playerCount: "unknown",
-      maxPlayers: "unknown",
-    };
+  const cfg = getServerConfig();
+  if (cfg.useRcon && cfg.rconPassword) {
+    const list = await getServerList();
+    return { playerCount: list.playerCount, maxPlayers: list.maxPlayers };
   }
+
+  // Screen fallback
+  const logContent = await getListOutput();
+  if (!logContent) return { playerCount: "unknown", maxPlayers: "unknown" };
   const parsed = parseListOutput(logContent);
-  return {
-    playerCount: parsed.playerCount ?? "unknown",
-    maxPlayers: parsed.maxPlayers ?? "unknown",
-  };
+  return { playerCount: parsed.playerCount ?? "unknown", maxPlayers: parsed.maxPlayers ?? "unknown" };
 }
 
 /**
- * Get a list of online players from the latest logs
- * @returns {Promise<string[]>} Array of player names
+ * Get online players — uses RCON when available
  */
 export async function getOnlinePlayers() {
+  const cfg = getServerConfig();
+  if (cfg.useRcon && cfg.rconPassword) {
+    const list = await getServerList();
+    return list.players;
+  }
+
   const logContent = await getListOutput();
   if (!logContent) return [];
   const parsed = parseListOutput(logContent);
@@ -57,137 +65,92 @@ export async function getOnlinePlayers() {
 }
 
 /**
- * Get the coordinates of a player by their in-game name
- * @param {string} playerName - The in-game name of the player
- * @returns {Promise<{x: number, y: number, z: number}>} The player's coordinates
- * @throws Will throw an error if the coordinates cannot be retrieved or parsed
+ * Get player coordinates — uses RCON direct response when available
  */
 export async function getPlayerCoords(playerName) {
-  await sendToServer(`/data get entity ${playerName} Pos`);
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  const response = await getPlayerData(playerName, "Pos");
 
-  const output = await getLatestLogs(10);
-  const regex = /\[([\d.+-]+)d,\s*([\d.+-]+)d,\s*([\d.+-]+)d\]/;
-  const match = output.match(regex);
-
-  if (!match) {
-    throw new Error("Could not parse coordinates from server output.");
+  if (response) {
+    // RCON returns the data directly
+    const match = response.match(/\[([\d.+-]+)d,\s*([\d.+-]+)d,\s*([\d.+-]+)d\]/);
+    if (match) return { x: Number(match[1]), y: Number(match[2]), z: Number(match[3]) };
   }
 
-  const [_, x, y, z] = match.map(Number);
-  return { x, y, z };
+  // Screen fallback — command was sent, check logs
+  await new Promise(r => setTimeout(r, 150));
+  const output = await getLatestLogs(10);
+  const match = output.match(/\[([\d.+-]+)d,\s*([\d.+-]+)d,\s*([\d.+-]+)d\]/);
+  if (!match) return null;
+  return { x: Number(match[1]), y: Number(match[2]), z: Number(match[3]) };
 }
 
 /**
- * Get the current dimension of a player by their in-game name
- * @param {string} playerName - The in-game name of the player
- * @returns {Promise<string>} The player's current dimension (e.g., "overworld", "nether", "the_end")
+ * Get player dimension — uses RCON direct response when available
  */
 export async function getPlayerDimension(playerName) {
-  // Send command to get the player's current dimension
-  await sendToServer(`/data get entity ${playerName} Dimension`);
+  const response = await getPlayerData(playerName, "Dimension");
 
-  // Wait a short moment for the server to log the output
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  if (response) {
+    const match = response.match(/"minecraft:([^"]+)"/);
+    if (match) return match[1];
+  }
 
+  // Screen fallback
+  await new Promise(r => setTimeout(r, 150));
   const output = await getLatestLogs(10);
-
-  // Parse output like: "minecraft:overworld"
   const match = output.match(/"minecraft:([^"]+)"/);
-  return match ? match[1] : "overworld"; // default to overworld if parsing fails
+  return match ? match[1] : "overworld";
 }
 
-/**
- * Main parser: parse a block of log content and return counts + player list
- */
+// ── Log parsing (screen fallback) ──
+
 export function parseListOutput(logContent) {
   if (!logContent) return { playerCount: "unknown", maxPlayers: "unknown", players: [] };
-
   const lines = logContent.split(/\r?\n/);
   const idx = findLastPlayerLine(lines);
   if (idx === -1) return { playerCount: "unknown", maxPlayers: "unknown", players: [] };
-
   const counts = parseCounts(lines[idx]);
   const inlinePlayers = parseInlinePlayers(lines[idx]);
   if (inlinePlayers) return { ...counts, players: inlinePlayers };
-
   const nextLinePlayers = parseNextLinesPlayers(lines, idx);
   return { ...counts, players: nextLinePlayers };
 }
 
-
-/**
- * Checks whether a string looks like a player list
- */
-function isLikelyNameList(candidate) {
-  if (!candidate) return false;
-  const plain = candidate.replace(/§./g, "").trim(); // remove color codes
-  return /^[\w,\- ]+$/.test(plain);
-}
-
-/**
- * Find last "There are ... players online" line in log
- */
 function findLastPlayerLine(lines) {
   for (let i = lines.length - 1; i >= 0; i--) {
-    const l = lines[i];
-    if (l.includes("There are") && l.includes("players online")) return i;
+    if (lines[i].includes("There are") && lines[i].includes("players online")) return i;
   }
   return -1;
 }
 
-/**
- * Parse player counts from a line
- */
 function parseCounts(line) {
   const content = stripLogPrefix(line);
   const match =
     content.match(/There are\s+(\d+)\s*of a max of\s*(\d+)\s*players online/i) ||
     content.match(/There are\s+(\d+)\s*\/\s*(\d+)\s*players online/i) ||
     content.match(/There are\s+(\d+)\s*players online/i);
-  const playerCount = match ? match[1] : "unknown";
-  const maxPlayers = match && match[2] ? match[2] : "unknown";
-  return { playerCount, maxPlayers };
+  return {
+    playerCount: match ? match[1] : "unknown",
+    maxPlayers: match?.[2] || "unknown",
+  };
 }
 
-/**
- * Extract inline player list from the line (newer versions)
- */
 function parseInlinePlayers(line) {
   const content = stripLogPrefix(line);
   const match = content.match(/players online\s*:\s*(.*)$/i);
-  if (!match || !match[1]) return null;
-  return match[1]
-    .split(",")
-    .map((s) => s.trim().replace(/§./g, ""))
-    .filter(Boolean);
+  if (!match?.[1]) return null;
+  return match[1].split(",").map(s => s.trim().replace(/§./g, "")).filter(Boolean);
 }
 
-/**
- * Scan following lines for player list (older versions)
- */
 function parseNextLinesPlayers(lines, startIdx) {
   for (let j = startIdx + 1; j < Math.min(lines.length, startIdx + LOOKAHEAD_LINES); j++) {
-    const candidateRaw = lines[j];
-    if (!candidateRaw) continue;
-    let candidate = stripLogPrefix(candidateRaw);
+    const raw = lines[j];
+    if (!raw) continue;
+    let candidate = stripLogPrefix(raw);
     if (!candidate) continue;
-
     const lower = candidate.toLowerCase();
-    if (
-      lower.includes("saving") ||
-      lower.includes("starting") ||
-      lower.includes("stopping") ||
-      lower.includes("backup") ||
-      lower.includes("joined the game") ||
-      lower.includes("left the game") ||
-      lower.includes("players online")
-    ) continue;
-
-    if (isLikelyNameList(candidate)) return candidate.split(",").map((s) => s.trim().replace(/§./g, "")).filter(Boolean);
-
-    const maybeStripped = candidate.replace(/^\[.*?\]\s*/, "");
-    if (isLikelyNameList(maybeStripped)) return maybeStripped.split(",").map((s) => s.trim().replace(/§./g, "")).filter(Boolean);
+    if (["saving", "starting", "stopping", "backup", "joined the game", "left the game", "players online"].some(k => lower.includes(k))) continue;
+    if (/^[\w,\- ]+$/.test(candidate)) return candidate.split(",").map(s => s.trim().replace(/§./g, "")).filter(Boolean);
   }
   return [];
 }

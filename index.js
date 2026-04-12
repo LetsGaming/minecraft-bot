@@ -4,23 +4,24 @@ import {
   GatewayIntentBits,
   REST,
   Routes,
-  MessageFlags
+  MessageFlags,
 } from "discord.js";
-import { readdirSync, statSync } from "fs";
+import { readdirSync, statSync, readFileSync } from "fs";
 import path from "path";
-import config from "./config.json" assert { type: "json" };
 import { fileURLToPath } from "url";
 import { initMinecraftCommands } from "./logWatcher/initMinecraftCommands.js";
 
-// ESM __dirname fix
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Create client
+// Load config
+const config = JSON.parse(readFileSync(path.resolve(__dirname, "config.json"), "utf-8"));
+
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 client.commands = new Collection();
 
-// Recursively load all .js command files
+// ── Load commands ──
+
 function getCommandFiles(dir) {
   let files = [];
   for (const file of readdirSync(dir)) {
@@ -40,14 +41,18 @@ async function loadCommands() {
   for (const file of commandFiles) {
     const command = await import(path.resolve(file));
 
-    // Check if command is enabled
-    const enabled = config.commands?.[command.data.name]?.enabled ?? true;
-
-    if (command.data && command.execute && enabled) {
-      client.commands.set(command.data.name, command);
-    } else {
-      console.warn(`Skipping file ${file} - missing 'data' or 'execute'.`);
+    if (!command.data || !command.execute) {
+      console.warn(`Skipping ${file} — missing data or execute.`);
+      continue;
     }
+
+    const enabled = config.commands?.[command.data.name]?.enabled ?? true;
+    if (!enabled) {
+      console.log(`⏭ Skipping disabled slash command: ${command.data.name}`);
+      continue;
+    }
+
+    client.commands.set(command.data.name, command);
   }
 }
 
@@ -57,31 +62,48 @@ async function registerGlobalCommands() {
 
   try {
     console.log("Registering global slash commands...");
-    await rest.put(Routes.applicationCommands(config.clientId), {
-      body: commands,
-    });
-    console.log("✅ Global slash commands registered.");
+    await rest.put(Routes.applicationCommands(config.clientId), { body: commands });
+    console.log(`✅ ${commands.length} slash commands registered.\n`);
   } catch (err) {
     console.error("❌ Failed to register commands:", err);
   }
 }
+
+// ── Main ──
 
 (async () => {
   await loadCommands();
   await registerGlobalCommands();
 
   client.once("ready", async () => {
-    console.log(`Bot is ready as ${client.user.tag} \n\n`);
+    console.log(`Bot ready as ${client.user.tag}\n`);
 
     try {
       await initMinecraftCommands(client);
-    console.log("✅ Minecraft commands initialized. \n\n");
     } catch (err) {
-      console.error("❌ Failed to initialize Minecraft commands:", err);
+      console.error("❌ Failed to initialize in-game commands:", err);
     }
   });
 
   client.on("interactionCreate", async (interaction) => {
+    // ── Autocomplete handler for player names ──
+    if (interaction.isAutocomplete()) {
+      const focused = interaction.options.getFocused(true);
+      if (["player", "player1", "player2"].includes(focused.name)) {
+        try {
+          const { getPlayerNames } = await import("./utils/playerUtils.js");
+          const names = await getPlayerNames();
+          const filtered = names
+            .filter(n => n.toLowerCase().startsWith(focused.value.toLowerCase()))
+            .slice(0, 25);
+          await interaction.respond(filtered.map(n => ({ name: n, value: n })));
+        } catch {
+          await interaction.respond([]);
+        }
+      }
+      return;
+    }
+
     if (!interaction.isChatInputCommand()) return;
 
     const command = client.commands.get(interaction.commandName);
@@ -90,10 +112,10 @@ async function registerGlobalCommands() {
     try {
       await command.execute(interaction);
     } catch (err) {
-      console.error(err);
+      console.error(`Error in /${interaction.commandName}:`, err);
       const errorMsg = {
-        content: "❌ There was an error while executing this command.",
-        flags: MessageFlags.Ephemeral
+        content: "❌ There was an error executing this command.",
+        flags: MessageFlags.Ephemeral,
       };
       if (interaction.replied || interaction.deferred) {
         await interaction.followUp(errorMsg);

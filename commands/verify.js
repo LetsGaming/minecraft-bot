@@ -1,6 +1,5 @@
 import { SlashCommandBuilder } from "discord.js";
-import fetch from "node-fetch";
-import { sendToServer } from "../utils/utils.js";
+import { sendToServer } from "../utils/server.js";
 import { createErrorEmbed, createSuccessEmbed } from "../utils/embedUtils.js";
 
 export const data = new SlashCommandBuilder()
@@ -21,48 +20,21 @@ export async function execute(interaction) {
     const res = await fetch(
       `https://api.mojang.com/users/profiles/minecraft/${username}`
     );
-    if (res.status !== 200) {
-      const errEmbd = createErrorEmbed(
-        `Username **${username}** not found. Please check the spelling and try again.`,
-        {
-          footer: { text: "Mojang API Error" },
-          timestamp: new Date(),
-        }
-      );
-      return interaction.editReply({ embeds: [errEmbd] });
+    if (!res.ok) {
+      return interaction.editReply({
+        embeds: [createErrorEmbed(`Username **${username}** not found.`)],
+      });
     }
 
-    const success = await whitelistUser(username);
-    if (!success) {
-      const errEmbd = createErrorEmbed(
-        `Failed to whitelist **${username}**.`,
-        {
-          footer: { text: "Whitelist Error" },
-          timestamp: new Date(),
-        }
-      );
-      return interaction.editReply({ embeds: [errEmbd] });
-    }
+    await sendToServer(`/whitelist add ${username}`);
 
-    await interaction.editReply({ embeds: [createSuccessEmbed(`✅ **${username}** has been whitelisted.`, { footer: { text: "Whitelist Success" }, timestamp: new Date() })] });
+    await interaction.editReply({
+      embeds: [createSuccessEmbed(`**${username}** has been whitelisted.`)],
+    });
   } catch (err) {
     console.error(err);
-    await interaction.editReply({embeds: [createErrorEmbed("An unexpected error occurred.", { footer: { text: "Verification error" }, timestamp: new Date() })]});
-  }
-}
-
-/**
- * Adds a user to the Minecraft whitelist.
- *
- * @param {string} username
- * @returns {Promise<boolean>}
- */
-export async function whitelistUser(username) {
-  try {
-    await sendToServer(`/whitelist add ${username}`);
-    return true;
-  } catch (err) {
-    console.error("Whitelist error:", err.stderr || err.error);
-    return false;
+    await interaction.editReply({
+      embeds: [createErrorEmbed("An unexpected error occurred.")],
+    });
   }
 }

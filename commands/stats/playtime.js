@@ -5,7 +5,7 @@ import {
   findPlayTimeStat,
   formatPlaytime,
 } from "../../utils/statUtils.js";
-import { findPlayer, PLAYER_NAMES } from "../../utils/playerUtils.js";
+import { findPlayer, getPlayerNamesChoices } from "../../utils/playerUtils.js";
 import { createEmbed, createErrorEmbed } from "../../utils/embedUtils.js";
 
 export const data = new SlashCommandBuilder()
@@ -16,7 +16,7 @@ export const data = new SlashCommandBuilder()
       .setName("player")
       .setDescription("Minecraft player name")
       .setRequired(true)
-      .addChoices(...PLAYER_NAMES)
+      .setAutocomplete(true)
   );
 
 export async function execute(interaction) {

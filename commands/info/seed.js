@@ -1,20 +1,17 @@
 import { SlashCommandBuilder } from "discord.js";
 import { createEmbed, createErrorEmbed } from "../../utils/embedUtils.js";
-import { getSeed } from "../../utils/utils.js";
+import { getServerSeed } from "../../utils/server.js";
 
 export const data = new SlashCommandBuilder()
   .setName("seed")
-  .setDescription("Get information about the server's world seed");
+  .setDescription("Get the server's world seed");
 
 export async function execute(interaction) {
   await interaction.deferReply();
-  const seed = await getSeed();
+  const seed = await getServerSeed();
 
   if (!seed) {
-    const errorEmbed = createErrorEmbed(
-      "Could not retrieve the world seed."
-    );
-    await interaction.editReply({ embeds: [errorEmbed] });
+    await interaction.editReply({ embeds: [createErrorEmbed("Could not retrieve the world seed.")] });
     return;
   }
 
@@ -26,5 +23,3 @@ export async function execute(interaction) {
 
   await interaction.editReply({ embeds: [embed] });
 }
-
-

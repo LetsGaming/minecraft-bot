@@ -1,67 +1,61 @@
-import { registerLogCommand } from "../logWatcher.js";
-import { getSeed, sendToServer } from "../../utils/utils.js";
-import {
-  getPlayerCoords,
-  getPlayerDimension,
-} from "../../utils/playerUtils.js";
+import { defineCommand } from "../defineCommand.js";
+import { sendToServer, getServerSeed, getPlayerData } from "../../utils/server.js";
 
-export const COMMAND_INFO = {
-  command: "!chunkbase",
-  description:
-    "Get a link to the Chunkbase map for the server's world seed and your current location",
-};
+const cmd = defineCommand({
+  name: "chunkbase",
+  description: "Get a Chunkbase link for your current location",
+  handler: async (username) => {
+    const seed = await getServerSeed();
+    if (!seed) {
+      await sendToServer(`/msg ${username} Could not retrieve the world seed.`);
+      return;
+    }
 
-// Example log: [12:34:56] [Server thread/INFO]: <PlayerName> !chunkbase
-const CHUNKBASE_REGEX = /\[.+?\]: <(?:\[AFK\]\s*)?([^>]+)> !chunkbase/;
+    // Get dimension
+    let dimension = "overworld";
+    try {
+      const dimResponse = await getPlayerData(username, "Dimension");
+      if (dimResponse) {
+        const match = dimResponse.match(/"minecraft:([^"]+)"/);
+        if (match) dimension = match[1];
+      }
+    } catch { /* default to overworld */ }
 
-/**
- * Handles the !chunkbase Minecraft chat command.
- */
-async function handleChunkbaseCommand(match) {
-  const user = match[1];
+    // Get coordinates
+    let coordsParam = "";
+    try {
+      const posResponse = await getPlayerData(username, "Pos");
+      if (posResponse) {
+        const match = posResponse.match(/\[([\d.+-]+)d,\s*([\d.+-]+)d,\s*([\d.+-]+)d\]/);
+        if (match) {
+          coordsParam = `&x=${Math.floor(Number(match[1]))}&z=${Math.floor(Number(match[3]))}`;
+        }
+      }
+    } catch { /* proceed without coords */ }
 
-  const seed = await getSeed();
-  if (!seed) {
-    await sendToServer(`/msg ${user} Could not retrieve the world seed.`);
-    return;
-  }
+    const url = `https://www.chunkbase.com/apps/seed-map#seed=${seed}&dimension=${dimension}${coordsParam}`;
 
-  const dimension = (await getPlayerDimension(user)) || "overworld";
-  const playerCoords = await getPlayerCoords(user);
-
-  let coordsParam = "";
-
-  if (playerCoords) {
-    coordsParam = `&x=${Math.floor(playerCoords.x)}&z=${Math.floor(
-      playerCoords.z,
-    )}`;
-  }
-
-  const baseUrl = `https://www.chunkbase.com/apps/seed-map#seed=${seed}&dimension=${dimension}${coordsParam}`;
-
-  const tellRaw = [
-    "",
-    { text: "See your location on Chunkbase ", color: "white" },
-    {
-      text: "Click here",
-      color: "gold",
-      click_event: {
-        action: "open_url",
-        url: baseUrl,
+    // Minecraft Java Edition uses camelCase for tellraw JSON
+    const tellRaw = [
+      "",
+      { text: "See your location on Chunkbase: ", color: "white" },
+      {
+        text: "[Click here]",
+        color: "gold",
+        underlined: true,
+        clickEvent: {
+          action: "open_url",
+          value: url,
+        },
+        hoverEvent: {
+          action: "show_text",
+          contents: "Open Chunkbase Seed Map",
+        },
       },
-    },
-  ];
+    ];
 
-  const jsonTellRaw = JSON.stringify(tellRaw);
+    await sendToServer(`/tellraw ${username} ${JSON.stringify(tellRaw)}`);
+  },
+});
 
-  const command = `/tellraw ${user} ${jsonTellRaw}`;
-
-  console.log(`Executing command: ${command}`);
-
-  await sendToServer(command);
-}
-
-export function init() {
-  registerLogCommand(CHUNKBASE_REGEX, handleChunkbaseCommand);
-  console.log("🔥 !chunkbase command handler registered");
-}
+export const { init, COMMAND_INFO } = cmd;
