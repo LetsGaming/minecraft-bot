@@ -1,6 +1,6 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import type {
   BotConfig,
   GuildConfig,
@@ -8,17 +8,34 @@ import type {
   RawServerConfig,
   ServerConfig,
   VariablesMap,
-} from './types/index.js';
+} from "./types/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CONFIG_PATH = path.resolve(__dirname, 'config.json');
+
+/**
+ * config.json lives in the project root, but at runtime __dirname
+ * points to dist/ (the compiled output). Walk up to the directory
+ * containing package.json so the path is correct in both dev and prod.
+ */
+function findProjectRoot(): string {
+  let dir = __dirname;
+  while (true) {
+    if (fs.existsSync(path.join(dir, "package.json"))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) return __dirname;
+    dir = parent;
+  }
+}
+
+const PROJECT_ROOT = findProjectRoot();
+const CONFIG_PATH = path.resolve(PROJECT_ROOT, "config.json");
 
 let _config: BotConfig | null = null;
 
 function parseVariablesTxt(filePath: string): VariablesMap {
   const vars: VariablesMap = {};
   if (!fs.existsSync(filePath)) return vars;
-  for (const line of fs.readFileSync(filePath, 'utf-8').split(/\r?\n/)) {
+  for (const line of fs.readFileSync(filePath, "utf-8").split(/\r?\n/)) {
     const m = line.match(/^(\w+)=(.*)$/);
     if (!m) continue;
     let v = m[2]!.trim();
@@ -32,22 +49,24 @@ function parseVariablesTxt(filePath: string): VariablesMap {
   return vars;
 }
 
-function resolveServerConfig(raw: RawServerConfig & { id: string }): ServerConfig {
-  const scriptDir = raw.scriptDir ?? raw.serverDir ?? '';
+function resolveServerConfig(
+  raw: RawServerConfig & { id: string },
+): ServerConfig {
+  const scriptDir = raw.scriptDir ?? raw.serverDir ?? "";
   const varsFile = scriptDir
-    ? path.join(scriptDir, '..', 'common', 'variables.txt')
+    ? path.join(scriptDir, "..", "common", "variables.txt")
     : null;
   const sv = varsFile ? parseVariablesTxt(varsFile) : {};
 
   return {
     id: raw.id,
-    serverDir: sv.SERVER_PATH ?? raw.serverDir ?? '',
-    linuxUser: sv.USER ?? raw.linuxUser ?? 'minecraft',
-    screenSession: sv.INSTANCE_NAME ?? raw.screenSession ?? 'server',
-    useRcon: sv.USE_RCON === 'true' || raw.useRcon === true,
-    rconHost: sv.RCON_HOST ?? raw.rconHost ?? 'localhost',
-    rconPort: parseInt(String(sv.RCON_PORT ?? raw.rconPort ?? '25575'), 10),
-    rconPassword: sv.RCON_PASSWORD ?? raw.rconPassword ?? '',
+    serverDir: sv.SERVER_PATH ?? raw.serverDir ?? "",
+    linuxUser: sv.USER ?? raw.linuxUser ?? "minecraft",
+    screenSession: sv.INSTANCE_NAME ?? raw.screenSession ?? "server",
+    useRcon: sv.USE_RCON === "true" || raw.useRcon === true,
+    rconHost: sv.RCON_HOST ?? raw.rconHost ?? "localhost",
+    rconPort: parseInt(String(sv.RCON_PORT ?? raw.rconPort ?? "25575"), 10),
+    rconPassword: sv.RCON_PASSWORD ?? raw.rconPassword ?? "",
     scriptDir: scriptDir,
   };
 }
@@ -55,11 +74,11 @@ function resolveServerConfig(raw: RawServerConfig & { id: string }): ServerConfi
 export function loadConfig(): BotConfig {
   if (_config) return _config;
 
-  const raw = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')) as RawBotConfig;
+  const raw = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8")) as RawBotConfig;
 
   // ── Resolve servers ──
   const servers: Record<string, ServerConfig> = {};
-  if (raw.servers && typeof raw.servers === 'object') {
+  if (raw.servers && typeof raw.servers === "object") {
     for (const [id, srv] of Object.entries(raw.servers)) {
       servers[id] = resolveServerConfig({ ...srv, id });
     }
@@ -67,7 +86,7 @@ export function loadConfig(): BotConfig {
     // Legacy single-server config — wrap it
     servers.default = resolveServerConfig({
       ...(raw as unknown as RawServerConfig),
-      id: 'default',
+      id: "default",
     });
   }
 
@@ -84,7 +103,7 @@ export function loadConfig(): BotConfig {
     leaderboard: raw.leaderboard ?? {},
     tpsWarningThreshold: raw.tpsWarningThreshold ?? 15,
     tpsPollIntervalMs: raw.tpsPollIntervalMs ?? 60000,
-    leaderboardInterval: raw.leaderboardInterval ?? 'weekly',
+    leaderboardInterval: raw.leaderboardInterval ?? "weekly",
   }) as BotConfig;
 
   return _config;
