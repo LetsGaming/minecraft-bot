@@ -44,6 +44,13 @@
       "tpsAlerts": {
         "channelId": "CHANNEL_ID",
         "server": "survival"
+      },
+      "statusEmbed": {
+        "channelId": "CHANNEL_ID"
+      },
+      "downtimeAlerts": {
+        "channelId": "CHANNEL_ID",
+        "server": "survival"
       }
     }
   },

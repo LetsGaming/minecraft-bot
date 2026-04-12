@@ -4,6 +4,7 @@ import { getServerInstance } from "../../utils/server.js";
 import { getServerChoices, getGuildServer } from "../../config.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { execCommand } from "../../shell/execCommand.js";
+import { suppressAlerts } from "../../logWatcher/watchers/downtimeMonitor.js";
 import { log } from "../../utils/logger.js";
 
 export const data = new SlashCommandBuilder()
@@ -30,6 +31,11 @@ export const execute = withErrorHandling(requireServerAdmin(async (interaction) 
     stop: "shutdown.sh",
     restart: "smart_restart.sh",
   };
+
+  // Suppress downtime alerts for intentional stop/restart
+  if (sub === "stop" || sub === "restart") {
+    suppressAlerts(server.id);
+  }
 
   const scriptDir = server.config.scriptDir || server.config.serverDir;
   const script = `${scriptDir}/${scriptMap[sub]}`;

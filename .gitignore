@@ -2,4 +2,9 @@ node_modules/
 config.json
 data/linkedAccounts.json
 data/linkCodes.json
+data/claimedDaily.json
+data/whitelistAudit.json
+data/leaderboardSchedule.json
+data/statusMessages.json
+data/snapshots/
 logs/

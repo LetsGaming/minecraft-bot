@@ -14,6 +14,8 @@ import { registerAdvancementWatcher } from "./watchers/advancements.js";
 import { registerServerEventWatcher } from "./watchers/serverEvents.js";
 import { startTpsMonitor } from "./watchers/tpsMonitor.js";
 import { startLeaderboardScheduler } from "./watchers/leaderboardScheduler.js";
+import { startStatusEmbed } from "./watchers/statusEmbed.js";
+import { startDowntimeMonitor } from "./watchers/downtimeMonitor.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -85,6 +87,12 @@ export async function initMinecraftCommands(client) {
 
   // ── 4. Scheduled leaderboard auto-poster ──
   startLeaderboardScheduler(client, guildConfigs);
+
+  // ── 5. Persistent status embed ──
+  startStatusEmbed(client, guildConfigs);
+
+  // ── 6. Downtime monitor ──
+  startDowntimeMonitor(instances, client, guildConfigs);
 
   log.info("init", `${instances.length} server(s) initialized with all watchers`);
 }
