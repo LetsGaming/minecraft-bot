@@ -1,16 +1,24 @@
 import path from "path";
 import { loadConfig } from "../../config.js";
 import { buildLeaderboard } from "../../utils/statUtils.js";
+import { takeSnapshot, getSnapshotClosestTo } from "../../utils/snapshotUtils.js";
 import { loadJson, saveJson, getRootDir } from "../../utils/utils.js";
 import { log } from "../../utils/logger.js";
 
 const SCHEDULE_PATH = path.resolve(getRootDir(), "data", "leaderboardSchedule.json");
 const CHECK_INTERVAL_MS = 60 * 60 * 1000; // Check every hour
+const SNAPSHOT_INTERVAL_MS = 60 * 60 * 1000; // Snapshot every hour
 
 const INTERVAL_MS = {
   daily: 24 * 60 * 60 * 1000,
   weekly: 7 * 24 * 60 * 60 * 1000,
   monthly: 30 * 24 * 60 * 60 * 1000,
+};
+
+const INTERVAL_LABELS = {
+  daily: "Daily",
+  weekly: "Weekly",
+  monthly: "Monthly",
 };
 
 async function loadSchedule() {
@@ -23,21 +31,35 @@ async function saveSchedule(schedule) {
 }
 
 /**
- * Start the leaderboard auto-poster for all guilds that have it configured.
- * Posts a playtime leaderboard at the configured interval to the configured channel.
+ * Start the leaderboard scheduler and the hourly snapshot timer.
+ * - Snapshots run every hour to track stat changes over time.
+ * - The scheduler checks hourly whether any guild is due for a post.
+ * - Posted leaderboards show only stats gained during the configured period.
  */
 export function startLeaderboardScheduler(client, guildConfigs) {
   const cfg = loadConfig();
   const globalInterval = cfg.leaderboardInterval || "weekly";
 
-  // Check if any guild actually has a leaderboard channel configured
+  // ── Snapshots: always run so historical data is ready when needed ──
+  const snapshotTimer = setInterval(async () => {
+    try {
+      await takeSnapshot();
+    } catch (err) {
+      log.error("snapshots", `Snapshot failed: ${err.message}`);
+    }
+  }, SNAPSHOT_INTERVAL_MS);
+
+  // Take an initial snapshot shortly after startup
+  setTimeout(() => takeSnapshot().catch(() => {}), 10000);
+
+  // ── Leaderboard posting: only if any guild has it configured ──
   const hasAnyConfig = Object.values(guildConfigs).some(g => g.leaderboard?.channelId);
   if (!hasAnyConfig) {
-    log.info("leaderboard", "No leaderboard channels configured, scheduler inactive");
-    return null;
+    log.info("leaderboard", "No leaderboard channels configured, scheduler inactive (snapshots still running)");
+    return snapshotTimer;
   }
 
-  const timer = setInterval(async () => {
+  const postTimer = setInterval(async () => {
     try {
       await checkAndPost(client, guildConfigs, globalInterval);
     } catch (err) {
@@ -45,11 +67,11 @@ export function startLeaderboardScheduler(client, guildConfigs) {
     }
   }, CHECK_INTERVAL_MS);
 
-  // Also run once shortly after startup to catch any missed posts
+  // Also check once shortly after startup to catch any missed posts
   setTimeout(() => checkAndPost(client, guildConfigs, globalInterval).catch(() => {}), 30000);
 
-  log.info("leaderboard", `Scheduler active (checking every ${CHECK_INTERVAL_MS / 60000}min)`);
-  return timer;
+  log.info("leaderboard", `Scheduler active (snapshots + posting every ${CHECK_INTERVAL_MS / 60000}min)`);
+  return { snapshotTimer, postTimer };
 }
 
 async function checkAndPost(client, guildConfigs, globalInterval) {
@@ -77,8 +99,25 @@ async function checkAndPost(client, guildConfigs, globalInterval) {
         continue;
       }
 
-      const { embed } = await buildLeaderboard("playtime");
-      embed.setFooter({ text: `Auto-posted ${interval} leaderboard` });
+      // Find the snapshot closest to the start of this period
+      const periodStart = now - intervalMs;
+      const snapshot = await getSnapshotClosestTo(periodStart);
+
+      const periodLabel = INTERVAL_LABELS[interval] || interval;
+      let footer;
+
+      const opts = { periodLabel };
+
+      if (snapshot) {
+        opts.baseline = snapshot.players;
+        const snapshotAge = Math.round((now - snapshot.timestamp) / (60 * 60 * 1000));
+        footer = `${periodLabel} leaderboard · based on last ${snapshotAge}h of data`;
+      } else {
+        footer = `${periodLabel} leaderboard · no snapshot available, showing all-time`;
+      }
+
+      const { embed } = await buildLeaderboard("playtime", opts);
+      embed.setFooter({ text: footer });
 
       await channel.send({ embeds: [embed] });
 

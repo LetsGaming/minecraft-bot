@@ -53,10 +53,13 @@ export const LEADERBOARD_STATS = {
  * Returns { embed, entries } where entries is the sorted array of all players.
  *
  * @param {string} statKey - One of the keys in LEADERBOARD_STATS
- * @param {number} [limit=10] - How many players to show
+ * @param {object} [options]
+ * @param {number} [options.limit=10] - How many players to show
+ * @param {object} [options.baseline] - Snapshot players map for delta mode ({ uuid: { statKey: value } })
+ * @param {string} [options.periodLabel] - Label like "Weekly" to show in the embed title
  * @returns {Promise<{embed: EmbedBuilder, entries: Array}>}
  */
-export async function buildLeaderboard(statKey, limit = 10) {
+export async function buildLeaderboard(statKey, { limit = 10, baseline = null, periodLabel = null } = {}) {
   const def = LEADERBOARD_STATS[statKey];
   if (!def) throw new Error(`Unknown stat: ${statKey}`);
 
@@ -78,10 +81,16 @@ export async function buildLeaderboard(statKey, limit = 10) {
     }
 
     const flat = flattenStats(statsFile);
-    const value = def.extract(flat);
+    let value = def.extract(flat);
+
+    // In delta mode, subtract the baseline value
+    if (baseline) {
+      const base = baseline[uuid]?.[statKey] || 0;
+      value = value - base;
+    }
 
     // For deaths include zero values, for everything else skip them
-    if (statKey !== "deaths" && value === 0) continue;
+    if (statKey !== "deaths" && value <= 0) continue;
 
     entries.push({ name, value, formatted: def.format(value) });
   }
@@ -95,8 +104,9 @@ export async function buildLeaderboard(statKey, limit = 10) {
     return `${prefix} **${e.name}** — ${e.formatted}`;
   });
 
+  const titlePeriod = periodLabel ? ` (${periodLabel})` : "";
   const embed = createEmbed({
-    title: `🏆 Leaderboard — ${def.label}`,
+    title: `🏆 Leaderboard — ${def.label}${titlePeriod}`,
     description: lines.join("\n") || "No data available.",
     footer: { text: `${entries.length} players tracked` },
   });
