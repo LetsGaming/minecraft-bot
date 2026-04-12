@@ -13,6 +13,7 @@ import { registerDeathWatcher } from "./watchers/deaths.js";
 import { registerAdvancementWatcher } from "./watchers/advancements.js";
 import { registerServerEventWatcher } from "./watchers/serverEvents.js";
 import { startTpsMonitor } from "./watchers/tpsMonitor.js";
+import { startLeaderboardScheduler } from "./watchers/leaderboardScheduler.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -81,6 +82,9 @@ export async function initMinecraftCommands(client) {
 
   // ── 3. Discord → MC chat bridge ──
   setupDiscordToMc(client, guildConfigs, getServerInstance);
+
+  // ── 4. Scheduled leaderboard auto-poster ──
+  startLeaderboardScheduler(client, guildConfigs);
 
   log.info("init", `${instances.length} server(s) initialized with all watchers`);
 }

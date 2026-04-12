@@ -2,8 +2,107 @@ import fs from "fs";
 import { promises as fsPromises } from "fs";
 import path from "path";
 import { getServerConfig } from "./server.js";
-import { getLevelName, loadJson } from "./utils.js";
+import { getLevelName, loadJson, loadWhitelist, deleteStats } from "./utils.js";
 import { createEmbed } from "../utils/embedUtils.js";
+
+/**
+ * Available leaderboard stat definitions.
+ * Each entry defines how to extract and format a stat from flattened player data.
+ */
+export const LEADERBOARD_STATS = {
+  playtime: {
+    label: "Playtime",
+    extract: (flat) => findPlayTimeStat(flat),
+    format: (v) => formatPlaytime(v),
+    sortAscending: false,
+  },
+  mob_kills: {
+    label: "Mob Kills",
+    extract: (flat) => flat.filter(s => s.category === "minecraft:killed").reduce((sum, s) => sum + s.value, 0),
+    format: (v) => v.toLocaleString(),
+    sortAscending: false,
+  },
+  deaths: {
+    label: "Deaths",
+    extract: (flat) => {
+      const d = flat.find(s => s.key === "minecraft:deaths");
+      return d?.value || 0;
+    },
+    format: (v) => v.toLocaleString(),
+    sortAscending: true,
+  },
+  mined: {
+    label: "Blocks Mined",
+    extract: (flat) => flat.filter(s => s.category === "minecraft:mined").reduce((sum, s) => sum + s.value, 0),
+    format: (v) => v.toLocaleString(),
+    sortAscending: false,
+  },
+  walked: {
+    label: "Distance Walked",
+    extract: (flat) => {
+      const w = flat.find(s => s.key === "minecraft:walk_one_cm");
+      return w?.value || 0;
+    },
+    format: (v) => formatDistance(v),
+    sortAscending: false,
+  },
+};
+
+/**
+ * Shared leaderboard builder used by /leaderboard, /top, and the scheduled poster.
+ * Returns { embed, entries } where entries is the sorted array of all players.
+ *
+ * @param {string} statKey - One of the keys in LEADERBOARD_STATS
+ * @param {number} [limit=10] - How many players to show
+ * @returns {Promise<{embed: EmbedBuilder, entries: Array}>}
+ */
+export async function buildLeaderboard(statKey, limit = 10) {
+  const def = LEADERBOARD_STATS[statKey];
+  if (!def) throw new Error(`Unknown stat: ${statKey}`);
+
+  const allStats = await loadAllStats();
+  const whitelist = await loadWhitelist() || [];
+
+  const uuidToName = {};
+  for (const p of whitelist) uuidToName[p.uuid] = p.name;
+
+  const entries = [];
+
+  for (const [uuid, statsFile] of Object.entries(allStats)) {
+    const name = uuidToName[uuid];
+
+    // Clean up stats for players no longer on the whitelist
+    if (!name) {
+      await deleteStats(uuid);
+      continue;
+    }
+
+    const flat = flattenStats(statsFile);
+    const value = def.extract(flat);
+
+    // For deaths include zero values, for everything else skip them
+    if (statKey !== "deaths" && value === 0) continue;
+
+    entries.push({ name, value, formatted: def.format(value) });
+  }
+
+  entries.sort((a, b) => def.sortAscending ? a.value - b.value : b.value - a.value);
+
+  const top = entries.slice(0, limit);
+  const medals = ["🥇", "🥈", "🥉"];
+  const lines = top.map((e, i) => {
+    const prefix = medals[i] || `**${i + 1}.**`;
+    return `${prefix} **${e.name}** — ${e.formatted}`;
+  });
+
+  const embed = createEmbed({
+    title: `🏆 Leaderboard — ${def.label}`,
+    description: lines.join("\n") || "No data available.",
+    footer: { text: `${entries.length} players tracked` },
+  });
+
+  return { embed, entries };
+}
 
 export function humanizeKey(rawKey) {
   return rawKey
