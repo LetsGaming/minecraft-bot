@@ -1,40 +1,24 @@
 import { SlashCommandBuilder } from "discord.js";
-import { sendToServer } from "../utils/server.js";
+import { getServerInstance } from "../utils/server.js";
+import { getGuildServer } from "../config.js";
 import { createErrorEmbed, createSuccessEmbed } from "../utils/embedUtils.js";
+import { withErrorHandling } from "./middleware.js";
 
 export const data = new SlashCommandBuilder()
   .setName("verify")
   .setDescription("Verify a Minecraft username and whitelist it")
-  .addStringOption((option) =>
-    option
-      .setName("username")
-      .setDescription("Minecraft username to verify")
-      .setRequired(true)
-  );
+  .addStringOption(o => o.setName("username").setDescription("Minecraft username").setRequired(true))
+  .addStringOption(o => o.setName("server").setDescription("Server instance").setAutocomplete(true));
 
-export async function execute(interaction) {
+export const execute = withErrorHandling(async (interaction) => {
   const username = interaction.options.getString("username");
-  await interaction.deferReply();
+  const serverId = interaction.options.getString("server");
+  const server = serverId ? getServerInstance(serverId) : getGuildServer(interaction.guild?.id);
+  if (!server) throw new Error("Server not found.");
 
-  try {
-    const res = await fetch(
-      `https://api.mojang.com/users/profiles/minecraft/${username}`
-    );
-    if (!res.ok) {
-      return interaction.editReply({
-        embeds: [createErrorEmbed(`Username **${username}** not found.`)],
-      });
-    }
+  const res = await fetch(`https://api.mojang.com/users/profiles/minecraft/${username}`);
+  if (!res.ok) throw new Error(`Username **${username}** not found.`);
 
-    await sendToServer(`/whitelist add ${username}`);
-
-    await interaction.editReply({
-      embeds: [createSuccessEmbed(`**${username}** has been whitelisted.`)],
-    });
-  } catch (err) {
-    console.error(err);
-    await interaction.editReply({
-      embeds: [createErrorEmbed("An unexpected error occurred.")],
-    });
-  }
-}
+  await server.sendCommand(`/whitelist add ${username}`);
+  await interaction.editReply({ embeds: [createSuccessEmbed(`**${username}** has been whitelisted on **${server.id}**.`)] });
+});

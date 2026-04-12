@@ -1,24 +1,17 @@
 import { defineCommand } from "../defineCommand.js";
-import { sendToServer } from "../../utils/server.js";
 
 const cmd = defineCommand({
   name: "playerhead",
   description: "Get the player head of any Minecraft player",
   args: ["player"],
-  handler: async (username, { player }) => {
-    // Validate the player exists via Mojang API
-    const res = await fetch(
-      `https://api.mojang.com/users/profiles/minecraft/${player}`
-    );
+  cooldown: 15,
+  handler: async (username, { player }, client, server) => {
+    const res = await fetch(`https://api.mojang.com/users/profiles/minecraft/${player}`);
     if (!res.ok) {
-      await sendToServer(`/msg ${username} Player "${player}" not found.`);
-      return; // ← Fixed: was missing, proceeded to give head even on error
+      await server.sendCommand(`/msg ${username} Player "${player}" not found.`);
+      return;
     }
-
-    await sendToServer(
-      `/give ${username} player_head[profile={name:"${player}"}]`
-    );
+    await server.sendCommand(`/give ${username} player_head[profile={name:"${player}"}]`);
   },
 });
-
 export const { init, COMMAND_INFO } = cmd;

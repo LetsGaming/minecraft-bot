@@ -2,3 +2,4 @@ node_modules/
 config.json
 data/linkedAccounts.json
 data/linkCodes.json
+logs/

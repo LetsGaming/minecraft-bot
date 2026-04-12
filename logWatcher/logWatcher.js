@@ -2,98 +2,109 @@ import fs from "fs/promises";
 import fsSync from "fs";
 import path from "path";
 import readline from "readline";
-import { getServerConfig } from "../utils/server.js";
+import { log } from "../utils/logger.js";
 
-const logFile = path.join(getServerConfig().serverDir, "logs", "latest.log");
-const logsDir = path.dirname(logFile);
-
-let lastSize = 0;
-let reading = false;
-const watchers = [];
+const POLL_INTERVAL_MS = 1000;
 
 /**
- * Register a new command watcher.
- * @param {RegExp} regex - Pattern to match against log lines.
- * @param {(match: RegExpExecArray, client: any) => Promise<void>} handler - Async function to handle matches.
+ * Per-server log watcher instance.
+ * Uses fs.watch with polling fallback for reliability.
  */
-export function registerLogCommand(regex, handler) {
-  watchers.push({ regex, handler });
-}
+export class LogWatcher {
+  constructor(serverInstance) {
+    this.server = serverInstance;
+    this.logFile = path.join(serverInstance.config.serverDir, "logs", "latest.log");
+    this.logsDir = path.dirname(this.logFile);
+    this.lastSize = 0;
+    this.reading = false;
+    this.watchers = [];
+    this.client = null;
+    this._pollTimer = null;
+    this._fsWatcher = null;
+  }
 
-/**
- * Read new lines from latest.log and dispatch them to registered handlers.
- */
-async function readNewLines(client) {
-  try {
-    const stats = await fs.stat(logFile);
-    if (stats.size < lastSize) lastSize = 0; // rotated or truncated
-    if (stats.size === lastSize) return;
+  /** Register a handler: { regex, handler } */
+  register(regex, handler) {
+    this.watchers.push({ regex, handler });
+  }
 
-    const stream = fsSync.createReadStream(logFile, {
-      start: lastSize,
-      end: stats.size - 1,
-    });
+  /** Start watching */
+  async start(client) {
+    this.client = client;
 
-    const rl = readline.createInterface({ input: stream });
+    try {
+      const stats = await fs.stat(this.logFile);
+      this.lastSize = stats.size;
+    } catch { this.lastSize = 0; }
 
-    for await (const line of rl) {
-      for (const { regex, handler } of watchers) {
-        const match = regex.exec(line);
-        if (match) {
-          try {
-            await handler(match, client);
-          } catch (err) {
-            console.error(`Error in log handler for ${regex}:`, err);
+    // Primary: fs.watch (fast, event-driven)
+    try {
+      this._fsWatcher = fsSync.watch(this.logsDir, async (event, filename) => {
+        if (filename !== "latest.log") return;
+        await this._processChanges(event);
+      });
+      this._fsWatcher.on("error", () => {
+        log.warn(this.server.id, "fs.watch failed, using polling only");
+        this._fsWatcher = null;
+      });
+    } catch {
+      log.warn(this.server.id, "fs.watch not available, using polling");
+    }
+
+    // Fallback: polling (catches anything fs.watch misses)
+    this._pollTimer = setInterval(() => this._processChanges("change"), POLL_INTERVAL_MS);
+
+    log.info(this.server.id, `Watching ${this.logFile}`);
+  }
+
+  stop() {
+    if (this._fsWatcher) { this._fsWatcher.close(); this._fsWatcher = null; }
+    if (this._pollTimer) { clearInterval(this._pollTimer); this._pollTimer = null; }
+  }
+
+  async _processChanges(event) {
+    if (this.reading) return;
+    this.reading = true;
+    try {
+      if (event === "rename") {
+        try { await fs.access(this.logFile); this.lastSize = 0; }
+        catch { return; }
+      }
+      await this._readNewLines();
+    } finally { this.reading = false; }
+  }
+
+  async _readNewLines() {
+    try {
+      const stats = await fs.stat(this.logFile);
+      if (stats.size < this.lastSize) this.lastSize = 0;
+      if (stats.size === this.lastSize) return;
+
+      const stream = fsSync.createReadStream(this.logFile, {
+        start: this.lastSize, end: stats.size - 1,
+      });
+      const rl = readline.createInterface({ input: stream });
+
+      for await (const line of rl) {
+        for (const { regex, handler } of this.watchers) {
+          const match = regex.exec(line);
+          if (match) {
+            try { await handler(match, this.client, this.server); }
+            catch (err) { log.error(this.server.id, `Log handler error: ${err.message}`); }
           }
         }
       }
-    }
-
-    lastSize = stats.size;
-  } catch (err) {
-    if (err.code === "ENOENT") {
-      console.warn("⚠️ latest.log not found (rotation in progress?)");
-      lastSize = 0;
-    } else {
-      console.error("Error reading log file:", err);
+      this.lastSize = stats.size;
+    } catch (err) {
+      if (err.code === "ENOENT") { this.lastSize = 0; }
+      else { log.error(this.server.id, `Log read error: ${err.message}`); }
     }
   }
 }
 
-/**
- * Begin watching the Minecraft server log for registered !commands.
- */
-export async function watchServerLog(client) {
-  try {
-    const stats = await fs.stat(logFile);
-    lastSize = stats.size;
-  } catch {
-    lastSize = 0;
-  }
-
-  fsSync.watch(logsDir, async (eventType, filename) => {
-    if (filename !== "latest.log") return;
-    if (reading) return;
-    reading = true;
-
-    try {
-      if (eventType === "rename") {
-        try {
-          await fs.access(logFile);
-          console.log("ℹ️ latest.log reappeared after rotation");
-          lastSize = 0;
-        } catch {
-          return; // still missing
-        }
-      }
-
-      if (eventType === "change") {
-        await readNewLines(client);
-      }
-    } finally {
-      reading = false;
-    }
-  });
-
-  console.log("👀 Watching latest.log for registered !commands...");
+// ── Global registry for backward compat ──
+const _globalWatchers = [];
+export function registerLogCommand(regex, handler) {
+  _globalWatchers.push({ regex, handler });
 }
+export function getGlobalWatchers() { return _globalWatchers; }

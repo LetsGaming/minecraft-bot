@@ -5,50 +5,33 @@ import { getServerConfig, sendToServer, isServerRunning, getServerSeed } from ".
 
 let whitelistCache = null;
 
-/**
- * Delete player stats file by UUID
- */
 export async function deleteStats(uuid) {
   const cfg = getServerConfig();
   const statsPath = path.resolve(cfg.serverDir, "world", "stats", `${uuid}.json`);
-  try {
-    await fsPromises.rm(statsPath);
-    return true;
-  } catch (err) {
-    if (err.code === "ENOENT") return false;
-    console.error(`Error deleting stats file: ${err}`);
-    return false;
-  }
+  try { await fsPromises.rm(statsPath); return true; }
+  catch (err) { if (err.code === "ENOENT") return false; return false; }
 }
 
-// Re-export server functions for backward compatibility
 export { sendToServer, isServerRunning as isScreenRunning, getServerSeed as getSeed };
 
 let lastListOutput = null;
 let lastListTime = 0;
 
-/**
- * Get the latest server list output, caching for 500ms
- */
 export async function getListOutput() {
   const now = Date.now();
   if (now - lastListTime < 500 && lastListOutput) return lastListOutput;
-
   await sendToServer("/list");
-  await new Promise((resolve) => setTimeout(resolve, 150));
+  await new Promise(r => setTimeout(r, 200));
   const output = await getLatestLogs(10);
-
   lastListOutput = output;
   lastListTime = now;
   return output;
 }
 
-/**
- * Read the latest N lines from the server log
- */
-export function getLatestLogs(lines = 10) {
+export function getLatestLogs(lines = 10, serverDir = null) {
   const cfg = getServerConfig();
-  const logFile = path.join(cfg.serverDir, "logs", "latest.log");
+  const dir = serverDir || cfg.serverDir;
+  const logFile = path.join(dir, "logs", "latest.log");
   return new Promise((resolve, reject) => {
     exec(`tail -n ${lines} "${logFile}"`, (err, stdout) => {
       if (err) return reject(err);
@@ -57,9 +40,6 @@ export function getLatestLogs(lines = 10) {
   });
 }
 
-/**
- * Strip the Minecraft log prefix from a line.
- */
 export function stripLogPrefix(line) {
   if (!line) return "";
   const sep = "]: ";
@@ -72,9 +52,6 @@ export function stripLogPrefix(line) {
   return line.trim();
 }
 
-/**
- * Load and cache the whitelist
- */
 export async function loadWhitelist(forceReload = false) {
   if (whitelistCache && !forceReload) return whitelistCache;
   const cfg = getServerConfig();
@@ -97,12 +74,10 @@ export async function getLevelName() {
   return "world";
 }
 
-// ── Project root discovery ──
-
-function findUpward(startDir, markerFilename) {
+function findUpward(startDir, marker) {
   let dir = startDir;
   while (true) {
-    if (existsSync(path.join(dir, markerFilename))) return dir;
+    if (existsSync(path.join(dir, marker))) return dir;
     const parent = path.dirname(dir);
     if (parent === dir) return startDir;
     dir = parent;
@@ -111,8 +86,7 @@ function findUpward(startDir, markerFilename) {
 
 export function getRootDir() {
   const start = process.cwd();
-  const pkgRoot = findUpward(start, "package.json");
-  return pkgRoot !== start ? pkgRoot : start;
+  return findUpward(start, "package.json");
 }
 
 export async function ensureDir(filePath) {
@@ -121,10 +95,7 @@ export async function ensureDir(filePath) {
   return dir;
 }
 
-// ── JSON cache ──
-
 const jsonCache = new Map();
-
 export async function loadJson(file) {
   try {
     const { mtimeMs } = await fsPromises.stat(file);
@@ -134,9 +105,7 @@ export async function loadJson(file) {
     const data = JSON.parse(raw);
     jsonCache.set(file, { mtimeMs, data });
     return data;
-  } catch {
-    return {};
-  }
+  } catch { return {}; }
 }
 
 export async function saveJson(file, data) {

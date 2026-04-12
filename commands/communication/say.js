@@ -1,37 +1,21 @@
 import { SlashCommandBuilder, MessageFlags } from "discord.js";
-import { sendToServer } from "../../utils/server.js";
-import { createErrorEmbed } from "../../utils/embedUtils.js";
+import { getServerInstance } from "../../utils/server.js";
+import { getGuildServer } from "../../config.js";
+import { withErrorHandling } from "../middleware.js";
 
 export const data = new SlashCommandBuilder()
   .setName("say")
   .setDescription("Send a message to the Minecraft server chat")
-  .addStringOption((option) =>
-    option
-      .setName("message")
-      .setDescription("Message to send")
-      .setRequired(true)
-  );
+  .addStringOption(o => o.setName("message").setDescription("Message to send").setRequired(true))
+  .addStringOption(o => o.setName("server").setDescription("Server instance").setAutocomplete(true));
 
-export async function execute(interaction) {
+export const execute = withErrorHandling(async (interaction) => {
   const message = interaction.options.getString("message");
-  const discordUsername = interaction.user.username;
+  const serverId = interaction.options.getString("server");
+  const server = serverId ? getServerInstance(serverId) : getGuildServer(interaction.guild?.id);
+  if (!server) throw new Error("Server not found.");
 
-  const mcMessage = `${discordUsername}: ${message}`;
-
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
-  try {
-    await sendToServer(`/say ${mcMessage}`);
-    await interaction.editReply(`✅ Sent to Minecraft: "${mcMessage}"`);
-  } catch (err) {
-    console.error(err);
-    const errorEmbed = createErrorEmbed(
-      `Failed to send message to Minecraft: ${err.message}`,
-      {
-        footer: { text: "Communication Error" },
-        timestamp: new Date(),
-      }
-    );
-    await interaction.editReply({ embeds: [errorEmbed] });
-  }
-}
+  const mcMessage = `[${interaction.user.displayName}] ${message}`;
+  await server.sendCommand(`/say ${mcMessage}`);
+  await interaction.editReply(`✅ Sent to **${server.id}**: "${mcMessage}"`);
+}, { ephemeral: true });

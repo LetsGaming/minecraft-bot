@@ -1,61 +1,31 @@
 import { defineCommand } from "../defineCommand.js";
-import { sendToServer, getServerSeed, getPlayerData } from "../../utils/server.js";
 
 const cmd = defineCommand({
   name: "chunkbase",
   description: "Get a Chunkbase link for your current location",
-  handler: async (username) => {
-    const seed = await getServerSeed();
-    if (!seed) {
-      await sendToServer(`/msg ${username} Could not retrieve the world seed.`);
-      return;
-    }
+  cooldown: 10,
+  handler: async (username, args, client, server) => {
+    const seed = await server.getSeed();
+    if (!seed) { await server.sendCommand(`/msg ${username} Could not retrieve the world seed.`); return; }
 
-    // Get dimension
     let dimension = "overworld";
     try {
-      const dimResponse = await getPlayerData(username, "Dimension");
-      if (dimResponse) {
-        const match = dimResponse.match(/"minecraft:([^"]+)"/);
-        if (match) dimension = match[1];
-      }
-    } catch { /* default to overworld */ }
+      const r = await server.getPlayerData(username, "Dimension");
+      if (r) { const m = r.match(/"minecraft:([^"]+)"/); if (m) dimension = m[1]; }
+    } catch { /* default */ }
 
-    // Get coordinates
     let coordsParam = "";
     try {
-      const posResponse = await getPlayerData(username, "Pos");
-      if (posResponse) {
-        const match = posResponse.match(/\[([\d.+-]+)d,\s*([\d.+-]+)d,\s*([\d.+-]+)d\]/);
-        if (match) {
-          coordsParam = `&x=${Math.floor(Number(match[1]))}&z=${Math.floor(Number(match[3]))}`;
-        }
-      }
-    } catch { /* proceed without coords */ }
+      const coords = await server.getPlayerCoords(username);
+      if (coords) coordsParam = `&x=${Math.floor(coords.x)}&z=${Math.floor(coords.z)}`;
+    } catch { /* proceed without */ }
 
     const url = `https://www.chunkbase.com/apps/seed-map#seed=${seed}&dimension=${dimension}${coordsParam}`;
-
-    // Minecraft Java Edition uses camelCase for tellraw JSON
-    const tellRaw = [
-      "",
-      { text: "See your location on Chunkbase: ", color: "white" },
-      {
-        text: "[Click here]",
-        color: "gold",
-        underlined: true,
-        clickEvent: {
-          action: "open_url",
-          value: url,
-        },
-        hoverEvent: {
-          action: "show_text",
-          contents: "Open Chunkbase Seed Map",
-        },
-      },
-    ];
-
-    await sendToServer(`/tellraw ${username} ${JSON.stringify(tellRaw)}`);
+    const tellRaw = ["", { text: "See your location on Chunkbase: ", color: "white" },
+      { text: "[Click here]", color: "gold", underlined: true,
+        clickEvent: { action: "open_url", value: url },
+        hoverEvent: { action: "show_text", contents: "Open Chunkbase Seed Map" } }];
+    await server.sendCommand(`/tellraw ${username} ${JSON.stringify(tellRaw)}`);
   },
 });
-
 export const { init, COMMAND_INFO } = cmd;

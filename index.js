@@ -1,23 +1,28 @@
 import {
-  Client,
-  Collection,
-  GatewayIntentBits,
-  REST,
-  Routes,
-  MessageFlags,
+  Client, Collection, GatewayIntentBits, REST, Routes, MessageFlags,
 } from "discord.js";
 import { readdirSync, statSync, readFileSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { loadConfig, getServerIds } from "./config.js";
+import { initServers } from "./utils/server.js";
 import { initMinecraftCommands } from "./logWatcher/initMinecraftCommands.js";
+import { log } from "./utils/logger.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const config = loadConfig();
 
-// Load config
-const config = JSON.parse(readFileSync(path.resolve(__dirname, "config.json"), "utf-8"));
+// Initialize all server instances
+initServers(config.servers);
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+// Create client with intents for chat bridge
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+  ],
+});
 client.commands = new Collection();
 
 // ── Load commands ──
@@ -25,47 +30,37 @@ client.commands = new Collection();
 function getCommandFiles(dir) {
   let files = [];
   for (const file of readdirSync(dir)) {
-    const fullPath = path.join(dir, file);
-    if (statSync(fullPath).isDirectory()) {
-      files = files.concat(getCommandFiles(fullPath));
-    } else if (file.endsWith(".js")) {
-      files.push(fullPath);
-    }
+    const full = path.join(dir, file);
+    if (statSync(full).isDirectory()) files = files.concat(getCommandFiles(full));
+    else if (file.endsWith(".js") && file !== "middleware.js") files.push(full);
   }
   return files;
 }
 
 async function loadCommands() {
-  const commandFiles = getCommandFiles(path.join(__dirname, "commands"));
-
-  for (const file of commandFiles) {
-    const command = await import(path.resolve(file));
-
-    if (!command.data || !command.execute) {
-      console.warn(`Skipping ${file} — missing data or execute.`);
-      continue;
+  const files = getCommandFiles(path.join(__dirname, "commands"));
+  for (const file of files) {
+    try {
+      const cmd = await import(path.resolve(file));
+      if (!cmd.data || !cmd.execute) continue;
+      const enabled = config.commands?.[cmd.data.name]?.enabled ?? true;
+      if (!enabled) { log.info("commands", `Skipping disabled: /${cmd.data.name}`); continue; }
+      client.commands.set(cmd.data.name, cmd);
+    } catch (err) {
+      log.error("commands", `Failed to load ${file}: ${err.message}`);
     }
-
-    const enabled = config.commands?.[command.data.name]?.enabled ?? true;
-    if (!enabled) {
-      console.log(`⏭ Skipping disabled slash command: ${command.data.name}`);
-      continue;
-    }
-
-    client.commands.set(command.data.name, command);
   }
 }
 
 async function registerGlobalCommands() {
-  const commands = client.commands.map((cmd) => cmd.data.toJSON());
+  const commands = client.commands.map(cmd => cmd.data.toJSON());
   const rest = new REST({ version: "10" }).setToken(config.token);
-
   try {
-    console.log("Registering global slash commands...");
+    log.info("commands", "Registering global slash commands...");
     await rest.put(Routes.applicationCommands(config.clientId), { body: commands });
-    console.log(`✅ ${commands.length} slash commands registered.\n`);
+    log.info("commands", `${commands.length} slash commands registered.`);
   } catch (err) {
-    console.error("❌ Failed to register commands:", err);
+    log.error("commands", `Failed to register: ${err.message}`);
   }
 }
 
@@ -76,32 +71,39 @@ async function registerGlobalCommands() {
   await registerGlobalCommands();
 
   client.once("ready", async () => {
-    console.log(`Bot ready as ${client.user.tag}\n`);
+    log.info("bot", `Ready as ${client.user.tag}`);
+    log.info("bot", `Servers: ${getServerIds().join(", ")}`);
+    log.info("bot", `Guilds: ${client.guilds.cache.size}`);
 
     try {
       await initMinecraftCommands(client);
     } catch (err) {
-      console.error("❌ Failed to initialize in-game commands:", err);
+      log.error("init", `Failed to initialize MC commands: ${err.message}`);
     }
   });
 
   client.on("interactionCreate", async (interaction) => {
-    // ── Autocomplete handler for player names ──
+    // ── Autocomplete ──
     if (interaction.isAutocomplete()) {
       const focused = interaction.options.getFocused(true);
+
+      // Server autocomplete
+      if (focused.name === "server") {
+        const ids = getServerIds().filter(id => id.startsWith(focused.value.toLowerCase()));
+        return interaction.respond(ids.slice(0, 25).map(id => ({ name: id, value: id })));
+      }
+
+      // Player name autocomplete
       if (["player", "player1", "player2"].includes(focused.name)) {
         try {
           const { getPlayerNames } = await import("./utils/playerUtils.js");
           const names = await getPlayerNames();
-          const filtered = names
-            .filter(n => n.toLowerCase().startsWith(focused.value.toLowerCase()))
-            .slice(0, 25);
-          await interaction.respond(filtered.map(n => ({ name: n, value: n })));
-        } catch {
-          await interaction.respond([]);
-        }
+          const filtered = names.filter(n => n.toLowerCase().startsWith(focused.value.toLowerCase()));
+          return interaction.respond(filtered.slice(0, 25).map(n => ({ name: n, value: n })));
+        } catch { return interaction.respond([]); }
       }
-      return;
+
+      return interaction.respond([]);
     }
 
     if (!interaction.isChatInputCommand()) return;
@@ -112,16 +114,12 @@ async function registerGlobalCommands() {
     try {
       await command.execute(interaction);
     } catch (err) {
-      console.error(`Error in /${interaction.commandName}:`, err);
-      const errorMsg = {
-        content: "❌ There was an error executing this command.",
-        flags: MessageFlags.Ephemeral,
-      };
-      if (interaction.replied || interaction.deferred) {
-        await interaction.followUp(errorMsg);
-      } else {
-        await interaction.reply(errorMsg);
-      }
+      log.error("command", `/${interaction.commandName}: ${err.message}`);
+      const msg = { content: "❌ An error occurred.", flags: MessageFlags.Ephemeral };
+      try {
+        if (interaction.replied || interaction.deferred) await interaction.followUp(msg);
+        else await interaction.reply(msg);
+      } catch { /* expired */ }
     }
   });
 

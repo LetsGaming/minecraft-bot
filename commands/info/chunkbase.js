@@ -1,56 +1,40 @@
 import { SlashCommandBuilder } from "discord.js";
-import { createEmbed, createErrorEmbed } from "../../utils/embedUtils.js";
-import { getServerSeed } from "../../utils/server.js";
+import { createEmbed } from "../../utils/embedUtils.js";
+import { getServerInstance } from "../../utils/server.js";
+import { getGuildServer } from "../../config.js";
 import { getLinkedAccount } from "../../utils/linkUtils.js";
-import { getPlayerCoords } from "../../utils/playerUtils.js";
+import { withErrorHandling } from "../middleware.js";
 
 export const data = new SlashCommandBuilder()
   .setName("chunkbase")
-  .setDescription("Get a link to the Chunkbase map for the server's world seed")
-  .addStringOption((option) =>
-    option
-      .setName("dimension")
-      .setDescription("The dimension to view.")
-      .setRequired(false)
-      .addChoices(
-        { name: "Overworld", value: "overworld" },
-        { name: "Nether", value: "nether" },
-        { name: "End", value: "end" }
-      )
-  );
+  .setDescription("Get a Chunkbase link for the server's world seed")
+  .addStringOption(o => o.setName("dimension").setDescription("Dimension")
+    .addChoices({ name: "Overworld", value: "overworld" }, { name: "Nether", value: "nether" }, { name: "End", value: "end" }))
+  .addStringOption(o => o.setName("server").setDescription("Server instance").setAutocomplete(true));
 
-export async function execute(interaction) {
-  await interaction.deferReply();
+export const execute = withErrorHandling(async (interaction) => {
+  const serverId = interaction.options.getString("server");
+  const server = serverId ? getServerInstance(serverId) : getGuildServer(interaction.guild?.id);
+  if (!server) throw new Error("Server not found.");
 
-  const seed = await getServerSeed();
-  if (!seed) {
-    await interaction.editReply({ embeds: [createErrorEmbed("Could not retrieve the world seed.")] });
-    return;
-  }
+  const seed = await server.getSeed();
+  if (!seed) throw new Error("Could not retrieve the world seed.");
 
   const dimension = interaction.options.getString("dimension") || "overworld";
-  const userId = interaction.user.id;
-  const linkedUsername = await getLinkedAccount(userId);
+  const linked = await getLinkedAccount(interaction.user.id);
 
   let coordsParam = "";
-  if (linkedUsername) {
+  if (linked) {
     try {
-      const playerCoords = await getPlayerCoords(linkedUsername);
-      if (playerCoords) {
-        coordsParam = `&x=${Math.floor(playerCoords.x)}&z=${Math.floor(playerCoords.z)}`;
-      }
-    } catch (err) {
-      console.warn(`Failed to get player coords for ${linkedUsername}:`, err.message);
-    }
+      const coords = await server.getPlayerCoords(linked);
+      if (coords) coordsParam = `&x=${Math.floor(coords.x)}&z=${Math.floor(coords.z)}`;
+    } catch { /* proceed without */ }
   }
 
-  const baseUrl = `https://www.chunkbase.com/apps/seed-map#seed=${seed}&dimension=${dimension}${coordsParam}`;
-
-  const embed = createEmbed({
+  const url = `https://www.chunkbase.com/apps/seed-map#seed=${seed}&dimension=${dimension}${coordsParam}`;
+  await interaction.editReply({ embeds: [createEmbed({
     title: "Chunkbase Map",
-    description: `View the seed map on Chunkbase: [Open Map](${baseUrl})`,
-    footer: { text: `Requested by ${interaction.user.tag}` },
-  });
-
-  await interaction.editReply({ embeds: [embed] });
-}
+    description: `[Open Seed Map](${url})`,
+    footer: { text: `${server.id} | ${interaction.user.tag}` },
+  })] });
+});

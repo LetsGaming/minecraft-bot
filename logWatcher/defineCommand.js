@@ -1,31 +1,28 @@
 import { registerLogCommand } from "./logWatcher.js";
 
+const cooldowns = new Map(); // "commandName:username" -> timestamp
+
 /**
- * Declarative in-game command definition.
+ * Declarative in-game command definition with optional cooldowns.
  *
  * Usage:
  *   defineCommand({
  *     name: "chunkbase",
- *     description: "Get a Chunkbase link for your location",
- *     args: [],                        // or ["player"] for !playerhead <player>
- *     handler: async (username, args, client) => { ... }
+ *     description: "Get a Chunkbase link",
+ *     args: [],
+ *     cooldown: 10,  // seconds per player (0 = no cooldown)
+ *     handler: async (username, args, client, server) => { ... }
  *   });
- *
- * The regex, COMMAND_INFO, and init() boilerplate are all handled automatically.
- * Commands match: [time] [Server thread/INFO]: <[AFK] PlayerName> !commandname [args...]
  */
-export function defineCommand({ name, aliases = [], description, args = [], handler }) {
+export function defineCommand({ name, aliases = [], description, args = [], cooldown = 0, handler }) {
   const allNames = [name, ...aliases].map(n => n.replace(/^!/, ""));
   const escapedNames = allNames.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
   const namePattern = escapedNames.join("|");
 
-  // Build args capture groups
-  const argsPattern = args.map(a => `\\s+(\\S+)`).join("");
-  const optionalArgs = args.length > 0 ? argsPattern : "";
+  const argsPattern = args.map(() => "\\s+(\\S+)").join("");
 
-  // Final regex: [time] [thread/INFO]: <[AFK] Player> !command [args]
   const regex = new RegExp(
-    `\\[.+?\\]: <(?:\\[AFK\\]\\s*)?([^>]+)> !(${namePattern})${optionalArgs}`
+    `\\[.+?\\]: <(?:\\[AFK\\]\\s*)?([^>]+)> !(${namePattern})${argsPattern}`
   );
 
   const commandInfo = {
@@ -34,17 +31,32 @@ export function defineCommand({ name, aliases = [], description, args = [], hand
   };
 
   function init() {
-    registerLogCommand(regex, async (match, client) => {
+    registerLogCommand(regex, async (match, client, server) => {
       const username = match[1];
-      // match[2] is the command name (for aliases)
+
+      // ── Cooldown check ──
+      if (cooldown > 0) {
+        const key = `${name}:${username.toLowerCase()}`;
+        const lastUsed = cooldowns.get(key) || 0;
+        const elapsed = (Date.now() - lastUsed) / 1000;
+        if (elapsed < cooldown) {
+          const remaining = Math.ceil(cooldown - elapsed);
+          const srv = server || { sendCommand: async () => {} };
+          await srv.sendCommand(`/msg ${username} Please wait ${remaining}s before using !${name} again.`);
+          return;
+        }
+        cooldowns.set(key, Date.now());
+      }
+
       const parsedArgs = {};
       for (let i = 0; i < args.length; i++) {
-        parsedArgs[args[i]] = match[i + 3]; // +3 because: [1]=user, [2]=cmdname, [3+]=args
+        parsedArgs[args[i]] = match[i + 3];
       }
+
       try {
-        await handler(username, parsedArgs, client);
+        await handler(username, parsedArgs, client, server);
       } catch (err) {
-        console.error(`Error in !${name} handler for ${username}:`, err);
+        console.error(`Error in !${name} for ${username}:`, err);
       }
     });
   }

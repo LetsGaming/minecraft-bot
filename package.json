@@ -1,7 +1,7 @@
 {
   "name": "minecraft-bot",
-  "version": "2.0.0",
-  "description": "Discord bot for Minecraft server management with RCON support",
+  "version": "3.0.0",
+  "description": "Multi-server Discord bot for Minecraft with RCON, chat bridge, notifications, and stats",
   "main": "index.js",
   "type": "module",
   "engines": {

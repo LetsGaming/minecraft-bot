@@ -1,22 +1,56 @@
 {
   "token": "DISCORD_APP_TOKEN",
   "clientId": "DISCORD_CLIENT_ID",
-  "linuxUser": "username",
-  "screenSession": "session_name",
-  "serverDir": "/path/to/minecraft/server",
 
-  "useRcon": false,
-  "rconHost": "localhost",
-  "rconPort": 25575,
-  "rconPassword": "",
+  "servers": {
+    "survival": {
+      "serverDir": "/home/minecraft/minecraft-server/survival",
+      "linuxUser": "minecraft",
+      "screenSession": "survival",
+      "useRcon": true,
+      "rconHost": "localhost",
+      "rconPort": 25575,
+      "rconPassword": "your-rcon-password"
+    },
+    "creative": {
+      "serverDir": "/home/minecraft/minecraft-server/creative",
+      "linuxUser": "minecraft",
+      "screenSession": "creative",
+      "useRcon": true,
+      "rconHost": "localhost",
+      "rconPort": 25576,
+      "rconPassword": "your-rcon-password"
+    }
+  },
+
+  "guilds": {
+    "GUILD_ID_HERE": {
+      "defaultServer": "survival",
+      "chatBridge": {
+        "channelId": "CHANNEL_ID",
+        "server": "survival"
+      },
+      "notifications": {
+        "channelId": "CHANNEL_ID",
+        "events": ["join", "leave", "death", "advancement", "start", "stop"]
+      },
+      "leaderboard": {
+        "channelId": "CHANNEL_ID",
+        "interval": "weekly",
+        "server": "survival"
+      },
+      "tpsAlerts": {
+        "channelId": "CHANNEL_ID",
+        "server": "survival"
+      }
+    }
+  },
+
+  "tpsWarningThreshold": 15,
+  "tpsPollIntervalMs": 60000,
 
   "commands": {
-    "map": {
-      "enabled": false,
-      "url": "http://example.com/map"
-    },
-    "seed": {
-      "enabled": true
-    }
+    "map": { "enabled": false, "url": "http://example.com/map" },
+    "seed": { "enabled": true }
   }
 }
