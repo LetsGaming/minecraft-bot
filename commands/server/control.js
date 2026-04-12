@@ -1,15 +1,14 @@
-import { SlashCommandBuilder, PermissionFlagsBits } from "discord.js";
+import { SlashCommandBuilder } from "discord.js";
 import { createEmbed, createErrorEmbed, createSuccessEmbed } from "../../utils/embedUtils.js";
 import { getServerInstance } from "../../utils/server.js";
 import { getServerChoices, getGuildServer } from "../../config.js";
-import { withErrorHandling } from "../middleware.js";
+import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { execCommand } from "../../shell/execCommand.js";
 import { log } from "../../utils/logger.js";
 
 export const data = new SlashCommandBuilder()
   .setName("server")
   .setDescription("Server control commands")
-  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
   .addSubcommand(sub => sub.setName("start").setDescription("Start the server")
     .addStringOption(o => o.setName("server").setDescription("Server instance").setAutocomplete(true)))
   .addSubcommand(sub => sub.setName("stop").setDescription("Stop the server")
@@ -17,7 +16,7 @@ export const data = new SlashCommandBuilder()
   .addSubcommand(sub => sub.setName("restart").setDescription("Restart the server")
     .addStringOption(o => o.setName("server").setDescription("Server instance").setAutocomplete(true)));
 
-export const execute = withErrorHandling(async (interaction) => {
+export const execute = withErrorHandling(requireServerAdmin(async (interaction) => {
   const sub = interaction.options.getSubcommand();
   const serverId = interaction.options.getString("server");
   const server = serverId
@@ -44,4 +43,4 @@ export const execute = withErrorHandling(async (interaction) => {
   } catch (err) {
     await interaction.editReply({ embeds: [createErrorEmbed(`${sub} failed: ${err}`)] });
   }
-});
+}));

@@ -21,10 +21,13 @@ const cmd = defineCommand({
     } catch { /* proceed without */ }
 
     const url = `https://www.chunkbase.com/apps/seed-map#seed=${seed}&dimension=${dimension}${coordsParam}`;
-    const tellRaw = ["", { text: "See your location on Chunkbase: ", color: "white" },
-      { text: "[Click here]", color: "gold", underlined: true,
-        clickEvent: { action: "open_url", value: url },
-        hoverEvent: { action: "show_text", contents: "Open Chunkbase Seed Map" } }];
+    const tellRaw = {
+      text: "", extra: [
+        { text: "See your location on Chunkbase: ", color: "white" },
+        { text: "[Click here]", color: "gold", underlined: true,
+          click_event: { action: "open_url", url: url } }
+      ]
+    };
     await server.sendCommand(`/tellraw ${username} ${JSON.stringify(tellRaw)}`);
   },
 });

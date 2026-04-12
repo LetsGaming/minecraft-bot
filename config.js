@@ -64,6 +64,7 @@ export function loadConfig() {
     clientId: raw.clientId,
     servers,
     guilds,
+    adminUsers: raw.adminUsers || [],
     commands: raw.commands || {},
     leaderboard: raw.leaderboard || {},
     tpsWarningThreshold: raw.tpsWarningThreshold || 15,
