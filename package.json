@@ -1,17 +1,19 @@
 {
   "name": "minecraft-bot",
-  "version": "3.0.0",
-  "description": "Multi-server Discord bot for Minecraft with RCON, chat bridge, notifications, and stats",
-  "main": "index.js",
+  "version": "2.0.0",
   "type": "module",
-  "engines": {
-    "node": ">=18.0.0"
-  },
+  "main": "dist/index.js",
   "scripts": {
-    "start": "node index.js",
-    "register": "node index.js"
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "discord.js": "^14.0.0"
+    "discord.js": "^14.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
   }
 }

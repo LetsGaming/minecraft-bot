@@ -1,0 +1,183 @@
+import path from 'path';
+import { EmbedBuilder, type Client } from 'discord.js';
+import { getAllInstances } from '../../utils/server.js';
+import { loadJson, saveJson, getRootDir } from '../../utils/utils.js';
+import { log } from '../../utils/logger.js';
+import type { GuildConfig, StatusMessageState } from '../../types/index.js';
+
+const STATE_PATH = path.resolve(getRootDir(), 'data', 'statusMessages.json');
+const UPDATE_INTERVAL_MS = 60 * 1000;
+
+async function loadState(): Promise<StatusMessageState> {
+  const data = await loadJson(STATE_PATH).catch(() => ({}));
+  return (data as StatusMessageState) || {};
+}
+
+async function saveState(state: StatusMessageState): Promise<void> {
+  await saveJson(STATE_PATH, state);
+}
+
+/**
+ * Build the status embed for all server instances.
+ */
+async function buildStatusEmbed(): Promise<EmbedBuilder> {
+  const instances = getAllInstances();
+
+  interface StatusField {
+    name: string;
+    value: string;
+    inline: boolean;
+  }
+
+  const fields: StatusField[] = [];
+
+  for (const server of instances) {
+    let statusLine: string;
+    let players: string[] = [];
+
+    try {
+      const running = await server.isRunning();
+      if (!running) {
+        statusLine = '🔴 Offline';
+      } else {
+        const list = await server.getList();
+        const count = list.playerCount || '0';
+        const max = list.maxPlayers || '?';
+        players = list.players || [];
+        statusLine = `🟢 Online — ${count}/${max} players`;
+      }
+    } catch {
+      statusLine = '⚪ Unknown';
+    }
+
+    let tpsLine = '';
+    if (server.useRcon) {
+      try {
+        const tps = await server.getTps();
+        if (tps?.tps1m !== null && tps?.tps1m !== undefined) {
+          const emoji = tps.tps1m >= 18 ? '🟢' : tps.tps1m >= 15 ? '🟡' : '🔴';
+          tpsLine = `\nTPS: ${emoji} ${tps.tps1m.toFixed(1)}`;
+        }
+      } catch {
+        /* server might not support tps */
+      }
+    }
+
+    const playerList =
+      players.length > 0 ? `\nOnline: ${players.join(', ')}` : '';
+
+    fields.push({
+      name: server.id,
+      value: `${statusLine}${tpsLine}${playerList}`,
+      inline: instances.length <= 3,
+    });
+  }
+
+  const embed = new EmbedBuilder()
+    .setTitle('📊 Server Status')
+    .setColor(0x00bfff)
+    .setTimestamp()
+    .setFooter({ text: 'Updates every 60s' });
+
+  if (fields.length > 0) {
+    embed.addFields(fields);
+  } else {
+    embed.setDescription('No servers configured.');
+  }
+
+  return embed;
+}
+
+/**
+ * Send or update the status embed for a specific guild.
+ */
+async function updateGuildStatus(
+  client: Client,
+  guildId: string,
+  channelId: string,
+  state: StatusMessageState,
+): Promise<void> {
+  let channel;
+  try {
+    channel = await client.channels.fetch(channelId);
+  } catch {
+    log.warn(
+      'status',
+      `Channel ${channelId} not accessible for guild ${guildId}`,
+    );
+    return;
+  }
+  if (!channel || !('send' in channel)) return;
+
+  const embed = await buildStatusEmbed();
+  const stored = state[guildId];
+
+  if (stored?.messageId && 'messages' in channel) {
+    try {
+      const msg = await channel.messages.fetch(stored.messageId);
+      await msg.edit({ embeds: [embed] });
+      return;
+    } catch {
+      log.info(
+        'status',
+        `Status message missing for guild ${guildId}, creating new one`,
+      );
+    }
+  }
+
+  try {
+    const msg = await channel.send({ embeds: [embed] });
+    state[guildId] = { channelId, messageId: msg.id };
+    await saveState(state);
+    log.info(
+      'status',
+      `Created status embed in channel ${channelId} for guild ${guildId}`,
+    );
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    log.error('status', `Failed to send status embed: ${errMsg}`);
+  }
+}
+
+/**
+ * Start the status embed updater.
+ */
+export function startStatusEmbed(
+  client: Client,
+  guildConfigs: Record<string, GuildConfig>,
+): ReturnType<typeof setInterval> | null {
+  const guildsWithStatus = Object.entries(guildConfigs).filter(
+    ([, cfg]) => cfg.statusEmbed?.channelId,
+  );
+
+  if (guildsWithStatus.length === 0) {
+    log.info('status', 'No status embed channels configured, skipping');
+    return null;
+  }
+
+  const update = async (): Promise<void> => {
+    try {
+      const state = await loadState();
+      for (const [guildId, gcfg] of guildsWithStatus) {
+        await updateGuildStatus(
+          client,
+          guildId,
+          gcfg.statusEmbed!.channelId!,
+          state,
+        );
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.error('status', `Update failed: ${msg}`);
+    }
+  };
+
+  setTimeout(update, 5000);
+  const timer = setInterval(update, UPDATE_INTERVAL_MS);
+
+  log.info(
+    'status',
+    `Status embed active for ${guildsWithStatus.length} guild(s)`,
+  );
+  return timer;
+}
