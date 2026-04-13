@@ -125,6 +125,15 @@ export function loadConfig(): BotConfig {
   return _config;
 }
 
+/**
+ * Clear the cached config so the next loadConfig() call re-reads from disk.
+ * Returns the freshly loaded config.
+ */
+export function reloadConfig(): BotConfig {
+  _config = null;
+  return loadConfig();
+}
+
 /** Get server config by ID */
 export function getServer(serverId: string): ServerConfig | null {
   const cfg = loadConfig();

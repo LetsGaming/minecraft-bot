@@ -1,5 +1,6 @@
 import { EmbedBuilder, type Client } from 'discord.js';
 import { log } from '../../utils/logger.js';
+import { recordCheck } from '../../utils/uptimeTracker.js';
 import type { ServerInstance } from '../../utils/server.js';
 import type { DowntimeState, GuildConfig } from '../../types/index.js';
 
@@ -42,14 +43,13 @@ export function startDowntimeMonitor(
   servers: ServerInstance[],
   client: Client,
   guildConfigs: Record<string, GuildConfig>,
-): ReturnType<typeof setInterval> | null {
+): ReturnType<typeof setInterval> {
   const guildsWithAlerts = Object.entries(guildConfigs).filter(
     ([, cfg]) => cfg.downtimeAlerts?.channelId,
   );
 
   if (guildsWithAlerts.length === 0) {
-    log.info('downtime', 'No downtime alert channels configured, skipping');
-    return null;
+    log.info('downtime', 'No downtime alert channels configured');
   }
 
   const timer = setInterval(async () => {
@@ -84,6 +84,9 @@ async function checkServer(
   } catch {
     isOnline = false;
   }
+
+  // Record for uptime tracking (independent of alert logic)
+  await recordCheck(server.id, isOnline);
 
   if (isOnline) {
     const wasDown = state.alerted;
