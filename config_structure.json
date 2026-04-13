@@ -53,6 +53,9 @@
       "downtimeAlerts": {
         "channelId": "CHANNEL_ID",
         "server": "survival"
+      },
+      "channelPurge": {
+        "channelId": "CHANNEL_ID"
       }
     }
   },

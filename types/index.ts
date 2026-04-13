@@ -65,6 +65,10 @@ export interface GuildTpsAlertsConfig {
   server?: string;
 }
 
+export interface GuildChannelPurgeConfig {
+  channelId?: string;
+}
+
 export interface GuildConfig {
   defaultServer?: string;
   notifications?: GuildNotificationConfig;
@@ -73,6 +77,7 @@ export interface GuildConfig {
   statusEmbed?: GuildStatusEmbedConfig;
   downtimeAlerts?: GuildDowntimeAlertsConfig;
   tpsAlerts?: GuildTpsAlertsConfig;
+  channelPurge?: GuildChannelPurgeConfig;
 }
 
 export interface CommandOverrideConfig {
