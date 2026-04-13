@@ -1,13 +1,13 @@
-import path from 'path';
-import type { Client, Message, TextChannel } from 'discord.js';
-import { loadJson, getRootDir } from '../../utils/utils.js';
-import { log } from '../../utils/logger.js';
-import type { GuildConfig, StatusMessageState } from '../../types/index.js';
+import path from "path";
+import type { Client, Message, TextChannel } from "discord.js";
+import { loadJson, getRootDir } from "../../utils/utils.js";
+import { log } from "../../utils/logger.js";
+import type { GuildConfig, StatusMessageState } from "../../types/index.js";
 
 const STATUS_STATE_PATH = path.resolve(
   getRootDir(),
-  'data',
-  'statusMessages.json',
+  "data",
+  "statusMessages.json",
 );
 
 /**
@@ -33,13 +33,16 @@ async function purgeChannel(
   let channel: TextChannel;
   try {
     const fetched = await client.channels.fetch(channelId);
-    if (!fetched || !('messages' in fetched)) {
-      log.warn('purge', `Channel ${channelId} not accessible for guild ${guildId}`);
+    if (!fetched || !("messages" in fetched)) {
+      log.warn(
+        "purge",
+        `Channel ${channelId} not accessible for guild ${guildId}`,
+      );
       return;
     }
     channel = fetched as TextChannel;
   } catch {
-    log.warn('purge', `Failed to fetch channel ${channelId}`);
+    log.warn("purge", `Failed to fetch channel ${channelId}`);
     return;
   }
 
@@ -57,10 +60,11 @@ async function purgeChannel(
 
   // 2. Pinned messages
   try {
-    const pinned = await channel.messages.fetchPinned();
-    for (const msg of pinned.values()) protectedIds.add(msg.id);
+    const pinned = await channel.messages.fetchPins();
+    const pinnedMessages = Array.isArray(pinned) ? pinned : pinned.items;
+    for (const msg of pinnedMessages) protectedIds.add(msg.id);
   } catch {
-    log.warn('purge', `Could not fetch pinned messages in ${channelId}`);
+    log.warn("purge", `Could not fetch pinned messages in ${channelId}`);
   }
 
   // Fetch and delete in batches (Discord API returns max 100 per fetch)
@@ -92,9 +96,7 @@ async function purgeChannel(
     const bulkable = toDelete.filter(
       (m) => m.createdTimestamp > fourteenDaysAgo,
     );
-    const old = toDelete.filter(
-      (m) => m.createdTimestamp <= fourteenDaysAgo,
-    );
+    const old = toDelete.filter((m) => m.createdTimestamp <= fourteenDaysAgo);
 
     // Bulk delete (2+ messages)
     if (bulkable.length >= 2) {
@@ -103,7 +105,7 @@ async function purgeChannel(
         totalDeleted += deleted.size;
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
-        log.error('purge', `Bulk delete failed: ${errMsg}`);
+        log.error("purge", `Bulk delete failed: ${errMsg}`);
       }
     } else if (bulkable.length === 1) {
       old.push(bulkable[0]!);
@@ -123,7 +125,7 @@ async function purgeChannel(
   }
 
   log.info(
-    'purge',
+    "purge",
     `Purged ${totalDeleted} message(s) from #${channel.name} (guild ${guildId}), kept ${protectedIds.size} protected`,
   );
 }
@@ -140,7 +142,7 @@ export function startChannelPurge(
   );
 
   if (guildsWithPurge.length === 0) {
-    log.info('purge', 'No channel purge targets configured, skipping');
+    log.info("purge", "No channel purge targets configured, skipping");
     return;
   }
 
@@ -153,7 +155,7 @@ export function startChannelPurge(
         await purgeChannel(client, guildId, channelId);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        log.error('purge', `Purge failed for guild ${guildId}: ${msg}`);
+        log.error("purge", `Purge failed for guild ${guildId}: ${msg}`);
       }
     }
   };
@@ -163,7 +165,7 @@ export function startChannelPurge(
   const delayHours = (delay / 3_600_000).toFixed(1);
 
   log.info(
-    'purge',
+    "purge",
     `Channel purge scheduled for ${guildsWithPurge.length} guild(s), next run in ${delayHours}h`,
   );
 
