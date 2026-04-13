@@ -130,14 +130,13 @@ async function purgeChannel(
 
 /**
  * Schedule the daily purge for all guilds that have channelPurge configured.
- * Falls back to the statusEmbed channel if channelPurge.channelId is not set.
  */
 export function startChannelPurge(
   client: Client,
   guildConfigs: Record<string, GuildConfig>,
 ): void {
   const guildsWithPurge = Object.entries(guildConfigs).filter(
-    ([, cfg]) => cfg.channelPurge?.channelId || cfg.statusEmbed?.channelId,
+    ([, cfg]) => cfg.channelPurge?.channelId,
   );
 
   if (guildsWithPurge.length === 0) {
@@ -147,8 +146,7 @@ export function startChannelPurge(
 
   const runPurge = async (): Promise<void> => {
     for (const [guildId, gcfg] of guildsWithPurge) {
-      const channelId =
-        gcfg.channelPurge?.channelId ?? gcfg.statusEmbed?.channelId;
+      const channelId = gcfg.channelPurge?.channelId;
       if (!channelId) continue;
 
       try {

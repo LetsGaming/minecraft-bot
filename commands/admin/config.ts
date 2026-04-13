@@ -70,7 +70,7 @@ export const execute = withErrorHandling(
     // Guild overview
     const guildLines = Object.entries(cfg.guilds).map(([guildId, gcfg]) => {
       const features: string[] = [];
-      if (gcfg.statusEmbed?.channelId) features.push('status');
+      if (gcfg.statusEmbed?.enabled !== false) features.push('status');
       if (gcfg.notifications?.channelId) features.push('notifications');
       if (gcfg.chatBridge?.channelId) features.push('chatBridge');
       if (gcfg.leaderboard?.channelId) features.push('leaderboard');

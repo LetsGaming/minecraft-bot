@@ -48,7 +48,7 @@
         "server": "survival"
       },
       "statusEmbed": {
-        "channelId": "CHANNEL_ID"
+        "enabled": true
       },
       "downtimeAlerts": {
         "channelId": "CHANNEL_ID",

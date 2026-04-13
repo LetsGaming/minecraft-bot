@@ -1,30 +1,37 @@
-import path from "path";
-import { EmbedBuilder, type Client, type TextChannel } from "discord.js";
-import { getAllInstances } from "../../utils/server.js";
-import { loadJson, saveJson, getRootDir } from "../../utils/utils.js";
-import { log } from "../../utils/logger.js";
+import path from 'path';
+import { EmbedBuilder, type Client, type TextChannel, type VoiceChannel } from 'discord.js';
+import { getAllInstances } from '../../utils/server.js';
+import { loadJson, saveJson, getRootDir } from '../../utils/utils.js';
+import { log } from '../../utils/logger.js';
+import {
+  ensureManagedCategory,
+  ensureTextChannel,
+  ensureVoiceChannel,
+  renameVoiceChannelIfChanged,
+} from '../../utils/discordChannel.js';
 import type {
   GuildConfig,
+  StatusChannelState,
   StatusMessageState,
   TpsResult,
-} from "../../types/index.js";
+} from '../../types/index.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const STATE_PATH = path.resolve(getRootDir(), "data", "statusMessages.json");
+const STATE_PATH = path.resolve(getRootDir(), 'data', 'statusMessages.json');
 const UPDATE_INTERVAL_MS = 60 * 1_000;
 const INITIAL_DELAY_MS = 5_000;
 
 /**
- * Discord text channel name constraints:
- * - Max 100 characters
- * - Only lowercase letters, numbers, and hyphens (no unicode, spaces, or slashes)
- *
- * Because these restrictions make it impossible to reliably append a suffix to
- * an arbitrary user-defined base name, the channel is treated as a dedicated
- * counter and its name is fully managed by the bot in the format:
- *   "players-<online>-of-<max>"
+ * Display names for the bot-managed Discord channels.
+ * Voice channels accept unicode/emoji/spaces freely, so the counter channel
+ * can use a human-friendly format. The text channel name must be lowercase
+ * letters, numbers, and hyphens only (Discord text channel restriction).
  */
+const CATEGORY_NAME = '📊 Server Status';
+const STATUS_TEXT_CHANNEL_NAME = 'server-status';
+const buildVoiceChannelName = (online: number, max: number) =>
+  `👥 Players: ${online} / ${max}`;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -38,17 +45,19 @@ interface StatusBuildResult {
   counts: PlayerCounts;
 }
 
-interface ChannelCacheEntry {
+/**
+ * Cached live Discord channel references per guild, so we avoid fetching
+ * them from the API on every update cycle.
+ */
+interface GuildChannelRefs {
+  textChannel: TextChannel;
+  voiceChannel: VoiceChannel;
   lastCounts: PlayerCounts;
 }
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
-/**
- * Per-guild cache so we only issue a Discord rename API call when player
- * counts actually change. Keyed by guild ID.
- */
-const channelCache = new Map<string, ChannelCacheEntry>();
+const channelRefCache = new Map<string, GuildChannelRefs>();
 
 // ─── Persistence ──────────────────────────────────────────────────────────────
 
@@ -61,39 +70,94 @@ async function saveState(state: StatusMessageState): Promise<void> {
   await saveJson(STATE_PATH, state);
 }
 
-// ─── Channel name helpers ─────────────────────────────────────────────────────
+// ─── Channel provisioning ─────────────────────────────────────────────────────
 
 /**
- * Build the full channel name from player counts.
- * The channel is fully owned by the bot — no user-defined base name is
- * preserved, because Discord text channels forbid the unicode/spaces that
- * most human-readable names contain.
+ * Ensure the bot's managed category and both child channels exist in the guild.
  *
- * Example: online=5, max=20 → "players-5-of-20"
+ * On first run this creates everything from scratch. On subsequent runs it
+ * validates the persisted IDs against the live guild channel cache and
+ * re-creates anything that was manually deleted.
  */
-function buildChannelName(counts: PlayerCounts): string {
-  return `_${counts.online}-of-${counts.max}`;
+async function provisionGuildChannels(
+  client: Client,
+  guildId: string,
+  state: StatusMessageState,
+): Promise<{ textChannel: TextChannel; voiceChannel: VoiceChannel; stored: StatusChannelState } | null> {
+  const guild = client.guilds.cache.get(guildId);
+  if (!guild) {
+    log.warn('status', `Guild ${guildId} not in cache, skipping provisioning`);
+    return null;
+  }
+
+  // Resolve channels from persisted state first to avoid unnecessary API calls
+  const stored = state[guildId];
+  if (stored) {
+    const textChannel = guild.channels.cache.get(stored.textChannelId) as TextChannel | undefined;
+    const voiceChannel = guild.channels.cache.get(stored.voiceChannelId) as VoiceChannel | undefined;
+    if (textChannel && voiceChannel) {
+      return { textChannel, voiceChannel, stored };
+    }
+    log.info('status', `Re-provisioning channels for guild ${guildId} (one or more channels missing)`);
+  }
+
+  try {
+    const { category } = await ensureManagedCategory(guild, CATEGORY_NAME);
+
+    const { channel: textChannel } = await ensureTextChannel(
+      guild,
+      category.id,
+      STATUS_TEXT_CHANNEL_NAME,
+      'Live Minecraft server status — managed by the bot.',
+    );
+
+    const { channel: voiceChannel } = await ensureVoiceChannel(
+      guild,
+      category.id,
+      buildVoiceChannelName(0, 0),
+    );
+
+    const newState: StatusChannelState = {
+      categoryId: category.id,
+      textChannelId: textChannel.id,
+      messageId: stored?.messageId ?? '',
+      voiceChannelId: voiceChannel.id,
+    };
+    state[guildId] = newState;
+    await saveState(state);
+
+    log.info(
+      'status',
+      `Provisioned status channels for guild ${guildId} ` +
+      `(category: ${category.id}, text: ${textChannel.id}, voice: ${voiceChannel.id})`,
+    );
+
+    return { textChannel, voiceChannel, stored: newState };
+  } catch (err) {
+    log.error(
+      'status',
+      `Failed to provision channels for guild ${guildId}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return null;
+  }
 }
 
 // ─── Embed builder ────────────────────────────────────────────────────────────
 
 function buildTpsLine(tps: TpsResult | null): string {
-  if (tps?.tps1m == null) return "";
-  const emoji = tps.tps1m >= 18 ? "🟢" : tps.tps1m >= 15 ? "🟡" : "🔴";
+  if (tps?.tps1m == null) return '';
+  const emoji = tps.tps1m >= 18 ? '🟢' : tps.tps1m >= 15 ? '🟡' : '🔴';
   return `\nTPS: ${emoji} ${tps.tps1m.toFixed(1)}`;
 }
 
 function buildPlayerListLine(players: string[]): string {
-  return players.length > 0 ? `\nOnline: ${players.join(", ")}` : "";
+  return players.length > 0 ? `\nOnline: ${players.join(', ')}` : '';
 }
 
 async function buildServerField(
   server: ReturnType<typeof getAllInstances>[number],
   isInline: boolean,
-): Promise<{
-  field: { name: string; value: string; inline: boolean };
-  counts: PlayerCounts;
-}> {
+): Promise<{ field: { name: string; value: string; inline: boolean }; counts: PlayerCounts }> {
   let isOnline = false;
   let tps: TpsResult | null = null;
   const counts: PlayerCounts = { online: 0, max: 0 };
@@ -116,12 +180,12 @@ async function buildServerField(
 
   if (!isOnline) {
     return {
-      field: { name: server.id, value: "🔴 Offline", inline: isInline },
+      field: { name: server.id, value: '🔴 Offline', inline: isInline },
       counts,
     };
   }
 
-  let statusLine = "🟢 Online";
+  let statusLine = '🟢 Online';
 
   try {
     const list = await server.getList();
@@ -154,159 +218,162 @@ async function buildStatusEmbed(): Promise<StatusBuildResult> {
 
   const fields = results.map((result, i) => {
     const instanceId = instances[i]?.id ?? `server-${i + 1}`;
-
-    if (result.status === "fulfilled") {
+    if (result.status === 'fulfilled') {
       total.online += result.value.counts.online;
       total.max += result.value.counts.max;
       return result.value.field;
     }
-    // Fulfilled failures are already handled inside buildServerField;
-    // this branch only fires if the function itself throws unexpectedly.
-    return {
-      name: instanceId,
-      value: "⚠️ Error fetching status",
-      inline: isInline,
-    };
+    return { name: instanceId, value: '⚠️ Error fetching status', inline: isInline };
   });
 
   const embed = new EmbedBuilder()
-    .setTitle("📊 Server Status")
+    .setTitle('📊 Server Status')
     .setColor(0x00bfff)
     .setTimestamp()
-    .setFooter({ text: "Updates every 60s" });
+    .setFooter({ text: 'Updates every 60s' });
 
   if (fields.length > 0) {
     embed.addFields(fields);
   } else {
-    embed.setDescription("No servers configured.");
+    embed.setDescription('No servers configured.');
   }
 
   return { embed, counts: total };
 }
 
-// ─── Channel rename ───────────────────────────────────────────────────────────
+// ─── Per-channel updates ──────────────────────────────────────────────────────
 
-async function updateChannelName(
-  channel: TextChannel,
+/**
+ * Send a new status embed or edit the existing pinned one.
+ * Persists the message ID so the same message is edited on every cycle.
+ */
+async function sendOrUpdateEmbed(
+  textChannel: TextChannel,
+  embed: EmbedBuilder,
+  guildId: string,
+  state: StatusMessageState,
+): Promise<void> {
+  const stored = state[guildId];
+  const messageId = stored?.messageId;
+
+  if (messageId) {
+    try {
+      const msg = await textChannel.messages.fetch(messageId);
+      await msg.edit({ embeds: [embed] });
+      return;
+    } catch {
+      log.info('status', `Embed message missing for guild ${guildId}, sending a new one`);
+    }
+  }
+
+  try {
+    const msg = await textChannel.send({ embeds: [embed] });
+    if (stored) {
+      stored.messageId = msg.id;
+      await saveState(state);
+    }
+    log.info('status', `Sent status embed in guild ${guildId}`);
+  } catch (err) {
+    log.error(
+      'status',
+      `Failed to send embed for guild ${guildId}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
+/**
+ * Update the voice channel name to reflect the current player count.
+ * Skips the API call when the count hasn't changed to preserve the
+ * Discord rate limit (2 renames per channel per 10 minutes).
+ */
+async function updatePlayerCountVoiceChannel(
+  voiceChannel: VoiceChannel,
   guildId: string,
   counts: PlayerCounts,
+  refs: GuildChannelRefs,
 ): Promise<void> {
-  const cached = channelCache.get(guildId);
-
   if (
-    cached &&
-    cached.lastCounts.online === counts.online &&
-    cached.lastCounts.max === counts.max
+    refs.lastCounts.online === counts.online &&
+    refs.lastCounts.max === counts.max
   ) {
     return;
   }
 
-  const newName = buildChannelName(counts);
+  const newName = buildVoiceChannelName(counts.online, counts.max);
 
   try {
-    await channel.setName(newName);
-    channelCache.set(guildId, { lastCounts: counts });
-    log.info("status", `Renamed channel to "${newName}" for guild ${guildId}`);
+    const renamed = await renameVoiceChannelIfChanged(voiceChannel, newName);
+    if (renamed) {
+      refs.lastCounts = counts;
+      log.info('status', `Updated player count to "${newName}" for guild ${guildId}`);
+    }
   } catch (err) {
     log.warn(
-      "status",
-      `Failed to rename channel: ${err instanceof Error ? err.message : String(err)}`,
+      'status',
+      `Failed to rename voice channel for guild ${guildId}: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 }
 
 // ─── Per-guild update ─────────────────────────────────────────────────────────
 
-async function sendOrUpdateEmbed(
-  channel: TextChannel,
-  embed: EmbedBuilder,
-  guildId: string,
-  channelId: string,
-  state: StatusMessageState,
-): Promise<void> {
-  const stored = state[guildId];
-
-  if (stored?.messageId) {
-    try {
-      const msg = await channel.messages.fetch(stored.messageId);
-      await msg.edit({ embeds: [embed] });
-      return;
-    } catch {
-      log.info(
-        "status",
-        `Status message missing for guild ${guildId}, creating new one`,
-      );
-    }
-  }
-
-  try {
-    const msg = await channel.send({ embeds: [embed] });
-    state[guildId] = { channelId, messageId: msg.id };
-    await saveState(state);
-    log.info(
-      "status",
-      `Created status embed in channel ${channelId} for guild ${guildId}`,
-    );
-  } catch (err) {
-    log.error(
-      "status",
-      `Failed to send status embed: ${err instanceof Error ? err.message : String(err)}`,
-    );
-  }
-}
-
 async function updateGuildStatus(
   client: Client,
   guildId: string,
-  channelId: string,
   state: StatusMessageState,
   { embed, counts }: StatusBuildResult,
 ): Promise<void> {
-  let channel: Awaited<ReturnType<typeof client.channels.fetch>>;
+  // Use the cached channel references; provision on first call or after eviction
+  let refs = channelRefCache.get(guildId);
 
-  try {
-    channel = await client.channels.fetch(channelId);
-  } catch {
-    log.warn(
-      "status",
-      `Channel ${channelId} not accessible for guild ${guildId}`,
-    );
-    return;
+  if (!refs) {
+    const provisioned = await provisionGuildChannels(client, guildId, state);
+    if (!provisioned) return;
+
+    refs = {
+      textChannel: provisioned.textChannel,
+      voiceChannel: provisioned.voiceChannel,
+      lastCounts: { online: -1, max: -1 }, // sentinel forces the first rename
+    };
+    channelRefCache.set(guildId, refs);
   }
 
-  // Narrow to a text channel that supports sending and renaming.
-  if (!channel || !("send" in channel) || !("setName" in channel)) return;
-  const textChannel = channel as TextChannel;
-
-  await sendOrUpdateEmbed(textChannel, embed, guildId, channelId, state);
-  await updateChannelName(textChannel, guildId, counts);
+  await sendOrUpdateEmbed(refs.textChannel, embed, guildId, state);
+  await updatePlayerCountVoiceChannel(refs.voiceChannel, guildId, counts, refs);
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
+/**
+ * Start the status embed updater.
+ *
+ * For every guild that has `statusEmbed.enabled = true` (or an unset config,
+ * which defaults to enabled), the bot will:
+ *  1. Create (or find) a private "📊 Server Status" category.
+ *  2. Provision a `#server-status` text channel for the live embed.
+ *  3. Provision a `👥 Players: X / Y` voice channel as a read-only counter.
+ *
+ * No manual channel IDs need to be configured — the bot self-provisions.
+ */
 export function startStatusEmbed(
   client: Client,
   guildConfigs: Record<string, GuildConfig>,
 ): ReturnType<typeof setInterval> | null {
-  const guildsWithStatus = Object.entries(guildConfigs).filter(
-    ([, cfg]) => cfg.statusEmbed?.channelId,
+  const enabledGuilds = Object.entries(guildConfigs).filter(
+    ([, cfg]) => cfg.statusEmbed?.enabled !== false,
   );
 
-  if (guildsWithStatus.length === 0) {
-    log.info("status", "No status embed channels configured, skipping");
+  if (enabledGuilds.length === 0) {
+    log.info('status', 'No guilds have statusEmbed enabled, skipping');
     return null;
   }
 
   const update = async (): Promise<void> => {
-    // Load state fresh each cycle and build the embed once for all guilds.
     let state: StatusMessageState;
     try {
       state = await loadState();
     } catch (err) {
-      log.error(
-        "status",
-        `Failed to load state: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      log.error('status', `Failed to load state: ${err instanceof Error ? err.message : String(err)}`);
       return;
     }
 
@@ -314,26 +381,17 @@ export function startStatusEmbed(
     try {
       statusResult = await buildStatusEmbed();
     } catch (err) {
-      log.error(
-        "status",
-        `Failed to build embed: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      log.error('status', `Failed to build embed: ${err instanceof Error ? err.message : String(err)}`);
       return;
     }
 
-    // Update guilds sequentially to avoid concurrent writes to shared state.
-    for (const [guildId, cfg] of guildsWithStatus) {
+    // Sequential: avoids concurrent writes to shared in-memory state
+    for (const [guildId] of enabledGuilds) {
       try {
-        await updateGuildStatus(
-          client,
-          guildId,
-          cfg.statusEmbed!.channelId!,
-          state,
-          statusResult,
-        );
+        await updateGuildStatus(client, guildId, state, statusResult);
       } catch (err) {
         log.error(
-          "status",
+          'status',
           `Update failed for guild ${guildId}: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
@@ -343,9 +401,6 @@ export function startStatusEmbed(
   setTimeout(update, INITIAL_DELAY_MS);
   const timer = setInterval(update, UPDATE_INTERVAL_MS);
 
-  log.info(
-    "status",
-    `Status embed active for ${guildsWithStatus.length} guild(s)`,
-  );
+  log.info('status', `Status embed active for ${enabledGuilds.length} guild(s)`);
   return timer;
 }

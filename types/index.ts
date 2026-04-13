@@ -51,8 +51,13 @@ export interface GuildLeaderboardConfig {
   interval?: LeaderboardInterval;
 }
 
+/**
+ * The status embed feature is fully self-provisioning — the bot creates its
+ * own category and channels. No channelId configuration is required.
+ * Set `enabled: true` in your guild config to activate it.
+ */
 export interface GuildStatusEmbedConfig {
-  channelId?: string;
+  enabled?: boolean;
 }
 
 export interface GuildDowntimeAlertsConfig {
@@ -365,10 +370,24 @@ export interface LeaderboardScheduleState {
   [guildId: string]: number;
 }
 
+/**
+ * Persisted IDs for channels the bot has created per guild.
+ * Stored so the bot can find its own channels after a restart without
+ * needing to re-create them.
+ */
+export interface StatusChannelState {
+  /** ID of the bot-managed category */
+  categoryId: string;
+  /** Text channel used for the status embed */
+  textChannelId: string;
+  /** Message ID of the pinned status embed inside the text channel */
+  messageId: string;
+  /** Voice channel used as a read-only player-count display */
+  voiceChannelId: string;
+}
+
 export interface StatusMessageState {
-  [guildId: string]:
-    | { channelId: string; messageId: string }
-    | undefined;
+  [guildId: string]: StatusChannelState | undefined;
 }
 
 // ── Downtime monitor ──
