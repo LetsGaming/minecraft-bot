@@ -3,18 +3,17 @@
 /**
  * start.mjs — Build & run the Minecraft Discord Bot via PM2.
  *
- * This file is plain ESM JavaScript (not TypeScript) because it must
- * run before the TypeScript compilation step it triggers.
+ * Plain ESM JavaScript — must run before the TypeScript build it triggers.
  *
  * Usage:
- *   node start.mjs              Start (or restart) in production mode
- *   node start.mjs dev          Start in development mode (with DEBUG)
+ *   node start.mjs              Build and start in production mode (default)
+ *   node start.mjs dev          Build and start in development mode
  *   node start.mjs stop         Stop the bot
- *   node start.mjs restart      Restart the bot
+ *   node start.mjs restart      Rebuild and restart
  *   node start.mjs logs         Tail live logs
- *   node start.mjs status       Show PM2 process status
- *   node start.mjs build        Only compile TypeScript, don't start
- *   node start.mjs setup        First-time setup: install deps, build, start
+ *   node start.mjs status       Show PM2 process info
+ *   node start.mjs build        Compile TypeScript only
+ *   node start.mjs setup        First-time setup: install, build, start
  */
 
 import { execSync, execFileSync } from "node:child_process";
@@ -22,68 +21,74 @@ import { existsSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-process.chdir(__dirname);
+const ROOT = dirname(fileURLToPath(import.meta.url));
+process.chdir(ROOT);
 
 const APP_NAME = "minecraft-bot";
 const ECOSYSTEM = "ecosystem.config.cjs";
 
-// ── Colors ──
+// ── Logging ──
 
-const colors = {
+const COLORS = /** @type {const} */ ({
   red: "\x1b[31m",
   green: "\x1b[32m",
   yellow: "\x1b[33m",
   reset: "\x1b[0m",
-};
+});
 
 /** @param {string} msg */
-function info(msg) {
-  console.log(`${colors.green}[INFO]${colors.reset}  ${msg}`);
-}
+const info = (msg) =>
+  console.log(`${COLORS.green}[INFO]${COLORS.reset}  ${msg}`);
 
 /** @param {string} msg */
-function warn(msg) {
-  console.log(`${colors.yellow}[WARN]${colors.reset}  ${msg}`);
-}
+const warn = (msg) =>
+  console.log(`${COLORS.yellow}[WARN]${COLORS.reset}  ${msg}`);
 
 /**
  * @param {string} msg
  * @returns {never}
  */
-function error(msg) {
-  console.error(`${colors.red}[ERROR]${colors.reset} ${msg}`);
+function fatal(msg) {
+  console.error(`${COLORS.red}[ERROR]${COLORS.reset} ${msg}`);
   process.exit(1);
 }
 
 // ── Shell helpers ──
 
 /**
- * Run a command, inheriting stdio so the user sees output in real time.
+ * Run a command with real-time output.
  * @param {string} cmd
- * @param {{ silent?: boolean }} options
+ * @param {{ silent?: boolean }} [opts]
  */
 function run(cmd, { silent = false } = {}) {
+  execSync(cmd, {
+    cwd: ROOT,
+    stdio: silent ? "pipe" : "inherit",
+    encoding: "utf-8",
+  });
+}
+
+/**
+ * Run a command silently; swallow errors.
+ * @param {string} cmd
+ */
+function runQuiet(cmd) {
   try {
-    execSync(cmd, {
-      cwd: __dirname,
-      stdio: silent ? "pipe" : "inherit",
-      encoding: "utf-8",
-    });
-  } catch (err) {
-    if (!silent) throw err;
+    run(cmd, { silent: true });
+  } catch {
+    // intentionally swallowed
   }
 }
 
 /**
- * Run a command and return trimmed stdout. Returns null on failure.
+ * Run a command and return trimmed stdout, or null on failure.
  * @param {string} cmd
  * @returns {string | null}
  */
 function capture(cmd) {
   try {
     return execSync(cmd, {
-      cwd: __dirname,
+      cwd: ROOT,
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
     }).trim();
@@ -93,7 +98,6 @@ function capture(cmd) {
 }
 
 /**
- * Check if a command exists on PATH.
  * @param {string} bin
  * @returns {boolean}
  */
@@ -110,22 +114,22 @@ function commandExists(bin) {
 
 // ── Preflight checks ──
 
-function checkNode() {
+function requireNode18() {
   const major = parseInt(process.versions.node.split(".")[0] ?? "0", 10);
   if (major < 18) {
-    error(`Node.js >= 18 required (found v${process.versions.node}).`);
+    fatal(`Node.js >= 18 required (found v${process.versions.node}).`);
   }
 }
 
-function checkPm2() {
+function requirePm2() {
   if (!commandExists("pm2")) {
-    error("PM2 is not installed. Run: npm install -g pm2");
+    fatal("PM2 is not installed. Run: npm install -g pm2");
   }
 }
 
-function checkConfig() {
-  if (!existsSync(resolve(__dirname, "config.json"))) {
-    error(
+function requireConfig() {
+  if (!existsSync(resolve(ROOT, "config.json"))) {
+    fatal(
       "config.json not found. Copy config.example.json and fill in your values.",
     );
   }
@@ -133,195 +137,170 @@ function checkConfig() {
 
 // ── PM2 helpers ──
 
-/**
- * Check whether the app is currently registered (running or stopped) in PM2.
- * @returns {boolean}
- */
+/** @returns {boolean} */
 function isRegistered() {
   const result = capture(`pm2 describe ${APP_NAME}`);
   return result !== null && !result.includes("doesn't exist");
 }
 
-// ── Build ──
-
-/** @param {{ dev?: boolean }} options */
-function build({ dev = false } = {}) {
-  info("Installing dependencies...");
-  if (dev) {
-    run("npm install");
-  } else {
-    // ci is faster and reproducible; fall back to install if lockfile is missing
-    const hasLockfile = existsSync(resolve(__dirname, "package-lock.json"));
-    run(hasLockfile ? "npm ci --omit=dev" : "npm install --omit=dev");
-  }
-
-  info("Compiling TypeScript...");
-  run("npx tsc");
-  info("Build complete → dist/");
-}
-
-// ── Commands ──
-
-/** @param {'production' | 'development'} env */
-function start(env = "production") {
-  checkPm2();
-  checkConfig();
-
+/**
+ * Start or restart the PM2 process.
+ * @param {'production' | 'development'} env
+ */
+function pm2Start(env) {
   if (isRegistered()) {
-    info("Bot is already running, restarting...");
+    info("Bot already registered — restarting...");
     run(`pm2 restart ${ECOSYSTEM} --env ${env}`);
   } else {
     info(`Starting bot (${env})...`);
     run(`pm2 start ${ECOSYSTEM} --env ${env}`);
   }
-
-  run("pm2 save --force", { silent: true });
-  info("Bot is running. Use 'node start.mjs logs' to watch output.");
+  runQuiet("pm2 save --force");
 }
 
-function stop() {
-  checkPm2();
-  if (isRegistered()) {
+// ── Build ──
+//
+// TypeScript is a devDependency, so we must install ALL deps before compiling.
+// After compilation we prune dev deps for a leaner production node_modules.
+
+/** @param {{ prune?: boolean }} [opts] */
+function build({ prune = false } = {}) {
+  info("Installing dependencies (including devDependencies for tsc)...");
+  const hasLockfile = existsSync(resolve(ROOT, "package-lock.json"));
+  run(hasLockfile ? "npm ci" : "npm install");
+
+  info("Compiling TypeScript...");
+  run("npx tsc");
+  info("Build complete → dist/");
+
+  if (prune) {
+    info("Pruning devDependencies...");
+    run("npm prune --omit=dev", { silent: true });
+  }
+}
+
+// ── Commands ──
+
+/** @type {Record<string, () => void>} */
+const commands = {
+  start() {
+    requireNode18();
+    requireConfig();
+    build({ prune: true });
+    requirePm2();
+    pm2Start("production");
+    info("Bot is running. Use 'node start.mjs logs' to watch output.");
+  },
+
+  dev() {
+    requireNode18();
+    requireConfig();
+    build();
+    requirePm2();
+    pm2Start("development");
+    info("Bot is running (dev). Use 'node start.mjs logs' to watch output.");
+  },
+
+  stop() {
+    requirePm2();
+    if (!isRegistered()) {
+      warn("Bot is not running.");
+      return;
+    }
     info("Stopping bot...");
     run(`pm2 stop ${APP_NAME}`);
     info("Bot stopped.");
-  } else {
-    warn("Bot is not running.");
-  }
-}
+  },
 
-function restart() {
-  checkPm2();
-  checkConfig();
-  info("Rebuilding before restart...");
-  build();
+  restart() {
+    requireNode18();
+    requireConfig();
+    info("Rebuilding before restart...");
+    build({ prune: true });
+    requirePm2();
+    pm2Start("production");
+    info("Bot restarted.");
+  },
 
-  if (isRegistered()) {
-    run(`pm2 restart ${APP_NAME}`);
-  } else {
-    run(`pm2 start ${ECOSYSTEM} --env production`);
-  }
+  logs() {
+    requirePm2();
+    run(`pm2 logs ${APP_NAME} --lines 50`);
+  },
 
-  run("pm2 save --force", { silent: true });
-  info("Bot restarted.");
-}
-
-function logs() {
-  checkPm2();
-  run(`pm2 logs ${APP_NAME} --lines 50`);
-}
-
-function status() {
-  checkPm2();
-  if (isRegistered()) {
-    run(`pm2 describe ${APP_NAME}`);
-  } else {
-    warn("Bot is not registered with PM2.");
-  }
-}
-
-function setup() {
-  info("Running first-time setup...");
-  checkNode();
-  checkPm2();
-  checkConfig();
-
-  // Ensure required directories exist
-  for (const dir of ["logs", "data"]) {
-    if (!existsSync(resolve(__dirname, dir))) {
-      mkdirSync(resolve(__dirname, dir), { recursive: true });
+  status() {
+    requirePm2();
+    if (!isRegistered()) {
+      warn("Bot is not registered with PM2.");
+      return;
     }
-  }
+    run(`pm2 describe ${APP_NAME}`);
+  },
 
-  build({ dev: true });
+  build() {
+    requireNode18();
+    build();
+  },
 
-  info("Starting bot via PM2...");
-  run(`pm2 start ${ECOSYSTEM} --env production`);
-  run("pm2 save --force", { silent: true });
+  setup() {
+    info("Running first-time setup...");
+    requireNode18();
+    requirePm2();
+    requireConfig();
 
-  // Try to enable boot persistence (non-fatal if it fails)
-  const startupCmd = capture("pm2 startup");
-  if (startupCmd) {
-    info(
-      "Run the command above to enable boot persistence (if you haven't already).",
-    );
-  }
+    for (const dir of ["logs", "data"]) {
+      mkdirSync(resolve(ROOT, dir), { recursive: true });
+    }
 
-  console.log("");
-  info("Setup complete! The bot is now running.");
-  info("  Logs:    node start.mjs logs");
-  info("  Stop:    node start.mjs stop");
-  info("  Restart: node start.mjs restart");
-  info("  Status:  node start.mjs status");
-}
+    build();
 
-function printUsage() {
-  console.log(`
+    info("Starting bot via PM2...");
+    pm2Start("production");
+
+    const startupCmd = capture("pm2 startup");
+    if (startupCmd) {
+      info(
+        "Run the command above to enable boot persistence (if you haven't already).",
+      );
+    }
+
+    console.log("");
+    info("Setup complete! The bot is now running.");
+    info("  Logs:    node start.mjs logs");
+    info("  Stop:    node start.mjs stop");
+    info("  Restart: node start.mjs restart");
+    info("  Status:  node start.mjs status");
+  },
+
+  help() {
+    console.log(`
 Usage: node start.mjs <command>
 
 Commands:
   start      Build and start in production mode (default)
-  dev        Build and start in development mode (DEBUG enabled)
+  dev        Build and start in development mode
   stop       Stop the bot
   restart    Rebuild and restart the bot
   logs       Tail live PM2 logs
   status     Show PM2 process info
-  build      Compile TypeScript only, don't start
+  build      Compile TypeScript only
   setup      First-time setup: install, build, start, enable boot persistence
 `);
-}
+  },
+};
+
+// Aliases
+commands["--help"] = commands.help;
+commands["-h"] = commands.help;
 
 // ── Main ──
 
 const command = process.argv[2] ?? "start";
+const handler = commands[command];
 
-switch (command) {
-  case "start":
-    checkNode();
-    build();
-    start("production");
-    break;
-
-  case "dev":
-    checkNode();
-    build({ dev: true });
-    start("development");
-    break;
-
-  case "stop":
-    stop();
-    break;
-
-  case "restart":
-    checkNode();
-    restart();
-    break;
-
-  case "logs":
-    logs();
-    break;
-
-  case "status":
-    status();
-    break;
-
-  case "build":
-    checkNode();
-    build();
-    break;
-
-  case "setup":
-    setup();
-    break;
-
-  case "help":
-  case "--help":
-  case "-h":
-    printUsage();
-    break;
-
-  default:
-    console.error(`Unknown command: ${command}`);
-    printUsage();
-    process.exit(1);
+if (!handler) {
+  console.error(`Unknown command: ${command}`);
+  commands.help();
+  process.exit(1);
 }
+
+handler();
