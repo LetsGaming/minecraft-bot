@@ -35,21 +35,26 @@ async function buildStatusEmbed(): Promise<EmbedBuilder> {
     let statusLine: string;
     let players: string[] = [];
 
-    // Run status checks in parallel. getTps() is conclusive proof the server is
-    // reachable — a server cannot return TPS data while being offline — so we
-    // derive the effective online state from both signals together.
-    const [runningResult, tpsResult] = await Promise.allSettled([
-      server.isRunning(),
-      server.useRcon ? server.getTps() : Promise.resolve(null),
-    ]);
+    // Check online status first, then fetch TPS sequentially.
+    // Running both in parallel on a cold RCON connection can cause getTps()
+    // to fail during the connection handshake, permanently poisoning the
+    // _hasTpsCommand cache so TPS is never displayed again.
+    let isOnline = false;
+    let tps: import("../../types/index.js").TpsResult | null = null;
 
-    const rconOnline =
-      runningResult.status === "fulfilled" && runningResult.value;
-    const tps = tpsResult.status === "fulfilled" ? tpsResult.value : null;
+    try {
+      isOnline = await server.isRunning();
+    } catch {
+      /* offline */
+    }
 
-    // TPS data is conclusive proof of reachability; never show offline when
-    // the server just responded with tick data.
-    const isOnline = rconOnline || tps !== null;
+    if (isOnline && server.useRcon) {
+      try {
+        tps = await server.getTps();
+      } catch {
+        /* TPS unavailable */
+      }
+    }
 
     if (!isOnline) {
       statusLine = "🔴 Offline";
