@@ -96,7 +96,7 @@ async function registerGlobalCommands(): Promise<void> {
   // Attach commands to client for help command access
   (client as unknown as { commands: Collection<string, BotCommand> }).commands = commands;
 
-  client.once('ready', async () => {
+  client.once('clientReady', async () => {
     log.info('bot', `Ready as ${client.user!.tag}`);
     log.info('bot', `Servers: ${getServerIds().join(', ')}`);
     log.info('bot', `Guilds: ${client.guilds.cache.size}`);
