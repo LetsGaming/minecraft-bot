@@ -1,11 +1,11 @@
-import path from 'path';
-import { EmbedBuilder, type Client } from 'discord.js';
-import { getAllInstances } from '../../utils/server.js';
-import { loadJson, saveJson, getRootDir } from '../../utils/utils.js';
-import { log } from '../../utils/logger.js';
-import type { GuildConfig, StatusMessageState } from '../../types/index.js';
+import path from "path";
+import { EmbedBuilder, type Client } from "discord.js";
+import { getAllInstances } from "../../utils/server.js";
+import { loadJson, saveJson, getRootDir } from "../../utils/utils.js";
+import { log } from "../../utils/logger.js";
+import type { GuildConfig, StatusMessageState } from "../../types/index.js";
 
-const STATE_PATH = path.resolve(getRootDir(), 'data', 'statusMessages.json');
+const STATE_PATH = path.resolve(getRootDir(), "data", "statusMessages.json");
 const UPDATE_INTERVAL_MS = 60 * 1000;
 
 async function loadState(): Promise<StatusMessageState> {
@@ -35,36 +35,44 @@ async function buildStatusEmbed(): Promise<EmbedBuilder> {
     let statusLine: string;
     let players: string[] = [];
 
-    try {
-      const running = await server.isRunning();
-      if (!running) {
-        statusLine = '🔴 Offline';
-      } else {
+    // Run status checks in parallel. getTps() is conclusive proof the server is
+    // reachable — a server cannot return TPS data while being offline — so we
+    // derive the effective online state from both signals together.
+    const [runningResult, tpsResult] = await Promise.allSettled([
+      server.isRunning(),
+      server.useRcon ? server.getTps() : Promise.resolve(null),
+    ]);
+
+    const rconOnline =
+      runningResult.status === "fulfilled" && runningResult.value;
+    const tps = tpsResult.status === "fulfilled" ? tpsResult.value : null;
+
+    // TPS data is conclusive proof of reachability; never show offline when
+    // the server just responded with tick data.
+    const isOnline = rconOnline || tps !== null;
+
+    if (!isOnline) {
+      statusLine = "🔴 Offline";
+    } else {
+      try {
         const list = await server.getList();
-        const count = list.playerCount || '0';
-        const max = list.maxPlayers || '?';
+        const count = list.playerCount || "0";
+        const max = list.maxPlayers || "?";
         players = list.players || [];
         statusLine = `🟢 Online — ${count}/${max} players`;
+      } catch {
+        statusLine = "🟢 Online";
       }
-    } catch {
-      statusLine = '⚪ Unknown';
     }
 
-    let tpsLine = '';
-    if (server.useRcon) {
-      try {
-        const tps = await server.getTps();
-        if (tps?.tps1m !== null && tps?.tps1m !== undefined) {
-          const emoji = tps.tps1m >= 18 ? '🟢' : tps.tps1m >= 15 ? '🟡' : '🔴';
-          tpsLine = `\nTPS: ${emoji} ${tps.tps1m.toFixed(1)}`;
-        }
-      } catch {
-        /* server might not support tps */
-      }
+    let tpsLine = "";
+    if (tps?.tps1m !== null && tps?.tps1m !== undefined) {
+      const emoji = tps.tps1m >= 18 ? "🟢" : tps.tps1m >= 15 ? "🟡" : "🔴";
+      tpsLine = `\nTPS: ${emoji} ${tps.tps1m.toFixed(1)}`;
     }
 
     const playerList =
-      players.length > 0 ? `\nOnline: ${players.join(', ')}` : '';
+      players.length > 0 ? `\nOnline: ${players.join(", ")}` : "";
 
     fields.push({
       name: server.id,
@@ -74,15 +82,15 @@ async function buildStatusEmbed(): Promise<EmbedBuilder> {
   }
 
   const embed = new EmbedBuilder()
-    .setTitle('📊 Server Status')
+    .setTitle("📊 Server Status")
     .setColor(0x00bfff)
     .setTimestamp()
-    .setFooter({ text: 'Updates every 60s' });
+    .setFooter({ text: "Updates every 60s" });
 
   if (fields.length > 0) {
     embed.addFields(fields);
   } else {
-    embed.setDescription('No servers configured.');
+    embed.setDescription("No servers configured.");
   }
 
   return embed;
@@ -102,24 +110,24 @@ async function updateGuildStatus(
     channel = await client.channels.fetch(channelId);
   } catch {
     log.warn(
-      'status',
+      "status",
       `Channel ${channelId} not accessible for guild ${guildId}`,
     );
     return;
   }
-  if (!channel || !('send' in channel)) return;
+  if (!channel || !("send" in channel)) return;
 
   const embed = await buildStatusEmbed();
   const stored = state[guildId];
 
-  if (stored?.messageId && 'messages' in channel) {
+  if (stored?.messageId && "messages" in channel) {
     try {
       const msg = await channel.messages.fetch(stored.messageId);
       await msg.edit({ embeds: [embed] });
       return;
     } catch {
       log.info(
-        'status',
+        "status",
         `Status message missing for guild ${guildId}, creating new one`,
       );
     }
@@ -130,12 +138,12 @@ async function updateGuildStatus(
     state[guildId] = { channelId, messageId: msg.id };
     await saveState(state);
     log.info(
-      'status',
+      "status",
       `Created status embed in channel ${channelId} for guild ${guildId}`,
     );
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
-    log.error('status', `Failed to send status embed: ${errMsg}`);
+    log.error("status", `Failed to send status embed: ${errMsg}`);
   }
 }
 
@@ -151,7 +159,7 @@ export function startStatusEmbed(
   );
 
   if (guildsWithStatus.length === 0) {
-    log.info('status', 'No status embed channels configured, skipping');
+    log.info("status", "No status embed channels configured, skipping");
     return null;
   }
 
@@ -168,7 +176,7 @@ export function startStatusEmbed(
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      log.error('status', `Update failed: ${msg}`);
+      log.error("status", `Update failed: ${msg}`);
     }
   };
 
@@ -176,7 +184,7 @@ export function startStatusEmbed(
   const timer = setInterval(update, UPDATE_INTERVAL_MS);
 
   log.info(
-    'status',
+    "status",
     `Status embed active for ${guildsWithStatus.length} guild(s)`,
   );
   return timer;

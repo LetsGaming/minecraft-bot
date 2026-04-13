@@ -2,10 +2,10 @@
  * Multi-server communication layer.
  * Each ServerInstance maintains its own RCON connection + screen fallback.
  */
-import net from 'net';
-import { execCommand } from '../shell/execCommand.js';
-import { log } from './logger.js';
-import { loadConfig } from '../config.js';
+import net from "net";
+import { execCommand } from "../shell/execCommand.js";
+import { log } from "./logger.js";
+import { loadConfig } from "../config.js";
 import type {
   ServerConfig,
   PlayerCoords,
@@ -13,7 +13,7 @@ import type {
   TpsResult,
   RconPacket,
   PendingRconCommand,
-} from '../types/index.js';
+} from "../types/index.js";
 
 // ── RCON Protocol ──
 
@@ -24,7 +24,7 @@ const RCON_PACKET_TYPE = {
 } as const;
 
 function encodePkt(id: number, type: number, body: string): Buffer {
-  const b = Buffer.from(body, 'utf-8');
+  const b = Buffer.from(body, "utf-8");
   const len = 4 + 4 + b.length + 2;
   const buf = Buffer.alloc(4 + len);
   buf.writeInt32LE(len, 0);
@@ -43,7 +43,7 @@ function decodePkt(buf: Buffer): RconPacket | null {
   return {
     id: buf.readInt32LE(4),
     type: buf.readInt32LE(8),
-    body: buf.toString('utf-8', 12, 4 + length - 2),
+    body: buf.toString("utf-8", 12, 4 + length - 2),
     totalSize: 4 + length,
   };
 }
@@ -64,6 +64,7 @@ export class ServerInstance {
   private _authReject: ((err: Error) => void) | null = null;
   private _seedCache: string | null = null;
   private _hasTpsCommand: boolean | null = null;
+  private _lastRconSuccess = 0;
 
   constructor(config: ServerConfig) {
     this.config = config;
@@ -86,12 +87,12 @@ export class ServerInstance {
     }
     for (const [, cb] of this._pending) {
       clearTimeout(cb.timer);
-      cb.reject(new Error('RCON lost'));
+      cb.reject(new Error("RCON lost"));
     }
     this._pending.clear();
     this._buf = Buffer.alloc(0);
     if (this._authReject) {
-      this._authReject(new Error('RCON lost'));
+      this._authReject(new Error("RCON lost"));
       this._authResolve = null;
       this._authReject = null;
     }
@@ -109,7 +110,7 @@ export class ServerInstance {
           }
           if (!this._connecting) {
             clearInterval(w);
-            reject(new Error('RCON failed'));
+            reject(new Error("RCON failed"));
           }
         }, 50);
         return;
@@ -123,12 +124,14 @@ export class ServerInstance {
       this._client.setKeepAlive(true, 30000);
       const t = setTimeout(() => {
         this._cleanup();
-        reject(new Error('RCON auth timeout'));
+        reject(new Error("RCON auth timeout"));
       }, 10000);
       this._client.connect(c.rconPort, c.rconHost, () => {
-        this._client!.write(encodePkt(1, RCON_PACKET_TYPE.AUTH, c.rconPassword));
+        this._client!.write(
+          encodePkt(1, RCON_PACKET_TYPE.AUTH, c.rconPassword),
+        );
       });
-      this._client.on('data', (data: Buffer) => {
+      this._client.on("data", (data: Buffer) => {
         this._buf = Buffer.concat([this._buf, data]);
         while (true) {
           const p = decodePkt(this._buf);
@@ -139,7 +142,7 @@ export class ServerInstance {
             if (p.id === -1) {
               this._connecting = false;
               this._cleanup();
-              reject(new Error('RCON auth failed'));
+              reject(new Error("RCON auth failed"));
               return;
             }
             if (p.id === 1) {
@@ -157,12 +160,13 @@ export class ServerInstance {
           if (cb) {
             clearTimeout(cb.timer);
             this._pending.delete(p.id);
+            this._lastRconSuccess = Date.now();
             cb.resolve(p.body);
           }
         }
       });
-      this._client.on('error', () => this._cleanup());
-      this._client.on('close', () => this._cleanup());
+      this._client.on("error", () => this._cleanup());
+      this._client.on("close", () => this._cleanup());
     });
   }
 
@@ -173,7 +177,7 @@ export class ServerInstance {
     return new Promise<string>((resolve, reject) => {
       const timer = setTimeout(() => {
         this._pending.delete(id);
-        reject(new Error('RCON timeout'));
+        reject(new Error("RCON timeout"));
       }, timeoutMs);
       this._pending.set(id, { resolve, reject, timer });
       this._client!.write(encodePkt(id, RCON_PACKET_TYPE.CMD, command));
@@ -184,7 +188,7 @@ export class ServerInstance {
 
   private async _screenSend(command: string): Promise<void> {
     const c = this.config;
-    const formatted = command.startsWith('/') ? command : `/${command}`;
+    const formatted = command.startsWith("/") ? command : `/${command}`;
     await execCommand(
       `sudo -u ${c.linuxUser} screen -S ${c.screenSession} -X stuff "${formatted}$(printf '\\r')"`,
     );
@@ -195,7 +199,7 @@ export class ServerInstance {
   async sendCommand(command: string): Promise<string | null> {
     if (this.useRcon) {
       try {
-        const cmd = command.startsWith('/') ? command.slice(1) : command;
+        const cmd = command.startsWith("/") ? command.slice(1) : command;
         return await this.rcon(cmd);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -210,13 +214,30 @@ export class ServerInstance {
 
   async isRunning(): Promise<boolean> {
     if (this.useRcon) {
-      try {
-        await this.rcon('list');
-        return true;
-      } catch {
-        return false;
+      // Fast path: a recent successful RCON response is conclusive — skip the probe.
+      // 15s is short enough not to mask a real outage, but covers the common case
+      // of multiple callers (e.g. statusEmbed, tpsMonitor) firing close together.
+      const RECENT_SUCCESS_MS = 15_000;
+      if (Date.now() - this._lastRconSuccess < RECENT_SUCCESS_MS) return true;
+
+      // Probe path: a single RCON call can transiently time out (GC pause, brief
+      // load spike) even when the server is fully healthy. Retry once before
+      // declaring offline so one blip cannot produce a false negative.
+      const PROBE_TIMEOUT_MS = 3_000;
+      const RETRY_DELAY_MS = 500;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        if (attempt > 0)
+          await new Promise<void>((r) => setTimeout(r, RETRY_DELAY_MS));
+        try {
+          await this.rcon("list", PROBE_TIMEOUT_MS);
+          return true;
+        } catch {
+          // continue to next attempt
+        }
       }
+      return false;
     }
+
     const out = await execCommand(
       `sudo -u ${this.config.linuxUser} screen -list`,
     );
@@ -228,36 +249,36 @@ export class ServerInstance {
   async getList(): Promise<ServerListResult> {
     if (this.useRcon) {
       try {
-        const r = await this.rcon('list');
+        const r = await this.rcon("list");
         const cm = r.match(
           /There are\s+(\d+)\s*(?:of a max of\s*(\d+)|\/\s*(\d+))\s*players online/i,
         );
         const pm = r.match(/players online:\s*(.*)$/i);
         return {
-          playerCount: cm?.[1] ?? '0',
-          maxPlayers: cm?.[2] ?? cm?.[3] ?? '?',
+          playerCount: cm?.[1] ?? "0",
+          maxPlayers: cm?.[2] ?? cm?.[3] ?? "?",
           players: pm?.[1]
             ? pm[1]
-                .split(',')
+                .split(",")
                 .map((s) => s.trim())
                 .filter(Boolean)
             : [],
         };
       } catch {
-        return { playerCount: '0', maxPlayers: '?', players: [] };
+        return { playerCount: "0", maxPlayers: "?", players: [] };
       }
     }
     // Screen fallback
-    await this.sendCommand('/list');
+    await this.sendCommand("/list");
     await new Promise<void>((r) => setTimeout(r, 200));
-    return { playerCount: '?', maxPlayers: '?', players: [] };
+    return { playerCount: "?", maxPlayers: "?", players: [] };
   }
 
   async getSeed(): Promise<string | null> {
     if (this._seedCache) return this._seedCache;
     if (this.useRcon) {
       try {
-        const r = await this.rcon('seed');
+        const r = await this.rcon("seed");
         const m = r.match(/Seed:\s*\[(-?\d+)\]/);
         if (m?.[1]) {
           this._seedCache = m[1];
@@ -267,11 +288,11 @@ export class ServerInstance {
         /* fall through */
       }
     }
-    await this.sendCommand('/seed');
+    await this.sendCommand("/seed");
     await new Promise<void>((r) => setTimeout(r, 200));
-    const { getLatestLogs } = await import('./utils.js');
+    const { getLatestLogs } = await import("./utils.js");
     const out = await getLatestLogs(10, this.config.serverDir);
-    for (const line of out.split('\n').reverse()) {
+    for (const line of out.split("\n").reverse()) {
       const m = line.match(/Seed:\s*\[(-?\d+)\]/);
       if (m?.[1]) {
         this._seedCache = m[1];
@@ -286,29 +307,29 @@ export class ServerInstance {
   }
 
   async getPlayerCoords(player: string): Promise<PlayerCoords | null> {
-    const r = await this.getPlayerData(player, 'Pos');
+    const r = await this.getPlayerData(player, "Pos");
     if (r) {
       const m = r.match(/\[([\d.+-]+)d,\s*([\d.+-]+)d,\s*([\d.+-]+)d\]/);
       if (m) return { x: Number(m[1]), y: Number(m[2]), z: Number(m[3]) };
     }
     await new Promise<void>((r) => setTimeout(r, 200));
-    const { getLatestLogs } = await import('./utils.js');
+    const { getLatestLogs } = await import("./utils.js");
     const out = await getLatestLogs(10, this.config.serverDir);
     const m = out.match(/\[([\d.+-]+)d,\s*([\d.+-]+)d,\s*([\d.+-]+)d\]/);
     return m ? { x: Number(m[1]), y: Number(m[2]), z: Number(m[3]) } : null;
   }
 
   async getPlayerDimension(player: string): Promise<string> {
-    const r = await this.getPlayerData(player, 'Dimension');
+    const r = await this.getPlayerData(player, "Dimension");
     if (r) {
       const m = r.match(/"minecraft:([^"]+)"/);
       if (m?.[1]) return m[1];
     }
     await new Promise<void>((r) => setTimeout(r, 200));
-    const { getLatestLogs } = await import('./utils.js');
+    const { getLatestLogs } = await import("./utils.js");
     const out = await getLatestLogs(10, this.config.serverDir);
     const m = out.match(/"minecraft:([^"]+)"/);
-    return m?.[1] ?? 'overworld';
+    return m?.[1] ?? "overworld";
   }
 
   async getTps(): Promise<TpsResult | null> {
@@ -317,8 +338,8 @@ export class ServerInstance {
     // ── Try Paper/Spigot/Purpur "tps" command first ──
     if (this._hasTpsCommand !== false) {
       try {
-        const r = await this.rcon('tps');
-        if (!r.toLowerCase().includes('unknown')) {
+        const r = await this.rcon("tps");
+        if (!r.toLowerCase().includes("unknown")) {
           const m = r.match(/([\d.]+)(?:,\s*([\d.]+)(?:,\s*([\d.]+))?)?/);
           if (m) {
             this._hasTpsCommand = true;
@@ -337,8 +358,8 @@ export class ServerInstance {
 
     // ── Fallback: vanilla "tick query" (1.20.3+) ──
     try {
-      const r = await this.rcon('tick query');
-      if (r.toLowerCase().includes('unknown')) return null;
+      const r = await this.rcon("tick query");
+      if (r.toLowerCase().includes("unknown")) return null;
 
       const msptMatch = r.match(/Average time per tick:\s*([\d.]+)\s*ms/i);
       if (!msptMatch) return { tps1m: 0, raw: r };
@@ -376,7 +397,7 @@ const instances = new Map<string, ServerInstance>();
 export function initServers(serversConfig: Record<string, ServerConfig>): void {
   for (const [id, cfg] of Object.entries(serversConfig)) {
     instances.set(id, new ServerInstance(cfg));
-    log.info('server', `Initialized server: ${id} (RCON: ${cfg.useRcon})`);
+    log.info("server", `Initialized server: ${id} (RCON: ${cfg.useRcon})`);
   }
 }
 
@@ -391,26 +412,26 @@ export function getAllInstances(): ServerInstance[] {
 // ── Backward-compat re-exports for commands that don't specify a server ──
 
 export function getServerConfig(): ServerConfig {
-  return getServerInstance('default')?.config ?? ({} as ServerConfig);
+  return getServerInstance("default")?.config ?? ({} as ServerConfig);
 }
 
 export async function sendToServer(cmd: string): Promise<string | null> {
-  return getServerInstance('default')?.sendCommand(cmd) ?? null;
+  return getServerInstance("default")?.sendCommand(cmd) ?? null;
 }
 
 export async function isServerRunning(): Promise<boolean> {
-  return getServerInstance('default')?.isRunning() ?? false;
+  return getServerInstance("default")?.isRunning() ?? false;
 }
 
 export async function getServerSeed(): Promise<string | null> {
-  return getServerInstance('default')?.getSeed() ?? null;
+  return getServerInstance("default")?.getSeed() ?? null;
 }
 
 export async function getServerList(): Promise<ServerListResult> {
   return (
-    getServerInstance('default')?.getList() ?? {
-      playerCount: '0',
-      maxPlayers: '?',
+    getServerInstance("default")?.getList() ?? {
+      playerCount: "0",
+      maxPlayers: "?",
       players: [],
     }
   );
@@ -420,14 +441,16 @@ export async function getPlayerData(
   p: string,
   n: string,
 ): Promise<string | null> {
-  return getServerInstance('default')?.getPlayerData(p, n) ?? null;
+  return getServerInstance("default")?.getPlayerData(p, n) ?? null;
 }
 
 /**
  * Get the default ServerInstance for a guild, or the first available instance.
  * Uses the guild's `defaultServer` config to pick the right one.
  */
-export function getGuildServer(guildId: string | undefined): ServerInstance | null {
+export function getGuildServer(
+  guildId: string | undefined,
+): ServerInstance | null {
   if (!guildId) return null;
   const cfg = loadConfig();
   const guild = cfg.guilds[guildId];
