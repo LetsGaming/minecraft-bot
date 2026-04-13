@@ -82,9 +82,6 @@ export const execute = withErrorHandling(
     });
 
     // Commands overview
-    const enabledCmds = Object.entries(cfg.commands)
-      .filter(([, v]) => v.enabled !== false)
-      .map(([k]) => k);
     const disabledCmds = Object.entries(cfg.commands)
       .filter(([, v]) => v.enabled === false)
       .map(([k]) => k);
