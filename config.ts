@@ -52,11 +52,27 @@ function parseVariablesTxt(filePath: string): VariablesMap {
 function resolveServerConfig(
   raw: RawServerConfig & { id: string },
 ): ServerConfig {
-  const scriptDir = raw.scriptDir ?? raw.serverDir ?? "";
+  // Derive scriptDir from serverDir if not explicitly set
+  // Typical layout: /home/minecraft/minecraft-server/server       (serverDir)
+  //                 /home/minecraft/minecraft-server/scripts/server (scriptDir)
+  let scriptDir = raw.scriptDir ?? "";
+  if (!scriptDir && raw.serverDir) {
+    const instanceName = raw.screenSession ?? raw.id ?? "server";
+    const candidate = path.resolve(
+      raw.serverDir,
+      "..",
+      "scripts",
+      instanceName,
+    );
+    if (fs.existsSync(candidate)) scriptDir = candidate;
+  }
+
+  // variables.txt lives at {scriptDir}/common/variables.txt
   const varsFile = scriptDir
-    ? path.join(scriptDir, "..", "common", "variables.txt")
+    ? path.join(scriptDir, "common", "variables.txt")
     : null;
-  const sv = varsFile ? parseVariablesTxt(varsFile) : {};
+  const sv =
+    varsFile && fs.existsSync(varsFile) ? parseVariablesTxt(varsFile) : {};
 
   return {
     id: raw.id,

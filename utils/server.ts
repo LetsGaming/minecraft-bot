@@ -3,7 +3,7 @@
  * Each ServerInstance maintains its own RCON connection + screen fallback.
  */
 import net from "net";
-import { execCommand } from "../shell/execCommand.js";
+import { execCommand, isSudoPermissionError } from "../shell/execCommand.js";
 import { log } from "./logger.js";
 import { loadConfig } from "../config.js";
 import type {
@@ -189,9 +189,16 @@ export class ServerInstance {
   private async _screenSend(command: string): Promise<void> {
     const c = this.config;
     const formatted = command.startsWith("/") ? command : `/${command}`;
-    await execCommand(
-      `sudo -u ${c.linuxUser} screen -S ${c.screenSession} -X stuff "${formatted}$(printf '\\r')"`,
+    const result = await execCommand(
+      `sudo -n -u ${c.linuxUser} screen -S ${c.screenSession} -X stuff "${formatted}$(printf '\\r')"`,
     );
+    if (result === null) {
+      log.warn(
+        this.id,
+        `Screen send failed — sudo may not be configured for user '${c.linuxUser}'. ` +
+          "See docs/sudoers-setup.md.",
+      );
+    }
   }
 
   // ── Unified interface ──
@@ -239,8 +246,18 @@ export class ServerInstance {
     }
 
     const out = await execCommand(
-      `sudo -u ${this.config.linuxUser} screen -list`,
+      `sudo -n -u ${this.config.linuxUser} screen -list 2>&1`,
     );
+
+    if (out !== null && isSudoPermissionError(out)) {
+      log.warn(
+        this.id,
+        `Cannot check screen session — sudo is not configured for user '${this.config.linuxUser}'. ` +
+          "See docs/sudoers-setup.md.",
+      );
+      return false;
+    }
+
     return out
       ? new RegExp(`\\b\\d+\\.${this.config.screenSession}\\b`).test(out)
       : false;
