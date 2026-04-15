@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { flattenStats, filterStats } from '../utils/statUtils.js';
+import { flattenStats, filterStats } from '../src/utils/statUtils.js';
 
 describe('flattenStats', () => {
   it('handles the new nested format', () => {

@@ -1,5 +1,5 @@
 import path from 'path';
-import { type Client, type TextChannel, type VoiceChannel } from 'discord.js';
+import { type Client, type TextChannel, type VoiceChannel, EmbedBuilder } from 'discord.js';
 import { getAllInstances } from '../../utils/server.js';
 import { loadJson, saveJson, getRootDir } from '../../utils/utils.js';
 import { log } from '../../utils/logger.js';

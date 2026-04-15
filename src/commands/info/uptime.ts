@@ -37,9 +37,9 @@ export const data = new SlashCommandBuilder()
   );
 
 export const execute = withErrorHandling(async (interaction) => {
-  const serverId = interaction.options.getString('server');
 
   // If a specific server is requested, show just that one
+  const serverId = interaction.options.getString('server');
   if (serverId) {
     const server = resolveServer(interaction);
 

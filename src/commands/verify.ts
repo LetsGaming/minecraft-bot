@@ -22,7 +22,6 @@ export const data = new SlashCommandBuilder()
 export const execute = withErrorHandling(
   requireServerAdmin(async (interaction) => {
     const username = interaction.options.getString('username', true);
-    const serverId = interaction.options.getString('server');
     const server = resolveServer(interaction);
     if (!server) throw new Error('Server not found.');
 

@@ -14,7 +14,8 @@
     "pm2:logs": "pm2 logs minecraft-bot",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "setup": "node scripts/setup.mjs"
   },
   "dependencies": {
     "discord.js": "^14.16.0"

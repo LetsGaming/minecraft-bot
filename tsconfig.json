@@ -5,7 +5,7 @@
     "moduleResolution": "Node16",
     "lib": ["ES2022"],
     "outDir": "./dist",
-    "rootDir": "./",
+    "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -21,6 +21,6 @@
     "exactOptionalPropertyTypes": false,
     "noUncheckedIndexedAccess": true
   },
-  "include": ["./**/*.ts"],
-  "exclude": ["node_modules", "dist", "docs", "data"]
+  "include": ["./src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "docs", "data", "tests"]
 }

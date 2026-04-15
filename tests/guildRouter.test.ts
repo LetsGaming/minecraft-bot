@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ── Mock server module ─────────────────────────────────────────────────────
-vi.mock('../utils/server.js', () => ({
+vi.mock('../src/utils/server.js', () => ({
   getServerInstance: vi.fn(),
   getGuildServer: vi.fn(),
 }));
 
-import { getServerInstance, getGuildServer } from '../utils/server.js';
-import { resolveServer, tryResolveServer } from '../utils/guildRouter.js';
+import { getServerInstance, getGuildServer } from '../src/utils/server.js';
+import { resolveServer, tryResolveServer } from '../src/utils/guildRouter.js';
 import type { ChatInputCommandInteraction } from 'discord.js';
 
 // Minimal interaction stub

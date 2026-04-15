@@ -226,7 +226,6 @@ const LABELS: Record<string, { verb: string; emoji: string; past: string }> = {
 export const execute = withErrorHandling(
   requireServerAdmin(async (interaction) => {
     const sub = interaction.options.getSubcommand();
-    const serverId = interaction.options.getString("server");
     const server = resolveServer(interaction);
 
     if (!server) throw new Error("Server not found.");

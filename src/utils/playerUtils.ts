@@ -4,7 +4,6 @@ import {
   loadWhitelist,
 } from './utils.js';
 import {
-  getPlayerData,
   getServerConfig,
   getServerList,
 } from './server.js';

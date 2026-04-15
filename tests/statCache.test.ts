@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { invalidateAllStatsCache } from '../utils/statUtils.js';
+import { invalidateAllStatsCache } from '../src/utils/statUtils.js';
 
 // ── Mock the filesystem calls loadAllStats uses ───────────────────────────
 vi.mock('fs', async (importOriginal) => {
@@ -22,7 +22,7 @@ vi.mock('fs/promises', async (importOriginal) => {
 });
 
 // Mock loadJson so we don't touch disk
-vi.mock('../utils/utils.js', async (importOriginal) => {
+vi.mock('../src/utils/utils.js', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
@@ -31,7 +31,7 @@ vi.mock('../utils/utils.js', async (importOriginal) => {
   };
 });
 
-vi.mock('./server.js', async (importOriginal) => {
+vi.mock('../src/utils/server.js', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
@@ -39,8 +39,8 @@ vi.mock('./server.js', async (importOriginal) => {
   };
 });
 
-import { loadAllStats } from '../utils/statUtils.js';
-import { loadJson } from '../utils/utils.js';
+import { loadAllStats } from '../src/utils/statUtils.js';
+import { loadJson } from '../src/utils/utils.js';
 
 beforeEach(() => {
   vi.clearAllMocks();

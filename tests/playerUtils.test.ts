@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseListOutput } from '../utils/playerUtils.js';
+import { parseListOutput } from '../src/utils/playerUtils.js';
 
 describe('parseListOutput', () => {
   it('parses vanilla "of a max of" format with players', () => {

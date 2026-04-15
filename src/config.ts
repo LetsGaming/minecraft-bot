@@ -1,6 +1,5 @@
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
 import { getRootDir } from "./utils/utils.js";
 import type {
   BotConfig,
