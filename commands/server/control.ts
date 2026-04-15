@@ -6,8 +6,8 @@ import {
   createErrorEmbed,
   createSuccessEmbed,
 } from "../../utils/embedUtils.js";
-import { getServerInstance, getGuildServer } from "../../utils/server.js";
 import type { ServerInstance } from "../../utils/server.js";
+import { resolveServer } from "../../utils/guildRouter.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { suppressAlerts } from "../../logWatcher/watchers/downtimeMonitor.js";
 import { log } from "../../utils/logger.js";
@@ -227,9 +227,7 @@ export const execute = withErrorHandling(
   requireServerAdmin(async (interaction) => {
     const sub = interaction.options.getSubcommand();
     const serverId = interaction.options.getString("server");
-    const server = serverId
-      ? getServerInstance(serverId)
-      : getGuildServer(interaction.guild?.id);
+    const server = resolveServer(interaction);
 
     if (!server) throw new Error("Server not found.");
 

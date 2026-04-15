@@ -13,9 +13,9 @@
 
 import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embedUtils.js";
-import { getServerInstance, getGuildServer } from "../../utils/server.js";
 import { getModList, type ModInfo } from "../../utils/modUtils.js";
 import { withErrorHandling } from "../middleware.js";
+import { resolveServer } from "../../utils/guildRouter.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -75,9 +75,7 @@ export const data = new SlashCommandBuilder()
 
 export const execute = withErrorHandling(async (interaction) => {
   const serverId = interaction.options.getString("server");
-  const server = serverId
-    ? getServerInstance(serverId)
-    : getGuildServer(interaction.guild?.id);
+  const server = resolveServer(interaction);
 
   if (!server) throw new Error("Server not found.");
 

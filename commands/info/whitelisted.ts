@@ -6,6 +6,7 @@ import {
   handlePagination,
 } from '../../utils/embedUtils.js';
 import { loadWhitelist } from '../../utils/utils.js';
+import { log } from '../../utils/logger.js';
 
 export const data = new SlashCommandBuilder()
   .setName('whitelisted')
@@ -58,7 +59,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
       await handlePagination(message, interaction, embeds);
     }
   } catch (err) {
-    console.error(err);
+    log.error('whitelisted', err instanceof Error ? err.message : String(err));
     await interaction.editReply({
       embeds: [createErrorEmbed('Failed to read the Whitelist.')],
     });

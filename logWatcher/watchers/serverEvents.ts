@@ -1,4 +1,5 @@
-import { EmbedBuilder, type Client } from 'discord.js';
+import { type Client } from 'discord.js';
+import { createEmbed } from '../../utils/embedUtils.js';
 import { log } from '../../utils/logger.js';
 import type { LogWatcher } from '../logWatcher.js';
 import type { GuildConfig } from '../../types/index.js';
@@ -67,14 +68,12 @@ async function notifyEvent(
       const channel = await client.channels.fetch(notif.channelId);
       if (!channel || !('send' in channel)) continue;
 
-      const embed = new EmbedBuilder()
-        .setTitle(title)
-        .setDescription(description)
-        .setColor(color)
-        .setTimestamp();
-
-      if (Object.keys(guildConfigs).length > 1)
-        embed.setFooter({ text: serverId });
+      const embed = createEmbed({
+        title,
+        description,
+        color,
+        ...(Object.keys(guildConfigs).length > 1 ? { footer: { text: serverId } } : {}),
+      });
 
       await channel.send({ embeds: [embed] });
     } catch (err) {

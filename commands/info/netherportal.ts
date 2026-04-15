@@ -2,6 +2,7 @@ import { SlashCommandBuilder, type ChatInputCommandInteraction } from 'discord.j
 import { createEmbed, createErrorEmbed } from '../../utils/embedUtils.js';
 import { getLinkedAccount } from '../../utils/linkUtils.js';
 import { getPlayerCoords } from '../../utils/playerUtils.js';
+import { resolveServer } from '../../utils/guildRouter.js';
 
 export const data = new SlashCommandBuilder()
   .setName('netherportal')
@@ -24,7 +25,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
   let playerCoords;
   try {
-    playerCoords = await getPlayerCoords(linkedUsername);
+    const server = resolveServer(interaction);
+    playerCoords = await getPlayerCoords(server, linkedUsername);
   } catch {
     await interaction.editReply({
       embeds: [createErrorEmbed(

@@ -1,8 +1,9 @@
 import path from 'path';
-import { EmbedBuilder, type Client, type TextChannel, type VoiceChannel } from 'discord.js';
+import { type Client, type TextChannel, type VoiceChannel } from 'discord.js';
 import { getAllInstances } from '../../utils/server.js';
 import { loadJson, saveJson, getRootDir } from '../../utils/utils.js';
 import { log } from '../../utils/logger.js';
+import { createEmbed } from '../../utils/embedUtils.js';
 import {
   ensureManagedCategory,
   ensureTextChannel,
@@ -226,11 +227,11 @@ async function buildStatusEmbed(): Promise<StatusBuildResult> {
     return { name: instanceId, value: '⚠️ Error fetching status', inline: isInline };
   });
 
-  const embed = new EmbedBuilder()
-    .setTitle('📊 Server Status')
-    .setColor(0x00bfff)
-    .setTimestamp()
-    .setFooter({ text: 'Updates every 60s' });
+  const embed = createEmbed({
+    title: '📊 Server Status',
+    color: 0x00bfff,
+    footer: { text: 'Updates every 60s' },
+  });
 
   if (fields.length > 0) {
     embed.addFields(fields);

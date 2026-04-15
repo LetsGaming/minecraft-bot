@@ -1,15 +1,14 @@
 import {
   getListOutput,
   stripLogPrefix,
-  getLatestLogs,
   loadWhitelist,
 } from './utils.js';
 import {
-
   getPlayerData,
   getServerConfig,
   getServerList,
 } from './server.js';
+import type { ServerInstance } from './server.js';
 import type {
   PlayerCoords,
   PlayerCount,
@@ -79,41 +78,25 @@ export async function getOnlinePlayers(): Promise<string[]> {
 }
 
 /**
- * Get player coordinates — uses RCON direct response when available
+ * Get player coordinates — delegates to ServerInstance which owns the
+ * single canonical implementation of the coordinate regex.
  */
-export async function getPlayerCoords(playerName: string): Promise<PlayerCoords | null> {
-  const response = await getPlayerData(playerName, 'Pos');
-
-  if (response) {
-    const match = response.match(
-      /\[([\d.+-]+)d,\s*([\d.+-]+)d,\s*([\d.+-]+)d\]/,
-    );
-    if (match)
-      return { x: Number(match[1]), y: Number(match[2]), z: Number(match[3]) };
-  }
-
-  await new Promise<void>((r) => setTimeout(r, 150));
-  const output = await getLatestLogs(10);
-  const match = output.match(/\[([\d.+-]+)d,\s*([\d.+-]+)d,\s*([\d.+-]+)d\]/);
-  if (!match) return null;
-  return { x: Number(match[1]), y: Number(match[2]), z: Number(match[3]) };
+export async function getPlayerCoords(
+  server: ServerInstance,
+  playerName: string,
+): Promise<PlayerCoords | null> {
+  return server.getPlayerCoords(playerName);
 }
 
 /**
- * Get player dimension — uses RCON direct response when available
+ * Get player dimension — delegates to ServerInstance which owns the
+ * single canonical implementation of the dimension regex.
  */
-export async function getPlayerDimension(playerName: string): Promise<string> {
-  const response = await getPlayerData(playerName, 'Dimension');
-
-  if (response) {
-    const match = response.match(/"minecraft:([^"]+)"/);
-    if (match?.[1]) return match[1];
-  }
-
-  await new Promise<void>((r) => setTimeout(r, 150));
-  const output = await getLatestLogs(10);
-  const match = output.match(/"minecraft:([^"]+)"/);
-  return match?.[1] ?? 'overworld';
+export async function getPlayerDimension(
+  server: ServerInstance,
+  playerName: string,
+): Promise<string> {
+  return server.getPlayerDimension(playerName);
 }
 
 // ── Log parsing (screen fallback) ──

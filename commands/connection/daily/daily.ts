@@ -10,6 +10,7 @@ import { getOnlinePlayers } from '../../../utils/playerUtils.js';
 import { isLinked, getLinkedAccount } from '../../../utils/linkUtils.js';
 import { createErrorEmbed } from '../../../utils/embedUtils.js';
 import type { DailyRewardsConfig, DailyRewardItem, UserClaimData } from '../../../types/index.js';
+import { log } from '../../../utils/logger.js';
 
 const baseDir = getRootDir();
 const dataDir = path.resolve(baseDir, 'data');
@@ -168,7 +169,7 @@ function fmt({ item = '???', amount = 1 }: DailyRewardItem): string {
 
 async function give(player: string, { item, amount = 1 }: DailyRewardItem): Promise<void> {
   if (!player || !item) {
-    console.error('Invalid reward params', { player, item });
+    log.error('daily', `Invalid reward params for player=${player} item=${item}`);
     return;
   }
   const name = item.startsWith('minecraft:') ? item : `minecraft:${item}`;

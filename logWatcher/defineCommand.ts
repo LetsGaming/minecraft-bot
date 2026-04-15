@@ -2,6 +2,7 @@ import { registerLogCommand } from './logWatcher.js';
 import type { Client } from 'discord.js';
 import type { ServerInstance } from '../utils/server.js';
 import type { InGameCommandDefinition, InGameCommandResult, InGameCommandInfo } from '../types/index.js';
+import { log } from '../utils/logger.js';
 
 const cooldowns = new Map<string, number>();
 
@@ -63,7 +64,7 @@ export function defineCommand({
       try {
         await handler(username, parsedArgs, client, server);
       } catch (err) {
-        console.error(`Error in !${name} for ${username}:`, err);
+        log.error('commands', `Error in !${name} for ${username}: ${err instanceof Error ? err.message : String(err)}`);
       }
     });
   }

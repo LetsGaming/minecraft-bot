@@ -1,7 +1,7 @@
 import path from 'path';
 import { promises as fsPromises } from 'fs';
 import { getRootDir } from './utils.js';
-import { loadAllStats, flattenStats, LEADERBOARD_STATS } from './statUtils.js';
+import { loadAllStats, flattenStats, LEADERBOARD_STATS, invalidateAllStatsCache } from './statUtils.js';
 import { log } from './logger.js';
 import type { SnapshotData } from '../types/index.js';
 
@@ -38,6 +38,9 @@ export async function takeSnapshot(): Promise<SnapshotData> {
   const timestamp = Date.now();
   const filePath = path.join(SNAPSHOTS_DIR, `${timestamp}.json`);
   await fsPromises.writeFile(filePath, JSON.stringify({ timestamp, players }));
+
+  // Snapshot captures the current state — force fresh load on next leaderboard query
+  invalidateAllStatsCache();
 
   log.info(
     'snapshots',

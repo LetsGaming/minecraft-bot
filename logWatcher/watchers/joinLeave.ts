@@ -1,4 +1,5 @@
-import { EmbedBuilder, type Client } from 'discord.js';
+import { type Client } from 'discord.js';
+import { createEmbed } from '../../utils/embedUtils.js';
 import { log } from '../../utils/logger.js';
 import type { LogWatcher } from '../logWatcher.js';
 import type { GuildConfig } from '../../types/index.js';
@@ -57,13 +58,11 @@ async function notify(
       if (!channel || !('send' in channel)) continue;
 
       const head = `https://mc-heads.net/avatar/${player}/32`;
-      const embed = new EmbedBuilder()
-        .setAuthor({ name: `${player} ${text}`, iconURL: head })
-        .setColor(color)
-        .setTimestamp();
-
-      if (Object.keys(guildConfigs).length > 1)
-        embed.setFooter({ text: serverId });
+      const embed = createEmbed({
+        author: { name: `${player} ${text}`, iconURL: head },
+        color,
+        ...(Object.keys(guildConfigs).length > 1 ? { footer: { text: serverId } } : {}),
+      });
 
       await channel.send({ embeds: [embed] });
     } catch (err) {

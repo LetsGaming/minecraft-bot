@@ -1,6 +1,7 @@
-import { EmbedBuilder, type Client } from 'discord.js';
+import { type Client } from 'discord.js';
 import { log } from '../../utils/logger.js';
 import { recordCheck } from '../../utils/uptimeTracker.js';
+import { createEmbed } from '../../utils/embedUtils.js';
 import type { ServerInstance } from '../../utils/server.js';
 import type { DowntimeState, GuildConfig } from '../../types/index.js';
 
@@ -162,12 +163,12 @@ async function sendAlert(
     const channel = await client.channels.fetch(channelId);
     if (!channel || !('send' in channel)) return;
 
-    const embed = new EmbedBuilder()
-      .setTitle(title)
-      .setDescription(description)
-      .setColor(color)
-      .setTimestamp()
-      .setFooter({ text: serverId });
+    const embed = createEmbed({
+      title,
+      description,
+      color,
+      footer: { text: serverId },
+    });
 
     await channel.send({ embeds: [embed] });
   } catch (err) {

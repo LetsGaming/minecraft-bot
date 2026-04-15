@@ -7,6 +7,7 @@ import {
 } from '../../utils/statUtils.js';
 import { findPlayer } from '../../utils/playerUtils.js';
 import { createEmbed, createErrorEmbed } from '../../utils/embedUtils.js';
+import { log } from '../../utils/logger.js';
 
 export const data = new SlashCommandBuilder()
   .setName('playtime')
@@ -69,7 +70,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
     await interaction.editReply({ embeds: [embed] });
   } catch (err) {
-    console.error(err);
+    log.error('playtime', err instanceof Error ? err.message : String(err));
     await interaction.editReply({
       embeds: [createErrorEmbed('An unexpected error occurred.', {
         footer: { text: 'Playtime Error' },

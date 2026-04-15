@@ -6,6 +6,7 @@ import {
   saveLinkedAccounts,
 } from '../../utils/linkUtils.js';
 import type { LinkCodesMap, LinkedAccountsMap } from '../../types/index.js';
+import { log } from '../../utils/logger.js';
 
 let codes: LinkCodesMap = {};
 let linked: LinkedAccountsMap = {};
@@ -27,7 +28,7 @@ async function saveData(): Promise<void> {
     await saveLinkCodes(codes);
     await saveLinkedAccounts(linked);
   } catch (err) {
-    console.error('Link save error:', err);
+    log.error('link', `Link save error: ${err instanceof Error ? err.message : String(err)}`);
   } finally {
     saving = false;
     if (pendingSave) {

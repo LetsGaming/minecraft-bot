@@ -17,6 +17,7 @@ import {
 import { findPlayer } from '../../utils/playerUtils.js';
 import type { EmbedBuilder } from 'discord.js';
 import type { FlattenedStat } from '../../types/index.js';
+import { log } from '../../utils/logger.js';
 
 export const data = new SlashCommandBuilder()
   .setName('compare')
@@ -107,7 +108,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
       await handlePagination(message, interaction, embeds);
     }
   } catch (error) {
-    console.error('Error comparing players:', error);
+    log.error('compare', `Error comparing players: ${error instanceof Error ? error.message : String(error)}`);
     await interaction.editReply({
       embeds: [
         createErrorEmbed('❌ An error occurred while comparing players.'),

@@ -5,6 +5,7 @@ import { type EmbedBuilder } from 'discord.js';
 import { getServerConfig } from './server.js';
 import { getLevelName, loadJson, loadWhitelist, deleteStats } from './utils.js';
 import { createEmbed } from './embedUtils.js';
+import { log } from './logger.js';
 import type {
   FlattenedStat,
   ScoredStat,
@@ -180,102 +181,6 @@ export function formatDistance(value: number): string {
   return `${kilometers}km ${meters}m`;
 }
 
-/**
- * Builds an array of embeds for displaying player stats.
- */
-export function buildStatsEmbeds(stats: FlattenedStat[], username: string): EmbedBuilder[] {
-  const embeds: EmbedBuilder[] = [];
-  let currentEmbed = createEmbed({ title: 'PLACEHOLDER' });
-  let fieldCount = 0;
-
-  const grouped = groupByCategory(stats);
-
-  for (const [category, entries] of Object.entries(grouped)) {
-    const lines = entries.map((s) => {
-      const key = s.key.toLowerCase();
-      const value = s.value;
-
-      const isTime = /(_time|Time)$/.test(key);
-      const isDistance = /one_cm$/.test(key);
-
-      let displayValue: string;
-      if (isTime) {
-        displayValue = formatPlaytime(value);
-      } else if (isDistance) {
-        displayValue = formatDistance(value);
-      } else {
-        displayValue = value.toLocaleString();
-      }
-
-      return `• ${humanizeKey(s.key)}: ${displayValue}`;
-    });
-
-    let index = 0;
-    let chunkNumber = 1;
-
-    while (index < lines.length) {
-      const chunk: string[] = [];
-      let chunkLength = 0;
-
-      while (
-        index < lines.length &&
-        chunkLength + lines[index]!.length + 1 < 1024
-      ) {
-        chunk.push(lines[index]!);
-        chunkLength += lines[index]!.length + 1;
-        index++;
-      }
-
-      const name =
-        chunkNumber === 1
-          ? humanizeKey(category)
-          : `${humanizeKey(category)} (${chunkNumber})`;
-      const value = chunk.join('\n');
-
-      if (fieldCount >= 2) {
-        embeds.push(currentEmbed);
-        currentEmbed = createEmbed({ title: 'PLACEHOLDER' });
-        fieldCount = 0;
-      }
-
-      currentEmbed.addFields({
-        name,
-        value,
-        inline: chunk.length <= 3 && chunkLength <= 100,
-      });
-
-      fieldCount++;
-      chunkNumber++;
-    }
-  }
-
-  if (fieldCount > 0) {
-    embeds.push(currentEmbed);
-  }
-
-  const totalPages = embeds.length;
-  for (let i = 0; i < totalPages; i++) {
-    const embed = embeds[i]!;
-    embed.data.title = `Stats for ${username} (Page ${i + 1}/${totalPages})`;
-    embed.setFooter({
-      text: `Total stats: ${stats.length} | Page ${i + 1}/${totalPages}`,
-    });
-  }
-
-  return embeds;
-}
-
-function groupByCategory(stats: FlattenedStat[]): Record<string, FlattenedStat[]> {
-  const grouped: Record<string, FlattenedStat[]> = {};
-  for (const stat of stats) {
-    if (!grouped[stat.category]) {
-      grouped[stat.category] = [];
-    }
-    grouped[stat.category]!.push(stat);
-  }
-  return grouped;
-}
-
 async function getStatsPath(uuid?: string): Promise<string> {
   const levelName = (await getLevelName()) || 'world';
   if (uuid) {
@@ -297,7 +202,7 @@ export async function loadStats(uuid: string): Promise<MinecraftStatsFile | null
 
   const statsFile = (await loadJson(statsPath)) as MinecraftStatsFile | null;
   if (!statsFile) {
-    console.warn(`Stats file not found for UUID: ${uuid}`);
+    log.warn('stats', `Stats file not found for UUID: ${uuid}`);
     return null;
   }
 
@@ -306,11 +211,26 @@ export async function loadStats(uuid: string): Promise<MinecraftStatsFile | null
 
 /**
  * Load all stats files from the server directory.
+ * Results are cached for 30 seconds to avoid redundant directory scans
+ * on burst requests (e.g. multiple /leaderboard calls close together).
+ * Call invalidateAllStatsCache() after writes that affect aggregate data.
  */
+
+const ALL_STATS_TTL_MS = 30_000;
+let allStatsCache: { data: Record<string, MinecraftStatsFile>; at: number } | null = null;
+
+export function invalidateAllStatsCache(): void {
+  allStatsCache = null;
+}
+
 export async function loadAllStats(): Promise<Record<string, MinecraftStatsFile>> {
+  if (allStatsCache && Date.now() - allStatsCache.at < ALL_STATS_TTL_MS) {
+    return allStatsCache.data;
+  }
+
   const statsDir = await getStatsPath();
   if (!fs.existsSync(statsDir)) {
-    console.error(`Stats directory does not exist: ${statsDir}`);
+    log.error('stats', `Stats directory does not exist: ${statsDir}`);
     return {};
   }
 
@@ -326,7 +246,9 @@ export async function loadAllStats(): Promise<Record<string, MinecraftStatsFile>
     }),
   );
 
-  return Object.fromEntries(results);
+  const data = Object.fromEntries(results);
+  allStatsCache = { data, at: Date.now() };
+  return data;
 }
 
 /**

@@ -3,9 +3,10 @@ import {
   loadStats,
   flattenStats,
   filterStats,
-  buildStatsEmbeds,
 } from '../../utils/statUtils.js';
+import { buildStatsEmbeds } from '../../utils/statEmbeds.js';
 import { findPlayer } from '../../utils/playerUtils.js';
+import { log } from '../../utils/logger.js';
 import {
   createPaginationButtons,
   handlePagination,
@@ -83,7 +84,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
       await handlePagination(message, interaction, embeds);
     }
   } catch (err) {
-    console.error(err);
+    log.error('stats', err instanceof Error ? err.message : String(err));
     await interaction.editReply({
       embeds: [createErrorEmbed('Failed to retrieve stats.')],
     });

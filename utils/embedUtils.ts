@@ -10,6 +10,7 @@ import {
   type Message,
 } from 'discord.js';
 import type { EmbedOptions, EmbedWithThumbnailOptions, EmbedStyleOptions } from '../types/index.js';
+import { log } from './logger.js';
 
 /**
  * Creates a customizable embed.
@@ -20,11 +21,14 @@ export function createEmbed({
   color = 0x00bfff,
   footer,
   timestamp = true,
+  author,
 }: EmbedOptions): EmbedBuilder {
-  const embed = new EmbedBuilder().setTitle(title).setColor(color);
+  const embed = new EmbedBuilder().setColor(color);
 
+  if (title) embed.setTitle(title);
   if (description) embed.setDescription(description);
   if (footer?.text) embed.setFooter(footer);
+  if (author) embed.setAuthor(author);
   if (timestamp === true) {
     embed.setTimestamp();
   } else if (
@@ -191,7 +195,7 @@ export async function handlePagination(
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.warn('Failed to update page during pagination:', msg);
+      log.warn('pagination', `Failed to update page: ${msg}`);
     }
   });
 
@@ -201,7 +205,7 @@ export async function handlePagination(
       await message.edit({ components: [] });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.warn('Failed to remove buttons after pagination timeout:', msg);
+      log.warn('pagination', `Failed to remove buttons after timeout: ${msg}`);
     }
   });
 }

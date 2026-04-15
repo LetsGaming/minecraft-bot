@@ -341,11 +341,12 @@ export interface PendingRconCommand {
 // ── Embed utilities ──
 
 export interface EmbedOptions {
-  title: string;
+  title?: string;
   description?: string;
   color?: number;
   footer?: { text: string; iconURL?: string };
   timestamp?: Date | string | number | boolean;
+  author?: { name: string; iconURL?: string };
 }
 
 export interface EmbedWithThumbnailOptions extends EmbedOptions {

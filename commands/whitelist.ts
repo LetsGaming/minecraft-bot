@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { getServerInstance, getGuildServer } from '../utils/server.js';
+import { resolveServer } from '../utils/guildRouter.js';
 
 import { createSuccessEmbed } from '../utils/embedUtils.js';
 import { withErrorHandling, requireServerAdmin } from './middleware.js';
@@ -23,9 +23,7 @@ export const execute = withErrorHandling(
   requireServerAdmin(async (interaction) => {
     const username = interaction.options.getString('username', true);
     const serverId = interaction.options.getString('server');
-    const server = serverId
-      ? getServerInstance(serverId)
-      : getGuildServer(interaction.guild?.id);
+    const server = resolveServer(interaction);
     if (!server) throw new Error('Server not found.');
 
     const res = await fetch(

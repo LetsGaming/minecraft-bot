@@ -84,6 +84,20 @@ Full documentation lives in [`docs/index.md`](docs/index.md).
 
 **For admins** — full config reference, command list, automated features, and permission management.
 
+## Development
+
+### Running Tests
+
+```bash
+npm test              # Run all tests once
+npm run test:watch    # Watch mode
+npm run test:coverage # Coverage report
+```
+
+### Code Standards
+
+See [docs/decisions.md](docs/decisions.md) for the architectural decisions and Golden Rules enforced in code review.
+
 ## Data Files
 
 The bot stores runtime data in the `data/` directory:

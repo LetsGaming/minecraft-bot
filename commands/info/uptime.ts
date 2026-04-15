@@ -1,6 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { createEmbed } from '../../utils/embedUtils.js';
-import { getServerInstance, getAllInstances } from '../../utils/server.js';
+import { getAllInstances } from '../../utils/server.js';
+import { resolveServer } from '../../utils/guildRouter.js';
 import { getUptimeStats } from '../../utils/uptimeTracker.js';
 import { withErrorHandling } from '../middleware.js';
 
@@ -40,8 +41,7 @@ export const execute = withErrorHandling(async (interaction) => {
 
   // If a specific server is requested, show just that one
   if (serverId) {
-    const server = getServerInstance(serverId);
-    if (!server) throw new Error('Server not found.');
+    const server = resolveServer(interaction);
 
     const stats = await getUptimeStats(server.id);
     const embed = buildSingleEmbed(server.id, stats);

@@ -21,6 +21,8 @@ export async function deleteStats(uuid: string): Promise<boolean> {
   );
   try {
     await fsPromises.rm(statsPath);
+    const { invalidateAllStatsCache } = await import('./statUtils.js');
+    invalidateAllStatsCache();
     return true;
   } catch {
     return false;
@@ -122,6 +124,10 @@ export async function ensureDir(filePath: string): Promise<string> {
 
 const jsonCache = new Map<string, JsonCacheEntry>();
 
+// Per-file write locks: serializes concurrent writes to the same file so
+// last-write-wins data loss cannot occur (e.g. two simultaneous /link calls).
+const writeLocks = new Map<string, Promise<void>>();
+
 export async function loadJson(file: string): Promise<unknown> {
   try {
     const { mtimeMs } = await fsPromises.stat(file);
@@ -137,8 +143,15 @@ export async function loadJson(file: string): Promise<unknown> {
 }
 
 export async function saveJson(file: string, data: unknown): Promise<void> {
-  await ensureDir(file);
-  await fsPromises.writeFile(file, JSON.stringify(data, null, 2));
-  const { mtimeMs } = await fsPromises.stat(file);
-  jsonCache.set(file, { mtimeMs, data });
+  const prev = writeLocks.get(file) ?? Promise.resolve();
+  const next = prev.then(async () => {
+    await ensureDir(file);
+    await fsPromises.writeFile(file, JSON.stringify(data, null, 2));
+    const { mtimeMs } = await fsPromises.stat(file);
+    jsonCache.set(file, { mtimeMs, data });
+  });
+  // Store a version that swallows errors so a failed write doesn't poison
+  // the lock chain for all subsequent writes to the same file.
+  writeLocks.set(file, next.catch(() => {}));
+  return next;
 }

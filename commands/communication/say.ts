@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { getServerInstance, getGuildServer } from '../../utils/server.js';
+import { resolveServer } from '../../utils/guildRouter.js';
 
 import { withErrorHandling } from '../middleware.js';
 
@@ -17,9 +17,7 @@ export const execute = withErrorHandling(
   async (interaction) => {
     const message = interaction.options.getString('message', true);
     const serverId = interaction.options.getString('server');
-    const server = serverId
-      ? getServerInstance(serverId)
-      : getGuildServer(interaction.guild?.id);
+    const server = resolveServer(interaction);
     if (!server) throw new Error('Server not found.');
 
     const mcMessage = `[${interaction.user.displayName}] ${message}`;

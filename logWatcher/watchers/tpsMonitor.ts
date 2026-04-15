@@ -1,6 +1,7 @@
-import { EmbedBuilder, type Client } from 'discord.js';
+import { type Client } from 'discord.js';
 import { log } from '../../utils/logger.js';
 import { loadConfig } from '../../config.js';
+import { createEmbed } from '../../utils/embedUtils.js';
 import type { ServerInstance } from '../../utils/server.js';
 import type { GuildConfig } from '../../types/index.js';
 
@@ -40,12 +41,12 @@ export function startTpsMonitor(
             const channel = await client.channels.fetch(tpsAlert.channelId);
             if (!channel || !('send' in channel)) continue;
 
-            const embed = new EmbedBuilder()
-              .setTitle('⚠️ Low TPS Warning')
-              .setDescription(`Server TPS has dropped below ${threshold}`)
-              .setColor(tps.tps1m < 10 ? 0xff0000 : 0xffaa00)
-              .setTimestamp()
-              .setFooter({ text: serverInstance.id });
+            const embed = createEmbed({
+              title: '⚠️ Low TPS Warning',
+              description: `Server TPS has dropped below ${threshold}`,
+              color: tps.tps1m < 10 ? 0xff0000 : 0xffaa00,
+              footer: { text: serverInstance.id },
+            });
 
             if ('tps5m' in tps && tps.tps5m !== undefined) {
               const paperTps = tps as import('../../types/index.js').PaperTpsResult;

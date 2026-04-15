@@ -5,6 +5,7 @@ import {
   handlePagination,
 } from '../../utils/embedUtils.js';
 import type { BotCommand } from '../../types/index.js';
+import { log } from '../../utils/logger.js';
 
 export const data = new SlashCommandBuilder()
   .setName('help')
@@ -68,7 +69,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     message = await interaction.fetchReply();
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.warn('Could not fetch interaction reply:', msg);
+    log.warn('help', `Could not fetch interaction reply: ${msg}`);
     return;
   }
 

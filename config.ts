@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { getRootDir } from "./utils/utils.js";
 import type {
   BotConfig,
   GuildConfig,
@@ -10,24 +11,7 @@ import type {
   VariablesMap,
 } from "./types/index.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-/**
- * config.json lives in the project root, but at runtime __dirname
- * points to dist/ (the compiled output). Walk up to the directory
- * containing package.json so the path is correct in both dev and prod.
- */
-function findProjectRoot(): string {
-  let dir = __dirname;
-  while (true) {
-    if (fs.existsSync(path.join(dir, "package.json"))) return dir;
-    const parent = path.dirname(dir);
-    if (parent === dir) return __dirname;
-    dir = parent;
-  }
-}
-
-const PROJECT_ROOT = findProjectRoot();
+const PROJECT_ROOT = getRootDir();
 const CONFIG_PATH = path.resolve(PROJECT_ROOT, "config.json");
 
 let _config: BotConfig | null = null;
