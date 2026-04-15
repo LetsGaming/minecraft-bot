@@ -17,7 +17,10 @@ vi.mock('fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('fs/promises')>();
   return {
     ...actual,
-    readdir: vi.fn().mockResolvedValue(['abc123.json', 'def456.json']),
+    default: {
+      ...actual,
+      readdir: vi.fn().mockResolvedValue(['abc123.json', 'def456.json']),
+    },
   };
 });
 

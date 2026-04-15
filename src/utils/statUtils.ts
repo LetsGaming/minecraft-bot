@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { promises as fsPromises } from 'fs';
+import fsPromises from 'fs/promises';
 import path from 'path';
 import { type EmbedBuilder } from 'discord.js';
 import { getServerConfig } from './server.js';
@@ -313,9 +313,7 @@ export function filterStats(statsArray: FlattenedStat[], filterStat: string | nu
 
   // Hardcoded disambiguation
   if (filter === 'killed')
-    return statsArray.filter(
-      (s) => s.category.includes('kill') || s.category === 'minecraft:killed',
-    );
+    return statsArray.filter((s) => s.category === 'minecraft:killed');
   if (filter === 'killed_by')
     return statsArray.filter(
       (s) =>
