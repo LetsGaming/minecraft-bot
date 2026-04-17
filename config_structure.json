@@ -7,6 +7,7 @@
   "servers": {
     "survival": {
       "serverDir": "/home/minecraft/minecraft-server/survival",
+      "scriptDir": "/home/minecraft/minecraft-server/scripts/survival",
       "linuxUser": "minecraft",
       "screenSession": "survival",
       "useRcon": true,
@@ -16,6 +17,7 @@
     },
     "creative": {
       "serverDir": "/home/minecraft/minecraft-server/creative",
+      "scriptDir": "/home/minecraft/minecraft-server/scripts/creative",
       "linuxUser": "minecraft",
       "screenSession": "creative",
       "useRcon": true,
@@ -46,11 +48,14 @@
         "server": "survival"
       },
       "statusEmbed": {
-        "channelId": "CHANNEL_ID"
+        "enabled": true
       },
       "downtimeAlerts": {
         "channelId": "CHANNEL_ID",
         "server": "survival"
+      },
+      "channelPurge": {
+        "channelId": "CHANNEL_ID"
       }
     }
   },

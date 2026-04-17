@@ -1,4 +1,5 @@
 node_modules/
+package-lock.json
 config.json
 data/linkedAccounts.json
 data/linkCodes.json
@@ -8,3 +9,4 @@ data/leaderboardSchedule.json
 data/statusMessages.json
 data/snapshots/
 logs/
+dist/
