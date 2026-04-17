@@ -1,5 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { LEADERBOARD_STATS, buildLeaderboard } from '../../utils/statUtils.js';
+import { buildLeaderboardEmbed } from '../../utils/statEmbeds.js';
 import { withErrorHandling } from '../middleware.js';
 
 const choices = Object.entries(LEADERBOARD_STATS).map(([key, def]) => ({
@@ -19,6 +20,7 @@ export const data = new SlashCommandBuilder()
 
 export const execute = withErrorHandling(async (interaction) => {
   const stat = interaction.options.getString('stat') ?? 'playtime';
-  const { embed } = await buildLeaderboard(stat);
+  const leaderboardData = await buildLeaderboard(stat);
+  const embed = buildLeaderboardEmbed(leaderboardData);
   await interaction.editReply({ embeds: [embed] });
 });

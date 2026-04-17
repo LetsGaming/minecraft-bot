@@ -2,7 +2,7 @@
  * Multi-server communication layer.
  * Each ServerInstance maintains its own RconClient + screen fallback.
  */
-import { execCommand, isSudoPermissionError } from "../shell/execCommand.js";
+import { execCommand, execSafe, isSudoPermissionError } from "../shell/execCommand.js";
 import { log } from "./logger.js";
 import { loadConfig } from "../config.js";
 import { RconClient } from "../rcon/RconClient.js";
@@ -40,9 +40,17 @@ export class ServerInstance {
   private async _screenSend(command: string): Promise<void> {
     const c = this.config;
     const formatted = command.startsWith("/") ? command : `/${command}`;
-    const result = await execCommand(
-      `sudo -n -u ${c.linuxUser} screen -S ${c.screenSession} -X stuff "${formatted}$(printf '\\r')"`,
-    );
+    const result = await execSafe("sudo", [
+      "-n",
+      "-u",
+      c.linuxUser,
+      "screen",
+      "-S",
+      c.screenSession,
+      "-X",
+      "stuff",
+      `${formatted}\r`,
+    ]);
     if (result === null) {
       log.warn(
         this.id,

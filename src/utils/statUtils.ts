@@ -1,10 +1,8 @@
 import fs from 'fs';
 import fsPromises from 'fs/promises';
 import path from 'path';
-import { type EmbedBuilder } from 'discord.js';
 import { getServerConfig } from './server.js';
 import { getLevelName, loadJson, loadWhitelist, deleteStats } from './utils.js';
-import { createEmbed } from './embedUtils.js';
 import { log } from './logger.js';
 import type {
   FlattenedStat,
@@ -69,13 +67,22 @@ interface BuildLeaderboardOptions {
   periodLabel?: string | null;
 }
 
+export interface LeaderboardData {
+  entries: LeaderboardEntry[];
+  title: string;
+  description: string;
+  footerText: string;
+}
+
 /**
  * Shared leaderboard builder used by /leaderboard, /top, and the scheduled poster.
+ * Returns plain data — callers should use buildLeaderboardEmbed() from statEmbeds.ts
+ * to convert it to a Discord embed.
  */
 export async function buildLeaderboard(
   statKey: string,
   { limit = 10, baseline = null, periodLabel = null }: BuildLeaderboardOptions = {},
-): Promise<{ embed: EmbedBuilder; entries: LeaderboardEntry[] }> {
+): Promise<LeaderboardData> {
   const def = LEADERBOARD_STATS[statKey];
   if (!def) throw new Error(`Unknown stat: ${statKey}`);
 
@@ -123,13 +130,13 @@ export async function buildLeaderboard(
   });
 
   const titlePeriod = periodLabel ? ` (${periodLabel})` : '';
-  const embed = createEmbed({
+
+  return {
+    entries,
     title: `🏆 Leaderboard — ${def.label}${titlePeriod}`,
     description: lines.join('\n') || 'No data available.',
-    footer: { text: `${entries.length} players tracked` },
-  });
-
-  return { embed, entries };
+    footerText: `${entries.length} players tracked`,
+  };
 }
 
 export function humanizeKey(rawKey: string): string {

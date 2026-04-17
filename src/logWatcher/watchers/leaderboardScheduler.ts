@@ -2,6 +2,7 @@ import path from 'path';
 import type { Client } from 'discord.js';
 import { loadConfig } from '../../config.js';
 import { buildLeaderboard } from '../../utils/statUtils.js';
+import { buildLeaderboardEmbed } from '../../utils/statEmbeds.js';
 import {
   takeSnapshot,
   getSnapshotClosestTo,
@@ -152,7 +153,8 @@ async function checkAndPost(
         footer = `${periodLabel} leaderboard · no snapshot available, showing all-time`;
       }
 
-      const { embed } = await buildLeaderboard('playtime', opts);
+      const leaderboardData = await buildLeaderboard('playtime', opts);
+      const embed = buildLeaderboardEmbed(leaderboardData);
       embed.setFooter({ text: footer });
 
       await channel.send({ embeds: [embed] });

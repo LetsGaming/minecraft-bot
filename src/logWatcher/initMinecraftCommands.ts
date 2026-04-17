@@ -19,6 +19,7 @@ import { startLeaderboardScheduler } from './watchers/leaderboardScheduler.js';
 import { startStatusEmbed } from './watchers/statusEmbed.js';
 import { startDowntimeMonitor } from './watchers/downtimeMonitor.js';
 import { startChannelPurge } from './watchers/channelPurge.js';
+import { startUptimeFlushScheduler } from '../utils/uptimeTracker.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -105,7 +106,10 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
   // ── 6. Downtime monitor ──
   startDowntimeMonitor(instances, client, guildConfigs);
 
-  // ── 7. Daily channel purge ──
+  // ── 7. Uptime flush scheduler ──
+  startUptimeFlushScheduler();
+
+  // ── 8. Daily channel purge ──
   startChannelPurge(client, guildConfigs);
 
   log.info(

@@ -145,10 +145,18 @@ export async function getUptimeStats(
   };
 }
 
-// Periodic flush — every 5 minutes
-setInterval(() => {
-  flushUptimeHistory().catch((err) => {
-    const msg = err instanceof Error ? err.message : String(err);
-    log.error('uptime', `Failed to flush history: ${msg}`);
-  });
-}, 5 * 60 * 1000);
+/**
+ * Start the periodic flush scheduler (every 5 minutes).
+ * Call this explicitly at startup rather than relying on module-level side effects.
+ * The timer is unref'd so it won't prevent a clean process exit.
+ */
+export function startUptimeFlushScheduler(): ReturnType<typeof setInterval> {
+  const timer = setInterval(() => {
+    flushUptimeHistory().catch((err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.error('uptime', `Failed to flush history: ${msg}`);
+    });
+  }, 5 * 60 * 1000);
+  timer.unref();
+  return timer;
+}

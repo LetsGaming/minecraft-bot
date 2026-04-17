@@ -4,8 +4,20 @@ import {
   humanizeKey,
   formatPlaytime,
   formatDistance,
+  type LeaderboardData,
 } from './statUtils.js';
 import type { FlattenedStat } from '../types/index.js';
+
+/**
+ * Converts plain leaderboard data (from buildLeaderboard) into a Discord EmbedBuilder.
+ */
+export function buildLeaderboardEmbed({ title, description, footerText }: LeaderboardData): EmbedBuilder {
+  return createEmbed({
+    title,
+    description,
+    footer: { text: footerText },
+  });
+}
 
 /**
  * Builds an array of paginated embeds for displaying player stats.
@@ -84,7 +96,7 @@ export function buildStatsEmbeds(stats: FlattenedStat[], username: string): Embe
   const totalPages = embeds.length;
   for (let i = 0; i < totalPages; i++) {
     const embed = embeds[i]!;
-    embed.data.title = `Stats for ${username} (Page ${i + 1}/${totalPages})`;
+    embed.setTitle(`Stats for ${username} (Page ${i + 1}/${totalPages})`);
     embed.setFooter({
       text: `Total stats: ${stats.length} | Page ${i + 1}/${totalPages}`,
     });
