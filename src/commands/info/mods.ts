@@ -78,16 +78,7 @@ export const execute = withErrorHandling(async (interaction) => {
 
   if (!server) throw new Error("Server not found.");
 
-  const cfg = server.config;
-
-  if (!cfg.scriptDir) {
-    throw new Error(
-      "No `scriptDir` configured for this server.\n" +
-        "The mods list is read from `{scriptDir}/common/downloaded_versions.json`.",
-    );
-  }
-
-  const modList = await getModList(cfg.scriptDir);
+  const modList = await getModList(server);
 
   const total =
     modList.serverOnly.length +

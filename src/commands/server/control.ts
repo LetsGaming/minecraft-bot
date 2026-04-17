@@ -1,20 +1,14 @@
 import { SlashCommandBuilder } from "discord.js";
-import { spawn } from "child_process";
-import { existsSync } from "fs";
 import {
   createEmbed,
   createErrorEmbed,
   createSuccessEmbed,
 } from "../../utils/embedUtils.js";
-import type { ServerInstance } from "../../utils/server.js";
 import { resolveServer } from "../../utils/guildRouter.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { suppressAlerts } from "../../logWatcher/watchers/downtimeMonitor.js";
 import { log } from "../../utils/logger.js";
-import {
-  isSudoPermissionError,
-  sudoHelpMessage,
-} from "../../shell/execCommand.js";
+import * as serverAccess from "../../utils/serverAccess.js";
 
 /**
  * Script paths relative to the scripts directory.
@@ -26,131 +20,6 @@ import {
  *     backup/backup.sh
  *     misc/status.sh
  */
-const SCRIPT_MAP: Record<string, string> = {
-  start: "start.sh",
-  stop: "shutdown.sh",
-  restart: "smart_restart.sh",
-  backup: "backup/backup.sh",
-  status: "misc/status.sh",
-};
-
-/** Per-subcommand timeouts in ms */
-const TIMEOUTS: Record<string, number> = {
-  start: 30_000, // systemctl start
-  stop: 60_000, // 25s wait + 5s countdown + save + systemctl stop
-  restart: 60_000, // 25s wait + 5s countdown + save + systemctl restart
-  backup: 300_000, // depends on world size
-  status: 15_000, // read-only, fast
-};
-
-interface ScriptResult {
-  output: string;
-  stderr: string;
-  exitCode: number | null;
-}
-
-/**
- * Runs a server script as the configured linux user via `sudo -u`.
- * The linux user is expected to have:
- *   - Ownership of the server files
- *   - Passwordless sudo for systemctl (via sudoers)
- *   - A running screen session for the server
- */
-function runServerScript(
-  server: ServerInstance,
-  scriptRelPath: string,
-  args: string[] = [],
-  timeoutMs = 120_000,
-): Promise<ScriptResult> {
-  return new Promise((resolve, reject) => {
-    const cfg = server.config;
-    const scriptDir = cfg.scriptDir;
-
-    if (!scriptDir) {
-      return reject(
-        new Error(
-          "No scriptDir configured for this server.\n" +
-            "Set `scriptDir` in config.json or ensure the standard layout exists:\n" +
-            "`{serverDir}/../scripts/{instanceName}/`",
-        ),
-      );
-    }
-
-    const scriptPath = `${scriptDir}/${scriptRelPath}`;
-
-    if (!existsSync(scriptPath)) {
-      return reject(new Error(`Script not found: ${scriptPath}`));
-    }
-
-    const linuxUser = cfg.linuxUser;
-
-    const child = spawn(
-      "sudo",
-      ["-n", "-u", linuxUser, "bash", scriptPath, ...args],
-      {
-        cwd: scriptDir,
-        env: { ...process.env, HOME: `/home/${linuxUser}` },
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    );
-
-    let stdout = "";
-    let stderr = "";
-    let killed = false;
-
-    const timer = setTimeout(() => {
-      killed = true;
-      child.kill("SIGTERM");
-      reject(
-        new Error(
-          `Script timed out after ${timeoutMs / 1000}s\n\nOutput:\n${stdout.slice(-500)}`,
-        ),
-      );
-    }, timeoutMs);
-
-    child.stdout.on("data", (data: Buffer) => {
-      stdout += data.toString();
-    });
-    child.stderr.on("data", (data: Buffer) => {
-      stderr += data.toString();
-    });
-
-    child.on("close", (code) => {
-      if (killed) return;
-      clearTimeout(timer);
-
-      const combined = stdout + "\n" + stderr;
-
-      // ── Layer 2: script ran but systemctl sudo failed ──
-      // The systemctl_cmd wrapper in the shell scripts emits [SUDO ERROR].
-      if (/\[SUDO ERROR\]/i.test(combined)) {
-        reject(new Error(sudoHelpMessage("systemctl", linuxUser)));
-        return;
-      }
-
-      // ── Layer 1: the outer sudo -u failed (script never started) ──
-      if (isSudoPermissionError(stderr)) {
-        reject(new Error(sudoHelpMessage("user-switch", linuxUser)));
-        return;
-      }
-
-      // Filter remaining sudo noise (harmless sudo info lines)
-      stderr = stderr
-        .split("\n")
-        .filter((l) => !l.includes("[sudo]") && !l.includes("password for"))
-        .join("\n")
-        .trim();
-
-      resolve({ output: stdout.trim(), stderr, exitCode: code });
-    });
-
-    child.on("error", (err) => {
-      clearTimeout(timer);
-      reject(new Error(`Failed to start script: ${err.message}`));
-    });
-  });
-}
-
 export const data = new SlashCommandBuilder()
   .setName("server")
   .setDescription("Server control commands")
@@ -230,9 +99,6 @@ export const execute = withErrorHandling(
 
     if (!server) throw new Error("Server not found.");
 
-    const scriptName = SCRIPT_MAP[sub];
-    if (!scriptName) throw new Error(`Unknown subcommand: ${sub}`);
-
     log.info("control", `${interaction.user.tag} → /${sub} on ${server.id}`);
 
     // Suppress downtime alerts for intentional stop/restart
@@ -242,12 +108,7 @@ export const execute = withErrorHandling(
 
     // Status is read-only and fast — no progress embed needed
     if (sub === "status") {
-      const result = await runServerScript(
-        server,
-        scriptName,
-        [],
-        TIMEOUTS[sub]!,
-      );
+      const result = await serverAccess.runScript(server.config, sub);
       const embed = createEmbed({
         title: `Server Status — ${server.id}`,
         description: `\`\`\`\n${result.output || "No output"}\n\`\`\``,
@@ -276,12 +137,7 @@ export const execute = withErrorHandling(
       args.push("--archive");
     }
 
-    const result = await runServerScript(
-      server,
-      scriptName,
-      args,
-      TIMEOUTS[sub]!,
-    );
+    const result = await serverAccess.runScript(server.config, sub, args);
 
     if (result.exitCode !== 0) {
       const errMsg =

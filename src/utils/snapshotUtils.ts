@@ -2,6 +2,7 @@ import path from 'path';
 import { promises as fsPromises } from 'fs';
 import { getRootDir } from './utils.js';
 import { loadAllStats, flattenStats, LEADERBOARD_STATS, invalidateAllStatsCache } from './statUtils.js';
+import type { ServerInstance } from './server.js';
 import { log } from './logger.js';
 import type { SnapshotData } from '../types/index.js';
 
@@ -24,10 +25,10 @@ function extractStatValues(flat: ReturnType<typeof flattenStats>): Record<string
  * Take a snapshot of all current player stats (leaderboard values only).
  * Saves to data/snapshots/{timestamp}.json and runs cleanup afterwards.
  */
-export async function takeSnapshot(): Promise<SnapshotData> {
+export async function takeSnapshot(server?: ServerInstance): Promise<SnapshotData> {
   await fsPromises.mkdir(SNAPSHOTS_DIR, { recursive: true });
 
-  const allStats = await loadAllStats();
+  const allStats = await loadAllStats(server);
   const players: Record<string, Record<string, number>> = {};
 
   for (const [uuid, statsFile] of Object.entries(allStats)) {

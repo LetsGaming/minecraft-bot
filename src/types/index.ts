@@ -22,6 +22,16 @@ export interface RawServerConfig {
   rconPort?: string | number;
   rconPassword?: string;
   scriptDir?: string;
+  /**
+   * Base URL of the API wrapper running on the MC server VM.
+   * Example: "http://192.168.1.10:3000"
+   * When set, all filesystem/shell operations for this instance are
+   * forwarded to that API wrapper instead of running locally.
+   * Omit (or leave empty) for same-VM / local operation — existing behaviour.
+   */
+  apiUrl?: string;
+  /** Shared secret sent as x-api-key to the API wrapper. */
+  apiKey?: string;
 }
 
 export interface ServerConfig {
@@ -34,6 +44,8 @@ export interface ServerConfig {
   rconPort: number;
   rconPassword: string;
   scriptDir: string;
+  apiUrl?: string;
+  apiKey?: string;
 }
 
 export interface GuildNotificationConfig {
@@ -49,6 +61,8 @@ export interface GuildChatBridgeConfig {
 export interface GuildLeaderboardConfig {
   channelId?: string;
   interval?: LeaderboardInterval;
+  /** Which server instance to source leaderboard stats from. Defaults to the guild's defaultServer. */
+  server?: string;
 }
 
 /**

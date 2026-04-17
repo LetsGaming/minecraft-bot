@@ -10,6 +10,17 @@ import type { LogHandler, LogWatcherEntry } from '../types/index.js';
 const POLL_INTERVAL_MS = 1000;
 
 /**
+ * Minimal interface that both LogWatcher (local) and RemoteLogWatcher (SSE)
+ * satisfy. Watchers register against this interface so they work with both.
+ */
+export interface ILogWatcher {
+  readonly server: ServerInstance;
+  register(regex: RegExp, handler: LogHandler): void;
+  start(client: Client): Promise<void>;
+  stop(): void;
+}
+
+/**
  * Per-server log watcher instance.
  * Uses fs.watch with polling fallback for reliability.
  */

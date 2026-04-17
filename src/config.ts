@@ -67,6 +67,8 @@ function resolveServerConfig(
     rconPort: parseInt(String(sv.RCON_PORT ?? raw.rconPort ?? "25575"), 10),
     rconPassword: sv.RCON_PASSWORD ?? raw.rconPassword ?? "",
     scriptDir: scriptDir,
+    apiUrl: raw.apiUrl,
+    apiKey: raw.apiKey,
   };
 }
 

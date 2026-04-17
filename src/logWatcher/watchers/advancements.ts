@@ -1,14 +1,14 @@
 import { type Client } from 'discord.js';
 import { createEmbed } from '../../utils/embedUtils.js';
 import { log } from '../../utils/logger.js';
-import type { LogWatcher } from '../logWatcher.js';
+import type { ILogWatcher } from '../logWatcher.js';
 import type { GuildConfig } from '../../types/index.js';
 
 const ADV_REGEX =
   /\[.+?\].*:\s+(\w+) has (?:made the advancement|completed the challenge|reached the goal) \[(.+?)\]/;
 
 export function registerAdvancementWatcher(
-  logWatcher: LogWatcher,
+  logWatcher: ILogWatcher,
   client: Client,
   guildConfigs: Record<string, GuildConfig>,
 ): void {

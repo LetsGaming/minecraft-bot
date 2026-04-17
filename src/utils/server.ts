@@ -156,13 +156,13 @@ export class ServerInstance {
           return this._seedCache;
         }
       } catch {
-        /* fall through to screen fallback */
+        /* fall through to log fallback */
       }
     }
     await this.sendCommand("/seed");
     await new Promise<void>((r) => setTimeout(r, 200));
-    const { getLatestLogs } = await import("./utils.js");
-    const out = await getLatestLogs(10, this.config.serverDir);
+    const { tailLog } = await import("./serverAccess.js");
+    const out = await tailLog(this.config, 10);
     for (const line of out.split("\n").reverse()) {
       const m = line.match(/Seed:\s*\[(-?\d+)\]/);
       if (m?.[1]) {
@@ -184,8 +184,8 @@ export class ServerInstance {
       if (m) return { x: Number(m[1]), y: Number(m[2]), z: Number(m[3]) };
     }
     await new Promise<void>((r) => setTimeout(r, 200));
-    const { getLatestLogs } = await import("./utils.js");
-    const out = await getLatestLogs(10, this.config.serverDir);
+    const { tailLog } = await import("./serverAccess.js");
+    const out = await tailLog(this.config, 10);
     const m = out.match(/\[([\d.+-]+)d,\s*([\d.+-]+)d,\s*([\d.+-]+)d\]/);
     return m ? { x: Number(m[1]), y: Number(m[2]), z: Number(m[3]) } : null;
   }
@@ -197,8 +197,8 @@ export class ServerInstance {
       if (m?.[1]) return m[1];
     }
     await new Promise<void>((r) => setTimeout(r, 200));
-    const { getLatestLogs } = await import("./utils.js");
-    const out = await getLatestLogs(10, this.config.serverDir);
+    const { tailLog } = await import("./serverAccess.js");
+    const out = await tailLog(this.config, 10);
     const m = out.match(/"minecraft:([^"]+)"/);
     return m?.[1] ?? "overworld";
   }

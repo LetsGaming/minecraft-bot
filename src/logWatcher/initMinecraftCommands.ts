@@ -2,6 +2,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { readdirSync, statSync, readFileSync } from 'fs';
 import { LogWatcher, getGlobalWatchers } from './logWatcher.js';
+import { RemoteLogWatcher } from './RemoteLogWatcher.js';
 import { getAllInstances, getServerInstance } from '../utils/server.js';
 import { loadConfig } from '../config.js';
 import { log } from '../utils/logger.js';
@@ -77,7 +78,10 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
   const instances = getAllInstances();
 
   for (const server of instances) {
-    const watcher = new LogWatcher(server);
+    // Remote instances stream logs over SSE; local instances watch the file directly.
+    const watcher = server.config.apiUrl
+      ? new RemoteLogWatcher(server)
+      : new LogWatcher(server);
 
     for (const { regex, handler } of globalWatchers) {
       watcher.register(regex, handler);

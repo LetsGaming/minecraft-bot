@@ -1,7 +1,7 @@
 import { type Client } from 'discord.js';
 import { createEmbed } from '../../utils/embedUtils.js';
 import { log } from '../../utils/logger.js';
-import type { LogWatcher } from '../logWatcher.js';
+import type { ILogWatcher } from '../logWatcher.js';
 import type { GuildConfig } from '../../types/index.js';
 
 const START_REGEX = /\[.+?\].*:\s+Done \([\d.]+s\)!/;
@@ -10,7 +10,7 @@ const STOP_REGEX = /\[.+?\].*:\s+Stopping server/;
 const startTimes = new Map<string, Date>();
 
 export function registerServerEventWatcher(
-  logWatcher: LogWatcher,
+  logWatcher: ILogWatcher,
   client: Client,
   guildConfigs: Record<string, GuildConfig>,
 ): void {

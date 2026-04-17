@@ -1,33 +1,100 @@
-import { exec } from 'child_process';
 import { promises as fsPromises, existsSync } from 'fs';
 import path from 'path';
 import type { JsonCacheEntry, WhitelistEntry } from '../types/index.js';
+import type { ServerInstance } from './server.js';
 import {
   getServerConfig,
   sendToServer,
   isServerRunning,
   getServerSeed,
 } from './server.js';
+import * as serverAccess from './serverAccess.js';
 
-let whitelistCache: WhitelistEntry[] | null = null;
+// ── Whitelist ─────────────────────────────────────────────────────────────
 
-export async function deleteStats(uuid: string): Promise<boolean> {
+// Per-server cache keyed by server ID so multi-instance setups don't bleed.
+const whitelistCache = new Map<string, WhitelistEntry[] | null>();
+
+/**
+ * Load the whitelist for the given server (defaults to the "default" instance).
+ * Routes through serverAccess so remote servers fetch from the API wrapper.
+ */
+export async function loadWhitelist(
+  forceReload = false,
+  server?: ServerInstance,
+): Promise<WhitelistEntry[] | null> {
+  const cfg = server?.config ?? getServerConfig();
+  const key = cfg.id;
+
+  if (!forceReload && whitelistCache.has(key)) return whitelistCache.get(key) ?? null;
+
+  const data = await serverAccess.readWhitelist(cfg);
+  const result = data.length > 0 ? data : null;
+  whitelistCache.set(key, result);
+  return result;
+}
+
+export function invalidateWhitelistCache(serverId?: string): void {
+  if (serverId) whitelistCache.delete(serverId);
+  else whitelistCache.clear();
+}
+
+// ── Level name ────────────────────────────────────────────────────────────
+
+const levelNameCache = new Map<string, string>();
+
+export async function getLevelName(server?: ServerInstance): Promise<string> {
+  const cfg = server?.config ?? getServerConfig();
+  const key = cfg.id;
+  if (levelNameCache.has(key)) return levelNameCache.get(key)!;
+  const name = await serverAccess.readLevelName(cfg);
+  levelNameCache.set(key, name);
+  return name;
+}
+
+// ── Log tailing ───────────────────────────────────────────────────────────
+
+/**
+ * Return the last N lines of latest.log.
+ * `serverDir` param kept for backward compat with local call sites in server.ts
+ * that pass it directly; those will be local-only, so the path override still works.
+ */
+export async function getLatestLogs(
+  lines = 10,
+  serverDir?: string,
+  server?: ServerInstance,
+): Promise<string> {
+  // If a server instance is provided, route through serverAccess (handles remote).
+  if (server) return serverAccess.tailLog(server.config, lines);
+
+  // Legacy local-only path: use serverDir override or default config.
   const cfg = getServerConfig();
-  const statsPath = path.resolve(
-    cfg.serverDir,
-    'world',
-    'stats',
-    `${uuid}.json`,
-  );
+  const dir = serverDir ?? cfg.serverDir;
+  const logFile = path.join(dir, 'logs', 'latest.log');
+  const { exec } = await import('child_process');
+  const { promisify } = await import('util');
+  const execAsync = promisify(exec);
   try {
-    await fsPromises.rm(statsPath);
-    const { invalidateAllStatsCache } = await import('./statUtils.js');
-    invalidateAllStatsCache();
-    return true;
+    const { stdout } = await execAsync(`tail -n ${lines} "${logFile}"`);
+    return stdout;
   } catch {
-    return false;
+    return '';
   }
 }
+
+// ── Stats deletion ────────────────────────────────────────────────────────
+
+export async function deleteStats(uuid: string, server?: ServerInstance): Promise<boolean> {
+  const cfg = server?.config ?? getServerConfig();
+  const deleted = await serverAccess.deleteStatsFile(cfg, uuid);
+  if (deleted) {
+    const { invalidateAllStatsCache } = await import('./statUtils.js');
+    invalidateAllStatsCache();
+  }
+  return deleted;
+}
+
+// ── Re-exports (backward compat) ──────────────────────────────────────────
 
 export {
   sendToServer,
@@ -49,17 +116,7 @@ export async function getListOutput(): Promise<string | null> {
   return output;
 }
 
-export function getLatestLogs(lines = 10, serverDir?: string): Promise<string> {
-  const cfg = getServerConfig();
-  const dir = serverDir ?? cfg.serverDir;
-  const logFile = path.join(dir, 'logs', 'latest.log');
-  return new Promise((resolve, reject) => {
-    exec(`tail -n ${lines} "${logFile}"`, (err, stdout) => {
-      if (err) return reject(err);
-      resolve(stdout);
-    });
-  });
-}
+// ── Pure helpers (no server dependency) ───────────────────────────────────
 
 export function stripLogPrefix(line: string): string {
   if (!line) return '';
@@ -77,30 +134,6 @@ export function stripLogPrefix(line: string): string {
   return line.trim();
 }
 
-export async function loadWhitelist(forceReload = false): Promise<WhitelistEntry[] | null> {
-  if (whitelistCache && !forceReload) return whitelistCache;
-  const cfg = getServerConfig();
-  const whitelistPath = path.resolve(cfg.serverDir, 'whitelist.json');
-  const data = await loadJson(whitelistPath) as unknown;
-  if (!Array.isArray(data)) return null;
-  if (data.length === 0) return null;
-  whitelistCache = data as WhitelistEntry[];
-  return whitelistCache;
-}
-
-export async function getLevelName(): Promise<string> {
-  const cfg = getServerConfig();
-  const propsPath = path.resolve(cfg.serverDir, 'server.properties');
-  try {
-    const content = await fsPromises.readFile(propsPath, 'utf-8');
-    const match = content.match(/^level-name\s*=\s*(.+)$/m);
-    if (match?.[1]) return match[1].trim();
-  } catch {
-    /* ignore */
-  }
-  return 'world';
-}
-
 function findUpward(startDir: string, marker: string): string {
   let dir = startDir;
   while (true) {
@@ -112,8 +145,7 @@ function findUpward(startDir: string, marker: string): string {
 }
 
 export function getRootDir(): string {
-  const start = process.cwd();
-  return findUpward(start, 'package.json');
+  return findUpward(process.cwd(), 'package.json');
 }
 
 export async function ensureDir(filePath: string): Promise<string> {
@@ -122,10 +154,9 @@ export async function ensureDir(filePath: string): Promise<string> {
   return dir;
 }
 
-const jsonCache = new Map<string, JsonCacheEntry>();
+// ── JSON cache (bot-local data: links, schedule, etc.) ───────────────────
 
-// Per-file write locks: serializes concurrent writes to the same file so
-// last-write-wins data loss cannot occur (e.g. two simultaneous /link calls).
+const jsonCache = new Map<string, JsonCacheEntry>();
 const writeLocks = new Map<string, Promise<void>>();
 
 export async function loadJson(file: string): Promise<unknown> {
@@ -150,8 +181,7 @@ export async function saveJson(file: string, data: unknown): Promise<void> {
     const { mtimeMs } = await fsPromises.stat(file);
     jsonCache.set(file, { mtimeMs, data });
   });
-  // Store a version that swallows errors so a failed write doesn't poison
-  // the lock chain for all subsequent writes to the same file.
   writeLocks.set(file, next.catch(() => {}));
   return next;
 }
+

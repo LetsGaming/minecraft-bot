@@ -9,6 +9,7 @@ import {
 } from '../../utils/snapshotUtils.js';
 import { loadJson, saveJson, getRootDir } from '../../utils/utils.js';
 import { log } from '../../utils/logger.js';
+import { getAllInstances, getServerInstance } from '../../utils/server.js';
 import type { GuildConfig, LeaderboardInterval, LeaderboardScheduleState } from '../../types/index.js';
 
 const SCHEDULE_PATH = path.resolve(
@@ -55,17 +56,21 @@ export function startLeaderboardScheduler(
   const cfg = loadConfig();
   const globalInterval = cfg.leaderboardInterval;
 
-  // ── Snapshots: always run so historical data is ready when needed ──
+  // ── Snapshots: one per server instance ──
   const snapshotTimer = setInterval(async () => {
-    try {
-      await takeSnapshot();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.error('snapshots', `Snapshot failed: ${msg}`);
+    for (const server of getAllInstances()) {
+      try {
+        await takeSnapshot(server);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.error('snapshots', `Snapshot failed for ${server.id}: ${msg}`);
+      }
     }
   }, SNAPSHOT_INTERVAL_MS);
 
-  setTimeout(() => takeSnapshot().catch(() => {}), 10000);
+  setTimeout(() => {
+    for (const server of getAllInstances()) takeSnapshot(server).catch(() => {});
+  }, 10000);
 
   // ── Leaderboard posting: only if any guild has it configured ──
   const hasAnyConfig = Object.values(guildConfigs).some(
@@ -136,12 +141,15 @@ async function checkAndPost(
       }
 
       const periodStart = now - intervalMs;
+      // Use the guild's configured server, or fall back to the first instance
+      const serverId = gcfg.leaderboard?.server ?? gcfg.defaultServer;
+      const server = serverId ? (getServerInstance(serverId) ?? undefined) : getAllInstances()[0];
       const snapshot = await getSnapshotClosestTo(periodStart);
 
       const periodLabel = INTERVAL_LABELS[interval] ?? interval;
       let footer: string;
 
-      const opts: { periodLabel: string; baseline?: Record<string, Record<string, number>> } = { periodLabel };
+      const opts: { periodLabel: string; baseline?: Record<string, Record<string, number>>; server?: typeof server } = { periodLabel, server };
 
       if (snapshot) {
         opts.baseline = snapshot.players;

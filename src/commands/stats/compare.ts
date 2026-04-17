@@ -15,6 +15,7 @@ import {
   createInfoEmbed,
 } from '../../utils/embedUtils.js';
 import { findPlayer } from '../../utils/playerUtils.js';
+import { resolveServer } from '../../utils/guildRouter.js';
 import type { EmbedBuilder } from 'discord.js';
 import type { FlattenedStat } from '../../types/index.js';
 import { log } from '../../utils/logger.js';
@@ -46,13 +47,14 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   await interaction.deferReply();
 
+  const server = resolveServer(interaction) ?? undefined;
   const player1 = interaction.options.getString('player1', true);
   const player2 = interaction.options.getString('player2', true);
   const filterStat = interaction.options.getString('stat');
 
   try {
-    const player1Data = await findPlayer(player1);
-    const player2Data = await findPlayer(player2);
+    const player1Data = await findPlayer(player1, server);
+    const player2Data = await findPlayer(player2, server);
 
     if (!player1Data || !player2Data) {
       await interaction.editReply({
@@ -61,8 +63,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
       return;
     }
 
-    const stats1 = await loadStats(player1Data.uuid);
-    const stats2 = await loadStats(player2Data.uuid);
+    const stats1 = await loadStats(player1Data.uuid, server);
+    const stats2 = await loadStats(player2Data.uuid, server);
 
     if (!stats1 || !stats2) {
       await interaction.editReply({
