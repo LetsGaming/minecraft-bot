@@ -85,13 +85,16 @@ export class ServerInstance {
       }
     }
 
-    // Remote server without RCON: screen is not reachable from this context.
+    // Remote server without RCON: route through the API wrapper.
     if (this.config.apiUrl) {
-      log.warn(
-        this.id,
-        `sendCommand called on remote server without RCON — command dropped: ${command}`,
-      );
-      return null;
+      try {
+        const { sendCommand } = await import("./serverAccess.js");
+        return await sendCommand(this.config, command);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        log.warn(this.id, `Remote sendCommand failed: ${message}`);
+        return null;
+      }
     }
 
     await this._screenSend(command);

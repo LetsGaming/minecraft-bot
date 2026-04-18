@@ -111,6 +111,22 @@ export async function getList(
   return { playerCount: "0", maxPlayers: "?", players: [] };
 }
 
+/** Send a command to the server (via RCON or screen on the remote host). */
+export async function sendCommand(
+  cfg: ServerConfig,
+  command: string,
+): Promise<string | null> {
+  if (cfg.apiUrl) {
+    const { result } = await apiPost<{ result: string | null }>(
+      cfg,
+      "/command",
+      { command },
+    );
+    return result;
+  }
+  return null;
+}
+
 // ── Whitelist ─────────────────────────────────────────────────────────────
 
 /** Read whitelist.json for the given server. Returns [] on any error. */
