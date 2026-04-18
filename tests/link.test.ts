@@ -98,10 +98,9 @@ describe('logWatcher link handler', () => {
     const { saveLinkedAccounts } = await import('../src/utils/linkUtils.js');
     // saveData() is called to persist the removed expired code, which also saves
     // linked accounts (unchanged). Verify the player was NOT added to linked accounts.
-    const linkedCalls = vi.mocked(saveLinkedAccounts).mock.calls;
-    for (const [calledWith] of linkedCalls) {
-      expect(calledWith).not.toHaveProperty('discord-42');
-    }
+    expect(vi.mocked(saveLinkedAccounts)).not.toHaveBeenCalledWith(
+      expect.objectContaining({ 'discord-42': expect.any(String) }),
+    );
     expect(send).toHaveBeenCalledWith(expect.stringContaining('expired'));
   });
 

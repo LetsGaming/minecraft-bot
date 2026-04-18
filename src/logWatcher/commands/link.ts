@@ -51,7 +51,7 @@ async function saveData(): Promise<void> {
 export async function handleLink(
   username: string,
   { code }: Record<string, string>,
-  client: Pick<Client, 'users'>,
+  client: Client,
 ): Promise<void> {
   if (!code) return;
 
