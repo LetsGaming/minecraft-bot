@@ -7,11 +7,11 @@
  * initMinecraftCommands can treat both the same way.
  */
 
-import { log } from '../utils/logger.js';
-import { logStreamUrl } from '../utils/serverAccess.js';
-import type { Client } from 'discord.js';
-import type { ServerInstance } from '../utils/server.js';
-import type { LogHandler, LogWatcherEntry } from '../types/index.js';
+import { log } from "../utils/logger.js";
+import { logStreamUrl } from "../utils/serverAccess.js";
+import type { Client } from "discord.js";
+import type { ServerInstance } from "../utils/server.js";
+import type { LogHandler, LogWatcherEntry } from "../types/index.js";
 
 const RECONNECT_BASE_MS = 5_000;
 const RECONNECT_MAX_MS = 60_000;
@@ -23,6 +23,7 @@ export class RemoteLogWatcher {
   private _stopped = false;
   private _reconnectDelay = RECONNECT_BASE_MS;
   private _reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private _abortController: AbortController | null = null;
 
   constructor(server: ServerInstance) {
     this.server = server;
@@ -44,6 +45,10 @@ export class RemoteLogWatcher {
       clearTimeout(this._reconnectTimer);
       this._reconnectTimer = null;
     }
+    if (this._abortController) {
+      this._abortController.abort();
+      this._abortController = null;
+    }
   }
 
   // ── SSE connection loop ───────────────────────────────────────────────
@@ -58,11 +63,21 @@ export class RemoteLogWatcher {
     log.info(this.server.id, `Connecting to remote log stream: ${url}`);
 
     const headers: Record<string, string> = {};
-    if (this.server.config.apiKey) headers['x-api-key'] = this.server.config.apiKey;
+    if (this.server.config.apiKey)
+      headers["x-api-key"] = this.server.config.apiKey;
+
+    // Use a separate AbortController for the connection so we can cancel it
+    // on stop(), while keeping a short timeout only for the initial handshake.
+    this._abortController = new AbortController();
+    const connectTimeout = setTimeout(
+      () => this._abortController?.abort(),
+      10_000,
+    );
 
     let res: Response;
     try {
-      res = await fetch(url, { headers, signal: AbortSignal.timeout(10_000) });
+      res = await fetch(url, { headers, signal: this._abortController.signal });
+      clearTimeout(connectTimeout);
     } catch (err) {
       this._scheduleReconnect(`connect failed: ${String(err)}`);
       return;
@@ -74,47 +89,56 @@ export class RemoteLogWatcher {
     }
 
     this._reconnectDelay = RECONNECT_BASE_MS; // reset on successful connect
-    log.info(this.server.id, 'Remote log stream connected');
+    log.info(this.server.id, "Remote log stream connected");
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
-    let buf = '';
+    let buf = "";
 
     try {
       for (;;) {
-        if (this._stopped) { reader.cancel(); return; }
+        if (this._stopped) {
+          reader.cancel();
+          return;
+        }
         const { done, value } = await reader.read();
         if (done) break;
 
         buf += decoder.decode(value, { stream: true });
 
         // SSE events are delimited by \n\n
-        const events = buf.split('\n\n');
-        buf = events.pop() ?? '';
+        const events = buf.split("\n\n");
+        buf = events.pop() ?? "";
 
         for (const event of events) {
-          for (const raw of event.split('\n')) {
-            if (!raw.startsWith('data:')) continue;
+          for (const raw of event.split("\n")) {
+            if (!raw.startsWith("data:")) continue;
             const json = raw.slice(5).trim();
             if (!json) continue;
             try {
               const { line } = JSON.parse(json) as { line: string };
               await this._dispatch(line);
-            } catch { /* malformed — skip */ }
+            } catch {
+              /* malformed — skip */
+            }
           }
         }
       }
     } catch (err) {
-      if (!this._stopped) this._scheduleReconnect(`stream error: ${String(err)}`);
+      if (!this._stopped)
+        this._scheduleReconnect(`stream error: ${String(err)}`);
       return;
     }
 
-    if (!this._stopped) this._scheduleReconnect('stream ended');
+    if (!this._stopped) this._scheduleReconnect("stream ended");
   }
 
   private _scheduleReconnect(reason: string): void {
     if (this._stopped) return;
-    log.warn(this.server.id, `Log stream disconnected (${reason}), reconnecting in ${this._reconnectDelay / 1000}s`);
+    log.warn(
+      this.server.id,
+      `Log stream disconnected (${reason}), reconnecting in ${this._reconnectDelay / 1000}s`,
+    );
     this._reconnectTimer = setTimeout(() => {
       this._reconnectTimer = null;
       this._connect();
@@ -129,7 +153,10 @@ export class RemoteLogWatcher {
         try {
           await handler(match, this._client!, this.server);
         } catch (err) {
-          log.error(this.server.id, `Log handler error: ${err instanceof Error ? err.message : String(err)}`);
+          log.error(
+            this.server.id,
+            `Log handler error: ${err instanceof Error ? err.message : String(err)}`,
+          );
         }
       }
     }

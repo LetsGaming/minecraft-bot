@@ -2,7 +2,11 @@
  * Multi-server communication layer.
  * Each ServerInstance maintains its own RconClient + screen fallback.
  */
-import { execCommand, execSafe, isSudoPermissionError } from "../shell/execCommand.js";
+import {
+  execCommand,
+  execSafe,
+  isSudoPermissionError,
+} from "../shell/execCommand.js";
 import { log } from "./logger.js";
 import { loadConfig } from "../config.js";
 import { RconClient } from "../rcon/RconClient.js";
@@ -26,9 +30,15 @@ export class ServerInstance {
   constructor(config: ServerConfig) {
     this.config = config;
     this.id = config.id;
-    this._rcon = config.useRcon && config.rconPassword
-      ? new RconClient(config.rconHost, config.rconPort, config.rconPassword, config.id)
-      : null;
+    this._rcon =
+      config.useRcon && config.rconPassword
+        ? new RconClient(
+            config.rconHost,
+            config.rconPort,
+            config.rconPassword,
+            config.id,
+          )
+        : null;
   }
 
   get useRcon(): boolean {
@@ -82,7 +92,8 @@ export class ServerInstance {
     if (this._rcon) {
       // Fast path: a recent successful RCON response is conclusive.
       const RECENT_SUCCESS_MS = 15_000;
-      if (Date.now() - this._rcon.lastSuccessTime < RECENT_SUCCESS_MS) return true;
+      if (Date.now() - this._rcon.lastSuccessTime < RECENT_SUCCESS_MS)
+        return true;
 
       // Retry once before declaring offline so a single blip isn't a false negative.
       const PROBE_TIMEOUT_MS = 3_000;
@@ -100,6 +111,18 @@ export class ServerInstance {
       return false;
     }
 
+    // Remote server (no RCON): ask the API wrapper for status
+    if (this.config.apiUrl) {
+      try {
+        const { runScript } = await import("./serverAccess.js");
+        const result = await runScript(this.config, "status");
+        return result.exitCode === 0;
+      } catch {
+        return false;
+      }
+    }
+
+    // Local server without RCON: check screen session
     const out = await execCommand(
       `sudo -n -u ${this.config.linuxUser} screen -list 2>&1`,
     );
