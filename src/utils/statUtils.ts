@@ -64,8 +64,8 @@ interface BuildLeaderboardOptions {
   limit?: number;
   baseline?: Record<string, Record<string, number>> | null;
   periodLabel?: string | null;
-  /** Which server to pull stats from. Defaults to the first configured instance. */
-  server?: ServerInstance;
+  /** Which server to pull stats from. Must be provided by the caller. */
+  server: ServerInstance;
 }
 
 export interface LeaderboardData {
@@ -82,12 +82,12 @@ export interface LeaderboardData {
  */
 export async function buildLeaderboard(
   statKey: string,
-  { limit = 10, baseline = null, periodLabel = null, server }: BuildLeaderboardOptions = {},
+  { limit = 10, baseline = null, periodLabel = null, server }: BuildLeaderboardOptions,
 ): Promise<LeaderboardData> {
   const def = LEADERBOARD_STATS[statKey];
   if (!def) throw new Error(`Unknown stat: ${statKey}`);
 
-  const srv = server ?? getServerInstance('default') ?? undefined;
+  const srv = server;
   const allStats = await loadAllStats(srv);
   const whitelist = (await loadWhitelist(false, srv)) ?? [];
 

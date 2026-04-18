@@ -2,12 +2,7 @@ import { promises as fsPromises, existsSync } from 'fs';
 import path from 'path';
 import type { JsonCacheEntry, WhitelistEntry } from '../types/index.js';
 import type { ServerInstance } from './server.js';
-import {
-  getServerConfig,
-  sendToServer,
-  isServerRunning,
-  getServerSeed,
-} from './server.js';
+import { getServerConfig } from './server.js';
 import * as serverAccess from './serverAccess.js';
 
 // ── Whitelist ─────────────────────────────────────────────────────────────
@@ -94,21 +89,17 @@ export async function deleteStats(uuid: string, server?: ServerInstance): Promis
   return deleted;
 }
 
-// ── Re-exports (backward compat) ──────────────────────────────────────────
-
-export {
-  sendToServer,
-  isServerRunning as isScreenRunning,
-  getServerSeed as getSeed,
-};
+// ── Re-exports removed — use resolveServer(interaction) from guildRouter.ts ──
 
 let lastListOutput: string | null = null;
 let lastListTime = 0;
 
-export async function getListOutput(): Promise<string | null> {
+export async function getListOutput(server?: ServerInstance): Promise<string | null> {
   const now = Date.now();
   if (now - lastListTime < 500 && lastListOutput) return lastListOutput;
-  await sendToServer('/list');
+  if (server) {
+    await server.sendCommand('/list');
+  }
   await new Promise<void>((r) => setTimeout(r, 200));
   const output = await getLatestLogs(10);
   lastListOutput = output;

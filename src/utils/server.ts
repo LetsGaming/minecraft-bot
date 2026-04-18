@@ -3,7 +3,6 @@
  * Each ServerInstance maintains its own RconClient + screen fallback.
  */
 import {
-  execCommand,
   execSafe,
   isSudoPermissionError,
 } from "../shell/execCommand.js";
@@ -135,9 +134,13 @@ export class ServerInstance {
     }
 
     // Local server without RCON: check screen session
-    const out = await execCommand(
-      `sudo -n -u ${this.config.linuxUser} screen -list 2>&1`,
-    );
+    const out = await execSafe('sudo', [
+      '-n',
+      '-u',
+      this.config.linuxUser,
+      'screen',
+      '-list',
+    ]);
 
     if (out !== null && isSudoPermissionError(out)) {
       log.warn(

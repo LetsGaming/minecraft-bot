@@ -3,10 +3,6 @@ import {
   stripLogPrefix,
   loadWhitelist,
 } from './utils.js';
-import {
-  getServerConfig,
-  getServerList,
-} from './server.js';
 import type { ServerInstance } from './server.js';
 import type {
   PlayerCoords,
@@ -49,11 +45,6 @@ export async function getPlayerCount(server?: ServerInstance): Promise<PlayerCou
     const list = await server.getList();
     return { playerCount: list.playerCount, maxPlayers: list.maxPlayers };
   }
-  const cfg = getServerConfig();
-  if (cfg.useRcon && cfg.rconPassword) {
-    const list = await getServerList();
-    return { playerCount: list.playerCount, maxPlayers: list.maxPlayers };
-  }
   const logContent = await getListOutput();
   if (!logContent) return { playerCount: 'unknown', maxPlayers: 'unknown' };
   const parsed = parseListOutput(logContent);
@@ -66,11 +57,6 @@ export async function getPlayerCount(server?: ServerInstance): Promise<PlayerCou
 export async function getOnlinePlayers(server?: ServerInstance): Promise<string[]> {
   if (server) {
     const list = await server.getList();
-    return list.players;
-  }
-  const cfg = getServerConfig();
-  if (cfg.useRcon && cfg.rconPassword) {
-    const list = await getServerList();
     return list.players;
   }
   const logContent = await getListOutput();

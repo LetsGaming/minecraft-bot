@@ -13,6 +13,11 @@ let linked: LinkedAccountsMap = {};
 let saving = false;
 let pendingSave = false;
 
+// Rate-limit per-player !link attempts to prevent brute-forcing codes.
+// Tracks the timestamp of the last attempt per Minecraft username.
+const linkAttempts = new Map<string, number>();
+const LINK_ATTEMPT_COOLDOWN_MS = 3_000;
+
 async function loadData(): Promise<void> {
   codes = await loadLinkCodes().catch(() => ({} as LinkCodesMap));
   linked = await loadLinkedAccounts().catch(() => ({} as LinkedAccountsMap));
@@ -44,6 +49,12 @@ const cmd = defineCommand({
   args: ['code'],
   handler: async (username, { code }, client) => {
     if (!code) return;
+
+    // Rate-limit: reject if the same player tried within the cooldown window
+    const lastAttempt = linkAttempts.get(username) ?? 0;
+    if (Date.now() - lastAttempt < LINK_ATTEMPT_COOLDOWN_MS) return;
+    linkAttempts.set(username, Date.now());
+
     const entry = codes[code];
     if (!entry) return;
     const { discordId, expires } = entry;

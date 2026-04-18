@@ -15,7 +15,8 @@ import { loadConfig, getServerIds } from './config.js';
 import { initServers } from './utils/server.js';
 import { initMinecraftCommands } from './logWatcher/initMinecraftCommands.js';
 import { log } from './utils/logger.js';
-import type { BotCommand } from './types/index.js';
+import { flushUptimeHistory } from './utils/uptimeTracker.js';
+import type { BotCommand, BotClient } from './types/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const config = loadConfig();
@@ -30,7 +31,7 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
   ],
-});
+}) as BotClient;
 
 /**
  * We store commands on the client instance for runtime access.
@@ -94,7 +95,7 @@ async function registerGlobalCommands(): Promise<void> {
   await registerGlobalCommands();
 
   // Attach commands to client for help command access
-  (client as unknown as { commands: Collection<string, BotCommand> }).commands = commands;
+  client.commands = commands;
 
   client.once('clientReady', async () => {
     log.info('bot', `Ready as ${client.user!.tag}`);
@@ -174,3 +175,20 @@ async function registerGlobalCommands(): Promise<void> {
 
   await client.login(config.token);
 })();
+
+// ── Graceful shutdown ──────────────────────────────────────────────────────
+// Flush the uptime tracker before the process exits so no polling data is lost.
+
+async function shutdown(signal: string): Promise<void> {
+  log.info('bot', `Received ${signal} — flushing uptime history and shutting down`);
+  try {
+    await flushUptimeHistory();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    log.error('bot', `Failed to flush uptime history on shutdown: ${msg}`);
+  }
+  process.exit(0);
+}
+
+process.on('SIGTERM', () => { shutdown('SIGTERM').catch(() => process.exit(1)); });
+process.on('SIGINT',  () => { shutdown('SIGINT').catch(() => process.exit(1)); });
