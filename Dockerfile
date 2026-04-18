@@ -28,8 +28,10 @@ COPY --from=builder /app/dist ./dist
 # Copy static assets
 COPY data/ ./data/
 
-# Runtime directories — actual files are mounted via volumes at runtime
-RUN mkdir -p logs data
+# Runtime directories — actual files are mounted via volumes at runtime.
+# chown ensures the node user can write into them even when the host
+# directory was created by root (which Docker does by default).
+RUN mkdir -p logs data && chown -R node:node logs data
 
 # Entrypoint: checks for config.json before handing off to CMD
 COPY docker-entrypoint.sh ./
