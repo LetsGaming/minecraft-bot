@@ -1,23 +1,25 @@
-import path from 'path';
-import { loadJson, saveJson, getRootDir } from './utils.js';
-import type { LinkedAccountsMap, LinkCodesMap } from '../types/index.js';
+import path from "path";
+import { loadJson, saveJson, getRootDir } from "./utils.js";
+import type { LinkedAccountsMap, LinkCodesMap } from "../types/index.js";
 
 export const LINKED_ACCOUNTS_PATH = path.resolve(
   getRootDir(),
-  'data',
-  'linkedAccounts.json',
+  "data",
+  "linkedAccounts.json",
 );
 export const LINK_CODES_PATH = path.resolve(
   getRootDir(),
-  'data',
-  'linkCodes.json',
+  "data",
+  "linkCodes.json",
 );
 
 export async function loadLinkedAccounts(): Promise<LinkedAccountsMap> {
   return (await loadJson(LINKED_ACCOUNTS_PATH)) as LinkedAccountsMap;
 }
 
-export async function saveLinkedAccounts(map: LinkedAccountsMap): Promise<void> {
+export async function saveLinkedAccounts(
+  map: LinkedAccountsMap,
+): Promise<void> {
   return saveJson(LINKED_ACCOUNTS_PATH, map);
 }
 
@@ -35,6 +37,8 @@ export async function isLinked(userId: string): Promise<boolean> {
 }
 
 export async function getLinkedAccount(userId: string): Promise<string | null> {
-  const linked = await loadLinkedAccounts().catch(() => ({} as LinkedAccountsMap));
+  const linked = await loadLinkedAccounts().catch(
+    () => ({}) as LinkedAccountsMap,
+  );
   return linked[userId] ?? null;
 }

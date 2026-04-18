@@ -1,9 +1,9 @@
-import { type Client } from 'discord.js';
-import { log } from '../../utils/logger.js';
-import { createEmbed } from '../../utils/embedUtils.js';
-import type { ILogWatcher } from '../logWatcher.js';
-import type { ServerInstance } from '../../utils/server.js';
-import type { GuildConfig } from '../../types/index.js';
+import { type Client } from "discord.js";
+import { log } from "../../utils/logger.js";
+import { createEmbed } from "../../utils/embedUtils.js";
+import type { ILogWatcher } from "../logWatcher.js";
+import type { ServerInstance } from "../../utils/server.js";
+import type { GuildConfig } from "../../types/index.js";
 
 const CHAT_REGEX = /\[.+?\]: <(?:\[AFK\]\s*)?([^>]+)>\s+(.+)/;
 
@@ -15,7 +15,7 @@ export function registerChatBridge(
   logWatcher.register(CHAT_REGEX, async (match) => {
     const [, player, message] = match;
     if (!player || !message) return;
-    if (message.startsWith('!')) return;
+    if (message.startsWith("!")) return;
 
     const serverId = logWatcher.server.id;
 
@@ -26,23 +26,22 @@ export function registerChatBridge(
 
       try {
         const channel = await client.channels.fetch(bridge.channelId);
-        if (!channel || !('send' in channel)) continue;
+        if (!channel || !("send" in channel)) continue;
 
         const head = `https://mc-heads.net/avatar/${player}/32`;
         const embed = createEmbed({
           author: { name: player, iconURL: head },
           description: message,
           color: 0x55ff55,
-          ...(Object.keys(guildConfigs).length > 1 ? { footer: { text: serverId } } : {}),
+          ...(Object.keys(guildConfigs).length > 1
+            ? { footer: { text: serverId } }
+            : {}),
         });
 
         await channel.send({ embeds: [embed] });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        log.error(
-          'chatBridge',
-          `Failed to send to guild ${guildId}: ${msg}`,
-        );
+        log.error("chatBridge", `Failed to send to guild ${guildId}: ${msg}`);
       }
     }
   });
@@ -56,7 +55,7 @@ export function setupDiscordToMc(
   guildConfigs: Record<string, GuildConfig>,
   getServerInstance: (id: string) => ServerInstance | null,
 ): void {
-  client.on('messageCreate', async (msg) => {
+  client.on("messageCreate", async (msg) => {
     if (msg.author.bot) return;
     const guildId = msg.guild?.id;
     if (!guildId) return;
@@ -65,7 +64,7 @@ export function setupDiscordToMc(
     if (!gcfg?.chatBridge?.channelId) return;
     if (msg.channel.id !== gcfg.chatBridge.channelId) return;
 
-    const serverId = gcfg.chatBridge.server ?? 'default';
+    const serverId = gcfg.chatBridge.server ?? "default";
     const server = getServerInstance(serverId);
     if (!server) return;
 

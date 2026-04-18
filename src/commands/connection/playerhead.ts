@@ -6,30 +6,32 @@ import {
   ButtonStyle,
   ComponentType,
   type ChatInputCommandInteraction,
-} from 'discord.js';
-import { getLinkedAccount } from '../../utils/linkUtils.js';
-import { resolveServer } from '../../utils/guildRouter.js';
-import { getOnlinePlayers } from '../../utils/playerUtils.js';
+} from "discord.js";
+import { getLinkedAccount } from "../../utils/linkUtils.js";
+import { resolveServer } from "../../utils/guildRouter.js";
+import { getOnlinePlayers } from "../../utils/playerUtils.js";
 import {
   createErrorEmbed,
   createEmbedWithThumbnail,
-} from '../../utils/embedUtils.js';
-import type { MojangProfile } from '../../types/index.js';
+} from "../../utils/embedUtils.js";
+import type { MojangProfile } from "../../types/index.js";
 
 export const data = new SlashCommandBuilder()
-  .setName('playerhead')
+  .setName("playerhead")
   .setDescription(
     "Get a player's head as an item (if you're linked and online)",
   )
   .addStringOption((opt) =>
     opt
-      .setName('mcname')
-      .setDescription('Minecraft username')
+      .setName("mcname")
+      .setDescription("Minecraft username")
       .setRequired(true),
   );
 
-export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
-  const mcname = interaction.options.getString('mcname', true);
+export async function execute(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const mcname = interaction.options.getString("mcname", true);
   const userId = interaction.user.id;
   const server = resolveServer(interaction);
 
@@ -59,7 +61,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
   const button = new ButtonBuilder()
     .setCustomId(`givehead_${mcname}`)
-    .setLabel('🎁 Give to me')
+    .setLabel("🎁 Give to me")
     .setStyle(ButtonStyle.Success);
 
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(button);
@@ -76,7 +78,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     time: 30_000,
   });
 
-  collector.on('collect', async (i) => {
+  collector.on("collect", async (i) => {
     if (i.customId !== `givehead_${mcname}`) return;
 
     if (i.user.id !== userId) {
@@ -90,7 +92,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     const linkedUsername = await getLinkedAccount(userId);
     if (!linkedUsername) {
       await i.reply({
-        embeds: [createErrorEmbed('You must link your account first.')],
+        embeds: [createErrorEmbed("You must link your account first.")],
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -99,7 +101,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     const onlinePlayers = await getOnlinePlayers(server);
     if (!onlinePlayers.includes(linkedUsername)) {
       await i.reply({
-        embeds: [createErrorEmbed('You must be online in Minecraft.')],
+        embeds: [createErrorEmbed("You must be online in Minecraft.")],
         flags: MessageFlags.Ephemeral,
       });
       return;

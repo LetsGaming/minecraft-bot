@@ -64,7 +64,6 @@ async function purgeChannel(
     for (const msg of pinned.items) {
       protectedIds.add(msg.message.id);
     }
-    
   } catch {
     log.warn("purge", `Could not fetch pinned messages in ${channelId}`);
   }

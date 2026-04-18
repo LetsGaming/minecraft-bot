@@ -8,9 +8,13 @@ import {
   type ButtonInteraction,
   type ChatInputCommandInteraction,
   type Message,
-} from 'discord.js';
-import type { EmbedOptions, EmbedWithThumbnailOptions, EmbedStyleOptions } from '../types/index.js';
-import { log } from './logger.js';
+} from "discord.js";
+import type {
+  EmbedOptions,
+  EmbedWithThumbnailOptions,
+  EmbedStyleOptions,
+} from "../types/index.js";
+import { log } from "./logger.js";
 
 /**
  * Creates a customizable embed.
@@ -33,10 +37,12 @@ export function createEmbed({
     embed.setTimestamp();
   } else if (
     timestamp instanceof Date ||
-    typeof timestamp === 'number' ||
-    typeof timestamp === 'string'
+    typeof timestamp === "number" ||
+    typeof timestamp === "string"
   ) {
-    embed.setTimestamp(timestamp instanceof Date ? timestamp : new Date(timestamp));
+    embed.setTimestamp(
+      timestamp instanceof Date ? timestamp : new Date(timestamp),
+    );
   }
 
   return embed;
@@ -45,7 +51,10 @@ export function createEmbed({
 /**
  * Adds multiple fields to an embed from a plain array.
  */
-export function addFieldsBulk(embed: EmbedBuilder, fields: APIEmbedField[] = []): EmbedBuilder {
+export function addFieldsBulk(
+  embed: EmbedBuilder,
+  fields: APIEmbedField[] = [],
+): EmbedBuilder {
   if (!Array.isArray(fields)) return embed;
   return embed.addFields(fields);
 }
@@ -58,7 +67,7 @@ export function createErrorEmbed(
   { footer, timestamp = true }: EmbedStyleOptions = {},
 ): EmbedBuilder {
   return createEmbed({
-    title: '❌ Error',
+    title: "❌ Error",
     description: message,
     color: 0xff5555,
     footer,
@@ -74,7 +83,7 @@ export function createSuccessEmbed(
   { footer, timestamp = true }: EmbedStyleOptions = {},
 ): EmbedBuilder {
   return createEmbed({
-    title: '✅ Success',
+    title: "✅ Success",
     description: message,
     color: 0x55ff55,
     footer,
@@ -90,7 +99,7 @@ export function createInfoEmbed(
   { footer, timestamp = true }: EmbedStyleOptions = {},
 ): EmbedBuilder {
   return createEmbed({
-    title: 'ℹ️ Info',
+    title: "ℹ️ Info",
     description: message,
     color: 0x3498db,
     footer,
@@ -123,26 +132,26 @@ export function createPaginationButtons(
 ): ActionRowBuilder<ButtonBuilder> {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
-      .setCustomId('first')
-      .setLabel('⏮️')
+      .setCustomId("first")
+      .setLabel("⏮️")
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(page <= 0),
 
     new ButtonBuilder()
-      .setCustomId('prev')
-      .setLabel('◀️')
+      .setCustomId("prev")
+      .setLabel("◀️")
       .setStyle(ButtonStyle.Primary)
       .setDisabled(page <= 0),
 
     new ButtonBuilder()
-      .setCustomId('next')
-      .setLabel('▶️')
+      .setCustomId("next")
+      .setLabel("▶️")
       .setStyle(ButtonStyle.Primary)
       .setDisabled(page >= totalPages - 1),
 
     new ButtonBuilder()
-      .setCustomId('last')
-      .setLabel('⏭️')
+      .setCustomId("last")
+      .setLabel("⏭️")
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(page >= totalPages - 1),
   );
@@ -164,7 +173,7 @@ export async function handlePagination(
     time: 60_000,
   });
 
-  collector.on('collect', async (i: ButtonInteraction) => {
+  collector.on("collect", async (i: ButtonInteraction) => {
     if (i.user.id !== interaction.user.id) {
       await i.reply({
         content: "These buttons aren't for you.",
@@ -174,16 +183,16 @@ export async function handlePagination(
     }
 
     switch (i.customId) {
-      case 'first':
+      case "first":
         page = 0;
         break;
-      case 'prev':
+      case "prev":
         if (page > 0) page--;
         break;
-      case 'next':
+      case "next":
         if (page < totalPages - 1) page++;
         break;
-      case 'last':
+      case "last":
         page = totalPages - 1;
         break;
     }
@@ -195,17 +204,17 @@ export async function handlePagination(
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      log.warn('pagination', `Failed to update page: ${msg}`);
+      log.warn("pagination", `Failed to update page: ${msg}`);
     }
   });
 
-  collector.on('end', async () => {
+  collector.on("end", async () => {
     if (interaction.ephemeral) return;
     try {
       await message.edit({ components: [] });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      log.warn('pagination', `Failed to remove buttons after timeout: ${msg}`);
+      log.warn("pagination", `Failed to remove buttons after timeout: ${msg}`);
     }
   });
 }

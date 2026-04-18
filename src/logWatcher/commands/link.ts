@@ -1,13 +1,12 @@
-import { defineCommand } from '../defineCommand.js';
+import { defineCommand } from "../defineCommand.js";
 import {
   loadLinkCodes,
   loadLinkedAccounts,
   saveLinkCodes,
   saveLinkedAccounts,
-} from '../../utils/linkUtils.js';
-import type { LinkCodesMap, LinkedAccountsMap } from '../../types/index.js';
-import { log } from '../../utils/logger.js';
-import type { Client } from 'discord.js';
+} from "../../utils/linkUtils.js";
+import type { LinkCodesMap, LinkedAccountsMap } from "../../types/index.js";
+import { log } from "../../utils/logger.js";
 
 let codes: LinkCodesMap = {};
 let linked: LinkedAccountsMap = {};
@@ -20,8 +19,8 @@ const linkAttempts = new Map<string, number>();
 const LINK_ATTEMPT_COOLDOWN_MS = 3_000;
 
 async function loadData(): Promise<void> {
-  codes = await loadLinkCodes().catch(() => ({} as LinkCodesMap));
-  linked = await loadLinkedAccounts().catch(() => ({} as LinkedAccountsMap));
+  codes = await loadLinkCodes().catch(() => ({}) as LinkCodesMap);
+  linked = await loadLinkedAccounts().catch(() => ({}) as LinkedAccountsMap);
 }
 
 async function saveData(): Promise<void> {
@@ -34,7 +33,10 @@ async function saveData(): Promise<void> {
     await saveLinkCodes(codes);
     await saveLinkedAccounts(linked);
   } catch (err) {
-    log.error('link', `Link save error: ${err instanceof Error ? err.message : String(err)}`);
+    log.error(
+      "link",
+      `Link save error: ${err instanceof Error ? err.message : String(err)}`,
+    );
   } finally {
     saving = false;
     if (pendingSave) {
@@ -44,45 +46,35 @@ async function saveData(): Promise<void> {
   }
 }
 
-/**
- * Core link handler — exported so it can be tested directly without
- * going through the log-watcher regex pipeline.
- */
-export async function handleLink(
-  username: string,
-  { code }: Record<string, string>,
-  client: Client,
-): Promise<void> {
-  if (!code) return;
+const cmd = defineCommand({
+  name: "link",
+  description: "Link your Minecraft account to Discord using a code",
+  args: ["code"],
+  handler: async (username, { code }, client) => {
+    if (!code) return;
 
-  // Rate-limit: reject if the same player tried within the cooldown window
-  const lastAttempt = linkAttempts.get(username) ?? 0;
-  if (Date.now() - lastAttempt < LINK_ATTEMPT_COOLDOWN_MS) return;
-  linkAttempts.set(username, Date.now());
+    // Rate-limit: reject if the same player tried within the cooldown window
+    const lastAttempt = linkAttempts.get(username) ?? 0;
+    if (Date.now() - lastAttempt < LINK_ATTEMPT_COOLDOWN_MS) return;
+    linkAttempts.set(username, Date.now());
 
-  const entry = codes[code];
-  if (!entry) return;
-  const { discordId, expires } = entry;
-  const user = client.users.cache.get(discordId);
-  if (Date.now() > expires) {
+    const entry = codes[code];
+    if (!entry) return;
+    const { discordId, expires } = entry;
+    const user = client.users.cache.get(discordId);
+    if (Date.now() > expires) {
+      delete codes[code];
+      await saveData();
+      if (user)
+        user.send(`❌ Link code **${code}** has expired.`).catch(() => {});
+      return;
+    }
+    linked[discordId] = username;
     delete codes[code];
     await saveData();
     if (user)
-      user.send(`❌ Link code **${code}** has expired.`).catch(() => {});
-    return;
-  }
-  linked[discordId] = username;
-  delete codes[code];
-  await saveData();
-  if (user)
-    user.send(`✅ Linked to Minecraft user **${username}**.`).catch(() => {});
-}
-
-const cmd = defineCommand({
-  name: 'link',
-  description: 'Link your Minecraft account to Discord using a code',
-  args: ['code'],
-  handler: handleLink,
+      user.send(`✅ Linked to Minecraft user **${username}**.`).catch(() => {});
+  },
 });
 
 const originalInit = cmd.init;
@@ -91,4 +83,15 @@ cmd.init = async (): Promise<void> => {
   originalInit();
 };
 
-export const { init, COMMAND_INFO } = cmd;
+export const { init, COMMAND_INFO, handler } = cmd;
+
+/**
+ * Reset all in-memory state. Only for use in tests.
+ */
+export function _resetStateForTesting(): void {
+  codes = {};
+  linked = {};
+  saving = false;
+  pendingSave = false;
+  linkAttempts.clear();
+}

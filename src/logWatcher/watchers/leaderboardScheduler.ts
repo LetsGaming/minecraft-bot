@@ -1,22 +1,26 @@
-import path from 'path';
-import type { Client } from 'discord.js';
-import { loadConfig } from '../../config.js';
-import { buildLeaderboard } from '../../utils/statUtils.js';
-import type { BuildLeaderboardOptions } from '../../utils/statUtils.js';
-import { buildLeaderboardEmbed } from '../../utils/statEmbeds.js';
+import path from "path";
+import type { Client } from "discord.js";
+import { loadConfig } from "../../config.js";
+import { buildLeaderboard } from "../../utils/statUtils.js";
+import { buildLeaderboardEmbed } from "../../utils/statEmbeds.js";
 import {
   takeSnapshot,
   getSnapshotClosestTo,
-} from '../../utils/snapshotUtils.js';
-import { loadJson, saveJson, getRootDir } from '../../utils/utils.js';
-import { log } from '../../utils/logger.js';
-import { getAllInstances, getServerInstance } from '../../utils/server.js';
-import type { GuildConfig, LeaderboardInterval, LeaderboardScheduleState } from '../../types/index.js';
+} from "../../utils/snapshotUtils.js";
+import { loadJson, saveJson, getRootDir } from "../../utils/utils.js";
+import { log } from "../../utils/logger.js";
+import { getAllInstances, getServerInstance } from "../../utils/server.js";
+import type {
+  GuildConfig,
+  LeaderboardInterval,
+  LeaderboardScheduleState,
+} from "../../types/index.js";
+import type { ServerInstance } from "../../utils/server.js";
 
 const SCHEDULE_PATH = path.resolve(
   getRootDir(),
-  'data',
-  'leaderboardSchedule.json',
+  "data",
+  "leaderboardSchedule.json",
 );
 const CHECK_INTERVAL_MS = 60 * 60 * 1000;
 const SNAPSHOT_INTERVAL_MS = 60 * 60 * 1000;
@@ -28,9 +32,9 @@ const INTERVAL_MS: Record<LeaderboardInterval, number> = {
 };
 
 const INTERVAL_LABELS: Record<LeaderboardInterval, string> = {
-  daily: 'Daily',
-  weekly: 'Weekly',
-  monthly: 'Monthly',
+  daily: "Daily",
+  weekly: "Weekly",
+  monthly: "Monthly",
 };
 
 async function loadSchedule(): Promise<LeaderboardScheduleState> {
@@ -64,13 +68,14 @@ export function startLeaderboardScheduler(
         await takeSnapshot(server);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        log.error('snapshots', `Snapshot failed for ${server.id}: ${msg}`);
+        log.error("snapshots", `Snapshot failed for ${server.id}: ${msg}`);
       }
     }
   }, SNAPSHOT_INTERVAL_MS);
 
   setTimeout(() => {
-    for (const server of getAllInstances()) takeSnapshot(server).catch(() => {});
+    for (const server of getAllInstances())
+      takeSnapshot(server).catch(() => {});
   }, 10000);
 
   // ── Leaderboard posting: only if any guild has it configured ──
@@ -79,8 +84,8 @@ export function startLeaderboardScheduler(
   );
   if (!hasAnyConfig) {
     log.info(
-      'leaderboard',
-      'No leaderboard channels configured, scheduler inactive (snapshots still running)',
+      "leaderboard",
+      "No leaderboard channels configured, scheduler inactive (snapshots still running)",
     );
     return snapshotTimer;
   }
@@ -90,7 +95,7 @@ export function startLeaderboardScheduler(
       await checkAndPost(client, guildConfigs, globalInterval);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      log.error('leaderboard', `Scheduler error: ${msg}`);
+      log.error("leaderboard", `Scheduler error: ${msg}`);
     }
   }, CHECK_INTERVAL_MS);
 
@@ -100,7 +105,7 @@ export function startLeaderboardScheduler(
   );
 
   log.info(
-    'leaderboard',
+    "leaderboard",
     `Scheduler active (snapshots + posting every ${CHECK_INTERVAL_MS / 60000}min)`,
   );
   return { snapshotTimer, postTimer };
@@ -122,7 +127,7 @@ async function checkAndPost(
     const intervalMs = INTERVAL_MS[interval];
     if (!intervalMs) {
       log.warn(
-        'leaderboard',
+        "leaderboard",
         `Unknown interval "${interval}" for guild ${guildId}, skipping`,
       );
       continue;
@@ -133,9 +138,9 @@ async function checkAndPost(
 
     try {
       const channel = await client.channels.fetch(lb.channelId);
-      if (!channel || !('send' in channel)) {
+      if (!channel || !("send" in channel)) {
         log.warn(
-          'leaderboard',
+          "leaderboard",
           `Channel ${lb.channelId} not found for guild ${guildId}`,
         );
         continue;
@@ -144,17 +149,28 @@ async function checkAndPost(
       const periodStart = now - intervalMs;
       // Use the guild's configured server, or fall back to the first instance
       const serverId = gcfg.leaderboard?.server ?? gcfg.defaultServer;
-      const server = serverId ? (getServerInstance(serverId) ?? undefined) : getAllInstances()[0];
+      const server = serverId
+        ? (getServerInstance(serverId) ?? undefined)
+        : getAllInstances()[0];
+
       if (!server) {
-        log.warn('leaderboard', `No server instance found for guild ${guildId}, skipping`);
+        log.warn(
+          "leaderboard",
+          `No server instance found for guild ${guildId}, skipping leaderboard post`,
+        );
         continue;
       }
+
       const snapshot = await getSnapshotClosestTo(periodStart);
 
       const periodLabel = INTERVAL_LABELS[interval] ?? interval;
       let footer: string;
 
-      const opts: BuildLeaderboardOptions = { periodLabel, server };
+      const opts: {
+        periodLabel: string;
+        baseline?: Record<string, Record<string, number>>;
+        server: ServerInstance;
+      } = { periodLabel, server };
 
       if (snapshot) {
         opts.baseline = snapshot.players;
@@ -166,7 +182,7 @@ async function checkAndPost(
         footer = `${periodLabel} leaderboard · no snapshot available, showing all-time`;
       }
 
-      const leaderboardData = await buildLeaderboard('playtime', opts);
+      const leaderboardData = await buildLeaderboard("playtime", opts);
       const embed = buildLeaderboardEmbed(leaderboardData);
       embed.setFooter({ text: footer });
 
@@ -176,15 +192,12 @@ async function checkAndPost(
       await saveSchedule(schedule);
 
       log.info(
-        'leaderboard',
+        "leaderboard",
         `Posted ${interval} leaderboard for guild ${guildId}`,
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      log.error(
-        'leaderboard',
-        `Failed to post for guild ${guildId}: ${msg}`,
-      );
+      log.error("leaderboard", `Failed to post for guild ${guildId}: ${msg}`);
     }
   }
 }

@@ -148,7 +148,10 @@ async function main() {
     token = await prompt("Bot token");
   }
 
-  let clientId = await prompt("Client ID (Application ID)", existing.clientId ?? "");
+  let clientId = await prompt(
+    "Client ID (Application ID)",
+    existing.clientId ?? "",
+  );
   while (clientId && !isSnowflake(clientId)) {
     warn("Client ID should be a numeric snowflake (17–20 digits).");
     clientId = await prompt("Client ID");
@@ -158,7 +161,9 @@ async function main() {
 
   heading("Admin Users");
   hint("Discord user IDs that can use admin commands (start/stop/restart).");
-  hint("Right-click your profile → Copy User ID (enable Developer Mode first).");
+  hint(
+    "Right-click your profile → Copy User ID (enable Developer Mode first).",
+  );
 
   /** @type {string[]} */
   const adminUsers = [...(existing.adminUsers ?? [])];
@@ -349,7 +354,10 @@ async function configureServer(id, existing) {
   const server = { serverDir, linuxUser, screenSession, useRcon };
 
   if (useRcon) {
-    server.rconHost = await prompt("RCON host", existing.rconHost ?? "localhost");
+    server.rconHost = await prompt(
+      "RCON host",
+      existing.rconHost ?? "localhost",
+    );
     server.rconPort = parseInt(
       await prompt("RCON port", String(existing.rconPort ?? 25575)),
       10,
@@ -361,7 +369,10 @@ async function configureServer(id, existing) {
   }
 
   // Optional scriptDir
-  const hasScripts = await confirm("Do you have management scripts (start.sh, shutdown.sh, etc.)?", !!existing.scriptDir);
+  const hasScripts = await confirm(
+    "Do you have management scripts (start.sh, shutdown.sh, etc.)?",
+    !!existing.scriptDir,
+  );
   if (hasScripts) {
     server.scriptDir = await prompt(
       "Scripts directory",
@@ -397,7 +408,9 @@ async function configureGuild(guildId, existing, serverIds) {
   }
 
   // ── Status embed ──
-  if (await confirm("Enable status embed?", !!existing.statusEmbed?.channelId)) {
+  if (
+    await confirm("Enable status embed?", !!existing.statusEmbed?.channelId)
+  ) {
     const channelId = await prompt(
       "Status embed channel ID",
       existing.statusEmbed?.channelId ?? "",
@@ -420,14 +433,16 @@ async function configureGuild(guildId, existing, serverIds) {
       hint("Available events: join, leave, death, advancement, start, stop");
       const events = await prompt(
         "Events to track (comma-separated)",
-        (existing.notifications?.events ?? [
-          "join",
-          "leave",
-          "death",
-          "advancement",
-          "start",
-          "stop",
-        ]).join(", "),
+        (
+          existing.notifications?.events ?? [
+            "join",
+            "leave",
+            "death",
+            "advancement",
+            "start",
+            "stop",
+          ]
+        ).join(", "),
       );
       guild.notifications = {
         channelId,
@@ -440,9 +455,7 @@ async function configureGuild(guildId, existing, serverIds) {
   }
 
   // ── Chat bridge ──
-  if (
-    await confirm("Enable chat bridge?", !!existing.chatBridge?.channelId)
-  ) {
+  if (await confirm("Enable chat bridge?", !!existing.chatBridge?.channelId)) {
     const channelId = await prompt(
       "Chat bridge channel ID",
       existing.chatBridge?.channelId ?? "",
@@ -460,7 +473,10 @@ async function configureGuild(guildId, existing, serverIds) {
 
   // ── Leaderboard ──
   if (
-    await confirm("Enable auto-posting leaderboard?", !!existing.leaderboard?.channelId)
+    await confirm(
+      "Enable auto-posting leaderboard?",
+      !!existing.leaderboard?.channelId,
+    )
   ) {
     const channelId = await prompt(
       "Leaderboard channel ID",

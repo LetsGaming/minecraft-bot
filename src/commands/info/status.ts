@@ -1,20 +1,20 @@
-import { SlashCommandBuilder } from 'discord.js';
-import { createEmbed } from '../../utils/embedUtils.js';
-import { resolveServer } from '../../utils/guildRouter.js';
+import { SlashCommandBuilder } from "discord.js";
+import { createEmbed } from "../../utils/embedUtils.js";
+import { resolveServer } from "../../utils/guildRouter.js";
 
-import { withErrorHandling } from '../middleware.js';
+import { withErrorHandling } from "../middleware.js";
 
 export const data = new SlashCommandBuilder()
-  .setName('status')
-  .setDescription('Get the current status of a Minecraft server')
+  .setName("status")
+  .setDescription("Get the current status of a Minecraft server")
   .addStringOption((o) =>
-    o.setName('server').setDescription('Server instance').setAutocomplete(true),
+    o.setName("server").setDescription("Server instance").setAutocomplete(true),
   );
 
 export const execute = withErrorHandling(async (interaction) => {
   const sent = Date.now();
   const server = resolveServer(interaction);
-  if (!server) throw new Error('Server not found.');
+  if (!server) throw new Error("Server not found.");
 
   const running = await server.isRunning();
   const botPing = interaction.client.ws.ping;
@@ -23,11 +23,11 @@ export const execute = withErrorHandling(async (interaction) => {
   if (!running) {
     const embed = createEmbed({
       title: `Server Status — ${server.id}`,
-      description: '**Offline**',
+      description: "**Offline**",
     });
     embed.addFields(
-      { name: 'Bot Ping', value: `${botPing}ms`, inline: true },
-      { name: 'Round Trip', value: `${roundTrip}ms`, inline: true },
+      { name: "Bot Ping", value: `${botPing}ms`, inline: true },
+      { name: "Round Trip", value: `${roundTrip}ms`, inline: true },
     );
     await interaction.editReply({ embeds: [embed] });
     return;
@@ -40,13 +40,13 @@ export const execute = withErrorHandling(async (interaction) => {
   });
   if (players.length > 0)
     embed.addFields({
-      name: 'Online',
-      value: players.join(', '),
+      name: "Online",
+      value: players.join(", "),
       inline: false,
     });
   embed.addFields(
-    { name: 'Bot Ping', value: `${botPing}ms`, inline: true },
-    { name: 'Round Trip', value: `${roundTrip}ms`, inline: true },
+    { name: "Bot Ping", value: `${botPing}ms`, inline: true },
+    { name: "Round Trip", value: `${roundTrip}ms`, inline: true },
   );
 
   await interaction.editReply({ embeds: [embed] });

@@ -1,8 +1,8 @@
-import path from 'path';
-import { loadJson, saveJson, getRootDir } from './utils.js';
-import type { WhitelistAuditEntry, WhitelistAuditMap } from '../types/index.js';
+import path from "path";
+import { loadJson, saveJson, getRootDir } from "./utils.js";
+import type { WhitelistAuditEntry, WhitelistAuditMap } from "../types/index.js";
 
-const AUDIT_PATH = path.resolve(getRootDir(), 'data', 'whitelistAudit.json');
+const AUDIT_PATH = path.resolve(getRootDir(), "data", "whitelistAudit.json");
 
 /**
  * Load the whitelist audit log.
@@ -74,7 +74,9 @@ export async function recordRemove(
 /**
  * Get the audit entry for a specific player.
  */
-export async function getAuditEntry(username: string): Promise<WhitelistAuditEntry | null> {
+export async function getAuditEntry(
+  username: string,
+): Promise<WhitelistAuditEntry | null> {
   const audit = await loadAudit();
   return audit[username.toLowerCase()] ?? null;
 }

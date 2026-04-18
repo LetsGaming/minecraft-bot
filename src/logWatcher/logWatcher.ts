@@ -1,11 +1,11 @@
-import fs from 'fs/promises';
-import fsSync from 'fs';
-import path from 'path';
-import readline from 'readline';
-import { log } from '../utils/logger.js';
-import type { Client } from 'discord.js';
-import type { ServerInstance } from '../utils/server.js';
-import type { LogHandler, LogWatcherEntry } from '../types/index.js';
+import fs from "fs/promises";
+import fsSync from "fs";
+import path from "path";
+import readline from "readline";
+import { log } from "../utils/logger.js";
+import type { Client } from "discord.js";
+import type { ServerInstance } from "../utils/server.js";
+import type { LogHandler, LogWatcherEntry } from "../types/index.js";
 
 const POLL_INTERVAL_MS = 1000;
 
@@ -39,8 +39,8 @@ export class LogWatcher {
     this.server = serverInstance;
     this.logFile = path.join(
       serverInstance.config.serverDir,
-      'logs',
-      'latest.log',
+      "logs",
+      "latest.log",
     );
     this.logsDir = path.dirname(this.logFile);
   }
@@ -64,20 +64,20 @@ export class LogWatcher {
     // Primary: fs.watch (fast, event-driven)
     try {
       this._fsWatcher = fsSync.watch(this.logsDir, async (_event, filename) => {
-        if (filename !== 'latest.log') return;
-        await this._processChanges(_event ?? 'change');
+        if (filename !== "latest.log") return;
+        await this._processChanges(_event ?? "change");
       });
-      this._fsWatcher.on('error', () => {
-        log.warn(this.server.id, 'fs.watch failed, using polling only');
+      this._fsWatcher.on("error", () => {
+        log.warn(this.server.id, "fs.watch failed, using polling only");
         this._fsWatcher = null;
       });
     } catch {
-      log.warn(this.server.id, 'fs.watch not available, using polling');
+      log.warn(this.server.id, "fs.watch not available, using polling");
     }
 
     // Fallback: polling (catches anything fs.watch misses)
     this._pollTimer = setInterval(
-      () => this._processChanges('change'),
+      () => this._processChanges("change"),
       POLL_INTERVAL_MS,
     );
 
@@ -99,7 +99,7 @@ export class LogWatcher {
     if (this.reading) return;
     this.reading = true;
     try {
-      if (event === 'rename') {
+      if (event === "rename") {
         try {
           await fs.access(this.logFile);
           this.lastSize = 0;
@@ -140,7 +140,7 @@ export class LogWatcher {
       }
       this.lastSize = stats.size;
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
         this.lastSize = 0;
       } else {
         const msg = err instanceof Error ? err.message : String(err);

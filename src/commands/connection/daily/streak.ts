@@ -1,18 +1,29 @@
-import path from 'path';
-import { SlashCommandBuilder, MessageFlags, type ChatInputCommandInteraction } from 'discord.js';
-import { getRootDir, loadJson } from '../../../utils/utils.js';
-import { createErrorEmbed } from '../../../utils/embedUtils.js';
-import type { DailyRewardsConfig, StreakData, NextBonusStreak, UserClaimData } from '../../../types/index.js';
+import path from "path";
+import {
+  SlashCommandBuilder,
+  MessageFlags,
+  type ChatInputCommandInteraction,
+} from "discord.js";
+import { getRootDir, loadJson } from "../../../utils/utils.js";
+import { createErrorEmbed } from "../../../utils/embedUtils.js";
+import type {
+  DailyRewardsConfig,
+  StreakData,
+  NextBonusStreak,
+  UserClaimData,
+} from "../../../types/index.js";
 
 const baseDir = getRootDir();
-const claimedPath = path.resolve(baseDir, 'data', 'claimedDaily.json');
-const dailyRewardsPath = path.resolve(baseDir, 'data', 'dailyRewards.json');
+const claimedPath = path.resolve(baseDir, "data", "claimedDaily.json");
+const dailyRewardsPath = path.resolve(baseDir, "data", "dailyRewards.json");
 
 export const data = new SlashCommandBuilder()
-  .setName('streak')
-  .setDescription('Get information about your daily streak');
+  .setName("streak")
+  .setDescription("Get information about your daily streak");
 
-export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+export async function execute(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const userId = interaction.user.id;
@@ -20,9 +31,9 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
   if (!streakData) {
     const errorEmbed = createErrorEmbed(
-      'No streak data found for your account.',
+      "No streak data found for your account.",
       {
-        footer: { text: 'Streak Data Not Found' },
+        footer: { text: "Streak Data Not Found" },
         timestamp: new Date(),
       },
     );
@@ -33,7 +44,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   const { currentStreak, longestStreak, bonusStreak } = streakData;
   const nextBonus = await getNextBonusStreak(bonusStreak);
 
-  const nextBonusText = nextBonus ? `${nextBonus.streak} days` : 'N/A';
+  const nextBonusText = nextBonus ? `${nextBonus.streak} days` : "N/A";
 
   await interaction.editReply(
     `📅 **Daily Streak Information**\n` +
@@ -44,7 +55,9 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 }
 
 async function getStreakData(userId: string): Promise<StreakData | null> {
-  const claimedDaily = (await loadJson(claimedPath).catch(() => ({}))) as Record<string, UserClaimData>;
+  const claimedDaily = (await loadJson(claimedPath).catch(
+    () => ({}),
+  )) as Record<string, UserClaimData>;
 
   if (!(userId in claimedDaily)) {
     return null;
@@ -58,9 +71,16 @@ async function getStreakData(userId: string): Promise<StreakData | null> {
   };
 }
 
-async function getNextBonusStreak(bonusStreak: number): Promise<NextBonusStreak | null> {
-  const dailyRewards = (await loadJson(dailyRewardsPath).catch(() => ({}))) as DailyRewardsConfig;
-  if (!dailyRewards?.streakBonuses || !Object.keys(dailyRewards.streakBonuses).length) {
+async function getNextBonusStreak(
+  bonusStreak: number,
+): Promise<NextBonusStreak | null> {
+  const dailyRewards = (await loadJson(dailyRewardsPath).catch(
+    () => ({}),
+  )) as DailyRewardsConfig;
+  if (
+    !dailyRewards?.streakBonuses ||
+    !Object.keys(dailyRewards.streakBonuses).length
+  ) {
     return null;
   }
 

@@ -1,19 +1,23 @@
-import { SlashCommandBuilder, MessageFlags, type ChatInputCommandInteraction } from 'discord.js';
-import path from 'path';
 import {
-  loadJson,
-  saveJson,
-  getRootDir,
-} from '../../../utils/utils.js';
-import { getOnlinePlayers } from '../../../utils/playerUtils.js';
-import { isLinked, getLinkedAccount } from '../../../utils/linkUtils.js';
-import { createErrorEmbed } from '../../../utils/embedUtils.js';
-import type { DailyRewardsConfig, DailyRewardItem, UserClaimData } from '../../../types/index.js';
-import { log } from '../../../utils/logger.js';
-import { resolveServer } from '../../../utils/guildRouter.js';
+  SlashCommandBuilder,
+  MessageFlags,
+  type ChatInputCommandInteraction,
+} from "discord.js";
+import path from "path";
+import { loadJson, saveJson, getRootDir } from "../../../utils/utils.js";
+import { getOnlinePlayers } from "../../../utils/playerUtils.js";
+import { isLinked, getLinkedAccount } from "../../../utils/linkUtils.js";
+import { createErrorEmbed } from "../../../utils/embedUtils.js";
+import type {
+  DailyRewardsConfig,
+  DailyRewardItem,
+  UserClaimData,
+} from "../../../types/index.js";
+import { log } from "../../../utils/logger.js";
+import { resolveServer } from "../../../utils/guildRouter.js";
 
 const baseDir = getRootDir();
-const dataDir = path.resolve(baseDir, 'data');
+const dataDir = path.resolve(baseDir, "data");
 const DAILY_COOLDOWN = 24 * 60 * 60 * 1000;
 const MAX_STREAK = 35;
 
@@ -23,15 +27,17 @@ const MAX_STREAK = 35;
 const claimLock = new Set<string>();
 
 export const data = new SlashCommandBuilder()
-  .setName('daily')
-  .setDescription('Claim your daily reward | Link required');
+  .setName("daily")
+  .setDescription("Claim your daily reward | Link required");
 
-export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+export async function execute(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
   const userId = interaction.user.id;
 
   if (claimLock.has(userId)) {
     await interaction.reply({
-      content: '⏳ Already processing your claim — please wait.',
+      content: "⏳ Already processing your claim — please wait.",
       flags: MessageFlags.Ephemeral as number,
     });
     return;
@@ -45,10 +51,13 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   }
 }
 
-async function _execute(interaction: ChatInputCommandInteraction, userId: string): Promise<void> {
+async function _execute(
+  interaction: ChatInputCommandInteraction,
+  userId: string,
+): Promise<void> {
   if (!(await isLinked(userId))) {
     await interaction.reply(
-      errorReply('You must link your Discord account first.', 'Link Required'),
+      errorReply("You must link your Discord account first.", "Link Required"),
     );
     return;
   }
@@ -56,7 +65,7 @@ async function _execute(interaction: ChatInputCommandInteraction, userId: string
   const username = await getLinkedAccount(userId);
   if (!username) {
     await interaction.reply(
-      errorReply('Could not resolve linked account.', 'Link Error'),
+      errorReply("Could not resolve linked account.", "Link Error"),
     );
     return;
   }
@@ -64,13 +73,17 @@ async function _execute(interaction: ChatInputCommandInteraction, userId: string
   const server = resolveServer(interaction);
 
   const [rewardsCfg, claimed] = await Promise.all([
-    loadJson(path.join(dataDir, 'dailyRewards.json')).catch(() => ({})) as Promise<DailyRewardsConfig>,
-    loadJson(path.join(dataDir, 'claimedDaily.json')).catch(() => ({})) as Promise<Record<string, UserClaimData>>,
+    loadJson(path.join(dataDir, "dailyRewards.json")).catch(
+      () => ({}),
+    ) as Promise<DailyRewardsConfig>,
+    loadJson(path.join(dataDir, "claimedDaily.json")).catch(
+      () => ({}),
+    ) as Promise<Record<string, UserClaimData>>,
   ]);
 
   if (!rewardsCfg.default?.length) {
     await interaction.reply(
-      errorReply('Daily rewards data unavailable.', 'Data Error'),
+      errorReply("Daily rewards data unavailable.", "Data Error"),
     );
     return;
   }
@@ -95,7 +108,10 @@ async function _execute(interaction: ChatInputCommandInteraction, userId: string
 
   if (!(await getOnlinePlayers(server)).includes(username)) {
     await interaction.reply(
-      errorReply('You must be online in Minecraft to claim.', 'Online Requirement'),
+      errorReply(
+        "You must be online in Minecraft to claim.",
+        "Online Requirement",
+      ),
     );
     return;
   }
@@ -116,17 +132,23 @@ async function _execute(interaction: ChatInputCommandInteraction, userId: string
     longestStreak,
     rewards: [...userData.rewards, { date: now, reward, bonus }],
   };
-  await saveJson(path.join(dataDir, 'claimedDaily.json'), claimed);
+  await saveJson(path.join(dataDir, "claimedDaily.json"), claimed);
 
   await interaction.reply(response(reward, bonus, currentStreak, bonusStreak));
 }
 
 // ── helpers ──
 
-function errorReply(msg: string, footer: string): { embeds: [ReturnType<typeof createErrorEmbed>]; flags: number } {
+function errorReply(
+  msg: string,
+  footer: string,
+): { embeds: [ReturnType<typeof createErrorEmbed>]; flags: number } {
   return {
     embeds: [
-      createErrorEmbed(msg, { footer: { text: footer }, timestamp: new Date() }),
+      createErrorEmbed(msg, {
+        footer: { text: footer },
+        timestamp: new Date(),
+      }),
     ],
     flags: MessageFlags.Ephemeral as number,
   };
@@ -137,11 +159,11 @@ function cooldownMsg(ms: number): string {
   const m = Math.floor((ms % 3600000) / 60000);
   const readyAt = new Date(Date.now() + ms);
   return `⏳ Next claim in ${h}h ${m}m. | Ready at ${readyAt.toLocaleTimeString(
-    'en-GB',
+    "en-GB",
     {
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZone: 'Europe/Berlin',
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "Europe/Berlin",
     },
   )}`;
 }
@@ -153,7 +175,11 @@ interface StreakResult {
 }
 
 export function calcStreak(
-  { currentStreak, bonusStreak, longestStreak }: Pick<UserClaimData, 'currentStreak' | 'bonusStreak' | 'longestStreak'>,
+  {
+    currentStreak,
+    bonusStreak,
+    longestStreak,
+  }: Pick<UserClaimData, "currentStreak" | "bonusStreak" | "longestStreak">,
   delta: number,
 ): StreakResult {
   const broken = delta > 2 * DAILY_COOLDOWN;
@@ -185,18 +211,25 @@ function response(
   const lines = [`🎁 **${fmt(reward)}**`];
   if (bonus) lines.push(`🔥 **${bs}-day bonus:** ${fmt(bonus)}`);
   lines.push(`📈 Streak: ${cs} days`);
-  return { content: lines.join('\n') };
+  return { content: lines.join("\n") };
 }
 
-function fmt({ item = '???', amount = 1 }: DailyRewardItem): string {
-  return `${amount}x ${item.replace(/^minecraft:/, '')}`;
+function fmt({ item = "???", amount = 1 }: DailyRewardItem): string {
+  return `${amount}x ${item.replace(/^minecraft:/, "")}`;
 }
 
-async function give(server: import('../../../utils/server.js').ServerInstance, player: string, { item, amount = 1 }: DailyRewardItem): Promise<void> {
+async function give(
+  server: import("../../../utils/server.js").ServerInstance,
+  player: string,
+  { item, amount = 1 }: DailyRewardItem,
+): Promise<void> {
   if (!player || !item) {
-    log.error('daily', `Invalid reward params for player=${player} item=${item}`);
+    log.error(
+      "daily",
+      `Invalid reward params for player=${player} item=${item}`,
+    );
     return;
   }
-  const name = item.startsWith('minecraft:') ? item : `minecraft:${item}`;
+  const name = item.startsWith("minecraft:") ? item : `minecraft:${item}`;
   await server.sendCommand(`give ${player} ${name} ${amount}`);
 }

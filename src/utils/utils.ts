@@ -1,9 +1,9 @@
-import { promises as fsPromises, existsSync } from 'fs';
-import path from 'path';
-import type { JsonCacheEntry, WhitelistEntry } from '../types/index.js';
-import type { ServerInstance } from './server.js';
-import { getServerConfig, getServerInstance } from './server.js';
-import * as serverAccess from './serverAccess.js';
+import { promises as fsPromises, existsSync } from "fs";
+import path from "path";
+import type { JsonCacheEntry, WhitelistEntry } from "../types/index.js";
+import type { ServerInstance } from "./server.js";
+import { getServerConfig } from "./server.js";
+import * as serverAccess from "./serverAccess.js";
 
 // ── Whitelist ─────────────────────────────────────────────────────────────
 
@@ -21,7 +21,8 @@ export async function loadWhitelist(
   const cfg = server?.config ?? getServerConfig();
   const key = cfg.id;
 
-  if (!forceReload && whitelistCache.has(key)) return whitelistCache.get(key) ?? null;
+  if (!forceReload && whitelistCache.has(key))
+    return whitelistCache.get(key) ?? null;
 
   const data = await serverAccess.readWhitelist(cfg);
   const result = data.length > 0 ? data : null;
@@ -65,25 +66,28 @@ export async function getLatestLogs(
   // Legacy local-only path: use serverDir override or default config.
   const cfg = getServerConfig();
   const dir = serverDir ?? cfg.serverDir;
-  const logFile = path.join(dir, 'logs', 'latest.log');
-  const { exec } = await import('child_process');
-  const { promisify } = await import('util');
+  const logFile = path.join(dir, "logs", "latest.log");
+  const { exec } = await import("child_process");
+  const { promisify } = await import("util");
   const execAsync = promisify(exec);
   try {
     const { stdout } = await execAsync(`tail -n ${lines} "${logFile}"`);
     return stdout;
   } catch {
-    return '';
+    return "";
   }
 }
 
 // ── Stats deletion ────────────────────────────────────────────────────────
 
-export async function deleteStats(uuid: string, server?: ServerInstance): Promise<boolean> {
+export async function deleteStats(
+  uuid: string,
+  server?: ServerInstance,
+): Promise<boolean> {
   const cfg = server?.config ?? getServerConfig();
   const deleted = await serverAccess.deleteStatsFile(cfg, uuid);
   if (deleted) {
-    const { invalidateAllStatsCache } = await import('./statUtils.js');
+    const { invalidateAllStatsCache } = await import("./statUtils.js");
     invalidateAllStatsCache(cfg.id);
   }
   return deleted;
@@ -94,16 +98,16 @@ export async function deleteStats(uuid: string, server?: ServerInstance): Promis
 let lastListOutput: string | null = null;
 let lastListTime = 0;
 
-export async function getListOutput(server?: ServerInstance): Promise<string | null> {
+export async function getListOutput(
+  server?: ServerInstance,
+): Promise<string | null> {
   const now = Date.now();
   if (now - lastListTime < 500 && lastListOutput) return lastListOutput;
-  // Resolve the instance: use what was passed or fall back to the default.
-  const inst: ServerInstance | undefined = server ?? getServerInstance('default') ?? undefined;
-  if (inst) {
-    await inst.sendCommand('/list');
+  if (server) {
+    await server.sendCommand("/list");
   }
   await new Promise<void>((r) => setTimeout(r, 200));
-  const output = await getLatestLogs(10, undefined, inst);
+  const output = await getLatestLogs(10, undefined, server);
   lastListOutput = output;
   lastListTime = now;
   return output;
@@ -112,17 +116,17 @@ export async function getListOutput(server?: ServerInstance): Promise<string | n
 // ── Pure helpers (no server dependency) ───────────────────────────────────
 
 export function stripLogPrefix(line: string): string {
-  if (!line) return '';
-  const sep = ']: ';
+  if (!line) return "";
+  const sep = "]: ";
   let idx = line.lastIndexOf(sep);
   if (idx !== -1) return line.slice(idx + sep.length).trim();
-  idx = line.lastIndexOf(']:');
+  idx = line.lastIndexOf("]:");
   if (idx !== -1)
     return line
       .slice(idx + 2)
-      .replace(/^[:\s]+/, '')
+      .replace(/^[:\s]+/, "")
       .trim();
-  idx = line.lastIndexOf(': ');
+  idx = line.lastIndexOf(": ");
   if (idx !== -1) return line.slice(idx + 2).trim();
   return line.trim();
 }
@@ -138,7 +142,7 @@ function findUpward(startDir: string, marker: string): string {
 }
 
 export function getRootDir(): string {
-  return findUpward(process.cwd(), 'package.json');
+  return findUpward(process.cwd(), "package.json");
 }
 
 export async function ensureDir(filePath: string): Promise<string> {
@@ -157,7 +161,7 @@ export async function loadJson(file: string): Promise<unknown> {
     const { mtimeMs } = await fsPromises.stat(file);
     const cached = jsonCache.get(file);
     if (cached && cached.mtimeMs === mtimeMs) return cached.data;
-    const raw = await fsPromises.readFile(file, 'utf-8');
+    const raw = await fsPromises.readFile(file, "utf-8");
     const data: unknown = JSON.parse(raw);
     jsonCache.set(file, { mtimeMs, data });
     return data;
@@ -174,7 +178,9 @@ export async function saveJson(file: string, data: unknown): Promise<void> {
     const { mtimeMs } = await fsPromises.stat(file);
     jsonCache.set(file, { mtimeMs, data });
   });
-  writeLocks.set(file, next.catch(() => {}));
+  writeLocks.set(
+    file,
+    next.catch(() => {}),
+  );
   return next;
 }
-

@@ -1,38 +1,38 @@
-import { SlashCommandBuilder } from 'discord.js';
-import { createEmbed } from '../../utils/embedUtils.js';
-import { resolveServer } from '../../utils/guildRouter.js';
+import { SlashCommandBuilder } from "discord.js";
+import { createEmbed } from "../../utils/embedUtils.js";
+import { resolveServer } from "../../utils/guildRouter.js";
 
-import { getLinkedAccount } from '../../utils/linkUtils.js';
-import { withErrorHandling } from '../middleware.js';
+import { getLinkedAccount } from "../../utils/linkUtils.js";
+import { withErrorHandling } from "../middleware.js";
 
 export const data = new SlashCommandBuilder()
-  .setName('chunkbase')
+  .setName("chunkbase")
   .setDescription("Get a Chunkbase link for the server's world seed")
   .addStringOption((o) =>
     o
-      .setName('dimension')
-      .setDescription('Dimension')
+      .setName("dimension")
+      .setDescription("Dimension")
       .addChoices(
-        { name: 'Overworld', value: 'overworld' },
-        { name: 'Nether', value: 'nether' },
-        { name: 'End', value: 'end' },
+        { name: "Overworld", value: "overworld" },
+        { name: "Nether", value: "nether" },
+        { name: "End", value: "end" },
       ),
   )
   .addStringOption((o) =>
-    o.setName('server').setDescription('Server instance').setAutocomplete(true),
+    o.setName("server").setDescription("Server instance").setAutocomplete(true),
   );
 
 export const execute = withErrorHandling(async (interaction) => {
   const server = resolveServer(interaction);
-  if (!server) throw new Error('Server not found.');
+  if (!server) throw new Error("Server not found.");
 
   const seed = await server.getSeed();
-  if (!seed) throw new Error('Could not retrieve the world seed.');
+  if (!seed) throw new Error("Could not retrieve the world seed.");
 
-  const dimension = interaction.options.getString('dimension') ?? 'overworld';
+  const dimension = interaction.options.getString("dimension") ?? "overworld";
   const linked = await getLinkedAccount(interaction.user.id);
 
-  let coordsParam = '';
+  let coordsParam = "";
   if (linked) {
     try {
       const coords = await server.getPlayerCoords(linked);
@@ -47,7 +47,7 @@ export const execute = withErrorHandling(async (interaction) => {
   await interaction.editReply({
     embeds: [
       createEmbed({
-        title: 'Chunkbase Map',
+        title: "Chunkbase Map",
         description: `[Open Seed Map](${url})`,
         footer: { text: `${server.id} | ${interaction.user.tag}` },
       }),

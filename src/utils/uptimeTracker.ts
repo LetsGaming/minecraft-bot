@@ -1,8 +1,8 @@
-import path from 'path';
-import { loadJson, saveJson, getRootDir } from './utils.js';
-import { log } from './logger.js';
+import path from "path";
+import { loadJson, saveJson, getRootDir } from "./utils.js";
+import { log } from "./logger.js";
 
-const STATE_PATH = path.resolve(getRootDir(), 'data', 'uptimeHistory.json');
+const STATE_PATH = path.resolve(getRootDir(), "data", "uptimeHistory.json");
 
 /** Maximum number of check entries to retain per server (~7 days at 1min intervals). */
 const MAX_ENTRIES = 10_080;
@@ -75,7 +75,7 @@ export interface UptimeStats {
   checks7d: { total: number; online: number };
   checks30d: { total: number; online: number };
   /** Current streak info */
-  currentState: 'online' | 'offline' | 'unknown';
+  currentState: "online" | "offline" | "unknown";
   /** How long the server has been in its current state (ms) */
   currentStateDuration: number;
 }
@@ -83,9 +83,7 @@ export interface UptimeStats {
 /**
  * Compute uptime statistics for a server over 24h / 7d / 30d windows.
  */
-export async function getUptimeStats(
-  serverId: string,
-): Promise<UptimeStats> {
+export async function getUptimeStats(serverId: string): Promise<UptimeStats> {
   const h = await load();
   const entries = h[serverId] ?? [];
 
@@ -113,12 +111,12 @@ export async function getUptimeStats(
     c.total > 0 ? Math.round((c.online / c.total) * 10000) / 100 : null;
 
   // Current state and duration
-  let currentState: 'online' | 'offline' | 'unknown' = 'unknown';
+  let currentState: "online" | "offline" | "unknown" = "unknown";
   let currentStateDuration = 0;
 
   if (entries.length > 0) {
     const last = entries[entries.length - 1]!;
-    currentState = last.up ? 'online' : 'offline';
+    currentState = last.up ? "online" : "offline";
     currentStateDuration = now - last.t;
 
     // Walk backwards to find how long we've been in this state
@@ -151,12 +149,15 @@ export async function getUptimeStats(
  * The timer is unref'd so it won't prevent a clean process exit.
  */
 export function startUptimeFlushScheduler(): ReturnType<typeof setInterval> {
-  const timer = setInterval(() => {
-    flushUptimeHistory().catch((err) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.error('uptime', `Failed to flush history: ${msg}`);
-    });
-  }, 5 * 60 * 1000);
+  const timer = setInterval(
+    () => {
+      flushUptimeHistory().catch((err) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.error("uptime", `Failed to flush history: ${msg}`);
+      });
+    },
+    5 * 60 * 1000,
+  );
   timer.unref();
   return timer;
 }

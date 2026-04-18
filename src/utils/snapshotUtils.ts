@@ -1,19 +1,26 @@
-import path from 'path';
-import { promises as fsPromises } from 'fs';
-import { getRootDir } from './utils.js';
-import { loadAllStats, flattenStats, LEADERBOARD_STATS, invalidateAllStatsCache } from './statUtils.js';
-import type { ServerInstance } from './server.js';
-import { log } from './logger.js';
-import type { SnapshotData } from '../types/index.js';
+import path from "path";
+import { promises as fsPromises } from "fs";
+import { getRootDir } from "./utils.js";
+import {
+  loadAllStats,
+  flattenStats,
+  LEADERBOARD_STATS,
+  invalidateAllStatsCache,
+} from "./statUtils.js";
+import type { ServerInstance } from "./server.js";
+import { log } from "./logger.js";
+import type { SnapshotData } from "../types/index.js";
 
-const SNAPSHOTS_DIR = path.resolve(getRootDir(), 'data', 'snapshots');
+const SNAPSHOTS_DIR = path.resolve(getRootDir(), "data", "snapshots");
 const MAX_AGE_MS = 31 * 24 * 60 * 60 * 1000; // 31 days
 
 /**
  * Extract only the leaderboard-relevant values from flattened stats.
  * Keeps snapshots small regardless of how many total stats a player has.
  */
-function extractStatValues(flat: ReturnType<typeof flattenStats>): Record<string, number> {
+function extractStatValues(
+  flat: ReturnType<typeof flattenStats>,
+): Record<string, number> {
   const values: Record<string, number> = {};
   for (const [key, def] of Object.entries(LEADERBOARD_STATS)) {
     values[key] = def.extract(flat);
@@ -25,7 +32,9 @@ function extractStatValues(flat: ReturnType<typeof flattenStats>): Record<string
  * Take a snapshot of all current player stats (leaderboard values only).
  * Saves to data/snapshots/{timestamp}.json and runs cleanup afterwards.
  */
-export async function takeSnapshot(server?: ServerInstance): Promise<SnapshotData> {
+export async function takeSnapshot(
+  server?: ServerInstance,
+): Promise<SnapshotData> {
   await fsPromises.mkdir(SNAPSHOTS_DIR, { recursive: true });
 
   const allStats = await loadAllStats(server);
@@ -44,7 +53,7 @@ export async function takeSnapshot(server?: ServerInstance): Promise<SnapshotDat
   invalidateAllStatsCache();
 
   log.info(
-    'snapshots',
+    "snapshots",
     `Snapshot taken (${Object.keys(players).length} players)`,
   );
 
@@ -57,13 +66,15 @@ export async function takeSnapshot(server?: ServerInstance): Promise<SnapshotDat
  * Find and load the snapshot closest to (but not after) a target timestamp.
  * Returns null if no snapshots exist at all.
  */
-export async function getSnapshotClosestTo(targetTimestamp: number): Promise<SnapshotData | null> {
+export async function getSnapshotClosestTo(
+  targetTimestamp: number,
+): Promise<SnapshotData | null> {
   await fsPromises.mkdir(SNAPSHOTS_DIR, { recursive: true });
 
   const files = await fsPromises.readdir(SNAPSHOTS_DIR);
   const timestamps = files
-    .filter((f) => f.endsWith('.json'))
-    .map((f) => parseInt(f.replace('.json', ''), 10))
+    .filter((f) => f.endsWith(".json"))
+    .map((f) => parseInt(f.replace(".json", ""), 10))
     .filter((t) => !isNaN(t))
     .sort((a, b) => a - b);
 
@@ -79,7 +90,7 @@ export async function getSnapshotClosestTo(targetTimestamp: number): Promise<Sna
   if (closest === null) closest = timestamps[0]!;
 
   const filePath = path.join(SNAPSHOTS_DIR, `${closest}.json`);
-  const raw = await fsPromises.readFile(filePath, 'utf-8');
+  const raw = await fsPromises.readFile(filePath, "utf-8");
   return JSON.parse(raw) as SnapshotData;
 }
 
@@ -96,8 +107,8 @@ export async function cleanupSnapshots(): Promise<void> {
 
   const files = await fsPromises.readdir(SNAPSHOTS_DIR);
   const entries: SnapshotFileEntry[] = files
-    .filter((f) => f.endsWith('.json'))
-    .map((f) => ({ file: f, timestamp: parseInt(f.replace('.json', ''), 10) }))
+    .filter((f) => f.endsWith(".json"))
+    .map((f) => ({ file: f, timestamp: parseInt(f.replace(".json", ""), 10) }))
     .filter((e) => !isNaN(e.timestamp))
     .sort((a, b) => a.timestamp - b.timestamp);
 
@@ -136,6 +147,6 @@ export async function cleanupSnapshots(): Promise<void> {
   }
 
   if (deleted > 0) {
-    log.info('snapshots', `Cleanup: removed ${deleted} old snapshot(s)`);
+    log.info("snapshots", `Cleanup: removed ${deleted} old snapshot(s)`);
   }
 }

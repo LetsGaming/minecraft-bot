@@ -1,9 +1,9 @@
-import { type Client } from 'discord.js';
-import { log } from '../../utils/logger.js';
-import { recordCheck } from '../../utils/uptimeTracker.js';
-import { createEmbed } from '../../utils/embedUtils.js';
-import type { ServerInstance } from '../../utils/server.js';
-import type { DowntimeState, GuildConfig } from '../../types/index.js';
+import { type Client } from "discord.js";
+import { log } from "../../utils/logger.js";
+import { recordCheck } from "../../utils/uptimeTracker.js";
+import { createEmbed } from "../../utils/embedUtils.js";
+import type { ServerInstance } from "../../utils/server.js";
+import type { DowntimeState, GuildConfig } from "../../types/index.js";
 
 const CHECK_INTERVAL_MS = 60 * 1000;
 const FAILURES_BEFORE_ALERT = 3;
@@ -26,13 +26,16 @@ function getState(serverId: string): DowntimeState {
  * Call this when an admin intentionally stops or restarts a server.
  * Suppresses downtime alerts for a grace period so the stop isn't flagged.
  */
-export function suppressAlerts(serverId: string, graceMs = 5 * 60 * 1000): void {
+export function suppressAlerts(
+  serverId: string,
+  graceMs = 5 * 60 * 1000,
+): void {
   const state = getState(serverId);
   state.suppressUntil = Date.now() + graceMs;
   state.consecutiveFailures = 0;
   state.alerted = false;
   log.info(
-    'downtime',
+    "downtime",
     `Alerts suppressed for ${serverId} (${graceMs / 1000}s grace)`,
   );
 }
@@ -50,7 +53,7 @@ export function startDowntimeMonitor(
   );
 
   if (guildsWithAlerts.length === 0) {
-    log.info('downtime', 'No downtime alert channels configured');
+    log.info("downtime", "No downtime alert channels configured");
   }
 
   const timer = setInterval(async () => {
@@ -59,13 +62,13 @@ export function startDowntimeMonitor(
         await checkServer(server, client, guildsWithAlerts);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        log.error('downtime', `Check error for ${server.id}: ${msg}`);
+        log.error("downtime", `Check error for ${server.id}: ${msg}`);
       }
     }
   }, CHECK_INTERVAL_MS);
 
   log.info(
-    'downtime',
+    "downtime",
     `Monitor active for ${servers.length} server(s), alerting ${guildsWithAlerts.length} guild(s)`,
   );
   return timer;
@@ -95,7 +98,7 @@ async function checkServer(
 
     if (wasDown) {
       state.alerted = false;
-      state.lastKnownState = 'online';
+      state.lastKnownState = "online";
 
       for (const [, gcfg] of guildsWithAlerts) {
         const alertCfg = gcfg.downtimeAlerts;
@@ -103,28 +106,28 @@ async function checkServer(
         if (alertCfg.server && alertCfg.server !== server.id) continue;
 
         await sendAlert(client, alertCfg.channelId, {
-          title: '✅ Server Back Online',
+          title: "✅ Server Back Online",
           description: `**${server.id}** is back online.`,
           color: 0x55ff55,
           serverId: server.id,
         });
       }
 
-      log.info('downtime', `${server.id} recovered`);
+      log.info("downtime", `${server.id} recovered`);
     }
 
-    state.lastKnownState = 'online';
+    state.lastKnownState = "online";
   } else {
     state.consecutiveFailures++;
 
     if (now < state.suppressUntil) {
-      state.lastKnownState = 'offline';
+      state.lastKnownState = "offline";
       return;
     }
 
     if (state.consecutiveFailures >= FAILURES_BEFORE_ALERT && !state.alerted) {
       state.alerted = true;
-      state.lastKnownState = 'offline';
+      state.lastKnownState = "offline";
 
       for (const [, gcfg] of guildsWithAlerts) {
         const alertCfg = gcfg.downtimeAlerts;
@@ -132,7 +135,7 @@ async function checkServer(
         if (alertCfg.server && alertCfg.server !== server.id) continue;
 
         await sendAlert(client, alertCfg.channelId, {
-          title: '🔴 Server Down',
+          title: "🔴 Server Down",
           description: `**${server.id}** appears to be offline.\nFailed ${state.consecutiveFailures} consecutive checks.`,
           color: 0xff5555,
           serverId: server.id,
@@ -140,7 +143,7 @@ async function checkServer(
       }
 
       log.warn(
-        'downtime',
+        "downtime",
         `${server.id} down (${state.consecutiveFailures} consecutive failures)`,
       );
     }
@@ -161,7 +164,7 @@ async function sendAlert(
 ): Promise<void> {
   try {
     const channel = await client.channels.fetch(channelId);
-    if (!channel || !('send' in channel)) return;
+    if (!channel || !("send" in channel)) return;
 
     const embed = createEmbed({
       title,
@@ -173,6 +176,6 @@ async function sendAlert(
     await channel.send({ embeds: [embed] });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    log.error('downtime', `Failed to send alert: ${msg}`);
+    log.error("downtime", `Failed to send alert: ${msg}`);
   }
 }

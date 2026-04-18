@@ -1,10 +1,10 @@
-import { defineCommand } from '../defineCommand.js';
-import type { MojangProfile } from '../../types/index.js';
+import { defineCommand } from "../defineCommand.js";
+import type { MojangProfile } from "../../types/index.js";
 
 const cmd = defineCommand({
-  name: 'playerhead',
-  description: 'Get the player head of any Minecraft player',
-  args: ['player'],
+  name: "playerhead",
+  description: "Get the player head of any Minecraft player",
+  args: ["player"],
   cooldown: 15,
   handler: async (username, { player }, _client, server) => {
     if (!player) return;
@@ -18,7 +18,7 @@ const cmd = defineCommand({
       return;
     }
     // Consume the response body to validate it, even though we only need to confirm existence
-    await res.json() as MojangProfile;
+    (await res.json()) as MojangProfile;
     await server.sendCommand(
       `/give ${username} player_head[profile={name:"${player}"}]`,
     );

@@ -6,8 +6,8 @@
  * Cache is keyed by server ID + mtime so it invalidates automatically.
  */
 
-import type { ServerInstance } from './server.js';
-import * as serverAccess from './serverAccess.js';
+import type { ServerInstance } from "./server.js";
+import * as serverAccess from "./serverAccess.js";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -71,7 +71,7 @@ export async function getModList(server: ServerInstance): Promise<ModList> {
   if (!cfg.apiUrl && !cfg.scriptDir) {
     throw new Error(
       `No scriptDir configured for server '${cfg.id}'.\n` +
-      'The mods list is read from {scriptDir}/common/downloaded_versions.json.',
+        "The mods list is read from {scriptDir}/common/downloaded_versions.json.",
     );
   }
 
@@ -87,7 +87,9 @@ export async function getModList(server: ServerInstance): Promise<ModList> {
 
   if (slugs.length === 0) {
     const empty: ModList = {
-      serverOnly: [], clientOptional: [], clientAndServer: [],
+      serverOnly: [],
+      clientOptional: [],
+      clientAndServer: [],
       fetchedAt: new Date().toISOString(),
     };
     cache.set(cacheKey, { mtimeMs, modList: empty });
@@ -100,13 +102,18 @@ export async function getModList(server: ServerInstance): Promise<ModList> {
   return modList;
 }
 
-async function fetchModrinthProjects(slugs: string[]): Promise<ModrinthProject[]> {
+async function fetchModrinthProjects(
+  slugs: string[],
+): Promise<ModrinthProject[]> {
   const ids = JSON.stringify(slugs);
   const url = `${MODRINTH_API}/projects?ids=${encodeURIComponent(ids)}`;
   const res = await fetch(url, {
-    headers: { "User-Agent": "minecraft-discord-bot (contact via server admin)" },
+    headers: {
+      "User-Agent": "minecraft-discord-bot (contact via server admin)",
+    },
   });
-  if (!res.ok) throw new Error(`Modrinth API returned ${res.status}: ${res.statusText}`);
+  if (!res.ok)
+    throw new Error(`Modrinth API returned ${res.status}: ${res.statusText}`);
   return res.json() as Promise<ModrinthProject[]>;
 }
 
@@ -124,9 +131,15 @@ function buildModList(projects: ModrinthProject[]): ModList {
       side: classifySide(p),
     };
     switch (info.side) {
-      case "server_only": serverOnly.push(info); break;
-      case "client_optional": clientOptional.push(info); break;
-      case "client_and_server": clientAndServer.push(info); break;
+      case "server_only":
+        serverOnly.push(info);
+        break;
+      case "client_optional":
+        clientOptional.push(info);
+        break;
+      case "client_and_server":
+        clientAndServer.push(info);
+        break;
     }
   }
 
@@ -145,4 +158,3 @@ export function evictModCache(serverId: string): void {
     if (k.startsWith(`${serverId}:`)) cache.delete(k);
   }
 }
-

@@ -1,8 +1,8 @@
-import { type Client } from 'discord.js';
-import { createEmbed } from '../../utils/embedUtils.js';
-import { log } from '../../utils/logger.js';
-import type { ILogWatcher } from '../logWatcher.js';
-import type { GuildConfig } from '../../types/index.js';
+import { type Client } from "discord.js";
+import { createEmbed } from "../../utils/embedUtils.js";
+import { log } from "../../utils/logger.js";
+import type { ILogWatcher } from "../logWatcher.js";
+import type { GuildConfig } from "../../types/index.js";
 
 const JOIN_REGEX = /\[.+?\].*:\s+(\w+) joined the game/;
 const LEAVE_REGEX = /\[.+?\].*:\s+(\w+) left the game/;
@@ -20,9 +20,9 @@ export function registerJoinLeaveWatcher(
       guildConfigs,
       serverId,
       match[1]!,
-      'join',
+      "join",
       0x55ff55,
-      'joined the server',
+      "joined the server",
     );
   });
 
@@ -32,9 +32,9 @@ export function registerJoinLeaveWatcher(
       guildConfigs,
       serverId,
       match[1]!,
-      'leave',
+      "leave",
       0xff5555,
-      'left the server',
+      "left the server",
     );
   });
 }
@@ -55,19 +55,21 @@ async function notify(
 
     try {
       const channel = await client.channels.fetch(notif.channelId);
-      if (!channel || !('send' in channel)) continue;
+      if (!channel || !("send" in channel)) continue;
 
       const head = `https://mc-heads.net/avatar/${player}/32`;
       const embed = createEmbed({
         author: { name: `${player} ${text}`, iconURL: head },
         color,
-        ...(Object.keys(guildConfigs).length > 1 ? { footer: { text: serverId } } : {}),
+        ...(Object.keys(guildConfigs).length > 1
+          ? { footer: { text: serverId } }
+          : {}),
       });
 
       await channel.send({ embeds: [embed] });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      log.error('joinLeave', `Failed: ${msg}`);
+      log.error("joinLeave", `Failed: ${msg}`);
     }
   }
 }

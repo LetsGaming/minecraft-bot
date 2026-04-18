@@ -2,10 +2,7 @@
  * Multi-server communication layer.
  * Each ServerInstance maintains its own RconClient + screen fallback.
  */
-import {
-  execSafe,
-  isSudoPermissionError,
-} from "../shell/execCommand.js";
+import { execSafe, isSudoPermissionError } from "../shell/execCommand.js";
 import { log } from "./logger.js";
 import { loadConfig } from "../config.js";
 import { RconClient } from "../rcon/RconClient.js";
@@ -134,12 +131,12 @@ export class ServerInstance {
     }
 
     // Local server without RCON: check screen session
-    const out = await execSafe('sudo', [
-      '-n',
-      '-u',
+    const out = await execSafe("sudo", [
+      "-n",
+      "-u",
       this.config.linuxUser,
-      'screen',
-      '-list',
+      "screen",
+      "-list",
     ]);
 
     if (out !== null && isSudoPermissionError(out)) {
@@ -256,7 +253,7 @@ export class ServerInstance {
    * True if connected via direct RCON or via a remote API wrapper.
    */
   get supportsTps(): boolean {
-    return this._rcon !== null || !!this.config.apiUrl;
+    return this._rcon !== null || Boolean(this.config.apiUrl);
   }
 
   async getTps(): Promise<TpsResult | null> {

@@ -7,16 +7,16 @@ import {
   MessageFlags,
   type ChatInputCommandInteraction,
   type AutocompleteInteraction,
-} from 'discord.js';
-import { readdirSync, statSync } from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { loadConfig, getServerIds } from './config.js';
-import { initServers } from './utils/server.js';
-import { initMinecraftCommands } from './logWatcher/initMinecraftCommands.js';
-import { log } from './utils/logger.js';
-import { flushUptimeHistory } from './utils/uptimeTracker.js';
-import type { BotCommand, BotClient } from './types/index.js';
+} from "discord.js";
+import { readdirSync, statSync } from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import { loadConfig, getServerIds } from "./config.js";
+import { initServers } from "./utils/server.js";
+import { initMinecraftCommands } from "./logWatcher/initMinecraftCommands.js";
+import { log } from "./utils/logger.js";
+import { flushUptimeHistory } from "./utils/uptimeTracker.js";
+import type { BotCommand, BotClient } from "./types/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const config = loadConfig();
@@ -48,13 +48,13 @@ function getCommandFiles(dir: string): string[] {
     const full = path.join(dir, file);
     if (statSync(full).isDirectory())
       files = files.concat(getCommandFiles(full));
-    else if (file.endsWith('.js') && file !== 'middleware.js') files.push(full);
+    else if (file.endsWith(".js") && file !== "middleware.js") files.push(full);
   }
   return files;
 }
 
 async function loadCommands(): Promise<void> {
-  const files = getCommandFiles(path.join(__dirname, 'commands'));
+  const files = getCommandFiles(path.join(__dirname, "commands"));
   for (const file of files) {
     try {
       const cmd = (await import(path.resolve(file))) as Partial<BotCommand>;
@@ -62,29 +62,29 @@ async function loadCommands(): Promise<void> {
       const name = cmd.data.name;
       const enabled = config.commands?.[name]?.enabled ?? true;
       if (!enabled) {
-        log.info('commands', `Skipping disabled: /${name}`);
+        log.info("commands", `Skipping disabled: /${name}`);
         continue;
       }
       commands.set(name, cmd as BotCommand);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      log.error('commands', `Failed to load ${file}: ${msg}`);
+      log.error("commands", `Failed to load ${file}: ${msg}`);
     }
   }
 }
 
 async function registerGlobalCommands(): Promise<void> {
   const commandData = commands.map((cmd) => cmd.data.toJSON());
-  const rest = new REST({ version: '10' }).setToken(config.token);
+  const rest = new REST({ version: "10" }).setToken(config.token);
   try {
-    log.info('commands', 'Registering global slash commands...');
+    log.info("commands", "Registering global slash commands...");
     await rest.put(Routes.applicationCommands(config.clientId), {
       body: commandData,
     });
-    log.info('commands', `${commandData.length} slash commands registered.`);
+    log.info("commands", `${commandData.length} slash commands registered.`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    log.error('commands', `Failed to register: ${msg}`);
+    log.error("commands", `Failed to register: ${msg}`);
   }
 }
 
@@ -97,27 +97,27 @@ async function registerGlobalCommands(): Promise<void> {
   // Attach commands to client for help command access
   client.commands = commands;
 
-  client.once('clientReady', async () => {
-    log.info('bot', `Ready as ${client.user!.tag}`);
-    log.info('bot', `Servers: ${getServerIds().join(', ')}`);
-    log.info('bot', `Guilds: ${client.guilds.cache.size}`);
+  client.once("clientReady", async () => {
+    log.info("bot", `Ready as ${client.user!.tag}`);
+    log.info("bot", `Servers: ${getServerIds().join(", ")}`);
+    log.info("bot", `Guilds: ${client.guilds.cache.size}`);
 
     try {
       await initMinecraftCommands(client);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      log.error('init', `Failed to initialize MC commands: ${msg}`);
+      log.error("init", `Failed to initialize MC commands: ${msg}`);
     }
   });
 
-  client.on('interactionCreate', async (interaction) => {
+  client.on("interactionCreate", async (interaction) => {
     // ── Autocomplete ──
     if (interaction.isAutocomplete()) {
       const autocomplete = interaction as AutocompleteInteraction;
       const focused = autocomplete.options.getFocused(true);
 
       // Server autocomplete
-      if (focused.name === 'server') {
+      if (focused.name === "server") {
         const ids = getServerIds().filter((id) =>
           id.startsWith(String(focused.value).toLowerCase()),
         );
@@ -128,9 +128,9 @@ async function registerGlobalCommands(): Promise<void> {
       }
 
       // Player name autocomplete
-      if (['player', 'player1', 'player2'].includes(focused.name)) {
+      if (["player", "player1", "player2"].includes(focused.name)) {
         try {
-          const { getPlayerNames } = await import('./utils/playerUtils.js');
+          const { getPlayerNames } = await import("./utils/playerUtils.js");
           const names = await getPlayerNames();
           const filtered = names.filter((n) =>
             n.toLowerCase().startsWith(String(focused.value).toLowerCase()),
@@ -158,9 +158,9 @@ async function registerGlobalCommands(): Promise<void> {
       await command.execute(chatInteraction);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      log.error('command', `/${chatInteraction.commandName}: ${msg}`);
+      log.error("command", `/${chatInteraction.commandName}: ${msg}`);
       const errorMsg = {
-        content: '❌ An error occurred.',
+        content: "❌ An error occurred.",
         flags: MessageFlags.Ephemeral as number,
       };
       try {
@@ -180,15 +180,22 @@ async function registerGlobalCommands(): Promise<void> {
 // Flush the uptime tracker before the process exits so no polling data is lost.
 
 async function shutdown(signal: string): Promise<void> {
-  log.info('bot', `Received ${signal} — flushing uptime history and shutting down`);
+  log.info(
+    "bot",
+    `Received ${signal} — flushing uptime history and shutting down`,
+  );
   try {
     await flushUptimeHistory();
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    log.error('bot', `Failed to flush uptime history on shutdown: ${msg}`);
+    log.error("bot", `Failed to flush uptime history on shutdown: ${msg}`);
   }
   process.exit(0);
 }
 
-process.on('SIGTERM', () => { shutdown('SIGTERM').catch(() => process.exit(1)); });
-process.on('SIGINT',  () => { shutdown('SIGINT').catch(() => process.exit(1)); });
+process.on("SIGTERM", () => {
+  shutdown("SIGTERM").catch(() => process.exit(1));
+});
+process.on("SIGINT", () => {
+  shutdown("SIGINT").catch(() => process.exit(1));
+});
