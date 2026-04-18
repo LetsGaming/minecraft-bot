@@ -84,6 +84,16 @@ export class ServerInstance {
         return null;
       }
     }
+
+    // Remote server without RCON: screen is not reachable from this context.
+    if (this.config.apiUrl) {
+      log.warn(
+        this.id,
+        `sendCommand called on remote server without RCON — command dropped: ${command}`,
+      );
+      return null;
+    }
+
     await this._screenSend(command);
     return null;
   }
@@ -111,12 +121,11 @@ export class ServerInstance {
       return false;
     }
 
-    // Remote server (no RCON): ask the API wrapper for status
+    // Remote server (no RCON): ask the API wrapper directly
     if (this.config.apiUrl) {
       try {
-        const { runScript } = await import("./serverAccess.js");
-        const result = await runScript(this.config, "status");
-        return result.exitCode === 0;
+        const { isRunning } = await import("./serverAccess.js");
+        return await isRunning(this.config);
       } catch {
         return false;
       }
@@ -163,6 +172,16 @@ export class ServerInstance {
         return { playerCount: "0", maxPlayers: "?", players: [] };
       }
     }
+    // Remote server without RCON: ask the API wrapper directly
+    if (this.config.apiUrl) {
+      try {
+        const { getList } = await import("./serverAccess.js");
+        return await getList(this.config);
+      } catch {
+        return { playerCount: "0", maxPlayers: "?", players: [] };
+      }
+    }
+
     await this.sendCommand("/list");
     await new Promise<void>((r) => setTimeout(r, 200));
     return { playerCount: "?", maxPlayers: "?", players: [] };
