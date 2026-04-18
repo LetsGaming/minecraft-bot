@@ -17,4 +17,10 @@ if [ ! -f /app/config.json ]; then
   exit 1
 fi
 
-exec "$@"
+# Fix ownership of bind-mounted directories so the node user can write to them.
+# This runs as root (before the user switch below) because the host creates
+# these directories as root by default.
+chown -R node:node /app/logs /app/data
+
+# Drop to the node user for the actual process
+exec su-exec node "$@"
