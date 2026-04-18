@@ -20,6 +20,7 @@ import { startLeaderboardScheduler } from "./watchers/leaderboardScheduler.js";
 import { startStatusEmbed } from "./watchers/statusEmbed.js";
 import { startDowntimeMonitor } from "./watchers/downtimeMonitor.js";
 import { startChannelPurge } from "./watchers/channelPurge.js";
+import { registerSleepWatcher } from "./watchers/sleepWatcher.js";
 import { startUptimeFlushScheduler } from "../utils/uptimeTracker.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -84,6 +85,7 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
     registerDeathWatcher(watcher, client, guildConfigs);
     registerAdvancementWatcher(watcher, client, guildConfigs);
     registerServerEventWatcher(watcher, client, guildConfigs);
+    registerSleepWatcher(watcher);
 
     await watcher.start(client);
 

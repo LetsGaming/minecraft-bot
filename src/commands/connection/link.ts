@@ -11,10 +11,37 @@ export async function execute(
 ): Promise<void> {
   const userId = interaction.user.id;
 
+  const codes = await loadLinkCodes();
+
+  // Check if user already has a pending code
+  for (const code in codes) {
+    const current = codes[code];
+    if (!current) continue;
+
+    if (current.discordId === userId) {
+      // Check if the existing code is still valid
+      if (current.expires > Date.now()) {
+        await interaction.reply({
+          content: `⚠️ You already have a pending link code: \`${code}\`. Please use that code or wait for it to expire before generating a new one.`,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      } else if (current.confirmed) {
+        await interaction.reply({
+          content: `⚠️ You have already linked your account. If you want to link a different Minecraft account, please unlink first.`,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      } else {
+        // Remove expired code
+        delete codes[code];
+      }
+    }
+  }
+
   const code = generateCode();
   const expires = Date.now() + 5 * 60 * 1000;
 
-  const codes = await loadLinkCodes();
   codes[code] = {
     discordId: userId,
     expires,

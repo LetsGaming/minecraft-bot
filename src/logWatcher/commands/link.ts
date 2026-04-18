@@ -60,8 +60,10 @@ const cmd = defineCommand({
 
     const entry = codes[code];
     if (!entry) return;
+
     const { discordId, expires } = entry;
     const user = client.users.cache.get(discordId);
+
     if (Date.now() > expires) {
       delete codes[code];
       await saveData();
@@ -69,8 +71,12 @@ const cmd = defineCommand({
         user.send(`❌ Link code **${code}** has expired.`).catch(() => {});
       return;
     }
+
     linked[discordId] = username;
-    delete codes[code];
+    // Mark the code as confirmed to prevent reuse until it expires
+    // Use the 'entry' reference which TS knows is defined
+    entry.confirmed = true;
+
     await saveData();
     if (user)
       user.send(`✅ Linked to Minecraft user **${username}**.`).catch(() => {});
