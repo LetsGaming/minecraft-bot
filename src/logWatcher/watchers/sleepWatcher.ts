@@ -37,10 +37,7 @@ const TITLES_LOWER: TitlePair[] = [
     title: "schlafenszeit.",
     subtitle: "%TRIGGER% hat's gesagt. du weißt was zu tun ist.",
   },
-  {
-    title: "okay ciao.",
-    subtitle: "log dich aus. das bett ist schon online.",
-  },
+  { title: "okay ciao.", subtitle: "log dich aus. das bett ist schon online." },
   {
     title: "skill issue.",
     subtitle: "nicht schlafen wollen ist halt auch nen skill issue.",
@@ -58,16 +55,13 @@ const TITLES_LOWER: TitlePair[] = [
 const TITLES_NORMAL: TitlePair[] = [
   {
     title: "Schlafenszeit.",
-    subtitle: "%TRIGGER% hat's angestoßen. Jetzt weißt du Bescheid.",
+    subtitle: "%TRIGGER% hat's angestossen. Jetzt weisst du Bescheid.",
   },
   {
     title: "Log dich aus.",
-    subtitle: "Das hier läuft morgen noch. Du brauchst Schlaf.",
+    subtitle: "Das hier laeuft morgen noch. Du brauchst Schlaf.",
   },
-  {
-    title: "Geh schlafen.",
-    subtitle: "Kein Drama. Einfach Bett.",
-  },
+  { title: "Geh schlafen.", subtitle: "Kein Drama. Einfach Bett." },
   {
     title: "Okay, Ciao.",
     subtitle: "%TRIGGER% hat gesprochen. Das Bett wartet schon.",
@@ -89,11 +83,11 @@ const TITLES_ALLCAPS: TitlePair[] = [
   },
   {
     title: "SKILL ISSUE!!!",
-    subtitle: "%TRIGGER% SCHLÄFT SCHON. NUR DU NICHT. CLASSIC.",
+    subtitle: "%TRIGGER% SCHLAEFT SCHON. NUR DU NICHT. CLASSIC.",
   },
   {
     title: "BRO???",
-    subtitle: "DU SCHLÄFST NOCH NICHT?! WHAT IS WRONG WITH YOU.",
+    subtitle: "DU SCHLAEFST NOCH NICHT?! WHAT IS WRONG WITH YOU.",
   },
   {
     title: "KEIN WIDERSPRUCH.",
@@ -118,6 +112,32 @@ function buildTitlePair(capsMode: CapsMode, trigger: string): TitlePair {
     title: title.replace(/%TRIGGER%/g, trigger),
     subtitle: subtitle.replace(/%TRIGGER%/g, trigger),
   };
+}
+
+// ── Night check ───────────────────────────────────────────────────────────────
+
+// Minecraft daytime ticks: 0 = 6:00, 6000 = 12:00, 12542 = sunset, 23459 = sunrise
+const NIGHT_START = 12542;
+const NIGHT_END = 23459;
+
+/**
+ * Returns true if the server is currently night time.
+ * `/time query daytime` returns e.g. "The time is 13000"
+ * Falls back to true (allow) when the output is unreadable (screen fallback,
+ * broken RCON) so a bad connection doesn't silently suppress all prompts.
+ */
+async function isNight(server: ServerInstance): Promise<boolean> {
+  try {
+    const output = await server.sendCommand("/time query daytime");
+    if (!output) return true; // screen fallback – can't read output, allow
+    const match = output.match(/\d+/);
+    if (!match) return true;
+    const tick = parseInt(match[0], 10);
+    // Night wraps around midnight: ticks >= NIGHT_START OR <= NIGHT_END
+    return tick >= NIGHT_START || tick <= NIGHT_END;
+  } catch {
+    return true;
+  }
 }
 
 // ── Title sender ──────────────────────────────────────────────────────────────
@@ -162,6 +182,11 @@ export function registerSleepWatcher(logWatcher: ILogWatcher): void {
         "sleepWatcher",
         `${triggerPlayer} triggered sleep prompt (${capsMode})`,
       );
+
+      if (!(await isNight(server))) {
+        log.info("sleepWatcher", "Daytime – skipping sleep prompt.");
+        return;
+      }
 
       const pair = buildTitlePair(capsMode, triggerPlayer);
 
