@@ -88,7 +88,7 @@ export async function deleteStats(
   const deleted = await serverAccess.deleteStatsFile(cfg, uuid);
   if (deleted) {
     const { invalidateAllStatsCache } = await import("./statUtils.js");
-    invalidateAllStatsCache();
+    invalidateAllStatsCache(cfg.id);
   }
   return deleted;
 }
@@ -107,7 +107,7 @@ export async function getListOutput(
     await server.sendCommand("/list");
   }
   await new Promise<void>((r) => setTimeout(r, 200));
-  const output = await getLatestLogs(10);
+  const output = await getLatestLogs(10, undefined, server);
   lastListOutput = output;
   lastListTime = now;
   return output;

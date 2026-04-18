@@ -253,7 +253,7 @@ export class ServerInstance {
    * True if connected via direct RCON or via a remote API wrapper.
    */
   get supportsTps(): boolean {
-    return this._rcon !== null || this.config.apiUrl !== undefined;
+    return this._rcon !== null || Boolean(this.config.apiUrl);
   }
 
   async getTps(): Promise<TpsResult | null> {

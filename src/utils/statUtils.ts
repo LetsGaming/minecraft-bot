@@ -60,7 +60,7 @@ export const LEADERBOARD_STATS: Record<string, LeaderboardStatDefinition> = {
   },
 };
 
-interface BuildLeaderboardOptions {
+export interface BuildLeaderboardOptions {
   limit?: number;
   baseline?: Record<string, Record<string, number>> | null;
   periodLabel?: string | null;

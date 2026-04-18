@@ -68,19 +68,21 @@ export class RemoteLogWatcher {
 
     // Use a separate AbortController for the connection so we can cancel it
     // on stop(), while keeping a short timeout only for the initial handshake.
-    this._abortController = new AbortController();
-    const connectTimeout = setTimeout(
-      () => this._abortController?.abort(),
-      10_000,
-    );
+    // Capture the controller locally so stale timers from previous attempts
+    // cannot abort a newly created controller after a reconnect.
+    const controller = new AbortController();
+    this._abortController = controller;
+    const connectTimeout = setTimeout(() => controller.abort(), 10_000);
 
     let res: Response;
     try {
-      res = await fetch(url, { headers, signal: this._abortController.signal });
-      clearTimeout(connectTimeout);
+      res = await fetch(url, { headers, signal: controller.signal });
     } catch (err) {
+      clearTimeout(connectTimeout);
       this._scheduleReconnect(`connect failed: ${String(err)}`);
       return;
+    } finally {
+      clearTimeout(connectTimeout);
     }
 
     if (!res.ok || !res.body) {
