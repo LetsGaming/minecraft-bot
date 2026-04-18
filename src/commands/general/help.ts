@@ -4,7 +4,7 @@ import {
   createPaginationButtons,
   handlePagination,
 } from '../../utils/embedUtils.js';
-import type { BotCommand, BotClient } from '../../types/index.js';
+import type { BotClient } from '../../types/index.js';
 import { log } from '../../utils/logger.js';
 
 export const data = new SlashCommandBuilder()

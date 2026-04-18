@@ -11,6 +11,7 @@ import { loadJson, saveJson, getRootDir } from '../../utils/utils.js';
 import { log } from '../../utils/logger.js';
 import { getAllInstances, getServerInstance } from '../../utils/server.js';
 import type { GuildConfig, LeaderboardInterval, LeaderboardScheduleState } from '../../types/index.js';
+import type { ServerInstance } from '../../utils/server.js';
 
 const SCHEDULE_PATH = path.resolve(
   getRootDir(),
@@ -144,12 +145,18 @@ async function checkAndPost(
       // Use the guild's configured server, or fall back to the first instance
       const serverId = gcfg.leaderboard?.server ?? gcfg.defaultServer;
       const server = serverId ? (getServerInstance(serverId) ?? undefined) : getAllInstances()[0];
+
+      if (!server) {
+        log.warn('leaderboard', `No server instance found for guild ${guildId}, skipping leaderboard post`);
+        continue;
+      }
+
       const snapshot = await getSnapshotClosestTo(periodStart);
 
       const periodLabel = INTERVAL_LABELS[interval] ?? interval;
       let footer: string;
 
-      const opts: { periodLabel: string; baseline?: Record<string, Record<string, number>>; server?: typeof server } = { periodLabel, server };
+      const opts: { periodLabel: string; baseline?: Record<string, Record<string, number>>; server: ServerInstance } = { periodLabel, server };
 
       if (snapshot) {
         opts.baseline = snapshot.players;

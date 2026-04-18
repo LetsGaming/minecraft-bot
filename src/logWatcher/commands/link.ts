@@ -80,4 +80,15 @@ cmd.init = async (): Promise<void> => {
   originalInit();
 };
 
-export const { init, COMMAND_INFO } = cmd;
+export const { init, COMMAND_INFO, handler } = cmd;
+
+/**
+ * Reset all in-memory state. Only for use in tests.
+ */
+export function _resetStateForTesting(): void {
+  codes = {};
+  linked = {};
+  saving = false;
+  pendingSave = false;
+  linkAttempts.clear();
+}

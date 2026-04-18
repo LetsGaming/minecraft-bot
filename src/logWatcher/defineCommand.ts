@@ -69,5 +69,5 @@ export function defineCommand({
     });
   }
 
-  return { init, COMMAND_INFO: commandInfo };
+  return { init, COMMAND_INFO: commandInfo, handler };
 }

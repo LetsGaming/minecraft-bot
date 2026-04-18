@@ -4,27 +4,48 @@
  * Covers:
  *  - calcStreak: streak increment, reset after miss, longestStreak tracking
  *  - pick: weighted random item selection
- *  - claimLock: concurrent executions are blocked (F-001 race condition fix)
- *  - cooldown: second claim within 24 h is rejected
+ *  - claimLock: concurrent executions are blocked for the same user
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+// ── Top-level mocks — must be at file scope for Vitest hoisting ───────────
+
+vi.mock('../src/utils/linkUtils.js', () => ({
+  isLinked: vi.fn(),
+  getLinkedAccount: vi.fn(),
+}));
+
+vi.mock('../src/utils/playerUtils.js', () => ({
+  getOnlinePlayers: vi.fn(),
+}));
+
+vi.mock('../src/utils/guildRouter.js', () => ({
+  resolveServer: vi.fn(),
+}));
+
+vi.mock('../src/utils/embedUtils.js', () => ({
+  createErrorEmbed: vi.fn().mockReturnValue({}),
+}));
+
+vi.mock('../src/utils/utils.js', () => ({
+  getRootDir: vi.fn().mockReturnValue('/tmp'),
+  loadJson: vi.fn(),
+  saveJson: vi.fn(),
+}));
+
 // ── calcStreak & pick ──────────────────────────────────────────────────────
-// These are pure functions — import them directly without touching Discord or FS.
+// Pure functions — import directly without Discord/FS side-effects.
 
 const DAILY_COOLDOWN = 24 * 60 * 60 * 1000;
 const TWO_DAYS = 2 * DAILY_COOLDOWN + 1;
 
-// Dynamic import so we can test without discord.js side-effects at module load.
-const { calcStreak, pick } = await import(
-  '../src/commands/connection/daily/daily.js'
-);
+const { calcStreak, pick } = await import('../src/commands/connection/daily/daily.js');
 
 describe('calcStreak', () => {
   it('increments streak on consecutive claim', () => {
     const result = calcStreak(
       { currentStreak: 3, bonusStreak: 3, longestStreak: 5 },
-      DAILY_COOLDOWN + 1000, // just over 24 h
+      DAILY_COOLDOWN + 1000,
     );
     expect(result.currentStreak).toBe(4);
     expect(result.bonusStreak).toBe(4);
@@ -66,8 +87,7 @@ describe('pick', () => {
       { item: 'minecraft:gold_ingot', amount: 3, weight: 5 },
     ];
     for (let i = 0; i < 100; i++) {
-      const result = pick(pool);
-      expect(pool).toContain(result);
+      expect(pool).toContain(pick(pool));
     }
   });
 
@@ -89,9 +109,7 @@ describe('pick', () => {
   });
 });
 
-// ── claimLock (F-001) ──────────────────────────────────────────────────────
-// We test the lock behaviour by mocking all external dependencies and driving
-// execute() directly.
+// ── claimLock — concurrent claim prevention ────────────────────────────────
 
 describe('claimLock — concurrent claim prevention', () => {
   beforeEach(() => {
@@ -102,55 +120,49 @@ describe('claimLock — concurrent claim prevention', () => {
     vi.restoreAllMocks();
   });
 
-  it('blocks a second concurrent execution for the same user', async () => {
-    // Stub every external module the command touches.
-    vi.mock('../src/utils/linkUtils.js', () => ({
-      isLinked: vi.fn().mockResolvedValue(true),
-      getLinkedAccount: vi.fn().mockResolvedValue('Steve'),
-    }));
-    vi.mock('../src/utils/playerUtils.js', () => ({
-      getOnlinePlayers: vi.fn().mockResolvedValue(['Steve']),
-    }));
-    vi.mock('../src/utils/guildRouter.js', () => ({
-      resolveServer: vi.fn().mockReturnValue({
-        sendCommand: vi.fn().mockResolvedValue(null),
-      }),
-    }));
-    vi.mock('../src/utils/embedUtils.js', () => ({
-      createErrorEmbed: vi.fn().mockReturnValue({}),
-    }));
-
-    // Provide a saveJson that never resolves so the first execution stays
-    // inside the lock long enough for the second to arrive.
-    let releaseSave!: () => void;
-    const savePending = new Promise<void>((res) => { releaseSave = res; });
-    vi.mock('../src/utils/utils.js', () => ({
-      getRootDir: vi.fn().mockReturnValue('/tmp'),
-      loadJson: vi.fn().mockResolvedValue({
-        default: [{ item: 'minecraft:diamond', amount: 1, weight: 1 }],
-        streakBonuses: {},
-      }),
-      saveJson: vi.fn().mockReturnValue(savePending),
-    }));
-
-    const { execute } = await import('../src/commands/connection/daily/daily.js');
-
-    const makeInteraction = (userId = 'user-1') => ({
+  function makeInteraction(userId = 'user-1') {
+    return {
       user: { id: userId },
       guild: { id: 'guild-1' },
       options: { getString: vi.fn().mockReturnValue(null) },
       reply: vi.fn().mockResolvedValue(undefined),
+    };
+  }
+
+  it('blocks a second concurrent execution for the same user', async () => {
+    const utils = await import('../src/utils/utils.js');
+    const linkUtils = await import('../src/utils/linkUtils.js');
+    const playerUtils = await import('../src/utils/playerUtils.js');
+    const guildRouter = await import('../src/utils/guildRouter.js');
+
+    vi.mocked(linkUtils.isLinked).mockResolvedValue(true);
+    vi.mocked(linkUtils.getLinkedAccount).mockResolvedValue('Steve');
+    vi.mocked(playerUtils.getOnlinePlayers).mockResolvedValue(['Steve']);
+    vi.mocked(guildRouter.resolveServer).mockReturnValue({
+      sendCommand: vi.fn().mockResolvedValue(null),
+    } as never);
+    vi.mocked(utils.getRootDir).mockReturnValue('/tmp');
+    vi.mocked(utils.loadJson).mockResolvedValue({
+      default: [{ item: 'minecraft:diamond', amount: 1, weight: 1 }],
+      streakBonuses: {},
     });
+
+    // saveJson that never resolves — keeps the first execution inside the lock.
+    let releaseSave!: () => void;
+    const savePending = new Promise<void>((res) => { releaseSave = res; });
+    vi.mocked(utils.saveJson).mockReturnValue(savePending as never);
+
+    const { execute } = await import('../src/commands/connection/daily/daily.js');
 
     const i1 = makeInteraction();
     const i2 = makeInteraction();
 
-    // Start first execution — it will hang at saveJson.
+    // Start first execution — hangs at saveJson.
     const p1 = execute(i1 as never);
-    // Yield so p1 enters the lock before p2 starts.
+    // Yield so i1 enters the lock before i2 starts.
     await new Promise((r) => setTimeout(r, 0));
 
-    // Second execution for the same user should be rejected immediately.
+    // Second execution for the same user must be rejected immediately.
     await execute(i2 as never);
     expect(i2.reply).toHaveBeenCalledWith(
       expect.objectContaining({ content: expect.stringContaining('Already processing') }),
@@ -162,40 +174,19 @@ describe('claimLock — concurrent claim prevention', () => {
   });
 
   it('allows a second execution for a different user', async () => {
-    vi.mock('../src/utils/linkUtils.js', () => ({
-      isLinked: vi.fn().mockResolvedValue(false), // fail fast — we only care about lock
-      getLinkedAccount: vi.fn(),
-    }));
-    vi.mock('../src/utils/playerUtils.js', () => ({
-      getOnlinePlayers: vi.fn(),
-    }));
-    vi.mock('../src/utils/guildRouter.js', () => ({
-      resolveServer: vi.fn(),
-    }));
-    vi.mock('../src/utils/embedUtils.js', () => ({
-      createErrorEmbed: vi.fn().mockReturnValue({}),
-    }));
-    vi.mock('../src/utils/utils.js', () => ({
-      getRootDir: vi.fn().mockReturnValue('/tmp'),
-      loadJson: vi.fn(),
-      saveJson: vi.fn(),
-    }));
+    const linkUtils = await import('../src/utils/linkUtils.js');
+
+    // Fail fast after the lock check — we only care that neither user gets blocked.
+    vi.mocked(linkUtils.isLinked).mockResolvedValue(false);
 
     const { execute } = await import('../src/commands/connection/daily/daily.js');
-
-    const makeInteraction = (userId: string) => ({
-      user: { id: userId },
-      guild: { id: 'guild-1' },
-      options: { getString: vi.fn().mockReturnValue(null) },
-      reply: vi.fn().mockResolvedValue(undefined),
-    });
 
     const iA = makeInteraction('user-A');
     const iB = makeInteraction('user-B');
 
     await Promise.all([execute(iA as never), execute(iB as never)]);
 
-    // Neither should get the "Already processing" lock message — they're different users.
+    // Neither should receive the "Already processing" lock message.
     for (const call of [...iA.reply.mock.calls, ...iB.reply.mock.calls]) {
       expect((call[0] as { content?: string }).content ?? '').not.toContain('Already processing');
     }

@@ -328,6 +328,12 @@ export interface InGameCommandInfo {
 export interface InGameCommandResult {
   init: () => void;
   COMMAND_INFO: InGameCommandInfo;
+  handler: (
+    username: string,
+    args: Record<string, string>,
+    client: import('discord.js').Client,
+    server: import('../utils/server.js').ServerInstance,
+  ) => Promise<void>;
 }
 
 // ── Mojang API ──
