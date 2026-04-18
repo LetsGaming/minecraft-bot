@@ -248,7 +248,25 @@ export class ServerInstance {
     return m?.[1] ?? "overworld";
   }
 
+  /**
+   * Whether this instance can provide TPS data.
+   * True if connected via direct RCON or via a remote API wrapper.
+   */
+  get supportsTps(): boolean {
+    return this._rcon !== null || this.config.apiUrl !== undefined;
+  }
+
   async getTps(): Promise<TpsResult | null> {
+    // Remote server: delegate to API wrapper
+    if (this.config.apiUrl) {
+      try {
+        const { getTps } = await import("./serverAccess.js");
+        return await getTps(this.config);
+      } catch {
+        return null;
+      }
+    }
+
     if (!this._rcon) return null;
 
     // ── Try Paper/Spigot/Purpur "tps" command first ──

@@ -127,6 +127,19 @@ export async function sendCommand(
   return null;
 }
 
+/** Get TPS data from the server. Returns null if unavailable. */
+export async function getTps(
+  cfg: ServerConfig,
+): Promise<import("../types/index.js").TpsResult | null> {
+  if (cfg.apiUrl) {
+    const { tps } = await apiGet<{
+      tps: import("../types/index.js").TpsResult | null;
+    }>(cfg, "/tps");
+    return tps;
+  }
+  return null;
+}
+
 // ── Whitelist ─────────────────────────────────────────────────────────────
 
 /** Read whitelist.json for the given server. Returns [] on any error. */

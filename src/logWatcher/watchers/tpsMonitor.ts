@@ -1,9 +1,9 @@
-import { type Client } from 'discord.js';
-import { log } from '../../utils/logger.js';
-import { loadConfig } from '../../config.js';
-import { createEmbed } from '../../utils/embedUtils.js';
-import type { ServerInstance } from '../../utils/server.js';
-import type { GuildConfig } from '../../types/index.js';
+import { type Client } from "discord.js";
+import { log } from "../../utils/logger.js";
+import { loadConfig } from "../../config.js";
+import { createEmbed } from "../../utils/embedUtils.js";
+import type { ServerInstance } from "../../utils/server.js";
+import type { GuildConfig } from "../../types/index.js";
 
 const warned = new Map<string, number>();
 
@@ -16,8 +16,8 @@ export function startTpsMonitor(
   const interval = cfg.tpsPollIntervalMs;
   const threshold = cfg.tpsWarningThreshold;
 
-  if (!serverInstance.useRcon) {
-    log.info(serverInstance.id, 'TPS monitoring skipped (requires RCON)');
+  if (!serverInstance.supportsTps) {
+    log.info(serverInstance.id, "TPS monitoring skipped (requires RCON)");
     return null;
   }
 
@@ -39,43 +39,44 @@ export function startTpsMonitor(
 
           try {
             const channel = await client.channels.fetch(tpsAlert.channelId);
-            if (!channel || !('send' in channel)) continue;
+            if (!channel || !("send" in channel)) continue;
 
             const embed = createEmbed({
-              title: '⚠️ Low TPS Warning',
+              title: "⚠️ Low TPS Warning",
               description: `Server TPS has dropped below ${threshold}`,
               color: tps.tps1m < 10 ? 0xff0000 : 0xffaa00,
               footer: { text: serverInstance.id },
             });
 
-            if ('tps5m' in tps && tps.tps5m !== undefined) {
-              const paperTps = tps as import('../../types/index.js').PaperTpsResult;
+            if ("tps5m" in tps && tps.tps5m !== undefined) {
+              const paperTps =
+                tps as import("../../types/index.js").PaperTpsResult;
               embed.addFields(
                 {
-                  name: '1 min',
+                  name: "1 min",
                   value: `${paperTps.tps1m.toFixed(1)}`,
                   inline: true,
                 },
                 {
-                  name: '5 min',
+                  name: "5 min",
                   value: `${paperTps.tps5m.toFixed(1)}`,
                   inline: true,
                 },
                 {
-                  name: '15 min',
+                  name: "15 min",
                   value: `${paperTps.tps15m.toFixed(1)}`,
                   inline: true,
                 },
               );
             } else {
               embed.addFields({
-                name: 'TPS',
+                name: "TPS",
                 value: `${tps.tps1m.toFixed(1)}`,
                 inline: true,
               });
-              if ('mspt' in tps && tps.mspt !== undefined) {
+              if ("mspt" in tps && tps.mspt !== undefined) {
                 embed.addFields({
-                  name: 'MSPT',
+                  name: "MSPT",
                   value: `${tps.mspt.toFixed(1)}ms`,
                   inline: true,
                 });
@@ -85,7 +86,7 @@ export function startTpsMonitor(
             await channel.send({ embeds: [embed] });
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            log.error('tps', `Alert failed: ${msg}`);
+            log.error("tps", `Alert failed: ${msg}`);
           }
         }
       }
