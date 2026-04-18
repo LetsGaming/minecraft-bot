@@ -78,7 +78,6 @@ export class RemoteLogWatcher {
     try {
       res = await fetch(url, { headers, signal: controller.signal });
     } catch (err) {
-      clearTimeout(connectTimeout);
       this._scheduleReconnect(`connect failed: ${String(err)}`);
       return;
     } finally {
