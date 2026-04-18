@@ -1,17 +1,21 @@
-import { type EmbedBuilder } from 'discord.js';
-import { createEmbed } from './embedUtils.js';
+import { type EmbedBuilder } from "discord.js";
+import { createEmbed } from "./embedUtils.js";
 import {
   humanizeKey,
   formatPlaytime,
   formatDistance,
   type LeaderboardData,
-} from './statUtils.js';
-import type { FlattenedStat } from '../types/index.js';
+} from "./statUtils.js";
+import type { FlattenedStat } from "../types/index.js";
 
 /**
  * Converts plain leaderboard data (from buildLeaderboard) into a Discord EmbedBuilder.
  */
-export function buildLeaderboardEmbed({ title, description, footerText }: LeaderboardData): EmbedBuilder {
+export function buildLeaderboardEmbed({
+  title,
+  description,
+  footerText,
+}: LeaderboardData): EmbedBuilder {
   return createEmbed({
     title,
     description,
@@ -23,9 +27,12 @@ export function buildLeaderboardEmbed({ title, description, footerText }: Leader
  * Builds an array of paginated embeds for displaying player stats.
  * Splits stats by category and chunks fields to stay within Discord's limits.
  */
-export function buildStatsEmbeds(stats: FlattenedStat[], username: string): EmbedBuilder[] {
+export function buildStatsEmbeds(
+  stats: FlattenedStat[],
+  username: string,
+): EmbedBuilder[] {
   const embeds: EmbedBuilder[] = [];
-  let currentEmbed = createEmbed({ title: 'PLACEHOLDER' });
+  let currentEmbed = createEmbed({ title: "PLACEHOLDER" });
   let fieldCount = 0;
 
   const grouped = groupByCategory(stats);
@@ -70,11 +77,11 @@ export function buildStatsEmbeds(stats: FlattenedStat[], username: string): Embe
         chunkNumber === 1
           ? humanizeKey(category)
           : `${humanizeKey(category)} (${chunkNumber})`;
-      const value = chunk.join('\n');
+      const value = chunk.join("\n");
 
       if (fieldCount >= 2) {
         embeds.push(currentEmbed);
-        currentEmbed = createEmbed({ title: 'PLACEHOLDER' });
+        currentEmbed = createEmbed({ title: "PLACEHOLDER" });
         fieldCount = 0;
       }
 
@@ -105,7 +112,9 @@ export function buildStatsEmbeds(stats: FlattenedStat[], username: string): Embe
   return embeds;
 }
 
-function groupByCategory(stats: FlattenedStat[]): Record<string, FlattenedStat[]> {
+function groupByCategory(
+  stats: FlattenedStat[],
+): Record<string, FlattenedStat[]> {
   const grouped: Record<string, FlattenedStat[]> = {};
   for (const stat of stats) {
     if (!grouped[stat.category]) {

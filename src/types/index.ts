@@ -8,7 +8,7 @@ import type {
   Client,
   SlashCommandBuilder,
   SlashCommandSubcommandsOnlyBuilder,
-} from 'discord.js';
+} from "discord.js";
 
 // ── Config ──
 
@@ -133,7 +133,10 @@ export interface BotConfig {
 // ── Discord commands ──
 
 export interface BotCommand {
-  data: SlashCommandBuilder | Omit<SlashCommandBuilder, 'addSubcommand' | 'addSubcommandGroup'> | SlashCommandSubcommandsOnlyBuilder;
+  data:
+    | SlashCommandBuilder
+    | Omit<SlashCommandBuilder, "addSubcommand" | "addSubcommandGroup">
+    | SlashCommandSubcommandsOnlyBuilder;
   execute: (interaction: ChatInputCommandInteraction) => Promise<void>;
 }
 
@@ -222,7 +225,7 @@ export interface LeaderboardEntry {
   formatted: string;
 }
 
-export type LeaderboardInterval = 'daily' | 'weekly' | 'monthly';
+export type LeaderboardInterval = "daily" | "weekly" | "monthly";
 
 /**
  * Minecraft stats file — can be either the old flat format
@@ -296,7 +299,7 @@ export type WhitelistAuditMap = Record<string, WhitelistAuditEntry>;
 export type LogHandler = (
   match: RegExpExecArray,
   client: Client,
-  server: import('../utils/server.js').ServerInstance,
+  server: import("../utils/server.js").ServerInstance,
 ) => Promise<void>;
 
 export interface LogWatcherEntry {
@@ -316,7 +319,7 @@ export interface InGameCommandDefinition {
     username: string,
     args: Record<string, string>,
     client: Client,
-    server: import('../utils/server.js').ServerInstance,
+    server: import("../utils/server.js").ServerInstance,
   ) => Promise<void>;
 }
 
@@ -331,8 +334,8 @@ export interface InGameCommandResult {
   handler: (
     username: string,
     args: Record<string, string>,
-    client: import('discord.js').Client,
-    server: import('../utils/server.js').ServerInstance,
+    client: import("discord.js").Client,
+    server: import("../utils/server.js").ServerInstance,
   ) => Promise<void>;
 }
 
@@ -417,7 +420,7 @@ export interface DowntimeState {
   consecutiveFailures: number;
   alerted: boolean;
   suppressUntil: number;
-  lastKnownState: 'online' | 'offline' | null;
+  lastKnownState: "online" | "offline" | null;
 }
 
 // ── Variables.txt parsing ──

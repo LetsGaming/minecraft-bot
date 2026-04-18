@@ -1,15 +1,15 @@
-import { getServerInstance } from './server.js';
-import type { ServerInstance } from './server.js';
-import { loadWhitelist, deleteStats } from './utils.js';
-import { log } from './logger.js';
-import * as serverAccess from './serverAccess.js';
+import { getServerInstance } from "./server.js";
+import type { ServerInstance } from "./server.js";
+import { loadWhitelist, deleteStats } from "./utils.js";
+import { log } from "./logger.js";
+import * as serverAccess from "./serverAccess.js";
 import type {
   FlattenedStat,
   ScoredStat,
   LeaderboardStatDefinition,
   LeaderboardEntry,
   MinecraftStatsFile,
-} from '../types/index.js';
+} from "../types/index.js";
 
 /**
  * Available leaderboard stat definitions.
@@ -17,42 +17,42 @@ import type {
  */
 export const LEADERBOARD_STATS: Record<string, LeaderboardStatDefinition> = {
   playtime: {
-    label: 'Playtime',
+    label: "Playtime",
     extract: (flat) => findPlayTimeStat(flat),
     format: (v) => formatPlaytime(v),
     sortAscending: false,
   },
   mob_kills: {
-    label: 'Mob Kills',
+    label: "Mob Kills",
     extract: (flat) =>
       flat
-        .filter((s) => s.category === 'minecraft:killed')
+        .filter((s) => s.category === "minecraft:killed")
         .reduce((sum, s) => sum + s.value, 0),
     format: (v) => v.toLocaleString(),
     sortAscending: false,
   },
   deaths: {
-    label: 'Deaths',
+    label: "Deaths",
     extract: (flat) => {
-      const d = flat.find((s) => s.key === 'minecraft:deaths');
+      const d = flat.find((s) => s.key === "minecraft:deaths");
       return d?.value ?? 0;
     },
     format: (v) => v.toLocaleString(),
     sortAscending: true,
   },
   mined: {
-    label: 'Blocks Mined',
+    label: "Blocks Mined",
     extract: (flat) =>
       flat
-        .filter((s) => s.category === 'minecraft:mined')
+        .filter((s) => s.category === "minecraft:mined")
         .reduce((sum, s) => sum + s.value, 0),
     format: (v) => v.toLocaleString(),
     sortAscending: false,
   },
   walked: {
-    label: 'Distance Walked',
+    label: "Distance Walked",
     extract: (flat) => {
-      const w = flat.find((s) => s.key === 'minecraft:walk_one_cm');
+      const w = flat.find((s) => s.key === "minecraft:walk_one_cm");
       return w?.value ?? 0;
     },
     format: (v) => formatDistance(v),
@@ -82,7 +82,12 @@ export interface LeaderboardData {
  */
 export async function buildLeaderboard(
   statKey: string,
-  { limit = 10, baseline = null, periodLabel = null, server }: BuildLeaderboardOptions,
+  {
+    limit = 10,
+    baseline = null,
+    periodLabel = null,
+    server,
+  }: BuildLeaderboardOptions,
 ): Promise<LeaderboardData> {
   const def = LEADERBOARD_STATS[statKey];
   if (!def) throw new Error(`Unknown stat: ${statKey}`);
@@ -115,7 +120,7 @@ export async function buildLeaderboard(
     }
 
     // For deaths include zero values, for everything else skip them
-    if (statKey !== 'deaths' && value <= 0) continue;
+    if (statKey !== "deaths" && value <= 0) continue;
 
     entries.push({ name, value, formatted: def.format(value) });
   }
@@ -125,26 +130,26 @@ export async function buildLeaderboard(
   );
 
   const top = entries.slice(0, limit);
-  const medals = ['🥇', '🥈', '🥉'];
+  const medals = ["🥇", "🥈", "🥉"];
   const lines = top.map((e, i) => {
     const prefix = medals[i] ?? `**${i + 1}.**`;
     return `${prefix} **${e.name}** — ${e.formatted}`;
   });
 
-  const titlePeriod = periodLabel ? ` (${periodLabel})` : '';
+  const titlePeriod = periodLabel ? ` (${periodLabel})` : "";
 
   return {
     entries,
     title: `🏆 Leaderboard — ${def.label}${titlePeriod}`,
-    description: lines.join('\n') || 'No data available.',
+    description: lines.join("\n") || "No data available.",
     footerText: `${entries.length} players tracked`,
   };
 }
 
 export function humanizeKey(rawKey: string): string {
   return rawKey
-    .replace(/^minecraft:/, '')
-    .replace(/_/g, ' ')
+    .replace(/^minecraft:/, "")
+    .replace(/_/g, " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
@@ -153,7 +158,7 @@ export function humanizeKey(rawKey: string): string {
  * 1 tick = 1/20 second.
  */
 export function formatPlaytime(ticks: number): string {
-  if (typeof ticks !== 'number' || ticks <= 0) return '0s';
+  if (typeof ticks !== "number" || ticks <= 0) return "0s";
   const seconds = Math.floor(ticks / 20);
   const days = Math.floor(seconds / 86400);
   const hours = Math.floor((seconds % 86400) / 3600);
@@ -171,9 +176,9 @@ export function findPlayTimeStat(flattenedStats: FlattenedStat[]): number {
 
   const playtime = flattenedStats.find(
     (stat) =>
-      (stat.key === 'minecraft:play_time' &&
-        stat.category === 'minecraft:custom') ||
-      stat.fullKey === 'stat.playOneMinute',
+      (stat.key === "minecraft:play_time" &&
+        stat.category === "minecraft:custom") ||
+      stat.fullKey === "stat.playOneMinute",
   );
 
   return playtime ? playtime.value : 0;
@@ -194,13 +199,19 @@ export function formatDistance(value: number): string {
  * Load and parse stats JSON for given UUID.
  * Routes through serverAccess so remote instances fetch from the API wrapper.
  */
-export async function loadStats(uuid: string, server?: ServerInstance): Promise<MinecraftStatsFile | null> {
-  const cfg = (server ?? getServerInstance('default'))?.config;
-  if (!cfg) { log.warn('stats', 'No server instance available'); return null; }
+export async function loadStats(
+  uuid: string,
+  server?: ServerInstance,
+): Promise<MinecraftStatsFile | null> {
+  const cfg = (server ?? getServerInstance("default"))?.config;
+  if (!cfg) {
+    log.warn("stats", "No server instance available");
+    return null;
+  }
 
   const statsFile = await serverAccess.readStats(cfg, uuid);
   if (!statsFile) {
-    log.warn('stats', `Stats file not found for UUID: ${uuid}`);
+    log.warn("stats", `Stats file not found for UUID: ${uuid}`);
     return null;
   }
   return statsFile;
@@ -211,15 +222,20 @@ export async function loadStats(uuid: string, server?: ServerInstance): Promise<
  * Cached per-server for 30 s. Call invalidateAllStatsCache() after writes.
  */
 const ALL_STATS_TTL_MS = 30_000;
-const allStatsCaches = new Map<string, { data: Record<string, MinecraftStatsFile>; at: number }>();
+const allStatsCaches = new Map<
+  string,
+  { data: Record<string, MinecraftStatsFile>; at: number }
+>();
 
 export function invalidateAllStatsCache(serverId?: string): void {
   if (serverId) allStatsCaches.delete(serverId);
   else allStatsCaches.clear();
 }
 
-export async function loadAllStats(server?: ServerInstance): Promise<Record<string, MinecraftStatsFile>> {
-  const srv = server ?? getServerInstance('default');
+export async function loadAllStats(
+  server?: ServerInstance,
+): Promise<Record<string, MinecraftStatsFile>> {
+  const srv = server ?? getServerInstance("default");
   const cfg = srv?.config;
   if (!cfg) return {};
   const cacheKey = cfg.id;
@@ -254,22 +270,22 @@ export function flattenStats(statsFile: MinecraftStatsFile): FlattenedStat[] {
   const flattened: FlattenedStat[] = [];
 
   const keys = Object.keys(allStats);
-  const isFlatFormat = keys.some((k) => k.includes('.'));
+  const isFlatFormat = keys.some((k) => k.includes("."));
 
   if (isFlatFormat) {
     for (const fullKey of keys) {
       const value = allStats[fullKey];
-      if (typeof value !== 'number') continue;
-      const parts = fullKey.split('.');
+      if (typeof value !== "number") continue;
+      const parts = fullKey.split(".");
       let category: string;
       let key: string;
 
-      if (!fullKey.startsWith('stat.')) {
+      if (!fullKey.startsWith("stat.")) {
         category = parts[0] ?? fullKey;
-        key = parts.slice(1).join('.');
+        key = parts.slice(1).join(".");
       } else {
-        category = parts.slice(0, 2).join('.');
-        key = parts.slice(2).join('.');
+        category = parts.slice(0, 2).join(".");
+        key = parts.slice(2).join(".");
       }
 
       flattened.push({ fullKey, category, key, value });
@@ -277,10 +293,10 @@ export function flattenStats(statsFile: MinecraftStatsFile): FlattenedStat[] {
   } else {
     for (const category of keys) {
       const group = allStats[category];
-      if (typeof group !== 'object' || group === null) continue;
+      if (typeof group !== "object" || group === null) continue;
       for (const key of Object.keys(group)) {
         const value = (group as Record<string, unknown>)[key];
-        if (typeof value !== 'number') continue;
+        if (typeof value !== "number") continue;
         flattened.push({
           fullKey: `${category}.${key}`,
           category,
@@ -298,21 +314,25 @@ export function flattenStats(statsFile: MinecraftStatsFile): FlattenedStat[] {
  * Filter stats by a search string.
  * Returns best matches sorted by simple similarity score.
  */
-export function filterStats(statsArray: FlattenedStat[], filterStat: string | null): FlattenedStat[] {
+export function filterStats(
+  statsArray: FlattenedStat[],
+  filterStat: string | null,
+): FlattenedStat[] {
   if (!filterStat) return statsArray;
 
   const filter = filterStat.toLowerCase();
 
   // Hardcoded disambiguation
-  if (filter === 'killed')
-    return statsArray.filter((s) => s.category === 'minecraft:killed');
-  if (filter === 'killed_by')
+  if (filter === "killed")
+    return statsArray.filter((s) => s.category === "minecraft:killed");
+  if (filter === "killed_by")
     return statsArray.filter(
       (s) =>
-        s.category.includes('KilledBy') || s.category === 'minecraft:killed_by',
+        s.category.includes("KilledBy") || s.category === "minecraft:killed_by",
     );
 
-  const tokenize = (str: string): string[] => str.toLowerCase().split(/[:._\-\s]+/);
+  const tokenize = (str: string): string[] =>
+    str.toLowerCase().split(/[:._\-\s]+/);
 
   const scoreToken = (token: string, filterStr: string): number => {
     if (token === filterStr) return 1;

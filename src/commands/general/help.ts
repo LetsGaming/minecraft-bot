@@ -1,17 +1,23 @@
-import { SlashCommandBuilder, MessageFlags, type ChatInputCommandInteraction } from 'discord.js';
+import {
+  SlashCommandBuilder,
+  MessageFlags,
+  type ChatInputCommandInteraction,
+} from "discord.js";
 import {
   createEmbed,
   createPaginationButtons,
   handlePagination,
-} from '../../utils/embedUtils.js';
-import type { BotClient } from '../../types/index.js';
-import { log } from '../../utils/logger.js';
+} from "../../utils/embedUtils.js";
+import type { BotClient } from "../../types/index.js";
+import { log } from "../../utils/logger.js";
 
 export const data = new SlashCommandBuilder()
-  .setName('help')
-  .setDescription('Show all available commands with descriptions and options');
+  .setName("help")
+  .setDescription("Show all available commands with descriptions and options");
 
-export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+export async function execute(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
   const commands = [...(interaction.client as BotClient).commands.values()];
   const pageSize = 5;
   const totalPages = Math.ceil(commands.length / pageSize);
@@ -27,7 +33,14 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     for (const command of pageCommands) {
       const cmdData = command.data;
       const { name, description } = cmdData;
-      const options = 'options' in cmdData ? (cmdData.options as unknown as Array<{ name: string; description: string; required?: boolean }>) : [];
+      const options =
+        "options" in cmdData
+          ? (cmdData.options as unknown as Array<{
+              name: string;
+              description: string;
+              required?: boolean;
+            }>)
+          : [];
 
       embed.addFields({
         name: `/${name}`,
@@ -38,13 +51,13 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
       if (options.length > 0) {
         const optionList = options
           .map((opt) => {
-            const required = opt.required ? '**(required)**' : '(optional)';
+            const required = opt.required ? "**(required)**" : "(optional)";
             return `• \`${opt.name}\`: ${opt.description} ${required}`;
           })
-          .join('\n');
+          .join("\n");
 
         embed.addFields({
-          name: 'Options',
+          name: "Options",
           value: optionList,
           inline: false,
         });
@@ -65,7 +78,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     message = await interaction.fetchReply();
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    log.warn('help', `Could not fetch interaction reply: ${msg}`);
+    log.warn("help", `Could not fetch interaction reply: ${msg}`);
     return;
   }
 

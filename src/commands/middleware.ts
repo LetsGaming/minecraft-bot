@@ -1,7 +1,7 @@
-import { MessageFlags, type ChatInputCommandInteraction } from 'discord.js';
-import { createErrorEmbed } from '../utils/embedUtils.js';
-import { log } from '../utils/logger.js';
-import { loadConfig } from '../config.js';
+import { MessageFlags, type ChatInputCommandInteraction } from "discord.js";
+import { createErrorEmbed } from "../utils/embedUtils.js";
+import { log } from "../utils/logger.js";
+import { loadConfig } from "../config.js";
 
 /**
  * Checks whether a Discord user ID is listed in config.adminUsers.
@@ -12,7 +12,9 @@ export function isServerAdmin(discordUserId: string): boolean {
   return admins.includes(discordUserId);
 }
 
-type CommandExecutor = (interaction: ChatInputCommandInteraction) => Promise<void>;
+type CommandExecutor = (
+  interaction: ChatInputCommandInteraction,
+) => Promise<void>;
 
 /**
  * Middleware that gates a command behind server admin status.
@@ -21,7 +23,7 @@ type CommandExecutor = (interaction: ChatInputCommandInteraction) => Promise<voi
 export function requireServerAdmin(execute: CommandExecutor): CommandExecutor {
   return async (interaction) => {
     if (!isServerAdmin(interaction.user.id)) {
-      throw new Error('You do not have permission to use this command.');
+      throw new Error("You do not have permission to use this command.");
     }
     return execute(interaction);
   };
@@ -51,8 +53,9 @@ export function withErrorHandling(
       }
       await execute(interaction);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'An unexpected error occurred.';
-      log.error('command', `/${interaction.commandName}: ${message}`);
+      const message =
+        err instanceof Error ? err.message : "An unexpected error occurred.";
+      log.error("command", `/${interaction.commandName}: ${message}`);
       const embed = createErrorEmbed(message);
       try {
         if (interaction.deferred || interaction.replied) {

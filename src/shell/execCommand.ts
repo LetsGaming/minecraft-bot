@@ -1,6 +1,6 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { log } from '../utils/logger.js';
+import { log } from "../utils/logger.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -13,11 +13,11 @@ export async function execCommand(command: string): Promise<string | null> {
     const { stdout, stderr } = await execFileAsync("bash", ["-c", command], {
       timeout: 15000,
     });
-    if (stderr) log.warn('exec', `[stderr] ${stderr.trim()}`);
+    if (stderr) log.warn("exec", `[stderr] ${stderr.trim()}`);
     return stdout.trim();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    log.error('exec', `[execCommand error] ${message}`);
+    log.error("exec", `[execCommand error] ${message}`);
     return null;
   }
 }
@@ -34,7 +34,7 @@ export async function execSafe(
     return stdout.trim();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    log.error('exec', `[execSafe error] ${message}`);
+    log.error("exec", `[execSafe error] ${message}`);
     return null;
   }
 }

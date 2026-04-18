@@ -1,22 +1,22 @@
-import { SlashCommandBuilder } from 'discord.js';
-import { createEmbed } from '../../utils/embedUtils.js';
-import { resolveServer } from '../../utils/guildRouter.js';
+import { SlashCommandBuilder } from "discord.js";
+import { createEmbed } from "../../utils/embedUtils.js";
+import { resolveServer } from "../../utils/guildRouter.js";
 
-import { withErrorHandling } from '../middleware.js';
+import { withErrorHandling } from "../middleware.js";
 
 export const data = new SlashCommandBuilder()
-  .setName('seed')
+  .setName("seed")
   .setDescription("Get the server's world seed")
   .addStringOption((o) =>
-    o.setName('server').setDescription('Server instance').setAutocomplete(true),
+    o.setName("server").setDescription("Server instance").setAutocomplete(true),
   );
 
 export const execute = withErrorHandling(async (interaction) => {
   const server = resolveServer(interaction);
-  if (!server) throw new Error('Server not found.');
+  if (!server) throw new Error("Server not found.");
 
   const seed = await server.getSeed();
-  if (!seed) throw new Error('Could not retrieve the world seed.');
+  if (!seed) throw new Error("Could not retrieve the world seed.");
 
   await interaction.editReply({
     embeds: [

@@ -1,29 +1,29 @@
-import { SlashCommandBuilder } from 'discord.js';
-import { resolveServer } from '../utils/guildRouter.js';
+import { SlashCommandBuilder } from "discord.js";
+import { resolveServer } from "../utils/guildRouter.js";
 
-import { createSuccessEmbed } from '../utils/embedUtils.js';
-import { withErrorHandling, requireServerAdmin } from './middleware.js';
-import { recordAdd } from '../utils/whitelistAudit.js';
-import type { MojangProfile } from '../types/index.js';
+import { createSuccessEmbed } from "../utils/embedUtils.js";
+import { withErrorHandling, requireServerAdmin } from "./middleware.js";
+import { recordAdd } from "../utils/whitelistAudit.js";
+import type { MojangProfile } from "../types/index.js";
 
 export const data = new SlashCommandBuilder()
-  .setName('whitelist')
-  .setDescription('Verify a Minecraft username and whitelist it')
+  .setName("whitelist")
+  .setDescription("Verify a Minecraft username and whitelist it")
   .addStringOption((o) =>
     o
-      .setName('username')
-      .setDescription('Minecraft username')
+      .setName("username")
+      .setDescription("Minecraft username")
       .setRequired(true),
   )
   .addStringOption((o) =>
-    o.setName('server').setDescription('Server instance').setAutocomplete(true),
+    o.setName("server").setDescription("Server instance").setAutocomplete(true),
   );
 
 export const execute = withErrorHandling(
   requireServerAdmin(async (interaction) => {
-    const username = interaction.options.getString('username', true);
+    const username = interaction.options.getString("username", true);
     const server = resolveServer(interaction);
-    if (!server) throw new Error('Server not found.');
+    if (!server) throw new Error("Server not found.");
 
     const res = await fetch(
       `https://api.mojang.com/users/profiles/minecraft/${username}`,

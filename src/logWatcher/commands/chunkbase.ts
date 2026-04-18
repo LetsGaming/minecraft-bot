@@ -1,8 +1,8 @@
-import { defineCommand } from '../defineCommand.js';
+import { defineCommand } from "../defineCommand.js";
 
 const cmd = defineCommand({
-  name: 'chunkbase',
-  description: 'Get a Chunkbase link for your current location',
+  name: "chunkbase",
+  description: "Get a Chunkbase link for your current location",
   cooldown: 10,
   handler: async (username, _args, _client, server) => {
     const seed = await server.getSeed();
@@ -13,9 +13,9 @@ const cmd = defineCommand({
       return;
     }
 
-    let dimension = 'overworld';
+    let dimension = "overworld";
     try {
-      const r = await server.getPlayerData(username, 'Dimension');
+      const r = await server.getPlayerData(username, "Dimension");
       if (r) {
         const m = r.match(/"minecraft:([^"]+)"/);
         if (m?.[1]) dimension = m[1];
@@ -24,7 +24,7 @@ const cmd = defineCommand({
       /* default */
     }
 
-    let coordsParam = '';
+    let coordsParam = "";
     try {
       const coords = await server.getPlayerCoords(username);
       if (coords)
@@ -43,14 +43,14 @@ const cmd = defineCommand({
     }
 
     const tellRaw: { text: string; extra: TellRawText[] } = {
-      text: '',
+      text: "",
       extra: [
-        { text: 'See your location on Chunkbase: ', color: 'white' },
+        { text: "See your location on Chunkbase: ", color: "white" },
         {
-          text: '[Click here]',
-          color: 'gold',
+          text: "[Click here]",
+          color: "gold",
           underlined: true,
-          click_event: { action: 'open_url', url },
+          click_event: { action: "open_url", url },
         },
       ],
     };

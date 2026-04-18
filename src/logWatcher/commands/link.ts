@@ -1,12 +1,12 @@
-import { defineCommand } from '../defineCommand.js';
+import { defineCommand } from "../defineCommand.js";
 import {
   loadLinkCodes,
   loadLinkedAccounts,
   saveLinkCodes,
   saveLinkedAccounts,
-} from '../../utils/linkUtils.js';
-import type { LinkCodesMap, LinkedAccountsMap } from '../../types/index.js';
-import { log } from '../../utils/logger.js';
+} from "../../utils/linkUtils.js";
+import type { LinkCodesMap, LinkedAccountsMap } from "../../types/index.js";
+import { log } from "../../utils/logger.js";
 
 let codes: LinkCodesMap = {};
 let linked: LinkedAccountsMap = {};
@@ -19,8 +19,8 @@ const linkAttempts = new Map<string, number>();
 const LINK_ATTEMPT_COOLDOWN_MS = 3_000;
 
 async function loadData(): Promise<void> {
-  codes = await loadLinkCodes().catch(() => ({} as LinkCodesMap));
-  linked = await loadLinkedAccounts().catch(() => ({} as LinkedAccountsMap));
+  codes = await loadLinkCodes().catch(() => ({}) as LinkCodesMap);
+  linked = await loadLinkedAccounts().catch(() => ({}) as LinkedAccountsMap);
 }
 
 async function saveData(): Promise<void> {
@@ -33,7 +33,10 @@ async function saveData(): Promise<void> {
     await saveLinkCodes(codes);
     await saveLinkedAccounts(linked);
   } catch (err) {
-    log.error('link', `Link save error: ${err instanceof Error ? err.message : String(err)}`);
+    log.error(
+      "link",
+      `Link save error: ${err instanceof Error ? err.message : String(err)}`,
+    );
   } finally {
     saving = false;
     if (pendingSave) {
@@ -44,9 +47,9 @@ async function saveData(): Promise<void> {
 }
 
 const cmd = defineCommand({
-  name: 'link',
-  description: 'Link your Minecraft account to Discord using a code',
-  args: ['code'],
+  name: "link",
+  description: "Link your Minecraft account to Discord using a code",
+  args: ["code"],
   handler: async (username, { code }, client) => {
     if (!code) return;
 

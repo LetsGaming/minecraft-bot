@@ -5,9 +5,9 @@
  * or getGuildServer() directly. This centralizes resolution logic and makes
  * commands trivially testable by swapping the resolver.
  */
-import { getServerInstance, getGuildServer } from './server.js';
-import type { ChatInputCommandInteraction } from 'discord.js';
-import type { ServerInstance } from './server.js';
+import { getServerInstance, getGuildServer } from "./server.js";
+import type { ChatInputCommandInteraction } from "discord.js";
+import type { ServerInstance } from "./server.js";
 
 /**
  * Resolve the ServerInstance for an interaction.
@@ -22,7 +22,7 @@ import type { ServerInstance } from './server.js';
 export function resolveServer(
   interaction: ChatInputCommandInteraction,
 ): ServerInstance {
-  const explicit = interaction.options.getString('server');
+  const explicit = interaction.options.getString("server");
   const server = explicit
     ? getServerInstance(explicit)
     : getGuildServer(interaction.guild?.id);
@@ -31,7 +31,7 @@ export function resolveServer(
     throw new Error(
       explicit
         ? `Server "${explicit}" not found.`
-        : 'No server configured for this guild.',
+        : "No server configured for this guild.",
     );
   }
   return server;

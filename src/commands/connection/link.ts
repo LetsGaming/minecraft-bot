@@ -1,12 +1,14 @@
-import { SlashCommandBuilder, MessageFlags } from 'discord.js';
-import { randomBytes } from 'crypto';
-import { loadLinkCodes, saveLinkCodes } from '../../utils/linkUtils.js';
+import { SlashCommandBuilder, MessageFlags } from "discord.js";
+import { randomBytes } from "crypto";
+import { loadLinkCodes, saveLinkCodes } from "../../utils/linkUtils.js";
 
 export const data = new SlashCommandBuilder()
-  .setName('link')
-  .setDescription('Link your Discord account to your Minecraft account');
+  .setName("link")
+  .setDescription("Link your Discord account to your Minecraft account");
 
-export async function execute(interaction: import('discord.js').ChatInputCommandInteraction): Promise<void> {
+export async function execute(
+  interaction: import("discord.js").ChatInputCommandInteraction,
+): Promise<void> {
   const userId = interaction.user.id;
 
   const code = generateCode();
@@ -31,5 +33,5 @@ export async function execute(interaction: import('discord.js').ChatInputCommand
 // (4 billion combinations). Replaces the old Math.random-based generator
 // which was brute-forceable within the 5-minute expiry window.
 function generateCode(): string {
-  return randomBytes(4).toString('hex').toUpperCase();
+  return randomBytes(4).toString("hex").toUpperCase();
 }

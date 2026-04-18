@@ -3,9 +3,9 @@
  * Has zero knowledge of Minecraft game logic or Discord. Designed to be
  * dependency-injected into ServerInstance so it can be mocked in tests.
  */
-import net from 'net';
-import { log } from '../utils/logger.js';
-import type { RconPacket, PendingRconCommand } from '../types/index.js';
+import net from "net";
+import { log } from "../utils/logger.js";
+import type { RconPacket, PendingRconCommand } from "../types/index.js";
 
 // ── Packet encoding / decoding ──────────────────────────────────────────────
 
@@ -15,7 +15,7 @@ const RCON_PACKET_TYPE = {
 } as const;
 
 function encodePkt(id: number, type: number, body: string): Buffer {
-  const b = Buffer.from(body, 'utf-8');
+  const b = Buffer.from(body, "utf-8");
   const len = 4 + 4 + b.length + 2;
   const buf = Buffer.alloc(4 + len);
   buf.writeInt32LE(len, 0);
@@ -34,7 +34,7 @@ function decodePkt(buf: Buffer): RconPacket | null {
   return {
     id: buf.readInt32LE(4),
     type: buf.readInt32LE(8),
-    body: buf.toString('utf-8', 12, 4 + length - 2),
+    body: buf.toString("utf-8", 12, 4 + length - 2),
     totalSize: 4 + length,
   };
 }
@@ -80,12 +80,12 @@ export class RconClient {
     }
     for (const [, cb] of this._pending) {
       clearTimeout(cb.timer);
-      cb.reject(new Error('RCON lost'));
+      cb.reject(new Error("RCON lost"));
     }
     this._pending.clear();
     this._buf = Buffer.alloc(0);
     if (this._authReject) {
-      this._authReject(new Error('RCON lost'));
+      this._authReject(new Error("RCON lost"));
       this._authResolve = null;
       this._authReject = null;
     }
@@ -93,13 +93,19 @@ export class RconClient {
 
   connect(): Promise<void> {
     return new Promise<void>((resolve, reject) => {
-      if (this._auth && this._client && !this._client.destroyed) return resolve();
+      if (this._auth && this._client && !this._client.destroyed)
+        return resolve();
 
       if (this._connecting) {
         // Another caller already started the handshake — wait for it.
         const poll = setInterval(() => {
-          if (this._auth) { clearInterval(poll); resolve(); }
-          else if (!this._connecting) { clearInterval(poll); reject(new Error('RCON failed')); }
+          if (this._auth) {
+            clearInterval(poll);
+            resolve();
+          } else if (!this._connecting) {
+            clearInterval(poll);
+            reject(new Error("RCON failed"));
+          }
         }, 50);
         return;
       }
@@ -114,14 +120,14 @@ export class RconClient {
 
       const authTimeout = setTimeout(() => {
         this._cleanup();
-        reject(new Error('RCON auth timeout'));
+        reject(new Error("RCON auth timeout"));
       }, 10000);
 
       this._client.connect(this.port, this.host, () => {
         this._client!.write(encodePkt(1, RCON_PACKET_TYPE.AUTH, this.password));
       });
 
-      this._client.on('data', (data: Buffer) => {
+      this._client.on("data", (data: Buffer) => {
         this._buf = Buffer.concat([this._buf, data]);
         while (true) {
           const pkt = decodePkt(this._buf);
@@ -133,7 +139,7 @@ export class RconClient {
             if (pkt.id === -1) {
               this._connecting = false;
               this._cleanup();
-              reject(new Error('RCON auth failed'));
+              reject(new Error("RCON auth failed"));
               return;
             }
             if (pkt.id === 1) {
@@ -156,8 +162,8 @@ export class RconClient {
         }
       });
 
-      this._client.on('error', () => this._cleanup());
-      this._client.on('close', () => this._cleanup());
+      this._client.on("error", () => this._cleanup());
+      this._client.on("close", () => this._cleanup());
     });
   }
 
@@ -175,7 +181,7 @@ export class RconClient {
     return new Promise<string>((resolve, reject) => {
       const timer = setTimeout(() => {
         this._pending.delete(id);
-        reject(new Error('RCON timeout'));
+        reject(new Error("RCON timeout"));
       }, timeoutMs);
       this._pending.set(id, { resolve, reject, timer });
       this._client!.write(encodePkt(id, RCON_PACKET_TYPE.CMD, command));
@@ -187,7 +193,10 @@ export class RconClient {
     try {
       return await this.send(command, timeoutMs);
     } catch (err) {
-      log.warn(this.serverId, `RCON trySend failed: ${err instanceof Error ? err.message : String(err)}`);
+      log.warn(
+        this.serverId,
+        `RCON trySend failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
       return null;
     }
   }

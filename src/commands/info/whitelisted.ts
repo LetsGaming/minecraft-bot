@@ -1,21 +1,26 @@
-import { SlashCommandBuilder, type ChatInputCommandInteraction } from 'discord.js';
+import {
+  SlashCommandBuilder,
+  type ChatInputCommandInteraction,
+} from "discord.js";
 import {
   createEmbed,
   createErrorEmbed,
   createPaginationButtons,
   handlePagination,
-} from '../../utils/embedUtils.js';
-import { loadWhitelist } from '../../utils/utils.js';
-import { resolveServer } from '../../utils/guildRouter.js';
-import { log } from '../../utils/logger.js';
+} from "../../utils/embedUtils.js";
+import { loadWhitelist } from "../../utils/utils.js";
+import { resolveServer } from "../../utils/guildRouter.js";
+import { log } from "../../utils/logger.js";
 
 export const data = new SlashCommandBuilder()
-  .setName('whitelisted')
+  .setName("whitelisted")
   .setDescription(
-    'List all players who have been whitelisted on the Minecraft server',
+    "List all players who have been whitelisted on the Minecraft server",
   );
 
-export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+export async function execute(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
   await interaction.deferReply();
 
   try {
@@ -24,7 +29,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
     if (!Array.isArray(players) || players.length === 0) {
       await interaction.editReply({
-        content: 'No players found in whitelist.',
+        content: "No players found in whitelist.",
       });
       return;
     }
@@ -40,11 +45,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     for (let i = 0; i < totalPages; i++) {
       const page = usernames.slice(i * chunkSize, (i + 1) * chunkSize);
       const embed = createEmbed({
-        title: '📃 Whitelisted Minecraft Players',
+        title: "📃 Whitelisted Minecraft Players",
       })
         .addFields({
           name: `Page ${i + 1}`,
-          value: page.join(', '),
+          value: page.join(", "),
         })
         .setFooter({ text: `Total: ${usernames.length}` });
 
@@ -61,9 +66,9 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
       await handlePagination(message, interaction, embeds);
     }
   } catch (err) {
-    log.error('whitelisted', err instanceof Error ? err.message : String(err));
+    log.error("whitelisted", err instanceof Error ? err.message : String(err));
     await interaction.editReply({
-      embeds: [createErrorEmbed('Failed to read the Whitelist.')],
+      embeds: [createErrorEmbed("Failed to read the Whitelist.")],
     });
   }
 }

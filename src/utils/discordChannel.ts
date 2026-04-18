@@ -23,7 +23,7 @@ import {
   type OverwriteResolvable,
   type TextChannel,
   type VoiceChannel,
-} from 'discord.js';
+} from "discord.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -48,7 +48,10 @@ export interface EnsuredVoiceChannel {
  * Build permission overwrites that lock a channel to the bot only.
  * @everyone is denied View/Send/Connect; the bot member is explicitly allowed.
  */
-function buildBotOnlyPermissions(botUserId: string, guildId: string): OverwriteResolvable[] {
+function buildBotOnlyPermissions(
+  botUserId: string,
+  guildId: string,
+): OverwriteResolvable[] {
   return [
     {
       id: guildId, // @everyone role shares the guild ID

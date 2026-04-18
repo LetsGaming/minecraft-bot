@@ -1,8 +1,8 @@
-import { type Client } from 'discord.js';
-import { createEmbed } from '../../utils/embedUtils.js';
-import { log } from '../../utils/logger.js';
-import type { ILogWatcher } from '../logWatcher.js';
-import type { GuildConfig } from '../../types/index.js';
+import { type Client } from "discord.js";
+import { createEmbed } from "../../utils/embedUtils.js";
+import { log } from "../../utils/logger.js";
+import type { ILogWatcher } from "../logWatcher.js";
+import type { GuildConfig } from "../../types/index.js";
 
 const START_REGEX = /\[.+?\].*:\s+Done \([\d.]+s\)!/;
 const STOP_REGEX = /\[.+?\].*:\s+Stopping server/;
@@ -22,15 +22,15 @@ export function registerServerEventWatcher(
       client,
       guildConfigs,
       serverId,
-      'start',
-      '🟢 Server Started',
+      "start",
+      "🟢 Server Started",
       0x55ff55,
-      'Server is now online and ready for players.',
+      "Server is now online and ready for players.",
     );
   });
 
   logWatcher.register(STOP_REGEX, async () => {
-    let uptimeMsg = '';
+    let uptimeMsg = "";
     const started = startTimes.get(serverId);
     if (started) {
       const uptime = Math.floor((Date.now() - started.getTime()) / 1000);
@@ -43,8 +43,8 @@ export function registerServerEventWatcher(
       client,
       guildConfigs,
       serverId,
-      'stop',
-      '🔴 Server Stopped',
+      "stop",
+      "🔴 Server Stopped",
       0xff5555,
       `Server is shutting down.${uptimeMsg}`,
     );
@@ -66,19 +66,21 @@ async function notifyEvent(
 
     try {
       const channel = await client.channels.fetch(notif.channelId);
-      if (!channel || !('send' in channel)) continue;
+      if (!channel || !("send" in channel)) continue;
 
       const embed = createEmbed({
         title,
         description,
         color,
-        ...(Object.keys(guildConfigs).length > 1 ? { footer: { text: serverId } } : {}),
+        ...(Object.keys(guildConfigs).length > 1
+          ? { footer: { text: serverId } }
+          : {}),
       });
 
       await channel.send({ embeds: [embed] });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      log.error('serverEvents', `Failed: ${msg}`);
+      log.error("serverEvents", `Failed: ${msg}`);
     }
   }
 }

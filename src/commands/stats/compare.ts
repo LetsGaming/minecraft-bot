@@ -1,4 +1,7 @@
-import { SlashCommandBuilder, type ChatInputCommandInteraction } from 'discord.js';
+import {
+  SlashCommandBuilder,
+  type ChatInputCommandInteraction,
+} from "discord.js";
 import {
   loadStats,
   flattenStats,
@@ -6,51 +9,53 @@ import {
   humanizeKey,
   formatPlaytime,
   formatDistance,
-} from '../../utils/statUtils.js';
+} from "../../utils/statUtils.js";
 import {
   createEmbed,
   createPaginationButtons,
   handlePagination,
   createErrorEmbed,
   createInfoEmbed,
-} from '../../utils/embedUtils.js';
-import { findPlayer } from '../../utils/playerUtils.js';
-import { resolveServer } from '../../utils/guildRouter.js';
-import type { EmbedBuilder } from 'discord.js';
-import type { FlattenedStat } from '../../types/index.js';
-import { log } from '../../utils/logger.js';
+} from "../../utils/embedUtils.js";
+import { findPlayer } from "../../utils/playerUtils.js";
+import { resolveServer } from "../../utils/guildRouter.js";
+import type { EmbedBuilder } from "discord.js";
+import type { FlattenedStat } from "../../types/index.js";
+import { log } from "../../utils/logger.js";
 
 export const data = new SlashCommandBuilder()
-  .setName('compare')
-  .setDescription('Compare stats of two players')
+  .setName("compare")
+  .setDescription("Compare stats of two players")
   .addStringOption((option) =>
     option
-      .setName('player1')
-      .setDescription('First player name')
+      .setName("player1")
+      .setDescription("First player name")
       .setRequired(true)
       .setAutocomplete(true),
   )
   .addStringOption((option) =>
     option
-      .setName('player2')
-      .setDescription('Second player name')
+      .setName("player2")
+      .setDescription("Second player name")
       .setRequired(true)
       .setAutocomplete(true),
   )
   .addStringOption((option) =>
     option
-      .setName('stat')
-      .setDescription('Optional stat category or specific stat ID')
+      .setName("stat")
+      .setDescription("Optional stat category or specific stat ID")
       .setRequired(false),
   );
 
-export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+export async function execute(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
   await interaction.deferReply();
 
   const server = resolveServer(interaction) ?? undefined;
-  const player1 = interaction.options.getString('player1', true);
-  const player2 = interaction.options.getString('player2', true);
-  const filterStat = interaction.options.getString('stat');
+  const player1 = interaction.options.getString("player1", true);
+  const player2 = interaction.options.getString("player2", true);
+  const filterStat = interaction.options.getString("stat");
 
   try {
     const player1Data = await findPlayer(player1, server);
@@ -58,7 +63,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
     if (!player1Data || !player2Data) {
       await interaction.editReply({
-        embeds: [createErrorEmbed(`Could not find one or both players: \`${player1}\`, \`${player2}\`.`)],
+        embeds: [
+          createErrorEmbed(
+            `Could not find one or both players: \`${player1}\`, \`${player2}\`.`,
+          ),
+        ],
       });
       return;
     }
@@ -68,9 +77,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
     if (!stats1 || !stats2) {
       await interaction.editReply({
-        embeds: [createErrorEmbed(
-          `Stats file not found for one or both players: \`${player1}\`, \`${player2}\`.`,
-        )],
+        embeds: [
+          createErrorEmbed(
+            `Stats file not found for one or both players: \`${player1}\`, \`${player2}\`.`,
+          ),
+        ],
       });
       return;
     }
@@ -92,9 +103,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
     if (embeds.length === 0) {
       await interaction.editReply({
-        embeds: [createInfoEmbed(
-          `No stats found for \`${player1}\` and \`${player2}\`.`,
-        )],
+        embeds: [
+          createInfoEmbed(
+            `No stats found for \`${player1}\` and \`${player2}\`.`,
+          ),
+        ],
       });
       return;
     }
@@ -110,10 +123,13 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
       await handlePagination(message, interaction, embeds);
     }
   } catch (error) {
-    log.error('compare', `Error comparing players: ${error instanceof Error ? error.message : String(error)}`);
+    log.error(
+      "compare",
+      `Error comparing players: ${error instanceof Error ? error.message : String(error)}`,
+    );
     await interaction.editReply({
       embeds: [
-        createErrorEmbed('❌ An error occurred while comparing players.'),
+        createErrorEmbed("❌ An error occurred while comparing players."),
       ],
     });
   }
@@ -131,7 +147,7 @@ export function buildComparisonEmbeds(
   name2: string,
 ): EmbedBuilder[] {
   const embeds: EmbedBuilder[] = [];
-  let currentEmbed = createEmbed({ title: 'PLACEHOLDER' });
+  let currentEmbed = createEmbed({ title: "PLACEHOLDER" });
   let fieldCount = 0;
 
   const statMap2 = new Map(flat2.map((stat) => [stat.fullKey, stat]));
@@ -145,8 +161,8 @@ export function buildComparisonEmbeds(
     const value1 = s1.value;
     const value2 = s2.value;
 
-    const isTime = key.includes('time');
-    const isDistance = key.includes('one_cm');
+    const isTime = key.includes("time");
+    const isDistance = key.includes("one_cm");
 
     let formatted1: string;
     let formatted2: string;
@@ -181,7 +197,10 @@ export function buildComparisonEmbeds(
       const chunk: string[] = [];
       let chunkLength = 0;
 
-      while (index < lines.length && chunkLength + lines[index]!.length < 1024) {
+      while (
+        index < lines.length &&
+        chunkLength + lines[index]!.length < 1024
+      ) {
         chunk.push(lines[index]!);
         chunkLength += lines[index]!.length;
         index++;
@@ -191,11 +210,11 @@ export function buildComparisonEmbeds(
         chunkNumber === 1
           ? humanizeKey(category)
           : `${humanizeKey(category)} (${chunkNumber})`;
-      const value = chunk.join('\n');
+      const value = chunk.join("\n");
 
       if (fieldCount >= 2) {
         embeds.push(currentEmbed);
-        currentEmbed = createEmbed({ title: 'PLACEHOLDER' });
+        currentEmbed = createEmbed({ title: "PLACEHOLDER" });
         fieldCount = 0;
       }
 

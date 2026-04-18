@@ -1,9 +1,9 @@
-import { SlashCommandBuilder } from 'discord.js';
-import { createEmbed } from '../../utils/embedUtils.js';
-import { getAllInstances } from '../../utils/server.js';
-import { resolveServer } from '../../utils/guildRouter.js';
-import { getUptimeStats } from '../../utils/uptimeTracker.js';
-import { withErrorHandling } from '../middleware.js';
+import { SlashCommandBuilder } from "discord.js";
+import { createEmbed } from "../../utils/embedUtils.js";
+import { getAllInstances } from "../../utils/server.js";
+import { resolveServer } from "../../utils/guildRouter.js";
+import { getUptimeStats } from "../../utils/uptimeTracker.js";
+import { withErrorHandling } from "../middleware.js";
 
 function formatDuration(ms: number): string {
   const s = Math.floor(ms / 1000);
@@ -15,31 +15,30 @@ function formatDuration(ms: number): string {
   if (d > 0) parts.push(`${d}d`);
   if (h > 0) parts.push(`${h}h`);
   if (m > 0 || parts.length === 0) parts.push(`${m}m`);
-  return parts.join(' ');
+  return parts.join(" ");
 }
 
 function uptimeBar(pct: number | null, width = 10): string {
-  if (pct === null) return '░'.repeat(width) + ' no data';
+  if (pct === null) return "░".repeat(width) + " no data";
   const filled = Math.round((pct / 100) * width);
-  const bar = '▓'.repeat(filled) + '░'.repeat(width - filled);
+  const bar = "▓".repeat(filled) + "░".repeat(width - filled);
   return `${bar} ${pct.toFixed(1)}%`;
 }
 
 function stateEmoji(state: string): string {
-  return state === 'online' ? '🟢' : state === 'offline' ? '🔴' : '⚫';
+  return state === "online" ? "🟢" : state === "offline" ? "🔴" : "⚫";
 }
 
 export const data = new SlashCommandBuilder()
-  .setName('uptime')
-  .setDescription('Show server uptime history')
+  .setName("uptime")
+  .setDescription("Show server uptime history")
   .addStringOption((o) =>
-    o.setName('server').setDescription('Server instance').setAutocomplete(true),
+    o.setName("server").setDescription("Server instance").setAutocomplete(true),
   );
 
 export const execute = withErrorHandling(async (interaction) => {
-
   // If a specific server is requested, show just that one
-  const serverId = interaction.options.getString('server');
+  const serverId = interaction.options.getString("server");
   if (serverId) {
     const server = resolveServer(interaction);
 
@@ -62,7 +61,7 @@ export const execute = withErrorHandling(async (interaction) => {
 
   // Multi-server overview
   const embed = createEmbed({
-    title: '📈 Server Uptime',
+    title: "📈 Server Uptime",
     color: 0x00bfff,
   });
 
@@ -70,9 +69,9 @@ export const execute = withErrorHandling(async (interaction) => {
     const stats = await getUptimeStats(server.id);
     const state = `${stateEmoji(stats.currentState)} ${stats.currentState}`;
     const since =
-      stats.currentState !== 'unknown'
+      stats.currentState !== "unknown"
         ? ` for ${formatDuration(stats.currentStateDuration)}`
-        : '';
+        : "";
 
     const lines = [
       `${state}${since}`,
@@ -83,7 +82,7 @@ export const execute = withErrorHandling(async (interaction) => {
 
     embed.addFields({
       name: server.id,
-      value: lines.join('\n'),
+      value: lines.join("\n"),
       inline: instances.length <= 3,
     });
   }
@@ -97,25 +96,29 @@ function buildSingleEmbed(
 ) {
   const state = `${stateEmoji(stats.currentState)} Currently **${stats.currentState}**`;
   const since =
-    stats.currentState !== 'unknown'
+    stats.currentState !== "unknown"
       ? ` for ${formatDuration(stats.currentStateDuration)}`
-      : '';
+      : "";
 
   const embed = createEmbed({
     title: `📈 Uptime — ${serverId}`,
     description: `${state}${since}`,
     color:
-      stats.currentState === 'online'
+      stats.currentState === "online"
         ? 0x55ff55
-        : stats.currentState === 'offline'
+        : stats.currentState === "offline"
           ? 0xff5555
           : 0x888888,
   });
 
   embed.addFields(
-    { name: 'Last 24 hours', value: uptimeBar(stats.pct24h, 15), inline: false },
-    { name: 'Last 7 days', value: uptimeBar(stats.pct7d, 15), inline: false },
-    { name: 'Last 30 days', value: uptimeBar(stats.pct30d, 15), inline: false },
+    {
+      name: "Last 24 hours",
+      value: uptimeBar(stats.pct24h, 15),
+      inline: false,
+    },
+    { name: "Last 7 days", value: uptimeBar(stats.pct7d, 15), inline: false },
+    { name: "Last 30 days", value: uptimeBar(stats.pct30d, 15), inline: false },
   );
 
   if (stats.checks24h.total > 0) {
@@ -124,7 +127,7 @@ function buildSingleEmbed(
     });
   } else {
     embed.setFooter({
-      text: 'No uptime data collected yet — stats populate over time',
+      text: "No uptime data collected yet — stats populate over time",
     });
   }
 
