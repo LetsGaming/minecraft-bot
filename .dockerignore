@@ -1,0 +1,16 @@
+node_modules/
+dist/
+logs/
+data/linkedAccounts.json
+data/linkCodes.json
+data/claimedDaily.json
+data/whitelistAudit.json
+data/leaderboardSchedule.json
+data/statusMessages.json
+data/snapshots/
+config.json
+.git/
+.gitignore
+tests/
+docs/
+*.md

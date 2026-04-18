@@ -68,13 +68,33 @@ At minimum, set these fields in `config.json`:
 
 See [docs/configuration.md](docs/configuration.md) for the full config reference.
 
-### Run
+### Run with PM2
 
 ```bash
 npm start
 ```
 
 The bot registers slash commands globally on startup. They may take up to an hour to appear in Discord for the first time.
+
+### Run with Docker
+
+Docker is supported for **remote mode only** — where the Minecraft server runs on a different machine with the API wrapper deployed there. If the bot and server are on the same machine, use PM2.
+
+```bash
+# Build and start
+docker compose up -d
+
+# Tail live logs
+docker compose logs -f
+
+# Stop
+docker compose down
+
+# Rebuild after a code change
+docker compose up -d --build
+```
+
+See [docs/docker.md](docs/docker.md) for details.
 
 ## Documentation
 

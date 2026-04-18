@@ -18,6 +18,7 @@ Setup, configuration, and admin features.
 - [Commands](commands.md) — Complete list of all Discord and in-game commands.
 - [Automated Features](features.md) — Chat bridge, status embed, alerts, scheduled leaderboards.
 - [Permissions & Whitelist](permissions.md) — Admin system, whitelist management, audit trail.
+- [Docker Deployment](docker.md) — Running the bot in a container alongside or instead of PM2.
 
 ## Quick Reference
 
