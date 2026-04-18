@@ -2,6 +2,7 @@ import path from 'path';
 import type { Client } from 'discord.js';
 import { loadConfig } from '../../config.js';
 import { buildLeaderboard } from '../../utils/statUtils.js';
+import type { BuildLeaderboardOptions } from '../../utils/statUtils.js';
 import { buildLeaderboardEmbed } from '../../utils/statEmbeds.js';
 import {
   takeSnapshot,
@@ -144,12 +145,16 @@ async function checkAndPost(
       // Use the guild's configured server, or fall back to the first instance
       const serverId = gcfg.leaderboard?.server ?? gcfg.defaultServer;
       const server = serverId ? (getServerInstance(serverId) ?? undefined) : getAllInstances()[0];
+      if (!server) {
+        log.warn('leaderboard', `No server instance found for guild ${guildId}, skipping`);
+        continue;
+      }
       const snapshot = await getSnapshotClosestTo(periodStart);
 
       const periodLabel = INTERVAL_LABELS[interval] ?? interval;
       let footer: string;
 
-      const opts: { periodLabel: string; baseline?: Record<string, Record<string, number>>; server?: typeof server } = { periodLabel, server };
+      const opts: BuildLeaderboardOptions = { periodLabel, server };
 
       if (snapshot) {
         opts.baseline = snapshot.players;

@@ -7,6 +7,7 @@ import {
 } from '../../utils/linkUtils.js';
 import type { LinkCodesMap, LinkedAccountsMap } from '../../types/index.js';
 import { log } from '../../utils/logger.js';
+import type { Client } from 'discord.js';
 
 let codes: LinkCodesMap = {};
 let linked: LinkedAccountsMap = {};
@@ -43,35 +44,45 @@ async function saveData(): Promise<void> {
   }
 }
 
+/**
+ * Core link handler — exported so it can be tested directly without
+ * going through the log-watcher regex pipeline.
+ */
+export async function handleLink(
+  username: string,
+  { code }: Record<string, string>,
+  client: Pick<Client, 'users'>,
+): Promise<void> {
+  if (!code) return;
+
+  // Rate-limit: reject if the same player tried within the cooldown window
+  const lastAttempt = linkAttempts.get(username) ?? 0;
+  if (Date.now() - lastAttempt < LINK_ATTEMPT_COOLDOWN_MS) return;
+  linkAttempts.set(username, Date.now());
+
+  const entry = codes[code];
+  if (!entry) return;
+  const { discordId, expires } = entry;
+  const user = client.users.cache.get(discordId);
+  if (Date.now() > expires) {
+    delete codes[code];
+    await saveData();
+    if (user)
+      user.send(`❌ Link code **${code}** has expired.`).catch(() => {});
+    return;
+  }
+  linked[discordId] = username;
+  delete codes[code];
+  await saveData();
+  if (user)
+    user.send(`✅ Linked to Minecraft user **${username}**.`).catch(() => {});
+}
+
 const cmd = defineCommand({
   name: 'link',
   description: 'Link your Minecraft account to Discord using a code',
   args: ['code'],
-  handler: async (username, { code }, client) => {
-    if (!code) return;
-
-    // Rate-limit: reject if the same player tried within the cooldown window
-    const lastAttempt = linkAttempts.get(username) ?? 0;
-    if (Date.now() - lastAttempt < LINK_ATTEMPT_COOLDOWN_MS) return;
-    linkAttempts.set(username, Date.now());
-
-    const entry = codes[code];
-    if (!entry) return;
-    const { discordId, expires } = entry;
-    const user = client.users.cache.get(discordId);
-    if (Date.now() > expires) {
-      delete codes[code];
-      await saveData();
-      if (user)
-        user.send(`❌ Link code **${code}** has expired.`).catch(() => {});
-      return;
-    }
-    linked[discordId] = username;
-    delete codes[code];
-    await saveData();
-    if (user)
-      user.send(`✅ Linked to Minecraft user **${username}**.`).catch(() => {});
-  },
+  handler: handleLink,
 });
 
 const originalInit = cmd.init;

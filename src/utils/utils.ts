@@ -2,7 +2,7 @@ import { promises as fsPromises, existsSync } from 'fs';
 import path from 'path';
 import type { JsonCacheEntry, WhitelistEntry } from '../types/index.js';
 import type { ServerInstance } from './server.js';
-import { getServerConfig } from './server.js';
+import { getServerConfig, getServerInstance } from './server.js';
 import * as serverAccess from './serverAccess.js';
 
 // ── Whitelist ─────────────────────────────────────────────────────────────
@@ -84,7 +84,7 @@ export async function deleteStats(uuid: string, server?: ServerInstance): Promis
   const deleted = await serverAccess.deleteStatsFile(cfg, uuid);
   if (deleted) {
     const { invalidateAllStatsCache } = await import('./statUtils.js');
-    invalidateAllStatsCache();
+    invalidateAllStatsCache(cfg.id);
   }
   return deleted;
 }
@@ -97,11 +97,13 @@ let lastListTime = 0;
 export async function getListOutput(server?: ServerInstance): Promise<string | null> {
   const now = Date.now();
   if (now - lastListTime < 500 && lastListOutput) return lastListOutput;
-  if (server) {
-    await server.sendCommand('/list');
+  // Resolve the instance: use what was passed or fall back to the default.
+  const inst: ServerInstance | undefined = server ?? getServerInstance('default') ?? undefined;
+  if (inst) {
+    await inst.sendCommand('/list');
   }
   await new Promise<void>((r) => setTimeout(r, 200));
-  const output = await getLatestLogs(10);
+  const output = await getLatestLogs(10, undefined, inst);
   lastListOutput = output;
   lastListTime = now;
   return output;
