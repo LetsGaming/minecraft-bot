@@ -50,6 +50,26 @@ const TITLES_LOWER: TitlePair[] = [
     title: "zzz...",
     subtitle: "der server läuft durch. du solltest das nicht.",
   },
+  {
+    title: "game over.",
+    subtitle: "für heute reicht's. träumen ist das bessere dlc.",
+  },
+  {
+    title: "low battery.",
+    subtitle: "dein fokus ist auf 1%. ab an die ladestation.",
+  },
+  {
+    title: "nachtschicht beendet.",
+    subtitle: "%TRIGGER% hat feierabend gemacht. du jetzt auch.",
+  },
+  {
+    title: "offline-modus.",
+    subtitle: "deine augen brauchen ein update. dauert ca. 8 stunden.",
+  },
+  {
+    title: "ende gelände.",
+    subtitle: "wer jetzt noch wach ist, hat die kontrolle verloren.",
+  },
 ];
 
 const TITLES_NORMAL: TitlePair[] = [
@@ -69,6 +89,26 @@ const TITLES_NORMAL: TitlePair[] = [
   {
     title: "Touch Grass. Oder Kissen.",
     subtitle: "Schlafen ist kein Bug. Ist ein Feature.",
+  },
+  {
+    title: "Ruhemodus aktiviert.",
+    subtitle: "Dein Körper braucht einen Neustart. Geh schlafen.",
+  },
+  {
+    title: "Morgen ist auch noch ein Tag.",
+    subtitle: "%TRIGGER% hat den Lead übernommen und schläft schon.",
+  },
+  {
+    title: "Zeit für die Horizontale.",
+    subtitle: "Sogar die beste Hardware braucht mal eine Pause.",
+  },
+  {
+    title: "Abflug ins Traumland.",
+    subtitle: "Keine Ausreden mehr. Klappe zu, Augen zu.",
+  },
+  {
+    title: "System-Check: Müde.",
+    subtitle: "%TRIGGER% empfiehlt: Matratzenhorchdienst antreten.",
   },
 ];
 
@@ -92,6 +132,26 @@ const TITLES_ALLCAPS: TitlePair[] = [
   {
     title: "KEIN WIDERSPRUCH.",
     subtitle: "%TRIGGER% HAT GESPROCHEN. INS BETT. JETZT. WIRKLICH.",
+  },
+  {
+    title: "ABFAHRT!!!",
+    subtitle: "DER SCHLAFZUG VERLÄSST DEN BAHNHOF. LETZTER AUFRUF.",
+  },
+  {
+    title: "REICHT JETZT!",
+    subtitle: "DU SIEHST AUS WIE EIN ZOMBIE. GEH SCHLAFEN.",
+  },
+  {
+    title: "BETT. SOFORT.",
+    subtitle: "WENN %TRIGGER% GEHT, GEHST DU AUCH. DISZIPLIN!",
+  },
+  {
+    title: "NOTFALL-STOPP!",
+    subtitle: "DEIN GEHIRN HAT SCHON LÄNGST DEN GEIST AUFGEGEBEN.",
+  },
+  {
+    title: "GO TO SLEEP!!!",
+    subtitle: "KEINE WEITEREN FRAGEN. KEINE WEITEREN KICKS. BETT.",
   },
 ];
 
