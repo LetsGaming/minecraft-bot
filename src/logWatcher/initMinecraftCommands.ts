@@ -1,12 +1,13 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { readdirSync, statSync, readFileSync } from 'fs';
+import { readdirSync, statSync } from 'fs';
 import { LogWatcher, getGlobalWatchers } from './logWatcher.js';
+import { RemoteLogWatcher } from './RemoteLogWatcher.js';
 import { getAllInstances, getServerInstance } from '../utils/server.js';
 import { loadConfig } from '../config.js';
 import { log } from '../utils/logger.js';
 import type { Client } from 'discord.js';
-import type { InGameCommandResult, CommandOverrideConfig } from '../types/index.js';
+import type { InGameCommandResult } from '../types/index.js';
 
 // Watchers
 import { registerChatBridge, setupDiscordToMc } from './watchers/chatBridge.js';
@@ -23,19 +24,6 @@ import { startUptimeFlushScheduler } from '../utils/uptimeTracker.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-interface RawBotConfigFile {
-  commands?: Record<string, CommandOverrideConfig>;
-}
-
-let botConfig: RawBotConfigFile = {};
-try {
-  botConfig = JSON.parse(
-    readFileSync(path.resolve(process.cwd(), 'config.json'), 'utf-8'),
-  ) as RawBotConfigFile;
-} catch {
-  /* */
-}
-
 function getCommandFiles(dir: string): string[] {
   let files: string[] = [];
   for (const file of readdirSync(dir)) {
@@ -50,6 +38,7 @@ function getCommandFiles(dir: string): string[] {
 export async function initMinecraftCommands(client: Client): Promise<void> {
   const cfg = loadConfig();
   const guildConfigs = cfg.guilds;
+  const commandOverrides = cfg.commands ?? {};
 
   // ── 1. Load in-game !command definitions (registers them globally) ──
   const commandsDir = path.join(__dirname, 'commands');
@@ -60,7 +49,7 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
       const mod = (await import(path.resolve(file))) as Partial<InGameCommandResult> & { init?: () => void | Promise<void> };
       if (typeof mod.init !== 'function') continue;
       const name = path.basename(file, '.js');
-      if ((botConfig.commands?.[name]?.enabled ?? true) === false) {
+      if ((commandOverrides[name]?.enabled ?? true) === false) {
         log.info('commands', `Skipping disabled: !${name}`);
         continue;
       }
@@ -77,7 +66,10 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
   const instances = getAllInstances();
 
   for (const server of instances) {
-    const watcher = new LogWatcher(server);
+    // Remote instances stream logs over SSE; local instances watch the file directly.
+    const watcher = server.config.apiUrl
+      ? new RemoteLogWatcher(server)
+      : new LogWatcher(server);
 
     for (const { regex, handler } of globalWatchers) {
       watcher.register(regex, handler);

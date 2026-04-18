@@ -3,10 +3,6 @@ import {
   stripLogPrefix,
   loadWhitelist,
 } from './utils.js';
-import {
-  getServerConfig,
-  getServerList,
-} from './server.js';
 import type { ServerInstance } from './server.js';
 import type {
   PlayerCoords,
@@ -16,64 +12,56 @@ import type {
 
 const LOOKAHEAD_LINES = 5;
 
-export async function getPlayerNamesChoices(): Promise<Array<{ name: string; value: string }>> {
-  const names = await getPlayerNames();
+export async function getPlayerNamesChoices(server?: ServerInstance): Promise<Array<{ name: string; value: string }>> {
+  const names = await getPlayerNames(server);
   return names.map((n) => ({ name: n, value: n }));
 }
 
 /**
  * Find a player object from whitelist by name (case insensitive)
  */
-export async function findPlayer(playerName: string): Promise<WhitelistEntry | null> {
-  const names = await getPlayerNames();
+export async function findPlayer(playerName: string, server?: ServerInstance): Promise<WhitelistEntry | null> {
+  const names = await getPlayerNames(server);
   const lowerName = playerName.toLowerCase();
   const index = names.findIndex((n) => n.toLowerCase() === lowerName);
   if (index === -1) return null;
-  const whitelist = await loadWhitelist();
+  const whitelist = await loadWhitelist(false, server);
   return whitelist?.[index] ?? null;
 }
 
 /**
  * Get all player names from the whitelist
  */
-export async function getPlayerNames(): Promise<string[]> {
-  const whitelist = await loadWhitelist();
+export async function getPlayerNames(server?: ServerInstance): Promise<string[]> {
+  const whitelist = await loadWhitelist(false, server);
   return whitelist ? whitelist.map((p) => p.name) : [];
 }
 
 /**
- * Get player count — uses RCON when available
+ * Get player count — uses RCON/API when available, falls back to log parsing.
  */
-export async function getPlayerCount(): Promise<PlayerCount> {
-  const cfg = getServerConfig();
-  if (cfg.useRcon && cfg.rconPassword) {
-    const list = await getServerList();
+export async function getPlayerCount(server?: ServerInstance): Promise<PlayerCount> {
+  if (server) {
+    const list = await server.getList();
     return { playerCount: list.playerCount, maxPlayers: list.maxPlayers };
   }
-
   const logContent = await getListOutput();
   if (!logContent) return { playerCount: 'unknown', maxPlayers: 'unknown' };
   const parsed = parseListOutput(logContent);
-  return {
-    playerCount: parsed.playerCount,
-    maxPlayers: parsed.maxPlayers,
-  };
+  return { playerCount: parsed.playerCount, maxPlayers: parsed.maxPlayers };
 }
 
 /**
- * Get online players — uses RCON when available
+ * Get online players — uses RCON/API when available, falls back to log parsing.
  */
-export async function getOnlinePlayers(): Promise<string[]> {
-  const cfg = getServerConfig();
-  if (cfg.useRcon && cfg.rconPassword) {
-    const list = await getServerList();
+export async function getOnlinePlayers(server?: ServerInstance): Promise<string[]> {
+  if (server) {
+    const list = await server.getList();
     return list.players;
   }
-
   const logContent = await getListOutput();
   if (!logContent) return [];
-  const parsed = parseListOutput(logContent);
-  return parsed.players;
+  return parseListOutput(logContent).players;
 }
 
 /**

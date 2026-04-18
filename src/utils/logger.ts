@@ -19,7 +19,7 @@ function write(level: string, tag: string, ...args: unknown[]): void {
     .map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a)))
     .join(' ');
   const line = `[${timestamp()}] [${level}] [${tag}] ${msg}`;
-  console.log(line);
+  process.stdout.write(line + '\n');
   stream.write(line + '\n');
 }
 

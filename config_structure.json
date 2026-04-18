@@ -24,6 +24,11 @@
       "rconHost": "localhost",
       "rconPort": 25576,
       "rconPassword": "your-rcon-password"
+    },
+    "remote-example": {
+      "apiUrl": "http://192.168.1.10:3000",
+      "apiKey": "same-secret-as-in-api-server-config",
+      "id": "remote-example"
     }
   },
 

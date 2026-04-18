@@ -1,14 +1,14 @@
 import { type Client } from 'discord.js';
 import { createEmbed } from '../../utils/embedUtils.js';
 import { log } from '../../utils/logger.js';
-import type { LogWatcher } from '../logWatcher.js';
+import type { ILogWatcher } from '../logWatcher.js';
 import type { GuildConfig } from '../../types/index.js';
 
 const JOIN_REGEX = /\[.+?\].*:\s+(\w+) joined the game/;
 const LEAVE_REGEX = /\[.+?\].*:\s+(\w+) left the game/;
 
 export function registerJoinLeaveWatcher(
-  logWatcher: LogWatcher,
+  logWatcher: ILogWatcher,
   client: Client,
   guildConfigs: Record<string, GuildConfig>,
 ): void {

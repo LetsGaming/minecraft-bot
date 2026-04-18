@@ -8,7 +8,7 @@ import {
   type ChatInputCommandInteraction,
 } from 'discord.js';
 import { getLinkedAccount } from '../../utils/linkUtils.js';
-import { sendToServer } from '../../utils/server.js';
+import { resolveServer } from '../../utils/guildRouter.js';
 import { getOnlinePlayers } from '../../utils/playerUtils.js';
 import {
   createErrorEmbed,
@@ -31,6 +31,7 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   const mcname = interaction.options.getString('mcname', true);
   const userId = interaction.user.id;
+  const server = resolveServer(interaction);
 
   const res = await fetch(
     `https://api.mojang.com/users/profiles/minecraft/${mcname}`,
@@ -95,7 +96,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
       return;
     }
 
-    const onlinePlayers = await getOnlinePlayers();
+    const onlinePlayers = await getOnlinePlayers(server);
     if (!onlinePlayers.includes(linkedUsername)) {
       await i.reply({
         embeds: [createErrorEmbed('You must be online in Minecraft.')],
@@ -104,7 +105,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
       return;
     }
 
-    await sendToServer(
+    await server.sendCommand(
       `give ${linkedUsername} player_head[profile={name:"${mcname}"}]`,
     );
     await i.reply({

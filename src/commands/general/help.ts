@@ -4,7 +4,7 @@ import {
   createPaginationButtons,
   handlePagination,
 } from '../../utils/embedUtils.js';
-import type { BotCommand } from '../../types/index.js';
+import type { BotCommand, BotClient } from '../../types/index.js';
 import { log } from '../../utils/logger.js';
 
 export const data = new SlashCommandBuilder()
@@ -12,11 +12,7 @@ export const data = new SlashCommandBuilder()
   .setDescription('Show all available commands with descriptions and options');
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
-  /**
-   * interaction.client.commands is set by our extended BotClient in index.ts.
-   * discord.js doesn't type this property natively, so we cast here.
-   */
-  const commands = [...(interaction.client as unknown as { commands: Map<string, BotCommand> }).commands.values()];
+  const commands = [...(interaction.client as BotClient).commands.values()];
   const pageSize = 5;
   const totalPages = Math.ceil(commands.length / pageSize);
 

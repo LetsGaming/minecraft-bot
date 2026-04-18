@@ -1,9 +1,8 @@
-import fs from 'fs';
-import fsPromises from 'fs/promises';
-import path from 'path';
-import { getServerConfig } from './server.js';
-import { getLevelName, loadJson, loadWhitelist, deleteStats } from './utils.js';
+import { getServerInstance } from './server.js';
+import type { ServerInstance } from './server.js';
+import { loadWhitelist, deleteStats } from './utils.js';
 import { log } from './logger.js';
+import * as serverAccess from './serverAccess.js';
 import type {
   FlattenedStat,
   ScoredStat,
@@ -61,10 +60,12 @@ export const LEADERBOARD_STATS: Record<string, LeaderboardStatDefinition> = {
   },
 };
 
-interface BuildLeaderboardOptions {
+export interface BuildLeaderboardOptions {
   limit?: number;
   baseline?: Record<string, Record<string, number>> | null;
   periodLabel?: string | null;
+  /** Which server to pull stats from. Must be provided by the caller. */
+  server: ServerInstance;
 }
 
 export interface LeaderboardData {
@@ -81,13 +82,14 @@ export interface LeaderboardData {
  */
 export async function buildLeaderboard(
   statKey: string,
-  { limit = 10, baseline = null, periodLabel = null }: BuildLeaderboardOptions = {},
+  { limit = 10, baseline = null, periodLabel = null, server }: BuildLeaderboardOptions,
 ): Promise<LeaderboardData> {
   const def = LEADERBOARD_STATS[statKey];
   if (!def) throw new Error(`Unknown stat: ${statKey}`);
 
-  const allStats = await loadAllStats();
-  const whitelist = (await loadWhitelist()) ?? [];
+  const srv = server;
+  const allStats = await loadAllStats(srv);
+  const whitelist = (await loadWhitelist(false, srv)) ?? [];
 
   const uuidToName: Record<string, string> = {};
   for (const p of whitelist) uuidToName[p.uuid] = p.name;
@@ -99,7 +101,7 @@ export async function buildLeaderboard(
 
     // Clean up stats for players no longer on the whitelist
     if (!name) {
-      await deleteStats(uuid);
+      await deleteStats(uuid, srv);
       continue;
     }
 
@@ -188,73 +190,56 @@ export function formatDistance(value: number): string {
   return `${kilometers}km ${meters}m`;
 }
 
-async function getStatsPath(uuid?: string): Promise<string> {
-  const levelName = (await getLevelName()) || 'world';
-  if (uuid) {
-    return path.resolve(
-      getServerConfig().serverDir,
-      levelName,
-      'stats',
-      `${uuid}.json`,
-    );
-  }
-  return path.resolve(getServerConfig().serverDir, levelName, 'stats');
-}
-
 /**
  * Load and parse stats JSON for given UUID.
+ * Routes through serverAccess so remote instances fetch from the API wrapper.
  */
-export async function loadStats(uuid: string): Promise<MinecraftStatsFile | null> {
-  const statsPath = await getStatsPath(uuid);
+export async function loadStats(uuid: string, server?: ServerInstance): Promise<MinecraftStatsFile | null> {
+  const cfg = (server ?? getServerInstance('default'))?.config;
+  if (!cfg) { log.warn('stats', 'No server instance available'); return null; }
 
-  const statsFile = (await loadJson(statsPath)) as MinecraftStatsFile | null;
+  const statsFile = await serverAccess.readStats(cfg, uuid);
   if (!statsFile) {
     log.warn('stats', `Stats file not found for UUID: ${uuid}`);
     return null;
   }
-
   return statsFile;
 }
 
 /**
- * Load all stats files from the server directory.
- * Results are cached for 30 seconds to avoid redundant directory scans
- * on burst requests (e.g. multiple /leaderboard calls close together).
- * Call invalidateAllStatsCache() after writes that affect aggregate data.
+ * Load all stats files for a server.
+ * Cached per-server for 30 s. Call invalidateAllStatsCache() after writes.
  */
-
 const ALL_STATS_TTL_MS = 30_000;
-let allStatsCache: { data: Record<string, MinecraftStatsFile>; at: number } | null = null;
+const allStatsCaches = new Map<string, { data: Record<string, MinecraftStatsFile>; at: number }>();
 
-export function invalidateAllStatsCache(): void {
-  allStatsCache = null;
+export function invalidateAllStatsCache(serverId?: string): void {
+  if (serverId) allStatsCaches.delete(serverId);
+  else allStatsCaches.clear();
 }
 
-export async function loadAllStats(): Promise<Record<string, MinecraftStatsFile>> {
-  if (allStatsCache && Date.now() - allStatsCache.at < ALL_STATS_TTL_MS) {
-    return allStatsCache.data;
-  }
+export async function loadAllStats(server?: ServerInstance): Promise<Record<string, MinecraftStatsFile>> {
+  const srv = server ?? getServerInstance('default');
+  const cfg = srv?.config;
+  if (!cfg) return {};
+  const cacheKey = cfg.id;
 
-  const statsDir = await getStatsPath();
-  if (!fs.existsSync(statsDir)) {
-    log.error('stats', `Stats directory does not exist: ${statsDir}`);
-    return {};
-  }
+  const cached = allStatsCaches.get(cacheKey);
+  if (cached && Date.now() - cached.at < ALL_STATS_TTL_MS) return cached.data;
 
-  const files = await fsPromises.readdir(statsDir);
-  const statFiles = files.filter((file) => file.endsWith('.json'));
+  const uuids = await serverAccess.listStatsUuids(cfg);
 
   const results = await Promise.all(
-    statFiles.map(async (file) => {
-      const uuid = file.slice(0, -5);
-      const statsPath = path.join(statsDir, file);
-      const data = (await loadJson(statsPath)) as MinecraftStatsFile;
-      return [uuid, data] as const;
+    uuids.map(async (uuid) => {
+      const statsData = await serverAccess.readStats(cfg, uuid);
+      return [uuid, statsData] as const;
     }),
   );
 
-  const data = Object.fromEntries(results);
-  allStatsCache = { data, at: Date.now() };
+  const data = Object.fromEntries(
+    results.filter((r): r is [string, MinecraftStatsFile] => r[1] !== null),
+  );
+  allStatsCaches.set(cacheKey, { data, at: Date.now() });
   return data;
 }
 

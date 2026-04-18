@@ -1,14 +1,14 @@
 import { type Client } from 'discord.js';
 import { log } from '../../utils/logger.js';
 import { createEmbed } from '../../utils/embedUtils.js';
-import type { LogWatcher } from '../logWatcher.js';
+import type { ILogWatcher } from '../logWatcher.js';
 import type { ServerInstance } from '../../utils/server.js';
 import type { GuildConfig } from '../../types/index.js';
 
 const CHAT_REGEX = /\[.+?\]: <(?:\[AFK\]\s*)?([^>]+)>\s+(.+)/;
 
 export function registerChatBridge(
-  logWatcher: LogWatcher,
+  logWatcher: ILogWatcher,
   client: Client,
   guildConfigs: Record<string, GuildConfig>,
 ): void {

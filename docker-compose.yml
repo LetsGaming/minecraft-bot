@@ -1,0 +1,23 @@
+services:
+  minecraft-bot:
+    build: .
+    restart: unless-stopped
+
+    # ── Config & persistent data ──────────────────────────────────────────
+    # config.json is required — copy config_structure.json and fill it in.
+    # data/ and logs/ are written at runtime and must survive container restarts.
+    volumes:
+      - ./config.json:/app/config.json:ro
+      - ./data:/app/data
+      - ./logs:/app/logs
+
+    environment:
+      - NODE_ENV=production
+      # Uncomment to enable debug logging:
+      # - DEBUG=true
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -2,7 +2,10 @@
  * Multi-server communication layer.
  * Each ServerInstance maintains its own RconClient + screen fallback.
  */
-import { execCommand, execSafe, isSudoPermissionError } from "../shell/execCommand.js";
+import {
+  execSafe,
+  isSudoPermissionError,
+} from "../shell/execCommand.js";
 import { log } from "./logger.js";
 import { loadConfig } from "../config.js";
 import { RconClient } from "../rcon/RconClient.js";
@@ -26,9 +29,15 @@ export class ServerInstance {
   constructor(config: ServerConfig) {
     this.config = config;
     this.id = config.id;
-    this._rcon = config.useRcon && config.rconPassword
-      ? new RconClient(config.rconHost, config.rconPort, config.rconPassword, config.id)
-      : null;
+    this._rcon =
+      config.useRcon && config.rconPassword
+        ? new RconClient(
+            config.rconHost,
+            config.rconPort,
+            config.rconPassword,
+            config.id,
+          )
+        : null;
   }
 
   get useRcon(): boolean {
@@ -74,6 +83,19 @@ export class ServerInstance {
         return null;
       }
     }
+
+    // Remote server without RCON: route through the API wrapper.
+    if (this.config.apiUrl) {
+      try {
+        const { sendCommand } = await import("./serverAccess.js");
+        return await sendCommand(this.config, command);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        log.warn(this.id, `Remote sendCommand failed: ${message}`);
+        return null;
+      }
+    }
+
     await this._screenSend(command);
     return null;
   }
@@ -82,7 +104,8 @@ export class ServerInstance {
     if (this._rcon) {
       // Fast path: a recent successful RCON response is conclusive.
       const RECENT_SUCCESS_MS = 15_000;
-      if (Date.now() - this._rcon.lastSuccessTime < RECENT_SUCCESS_MS) return true;
+      if (Date.now() - this._rcon.lastSuccessTime < RECENT_SUCCESS_MS)
+        return true;
 
       // Retry once before declaring offline so a single blip isn't a false negative.
       const PROBE_TIMEOUT_MS = 3_000;
@@ -100,9 +123,24 @@ export class ServerInstance {
       return false;
     }
 
-    const out = await execCommand(
-      `sudo -n -u ${this.config.linuxUser} screen -list 2>&1`,
-    );
+    // Remote server (no RCON): ask the API wrapper directly
+    if (this.config.apiUrl) {
+      try {
+        const { isRunning } = await import("./serverAccess.js");
+        return await isRunning(this.config);
+      } catch {
+        return false;
+      }
+    }
+
+    // Local server without RCON: check screen session
+    const out = await execSafe('sudo', [
+      '-n',
+      '-u',
+      this.config.linuxUser,
+      'screen',
+      '-list',
+    ]);
 
     if (out !== null && isSudoPermissionError(out)) {
       log.warn(
@@ -140,6 +178,16 @@ export class ServerInstance {
         return { playerCount: "0", maxPlayers: "?", players: [] };
       }
     }
+    // Remote server without RCON: ask the API wrapper directly
+    if (this.config.apiUrl) {
+      try {
+        const { getList } = await import("./serverAccess.js");
+        return await getList(this.config);
+      } catch {
+        return { playerCount: "0", maxPlayers: "?", players: [] };
+      }
+    }
+
     await this.sendCommand("/list");
     await new Promise<void>((r) => setTimeout(r, 200));
     return { playerCount: "?", maxPlayers: "?", players: [] };
@@ -156,13 +204,13 @@ export class ServerInstance {
           return this._seedCache;
         }
       } catch {
-        /* fall through to screen fallback */
+        /* fall through to log fallback */
       }
     }
     await this.sendCommand("/seed");
     await new Promise<void>((r) => setTimeout(r, 200));
-    const { getLatestLogs } = await import("./utils.js");
-    const out = await getLatestLogs(10, this.config.serverDir);
+    const { tailLog } = await import("./serverAccess.js");
+    const out = await tailLog(this.config, 10);
     for (const line of out.split("\n").reverse()) {
       const m = line.match(/Seed:\s*\[(-?\d+)\]/);
       if (m?.[1]) {
@@ -184,8 +232,8 @@ export class ServerInstance {
       if (m) return { x: Number(m[1]), y: Number(m[2]), z: Number(m[3]) };
     }
     await new Promise<void>((r) => setTimeout(r, 200));
-    const { getLatestLogs } = await import("./utils.js");
-    const out = await getLatestLogs(10, this.config.serverDir);
+    const { tailLog } = await import("./serverAccess.js");
+    const out = await tailLog(this.config, 10);
     const m = out.match(/\[([\d.+-]+)d,\s*([\d.+-]+)d,\s*([\d.+-]+)d\]/);
     return m ? { x: Number(m[1]), y: Number(m[2]), z: Number(m[3]) } : null;
   }
@@ -197,13 +245,31 @@ export class ServerInstance {
       if (m?.[1]) return m[1];
     }
     await new Promise<void>((r) => setTimeout(r, 200));
-    const { getLatestLogs } = await import("./utils.js");
-    const out = await getLatestLogs(10, this.config.serverDir);
+    const { tailLog } = await import("./serverAccess.js");
+    const out = await tailLog(this.config, 10);
     const m = out.match(/"minecraft:([^"]+)"/);
     return m?.[1] ?? "overworld";
   }
 
+  /**
+   * Whether this instance can provide TPS data.
+   * True if connected via direct RCON or via a remote API wrapper.
+   */
+  get supportsTps(): boolean {
+    return this._rcon !== null || !!this.config.apiUrl;
+  }
+
   async getTps(): Promise<TpsResult | null> {
+    // Remote server: delegate to API wrapper
+    if (this.config.apiUrl) {
+      try {
+        const { getTps } = await import("./serverAccess.js");
+        return await getTps(this.config);
+      } catch {
+        return null;
+      }
+    }
+
     if (!this._rcon) return null;
 
     // ── Try Paper/Spigot/Purpur "tps" command first ──

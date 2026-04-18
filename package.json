@@ -1,6 +1,6 @@
 {
   "name": "minecraft-bot",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
@@ -8,6 +8,7 @@
     "start": "node --enable-source-maps dist/index.js",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint src --max-warnings 0",
     "pm2:start": "pm2 start ecosystem.config.cjs --env production",
     "pm2:stop": "pm2 stop minecraft-bot",
     "pm2:restart": "npm run build && pm2 restart minecraft-bot",
@@ -22,7 +23,10 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
     "@vitest/coverage-v8": "^4.1.4",
+    "eslint": "^9.0.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.4"
   }

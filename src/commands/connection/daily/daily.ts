@@ -4,18 +4,23 @@ import {
   loadJson,
   saveJson,
   getRootDir,
-  sendToServer,
 } from '../../../utils/utils.js';
 import { getOnlinePlayers } from '../../../utils/playerUtils.js';
 import { isLinked, getLinkedAccount } from '../../../utils/linkUtils.js';
 import { createErrorEmbed } from '../../../utils/embedUtils.js';
 import type { DailyRewardsConfig, DailyRewardItem, UserClaimData } from '../../../types/index.js';
 import { log } from '../../../utils/logger.js';
+import { resolveServer } from '../../../utils/guildRouter.js';
 
 const baseDir = getRootDir();
 const dataDir = path.resolve(baseDir, 'data');
 const DAILY_COOLDOWN = 24 * 60 * 60 * 1000;
 const MAX_STREAK = 35;
+
+// Per-user in-memory lock — prevents concurrent /daily executions from the
+// same user (double-click, network retry) both passing the cooldown check
+// before either writes back. Sufficient for single-process PM2 deployments.
+const claimLock = new Set<string>();
 
 export const data = new SlashCommandBuilder()
   .setName('daily')
@@ -23,6 +28,24 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   const userId = interaction.user.id;
+
+  if (claimLock.has(userId)) {
+    await interaction.reply({
+      content: '⏳ Already processing your claim — please wait.',
+      flags: MessageFlags.Ephemeral as number,
+    });
+    return;
+  }
+  claimLock.add(userId);
+
+  try {
+    await _execute(interaction, userId);
+  } finally {
+    claimLock.delete(userId);
+  }
+}
+
+async function _execute(interaction: ChatInputCommandInteraction, userId: string): Promise<void> {
   if (!(await isLinked(userId))) {
     await interaction.reply(
       errorReply('You must link your Discord account first.', 'Link Required'),
@@ -37,6 +60,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     );
     return;
   }
+
+  const server = resolveServer(interaction);
 
   const [rewardsCfg, claimed] = await Promise.all([
     loadJson(path.join(dataDir, 'dailyRewards.json')).catch(() => ({})) as Promise<DailyRewardsConfig>,
@@ -68,7 +93,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     return;
   }
 
-  if (!(await getOnlinePlayers()).includes(username)) {
+  if (!(await getOnlinePlayers(server)).includes(username)) {
     await interaction.reply(
       errorReply('You must be online in Minecraft to claim.', 'Online Requirement'),
     );
@@ -81,8 +106,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   );
   const reward = pick(rewardsCfg.default);
   const bonus = rewardsCfg.streakBonuses?.[String(bonusStreak)] ?? null;
-  await give(username, reward);
-  if (bonus) await give(username, bonus);
+  await give(server, username, reward);
+  if (bonus) await give(server, username, bonus);
 
   claimed[userId] = {
     lastClaim: now,
@@ -127,7 +152,7 @@ interface StreakResult {
   longestStreak: number;
 }
 
-function calcStreak(
+export function calcStreak(
   { currentStreak, bonusStreak, longestStreak }: Pick<UserClaimData, 'currentStreak' | 'bonusStreak' | 'longestStreak'>,
   delta: number,
 ): StreakResult {
@@ -141,7 +166,7 @@ function calcStreak(
   };
 }
 
-function pick(pool: DailyRewardItem[]): DailyRewardItem {
+export function pick(pool: DailyRewardItem[]): DailyRewardItem {
   const total = pool.reduce((sum, { weight = 1 }) => sum + weight, 0);
   let r = Math.random() * total;
   for (const item of pool) {
@@ -167,11 +192,11 @@ function fmt({ item = '???', amount = 1 }: DailyRewardItem): string {
   return `${amount}x ${item.replace(/^minecraft:/, '')}`;
 }
 
-async function give(player: string, { item, amount = 1 }: DailyRewardItem): Promise<void> {
+async function give(server: import('../../../utils/server.js').ServerInstance, player: string, { item, amount = 1 }: DailyRewardItem): Promise<void> {
   if (!player || !item) {
     log.error('daily', `Invalid reward params for player=${player} item=${item}`);
     return;
   }
   const name = item.startsWith('minecraft:') ? item : `minecraft:${item}`;
-  await sendToServer(`give ${player} ${name} ${amount}`);
+  await server.sendCommand(`give ${player} ${name} ${amount}`);
 }

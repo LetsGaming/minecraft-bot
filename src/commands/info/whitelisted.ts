@@ -6,6 +6,7 @@ import {
   handlePagination,
 } from '../../utils/embedUtils.js';
 import { loadWhitelist } from '../../utils/utils.js';
+import { resolveServer } from '../../utils/guildRouter.js';
 import { log } from '../../utils/logger.js';
 
 export const data = new SlashCommandBuilder()
@@ -18,7 +19,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   await interaction.deferReply();
 
   try {
-    const players = await loadWhitelist();
+    const server = resolveServer(interaction) ?? undefined;
+    const players = await loadWhitelist(false, server);
 
     if (!Array.isArray(players) || players.length === 0) {
       await interaction.editReply({

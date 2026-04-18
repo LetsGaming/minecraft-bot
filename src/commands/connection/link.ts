@@ -1,4 +1,5 @@
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
+import { randomBytes } from 'crypto';
 import { loadLinkCodes, saveLinkCodes } from '../../utils/linkUtils.js';
 
 export const data = new SlashCommandBuilder()
@@ -26,12 +27,9 @@ export async function execute(interaction: import('discord.js').ChatInputCommand
   });
 }
 
-function generateCode(length = 6): string {
-  return [...Array<undefined>(length)]
-    .map(() =>
-      Math.floor(Math.random() * 36)
-        .toString(36)
-        .toUpperCase(),
-    )
-    .join('');
+// Uses crypto.randomBytes for a cryptographically secure 8-char hex code
+// (4 billion combinations). Replaces the old Math.random-based generator
+// which was brute-forceable within the 5-minute expiry window.
+function generateCode(): string {
+  return randomBytes(4).toString('hex').toUpperCase();
 }
