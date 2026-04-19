@@ -198,6 +198,11 @@ async function checkAndPost(
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.error("leaderboard", `Failed to post for guild ${guildId}: ${msg}`);
+      // B-09: advance the schedule timestamp even on failure so a permanently
+      // broken channel (deleted, missing permissions) doesn't cause hourly
+      // retry spam. The next post will be attempted after the normal interval.
+      schedule[guildId] = now;
+      await saveSchedule(schedule).catch(() => {});
     }
   }
 }

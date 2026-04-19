@@ -273,20 +273,32 @@ export class ServerInstance {
     if (this._hasTpsCommand !== false) {
       try {
         const r = await this._rcon.send("tps");
-        if (!r.toLowerCase().includes("unknown")) {
-          const m = r.match(/([\d.]+)(?:,\s*([\d.]+)(?:,\s*([\d.]+))?)?/);
+        if (r.toLowerCase().includes("unknown")) {
+          // Server does not support this command — permanently skip it.
+          this._hasTpsCommand = false;
+        } else {
+          // Bug 4 fix: anchor after the colon so we don't match stray digits
+          // earlier in the response (e.g. colour codes, packet prefixes).
+          // Handles both "TPS from last 1m, 5m, 15m: *19.98, *19.99, *20.0"
+          // and plain "20.0, 20.0, 20.0" responses.
+          const m =
+            r.match(/:\s*\*?([\d.]+),\s*\*?([\d.]+),\s*\*?([\d.]+)/) ??
+            r.match(/^\s*\*?([\d.]+),\s*\*?([\d.]+),\s*\*?([\d.]+)/m);
           if (m) {
             this._hasTpsCommand = true;
             return {
               tps1m: parseFloat(m[1]!),
-              tps5m: parseFloat(m[2] ?? m[1]!),
-              tps15m: parseFloat(m[3] ?? m[1]!),
+              tps5m: parseFloat(m[2]!),
+              tps15m: parseFloat(m[3]!),
               raw: r,
             };
           }
         }
       } catch {
-        this._hasTpsCommand = false;
+        // Bug 1 fix: a network/RCON error does NOT mean the server lacks the
+        // tps command — it means the connection blipped. Leave _hasTpsCommand
+        // as-is so the next poll retries the command instead of permanently
+        // falling back to tick query (which may not exist on Paper servers).
       }
     }
 
@@ -296,7 +308,9 @@ export class ServerInstance {
       if (r.toLowerCase().includes("unknown")) return null;
 
       const msptMatch = r.match(/Average time per tick:\s*([\d.]+)\s*ms/i);
-      if (!msptMatch) return { tps1m: 0, raw: r };
+      // Bug 2 fix: return null (not { tps1m: 0 }) when the expected line is
+      // missing — a zero TPS value would trigger a false Low TPS alert.
+      if (!msptMatch) return null;
 
       const mspt = parseFloat(msptMatch[1]!);
       const tps = Math.min(20, 1000 / mspt);

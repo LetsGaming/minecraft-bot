@@ -65,6 +65,16 @@ interface GuildChannelRefs {
 
 const channelRefCache = new Map<string, GuildChannelRefs>();
 
+/**
+ * B-10: clear the channel ref cache so the next update cycle re-fetches live
+ * channel objects. Call this after a Discord reconnect — stale TextChannel /
+ * VoiceChannel objects from before the disconnect can no longer be written to.
+ */
+export function invalidateStatusChannelCache(): void {
+  channelRefCache.clear();
+  log.info("status", "Channel ref cache invalidated (reconnect)");
+}
+
 // ─── Persistence ──────────────────────────────────────────────────────────────
 
 async function loadState(): Promise<StatusMessageState> {

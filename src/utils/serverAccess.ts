@@ -37,7 +37,12 @@ async function apiGet<T>(cfg: ServerConfig, route: string): Promise<T> {
   const url = `${cfg.apiUrl!.replace(/\/$/, "")}/instances/${cfg.id}${route}`;
   const headers: Record<string, string> = {};
   if (cfg.apiKey) headers["x-api-key"] = cfg.apiKey;
-  const res = await fetch(url, { headers });
+  // Bug 3 fix: explicit timeout so a hung API server can't stall the poll
+  // loop indefinitely. Node 18+ AbortSignal.timeout() is zero-dependency.
+  const res = await fetch(url, {
+    headers,
+    signal: AbortSignal.timeout(8_000),
+  });
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`API ${route} → ${res.status}: ${body}`);
@@ -55,10 +60,13 @@ async function apiPost<T>(
     "Content-Type": "application/json",
   };
   if (cfg.apiKey) headers["x-api-key"] = cfg.apiKey;
+  // Bug 3 fix: explicit timeout (script endpoints have longer operations,
+  // but 30 s is still a sane ceiling for any single HTTP call).
   const res = await fetch(url, {
     method: "POST",
     headers,
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(30_000),
   });
   if (!res.ok) {
     const text = await res.text();

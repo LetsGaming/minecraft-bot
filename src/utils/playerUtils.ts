@@ -16,18 +16,19 @@ export async function getPlayerNamesChoices(
 }
 
 /**
- * Find a player object from whitelist by name (case insensitive)
+ * Find a player object from whitelist by name (case insensitive).
+ * B-02 fix: search directly on the whitelist array rather than finding the
+ * index in a separate `names` array — the two lists could diverge if the
+ * cache is invalidated between the two loadWhitelist() calls.
  */
 export async function findPlayer(
   playerName: string,
   server?: ServerInstance,
 ): Promise<WhitelistEntry | null> {
-  const names = await getPlayerNames(server);
-  const lowerName = playerName.toLowerCase();
-  const index = names.findIndex((n) => n.toLowerCase() === lowerName);
-  if (index === -1) return null;
   const whitelist = await loadWhitelist(false, server);
-  return whitelist?.[index] ?? null;
+  if (!whitelist) return null;
+  const lower = playerName.toLowerCase();
+  return whitelist.find((p) => p.name.toLowerCase() === lower) ?? null;
 }
 
 /**

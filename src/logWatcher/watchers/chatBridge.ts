@@ -68,7 +68,18 @@ export function setupDiscordToMc(
     const server = getServerInstance(serverId);
     if (!server) return;
 
-    const content = msg.content.replace(/"/g, '\\"').slice(0, 200);
-    await server.sendCommand(`/say [${msg.author.displayName}] ${content}`);
+    // B-08: strip control characters and newlines from both the display name
+    // and message content before forwarding to the server. A Discord display
+    // name containing \r or other control codes could inject extra commands
+    // via the screen fallback path. Also cap the combined length so the
+    // resulting /say command stays well within Minecraft's 256-char limit.
+    const safeName = msg.author.displayName
+      .replace(/[^\x20-\x7E]/g, "") // strip non-printable / non-ASCII
+      .slice(0, 32);
+    const safeContent = msg.content
+      .replace(/[^\x20-\x7E]/g, "")
+      .replace(/"/g, '\\"')
+      .slice(0, 160); // 32 (name) + 7 (/say []) + 160 + margin ≤ 256
+    await server.sendCommand(`/say [${safeName}] ${safeContent}`);
   });
 }

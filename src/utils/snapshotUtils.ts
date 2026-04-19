@@ -86,8 +86,10 @@ export async function getSnapshotClosestTo(
     else break;
   }
 
-  // If nothing before target, use the earliest available
-  if (closest === null) closest = timestamps[0]!;
+  // B-13: if every snapshot is newer than the target (e.g. bot just started),
+  // return null so callers show "all-time" explicitly rather than silently
+  // using the very first snapshot as a misleading baseline.
+  if (closest === null) return null;
 
   const filePath = path.join(SNAPSHOTS_DIR, `${closest}.json`);
   const raw = await fsPromises.readFile(filePath, "utf-8");
@@ -118,6 +120,10 @@ export async function cleanupSnapshots(): Promise<void> {
   const oneDayAgo = now - 24 * 60 * 60 * 1000;
   const maxAge = now - MAX_AGE_MS;
 
+  // B-04: always keep the newest snapshot regardless of age so there is
+  // always a baseline for leaderboard queries. Identify it up-front.
+  const newestTimestamp = entries[entries.length - 1]!.timestamp;
+
   const byDay = new Map<string, SnapshotFileEntry[]>();
   for (const entry of entries) {
     const day = new Date(entry.timestamp).toISOString().slice(0, 10);
@@ -131,13 +137,20 @@ export async function cleanupSnapshots(): Promise<void> {
     const toDelete: SnapshotFileEntry[] = [];
 
     for (const e of dayEntries) {
-      if (e.timestamp < maxAge) toDelete.push(e);
+      // B-04: never delete the single newest snapshot even if it's past maxAge
+      if (e.timestamp < maxAge && e.timestamp !== newestTimestamp)
+        toDelete.push(e);
     }
 
     const remaining = dayEntries.filter((e) => e.timestamp >= maxAge);
 
     if (remaining.length > 1 && remaining[0]!.timestamp < oneDayAgo) {
-      toDelete.push(...remaining.slice(0, -1));
+      // Keep only the latest per day; but never delete the overall newest
+      toDelete.push(
+        ...remaining
+          .slice(0, -1)
+          .filter((e) => e.timestamp !== newestTimestamp),
+      );
     }
 
     for (const e of toDelete) {

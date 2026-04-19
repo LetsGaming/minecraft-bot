@@ -4,8 +4,11 @@ import { log } from "../../utils/logger.js";
 import type { ILogWatcher } from "../logWatcher.js";
 import type { GuildConfig } from "../../types/index.js";
 
-const JOIN_REGEX = /\[.+?\].*:\s+(\w+) joined the game/;
-const LEAVE_REGEX = /\[.+?\].*:\s+(\w+) left the game/;
+// B-11: \w+ only matches [a-zA-Z0-9_] and silently drops Bedrock players
+// whose names are prefixed with "." by Geyser/Floodgate (e.g. ".BedrockName").
+// Using [\w.]+ captures both vanilla and Bedrock-prefixed names.
+const JOIN_REGEX = /\[.+?\].*:\s+([\w.]+) joined the game/;
+const LEAVE_REGEX = /\[.+?\].*:\s+([\w.]+) left the game/;
 
 export function registerJoinLeaveWatcher(
   logWatcher: ILogWatcher,

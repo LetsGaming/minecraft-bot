@@ -95,21 +95,24 @@ export async function deleteStats(
 
 // ── Re-exports removed — use resolveServer(interaction) from guildRouter.ts ──
 
-let lastListOutput: string | null = null;
-let lastListTime = 0;
+// B-06: cache is keyed by server ID so multiple instances don't bleed into
+// each other. The old module-level variables returned server A's output when
+// server B was queried within the 500ms window.
+const listOutputCache = new Map<string, { output: string; time: number }>();
 
 export async function getListOutput(
   server?: ServerInstance,
 ): Promise<string | null> {
+  const key = server?.id ?? "__local__";
   const now = Date.now();
-  if (now - lastListTime < 500 && lastListOutput) return lastListOutput;
+  const cached = listOutputCache.get(key);
+  if (cached && now - cached.time < 500) return cached.output;
   if (server) {
     await server.sendCommand("/list");
   }
   await new Promise<void>((r) => setTimeout(r, 200));
   const output = await getLatestLogs(10, undefined, server);
-  lastListOutput = output;
-  lastListTime = now;
+  listOutputCache.set(key, { output, time: now });
   return output;
 }
 

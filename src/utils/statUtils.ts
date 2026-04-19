@@ -99,6 +99,12 @@ export async function buildLeaderboard(
   const uuidToName: Record<string, string> = {};
   for (const p of whitelist) uuidToName[p.uuid] = p.name;
 
+  // B-03: only delete stats for unlisted players when the whitelist loaded
+  // successfully and is non-empty. An empty whitelist most likely means the
+  // load failed (API error, missing file) — deleting every player's stats
+  // in that case would be irreversible data loss.
+  const whitelistLoadedOk = whitelist.length > 0;
+
   const entries: LeaderboardEntry[] = [];
 
   for (const [uuid, statsFile] of Object.entries(allStats)) {
@@ -106,7 +112,7 @@ export async function buildLeaderboard(
 
     // Clean up stats for players no longer on the whitelist
     if (!name) {
-      await deleteStats(uuid, srv);
+      if (whitelistLoadedOk) await deleteStats(uuid, srv);
       continue;
     }
 

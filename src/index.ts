@@ -16,6 +16,7 @@ import { initServers } from "./utils/server.js";
 import { initMinecraftCommands } from "./logWatcher/initMinecraftCommands.js";
 import { log } from "./utils/logger.js";
 import { flushUptimeHistory } from "./utils/uptimeTracker.js";
+import { invalidateStatusChannelCache } from "./logWatcher/watchers/statusEmbed.js";
 import type { BotCommand, BotClient } from "./types/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -109,6 +110,10 @@ async function registerGlobalCommands(): Promise<void> {
       log.error("init", `Failed to initialize MC commands: ${msg}`);
     }
   });
+
+  // B-10: invalidate the statusEmbed channel ref cache after every Discord
+  // reconnect so stale TextChannel/VoiceChannel objects are not reused.
+  client.on("shardResume", () => invalidateStatusChannelCache());
 
   client.on("interactionCreate", async (interaction) => {
     // ── Autocomplete ──

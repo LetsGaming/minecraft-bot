@@ -15,19 +15,18 @@ const CONFIG_PATH = path.resolve(PROJECT_ROOT, "config.json");
 
 let _config: BotConfig | null = null;
 
+// B-12: previously this stripped both single and double quotes, while the
+// api-server's parseVarsFile only strips double quotes via regex. A value
+// like VALUE='something' would parse as "something" here but "'something'"
+// there, causing silent config divergence. Aligned to double-quotes only,
+// matching the api-server behaviour and the standard shell-var convention.
 function parseVariablesTxt(filePath: string): VariablesMap {
   const vars: VariablesMap = {};
   if (!fs.existsSync(filePath)) return vars;
   for (const line of fs.readFileSync(filePath, "utf-8").split(/\r?\n/)) {
-    const m = line.match(/^(\w+)=(.*)$/);
+    const m = line.match(/^(\w+)="?([^"]*)"?$/);
     if (!m) continue;
-    let v = m[2]!.trim();
-    if (
-      (v.startsWith('"') && v.endsWith('"')) ||
-      (v.startsWith("'") && v.endsWith("'"))
-    )
-      v = v.slice(1, -1);
-    vars[m[1]!] = v;
+    vars[m[1]!] = m[2]!;
   }
   return vars;
 }
@@ -75,7 +74,17 @@ function resolveServerConfig(
 export function loadConfig(): BotConfig {
   if (_config) return _config;
 
-  const raw = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8")) as RawBotConfig;
+  // B-07: give an actionable error message instead of a raw JSON parse stack trace
+  let raw: RawBotConfig;
+  try {
+    raw = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8")) as RawBotConfig;
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Failed to load config.json at ${CONFIG_PATH}: ${reason}\n` +
+        "Make sure the file exists and contains valid JSON.",
+    );
+  }
 
   // ── Resolve servers ──
   const servers: Record<string, ServerConfig> = {};

@@ -55,6 +55,9 @@ export class RconClient {
   private _buf = Buffer.alloc(0);
   private _authResolve: (() => void) | null = null;
   private _authReject: ((err: Error) => void) | null = null;
+  // B-01: waiter queue — concurrent callers await auth without a poll loop
+  private _waiters: Array<{ resolve: () => void; reject: (e: Error) => void }> =
+    [];
   private _lastSuccess = 0;
 
   constructor(host: string, port: number, password: string, serverId: string) {
@@ -89,6 +92,9 @@ export class RconClient {
       this._authResolve = null;
       this._authReject = null;
     }
+    // B-01: reject any concurrent callers waiting on auth
+    for (const w of this._waiters) w.reject(new Error("RCON lost"));
+    this._waiters = [];
   }
 
   connect(): Promise<void> {
@@ -97,16 +103,10 @@ export class RconClient {
         return resolve();
 
       if (this._connecting) {
-        // Another caller already started the handshake — wait for it.
-        const poll = setInterval(() => {
-          if (this._auth) {
-            clearInterval(poll);
-            resolve();
-          } else if (!this._connecting) {
-            clearInterval(poll);
-            reject(new Error("RCON failed"));
-          }
-        }, 50);
+        // B-01: queue the caller instead of spinning a 50ms poll loop.
+        // The primary connect() path resolves/rejects all waiters on auth
+        // success or failure — no independent timeout leak is possible.
+        this._waiters.push({ resolve, reject });
         return;
       }
 
@@ -138,8 +138,11 @@ export class RconClient {
             clearTimeout(authTimeout);
             if (pkt.id === -1) {
               this._connecting = false;
+              const err = new Error("RCON auth failed");
+              for (const w of this._waiters) w.reject(err);
+              this._waiters = [];
               this._cleanup();
-              reject(new Error("RCON auth failed"));
+              reject(err);
               return;
             }
             if (pkt.id === 1) {
@@ -148,6 +151,9 @@ export class RconClient {
               this._authResolve?.();
               this._authResolve = null;
               this._authReject = null;
+              // B-01: wake all concurrent callers
+              for (const w of this._waiters) w.resolve();
+              this._waiters = [];
             }
             continue;
           }
