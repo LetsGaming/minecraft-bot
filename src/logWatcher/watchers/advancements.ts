@@ -1,5 +1,5 @@
 import { type Client } from "discord.js";
-import { createEmbed } from "../../utils/embedUtils.js";
+import { createPlayerEmbed } from "../../utils/embedUtils.js";
 import { log } from "../../utils/logger.js";
 import type { ILogWatcher } from "../logWatcher.js";
 import type { GuildConfig } from "../../types/index.js";
@@ -26,14 +26,12 @@ export function registerAdvancementWatcher(
         const channel = await client.channels.fetch(notif.channelId);
         if (!channel || !("send" in channel)) continue;
 
-        const head = `https://mc-heads.net/avatar/${player}/32`;
         const isChallenge = match[0].includes("completed the challenge");
 
-        const embed = createEmbed({
-          author: { name: player, iconURL: head },
+        const embed = createPlayerEmbed(player, {
           title: isChallenge
-            ? "🏆 Challenge Complete!"
-            : "⭐ Advancement Made!",
+            ? `Completed challenge: ${advancement}`
+            : `Made advancement: ${advancement}`,
           description: `**${advancement}**`,
           color: isChallenge ? 0xa020f0 : 0x55ff55,
           ...(Object.keys(guildConfigs).length > 1

@@ -64,7 +64,10 @@ export async function takeSnapshot(
 
 /**
  * Find and load the snapshot closest to (but not after) a target timestamp.
- * Returns null if no snapshots exist at all.
+ * If all snapshots are newer than the target (e.g. bot just started and hasn't
+ * been running for a full interval yet), falls back to the oldest available
+ * snapshot so callers always get a meaningful baseline rather than nothing.
+ * Returns null only if no snapshots exist at all.
  */
 export async function getSnapshotClosestTo(
   targetTimestamp: number,
@@ -86,10 +89,11 @@ export async function getSnapshotClosestTo(
     else break;
   }
 
-  // B-13: if every snapshot is newer than the target (e.g. bot just started),
-  // return null so callers show "all-time" explicitly rather than silently
-  // using the very first snapshot as a misleading baseline.
-  if (closest === null) return null;
+  // If every snapshot is newer than the target (bot hasn't been running for a
+  // full interval yet), fall back to the oldest available snapshot so the
+  // leaderboard shows a partial-period baseline rather than silently showing
+  // all-time stats.
+  if (closest === null) closest = timestamps[0]!;
 
   const filePath = path.join(SNAPSHOTS_DIR, `${closest}.json`);
   const raw = await fsPromises.readFile(filePath, "utf-8");

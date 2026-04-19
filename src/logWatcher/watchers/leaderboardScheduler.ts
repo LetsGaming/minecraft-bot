@@ -177,16 +177,24 @@ async function checkAndPost(
         const snapshotAge = Math.round(
           (now - snapshot.timestamp) / (60 * 60 * 1000),
         );
-        footer = `${periodLabel} leaderboard · based on last ${snapshotAge}h of data`;
+
+        // So users know it's a partial period when the bot is young:
+        footer =
+          snapshotAge > intervalMs / (60 * 60 * 1000)
+            ? `${periodLabel} leaderboard · based on last ${snapshotAge}h of data`
+            : `${periodLabel} leaderboard · bot tracking since ${snapshotAge}h ago (partial period)`;
       } else {
         footer = `${periodLabel} leaderboard · no snapshot available, showing all-time`;
       }
 
-      const leaderboardData = await buildLeaderboard("playtime", opts);
-      const embed = buildLeaderboardEmbed(leaderboardData);
-      embed.setFooter({ text: footer });
+      const leaderboardDataMined = await buildLeaderboard("mined", opts);
+      const leaderboardDataPlaytime = await buildLeaderboard("playtime", opts);
+      const playtimeEmbed = buildLeaderboardEmbed(leaderboardDataPlaytime);
+      const minedEmbed = buildLeaderboardEmbed(leaderboardDataMined);
+      playtimeEmbed.setFooter({ text: footer });
+      minedEmbed.setFooter({ text: footer });
 
-      await channel.send({ embeds: [embed] });
+      await channel.send({ embeds: [playtimeEmbed, minedEmbed] });
 
       schedule[guildId] = now;
       await saveSchedule(schedule);

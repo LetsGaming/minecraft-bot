@@ -12,7 +12,7 @@ import { resolveServer } from "../../utils/guildRouter.js";
 import { getOnlinePlayers } from "../../utils/playerUtils.js";
 import {
   createErrorEmbed,
-  createEmbedWithThumbnail,
+  createPlayerEmbed,
 } from "../../utils/embedUtils.js";
 import type { MojangProfile } from "../../types/index.js";
 
@@ -46,17 +46,11 @@ export async function execute(
     return;
   }
 
-  const { id: uuid } = (await res.json()) as MojangProfile;
+  const { name } = (await res.json()) as MojangProfile;
 
-  const skinUrl = `https://crafatar.com/avatars/${uuid}?overlay&size=128`;
-
-  const embed = createEmbedWithThumbnail({
-    title: `${mcname}'s Player Head`,
-    description:
-      "Click the button to receive this head in-game (if you're linked and online).",
-    thumbnail: skinUrl,
-    footer: { text: `Requested by ${interaction.user.tag}` },
-    timestamp: true,
+  const embed = createPlayerEmbed(name, {
+    title: `${name}'s Head`,
+    description: "Click the button below to receive this head in-game.",
   });
 
   const button = new ButtonBuilder()

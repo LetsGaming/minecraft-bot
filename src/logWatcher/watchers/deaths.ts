@@ -1,5 +1,5 @@
 import { type Client } from "discord.js";
-import { createEmbed } from "../../utils/embedUtils.js";
+import { createPlayerEmbed } from "../../utils/embedUtils.js";
 import { log } from "../../utils/logger.js";
 import type { ILogWatcher } from "../logWatcher.js";
 import type { GuildConfig } from "../../types/index.js";
@@ -28,11 +28,10 @@ export function registerDeathWatcher(
         const channel = await client.channels.fetch(notif.channelId);
         if (!channel || !("send" in channel)) continue;
 
-        const head = `https://mc-heads.net/avatar/${player}/32`;
-        const embed = createEmbed({
-          author: { name: "☠️ Death", iconURL: head },
+        const embed = createPlayerEmbed(player, {
+          title: "Death",
           description: deathMessage,
-          color: 0x8b0000,
+          color: 0xff5555,
           ...(Object.keys(guildConfigs).length > 1
             ? { footer: { text: serverId } }
             : {}),

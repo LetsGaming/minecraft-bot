@@ -1,5 +1,5 @@
 import { type Client } from "discord.js";
-import { createEmbed } from "../../utils/embedUtils.js";
+import { createPlayerEmbed } from "../../utils/embedUtils.js";
 import { log } from "../../utils/logger.js";
 import type { ILogWatcher } from "../logWatcher.js";
 import type { GuildConfig } from "../../types/index.js";
@@ -60,9 +60,9 @@ async function notify(
       const channel = await client.channels.fetch(notif.channelId);
       if (!channel || !("send" in channel)) continue;
 
-      const head = `https://mc-heads.net/avatar/${player}/32`;
-      const embed = createEmbed({
-        author: { name: `${player} ${text}`, iconURL: head },
+      const embed = createPlayerEmbed(player, {
+        title: event === "join" ? "Player Joined" : "Player Left",
+        description: `${player} ${text}`,
         color,
         ...(Object.keys(guildConfigs).length > 1
           ? { footer: { text: serverId } }

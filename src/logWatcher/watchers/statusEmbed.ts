@@ -342,10 +342,6 @@ async function updatePlayerCountVoiceChannel(
     const renamed = await renameVoiceChannelIfChanged(voiceChannel, newName);
     if (renamed) {
       refs.lastCounts = counts;
-      log.info(
-        "status",
-        `Updated player count to "${newName}" for guild ${guildId}`,
-      );
     }
   } catch (err) {
     log.warn(

@@ -123,6 +123,27 @@ export function createEmbedWithThumbnail({
   return embed;
 }
 
+export function createPlayerEmbed(
+  player: string,
+  options: Omit<EmbedOptions, "author">,
+  asThumbnail: boolean = false,
+): EmbedBuilder {
+  const head = `https://mc-heads.net/avatar/${player}/64`;
+  if (asThumbnail) {
+    return createEmbedWithThumbnail({
+      ...options,
+      thumbnail: head,
+    });
+  }
+  return createEmbed({
+    ...options,
+    author: {
+      name: player,
+      iconURL: head,
+    },
+  });
+}
+
 /**
  * Generates pagination buttons based on current page state.
  */
