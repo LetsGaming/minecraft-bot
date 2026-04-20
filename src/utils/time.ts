@@ -116,8 +116,8 @@ export function nextMidnightEpoch(): number {
   const tomorrowIso = `${year}-${String(month).padStart(2, "0")}-${String(day + 1).padStart(2, "0")}T00:00:00Z`;
   const naiveEpoch = new Date(tomorrowIso).getTime();
 
-  // Step 3: subtract the TZ offset to land on the correct UTC epoch for midnight
-  return naiveEpoch - getTzOffsetMs(naiveEpoch);
+  // Step 3: add the TZ offset to land on the correct UTC epoch for midnight.
+  return naiveEpoch + getTzOffsetMs(naiveEpoch);
 }
 
 /**
