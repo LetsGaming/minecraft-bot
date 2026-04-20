@@ -6,6 +6,7 @@ import type {
   SlashCommandBuilder,
   SlashCommandSubcommandsOnlyBuilder,
 } from "discord.js";
+import type { ServerInstance } from "../utils/server.js";
 
 export interface BotCommand {
   data:
@@ -36,7 +37,7 @@ export interface InGameCommandDefinition {
     username: string,
     args: Record<string, string>,
     client: Client,
-    server: import("../utils/server.js").ServerInstance,
+    server: ServerInstance,
   ) => Promise<void>;
 }
 
@@ -52,6 +53,6 @@ export interface InGameCommandResult {
     username: string,
     args: Record<string, string>,
     client: Client,
-    server: import("../utils/server.js").ServerInstance,
+    server: ServerInstance,
   ) => Promise<void>;
 }

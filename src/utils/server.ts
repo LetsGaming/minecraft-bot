@@ -205,14 +205,16 @@ export class ServerInstance {
       }
     }
     await this.sendCommand("/seed");
-    await new Promise<void>((r) => setTimeout(r, 200));
     const { tailLog } = await import("./serverAccess.js");
-    const out = await tailLog(this.config, 10);
-    for (const line of out.split("\n").reverse()) {
-      const m = line.match(/Seed:\s*\[(-?\d+)\]/);
-      if (m?.[1]) {
-        this._seedCache = m[1];
-        return this._seedCache;
+    for (let i = 0; i < 3; i++) {
+      await new Promise<void>((r) => setTimeout(r, 300));
+      const out = await tailLog(this.config, 10);
+      for (const line of out.split("\n").reverse()) {
+        const m = line.match(/Seed:\s*\[(-?\d+)\]/);
+        if (m?.[1]) {
+          this._seedCache = m[1];
+          return this._seedCache;
+        }
       }
     }
     return null;
@@ -228,11 +230,14 @@ export class ServerInstance {
       const m = r.match(/\[([\d.+-]+)d,\s*([\d.+-]+)d,\s*([\d.+-]+)d\]/);
       if (m) return { x: Number(m[1]), y: Number(m[2]), z: Number(m[3]) };
     }
-    await new Promise<void>((r) => setTimeout(r, 200));
     const { tailLog } = await import("./serverAccess.js");
-    const out = await tailLog(this.config, 10);
-    const m = out.match(/\[([\d.+-]+)d,\s*([\d.+-]+)d,\s*([\d.+-]+)d\]/);
-    return m ? { x: Number(m[1]), y: Number(m[2]), z: Number(m[3]) } : null;
+    for (let i = 0; i < 3; i++) {
+      await new Promise<void>((r) => setTimeout(r, 300));
+      const out = await tailLog(this.config, 10);
+      const m = out.match(/\[([\d.+-]+)d,\s*([\d.+-]+)d,\s*([\d.+-]+)d\]/);
+      if (m) return { x: Number(m[1]), y: Number(m[2]), z: Number(m[3]) };
+    }
+    return null;
   }
 
   async getPlayerDimension(player: string): Promise<string> {
@@ -241,11 +246,14 @@ export class ServerInstance {
       const m = r.match(/"minecraft:([^"]+)"/);
       if (m?.[1]) return m[1];
     }
-    await new Promise<void>((r) => setTimeout(r, 200));
     const { tailLog } = await import("./serverAccess.js");
-    const out = await tailLog(this.config, 10);
-    const m = out.match(/"minecraft:([^"]+)"/);
-    return m?.[1] ?? "overworld";
+    for (let i = 0; i < 3; i++) {
+      await new Promise<void>((r) => setTimeout(r, 300));
+      const out = await tailLog(this.config, 10);
+      const m = out.match(/"minecraft:([^"]+)"/);
+      if (m?.[1]) return m[1];
+    }
+    return "overworld";
   }
 
   /**
@@ -373,41 +381,4 @@ export function getGuildServer(
     if (inst) return inst;
   }
   return instances.values().next().value ?? null;
-}
-
-// ── Backward-compat shims — TO BE REMOVED in Phase 2.2 cleanup ──
-// These hard-code the "default" server. All call sites should migrate
-// to resolveServer(interaction) from utils/guildRouter.ts instead.
-
-export function getServerConfig(): ServerConfig {
-  return getServerInstance("default")?.config ?? ({} as ServerConfig);
-}
-
-export async function sendToServer(cmd: string): Promise<string | null> {
-  return getServerInstance("default")?.sendCommand(cmd) ?? null;
-}
-
-export async function isServerRunning(): Promise<boolean> {
-  return getServerInstance("default")?.isRunning() ?? false;
-}
-
-export async function getServerSeed(): Promise<string | null> {
-  return getServerInstance("default")?.getSeed() ?? null;
-}
-
-export async function getServerList(): Promise<ServerListResult> {
-  return (
-    getServerInstance("default")?.getList() ?? {
-      playerCount: "0",
-      maxPlayers: "?",
-      players: [],
-    }
-  );
-}
-
-export async function getPlayerData(
-  p: string,
-  n: string,
-): Promise<string | null> {
-  return getServerInstance("default")?.getPlayerData(p, n) ?? null;
 }

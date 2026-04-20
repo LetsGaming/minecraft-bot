@@ -2,7 +2,6 @@ import { promises as fsPromises, existsSync } from "fs";
 import path from "path";
 import type { JsonCacheEntry, WhitelistEntry } from "../types/index.js";
 import type { ServerInstance } from "./server.js";
-import { getServerConfig } from "./server.js";
 import * as serverAccess from "./serverAccess.js";
 
 // ── Whitelist ─────────────────────────────────────────────────────────────
@@ -11,14 +10,14 @@ import * as serverAccess from "./serverAccess.js";
 const whitelistCache = new Map<string, WhitelistEntry[] | null>();
 
 /**
- * Load the whitelist for the given server (defaults to the "default" instance).
+ * Load the whitelist for the given server.
  * Routes through serverAccess so remote servers fetch from the API wrapper.
  */
 export async function loadWhitelist(
   forceReload = false,
-  server?: ServerInstance,
+  server: ServerInstance,
 ): Promise<WhitelistEntry[] | null> {
-  const cfg = server?.config ?? getServerConfig();
+  const cfg = server.config;
   const key = cfg.id;
 
   if (!forceReload && whitelistCache.has(key))
@@ -39,8 +38,8 @@ export function invalidateWhitelistCache(serverId?: string): void {
 
 const levelNameCache = new Map<string, string>();
 
-export async function getLevelName(server?: ServerInstance): Promise<string> {
-  const cfg = server?.config ?? getServerConfig();
+export async function getLevelName(server: ServerInstance): Promise<string> {
+  const cfg = server.config;
   const key = cfg.id;
   if (levelNameCache.has(key)) return levelNameCache.get(key)!;
   const name = await serverAccess.readLevelName(cfg);
@@ -51,40 +50,23 @@ export async function getLevelName(server?: ServerInstance): Promise<string> {
 // ── Log tailing ───────────────────────────────────────────────────────────
 
 /**
- * Return the last N lines of latest.log.
- * `serverDir` param kept for backward compat with local call sites in server.ts
- * that pass it directly; those will be local-only, so the path override still works.
+ * Return the last N lines of latest.log for the given server.
+ * Routes through serverAccess so remote servers are handled transparently.
  */
 export async function getLatestLogs(
   lines = 10,
-  serverDir?: string,
-  server?: ServerInstance,
+  server: ServerInstance,
 ): Promise<string> {
-  // If a server instance is provided, route through serverAccess (handles remote).
-  if (server) return serverAccess.tailLog(server.config, lines);
-
-  // Legacy local-only path: use serverDir override or default config.
-  const cfg = getServerConfig();
-  const dir = serverDir ?? cfg.serverDir;
-  const logFile = path.join(dir, "logs", "latest.log");
-  const { exec } = await import("child_process");
-  const { promisify } = await import("util");
-  const execAsync = promisify(exec);
-  try {
-    const { stdout } = await execAsync(`tail -n ${lines} "${logFile}"`);
-    return stdout;
-  } catch {
-    return "";
-  }
+  return serverAccess.tailLog(server.config, lines);
 }
 
 // ── Stats deletion ────────────────────────────────────────────────────────
 
 export async function deleteStats(
   uuid: string,
-  server?: ServerInstance,
+  server: ServerInstance,
 ): Promise<boolean> {
-  const cfg = server?.config ?? getServerConfig();
+  const cfg = server.config;
   const deleted = await serverAccess.deleteStatsFile(cfg, uuid);
   if (deleted) {
     const { invalidateAllStatsCache } = await import("./statUtils.js");
@@ -103,15 +85,14 @@ const listOutputCache = new Map<string, { output: string; time: number }>();
 export async function getListOutput(
   server?: ServerInstance,
 ): Promise<string | null> {
-  const key = server?.id ?? "__local__";
+  if (!server) return null;
+  const key = server.id;
   const now = Date.now();
   const cached = listOutputCache.get(key);
   if (cached && now - cached.time < 500) return cached.output;
-  if (server) {
-    await server.sendCommand("/list");
-  }
+  await server.sendCommand("/list");
   await new Promise<void>((r) => setTimeout(r, 200));
-  const output = await getLatestLogs(10, undefined, server);
+  const output = await getLatestLogs(10, server);
   listOutputCache.set(key, { output, time: now });
   return output;
 }
