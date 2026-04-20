@@ -2,7 +2,7 @@ import path from "path";
 import type { Client, Message, TextChannel } from "discord.js";
 import { loadJson, getRootDir } from "../../utils/utils.js";
 import { log } from "../../utils/logger.js";
-import { msUntilMidnight } from "../../utils/time.js";
+import { nextMidnightEpoch } from "../../utils/time.js";
 import type { GuildConfig, StatusMessageState } from "../../types/index.js";
 
 const STATUS_STATE_PATH = path.resolve(
@@ -151,20 +151,24 @@ export function startChannelPurge(
     }
   };
 
-  // Schedule first run at next midnight, then repeat every 24h
-  const delay = msUntilMidnight();
-  const delayHours = (delay / 3_600_000).toFixed(1);
+  // Self-rescheduling: always wait until the *next* local midnight in TZ.
+  // A fixed setInterval(86400000) would drift by ±1 h on DST transitions;
+  // re-computing from nextMidnightEpoch() on every iteration stays exact.
+  function scheduleNextPurge(): void {
+    const delay = nextMidnightEpoch() - Date.now();
+    const delayHours = (delay / 3_600_000).toFixed(1);
+    log.info(
+      "purge",
+      `Next channel purge in ${delayHours}h (${guildsWithPurge.length} guild(s))`,
+    );
+    setTimeout(async () => {
+      await runPurge().catch((err) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.error("purge", `Purge failed: ${msg}`);
+      });
+      scheduleNextPurge();
+    }, delay);
+  }
 
-  log.info(
-    "purge",
-    `Channel purge scheduled for ${guildsWithPurge.length} guild(s), next run in ${delayHours}h`,
-  );
-
-  setTimeout(() => {
-    runPurge().catch((err) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.error("purge", `Initial purge failed: ${msg}`);
-    });
-    setInterval(runPurge, 24 * 60 * 60 * 1000);
-  }, delay);
+  scheduleNextPurge();
 }
