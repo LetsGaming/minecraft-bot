@@ -91,10 +91,15 @@ export async function getListOutput(
   const cached = listOutputCache.get(key);
   if (cached && now - cached.time < 500) return cached.output;
   await server.sendCommand("/list");
-  await new Promise<void>((r) => setTimeout(r, 200));
-  const output = await getLatestLogs(10, server);
-  listOutputCache.set(key, { output, time: now });
-  return output;
+  for (let i = 0; i < 3; i++) {
+    await new Promise<void>((r) => setTimeout(r, 300));
+    const output = await getLatestLogs(10, server);
+    if (output.includes("players online")) {
+      listOutputCache.set(key, { output, time: now });
+      return output;
+    }
+  }
+  return null;
 }
 
 // ── Pure helpers (no server dependency) ───────────────────────────────────

@@ -30,6 +30,7 @@ import type {
   BackupDirInfo,
   BackupSummary,
   ScriptResult,
+  TpsResult,
 } from "../types/index.js";
 
 const execAsync = promisify(exec);
@@ -141,10 +142,10 @@ export async function sendCommand(
 /** Get TPS data from the server. Returns null if unavailable. */
 export async function getTps(
   cfg: ServerConfig,
-): Promise<import("../types/index.js").TpsResult | null> {
+): Promise<TpsResult | null> {
   if (cfg.apiUrl) {
     const { tps } = await apiGet<{
-      tps: import("../types/index.js").TpsResult | null;
+      tps: TpsResult | null;
     }>(cfg, "/tps");
     return tps;
   }

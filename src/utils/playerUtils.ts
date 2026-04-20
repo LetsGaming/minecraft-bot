@@ -9,7 +9,7 @@ import type {
 const LOOKAHEAD_LINES = 5;
 
 export async function getPlayerNamesChoices(
-  server?: ServerInstance,
+  server: ServerInstance,
 ): Promise<Array<{ name: string; value: string }>> {
   const names = await getPlayerNames(server);
   return names.map((n) => ({ name: n, value: n }));
@@ -23,7 +23,7 @@ export async function getPlayerNamesChoices(
  */
 export async function findPlayer(
   playerName: string,
-  server?: ServerInstance,
+  server: ServerInstance,
 ): Promise<WhitelistEntry | null> {
   const whitelist = await loadWhitelist(false, server);
   if (!whitelist) return null;
@@ -35,7 +35,7 @@ export async function findPlayer(
  * Get all player names from the whitelist
  */
 export async function getPlayerNames(
-  server?: ServerInstance,
+  server: ServerInstance,
 ): Promise<string[]> {
   const whitelist = await loadWhitelist(false, server);
   return whitelist ? whitelist.map((p) => p.name) : [];

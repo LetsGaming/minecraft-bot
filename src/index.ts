@@ -13,6 +13,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { loadConfig, getServerIds } from "./config.js";
 import { initServers } from "./utils/server.js";
+import { tryResolveServer } from "./utils/guildRouter.js";
 import { initMinecraftCommands } from "./logWatcher/initMinecraftCommands.js";
 import { log } from "./utils/logger.js";
 import { flushUptimeHistory } from "./utils/uptimeTracker.js";
@@ -136,7 +137,10 @@ async function registerGlobalCommands(): Promise<void> {
       if (["player", "player1", "player2"].includes(focused.name)) {
         try {
           const { getPlayerNames } = await import("./utils/playerUtils.js");
-          const names = await getPlayerNames();
+          const server = tryResolveServer(
+            autocomplete as unknown as ChatInputCommandInteraction,
+          );
+          const names = server ? await getPlayerNames(server) : [];
           const filtered = names.filter((n) =>
             n.toLowerCase().startsWith(String(focused.value).toLowerCase()),
           );
