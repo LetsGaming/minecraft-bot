@@ -30,8 +30,8 @@ export function registerAdvancementWatcher(
 
         const embed = createPlayerEmbed(player, {
           title: isChallenge
-            ? `Completed challenge: ${advancement}`
-            : `Made advancement: ${advancement}`,
+            ? `✨ Completed challenge`
+            : `⭐ Made advancement`,
           description: `**${advancement}**`,
           color: isChallenge ? 0xa020f0 : 0x55ff55,
           ...(Object.keys(guildConfigs).length > 1

@@ -29,7 +29,7 @@ export function registerDeathWatcher(
         if (!channel || !("send" in channel)) continue;
 
         const embed = createPlayerEmbed(player, {
-          title: "Death",
+          title: "☠️ Death",
           description: deathMessage,
           color: 0xff5555,
           ...(Object.keys(guildConfigs).length > 1
