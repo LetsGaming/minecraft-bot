@@ -24,23 +24,13 @@ import {
   type TextChannel,
   type VoiceChannel,
 } from "discord.js";
+import type {
+  ManagedCategory,
+  EnsuredTextChannel,
+  EnsuredVoiceChannel,
+} from "../types/index.js";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-export interface ManagedCategory {
-  category: CategoryChannel;
-  guild: Guild;
-}
-
-export interface EnsuredTextChannel {
-  channel: TextChannel;
-  categoryId: string;
-}
-
-export interface EnsuredVoiceChannel {
-  channel: VoiceChannel;
-  categoryId: string;
-}
+export type { ManagedCategory, EnsuredTextChannel, EnsuredVoiceChannel };
 
 // ─── Permissions ──────────────────────────────────────────────────────────────
 

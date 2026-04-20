@@ -5,20 +5,11 @@ import readline from "readline";
 import { log } from "../utils/logger.js";
 import type { Client } from "discord.js";
 import type { ServerInstance } from "../utils/server.js";
-import type { LogHandler, LogWatcherEntry } from "../types/index.js";
+import type { LogHandler, LogWatcherEntry, ILogWatcher } from "../types/index.js";
+
+export type { ILogWatcher };
 
 const POLL_INTERVAL_MS = 1000;
-
-/**
- * Minimal interface that both LogWatcher (local) and RemoteLogWatcher (SSE)
- * satisfy. Watchers register against this interface so they work with both.
- */
-export interface ILogWatcher {
-  readonly server: ServerInstance;
-  register(regex: RegExp, handler: LogHandler): void;
-  start(client: Client): Promise<void>;
-  stop(): void;
-}
 
 /**
  * Per-server log watcher instance.

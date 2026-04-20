@@ -27,6 +27,9 @@ import type {
   ServerConfig,
   WhitelistEntry,
   MinecraftStatsFile,
+  BackupDirInfo,
+  BackupSummary,
+  ScriptResult,
 } from "../types/index.js";
 
 const execAsync = promisify(exec);
@@ -293,19 +296,6 @@ export async function readModSlugs(
 
 // ── Backups ───────────────────────────────────────────────────────────────
 
-export interface BackupDirInfo {
-  dir: string;
-  count: number;
-  latestFile: string;
-  latestMtime: Date;
-  latestSizeBytes: number;
-}
-
-export interface BackupSummary {
-  dirs: BackupDirInfo[];
-  totalBytes: number;
-}
-
 /** Scan the backup directories for a server. */
 export async function readBackups(cfg: ServerConfig): Promise<BackupSummary> {
   if (cfg.apiUrl) {
@@ -384,12 +374,6 @@ const SCRIPT_TIMEOUTS: Record<string, number> = {
   backup: 300_000,
   status: 15_000,
 };
-
-export interface ScriptResult {
-  output: string;
-  stderr: string;
-  exitCode: number | null;
-}
 
 /**
  * Run a named server management script (start / stop / restart / backup / status).

@@ -7,26 +7,16 @@
  */
 
 import type { ServerInstance } from "./server.js";
+import type { ModSide, ModInfo, ModList } from "../types/index.js";
 import * as serverAccess from "./serverAccess.js";
 
 // ── Types ──────────────────────────────────────────────────────────────────
+// ModSide, ModInfo, ModList are defined in types/mods.ts and re-exported
+// via types/index.ts. They are re-exported here for backward compatibility
+// so existing importers of modUtils.ts continue to work unchanged.
+export type { ModSide, ModInfo, ModList };
 
-export type ModSide = "server_only" | "client_optional" | "client_and_server";
 
-export interface ModInfo {
-  slug: string;
-  name: string;
-  description: string;
-  url: string;
-  side: ModSide;
-}
-
-export interface ModList {
-  serverOnly: ModInfo[];
-  clientOptional: ModInfo[];
-  clientAndServer: ModInfo[];
-  fetchedAt: number;
-}
 
 // ── Modrinth API types ────────────────────────────────────────────────────
 

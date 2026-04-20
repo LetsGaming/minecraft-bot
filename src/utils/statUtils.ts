@@ -9,7 +9,11 @@ import type {
   LeaderboardStatDefinition,
   LeaderboardEntry,
   MinecraftStatsFile,
+  BuildLeaderboardOptions,
+  LeaderboardData,
 } from "../types/index.js";
+
+export type { BuildLeaderboardOptions, LeaderboardData };
 
 /**
  * Available leaderboard stat definitions.
@@ -60,20 +64,6 @@ export const LEADERBOARD_STATS: Record<string, LeaderboardStatDefinition> = {
   },
 };
 
-export interface BuildLeaderboardOptions {
-  limit?: number;
-  baseline?: Record<string, Record<string, number>> | null;
-  periodLabel?: string | null;
-  /** Which server to pull stats from. Must be provided by the caller. */
-  server: ServerInstance;
-}
-
-export interface LeaderboardData {
-  entries: LeaderboardEntry[];
-  title: string;
-  description: string;
-  footerText: string;
-}
 
 /**
  * Shared leaderboard builder used by /leaderboard, /top, and the scheduled poster.
