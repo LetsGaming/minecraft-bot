@@ -25,7 +25,7 @@ export interface ModList {
   serverOnly: ModInfo[];
   clientOptional: ModInfo[];
   clientAndServer: ModInfo[];
-  fetchedAt: string;
+  fetchedAt: number;
 }
 
 // ── Modrinth API types ────────────────────────────────────────────────────
@@ -90,7 +90,7 @@ export async function getModList(server: ServerInstance): Promise<ModList> {
       serverOnly: [],
       clientOptional: [],
       clientAndServer: [],
-      fetchedAt: new Date().toISOString(),
+      fetchedAt: Date.now(),
     };
     cache.set(cacheKey, { mtimeMs, modList: empty });
     return empty;
@@ -148,7 +148,7 @@ function buildModList(projects: ModrinthProject[]): ModList {
     serverOnly: serverOnly.sort(byName),
     clientOptional: clientOptional.sort(byName),
     clientAndServer: clientAndServer.sort(byName),
-    fetchedAt: new Date().toISOString(),
+    fetchedAt: Date.now(),
   };
 }
 

@@ -2,6 +2,7 @@ import path from "path";
 import type { Client, Message, TextChannel } from "discord.js";
 import { loadJson, getRootDir } from "../../utils/utils.js";
 import { log } from "../../utils/logger.js";
+import { msUntilMidnight } from "../../utils/time.js";
 import type { GuildConfig, StatusMessageState } from "../../types/index.js";
 
 const STATUS_STATE_PATH = path.resolve(
@@ -10,15 +11,6 @@ const STATUS_STATE_PATH = path.resolve(
   "statusMessages.json",
 );
 
-/**
- * Return milliseconds until the next local midnight (00:00).
- */
-function msUntilMidnight(): number {
-  const now = new Date();
-  const midnight = new Date(now);
-  midnight.setHours(24, 0, 0, 0);
-  return midnight.getTime() - now.getTime();
-}
 
 /**
  * Purge all messages in a channel except for:

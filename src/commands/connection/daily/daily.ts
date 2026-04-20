@@ -15,6 +15,7 @@ import type {
 } from "../../../types/index.js";
 import { log } from "../../../utils/logger.js";
 import { resolveServer } from "../../../utils/guildRouter.js";
+import { formatTime } from "../../../utils/time.js";
 
 const baseDir = getRootDir();
 const dataDir = path.resolve(baseDir, "data");
@@ -158,14 +159,7 @@ function cooldownMsg(ms: number): string {
   const h = Math.floor(ms / 3600000);
   const m = Math.floor((ms % 3600000) / 60000);
   const readyAt = new Date(Date.now() + ms);
-  return `⏳ Next claim in ${h}h ${m}m. | Ready at ${readyAt.toLocaleTimeString(
-    "en-GB",
-    {
-      hour: "2-digit",
-      minute: "2-digit",
-      timeZone: "Europe/Berlin",
-    },
-  )}`;
+  return `⏳ Next claim in ${h}h ${m}m. | Ready at ${formatTime(readyAt)}`;
 }
 
 interface StreakResult {

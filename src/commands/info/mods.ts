@@ -16,6 +16,7 @@ import { createEmbed } from "../../utils/embedUtils.js";
 import { getModList, type ModInfo } from "../../utils/modUtils.js";
 import { withErrorHandling } from "../middleware.js";
 import { resolveServer } from "../../utils/guildRouter.js";
+import { formatTime } from "../../utils/time.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -95,10 +96,7 @@ export const execute = withErrorHandling(async (interaction) => {
   addModFields(embed, "🔧 Optional (client)", modList.clientOptional);
   addModFields(embed, "🔒 Server-only", modList.serverOnly);
 
-  const fetchedAt = new Date(modList.fetchedAt).toLocaleTimeString("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const fetchedAt = formatTime(modList.fetchedAt);
   embed.setFooter({ text: `Data from Modrinth · last fetched ${fetchedAt}` });
 
   await interaction.editReply({ embeds: [embed] });

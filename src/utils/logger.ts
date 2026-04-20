@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { formatDatetime } from "./time.js";
 
 const LOG_DIR = path.resolve(process.cwd(), "logs");
 if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
@@ -8,10 +9,7 @@ const LOG_FILE = path.join(LOG_DIR, "bot.log");
 const stream = fs.createWriteStream(LOG_FILE, { flags: "a" });
 
 function timestamp(): string {
-  return new Date()
-    .toISOString()
-    .replace("T", " ")
-    .replace(/\.\d+Z$/, "");
+  return formatDatetime();
 }
 
 function write(level: string, tag: string, ...args: unknown[]): void {

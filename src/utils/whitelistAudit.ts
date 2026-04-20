@@ -1,5 +1,6 @@
 import path from "path";
 import { loadJson, saveJson, getRootDir } from "./utils.js";
+import { formatDatetime } from "./time.js";
 import type { WhitelistAuditEntry, WhitelistAuditMap } from "../types/index.js";
 
 const AUDIT_PATH = path.resolve(getRootDir(), "data", "whitelistAudit.json");
@@ -34,7 +35,7 @@ export async function recordAdd(
     uuid: uuid ?? audit[key]?.uuid ?? null,
     addedBy: discordTag,
     addedById: discordId,
-    addedAt: new Date().toISOString(),
+    addedAt: formatDatetime(),
     server: serverId,
   };
 
@@ -56,14 +57,14 @@ export async function recordRemove(
   if (audit[key]) {
     audit[key]!.removedBy = discordTag;
     audit[key]!.removedById = discordId;
-    audit[key]!.removedAt = new Date().toISOString();
+    audit[key]!.removedAt = formatDatetime();
     audit[key]!.removedFromServer = serverId;
   } else {
     audit[key] = {
       username,
       removedBy: discordTag,
       removedById: discordId,
-      removedAt: new Date().toISOString(),
+      removedAt: formatDatetime(),
       removedFromServer: serverId,
     };
   }

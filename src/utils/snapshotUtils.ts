@@ -1,6 +1,7 @@
 import path from "path";
 import { promises as fsPromises } from "fs";
 import { getRootDir } from "./utils.js";
+import { formatDate } from "./time.js";
 import {
   loadAllStats,
   flattenStats,
@@ -130,7 +131,7 @@ export async function cleanupSnapshots(): Promise<void> {
 
   const byDay = new Map<string, SnapshotFileEntry[]>();
   for (const entry of entries) {
-    const day = new Date(entry.timestamp).toISOString().slice(0, 10);
+    const day = formatDate(entry.timestamp);
     if (!byDay.has(day)) byDay.set(day, []);
     byDay.get(day)!.push(entry);
   }
