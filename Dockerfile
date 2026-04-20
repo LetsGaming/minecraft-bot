@@ -19,7 +19,8 @@ FROM node:20-alpine AS runtime
 WORKDIR /app
 
 # su-exec: clean privilege drop from root to node user in the entrypoint
-RUN apk add --no-cache su-exec
+# tzdata: required so the TZ env var set in docker-compose actually works on Alpine
+RUN apk add --no-cache su-exec tzdata
 
 # Install production deps only
 COPY package.json package-lock.json* ./
