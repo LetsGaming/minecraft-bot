@@ -3,6 +3,7 @@ import { createEmbed } from "../../utils/embedUtils.js";
 import { resolveServer } from "../../utils/guildRouter.js";
 
 import { withErrorHandling } from "../middleware.js";
+import type { PaperTpsResult } from "../../types/minecraft.js";
 
 export const data = new SlashCommandBuilder()
   .setName("tps")
@@ -32,7 +33,7 @@ export const execute = withErrorHandling(async (interaction) => {
 
   if ("tps5m" in tps && tps.tps5m !== undefined) {
     // Paper/Spigot/Purpur: 1m, 5m, 15m averages
-    const paperTps = tps as import("../../types/index.js").PaperTpsResult;
+    const paperTps = tps as PaperTpsResult;
     embed.addFields(
       { name: "1 min", value: `${paperTps.tps1m.toFixed(1)}`, inline: true },
       { name: "5 min", value: `${paperTps.tps5m.toFixed(1)}`, inline: true },

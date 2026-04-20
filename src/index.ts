@@ -92,7 +92,7 @@ async function registerGlobalCommands(): Promise<void> {
 
 // ── Main ──
 
-(async () => {
+void (async () => {
   await loadCommands();
   await registerGlobalCommands();
 

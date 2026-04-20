@@ -11,7 +11,6 @@ const STATUS_STATE_PATH = path.resolve(
   "statusMessages.json",
 );
 
-
 /**
  * Purge all messages in a channel except for:
  *  - The status embed message (tracked in data/statusMessages.json)
@@ -64,7 +63,6 @@ async function purgeChannel(
   let totalDeleted = 0;
   let lastId: string | undefined;
 
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const fetchOptions: { limit: number; before?: string } = { limit: 100 };
     if (lastId) fetchOptions.before = lastId;
@@ -163,7 +161,10 @@ export function startChannelPurge(
   );
 
   setTimeout(() => {
-    runPurge();
+    runPurge().catch((err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.error("purge", `Initial purge failed: ${msg}`);
+    });
     setInterval(runPurge, 24 * 60 * 60 * 1000);
   }, delay);
 }

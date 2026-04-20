@@ -99,7 +99,7 @@ export class RemoteLogWatcher {
     try {
       for (;;) {
         if (this._stopped) {
-          reader.cancel();
+          void reader.cancel();
           return;
         }
         const { done, value } = await reader.read();

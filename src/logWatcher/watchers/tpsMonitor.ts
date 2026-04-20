@@ -3,7 +3,7 @@ import { log } from "../../utils/logger.js";
 import { loadConfig } from "../../config.js";
 import { createEmbed } from "../../utils/embedUtils.js";
 import type { ServerInstance } from "../../utils/server.js";
-import type { GuildConfig } from "../../types/index.js";
+import type { GuildConfig, PaperTpsResult } from "../../types/index.js";
 
 const warned = new Map<string, number>();
 
@@ -49,8 +49,7 @@ export function startTpsMonitor(
             });
 
             if ("tps5m" in tps && tps.tps5m !== undefined) {
-              const paperTps =
-                tps as import("../../types/index.js").PaperTpsResult;
+              const paperTps = tps as PaperTpsResult;
               embed.addFields(
                 {
                   name: "1 min",

@@ -16,6 +16,7 @@ import type {
 import { log } from "../../../utils/logger.js";
 import { resolveServer } from "../../../utils/guildRouter.js";
 import { formatTime } from "../../../utils/time.js";
+import type { ServerInstance } from "../../../utils/server.js";
 
 const baseDir = getRootDir();
 const dataDir = path.resolve(baseDir, "data");
@@ -213,7 +214,7 @@ function fmt({ item = "???", amount = 1 }: DailyRewardItem): string {
 }
 
 async function give(
-  server: import("../../../utils/server.js").ServerInstance,
+  server: ServerInstance,
   player: string,
   { item, amount = 1 }: DailyRewardItem,
 ): Promise<void> {

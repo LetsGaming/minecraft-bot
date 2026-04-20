@@ -3,7 +3,7 @@ import {
   type Client,
   type TextChannel,
   type VoiceChannel,
-  EmbedBuilder,
+  type EmbedBuilder,
 } from "discord.js";
 import { getAllInstances } from "../../utils/server.js";
 import { loadJson, saveJson, getRootDir } from "../../utils/utils.js";

@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, MessageFlags } from "discord.js";
+import { SlashCommandBuilder, MessageFlags, type ChatInputCommandInteraction} from "discord.js";
 import { randomBytes } from "crypto";
 import { loadLinkCodes, saveLinkCodes } from "../../utils/linkUtils.js";
 
@@ -7,7 +7,7 @@ export const data = new SlashCommandBuilder()
   .setDescription("Link your Discord account to your Minecraft account");
 
 export async function execute(
-  interaction: import("discord.js").ChatInputCommandInteraction,
+  interaction: ChatInputCommandInteraction,
 ): Promise<void> {
   const userId = interaction.user.id;
 
