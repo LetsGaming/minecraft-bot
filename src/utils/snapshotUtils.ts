@@ -14,10 +14,17 @@ import type { SnapshotData } from "../types/index.js";
 
 const SNAPSHOTS_DIR = path.resolve(getRootDir(), "data", "snapshots");
 const MAX_AGE_MS = 31 * 24 * 60 * 60 * 1000; // 31 days
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// NOTE: SnapshotData type lives in types/index.ts — extend it there with:
+//   version?: number;
+//   flatStats?: Record<string, Record<string, number>>;
+// Both optional so legacy v1 snapshots still parse.
+const SNAPSHOT_VERSION = 2;
 
 /**
  * Extract only the leaderboard-relevant values from flattened stats.
- * Keeps snapshots small regardless of how many total stats a player has.
+ * Keeps the leaderboard hot-path independent of the full stats dump.
  */
 function extractStatValues(
   flat: ReturnType<typeof flattenStats>,
@@ -30,8 +37,21 @@ function extractStatValues(
 }
 
 /**
- * Take a snapshot of all current player stats (leaderboard values only).
- * Saves to data/snapshots/{timestamp}.json and runs cleanup afterwards.
+ * Convert flattened stats array to a flat fullKey -> value map.
+ * Used by the /stats daily diff to compare snapshots against current state.
+ */
+function flattenedToMap(
+  flat: ReturnType<typeof flattenStats>,
+): Record<string, number> {
+  const map: Record<string, number> = {};
+  for (const s of flat) map[s.fullKey] = s.value;
+  return map;
+}
+
+/**
+ * Take a snapshot of all current player stats.
+ * v2 format stores both the leaderboard values (small, hot path) and the
+ * full flattened stat map (used for /stats daily diffs).
  */
 export async function takeSnapshot(
   server?: ServerInstance,
@@ -40,27 +60,35 @@ export async function takeSnapshot(
 
   const allStats = await loadAllStats(server);
   const players: Record<string, Record<string, number>> = {};
+  const flatStats: Record<string, Record<string, number>> = {};
 
   for (const [uuid, statsFile] of Object.entries(allStats)) {
     const flat = flattenStats(statsFile);
     players[uuid] = extractStatValues(flat);
+    flatStats[uuid] = flattenedToMap(flat);
   }
 
   const timestamp = Date.now();
   const filePath = path.join(SNAPSHOTS_DIR, `${timestamp}.json`);
-  await fsPromises.writeFile(filePath, JSON.stringify({ timestamp, players }));
+  const payload: SnapshotData = {
+    version: SNAPSHOT_VERSION,
+    timestamp,
+    players,
+    flatStats,
+  };
+  await fsPromises.writeFile(filePath, JSON.stringify(payload));
 
   // Snapshot captures the current state — force fresh load on next leaderboard query
   invalidateAllStatsCache();
 
   log.info(
     "snapshots",
-    `Snapshot taken (${Object.keys(players).length} players)`,
+    `Snapshot taken (${Object.keys(players).length} players, v${SNAPSHOT_VERSION})`,
   );
 
   await cleanupSnapshots();
 
-  return { timestamp, players };
+  return payload;
 }
 
 /**
@@ -101,6 +129,50 @@ export async function getSnapshotClosestTo(
   return JSON.parse(raw) as SnapshotData;
 }
 
+/**
+ * Find the snapshot closest to (but not after) `targetTimestamp` that
+ * actually contains full flattened stats (v2+). Skips legacy v1 snapshots
+ * which only stored leaderboard values.
+ *
+ * Returns null if no v2 snapshot exists yet — caller should treat this as
+ * "no baseline available, can't compute diff".
+ */
+export async function getSnapshotForDailyDiff(
+  targetTimestamp: number,
+): Promise<SnapshotData | null> {
+  await fsPromises.mkdir(SNAPSHOTS_DIR, { recursive: true });
+
+  const files = await fsPromises.readdir(SNAPSHOTS_DIR);
+  const timestamps = files
+    .filter((f) => f.endsWith(".json"))
+    .map((f) => parseInt(f.replace(".json", ""), 10))
+    .filter((t) => !isNaN(t))
+    .sort((a, b) => a - b);
+
+  if (timestamps.length === 0) return null;
+
+  // Walk newest-to-oldest among snapshots <= target, return first v2 hit.
+  // If none found at-or-before target, fall back to oldest v2 snapshot so
+  // a freshly-upgraded bot still produces some output.
+  const eligible = timestamps.filter((t) => t <= targetTimestamp);
+  const candidates = eligible.length > 0 ? [...eligible].reverse() : timestamps;
+
+  for (const ts of candidates) {
+    const filePath = path.join(SNAPSHOTS_DIR, `${ts}.json`);
+    try {
+      const raw = await fsPromises.readFile(filePath, "utf-8");
+      const data = JSON.parse(raw) as SnapshotData;
+      if (data.flatStats && Object.keys(data.flatStats).length > 0) {
+        return data;
+      }
+    } catch {
+      // unreadable snapshot — skip
+    }
+  }
+
+  return null;
+}
+
 interface SnapshotFileEntry {
   file: string;
   timestamp: number;
@@ -122,7 +194,7 @@ export async function cleanupSnapshots(): Promise<void> {
   if (entries.length === 0) return;
 
   const now = Date.now();
-  const oneDayAgo = now - 24 * 60 * 60 * 1000;
+  const oneDayAgo = now - DAY_MS;
   const maxAge = now - MAX_AGE_MS;
 
   // B-04: always keep the newest snapshot regardless of age so there is
