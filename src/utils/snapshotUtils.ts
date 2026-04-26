@@ -151,13 +151,7 @@ export async function getSnapshotForDailyDiff(
 
   if (timestamps.length === 0) return null;
 
-  // Walk newest-to-oldest among snapshots <= target, return first v2 hit.
-  // If none found at-or-before target, fall back to oldest v2 snapshot so
-  // a freshly-upgraded bot still produces some output.
-  const eligible = timestamps.filter((t) => t <= targetTimestamp);
-  const candidates = eligible.length > 0 ? [...eligible].reverse() : timestamps;
-
-  for (const ts of candidates) {
+  const tryLoad = async (ts: number): Promise<SnapshotData | null> => {
     const filePath = path.join(SNAPSHOTS_DIR, `${ts}.json`);
     try {
       const raw = await fsPromises.readFile(filePath, "utf-8");
@@ -168,6 +162,26 @@ export async function getSnapshotForDailyDiff(
     } catch {
       // unreadable snapshot — skip
     }
+    return null;
+  };
+
+  // First pass: walk eligible snapshots (<= target) newest-to-oldest, return
+  // the first v2 hit. This is the normal case once the bot has been running
+  // long enough.
+  const eligible = timestamps.filter((t) => t <= targetTimestamp);
+  for (const ts of [...eligible].reverse()) {
+    const data = await tryLoad(ts);
+    if (data) return data;
+  }
+
+  // Second pass: no v2 snapshot at-or-before target. Could happen if all
+  // pre-target snapshots are legacy v1, or if the bot was upgraded recently.
+  // Fall back to the OLDEST v2 snapshot (even if it's after target) so the
+  // user gets a partial-period baseline rather than an error. Walk
+  // oldest-to-newest to grab the earliest v2 we can find.
+  for (const ts of timestamps) {
+    const data = await tryLoad(ts);
+    if (data) return data;
   }
 
   return null;
