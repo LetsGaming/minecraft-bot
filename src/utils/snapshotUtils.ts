@@ -174,12 +174,12 @@ export async function getSnapshotForDailyDiff(
     if (data) return data;
   }
 
-  // Second pass: no v2 snapshot at-or-before target. Could happen if all
-  // pre-target snapshots are legacy v1, or if the bot was upgraded recently.
-  // Fall back to the OLDEST v2 snapshot (even if it's after target) so the
-  // user gets a partial-period baseline rather than an error. Walk
-  // oldest-to-newest to grab the earliest v2 we can find.
+  // Second pass: no v2 snapshot at-or-before target. Bot was likely upgraded
+  // recently, so the period will be shorter than 24h. Walk oldest-first
+  // through snapshots AFTER target and grab the first v2 hit — this gives
+  // the longest baseline that's still strictly < 24h old, never longer.
   for (const ts of timestamps) {
+    if (ts <= targetTimestamp) continue;
     const data = await tryLoad(ts);
     if (data) return data;
   }
