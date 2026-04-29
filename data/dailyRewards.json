@@ -1,122 +1,102 @@
 {
-    "default": [
-        {
-            "item": "coal_block",
-            "amount": 6,
-            "weight": 8
-        },
-        {
-            "item": "emerald",
-            "amount": 4,
-            "weight": 7
-        },
-        {
-            "item": "gold_block",
-            "amount": 6,
-            "weight": 6
-        },
-        {
-            "item": "lapis_block",
-            "amount": 16,
-            "weight": 5
-        },
-        {
-            "item": "stick",
-            "amount": 1,
-            "weight": 4
-        },
-        {
-            "item": "diamond",
-            "amount": 1,
-            "weight": 4
-        },
-        {
-            "item": "name_tag",
-            "amount": 1,
-            "weight": 3
-        },
-        {
-            "item": "experience_bottle",
-            "amount": 16,
-            "weight": 2.5
-        },
-        {
-            "item": "golden_apple",
-            "amount": 1,
-            "weight": 2
-        },
-        {
-            "item": "netherite_scrap",
-            "amount": 1,
-            "weight": 1.2
-        },
-        {
-            "item": "diamond",
-            "amount": 4,
-            "weight": 1
-        },
-        {
-            "item": "elytra",
-            "amount": 1,
-            "weight": 0.3
-        },
-        {
-            "item": "netherite_ingot",
-            "amount": 1,
-            "weight": 0.2
-        },
-        {
-            "item": "totem_of_undying",
-            "amount": 1,
-            "weight": 0.15
-        },
-        {
-            "item": "beacon",
-            "amount": 1,
-            "weight": 0.1
-        },
-        {
-            "item": "netherite_block",
-            "amount": 1,
-            "weight": 0.02
-        }
+  "default": [
+    { "item": "experience_bottle", "amount": 16, "weight": 10 },
+    { "item": "amethyst_shard", "amount": 32, "weight": 10 },
+    { "item": "blaze_rod", "amount": 16, "weight": 10 },
+    { "item": "deepslate_bricks", "amount": 64, "weight": 10 },
+    { "item": "calcite", "amount": 64, "weight": 10 },
+    { "item": "tuff", "amount": 64, "weight": 10 },
+    { "item": "quartz_block", "amount": 64, "weight": 9 },
+    { "item": "smooth_quartz", "amount": 32, "weight": 9 },
+    { "item": "polished_blackstone_bricks", "amount": 64, "weight": 9 },
+    { "item": "end_stone_bricks", "amount": 64, "weight": 9 },
+    { "item": "prismarine_bricks", "amount": 32, "weight": 9 },
+    { "item": "moss_block", "amount": 64, "weight": 8 },
+    { "item": "dripstone_block", "amount": 32, "weight": 8 },
+    { "item": "bone_block", "amount": 16, "weight": 8 },
+    { "item": "sea_lantern", "amount": 64, "weight": 8 },
+    { "item": "shroomlight", "amount": 32, "weight": 8 },
+    { "item": "phantom_membrane", "amount": 6, "weight": 7 },
+    { "item": "ghast_tear", "amount": 4, "weight": 6 },
+    { "item": "name_tag", "amount": 1, "weight": 6 },
+    { "item": "saddle", "amount": 1, "weight": 6 },
+    { "item": "lead", "amount": 4, "weight": 5 },
+    { "item": "pearlescent_froglight", "amount": 16, "weight": 5 },
+    { "item": "verdant_froglight", "amount": 16, "weight": 5 },
+    { "item": "ochre_froglight", "amount": 16, "weight": 5 },
+    { "item": "music_disc_cat", "amount": 1, "weight": 4 },
+    { "item": "music_disc_strad", "amount": 1, "weight": 4 },
+    { "item": "music_disc_mall", "amount": 1, "weight": 4 },
+    { "item": "creeper_head", "amount": 1, "weight": 3 },
+    { "item": "skull_pottery_sherd", "amount": 1, "weight": 3 },
+    { "item": "miner_pottery_sherd", "amount": 1, "weight": 3 },
+    { "item": "explorer_pottery_sherd", "amount": 1, "weight": 3 },
+    { "item": "echo_shard", "amount": 8, "weight": 3 },
+    { "item": "creeper_banner_pattern", "amount": 1, "weight": 2.5 },
+    { "item": "skull_banner_pattern", "amount": 1, "weight": 2.5 },
+    { "item": "flower_banner_pattern", "amount": 1, "weight": 2.5 },
+    { "item": "nautilus_shell", "amount": 8, "weight": 2.5 },
+    { "item": "heart_of_the_sea", "amount": 1, "weight": 2 },
+    { "item": "recovery_compass", "amount": 1, "weight": 2 },
+    { "item": "globe_banner_pattern", "amount": 1, "weight": 1.5 },
+    { "item": "snout_banner_pattern", "amount": 1, "weight": 1.5 },
+    { "item": "bundle", "amount": 1, "weight": 1.5 },
+    { "item": "piglin_head", "amount": 1, "weight": 1.5 },
+    { "item": "music_disc_otherside", "amount": 1, "weight": 1.2 },
+    { "item": "enchanted_golden_apple", "amount": 1, "weight": 1 },
+    { "item": "conduit", "amount": 1, "weight": 0.8 },
+    { "item": "ward_armor_trim_smithing_template", "amount": 1, "weight": 0.4 },
+    {
+      "item": "silence_armor_trim_smithing_template",
+      "amount": 1,
+      "weight": 0.2
+    },
+    { "item": "honeycomb", "amount": 1, "weight": 0.1 },
+    { "item": "feather", "amount": 1, "weight": 0.1 },
+    { "item": "paper", "amount": 1, "weight": 0.1 },
+    { "item": "gold_nugget", "amount": 1, "weight": 0.1 }
+  ],
+  "streakBonuses": {
+    "3": [{ "item": "experience_bottle", "amount": 32 }],
+    "6": [
+      { "item": "cobbled_deepslate", "amount": 128 },
+      { "item": "spruce_log", "amount": 128 }
     ],
-    "streakBonuses": {
-        "3": {
-            "item": "diamond",
-            "amount": 2
-        },
-        "5": {
-            "item": "experience_bottle",
-            "amount": 32
-        },
-        "7": {
-            "item": "emerald",
-            "amount": 24
-        },
-        "10": {
-            "item": "golden_apple",
-            "amount": 2
-        },
-        "14": {
-            "item": "netherite_ingot",
-            "amount": 1
-        },
-        "17": {
-            "item": "totem_of_undying",
-            "amount": 2
-        },
-        "21": {
-            "item": "elytra",
-            "amount": 1
-        },
-        "28": {
-            "item": "beacon",
-            "amount": 1
-        },
-        "35": {
-            "item": "netherite_block",
-            "amount": 1
-        }
-    }
+    "10": [{ "item": "amethyst_shard", "amount": 32 }],
+    "14": [
+      { "item": "diamond_block", "amount": 2 },
+      { "item": "experience_bottle", "amount": 64 }
+    ],
+    "20": [
+      { "item": "netherite_scrap", "amount": 4 },
+      { "item": "gold_ingot", "amount": 4 }
+    ],
+    "28": [{ "item": "enchanted_golden_apple", "amount": 3 }],
+    "38": [
+      { "item": "sentry_armor_trim_smithing_template", "amount": 2 },
+      { "item": "ward_armor_trim_smithing_template", "amount": 2 }
+    ],
+    "40": [{ "item": "netherite_block", "amount": 1 }],
+    "50": [
+      { "item": "music_disc_precipice", "amount": 1 },
+      { "item": "music_disc_otherside", "amount": 1 }
+    ],
+    "64": [
+      { "item": "vex_armor_trim_smithing_template", "amount": 2 },
+      { "item": "coast_armor_trim_smithing_template", "amount": 2 }
+    ],
+    "81": [
+      { "item": "music_disc_creator", "amount": 1 },
+      { "item": "music_disc_pigstep", "amount": 1 }
+    ],
+    "100": [
+      { "item": "heavy_core", "amount": 1 },
+      { "item": "netherite_ingot", "amount": 4 }
+    ],
+    "121": [
+      { "item": "dragon_egg", "amount": 1 },
+      { "item": "netherite_block", "amount": 4 },
+      { "item": "diamond_block", "amount": 16 }
+    ]
+  }
 }

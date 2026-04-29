@@ -21,11 +21,8 @@ import type { ServerInstance } from "../../../utils/server.js";
 const baseDir = getRootDir();
 const dataDir = path.resolve(baseDir, "data");
 const DAILY_COOLDOWN = 24 * 60 * 60 * 1000;
-const MAX_STREAK = 35;
 
-// Per-user in-memory lock — prevents concurrent /daily executions from the
-// same user (double-click, network retry) both passing the cooldown check
-// before either writes back. Sufficient for single-process PM2 deployments.
+const DEFAULT_MAX_STREAK = 35;
 const claimLock = new Set<string>();
 
 export const data = new SlashCommandBuilder()
@@ -121,25 +118,47 @@ async function _execute(
   const { currentStreak, bonusStreak, longestStreak } = calcStreak(
     userData,
     delta,
+    deriveMaxStreak(rewardsCfg.streakBonuses),
   );
-  const reward = pick(rewardsCfg.default);
+
+  const grantedRewards: DailyRewardItem[] = [];
+  const mainReward = pick(rewardsCfg.default);
+  grantedRewards.push(mainReward);
+
   const bonus = rewardsCfg.streakBonuses?.[String(bonusStreak)] ?? null;
-  await give(server, username, reward);
-  if (bonus) await give(server, username, bonus);
+  if (bonus && bonus.length > 0) {
+    grantedRewards.push(...bonus);
+  }
+
+  for (const reward of grantedRewards) {
+    await give(server, username, reward);
+  }
 
   claimed[userId] = {
     lastClaim: now,
     currentStreak,
     bonusStreak,
     longestStreak,
-    rewards: [...userData.rewards, { date: now, reward, bonus }],
+    rewards: [
+      ...userData.rewards,
+      {
+        date: now,
+        items: grantedRewards,
+        streak: currentStreak,
+      },
+    ],
   };
+
   await saveJson(path.join(dataDir, "claimedDaily.json"), claimed);
-
-  await interaction.reply(response(reward, bonus, currentStreak, bonusStreak));
+  await interaction.reply(
+    response(
+      grantedRewards,
+      currentStreak,
+      bonusStreak,
+      !!bonus && bonus.length > 0,
+    ),
+  );
 }
-
-// ── helpers ──
 
 function errorReply(
   msg: string,
@@ -176,15 +195,35 @@ export function calcStreak(
     longestStreak,
   }: Pick<UserClaimData, "currentStreak" | "bonusStreak" | "longestStreak">,
   delta: number,
+  cycleMax: number = DEFAULT_MAX_STREAK,
 ): StreakResult {
   const broken = delta > 2 * DAILY_COOLDOWN;
   const cs = broken ? 1 : currentStreak + 1;
-  const bs = broken ? 1 : Math.min(bonusStreak + 1, MAX_STREAK);
+
+  let bs: number;
+  if (broken) {
+    bs = 1;
+  } else if (bonusStreak >= cycleMax) {
+    bs = 1;
+  } else {
+    bs = bonusStreak + 1;
+  }
+
   return {
     currentStreak: cs,
     bonusStreak: bs,
     longestStreak: Math.max(longestStreak, cs),
   };
+}
+
+export function deriveMaxStreak(
+  streakBonuses: DailyRewardsConfig["streakBonuses"],
+): number {
+  if (!streakBonuses) return DEFAULT_MAX_STREAK;
+  const keys = Object.keys(streakBonuses)
+    .map((k) => parseInt(k, 10))
+    .filter((n) => !isNaN(n) && n > 0);
+  return keys.length > 0 ? Math.max(...keys) : DEFAULT_MAX_STREAK;
 }
 
 export function pick(pool: DailyRewardItem[]): DailyRewardItem {
@@ -198,19 +237,31 @@ export function pick(pool: DailyRewardItem[]): DailyRewardItem {
 }
 
 function response(
-  reward: DailyRewardItem,
-  bonus: DailyRewardItem | null,
+  items: DailyRewardItem[],
   cs: number,
   bs: number,
+  hasBonus: boolean,
 ): { content: string } {
-  const lines = [`🎁 **${fmt(reward)}**`];
-  if (bonus) lines.push(`🔥 **${bs}-day bonus:** ${fmt(bonus)}`);
+  const lines: string[] = [];
+  const main = items[0];
+
+  if (main) {
+    lines.push(`🎁 **Daily Reward:** ${fmt(main)}`);
+  }
+
+  if (hasBonus && items.length > 1) {
+    const bonusItems = items.slice(1);
+    const bonusList = bonusItems.map(fmt).join(", ");
+    lines.push(`🔥 **${bs}-day bonus:** ${bonusList}`);
+  }
+
   lines.push(`📈 Streak: ${cs} days`);
   return { content: lines.join("\n") };
 }
 
 function fmt({ item = "???", amount = 1 }: DailyRewardItem): string {
-  return `${amount}x ${item.replace(/^minecraft:/, "")}`;
+  const cleanName = item.replace(/^minecraft:/, "").replace(/_/g, " ");
+  return `${amount}x ${cleanName}`;
 }
 
 async function give(

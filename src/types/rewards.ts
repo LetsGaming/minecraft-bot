@@ -8,7 +8,8 @@ export interface DailyRewardItem {
 
 export interface DailyRewardsConfig {
   default: DailyRewardItem[];
-  streakBonuses?: Record<string, DailyRewardItem>;
+  // Each milestone awards an array of items (multi-item bonuses).
+  streakBonuses?: Record<string, DailyRewardItem[]>;
 }
 
 export interface UserClaimData {
@@ -18,8 +19,11 @@ export interface UserClaimData {
   longestStreak: number;
   rewards: Array<{
     date: number;
-    reward: DailyRewardItem;
-    bonus: DailyRewardItem | null;
+    // First entry is the random main reward; remaining entries are the
+    // streak-bonus items (zero or more, depending on whether today hit a
+    // milestone and how many items that milestone awards).
+    items: DailyRewardItem[];
+    streak: number;
   }>;
 }
 
@@ -31,5 +35,5 @@ export interface StreakData {
 
 export interface NextBonusStreak {
   streak: number;
-  reward: DailyRewardItem;
+  reward: DailyRewardItem[];
 }

@@ -39,7 +39,7 @@ vi.mock("../src/utils/utils.js", () => ({
 const DAILY_COOLDOWN = 24 * 60 * 60 * 1000;
 const TWO_DAYS = 2 * DAILY_COOLDOWN + 1;
 
-const { calcStreak, pick } =
+const { calcStreak, pick, deriveMaxStreak } =
   await import("../src/commands/connection/daily/daily.js");
 
 describe("calcStreak", () => {
@@ -72,12 +72,74 @@ describe("calcStreak", () => {
     expect(result.longestStreak).toBe(8);
   });
 
-  it("caps bonusStreak at MAX_STREAK (35)", () => {
+  it("resets bonusStreak to 1 after the cycle's top milestone (default 35)", () => {
+    // After the top-milestone bonus has been awarded, the cycle restarts.
+    // currentStreak keeps counting up — only the milestone position resets.
     const result = calcStreak(
       { currentStreak: 35, bonusStreak: 35, longestStreak: 35 },
       DAILY_COOLDOWN + 1000,
     );
-    expect(result.bonusStreak).toBe(35); // not 36
+    expect(result.bonusStreak).toBe(1);
+    expect(result.currentStreak).toBe(36);
+    expect(result.longestStreak).toBe(36);
+  });
+
+  it("respects a custom cycleMax passed by the caller", () => {
+    // With cycleMax=121 (the current production config — 3 cycles per
+    // 365-day year), bonusStreak=35 is mid-cycle and should keep
+    // incrementing — not reset.
+    const mid = calcStreak(
+      { currentStreak: 35, bonusStreak: 35, longestStreak: 35 },
+      DAILY_COOLDOWN + 1000,
+      121,
+    );
+    expect(mid.bonusStreak).toBe(36);
+
+    // At cycleMax=121 with bonusStreak=121, the cycle resets.
+    const top = calcStreak(
+      { currentStreak: 121, bonusStreak: 121, longestStreak: 121 },
+      DAILY_COOLDOWN + 1000,
+      121,
+    );
+    expect(top.bonusStreak).toBe(1);
+    expect(top.currentStreak).toBe(122);
+  });
+
+  it("continues a cycle normally below the cap", () => {
+    const result = calcStreak(
+      { currentStreak: 50, bonusStreak: 14, longestStreak: 50 },
+      DAILY_COOLDOWN + 1000,
+    );
+    expect(result.bonusStreak).toBe(15);
+    expect(result.currentStreak).toBe(51);
+  });
+});
+
+describe("deriveMaxStreak", () => {
+  it("returns the highest milestone key from streakBonuses", () => {
+    expect(
+      deriveMaxStreak({
+        "3": [{ item: "diamond", amount: 1 }],
+        "121": [{ item: "beacon", amount: 1 }],
+        "20": [{ item: "netherite_ingot", amount: 1 }],
+      }),
+    ).toBe(121);
+  });
+
+  it("falls back to the default when streakBonuses is missing", () => {
+    expect(deriveMaxStreak(undefined)).toBe(35);
+    expect(deriveMaxStreak({})).toBe(35);
+  });
+
+  it("ignores non-numeric or non-positive keys", () => {
+    expect(
+      deriveMaxStreak({
+        "10": [{ item: "diamond", amount: 1 }],
+        notanumber: [{ item: "diamond", amount: 1 }],
+        "0": [{ item: "diamond", amount: 1 }],
+        "-5": [{ item: "diamond", amount: 1 }],
+      }),
+    ).toBe(10);
   });
 });
 

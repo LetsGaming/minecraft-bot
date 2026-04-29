@@ -130,12 +130,19 @@ export async function getSnapshotClosestTo(
 }
 
 /**
- * Find the snapshot closest to (but not after) `targetTimestamp` that
- * actually contains full flattened stats (v2+). Skips legacy v1 snapshots
- * which only stored leaderboard values.
+ * Find the oldest v2 snapshot whose timestamp is at or after
+ * `targetTimestamp`. Skips legacy v1 snapshots which only stored
+ * leaderboard values.
  *
- * Returns null if no v2 snapshot exists yet — caller should treat this as
- * "no baseline available, can't compute diff".
+ * The caller passes `now - 24h` as the target, so this returns the
+ * longest baseline that is guaranteed to be <= 24h old. Picking an
+ * older snapshot would silently extend the window past 24h, which is
+ * not what users expect from a "daily" stat.
+ *
+ * If no v2 snapshot exists in the [target, now] window (e.g. the bot
+ * just started and hasn't taken its first snapshot yet), returns null —
+ * caller should treat this as "no baseline available, can't compute
+ * diff".
  */
 export async function getSnapshotForDailyDiff(
   targetTimestamp: number,
@@ -165,21 +172,12 @@ export async function getSnapshotForDailyDiff(
     return null;
   };
 
-  // First pass: walk eligible snapshots (<= target) newest-to-oldest, return
-  // the first v2 hit. This is the normal case once the bot has been running
-  // long enough.
-  const eligible = timestamps.filter((t) => t <= targetTimestamp);
-  for (const ts of [...eligible].reverse()) {
-    const data = await tryLoad(ts);
-    if (data) return data;
-  }
-
-  // Second pass: no v2 snapshot at-or-before target. Bot was likely upgraded
-  // recently, so the period will be shorter than 24h. Walk oldest-first
-  // through snapshots AFTER target and grab the first v2 hit — this gives
-  // the longest baseline that's still strictly < 24h old, never longer.
+  // Walk snapshots oldest-first, skip anything older than the target
+  // (those would push the window past 24h). First v2 hit wins — that's
+  // the oldest baseline still inside the 24h window, giving the largest
+  // valid period.
   for (const ts of timestamps) {
-    if (ts <= targetTimestamp) continue;
+    if (ts < targetTimestamp) continue;
     const data = await tryLoad(ts);
     if (data) return data;
   }
