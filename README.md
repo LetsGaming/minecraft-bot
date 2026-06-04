@@ -18,16 +18,35 @@ A Discord bot for managing one or more Minecraft servers. Bridges chat between D
 - **Event notifications** — Join/leave, deaths, advancements, and server start/stop events posted to Discord.
 - **Multi-server** — All features work across multiple server instances from a single bot.
 
+---
+
 ## Quickstart
 
-### Prerequisites
+### Run with Docker (recommended)
 
-- Node.js 18 or higher
-- A Discord bot token ([Discord Developer Portal](https://discord.com/developers/applications))
-- A Minecraft server with RCON enabled (recommended) or running in a `screen` session
-- The bot must run on the same machine as the Minecraft server (it reads log files and stats directly)
+Docker is the recommended deployment path. The bot connects to your Minecraft server via the [API wrapper](docs/remote-setup.md), which can run on the same machine or a different one.
 
-### Install
+```bash
+git clone <your-repo-url> minecraft-bot && cd minecraft-bot
+
+# 1. Copy and fill in your environment variables
+cp .env.example .env
+# Edit .env — set DISCORD_TOKEN, DISCORD_CLIENT_ID, MC_API_URL, etc.
+
+# 2. Build and start
+docker compose up -d
+
+# 3. Follow startup logs
+docker compose logs -f
+```
+
+See [docs/docker.md](docs/docker.md) for the full guide, including the static `config.json` option for complex multi-server setups.
+
+### Run without Docker (PM2)
+
+For running directly on the host with Node.js and PM2:
+
+**Prerequisites:** Node.js 18+, a Discord bot token, a Minecraft server with RCON enabled or running in a `screen` session.
 
 ```bash
 git clone <your-repo-url> minecraft-bot
@@ -35,9 +54,7 @@ cd minecraft-bot
 npm install
 ```
 
-### Configure
-
-Copy the example config and fill in your values:
+Copy the config template and fill in your values:
 
 ```bash
 cp config_structure.json config.json
@@ -68,33 +85,13 @@ At minimum, set these fields in `config.json`:
 
 See [docs/configuration.md](docs/configuration.md) for the full config reference.
 
-### Run with PM2
-
 ```bash
-npm start
+npm run pm2:start
 ```
 
 The bot registers slash commands globally on startup. They may take up to an hour to appear in Discord for the first time.
 
-### Run with Docker
-
-Docker is supported for **remote mode only** — where the Minecraft server runs on a different machine with the API wrapper deployed there. If the bot and server are on the same machine, use PM2.
-
-```bash
-# Build and start
-docker compose up -d
-
-# Tail live logs
-docker compose logs -f
-
-# Stop
-docker compose down
-
-# Rebuild after a code change
-docker compose up -d --build
-```
-
-See [docs/docker.md](docs/docker.md) for details.
+---
 
 ## Documentation
 
@@ -104,9 +101,9 @@ Full documentation lives in [`docs/index.md`](docs/index.md).
 
 **For admins** — full config reference, command list, automated features, and permission management.
 
-## Development
+---
 
-### Running Tests
+## Development
 
 ```bash
 npm test              # Run all tests once
@@ -114,13 +111,13 @@ npm run test:watch    # Watch mode
 npm run test:coverage # Coverage report
 ```
 
-### Code Standards
+See [docs/decisions.md](docs/decisions.md) for architectural decisions and Golden Rules enforced in code review.
 
-See [docs/decisions.md](docs/decisions.md) for the architectural decisions and Golden Rules enforced in code review.
+---
 
 ## Data Files
 
-The bot stores runtime data in the `data/` directory:
+The bot stores runtime data in the `data/` directory (or `bot_data` Docker volume):
 
 | File | Purpose |
 |---|---|

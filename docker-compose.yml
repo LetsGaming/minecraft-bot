@@ -1,24 +1,61 @@
+name: minecraft-bot
+
 services:
-  minecraft-bot:
+  bot:
     build: .
+    image: minecraft-bot:latest
+    container_name: minecraft-bot
     restart: unless-stopped
 
-    # ── Config & persistent data ──────────────────────────────────────────
-    # config.json is required — copy config_structure.json and fill it in.
-    # data/ and logs/ are written at runtime and must survive container restarts.
-    volumes:
-      - ./config.json:/app/config.json:ro
-      - ./data:/app/data
-      - ./logs:/app/logs
-
+    # ── Environment ───────────────────────────────────────────────────────────
+    # .env is optional — inline overrides below always apply.
+    # Copy .env.example to .env and fill in your values.
+    env_file:
+      - path: .env
+        required: false
     environment:
-      - NODE_ENV=production
-      - TZ=Europe/Berlin
-      # Uncomment to enable debug logging:
-      # - DEBUG=true
+      NODE_ENV: production
+      # TZ is read from .env; override here if needed:
+      # TZ: Europe/Berlin
+      # DEBUG: "true"
 
+    # ── Config ────────────────────────────────────────────────────────────────
+    # Choose ONE strategy:
+    #
+    # Option A — Template (recommended for first-time setup):
+    #   Fill in .env, then let the entrypoint substitute variables at startup.
+    #
+    # Option B — Static file (for complex multi-server / multi-guild configs):
+    #   Copy config_structure.json → config.json, fill it in, mount it here.
+    #
+    volumes:
+      # Option A (default): template-based config
+      - ./config.template.json:/app/config.template.json:ro
+      # Option B: static config — comment out A and uncomment this line
+      # - ./config.json:/app/config.json:ro
+
+      # Persistent runtime state.
+      # Named volumes are managed by Docker and survive image rebuilds.
+      # To inspect: docker compose exec bot ls /app/data/
+      # To back up: docker compose cp bot:/app/data/ ./data-backup/
+      - bot_data:/app/data
+      - bot_logs:/app/logs
+
+    # ── Hardening ─────────────────────────────────────────────────────────────
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+    # ── Logging ───────────────────────────────────────────────────────────────
+    # Logs are also written to the bot_logs volume as logs/bot.log.
+    # docker compose logs -f  shows live output from stdout.
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
+
+volumes:
+  bot_data:
+  bot_logs:
