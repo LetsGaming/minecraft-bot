@@ -1,0 +1,16 @@
+# Normalize all text files to LF on commit.
+# This eliminates CRLF/LF mixed-encoding in TypeScript source files.
+* text=auto eol=lf
+
+# Explicit overrides for the most common types
+*.ts   text eol=lf
+*.js   text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+*.yml  text eol=lf
+*.sh   text eol=lf
+
+# Binaries — no line-ending conversion
+*.png  binary
+*.jpg  binary
+*.ico  binary

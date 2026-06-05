@@ -5,32 +5,18 @@ import { log } from "../utils/logger.js";
 const execFileAsync = promisify(execFile);
 
 /**
- * Executes a shell command via `bash -c`.
- * Returns trimmed stdout on success, or null on failure.
- */
-export async function execCommand(command: string): Promise<string | null> {
-  try {
-    const { stdout, stderr } = await execFileAsync("bash", ["-c", command], {
-      timeout: 15000,
-    });
-    if (stderr) log.warn("exec", `[stderr] ${stderr.trim()}`);
-    return stdout.trim();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    log.error("exec", `[execCommand error] ${message}`);
-    return null;
-  }
-}
-
-/**
- * Execute a command with explicit args (no shell interpolation — safe).
+ * Execute a command with an explicit argument array.
+ * No shell interpolation — arguments are passed directly to execFile,
+ * so user-controlled strings in `args` cannot inject shell metacharacters.
+ *
+ * Returns trimmed stdout on success, or null on any error.
  */
 export async function execSafe(
   cmd: string,
   args: string[] = [],
 ): Promise<string | null> {
   try {
-    const { stdout } = await execFileAsync(cmd, args, { timeout: 15000 });
+    const { stdout } = await execFileAsync(cmd, args, { timeout: 15_000 });
     return stdout.trim();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -39,7 +25,7 @@ export async function execSafe(
   }
 }
 
-// ── Sudo error detection ──
+// ── Sudo error detection ──────────────────────────────────────────────────
 
 const SUDO_ERROR_PATTERNS = [
   /sudo:.*password is required/i,

@@ -7,7 +7,7 @@
  * Rule: if server.config.apiUrl is set → HTTP call to the API wrapper.
  *       Otherwise → exact same local logic that always existed.
  *
- * Callers never import fs, path, spawn, or execCommand directly for
+ * Callers never import fs, path, spawn, or execFile directly for
  * server-specific data. They import and call these functions instead.
  *
  * Functions are intentionally thin — they do no business logic beyond
@@ -17,7 +17,7 @@
 import fs from "fs";
 import fsPromises from "fs/promises";
 import path from "path";
-import { exec, spawn } from "child_process";
+import { execFile, spawn } from "child_process";
 import { promisify } from "util";
 import {
   isSudoPermissionError,
@@ -33,7 +33,7 @@ import type {
   TpsResult,
 } from "../types/index.js";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 // ── API helper ────────────────────────────────────────────────────────────
 
@@ -95,7 +95,9 @@ export async function tailLog(cfg: ServerConfig, lines = 10): Promise<string> {
   }
   const logFile = path.join(cfg.serverDir, "logs", "latest.log");
   try {
-    const { stdout } = await execAsync(`tail -n ${lines} "${logFile}"`);
+    // Use execFile (no shell) so logFile cannot inject shell metacharacters
+    // even if a future refactor sources cfg.serverDir from user input.
+    const { stdout } = await execFileAsync("tail", ["-n", String(lines), logFile]);
     return stdout;
   } catch {
     return "";

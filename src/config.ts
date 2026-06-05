@@ -11,22 +11,82 @@ import type {
 } from "./types/index.js";
 
 const PROJECT_ROOT = getRootDir();
-const CONFIG_PATH = path.resolve(PROJECT_ROOT, "config.json");
+const CONFIG_PATH  = path.resolve(PROJECT_ROOT, "config.json");
 
 let _config: BotConfig | null = null;
 
-// B-12: previously this stripped both single and double quotes, while the
-// api-server's parseVarsFile only strips double quotes via regex. A value
-// like VALUE='something' would parse as "something" here but "'something'"
-// there, causing silent config divergence. Aligned to double-quotes only,
-// matching the api-server behaviour and the standard shell-var convention.
+// ── Runtime schema validation ─────────────────────────────────────────────
+// TypeScript's type system only operates at compile time. A malformed
+// config.json (wrong types, missing required fields) produces cryptic
+// runtime errors deep inside Discord.js or the RCON client. Validating
+// here gives an actionable error message at startup instead.
+
+function validateRawConfig(raw: RawBotConfig, configPath: string): void {
+  const errors: string[] = [];
+
+  if (!raw.token || typeof raw.token !== "string") {
+    errors.push("  - token: required string (your Discord bot token)");
+  }
+  if (!raw.clientId || typeof raw.clientId !== "string") {
+    errors.push("  - clientId: required string (your Discord application ID)");
+  }
+
+  // Validate servers block if present
+  if (raw.servers !== undefined) {
+    if (typeof raw.servers !== "object" || Array.isArray(raw.servers)) {
+      errors.push("  - servers: must be an object (e.g. { \"survival\": { ... } })");
+    } else {
+      for (const [id, srv] of Object.entries(raw.servers)) {
+        if (srv.rconPort !== undefined) {
+          const p = Number(srv.rconPort);
+          if (!Number.isInteger(p) || p < 1 || p > 65535) {
+            errors.push(`  - servers.${id}.rconPort: must be an integer between 1 and 65535`);
+          }
+        }
+        if (srv.apiUrl !== undefined && typeof srv.apiUrl !== "string") {
+          errors.push(`  - servers.${id}.apiUrl: must be a string URL`);
+        }
+      }
+    }
+  }
+
+  if (raw.tpsWarningThreshold !== undefined) {
+    if (typeof raw.tpsWarningThreshold !== "number" || raw.tpsWarningThreshold <= 0) {
+      errors.push("  - tpsWarningThreshold: must be a positive number (e.g. 15)");
+    }
+  }
+  if (raw.tpsPollIntervalMs !== undefined) {
+    if (typeof raw.tpsPollIntervalMs !== "number" || raw.tpsPollIntervalMs < 1000) {
+      errors.push("  - tpsPollIntervalMs: must be a number >= 1000 ms");
+    }
+  }
+
+  if (errors.length > 0) {
+    throw new Error(
+      `config.json validation failed at ${configPath}:\n` +
+      errors.join("\n") + "\n" +
+      "See config_structure.json for the expected format.",
+    );
+  }
+}
+
+// ── Variables.txt parser ──────────────────────────────────────────────────
+// B-12: aligned to double-quotes only, matching the api-server's parseVarsFile
+// and the standard shell-variable convention. A value quoted with single
+// quotes (VALUE='something') was previously stripped to "something" here
+// but left as "'something'" in the api-server, causing silent divergence.
 function parseVariablesTxt(filePath: string): VariablesMap {
   const vars: VariablesMap = {};
   if (!fs.existsSync(filePath)) return vars;
-  for (const line of fs.readFileSync(filePath, "utf-8").split(/\r?\n/)) {
-    const m = line.match(/^(\w+)="?([^"]*)"?$/);
-    if (!m) continue;
-    vars[m[1]!] = m[2]!;
+  for (const rawLine of fs.readFileSync(filePath, "utf-8").split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    // Branch 1: KEY="value"
+    const quoted = line.match(/^(\w+)="(.*)"$/);
+    if (quoted) { vars[quoted[1]!] = quoted[2]!; continue; }
+    // Branch 2: KEY=value (unquoted)
+    const unquoted = line.match(/^(\w+)=(.*)$/);
+    if (unquoted) vars[unquoted[1]!] = unquoted[2]!.trim();
   }
   return vars;
 }
@@ -57,17 +117,17 @@ function resolveServerConfig(
     varsFile && fs.existsSync(varsFile) ? parseVariablesTxt(varsFile) : {};
 
   return {
-    id: raw.id,
-    serverDir: sv.SERVER_PATH ?? raw.serverDir ?? "",
-    linuxUser: sv.USER ?? raw.linuxUser ?? "minecraft",
-    screenSession: sv.INSTANCE_NAME ?? raw.screenSession ?? "server",
-    useRcon: sv.USE_RCON === "true" || raw.useRcon === true,
-    rconHost: sv.RCON_HOST ?? raw.rconHost ?? "localhost",
-    rconPort: parseInt(String(sv.RCON_PORT ?? raw.rconPort ?? "25575"), 10),
-    rconPassword: sv.RCON_PASSWORD ?? raw.rconPassword ?? "",
-    scriptDir: scriptDir,
-    apiUrl: raw.apiUrl,
-    apiKey: raw.apiKey,
+    id:            raw.id,
+    serverDir:     sv.SERVER_PATH    ?? raw.serverDir    ?? "",
+    linuxUser:     sv.USER           ?? raw.linuxUser    ?? "minecraft",
+    screenSession: sv.INSTANCE_NAME  ?? raw.screenSession ?? "server",
+    useRcon:       sv.USE_RCON === "true" || raw.useRcon === true,
+    rconHost:      sv.RCON_HOST      ?? raw.rconHost     ?? "localhost",
+    rconPort:      parseInt(String(sv.RCON_PORT ?? raw.rconPort ?? "25575"), 10),
+    rconPassword:  sv.RCON_PASSWORD  ?? raw.rconPassword ?? "",
+    scriptDir,
+    apiUrl:        raw.apiUrl,
+    apiKey:        raw.apiKey,
   };
 }
 
@@ -82,9 +142,12 @@ export function loadConfig(): BotConfig {
     const reason = err instanceof Error ? err.message : String(err);
     throw new Error(
       `Failed to load config.json at ${CONFIG_PATH}: ${reason}\n` +
-        "Make sure the file exists and contains valid JSON.",
+      "Make sure the file exists and contains valid JSON.",
     );
   }
+
+  // Runtime validation — catches type mismatches that TypeScript cannot
+  validateRawConfig(raw, CONFIG_PATH);
 
   // ── Resolve servers ──
   const servers: Record<string, ServerConfig> = {};
@@ -104,16 +167,16 @@ export function loadConfig(): BotConfig {
   const guilds: Record<string, GuildConfig> = raw.guilds ?? {};
 
   _config = Object.freeze({
-    token: raw.token,
-    clientId: raw.clientId,
+    token:                raw.token,
+    clientId:             raw.clientId,
     servers,
     guilds,
-    adminUsers: raw.adminUsers ?? [],
-    commands: raw.commands ?? {},
-    leaderboard: raw.leaderboard ?? {},
-    tpsWarningThreshold: raw.tpsWarningThreshold ?? 15,
-    tpsPollIntervalMs: raw.tpsPollIntervalMs ?? 60000,
-    leaderboardInterval: raw.leaderboardInterval ?? "weekly",
+    adminUsers:           raw.adminUsers          ?? [],
+    commands:             raw.commands            ?? {},
+    leaderboard:          raw.leaderboard         ?? {},
+    tpsWarningThreshold:  raw.tpsWarningThreshold ?? 15,
+    tpsPollIntervalMs:    raw.tpsPollIntervalMs   ?? 60_000,
+    leaderboardInterval:  raw.leaderboardInterval ?? "weekly",
   }) as BotConfig;
 
   return _config;
@@ -140,7 +203,7 @@ export function getServer(serverId: string): ServerConfig | null {
  */
 export function getGuildServerId(guildId: string | undefined): string | null {
   if (!guildId) return null;
-  const cfg = loadConfig();
+  const cfg   = loadConfig();
   const guild = cfg.guilds[guildId];
   if (guild?.defaultServer && cfg.servers[guild.defaultServer]) {
     return guild.defaultServer;

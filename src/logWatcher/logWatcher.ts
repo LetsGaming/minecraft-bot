@@ -11,6 +11,13 @@ export type { ILogWatcher };
 
 const POLL_INTERVAL_MS = 1000;
 
+// Cap how many bytes we read per polling cycle. If the bot was offline while
+// the server kept writing (e.g. after a crash restart) and the log is hundreds
+// of MB, reading it all at once would spike heap usage and stall the event
+// loop. The cap catches up across subsequent cycles without blocking.
+// Mirrors the same A-05 guard in minecraft-api-server/src/logStream.js.
+const MAX_DELTA_BYTES = 1 * 1024 * 1024; // 1 MB per cycle
+
 /**
  * Per-server log watcher instance.
  * Uses fs.watch with polling fallback for reliability.
@@ -110,9 +117,17 @@ export class LogWatcher {
       if (stats.size < this.lastSize) this.lastSize = 0;
       if (stats.size === this.lastSize) return;
 
+      // Clamp the read window to MAX_DELTA_BYTES so a large catch-up after
+      // a bot restart does not block the event loop or spike heap usage.
+      // Any bytes beyond the window are picked up on the next poll cycle.
+      const readEnd = Math.min(
+        stats.size - 1,
+        this.lastSize + MAX_DELTA_BYTES - 1,
+      );
+
       const stream = fsSync.createReadStream(this.logFile, {
         start: this.lastSize,
-        end: stats.size - 1,
+        end: readEnd,
       });
       const rl = readline.createInterface({ input: stream });
 
@@ -129,7 +144,8 @@ export class LogWatcher {
           }
         }
       }
-      this.lastSize = stats.size;
+
+      this.lastSize = readEnd + 1;
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === "ENOENT") {
         this.lastSize = 0;
