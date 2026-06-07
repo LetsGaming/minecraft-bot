@@ -149,6 +149,24 @@ export function loadConfig(): BotConfig {
   // Runtime validation — catches type mismatches that TypeScript cannot
   validateRawConfig(raw, CONFIG_PATH);
 
+  // ── Environment variable overrides ──────────────────────────────────────
+  // Env vars take precedence over config.json, enabling Docker/K8s secrets
+  // injection without touching config files.
+  //
+  //   DISCORD_TOKEN      — overrides token
+  //   DISCORD_CLIENT_ID  — overrides clientId
+  //   RCON_PASSWORD      — overrides rconPassword for ALL configured servers
+  //   RCON_PASSWORD_<SERVER_ID_UPPER> — overrides for a specific server
+  if (process.env.DISCORD_TOKEN)     raw.token    = process.env.DISCORD_TOKEN;
+  if (process.env.DISCORD_CLIENT_ID) raw.clientId = process.env.DISCORD_CLIENT_ID;
+  if (raw.servers && typeof raw.servers === "object") {
+    for (const [id, srv] of Object.entries(raw.servers)) {
+      const specific = `RCON_PASSWORD_${id.toUpperCase().replace(/[^A-Z0-9]/g, "_")}`;
+      if (process.env[specific]) srv.rconPassword = process.env[specific];
+      else if (process.env.RCON_PASSWORD) srv.rconPassword = process.env.RCON_PASSWORD;
+    }
+  }
+
   // ── Resolve servers ──
   const servers: Record<string, ServerConfig> = {};
   if (raw.servers && typeof raw.servers === "object") {
@@ -190,6 +208,47 @@ export function reloadConfig(): BotConfig {
   _config = null;
   return loadConfig();
 }
+
+// ── Config file watcher ───────────────────────────────────────────────────
+let _watcher: ReturnType<typeof fs.watch> | null = null;
+
+/**
+ * Watch config.json for changes and automatically invalidate the cache so
+ * the next loadConfig() call picks up rotated credentials or updated settings
+ * without requiring a process restart.
+ *
+ * @param onChange Optional callback invoked after the cache is cleared.
+ *                 Useful for re-applying settings (e.g. re-registering commands).
+ */
+export function watchConfig(onChange?: (newConfig: BotConfig) => void): void {
+  if (_watcher) return; // idempotent — only one watcher per process
+
+  try {
+    _watcher = fs.watch(CONFIG_PATH, () => {
+      // fs.watch can fire multiple events for a single save; debounce via
+      // a short timeout so we only reload once per edit.
+      if (_reloadTimer) clearTimeout(_reloadTimer);
+      _reloadTimer = setTimeout(() => {
+        _reloadTimer = null;
+        try {
+          const fresh = reloadConfig();
+          onChange?.(fresh);
+        } catch (err) {
+          // Don't crash the bot on a malformed config save — the old config
+          // stays active until a valid file is written.
+          const msg = err instanceof Error ? err.message : String(err);
+          // eslint-disable-next-line no-console
+          console.error(`[config] Reload failed after file change: ${msg}`);
+        }
+      }, 300);
+    });
+    _watcher.on("error", () => { _watcher = null; });
+  } catch {
+    // fs.watch unavailable in this environment — skip silently
+  }
+}
+
+let _reloadTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** Get server config by ID */
 export function getServer(serverId: string): ServerConfig | null {

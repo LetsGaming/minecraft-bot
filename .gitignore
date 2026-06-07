@@ -8,4 +8,4 @@ data/leaderboardSchedule.json
 data/statusMessages.json
 data/snapshots/
 logs/
-dist/
+dist/.env

@@ -204,6 +204,9 @@ export class ServerInstance {
         /* fall through to log fallback */
       }
     }
+    // Screen-based server (no RCON): send via screen and poll the log.
+    // Log polling is only necessary here because screen has no response channel.
+    // When RCON is available, the response is parsed above and we never reach this.
     await this.sendCommand("/seed");
     const { tailLog } = await import("./serverAccess.js");
     for (let i = 0; i < 3; i++) {
@@ -226,10 +229,14 @@ export class ServerInstance {
 
   async getPlayerCoords(player: string): Promise<PlayerCoords | null> {
     const r = await this.getPlayerData(player, "Pos");
-    if (r) {
+    if (r !== null) {
+      // RCON returned a response — it is authoritative. Parse and return immediately.
+      // Falling through to log polling when RCON responded would add up to 900 ms
+      // of unnecessary latency without giving us any additional information.
       const m = r.match(/\[([\d.+-]+)d,\s*([\d.+-]+)d,\s*([\d.+-]+)d\]/);
-      if (m) return { x: Number(m[1]), y: Number(m[2]), z: Number(m[3]) };
+      return m ? { x: Number(m[1]), y: Number(m[2]), z: Number(m[3]) } : null;
     }
+    // r is null → screen-based server (no RCON response channel); poll the log.
     const { tailLog } = await import("./serverAccess.js");
     for (let i = 0; i < 3; i++) {
       await new Promise<void>((r) => setTimeout(r, 300));
@@ -242,10 +249,12 @@ export class ServerInstance {
 
   async getPlayerDimension(player: string): Promise<string> {
     const r = await this.getPlayerData(player, "Dimension");
-    if (r) {
+    if (r !== null) {
+      // RCON response is authoritative — return immediately without log polling.
       const m = r.match(/"minecraft:([^"]+)"/);
-      if (m?.[1]) return m[1];
+      return m?.[1] ?? "overworld";
     }
+    // Screen-based server: poll the log for the dimension output.
     const { tailLog } = await import("./serverAccess.js");
     for (let i = 0; i < 3; i++) {
       await new Promise<void>((r) => setTimeout(r, 300));

@@ -11,7 +11,8 @@ import {
 import { readdirSync, statSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { loadConfig, getServerIds } from "./config.js";
+import { loadConfig, getServerIds, watchConfig } from "./config.js";
+import { consumeToken, cooldownSeconds } from "./utils/rateLimiter.js";
 import { initServers } from "./utils/server.js";
 import { tryResolveServer } from "./utils/guildRouter.js";
 import { initMinecraftCommands } from "./logWatcher/initMinecraftCommands.js";
@@ -22,6 +23,8 @@ import type { BotCommand, BotClient } from "./types/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const config = loadConfig();
+// Re-cache automatically when config.json is edited on disk
+watchConfig();
 
 // Initialize all server instances
 initServers(config.servers);
@@ -164,6 +167,15 @@ void (async () => {
     if (!command) return;
 
     try {
+      // Per-user rate limit: prevents RCON pool exhaustion from command spam
+      if (!consumeToken(chatInteraction.user.id)) {
+        const secs = cooldownSeconds(chatInteraction.user.id);
+        await chatInteraction.reply({
+          content: `Too many commands. Please wait ${secs}s.`,
+          flags: MessageFlags.Ephemeral as number,
+        });
+        return;
+      }
       await command.execute(chatInteraction);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
