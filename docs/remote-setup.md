@@ -27,7 +27,7 @@ There are two ways to get the wrapper running. Choose the one that fits your set
 
 ### Option A — Via minecraft-server-setup (recommended)
 
-If you set up your server with [minecraft-server-setup](https://github.com/your-org/minecraft-server-setup), enable the API wrapper in `variables.json` before running setup:
+If you set up your server with [minecraft-server-setup](https://github.com/letsgaming/minecraft-server-setup), enable the API wrapper in `variables.json` before running setup:
 
 ```json
 "API_SERVER": {
@@ -53,7 +53,7 @@ The setup script deploys the wrapper, generates `api-server-config.json`, and cr
 
 ```bash
 # On the MC server VM
-git clone https://github.com/your-org/mc-api-server.git
+git clone https://github.com/letsgaming/mc-api-server.git
 cd mc-api-server
 npm install --omit=dev
 ```

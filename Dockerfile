@@ -15,7 +15,7 @@ FROM node:20.19-alpine AS runtime
 
 LABEL org.opencontainers.image.title="minecraft-bot" \
       org.opencontainers.image.description="Discord bot for managing Minecraft servers" \
-      org.opencontainers.image.url="https://github.com/your-org/minecraft-bot"
+      org.opencontainers.image.url="https://github.com/letsgaming/minecraft-bot"
 
 WORKDIR /app
 
