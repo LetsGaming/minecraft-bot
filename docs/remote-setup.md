@@ -53,8 +53,8 @@ The setup script deploys the wrapper, generates `api-server-config.json`, and cr
 
 ```bash
 # On the MC server VM
-git clone https://github.com/letsgaming/mc-api-server.git
-cd mc-api-server
+git clone https://github.com/LetsGaming/minecraft-server-api.git
+cd minecraft-server-api
 npm install --omit=dev
 ```
 
