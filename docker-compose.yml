@@ -46,6 +46,8 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    cap_add:
+      - CHOWN
 
     # ── Logging ───────────────────────────────────────────────────────────────
     # Logs are also written to the bot_logs volume as logs/bot.log.
