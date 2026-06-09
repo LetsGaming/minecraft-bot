@@ -48,6 +48,8 @@ services:
       - ALL
     cap_add:
       - CHOWN
+      - SETGID
+      - SETUID
 
     # ── Logging ───────────────────────────────────────────────────────────────
     # Logs are also written to the bot_logs volume as logs/bot.log.
