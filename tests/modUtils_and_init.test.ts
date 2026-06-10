@@ -12,7 +12,9 @@ vi.mock("../src/utils/serverAccess.js", () => ({
   logStreamUrl: vi.fn().mockReturnValue("https://api.example.com/stream"),
   tailLog: vi.fn().mockResolvedValue(""),
   isRunning: vi.fn().mockResolvedValue(false),
-  getList: vi.fn().mockResolvedValue({ playerCount: "0", maxPlayers: "20", players: [] }),
+  getList: vi
+    .fn()
+    .mockResolvedValue({ playerCount: "0", maxPlayers: "20", players: [] }),
   sendCommand: vi.fn().mockResolvedValue(null),
   getTps: vi.fn().mockResolvedValue(null),
   readWhitelist: vi.fn().mockResolvedValue([]),
@@ -32,10 +34,15 @@ vi.mock("../src/utils/logger.js", () => ({
 
 vi.mock("../src/config.js", () => ({
   loadConfig: vi.fn().mockReturnValue({
-    token: "tok", clientId: "cid",
-    guilds: {}, servers: {}, adminUsers: [],
-    commands: {}, leaderboardInterval: "daily",
-    tpsWarningThreshold: 15, tpsPollIntervalMs: 60_000,
+    token: "tok",
+    clientId: "cid",
+    guilds: {},
+    servers: {},
+    adminUsers: [],
+    commands: {},
+    leaderboardInterval: "daily",
+    tpsWarningThreshold: 15,
+    tpsPollIntervalMs: 60_000,
   }),
 }));
 
@@ -92,7 +99,12 @@ vi.mock("../src/logWatcher/watchers/tpsMonitor.js", () => ({
 }));
 
 vi.mock("../src/logWatcher/watchers/leaderboardScheduler.js", () => ({
-  startLeaderboardScheduler: vi.fn().mockReturnValue({ snapshotTimer: { unref: vi.fn() }, postTimer: { unref: vi.fn() } }),
+  startLeaderboardScheduler: vi
+    .fn()
+    .mockReturnValue({
+      snapshotTimer: { unref: vi.fn() },
+      postTimer: { unref: vi.fn() },
+    }),
 }));
 
 vi.mock("../src/logWatcher/watchers/statusEmbed.js", () => ({
@@ -166,7 +178,11 @@ describe("modUtils.getModList", () => {
     expect(result).toHaveProperty("serverOnly");
     expect(result).toHaveProperty("clientAndServer");
     expect(result).toHaveProperty("clientOptional");
-    expect(result.serverOnly.length + result.clientAndServer.length + result.clientOptional.length).toBe(2);
+    expect(
+      result.serverOnly.length +
+        result.clientAndServer.length +
+        result.clientOptional.length,
+    ).toBe(2);
   });
 
   it("returns empty lists when no mod slugs exist", async () => {
@@ -190,15 +206,24 @@ describe("modUtils.getModList", () => {
     } as never);
     vi.mocked(fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
-      json: vi.fn().mockResolvedValue([{
-        slug: "some-mod", title: "Some Mod", description: "desc",
-        client_side: "required", server_side: "required",
-      }]),
+      json: vi.fn().mockResolvedValue([
+        {
+          slug: "some-mod",
+          title: "Some Mod",
+          description: "desc",
+          client_side: "required",
+          server_side: "required",
+        },
+      ]),
     } as never);
 
     const server2 = {
       id: "unique-cache-server",
-      config: { id: "unique-cache-server", serverDir: "/tmp", scriptDir: "/tmp" },
+      config: {
+        id: "unique-cache-server",
+        serverDir: "/tmp",
+        scriptDir: "/tmp",
+      },
     } as never;
 
     await getModList(server2);
@@ -216,9 +241,8 @@ describe("modUtils.getModList", () => {
 describe("initMinecraftCommands", () => {
   let initMinecraftCommands: (client: never) => Promise<void>;
   beforeEach(async () => {
-    ({ initMinecraftCommands } = await import(
-      "../src/logWatcher/initMinecraftCommands.js"
-    ));
+    ({ initMinecraftCommands } =
+      await import("../src/logWatcher/initMinecraftCommands.js"));
   });
 
   it("runs without throwing when no server instances are configured", async () => {

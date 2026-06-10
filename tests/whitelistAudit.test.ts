@@ -41,7 +41,13 @@ describe("loadAudit", () => {
 
   it("returns existing audit data", async () => {
     vi.mocked(loadJson).mockResolvedValue({
-      steve: { username: "Steve", addedBy: "admin", addedById: "u1", addedAt: "2025-01-01", server: "survival" },
+      steve: {
+        username: "Steve",
+        addedBy: "admin",
+        addedById: "u1",
+        addedAt: "2025-01-01",
+        server: "survival",
+      },
     });
     const audit = await loadAudit();
     expect(audit).toHaveProperty("steve");
@@ -55,7 +61,10 @@ describe("recordAdd", () => {
     await recordAdd("Steve", "Admin#0001", "admin-id", "survival");
 
     expect(saveJson).toHaveBeenCalledOnce();
-    const savedArg = vi.mocked(saveJson).mock.calls[0]![1] as Record<string, unknown>;
+    const savedArg = vi.mocked(saveJson).mock.calls[0]![1] as Record<
+      string,
+      unknown
+    >;
     expect(savedArg).toHaveProperty("steve");
     const entry = savedArg["steve"] as Record<string, unknown>;
     expect(entry.username).toBe("Steve");
@@ -67,32 +76,50 @@ describe("recordAdd", () => {
 
   it("keys by lowercase username", async () => {
     await recordAdd("ALEX", "Admin", "aid", "main");
-    const savedArg = vi.mocked(saveJson).mock.calls[0]![1] as Record<string, unknown>;
+    const savedArg = vi.mocked(saveJson).mock.calls[0]![1] as Record<
+      string,
+      unknown
+    >;
     expect(Object.keys(savedArg)).toContain("alex");
   });
 
   it("stores a provided UUID", async () => {
     await recordAdd("Steve", "Admin", "aid", "main", "uuid-1234");
-    const savedArg = vi.mocked(saveJson).mock.calls[0]![1] as Record<string, unknown>;
+    const savedArg = vi.mocked(saveJson).mock.calls[0]![1] as Record<
+      string,
+      unknown
+    >;
     const entry = savedArg["steve"] as Record<string, unknown>;
     expect(entry.uuid).toBe("uuid-1234");
   });
 
   it("stores null when UUID is not provided", async () => {
     await recordAdd("Steve", "Admin", "aid", "main");
-    const savedArg = vi.mocked(saveJson).mock.calls[0]![1] as Record<string, unknown>;
+    const savedArg = vi.mocked(saveJson).mock.calls[0]![1] as Record<
+      string,
+      unknown
+    >;
     const entry = savedArg["steve"] as Record<string, unknown>;
     expect(entry.uuid).toBeNull();
   });
 
   it("overwrites an existing entry for the same player", async () => {
     vi.mocked(loadJson).mockResolvedValueOnce({
-      steve: { username: "Steve", addedBy: "OldAdmin", addedById: "old-id", addedAt: "old-time", server: "old" },
+      steve: {
+        username: "Steve",
+        addedBy: "OldAdmin",
+        addedById: "old-id",
+        addedAt: "old-time",
+        server: "old",
+      },
     });
 
     await recordAdd("Steve", "NewAdmin", "new-id", "new-server");
 
-    const savedArg = vi.mocked(saveJson).mock.calls[0]![1] as Record<string, unknown>;
+    const savedArg = vi.mocked(saveJson).mock.calls[0]![1] as Record<
+      string,
+      unknown
+    >;
     const entry = savedArg["steve"] as Record<string, unknown>;
     expect(entry.addedBy).toBe("NewAdmin");
     expect(entry.server).toBe("new-server");
@@ -104,12 +131,21 @@ describe("recordAdd", () => {
 describe("recordRemove", () => {
   it("adds remove fields to an existing entry", async () => {
     vi.mocked(loadJson).mockResolvedValue({
-      bob: { username: "Bob", addedBy: "Admin", addedById: "aid", addedAt: "2025-01-01", server: "main" },
+      bob: {
+        username: "Bob",
+        addedBy: "Admin",
+        addedById: "aid",
+        addedAt: "2025-01-01",
+        server: "main",
+      },
     });
 
     await recordRemove("Bob", "Mod#1234", "mod-id", "main");
 
-    const savedArg = vi.mocked(saveJson).mock.calls[0]![1] as Record<string, unknown>;
+    const savedArg = vi.mocked(saveJson).mock.calls[0]![1] as Record<
+      string,
+      unknown
+    >;
     const entry = savedArg["bob"] as Record<string, unknown>;
     expect(entry.removedBy).toBe("Mod#1234");
     expect(entry.removedById).toBe("mod-id");
@@ -125,7 +161,10 @@ describe("recordRemove", () => {
 
     await recordRemove("Ghost", "Mod", "mod-id", "survival");
 
-    const savedArg = vi.mocked(saveJson).mock.calls[0]![1] as Record<string, unknown>;
+    const savedArg = vi.mocked(saveJson).mock.calls[0]![1] as Record<
+      string,
+      unknown
+    >;
     expect(savedArg).toHaveProperty("ghost");
     const entry = savedArg["ghost"] as Record<string, unknown>;
     expect(entry.removedBy).toBe("Mod");
@@ -136,7 +175,10 @@ describe("recordRemove", () => {
   it("keys by lowercase username", async () => {
     vi.mocked(loadJson).mockResolvedValue({});
     await recordRemove("CHARLIE", "Mod", "mid", "main");
-    const savedArg = vi.mocked(saveJson).mock.calls[0]![1] as Record<string, unknown>;
+    const savedArg = vi.mocked(saveJson).mock.calls[0]![1] as Record<
+      string,
+      unknown
+    >;
     expect(Object.keys(savedArg)).toContain("charlie");
   });
 });
@@ -152,7 +194,13 @@ describe("getAuditEntry", () => {
 
   it("returns the audit entry for an existing player", async () => {
     vi.mocked(loadJson).mockResolvedValue({
-      alice: { username: "Alice", addedBy: "Admin", addedById: "a1", addedAt: "2025-01-01", server: "main" },
+      alice: {
+        username: "Alice",
+        addedBy: "Admin",
+        addedById: "a1",
+        addedAt: "2025-01-01",
+        server: "main",
+      },
     });
     const entry = await getAuditEntry("alice");
     expect(entry).not.toBeNull();
@@ -161,7 +209,13 @@ describe("getAuditEntry", () => {
 
   it("looks up by lowercase username (case-insensitive)", async () => {
     vi.mocked(loadJson).mockResolvedValue({
-      dave: { username: "Dave", addedBy: "Admin", addedById: "a1", addedAt: "2025-01-01", server: "main" },
+      dave: {
+        username: "Dave",
+        addedBy: "Admin",
+        addedById: "a1",
+        addedAt: "2025-01-01",
+        server: "main",
+      },
     });
     const entry = await getAuditEntry("DAVE");
     expect(entry).not.toBeNull();

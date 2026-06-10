@@ -66,7 +66,9 @@ describe("loadLinkedAccounts", () => {
 
 describe("loadLinkCodes", () => {
   it("returns the code map from JSON storage", async () => {
-    vi.mocked(loadJson).mockResolvedValue({ "CODE1": { discordId: "u1", expires: 9999 } });
+    vi.mocked(loadJson).mockResolvedValue({
+      CODE1: { discordId: "u1", expires: 9999 },
+    });
     const result = await loadLinkCodes();
     expect(result).toHaveProperty("CODE1");
   });

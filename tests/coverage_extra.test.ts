@@ -23,7 +23,10 @@ vi.mock("../src/config.js", () => ({
     tpsWarningThreshold: 15,
     tpsPollIntervalMs: 100, // short for testing
     guilds: {},
-    servers: {}, adminUsers: [], token: "tok", clientId: "cid",
+    servers: {},
+    adminUsers: [],
+    token: "tok",
+    clientId: "cid",
   }),
 }));
 
@@ -35,7 +38,13 @@ vi.mock("../src/logWatcher/logWatcher.js", () => ({
 vi.mock("../src/utils/serverAccess.js", () => ({
   tailLog: vi.fn().mockResolvedValue(""),
   isRunning: vi.fn().mockResolvedValue(true),
-  getList: vi.fn().mockResolvedValue({ playerCount: "2", maxPlayers: "20", players: ["A", "B"] }),
+  getList: vi
+    .fn()
+    .mockResolvedValue({
+      playerCount: "2",
+      maxPlayers: "20",
+      players: ["A", "B"],
+    }),
   sendCommand: vi.fn().mockResolvedValue("result"),
   getTps: vi.fn().mockResolvedValue({ tps1m: 20 }),
 }));
@@ -49,7 +58,11 @@ vi.mock("../src/rcon/RconClient.js", () => ({
   RconClient: vi.fn().mockImplementation(() => ({
     connect: vi.fn(),
     disconnect: vi.fn(),
-    send: vi.fn().mockResolvedValue("There are 2 of a max of 20 players online: Alice, Bob"),
+    send: vi
+      .fn()
+      .mockResolvedValue(
+        "There are 2 of a max of 20 players online: Alice, Bob",
+      ),
   })),
 }));
 
@@ -76,13 +89,17 @@ describe("defineCommand — cooldown enforcement", () => {
 
     expect(COMMAND_INFO.command).toBe("!cooldowntest");
 
-    const { registerLogCommand } = await import("../src/logWatcher/logWatcher.js");
+    const { registerLogCommand } =
+      await import("../src/logWatcher/logWatcher.js");
     const registeredHandler = vi.mocked(registerLogCommand).mock.calls[0]![1]!;
     const regex = vi.mocked(registerLogCommand).mock.calls[0]![0]! as RegExp;
 
     const line = "[12:00:00] [Server thread/INFO]: <Alice> !cooldowntest";
     const match = regex.exec(line)!;
-    const server = { id: "srv", sendCommand: vi.fn().mockResolvedValue("") } as never;
+    const server = {
+      id: "srv",
+      sendCommand: vi.fn().mockResolvedValue(""),
+    } as never;
     const client = {} as never;
 
     // First call — should succeed
@@ -107,7 +124,11 @@ describe("ServerInstance methods", () => {
     isRunning: () => Promise<boolean>;
     sendCommand: (cmd: string) => Promise<string | null>;
     getSeed: () => Promise<string | null>;
-    getList: () => Promise<{ playerCount: string; maxPlayers: string; players: string[] }>;
+    getList: () => Promise<{
+      playerCount: string;
+      maxPlayers: string;
+      players: string[];
+    }>;
     supportsTps: boolean;
     getTps: () => Promise<unknown>;
   };
@@ -184,7 +205,8 @@ describe("startTpsMonitor — fires warning when TPS drops", () => {
   ) => ReturnType<typeof setInterval> | null;
 
   beforeEach(async () => {
-    ({ startTpsMonitor } = await import("../src/logWatcher/watchers/tpsMonitor.js"));
+    ({ startTpsMonitor } =
+      await import("../src/logWatcher/watchers/tpsMonitor.js"));
     vi.clearAllMocks();
   });
 
@@ -196,7 +218,9 @@ describe("startTpsMonitor — fires warning when TPS drops", () => {
     } as never;
 
     const channel = { send: vi.fn().mockResolvedValue(undefined) };
-    const client = { channels: { fetch: vi.fn().mockResolvedValue(channel) } } as never;
+    const client = {
+      channels: { fetch: vi.fn().mockResolvedValue(channel) },
+    } as never;
     const guilds = { g1: { tpsAlerts: { channelId: "ch1" } } } as never;
 
     const timer = startTpsMonitor(server, client, guilds);

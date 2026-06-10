@@ -160,13 +160,48 @@ describe("humanizeKey", () => {
 // ── LEADERBOARD_STATS ─────────────────────────────────────────────────────────
 
 const testStats: FlattenedStat[] = [
-  { fullKey: "minecraft:custom.minecraft:play_time",  category: "minecraft:custom",  key: "minecraft:play_time",  value: 72000 },
-  { fullKey: "minecraft:killed.minecraft:zombie",      category: "minecraft:killed",   key: "minecraft:zombie",     value: 30    },
-  { fullKey: "minecraft:killed.minecraft:skeleton",    category: "minecraft:killed",   key: "minecraft:skeleton",   value: 15    },
-  { fullKey: "minecraft:custom.minecraft:deaths",      category: "minecraft:custom",   key: "minecraft:deaths",     value: 5     },
-  { fullKey: "minecraft:mined.minecraft:stone",        category: "minecraft:mined",    key: "minecraft:stone",      value: 100   },
-  { fullKey: "minecraft:mined.minecraft:dirt",         category: "minecraft:mined",    key: "minecraft:dirt",       value: 50    },
-  { fullKey: "minecraft:custom.minecraft:walk_one_cm", category: "minecraft:custom",   key: "minecraft:walk_one_cm",value: 50000 },
+  {
+    fullKey: "minecraft:custom.minecraft:play_time",
+    category: "minecraft:custom",
+    key: "minecraft:play_time",
+    value: 72000,
+  },
+  {
+    fullKey: "minecraft:killed.minecraft:zombie",
+    category: "minecraft:killed",
+    key: "minecraft:zombie",
+    value: 30,
+  },
+  {
+    fullKey: "minecraft:killed.minecraft:skeleton",
+    category: "minecraft:killed",
+    key: "minecraft:skeleton",
+    value: 15,
+  },
+  {
+    fullKey: "minecraft:custom.minecraft:deaths",
+    category: "minecraft:custom",
+    key: "minecraft:deaths",
+    value: 5,
+  },
+  {
+    fullKey: "minecraft:mined.minecraft:stone",
+    category: "minecraft:mined",
+    key: "minecraft:stone",
+    value: 100,
+  },
+  {
+    fullKey: "minecraft:mined.minecraft:dirt",
+    category: "minecraft:mined",
+    key: "minecraft:dirt",
+    value: 50,
+  },
+  {
+    fullKey: "minecraft:custom.minecraft:walk_one_cm",
+    category: "minecraft:custom",
+    key: "minecraft:walk_one_cm",
+    value: 50000,
+  },
 ];
 
 describe("LEADERBOARD_STATS.playtime", () => {

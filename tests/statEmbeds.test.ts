@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { EmbedBuilder } from "discord.js";
-import { buildLeaderboardEmbed, buildStatsEmbeds } from "../src/utils/statEmbeds.js";
+import {
+  buildLeaderboardEmbed,
+  buildStatsEmbeds,
+} from "../src/utils/statEmbeds.js";
 import type { LeaderboardData } from "../src/utils/statUtils.js";
 import type { FlattenedStat } from "../src/types/index.js";
 
@@ -34,7 +37,10 @@ describe("buildLeaderboardEmbed", () => {
   });
 
   it("works with empty description", () => {
-    const data: LeaderboardData = { ...sampleData, description: "No data available." };
+    const data: LeaderboardData = {
+      ...sampleData,
+      description: "No data available.",
+    };
     const embed = buildLeaderboardEmbed(data);
     expect(embed.toJSON().description).toBe("No data available.");
   });
@@ -43,14 +49,39 @@ describe("buildLeaderboardEmbed", () => {
 // ── buildStatsEmbeds ─────────────────────────────────────────────────────────
 
 const minimalStats: FlattenedStat[] = [
-  { fullKey: "minecraft:custom.minecraft:deaths",       category: "minecraft:custom", key: "minecraft:deaths",      value: 5    },
-  { fullKey: "minecraft:custom.minecraft:play_time",    category: "minecraft:custom", key: "minecraft:play_time",   value: 72000},
-  { fullKey: "minecraft:mined.minecraft:stone",         category: "minecraft:mined",  key: "minecraft:stone",       value: 100  },
+  {
+    fullKey: "minecraft:custom.minecraft:deaths",
+    category: "minecraft:custom",
+    key: "minecraft:deaths",
+    value: 5,
+  },
+  {
+    fullKey: "minecraft:custom.minecraft:play_time",
+    category: "minecraft:custom",
+    key: "minecraft:play_time",
+    value: 72000,
+  },
+  {
+    fullKey: "minecraft:mined.minecraft:stone",
+    category: "minecraft:mined",
+    key: "minecraft:stone",
+    value: 100,
+  },
 ];
 
 const distanceStats: FlattenedStat[] = [
-  { fullKey: "minecraft:custom.minecraft:walk_one_cm",  category: "minecraft:custom", key: "minecraft:walk_one_cm", value: 100000},
-  { fullKey: "minecraft:custom.minecraft:fly_one_cm",   category: "minecraft:custom", key: "minecraft:fly_one_cm",  value: 50000 },
+  {
+    fullKey: "minecraft:custom.minecraft:walk_one_cm",
+    category: "minecraft:custom",
+    key: "minecraft:walk_one_cm",
+    value: 100000,
+  },
+  {
+    fullKey: "minecraft:custom.minecraft:fly_one_cm",
+    category: "minecraft:custom",
+    key: "minecraft:fly_one_cm",
+    value: 50000,
+  },
 ];
 
 describe("buildStatsEmbeds", () => {
@@ -76,7 +107,9 @@ describe("buildStatsEmbeds", () => {
 
   it("includes total stats count in footer", () => {
     const embeds = buildStatsEmbeds(minimalStats, "Steve");
-    expect(embeds[0]!.toJSON().footer?.text).toContain(String(minimalStats.length));
+    expect(embeds[0]!.toJSON().footer?.text).toContain(
+      String(minimalStats.length),
+    );
   });
 
   it("formats _time keys as human-readable duration", () => {

@@ -23,16 +23,20 @@ vi.mock("../src/utils/uptimeTracker.js", () => ({
 vi.mock("../src/utils/embedUtils.js", () => ({
   createEmbed: vi.fn().mockImplementation((opts) => {
     // Return a minimal object that quacks like EmbedBuilder
-    const fields: Array<{name: string; value: string; inline: boolean}> = [];
+    const fields: Array<{ name: string; value: string; inline: boolean }> = [];
     return {
       _opts: opts,
       addFields: vi.fn((...args) => {
         if (Array.isArray(args[0])) fields.push(...args[0]);
-        else fields.push(args[0] as typeof fields[0]);
+        else fields.push(args[0] as (typeof fields)[0]);
         return this;
       }),
       setFooter: vi.fn().mockReturnThis(),
-      toJSON: () => ({ title: opts?.title, description: opts?.description, fields }),
+      toJSON: () => ({
+        title: opts?.title,
+        description: opts?.description,
+        fields,
+      }),
     };
   }),
 }));
@@ -48,7 +52,9 @@ import { execute } from "../src/commands/info/uptime.js";
 import type { ChatInputCommandInteraction } from "discord.js";
 import type { UptimeStats } from "../src/utils/uptimeTracker.js";
 
-function makeInteraction(serverId: string | null = null): ChatInputCommandInteraction {
+function makeInteraction(
+  serverId: string | null = null,
+): ChatInputCommandInteraction {
   return {
     user: { id: "user1" },
     commandName: "uptime",

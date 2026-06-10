@@ -114,7 +114,8 @@ describe("loadConfig", () => {
 
   it("throws when rconPort is out of range", () => {
     writeConfig({
-      token: "tok", clientId: "cid",
+      token: "tok",
+      clientId: "cid",
       servers: { srv: { rconPort: 99999 } },
     });
     expect(() => reloadConfig()).toThrow("rconPort");

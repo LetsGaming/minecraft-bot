@@ -18,14 +18,20 @@ import type { Client } from "discord.js";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
-type HandlerFn = (match: RegExpExecArray, client: Client, server: ServerInstance) => Promise<void>;
+type HandlerFn = (
+  match: RegExpExecArray,
+  client: Client,
+  server: ServerInstance,
+) => Promise<void>;
 
 interface CapturedHandler {
   regex: RegExp;
   handler: HandlerFn;
 }
 
-function makeLogWatcher(serverId = "sleep-test"): ILogWatcher & { _handlers: CapturedHandler[] } {
+function makeLogWatcher(
+  serverId = "sleep-test",
+): ILogWatcher & { _handlers: CapturedHandler[] } {
   const handlers: CapturedHandler[] = [];
   return {
     server: { id: serverId } as ILogWatcher["server"],
@@ -75,14 +81,18 @@ describe("registerSleepWatcher — registration", () => {
     const watcher = makeLogWatcher();
     registerSleepWatcher(watcher);
     const regex = watcher._handlers[0]!.regex;
-    expect(regex.exec("[12:00:00] [Server thread/INFO]: <Steve> liege wie")).not.toBeNull();
+    expect(
+      regex.exec("[12:00:00] [Server thread/INFO]: <Steve> liege wie"),
+    ).not.toBeNull();
   });
 
   it("the regex captures player name in group 1 and message in group 2", () => {
     const watcher = makeLogWatcher();
     registerSleepWatcher(watcher);
     const regex = watcher._handlers[0]!.regex;
-    const match = regex.exec("[12:00:00] [Server thread/INFO]: <Alice> liege wie")!;
+    const match = regex.exec(
+      "[12:00:00] [Server thread/INFO]: <Alice> liege wie",
+    )!;
     expect(match[1]).toBe("Alice");
     expect(match[2]).toBe("liege wie");
   });
@@ -106,7 +116,10 @@ describe("handler — non-sleep trigger messages", () => {
     const watcher = makeLogWatcher();
     registerSleepWatcher(watcher);
     const { regex, handler } = watcher._handlers[0]!;
-    const server = makeServer({ sleepTimerOutput: "87s", timeOutput: "The time is 13000" });
+    const server = makeServer({
+      sleepTimerOutput: "87s",
+      timeOutput: "The time is 13000",
+    });
 
     const match = regex.exec("[12:00:00] [INFO]: <Steve> hello world")!;
     await handler(match, null as unknown as Client, server);
@@ -118,7 +131,10 @@ describe("handler — non-sleep trigger messages", () => {
     const watcher = makeLogWatcher();
     registerSleepWatcher(watcher);
     const { regex, handler } = watcher._handlers[0]!;
-    const server = makeServer({ sleepTimerOutput: "87s", timeOutput: "The time is 13000" });
+    const server = makeServer({
+      sleepTimerOutput: "87s",
+      timeOutput: "The time is 13000",
+    });
 
     const match = regex.exec("[12:00:00] [INFO]: <Steve> liege wie bitte")!;
     if (!match) return; // regex might not match, test still passes
@@ -156,7 +172,10 @@ describe("handler — player not in bed", () => {
     const watcher = makeLogWatcher("null-rcon");
     registerSleepWatcher(watcher);
     const { regex, handler } = watcher._handlers[0]!;
-    const server = makeServer({ id: "null-rcon", sleepTimerOutput: null as unknown as string });
+    const server = makeServer({
+      id: "null-rcon",
+      sleepTimerOutput: null as unknown as string,
+    });
 
     const match = regex.exec("[12:00:00] [INFO]: <Steve> liege wie")!;
     await handler(match, null as unknown as Client, server);
@@ -174,7 +193,9 @@ describe("handler — player not in bed", () => {
     const server = makeServer({ id: "rcon-error", sendCommandError: true });
 
     const match = regex.exec("[12:00:00] [INFO]: <Steve> liege wie")!;
-    await expect(handler(match, null as unknown as Client, server)).resolves.toBeUndefined();
+    await expect(
+      handler(match, null as unknown as Client, server),
+    ).resolves.toBeUndefined();
   });
 });
 
@@ -211,7 +232,7 @@ describe("handler — isNight fallback", () => {
     const server = makeServer({
       id: "no-num-time",
       sleepTimerOutput: "Steve has the following entity data: 87s",
-      timeOutput: "The time is unknown",  // no digit match → isNight=true
+      timeOutput: "The time is unknown", // no digit match → isNight=true
     });
 
     const match = regex.exec("[12:00:00] [INFO]: <Steve> liege wie")!;

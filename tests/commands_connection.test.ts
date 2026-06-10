@@ -25,7 +25,12 @@ vi.mock("../src/utils/embedUtils.js", () => ({
     toJSON: () => ({ title: opts?.title }),
   })),
   createErrorEmbed: vi.fn().mockReturnValue({ type: "error-embed" }),
-  createSuccessEmbed: vi.fn().mockReturnValue({ type: "success-embed", setDescription: vi.fn().mockReturnThis() }),
+  createSuccessEmbed: vi
+    .fn()
+    .mockReturnValue({
+      type: "success-embed",
+      setDescription: vi.fn().mockReturnThis(),
+    }),
   createPaginationButtons: vi.fn().mockReturnValue({ type: "buttons" }),
   handlePagination: vi.fn().mockResolvedValue(undefined),
 }));
@@ -88,7 +93,8 @@ function makeInteraction(overrides: Record<string, unknown> = {}) {
   return {
     user: { id: "user123", tag: "User#0001" },
     commandName: "cmd",
-    deferred: false, replied: false,
+    deferred: false,
+    replied: false,
     deferReply: vi.fn().mockResolvedValue(undefined),
     editReply: vi.fn().mockResolvedValue({ id: "msg1" }),
     reply: vi.fn().mockResolvedValue(undefined),
@@ -132,29 +138,45 @@ describe("/link command", () => {
 
   it("replies with 'already pending' when valid unexpired code exists", async () => {
     vi.mocked(loadLinkCodes).mockResolvedValue({
-      "ABC123": { discordId: "user123", expires: Date.now() + 300_000, confirmed: false },
+      ABC123: {
+        discordId: "user123",
+        expires: Date.now() + 300_000,
+        confirmed: false,
+      },
     });
     const interaction = makeInteraction();
     await execute(interaction as never);
     expect(interaction.reply).toHaveBeenCalledWith(
-      expect.objectContaining({ content: expect.stringContaining("already have") }),
+      expect.objectContaining({
+        content: expect.stringContaining("already have"),
+      }),
     );
   });
 
   it("replies with 'already linked' when confirmed code is expired", async () => {
     vi.mocked(loadLinkCodes).mockResolvedValue({
-      "OLD123": { discordId: "user123", expires: Date.now() - 1, confirmed: true },
+      OLD123: {
+        discordId: "user123",
+        expires: Date.now() - 1,
+        confirmed: true,
+      },
     });
     const interaction = makeInteraction();
     await execute(interaction as never);
     expect(interaction.reply).toHaveBeenCalledWith(
-      expect.objectContaining({ content: expect.stringContaining("already linked") }),
+      expect.objectContaining({
+        content: expect.stringContaining("already linked"),
+      }),
     );
   });
 
   it("removes expired code and issues new one", async () => {
     vi.mocked(loadLinkCodes).mockResolvedValue({
-      "EXP123": { discordId: "user123", expires: Date.now() - 1, confirmed: false },
+      EXP123: {
+        discordId: "user123",
+        expires: Date.now() - 1,
+        confirmed: false,
+      },
     });
     const interaction = makeInteraction();
     await execute(interaction as never);
@@ -178,7 +200,9 @@ describe("/linkstatus command", () => {
     const interaction = makeInteraction();
     await execute(interaction as never);
     expect(interaction.reply).toHaveBeenCalledWith(
-      expect.objectContaining({ content: expect.stringContaining("not linked") }),
+      expect.objectContaining({
+        content: expect.stringContaining("not linked"),
+      }),
     );
   });
 
@@ -207,7 +231,9 @@ describe("/unlink command", () => {
     const interaction = makeInteraction();
     await execute(interaction as never);
     expect(interaction.reply).toHaveBeenCalledWith(
-      expect.objectContaining({ content: expect.stringContaining("not linked") }),
+      expect.objectContaining({
+        content: expect.stringContaining("not linked"),
+      }),
     );
   });
 
@@ -235,8 +261,9 @@ describe("/help command", () => {
   it("calls reply with help embed and handles fetchReply error gracefully", async () => {
     const interaction = makeInteraction();
     // help.ts calls fetchReply after reply — add that mock
-    (interaction as never as { fetchReply: ReturnType<typeof vi.fn> }).fetchReply =
-      vi.fn().mockRejectedValue(new Error("Interaction expired"));
+    (
+      interaction as never as { fetchReply: ReturnType<typeof vi.fn> }
+    ).fetchReply = vi.fn().mockRejectedValue(new Error("Interaction expired"));
     await execute(interaction as never);
     expect(interaction.reply).toHaveBeenCalled();
   });
@@ -247,11 +274,13 @@ describe("/help command", () => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 describe("startChannelPurge", () => {
-  let startChannelPurge: (client: never, guildConfigs: Record<string, never>) => void;
+  let startChannelPurge: (
+    client: never,
+    guildConfigs: Record<string, never>,
+  ) => void;
   beforeEach(async () => {
-    ({ startChannelPurge } = await import(
-      "../src/logWatcher/watchers/channelPurge.js"
-    ));
+    ({ startChannelPurge } =
+      await import("../src/logWatcher/watchers/channelPurge.js"));
   });
 
   it("logs and returns when no guilds have purge configured", async () => {
@@ -279,11 +308,14 @@ describe("startChannelPurge", () => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 describe("startTpsMonitor", () => {
-  let startTpsMonitor: (server: never, client: never, guilds: Record<string, never>) => ReturnType<typeof setInterval> | null;
+  let startTpsMonitor: (
+    server: never,
+    client: never,
+    guilds: Record<string, never>,
+  ) => ReturnType<typeof setInterval> | null;
   beforeEach(async () => {
-    ({ startTpsMonitor } = await import(
-      "../src/logWatcher/watchers/tpsMonitor.js"
-    ));
+    ({ startTpsMonitor } =
+      await import("../src/logWatcher/watchers/tpsMonitor.js"));
   });
 
   it("returns null when server does not support TPS", () => {

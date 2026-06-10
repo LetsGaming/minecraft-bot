@@ -42,7 +42,11 @@ vi.mock("../src/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-import { loadStats, flattenStats, filterStats } from "../src/utils/statUtils.js";
+import {
+  loadStats,
+  flattenStats,
+  filterStats,
+} from "../src/utils/statUtils.js";
 import { findPlayer } from "../src/utils/playerUtils.js";
 import { resolveServer } from "../src/utils/guildRouter.js";
 import { getSnapshotForDailyDiff } from "../src/utils/snapshotUtils.js";
@@ -52,12 +56,23 @@ import type { ChatInputCommandInteraction } from "discord.js";
 
 const fakeServer = { id: "survival" } as never;
 const fakePlayer = { name: "Steve", uuid: "uuid-1" };
-const fakeStatsFile = { stats: { "minecraft:custom": { "minecraft:deaths": 5 } } };
+const fakeStatsFile = {
+  stats: { "minecraft:custom": { "minecraft:deaths": 5 } },
+};
 const fakeFlattened = [
-  { fullKey: "minecraft:custom.minecraft:deaths", category: "minecraft:custom", key: "minecraft:deaths", value: 5 },
+  {
+    fullKey: "minecraft:custom.minecraft:deaths",
+    category: "minecraft:custom",
+    key: "minecraft:deaths",
+    value: 5,
+  },
 ];
 
-function makeInteraction(sub = "player", playerName = "Steve", filterStat: string | null = null): ChatInputCommandInteraction {
+function makeInteraction(
+  sub = "player",
+  playerName = "Steve",
+  filterStat: string | null = null,
+): ChatInputCommandInteraction {
   return {
     user: { id: "user1" },
     commandName: "stats",

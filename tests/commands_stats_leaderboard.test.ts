@@ -15,8 +15,18 @@ vi.mock("../src/utils/guildRouter.js", () => ({
 
 vi.mock("../src/utils/statUtils.js", () => ({
   LEADERBOARD_STATS: {
-    playtime: { label: "Playtime", extract: vi.fn().mockReturnValue(0), format: vi.fn().mockReturnValue("0s"), sortAscending: false },
-    deaths: { label: "Deaths", extract: vi.fn().mockReturnValue(0), format: vi.fn().mockReturnValue("0"), sortAscending: true },
+    playtime: {
+      label: "Playtime",
+      extract: vi.fn().mockReturnValue(0),
+      format: vi.fn().mockReturnValue("0s"),
+      sortAscending: false,
+    },
+    deaths: {
+      label: "Deaths",
+      extract: vi.fn().mockReturnValue(0),
+      format: vi.fn().mockReturnValue("0"),
+      sortAscending: true,
+    },
   },
   buildLeaderboard: vi.fn(),
   loadStats: vi.fn(),
@@ -40,7 +50,12 @@ vi.mock("../src/utils/playerUtils.js", () => ({
 }));
 
 vi.mock("../src/utils/embedUtils.js", () => ({
-  createEmbed: vi.fn().mockReturnValue({ addFields: vi.fn().mockReturnThis(), setFooter: vi.fn().mockReturnThis() }),
+  createEmbed: vi
+    .fn()
+    .mockReturnValue({
+      addFields: vi.fn().mockReturnThis(),
+      setFooter: vi.fn().mockReturnThis(),
+    }),
   createErrorEmbed: vi.fn().mockReturnValue({ type: "error-embed" }),
 }));
 
@@ -124,13 +139,20 @@ describe("/leaderboard command", () => {
   });
 
   it("defaults to playtime when no stat selected", async () => {
-    const interaction = makeInteraction({ options: { getString: vi.fn().mockReturnValue(null) } });
+    const interaction = makeInteraction({
+      options: { getString: vi.fn().mockReturnValue(null) },
+    });
     await execute(interaction);
-    expect(buildLeaderboard).toHaveBeenCalledWith("playtime", expect.any(Object));
+    expect(buildLeaderboard).toHaveBeenCalledWith(
+      "playtime",
+      expect.any(Object),
+    );
   });
 
   it("calls editReply with the leaderboard embed", async () => {
-    const interaction = makeInteraction({ options: { getString: vi.fn().mockReturnValue(null) } });
+    const interaction = makeInteraction({
+      options: { getString: vi.fn().mockReturnValue(null) },
+    });
     await execute(interaction);
     expect(interaction.editReply).toHaveBeenCalledWith(
       expect.objectContaining({ embeds: expect.any(Array) }),
@@ -177,7 +199,10 @@ describe("/playtime command", () => {
   });
 
   it("replies with error when stats file is missing", async () => {
-    vi.mocked(findPlayer).mockResolvedValue({ name: "Steve", uuid: "u1" } as never);
+    vi.mocked(findPlayer).mockResolvedValue({
+      name: "Steve",
+      uuid: "u1",
+    } as never);
     vi.mocked(loadStats).mockResolvedValue(null);
     const interaction = makeInteraction({
       options: { getString: vi.fn().mockReturnValue("Steve") },
@@ -187,7 +212,10 @@ describe("/playtime command", () => {
   });
 
   it("replies with playtime embed on success", async () => {
-    vi.mocked(findPlayer).mockResolvedValue({ name: "Steve", uuid: "u1" } as never);
+    vi.mocked(findPlayer).mockResolvedValue({
+      name: "Steve",
+      uuid: "u1",
+    } as never);
     vi.mocked(loadStats).mockResolvedValue({
       stats: { "minecraft:custom": { "minecraft:play_time": 72000 } },
     } as never);
@@ -204,11 +232,13 @@ describe("/playtime command", () => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 describe("startLeaderboardScheduler", () => {
-  let startLeaderboardScheduler: (client: never, guildConfigs: Record<string, never>) => unknown;
+  let startLeaderboardScheduler: (
+    client: never,
+    guildConfigs: Record<string, never>,
+  ) => unknown;
   beforeEach(async () => {
-    ({ startLeaderboardScheduler } = await import(
-      "../src/logWatcher/watchers/leaderboardScheduler.js"
-    ));
+    ({ startLeaderboardScheduler } =
+      await import("../src/logWatcher/watchers/leaderboardScheduler.js"));
   });
 
   it("returns a timer object (SchedulerTimers with snapshotTimer + postTimer)", () => {
@@ -216,9 +246,18 @@ describe("startLeaderboardScheduler", () => {
     // Returns either a single timer or a SchedulerTimers object
     expect(result).toBeTruthy();
     // Clean up intervals
-    if (result && typeof result === "object" && "snapshotTimer" in (result as object)) {
-      clearInterval((result as { snapshotTimer: ReturnType<typeof setInterval> }).snapshotTimer);
-      clearInterval((result as { postTimer: ReturnType<typeof setInterval> }).postTimer);
+    if (
+      result &&
+      typeof result === "object" &&
+      "snapshotTimer" in (result as object)
+    ) {
+      clearInterval(
+        (result as { snapshotTimer: ReturnType<typeof setInterval> })
+          .snapshotTimer,
+      );
+      clearInterval(
+        (result as { postTimer: ReturnType<typeof setInterval> }).postTimer,
+      );
     } else {
       clearInterval(result as ReturnType<typeof setInterval>);
     }
@@ -228,8 +267,13 @@ describe("startLeaderboardScheduler", () => {
     expect(() => {
       const r = startLeaderboardScheduler(null as never, {});
       if (r && typeof r === "object" && "snapshotTimer" in (r as object)) {
-        clearInterval((r as { snapshotTimer: ReturnType<typeof setInterval> }).snapshotTimer);
-        clearInterval((r as { postTimer: ReturnType<typeof setInterval> }).postTimer);
+        clearInterval(
+          (r as { snapshotTimer: ReturnType<typeof setInterval> })
+            .snapshotTimer,
+        );
+        clearInterval(
+          (r as { postTimer: ReturnType<typeof setInterval> }).postTimer,
+        );
       } else {
         clearInterval(r as ReturnType<typeof setInterval>);
       }

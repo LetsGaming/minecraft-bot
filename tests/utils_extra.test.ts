@@ -46,8 +46,7 @@ describe("stripLogPrefix", () => {
   });
 
   it("handles a real Paper join log line", () => {
-    const line =
-      "[12:34:56] [Server thread/INFO]: Steve joined the game";
+    const line = "[12:34:56] [Server thread/INFO]: Steve joined the game";
     expect(stripLogPrefix(line)).toBe("Steve joined the game");
   });
 

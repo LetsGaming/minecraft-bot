@@ -23,12 +23,14 @@ import type { ChatInputCommandInteraction } from "discord.js";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
-function makeInteraction(opts: {
-  userId?: string;
-  commandName?: string;
-  deferred?: boolean;
-  replied?: boolean;
-} = {}): ChatInputCommandInteraction {
+function makeInteraction(
+  opts: {
+    userId?: string;
+    commandName?: string;
+    deferred?: boolean;
+    replied?: boolean;
+  } = {},
+): ChatInputCommandInteraction {
   return {
     user: { id: opts.userId ?? "user_default" },
     commandName: opts.commandName ?? "cmd",
@@ -48,22 +50,30 @@ beforeEach(() => {
 
 describe("isServerAdmin", () => {
   it("returns true when the user ID is in adminUsers", () => {
-    vi.mocked(loadConfig).mockReturnValue({ adminUsers: ["admin1", "admin2"] } as ReturnType<typeof loadConfig>);
+    vi.mocked(loadConfig).mockReturnValue({
+      adminUsers: ["admin1", "admin2"],
+    } as ReturnType<typeof loadConfig>);
     expect(isServerAdmin("admin1")).toBe(true);
   });
 
   it("returns true for the second admin in the list", () => {
-    vi.mocked(loadConfig).mockReturnValue({ adminUsers: ["admin1", "admin2"] } as ReturnType<typeof loadConfig>);
+    vi.mocked(loadConfig).mockReturnValue({
+      adminUsers: ["admin1", "admin2"],
+    } as ReturnType<typeof loadConfig>);
     expect(isServerAdmin("admin2")).toBe(true);
   });
 
   it("returns false when the user ID is not in adminUsers", () => {
-    vi.mocked(loadConfig).mockReturnValue({ adminUsers: ["admin1"] } as ReturnType<typeof loadConfig>);
+    vi.mocked(loadConfig).mockReturnValue({
+      adminUsers: ["admin1"],
+    } as ReturnType<typeof loadConfig>);
     expect(isServerAdmin("notanadmin")).toBe(false);
   });
 
   it("returns false when adminUsers is an empty array", () => {
-    vi.mocked(loadConfig).mockReturnValue({ adminUsers: [] } as ReturnType<typeof loadConfig>);
+    vi.mocked(loadConfig).mockReturnValue({ adminUsers: [] } as ReturnType<
+      typeof loadConfig
+    >);
     expect(isServerAdmin("anyone")).toBe(false);
   });
 });
@@ -72,7 +82,9 @@ describe("isServerAdmin", () => {
 
 describe("requireServerAdmin", () => {
   it("calls execute when the user is an admin", async () => {
-    vi.mocked(loadConfig).mockReturnValue({ adminUsers: ["admin1"] } as ReturnType<typeof loadConfig>);
+    vi.mocked(loadConfig).mockReturnValue({
+      adminUsers: ["admin1"],
+    } as ReturnType<typeof loadConfig>);
     const execute = vi.fn().mockResolvedValue(undefined);
     const wrapped = requireServerAdmin(execute);
     const interaction = makeInteraction({ userId: "admin1" });
@@ -84,7 +96,9 @@ describe("requireServerAdmin", () => {
   });
 
   it("throws when the user is not an admin", async () => {
-    vi.mocked(loadConfig).mockReturnValue({ adminUsers: [] } as ReturnType<typeof loadConfig>);
+    vi.mocked(loadConfig).mockReturnValue({ adminUsers: [] } as ReturnType<
+      typeof loadConfig
+    >);
     const execute = vi.fn();
     const wrapped = requireServerAdmin(execute);
     const interaction = makeInteraction({ userId: "nobody" });

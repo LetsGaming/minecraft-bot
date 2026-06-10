@@ -78,7 +78,9 @@ describe("createEmbed", () => {
   });
 
   it("omits title when not provided", () => {
-    expect(createEmbed({ description: "only desc" }).toJSON().title).toBeUndefined();
+    expect(
+      createEmbed({ description: "only desc" }).toJSON().title,
+    ).toBeUndefined();
   });
 });
 
@@ -136,7 +138,9 @@ describe("createErrorEmbed", () => {
   });
 
   it("omits timestamp when timestamp=false", () => {
-    expect(createErrorEmbed("err", { timestamp: false }).toJSON().timestamp).toBeUndefined();
+    expect(
+      createErrorEmbed("err", { timestamp: false }).toJSON().timestamp,
+    ).toBeUndefined();
   });
 });
 
@@ -152,7 +156,9 @@ describe("createSuccessEmbed", () => {
   });
 
   it("sets description", () => {
-    expect(createSuccessEmbed("it worked").toJSON().description).toBe("it worked");
+    expect(createSuccessEmbed("it worked").toJSON().description).toBe(
+      "it worked",
+    );
   });
 });
 
@@ -224,7 +230,10 @@ describe("createPlayerEmbed", () => {
   });
 
   it("passes through color and description", () => {
-    const embed = createPlayerEmbed("Hero", { description: "desc", color: 0x123456 });
+    const embed = createPlayerEmbed("Hero", {
+      description: "desc",
+      color: 0x123456,
+    });
     const json = embed.toJSON();
     expect(json.description).toBe("desc");
     expect(json.color).toBe(0x123456);

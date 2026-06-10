@@ -70,7 +70,8 @@ describe("streak execute", () => {
     const interaction = makeInteraction();
     await execute(interaction);
     // Should mention "7 days" as the next bonus streak
-    const editReplyArg = vi.mocked(interaction.editReply).mock.calls[0]![0] as string;
+    const editReplyArg = vi.mocked(interaction.editReply).mock
+      .calls[0]![0] as string;
     expect(editReplyArg).toContain("7 days");
   });
 
@@ -85,7 +86,8 @@ describe("streak execute", () => {
 
     const interaction = makeInteraction();
     await execute(interaction);
-    const editReplyArg = vi.mocked(interaction.editReply).mock.calls[0]![0] as string;
+    const editReplyArg = vi.mocked(interaction.editReply).mock
+      .calls[0]![0] as string;
     expect(editReplyArg).toContain("N/A");
   });
 

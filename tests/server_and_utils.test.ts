@@ -18,7 +18,8 @@ vi.mock("../src/config.js", () => ({
     guilds: { guild1: { defaultServer: "survival" } },
     servers: {},
     adminUsers: [],
-    token: "tok", clientId: "cid",
+    token: "tok",
+    clientId: "cid",
   }),
 }));
 
@@ -38,7 +39,9 @@ vi.mock("../src/shell/execCommand.js", () => ({
 vi.mock("../src/utils/serverAccess.js", () => ({
   tailLog: vi.fn().mockResolvedValue(""),
   isRunning: vi.fn().mockResolvedValue(false),
-  getList: vi.fn().mockResolvedValue({ playerCount: "0", maxPlayers: "20", players: [] }),
+  getList: vi
+    .fn()
+    .mockResolvedValue({ playerCount: "0", maxPlayers: "20", players: [] }),
   sendCommand: vi.fn().mockResolvedValue(null),
   getTps: vi.fn().mockResolvedValue(null),
 }));
@@ -86,7 +89,10 @@ describe("server.ts — initServers / getServerInstance / getAllInstances", () =
   });
 
   it("getAllInstances returns all registered instances", () => {
-    initServers({ survival: minimalCfg, creative: { ...minimalCfg, id: "creative" } as never });
+    initServers({
+      survival: minimalCfg,
+      creative: { ...minimalCfg, id: "creative" } as never,
+    });
     const all = getAllInstances();
     expect(all.length).toBeGreaterThanOrEqual(2);
   });
@@ -101,7 +107,12 @@ describe("server.ts — initServers / getServerInstance / getAllInstances", () =
 // ══════════════════════════════════════════════════════════════════════════════
 
 describe("ServerInstance", () => {
-  let ServerInstance: new (cfg: never) => { id: string; useRcon: boolean; config: never; supportsTps: boolean };
+  let ServerInstance: new (cfg: never) => {
+    id: string;
+    useRcon: boolean;
+    config: never;
+    supportsTps: boolean;
+  };
 
   beforeEach(async () => {
     vi.resetModules();

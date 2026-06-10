@@ -66,7 +66,9 @@ beforeEach(() => {
 
 describe("tailLog", () => {
   it("calls API /logs/tail when apiUrl is set", async () => {
-    mockFetch.mockResolvedValueOnce(jsonResponse({ output: "server log line" }));
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({ output: "server log line" }),
+    );
     const result = await tailLog(remoteCfg, 5);
     expect(result).toBe("server log line");
     expect(mockFetch).toHaveBeenCalledWith(
@@ -104,7 +106,11 @@ describe("isRunning", () => {
 describe("getList", () => {
   it("returns player list from API", async () => {
     mockFetch.mockResolvedValueOnce(
-      jsonResponse({ playerCount: "3", maxPlayers: "20", players: ["A", "B", "C"] }),
+      jsonResponse({
+        playerCount: "3",
+        maxPlayers: "20",
+        players: ["A", "B", "C"],
+      }),
     );
     const list = await getList(remoteCfg);
     expect(list.playerCount).toBe("3");
@@ -207,7 +213,9 @@ describe("readStats", () => {
 
 describe("listStatsUuids", () => {
   it("returns UUID list from API", async () => {
-    mockFetch.mockResolvedValueOnce(jsonResponse({ uuids: ["u1", "u2", "u3"] }));
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({ uuids: ["u1", "u2", "u3"] }),
+    );
     const uuids = await listStatsUuids(remoteCfg);
     expect(uuids).toEqual(["u1", "u2", "u3"]);
   });
@@ -240,13 +248,15 @@ describe("readBackups", () => {
     const mtime = Date.now();
     mockFetch.mockResolvedValueOnce(
       jsonResponse({
-        dirs: [{
-          dir: "hourly",
-          count: 3,
-          latestFile: "backup-001.tar.zst",
-          latestMtimeMs: mtime,
-          latestSizeBytes: 1_048_576,
-        }],
+        dirs: [
+          {
+            dir: "hourly",
+            count: 3,
+            latestFile: "backup-001.tar.zst",
+            latestMtimeMs: mtime,
+            latestSizeBytes: 1_048_576,
+          },
+        ],
         totalBytes: 3_145_728,
       }),
     );
@@ -294,12 +304,18 @@ describe("runScript", () => {
 
 describe("logStreamUrl", () => {
   it("constructs correct SSE URL", () => {
-    const url = logStreamUrl({ id: "survival", apiUrl: "https://api.example.com" } as never);
+    const url = logStreamUrl({
+      id: "survival",
+      apiUrl: "https://api.example.com",
+    } as never);
     expect(url).toBe("https://api.example.com/instances/survival/logs/stream");
   });
 
   it("strips trailing slash from apiUrl", () => {
-    const url = logStreamUrl({ id: "srv", apiUrl: "https://api.example.com/" } as never);
+    const url = logStreamUrl({
+      id: "srv",
+      apiUrl: "https://api.example.com/",
+    } as never);
     expect(url).not.toContain("//instances");
   });
 });

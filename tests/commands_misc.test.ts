@@ -59,7 +59,11 @@ import { resolveServer } from "../src/utils/guildRouter.js";
 import { getLinkedAccount } from "../src/utils/linkUtils.js";
 import { getModList } from "../src/utils/modUtils.js";
 
-const fakeServer = { id: "survival", config: { id: "survival" }, getSeed: vi.fn().mockResolvedValue("12345") } as never;
+const fakeServer = {
+  id: "survival",
+  config: { id: "survival" },
+  getSeed: vi.fn().mockResolvedValue("12345"),
+} as never;
 
 function makeInteraction(overrides: Record<string, unknown> = {}) {
   return {
@@ -92,7 +96,15 @@ describe("/mods command", () => {
 
   it("replies with mod list embed when mods are available", async () => {
     vi.mocked(getModList).mockResolvedValue({
-      serverOnly: [{ slug: "m1", name: "Mod One", url: "https://modrinth.com/m1", description: "A mod", side: "server_only" }],
+      serverOnly: [
+        {
+          slug: "m1",
+          name: "Mod One",
+          url: "https://modrinth.com/m1",
+          description: "A mod",
+          side: "server_only",
+        },
+      ],
       clientAndServer: [],
       clientOptional: [],
       cached: false,
@@ -196,21 +208,29 @@ describe("/chunkbase command", () => {
 describe("/playerhead command", () => {
   let execute: (i: never) => Promise<void>;
   beforeEach(async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({ id: "uuid-99", name: "Notch" }),
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({ id: "uuid-99", name: "Notch" }),
+      }),
+    );
     ({ execute } = await import("../src/commands/connection/playerhead.js"));
   });
 
   it("replies with player head embed when player is found", async () => {
     const interaction = makeInteraction({
       options: {
-        getString: vi.fn().mockImplementation((n: string) =>
-          n === "mcname" ? "Notch" : null,
-        ),
+        getString: vi
+          .fn()
+          .mockImplementation((n: string) => (n === "mcname" ? "Notch" : null)),
       },
-      fetchReply: vi.fn().mockResolvedValue({ id: "msg1", createMessageComponentCollector: vi.fn().mockReturnValue({ on: vi.fn() }) }),
+      fetchReply: vi.fn().mockResolvedValue({
+        id: "msg1",
+        createMessageComponentCollector: vi
+          .fn()
+          .mockReturnValue({ on: vi.fn() }),
+      }),
     });
     await execute(interaction);
     expect(interaction.reply).toHaveBeenCalled();
@@ -220,9 +240,11 @@ describe("/playerhead command", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
     const interaction = makeInteraction({
       options: {
-        getString: vi.fn().mockImplementation((n: string) =>
-          n === "mcname" ? "NotRealPlayer" : null,
-        ),
+        getString: vi
+          .fn()
+          .mockImplementation((n: string) =>
+            n === "mcname" ? "NotRealPlayer" : null,
+          ),
       },
     });
     await execute(interaction);
@@ -244,7 +266,9 @@ describe("serverAccess.logStreamUrl", () => {
     const cfg = { id: "survival", apiUrl: "https://api.example.com" } as never;
     const url = logStreamUrl(cfg);
     // The real function: `${apiUrl}/instances/${id}/logs/stream`
-    expect(url).toMatch(/https:\/\/api\.example\.com\/instances\/survival\/logs\/stream/);
+    expect(url).toMatch(
+      /https:\/\/api\.example\.com\/instances\/survival\/logs\/stream/,
+    );
   });
 
   it("strips trailing slash from apiUrl before building URL", () => {
@@ -266,12 +290,17 @@ describe("serverAccess.logStreamUrl", () => {
 describe("RemoteLogWatcher", () => {
   let RemoteLogWatcher: typeof import("../src/logWatcher/RemoteLogWatcher.js").RemoteLogWatcher;
   beforeEach(async () => {
-    ({ RemoteLogWatcher } = await import("../src/logWatcher/RemoteLogWatcher.js"));
+    ({ RemoteLogWatcher } =
+      await import("../src/logWatcher/RemoteLogWatcher.js"));
   });
 
   const fakeRemoteServer = {
     id: "remote",
-    config: { id: "remote", apiUrl: "https://api.example.com", apiKey: "key123" },
+    config: {
+      id: "remote",
+      apiUrl: "https://api.example.com",
+      apiKey: "key123",
+    },
   } as never;
 
   it("can be constructed with a server instance", () => {
@@ -295,14 +324,21 @@ describe("RemoteLogWatcher", () => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 describe("discordChannel — renameVoiceChannelIfChanged", () => {
-  let renameVoiceChannelIfChanged: (ch: never, name: string) => Promise<boolean>;
+  let renameVoiceChannelIfChanged: (
+    ch: never,
+    name: string,
+  ) => Promise<boolean>;
   beforeEach(async () => {
-    ({ renameVoiceChannelIfChanged } = await import("../src/utils/discordChannel.js"));
+    ({ renameVoiceChannelIfChanged } =
+      await import("../src/utils/discordChannel.js"));
   });
 
   it("returns false without API call when name is unchanged", async () => {
     const channel = { name: "👥 Players: 3 / 20", setName: vi.fn() } as never;
-    const result = await renameVoiceChannelIfChanged(channel, "👥 Players: 3 / 20");
+    const result = await renameVoiceChannelIfChanged(
+      channel,
+      "👥 Players: 3 / 20",
+    );
     expect(result).toBe(false);
     expect(channel.setName).not.toHaveBeenCalled();
   });
@@ -312,7 +348,10 @@ describe("discordChannel — renameVoiceChannelIfChanged", () => {
       name: "👥 Players: 3 / 20",
       setName: vi.fn().mockResolvedValue(undefined),
     } as never;
-    const result = await renameVoiceChannelIfChanged(channel, "👥 Players: 5 / 20");
+    const result = await renameVoiceChannelIfChanged(
+      channel,
+      "👥 Players: 5 / 20",
+    );
     expect(result).toBe(true);
     expect(channel.setName).toHaveBeenCalledWith("👥 Players: 5 / 20");
   });

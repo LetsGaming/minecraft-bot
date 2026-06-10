@@ -27,14 +27,20 @@ import type { Client } from "discord.js";
 
 // ── Mock ILogWatcher factory ───────────────────────────────────────────────
 
-type HandlerFn = (match: RegExpExecArray, client: Client, server: unknown) => Promise<void>;
+type HandlerFn = (
+  match: RegExpExecArray,
+  client: Client,
+  server: unknown,
+) => Promise<void>;
 
 interface CapturedHandler {
   regex: RegExp;
   handler: HandlerFn;
 }
 
-function makeLogWatcher(serverId = "test"): ILogWatcher & { _handlers: CapturedHandler[] } {
+function makeLogWatcher(
+  serverId = "test",
+): ILogWatcher & { _handlers: CapturedHandler[] } {
   const handlers: CapturedHandler[] = [];
   return {
     server: { id: serverId } as ILogWatcher["server"],
@@ -57,7 +63,10 @@ function makeClient(channel: ReturnType<typeof makeChannel>) {
 
 const guildConfigsWithNotifs = {
   guild1: {
-    notifications: { channelId: "ch1", events: ["join", "leave", "death", "start", "stop", "advancement"] },
+    notifications: {
+      channelId: "ch1",
+      events: ["join", "leave", "death", "start", "stop", "advancement"],
+    },
     chatBridge: { channelId: "ch1" },
   },
 };
@@ -92,7 +101,9 @@ describe("joinLeave watcher — regex patterns", () => {
     const watcher = makeLogWatcher();
     registerJoinLeaveWatcher(watcher, makeClient(makeChannel()), {});
     const joinRegex = watcher._handlers[0]!.regex;
-    const match = joinRegex.exec("[12:00:00] [Server thread/INFO]: .BedrockPlayer joined the game");
+    const match = joinRegex.exec(
+      "[12:00:00] [Server thread/INFO]: .BedrockPlayer joined the game",
+    );
     expect(match).not.toBeNull();
     expect(match![1]).toBe(".BedrockPlayer");
   });
@@ -101,7 +112,9 @@ describe("joinLeave watcher — regex patterns", () => {
     const watcher = makeLogWatcher();
     registerJoinLeaveWatcher(watcher, makeClient(makeChannel()), {});
     const leaveRegex = watcher._handlers[1]!.regex;
-    const match = leaveRegex.exec("[12:00:00] [Server thread/INFO]: Bob left the game");
+    const match = leaveRegex.exec(
+      "[12:00:00] [Server thread/INFO]: Bob left the game",
+    );
     expect(match).not.toBeNull();
     expect(match![1]).toBe("Bob");
   });
@@ -158,7 +171,9 @@ describe("chatBridge watcher — regex patterns", () => {
     const watcher = makeLogWatcher();
     registerChatBridge(watcher, makeClient(makeChannel()), {});
     const chatRegex = watcher._handlers[0]!.regex;
-    const match = chatRegex.exec("[12:00:00] [Server thread/INFO]: <Steve> Hello world");
+    const match = chatRegex.exec(
+      "[12:00:00] [Server thread/INFO]: <Steve> Hello world",
+    );
     expect(match).not.toBeNull();
     expect(match![1]).toBe("Steve");
     expect(match![2]).toBe("Hello world");
@@ -168,7 +183,9 @@ describe("chatBridge watcher — regex patterns", () => {
     const watcher = makeLogWatcher();
     registerChatBridge(watcher, makeClient(makeChannel()), {});
     const chatRegex = watcher._handlers[0]!.regex;
-    const match = chatRegex.exec("[12:00:00] [Server thread/INFO]: <[AFK] Steve> Hi");
+    const match = chatRegex.exec(
+      "[12:00:00] [Server thread/INFO]: <[AFK] Steve> Hi",
+    );
     expect(match).not.toBeNull();
     expect(match![1]).toBe("Steve");
   });
@@ -177,7 +194,9 @@ describe("chatBridge watcher — regex patterns", () => {
     const watcher = makeLogWatcher();
     registerChatBridge(watcher, makeClient(makeChannel()), {});
     const chatRegex = watcher._handlers[0]!.regex;
-    expect(chatRegex.exec("[12:00:00] [INFO]: Steve joined the game")).toBeNull();
+    expect(
+      chatRegex.exec("[12:00:00] [INFO]: Steve joined the game"),
+    ).toBeNull();
   });
 });
 
@@ -259,7 +278,9 @@ describe("deaths watcher — regex patterns", () => {
     const watcher = makeLogWatcher();
     registerDeathWatcher(watcher, makeClient(makeChannel()), {});
     const deathRegex = watcher._handlers[0]!.regex;
-    expect(deathRegex.exec("[12:00:00] [INFO]: Steve joined the game")).toBeNull();
+    expect(
+      deathRegex.exec("[12:00:00] [INFO]: Steve joined the game"),
+    ).toBeNull();
   });
 });
 
@@ -271,7 +292,9 @@ describe("deaths watcher — handler invocation", () => {
     registerDeathWatcher(watcher, client, guildConfigsWithNotifs);
 
     const deathRegex = watcher._handlers[0]!.regex;
-    const match = deathRegex.exec("[12:00:00] [INFO]: Steve was slain by Zombie")!;
+    const match = deathRegex.exec(
+      "[12:00:00] [INFO]: Steve was slain by Zombie",
+    )!;
     await watcher._handlers[0]!.handler(match, client, watcher.server);
 
     expect(channel.send).toHaveBeenCalledOnce();
@@ -311,7 +334,9 @@ describe("serverEvents watcher — regex patterns", () => {
     const watcher = makeLogWatcher();
     registerServerEventWatcher(watcher, makeClient(makeChannel()), {});
     expect(
-      watcher._handlers[0]!.regex.exec("[12:00:00] [INFO]: Steve joined the game"),
+      watcher._handlers[0]!.regex.exec(
+        "[12:00:00] [INFO]: Steve joined the game",
+      ),
     ).toBeNull();
   });
 });
@@ -389,7 +414,9 @@ describe("advancements watcher — regex patterns", () => {
     registerAdvancementWatcher(watcher, makeClient(makeChannel()), {});
     const advRegex = watcher._handlers[0]!.regex;
     expect(
-      advRegex.exec("[12:00:00] [INFO]: Notch has reached the goal [Ice Bucket Challenge]"),
+      advRegex.exec(
+        "[12:00:00] [INFO]: Notch has reached the goal [Ice Bucket Challenge]",
+      ),
     ).not.toBeNull();
   });
 
@@ -397,7 +424,9 @@ describe("advancements watcher — regex patterns", () => {
     const watcher = makeLogWatcher();
     registerAdvancementWatcher(watcher, makeClient(makeChannel()), {});
     const advRegex = watcher._handlers[0]!.regex;
-    expect(advRegex.exec("[12:00:00] [INFO]: <Steve> I got an advancement!")).toBeNull();
+    expect(
+      advRegex.exec("[12:00:00] [INFO]: <Steve> I got an advancement!"),
+    ).toBeNull();
   });
 });
 

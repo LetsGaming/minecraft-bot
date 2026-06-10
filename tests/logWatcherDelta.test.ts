@@ -12,9 +12,15 @@ function makeServer(serverDir: string): ServerInstance {
   return {
     id: "test",
     config: {
-      id: "test", serverDir, linuxUser: "test", screenSession: "test",
-      useRcon: false, rconHost: "localhost", rconPort: 25575,
-      rconPassword: "", scriptDir: "",
+      id: "test",
+      serverDir,
+      linuxUser: "test",
+      screenSession: "test",
+      useRcon: false,
+      rconHost: "localhost",
+      rconPort: 25575,
+      rconPassword: "",
+      scriptDir: "",
     },
   } as unknown as ServerInstance;
 }
@@ -29,7 +35,7 @@ describe("LogWatcher delta-cap formula", () => {
     const lastSize = 1024; // arbitrary non-zero position
     const fileSize = lastSize + MAX_DELTA * 3; // 3× the cap
 
-    const readEnd  = Math.min(fileSize - 1, lastSize + MAX_DELTA - 1);
+    const readEnd = Math.min(fileSize - 1, lastSize + MAX_DELTA - 1);
     const bytesRead = readEnd - lastSize + 1;
 
     expect(bytesRead).toBe(MAX_DELTA);
@@ -38,9 +44,9 @@ describe("LogWatcher delta-cap formula", () => {
   it("reads to end of file when remaining < MAX_DELTA", () => {
     const lastSize = 1024;
     const remaining = MAX_DELTA / 2; // half the cap
-    const fileSize  = lastSize + remaining;
+    const fileSize = lastSize + remaining;
 
-    const readEnd  = Math.min(fileSize - 1, lastSize + MAX_DELTA - 1);
+    const readEnd = Math.min(fileSize - 1, lastSize + MAX_DELTA - 1);
     const bytesRead = readEnd - lastSize + 1;
 
     expect(bytesRead).toBe(remaining);
@@ -50,7 +56,7 @@ describe("LogWatcher delta-cap formula", () => {
     const lastSize = 0;
     const fileSize = MAX_DELTA;
 
-    const readEnd  = Math.min(fileSize - 1, lastSize + MAX_DELTA - 1);
+    const readEnd = Math.min(fileSize - 1, lastSize + MAX_DELTA - 1);
     const bytesRead = readEnd - lastSize + 1;
 
     expect(bytesRead).toBe(MAX_DELTA);
@@ -76,7 +82,9 @@ describe("LogWatcher integration", () => {
 
     const watcher = new LogWatcher(makeServer(tmpDir));
     const seen: string[] = [];
-    watcher.register(/^TEST (.+)$/, async ([, msg]) => { seen.push(msg); });
+    watcher.register(/^TEST (.+)$/, async ([, msg]) => {
+      seen.push(msg);
+    });
 
     await watcher.start(null as any);
     fs.appendFileSync(logFile, "TEST hello\nTEST world\n");
@@ -95,12 +103,14 @@ describe("LogWatcher integration", () => {
 
     const watcher = new LogWatcher(makeServer(tmpDir));
     let totalLines = 0;
-    watcher.register(/.+/, async () => { totalLines++; });
+    watcher.register(/.+/, async () => {
+      totalLines++;
+    });
 
     await watcher.start(null as any);
 
     // Append 2 MB AFTER start() — the watcher will consume it across cycles
-    const row   = "CATCHUP line\n"; // ~14 bytes
+    const row = "CATCHUP line\n"; // ~14 bytes
     const count = Math.ceil((MAX_DELTA * 2) / row.length);
     fs.appendFileSync(logFile, row.repeat(count));
 

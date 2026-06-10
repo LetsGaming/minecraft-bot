@@ -1,4 +1,12 @@
-import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeAll,
+  afterAll,
+  beforeEach,
+} from "vitest";
 import { mkdir, rm, writeFile, readdir } from "fs/promises";
 import path from "path";
 
@@ -44,7 +52,11 @@ async function writeSnapshot(
     timestamp,
     players: { "uuid-1": { playtime: 1000 } },
     ...(withFlatStats
-      ? { flatStats: { "uuid-1": { "minecraft:custom.minecraft:play_time": 1000 } } }
+      ? {
+          flatStats: {
+            "uuid-1": { "minecraft:custom.minecraft:play_time": 1000 },
+          },
+        }
       : {}),
   };
   await writeFile(
@@ -69,7 +81,9 @@ afterAll(async () => {
 
 beforeEach(async () => {
   const files = await listSnapshotFiles();
-  await Promise.all(files.map((f) => rm(path.join(SNAPSHOTS_DIR, f), { force: true })));
+  await Promise.all(
+    files.map((f) => rm(path.join(SNAPSHOTS_DIR, f), { force: true })),
+  );
 });
 
 // ── getSnapshotClosestTo ───────────────────────────────────────────────────

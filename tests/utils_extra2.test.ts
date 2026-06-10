@@ -14,7 +14,12 @@ vi.mock("../src/utils/logger.js", () => ({
 }));
 
 vi.mock("../src/utils/embedUtils.js", () => ({
-  createEmbed: vi.fn().mockReturnValue({ addFields: vi.fn().mockReturnThis(), setFooter: vi.fn().mockReturnThis() }),
+  createEmbed: vi
+    .fn()
+    .mockReturnValue({
+      addFields: vi.fn().mockReturnThis(),
+      setFooter: vi.fn().mockReturnThis(),
+    }),
   createErrorEmbed: vi.fn().mockReturnValue({ type: "error-embed" }),
 }));
 
@@ -53,7 +58,8 @@ describe("setupDiscordToMc", () => {
   ) => void;
 
   beforeEach(async () => {
-    ({ setupDiscordToMc } = await import("../src/logWatcher/watchers/chatBridge.js"));
+    ({ setupDiscordToMc } =
+      await import("../src/logWatcher/watchers/chatBridge.js"));
   });
 
   function makeClient() {
@@ -62,19 +68,25 @@ describe("setupDiscordToMc", () => {
       on: vi.fn((event: string, handler: (...args: never[]) => void) => {
         handlers.set(event, handler);
       }),
-      _trigger: (event: string, ...args: never[]) => handlers.get(event)?.(...args),
+      _trigger: (event: string, ...args: never[]) =>
+        handlers.get(event)?.(...args),
     };
   }
 
   it("registers messageCreate handler on the client", () => {
     const client = makeClient();
     setupDiscordToMc(client as never, {}, () => null as never);
-    expect(client.on).toHaveBeenCalledWith("messageCreate", expect.any(Function));
+    expect(client.on).toHaveBeenCalledWith(
+      "messageCreate",
+      expect.any(Function),
+    );
   });
 
   it("forwards message to server.sendCommand when in configured channel", async () => {
     const client = makeClient();
-    const server = { sendCommand: vi.fn().mockResolvedValue(undefined) } as never;
+    const server = {
+      sendCommand: vi.fn().mockResolvedValue(undefined),
+    } as never;
     const guildConfigs = {
       guild1: { chatBridge: { channelId: "ch1", server: "survival" } },
     } as never;
@@ -97,9 +109,18 @@ describe("setupDiscordToMc", () => {
   it("ignores bot messages", async () => {
     const client = makeClient();
     const server = { sendCommand: vi.fn() } as never;
-    setupDiscordToMc(client as never, { guild1: { chatBridge: { channelId: "ch1" } } } as never, () => server);
+    setupDiscordToMc(
+      client as never,
+      { guild1: { chatBridge: { channelId: "ch1" } } } as never,
+      () => server,
+    );
 
-    const botMsg = { author: { bot: true }, guild: { id: "guild1" }, channel: { id: "ch1" }, content: "bot msg" };
+    const botMsg = {
+      author: { bot: true },
+      guild: { id: "guild1" },
+      channel: { id: "ch1" },
+      content: "bot msg",
+    };
     await client._trigger("messageCreate", botMsg as never);
     expect(server.sendCommand).not.toHaveBeenCalled();
   });
@@ -109,14 +130,21 @@ describe("setupDiscordToMc", () => {
     const server = { sendCommand: vi.fn() } as never;
     setupDiscordToMc(client as never, {}, () => server);
 
-    const msg = { author: { bot: false }, guild: null, channel: { id: "ch1" }, content: "hi" };
+    const msg = {
+      author: { bot: false },
+      guild: null,
+      channel: { id: "ch1" },
+      content: "hi",
+    };
     await client._trigger("messageCreate", msg as never);
     expect(server.sendCommand).not.toHaveBeenCalled();
   });
 
   it("strips non-ASCII characters from displayName and content (B-08)", async () => {
     const client = makeClient();
-    const server = { sendCommand: vi.fn().mockResolvedValue(undefined) } as never;
+    const server = {
+      sendCommand: vi.fn().mockResolvedValue(undefined),
+    } as never;
     const guildConfigs = { g1: { chatBridge: { channelId: "ch1" } } } as never;
     setupDiscordToMc(client as never, guildConfigs, () => server);
 
@@ -141,7 +169,9 @@ describe("playerUtils", () => {
   let getPlayerNames: (server: never) => Promise<string[]>;
   let getPlayerCount: (server?: never) => Promise<unknown>;
   let getOnlinePlayers: (server?: never) => Promise<string[]>;
-  let getPlayerNamesChoices: (server: never) => Promise<Array<{ name: string; value: string }>>;
+  let getPlayerNamesChoices: (
+    server: never,
+  ) => Promise<Array<{ name: string; value: string }>>;
 
   beforeEach(async () => {
     const mod = await import("../src/utils/playerUtils.js");
@@ -180,7 +210,13 @@ describe("playerUtils", () => {
   it("getPlayerCount uses server.getList when server is provided", async () => {
     const server = {
       id: "srv",
-      getList: vi.fn().mockResolvedValue({ playerCount: "3", maxPlayers: "20", players: ["A"] }),
+      getList: vi
+        .fn()
+        .mockResolvedValue({
+          playerCount: "3",
+          maxPlayers: "20",
+          players: ["A"],
+        }),
     } as never;
     const count = await getPlayerCount(server);
     expect((count as { playerCount: string }).playerCount).toBe("3");
@@ -194,7 +230,13 @@ describe("playerUtils", () => {
   it("getOnlinePlayers uses server.getList when server is provided", async () => {
     const server = {
       id: "srv",
-      getList: vi.fn().mockResolvedValue({ playerCount: "2", maxPlayers: "20", players: ["A", "B"] }),
+      getList: vi
+        .fn()
+        .mockResolvedValue({
+          playerCount: "2",
+          maxPlayers: "20",
+          players: ["A", "B"],
+        }),
     } as never;
     const players = await getOnlinePlayers(server);
     expect(players).toContain("A");
@@ -219,9 +261,8 @@ describe("downtimeMonitor — state machine", () => {
   let suppressAlerts: (id: string) => void;
 
   beforeEach(async () => {
-    ({ startDowntimeMonitor, suppressAlerts } = await import(
-      "../src/logWatcher/watchers/downtimeMonitor.js"
-    ));
+    ({ startDowntimeMonitor, suppressAlerts } =
+      await import("../src/logWatcher/watchers/downtimeMonitor.js"));
     vi.clearAllMocks();
   });
 
@@ -232,9 +273,14 @@ describe("downtimeMonitor — state machine", () => {
   });
 
   it("startDowntimeMonitor returns a timer for configured guild", () => {
-    const server = { id: "sm-srv", isRunning: vi.fn().mockResolvedValue(true) } as never;
+    const server = {
+      id: "sm-srv",
+      isRunning: vi.fn().mockResolvedValue(true),
+    } as never;
     const channel = { send: vi.fn().mockResolvedValue(undefined) };
-    const client = { channels: { fetch: vi.fn().mockResolvedValue(channel) } } as never;
+    const client = {
+      channels: { fetch: vi.fn().mockResolvedValue(channel) },
+    } as never;
     const guilds = { g1: { downtimeAlerts: { channelId: "ch1" } } } as never;
     const timer = startDowntimeMonitor([server], client, guilds);
     expect(timer).toBeTruthy();

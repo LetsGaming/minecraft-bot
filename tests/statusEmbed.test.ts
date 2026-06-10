@@ -19,7 +19,13 @@ vi.mock("../src/utils/logger.js", () => ({
 }));
 
 vi.mock("../src/utils/embedUtils.js", () => ({
-  createEmbed: vi.fn().mockReturnValue({ type: "base-embed", addFields: vi.fn().mockReturnThis(), setFooter: vi.fn().mockReturnThis() }),
+  createEmbed: vi
+    .fn()
+    .mockReturnValue({
+      type: "base-embed",
+      addFields: vi.fn().mockReturnThis(),
+      setFooter: vi.fn().mockReturnThis(),
+    }),
 }));
 
 vi.mock("../src/utils/discordChannel.js", () => ({

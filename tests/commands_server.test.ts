@@ -25,7 +25,12 @@ vi.mock("../src/utils/embedUtils.js", () => ({
     toJSON: () => ({ title: opts?.title }),
   })),
   createErrorEmbed: vi.fn().mockReturnValue({ type: "error-embed" }),
-  createSuccessEmbed: vi.fn().mockReturnValue({ type: "success-embed", setDescription: vi.fn().mockReturnThis() }),
+  createSuccessEmbed: vi
+    .fn()
+    .mockReturnValue({
+      type: "success-embed",
+      setDescription: vi.fn().mockReturnThis(),
+    }),
 }));
 
 vi.mock("../src/utils/logger.js", () => ({
@@ -51,7 +56,13 @@ function makeServer(id = "survival", overrides: Record<string, unknown> = {}) {
     id,
     config: { id, serverDir: "/fake" },
     isRunning: vi.fn().mockResolvedValue(true),
-    getList: vi.fn().mockResolvedValue({ playerCount: "2", maxPlayers: "20", players: ["Alice", "Bob"] }),
+    getList: vi
+      .fn()
+      .mockResolvedValue({
+        playerCount: "2",
+        maxPlayers: "20",
+        players: ["Alice", "Bob"],
+      }),
     getTps: vi.fn().mockResolvedValue({ tps1m: 20, tps5m: 20, tps15m: 20 }),
     supportsTps: true,
     getSeed: vi.fn().mockResolvedValue("123456789"),
@@ -104,7 +115,9 @@ describe("/status command", () => {
   });
 
   it("replies with an offline embed when server is not running", async () => {
-    const server = makeServer("survival", { isRunning: vi.fn().mockResolvedValue(false) });
+    const server = makeServer("survival", {
+      isRunning: vi.fn().mockResolvedValue(false),
+    });
     vi.mocked(resolveServer).mockReturnValue(server);
     const interaction = makeInteraction();
     await execute(interaction);
@@ -152,14 +165,18 @@ describe("/tps command", () => {
   });
 
   it("throws when getTps returns null", async () => {
-    const server = makeServer("srv", { getTps: vi.fn().mockResolvedValue(null) });
+    const server = makeServer("srv", {
+      getTps: vi.fn().mockResolvedValue(null),
+    });
     vi.mocked(resolveServer).mockReturnValue(server);
     await expect(execute(makeInteraction())).rejects.toThrow("offline");
   });
 
   it("includes Paper TPS fields (1m/5m/15m) when tps5m is present", async () => {
     const server = makeServer("srv", {
-      getTps: vi.fn().mockResolvedValue({ tps1m: 20, tps5m: 19.9, tps15m: 19.8 }),
+      getTps: vi
+        .fn()
+        .mockResolvedValue({ tps1m: 20, tps5m: 19.9, tps15m: 19.8 }),
     });
     vi.mocked(resolveServer).mockReturnValue(server);
     const interaction = makeInteraction();
@@ -197,7 +214,9 @@ describe("/seed command", () => {
   });
 
   it("throws when seed is null", async () => {
-    const server = makeServer("srv", { getSeed: vi.fn().mockResolvedValue(null) });
+    const server = makeServer("srv", {
+      getSeed: vi.fn().mockResolvedValue(null),
+    });
     vi.mocked(resolveServer).mockReturnValue(server);
     await expect(execute(makeInteraction())).rejects.toThrow("seed");
   });
@@ -218,9 +237,11 @@ describe("/say command", () => {
     vi.mocked(resolveServer).mockReturnValue(server);
     const interaction = makeInteraction({
       options: {
-        getString: vi.fn().mockImplementation((n: string) =>
-          n === "message" ? "Hello world" : null,
-        ),
+        getString: vi
+          .fn()
+          .mockImplementation((n: string) =>
+            n === "message" ? "Hello world" : null,
+          ),
       },
     });
     await execute(interaction);
@@ -245,7 +266,14 @@ describe("/backup command", () => {
     const server = makeServer();
     vi.mocked(resolveServer).mockReturnValue(server);
     vi.mocked(serverAccess.readBackups).mockResolvedValue({
-      dirs: [{ dir: "hourly", count: 5, latestSizeBytes: 1048576, latestMtime: new Date() }],
+      dirs: [
+        {
+          dir: "hourly",
+          count: 5,
+          latestSizeBytes: 1048576,
+          latestMtime: new Date(),
+        },
+      ],
       totalBytes: 5_242_880,
     } as never);
     const interaction = makeInteraction();
@@ -256,7 +284,10 @@ describe("/backup command", () => {
   it("throws when no backups exist", async () => {
     const server = makeServer();
     vi.mocked(resolveServer).mockReturnValue(server);
-    vi.mocked(serverAccess.readBackups).mockResolvedValue({ dirs: [], totalBytes: 0 } as never);
+    vi.mocked(serverAccess.readBackups).mockResolvedValue({
+      dirs: [],
+      totalBytes: 0,
+    } as never);
     await expect(execute(makeInteraction())).rejects.toThrow("No backups");
   });
 });
@@ -280,7 +311,10 @@ describe("/server control command", () => {
       stderr: "",
     } as never);
     const interaction = makeInteraction({
-      options: { getString: vi.fn().mockReturnValue(null), getSubcommand: vi.fn().mockReturnValue("status") },
+      options: {
+        getString: vi.fn().mockReturnValue(null),
+        getSubcommand: vi.fn().mockReturnValue("status"),
+      },
     });
     await execute(interaction);
     expect(serverAccess.runScript).toHaveBeenCalled();
@@ -291,7 +325,9 @@ describe("/server control command", () => {
     const server = makeServer();
     vi.mocked(resolveServer).mockReturnValue(server);
     vi.mocked(serverAccess.runScript).mockResolvedValue({
-      exitCode: 0, output: "", stderr: "",
+      exitCode: 0,
+      output: "",
+      stderr: "",
     } as never);
     const interaction = makeInteraction({
       options: {
@@ -308,9 +344,12 @@ describe("/server control command", () => {
     const server = makeServer();
     vi.mocked(resolveServer).mockReturnValue(server);
     vi.mocked(serverAccess.runScript).mockResolvedValue({
-      exitCode: 0, output: "Server stopped", stderr: "",
+      exitCode: 0,
+      output: "Server stopped",
+      stderr: "",
     } as never);
-    const { suppressAlerts } = await import("../src/logWatcher/watchers/downtimeMonitor.js");
+    const { suppressAlerts } =
+      await import("../src/logWatcher/watchers/downtimeMonitor.js");
     const interaction = makeInteraction({
       options: {
         getString: vi.fn().mockReturnValue(null),
@@ -326,7 +365,9 @@ describe("/server control command", () => {
     const server = makeServer();
     vi.mocked(resolveServer).mockReturnValue(server);
     vi.mocked(serverAccess.runScript).mockResolvedValue({
-      exitCode: 1, output: "", stderr: "Script failed",
+      exitCode: 1,
+      output: "",
+      stderr: "Script failed",
     } as never);
     const interaction = makeInteraction({
       options: {

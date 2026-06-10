@@ -66,7 +66,12 @@ function makeInteraction(opts: Record<string, unknown> = {}) {
     deferred: false,
     replied: false,
     channel: {
-      bulkDelete: vi.fn().mockResolvedValue(new Map([["m1", {}], ["m2", {}]])),
+      bulkDelete: vi.fn().mockResolvedValue(
+        new Map([
+          ["m1", {}],
+          ["m2", {}],
+        ]),
+      ),
       name: "general",
     },
     deferReply: vi.fn().mockResolvedValue(undefined),
@@ -94,19 +99,24 @@ describe("/whitelist command", () => {
   let execute: (i: never) => Promise<void>;
 
   beforeEach(async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({ id: "uuid-99", name: "Steve" }),
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({ id: "uuid-99", name: "Steve" }),
+      }),
+    );
     ({ execute } = await import("../src/commands/whitelist.js"));
   });
 
   it("whitelists a valid player and replies with success", async () => {
     const interaction = makeInteraction({
       options: {
-        getString: vi.fn().mockImplementation((n: string) =>
-          n === "username" ? "Steve" : null,
-        ),
+        getString: vi
+          .fn()
+          .mockImplementation((n: string) =>
+            n === "username" ? "Steve" : null,
+          ),
       },
     });
     await execute(interaction);
@@ -135,9 +145,11 @@ describe("/unwhitelist command", () => {
   it("removes a player and replies with success", async () => {
     const interaction = makeInteraction({
       options: {
-        getString: vi.fn().mockImplementation((n: string) =>
-          n === "username" ? "Steve" : null,
-        ),
+        getString: vi
+          .fn()
+          .mockImplementation((n: string) =>
+            n === "username" ? "Steve" : null,
+          ),
       },
     });
     await execute(interaction);
@@ -156,19 +168,24 @@ describe("/unwhitelist command", () => {
 describe("/verify command", () => {
   let execute: (i: never) => Promise<void>;
   beforeEach(async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({ id: "uuid-99", name: "Alex" }),
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({ id: "uuid-99", name: "Alex" }),
+      }),
+    );
     ({ execute } = await import("../src/commands/verify.js"));
   });
 
   it("verifies a player and replies with success", async () => {
     const interaction = makeInteraction({
       options: {
-        getString: vi.fn().mockImplementation((n: string) =>
-          n === "username" ? "Alex" : null,
-        ),
+        getString: vi
+          .fn()
+          .mockImplementation((n: string) =>
+            n === "username" ? "Alex" : null,
+          ),
       },
     });
     await execute(interaction);
@@ -197,7 +214,9 @@ describe("/whitelisted command", () => {
     const interaction = makeInteraction();
     await execute(interaction);
     expect(interaction.editReply).toHaveBeenCalledWith(
-      expect.objectContaining({ content: expect.stringContaining("No players") }),
+      expect.objectContaining({
+        content: expect.stringContaining("No players"),
+      }),
     );
   });
 
@@ -224,13 +243,19 @@ describe("/clear command", () => {
   });
 
   it("bulk-deletes messages and replies with count", async () => {
-    const deleted = new Map([["m1", {}], ["m2", {}]]);
+    const deleted = new Map([
+      ["m1", {}],
+      ["m2", {}],
+    ]);
     const interaction = makeInteraction({
       options: {
         getInteger: vi.fn().mockReturnValue(5),
         getString: vi.fn().mockReturnValue(null),
       },
-      channel: { bulkDelete: vi.fn().mockResolvedValue(deleted), name: "general" },
+      channel: {
+        bulkDelete: vi.fn().mockResolvedValue(deleted),
+        name: "general",
+      },
     });
     await execute(interaction);
     expect(interaction.editReply).toHaveBeenCalled();
@@ -253,16 +278,20 @@ describe("/map command", () => {
   });
 
   it("replies with error when map URL is not configured", async () => {
-    vi.mocked(await import("../src/utils/utils.js")).loadJson.mockResolvedValue({});
+    vi.mocked(await import("../src/utils/utils.js")).loadJson.mockResolvedValue(
+      {},
+    );
     const interaction = makeInteraction();
     await execute(interaction);
     expect(interaction.editReply).toHaveBeenCalled();
   });
 
   it("replies with map embed when URL is configured", async () => {
-    vi.mocked(await import("../src/utils/utils.js")).loadJson.mockResolvedValue({
-      commands: { map: { url: "https://map.example.com" } },
-    });
+    vi.mocked(await import("../src/utils/utils.js")).loadJson.mockResolvedValue(
+      {
+        commands: { map: { url: "https://map.example.com" } },
+      },
+    );
     const interaction = makeInteraction();
     await execute(interaction);
     expect(interaction.editReply).toHaveBeenCalled();
