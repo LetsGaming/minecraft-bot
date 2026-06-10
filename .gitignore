@@ -4,3 +4,4 @@ data/*
 !data/dailyRewards.json
 logs/
 dist/
+coverage/
