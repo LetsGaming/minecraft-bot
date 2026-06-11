@@ -1,21 +1,14 @@
-import path from "path";
 import {
   SlashCommandBuilder,
   MessageFlags,
   type ChatInputCommandInteraction,
 } from "discord.js";
-import { getRootDir, loadJson } from "../../../utils/utils.js";
+import {
+  loadDailyRewardsConfig,
+  loadClaimedDaily,
+} from "../../../utils/dailyStore.js";
 import { createErrorEmbed } from "../../../utils/embedUtils.js";
-import type {
-  DailyRewardsConfig,
-  StreakData,
-  NextBonusStreak,
-  UserClaimData,
-} from "../../../types/index.js";
-
-const baseDir = getRootDir();
-const claimedPath = path.resolve(baseDir, "data", "claimedDaily.json");
-const dailyRewardsPath = path.resolve(baseDir, "data", "dailyRewards.json");
+import type { StreakData, NextBonusStreak } from "../../../types/index.js";
 
 export const data = new SlashCommandBuilder()
   .setName("streak")
@@ -55,9 +48,7 @@ export async function execute(
 }
 
 async function getStreakData(userId: string): Promise<StreakData | null> {
-  const claimedDaily = (await loadJson(claimedPath).catch(
-    () => ({}),
-  )) as Record<string, UserClaimData>;
+  const claimedDaily = await loadClaimedDaily();
 
   if (!(userId in claimedDaily)) {
     return null;
@@ -74,9 +65,7 @@ async function getStreakData(userId: string): Promise<StreakData | null> {
 async function getNextBonusStreak(
   bonusStreak: number,
 ): Promise<NextBonusStreak | null> {
-  const dailyRewards = (await loadJson(dailyRewardsPath).catch(
-    () => ({}),
-  )) as DailyRewardsConfig;
+  const dailyRewards = await loadDailyRewardsConfig();
   if (
     !dailyRewards?.streakBonuses ||
     !Object.keys(dailyRewards.streakBonuses).length

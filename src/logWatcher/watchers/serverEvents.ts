@@ -1,8 +1,8 @@
 import { type Client } from "discord.js";
 import { createEmbed } from "../../utils/embedUtils.js";
-import { log } from "../../utils/logger.js";
 import type { ILogWatcher } from "../logWatcher.js";
 import type { GuildConfig } from "../../types/index.js";
+import { broadcastNotification } from "./notifyGuilds.js";
 
 const START_REGEX = /\[.+?\].*:\s+Done \([\d.]+s\)!/;
 const STOP_REGEX = /\[.+?\].*:\s+Stopping server/;
@@ -60,27 +60,16 @@ async function notifyEvent(
   color: number,
   description: string,
 ): Promise<void> {
-  for (const [, gcfg] of Object.entries(guildConfigs)) {
-    const notif = gcfg.notifications;
-    if (!notif?.channelId || !notif.events?.includes(event)) continue;
-
-    try {
-      const channel = await client.channels.fetch(notif.channelId);
-      if (!channel || !("send" in channel)) continue;
-
-      const embed = createEmbed({
+  await broadcastNotification(client, guildConfigs, {
+    serverId,
+    event,
+    logTag: "serverEvents",
+    buildEmbed: (withServerFooter) =>
+      createEmbed({
         title,
         description,
         color,
-        ...(Object.keys(guildConfigs).length > 1
-          ? { footer: { text: serverId } }
-          : {}),
-      });
-
-      await channel.send({ embeds: [embed] });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.error("serverEvents", `Failed: ${msg}`);
-    }
-  }
+        ...(withServerFooter ? { footer: { text: serverId } } : {}),
+      }),
+  });
 }

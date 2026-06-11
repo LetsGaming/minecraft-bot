@@ -14,7 +14,7 @@ There is no database. All runtime state is JSON under `data/` (the `bot_data` vo
 | `leaderboardSchedule.json` | leaderboard scheduler | Last post timestamp per guild |
 | `statusMessages.json` | status embed | Provisioned category/channel/message IDs per guild |
 | `uptimeHistory.json` | downtime monitor | Per server: array of `{t, up}` checks, capped at 10,080 entries |
-| `snapshots/<timestamp>.json` | leaderboard scheduler | Hourly stat snapshots (see below) |
+| `snapshots/<serverId>/<timestamp>.json` | leaderboard scheduler | Hourly stat snapshots, one directory per server (see below) |
 
 Everything is auto-created on first use. Deleting a file resets that feature's state and nothing else.
 
@@ -32,7 +32,7 @@ The rule from the guidelines follows from this: never `fs.writeFile` a state fil
 
 | Cache | Where | Lifetime | Invalidation |
 |---|---|---|---|
-| Whitelist per server | `utils.ts` | unbounded | `invalidateWhitelistCache(serverId)` (currently not wired to the whitelist commands; known issue) |
+| Whitelist per server | `utils.ts` | 60 s TTL | `invalidateWhitelistCache(serverId)` — called by `/whitelist`, `/verify`, and `/unwhitelist`; the TTL covers edits made outside the bot |
 | All player stats per server | `statUtils.ts` | 30 s TTL | TTL, plus explicit invalidation after snapshots and stat deletion |
 | Level name per server | `utils.ts` | unbounded | none (changes require restart) |
 | `/list` output per server | `utils.ts` | 500 ms | TTL |
@@ -42,7 +42,7 @@ The rule from the guidelines follows from this: never `fs.writeFile` a state fil
 
 ## Snapshots
 
-The leaderboard scheduler writes a full stat snapshot every hour to `data/snapshots/<epochMs>.json`:
+The leaderboard scheduler writes a full stat snapshot every hour per server to `data/snapshots/<serverId>/<epochMs>.json` (legacy loose files are migrated into the first server's directory on startup):
 
 ```json
 {

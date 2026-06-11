@@ -4,6 +4,7 @@ import { createPlayerEmbed } from "../../utils/embedUtils.js";
 import type { ILogWatcher } from "../logWatcher.js";
 import type { ServerInstance } from "../../utils/server.js";
 import type { GuildConfig } from "../../types/index.js";
+import { sanitizeForConsole } from "../../utils/sanitize.js";
 
 const CHAT_REGEX = /\[.+?\]: <(?:\[AFK\]\s*)?([^>]+)>\s+(.+)/;
 
@@ -51,7 +52,7 @@ export function registerChatBridge(
 export function setupDiscordToMc(
   client: Client,
   guildConfigs: Record<string, GuildConfig>,
-  getServerInstance: (id: string) => ServerInstance | null,
+  getServerInstance: (id: string | undefined) => ServerInstance | null,
 ): void {
   client.on("messageCreate", async (msg) => {
     if (msg.author.bot) return;
@@ -62,22 +63,20 @@ export function setupDiscordToMc(
     if (!gcfg?.chatBridge?.channelId) return;
     if (msg.channel.id !== gcfg.chatBridge.channelId) return;
 
-    const serverId = gcfg.chatBridge.server ?? "default";
+    // M-06: fall back to the guild's configured default server, not the
+    // literal ID "default" (no instance is ever named that in multi-server
+    // configs). If neither is set, the resolver picks the first instance.
+    const serverId = gcfg.chatBridge.server ?? gcfg.defaultServer;
     const server = getServerInstance(serverId);
     if (!server) return;
 
-    // B-08: strip control characters and newlines from both the display name
-    // and message content before forwarding to the server. A Discord display
-    // name containing \r or other control codes could inject extra commands
-    // via the screen fallback path. Also cap the combined length so the
-    // resulting /say command stays well within Minecraft's 256-char limit.
-    const safeName = msg.author.displayName
-      .replace(/[^\x20-\x7E]/g, "") // strip non-printable / non-ASCII
-      .slice(0, 32);
-    const safeContent = msg.content
-      .replace(/[^\x20-\x7E]/g, "")
-      .replace(/"/g, '\\"')
-      .slice(0, 160); // 32 (name) + 7 (/say []) + 160 + margin ≤ 256
+    // B-08 / H-02 / M-07: strip control characters (incl. \r\n which could
+    // inject extra commands via the screen fallback path) and cap lengths,
+    // while keeping printable Unicode so umlauts/emoji survive the bridge.
+    const { name: safeName, message: safeContent } = sanitizeForConsole(
+      msg.author.displayName,
+      msg.content,
+    );
     await server.sendCommand(`/say [${safeName}] ${safeContent}`);
   });
 }

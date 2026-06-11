@@ -8,6 +8,7 @@ import {
   type ChatInputCommandInteraction,
 } from "discord.js";
 import { getLinkedAccount } from "../../utils/linkUtils.js";
+import { isValidMcName } from "../../utils/sanitize.js";
 import { resolveServer } from "../../utils/guildRouter.js";
 import { getOnlinePlayers } from "../../utils/playerUtils.js";
 import {
@@ -35,8 +36,17 @@ export async function execute(
   const userId = interaction.user.id;
   const server = resolveServer(interaction);
 
+  // H-02/L-03: validate before the name reaches a console command or URL.
+  if (!isValidMcName(mcname)) {
+    await interaction.reply({
+      embeds: [createErrorEmbed(`\`${mcname}\` is not a valid username.`)],
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
   const res = await fetch(
-    `https://api.mojang.com/users/profiles/minecraft/${mcname}`,
+    `https://api.mojang.com/users/profiles/minecraft/${encodeURIComponent(mcname)}`,
   );
   if (!res.ok) {
     await interaction.reply({
@@ -54,7 +64,7 @@ export async function execute(
   });
 
   const button = new ButtonBuilder()
-    .setCustomId(`givehead_${mcname}`)
+    .setCustomId(`givehead_${name}`)
     .setLabel("🎁 Give to me")
     .setStyle(ButtonStyle.Success);
 
@@ -73,7 +83,7 @@ export async function execute(
   });
 
   collector.on("collect", async (i) => {
-    if (i.customId !== `givehead_${mcname}`) return;
+    if (i.customId !== `givehead_${name}`) return;
 
     if (i.user.id !== userId) {
       await i.reply({
@@ -101,11 +111,12 @@ export async function execute(
       return;
     }
 
+    // L-04: use the canonical name returned by Mojang, not the raw input.
     await server.sendCommand(
-      `give ${linkedUsername} player_head[profile={name:"${mcname}"}]`,
+      `give ${linkedUsername} player_head[profile={name:"${name}"}]`,
     );
     await i.reply({
-      content: `✅ Given ${mcname}'s head to ${linkedUsername}.`,
+      content: `✅ Given ${name}'s head to ${linkedUsername}.`,
       flags: MessageFlags.Ephemeral,
     });
   });

@@ -74,7 +74,7 @@ async function runPlayer(
 ): Promise<void> {
   await interaction.deferReply();
 
-  const server = resolveServer(interaction) ?? undefined;
+  const server = resolveServer(interaction);
   const playerName = interaction.options.getString("player", true);
   const filterStat = interaction.options.getString("stat");
 
@@ -151,7 +151,7 @@ async function runDaily(
 ): Promise<void> {
   await interaction.deferReply();
 
-  const server = resolveServer(interaction) ?? undefined;
+  const server = resolveServer(interaction);
   const playerName = interaction.options.getString("player", true);
   const filterStat = interaction.options.getString("stat");
 
@@ -182,7 +182,10 @@ async function runDaily(
       return;
     }
 
-    const snapshot = await getSnapshotForDailyDiff(Date.now() - DAY_MS);
+    const snapshot = await getSnapshotForDailyDiff(
+      server.id,
+      Date.now() - DAY_MS,
+    );
     if (!snapshot || !snapshot.flatStats) {
       await interaction.editReply({
         embeds: [

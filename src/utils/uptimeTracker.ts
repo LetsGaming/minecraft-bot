@@ -7,8 +7,14 @@ export type { UptimeStats };
 
 const STATE_PATH = path.resolve(getRootDir(), "data", "uptimeHistory.json");
 
-/** Maximum number of check entries to retain per server (~7 days at 1min intervals). */
-const MAX_ENTRIES = 10_080;
+/**
+ * Maximum number of check entries to retain per server.
+ * H-06: the /uptime command displays a "Last 30 days" figure, so retention
+ * must cover 30 days (43,200 checks at one per minute). The old cap of
+ * 10,080 (~7 days) silently turned the 30d row into a 7d number. At ~20
+ * bytes/entry this is ~860 KB per server in uptimeHistory.json.
+ */
+const MAX_ENTRIES = 43_200;
 
 interface CheckEntry {
   /** Unix timestamp in ms */

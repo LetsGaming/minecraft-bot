@@ -24,7 +24,7 @@ export async function execute(
   await interaction.deferReply();
 
   try {
-    const server = resolveServer(interaction) ?? undefined;
+    const server = resolveServer(interaction);
     const players = await loadWhitelist(false, server);
 
     if (!Array.isArray(players) || players.length === 0) {

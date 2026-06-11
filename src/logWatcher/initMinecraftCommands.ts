@@ -3,7 +3,11 @@ import { fileURLToPath } from "url";
 import { readdirSync, statSync } from "fs";
 import { LogWatcher, getGlobalWatchers } from "./logWatcher.js";
 import { RemoteLogWatcher } from "./RemoteLogWatcher.js";
-import { getAllInstances, getServerInstance } from "../utils/server.js";
+import {
+  getAllInstances,
+  getFirstInstance,
+  getServerInstance,
+} from "../utils/server.js";
 import { loadConfig } from "../config.js";
 import { log } from "../utils/logger.js";
 import type { Client } from "discord.js";
@@ -93,7 +97,12 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
   }
 
   // ── 3. Discord → MC chat bridge ──
-  setupDiscordToMc(client, guildConfigs, getServerInstance);
+  // M-06: when neither chatBridge.server nor the guild defaultServer is
+  // set, route to the first configured instance (legacy single-server
+  // behaviour) instead of looking up a literal "default" ID.
+  setupDiscordToMc(client, guildConfigs, (id) =>
+    id ? getServerInstance(id) : getFirstInstance(),
+  );
 
   // ── 4. Scheduled leaderboard auto-poster ──
   startLeaderboardScheduler(client, guildConfigs);

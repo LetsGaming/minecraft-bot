@@ -13,7 +13,9 @@ import path from "path";
 // IMPORTANT: vi.mock is hoisted before const declarations, so the factory
 // must use a plain string literal — not a variable — for getRootDir's return value.
 const SNAP_ROOT = "/tmp/mc-bot-snap-test-" + process.pid;
-const SNAPSHOTS_DIR = SNAP_ROOT + "/data/snapshots";
+// C-01: snapshots are now stored per server under data/snapshots/<serverId>/
+const SERVER_ID = "survival";
+const SNAPSHOTS_DIR = SNAP_ROOT + "/data/snapshots/" + SERVER_ID;
 
 vi.mock("../src/utils/utils.js", () => ({
   // String literals inline — no TDZ risk
@@ -37,7 +39,9 @@ import {
   getSnapshotClosestTo,
   getSnapshotForDailyDiff,
   cleanupSnapshots,
+  migrateLegacySnapshots,
 } from "../src/utils/snapshotUtils.js";
+import { mkdir as mkdirP } from "fs/promises";
 import type { SnapshotData } from "../src/types/index.js";
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -90,13 +94,13 @@ beforeEach(async () => {
 
 describe("getSnapshotClosestTo", () => {
   it("returns null when no snapshots exist", async () => {
-    expect(await getSnapshotClosestTo(Date.now())).toBeNull();
+    expect(await getSnapshotClosestTo(SERVER_ID, Date.now())).toBeNull();
   });
 
   it("returns the only snapshot when there is exactly one", async () => {
     const ts = Date.now() - 1000;
     await writeSnapshot(ts);
-    const result = await getSnapshotClosestTo(Date.now());
+    const result = await getSnapshotClosestTo(SERVER_ID, Date.now());
     expect(result).not.toBeNull();
     expect(result!.timestamp).toBe(ts);
   });
@@ -107,7 +111,7 @@ describe("getSnapshotClosestTo", () => {
     await writeSnapshot(now - 1000); // closer
     await writeSnapshot(now + 5000); // after target — excluded
 
-    const result = await getSnapshotClosestTo(now);
+    const result = await getSnapshotClosestTo(SERVER_ID, now);
     expect(result!.timestamp).toBe(now - 1000);
   });
 
@@ -117,14 +121,14 @@ describe("getSnapshotClosestTo", () => {
     await writeSnapshot(oldest);
     await writeSnapshot(now + 2000);
 
-    const result = await getSnapshotClosestTo(now - 10000);
+    const result = await getSnapshotClosestTo(SERVER_ID, now - 10000);
     expect(result!.timestamp).toBe(oldest);
   });
 
   it("parses JSON and returns a full SnapshotData object", async () => {
     const ts = Date.now() - 500;
     await writeSnapshot(ts);
-    const result = await getSnapshotClosestTo(Date.now());
+    const result = await getSnapshotClosestTo(SERVER_ID, Date.now());
     expect(result).toHaveProperty("timestamp");
     expect(result).toHaveProperty("players");
     expect(result!.version).toBe(2);
@@ -135,14 +139,14 @@ describe("getSnapshotClosestTo", () => {
 
 describe("getSnapshotForDailyDiff", () => {
   it("returns null when no snapshots exist", async () => {
-    expect(await getSnapshotForDailyDiff(Date.now() - 86400_000)).toBeNull();
+    expect(await getSnapshotForDailyDiff(SERVER_ID, Date.now() - 86400_000)).toBeNull();
   });
 
   it("returns null when all snapshots are older than the target", async () => {
     const now = Date.now();
     await writeSnapshot(now - 100_000);
 
-    const result = await getSnapshotForDailyDiff(now - 1000);
+    const result = await getSnapshotForDailyDiff(SERVER_ID, now - 1000);
     expect(result).toBeNull();
   });
 
@@ -151,7 +155,7 @@ describe("getSnapshotForDailyDiff", () => {
     const target = now - 86400_000;
     await writeSnapshot(target + 1000, 2, true);
 
-    const result = await getSnapshotForDailyDiff(target);
+    const result = await getSnapshotForDailyDiff(SERVER_ID, target);
     expect(result).not.toBeNull();
     expect(result!.flatStats).toBeDefined();
   });
@@ -161,7 +165,7 @@ describe("getSnapshotForDailyDiff", () => {
     const target = now - 86400_000;
     await writeSnapshot(target + 1000, 1, false);
 
-    const result = await getSnapshotForDailyDiff(target);
+    const result = await getSnapshotForDailyDiff(SERVER_ID, target);
     expect(result).toBeNull();
   });
 
@@ -173,7 +177,7 @@ describe("getSnapshotForDailyDiff", () => {
     await writeSnapshot(ts1, 2, true);
     await writeSnapshot(ts2, 2, true);
 
-    const result = await getSnapshotForDailyDiff(target);
+    const result = await getSnapshotForDailyDiff(SERVER_ID, target);
     expect(result!.timestamp).toBe(ts1);
   });
 });
@@ -182,14 +186,14 @@ describe("getSnapshotForDailyDiff", () => {
 
 describe("cleanupSnapshots", () => {
   it("does not throw when directory is empty", async () => {
-    await expect(cleanupSnapshots()).resolves.toBeUndefined();
+    await expect(cleanupSnapshots(SERVER_ID)).resolves.toBeUndefined();
   });
 
   it("keeps the newest snapshot even if very old (B-04 protection)", async () => {
     const veryOld = Date.now() - 32 * 24 * 60 * 60 * 1000;
     await writeSnapshot(veryOld);
 
-    await cleanupSnapshots();
+    await cleanupSnapshots(SERVER_ID);
 
     const remaining = await listSnapshotFiles();
     expect(remaining).toHaveLength(1);
@@ -199,7 +203,7 @@ describe("cleanupSnapshots", () => {
     const recent = Date.now() - 60_000;
     await writeSnapshot(recent);
 
-    await cleanupSnapshots();
+    await cleanupSnapshots(SERVER_ID);
 
     const remaining = await listSnapshotFiles();
     expect(remaining).toHaveLength(1);
@@ -210,10 +214,70 @@ describe("cleanupSnapshots", () => {
     await writeSnapshot(dayStart + 1000); // earlier on that day
     await writeSnapshot(dayStart + 5000); // later — should win
 
-    await cleanupSnapshots();
+    await cleanupSnapshots(SERVER_ID);
 
     const remaining = await listSnapshotFiles();
     expect(remaining).toHaveLength(1);
     expect(remaining[0]).toBe(`${dayStart + 5000}.json`);
+  });
+});
+
+// ── C-01: per-server isolation ─────────────────────────────────────────────
+
+describe("per-server snapshot isolation (C-01)", () => {
+  it("does not return another server's snapshot as a baseline", async () => {
+    const now = Date.now();
+    // Snapshot for "survival" (the default test server)
+    await writeSnapshot(now - 5000);
+
+    // Snapshot for a second server at a closer timestamp
+    const otherDir = SNAP_ROOT + "/data/snapshots/creative";
+    await mkdirP(otherDir, { recursive: true });
+    const otherData: SnapshotData = {
+      version: 2,
+      timestamp: now - 1000,
+      players: { "uuid-other": { playtime: 999 } },
+      flatStats: { "uuid-other": { "minecraft:custom.minecraft:play_time": 999 } },
+    };
+    await writeFile(
+      path.join(otherDir, `${now - 1000}.json`),
+      JSON.stringify(otherData),
+    );
+
+    const result = await getSnapshotClosestTo(SERVER_ID, now);
+    // Must be survival's snapshot — never the closer-in-time creative one
+    expect(result?.players["uuid-1"]).toBeDefined();
+    expect(result?.players["uuid-other"]).toBeUndefined();
+
+    const other = await getSnapshotClosestTo("creative", now);
+    expect(other?.players["uuid-other"]).toBeDefined();
+    expect(other?.players["uuid-1"]).toBeUndefined();
+
+    await rm(otherDir, { recursive: true, force: true });
+  });
+});
+
+// ── C-01: legacy migration ─────────────────────────────────────────────────
+
+describe("migrateLegacySnapshots", () => {
+  it("moves loose snapshot files into the first server's directory", async () => {
+    const ts = Date.now() - 12345;
+    const looseFile = path.join(SNAP_ROOT, "data", "snapshots", `${ts}.json`);
+    await writeFile(
+      looseFile,
+      JSON.stringify({ version: 2, timestamp: ts, players: {}, flatStats: {} }),
+    );
+
+    await migrateLegacySnapshots(SERVER_ID);
+
+    const migrated = await listSnapshotFiles();
+    expect(migrated).toContain(`${ts}.json`);
+    // Loose file is gone
+    const base = await readdir(path.join(SNAP_ROOT, "data", "snapshots"));
+    expect(base.filter((f) => f.endsWith(".json"))).toHaveLength(0);
+  });
+
+  it("is a no-op when there is nothing to migrate", async () => {
+    await expect(migrateLegacySnapshots(SERVER_ID)).resolves.toBeUndefined();
   });
 });

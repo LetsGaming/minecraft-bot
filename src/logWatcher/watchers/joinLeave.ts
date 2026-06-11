@@ -1,14 +1,17 @@
 import { type Client } from "discord.js";
 import { createPlayerEmbed } from "../../utils/embedUtils.js";
-import { log } from "../../utils/logger.js";
 import type { ILogWatcher } from "../logWatcher.js";
 import type { GuildConfig } from "../../types/index.js";
+import { broadcastNotification, PLAYER_NAME } from "./notifyGuilds.js";
 
-// B-11: \w+ only matches [a-zA-Z0-9_] and silently drops Bedrock players
-// whose names are prefixed with "." by Geyser/Floodgate (e.g. ".BedrockName").
-// Using [\w.]+ captures both vanilla and Bedrock-prefixed names.
-const JOIN_REGEX = /\[.+?\].*:\s+([\w.]+) joined the game/;
-const LEAVE_REGEX = /\[.+?\].*:\s+([\w.]+) left the game/;
+// B-11/M-01: PLAYER_NAME captures Bedrock names prefixed with "." by
+// Geyser/Floodgate in addition to vanilla [a-zA-Z0-9_] names.
+const JOIN_REGEX = new RegExp(
+  String.raw`\[.+?\].*:\s+(${PLAYER_NAME}) joined the game`,
+);
+const LEAVE_REGEX = new RegExp(
+  String.raw`\[.+?\].*:\s+(${PLAYER_NAME}) left the game`,
+);
 
 export function registerJoinLeaveWatcher(
   logWatcher: ILogWatcher,
@@ -18,27 +21,11 @@ export function registerJoinLeaveWatcher(
   const serverId = logWatcher.server.id;
 
   logWatcher.register(JOIN_REGEX, async (match) => {
-    await notify(
-      client,
-      guildConfigs,
-      serverId,
-      match[1]!,
-      "join",
-      0x55ff55,
-      "joined the server",
-    );
+    await notify(client, guildConfigs, serverId, match[1]!, "join");
   });
 
   logWatcher.register(LEAVE_REGEX, async (match) => {
-    await notify(
-      client,
-      guildConfigs,
-      serverId,
-      match[1]!,
-      "leave",
-      0xff5555,
-      "left the server",
-    );
+    await notify(client, guildConfigs, serverId, match[1]!, "leave");
   });
 }
 
@@ -47,32 +34,19 @@ async function notify(
   guildConfigs: Record<string, GuildConfig>,
   serverId: string,
   player: string,
-  event: string,
-  color: number,
-  text: string,
+  event: "join" | "leave",
 ): Promise<void> {
-  for (const [, gcfg] of Object.entries(guildConfigs)) {
-    const notif = gcfg.notifications;
-    if (!notif?.channelId) continue;
-    if (!notif.events?.includes(event)) continue;
-
-    try {
-      const channel = await client.channels.fetch(notif.channelId);
-      if (!channel || !("send" in channel)) continue;
-
-      const embed = createPlayerEmbed(player, {
-        title: event === "join" ? "Player Joined" : "Player Left",
-        description: `${player} ${text}`,
-        color,
-        ...(Object.keys(guildConfigs).length > 1
-          ? { footer: { text: serverId } }
-          : {}),
-      });
-
-      await channel.send({ embeds: [embed] });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.error("joinLeave", `Failed: ${msg}`);
-    }
-  }
+  const isJoin = event === "join";
+  await broadcastNotification(client, guildConfigs, {
+    serverId,
+    event,
+    logTag: "joinLeave",
+    buildEmbed: (withServerFooter) =>
+      createPlayerEmbed(player, {
+        title: isJoin ? "Player Joined" : "Player Left",
+        description: `${player} ${isJoin ? "joined" : "left"} the server`,
+        color: isJoin ? 0x55ff55 : 0xff5555,
+        ...(withServerFooter ? { footer: { text: serverId } } : {}),
+      }),
+  });
 }

@@ -1,6 +1,13 @@
 {
   "name": "minecraft-bot",
   "version": "3.3.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LetsGaming/minecraft-bot.git"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "type": "module",
   "main": "dist/index.js",
   "scripts": {

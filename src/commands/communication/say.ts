@@ -2,6 +2,7 @@ import { SlashCommandBuilder } from "discord.js";
 import { resolveServer } from "../../utils/guildRouter.js";
 
 import { withErrorHandling } from "../middleware.js";
+import { sanitizeForConsole } from "../../utils/sanitize.js";
 
 export const data = new SlashCommandBuilder()
   .setName("say")
@@ -19,7 +20,16 @@ export const execute = withErrorHandling(
     const server = resolveServer(interaction);
     if (!server) throw new Error("Server not found.");
 
-    const mcMessage = `[${interaction.user.displayName}] ${message}`;
+    // H-02: /say is open to every user and its input ends up on the server
+    // console — a \r/\n in the display name or message could inject a second
+    // command via the screen `stuff` path. Route through the same
+    // sanitization the chat bridge uses (B-08).
+    const { name, message: safeMessage } = sanitizeForConsole(
+      interaction.user.displayName,
+      message,
+    );
+
+    const mcMessage = `[${name}] ${safeMessage}`;
     await server.sendCommand(`/say ${mcMessage}`);
     await interaction.editReply(`✅ Sent to **${server.id}**: "${mcMessage}"`);
   },

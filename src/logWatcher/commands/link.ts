@@ -72,6 +72,29 @@ const cmd = defineCommand({
       return;
     }
 
+    // M-08: one Minecraft account must not be linkable by multiple Discord
+    // accounts — daily-reward cooldowns are per Discord user, so a second
+    // link would double /daily claims. Reject if another Discord account
+    // already owns this username (case-insensitive).
+    const lowerName = username.toLowerCase();
+    const existingOwner = Object.entries(linked).find(
+      ([ownerId, mcName]) =>
+        ownerId !== discordId && mcName.toLowerCase() === lowerName,
+    );
+    if (existingOwner) {
+      log.warn(
+        "link",
+        `Rejected link of ${username}: already linked to another Discord account`,
+      );
+      if (user)
+        user
+          .send(
+            `❌ **${username}** is already linked to a different Discord account. Ask an admin to unlink it first if this is your account.`,
+          )
+          .catch(() => {});
+      return;
+    }
+
     linked[discordId] = username;
     // Mark the code as confirmed to prevent reuse until it expires
     // Use the 'entry' reference which TS knows is defined

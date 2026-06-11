@@ -371,8 +371,21 @@ export function initServers(serversConfig: Record<string, ServerConfig>): void {
   }
 }
 
+/**
+ * Strict lookup: returns the instance with exactly this ID, or null.
+ *
+ * H-01: this used to fall back to the first configured instance for any
+ * unknown ID, which meant `/server stop server:survvial` (typo) silently
+ * stopped the *first* server. Callers that legitimately want "any server"
+ * semantics must use getFirstInstance() explicitly.
+ */
 export function getServerInstance(serverId: string): ServerInstance | null {
-  return instances.get(serverId) ?? instances.values().next().value ?? null;
+  return instances.get(serverId) ?? null;
+}
+
+/** Returns the first registered server instance, or null if none exist. */
+export function getFirstInstance(): ServerInstance | null {
+  return instances.values().next().value ?? null;
 }
 
 export function getAllInstances(): ServerInstance[] {
@@ -389,5 +402,5 @@ export function getGuildServer(
     const inst = instances.get(guild.defaultServer);
     if (inst) return inst;
   }
-  return instances.values().next().value ?? null;
+  return getFirstInstance();
 }

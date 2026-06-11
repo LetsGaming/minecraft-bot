@@ -13,7 +13,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { loadConfig, getServerIds, watchConfig } from "./config.js";
 import { consumeToken, cooldownSeconds } from "./utils/rateLimiter.js";
-import { initServers } from "./utils/server.js";
+import { initServers, getAllInstances } from "./utils/server.js";
+import { migrateLegacySnapshots } from "./utils/snapshotUtils.js";
 import { tryResolveServer } from "./utils/guildRouter.js";
 import { initMinecraftCommands } from "./logWatcher/initMinecraftCommands.js";
 import { log } from "./utils/logger.js";
@@ -23,11 +24,35 @@ import type { BotCommand, BotClient } from "./types/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const config = loadConfig();
-// Re-cache automatically when config.json is edited on disk
-watchConfig();
+// Re-cache automatically when config.json is edited on disk.
+// M-05: added/removed servers cannot be applied without a restart — the
+// instance registry and log watchers are wired once at startup. Log it
+// honestly instead of silently routing the "new" server to the fallback.
+watchConfig((fresh) => {
+  const registered = new Set(getAllInstances().map((s) => s.id));
+  const configured = Object.keys(fresh.servers);
+  const added = configured.filter((id) => !registered.has(id));
+  const removed = [...registered].filter((id) => !configured.includes(id));
+  if (added.length > 0 || removed.length > 0) {
+    log.warn(
+      "config",
+      `Server list changed (added: [${added.join(", ")}], removed: [${removed.join(", ")}]) — restart required to apply server changes.`,
+    );
+  }
+});
 
 // Initialize all server instances
 initServers(config.servers);
+
+// C-01: move legacy loose snapshot files into the first server's directory
+// so existing baselines survive the per-server snapshot layout change.
+const firstServerId = Object.keys(config.servers)[0];
+if (firstServerId) {
+  migrateLegacySnapshots(firstServerId).catch((err) => {
+    const msg = err instanceof Error ? err.message : String(err);
+    log.warn("snapshots", `Legacy snapshot migration failed: ${msg}`);
+  });
+}
 
 // Create client with intents for chat bridge
 const client = new Client({

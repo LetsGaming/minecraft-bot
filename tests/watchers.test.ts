@@ -274,6 +274,17 @@ describe("deaths watcher — regex patterns", () => {
     });
   });
 
+  it("DEATH regex matches a Bedrock-prefixed name (M-01)", () => {
+    const watcher = makeLogWatcher();
+    registerDeathWatcher(watcher, makeClient(makeChannel()), {});
+    const deathRegex = watcher._handlers[0]!.regex;
+    const m = deathRegex.exec(
+      "[12:00:00] [INFO]: .BedrockPlayer was slain by Zombie",
+    );
+    expect(m).not.toBeNull();
+    expect(m![1]).toBe(".BedrockPlayer");
+  });
+
   it("DEATH regex does NOT match a join line", () => {
     const watcher = makeLogWatcher();
     registerDeathWatcher(watcher, makeClient(makeChannel()), {});
@@ -430,6 +441,19 @@ describe("advancements watcher — regex patterns", () => {
   });
 });
 
+describe("advancements watcher — Bedrock names (M-01)", () => {
+  it("ADV regex matches a Bedrock-prefixed name", () => {
+    const watcher = makeLogWatcher();
+    registerAdvancementWatcher(watcher, makeClient(makeChannel()), {});
+    const advRegex = watcher._handlers[0]!.regex;
+    const m = advRegex.exec(
+      "[12:00:00] [INFO]: .BedrockPlayer has made the advancement [Stone Age]",
+    );
+    expect(m).not.toBeNull();
+    expect(m![1]).toBe(".BedrockPlayer");
+  });
+});
+
 describe("advancements watcher — handler invocation", () => {
   it("sends advancement embed when advancement event is enabled", async () => {
     const channel = makeChannel();
@@ -461,5 +485,51 @@ describe("advancements watcher — handler invocation", () => {
     await watcher._handlers[0]!.handler(match, client, watcher.server);
 
     expect(channel.send).not.toHaveBeenCalled();
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// H-04: per-server notification filter
+// ══════════════════════════════════════════════════════════════════════════════
+
+describe("notification server filter (H-04)", () => {
+  const scopedConfigs = {
+    guild1: {
+      notifications: {
+        channelId: "ch1",
+        events: ["join", "death"],
+        server: "survival",
+      },
+    },
+  };
+
+  it("skips events from servers the guild did not subscribe to", async () => {
+    const channel = makeChannel();
+    const client = makeClient(channel);
+    const watcher = makeLogWatcher("creative"); // different server
+    registerJoinLeaveWatcher(watcher, client, scopedConfigs);
+
+    const joinRegex = watcher._handlers[0]!.regex;
+    const match = joinRegex.exec(
+      "[12:00:00] [INFO]: Steve joined the game",
+    )!;
+    await watcher._handlers[0]!.handler(match, client, watcher.server);
+
+    expect(channel.send).not.toHaveBeenCalled();
+  });
+
+  it("delivers events from the subscribed server", async () => {
+    const channel = makeChannel();
+    const client = makeClient(channel);
+    const watcher = makeLogWatcher("survival");
+    registerJoinLeaveWatcher(watcher, client, scopedConfigs);
+
+    const joinRegex = watcher._handlers[0]!.regex;
+    const match = joinRegex.exec(
+      "[12:00:00] [INFO]: Steve joined the game",
+    )!;
+    await watcher._handlers[0]!.handler(match, client, watcher.server);
+
+    expect(channel.send).toHaveBeenCalledOnce();
   });
 });

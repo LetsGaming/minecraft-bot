@@ -152,6 +152,42 @@ describe("logWatcher link handler", () => {
     expect(send).toHaveBeenCalledWith(expect.stringContaining("expired"));
   });
 
+  it("rejects linking a Minecraft account already owned by another Discord user (M-08)", async () => {
+    const linkUtils = await import("../src/utils/linkUtils.js");
+    vi.mocked(linkUtils.loadLinkCodes).mockResolvedValue({
+      ABCD1234: {
+        discordId: "discord-2",
+        expires: Date.now() + 60_000,
+        confirmed: false,
+      },
+    } as never);
+    // "steve" (different casing) is already linked to discord-1
+    vi.mocked(linkUtils.loadLinkedAccounts).mockResolvedValue({
+      "discord-1": "steve",
+    } as never);
+
+    const mod = await import("../src/logWatcher/commands/link.js");
+    await mod.init();
+
+    const dm = vi.fn().mockResolvedValue(undefined);
+    const mockClient = {
+      users: { cache: new Map([["discord-2", { send: dm }]]) },
+    };
+    await mod.handler(
+      "Steve",
+      { code: "ABCD1234" },
+      mockClient as never,
+      null as never,
+    );
+
+    // The second Discord account must NOT be linked
+    const calls = vi.mocked(linkUtils.saveLinkedAccounts).mock.calls;
+    for (const [saved] of calls) {
+      expect((saved as Record<string, string>)["discord-2"]).toBeUndefined();
+    }
+    expect(dm).toHaveBeenCalledWith(expect.stringContaining("already linked"));
+  });
+
   it("rate-limits rapid successive attempts from same player", async () => {
     const { handler } = await loadModule({
       VALID001: {

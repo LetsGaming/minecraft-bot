@@ -12,7 +12,16 @@ import type { ServerInstance } from "./server.js";
 import { log } from "./logger.js";
 import type { SnapshotData } from "../types/index.js";
 
-const SNAPSHOTS_DIR = path.resolve(getRootDir(), "data", "snapshots");
+// C-01: snapshots are stored per server (data/snapshots/<serverId>/<ts>.json)
+// so multi-server setups never diff one server's players against another
+// server's baseline. Legacy loose files (data/snapshots/<ts>.json) are moved
+// into the first server's directory on startup — see migrateLegacySnapshots().
+const SNAPSHOTS_BASE_DIR = path.resolve(getRootDir(), "data", "snapshots");
+
+function snapshotsDirFor(serverId: string): string {
+  return path.join(SNAPSHOTS_BASE_DIR, serverId);
+}
+
 const MAX_AGE_MS = 31 * 24 * 60 * 60 * 1000; // 31 days
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -54,9 +63,10 @@ function flattenedToMap(
  * full flattened stat map (used for /stats daily diffs).
  */
 export async function takeSnapshot(
-  server?: ServerInstance,
+  server: ServerInstance,
 ): Promise<SnapshotData> {
-  await fsPromises.mkdir(SNAPSHOTS_DIR, { recursive: true });
+  const dir = snapshotsDirFor(server.id);
+  await fsPromises.mkdir(dir, { recursive: true });
 
   const allStats = await loadAllStats(server);
   const players: Record<string, Record<string, number>> = {};
@@ -69,7 +79,7 @@ export async function takeSnapshot(
   }
 
   const timestamp = Date.now();
-  const filePath = path.join(SNAPSHOTS_DIR, `${timestamp}.json`);
+  const filePath = path.join(dir, `${timestamp}.json`);
   const payload: SnapshotData = {
     version: SNAPSHOT_VERSION,
     timestamp,
@@ -83,10 +93,10 @@ export async function takeSnapshot(
 
   log.info(
     "snapshots",
-    `Snapshot taken (${Object.keys(players).length} players, v${SNAPSHOT_VERSION})`,
+    `Snapshot taken for ${server.id} (${Object.keys(players).length} players, v${SNAPSHOT_VERSION})`,
   );
 
-  await cleanupSnapshots();
+  await cleanupSnapshots(server.id);
 
   return payload;
 }
@@ -99,11 +109,13 @@ export async function takeSnapshot(
  * Returns null only if no snapshots exist at all.
  */
 export async function getSnapshotClosestTo(
+  serverId: string,
   targetTimestamp: number,
 ): Promise<SnapshotData | null> {
-  await fsPromises.mkdir(SNAPSHOTS_DIR, { recursive: true });
+  const dir = snapshotsDirFor(serverId);
+  await fsPromises.mkdir(dir, { recursive: true });
 
-  const files = await fsPromises.readdir(SNAPSHOTS_DIR);
+  const files = await fsPromises.readdir(dir);
   const timestamps = files
     .filter((f) => f.endsWith(".json"))
     .map((f) => parseInt(f.replace(".json", ""), 10))
@@ -124,7 +136,7 @@ export async function getSnapshotClosestTo(
   // all-time stats.
   if (closest === null) closest = timestamps[0]!;
 
-  const filePath = path.join(SNAPSHOTS_DIR, `${closest}.json`);
+  const filePath = path.join(dir, `${closest}.json`);
   const raw = await fsPromises.readFile(filePath, "utf-8");
   return JSON.parse(raw) as SnapshotData;
 }
@@ -145,11 +157,13 @@ export async function getSnapshotClosestTo(
  * diff".
  */
 export async function getSnapshotForDailyDiff(
+  serverId: string,
   targetTimestamp: number,
 ): Promise<SnapshotData | null> {
-  await fsPromises.mkdir(SNAPSHOTS_DIR, { recursive: true });
+  const dir = snapshotsDirFor(serverId);
+  await fsPromises.mkdir(dir, { recursive: true });
 
-  const files = await fsPromises.readdir(SNAPSHOTS_DIR);
+  const files = await fsPromises.readdir(dir);
   const timestamps = files
     .filter((f) => f.endsWith(".json"))
     .map((f) => parseInt(f.replace(".json", ""), 10))
@@ -159,7 +173,7 @@ export async function getSnapshotForDailyDiff(
   if (timestamps.length === 0) return null;
 
   const tryLoad = async (ts: number): Promise<SnapshotData | null> => {
-    const filePath = path.join(SNAPSHOTS_DIR, `${ts}.json`);
+    const filePath = path.join(dir, `${ts}.json`);
     try {
       const raw = await fsPromises.readFile(filePath, "utf-8");
       const data = JSON.parse(raw) as SnapshotData;
@@ -193,10 +207,11 @@ interface SnapshotFileEntry {
 /**
  * Clean up old snapshots to avoid wasting storage.
  */
-export async function cleanupSnapshots(): Promise<void> {
-  await fsPromises.mkdir(SNAPSHOTS_DIR, { recursive: true });
+export async function cleanupSnapshots(serverId: string): Promise<void> {
+  const dir = snapshotsDirFor(serverId);
+  await fsPromises.mkdir(dir, { recursive: true });
 
-  const files = await fsPromises.readdir(SNAPSHOTS_DIR);
+  const files = await fsPromises.readdir(dir);
   const entries: SnapshotFileEntry[] = files
     .filter((f) => f.endsWith(".json"))
     .map((f) => ({ file: f, timestamp: parseInt(f.replace(".json", ""), 10) }))
@@ -243,12 +258,59 @@ export async function cleanupSnapshots(): Promise<void> {
     }
 
     for (const e of toDelete) {
-      await fsPromises.unlink(path.join(SNAPSHOTS_DIR, e.file)).catch(() => {});
+      await fsPromises.unlink(path.join(dir, e.file)).catch(() => {});
       deleted++;
     }
   }
 
   if (deleted > 0) {
-    log.info("snapshots", `Cleanup: removed ${deleted} old snapshot(s)`);
+    log.info(
+      "snapshots",
+      `Cleanup (${serverId}): removed ${deleted} old snapshot(s)`,
+    );
+  }
+}
+
+/**
+ * One-time migration for C-01: snapshots used to live as loose files
+ * directly in data/snapshots/. Move any such files into the first
+ * configured server's subdirectory so existing baselines survive the
+ * upgrade. Call once at startup, after initServers().
+ */
+export async function migrateLegacySnapshots(
+  firstServerId: string,
+): Promise<void> {
+  let files: string[];
+  try {
+    files = await fsPromises.readdir(SNAPSHOTS_BASE_DIR);
+  } catch {
+    return; // no snapshots dir yet — nothing to migrate
+  }
+
+  const loose = files.filter((f) => /^\d+\.json$/.test(f));
+  if (loose.length === 0) return;
+
+  const targetDir = snapshotsDirFor(firstServerId);
+  await fsPromises.mkdir(targetDir, { recursive: true });
+
+  let moved = 0;
+  for (const f of loose) {
+    try {
+      await fsPromises.rename(
+        path.join(SNAPSHOTS_BASE_DIR, f),
+        path.join(targetDir, f),
+      );
+      moved++;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn("snapshots", `Migration failed for ${f}: ${msg}`);
+    }
+  }
+
+  if (moved > 0) {
+    log.info(
+      "snapshots",
+      `Migrated ${moved} legacy snapshot(s) into ${firstServerId}/`,
+    );
   }
 }

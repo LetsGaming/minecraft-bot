@@ -41,6 +41,13 @@ export interface ServerConfig {
 export interface GuildNotificationConfig {
   channelId?: string;
   events?: string[];
+  /**
+   * H-04: which server instance to receive events from. When unset, events
+   * from every server are forwarded (legacy behaviour). Set this on
+   * multi-server setups to scope a guild's notification channel to one
+   * server, matching chatBridge/downtimeAlerts/tpsAlerts.
+   */
+  server?: string;
 }
 
 export interface GuildChatBridgeConfig {

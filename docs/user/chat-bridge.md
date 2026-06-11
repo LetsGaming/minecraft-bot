@@ -22,7 +22,7 @@ Type a normal message in the bridge channel and it appears in the game chat as:
 A few practical limits, so the game chat stays clean and safe:
 
 - Your display name is capped at 32 characters, the message at 160.
-- Special characters outside plain ASCII (including emoji and umlauts) are removed before forwarding. `Grüße ✨` arrives as `Gre`. Stick to plain text if you want in-game players to read it as written.
+- Unicode text (umlauts, accents, emoji) is forwarded as written — `Grüße ✨` arrives as `Grüße ✨`. Only invisible control characters are removed, and long messages are shortened to fit Minecraft's chat limit.
 - Messages from bots are ignored, so two bots cannot loop each other.
 
 There is also `/say message:...` which does the same thing from any channel, useful when you are not in the bridge channel.

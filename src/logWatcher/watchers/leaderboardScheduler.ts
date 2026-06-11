@@ -161,7 +161,7 @@ async function checkAndPost(
         continue;
       }
 
-      const snapshot = await getSnapshotClosestTo(periodStart);
+      const snapshot = await getSnapshotClosestTo(server.id, periodStart);
 
       const periodLabel = INTERVAL_LABELS[interval] ?? interval;
       let footer: string;

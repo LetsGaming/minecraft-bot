@@ -52,7 +52,7 @@ export async function execute(
 ): Promise<void> {
   await interaction.deferReply();
 
-  const server = resolveServer(interaction) ?? undefined;
+  const server = resolveServer(interaction);
   const player1 = interaction.options.getString("player1", true);
   const player2 = interaction.options.getString("player2", true);
   const filterStat = interaction.options.getString("stat");

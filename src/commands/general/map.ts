@@ -1,11 +1,9 @@
-import path from "path";
 import {
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
 } from "discord.js";
 import { createEmbed, createErrorEmbed } from "../../utils/embedUtils.js";
-import { getRootDir, loadJson } from "../../utils/utils.js";
-import type { RawBotConfig } from "../../types/index.js";
+import { loadConfig } from "../../config.js";
 
 export const data = new SlashCommandBuilder()
   .setName("map")
@@ -16,7 +14,7 @@ export async function execute(
 ): Promise<void> {
   await interaction.deferReply();
 
-  const url = await getUrl();
+  const url = getUrl();
   if (!url) {
     const errorEmbed = createErrorEmbed(
       "The map URL is not configured. Please contact the server administrator.",
@@ -34,9 +32,8 @@ export async function execute(
   await interaction.editReply({ embeds: [embed] });
 }
 
-async function getUrl(): Promise<string | null> {
-  const root = getRootDir();
-  const configPath = path.join(root, "config.json");
-  const config = (await loadJson(configPath)) as Partial<RawBotConfig>;
-  return config?.commands?.map?.url ?? null;
+// M-04: read through loadConfig() so env overrides, validation, and config
+// hot-reload apply — instead of re-reading config.json from disk directly.
+function getUrl(): string | null {
+  return loadConfig().commands["map"]?.url ?? null;
 }

@@ -46,10 +46,17 @@ vi.mock("../src/utils/utils.js", () => ({
     { name: "Bob", uuid: "uuid-2" },
   ]),
   saveJson: vi.fn().mockResolvedValue(undefined),
+  invalidateWhitelistCache: vi.fn(),
+}));
+
+// M-04: /map now reads through loadConfig() instead of loadJson(config.json)
+vi.mock("../src/config.js", () => ({
+  loadConfig: vi.fn().mockReturnValue({ commands: {} }),
 }));
 
 import { resolveServer } from "../src/utils/guildRouter.js";
-import { loadWhitelist } from "../src/utils/utils.js";
+import { loadWhitelist, invalidateWhitelistCache } from "../src/utils/utils.js";
+import { loadConfig } from "../src/config.js";
 
 function makeServer(id = "survival") {
   return {
@@ -121,6 +128,23 @@ describe("/whitelist command", () => {
     });
     await execute(interaction);
     expect(interaction.editReply).toHaveBeenCalled();
+    // C-02: a successful add must invalidate the whitelist cache
+    expect(invalidateWhitelistCache).toHaveBeenCalledWith("survival");
+  });
+
+  it("rejects an invalid username before any console command", async () => {
+    const interaction = makeInteraction({
+      options: {
+        getString: vi
+          .fn()
+          .mockImplementation((n: string) =>
+            n === "username" ? "bad name\nstop" : null,
+          ),
+      },
+    });
+    await expect(execute(interaction)).rejects.toThrow("not a valid");
+    const server = vi.mocked(resolveServer).mock.results[0]!.value;
+    expect(server.sendCommand).not.toHaveBeenCalled();
   });
 
   it("throws when Mojang API returns not-ok", async () => {
@@ -278,20 +302,16 @@ describe("/map command", () => {
   });
 
   it("replies with error when map URL is not configured", async () => {
-    vi.mocked(await import("../src/utils/utils.js")).loadJson.mockResolvedValue(
-      {},
-    );
+    vi.mocked(loadConfig).mockReturnValue({ commands: {} } as never);
     const interaction = makeInteraction();
     await execute(interaction);
     expect(interaction.editReply).toHaveBeenCalled();
   });
 
   it("replies with map embed when URL is configured", async () => {
-    vi.mocked(await import("../src/utils/utils.js")).loadJson.mockResolvedValue(
-      {
-        commands: { map: { url: "https://map.example.com" } },
-      },
-    );
+    vi.mocked(loadConfig).mockReturnValue({
+      commands: { map: { url: "https://map.example.com" } },
+    } as never);
     const interaction = makeInteraction();
     await execute(interaction);
     expect(interaction.editReply).toHaveBeenCalled();

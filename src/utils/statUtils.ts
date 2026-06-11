@@ -1,6 +1,6 @@
-import { getServerInstance } from "./server.js";
+import { getFirstInstance } from "./server.js";
 import type { ServerInstance } from "./server.js";
-import { loadWhitelist, deleteStats } from "./utils.js";
+import { loadWhitelist } from "./utils.js";
 import { log } from "./logger.js";
 import * as serverAccess from "./serverAccess.js";
 import type {
@@ -89,22 +89,18 @@ export async function buildLeaderboard(
   const uuidToName: Record<string, string> = {};
   for (const p of whitelist) uuidToName[p.uuid] = p.name;
 
-  // B-03: only delete stats for unlisted players when the whitelist loaded
-  // successfully and is non-empty. An empty whitelist most likely means the
-  // load failed (API error, missing file) — deleting every player's stats
-  // in that case would be irreversible data loss.
-  const whitelistLoadedOk = whitelist.length > 0;
-
   const entries: LeaderboardEntry[] = [];
 
   for (const [uuid, statsFile] of Object.entries(allStats)) {
     const name = uuidToName[uuid];
 
-    // Clean up stats for players no longer on the whitelist
-    if (!name) {
-      if (whitelistLoadedOk) await deleteStats(uuid, srv);
-      continue;
-    }
+    // H-05: a leaderboard is a read — it must never delete player data.
+    // The old behaviour removed stats files for UUIDs missing from the
+    // whitelist, which turned a stale whitelist cache (C-02), a disabled
+    // whitelist feature, or a transient partial read into irreversible
+    // data loss. Cleanup of departed players is now an explicit admin
+    // action (see /server prune-stats); here we simply skip unknown UUIDs.
+    if (!name) continue;
 
     const flat = flattenStats(statsFile);
     let value = def.extract(flat);
@@ -199,7 +195,7 @@ export async function loadStats(
   uuid: string,
   server?: ServerInstance,
 ): Promise<MinecraftStatsFile | null> {
-  const cfg = (server ?? getServerInstance("default"))?.config;
+  const cfg = (server ?? getFirstInstance())?.config;
   if (!cfg) {
     log.warn("stats", "No server instance available");
     return null;
@@ -231,7 +227,7 @@ export function invalidateAllStatsCache(serverId?: string): void {
 export async function loadAllStats(
   server?: ServerInstance,
 ): Promise<Record<string, MinecraftStatsFile>> {
-  const srv = server ?? getServerInstance("default");
+  const srv = server ?? getFirstInstance();
   const cfg = srv?.config;
   if (!cfg) return {};
   const cacheKey = cfg.id;

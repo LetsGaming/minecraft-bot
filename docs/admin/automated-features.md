@@ -9,7 +9,7 @@ These run in the background, no user interaction needed. Each one is activated b
 Two-way bridge between one Discord channel and the Minecraft chat.
 
 - Minecraft → Discord: player chat appears in the channel as an embed with the player's head avatar. Messages starting with `!` (in-game commands) are not bridged.
-- Discord → Minecraft: messages in the channel are forwarded as `[DiscordName] message` via `/say`. Names are capped at 32 characters, messages at 160, and control characters are stripped so nothing can be smuggled into the server console. Non-ASCII characters (umlauts, emoji) are currently stripped as part of that sanitization.
+- Discord → Minecraft: messages in the channel are forwarded as `[DiscordName] message` via `/say`. Names are capped at 32 characters, messages at 160, and Unicode control characters are stripped so nothing can be smuggled into the server console. Printable Unicode (umlauts, accents, emoji) is forwarded unchanged.
 
 Bot messages are ignored to prevent loops.
 

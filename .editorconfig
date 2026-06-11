@@ -1,0 +1,15 @@
+# M-10: keep the working tree LF-only so editors stop reintroducing CRLF
+# (.gitattributes already normalizes at commit time; this prevents the
+# whole-file diffs caused by mixed line endings in the tree).
+root = true
+
+[*]
+end_of_line = lf
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false

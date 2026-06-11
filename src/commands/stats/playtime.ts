@@ -29,7 +29,7 @@ export async function execute(
 ): Promise<void> {
   await interaction.deferReply();
 
-  const server = resolveServer(interaction) ?? undefined;
+  const server = resolveServer(interaction);
   const playerName = interaction.options.getString("player", true);
 
   try {

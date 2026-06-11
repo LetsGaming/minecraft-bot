@@ -4,6 +4,8 @@ import { resolveServer } from "../utils/guildRouter.js";
 import { createSuccessEmbed } from "../utils/embedUtils.js";
 import { withErrorHandling, requireServerAdmin } from "./middleware.js";
 import { recordRemove } from "../utils/whitelistAudit.js";
+import { invalidateWhitelistCache } from "../utils/utils.js";
+import { isValidMcName } from "../utils/sanitize.js";
 
 export const data = new SlashCommandBuilder()
   .setName("unwhitelist")
@@ -24,6 +26,12 @@ export const execute = withErrorHandling(
     const server = resolveServer(interaction);
     if (!server) throw new Error("Server not found.");
 
+    // H-02: /unwhitelist previously validated nothing before interpolating
+    // the raw username into a console command.
+    if (!isValidMcName(username)) {
+      throw new Error(`**${username}** is not a valid Minecraft username.`);
+    }
+
     await server.sendCommand(`/whitelist remove ${username}`);
     await recordRemove(
       username,
@@ -31,6 +39,10 @@ export const execute = withErrorHandling(
       interaction.user.id,
       server.id,
     );
+
+    // C-02: drop the cached whitelist so the removed player disappears
+    // immediately instead of after a restart.
+    invalidateWhitelistCache(server.id);
 
     await interaction.editReply({
       embeds: [

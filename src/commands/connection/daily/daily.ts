@@ -3,8 +3,11 @@ import {
   MessageFlags,
   type ChatInputCommandInteraction,
 } from "discord.js";
-import path from "path";
-import { loadJson, saveJson, getRootDir } from "../../../utils/utils.js";
+import {
+  loadDailyRewardsConfig,
+  loadClaimedDaily,
+  saveClaimedDaily,
+} from "../../../utils/dailyStore.js";
 import { getOnlinePlayers } from "../../../utils/playerUtils.js";
 import { isLinked, getLinkedAccount } from "../../../utils/linkUtils.js";
 import { createErrorEmbed } from "../../../utils/embedUtils.js";
@@ -18,8 +21,6 @@ import { resolveServer } from "../../../utils/guildRouter.js";
 import { formatTime } from "../../../utils/time.js";
 import type { ServerInstance } from "../../../utils/server.js";
 
-const baseDir = getRootDir();
-const dataDir = path.resolve(baseDir, "data");
 const DAILY_COOLDOWN = 24 * 60 * 60 * 1000;
 
 const DEFAULT_MAX_STREAK = 35;
@@ -72,12 +73,8 @@ async function _execute(
   const server = resolveServer(interaction);
 
   const [rewardsCfg, claimed] = await Promise.all([
-    loadJson(path.join(dataDir, "dailyRewards.json")).catch(
-      () => ({}),
-    ) as Promise<DailyRewardsConfig>,
-    loadJson(path.join(dataDir, "claimedDaily.json")).catch(
-      () => ({}),
-    ) as Promise<Record<string, UserClaimData>>,
+    loadDailyRewardsConfig(),
+    loadClaimedDaily(),
   ]);
 
   if (!rewardsCfg.default?.length) {
@@ -130,8 +127,21 @@ async function _execute(
     grantedRewards.push(...bonus);
   }
 
+  // M-11: reward delivery used to be fire-and-forget — RCON could drop
+  // between the online check and the give, or an invalid item ID could fail
+  // server-side, and the claim was consumed anyway. Verify delivery before
+  // persisting; on failure the cooldown is NOT written so the user can retry.
   for (const reward of grantedRewards) {
-    await give(server, username, reward);
+    const ok = await give(server, username, reward);
+    if (!ok) {
+      await interaction.reply(
+        errorReply(
+          "Reward delivery failed — your claim was not consumed. Please try again in a moment.",
+          "Delivery Failed",
+        ),
+      );
+      return;
+    }
   }
 
   claimed[userId] = {
@@ -149,7 +159,7 @@ async function _execute(
     ],
   };
 
-  await saveJson(path.join(dataDir, "claimedDaily.json"), claimed);
+  await saveClaimedDaily(claimed);
   await interaction.reply(
     response(
       grantedRewards,
@@ -264,18 +274,44 @@ function fmt({ item = "???", amount = 1 }: DailyRewardItem): string {
   return `${amount}x ${cleanName}`;
 }
 
-async function give(
+/**
+ * Give a reward item to a player.
+ *
+ * M-12: prefix with "minecraft:" only when the ID has no namespace at all,
+ * so modded IDs like "create:brass_ingot" pass through unchanged instead of
+ * becoming "minecraft:create:brass_ingot".
+ *
+ * M-11: returns false when delivery could not be confirmed. On RCON-capable
+ * servers the response must contain the "Gave ..." confirmation; a null or
+ * unexpected response (connection drop, unknown item ID) is a failure and
+ * is logged with the raw response so bad item IDs surface. Screen-fallback
+ * servers provide no response signal, so they are assumed successful.
+ */
+export async function give(
   server: ServerInstance,
   player: string,
   { item, amount = 1 }: DailyRewardItem,
-): Promise<void> {
+): Promise<boolean> {
   if (!player || !item) {
     log.error(
       "daily",
       `Invalid reward params for player=${player} item=${item}`,
     );
-    return;
+    return false;
   }
-  const name = item.startsWith("minecraft:") ? item : `minecraft:${item}`;
-  await server.sendCommand(`give ${player} ${name} ${amount}`);
+  const name = item.includes(":") ? item : `minecraft:${item}`;
+  const response = await server.sendCommand(`give ${player} ${name} ${amount}`);
+
+  // Only RCON returns command output; screen/remote fallbacks return null
+  // both on success and failure, so they can't be verified.
+  if (!server.config?.useRcon) return true;
+
+  if (response === null || !/\bGave\b/i.test(response)) {
+    log.error(
+      "daily",
+      `Give not confirmed for ${player} (item=${name}): ${response ?? "no response"}`,
+    );
+    return false;
+  }
+  return true;
 }

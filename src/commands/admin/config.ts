@@ -43,10 +43,18 @@ export const execute = withErrorHandling(
         `Admins: ${cfg.adminUsers.length}`,
       ];
 
+      // M-05: server additions/removals refresh the config object, but the
+      // instance registry and log watchers are only wired at startup — so
+      // be honest about it instead of claiming the server was applied.
       const added = after.filter((s) => !before.includes(s));
       const removed = before.filter((s) => !after.includes(s));
       if (added.length > 0) lines.push(`+ Added: ${added.join(", ")}`);
       if (removed.length > 0) lines.push(`- Removed: ${removed.join(", ")}`);
+      if (added.length > 0 || removed.length > 0) {
+        lines.push(
+          "⚠ Server changes require a bot restart to take effect.",
+        );
+      }
 
       await interaction.editReply({
         embeds: [
@@ -72,7 +80,7 @@ export const execute = withErrorHandling(
     // Guild overview
     const guildLines = Object.entries(cfg.guilds).map(([guildId, gcfg]) => {
       const features: string[] = [];
-      if (gcfg.statusEmbed?.enabled !== false) features.push("status");
+      if (gcfg.statusEmbed?.enabled === true) features.push("status");
       if (gcfg.notifications?.channelId) features.push("notifications");
       if (gcfg.chatBridge?.channelId) features.push("chatBridge");
       if (gcfg.leaderboard?.channelId) features.push("leaderboard");

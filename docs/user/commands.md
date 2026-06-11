@@ -71,7 +71,7 @@ See [daily-rewards.md](daily-rewards.md).
 
 ## Admin commands
 
-`/server` (start/stop/restart/backup/status), `/whitelist`, `/verify`, `/unwhitelist`, and `/config` are restricted to configured admins. They are documented in [../admin/permissions.md](../admin/permissions.md).
+`/server` (start/stop/restart/backup/status/prune-stats), `/whitelist`, `/verify`, `/unwhitelist`, and `/config` are restricted to configured admins. They are documented in [../admin/permissions.md](../admin/permissions.md).
 
 ## Misc
 

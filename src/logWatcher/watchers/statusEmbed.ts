@@ -383,8 +383,11 @@ async function updateGuildStatus(
 /**
  * Start the status embed updater.
  *
- * For every guild that has `statusEmbed.enabled = true` (or an unset config,
- * which defaults to enabled), the bot will:
+ * L-08: the feature is explicit opt-in — only guilds that set
+ * `statusEmbed.enabled: true` activate it. (It used to default to enabled
+ * while config.template.json shipped `false`, giving Docker and PM2 users
+ * different first-run behaviour; opt-in is the safer default since the bot
+ * creates channels.) For every enabled guild, the bot will:
  *  1. Create (or find) a private "📊 Server Status" category.
  *  2. Provision a `#server-status` text channel for the live embed.
  *  3. Provision a `👥 Players: X / Y` voice channel as a read-only counter.
@@ -396,7 +399,7 @@ export function startStatusEmbed(
   guildConfigs: Record<string, GuildConfig>,
 ): ReturnType<typeof setInterval> | null {
   const enabledGuilds = Object.entries(guildConfigs).filter(
-    ([, cfg]) => cfg.statusEmbed?.enabled !== false,
+    ([, cfg]) => cfg.statusEmbed?.enabled === true,
   );
 
   if (enabledGuilds.length === 0) {

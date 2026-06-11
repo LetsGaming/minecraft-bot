@@ -43,7 +43,7 @@ The bot validates `config.json` at startup. Wrong types or missing required fiel
 "adminUsers": ["123456789012345678"]
 ```
 
-A list of Discord user IDs allowed to use admin commands: `/server` (start, stop, restart, backup, status), `/whitelist`, `/verify`, `/unwhitelist`, and `/config`. Everyone else gets a permission error.
+A list of Discord user IDs allowed to use admin commands: `/server` (start, stop, restart, backup, status, prune-stats), `/whitelist`, `/verify`, `/unwhitelist`, and `/config`. Everyone else gets a permission error.
 
 To find an ID: enable Developer Mode (Discord Settings → Advanced), right-click a user → Copy User ID.
 
@@ -122,7 +122,7 @@ Each Discord server is configured independently. The key is the guild ID. Every 
 |---|---|---|
 | `defaultServer` | server ID | Used when a command is run without an explicit `server` option. |
 | `chatBridge` | `channelId`, `server` | Two-way chat between this channel and the Minecraft chat. |
-| `notifications` | `channelId`, `events` | Posts join/leave/death/advancement/start/stop events. Remove event names you do not want. Note: in multi-server setups, events from all servers are posted (there is currently no per-server filter for notifications). |
+| `notifications` | `channelId`, `events`, `server` | Posts join/leave/death/advancement/start/stop events. Remove event names you do not want. Set `server` to only receive events from one server instance; omit it to receive events from all servers (the source server is shown in the embed footer when more than one server is configured). |
 | `leaderboard` | `channelId`, `interval`, `server` | Auto-posts a period leaderboard (playtime and blocks mined). `interval` is `daily`, `weekly`, or `monthly`. |
 | `tpsAlerts` | `channelId`, `server` | Warns when TPS drops below `tpsWarningThreshold`. Omit `server` to alert for all servers. |
 | `downtimeAlerts` | `channelId`, `server` | Alerts on unexpected downtime and recovery. Omit `server` to monitor all. |
@@ -135,10 +135,10 @@ Details on how each feature behaves are in [automated-features.md](automated-fea
 
 The status embed is fully self-provisioning. The bot creates its own private category ("📊 Server Status") with a `#server-status` text channel and a player-counter voice channel. You do not configure a channel ID for it.
 
-It defaults to enabled for every configured guild. To turn it off for a guild, set it explicitly:
+It is opt-in: set it explicitly to activate it for a guild:
 
 ```json
-"statusEmbed": { "enabled": false }
+"statusEmbed": { "enabled": true }
 ```
 
 The bot needs the Manage Channels permission for this feature.

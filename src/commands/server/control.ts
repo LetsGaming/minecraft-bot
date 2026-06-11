@@ -9,6 +9,8 @@ import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { suppressAlerts } from "../../logWatcher/watchers/downtimeMonitor.js";
 import { log } from "../../utils/logger.js";
 import * as serverAccess from "../../utils/serverAccess.js";
+import { loadAllStats } from "../../utils/statUtils.js";
+import { loadWhitelist, deleteStats } from "../../utils/utils.js";
 
 /**
  * Script paths relative to the scripts directory.
@@ -82,6 +84,24 @@ export const data = new SlashCommandBuilder()
           .setDescription("Server instance")
           .setAutocomplete(true),
       ),
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName("prune-stats")
+      .setDescription(
+        "Delete stats files of players no longer on the whitelist",
+      )
+      .addStringOption((o) =>
+        o
+          .setName("server")
+          .setDescription("Server instance")
+          .setAutocomplete(true),
+      )
+      .addBooleanOption((o) =>
+        o
+          .setName("confirm")
+          .setDescription("Set to true to actually delete (otherwise dry run)"),
+      ),
   );
 
 const LABELS: Record<string, { verb: string; emoji: string; past: string }> = {
@@ -104,6 +124,63 @@ export const execute = withErrorHandling(
     // Suppress downtime alerts for intentional stop/restart
     if (sub === "stop" || sub === "restart") {
       suppressAlerts(server.id);
+    }
+
+    // H-05/F-07: explicit, admin-gated replacement for the automatic stats
+    // cleanup that buildLeaderboard used to perform as a hidden side effect.
+    // Dry run by default — lists what would be deleted; confirm:true deletes.
+    if (sub === "prune-stats") {
+      const whitelist = (await loadWhitelist(true, server)) ?? [];
+      if (whitelist.length === 0) {
+        throw new Error(
+          "Whitelist is empty or could not be loaded — refusing to prune (this would delete every player's stats).",
+        );
+      }
+      const known = new Set(whitelist.map((p) => p.uuid));
+      const allStats = await loadAllStats(server);
+      const orphans = Object.keys(allStats).filter((uuid) => !known.has(uuid));
+
+      if (orphans.length === 0) {
+        return void (await interaction.editReply({
+          embeds: [
+            createSuccessEmbed(
+              `No orphaned stats files on **${server.id}** — nothing to prune.`,
+            ),
+          ],
+        }));
+      }
+
+      const confirmed = interaction.options.getBoolean("confirm") === true;
+      if (!confirmed) {
+        return void (await interaction.editReply({
+          embeds: [
+            createEmbed({
+              title: `🧹 Prune stats — dry run (${server.id})`,
+              description:
+                `${orphans.length} stats file(s) belong to players not on the whitelist:\n` +
+                `\`\`\`\n${orphans.slice(0, 20).join("\n")}${orphans.length > 20 ? "\n..." : ""}\n\`\`\`\n` +
+                `Re-run with \`confirm: true\` to delete them permanently.`,
+              color: 0xffaa00,
+            }),
+          ],
+        }));
+      }
+
+      let deletedCount = 0;
+      for (const uuid of orphans) {
+        if (await deleteStats(uuid, server)) deletedCount++;
+      }
+      log.info(
+        "control",
+        `prune-stats: ${interaction.user.tag} deleted ${deletedCount}/${orphans.length} stats file(s) on ${server.id}`,
+      );
+      return void (await interaction.editReply({
+        embeds: [
+          createSuccessEmbed(
+            `Deleted ${deletedCount} orphaned stats file(s) on **${server.id}**.`,
+          ),
+        ],
+      }));
     }
 
     // Status is read-only and fast — no progress embed needed

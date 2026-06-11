@@ -1,11 +1,15 @@
 import { type Client } from "discord.js";
 import { createPlayerEmbed } from "../../utils/embedUtils.js";
-import { log } from "../../utils/logger.js";
 import type { ILogWatcher } from "../logWatcher.js";
 import type { GuildConfig } from "../../types/index.js";
+import { broadcastNotification, PLAYER_NAME } from "./notifyGuilds.js";
 
-const DEATH_REGEX =
-  /\[.+?\].*:\s+(\w+)\s+(was slain|was shot|was killed|drowned|burned|fell|hit the ground|went off with a bang|blew up|was blown up|tried to swim|was impaled|was squished|was pummeled|was fireballed|starved|suffocated|was poked|experienced kinetic|was doomed|walked into|was pricked|died|withered away|was stung|was obliterated|was squashed|didn't want to live|was frozen|was skewered)(.*)$/i;
+// M-01: use PLAYER_NAME (not \w+) so Bedrock players with "."-prefixed
+// names get death notifications too.
+const DEATH_REGEX = new RegExp(
+  String.raw`\[.+?\].*:\s+(${PLAYER_NAME})\s+(was slain|was shot|was killed|drowned|burned|fell|hit the ground|went off with a bang|blew up|was blown up|tried to swim|was impaled|was squished|was pummeled|was fireballed|starved|suffocated|was poked|experienced kinetic|was doomed|walked into|was pricked|died|withered away|was stung|was obliterated|was squashed|didn't want to live|was frozen|was skewered)(.*)$`,
+  "i",
+);
 
 export function registerDeathWatcher(
   logWatcher: ILogWatcher,
@@ -20,28 +24,17 @@ export function registerDeathWatcher(
     const rest = match[3] ?? "";
     const deathMessage = `${player} ${verb}${rest}`.trim();
 
-    for (const [, gcfg] of Object.entries(guildConfigs)) {
-      const notif = gcfg.notifications;
-      if (!notif?.channelId || !notif.events?.includes("death")) continue;
-
-      try {
-        const channel = await client.channels.fetch(notif.channelId);
-        if (!channel || !("send" in channel)) continue;
-
-        const embed = createPlayerEmbed(player, {
+    await broadcastNotification(client, guildConfigs, {
+      serverId,
+      event: "death",
+      logTag: "deaths",
+      buildEmbed: (withServerFooter) =>
+        createPlayerEmbed(player, {
           title: "☠️ Death",
           description: deathMessage,
           color: 0xff5555,
-          ...(Object.keys(guildConfigs).length > 1
-            ? { footer: { text: serverId } }
-            : {}),
-        });
-
-        await channel.send({ embeds: [embed] });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        log.error("deaths", `Failed: ${msg}`);
-      }
-    }
+          ...(withServerFooter ? { footer: { text: serverId } } : {}),
+        }),
+    });
   });
 }

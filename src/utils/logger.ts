@@ -6,6 +6,20 @@ const LOG_DIR = path.resolve(process.cwd(), "logs");
 if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
 
 const LOG_FILE = path.join(LOG_DIR, "bot.log");
+
+// M-09: bot.log previously grew without bound (Docker/PM2 only rotate their
+// own stdout logs). Rotate on startup once the file exceeds the size cap —
+// the previous log is kept as bot.log.1 (overwriting the one before it).
+const MAX_LOG_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+try {
+  const { size } = fs.statSync(LOG_FILE);
+  if (size > MAX_LOG_SIZE_BYTES) {
+    fs.renameSync(LOG_FILE, `${LOG_FILE}.1`);
+  }
+} catch {
+  // file doesn't exist yet — nothing to rotate
+}
+
 const stream = fs.createWriteStream(LOG_FILE, { flags: "a" });
 
 function timestamp(): string {

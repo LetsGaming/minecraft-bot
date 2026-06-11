@@ -7,7 +7,15 @@ import * as serverAccess from "./serverAccess.js";
 // ── Whitelist ─────────────────────────────────────────────────────────────
 
 // Per-server cache keyed by server ID so multi-instance setups don't bleed.
-const whitelistCache = new Map<string, WhitelistEntry[] | null>();
+// C-02: entries carry a timestamp and expire after WHITELIST_CACHE_TTL_MS as
+// a safety net for whitelist edits made outside the bot (in-game
+// `/whitelist add`, manual file edits). Bot-initiated edits additionally
+// call invalidateWhitelistCache() directly for immediate consistency.
+const WHITELIST_CACHE_TTL_MS = 60_000;
+const whitelistCache = new Map<
+  string,
+  { data: WhitelistEntry[] | null; at: number }
+>();
 
 /**
  * Load the whitelist for the given server.
@@ -20,12 +28,17 @@ export async function loadWhitelist(
   const cfg = server.config;
   const key = cfg.id;
 
-  if (!forceReload && whitelistCache.has(key))
-    return whitelistCache.get(key) ?? null;
+  const cached = whitelistCache.get(key);
+  if (
+    !forceReload &&
+    cached &&
+    Date.now() - cached.at < WHITELIST_CACHE_TTL_MS
+  )
+    return cached.data;
 
   const data = await serverAccess.readWhitelist(cfg);
   const result = data.length > 0 ? data : null;
-  whitelistCache.set(key, result);
+  whitelistCache.set(key, { data: result, at: Date.now() });
   return result;
 }
 
