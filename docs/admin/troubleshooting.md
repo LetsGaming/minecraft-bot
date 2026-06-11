@@ -14,6 +14,14 @@ The bot tells you exactly which field is wrong, e.g. `servers.survival.rconPort:
 
 If the message is `Failed to load config.json`, the file is missing or not valid JSON. A trailing comma is the usual culprit; run it through a JSON validator.
 
+## "Script not found: ..." on /server commands, or /mods and /backup fail
+
+Your server was probably not installed with [minecraft-server-setup](https://github.com/LetsGaming/minecraft-server-setup). These features call into files that suite creates: the management scripts (`start.sh`, `shutdown.sh`, `smart_restart.sh`, `misc/status.sh`, `backup/backup.sh`), the tiered backup directories, and `common/downloaded_versions.json` for `/mods`.
+
+Your options, in order of effort: disable the affected commands in the `commands` config block, provide your own compatible scripts in `scriptDir`, or migrate the server to the suite. The full matrix of what works without the suite is in [setup.md](setup.md#plain-server-or-setup-suite-server). Everything RCON- and log-based is unaffected.
+
+If the server *was* set up with the suite, the error means `scriptDir` points to the wrong place. It must contain the scripts directly (e.g. `/opt/mc/scripts/survival/start.sh`), and remember the auto-derivation: unset, it resolves to `{serverDir}/../scripts/{screenSession}`.
+
 ## "Sudo is not configured correctly"
 
 `/server` commands need passwordless sudo for two separate hops, and the error tells you which one failed:

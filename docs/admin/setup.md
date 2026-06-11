@@ -2,6 +2,37 @@
 
 This guide takes you from nothing to a running bot. No prior Discord bot experience required.
 
+## Plain server or setup-suite server?
+
+The bot runs against any Minecraft Java server, but it is designed for servers installed with [minecraft-server-setup](https://github.com/LetsGaming/minecraft-server-setup). That suite provides the management scripts, the backup directory layout, and the mod manifest that some features call into. On a plain server those files simply do not exist, and the affected commands fail with a "Script not found" or "not found at ..." error.
+
+What works where:
+
+| Feature | Plain server | Setup-suite server |
+|---|---|---|
+| Status, stats, leaderboards, daily rewards, linking | ✅ | ✅ |
+| Chat bridge, notifications, in-game commands | ✅ | ✅ |
+| TPS + downtime monitoring, uptime, whitelist, seed/map tools | ✅ | ✅ |
+| `/server start` / `stop` / `restart` / `status` | ❌ needs `start.sh`, `shutdown.sh`, `smart_restart.sh`, `misc/status.sh` | ✅ |
+| `/server backup` and the `/backup` overview | ❌ needs `backup/backup.sh` and the suite's backup tier layout | ✅ |
+| `/mods` | ❌ needs `{scriptDir}/common/downloaded_versions.json` | ✅ |
+| `variables.txt` config sync | ❌ | ✅ |
+
+Three ways to proceed:
+
+1. **Use the suite** (recommended if you are setting up a new server anyway): everything works out of the box, including the [API wrapper](remote-setup.md) for Docker/remote setups.
+2. **Plain server, reduced feature set**: everything in the ✅ rows works over RCON and the server log. Disable the rest so users never see broken commands, via the `commands` block in `config.json`:
+
+   ```json
+   "commands": {
+     "server": { "enabled": false },
+     "backup": { "enabled": false },
+     "mods":   { "enabled": false }
+   }
+   ```
+
+3. **Plain server, own scripts**: point `scriptDir` at a directory providing the five scripts above with the same names and you get `/server` back without the suite. Your scripts receive no arguments (except backup, which gets `--archive` for archive backups) and must be runnable non-interactively as `linuxUser`.
+
 ## What you need
 
 - A Discord account and a Discord server (guild) where you have admin rights

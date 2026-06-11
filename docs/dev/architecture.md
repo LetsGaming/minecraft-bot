@@ -118,6 +118,20 @@ server writes log line → LogWatcher reads delta → regex match
 
 There is no database. All runtime state is JSON under `data/`, accessed through `loadJson`/`saveJson` in `utils.ts`, which add an mtime-based read cache and a per-file promise-chain write lock (concurrent writes serialize instead of clobbering each other). Details per file: [data-storage.md](data-storage.md).
 
+## The setup-suite contract
+
+Several features assume artifacts created by [minecraft-server-setup](https://github.com/LetsGaming/minecraft-server-setup) rather than vanilla server files. This is an implicit external contract; keep it in mind when changing `serverAccess.ts`:
+
+| Code | Suite artifact |
+|---|---|
+| `serverAccess.runScript` (used by `/server *`) | `start.sh`, `shutdown.sh`, `smart_restart.sh`, `misc/status.sh`, `backup/backup.sh` in `scriptDir`; backup accepts `--archive` |
+| `serverAccess` backup info (used by `/backup`) | Tier layout `backups/hourly` and `backups/archives/{daily,weekly,monthly,update}` |
+| `modUtils` (used by `/mods`) | `{scriptDir}/common/downloaded_versions.json` |
+| `config.ts` overrides | `{scriptDir}/common/variables.txt` |
+| The remote API wrapper | Is itself part of the suite ecosystem |
+
+Everything else (RCON, log parsing, stats, whitelist) works against a plain server. There is currently no runtime capability detection: missing artifacts surface as per-command errors. The audit report sketches a capability-flag design if that ever becomes code; until then, suite-dependent additions belong behind the same `serverAccess` functions so the contract stays in one file.
+
 ## Startup sequence
 
 1. `loadConfig()`: read, validate, apply env overrides, freeze; `watchConfig()` arms hot reload.

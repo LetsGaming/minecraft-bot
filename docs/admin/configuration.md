@@ -51,6 +51,8 @@ To find an ID: enable Developer Mode (Discord Settings → Advanced), right-clic
 
 Each Minecraft instance gets one entry. The key (here `"survival"`) is the server ID used everywhere else: in guild configs, in the `server` option of slash commands, and in autocomplete.
 
+Note: `scriptDir`, the `/backup` overview, and `/mods` assume a server installed with [minecraft-server-setup](https://github.com/LetsGaming/minecraft-server-setup). On a plain server, disable the dependent commands or provide compatible scripts; see [setup.md](setup.md#plain-server-or-setup-suite-server) for the feature matrix.
+
 ```json
 "servers": {
   "survival": {

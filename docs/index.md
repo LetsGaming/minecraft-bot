@@ -2,6 +2,8 @@
 
 The documentation is split by audience. Pick your section:
 
+> **Note:** The bot works with any Minecraft Java server, but is designed for servers installed via [minecraft-server-setup](https://github.com/LetsGaming/minecraft-server-setup). Some features (`/server`, `/backup`, `/mods`) depend on files that suite provides. The feature matrix and your options on a plain server are in [admin/setup.md](admin/setup.md#plain-server-or-setup-suite-server).
+
 ## Admins (`docs/admin/`)
 
 You host the bot and/or the Minecraft server.
