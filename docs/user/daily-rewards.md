@@ -1,24 +1,39 @@
-# Daily Rewards
+# Daily rewards
+
+Claim a random in-game item once a day and build a streak for bonus loot.
 
 ## Claiming
 
-`/daily` — Claims your daily reward. You'll receive a random item directly in your Minecraft inventory.
+```
+/daily
+```
 
-**Requirements:**
-- Your account must be [linked](linking.md).
-- You must be online on the Minecraft server when you claim.
+Requirements:
 
-After claiming, there's a 24-hour cooldown before you can claim again. The bot tells you exactly when your next claim is available.
+- Your account is [linked](linking.md).
+- You are online on the Minecraft server at the moment you claim. The item lands directly in your inventory.
+
+After a claim there is a 24-hour cooldown. If you try too early, the bot tells you exactly how long is left and at what time your next claim is ready.
 
 ## Streaks
 
-Claiming on consecutive days builds a streak. At certain milestones, you receive bonus items on top of the regular reward.
+Claiming on consecutive days builds a streak. The rules:
 
-If you miss more than 48 hours between claims, your streak resets to zero.
+- You have up to 48 hours between claims to keep the streak alive.
+- Miss that window and the streak restarts at 1 with your next claim.
+- At certain milestones (for example day 3, 6, 10, 14, ...) you get bonus items on top of the regular reward. The milestone schedule is set by the server admin.
+- After the highest milestone, the bonus cycle starts over, so milestone rewards repeat. Your visible streak number keeps counting up.
 
-`/streak` — Shows your current streak, your longest streak ever, and how far you are from the next bonus milestone.
+## Checking your streak
+
+```
+/streak
+```
+
+Shows your current streak, your longest streak ever, and the next bonus milestone.
 
 ## Tips
 
-- Set a daily reminder so you don't break your streak.
-- You must be online in Minecraft at the moment you type `/daily` in Discord — claiming from Discord alone won't work.
+- The reward is drawn from a weighted pool: common items drop often, rare ones (think enchanted golden apples) rarely. Every claim is a small lottery.
+- Claim right when you log in for a play session, then it is done and your streak is safe.
+- If `/daily` says you must be online: join the server first, then run the command.

@@ -1,34 +1,58 @@
 # Documentation
 
-## For Players
+The documentation is split by audience. Pick your section:
 
-Guides for using the bot as a player on the server.
+## Admins (`docs/admin/`)
 
-- [Account Linking](user/linking.md) — Connect your Discord and Minecraft accounts.
-- [Stats & Leaderboards](user/stats.md) — View your stats, compare with others, and check the leaderboard.
-- [Tools & Info](user/tools.md) — Chunkbase, nether portal calculator, server status, and more.
-- [Daily Rewards](user/daily-rewards.md) — Claim daily items and build a streak.
-- [In-Game Commands](user/in-game.md) — Commands you can type in Minecraft chat.
+You host the bot and/or the Minecraft server.
 
-## For Server Admins
-
-Setup, configuration, and admin features.
-
-- [Configuration](configuration.md) — Full `config.json` reference.
-- [Commands](commands.md) — Complete list of all Discord and in-game commands.
-- [Automated Features](features.md) — Chat bridge, status embed, alerts, scheduled leaderboards.
-- [Permissions & Whitelist](permissions.md) — Admin system, whitelist management, audit trail.
-- [Docker Deployment](docker.md) — Running the bot in a container alongside or instead of PM2.
-
-## Quick Reference
-
-| I want to... | Go to... |
+| Topic | File |
 |---|---|
-| Set up the bot for the first time | [README](../README.md) |
-| Link my Discord to Minecraft | [Account Linking](user/linking.md) |
-| See who's online | Use `/status` or check the status embed channel |
-| Check my playtime | [Stats & Leaderboards](user/stats.md) |
-| Use a command in Minecraft chat | [In-Game Commands](user/in-game.md) |
-| Add someone to the whitelist | [Permissions & Whitelist](permissions.md) |
-| Set up auto-posting leaderboards | [Configuration → Leaderboard Scheduler](configuration.md#leaderboard-scheduler) |
-| Understand downtime alerts | [Automated Features → Downtime Alerts](features.md#downtime-alerts) |
+| First-time setup (Discord app, invite, first start) | [admin/setup.md](admin/setup.md) |
+| Full `config.json` reference | [admin/configuration.md](admin/configuration.md) |
+| Running with Docker | [admin/docker.md](admin/docker.md) |
+| Running with PM2 (bare metal) | [admin/pm2.md](admin/pm2.md) |
+| Bot and Minecraft server on different machines | [admin/remote-setup.md](admin/remote-setup.md) |
+| Passwordless sudo for `/server` commands | [admin/sudoers.md](admin/sudoers.md) |
+| Admin permissions, whitelist, audit trail | [admin/permissions.md](admin/permissions.md) |
+| Configuring daily rewards and streak bonuses | [admin/daily-rewards.md](admin/daily-rewards.md) |
+| Automated features (bridge, alerts, status embed, ...) | [admin/automated-features.md](admin/automated-features.md) |
+| Common problems and how to fix them | [admin/troubleshooting.md](admin/troubleshooting.md) |
+
+## Users (`docs/user/`)
+
+You use the bot as a Discord member or Minecraft player.
+
+| Topic | File |
+|---|---|
+| What the bot can do for you | [user/getting-started.md](user/getting-started.md) |
+| Every command, with examples | [user/commands.md](user/commands.md) |
+| Linking Discord and Minecraft | [user/linking.md](user/linking.md) |
+| Stats, comparisons, leaderboards | [user/stats-and-leaderboards.md](user/stats-and-leaderboards.md) |
+| Daily rewards and streaks | [user/daily-rewards.md](user/daily-rewards.md) |
+| Commands you type in Minecraft chat | [user/in-game-commands.md](user/in-game-commands.md) |
+| How the Discord ↔ Minecraft chat bridge works | [user/chat-bridge.md](user/chat-bridge.md) |
+
+## Developers (`docs/dev/`)
+
+You want to change the code or contribute.
+
+| Topic | File |
+|---|---|
+| How the codebase is structured and why | [dev/architecture.md](dev/architecture.md) |
+| Adding commands, watchers, and features step by step | [dev/adding-features.md](dev/adding-features.md) |
+| Coding rules enforced in review | [dev/coding-guidelines.md](dev/coding-guidelines.md) |
+| Running and writing tests | [dev/testing.md](dev/testing.md) |
+| Data files, caches, and snapshots | [dev/data-storage.md](dev/data-storage.md) |
+| Architectural decision log | [dev/decisions.md](dev/decisions.md) |
+
+## Quick reference
+
+| I want to... | Go to |
+|---|---|
+| Set the bot up for the first time | [admin/setup.md](admin/setup.md) |
+| Link my Discord to Minecraft | [user/linking.md](user/linking.md) |
+| Check my playtime | [user/stats-and-leaderboards.md](user/stats-and-leaderboards.md) |
+| Whitelist a player | [admin/permissions.md](admin/permissions.md) |
+| Fix "sudo is not configured" errors | [admin/sudoers.md](admin/sudoers.md) |
+| Add a new slash command | [dev/adding-features.md](dev/adding-features.md) |

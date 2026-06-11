@@ -13,8 +13,8 @@ If either hop isn't configured, the bot will show a clear error message in Disco
 
 You need to know two usernames:
 
-- **Bot user** — the OS user that runs the Discord bot (whoever starts PM2 or `node`). Find it with `whoami` in the terminal where you run the bot.
-- **Minecraft user** — the `linuxUser` value from your `config.json` server entry (default: `minecraft`). This user owns the server files and screen session.
+- **Bot user**: the OS user that runs the Discord bot (whoever starts PM2 or `node`). Find it with `whoami` in the terminal where you run the bot.
+- **Minecraft user**: the `linuxUser` value from your `config.json` server entry (default: `minecraft`). This user owns the server files and screen session.
 
 In the examples below, we'll use `discord-bot` and `minecraft` respectively. Replace them with your actual usernames.
 
@@ -22,7 +22,7 @@ In the examples below, we'll use `discord-bot` and `minecraft` respectively. Rep
 
 ### 1. Create a sudoers drop-in file
 
-Always use `visudo` to edit sudoers files — it validates syntax and prevents lockouts.
+Always use `visudo` to edit sudoers files; it validates syntax and prevents lockouts.
 
 ```bash
 sudo visudo -f /etc/sudoers.d/minecraft-bot
@@ -100,7 +100,7 @@ If this works, the bot's `/server` commands will work too.
 
 ## What happens without sudoers
 
-The bot itself runs fine — all features that don't need `sudo` keep working normally (RCON commands, chat bridge, status embeds, stats, TPS monitoring, etc.).
+The bot itself runs fine: all features that don't need `sudo` keep working normally (RCON commands, chat bridge, status embeds, stats, TPS monitoring, etc.).
 
 Only the `/server` subcommands (`start`, `stop`, `restart`, `backup`, `status`) are affected. When sudo is misconfigured, the bot responds with a Discord embed explaining which layer failed and points to this document.
 
