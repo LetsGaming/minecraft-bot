@@ -243,6 +243,23 @@ async function doReconcile(
     }
   }
 
+  // M-13: re-probe capabilities on every reload — an admin may have just
+  // installed the setup suite (or removed it) for an existing server, and
+  // added servers haven't been probed at all yet. Registration-level
+  // gating stays as decided at startup (Discord command registration is a
+  // startup concern), but per-invocation gates pick the new flags up
+  // immediately.
+  await Promise.all(
+    getAllInstances().map(async (inst) => {
+      try {
+        await inst.probeCapabilities();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.warn("reconcile", `Capability probe failed for ${inst.id}: ${msg}`);
+      }
+    }),
+  );
+
   if (changed.length > 0) {
     log.warn(
       "reconcile",

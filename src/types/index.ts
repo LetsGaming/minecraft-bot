@@ -117,6 +117,12 @@ export type {
 } from "./backup.js";
 
 export type {
+  ServerCapabilities,
+  ScriptCapabilities,
+} from "./capabilities.js";
+export { allCapabilities } from "./capabilities.js";
+
+export type {
   ManagedCategory,
   EnsuredTextChannel,
   EnsuredVoiceChannel,

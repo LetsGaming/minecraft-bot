@@ -321,6 +321,37 @@ describe("/server control command", () => {
     expect(interaction.editReply).toHaveBeenCalled();
   });
 
+  it("rejects script subcommands with a friendly error on probed plain servers (M-13)", async () => {
+    const serverAccess = await import("../src/utils/serverAccess.js");
+    const server = makeServer("plain", {
+      capabilities: {
+        scripts: {
+          start: false,
+          stop: false,
+          restart: false,
+          backup: false,
+          status: false,
+        },
+        backups: false,
+        modManifest: false,
+        variablesFile: false,
+      },
+    });
+    vi.mocked(resolveServer).mockReturnValue(server);
+    const interaction = makeInteraction({
+      options: {
+        getString: vi.fn().mockReturnValue(null),
+        getBoolean: vi.fn().mockReturnValue(null),
+        getSubcommand: vi.fn().mockReturnValue("start"),
+      },
+    });
+
+    await expect(execute(interaction)).rejects.toThrow(
+      /setup-suite layout.*docs\/admin\/setup\.md/s,
+    );
+    expect(serverAccess.runScript).not.toHaveBeenCalled();
+  });
+
   it("runs start subcommand and replies with success", async () => {
     const server = makeServer();
     vi.mocked(resolveServer).mockReturnValue(server);

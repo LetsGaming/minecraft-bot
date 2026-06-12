@@ -4,6 +4,7 @@
  */
 import { execSafe, isSudoPermissionError } from "../shell/execCommand.js";
 import { log } from "./logger.js";
+import type { ServerCapabilities } from "../types/index.js";
 import { loadConfig } from "../config.js";
 import { RconClient } from "../rcon/RconClient.js";
 import type {
@@ -22,6 +23,20 @@ export class ServerInstance {
   private _rcon: RconClient | null;
   private _seedCache: string | null = null;
   private _hasTpsCommand: boolean | null = null;
+
+  /**
+   * M-13: suite-artifact capabilities, probed at startup and re-probed on
+   * config reload. `null` means "not probed yet" — gates treat that as
+   * fully capable so nothing changes for callers that skip probing (tests).
+   */
+  capabilities: ServerCapabilities | null = null;
+
+  /** Probe and cache which setup-suite artifacts exist for this server. */
+  async probeCapabilities(): Promise<ServerCapabilities> {
+    const { detectCapabilities } = await import("./serverAccess.js");
+    this.capabilities = await detectCapabilities(this.config);
+    return this.capabilities;
+  }
 
   constructor(config: ServerConfig) {
     this.config = config;

@@ -184,5 +184,6 @@ What applies live:
 - Channel IDs, admins, thresholds, and other settings read on each use.
 - **Adding a server entry**: the instance is created and its log watcher, notifications, TPS monitor, snapshots, and downtime checks start immediately.
 - **Removing a server entry**: its log watcher and TPS monitor are stopped, the RCON connection is closed, and the instance is dropped from routing.
+- **Suite capabilities** (management scripts, backup layout, mod manifest) are re-detected for every server on each reload — installing the setup suite for an existing server takes effect immediately, except that a `/backup` or `/mods` command skipped at startup (because no server had the capability) is only registered after a restart.
 
 One limitation remains: **changing the settings of an existing server entry** (e.g. its RCON host, port, or password) is not applied live, because the running instance keeps the connection it was built with. The reload reports such servers as restart-required. Workaround without a full restart: temporarily remove the entry, reload, re-add it with the new settings, and reload again.

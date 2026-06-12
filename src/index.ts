@@ -13,7 +13,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { loadConfig, getServerIds, watchConfig } from "./config.js";
 import { consumeToken, cooldownSeconds } from "./utils/rateLimiter.js";
-import { initServers } from "./utils/server.js";
+import { initServers, getAllInstances } from "./utils/server.js";
+import {
+  capabilityCommandSkips,
+  capabilitySummary,
+} from "./utils/capabilities.js";
 import { migrateLegacySnapshots } from "./utils/snapshotUtils.js";
 import { tryResolveServer } from "./utils/guildRouter.js";
 import {
@@ -30,6 +34,20 @@ const config = loadConfig();
 
 // Initialize all server instances
 initServers(config.servers);
+
+// M-13: probe which setup-suite artifacts each server provides. The result
+// gates command registration below and per-invocation checks in the
+// suite-dependent commands; probe failures leave `capabilities` null, which
+// every gate treats as fully capable (legacy behaviour).
+for (const inst of getAllInstances()) {
+  try {
+    const cap = await inst.probeCapabilities();
+    log.info("capabilities", `${inst.id}: ${capabilitySummary(cap)}`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    log.warn("capabilities", `Probe failed for ${inst.id}: ${msg}`);
+  }
+}
 
 // C-01: move legacy loose snapshot files into the first server's directory
 // so existing baselines survive the per-server snapshot layout change.
@@ -96,6 +114,11 @@ function getCommandFiles(dir: string): string[] {
 }
 
 async function loadCommands(): Promise<void> {
+  // M-13: skip registering suite-dependent commands when NO configured
+  // server provides the capability ("/server" stays registered — see
+  // capabilityCommandSkips for why).
+  const capabilitySkips = capabilityCommandSkips(getAllInstances());
+
   const files = getCommandFiles(path.join(__dirname, "commands"));
   for (const file of files) {
     try {
@@ -105,6 +128,14 @@ async function loadCommands(): Promise<void> {
       const enabled = config.commands?.[name]?.enabled ?? true;
       if (!enabled) {
         log.info("commands", `Skipping disabled: /${name}`);
+        continue;
+      }
+      const skipReason = capabilitySkips.get(name);
+      if (skipReason) {
+        log.info(
+          "commands",
+          `Skipping /${name}: ${skipReason} (see docs/admin/setup.md)`,
+        );
         continue;
       }
       commands.set(name, cmd as BotCommand);

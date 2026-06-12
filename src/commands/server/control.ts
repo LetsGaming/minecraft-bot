@@ -9,6 +9,7 @@ import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { suppressAlerts } from "../../logWatcher/watchers/downtimeMonitor.js";
 import { log } from "../../utils/logger.js";
 import * as serverAccess from "../../utils/serverAccess.js";
+import { requireCapability } from "../../utils/capabilities.js";
 import { loadAllStats } from "../../utils/statUtils.js";
 import { loadWhitelist, deleteStats } from "../../utils/utils.js";
 
@@ -120,6 +121,18 @@ export const execute = withErrorHandling(
     if (!server) throw new Error("Server not found.");
 
     log.info("control", `${interaction.user.tag} → /${sub} on ${server.id}`);
+
+    // M-13: script-based subcommands need the corresponding management
+    // script from the setup suite. Gate here with a documented error
+    // instead of letting runScript fail with a raw "Script not found"
+    // path. prune-stats is suite-independent and never gated.
+    if (sub !== "prune-stats") {
+      requireCapability(
+        server,
+        (c) => c.scripts[sub as keyof typeof c.scripts] === true,
+        `the \`${sub}\` management script`,
+      );
+    }
 
     // Suppress downtime alerts for intentional stop/restart
     if (sub === "stop" || sub === "restart") {

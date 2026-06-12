@@ -30,8 +30,10 @@ import type {
   BackupDirInfo,
   BackupSummary,
   ScriptResult,
+  ServerCapabilities,
   TpsResult,
 } from "../types/index.js";
+import { allCapabilities } from "../types/index.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -358,6 +360,52 @@ export async function readBackups(cfg: ServerConfig): Promise<BackupSummary> {
   }
 
   return { dirs, totalBytes };
+}
+
+// ── Capability detection (M-13) ───────────────────────────────────────────
+
+/**
+ * Probe which setup-suite artifacts exist for a server.
+ *
+ * Local instances: cheap fs.existsSync probes against the documented suite
+ * layout (management scripts, backup directories, mod manifest,
+ * variables.txt).
+ *
+ * Remote instances: GET /instances/:id/capabilities on the API wrapper.
+ * Older wrappers don't have that route, so any failure falls back to the
+ * conservative all-true default — behaviour is then exactly as before
+ * capability detection existed (errors surface at invocation time).
+ */
+export async function detectCapabilities(
+  cfg: ServerConfig,
+): Promise<ServerCapabilities> {
+  if (cfg.apiUrl) {
+    try {
+      return await apiGet<ServerCapabilities>(cfg, "/capabilities");
+    } catch {
+      return allCapabilities();
+    }
+  }
+
+  const scriptExists = (rel: string): boolean =>
+    !!cfg.scriptDir && fs.existsSync(path.join(cfg.scriptDir, rel));
+
+  const backupsBase = cfg.serverDir
+    ? path.resolve(cfg.serverDir, "..", "backups", cfg.screenSession)
+    : "";
+
+  return {
+    scripts: {
+      start: scriptExists(SCRIPT_MAP["start"]!),
+      stop: scriptExists(SCRIPT_MAP["stop"]!),
+      restart: scriptExists(SCRIPT_MAP["restart"]!),
+      backup: scriptExists(SCRIPT_MAP["backup"]!),
+      status: scriptExists(SCRIPT_MAP["status"]!),
+    },
+    backups: !!backupsBase && fs.existsSync(backupsBase),
+    modManifest: scriptExists(path.join("common", "downloaded_versions.json")),
+    variablesFile: scriptExists(path.join("common", "variables.txt")),
+  };
 }
 
 // ── Script execution ──────────────────────────────────────────────────────

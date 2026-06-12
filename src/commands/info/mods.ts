@@ -16,6 +16,7 @@ import { createEmbed } from "../../utils/embedUtils.js";
 import { getModList, type ModInfo } from "../../utils/modUtils.js";
 import { withErrorHandling } from "../middleware.js";
 import { resolveServer } from "../../utils/guildRouter.js";
+import { requireCapability } from "../../utils/capabilities.js";
 import { formatTime } from "../../utils/time.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -78,6 +79,13 @@ export const execute = withErrorHandling(async (interaction) => {
   const server = resolveServer(interaction);
 
   if (!server) throw new Error("Server not found.");
+
+  // M-13: friendly gate — /mods needs the suite's mod manifest.
+  requireCapability(
+    server,
+    (c) => c.modManifest,
+    "a mod manifest (common/downloaded_versions.json)",
+  );
 
   const modList = await getModList(server);
 

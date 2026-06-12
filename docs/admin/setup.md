@@ -4,7 +4,7 @@ This guide takes you from nothing to a running bot. No prior Discord bot experie
 
 ## Plain server or setup-suite server?
 
-The bot runs against any Minecraft Java server, but it is designed for servers installed with [minecraft-server-setup](https://github.com/LetsGaming/minecraft-server-setup). That suite provides the management scripts, the backup directory layout, and the mod manifest that some features call into. On a plain server those files simply do not exist, and the affected commands fail with a "Script not found" or "not found at ..." error.
+The bot runs against any Minecraft Java server, but it is designed for servers installed with [minecraft-server-setup](https://github.com/LetsGaming/minecraft-server-setup). That suite provides the management scripts, the backup directory layout, and the mod manifest that some features call into. The bot detects at startup which of these artifacts each server actually provides (one log line per server summarizes the result): if **no** configured server has them, `/backup` and `/mods` are not registered at all; in mixed setups they stay available and the affected server answers with a clear message pointing here instead of a raw "Script not found" error. The same applies to the script-based `/server` subcommands (`/server prune-stats` works everywhere). Capabilities are re-checked on every config reload, so installing the suite later is picked up without restarting the bot — only command *registration* (the `/backup` / `/mods` skip) is decided once at startup.
 
 What works where:
 
@@ -21,7 +21,7 @@ What works where:
 Three ways to proceed:
 
 1. **Use the suite** (recommended if you are setting up a new server anyway): everything works out of the box, including the [API wrapper](remote-setup.md) for Docker/remote setups.
-2. **Plain server, reduced feature set**: everything in the ✅ rows works over RCON and the server log. Disable the rest so users never see broken commands, via the `commands` block in `config.json`:
+2. **Plain server, reduced feature set**: everything in the ✅ rows works over RCON and the server log. `/backup` and `/mods` disappear automatically when no server provides them; optionally also disable `/server` (if you don't need `prune-stats`) via the `commands` block in `config.json`:
 
    ```json
    "commands": {

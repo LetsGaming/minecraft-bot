@@ -130,7 +130,11 @@ Several features assume artifacts created by [minecraft-server-setup](https://gi
 | `config.ts` overrides | `{scriptDir}/common/variables.txt` |
 | The remote API wrapper | Is itself part of the suite ecosystem |
 
-Everything else (RCON, log parsing, stats, whitelist) works against a plain server. There is currently no runtime capability detection: missing artifacts surface as per-command errors. The audit report sketches a capability-flag design if that ever becomes code; until then, suite-dependent additions belong behind the same `serverAccess` functions so the contract stays in one file.
+Everything else (RCON, log parsing, stats, whitelist) works against a plain server.
+
+Suite artifacts are detected at runtime: `serverAccess.detectCapabilities(cfg)` probes the documented layout (management scripts, backup tiers, mod manifest, variables.txt) per server — locally via `fs.existsSync`, remotely via `GET /instances/:id/capabilities` with a conservative all-true fallback for wrappers that predate the route. The result is cached on `ServerInstance.capabilities`, logged as a one-line summary at startup, and re-probed on every config reload (so installing the suite later is picked up without a restart, except for command registration).
+
+Gating happens at two levels (`utils/capabilities.ts`): `/backup` and `/mods` are skipped at command-registration time when *no* configured instance provides the capability; per invocation, `requireCapability()` replaces raw ENOENT/"Script not found" errors with a friendly message pointing at the setup docs. `/server` is never registration-gated because its `prune-stats` subcommand is suite-independent — only its script-based subcommands are gated per invocation. Unprobed instances (`capabilities === null`) always pass the gates, which keeps legacy behaviour for anything that skips probing. Suite-dependent additions still belong behind `serverAccess` functions so the contract stays in one file — plus a flag in `detectCapabilities` and a gate at the call site.
 
 ## Startup sequence
 

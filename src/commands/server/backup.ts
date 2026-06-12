@@ -3,6 +3,7 @@ import { createEmbed } from "../../utils/embedUtils.js";
 import { resolveServer } from "../../utils/guildRouter.js";
 import { withErrorHandling } from "../middleware.js";
 import * as serverAccess from "../../utils/serverAccess.js";
+import { requireCapability } from "../../utils/capabilities.js";
 
 export const data = new SlashCommandBuilder()
   .setName("backup")
@@ -14,6 +15,9 @@ export const data = new SlashCommandBuilder()
 export const execute = withErrorHandling(async (interaction) => {
   const server = resolveServer(interaction);
   if (!server) throw new Error("Server not found.");
+
+  // M-13: friendly gate instead of an empty/raw error on plain servers.
+  requireCapability(server, (c) => c.backups, "the suite backup layout");
 
   const { dirs, totalBytes } = await serverAccess.readBackups(server.config);
 
