@@ -137,8 +137,18 @@ Everything else (RCON, log parsing, stats, whitelist) works against a plain serv
 1. `loadConfig()`: read, validate, apply env overrides, freeze; `watchConfig()` arms hot reload.
 2. `initServers()`: build one `ServerInstance` per config entry.
 3. Load command files, skip disabled ones, register all globally with Discord.
-4. On `clientReady`: `initMinecraftCommands()` loads in-game commands, creates a log watcher per server, registers all watchers, and starts the schedulers (TPS, leaderboard, status embed, downtime, uptime flush, channel purge).
+4. On `clientReady`: `initMinecraftCommands()` loads in-game commands, creates a log watcher per server (via `wireServer`, which tracks the watcher + TPS timer per server ID), and starts the schedulers (TPS, leaderboard, status embed, downtime, uptime flush, channel purge).
 5. SIGTERM/SIGINT flush the uptime history before exit.
+
+## Config-reload reconciliation
+
+Both reload paths (`/config reload` and the `config.json` file watcher) call `reconcileServers(client, freshConfig)` in `initMinecraftCommands.ts`:
+
+- **Added server IDs**: `addServerInstance()` registers the instance, then `wireServer()` starts its log watcher and TPS monitor — identical to startup wiring. Tick-based consumers (snapshot timer, downtime monitor, status embed) resolve instances via `getAllInstances()` each cycle, so they pick the new server up automatically.
+- **Removed server IDs**: `unwireServer()` stops the log watcher and clears the TPS timer, `removeServerInstance()` disconnects RCON and drops the instance from the registry.
+- **Changed settings on an existing ID**: detected by config diff and reported as restart-required; the live instance keeps its original connection wiring on purpose.
+
+Reconciliations are serialized through an internal promise chain, so a near-simultaneous `/config reload` and file-watcher event for the same edit cannot interleave add/remove of the same ID — the second call sees an empty diff.
 
 ## Layer import rules
 

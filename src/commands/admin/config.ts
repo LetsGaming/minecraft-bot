@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, codeBlock } from "discord.js";
-import { loadConfig, reloadConfig, getServerIds } from "../../config.js";
+import { loadConfig, reloadConfig } from "../../config.js";
+import { reconcileServers } from "../../logWatcher/initMinecraftCommands.js";
 import { createEmbed, createSuccessEmbed } from "../../utils/embedUtils.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { log } from "../../utils/logger.js";
@@ -31,9 +32,18 @@ export const execute = withErrorHandling(
     const sub = interaction.options.getSubcommand();
 
     if (sub === "reload") {
-      const before = getServerIds();
       const cfg = reloadConfig();
       const after = Object.keys(cfg.servers);
+
+      // M-05(b): apply server additions/removals to the running bot —
+      // create instances + watchers for added IDs, stop watchers and drop
+      // instances for removed ones. Changed settings on an existing ID
+      // can't be applied live (the instance keeps its original RCON/watcher
+      // wiring), so those are reported as restart-required.
+      const { added, removed, changed } = await reconcileServers(
+        interaction.client,
+        cfg,
+      );
 
       log.info("config", `Config reloaded by ${interaction.user.tag}`);
 
@@ -43,16 +53,13 @@ export const execute = withErrorHandling(
         `Admins: ${cfg.adminUsers.length}`,
       ];
 
-      // M-05: server additions/removals refresh the config object, but the
-      // instance registry and log watchers are only wired at startup — so
-      // be honest about it instead of claiming the server was applied.
-      const added = after.filter((s) => !before.includes(s));
-      const removed = before.filter((s) => !after.includes(s));
-      if (added.length > 0) lines.push(`+ Added: ${added.join(", ")}`);
-      if (removed.length > 0) lines.push(`- Removed: ${removed.join(", ")}`);
-      if (added.length > 0 || removed.length > 0) {
+      if (added.length > 0)
+        lines.push(`+ Added (live): ${added.join(", ")}`);
+      if (removed.length > 0)
+        lines.push(`- Removed (live): ${removed.join(", ")}`);
+      if (changed.length > 0) {
         lines.push(
-          "⚠ Server changes require a bot restart to take effect.",
+          `⚠ Changed settings on existing server(s) require a restart: ${changed.join(", ")}`,
         );
       }
 

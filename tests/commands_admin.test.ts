@@ -51,6 +51,13 @@ vi.mock("../src/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+// M-05(b): /config reload now applies server changes live via reconciliation
+vi.mock("../src/logWatcher/initMinecraftCommands.js", () => ({
+  reconcileServers: vi
+    .fn()
+    .mockResolvedValue({ added: [], removed: [], changed: [] }),
+}));
+
 vi.mock("../src/logWatcher/logWatcher.js", () => ({
   registerLogCommand: vi.fn(),
   getGlobalWatchers: vi.fn().mockReturnValue([]),
@@ -115,6 +122,27 @@ describe("/config admin command — reload subcommand", () => {
     const interaction = makeInteraction("reload");
     await execute(interaction as never);
     expect(interaction.editReply).toHaveBeenCalled();
+  });
+
+  it("reconciles server changes and reports them as applied live (M-05b)", async () => {
+    const { reconcileServers } = await import(
+      "../src/logWatcher/initMinecraftCommands.js"
+    );
+    vi.mocked(reconcileServers).mockResolvedValue({
+      added: ["creative"],
+      removed: ["old"],
+      changed: ["survival"],
+    });
+    const { createSuccessEmbed } = await import("../src/utils/embedUtils.js");
+
+    const interaction = makeInteraction("reload");
+    await execute(interaction as never);
+
+    expect(reconcileServers).toHaveBeenCalledOnce();
+    const msg = vi.mocked(createSuccessEmbed).mock.calls.at(-1)![0] as string;
+    expect(msg).toContain("+ Added (live): creative");
+    expect(msg).toContain("- Removed (live): old");
+    expect(msg).toContain("require a restart: survival");
   });
 });
 

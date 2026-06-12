@@ -41,13 +41,20 @@ export function suppressAlerts(
 }
 
 /**
- * Start the downtime monitor for all server instances.
+ * Start the downtime monitor.
+ *
+ * M-05(b): accepts either a fixed array (legacy/tests) or a provider
+ * function that is consulted on every tick — pass getAllInstances so
+ * servers added/removed by config-reload reconciliation are picked up
+ * without restarting the monitor.
  */
 export function startDowntimeMonitor(
-  servers: ServerInstance[],
+  servers: ServerInstance[] | (() => ServerInstance[]),
   client: Client,
   guildConfigs: Record<string, GuildConfig>,
 ): ReturnType<typeof setInterval> {
+  const getServers = typeof servers === "function" ? servers : () => servers;
+
   const guildsWithAlerts = Object.entries(guildConfigs).filter(
     ([, cfg]) => cfg.downtimeAlerts?.channelId,
   );
@@ -57,7 +64,7 @@ export function startDowntimeMonitor(
   }
 
   const timer = setInterval(async () => {
-    for (const server of servers) {
+    for (const server of getServers()) {
       try {
         await checkServer(server, client, guildsWithAlerts);
       } catch (err) {
@@ -69,7 +76,7 @@ export function startDowntimeMonitor(
 
   log.info(
     "downtime",
-    `Monitor active for ${servers.length} server(s), alerting ${guildsWithAlerts.length} guild(s)`,
+    `Monitor active for ${getServers().length} server(s), alerting ${guildsWithAlerts.length} guild(s)`,
   );
   return timer;
 }

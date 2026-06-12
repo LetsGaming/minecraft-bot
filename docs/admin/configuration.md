@@ -179,4 +179,10 @@ Environment variables take precedence over `config.json`. This is how Docker and
 
 The bot watches `config.json` for changes and reloads it automatically (debounced, a malformed save keeps the old config active). Admins can also run `/config reload` in Discord, and `/config show` displays the running configuration with secrets redacted.
 
-One limitation: server connections (RCON clients, log watchers) are created at startup. Changing channel IDs, admins, or thresholds applies live; adding or removing a server entry requires a bot restart to take effect.
+What applies live:
+
+- Channel IDs, admins, thresholds, and other settings read on each use.
+- **Adding a server entry**: the instance is created and its log watcher, notifications, TPS monitor, snapshots, and downtime checks start immediately.
+- **Removing a server entry**: its log watcher and TPS monitor are stopped, the RCON connection is closed, and the instance is dropped from routing.
+
+One limitation remains: **changing the settings of an existing server entry** (e.g. its RCON host, port, or password) is not applied live, because the running instance keeps the connection it was built with. The reload reports such servers as restart-required. Workaround without a full restart: temporarily remove the entry, reload, re-add it with the new settings, and reload again.

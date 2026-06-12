@@ -7,11 +7,17 @@ import {
   getAllInstances,
   getFirstInstance,
   getServerInstance,
+  addServerInstance,
+  removeServerInstance,
 } from "../utils/server.js";
 import { loadConfig } from "../config.js";
 import { log } from "../utils/logger.js";
 import type { Client } from "discord.js";
-import type { InGameCommandResult } from "../types/index.js";
+import type {
+  BotConfig,
+  GuildConfig,
+  InGameCommandResult,
+} from "../types/index.js";
 
 // Watchers
 import { registerChatBridge, setupDiscordToMc } from "./watchers/chatBridge.js";
@@ -38,6 +44,57 @@ function getCommandFiles(dir: string): string[] {
     else if (file.endsWith(".js")) files.push(fullPath);
   }
   return files;
+}
+
+// ── Per-server watcher lifecycle (M-05b) ──────────────────────────────────
+// Every resource wired for a server instance is tracked here so config-reload
+// reconciliation can tear it down again when the server is removed.
+
+interface ServerHandles {
+  watcher: LogWatcher | RemoteLogWatcher;
+  tpsTimer: ReturnType<typeof setInterval> | null;
+}
+
+const serverHandles = new Map<string, ServerHandles>();
+
+async function wireServer(
+  server: ReturnType<typeof getAllInstances>[number],
+  client: Client,
+  guildConfigs: Record<string, GuildConfig>,
+): Promise<void> {
+  // Remote instances stream logs over SSE; local instances watch the file directly.
+  const watcher = server.config.apiUrl
+    ? new RemoteLogWatcher(server)
+    : new LogWatcher(server);
+
+  for (const { regex, handler } of getGlobalWatchers()) {
+    watcher.register(regex, handler);
+  }
+
+  registerChatBridge(watcher, client, guildConfigs);
+  registerJoinLeaveWatcher(watcher, client, guildConfigs);
+  registerDeathWatcher(watcher, client, guildConfigs);
+  registerAdvancementWatcher(watcher, client, guildConfigs);
+  registerServerEventWatcher(watcher, client, guildConfigs);
+  registerSleepWatcher(watcher);
+
+  await watcher.start(client);
+
+  const tpsTimer = startTpsMonitor(server, client, guildConfigs);
+
+  serverHandles.set(server.id, { watcher, tpsTimer });
+}
+
+function unwireServer(serverId: string): void {
+  const handles = serverHandles.get(serverId);
+  if (!handles) return;
+  try {
+    handles.watcher.stop();
+  } catch {
+    // best-effort — a watcher that failed to start has nothing to stop
+  }
+  if (handles.tpsTimer) clearInterval(handles.tpsTimer);
+  serverHandles.delete(serverId);
 }
 
 export async function initMinecraftCommands(client: Client): Promise<void> {
@@ -71,29 +128,10 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
   }
 
   // ── 2. Create a LogWatcher for each server instance ──
-  const globalWatchers = getGlobalWatchers();
   const instances = getAllInstances();
 
   for (const server of instances) {
-    // Remote instances stream logs over SSE; local instances watch the file directly.
-    const watcher = server.config.apiUrl
-      ? new RemoteLogWatcher(server)
-      : new LogWatcher(server);
-
-    for (const { regex, handler } of globalWatchers) {
-      watcher.register(regex, handler);
-    }
-
-    registerChatBridge(watcher, client, guildConfigs);
-    registerJoinLeaveWatcher(watcher, client, guildConfigs);
-    registerDeathWatcher(watcher, client, guildConfigs);
-    registerAdvancementWatcher(watcher, client, guildConfigs);
-    registerServerEventWatcher(watcher, client, guildConfigs);
-    registerSleepWatcher(watcher);
-
-    await watcher.start(client);
-
-    startTpsMonitor(server, client, guildConfigs);
+    await wireServer(server, client, guildConfigs);
   }
 
   // ── 3. Discord → MC chat bridge ──
@@ -111,7 +149,9 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
   startStatusEmbed(client, guildConfigs);
 
   // ── 6. Downtime monitor ──
-  startDowntimeMonitor(instances, client, guildConfigs);
+  // M-05(b): pass the provider so reconciled server additions/removals are
+  // monitored without restarting the timer.
+  startDowntimeMonitor(getAllInstances, client, guildConfigs);
 
   // ── 7. Uptime flush scheduler ──
   startUptimeFlushScheduler();
@@ -123,4 +163,92 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
     "init",
     `${instances.length} server(s) initialized with all watchers`,
   );
+}
+
+// ── Config-reload reconciliation (M-05b) ──────────────────────────────────
+
+export interface ReconcileResult {
+  /** Server IDs added to the registry and fully wired (watchers + TPS). */
+  added: string[];
+  /** Server IDs whose watchers were stopped and instances dropped. */
+  removed: string[];
+  /**
+   * Server IDs that exist in both old and new config but whose settings
+   * differ. Live instances keep their original config object (RCON client,
+   * watcher, etc. were built from it), so these still need a restart.
+   */
+  changed: string[];
+}
+
+// Reconciliations are serialized: /config reload and the config file
+// watcher can fire near-simultaneously for the same edit, and interleaved
+// add/remove of the same server ID would corrupt the handle registry.
+let reconcileChain: Promise<unknown> = Promise.resolve();
+
+/**
+ * Apply server additions/removals from a freshly reloaded config to the
+ * running bot:
+ *  - removed IDs: stop the log watcher, clear the TPS timer, disconnect
+ *    RCON, and drop the instance from the registry,
+ *  - added IDs: create the instance and wire the full watcher set, exactly
+ *    as at startup.
+ *
+ * Everything that resolves instances per tick (snapshot timer, downtime
+ * monitor, status embed, command routing) picks the change up automatically
+ * via getAllInstances()/getServerInstance().
+ */
+export function reconcileServers(
+  client: Client,
+  freshConfig: BotConfig,
+): Promise<ReconcileResult> {
+  const run = reconcileChain.then(() => doReconcile(client, freshConfig));
+  reconcileChain = run.catch(() => {});
+  return run;
+}
+
+async function doReconcile(
+  client: Client,
+  freshConfig: BotConfig,
+): Promise<ReconcileResult> {
+  const configured = freshConfig.servers;
+  const registered = getAllInstances();
+  const registeredIds = new Set(registered.map((i) => i.id));
+
+  const removed = [...registeredIds].filter((id) => !(id in configured));
+  const added = Object.keys(configured).filter(
+    (id) => !registeredIds.has(id),
+  );
+  const changed = registered
+    .filter(
+      (inst) =>
+        inst.id in configured &&
+        JSON.stringify(inst.config) !== JSON.stringify(configured[inst.id]),
+    )
+    .map((inst) => inst.id);
+
+  for (const id of removed) {
+    unwireServer(id);
+    removeServerInstance(id);
+    log.info("reconcile", `Server removed and watchers stopped: ${id}`);
+  }
+
+  for (const id of added) {
+    const inst = addServerInstance(configured[id]!);
+    try {
+      await wireServer(inst, client, freshConfig.guilds);
+      log.info("reconcile", `Server added and watchers started: ${id}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.error("reconcile", `Failed to wire added server ${id}: ${msg}`);
+    }
+  }
+
+  if (changed.length > 0) {
+    log.warn(
+      "reconcile",
+      `Settings changed on existing server(s) [${changed.join(", ")}] — a restart is required to apply those (live instances keep their original connection settings).`,
+    );
+  }
+
+  return { added, removed, changed };
 }

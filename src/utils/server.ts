@@ -365,10 +365,39 @@ export class ServerInstance {
 const instances = new Map<string, ServerInstance>();
 
 export function initServers(serversConfig: Record<string, ServerConfig>): void {
-  for (const [id, cfg] of Object.entries(serversConfig)) {
-    instances.set(id, new ServerInstance(cfg));
-    log.info("server", `Initialized server: ${id} (RCON: ${cfg.useRcon})`);
+  for (const cfg of Object.values(serversConfig)) {
+    addServerInstance(cfg);
   }
+}
+
+/**
+ * M-05(b): register a single server instance at runtime.
+ * Used by config-reload reconciliation in addition to startup init.
+ */
+export function addServerInstance(cfg: ServerConfig): ServerInstance {
+  const inst = new ServerInstance(cfg);
+  instances.set(cfg.id, inst);
+  log.info("server", `Initialized server: ${cfg.id} (RCON: ${cfg.useRcon})`);
+  return inst;
+}
+
+/**
+ * M-05(b): drop a server instance from the registry and tear down its
+ * RCON connection. Watcher teardown is the caller's responsibility
+ * (see unwireServer in initMinecraftCommands.ts) — this only owns what
+ * the instance itself owns.
+ */
+export function removeServerInstance(serverId: string): ServerInstance | null {
+  const inst = instances.get(serverId) ?? null;
+  if (!inst) return null;
+  instances.delete(serverId);
+  try {
+    inst.rcon?.disconnect();
+  } catch {
+    // best-effort teardown — the socket may already be closed
+  }
+  log.info("server", `Removed server instance: ${serverId}`);
+  return inst;
 }
 
 /**

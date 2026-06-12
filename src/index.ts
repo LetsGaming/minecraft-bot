@@ -13,10 +13,13 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { loadConfig, getServerIds, watchConfig } from "./config.js";
 import { consumeToken, cooldownSeconds } from "./utils/rateLimiter.js";
-import { initServers, getAllInstances } from "./utils/server.js";
+import { initServers } from "./utils/server.js";
 import { migrateLegacySnapshots } from "./utils/snapshotUtils.js";
 import { tryResolveServer } from "./utils/guildRouter.js";
-import { initMinecraftCommands } from "./logWatcher/initMinecraftCommands.js";
+import {
+  initMinecraftCommands,
+  reconcileServers,
+} from "./logWatcher/initMinecraftCommands.js";
 import { log } from "./utils/logger.js";
 import { flushUptimeHistory } from "./utils/uptimeTracker.js";
 import { invalidateStatusChannelCache } from "./logWatcher/watchers/statusEmbed.js";
@@ -24,22 +27,6 @@ import type { BotCommand, BotClient } from "./types/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const config = loadConfig();
-// Re-cache automatically when config.json is edited on disk.
-// M-05: added/removed servers cannot be applied without a restart — the
-// instance registry and log watchers are wired once at startup. Log it
-// honestly instead of silently routing the "new" server to the fallback.
-watchConfig((fresh) => {
-  const registered = new Set(getAllInstances().map((s) => s.id));
-  const configured = Object.keys(fresh.servers);
-  const added = configured.filter((id) => !registered.has(id));
-  const removed = [...registered].filter((id) => !configured.includes(id));
-  if (added.length > 0 || removed.length > 0) {
-    log.warn(
-      "config",
-      `Server list changed (added: [${added.join(", ")}], removed: [${removed.join(", ")}]) — restart required to apply server changes.`,
-    );
-  }
-});
 
 // Initialize all server instances
 initServers(config.servers);
@@ -62,6 +49,31 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
   ],
 }) as BotClient;
+
+// Re-cache automatically when config.json is edited on disk.
+// M-05(b): server additions/removals are reconciled live — instances and
+// watchers are created for added IDs and torn down for removed ones.
+// Before the client is ready, watchers can't be wired yet; startup reads
+// the fresh config anyway, so skipping is correct rather than lossy.
+watchConfig((fresh) => {
+  if (!client.isReady()) return;
+  reconcileServers(client, fresh)
+    .then(({ added, removed, changed }) => {
+      if (added.length > 0 || removed.length > 0 || changed.length > 0) {
+        log.info(
+          "config",
+          `Reload applied — added: [${added.join(", ")}], removed: [${removed.join(", ")}]` +
+            (changed.length > 0
+              ? `; changed (restart required): [${changed.join(", ")}]`
+              : ""),
+        );
+      }
+    })
+    .catch((err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.error("config", `Reconciliation after reload failed: ${msg}`);
+    });
+});
 
 /**
  * We store commands on the client instance for runtime access.
