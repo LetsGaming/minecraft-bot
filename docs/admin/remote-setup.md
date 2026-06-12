@@ -108,6 +108,15 @@ In the bot's `config.json`, add `apiUrl` and `apiKey` to each remote server. The
 
 Both instances point at the same `apiUrl`; the wrapper routes by the instance ID in the URL path. Local instances simply omit `apiUrl`.
 
+## Wrapper version notes
+
+Two bot features need wrapper routes added in wrapper v2.1:
+
+- **Capability detection** (`GET /instances/:id/capabilities`): lets the bot know which setup-suite artifacts the remote instance provides. Older wrappers without the route are fine — the bot then assumes everything is available and errors surface at invocation time, exactly as before.
+- **`/server prune-stats`** (`DELETE /instances/:id/stats/:uuid`): explicit, admin-gated deletion of orphaned stats files. On older wrappers the deletion silently degrades — prune-stats reports 0 deleted files instead of failing.
+
+Update the wrapper to get both; no bot-side configuration changes are needed.
+
 ## Step 3: Verify
 
 ```bash

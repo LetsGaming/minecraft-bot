@@ -156,6 +156,22 @@ export async function getTps(
   return null;
 }
 
+async function apiDelete<T>(cfg: ServerConfig, route: string): Promise<T> {
+  const url = `${cfg.apiUrl!.replace(/\/$/, "")}/instances/${cfg.id}${route}`;
+  const headers: Record<string, string> = {};
+  if (cfg.apiKey) headers["x-api-key"] = cfg.apiKey;
+  const res = await fetch(url, {
+    method: "DELETE",
+    headers,
+    signal: AbortSignal.timeout(8_000),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`API DELETE ${route} → ${res.status}: ${text}`);
+  }
+  return res.json() as Promise<T>;
+}
+
 // ── Whitelist ─────────────────────────────────────────────────────────────
 
 /** Read whitelist.json for the given server. Returns [] on any error. */
@@ -255,9 +271,20 @@ export async function deleteStatsFile(
   uuid: string,
 ): Promise<boolean> {
   if (cfg.apiUrl) {
-    // Remote stats files are managed by the API server VM.
-    // Deletion from the bot side is intentionally not supported.
-    return false;
+    // H-05 companion: the wrapper exposes DELETE /stats/:uuid so the
+    // admin-gated /server prune-stats works on remote instances too.
+    // Older wrappers without the route (or any transport error) degrade
+    // to "not deleted" — prune-stats then reports 0 deletions instead of
+    // failing the whole command.
+    try {
+      const { deleted } = await apiDelete<{ deleted: boolean }>(
+        cfg,
+        `/stats/${encodeURIComponent(uuid)}`,
+      );
+      return deleted === true;
+    } catch {
+      return false;
+    }
   }
   const dir = await statsDir(cfg);
   try {

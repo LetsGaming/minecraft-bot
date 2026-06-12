@@ -260,3 +260,46 @@ describe("capabilitySummary", () => {
     );
   });
 });
+
+// ── Remote deleteStatsFile (H-05 prune-stats on remote instances) ──────────
+
+describe("deleteStatsFile — remote wrapper", () => {
+  const UUID = "550e8400-e29b-41d4-a716-446655440000";
+
+  it("calls DELETE /stats/:uuid and returns the wrapper's verdict", async () => {
+    const { deleteStatsFile } = await import("../src/utils/serverAccess.js");
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(Response.json({ deleted: true }));
+    try {
+      const ok = await deleteStatsFile(
+        cfg({ apiUrl: "https://wrapper.example.com", id: "survival" }),
+        UUID,
+      );
+      expect(ok).toBe(true);
+      const [url, init] = fetchSpy.mock.calls[0]!;
+      expect(String(url)).toBe(
+        `https://wrapper.example.com/instances/survival/stats/${UUID}`,
+      );
+      expect((init as RequestInit).method).toBe("DELETE");
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("degrades to false on wrappers without the route", async () => {
+    const { deleteStatsFile } = await import("../src/utils/serverAccess.js");
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("Cannot DELETE", { status: 404 }));
+    try {
+      const ok = await deleteStatsFile(
+        cfg({ apiUrl: "https://wrapper.example.com" }),
+        UUID,
+      );
+      expect(ok).toBe(false);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+});
