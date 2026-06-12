@@ -2,13 +2,13 @@
 
 ## The admin model
 
-The bot has exactly two permission levels: regular users and admins. Admins are Discord user IDs listed in `config.json`:
+The bot has exactly two permission levels: regular users and admins. The `adminUsers` list in `config.json` accepts Discord **user IDs and role IDs** (both are snowflakes, so they mix freely):
 
 ```json
-"adminUsers": ["123456789012345678", "987654321098765432"]
+"adminUsers": ["123456789012345678", "555555555555555555"]
 ```
 
-There are no roles, no per-command grants. If finer control matters to you, restrict who can see the commands via Discord's own server settings (Server Settings → Integrations → your bot → command permissions).
+A user counts as admin if their own ID is listed **or** they carry any listed role — so you can manage admin access entirely through a Discord role without touching the config for each person. Role checks only apply inside guilds (DM'd commands match by user ID only). There are no per-command grants; if finer control matters to you, restrict who can see the commands via Discord's own server settings (Server Settings → Integrations → your bot → command permissions).
 
 ### Admin-only commands
 
@@ -21,6 +21,8 @@ There are no roles, no per-command grants. If finer control matters to you, rest
 | `/verify` | Identical to `/whitelist` (kept as an alias). |
 | `/unwhitelist` | Removes a player from the whitelist. |
 | `/config show` / `/config reload` | Inspect the running config (secrets redacted) or hot-reload it from disk. |
+| `/server prune-stats` | Lists (dry run) or deletes stats files of players no longer on the whitelist. |
+| `/whois` | Shows the whitelist audit entry (who added/removed a player, when, where) and the linked Discord account for a Minecraft username. |
 
 A non-admin running any of these gets a clean "You do not have permission to use this command" error. The `/clear` command is gated differently: Discord itself only shows it to members with the Manage Messages permission.
 

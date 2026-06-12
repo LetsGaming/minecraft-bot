@@ -106,7 +106,10 @@ export interface RawBotConfig {
   clientId: string;
   servers?: Record<string, RawServerConfig>;
   guilds?: Record<string, GuildConfig>;
+  /** F-02: may contain Discord user IDs and/or role IDs. */
   adminUsers?: string[];
+  /** F-05: locale for user-visible bot strings ("en" | "de", default "en"). */
+  language?: string;
   commands?: Record<string, CommandOverrideConfig>;
   leaderboard?: Record<string, unknown>;
   tpsWarningThreshold?: number;
@@ -119,7 +122,10 @@ export interface BotConfig {
   clientId: string;
   servers: Record<string, ServerConfig>;
   guilds: Record<string, GuildConfig>;
+  /** F-02: may contain Discord user IDs and/or role IDs. */
   adminUsers: string[];
+  /** F-05: locale for user-visible bot strings. */
+  language: "en" | "de";
   commands: Record<string, CommandOverrideConfig>;
   leaderboard: Record<string, unknown>;
   tpsWarningThreshold: number;

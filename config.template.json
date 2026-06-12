@@ -1,47 +1,53 @@
 {
   "token": "${DISCORD_TOKEN}",
   "clientId": "${DISCORD_CLIENT_ID}",
-
-  "adminUsers": ["${DISCORD_ADMIN_USER_ID}"],
-
+  "adminUsers": [
+    "${DISCORD_ADMIN_USER_ID}"
+  ],
+  "language": "en",
   "servers": {
     "survival": {
       "apiUrl": "${MC_API_URL}",
       "apiKey": "${MC_API_KEY}"
     }
   },
-
   "guilds": {
     "${DISCORD_GUILD_ID}": {
       "defaultServer": "survival",
-
       "notifications": {
         "channelId": "${DISCORD_NOTIFICATIONS_CHANNEL_ID}",
-        "events": ["join", "leave", "death", "advancement", "start", "stop"]
+        "events": [
+          "join",
+          "leave",
+          "death",
+          "advancement",
+          "start",
+          "stop"
+        ]
       },
-
       "chatBridge": {
         "channelId": "${DISCORD_CHAT_BRIDGE_CHANNEL_ID}",
         "server": "survival"
       },
-
       "leaderboard": {
         "channelId": "${DISCORD_LEADERBOARD_CHANNEL_ID}",
         "interval": "weekly",
         "server": "survival"
       },
-
       "statusEmbed": {
         "enabled": false
       }
     }
   },
-
   "tpsWarningThreshold": 15,
   "tpsPollIntervalMs": 60000,
-
   "commands": {
-    "map": { "enabled": false, "url": "" },
-    "seed": { "enabled": true }
+    "map": {
+      "enabled": false,
+      "url": ""
+    },
+    "seed": {
+      "enabled": true
+    }
   }
 }

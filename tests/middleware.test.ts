@@ -76,6 +76,33 @@ describe("isServerAdmin", () => {
     >);
     expect(isServerAdmin("anyone")).toBe(false);
   });
+
+  it("accepts a user carrying an admin role ID (F-02)", async () => {
+    vi.mocked(loadConfig).mockReturnValue({
+      adminUsers: ["admin1", "role-mod-123"],
+    } as never);
+    const { isServerAdmin } = await import("../src/commands/middleware.js");
+    expect(isServerAdmin("someuser", ["role-other", "role-mod-123"])).toBe(
+      true,
+    );
+    expect(isServerAdmin("someuser", ["role-other"])).toBe(false);
+  });
+
+  it("getMemberRoleIds handles cached and raw member shapes (F-02)", async () => {
+    const { getMemberRoleIds } = await import("../src/commands/middleware.js");
+    // Raw API shape: roles is a string array
+    expect(
+      getMemberRoleIds({ member: { roles: ["r1", "r2"] } } as never),
+    ).toEqual(["r1", "r2"]);
+    // Cached shape: roles.cache is a Map
+    expect(
+      getMemberRoleIds({
+        member: { roles: { cache: new Map([["r3", {}]]) } },
+      } as never),
+    ).toEqual(["r3"]);
+    // No member (DM)
+    expect(getMemberRoleIds({} as never)).toEqual([]);
+  });
 });
 
 // ── requireServerAdmin ─────────────────────────────────────────────────────

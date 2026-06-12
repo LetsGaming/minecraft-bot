@@ -4,12 +4,37 @@ import { log } from "../utils/logger.js";
 import { loadConfig } from "../config.js";
 
 /**
- * Checks whether a Discord user ID is listed in config.adminUsers.
+ * Checks whether a Discord user is an admin.
+ *
+ * F-02: `config.adminUsers` may contain user IDs *and* role IDs (both are
+ * snowflakes, so no config format change is needed). A user is an admin if
+ * their own ID is listed or if they carry any listed role. Pure-ID callers
+ * (no roles available) keep working — role matching is simply skipped.
  */
-export function isServerAdmin(discordUserId: string): boolean {
+export function isServerAdmin(
+  discordUserId: string,
+  memberRoleIds: readonly string[] = [],
+): boolean {
   const cfg = loadConfig();
   const admins = cfg.adminUsers;
-  return admins.includes(discordUserId);
+  return (
+    admins.includes(discordUserId) ||
+    memberRoleIds.some((roleId) => admins.includes(roleId))
+  );
+}
+
+/**
+ * Extract the role IDs from an interaction's member, handling both the
+ * cached GuildMember shape (roles.cache Map) and the raw API shape
+ * (roles as a string array).
+ */
+export function getMemberRoleIds(
+  interaction: ChatInputCommandInteraction,
+): string[] {
+  const roles = interaction.member?.roles;
+  if (!roles) return [];
+  if (Array.isArray(roles)) return roles;
+  return [...roles.cache.keys()];
 }
 
 type CommandExecutor = (
@@ -22,7 +47,8 @@ type CommandExecutor = (
  */
 export function requireServerAdmin(execute: CommandExecutor): CommandExecutor {
   return async (interaction) => {
-    if (!isServerAdmin(interaction.user.id)) {
+    // F-02: pass the member's roles so role-based admin entries match.
+    if (!isServerAdmin(interaction.user.id, getMemberRoleIds(interaction))) {
       throw new Error("You do not have permission to use this command.");
     }
     return execute(interaction);

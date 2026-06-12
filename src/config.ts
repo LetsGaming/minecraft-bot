@@ -190,6 +190,8 @@ export function loadConfig(): BotConfig {
     servers,
     guilds,
     adminUsers:           raw.adminUsers          ?? [],
+    // F-05: locale for user-visible strings; anything but "de" → "en"
+    language:             raw.language === "de" ? "de" : "en",
     commands:             raw.commands            ?? {},
     leaderboard:          raw.leaderboard         ?? {},
     tpsWarningThreshold:  raw.tpsWarningThreshold ?? 15,

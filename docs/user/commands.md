@@ -9,7 +9,7 @@ Options in `(parentheses)` are optional. Most commands accept an optional `serve
 | Command | Options | Description |
 |---|---|---|
 | `/status` | (`server`) | Online/offline, player count, who is online, and bot latency. |
-| `/uptime` | (`server`) | Uptime history with 24h/7d/30d percentage bars. Without a server, shows all servers. |
+| `/uptime` | (`server`) | Uptime history with 24h/7d/30d percentage bars and an hourly 24h sparkline. Without a server, shows all servers. |
 | `/seed` | (`server`) | The world seed. |
 | `/tps` | (`server`) | Current TPS. Paper-style servers show 1/5/15-minute averages, vanilla shows TPS plus MSPT and tick timing percentiles. |
 | `/backup` | (`server`) | Backup overview: count, age, and size of the latest backup per backup tier. |
@@ -45,6 +45,7 @@ See [linking.md](linking.md) for the walkthrough and what linking unlocks.
 | Command | Description |
 |---|---|
 | `/daily` | Claim your daily item reward. Needs a linked account and you must be online in Minecraft. |
+| `/daily-reminder` | Opt in/out of a DM when your next daily reward is ready (`enabled: true/false`). |
 | `/streak` | Your current streak, longest streak, and the next bonus milestone. |
 
 See [daily-rewards.md](daily-rewards.md).

@@ -144,6 +144,10 @@ Gating happens at two levels (`utils/capabilities.ts`): `/backup` and `/mods` ar
 4. On `clientReady`: `initMinecraftCommands()` loads in-game commands, creates a log watcher per server (via `wireServer`, which tracks the watcher + TPS timer per server ID), and starts the schedulers (TPS, leaderboard, status embed, downtime, uptime flush, channel purge).
 5. SIGTERM/SIGINT flush the uptime history before exit.
 
+## Localization (F-05)
+
+User-visible strings resolve through `t(key, vars)` in `utils/i18n.ts`. Locales are plain TS maps in `src/locales/` (`en.ts` is the default and fallback, `de.ts` overrides per key); `config.language` ("en" | "de") selects the active one, and missing keys fall back en → key. The layer is deliberately minimal — no plural rules, no nested keys, no runtime file loading. **All new user-visible strings must go through `t()`**; existing literal strings migrate key-by-key whenever a command is touched, so the map grows with the code instead of in one risky bulk rewrite.
+
 ## Config-reload reconciliation
 
 Both reload paths (`/config reload` and the `config.json` file watcher) call `reconcileServers(client, freshConfig)` in `initMinecraftCommands.ts`:

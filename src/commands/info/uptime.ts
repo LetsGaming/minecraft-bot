@@ -121,6 +121,16 @@ function buildSingleEmbed(
     { name: "Last 30 days", value: uptimeBar(stats.pct30d, 15), inline: false },
   );
 
+  // F-06: hourly sparkline, oldest → newest. Only shown when at least one
+  // hour has data; a row of 24 dots would just be noise.
+  if (stats.checks24h.total > 0) {
+    embed.addFields({
+      name: "24h trend (hourly)",
+      value: `\`${stats.sparkline24h}\` (oldest → now, · = no data)`,
+      inline: false,
+    });
+  }
+
   if (stats.checks24h.total > 0) {
     embed.setFooter({
       text: `Based on ${stats.checks24h.total} checks (24h) · ${stats.checks7d.total} checks (7d)`,

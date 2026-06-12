@@ -29,6 +29,7 @@ import { startTpsMonitor } from "./watchers/tpsMonitor.js";
 import { startLeaderboardScheduler } from "./watchers/leaderboardScheduler.js";
 import { startStatusEmbed } from "./watchers/statusEmbed.js";
 import { startDowntimeMonitor } from "./watchers/downtimeMonitor.js";
+import { startDailyReminderScheduler } from "./watchers/dailyReminderScheduler.js";
 import { startChannelPurge } from "./watchers/channelPurge.js";
 import { registerSleepWatcher } from "./watchers/sleepWatcher.js";
 import { startUptimeFlushScheduler } from "../utils/uptimeTracker.js";
@@ -147,6 +148,9 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
 
   // ── 5. Persistent status embed ──
   startStatusEmbed(client, guildConfigs);
+
+  // ── 5b. Daily claim reminders (F-04) ──
+  startDailyReminderScheduler(client);
 
   // ── 6. Downtime monitor ──
   // M-05(b): pass the provider so reconciled server additions/removals are

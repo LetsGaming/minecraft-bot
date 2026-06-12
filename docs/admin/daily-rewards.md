@@ -61,3 +61,7 @@ Claim history and streaks are stored per Discord user in `data/claimedDaily.json
 - Validate the JSON after editing (`python3 -m json.tool data/dailyRewards.json` or any JSON linter). If the file is unreadable, `/daily` answers "Daily rewards data unavailable" instead of crashing.
 - Item IDs must exist in your server's Minecraft version; an invalid ID makes the `give` command fail silently on the server side, with the claim still consumed.
 - Modded item IDs (e.g. `create:brass_ingot`) are supported: any ID that already contains a namespace (`:`) is passed through unchanged; only bare IDs like `diamond` get the `minecraft:` prefix.
+
+## Claim reminders
+
+Users can opt in to a DM reminder with `/daily-reminder enabled:true`. The bot checks every 5 minutes for opted-in users whose 24-hour cooldown has expired and sends one DM per claim cycle (claiming again re-arms the reminder). Users with closed DMs are skipped silently until their next claim. The opt-in flag and reminder bookkeeping live in `data/claimedDaily.json`.

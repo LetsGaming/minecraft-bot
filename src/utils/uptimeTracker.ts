@@ -78,6 +78,43 @@ export async function flushUptimeHistory(): Promise<void> {
 /**
  * Compute uptime statistics for a server over 24h / 7d / 30d windows.
  */
+/**
+ * F-06: render an hourly sparkline from raw check entries.
+ * Buckets the last `hours` hours (oldest first); each bucket becomes one
+ * block character scaled by its uptime percentage, or "·" when the bucket
+ * contains no checks (bot offline / before H-06's retention window).
+ * Exported for tests.
+ */
+export function buildSparkline(
+  entries: ReadonlyArray<{ t: number; up: number }>,
+  now: number,
+  hours = 24,
+): string {
+  const HOUR = 60 * 60 * 1000;
+  const LEVELS = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
+  const start = now - hours * HOUR;
+
+  const total = new Array<number>(hours).fill(0);
+  const online = new Array<number>(hours).fill(0);
+  for (const e of entries) {
+    if (e.t < start || e.t > now) continue;
+    const bucket = Math.min(hours - 1, Math.floor((e.t - start) / HOUR));
+    total[bucket]!++;
+    online[bucket]! += e.up;
+  }
+
+  let out = "";
+  for (let i = 0; i < hours; i++) {
+    if (total[i] === 0) {
+      out += "·";
+      continue;
+    }
+    const pct = online[i]! / total[i]!;
+    out += LEVELS[Math.round(pct * (LEVELS.length - 1))]!;
+  }
+  return out;
+}
+
 export async function getUptimeStats(serverId: string): Promise<UptimeStats> {
   const h = await load();
   const entries = h[serverId] ?? [];
@@ -135,6 +172,7 @@ export async function getUptimeStats(serverId: string): Promise<UptimeStats> {
     checks30d,
     currentState,
     currentStateDuration,
+    sparkline24h: buildSparkline(entries, now),
   };
 }
 
