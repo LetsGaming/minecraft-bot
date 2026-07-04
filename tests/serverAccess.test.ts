@@ -198,13 +198,13 @@ describe("readStats", () => {
   it("returns stats from API", async () => {
     const fakeStats = { stats: { "minecraft:custom": {} } };
     mockFetch.mockResolvedValueOnce(jsonResponse({ stats: fakeStats }));
-    const stats = await readStats(remoteCfg, "uuid-1");
+    const stats = await readStats(remoteCfg, "11111111-2222-3333-4444-555555555555");
     expect(stats).toEqual(fakeStats);
   });
 
   it("returns null for local cfg when file doesn't exist", async () => {
     // readLevelName falls back to "world", then stats dir doesn't exist
-    const stats = await readStats(localCfg, "uuid-1");
+    const stats = await readStats(localCfg, "11111111-2222-3333-4444-555555555555");
     expect(stats).toBeNull();
   });
 });
@@ -231,13 +231,59 @@ describe("listStatsUuids", () => {
 describe("deleteStatsFile", () => {
   it("returns false for remote (deletion not supported via API)", async () => {
     // By design, remote stats deletion is not supported through the API
-    const result = await deleteStatsFile(remoteCfg, "uuid-1");
+    const result = await deleteStatsFile(remoteCfg, "11111111-2222-3333-4444-555555555555");
     expect(result).toBe(false);
   });
 
   it("returns false for local when file doesn't exist", async () => {
-    const result = await deleteStatsFile(localCfg, "nonexistent-uuid");
+    const result = await deleteStatsFile(localCfg, "00000000000000000000000000000000");
     expect(result).toBe(false);
+  });
+});
+
+// ── UUID sinks reject malformed input before path/URL build ───────────────
+
+describe("uuid format assertion at sinks", () => {
+  const badUuids = [
+    "../../../etc/passwd", // path traversal
+    "abc/../def",
+    "uuid-1", // too short / non-hex
+    "g1111111-2222-3333-4444-555555555555", // non-hex char
+    "",
+  ];
+
+  it("readStats rejects malformed uuids without touching fetch/fs", async () => {
+    for (const bad of badUuids) {
+      await expect(readStats(remoteCfg, bad)).rejects.toThrow(
+        /Invalid UUID format/,
+      );
+      await expect(readStats(localCfg, bad)).rejects.toThrow(
+        /Invalid UUID format/,
+      );
+    }
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("deleteStatsFile rejects malformed uuids without touching fetch/fs", async () => {
+    for (const bad of badUuids) {
+      await expect(deleteStatsFile(remoteCfg, bad)).rejects.toThrow(
+        /Invalid UUID format/,
+      );
+      await expect(deleteStatsFile(localCfg, bad)).rejects.toThrow(
+        /Invalid UUID format/,
+      );
+    }
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("accepts both dashed and dashless Minecraft UUID shapes", async () => {
+    // 36-char dashed and 32-char raw hex are both valid on-disk formats.
+    await expect(
+      readStats(localCfg, "11111111-2222-3333-4444-555555555555"),
+    ).resolves.toBeNull(); // file simply doesn't exist
+    await expect(
+      readStats(localCfg, "11111111222233334444555555555555"),
+    ).resolves.toBeNull();
   });
 });
 

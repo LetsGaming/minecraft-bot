@@ -1,8 +1,8 @@
 /**
- * F-01: /whois <username> (admin) — shows the whitelist audit trail for a
+ * /whois <username> (admin) — shows the whitelist audit trail for a
  * Minecraft username (who added/removed it, when, on which server) and the
  * linked Discord account, in one place. Wires up the previously unused
- * getAuditEntry() (L-01).
+ * getAuditEntry().
  */
 import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embedUtils.js";

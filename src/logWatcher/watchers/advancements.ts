@@ -4,7 +4,7 @@ import type { ILogWatcher } from "../logWatcher.js";
 import type { GuildConfig } from "../../types/index.js";
 import { broadcastNotification, PLAYER_NAME } from "./notifyGuilds.js";
 
-// M-01: use PLAYER_NAME (not \w+) so Bedrock players with "."-prefixed
+// Use PLAYER_NAME (not \w+) so Bedrock players with "."-prefixed
 // names get advancement notifications too.
 const ADV_REGEX = new RegExp(
   String.raw`\[.+?\].*:\s+(${PLAYER_NAME}) has (?:made the advancement|completed the challenge|reached the goal) \[(.+?)\]`,

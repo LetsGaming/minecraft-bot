@@ -19,7 +19,7 @@ vi.mock("../src/utils/server.js", () => ({
     config: { id: "default", serverDir: "/fake/server" },
     // minimal ServerInstance shape loadAllStats requires
   }),
-  // H-01: statUtils now resolves the implicit fallback via getFirstInstance
+  // StatUtils now resolves the implicit fallback via getFirstInstance
   getFirstInstance: vi.fn().mockReturnValue({
     config: { id: "default", serverDir: "/fake/server" },
   }),

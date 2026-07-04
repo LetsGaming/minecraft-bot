@@ -141,7 +141,7 @@ describe("connect()", () => {
     expect(srv.authCount).toBe(before);
   });
 
-  it("handles concurrent calls: all settle, only one handshake (B-01 waiter queue)", async () => {
+  it("handles concurrent calls: all settle, only one handshake", async () => {
     await Promise.all([client.connect(), client.connect(), client.connect()]);
     expect(srv.authCount).toBe(1);
   });

@@ -1,5 +1,5 @@
 /**
- * M-05(b): config-reload reconciliation tests.
+ * Config-reload reconciliation tests.
  *
  * Uses the REAL server.ts registry (instances with useRcon:false never open
  * sockets) and mocks the watcher layer so we can assert lifecycle calls:
@@ -14,6 +14,7 @@ vi.mock("../src/utils/logger.js", () => ({
 }));
 
 vi.mock("../src/config.js", () => ({
+  getServerIds: vi.fn().mockReturnValue([]),
   loadConfig: vi.fn().mockReturnValue({
     token: "tok",
     clientId: "cid",
@@ -153,7 +154,7 @@ beforeEach(() => {
   for (const inst of getAllInstances()) removeServerInstance(inst.id);
 });
 
-describe("reconcileServers (M-05b)", () => {
+describe("reconcileServers", () => {
   it("adds a new server: instance registered, watcher started, TPS monitor wired", async () => {
     initServers({ survival: srvCfg("survival") });
 

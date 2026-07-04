@@ -1,5 +1,5 @@
 /**
- * M-13 (stage 2): pure helpers around capability flags.
+ * Pure helpers around capability flags.
  *
  * Detection itself lives in serverAccess.ts (it's fs/API access and belongs
  * to the routing layer); this module only derives decisions from already
@@ -19,7 +19,7 @@ export const CAPABILITY_DOCS_HINT =
  * server) it stays registered and the per-invocation gate produces a
  * friendly error for the plain instance.
  *
- * `/server` is intentionally NOT registration-gated: since H-05 it carries
+ * `/server` is intentionally NOT registration-gated: it also carries
  * the suite-independent `prune-stats` subcommand, so the command must exist
  * even when no instance has management scripts. Its script-based
  * subcommands are gated per invocation instead.
@@ -66,7 +66,7 @@ export function capabilitySummary(cap: ServerCapabilities): string {
 /**
  * Per-invocation gate: throw a friendly, documented error when a probed
  * instance lacks the capability. Unprobed instances pass — the underlying
- * call will then fail exactly as it did before M-13.
+ * call will then fail with the usual script-not-found error.
  */
 export function requireCapability(
   server: ServerInstance,

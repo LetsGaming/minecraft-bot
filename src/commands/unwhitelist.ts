@@ -26,8 +26,7 @@ export const execute = withErrorHandling(
     const server = resolveServer(interaction);
     if (!server) throw new Error("Server not found.");
 
-    // H-02: /unwhitelist previously validated nothing before interpolating
-    // the raw username into a console command.
+    // Never interpolate a raw username into a console command.
     if (!isValidMcName(username)) {
       throw new Error(`**${username}** is not a valid Minecraft username.`);
     }
@@ -40,7 +39,7 @@ export const execute = withErrorHandling(
       server.id,
     );
 
-    // C-02: drop the cached whitelist so the removed player disappears
+    // Drop the cached whitelist so the removed player disappears
     // immediately instead of after a restart.
     invalidateWhitelistCache(server.id);
 

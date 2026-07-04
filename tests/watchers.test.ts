@@ -11,6 +11,20 @@ vi.mock("../src/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+// Scope helper: replicate the pure semantics (string eq, list
+// membership, unset = unrestricted) without pulling in the config chain.
+vi.mock("../src/utils/guildRouter.js", () => ({
+  serverInScope: vi.fn(
+    (scope: string | string[] | undefined, serverId: string) =>
+      typeof scope === "string"
+        ? scope === serverId
+        : Array.isArray(scope)
+          ? scope.includes(serverId)
+          : true,
+  ),
+  getAllowedServerIds: vi.fn().mockReturnValue(null),
+}));
+
 // ── embedUtils mock ────────────────────────────────────────────────────────
 vi.mock("../src/utils/embedUtils.js", () => ({
   createPlayerEmbed: vi.fn().mockReturnValue({ type: "player-embed" }),
@@ -205,7 +219,7 @@ describe("chatBridge watcher — handler invocation", () => {
     const channel = makeChannel();
     const client = makeClient(channel);
     const watcher = makeLogWatcher("srv1");
-    registerChatBridge(watcher, client, guildConfigsWithNotifs);
+    registerChatBridge(watcher, client, guildConfigsWithNotifs, ["srv1"]);
 
     const chatRegex = watcher._handlers[0]!.regex;
     const match = chatRegex.exec("[12:00:00] [INFO]: <Steve> Hello world")!;
@@ -218,7 +232,7 @@ describe("chatBridge watcher — handler invocation", () => {
     const channel = makeChannel();
     const client = makeClient(channel);
     const watcher = makeLogWatcher("srv1");
-    registerChatBridge(watcher, client, guildConfigsWithNotifs);
+    registerChatBridge(watcher, client, guildConfigsWithNotifs, ["srv1"]);
 
     const chatRegex = watcher._handlers[0]!.regex;
     const match = chatRegex.exec("[12:00:00] [INFO]: <Steve> !coords")!;
@@ -274,7 +288,7 @@ describe("deaths watcher — regex patterns", () => {
     });
   });
 
-  it("DEATH regex matches a Bedrock-prefixed name (M-01)", () => {
+  it("DEATH regex matches a Bedrock-prefixed name", () => {
     const watcher = makeLogWatcher();
     registerDeathWatcher(watcher, makeClient(makeChannel()), {});
     const deathRegex = watcher._handlers[0]!.regex;
@@ -441,7 +455,7 @@ describe("advancements watcher — regex patterns", () => {
   });
 });
 
-describe("advancements watcher — Bedrock names (M-01)", () => {
+describe("advancements watcher — Bedrock names", () => {
   it("ADV regex matches a Bedrock-prefixed name", () => {
     const watcher = makeLogWatcher();
     registerAdvancementWatcher(watcher, makeClient(makeChannel()), {});
@@ -489,10 +503,10 @@ describe("advancements watcher — handler invocation", () => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// H-04: per-server notification filter
+// Per-server notification filter
 // ══════════════════════════════════════════════════════════════════════════════
 
-describe("notification server filter (H-04)", () => {
+describe("notification server filter", () => {
   const scopedConfigs = {
     guild1: {
       notifications: {

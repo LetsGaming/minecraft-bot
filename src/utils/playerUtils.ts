@@ -17,7 +17,7 @@ export async function getPlayerNamesChoices(
 
 /**
  * Find a player object from whitelist by name (case insensitive).
- * B-02 fix: search directly on the whitelist array rather than finding the
+ * Searches directly on the whitelist array rather than finding the
  * index in a separate `names` array — the two lists could diverge if the
  * cache is invalidated between the two loadWhitelist() calls.
  */

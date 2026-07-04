@@ -37,6 +37,24 @@ import { allCapabilities } from "../types/index.js";
 
 const execFileAsync = promisify(execFile);
 
+// ── UUID sink guard ───────────────────────────────────────────────────────
+
+/**
+ * Defense-in-depth at the sink: every UUID used here currently comes from
+ * Mojang or the server's own files, but assert the shape right before any
+ * `path.join`/URL interpolation anyway so a future caller can't introduce
+ * path traversal.
+ */
+const UUID_FORMAT = /^[0-9a-fA-F-]{32,36}$/;
+
+function assertUuidFormat(uuid: string): void {
+  if (!UUID_FORMAT.test(uuid)) {
+    throw new Error(
+      `Invalid UUID format: ${JSON.stringify(String(uuid).slice(0, 64))}`,
+    );
+  }
+}
+
 // ── API helper ────────────────────────────────────────────────────────────
 
 async function apiGet<T>(cfg: ServerConfig, route: string): Promise<T> {
@@ -233,6 +251,7 @@ export async function readStats(
   cfg: ServerConfig,
   uuid: string,
 ): Promise<MinecraftStatsFile | null> {
+  assertUuidFormat(uuid); // guard the path/route sink
   if (cfg.apiUrl) {
     const { stats } = await apiGet<{ stats: MinecraftStatsFile | null }>(
       cfg,
@@ -270,8 +289,9 @@ export async function deleteStatsFile(
   cfg: ServerConfig,
   uuid: string,
 ): Promise<boolean> {
+  assertUuidFormat(uuid); // guard the path/route sink
   if (cfg.apiUrl) {
-    // H-05 companion: the wrapper exposes DELETE /stats/:uuid so the
+    // The wrapper exposes DELETE /stats/:uuid so the
     // admin-gated /server prune-stats works on remote instances too.
     // Older wrappers without the route (or any transport error) degrade
     // to "not deleted" — prune-stats then reports 0 deletions instead of
@@ -389,7 +409,7 @@ export async function readBackups(cfg: ServerConfig): Promise<BackupSummary> {
   return { dirs, totalBytes };
 }
 
-// ── Capability detection (M-13) ───────────────────────────────────────────
+// ── Capability detection ───────────────────────────────────────────
 
 /**
  * Probe which setup-suite artifacts exist for a server.

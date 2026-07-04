@@ -8,6 +8,7 @@ import { resolveServer } from "../../utils/guildRouter.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { suppressAlerts } from "../../logWatcher/watchers/downtimeMonitor.js";
 import { log } from "../../utils/logger.js";
+import { recordAdminAction } from "../../utils/adminAudit.js";
 import * as serverAccess from "../../utils/serverAccess.js";
 import { requireCapability } from "../../utils/capabilities.js";
 import { loadAllStats } from "../../utils/statUtils.js";
@@ -122,7 +123,27 @@ export const execute = withErrorHandling(
 
     log.info("control", `${interaction.user.tag} → /${sub} on ${server.id}`);
 
-    // M-13: script-based subcommands need the corresponding management
+    // Persistent audit trail of admin server actions.
+    // "status" is read-only and skipped; prune-stats records its mode.
+    if (sub !== "status") {
+      await recordAdminAction({
+        action: `server ${sub}`,
+        server: server.id,
+        by: interaction.user.tag,
+        byId: interaction.user.id,
+        guildId: interaction.guild?.id ?? null,
+        ...(sub === "prune-stats"
+          ? {
+              detail:
+                interaction.options.getBoolean("confirm") === true
+                  ? "confirmed"
+                  : "dry-run",
+            }
+          : {}),
+      });
+    }
+
+    // Script-based subcommands need the corresponding management
     // script from the setup suite. Gate here with a documented error
     // instead of letting runScript fail with a raw "Script not found"
     // path. prune-stats is suite-independent and never gated.
@@ -139,7 +160,7 @@ export const execute = withErrorHandling(
       suppressAlerts(server.id);
     }
 
-    // H-05/F-07: explicit, admin-gated replacement for the automatic stats
+    // Explicit, admin-gated replacement for the automatic stats
     // cleanup that buildLeaderboard used to perform as a hidden side effect.
     // Dry run by default — lists what would be deleted; confirm:true deletes.
     if (sub === "prune-stats") {

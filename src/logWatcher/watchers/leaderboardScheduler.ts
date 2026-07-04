@@ -38,6 +38,9 @@ const INTERVAL_LABELS: Record<LeaderboardInterval, string> = {
 };
 
 async function loadSchedule(): Promise<LeaderboardScheduleState> {
+  // Deliberately resilient: this is recreatable operational
+  // state, not user data. loadJson already logged loudly and tried the
+  // .bak before this fallback runs — starting fresh here is harmless.
   const data = await loadJson(SCHEDULE_PATH).catch(() => ({}));
   return (data as LeaderboardScheduleState) || {};
 }
@@ -147,13 +150,18 @@ async function checkAndPost(
       }
 
       const periodStart = now - intervalMs;
-      // Use the guild's configured server, or fall back to the first instance
-      const serverId = gcfg.leaderboard?.server ?? gcfg.defaultServer;
-      const server = serverId
-        ? (getServerInstance(serverId) ?? undefined)
-        : getAllInstances()[0];
+      // `server` may be one ID, a list (one leaderboard per server), or
+      // unset → the guild's defaultServer / the first instance.
+      const scope = gcfg.leaderboard?.server;
+      const serverIds: Array<string | undefined> = Array.isArray(scope)
+        ? scope
+        : [scope ?? gcfg.defaultServer];
 
-      if (!server) {
+      const servers = serverIds
+        .map((id) => (id ? getServerInstance(id) : getAllInstances()[0]))
+        .filter((s): s is ServerInstance => s != null);
+
+      if (servers.length === 0) {
         log.warn(
           "leaderboard",
           `No server instance found for guild ${guildId}, skipping leaderboard post`,
@@ -161,40 +169,47 @@ async function checkAndPost(
         continue;
       }
 
-      const snapshot = await getSnapshotClosestTo(server.id, periodStart);
-
       const periodLabel = INTERVAL_LABELS[interval] ?? interval;
-      let footer: string;
+      const showServerName = servers.length > 1;
 
-      const opts: {
-        periodLabel: string;
-        baseline?: Record<string, Record<string, number>>;
-        server: ServerInstance;
-      } = { periodLabel, server };
+      for (const server of servers) {
+        const snapshot = await getSnapshotClosestTo(server.id, periodStart);
 
-      if (snapshot) {
-        opts.baseline = snapshot.players;
-        const snapshotAge = Math.round(
-          (now - snapshot.timestamp) / (60 * 60 * 1000),
+        let footer: string;
+        const opts: {
+          periodLabel: string;
+          baseline?: Record<string, Record<string, number>>;
+          server: ServerInstance;
+        } = { periodLabel, server };
+
+        if (snapshot) {
+          opts.baseline = snapshot.players;
+          const snapshotAge = Math.round(
+            (now - snapshot.timestamp) / (60 * 60 * 1000),
+          );
+
+          // So users know it's a partial period when the bot is young:
+          footer =
+            snapshotAge > intervalMs / (60 * 60 * 1000)
+              ? `${periodLabel} leaderboard · based on last ${snapshotAge}h of data`
+              : `${periodLabel} leaderboard · bot tracking since ${snapshotAge}h ago (partial period)`;
+        } else {
+          footer = `${periodLabel} leaderboard · no snapshot available, showing all-time`;
+        }
+        if (showServerName) footer = `${server.id} · ${footer}`;
+
+        const leaderboardDataMined = await buildLeaderboard("mined", opts);
+        const leaderboardDataPlaytime = await buildLeaderboard(
+          "playtime",
+          opts,
         );
+        const playtimeEmbed = buildLeaderboardEmbed(leaderboardDataPlaytime);
+        const minedEmbed = buildLeaderboardEmbed(leaderboardDataMined);
+        playtimeEmbed.setFooter({ text: footer });
+        minedEmbed.setFooter({ text: footer });
 
-        // So users know it's a partial period when the bot is young:
-        footer =
-          snapshotAge > intervalMs / (60 * 60 * 1000)
-            ? `${periodLabel} leaderboard · based on last ${snapshotAge}h of data`
-            : `${periodLabel} leaderboard · bot tracking since ${snapshotAge}h ago (partial period)`;
-      } else {
-        footer = `${periodLabel} leaderboard · no snapshot available, showing all-time`;
+        await channel.send({ embeds: [playtimeEmbed, minedEmbed] });
       }
-
-      const leaderboardDataMined = await buildLeaderboard("mined", opts);
-      const leaderboardDataPlaytime = await buildLeaderboard("playtime", opts);
-      const playtimeEmbed = buildLeaderboardEmbed(leaderboardDataPlaytime);
-      const minedEmbed = buildLeaderboardEmbed(leaderboardDataMined);
-      playtimeEmbed.setFooter({ text: footer });
-      minedEmbed.setFooter({ text: footer });
-
-      await channel.send({ embeds: [playtimeEmbed, minedEmbed] });
 
       schedule[guildId] = now;
       await saveSchedule(schedule);
@@ -206,7 +221,7 @@ async function checkAndPost(
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.error("leaderboard", `Failed to post for guild ${guildId}: ${msg}`);
-      // B-09: advance the schedule timestamp even on failure so a permanently
+      // Advance the schedule timestamp even on failure so a permanently
       // broken channel (deleted, missing permissions) doesn't cause hourly
       // retry spam. The next post will be attempted after the normal interval.
       schedule[guildId] = now;

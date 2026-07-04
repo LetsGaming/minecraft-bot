@@ -7,6 +7,7 @@ import type {
   InGameCommandInfo,
 } from "../types/index.js";
 import { log } from "../utils/logger.js";
+import { isValidMcName } from "../utils/sanitize.js";
 
 const cooldowns = new Map<string, number>();
 
@@ -50,6 +51,21 @@ export function defineCommand({
         server: ServerInstance,
       ) => {
         const username = match[1]!;
+
+        // The slash-command paths validate Minecraft usernames
+        // before interpolating them into console commands; the in-game
+        // path captured `<([^>]+)>` raw. A log line can't smuggle a
+        // newline (lines are pre-split) so this wasn't exploitable, but
+        // handlers interpolate the name into /msg, /tellraw and
+        // `/data get entity …` — enforce the same contract here for
+        // parity and future-proofing.
+        if (!isValidMcName(username)) {
+          log.warn(
+            "commands",
+            `Ignoring !${name} from non-conforming username: ${JSON.stringify(username.slice(0, 32))}`,
+          );
+          return;
+        }
 
         // ── Cooldown check ──
         if (cooldown > 0) {

@@ -8,19 +8,28 @@ on:
 
 jobs:
   check:
-    name: Typecheck / Lint / Test
+    name: Typecheck / Lint / Test / Audit
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      # QUAL-01: actions pinned to commit SHAs (not mutable tags) so a
+      # compromised or force-pushed tag cannot change what CI executes.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
           cache: "npm"
 
       - name: Install dependencies
         run: npm ci
+
+      # DEP-01 / QUAL-01: fail the build on high-severity advisories so
+      # vulnerable transitive dependencies (e.g. the bundled undici copy
+      # inside discord.js) can't silently regress. The undici pin itself
+      # lives in package.json "overrides".
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
 
       - name: Typecheck
         run: npm run typecheck

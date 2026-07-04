@@ -77,7 +77,7 @@ describe("isServerAdmin", () => {
     expect(isServerAdmin("anyone")).toBe(false);
   });
 
-  it("accepts a user carrying an admin role ID (F-02)", async () => {
+  it("accepts a user carrying an admin role ID", async () => {
     vi.mocked(loadConfig).mockReturnValue({
       adminUsers: ["admin1", "role-mod-123"],
     } as never);
@@ -88,7 +88,41 @@ describe("isServerAdmin", () => {
     expect(isServerAdmin("someuser", ["role-other"])).toBe(false);
   });
 
-  it("getMemberRoleIds handles cached and raw member shapes (F-02)", async () => {
+  // ── Per-guild admin scoping ──────────────────────────────────────
+
+  it("accepts a per-guild admin only within their own guild", () => {
+    vi.mocked(loadConfig).mockReturnValue({
+      adminUsers: [],
+      guilds: {
+        guildA: { adminUsers: ["alice"] },
+        guildB: { adminUsers: ["bob"] },
+      },
+    } as never);
+    expect(isServerAdmin("alice", [], "guildA")).toBe(true);
+    expect(isServerAdmin("alice", [], "guildB")).toBe(false);
+    expect(isServerAdmin("alice", [])).toBe(false); // DM: no guild scope
+  });
+
+  it("matches per-guild admin role IDs", () => {
+    vi.mocked(loadConfig).mockReturnValue({
+      adminUsers: [],
+      guilds: { guildA: { adminUsers: ["role-guildA-mod"] } },
+    } as never);
+    expect(isServerAdmin("member", ["role-guildA-mod"], "guildA")).toBe(true);
+    expect(isServerAdmin("member", ["role-guildA-mod"], "guildB")).toBe(false);
+  });
+
+  it("global adminUsers remain valid in every guild", () => {
+    vi.mocked(loadConfig).mockReturnValue({
+      adminUsers: ["operator"],
+      guilds: { guildA: { adminUsers: ["alice"] } },
+    } as never);
+    expect(isServerAdmin("operator", [], "guildA")).toBe(true);
+    expect(isServerAdmin("operator", [], "guildB")).toBe(true);
+    expect(isServerAdmin("operator", [])).toBe(true);
+  });
+
+  it("getMemberRoleIds handles cached and raw member shapes", async () => {
     const { getMemberRoleIds } = await import("../src/commands/middleware.js");
     // Raw API shape: roles is a string array
     expect(

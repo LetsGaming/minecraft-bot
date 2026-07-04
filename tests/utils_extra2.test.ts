@@ -94,10 +94,11 @@ describe("setupDiscordToMc", () => {
     setupDiscordToMc(client as never, guildConfigs, () => server);
 
     const fakeMsg = {
-      author: { bot: false, displayName: "TestUser" },
+      author: { bot: false, id: "user-forward", displayName: "TestUser" },
       guild: { id: "guild1" },
       channel: { id: "ch1" },
       content: "Hello world!",
+      react: vi.fn().mockResolvedValue(undefined),
     };
 
     await client._trigger("messageCreate", fakeMsg as never);
@@ -140,19 +141,26 @@ describe("setupDiscordToMc", () => {
     expect(server.sendCommand).not.toHaveBeenCalled();
   });
 
-  it("strips non-ASCII characters from displayName and content (B-08)", async () => {
+  it("strips non-ASCII characters from displayName and content", async () => {
     const client = makeClient();
     const server = {
       sendCommand: vi.fn().mockResolvedValue(undefined),
     } as never;
-    const guildConfigs = { g1: { chatBridge: { channelId: "ch1" } } } as never;
-    setupDiscordToMc(client as never, guildConfigs, () => server);
+    const guildConfigs = {
+      g1: { chatBridge: { channelId: "ch1", server: "main" } },
+    } as never;
+    setupDiscordToMc(client as never, guildConfigs, () => server, ["main"]);
 
     const msg = {
-      author: { bot: false, displayName: "User\x00Injected" },
+      author: {
+        bot: false,
+        id: "user-sanitize",
+        displayName: "User\x00Injected",
+      },
       guild: { id: "g1" },
       channel: { id: "ch1" },
       content: "Normal message",
+      react: vi.fn().mockResolvedValue(undefined),
     };
     await client._trigger("messageCreate", msg as never);
     const cmd = vi.mocked(server.sendCommand).mock.calls[0]![0] as string;

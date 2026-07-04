@@ -8,7 +8,18 @@ The bot has exactly two permission levels: regular users and admins. The `adminU
 "adminUsers": ["123456789012345678", "555555555555555555"]
 ```
 
-A user counts as admin if their own ID is listed **or** they carry any listed role — so you can manage admin access entirely through a Discord role without touching the config for each person. Role checks only apply inside guilds (DM'd commands match by user ID only). There are no per-command grants; if finer control matters to you, restrict who can see the commands via Discord's own server settings (Server Settings → Integrations → your bot → command permissions).
+A user counts as admin if their own ID is listed **or** they carry any listed role — so you can manage admin access entirely through a Discord role without touching the config for each person. Role checks only apply inside guilds (DM'd commands match by user ID only). There are no per-command grants; if finer control matters to you, restrict who can see the commands via Discord's own server settings (Server Settings → Integrations → your bot → command permissions). One exception: any slash command can be gated behind the admin check with the `adminOnly` command toggle (see [configuration.md](configuration.md#command-toggles)) — handy for `/say`.
+
+### Two admin scopes
+
+There are two places admins can be defined, with different reach:
+
+| Scope | Where | Reach |
+|---|---|---|
+| **Operator** | top-level `adminUsers` | Every guild, every server, including DMs. |
+| **Guild-scoped** | `guilds.<id>.adminUsers` | Admin commands only in that guild, and only against servers that guild may target (`allowedServers`, or the servers referenced in the guild's config). |
+
+In a single-guild deployment the two behave identically. Once the bot serves several communities, guild-scoped admins are the safe way to hand moderation to each community: a guild-B moderator cannot stop, restart, or back up guild A's server — not even with the explicit `server:` option. See [Multi-guild isolation](configuration.md#multi-guild-isolation) for the targeting rules.
 
 ### Admin-only commands
 
@@ -26,7 +37,7 @@ A user counts as admin if their own ID is listed **or** they carry any listed ro
 
 A non-admin running any of these gets a clean "You do not have permission to use this command" error. The `/clear` command is gated differently: Discord itself only shows it to members with the Manage Messages permission.
 
-In addition, every user is rate-limited to 5 commands per 30 seconds to protect the RCON connection from spam.
+In addition, every user is rate-limited to 5 slash commands per 30 seconds to protect the RCON connection from spam, and the Discord→Minecraft chat bridge has its own per-user limit (bursts of up to 8 messages per 10 seconds; messages beyond that get a ⏳ reaction instead of reaching the game).
 
 ## Whitelist management
 
@@ -54,7 +65,11 @@ Note: the bot caches the whitelist in memory. If a freshly added player does not
 
 ## Audit trail
 
-Every whitelist add and remove is recorded in `data/whitelistAudit.json`, keyed by lowercased username:
+Two audit stores exist under `data/`:
+
+**Admin actions** — every admin-gated mutation is recorded in `data/adminAudit.json`: `/server start|stop|restart|backup|prune-stats` (including whether a prune was a dry run or confirmed) and `/config reload`. Each entry stores the timestamp, action, target server, the acting user's tag and ID, and the guild it was issued from. The log keeps the most recent 500 entries. Recording is best-effort: a failed audit write is logged but never blocks the action itself.
+
+**Whitelist changes** — every whitelist add and remove is recorded in `data/whitelistAudit.json`, keyed by lowercased username:
 
 | Field | Description |
 |---|---|

@@ -1,11 +1,11 @@
 /**
- * Feature tests (audit §7):
- *  - F-01 /whois: audit + link lookup, no-data and validation paths
- *  - F-04 daily reminders: toggle persistence + scheduler pass semantics
- *  - F-05 i18n: locale resolution, fallback chain, placeholder substitution
- *  - F-06 uptime sparkline: bucketing, scaling, no-data hours
- * (F-02 role admins is covered in middleware.test.ts, F-03 is config/docs,
- *  F-07 prune-stats in commands_server.test.ts.)
+ * Feature tests:
+ *  - /whois: audit + link lookup, no-data and validation paths
+ *  - daily reminders: toggle persistence + scheduler pass semantics
+ *  - i18n: locale resolution, fallback chain, placeholder substitution
+ *  - uptime sparkline: bucketing, scaling, no-data hours
+ * (Role admins are covered in middleware.test.ts, prune-stats in
+ *  commands_server.test.ts.)
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -30,8 +30,26 @@ vi.mock("../src/utils/linkUtils.js", () => ({
   loadLinkedAccounts: vi.fn().mockResolvedValue({}),
 }));
 vi.mock("../src/utils/dailyStore.js", () => ({
-  loadClaimedDaily: vi.fn().mockResolvedValue({}),
-  saveClaimedDaily: vi.fn().mockResolvedValue(undefined),
+  loadClaimedStore: vi
+    .fn()
+    .mockResolvedValue({ version: 2, servers: {} }),
+  // Real lazy-map semantics so command code can mutate the store.
+  getServerClaims: vi.fn(
+    (
+      store: { servers: Record<string, Record<string, unknown>> },
+      serverId: string,
+    ) => (store.servers[serverId] ??= {}),
+  ),
+  saveClaimedStore: vi.fn().mockResolvedValue(undefined),
+}));
+
+// reminder.ts resolves the target server and checks the instance count
+// for its reply suffix.
+vi.mock("../src/utils/guildRouter.js", () => ({
+  resolveServer: vi.fn().mockReturnValue({ id: "main" }),
+}));
+vi.mock("../src/utils/server.js", () => ({
+  getAllInstances: vi.fn().mockReturnValue([]),
 }));
 
 import { t } from "../src/utils/i18n.js";
@@ -40,8 +58,8 @@ import { processDailyReminders } from "../src/logWatcher/watchers/dailyReminderS
 import { getAuditEntry } from "../src/utils/whitelistAudit.js";
 import { loadLinkedAccounts } from "../src/utils/linkUtils.js";
 import {
-  loadClaimedDaily,
-  saveClaimedDaily,
+  loadClaimedStore,
+  saveClaimedStore,
 } from "../src/utils/dailyStore.js";
 import type { Client } from "discord.js";
 
@@ -49,12 +67,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockConfig.language = "en";
   vi.mocked(loadLinkedAccounts).mockResolvedValue({});
-  vi.mocked(loadClaimedDaily).mockResolvedValue({});
+  vi.mocked(loadClaimedStore).mockResolvedValue({ version: 2, servers: {} });
 });
 
-// ── F-05: i18n ──────────────────────────────────────────────────────────────
+// ── I18n ──────────────────────────────────────────────────────────────
 
-describe("i18n t() (F-05)", () => {
+describe("i18n t()", () => {
   it("resolves English by default", () => {
     expect(t("common.serverNotFound")).toBe("Server not found.");
   });
@@ -85,9 +103,9 @@ describe("i18n t() (F-05)", () => {
   });
 });
 
-// ── F-06: sparkline ─────────────────────────────────────────────────────────
+// ── Sparkline ─────────────────────────────────────────────────────────
 
-describe("buildSparkline (F-06)", () => {
+describe("buildSparkline", () => {
   const HOUR = 60 * 60 * 1000;
 
   it("renders 24 chars, oldest hour first", () => {
@@ -126,9 +144,9 @@ describe("buildSparkline (F-06)", () => {
   });
 });
 
-// ── F-04: reminder scheduler ────────────────────────────────────────────────
+// ── Reminder scheduler ────────────────────────────────────────────────
 
-describe("processDailyReminders (F-04)", () => {
+describe("processDailyReminders", () => {
   const DAY = 24 * 60 * 60 * 1000;
 
   function makeClient(send = vi.fn().mockResolvedValue(undefined)) {
@@ -142,14 +160,19 @@ describe("processDailyReminders (F-04)", () => {
 
   it("DMs opted-in users whose cooldown expired, once per claim cycle", async () => {
     const now = 10 * DAY;
-    vi.mocked(loadClaimedDaily).mockResolvedValue({
-      due: {
-        lastClaim: now - DAY - 1000,
-        remind: true,
-        currentStreak: 1,
-        bonusStreak: 1,
-        longestStreak: 1,
-        rewards: [],
+    vi.mocked(loadClaimedStore).mockResolvedValue({
+      version: 2,
+      servers: {
+        main: {
+          due: {
+            lastClaim: now - DAY - 1000,
+            remind: true,
+            currentStreak: 1,
+            bonusStreak: 1,
+            longestStreak: 1,
+            rewards: [],
+          },
+        },
       },
     } as never);
     const { client, send } = makeClient();
@@ -158,60 +181,93 @@ describe("processDailyReminders (F-04)", () => {
     expect(send).toHaveBeenCalledWith(expect.stringContaining("/daily"));
 
     // The persisted record must carry lastReminderAt = now (dedupe)
-    const saved = vi.mocked(saveClaimedDaily).mock.calls[0]![0] as Record<
-      string,
-      { lastReminderAt?: number }
-    >;
-    expect(saved["due"]!.lastReminderAt).toBe(now);
+    const saved = vi.mocked(saveClaimedStore).mock.calls[0]![0] as {
+      servers: Record<string, Record<string, { lastReminderAt?: number }>>;
+    };
+    expect(saved.servers["main"]!["due"]!.lastReminderAt).toBe(now);
   });
 
   it("skips users who are not opted in, not due, never claimed, or already reminded", async () => {
     const now = 10 * DAY;
-    vi.mocked(loadClaimedDaily).mockResolvedValue({
-      notOptedIn: { lastClaim: now - 2 * DAY, rewards: [] },
-      stillCoolingDown: {
-        lastClaim: now - DAY / 2,
-        remind: true,
-        rewards: [],
-      },
-      neverClaimed: { lastClaim: 0, remind: true, rewards: [] },
-      alreadyReminded: {
-        lastClaim: now - 2 * DAY,
-        remind: true,
-        lastReminderAt: now - DAY,
-        rewards: [],
+    vi.mocked(loadClaimedStore).mockResolvedValue({
+      version: 2,
+      servers: {
+        main: {
+          notOptedIn: { lastClaim: now - 2 * DAY, rewards: [] },
+          stillCoolingDown: {
+            lastClaim: now - DAY / 2,
+            remind: true,
+            rewards: [],
+          },
+          neverClaimed: { lastClaim: 0, remind: true, rewards: [] },
+          alreadyReminded: {
+            lastClaim: now - 2 * DAY,
+            remind: true,
+            lastReminderAt: now - DAY,
+            rewards: [],
+          },
+        },
       },
     } as never);
     const { client } = makeClient();
 
     expect(await processDailyReminders(client, now)).toBe(0);
-    expect(saveClaimedDaily).not.toHaveBeenCalled();
+    expect(saveClaimedStore).not.toHaveBeenCalled();
   });
 
   it("advances lastReminderAt even when the DM fails (no hammering)", async () => {
     const now = 10 * DAY;
-    vi.mocked(loadClaimedDaily).mockResolvedValue({
-      closedDms: {
-        lastClaim: now - 2 * DAY,
-        remind: true,
-        rewards: [],
+    vi.mocked(loadClaimedStore).mockResolvedValue({
+      version: 2,
+      servers: {
+        main: {
+          closedDms: {
+            lastClaim: now - 2 * DAY,
+            remind: true,
+            rewards: [],
+          },
+        },
       },
     } as never);
     const send = vi.fn().mockRejectedValue(new Error("Cannot send DM"));
     const { client } = makeClient(send);
 
     expect(await processDailyReminders(client, now)).toBe(0);
-    const saved = vi.mocked(saveClaimedDaily).mock.calls[0]![0] as Record<
-      string,
-      { lastReminderAt?: number }
-    >;
-    expect(saved["closedDms"]!.lastReminderAt).toBe(now);
+    const saved = vi.mocked(saveClaimedStore).mock.calls[0]![0] as {
+      servers: Record<string, Record<string, { lastReminderAt?: number }>>;
+    };
+    expect(saved.servers["main"]!["closedDms"]!.lastReminderAt).toBe(now);
+  });
+
+  it("names the server in the DM when several servers have claims", async () => {
+    const now = 10 * DAY;
+    const due = {
+      lastClaim: now - 2 * DAY,
+      remind: true,
+      currentStreak: 1,
+      bonusStreak: 1,
+      longestStreak: 1,
+      rewards: [],
+    };
+    vi.mocked(loadClaimedStore).mockResolvedValue({
+      version: 2,
+      servers: {
+        survival: { u1: { ...due } },
+        creative: { u1: { ...due } },
+      },
+    } as never);
+    const { client, send } = makeClient();
+
+    // One reminder per server — the same user can be due on both.
+    expect(await processDailyReminders(client, now)).toBe(2);
+    expect(send).toHaveBeenCalledWith(expect.stringContaining("survival"));
+    expect(send).toHaveBeenCalledWith(expect.stringContaining("creative"));
   });
 });
 
-// ── F-04: toggle command ────────────────────────────────────────────────────
+// ── Toggle command ────────────────────────────────────────────────────
 
-describe("/daily-reminder command (F-04)", () => {
+describe("/daily-reminder command", () => {
   function makeInteraction(enabled: boolean) {
     return {
       user: { id: "u1", tag: "User#1", displayName: "User" },
@@ -226,13 +282,18 @@ describe("/daily-reminder command (F-04)", () => {
   }
 
   it("persists the opt-in flag without clobbering existing claim data", async () => {
-    vi.mocked(loadClaimedDaily).mockResolvedValue({
-      u1: {
-        lastClaim: 123,
-        currentStreak: 5,
-        bonusStreak: 2,
-        longestStreak: 9,
-        rewards: [{ date: 123, items: [] }],
+    vi.mocked(loadClaimedStore).mockResolvedValue({
+      version: 2,
+      servers: {
+        main: {
+          u1: {
+            lastClaim: 123,
+            currentStreak: 5,
+            bonusStreak: 2,
+            longestStreak: 9,
+            rewards: [{ date: 123, items: [] }],
+          },
+        },
       },
     } as never);
     const { execute } = await import(
@@ -241,13 +302,18 @@ describe("/daily-reminder command (F-04)", () => {
 
     await execute(makeInteraction(true));
 
-    const saved = vi.mocked(saveClaimedDaily).mock.calls[0]![0] as Record<
-      string,
-      { remind?: boolean; currentStreak: number; lastClaim: number }
-    >;
-    expect(saved["u1"]!.remind).toBe(true);
-    expect(saved["u1"]!.currentStreak).toBe(5);
-    expect(saved["u1"]!.lastClaim).toBe(123);
+    const saved = vi.mocked(saveClaimedStore).mock.calls[0]![0] as {
+      servers: Record<
+        string,
+        Record<
+          string,
+          { remind?: boolean; currentStreak: number; lastClaim: number }
+        >
+      >;
+    };
+    expect(saved.servers["main"]!["u1"]!.remind).toBe(true);
+    expect(saved.servers["main"]!["u1"]!.currentStreak).toBe(5);
+    expect(saved.servers["main"]!["u1"]!.lastClaim).toBe(123);
   });
 
   it("creates a zeroed record for users who never claimed", async () => {
@@ -255,18 +321,20 @@ describe("/daily-reminder command (F-04)", () => {
       "../src/commands/connection/daily/reminder.js"
     );
     await execute(makeInteraction(true));
-    const saved = vi.mocked(saveClaimedDaily).mock.calls[0]![0] as Record<
-      string,
-      { remind?: boolean; lastClaim: number }
-    >;
-    expect(saved["u1"]!.remind).toBe(true);
-    expect(saved["u1"]!.lastClaim).toBe(0);
+    const saved = vi.mocked(saveClaimedStore).mock.calls[0]![0] as {
+      servers: Record<
+        string,
+        Record<string, { remind?: boolean; lastClaim: number }>
+      >;
+    };
+    expect(saved.servers["main"]!["u1"]!.remind).toBe(true);
+    expect(saved.servers["main"]!["u1"]!.lastClaim).toBe(0);
   });
 });
 
-// ── F-01: /whois ────────────────────────────────────────────────────────────
+// ── /whois ────────────────────────────────────────────────────────────
 
-describe("/whois command (F-01)", () => {
+describe("/whois command", () => {
   function makeInteraction(username: string) {
     return {
       user: { id: "admin1", tag: "Admin#1", displayName: "Admin" },
@@ -335,7 +403,7 @@ describe("/whois command (F-01)", () => {
     expect(getAuditEntry).not.toHaveBeenCalled();
   });
 
-  it("denies non-admins (F-02 path)", async () => {
+  it("denies non-admins", async () => {
     const { execute } = await import("../src/commands/admin/whois.js");
     const interaction = makeInteraction("Steve");
     (interaction as { user: { id: string } }).user.id = "rando";

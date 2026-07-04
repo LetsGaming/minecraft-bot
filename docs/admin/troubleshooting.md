@@ -61,6 +61,10 @@ Snapshots are taken hourly starting from bot startup. Right after installation t
 
 `data/dailyRewards.json` is missing or invalid JSON. See [daily-rewards.md](daily-rewards.md). In Docker, check that the volume seeding ran (`docker compose exec bot cat /app/data/dailyRewards.json`).
 
+## A `data/*.json` file is corrupt
+
+Bot-owned JSON stores (`linkedAccounts.json`, `claimedDaily.json`, `whitelistAudit.json`, `adminAudit.json`, …) are written atomically and each save also refreshes a `<file>.bak` last-known-good copy next to it. If a file is ever corrupted (power loss, disk issues, manual edits), the bot logs an error and transparently recovers from the `.bak` — the next save repairs the main file. You only need to act if **both** copies are unusable: the affected feature then fails loudly (instead of silently starting from empty data) until you restore the file from a backup or delete both the file and its `.bak` to intentionally start fresh. The `.bak` and short-lived `.tmp` siblings in `data/` are part of this mechanism — do not commit or delete them while the bot runs.
+
 ## "Too many commands. Please wait Xs."
 
 Per-user rate limit: 5 commands per rolling 30 seconds. It protects the RCON connection; there is no config switch for it.

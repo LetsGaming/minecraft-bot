@@ -2,6 +2,25 @@
 
 This guide takes you from nothing to a running bot. No prior Discord bot experience required.
 
+## Quickstart (≈15–30 minutes)
+
+The fastest path, if you just want it running:
+
+1. Create the Discord application ([Step 1](#step-1-create-the-discord-application) below) — you need the **bot token**, the **application ID**, and the bot invited to your server.
+2. On the machine that will run the bot:
+
+   ```bash
+   git clone <this repo> && cd minecraft-bot
+   npm install
+   npm run setup     # interactive wizard → writes config.json
+   npm run build
+   npm start
+   ```
+
+The wizard asks for the token, IDs, your Minecraft server location (local path or [remote API wrapper](remote-setup.md)), and which optional features you want — nothing else. The bot validates the result on start and tells you exactly what to fix if something is off. Everything the wizard skipped can be added later in `config.json` ([full reference](configuration.md)); the file is hot-reloaded.
+
+For a permanent installation (auto-restart, boot persistence) continue with [Docker](docker.md) or [PM2](pm2.md) once the bot works.
+
 ## Plain server or setup-suite server?
 
 The bot runs against any Minecraft Java server, but it is designed for servers installed with [minecraft-server-setup](https://github.com/LetsGaming/minecraft-server-setup). That suite provides the management scripts, the backup directory layout, and the mod manifest that some features call into. The bot detects at startup which of these artifacts each server actually provides (one log line per server summarizes the result): if **no** configured server has them, `/backup` and `/mods` are not registered at all; in mixed setups they stay available and the affected server answers with a clear message pointing here instead of a raw "Script not found" error. The same applies to the script-based `/server` subcommands (`/server prune-stats` works everywhere). Capabilities are re-checked on every config reload, so installing the suite later is picked up without restarting the bot — only command *registration* (the `/backup` / `/mods` skip) is decided once at startup.

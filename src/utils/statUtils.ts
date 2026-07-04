@@ -94,12 +94,11 @@ export async function buildLeaderboard(
   for (const [uuid, statsFile] of Object.entries(allStats)) {
     const name = uuidToName[uuid];
 
-    // H-05: a leaderboard is a read — it must never delete player data.
-    // The old behaviour removed stats files for UUIDs missing from the
-    // whitelist, which turned a stale whitelist cache (C-02), a disabled
-    // whitelist feature, or a transient partial read into irreversible
-    // data loss. Cleanup of departed players is now an explicit admin
-    // action (see /server prune-stats); here we simply skip unknown UUIDs.
+    // A leaderboard is a read — it must never delete player data. A stale
+    // whitelist cache, a disabled whitelist, or a transient partial read
+    // would otherwise turn into irreversible data loss. Cleanup of
+    // departed players is an explicit admin action (/server prune-stats);
+    // here we simply skip unknown UUIDs.
     if (!name) continue;
 
     const flat = flattenStats(statsFile);

@@ -1,5 +1,5 @@
 /**
- * F-04: daily-reward claim reminders.
+ * Daily-reward claim reminders.
  *
  * Every CHECK_INTERVAL_MS the scheduler scans claimedDaily.json for users
  * who opted in (/daily-reminder enabled:true) whose 24h cooldown has
@@ -12,8 +12,8 @@
  */
 import type { Client } from "discord.js";
 import {
-  loadClaimedDaily,
-  saveClaimedDaily,
+  loadClaimedStore,
+  saveClaimedStore,
 } from "../../utils/dailyStore.js";
 import { log } from "../../utils/logger.js";
 import { t } from "../../utils/i18n.js";
@@ -29,32 +29,43 @@ export async function processDailyReminders(
   client: Client,
   now = Date.now(),
 ): Promise<number> {
-  const claimed = await loadClaimedDaily();
+  const store = await loadClaimedStore();
   let sent = 0;
   let dirty = false;
 
-  for (const [userId, data] of Object.entries(claimed)) {
-    if (data.remind !== true) continue;
-    if (!data.lastClaim || data.lastClaim <= 0) continue; // never claimed yet
-    if (now - data.lastClaim < DAILY_COOLDOWN_MS) continue; // still cooling down
-    if ((data.lastReminderAt ?? 0) >= data.lastClaim) continue; // already reminded this cycle
+  // Claims are per server, so reminders are too — one DM per due server,
+  // naming the server when there's more than one.
+  const serverEntries = Object.entries(store.servers);
+  const multiServer = serverEntries.length > 1;
 
-    data.lastReminderAt = now;
-    dirty = true;
+  for (const [serverId, claimed] of serverEntries) {
+    for (const [userId, data] of Object.entries(claimed)) {
+      if (data.remind !== true) continue;
+      if (!data.lastClaim || data.lastClaim <= 0) continue; // never claimed yet
+      if (now - data.lastClaim < DAILY_COOLDOWN_MS) continue; // still cooling down
+      if ((data.lastReminderAt ?? 0) >= data.lastClaim) continue; // already reminded this cycle
 
-    try {
-      const user = await client.users.fetch(userId);
-      await user.send(t("dailyReminder.dm"));
-      sent++;
-    } catch (err) {
-      // Closed DMs or unknown user — lastReminderAt is already advanced,
-      // so this user is skipped until their next claim.
-      const msg = err instanceof Error ? err.message : String(err);
-      log.debug("dailyReminder", `DM to ${userId} failed: ${msg}`);
+      data.lastReminderAt = now;
+      dirty = true;
+
+      try {
+        const user = await client.users.fetch(userId);
+        await user.send(
+          multiServer
+            ? t("dailyReminder.dmServer", { server: serverId })
+            : t("dailyReminder.dm"),
+        );
+        sent++;
+      } catch (err) {
+        // Closed DMs or unknown user — lastReminderAt is already advanced,
+        // so this user is skipped until their next claim.
+        const msg = err instanceof Error ? err.message : String(err);
+        log.debug("dailyReminder", `DM to ${userId} failed: ${msg}`);
+      }
     }
   }
 
-  if (dirty) await saveClaimedDaily(claimed);
+  if (dirty) await saveClaimedStore(store);
   return sent;
 }
 

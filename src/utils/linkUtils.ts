@@ -37,8 +37,8 @@ export async function isLinked(userId: string): Promise<boolean> {
 }
 
 export async function getLinkedAccount(userId: string): Promise<string | null> {
-  const linked = await loadLinkedAccounts().catch(
-    () => ({}) as LinkedAccountsMap,
-  );
+  // Don't swallow read failures — a corrupt store must surface as
+  // an error, not as "this user is not linked".
+  const linked = await loadLinkedAccounts();
   return linked[userId] ?? null;
 }

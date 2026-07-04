@@ -25,9 +25,9 @@ export class ServerInstance {
   private _hasTpsCommand: boolean | null = null;
 
   /**
-   * M-13: suite-artifact capabilities, probed at startup and re-probed on
-   * config reload. `null` means "not probed yet" — gates treat that as
-   * fully capable so nothing changes for callers that skip probing (tests).
+   * Setup-suite capabilities, probed at startup and re-probed on config
+   * reload. `null` means "not probed yet" — gates treat that as fully
+   * capable so callers that skip probing (tests) see no difference.
    */
   capabilities: ServerCapabilities | null = null;
 
@@ -386,7 +386,7 @@ export function initServers(serversConfig: Record<string, ServerConfig>): void {
 }
 
 /**
- * M-05(b): register a single server instance at runtime.
+ * Register a single server instance at runtime.
  * Used by config-reload reconciliation in addition to startup init.
  */
 export function addServerInstance(cfg: ServerConfig): ServerInstance {
@@ -397,7 +397,7 @@ export function addServerInstance(cfg: ServerConfig): ServerInstance {
 }
 
 /**
- * M-05(b): drop a server instance from the registry and tear down its
+ * Drop a server instance from the registry and tear down its
  * RCON connection. Watcher teardown is the caller's responsibility
  * (see unwireServer in initMinecraftCommands.ts) — this only owns what
  * the instance itself owns.
@@ -416,12 +416,10 @@ export function removeServerInstance(serverId: string): ServerInstance | null {
 }
 
 /**
- * Strict lookup: returns the instance with exactly this ID, or null.
- *
- * H-01: this used to fall back to the first configured instance for any
- * unknown ID, which meant `/server stop server:survvial` (typo) silently
- * stopped the *first* server. Callers that legitimately want "any server"
- * semantics must use getFirstInstance() explicitly.
+ * Strict lookup: the instance with exactly this ID, or null. No silent
+ * fallback — a typo like `/server stop server:survvial` must fail, not
+ * stop the first server. Callers that want "any server" semantics use
+ * getFirstInstance() explicitly.
  */
 export function getServerInstance(serverId: string): ServerInstance | null {
   return instances.get(serverId) ?? null;

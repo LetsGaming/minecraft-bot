@@ -1,5 +1,5 @@
 /**
- * F-05: English locale (default + fallback).
+ * English locale (default + fallback).
  *
  * Key convention: `<area>.<message>` in camelCase. Placeholders use
  * {curlyBraces} and are substituted by t() — see utils/i18n.ts.
@@ -15,7 +15,7 @@ export const en: Record<string, string> = {
   "common.noPermission": "You do not have permission to use this command.",
   "common.invalidUsername": "**{username}** is not a valid Minecraft username.",
 
-  // ── whois (F-01) ──
+  // ── whois ──
   "whois.title": "Whois — {username}",
   "whois.noData": "No whitelist or link data found for **{username}**.",
   "whois.addedBy": "Added by",
@@ -27,10 +27,12 @@ export const en: Record<string, string> = {
   "whois.linkedAccount": "Linked Discord account",
   "whois.notLinked": "Not linked",
 
-  // ── daily reminders (F-04) ──
+  // ── daily reminders ──
   "dailyReminder.enabled":
     "✅ Daily reminders enabled — I'll DM you when your next /daily is ready. Make sure your DMs are open for this server.",
   "dailyReminder.disabled": "✅ Daily reminders disabled.",
   "dailyReminder.dm":
     "🎁 Your daily reward is ready! Claim it with /daily on the server.",
+  "dailyReminder.dmServer":
+    "🎁 Your daily reward on **{server}** is ready! Claim it with /daily server:{server}.",
 };

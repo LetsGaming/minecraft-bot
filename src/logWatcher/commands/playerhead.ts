@@ -9,7 +9,7 @@ const cmd = defineCommand({
   cooldown: 15,
   handler: async (username, { player }, _client, server) => {
     if (!player) return;
-    // H-02/L-03: validate before the name reaches a console command or URL.
+    // Validate before the name reaches a console command or URL.
     if (!isValidMcName(player)) {
       await server.sendCommand(
         `/msg ${username} "${player}" is not a valid username.`,
@@ -25,7 +25,7 @@ const cmd = defineCommand({
       );
       return;
     }
-    // L-04: use the canonical capitalization Mojang returns.
+    // Use the canonical capitalization Mojang returns.
     const profile = (await res.json()) as MojangProfile;
     await server.sendCommand(
       `/give ${username} player_head[profile={name:"${profile.name ?? player}"}]`,

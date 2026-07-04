@@ -54,7 +54,11 @@ The highest key defines the bonus cycle length. After reaching it, the player's 
 - A streak survives as long as claims are no more than 48 hours apart. Otherwise it restarts at 1.
 - Items are delivered via the server console (`give` command), so they work without any server-side plugin.
 
-Claim history and streaks are stored per Discord user in `data/claimedDaily.json`. Deleting a user's entry there resets them completely.
+**Claims are per server.** Cooldown, streaks, and claim history are tracked independently for every server instance: claiming on `survival` does not consume the daily on `creative`, and each server builds its own streak. On multi-server setups players pick the target with `/daily server:<id>` (their guild's default server is used otherwise), and `/streak` shows the streak for the resolved server.
+
+The reward *configuration* (`data/dailyRewards.json`) stays global — every server hands out the same pool and milestones.
+
+Claim state is stored in `data/claimedDaily.json`, keyed by server and Discord user. Deleting a user's entry under a server resets them there. Files from older bot versions (one flat user map, no server dimension) are migrated automatically on first start: all existing streaks move under the **first configured server** — exact for single-server setups; on multi-server setups the log names the target so you can move entries manually if needed.
 
 ## Tips
 
@@ -64,4 +68,4 @@ Claim history and streaks are stored per Discord user in `data/claimedDaily.json
 
 ## Claim reminders
 
-Users can opt in to a DM reminder with `/daily-reminder enabled:true`. The bot checks every 5 minutes for opted-in users whose 24-hour cooldown has expired and sends one DM per claim cycle (claiming again re-arms the reminder). Users with closed DMs are skipped silently until their next claim. The opt-in flag and reminder bookkeeping live in `data/claimedDaily.json`.
+Users can opt in to a DM reminder with `/daily-reminder enabled:true` — per server, like the claims themselves (`/daily-reminder enabled:true server:creative` on multi-server setups). The bot checks every 5 minutes for opted-in users whose 24-hour cooldown has expired and sends one DM per claim cycle (claiming again re-arms the reminder); when several servers have claim data, the DM names the server it is about. Users with closed DMs are skipped silently until their next claim. The opt-in flag and reminder bookkeeping live in `data/claimedDaily.json`.

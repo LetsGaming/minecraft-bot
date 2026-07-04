@@ -4,7 +4,7 @@ import type { ILogWatcher } from "../logWatcher.js";
 import type { GuildConfig } from "../../types/index.js";
 import { broadcastNotification, PLAYER_NAME } from "./notifyGuilds.js";
 
-// M-01: use PLAYER_NAME (not \w+) so Bedrock players with "."-prefixed
+// Use PLAYER_NAME (not \w+) so Bedrock players with "."-prefixed
 // names get death notifications too.
 const DEATH_REGEX = new RegExp(
   String.raw`\[.+?\].*:\s+(${PLAYER_NAME})\s+(was slain|was shot|was killed|drowned|burned|fell|hit the ground|went off with a bang|blew up|was blown up|tried to swim|was impaled|was squished|was pummeled|was fireballed|starved|suffocated|was poked|experienced kinetic|was doomed|walked into|was pricked|died|withered away|was stung|was obliterated|was squashed|didn't want to live|was frozen|was skewered)(.*)$`,

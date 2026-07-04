@@ -17,9 +17,9 @@ export interface UserClaimData {
   currentStreak: number;
   bonusStreak: number;
   longestStreak: number;
-  /** F-04: opt-in DM reminder when the 24h cooldown expires. */
+  /** Opt-in DM reminder when the 24h cooldown expires. */
   remind?: boolean;
-  /** F-04: when the last reminder DM was sent (dedupe per claim cycle). */
+  /** When the last reminder DM was sent (dedupe per claim cycle). */
   lastReminderAt?: number;
   rewards: Array<{
     date: number;

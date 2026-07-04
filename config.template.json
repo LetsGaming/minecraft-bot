@@ -14,6 +14,10 @@
   "guilds": {
     "${DISCORD_GUILD_ID}": {
       "defaultServer": "survival",
+      "adminUsers": [],
+      "allowedServers": [
+        "survival"
+      ],
       "notifications": {
         "channelId": "${DISCORD_NOTIFICATIONS_CHANNEL_ID}",
         "events": [
@@ -48,6 +52,9 @@
     },
     "seed": {
       "enabled": true
+    },
+    "say": {
+      "adminOnly": false
     }
   }
 }

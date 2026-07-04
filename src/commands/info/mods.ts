@@ -80,7 +80,7 @@ export const execute = withErrorHandling(async (interaction) => {
 
   if (!server) throw new Error("Server not found.");
 
-  // M-13: friendly gate — /mods needs the suite's mod manifest.
+  // Friendly gate — /mods needs the suite's mod manifest.
   requireCapability(
     server,
     (c) => c.modManifest,

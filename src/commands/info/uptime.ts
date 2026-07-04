@@ -1,7 +1,10 @@
 import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embedUtils.js";
 import { getAllInstances } from "../../utils/server.js";
-import { resolveServer } from "../../utils/guildRouter.js";
+import {
+  resolveServer,
+  getAllowedServerIds,
+} from "../../utils/guildRouter.js";
 import { getUptimeStats } from "../../utils/uptimeTracker.js";
 import { withErrorHandling } from "../middleware.js";
 
@@ -48,8 +51,13 @@ export const execute = withErrorHandling(async (interaction) => {
     return;
   }
 
-  // Otherwise show all servers, or the guild default if only one
-  const instances = getAllInstances();
+  // Otherwise show all servers, or the guild default if only one.
+  // In multi-guild deployments, the overview only includes servers
+  // this guild may target — no cross-tenant uptime disclosure.
+  const allowed = getAllowedServerIds(interaction.guild?.id);
+  const instances = getAllInstances().filter(
+    (inst) => !allowed || allowed.has(inst.id),
+  );
 
   if (instances.length === 1) {
     const server = instances[0]!;
@@ -121,7 +129,7 @@ function buildSingleEmbed(
     { name: "Last 30 days", value: uptimeBar(stats.pct30d, 15), inline: false },
   );
 
-  // F-06: hourly sparkline, oldest → newest. Only shown when at least one
+  // Hourly sparkline, oldest → newest. Only shown when at least one
   // hour has data; a row of 24 dots would just be noise.
   if (stats.checks24h.total > 0) {
     embed.addFields({

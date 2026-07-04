@@ -204,9 +204,9 @@ describe("checkAndPost — snapshot exists", () => {
   });
 });
 
-// ── B-09: advance schedule even on failure ────────────────────────────────
+// ── Advance schedule even on failure ───────────────────────────────────────
 
-it("saves the schedule timestamp even when buildLeaderboard throws (B-09)", async () => {
+it("saves the schedule timestamp even when buildLeaderboard throws", async () => {
   vi.mocked(statUtils.buildLeaderboard).mockRejectedValue(
     new Error("stat read error"),
   );

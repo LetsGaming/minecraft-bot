@@ -37,6 +37,11 @@ vi.mock("../src/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+vi.mock("../src/utils/adminAudit.js", () => ({
+  recordAdminAction: vi.fn().mockResolvedValue(undefined),
+  loadAdminAudit: vi.fn().mockResolvedValue([]),
+}));
+
 vi.mock("../src/utils/serverAccess.js", () => ({
   readBackups: vi.fn(),
   runScript: vi.fn(),
@@ -321,7 +326,7 @@ describe("/server control command", () => {
     expect(interaction.editReply).toHaveBeenCalled();
   });
 
-  it("rejects script subcommands with a friendly error on probed plain servers (M-13)", async () => {
+  it("rejects script subcommands with a friendly error on probed plain servers", async () => {
     const serverAccess = await import("../src/utils/serverAccess.js");
     const server = makeServer("plain", {
       capabilities: {

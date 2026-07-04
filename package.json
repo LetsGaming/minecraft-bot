@@ -1,6 +1,6 @@
 {
   "name": "minecraft-bot",
-  "version": "3.3.0",
+  "version": "3.5.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/LetsGaming/minecraft-bot.git"
@@ -27,6 +27,9 @@
   },
   "dependencies": {
     "discord.js": "^14.26.4"
+  },
+  "overrides": {
+    "undici": "^6.27.0"
   },
   "devDependencies": {
     "@types/node": "^25.9.2",

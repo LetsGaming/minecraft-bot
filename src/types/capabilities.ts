@@ -1,5 +1,5 @@
 /**
- * M-13 (stage 2): runtime capability detection.
+ * Runtime capability detection.
  *
  * The bot is designed for servers installed via the minecraft-server-setup
  * suite, but works against plain servers for everything that doesn't depend

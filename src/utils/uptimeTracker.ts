@@ -9,7 +9,7 @@ const STATE_PATH = path.resolve(getRootDir(), "data", "uptimeHistory.json");
 
 /**
  * Maximum number of check entries to retain per server.
- * H-06: the /uptime command displays a "Last 30 days" figure, so retention
+ * The /uptime command displays a "Last 30 days" figure, so retention
  * must cover 30 days (43,200 checks at one per minute). The old cap of
  * 10,080 (~7 days) silently turned the 30d row into a 7d number. At ~20
  * bytes/entry this is ~860 KB per server in uptimeHistory.json.
@@ -32,6 +32,9 @@ let dirty = false;
 
 async function load(): Promise<UptimeHistory> {
   if (history) return history;
+  // Deliberately resilient: this is recreatable operational
+  // state, not user data. loadJson already logged loudly and tried the
+  // .bak before this fallback runs — starting fresh here is harmless.
   const data = await loadJson(STATE_PATH).catch(() => ({}));
   history = (data as UptimeHistory) || {};
   return history;
@@ -79,10 +82,10 @@ export async function flushUptimeHistory(): Promise<void> {
  * Compute uptime statistics for a server over 24h / 7d / 30d windows.
  */
 /**
- * F-06: render an hourly sparkline from raw check entries.
+ * Render an hourly sparkline from raw check entries.
  * Buckets the last `hours` hours (oldest first); each bucket becomes one
  * block character scaled by its uptime percentage, or "·" when the bucket
- * contains no checks (bot offline / before H-06's retention window).
+ * contains no checks (bot offline / outside the retention window).
  * Exported for tests.
  */
 export function buildSparkline(

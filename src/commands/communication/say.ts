@@ -20,10 +20,10 @@ export const execute = withErrorHandling(
     const server = resolveServer(interaction);
     if (!server) throw new Error("Server not found.");
 
-    // H-02: /say is open to every user and its input ends up on the server
+    // /say is open to every user and its input ends up on the server
     // console — a \r/\n in the display name or message could inject a second
     // command via the screen `stuff` path. Route through the same
-    // sanitization the chat bridge uses (B-08).
+    // sanitization the chat bridge uses.
     const { name, message: safeMessage } = sanitizeForConsole(
       interaction.user.displayName,
       message,

@@ -36,7 +36,7 @@ export async function execute(
   const userId = interaction.user.id;
   const server = resolveServer(interaction);
 
-  // H-02/L-03: validate before the name reaches a console command or URL.
+  // Validate before the name reaches a console command or URL.
   if (!isValidMcName(mcname)) {
     await interaction.reply({
       embeds: [createErrorEmbed(`\`${mcname}\` is not a valid username.`)],
@@ -111,7 +111,7 @@ export async function execute(
       return;
     }
 
-    // L-04: use the canonical name returned by Mojang, not the raw input.
+    // Use the canonical name returned by Mojang, not the raw input.
     await server.sendCommand(
       `give ${linkedUsername} player_head[profile={name:"${name}"}]`,
     );

@@ -3,11 +3,12 @@ import path from "path";
 import type { JsonCacheEntry, WhitelistEntry } from "../types/index.js";
 import type { ServerInstance } from "./server.js";
 import * as serverAccess from "./serverAccess.js";
+import { log } from "./logger.js";
 
 // ── Whitelist ─────────────────────────────────────────────────────────────
 
 // Per-server cache keyed by server ID so multi-instance setups don't bleed.
-// C-02: entries carry a timestamp and expire after WHITELIST_CACHE_TTL_MS as
+// Entries carry a timestamp and expire after WHITELIST_CACHE_TTL_MS as
 // a safety net for whitelist edits made outside the bot (in-game
 // `/whitelist add`, manual file edits). Bot-initiated edits additionally
 // call invalidateWhitelistCache() directly for immediate consistency.
@@ -90,7 +91,7 @@ export async function deleteStats(
 
 // ── Re-exports removed — use resolveServer(interaction) from guildRouter.ts ──
 
-// B-06: cache is keyed by server ID so multiple instances don't bleed into
+// Cache is keyed by server ID so multiple instances don't bleed into
 // each other. The old module-level variables returned server A's output when
 // server B was queried within the 500ms window.
 const listOutputCache = new Map<string, { output: string; time: number }>();
@@ -158,6 +159,20 @@ export async function ensureDir(filePath: string): Promise<string> {
 const jsonCache = new Map<string, JsonCacheEntry>();
 const writeLocks = new Map<string, Promise<void>>();
 
+function isEnoent(err: unknown): boolean {
+  return (
+    err instanceof Error && (err as NodeJS.ErrnoException).code === "ENOENT"
+  );
+}
+
+/**
+ * Load a bot-local JSON store.
+ *
+ * A missing file just means "first run" and yields an empty store. Anything
+ * else (truncated file, bad permissions, corrupt JSON) must not be turned
+ * into `{}` — the next save would overwrite what's left on disk and make
+ * the loss permanent. So: log, try the `.bak` copy, throw if that fails too.
+ */
 export async function loadJson(file: string): Promise<unknown> {
   try {
     const { mtimeMs } = await fsPromises.stat(file);
@@ -167,8 +182,34 @@ export async function loadJson(file: string): Promise<unknown> {
     const data: unknown = JSON.parse(raw);
     jsonCache.set(file, { mtimeMs, data });
     return data;
-  } catch {
-    return {};
+  } catch (err) {
+    if (isEnoent(err)) return {};
+
+    const reason = err instanceof Error ? err.message : String(err);
+    const base = path.basename(file);
+    log.error(
+      "storage",
+      `Failed to read ${file}: ${reason} — attempting recovery from ${base}.bak`,
+    );
+
+    try {
+      const raw = await fsPromises.readFile(`${file}.bak`, "utf-8");
+      const data: unknown = JSON.parse(raw);
+      log.warn(
+        "storage",
+        `Recovered ${base} from last-known-good backup; the next save will repair the main file.`,
+      );
+      // Not cached: the main file's mtime still identifies the corrupt
+      // content. The next save rewrites the file and refreshes the cache.
+      return data;
+    } catch {
+      throw new Error(
+        `${file} is corrupt or unreadable (${reason}) and no usable .bak ` +
+          `backup exists. Refusing to continue with empty data — restore ` +
+          `the file from a backup, or delete it (and its .bak) to ` +
+          `intentionally start fresh.`,
+      );
+    }
   }
 }
 
@@ -176,9 +217,31 @@ export async function saveJson(file: string, data: unknown): Promise<void> {
   const prev = writeLocks.get(file) ?? Promise.resolve();
   const next = prev.then(async () => {
     await ensureDir(file);
-    await fsPromises.writeFile(file, JSON.stringify(data, null, 2));
+    const json = JSON.stringify(data, null, 2);
+
+    // Write-then-rename: an interrupted in-place write leaves a truncated
+    // file, while rename(2) is atomic — readers see old or new, never half.
+    const tmp = `${file}.tmp`;
+    await fsPromises.writeFile(tmp, json);
+    await fsPromises.rename(tmp, file);
+
     const { mtimeMs } = await fsPromises.stat(file);
     jsonCache.set(file, { mtimeMs, data });
+
+    // Last-known-good copy for loadJson's recovery path, same tmp+rename
+    // dance. Best-effort — a failed backup must not fail the save.
+    try {
+      const bakTmp = `${file}.bak.tmp`;
+      await fsPromises.writeFile(bakTmp, json);
+      await fsPromises.rename(bakTmp, `${file}.bak`);
+    } catch (bakErr) {
+      const reason =
+        bakErr instanceof Error ? bakErr.message : String(bakErr);
+      log.warn(
+        "storage",
+        `Could not write backup for ${path.basename(file)}: ${reason}`,
+      );
+    }
   });
   writeLocks.set(
     file,

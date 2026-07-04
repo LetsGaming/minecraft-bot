@@ -9,7 +9,10 @@ const AUDIT_PATH = path.resolve(getRootDir(), "data", "whitelistAudit.json");
  * Load the whitelist audit log.
  */
 export async function loadAudit(): Promise<WhitelistAuditMap> {
-  const data = await loadJson(AUDIT_PATH).catch(() => ({}));
+  // No `.catch(() => ({}))` here — a corrupt audit file must not be
+  // treated as an empty trail (the next recordAdd would overwrite it and
+  // erase the history). loadJson recovers from .bak or throws loudly.
+  const data = await loadJson(AUDIT_PATH);
   return (data as WhitelistAuditMap) || {};
 }
 

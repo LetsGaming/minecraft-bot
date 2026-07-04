@@ -4,7 +4,7 @@ import type { ILogWatcher } from "../logWatcher.js";
 import type { GuildConfig } from "../../types/index.js";
 import { broadcastNotification, PLAYER_NAME } from "./notifyGuilds.js";
 
-// B-11/M-01: PLAYER_NAME captures Bedrock names prefixed with "." by
+// PLAYER_NAME captures Bedrock names prefixed with "." by
 // Geyser/Floodgate in addition to vanilla [a-zA-Z0-9_] names.
 const JOIN_REGEX = new RegExp(
   String.raw`\[.+?\].*:\s+(${PLAYER_NAME}) joined the game`,

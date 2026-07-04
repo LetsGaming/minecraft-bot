@@ -6,6 +6,7 @@ import {
   type EmbedBuilder,
 } from "discord.js";
 import { getAllInstances } from "../../utils/server.js";
+import { getAllowedServerIds } from "../../utils/guildRouter.js";
 import { loadJson, saveJson, getRootDir } from "../../utils/utils.js";
 import { log } from "../../utils/logger.js";
 import { createEmbed } from "../../utils/embedUtils.js";
@@ -66,7 +67,7 @@ interface GuildChannelRefs {
 const channelRefCache = new Map<string, GuildChannelRefs>();
 
 /**
- * B-10: clear the channel ref cache so the next update cycle re-fetches live
+ * Clear the channel ref cache so the next update cycle re-fetches live
  * channel objects. Call this after a Discord reconnect — stale TextChannel /
  * VoiceChannel objects from before the disconnect can no longer be written to.
  */
@@ -78,6 +79,9 @@ export function invalidateStatusChannelCache(): void {
 // ─── Persistence ──────────────────────────────────────────────────────────────
 
 async function loadState(): Promise<StatusMessageState> {
+  // Deliberately resilient: this is recreatable operational
+  // state, not user data. loadJson already logged loudly and tried the
+  // .bak before this fallback runs — starting fresh here is harmless.
   const data = await loadJson(STATE_PATH).catch(() => ({}));
   return (data as StatusMessageState) ?? {};
 }
@@ -237,28 +241,63 @@ async function buildServerField(
   };
 }
 
-async function buildStatusEmbed(): Promise<StatusBuildResult> {
+interface ServerFieldResult {
+  field: { name: string; value: string; inline: boolean };
+  counts: PlayerCounts;
+}
+
+/**
+ * Query every server once per update pass. Guild embeds are assembled
+ * from this shared map so N guilds never means N× server round-trips.
+ */
+async function buildAllServerFields(): Promise<
+  Map<string, ServerFieldResult>
+> {
   const instances = getAllInstances();
   const isInline = instances.length <= 3;
-  const total: PlayerCounts = { online: 0, max: 0 };
 
   const results = await Promise.allSettled(
     instances.map((s) => buildServerField(s, isInline)),
   );
 
-  const fields = results.map((result, i) => {
+  const map = new Map<string, ServerFieldResult>();
+  results.forEach((result, i) => {
     const instanceId = instances[i]?.id ?? `server-${i + 1}`;
     if (result.status === "fulfilled") {
-      total.online += result.value.counts.online;
-      total.max += result.value.counts.max;
-      return result.value.field;
+      map.set(instanceId, result.value as ServerFieldResult);
+    } else {
+      map.set(instanceId, {
+        field: {
+          name: instanceId,
+          value: "⚠️ Error fetching status",
+          inline: isInline,
+        },
+        counts: { online: 0, max: 0 },
+      });
     }
-    return {
-      name: instanceId,
-      value: "⚠️ Error fetching status",
-      inline: isInline,
-    };
   });
+  return map;
+}
+
+/**
+ * Assemble one guild's status embed from the shared field map.
+ * Multi-guild deployments: the embed only shows servers this guild can
+ * see. Single-guild setups keep showing every configured server.
+ */
+function buildStatusEmbed(
+  guildId: string,
+  fieldMap: Map<string, ServerFieldResult>,
+): StatusBuildResult {
+  const allowed = getAllowedServerIds(guildId);
+  const total: PlayerCounts = { online: 0, max: 0 };
+  const fields: ServerFieldResult["field"][] = [];
+
+  for (const [serverId, entry] of fieldMap) {
+    if (allowed && !allowed.has(serverId)) continue;
+    total.online += entry.counts.online;
+    total.max += entry.counts.max;
+    fields.push(entry.field);
+  }
 
   const embed = createEmbed({
     title: "📊 Server Status",
@@ -381,18 +420,12 @@ async function updateGuildStatus(
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
- * Start the status embed updater.
- *
- * L-08: the feature is explicit opt-in — only guilds that set
- * `statusEmbed.enabled: true` activate it. (It used to default to enabled
- * while config.template.json shipped `false`, giving Docker and PM2 users
- * different first-run behaviour; opt-in is the safer default since the bot
- * creates channels.) For every enabled guild, the bot will:
- *  1. Create (or find) a private "📊 Server Status" category.
- *  2. Provision a `#server-status` text channel for the live embed.
- *  3. Provision a `👥 Players: X / Y` voice channel as a read-only counter.
- *
- * No manual channel IDs need to be configured — the bot self-provisions.
+ * Start the status embed updater. Explicit opt-in per guild
+ * (`statusEmbed.enabled: true`) — safer than a default, since the bot
+ * creates channels. For every enabled guild it self-provisions a private
+ * "📊 Server Status" category with a `#server-status` text channel (live
+ * embed) and a `👥 Players: X / Y` voice channel as a read-only counter;
+ * no channel IDs to configure.
  */
 export function startStatusEmbed(
   client: Client,
@@ -419,9 +452,9 @@ export function startStatusEmbed(
       return;
     }
 
-    let statusResult: StatusBuildResult;
+    let fieldMap: Map<string, ServerFieldResult>;
     try {
-      statusResult = await buildStatusEmbed();
+      fieldMap = await buildAllServerFields();
     } catch (err) {
       log.error(
         "status",
@@ -430,9 +463,11 @@ export function startStatusEmbed(
       return;
     }
 
-    // Sequential: avoids concurrent writes to shared in-memory state
+    // Sequential: avoids concurrent writes to shared in-memory state.
+    // Each guild gets its own embed (scoped to the servers it can see).
     for (const [guildId] of enabledGuilds) {
       try {
+        const statusResult = buildStatusEmbed(guildId, fieldMap);
         await updateGuildStatus(client, guildId, state, statusResult);
       } catch (err) {
         log.error(

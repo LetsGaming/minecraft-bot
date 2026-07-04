@@ -1,5 +1,6 @@
 import { type Client } from "discord.js";
 import { log } from "../../utils/logger.js";
+import { serverInScope } from "../../utils/guildRouter.js";
 import { loadConfig } from "../../config.js";
 import { createEmbed } from "../../utils/embedUtils.js";
 import type { ServerInstance } from "../../utils/server.js";
@@ -31,10 +32,10 @@ export function startTpsMonitor(
         if (Date.now() - lastWarn < 300000) return;
         warned.set(serverInstance.id, Date.now());
 
-        for (const [, gcfg] of Object.entries(guildConfigs)) {
+        for (const [guildId, gcfg] of Object.entries(guildConfigs)) {
           const tpsAlert = gcfg.tpsAlerts;
           if (!tpsAlert?.channelId) continue;
-          if (tpsAlert.server && tpsAlert.server !== serverInstance.id)
+          if (!serverInScope(tpsAlert.server, serverInstance.id, guildId))
             continue;
 
           try {

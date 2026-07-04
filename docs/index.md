@@ -47,6 +47,7 @@ You want to change the code or contribute.
 | Running and writing tests | [dev/testing.md](dev/testing.md) |
 | Data files, caches, and snapshots | [dev/data-storage.md](dev/data-storage.md) |
 | Architectural decision log | [dev/decisions.md](dev/decisions.md) |
+| Preparing/building a web dashboard on top of the bot | [dev/webui-integration.md](dev/webui-integration.md) |
 
 ## Quick reference
 

@@ -1,5 +1,5 @@
 /**
- * H-03: /whitelist and /verify were byte-identical duplicates. The shared
+ * /whitelist and /verify were byte-identical duplicates. The shared
  * implementation now lives here; both command files re-export it with their
  * own command name. The two names are kept as intentional aliases (the docs
  * document them as such) so existing muscle memory keeps working.
@@ -37,7 +37,7 @@ export const executeWhitelistAdd = withErrorHandling(
     const server = resolveServer(interaction);
     if (!server) throw new Error("Server not found.");
 
-    // H-02/L-03: validate the username format before it reaches a console
+    // Validate the username format before it reaches a console
     // command or a Mojang API URL. Rejecting here also gives a clearer
     // error than a failed Mojang lookup for garbage input.
     if (!isValidMcName(username)) {
@@ -51,7 +51,7 @@ export const executeWhitelistAdd = withErrorHandling(
 
     const profile = (await res.json()) as MojangProfile;
 
-    // L-04-adjacent: use the canonical capitalization Mojang returns so the
+    // Use the canonical capitalization Mojang returns so the
     // whitelist entry matches the in-game name exactly.
     const canonicalName = profile.name ?? username;
 
@@ -64,7 +64,7 @@ export const executeWhitelistAdd = withErrorHandling(
       profile.id,
     );
 
-    // C-02: the whitelist cache would otherwise serve the stale (pre-add)
+    // The whitelist cache would otherwise serve the stale (pre-add)
     // list until restart — making the new player invisible to /whitelisted,
     // autocomplete, findPlayer, and leaderboards.
     invalidateWhitelistCache(server.id);

@@ -16,7 +16,7 @@ export const execute = withErrorHandling(async (interaction) => {
   const server = resolveServer(interaction);
   if (!server) throw new Error("Server not found.");
 
-  // M-13: friendly gate instead of an empty/raw error on plain servers.
+  // Friendly gate instead of an empty/raw error on plain servers.
   requireCapability(server, (c) => c.backups, "the suite backup layout");
 
   const { dirs, totalBytes } = await serverAccess.readBackups(server.config);

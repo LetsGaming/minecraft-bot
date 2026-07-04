@@ -33,6 +33,7 @@ vi.mock("../src/utils/logger.js", () => ({
 // ── mocks for initMinecraftCommands ───────────────────────────────────────
 
 vi.mock("../src/config.js", () => ({
+  getServerIds: vi.fn().mockReturnValue([]),
   loadConfig: vi.fn().mockReturnValue({
     token: "tok",
     clientId: "cid",

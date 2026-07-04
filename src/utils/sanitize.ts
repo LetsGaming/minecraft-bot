@@ -3,14 +3,13 @@
  * user-controlled text into a Minecraft server console command
  * (chat bridge, /say, whitelist commands, in-game commands).
  *
- * H-02: extracted from the chat bridge (B-08) so the protection lands in
+ * Extracted from the chat bridge so the protection lands in
  * one tested place instead of being re-implemented (or forgotten) per caller.
  *
- * M-07: the original B-08 filter stripped all non-ASCII, mangling normal
- * messages ("Grüße" → "Gre"). Minecraft chat renders UTF-8 fine — only
- * Unicode control/format characters are dangerous (a \r or \n in input can
- * inject a second command via the screen `stuff` path), so strip exactly
- * those and keep printable Unicode.
+ * Minecraft chat renders UTF-8 fine, so printable Unicode ("Grüße",
+ * emoji) passes through. Only Unicode control/format characters are
+ * dangerous — a \r or \n in input can inject a second command via the
+ * screen `stuff` path — so strip exactly those.
  */
 
 const MAX_NAME_LENGTH = 32;
@@ -49,7 +48,7 @@ export function sanitizeForConsole(
  * command or a Mojang API URL.
  *
  * Java edition names are 1–16 chars of [A-Za-z0-9_]. Geyser/Floodgate
- * prefixes Bedrock players with "." (B-11), so dots are allowed and the
+ * prefixes Bedrock players with ".", so dots are allowed and the
  * length cap is raised to 17 to cover the prefix.
  */
 const MC_NAME_REGEX = /^[\w.]{1,17}$/;

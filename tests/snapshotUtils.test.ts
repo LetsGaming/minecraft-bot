@@ -13,7 +13,7 @@ import path from "path";
 // IMPORTANT: vi.mock is hoisted before const declarations, so the factory
 // must use a plain string literal — not a variable — for getRootDir's return value.
 const SNAP_ROOT = "/tmp/mc-bot-snap-test-" + process.pid;
-// C-01: snapshots are now stored per server under data/snapshots/<serverId>/
+// Snapshots are now stored per server under data/snapshots/<serverId>/
 const SERVER_ID = "survival";
 const SNAPSHOTS_DIR = SNAP_ROOT + "/data/snapshots/" + SERVER_ID;
 
@@ -189,7 +189,7 @@ describe("cleanupSnapshots", () => {
     await expect(cleanupSnapshots(SERVER_ID)).resolves.toBeUndefined();
   });
 
-  it("keeps the newest snapshot even if very old (B-04 protection)", async () => {
+  it("keeps the newest snapshot even if very old", async () => {
     const veryOld = Date.now() - 32 * 24 * 60 * 60 * 1000;
     await writeSnapshot(veryOld);
 
@@ -222,9 +222,9 @@ describe("cleanupSnapshots", () => {
   });
 });
 
-// ── C-01: per-server isolation ─────────────────────────────────────────────
+// ── Per-server isolation ─────────────────────────────────────────────
 
-describe("per-server snapshot isolation (C-01)", () => {
+describe("per-server snapshot isolation", () => {
   it("does not return another server's snapshot as a baseline", async () => {
     const now = Date.now();
     // Snapshot for "survival" (the default test server)
@@ -257,7 +257,7 @@ describe("per-server snapshot isolation (C-01)", () => {
   });
 });
 
-// ── C-01: legacy migration ─────────────────────────────────────────────────
+// ── Legacy migration ─────────────────────────────────────────────────
 
 describe("migrateLegacySnapshots", () => {
   it("moves loose snapshot files into the first server's directory", async () => {

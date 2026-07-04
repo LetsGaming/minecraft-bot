@@ -4,14 +4,14 @@ These run in the background, no user interaction needed. Each one is activated b
 
 ## Chat bridge
 
-**Config key:** `chatBridge`
+**Config key:** `chatBridge` — one entry or an array of entries
 
-Two-way bridge between one Discord channel and the Minecraft chat.
+Two-way bridge between a Discord channel and **exactly one** server. The binding applies in both directions, so a channel never mixes conversations from different servers: replies always land on the server the conversation came from. Multi-server guilds use one channel per server (array form); see [configuration.md](configuration.md#chat-bridges-one-channel--one-server) for the config shapes and validation rules.
 
-- Minecraft → Discord: player chat appears in the channel as an embed with the player's head avatar. Messages starting with `!` (in-game commands) are not bridged.
-- Discord → Minecraft: messages in the channel are forwarded as `[DiscordName] message` via `/say`. Names are capped at 32 characters, messages at 160, and Unicode control characters are stripped so nothing can be smuggled into the server console. Printable Unicode (umlauts, accents, emoji) is forwarded unchanged.
+- Minecraft → Discord: player chat from the bound server appears in the channel as an embed with the player's head avatar. Messages starting with `!` (in-game commands) are not bridged.
+- Discord → Minecraft: messages in the channel are forwarded to the bound server as `[DiscordName] message` via `/say`. Names are capped at 32 characters, messages at 160, and Unicode control characters are stripped so nothing can be smuggled into the server console. Printable Unicode (umlauts, accents, emoji) is forwarded unchanged.
 
-Bot messages are ignored to prevent loops.
+Bot messages are ignored to prevent loops. A per-user rate limit (8 messages / 10 s) stops console flooding; over-limit messages get a ⏳ reaction instead of being forwarded.
 
 ## Event notifications
 
@@ -26,7 +26,7 @@ Posts server events to a channel. Pick the events you want in the `events` array
 | `advancement` | Advancements, challenges, and goals |
 | `start` / `stop` | Server finishing startup / beginning shutdown. Stop messages include the uptime since the last start the bot observed. |
 
-In multi-server setups, every configured server's events are posted to the channel (the embed footer names the source server). There is currently no per-server filter for this block.
+The `server` field controls which servers feed the channel: one ID, a list of IDs, or omitted for every server this guild can see (the embed footer names the source server whenever more than one server is configured). See [Server scoping](configuration.md#server-scoping-one-several-or-all).
 
 ## Status embed
 

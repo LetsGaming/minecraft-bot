@@ -14,6 +14,8 @@ vi.mock("../src/utils/server.js", () => ({
 
 vi.mock("../src/utils/guildRouter.js", () => ({
   resolveServer: vi.fn(),
+  // Null = unrestricted (single-tenant), matching these scenarios.
+  getAllowedServerIds: vi.fn().mockReturnValue(null),
 }));
 
 vi.mock("../src/utils/uptimeTracker.js", () => ({

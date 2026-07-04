@@ -19,8 +19,14 @@ const linkAttempts = new Map<string, number>();
 const LINK_ATTEMPT_COOLDOWN_MS = 3_000;
 
 async function loadData(): Promise<void> {
-  codes = await loadLinkCodes().catch(() => ({}) as LinkCodesMap);
-  linked = await loadLinkedAccounts().catch(() => ({}) as LinkedAccountsMap);
+  // Don't fall back to {} on a failed read. If both the store and
+  // its .bak are unreadable, proceeding with an empty in-memory map means
+  // the next successful !link persists a one-entry map over everyone's
+  // links. Propagating instead makes init fail for this command only
+  // (initMinecraftCommands catches per-command), disabling !link loudly
+  // until the operator restores the file.
+  codes = await loadLinkCodes();
+  linked = await loadLinkedAccounts();
 }
 
 async function saveData(): Promise<void> {
@@ -72,7 +78,7 @@ const cmd = defineCommand({
       return;
     }
 
-    // M-08: one Minecraft account must not be linkable by multiple Discord
+    // One Minecraft account must not be linkable by multiple Discord
     // accounts — daily-reward cooldowns are per Discord user, so a second
     // link would double /daily claims. Reject if another Discord account
     // already owns this username (case-insensitive).

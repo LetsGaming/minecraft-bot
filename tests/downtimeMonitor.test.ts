@@ -12,6 +12,20 @@ vi.mock("../src/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+// Scope helper: replicate the pure semantics (string eq, list
+// membership, unset = unrestricted) without pulling in the config chain.
+vi.mock("../src/utils/guildRouter.js", () => ({
+  serverInScope: vi.fn(
+    (scope: string | string[] | undefined, serverId: string) =>
+      typeof scope === "string"
+        ? scope === serverId
+        : Array.isArray(scope)
+          ? scope.includes(serverId)
+          : true,
+  ),
+  getAllowedServerIds: vi.fn().mockReturnValue(null),
+}));
+
 vi.mock("../src/utils/uptimeTracker.js", () => ({
   recordCheck: vi.fn().mockResolvedValue(undefined),
 }));

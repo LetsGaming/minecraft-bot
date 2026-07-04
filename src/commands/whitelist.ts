@@ -1,4 +1,4 @@
-// H-03: shared implementation with /verify — see commands/shared/whitelistAdd.ts
+// Shared implementation with /verify — see commands/shared/whitelistAdd.ts
 import {
   buildWhitelistAddData,
   executeWhitelistAdd,

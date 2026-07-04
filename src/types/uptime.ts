@@ -14,7 +14,7 @@ export interface UptimeStats {
   /** How long the server has been in its current state (ms) */
   currentStateDuration: number;
   /**
-   * F-06: hourly uptime sparkline for the last 24 h, oldest hour first.
+   * Hourly uptime sparkline for the last 24 h, oldest hour first.
    * One block char per hour (▁–█ scaled by that hour's uptime %), "·" for
    * hours without any checks.
    */

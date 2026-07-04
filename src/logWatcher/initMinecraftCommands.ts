@@ -10,7 +10,7 @@ import {
   addServerInstance,
   removeServerInstance,
 } from "../utils/server.js";
-import { loadConfig } from "../config.js";
+import { loadConfig, getServerIds } from "../config.js";
 import { log } from "../utils/logger.js";
 import type { Client } from "discord.js";
 import type {
@@ -47,7 +47,7 @@ function getCommandFiles(dir: string): string[] {
   return files;
 }
 
-// ── Per-server watcher lifecycle (M-05b) ──────────────────────────────────
+// ── Per-server watcher lifecycle ──────────────────────────────────────────
 // Every resource wired for a server instance is tracked here so config-reload
 // reconciliation can tear it down again when the server is removed.
 
@@ -72,7 +72,7 @@ async function wireServer(
     watcher.register(regex, handler);
   }
 
-  registerChatBridge(watcher, client, guildConfigs);
+  registerChatBridge(watcher, client, guildConfigs, getServerIds());
   registerJoinLeaveWatcher(watcher, client, guildConfigs);
   registerDeathWatcher(watcher, client, guildConfigs);
   registerAdvancementWatcher(watcher, client, guildConfigs);
@@ -136,11 +136,13 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
   }
 
   // ── 3. Discord → MC chat bridge ──
-  // M-06: when neither chatBridge.server nor the guild defaultServer is
-  // set, route to the first configured instance (legacy single-server
-  // behaviour) instead of looking up a literal "default" ID.
-  setupDiscordToMc(client, guildConfigs, (id) =>
-    id ? getServerInstance(id) : getFirstInstance(),
+  // Every bridge is bound to exactly one server (resolveGuildBridges):
+  // the channel a message is typed in decides which server it reaches.
+  setupDiscordToMc(
+    client,
+    guildConfigs,
+    (id) => (id ? getServerInstance(id) : getFirstInstance()),
+    getServerIds(),
   );
 
   // ── 4. Scheduled leaderboard auto-poster ──
@@ -149,11 +151,11 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
   // ── 5. Persistent status embed ──
   startStatusEmbed(client, guildConfigs);
 
-  // ── 5b. Daily claim reminders (F-04) ──
+  // ── 5b. Daily claim reminders ──
   startDailyReminderScheduler(client);
 
   // ── 6. Downtime monitor ──
-  // M-05(b): pass the provider so reconciled server additions/removals are
+  // Pass the provider so reconciled server additions/removals are
   // monitored without restarting the timer.
   startDowntimeMonitor(getAllInstances, client, guildConfigs);
 
@@ -169,7 +171,7 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
   );
 }
 
-// ── Config-reload reconciliation (M-05b) ──────────────────────────────────
+// ── Config-reload reconciliation ──────────────────────────────────────────
 
 export interface ReconcileResult {
   /** Server IDs added to the registry and fully wired (watchers + TPS). */
@@ -247,12 +249,10 @@ async function doReconcile(
     }
   }
 
-  // M-13: re-probe capabilities on every reload — an admin may have just
-  // installed the setup suite (or removed it) for an existing server, and
-  // added servers haven't been probed at all yet. Registration-level
-  // gating stays as decided at startup (Discord command registration is a
-  // startup concern), but per-invocation gates pick the new flags up
-  // immediately.
+  // Re-probe capabilities on every reload — the admin may have just
+  // installed (or removed) the setup suite, and newly added servers
+  // haven't been probed at all. Command *registration* stays as decided
+  // at startup; per-invocation gates pick the new flags up immediately.
   await Promise.all(
     getAllInstances().map(async (inst) => {
       try {

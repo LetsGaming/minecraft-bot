@@ -1,6 +1,6 @@
 /**
- * Tests for the shared console sanitization helper (H-02) and the
- * Unicode-aware filtering it implements (M-07).
+ * Tests for the shared console sanitization helper and the
+ * Unicode-aware filtering it implements.
  */
 import { describe, it, expect } from "vitest";
 import {
@@ -18,7 +18,7 @@ describe("stripControlChars", () => {
     expect(stripControlChars("a\u0000b\u001bc\u200bd")).toBe("abcd");
   });
 
-  it("keeps umlauts, accents, and emoji (M-07)", () => {
+  it("keeps umlauts, accents, and emoji", () => {
     expect(stripControlChars("Grüße, Müller! Ça va? 🎉")).toBe(
       "Grüße, Müller! Ça va? 🎉",
     );

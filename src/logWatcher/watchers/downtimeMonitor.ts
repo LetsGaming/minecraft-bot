@@ -1,5 +1,6 @@
 import { type Client } from "discord.js";
 import { log } from "../../utils/logger.js";
+import { serverInScope } from "../../utils/guildRouter.js";
 import { recordCheck } from "../../utils/uptimeTracker.js";
 import { createEmbed } from "../../utils/embedUtils.js";
 import type { ServerInstance } from "../../utils/server.js";
@@ -43,7 +44,7 @@ export function suppressAlerts(
 /**
  * Start the downtime monitor.
  *
- * M-05(b): accepts either a fixed array (legacy/tests) or a provider
+ * Accepts either a fixed array (legacy/tests) or a provider
  * function that is consulted on every tick — pass getAllInstances so
  * servers added/removed by config-reload reconciliation are picked up
  * without restarting the monitor.
@@ -107,10 +108,10 @@ async function checkServer(
       state.alerted = false;
       state.lastKnownState = "online";
 
-      for (const [, gcfg] of guildsWithAlerts) {
+      for (const [guildId, gcfg] of guildsWithAlerts) {
         const alertCfg = gcfg.downtimeAlerts;
         if (!alertCfg?.channelId) continue;
-        if (alertCfg.server && alertCfg.server !== server.id) continue;
+        if (!serverInScope(alertCfg.server, server.id, guildId)) continue;
 
         await sendAlert(client, alertCfg.channelId, {
           title: "✅ Server Back Online",
@@ -136,10 +137,10 @@ async function checkServer(
       state.alerted = true;
       state.lastKnownState = "offline";
 
-      for (const [, gcfg] of guildsWithAlerts) {
+      for (const [guildId, gcfg] of guildsWithAlerts) {
         const alertCfg = gcfg.downtimeAlerts;
         if (!alertCfg?.channelId) continue;
-        if (alertCfg.server && alertCfg.server !== server.id) continue;
+        if (!serverInScope(alertCfg.server, server.id, guildId)) continue;
 
         await sendAlert(client, alertCfg.channelId, {
           title: "🔴 Server Down",

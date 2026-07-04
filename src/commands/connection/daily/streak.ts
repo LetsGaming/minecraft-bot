@@ -5,14 +5,22 @@ import {
 } from "discord.js";
 import {
   loadDailyRewardsConfig,
-  loadClaimedDaily,
+  loadClaimedStore,
+  getServerClaims,
 } from "../../../utils/dailyStore.js";
+import { resolveServer } from "../../../utils/guildRouter.js";
 import { createErrorEmbed } from "../../../utils/embedUtils.js";
 import type { StreakData, NextBonusStreak } from "../../../types/index.js";
 
 export const data = new SlashCommandBuilder()
   .setName("streak")
-  .setDescription("Get information about your daily streak");
+  .setDescription("Get information about your daily streak")
+  .addStringOption((o) =>
+    o
+      .setName("server")
+      .setDescription("Server to show the streak for")
+      .setAutocomplete(true),
+  );
 
 export async function execute(
   interaction: ChatInputCommandInteraction,
@@ -20,7 +28,8 @@ export async function execute(
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const userId = interaction.user.id;
-  const streakData = await getStreakData(userId);
+  const server = resolveServer(interaction);
+  const streakData = await getStreakData(userId, server.id);
 
   if (!streakData) {
     const errorEmbed = createErrorEmbed(
@@ -47,8 +56,12 @@ export async function execute(
   );
 }
 
-async function getStreakData(userId: string): Promise<StreakData | null> {
-  const claimedDaily = await loadClaimedDaily();
+async function getStreakData(
+  userId: string,
+  serverId: string,
+): Promise<StreakData | null> {
+  const store = await loadClaimedStore();
+  const claimedDaily = getServerClaims(store, serverId);
 
   if (!(userId in claimedDaily)) {
     return null;

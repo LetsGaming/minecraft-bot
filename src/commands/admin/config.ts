@@ -4,6 +4,7 @@ import { reconcileServers } from "../../logWatcher/initMinecraftCommands.js";
 import { createEmbed, createSuccessEmbed } from "../../utils/embedUtils.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { log } from "../../utils/logger.js";
+import { recordAdminAction } from "../../utils/adminAudit.js";
 
 export const data = new SlashCommandBuilder()
   .setName("config")
@@ -35,7 +36,7 @@ export const execute = withErrorHandling(
       const cfg = reloadConfig();
       const after = Object.keys(cfg.servers);
 
-      // M-05(b): apply server additions/removals to the running bot —
+      // Apply server additions/removals to the running bot —
       // create instances + watchers for added IDs, stop watchers and drop
       // instances for removed ones. Changed settings on an existing ID
       // can't be applied live (the instance keeps its original RCON/watcher
@@ -46,6 +47,22 @@ export const execute = withErrorHandling(
       );
 
       log.info("config", `Config reloaded by ${interaction.user.tag}`);
+
+      // Config reload is an operator-level mutation.
+      await recordAdminAction({
+        action: "config reload",
+        by: interaction.user.tag,
+        byId: interaction.user.id,
+        guildId: interaction.guild?.id ?? null,
+        detail:
+          [
+            added.length > 0 ? `added: ${added.join(",")}` : "",
+            removed.length > 0 ? `removed: ${removed.join(",")}` : "",
+            changed.length > 0 ? `changed: ${changed.join(",")}` : "",
+          ]
+            .filter(Boolean)
+            .join("; ") || "no server changes",
+      });
 
       const lines = [
         `Servers: ${after.join(", ")}`,
@@ -89,7 +106,14 @@ export const execute = withErrorHandling(
       const features: string[] = [];
       if (gcfg.statusEmbed?.enabled === true) features.push("status");
       if (gcfg.notifications?.channelId) features.push("notifications");
-      if (gcfg.chatBridge?.channelId) features.push("chatBridge");
+      const bridgeList = Array.isArray(gcfg.chatBridge)
+        ? gcfg.chatBridge
+        : gcfg.chatBridge
+          ? [gcfg.chatBridge]
+          : [];
+      const bridgeCount = bridgeList.filter((b) => b?.channelId).length;
+      if (bridgeCount === 1) features.push("chatBridge");
+      if (bridgeCount > 1) features.push(`chatBridge ×${bridgeCount}`);
       if (gcfg.leaderboard?.channelId) features.push("leaderboard");
       if (gcfg.downtimeAlerts?.channelId) features.push("downtime");
       if (gcfg.tpsAlerts?.channelId) features.push("tpsAlerts");

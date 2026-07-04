@@ -32,7 +32,7 @@ export async function execute(
   await interaction.editReply({ embeds: [embed] });
 }
 
-// M-04: read through loadConfig() so env overrides, validation, and config
+// Read through loadConfig() so env overrides, validation, and config
 // hot-reload apply — instead of re-reading config.json from disk directly.
 function getUrl(): string | null {
   return loadConfig().commands["map"]?.url ?? null;

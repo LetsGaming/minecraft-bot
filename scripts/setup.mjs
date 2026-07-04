@@ -408,14 +408,15 @@ async function configureGuild(guildId, existing, serverIds) {
   }
 
   // ── Status embed ──
+  // Self-provisioning: the bot creates its own status category/channels,
+  // so this is just an on/off switch (no channel ID needed).
   if (
-    await confirm("Enable status embed?", !!existing.statusEmbed?.channelId)
+    await confirm(
+      "Enable the live status embed (auto-creates its own channel)?",
+      existing.statusEmbed?.enabled === true,
+    )
   ) {
-    const channelId = await prompt(
-      "Status embed channel ID",
-      existing.statusEmbed?.channelId ?? "",
-    );
-    if (channelId) guild.statusEmbed = { channelId };
+    guild.statusEmbed = { enabled: true };
   }
 
   // ── Notifications ──
@@ -455,19 +456,38 @@ async function configureGuild(guildId, existing, serverIds) {
   }
 
   // ── Chat bridge ──
-  if (await confirm("Enable chat bridge?", !!existing.chatBridge?.channelId)) {
-    const channelId = await prompt(
-      "Chat bridge channel ID",
-      existing.chatBridge?.channelId ?? "",
-    );
-    if (channelId) {
-      guild.chatBridge = { channelId };
-      if (serverIds.length > 1) {
-        guild.chatBridge.server = await prompt(
-          `Bridge to which server? (${serverIds.join("/")})`,
-          existing.chatBridge?.server ?? guild.defaultServer ?? "",
-        );
+  // One Discord channel is bound to exactly ONE server (both directions),
+  // so conversations from different servers never mix. Multi-server setups
+  // therefore get one bridge channel per server.
+  const existingBridges = Array.isArray(existing.chatBridge)
+    ? existing.chatBridge
+    : existing.chatBridge
+      ? [existing.chatBridge]
+      : [];
+  if (await confirm("Enable chat bridge?", existingBridges.length > 0)) {
+    if (serverIds.length <= 1) {
+      const channelId = await prompt(
+        "Chat bridge channel ID",
+        existingBridges[0]?.channelId ?? "",
+      );
+      if (channelId) {
+        guild.chatBridge = { channelId, server: serverIds[0] };
       }
+    } else {
+      hint(
+        "Each server gets its own channel — leave one empty to skip that server.",
+      );
+      const bridges = [];
+      for (const sid of serverIds) {
+        const prev = existingBridges.find((b) => b?.server === sid);
+        const channelId = await prompt(
+          `Bridge channel ID for "${sid}"`,
+          prev?.channelId ?? "",
+        );
+        if (channelId) bridges.push({ channelId, server: sid });
+      }
+      if (bridges.length === 1) guild.chatBridge = bridges[0];
+      if (bridges.length > 1) guild.chatBridge = bridges;
     }
   }
 

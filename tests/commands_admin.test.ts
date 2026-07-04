@@ -51,7 +51,12 @@ vi.mock("../src/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-// M-05(b): /config reload now applies server changes live via reconciliation
+vi.mock("../src/utils/adminAudit.js", () => ({
+  recordAdminAction: vi.fn().mockResolvedValue(undefined),
+  loadAdminAudit: vi.fn().mockResolvedValue([]),
+}));
+
+// /config reload now applies server changes live via reconciliation
 vi.mock("../src/logWatcher/initMinecraftCommands.js", () => ({
   reconcileServers: vi
     .fn()
@@ -124,7 +129,7 @@ describe("/config admin command — reload subcommand", () => {
     expect(interaction.editReply).toHaveBeenCalled();
   });
 
-  it("reconciles server changes and reports them as applied live (M-05b)", async () => {
+  it("reconciles server changes and reports them as applied live", async () => {
     const { reconcileServers } = await import(
       "../src/logWatcher/initMinecraftCommands.js"
     );

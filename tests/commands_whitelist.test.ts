@@ -49,7 +49,7 @@ vi.mock("../src/utils/utils.js", () => ({
   invalidateWhitelistCache: vi.fn(),
 }));
 
-// M-04: /map now reads through loadConfig() instead of loadJson(config.json)
+// /map now reads through loadConfig() instead of loadJson(config.json)
 vi.mock("../src/config.js", () => ({
   loadConfig: vi.fn().mockReturnValue({ commands: {} }),
 }));
@@ -128,7 +128,7 @@ describe("/whitelist command", () => {
     });
     await execute(interaction);
     expect(interaction.editReply).toHaveBeenCalled();
-    // C-02: a successful add must invalidate the whitelist cache
+    // A successful add must invalidate the whitelist cache
     expect(invalidateWhitelistCache).toHaveBeenCalledWith("survival");
   });
 

@@ -14,6 +14,10 @@ vi.mock("../src/utils/embedUtils.js", () => ({
   createErrorEmbed: vi.fn().mockReturnValue({ type: "error-embed" }),
 }));
 
+vi.mock("../src/utils/guildRouter.js", () => ({
+  resolveServer: vi.fn().mockReturnValue({ id: "main" }),
+}));
+
 import { loadJson } from "../src/utils/utils.js";
 import { execute } from "../src/commands/connection/daily/streak.js";
 import type { ChatInputCommandInteraction } from "discord.js";
@@ -47,7 +51,12 @@ describe("streak execute", () => {
   it("replies with streak info when user has data and no rewards config", async () => {
     vi.mocked(loadJson)
       .mockResolvedValueOnce({
-        user1: { currentStreak: 7, longestStreak: 14, bonusStreak: 7 },
+        version: 2,
+        servers: {
+          main: {
+            user1: { currentStreak: 7, longestStreak: 14, bonusStreak: 7 },
+          },
+        },
       })
       .mockResolvedValueOnce({}); // no dailyRewards config
 
@@ -61,7 +70,12 @@ describe("streak execute", () => {
   it("includes next bonus streak when rewards config has a higher milestone", async () => {
     vi.mocked(loadJson)
       .mockResolvedValueOnce({
-        user1: { currentStreak: 5, longestStreak: 5, bonusStreak: 5 },
+        version: 2,
+        servers: {
+          main: {
+            user1: { currentStreak: 5, longestStreak: 5, bonusStreak: 5 },
+          },
+        },
       })
       .mockResolvedValueOnce({
         streakBonuses: { "7": "bonus_item", "14": "better_bonus" },
@@ -78,7 +92,12 @@ describe("streak execute", () => {
   it("shows N/A when all bonuses are already surpassed", async () => {
     vi.mocked(loadJson)
       .mockResolvedValueOnce({
-        user1: { currentStreak: 100, longestStreak: 100, bonusStreak: 100 },
+        version: 2,
+        servers: {
+          main: {
+            user1: { currentStreak: 100, longestStreak: 100, bonusStreak: 100 },
+          },
+        },
       })
       .mockResolvedValueOnce({
         streakBonuses: { "7": "item1", "14": "item2" },

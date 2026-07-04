@@ -6,21 +6,28 @@ import { loadConfig } from "../config.js";
 /**
  * Checks whether a Discord user is an admin.
  *
- * F-02: `config.adminUsers` may contain user IDs *and* role IDs (both are
- * snowflakes, so no config format change is needed). A user is an admin if
- * their own ID is listed or if they carry any listed role. Pure-ID callers
- * (no roles available) keep working — role matching is simply skipped.
+ * Admin lists may contain user IDs and role IDs (both are snowflakes): a
+ * user qualifies if their ID is listed or they carry a listed role.
+ *
+ * Two scopes exist: `config.adminUsers` is operator level and valid
+ * everywhere; `config.guilds[guildId].adminUsers` only counts for commands
+ * issued from that guild (and, via resolveServer, only against servers the
+ * guild may target). In DMs only the global list applies.
  */
 export function isServerAdmin(
   discordUserId: string,
   memberRoleIds: readonly string[] = [],
+  guildId?: string,
 ): boolean {
   const cfg = loadConfig();
-  const admins = cfg.adminUsers;
-  return (
-    admins.includes(discordUserId) ||
-    memberRoleIds.some((roleId) => admins.includes(roleId))
-  );
+  const matches = (list: readonly string[] | undefined): boolean =>
+    !!list &&
+    (list.includes(discordUserId) ||
+      memberRoleIds.some((roleId) => list.includes(roleId)));
+
+  if (matches(cfg.adminUsers)) return true;
+  if (guildId && matches(cfg.guilds?.[guildId]?.adminUsers)) return true;
+  return false;
 }
 
 /**
@@ -47,8 +54,15 @@ type CommandExecutor = (
  */
 export function requireServerAdmin(execute: CommandExecutor): CommandExecutor {
   return async (interaction) => {
-    // F-02: pass the member's roles so role-based admin entries match.
-    if (!isServerAdmin(interaction.user.id, getMemberRoleIds(interaction))) {
+    // Roles make role-based admin entries match; the guild ID scopes
+    // per-guild admin lists to their own guild.
+    if (
+      !isServerAdmin(
+        interaction.user.id,
+        getMemberRoleIds(interaction),
+        interaction.guild?.id,
+      )
+    ) {
       throw new Error("You do not have permission to use this command.");
     }
     return execute(interaction);

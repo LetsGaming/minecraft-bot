@@ -152,7 +152,7 @@ describe("logWatcher link handler", () => {
     expect(send).toHaveBeenCalledWith(expect.stringContaining("expired"));
   });
 
-  it("rejects linking a Minecraft account already owned by another Discord user (M-08)", async () => {
+  it("rejects linking a Minecraft account already owned by another Discord user", async () => {
     const linkUtils = await import("../src/utils/linkUtils.js");
     vi.mocked(linkUtils.loadLinkCodes).mockResolvedValue({
       ABCD1234: {

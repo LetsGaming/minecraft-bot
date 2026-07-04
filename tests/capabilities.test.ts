@@ -1,5 +1,5 @@
 /**
- * M-13 (stage 2): capability detection tests.
+ * Capability detection tests.
  *
  * - detectCapabilities against a real tmp-dir "suite server" fixture (all
  *   artifacts present) and a "plain server" fixture (none present)
@@ -261,7 +261,7 @@ describe("capabilitySummary", () => {
   });
 });
 
-// ── Remote deleteStatsFile (H-05 prune-stats on remote instances) ──────────
+// ── Remote deleteStatsFile (prune-stats on remote instances) ───────────────
 
 describe("deleteStatsFile — remote wrapper", () => {
   const UUID = "550e8400-e29b-41d4-a716-446655440000";

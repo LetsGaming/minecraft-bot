@@ -12,7 +12,7 @@ import type { ServerInstance } from "./server.js";
 import { log } from "./logger.js";
 import type { SnapshotData } from "../types/index.js";
 
-// C-01: snapshots are stored per server (data/snapshots/<serverId>/<ts>.json)
+// Snapshots are stored per server (data/snapshots/<serverId>/<ts>.json)
 // so multi-server setups never diff one server's players against another
 // server's baseline. Legacy loose files (data/snapshots/<ts>.json) are moved
 // into the first server's directory on startup — see migrateLegacySnapshots().
@@ -224,7 +224,7 @@ export async function cleanupSnapshots(serverId: string): Promise<void> {
   const oneDayAgo = now - DAY_MS;
   const maxAge = now - MAX_AGE_MS;
 
-  // B-04: always keep the newest snapshot regardless of age so there is
+  // Always keep the newest snapshot regardless of age so there is
   // always a baseline for leaderboard queries. Identify it up-front.
   const newestTimestamp = entries[entries.length - 1]!.timestamp;
 
@@ -241,7 +241,7 @@ export async function cleanupSnapshots(serverId: string): Promise<void> {
     const toDelete: SnapshotFileEntry[] = [];
 
     for (const e of dayEntries) {
-      // B-04: never delete the single newest snapshot even if it's past maxAge
+      // Never delete the single newest snapshot even if it's past maxAge
       if (e.timestamp < maxAge && e.timestamp !== newestTimestamp)
         toDelete.push(e);
     }
@@ -272,10 +272,10 @@ export async function cleanupSnapshots(serverId: string): Promise<void> {
 }
 
 /**
- * One-time migration for C-01: snapshots used to live as loose files
- * directly in data/snapshots/. Move any such files into the first
- * configured server's subdirectory so existing baselines survive the
- * upgrade. Call once at startup, after initServers().
+ * One-time migration: move loose snapshot files from data/snapshots/ into
+ * the first configured server's subdirectory so old baselines survive the
+ * upgrade to per-server snapshots. Call once at startup, after
+ * initServers().
  */
 export async function migrateLegacySnapshots(
   firstServerId: string,

@@ -108,6 +108,24 @@ In the bot's `config.json`, add `apiUrl` and `apiKey` to each remote server. The
 
 Both instances point at the same `apiUrl`; the wrapper routes by the instance ID in the URL path. Local instances simply omit `apiUrl`.
 
+### Transport security
+
+The `x-api-key` grants full server control, so the bot enforces transport rules at config load:
+
+- `https://…` is always accepted. Use it whenever the wrapper is reachable beyond your LAN — the simplest setup is a reverse proxy (Caddy, nginx, Traefik) terminating TLS in front of the wrapper.
+- `http://…` is accepted **only for local/private hosts** (loopback, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, link-local, single-label hostnames, and `.local`/`.lan`/`.internal`/`.home.arpa` names). A startup warning reminds you the traffic is unencrypted — LAN-only by design.
+- `http://` to a **public host is rejected** at startup with an actionable error. If the host genuinely is on a trusted segment the bot cannot classify (e.g. an internal DNS name like `mc.corp.example.com` resolving to a private address), set `"allowInsecureHttp": true` on that server to downgrade the rejection to a loud warning:
+
+```json
+"survival": {
+  "apiUrl": "http://mc.corp.example.com:3000",
+  "apiKey": "the-same-secret",
+  "allowInsecureHttp": true
+}
+```
+
+Prefer fixing the transport over setting the flag — anyone on the network path of a plaintext connection can read the key and issue wrapper commands.
+
 ## Wrapper version notes
 
 Two bot features need wrapper routes added in wrapper v2.1:
@@ -134,4 +152,4 @@ Then start the bot and run `/status` in Discord.
 
 - All wrapper HTTP calls from the bot have timeouts (8 s for reads, 30 s for script POSTs), so a hung wrapper cannot stall the bot.
 - Log events stream over SSE (`GET /instances/:id/logs/stream`). The bot reconnects automatically with exponential backoff (5 s up to 60 s).
-- Use a long random `apiKey`. The wrapper can run scripts and read files; treat the key like a password.
+- Use a long random `apiKey`. The wrapper can run scripts and read files; treat the key like a password — and pair it with the transport rules above (HTTPS or trusted LAN only).

@@ -1,5 +1,5 @@
 /**
- * F-05: minimal localization layer.
+ * Minimal localization layer.
  *
  * `t(key, vars)` resolves a key in the configured locale
  * (config.language, "en" | "de"), falling back to English and finally to

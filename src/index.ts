@@ -13,6 +13,10 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { loadConfig, getServerIds, watchConfig } from "./config.js";
 import { consumeToken, cooldownSeconds } from "./utils/rateLimiter.js";
+import {
+  isServerAdmin,
+  getMemberRoleIds,
+} from "./commands/middleware.js";
 import { initServers, getAllInstances } from "./utils/server.js";
 import {
   capabilityCommandSkips,
@@ -35,7 +39,7 @@ const config = loadConfig();
 // Initialize all server instances
 initServers(config.servers);
 
-// M-13: probe which setup-suite artifacts each server provides. The result
+// Probe which setup-suite artifacts each server provides. The result
 // gates command registration below and per-invocation checks in the
 // suite-dependent commands; probe failures leave `capabilities` null, which
 // every gate treats as fully capable (legacy behaviour).
@@ -49,7 +53,7 @@ for (const inst of getAllInstances()) {
   }
 }
 
-// C-01: move legacy loose snapshot files into the first server's directory
+// Move legacy loose snapshot files into the first server's directory
 // so existing baselines survive the per-server snapshot layout change.
 const firstServerId = Object.keys(config.servers)[0];
 if (firstServerId) {
@@ -69,7 +73,7 @@ const client = new Client({
 }) as BotClient;
 
 // Re-cache automatically when config.json is edited on disk.
-// M-05(b): server additions/removals are reconciled live — instances and
+// Server additions/removals are reconciled live — instances and
 // watchers are created for added IDs and torn down for removed ones.
 // Before the client is ready, watchers can't be wired yet; startup reads
 // the fresh config anyway, so skipping is correct rather than lossy.
@@ -114,7 +118,7 @@ function getCommandFiles(dir: string): string[] {
 }
 
 async function loadCommands(): Promise<void> {
-  // M-13: skip registering suite-dependent commands when NO configured
+  // Skip registering suite-dependent commands when NO configured
   // server provides the capability ("/server" stays registered — see
   // capabilityCommandSkips for why).
   const capabilitySkips = capabilityCommandSkips(getAllInstances());
@@ -183,7 +187,7 @@ void (async () => {
     }
   });
 
-  // B-10: invalidate the statusEmbed channel ref cache after every Discord
+  // Invalidate the statusEmbed channel ref cache after every Discord
   // reconnect so stale TextChannel/VoiceChannel objects are not reused.
   client.on("shardResume", () => invalidateStatusChannelCache());
 
@@ -195,8 +199,16 @@ void (async () => {
 
       // Server autocomplete
       if (focused.name === "server") {
-        const ids = getServerIds().filter((id) =>
-          id.startsWith(String(focused.value).toLowerCase()),
+        // In multi-guild deployments, only suggest servers this
+        // guild may target — no cross-tenant server-ID disclosure.
+        const { getAllowedServerIds } = await import(
+          "./utils/guildRouter.js"
+        );
+        const allowed = getAllowedServerIds(autocomplete.guild?.id ?? undefined);
+        const ids = getServerIds().filter(
+          (id) =>
+            (!allowed || allowed.has(id)) &&
+            id.startsWith(String(focused.value).toLowerCase()),
         );
         await autocomplete.respond(
           ids.slice(0, 25).map((id) => ({ name: id, value: id })),
@@ -233,6 +245,24 @@ void (async () => {
     const chatInteraction = interaction as ChatInputCommandInteraction;
     const command = commands.get(chatInteraction.commandName);
     if (!command) return;
+
+    // Commands marked adminOnly in config (e.g. "say") use the same check
+    // as requireServerAdmin. Read via loadConfig() at dispatch time so
+    // config reloads apply without a restart.
+    if (loadConfig().commands?.[chatInteraction.commandName]?.adminOnly) {
+      const allowed = isServerAdmin(
+        chatInteraction.user.id,
+        getMemberRoleIds(chatInteraction),
+        chatInteraction.guild?.id,
+      );
+      if (!allowed) {
+        await chatInteraction.reply({
+          content: "You do not have permission to use this command.",
+          flags: MessageFlags.Ephemeral as number,
+        });
+        return;
+      }
+    }
 
     try {
       // Per-user rate limit: prevents RCON pool exhaustion from command spam

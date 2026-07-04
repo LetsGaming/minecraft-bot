@@ -5,8 +5,9 @@ import {
 } from "discord.js";
 import {
   loadDailyRewardsConfig,
-  loadClaimedDaily,
-  saveClaimedDaily,
+  loadClaimedStore,
+  getServerClaims,
+  saveClaimedStore,
 } from "../../../utils/dailyStore.js";
 import { getOnlinePlayers } from "../../../utils/playerUtils.js";
 import { isLinked, getLinkedAccount } from "../../../utils/linkUtils.js";
@@ -28,7 +29,13 @@ const claimLock = new Set<string>();
 
 export const data = new SlashCommandBuilder()
   .setName("daily")
-  .setDescription("Claim your daily reward | Link required");
+  .setDescription("Claim your daily reward | Link required")
+  .addStringOption((o) =>
+    o
+      .setName("server")
+      .setDescription("Server to claim on (default: this guild's server)")
+      .setAutocomplete(true),
+  );
 
 export async function execute(
   interaction: ChatInputCommandInteraction,
@@ -72,10 +79,12 @@ async function _execute(
 
   const server = resolveServer(interaction);
 
-  const [rewardsCfg, claimed] = await Promise.all([
+  // Cooldown, streak, and history are all per server.
+  const [rewardsCfg, store] = await Promise.all([
     loadDailyRewardsConfig(),
-    loadClaimedDaily(),
+    loadClaimedStore(),
   ]);
+  const claimed = getServerClaims(store, server.id);
 
   if (!rewardsCfg.default?.length) {
     await interaction.reply(
@@ -127,7 +136,7 @@ async function _execute(
     grantedRewards.push(...bonus);
   }
 
-  // M-11: reward delivery used to be fire-and-forget — RCON could drop
+  // Reward delivery used to be fire-and-forget — RCON could drop
   // between the online check and the give, or an invalid item ID could fail
   // server-side, and the claim was consumed anyway. Verify delivery before
   // persisting; on failure the cooldown is NOT written so the user can retry.
@@ -144,7 +153,14 @@ async function _execute(
     }
   }
 
+  // Cap the per-claim history so the file can't grow forever. Streaks
+  // live in their own counters, so trimming old records loses nothing.
+  const MAX_REWARD_HISTORY = 30;
+
   claimed[userId] = {
+    // Spread first so optional fields (remind / lastReminderAt) survive
+    // the claim instead of being rebuilt away.
+    ...userData,
     lastClaim: now,
     currentStreak,
     bonusStreak,
@@ -156,10 +172,10 @@ async function _execute(
         items: grantedRewards,
         streak: currentStreak,
       },
-    ],
+    ].slice(-MAX_REWARD_HISTORY),
   };
 
-  await saveClaimedDaily(claimed);
+  await saveClaimedStore(store);
   await interaction.reply(
     response(
       grantedRewards,
@@ -275,17 +291,14 @@ function fmt({ item = "???", amount = 1 }: DailyRewardItem): string {
 }
 
 /**
- * Give a reward item to a player.
+ * Give a reward item to a player. IDs get a "minecraft:" prefix only when
+ * they have no namespace, so modded IDs like "create:brass_ingot" pass
+ * through unchanged.
  *
- * M-12: prefix with "minecraft:" only when the ID has no namespace at all,
- * so modded IDs like "create:brass_ingot" pass through unchanged instead of
- * becoming "minecraft:create:brass_ingot".
- *
- * M-11: returns false when delivery could not be confirmed. On RCON-capable
- * servers the response must contain the "Gave ..." confirmation; a null or
- * unexpected response (connection drop, unknown item ID) is a failure and
- * is logged with the raw response so bad item IDs surface. Screen-fallback
- * servers provide no response signal, so they are assumed successful.
+ * Returns false when delivery could not be confirmed: RCON responses must
+ * contain the "Gave ..." confirmation (anything else is logged raw so bad
+ * item IDs surface); screen-fallback servers give no signal and are
+ * assumed successful.
  */
 export async function give(
   server: ServerInstance,

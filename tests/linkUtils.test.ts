@@ -50,9 +50,12 @@ describe("getLinkedAccount", () => {
     expect(await getLinkedAccount("discord123")).toBe("Notch");
   });
 
-  it("handles loadJson failure gracefully (returns null)", async () => {
-    vi.mocked(loadJson).mockRejectedValue(new Error("File not found"));
-    expect(await getLinkedAccount("user")).toBeNull();
+  it("propagates loadJson failures instead of reporting 'not linked'", async () => {
+    // A corrupt/unreadable store must surface as an error — silently
+    // returning null here made the caller treat the user as unlinked and
+    // risked overwriting the store with near-empty data on the next save.
+    vi.mocked(loadJson).mockRejectedValue(new Error("File corrupt"));
+    await expect(getLinkedAccount("user")).rejects.toThrow("File corrupt");
   });
 });
 

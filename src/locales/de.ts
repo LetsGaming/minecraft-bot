@@ -1,5 +1,5 @@
 /**
- * F-05: German locale. Keys missing here fall back to English per key.
+ * German locale. Keys missing here fall back to English per key.
  */
 export const de: Record<string, string> = {
   // ── common ──
@@ -8,7 +8,7 @@ export const de: Record<string, string> = {
   "common.invalidUsername":
     "**{username}** ist kein gültiger Minecraft-Benutzername.",
 
-  // ── whois (F-01) ──
+  // ── whois ──
   "whois.title": "Whois — {username}",
   "whois.noData":
     "Keine Whitelist- oder Link-Daten für **{username}** gefunden.",
@@ -21,10 +21,12 @@ export const de: Record<string, string> = {
   "whois.linkedAccount": "Verknüpfter Discord-Account",
   "whois.notLinked": "Nicht verknüpft",
 
-  // ── daily reminders (F-04) ──
+  // ── daily reminders ──
   "dailyReminder.enabled":
     "✅ Tägliche Erinnerungen aktiviert — ich schicke dir eine DM, sobald dein nächstes /daily bereit ist. Stelle sicher, dass deine DMs für diesen Server offen sind.",
   "dailyReminder.disabled": "✅ Tägliche Erinnerungen deaktiviert.",
+  "dailyReminder.dmServer":
+    "🎁 Deine tägliche Belohnung auf **{server}** ist bereit! Hol sie dir mit /daily server:{server}.",
   "dailyReminder.dm":
     "🎁 Deine tägliche Belohnung ist bereit! Hol sie dir mit /daily auf dem Server ab.",
 };
