@@ -19,6 +19,7 @@ vi.mock("../src/utils/serverAccess.js", () => ({
   getTps: vi.fn().mockResolvedValue(null),
   readWhitelist: vi.fn().mockResolvedValue([]),
   readLevelName: vi.fn().mockResolvedValue("world"),
+  readUserCache: vi.fn().mockResolvedValue([]),
   readStats: vi.fn().mockResolvedValue(null),
   listStatsUuids: vi.fn().mockResolvedValue([]),
   deleteStatsFile: vi.fn().mockResolvedValue(false),

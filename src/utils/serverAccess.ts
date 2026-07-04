@@ -19,6 +19,7 @@ import fsPromises from "fs/promises";
 import path from "path";
 import { execFile, spawn } from "child_process";
 import { promisify } from "util";
+import { log } from "./logger.js";
 import {
   isSudoPermissionError,
   sudoHelpMessage,
@@ -210,6 +211,43 @@ export async function readWhitelist(
     );
     const data: unknown = JSON.parse(raw);
     return Array.isArray(data) ? (data as WhitelistEntry[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Read usercache.json (every player the server has ever seen, whitelist or
+ * not). Returns [] on any error, including remote wrappers that predate the
+ * /usercache endpoint — callers treat the cache as a best-effort name
+ * source on top of the whitelist.
+ */
+export async function readUserCache(
+  cfg: ServerConfig,
+): Promise<WhitelistEntry[]> {
+  if (cfg.apiUrl) {
+    try {
+      const { usercache } = await apiGet<{ usercache: WhitelistEntry[] }>(
+        cfg,
+        "/usercache",
+      );
+      return Array.isArray(usercache) ? usercache : [];
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.debug("serverAccess", `usercache unavailable for ${cfg.id}: ${msg}`);
+      return [];
+    }
+  }
+  try {
+    const raw = await fsPromises.readFile(
+      path.resolve(cfg.serverDir, "usercache.json"),
+      "utf-8",
+    );
+    const data: unknown = JSON.parse(raw);
+    if (!Array.isArray(data)) return [];
+    return (data as Array<{ name?: unknown; uuid?: unknown }>)
+      .filter((e) => typeof e?.name === "string" && typeof e?.uuid === "string")
+      .map((e) => ({ name: e.name as string, uuid: e.uuid as string }));
   } catch {
     return [];
   }

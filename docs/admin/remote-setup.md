@@ -132,8 +132,9 @@ Two bot features need wrapper routes added in wrapper v2.1:
 
 - **Capability detection** (`GET /instances/:id/capabilities`): lets the bot know which setup-suite artifacts the remote instance provides. Older wrappers without the route are fine — the bot then assumes everything is available and errors surface at invocation time, exactly as before.
 - **`/server prune-stats`** (`DELETE /instances/:id/stats/:uuid`): explicit, admin-gated deletion of orphaned stats files. On older wrappers the deletion silently degrades — prune-stats reports 0 deleted files instead of failing.
+- **Servers without a whitelist** (`GET /instances/:id/usercache`, wrapper v2.2): returns the server's `usercache.json` so the bot can resolve player names when the whitelist is disabled. Older wrappers without the route are fine — name resolution then uses only the whitelist, which on whitelist-less servers means empty leaderboards and "player not found" in `/stats` until the wrapper is updated.
 
-Update the wrapper to get both; no bot-side configuration changes are needed.
+Update the wrapper to get all three; no bot-side configuration changes are needed.
 
 ## Step 3: Verify
 

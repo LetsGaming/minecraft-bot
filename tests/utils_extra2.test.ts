@@ -31,6 +31,10 @@ vi.mock("../src/utils/utils.js", () => ({
     { name: "Steve", uuid: "uuid-1" },
     { name: "Alex", uuid: "uuid-2" },
   ]),
+  loadKnownPlayers: vi.fn().mockResolvedValue([
+    { name: "Steve", uuid: "uuid-1" },
+    { name: "Alex", uuid: "uuid-2" },
+  ]),
   getListOutput: vi.fn().mockResolvedValue(null),
   stripLogPrefix: vi.fn((l) => l),
 }));

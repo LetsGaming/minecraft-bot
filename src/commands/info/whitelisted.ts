@@ -29,7 +29,8 @@ export async function execute(
 
     if (!Array.isArray(players) || players.length === 0) {
       await interaction.editReply({
-        content: "No players found in whitelist.",
+        content:
+          "The whitelist is empty — it may be disabled on this server.",
       });
       return;
     }

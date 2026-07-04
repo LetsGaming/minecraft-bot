@@ -37,6 +37,7 @@ vi.mock("../src/shell/execCommand.js", () => ({
 }));
 
 vi.mock("../src/utils/serverAccess.js", () => ({
+  readUserCache: vi.fn().mockResolvedValue([]),
   tailLog: vi.fn().mockResolvedValue(""),
   isRunning: vi.fn().mockResolvedValue(false),
   getList: vi

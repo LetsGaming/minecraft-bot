@@ -26,6 +26,7 @@ import {
   sendCommand,
   getTps,
   readWhitelist,
+  readUserCache,
   readLevelName,
   readStats,
   listStatsUuids,
@@ -174,6 +175,54 @@ describe("readWhitelist", () => {
   it("returns empty array for local cfg when whitelist.json doesn't exist", async () => {
     const list = await readWhitelist(localCfg);
     expect(list).toEqual([]);
+  });
+});
+
+// ── readUserCache ─────────────────────────────────────────────────────────
+
+describe("readUserCache", () => {
+  it("returns the usercache from the API", async () => {
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({ usercache: [{ uuid: "u1", name: "Casey" }] }),
+    );
+    const list = await readUserCache(remoteCfg);
+    expect(list).toEqual([{ uuid: "u1", name: "Casey" }]);
+  });
+
+  it("returns [] when the wrapper predates the /usercache endpoint", async () => {
+    // Older api-servers answer 404; the bot must degrade, not throw.
+    mockFetch.mockResolvedValueOnce(jsonResponse({ error: "not found" }, false));
+    const list = await readUserCache(remoteCfg);
+    expect(list).toEqual([]);
+  });
+
+  it("returns [] for local cfg when usercache.json doesn't exist", async () => {
+    const list = await readUserCache(localCfg);
+    expect(list).toEqual([]);
+  });
+
+  it("parses local usercache.json and drops malformed entries", async () => {
+    const fs = await import("fs");
+    const os = await import("os");
+    const path = await import("path");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "usercache-"));
+    fs.writeFileSync(
+      path.join(dir, "usercache.json"),
+      JSON.stringify([
+        { name: "Casey", uuid: "u1", expiresOn: "2026-08-01" },
+        { name: 42, uuid: "broken" },
+        { uuid: "u3" },
+      ]),
+    );
+    try {
+      const list = await readUserCache({
+        id: "local",
+        serverDir: dir,
+      } as never);
+      expect(list).toEqual([{ name: "Casey", uuid: "u1" }]);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

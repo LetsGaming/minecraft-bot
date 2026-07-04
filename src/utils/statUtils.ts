@@ -1,6 +1,6 @@
 import { getFirstInstance } from "./server.js";
 import type { ServerInstance } from "./server.js";
-import { loadWhitelist } from "./utils.js";
+import { loadKnownPlayers } from "./utils.js";
 import { log } from "./logger.js";
 import * as serverAccess from "./serverAccess.js";
 import type {
@@ -84,21 +84,20 @@ export async function buildLeaderboard(
 
   const srv = server;
   const allStats = await loadAllStats(srv);
-  const whitelist = (await loadWhitelist(false, srv)) ?? [];
+  // Whitelist + usercache, so boards fill on servers without a whitelist.
+  const players = await loadKnownPlayers(false, srv);
 
   const uuidToName: Record<string, string> = {};
-  for (const p of whitelist) uuidToName[p.uuid] = p.name;
+  for (const p of players) uuidToName[p.uuid] = p.name;
 
   const entries: LeaderboardEntry[] = [];
 
   for (const [uuid, statsFile] of Object.entries(allStats)) {
     const name = uuidToName[uuid];
 
-    // A leaderboard is a read — it must never delete player data. A stale
-    // whitelist cache, a disabled whitelist, or a transient partial read
-    // would otherwise turn into irreversible data loss. Cleanup of
-    // departed players is an explicit admin action (/server prune-stats);
-    // here we simply skip unknown UUIDs.
+    // A leaderboard is a read — it must never delete player data.
+    // Cleanup of departed players is an explicit admin action
+    // (/server prune-stats); UUIDs neither source can name are skipped.
     if (!name) continue;
 
     const flat = flattenStats(statsFile);

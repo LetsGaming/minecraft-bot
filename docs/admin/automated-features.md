@@ -67,7 +67,7 @@ These checks also feed the `/uptime` command's history.
 
 **Config key:** `leaderboard`
 
-Auto-posts two leaderboards (playtime and blocks mined) at the configured interval: `daily`, `weekly`, or `monthly`.
+Auto-posts two leaderboards (playtime and blocks mined) at the configured interval: `daily`, `weekly`, or `monthly`. Names come from the whitelist plus the server's `usercache.json`, so the boards fill on servers that run without a whitelist too.
 
 Unlike `/leaderboard` (all-time), scheduled posts show only stats gained during the period. The bot takes a stat snapshot every hour; when a post is due, it diffs current stats against the snapshot closest to the period start. The embed footer is honest about data quality: if the bot has been tracking for less than a full period, it says so, and with no snapshot at all it falls back to all-time values and labels them as such.
 

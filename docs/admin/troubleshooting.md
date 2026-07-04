@@ -51,7 +51,16 @@ Full setup and verification commands: [sudoers.md](sudoers.md).
 
 ## A freshly whitelisted player is "not found" in /stats or autocomplete
 
-The whitelist is cached in memory and currently not refreshed after `/whitelist` / `/unwhitelist`. Restart the bot to refresh, or wait for a fix. Stats also only exist once the player has joined the server at least once.
+Whitelist changes made through the bot apply immediately (the cache is invalidated on `/whitelist` / `/unwhitelist`). Changes made outside the bot (in-game `/whitelist add`, manual file edits) show up within a minute when the cache expires. Stats also only exist once the player has joined the server at least once.
+
+## The server runs without a whitelist — do stats and leaderboards work?
+
+Yes. Player names are resolved from the whitelist plus the server's `usercache.json`, which every Java server maintains for everyone who has ever joined. On whitelist-less servers, `/stats`, `/playtime`, `/compare`, player autocomplete, and the leaderboards all use the usercache automatically.
+
+Two things to know:
+
+- **Remote servers** need an API wrapper with the `/usercache` route (see [remote-setup.md](remote-setup.md#wrapper-version-notes)). With an older wrapper, names come only from the whitelist.
+- **`/server prune-stats` refuses to run** when the whitelist is empty. It defines "orphaned" as "not on the whitelist", so without one it would consider every player's stats orphaned — the refusal is deliberate.
 
 ## /stats daily or scheduled leaderboards say "no snapshot available"
 

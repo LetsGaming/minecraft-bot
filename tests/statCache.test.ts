@@ -10,6 +10,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // ── Top-level mocks ────────────────────────────────────────────────────────
 
 vi.mock("../src/utils/serverAccess.js", () => ({
+  readUserCache: vi.fn().mockResolvedValue([]),
   listStatsUuids: vi.fn().mockResolvedValue(["abc123", "def456"]),
   readStats: vi.fn().mockResolvedValue({ stats: {} }),
 }));

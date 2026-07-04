@@ -14,6 +14,7 @@ vi.mock("../src/utils/logger.js", () => ({
 vi.mock("../src/utils/serverAccess.js", () => ({
   readWhitelist: vi.fn().mockResolvedValue([{ name: "Alice", uuid: "u1" }]),
   readStats: vi.fn().mockResolvedValue({ stats: {} }),
+  readUserCache: vi.fn().mockResolvedValue([]),
   listStatsUuids: vi.fn().mockResolvedValue(["u1", "u-orphan"]),
   deleteStatsFile: vi.fn().mockResolvedValue(true),
   readLevelName: vi.fn().mockResolvedValue("world"),
@@ -27,6 +28,7 @@ vi.mock("../src/config.js", () => ({
 import * as serverAccess from "../src/utils/serverAccess.js";
 import {
   loadWhitelist,
+  loadKnownPlayers,
   invalidateWhitelistCache,
 } from "../src/utils/utils.js";
 import { buildLeaderboard, invalidateAllStatsCache } from "../src/utils/statUtils.js";
@@ -161,5 +163,83 @@ describe("daily give() item prefixing", () => {
       sendCommand: vi.fn().mockResolvedValue("Gave 1 [Diamond] to Steve"),
     } as unknown as ServerInstance;
     expect(await give(ok, "Steve", { item: "diamond" })).toBe(true);
+  });
+});
+
+
+// ── Name resolution without a whitelist ─────────────────────────────────────
+// Servers running with the whitelist disabled still have usercache.json;
+// stats, leaderboards, and autocomplete resolve names through it.
+
+describe("loadKnownPlayers", () => {
+  it("falls back to the usercache when the whitelist is empty", async () => {
+    invalidateWhitelistCache();
+    vi.mocked(serverAccess.readWhitelist).mockResolvedValue([]);
+    vi.mocked(serverAccess.readUserCache).mockResolvedValue([
+      { name: "Casey", uuid: "u1" },
+    ] as never);
+
+    const known = await loadKnownPlayers(false, makeServer());
+    expect(known).toEqual([{ name: "Casey", uuid: "u1" }]);
+  });
+
+  it("lets the whitelist win name conflicts and appends usercache-only players", async () => {
+    invalidateWhitelistCache();
+    vi.mocked(serverAccess.readWhitelist).mockResolvedValue([
+      { name: "Alice", uuid: "u1" },
+    ] as never);
+    vi.mocked(serverAccess.readUserCache).mockResolvedValue([
+      { name: "OldAlice", uuid: "u1" },
+      { name: "Casey", uuid: "u2" },
+    ] as never);
+
+    const known = await loadKnownPlayers(false, makeServer());
+    expect(known.map((p) => p.name)).toEqual(["Alice", "Casey"]);
+  });
+
+  it("dedupes the usercache by uuid, newest entry first", async () => {
+    invalidateWhitelistCache();
+    vi.mocked(serverAccess.readWhitelist).mockResolvedValue([]);
+    // usercache.json appends as players join → the later entry is newer
+    vi.mocked(serverAccess.readUserCache).mockResolvedValue([
+      { name: "OldName", uuid: "u1" },
+      { name: "NewName", uuid: "u1" },
+      { name: "Zed", uuid: "u3" },
+    ] as never);
+
+    const known = await loadKnownPlayers(false, makeServer());
+    expect(known.map((p) => p.name)).toEqual(["Zed", "NewName"]);
+  });
+
+  it("invalidateWhitelistCache drops the usercache cache too", async () => {
+    invalidateWhitelistCache();
+    vi.mocked(serverAccess.readWhitelist).mockResolvedValue([]);
+    vi.mocked(serverAccess.readUserCache).mockResolvedValue([] as never);
+    const srv = makeServer();
+
+    await loadKnownPlayers(false, srv);
+    await loadKnownPlayers(false, srv); // served from cache
+    expect(serverAccess.readUserCache).toHaveBeenCalledTimes(1);
+
+    invalidateWhitelistCache(srv.id);
+    await loadKnownPlayers(false, srv);
+    expect(serverAccess.readUserCache).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("leaderboards on servers without a whitelist", () => {
+  it("names entries from the usercache instead of skipping everyone", async () => {
+    invalidateWhitelistCache();
+    invalidateAllStatsCache();
+    vi.mocked(serverAccess.readWhitelist).mockResolvedValue([]);
+    vi.mocked(serverAccess.readUserCache).mockResolvedValue([
+      { name: "Casey", uuid: "u1" },
+    ] as never);
+
+    const result = await buildLeaderboard("deaths", { server: makeServer() });
+    expect(result.entries.map((e) => e.name)).toEqual(["Casey"]);
+    // u-orphan has stats but no name in either source → still skipped,
+    // and nothing is ever deleted
+    expect(serverAccess.deleteStatsFile).not.toHaveBeenCalled();
   });
 });

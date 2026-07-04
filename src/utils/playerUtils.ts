@@ -1,4 +1,4 @@
-import { getListOutput, stripLogPrefix, loadWhitelist } from "./utils.js";
+import { getListOutput, stripLogPrefix, loadKnownPlayers } from "./utils.js";
 import type { ServerInstance } from "./server.js";
 import type {
   PlayerCoords,
@@ -16,29 +16,26 @@ export async function getPlayerNamesChoices(
 }
 
 /**
- * Find a player object from whitelist by name (case insensitive).
- * Searches directly on the whitelist array rather than finding the
- * index in a separate `names` array — the two lists could diverge if the
- * cache is invalidated between the two loadWhitelist() calls.
+ * Find a player by name (case insensitive) among everyone the server
+ * knows: whitelist first, then usercache — so lookups work on servers
+ * that run without a whitelist. Searches a single list so a cache
+ * invalidation mid-call can't produce a name/uuid mismatch.
  */
 export async function findPlayer(
   playerName: string,
   server: ServerInstance,
 ): Promise<WhitelistEntry | null> {
-  const whitelist = await loadWhitelist(false, server);
-  if (!whitelist) return null;
+  const players = await loadKnownPlayers(false, server);
   const lower = playerName.toLowerCase();
-  return whitelist.find((p) => p.name.toLowerCase() === lower) ?? null;
+  return players.find((p) => p.name.toLowerCase() === lower) ?? null;
 }
 
-/**
- * Get all player names from the whitelist
- */
+/** All player names the server knows (whitelist + usercache). */
 export async function getPlayerNames(
   server: ServerInstance,
 ): Promise<string[]> {
-  const whitelist = await loadWhitelist(false, server);
-  return whitelist ? whitelist.map((p) => p.name) : [];
+  const players = await loadKnownPlayers(false, server);
+  return players.map((p) => p.name);
 }
 
 /**

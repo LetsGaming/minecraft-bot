@@ -43,6 +43,7 @@ vi.mock("../src/utils/adminAudit.js", () => ({
 }));
 
 vi.mock("../src/utils/serverAccess.js", () => ({
+  readUserCache: vi.fn().mockResolvedValue([]),
   readBackups: vi.fn(),
   runScript: vi.fn(),
 }));

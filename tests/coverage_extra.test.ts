@@ -36,6 +36,7 @@ vi.mock("../src/logWatcher/logWatcher.js", () => ({
 }));
 
 vi.mock("../src/utils/serverAccess.js", () => ({
+  readUserCache: vi.fn().mockResolvedValue([]),
   tailLog: vi.fn().mockResolvedValue(""),
   isRunning: vi.fn().mockResolvedValue(true),
   getList: vi

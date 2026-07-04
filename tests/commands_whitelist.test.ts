@@ -45,6 +45,10 @@ vi.mock("../src/utils/utils.js", () => ({
     { name: "Alice", uuid: "uuid-1" },
     { name: "Bob", uuid: "uuid-2" },
   ]),
+  loadKnownPlayers: vi.fn().mockResolvedValue([
+    { name: "Alice", uuid: "uuid-1" },
+    { name: "Bob", uuid: "uuid-2" },
+  ]),
   saveJson: vi.fn().mockResolvedValue(undefined),
   invalidateWhitelistCache: vi.fn(),
 }));
@@ -233,13 +237,13 @@ describe("/whitelisted command", () => {
     expect(interaction.editReply).toHaveBeenCalled();
   });
 
-  it("replies with 'no players' message when whitelist is empty", async () => {
+  it("explains an empty whitelist (may be disabled)", async () => {
     vi.mocked(loadWhitelist).mockResolvedValue([]);
     const interaction = makeInteraction();
     await execute(interaction);
     expect(interaction.editReply).toHaveBeenCalledWith(
       expect.objectContaining({
-        content: expect.stringContaining("No players"),
+        content: expect.stringContaining("may be disabled"),
       }),
     );
   });

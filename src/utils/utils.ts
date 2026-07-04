@@ -44,8 +44,68 @@ export async function loadWhitelist(
 }
 
 export function invalidateWhitelistCache(serverId?: string): void {
-  if (serverId) whitelistCache.delete(serverId);
-  else whitelistCache.clear();
+  if (serverId) {
+    whitelistCache.delete(serverId);
+    userCacheCache.delete(serverId);
+  } else {
+    whitelistCache.clear();
+    userCacheCache.clear();
+  }
+}
+
+// ── Known players (whitelist + usercache) ─────────────────────────────────
+
+// usercache.json covers every player the server has ever seen, so name
+// resolution keeps working on servers that run without a whitelist. Same
+// TTL and invalidation as the whitelist cache.
+const userCacheCache = new Map<string, { data: WhitelistEntry[]; at: number }>();
+
+async function loadUserCache(server: ServerInstance): Promise<WhitelistEntry[]> {
+  const key = server.config.id;
+  const cached = userCacheCache.get(key);
+  if (cached && Date.now() - cached.at < WHITELIST_CACHE_TTL_MS) {
+    return cached.data;
+  }
+  const data = await serverAccess.readUserCache(server.config);
+  userCacheCache.set(key, { data, at: Date.now() });
+  return data;
+}
+
+/**
+ * Every player the bot can put a name to: the whitelist plus usercache.json.
+ *
+ * Whitelist entries come first and win name conflicts (they are the
+ * admin-managed canonical list); usercache fills in everyone else, most
+ * recently seen first. On servers without a whitelist this is simply the
+ * usercache, so stats, leaderboards, and autocomplete keep working.
+ */
+export async function loadKnownPlayers(
+  forceReload = false,
+  server: ServerInstance,
+): Promise<WhitelistEntry[]> {
+  const [whitelist, usercache] = await Promise.all([
+    loadWhitelist(forceReload, server),
+    forceReload
+      ? serverAccess
+          .readUserCache(server.config)
+          .then((data) => {
+            userCacheCache.set(server.config.id, { data, at: Date.now() });
+            return data;
+          })
+      : loadUserCache(server),
+  ]);
+
+  const known: WhitelistEntry[] = [...(whitelist ?? [])];
+  const seen = new Set(known.map((p) => p.uuid));
+
+  // usercache.json appends as players join, so iterate newest first.
+  for (let i = usercache.length - 1; i >= 0; i--) {
+    const entry = usercache[i]!;
+    if (seen.has(entry.uuid)) continue;
+    seen.add(entry.uuid);
+    known.push(entry);
+  }
+  return known;
 }
 
 // ── Level name ────────────────────────────────────────────────────────────

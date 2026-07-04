@@ -35,6 +35,12 @@ You use the bot as a Discord member or Minecraft player.
 | Commands you type in Minecraft chat | [user/in-game-commands.md](user/in-game-commands.md) |
 | How the Discord ↔ Minecraft chat bridge works | [user/chat-bridge.md](user/chat-bridge.md) |
 
+## Project
+
+| I want to… | Read this |
+|---|---|
+| See what is planned and what could come next | [ROADMAP.md](ROADMAP.md) |
+
 ## Developers (`docs/dev/`)
 
 You want to change the code or contribute.
