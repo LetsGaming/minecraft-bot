@@ -8,13 +8,13 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-vi.mock("../src/utils/logger.js", () => ({
+vi.mock("../src/common/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
 // Scope helper: replicate the pure semantics (string eq, list
 // membership, unset = unrestricted) without pulling in the config chain.
-vi.mock("../src/utils/guildRouter.js", () => ({
+vi.mock("../src/bot/utils/guildRouter.js", () => ({
   serverInScope: vi.fn(
     (scope: string | string[] | undefined, serverId: string) =>
       typeof scope === "string"
@@ -26,11 +26,11 @@ vi.mock("../src/utils/guildRouter.js", () => ({
   getAllowedServerIds: vi.fn().mockReturnValue(null),
 }));
 
-vi.mock("../src/utils/uptimeTracker.js", () => ({
+vi.mock("../src/common/utils/uptimeTracker.js", () => ({
   recordCheck: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../src/utils/embedUtils.js", () => ({
+vi.mock("../src/bot/utils/embedUtils.js", () => ({
   createEmbed: vi.fn().mockReturnValue({
     setDescription: vi.fn().mockReturnThis(),
     setFooter: vi.fn().mockReturnThis(),
@@ -43,7 +43,7 @@ const TICK = 60_001; // just past the 60 000 ms check interval
 import {
   startDowntimeMonitor,
   suppressAlerts,
-} from "../src/logWatcher/watchers/downtimeMonitor.js";
+} from "../src/bot/logWatcher/watchers/downtimeMonitor.js";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -117,7 +117,7 @@ describe("suppressAlerts()", () => {
 
 describe("startDowntimeMonitor — online server", () => {
   it("records each check via recordCheck", async () => {
-    const { recordCheck } = await import("../src/utils/uptimeTracker.js");
+    const { recordCheck } = await import("../src/common/utils/uptimeTracker.js");
     const id = uid();
     const timer = startDowntimeMonitor(
       [fakeServer(id, true)],

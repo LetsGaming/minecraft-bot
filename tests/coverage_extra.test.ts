@@ -7,18 +7,18 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/utils/logger.js", () => ({
+vi.mock("../src/common/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../src/utils/embedUtils.js", () => ({
+vi.mock("../src/bot/utils/embedUtils.js", () => ({
   createEmbed: vi.fn().mockReturnValue({
     addFields: vi.fn().mockReturnThis(),
     setFooter: vi.fn().mockReturnThis(),
   }),
 }));
 
-vi.mock("../src/config.js", () => ({
+vi.mock("../src/common/config.js", () => ({
   loadConfig: vi.fn().mockReturnValue({
     tpsWarningThreshold: 15,
     tpsPollIntervalMs: 100, // short for testing
@@ -30,12 +30,12 @@ vi.mock("../src/config.js", () => ({
   }),
 }));
 
-vi.mock("../src/logWatcher/logWatcher.js", () => ({
+vi.mock("../src/bot/logWatcher/logWatcher.js", () => ({
   registerLogCommand: vi.fn(),
   getGlobalWatchers: vi.fn().mockReturnValue([]),
 }));
 
-vi.mock("../src/utils/serverAccess.js", () => ({
+vi.mock("../src/common/utils/serverAccess.js", () => ({
   readUserCache: vi.fn().mockResolvedValue([]),
   tailLog: vi.fn().mockResolvedValue(""),
   isRunning: vi.fn().mockResolvedValue(true),
@@ -50,12 +50,12 @@ vi.mock("../src/utils/serverAccess.js", () => ({
   getTps: vi.fn().mockResolvedValue({ tps1m: 20 }),
 }));
 
-vi.mock("../src/shell/execCommand.js", () => ({
+vi.mock("../src/common/shell/execCommand.js", () => ({
   execSafe: vi.fn().mockResolvedValue(null),
   isSudoPermissionError: vi.fn().mockReturnValue(false),
 }));
 
-vi.mock("../src/rcon/RconClient.js", () => ({
+vi.mock("../src/common/rcon/RconClient.js", () => ({
   RconClient: vi.fn().mockImplementation(() => ({
     connect: vi.fn(),
     disconnect: vi.fn(),
@@ -72,10 +72,10 @@ vi.mock("../src/rcon/RconClient.js", () => ({
 // ══════════════════════════════════════════════════════════════════════════════
 
 describe("defineCommand — cooldown enforcement", () => {
-  let defineCommand: typeof import("../src/logWatcher/defineCommand.js").defineCommand;
+  let defineCommand: typeof import("../src/bot/logWatcher/defineCommand.js").defineCommand;
 
   beforeEach(async () => {
-    ({ defineCommand } = await import("../src/logWatcher/defineCommand.js"));
+    ({ defineCommand } = await import("../src/bot/logWatcher/defineCommand.js"));
   });
 
   it("sends cooldown message when command is used twice within cooldown window", async () => {
@@ -91,7 +91,7 @@ describe("defineCommand — cooldown enforcement", () => {
     expect(COMMAND_INFO.command).toBe("!cooldowntest");
 
     const { registerLogCommand } =
-      await import("../src/logWatcher/logWatcher.js");
+      await import("../src/bot/logWatcher/logWatcher.js");
     const registeredHandler = vi.mocked(registerLogCommand).mock.calls[0]![1]!;
     const regex = vi.mocked(registerLogCommand).mock.calls[0]![0]! as RegExp;
 
@@ -136,7 +136,7 @@ describe("ServerInstance methods", () => {
 
   beforeEach(async () => {
     vi.resetModules();
-    ({ ServerInstance } = await import("../src/utils/server.js"));
+    ({ ServerInstance } = await import("../src/common/utils/server.js"));
     vi.clearAllMocks();
   });
 
@@ -186,7 +186,7 @@ describe("ServerInstance methods", () => {
       scriptDir: "",
     } as never;
     const inst = new ServerInstance(localCfg);
-    const { tailLog } = await import("../src/utils/serverAccess.js");
+    const { tailLog } = await import("../src/common/utils/serverAccess.js");
     vi.mocked(tailLog).mockResolvedValue("no seed here");
     const seed = await inst.getSeed();
     // Without RCON and with no seed in log, returns null
@@ -207,7 +207,7 @@ describe("startTpsMonitor — fires warning when TPS drops", () => {
 
   beforeEach(async () => {
     ({ startTpsMonitor } =
-      await import("../src/logWatcher/watchers/tpsMonitor.js"));
+      await import("../src/bot/logWatcher/watchers/tpsMonitor.js"));
     vi.clearAllMocks();
   });
 

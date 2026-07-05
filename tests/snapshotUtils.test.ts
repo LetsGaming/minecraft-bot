@@ -17,21 +17,21 @@ const SNAP_ROOT = "/tmp/mc-bot-snap-test-" + process.pid;
 const SERVER_ID = "survival";
 const SNAPSHOTS_DIR = SNAP_ROOT + "/data/snapshots/" + SERVER_ID;
 
-vi.mock("../src/utils/utils.js", () => ({
+vi.mock("../src/common/utils/utils.js", () => ({
   // String literals inline — no TDZ risk
   getRootDir: () => "/tmp/mc-bot-snap-test-" + process.pid,
   loadJson: vi.fn(),
   saveJson: vi.fn(),
 }));
 
-vi.mock("../src/utils/statUtils.js", () => ({
+vi.mock("../src/common/utils/statUtils.js", () => ({
   loadAllStats: vi.fn().mockResolvedValue({}),
   flattenStats: vi.fn().mockReturnValue([]),
   LEADERBOARD_STATS: {},
   invalidateAllStatsCache: vi.fn(),
 }));
 
-vi.mock("../src/utils/logger.js", () => ({
+vi.mock("../src/common/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -40,9 +40,9 @@ import {
   getSnapshotForDailyDiff,
   cleanupSnapshots,
   migrateLegacySnapshots,
-} from "../src/utils/snapshotUtils.js";
+} from "../src/common/utils/snapshotUtils.js";
 import { mkdir as mkdirP } from "fs/promises";
-import type { SnapshotData } from "../src/types/index.js";
+import type { SnapshotData } from "../src/common/types/index.js";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 

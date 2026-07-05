@@ -7,14 +7,14 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/utils/logger.js", () => ({
+vi.mock("../src/common/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock("../src/logWatcher/logWatcher.js", () => ({
+vi.mock("../src/bot/logWatcher/logWatcher.js", () => ({
   registerLogCommand: vi.fn(),
 }));
 
-import { registerLogCommand } from "../src/logWatcher/logWatcher.js";
+import { registerLogCommand } from "../src/bot/logWatcher/logWatcher.js";
 
 type Handler = (
   m: RegExpExecArray,
@@ -41,7 +41,7 @@ describe("!seed handler", () => {
 
   beforeEach(async () => {
     const p = capture();
-    (await import("../src/logWatcher/commands/seed.js")).init();
+    (await import("../src/bot/logWatcher/commands/seed.js")).init();
     ({ regex, handler } = await p);
   });
 
@@ -80,7 +80,7 @@ describe("!netherportal handler", () => {
 
   beforeEach(async () => {
     const p = capture();
-    (await import("../src/logWatcher/commands/netherportal.js")).init();
+    (await import("../src/bot/logWatcher/commands/netherportal.js")).init();
     ({ regex, handler } = await p);
   });
 

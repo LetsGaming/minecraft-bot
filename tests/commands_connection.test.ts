@@ -6,7 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── Shared mocks ──────────────────────────────────────────────────────────
-vi.mock("../src/utils/linkUtils.js", () => ({
+vi.mock("../src/common/utils/linkUtils.js", () => ({
   LINKED_ACCOUNTS_PATH: "/tmp/linked.json",
   LINK_CODES_PATH: "/tmp/codes.json",
   loadLinkedAccounts: vi.fn().mockResolvedValue({}),
@@ -17,7 +17,7 @@ vi.mock("../src/utils/linkUtils.js", () => ({
   getLinkedAccount: vi.fn().mockResolvedValue(null),
 }));
 
-vi.mock("../src/utils/embedUtils.js", () => ({
+vi.mock("../src/bot/utils/embedUtils.js", () => ({
   createEmbed: vi.fn().mockImplementation((opts) => ({
     _opts: opts,
     addFields: vi.fn().mockReturnThis(),
@@ -35,11 +35,11 @@ vi.mock("../src/utils/embedUtils.js", () => ({
   handlePagination: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../src/utils/logger.js", () => ({
+vi.mock("../src/common/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../src/utils/time.js", () => ({
+vi.mock("../src/common/utils/time.js", () => ({
   nextMidnightEpoch: vi.fn().mockReturnValue(Date.now() + 3_600_000),
   msUntilMidnight: vi.fn().mockReturnValue(3_600_000),
   formatDate: vi.fn(),
@@ -48,13 +48,13 @@ vi.mock("../src/utils/time.js", () => ({
   TZ: "UTC",
 }));
 
-vi.mock("../src/utils/utils.js", () => ({
+vi.mock("../src/common/utils/utils.js", () => ({
   getRootDir: vi.fn().mockReturnValue("/tmp"),
   loadJson: vi.fn().mockResolvedValue({}),
   saveJson: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../src/config.js", () => ({
+vi.mock("../src/common/config.js", () => ({
   loadConfig: vi.fn().mockReturnValue({
     adminUsers: [],
     servers: {},
@@ -71,13 +71,13 @@ vi.mock("../src/config.js", () => ({
   getServerIds: vi.fn().mockReturnValue([]),
 }));
 
-vi.mock("../src/commands/middleware.js", () => ({
+vi.mock("../src/bot/commands/middleware.js", () => ({
   withErrorHandling: vi.fn((fn) => fn),
   requireServerAdmin: vi.fn((fn) => fn),
   isServerAdmin: vi.fn().mockReturnValue(true),
 }));
 
-vi.mock("../src/utils/uptimeTracker.js", () => ({
+vi.mock("../src/common/utils/uptimeTracker.js", () => ({
   recordCheck: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -86,7 +86,7 @@ import {
   loadLinkedAccounts,
   saveLinkedAccounts,
   getLinkedAccount,
-} from "../src/utils/linkUtils.js";
+} from "../src/common/utils/linkUtils.js";
 import type { ChatInputCommandInteraction } from "discord.js";
 
 function makeInteraction(overrides: Record<string, unknown> = {}) {
@@ -124,7 +124,7 @@ beforeEach(() => {
 describe("/link command", () => {
   let execute: (i: never) => Promise<void>;
   beforeEach(async () => {
-    ({ execute } = await import("../src/commands/connection/link.js"));
+    ({ execute } = await import("../src/bot/commands/connection/link.js"));
   });
 
   it("replies with ephemeral code when user has no existing codes", async () => {
@@ -192,7 +192,7 @@ describe("/link command", () => {
 describe("/linkstatus command", () => {
   let execute: (i: never) => Promise<void>;
   beforeEach(async () => {
-    ({ execute } = await import("../src/commands/connection/linkStatus.js"));
+    ({ execute } = await import("../src/bot/commands/connection/linkStatus.js"));
   });
 
   it("replies with 'not linked' when no account is linked", async () => {
@@ -223,7 +223,7 @@ describe("/linkstatus command", () => {
 describe("/unlink command", () => {
   let execute: (i: never) => Promise<void>;
   beforeEach(async () => {
-    ({ execute } = await import("../src/commands/connection/unlink.js"));
+    ({ execute } = await import("../src/bot/commands/connection/unlink.js"));
   });
 
   it("replies with 'not linked' when user has no linked account", async () => {
@@ -255,7 +255,7 @@ describe("/unlink command", () => {
 describe("/help command", () => {
   let execute: (i: never) => Promise<void>;
   beforeEach(async () => {
-    ({ execute } = await import("../src/commands/general/help.js"));
+    ({ execute } = await import("../src/bot/commands/general/help.js"));
   });
 
   it("calls reply with help embed and handles fetchReply error gracefully", async () => {
@@ -280,11 +280,11 @@ describe("startChannelPurge", () => {
   ) => void;
   beforeEach(async () => {
     ({ startChannelPurge } =
-      await import("../src/logWatcher/watchers/channelPurge.js"));
+      await import("../src/bot/logWatcher/watchers/channelPurge.js"));
   });
 
   it("logs and returns when no guilds have purge configured", async () => {
-    const { log } = vi.mocked(await import("../src/utils/logger.js"));
+    const { log } = vi.mocked(await import("../src/common/utils/logger.js"));
     startChannelPurge(null as never, {});
     expect(vi.mocked(log.info)).toHaveBeenCalledWith(
       "purge",
@@ -315,7 +315,7 @@ describe("startTpsMonitor", () => {
   ) => ReturnType<typeof setInterval> | null;
   beforeEach(async () => {
     ({ startTpsMonitor } =
-      await import("../src/logWatcher/watchers/tpsMonitor.js"));
+      await import("../src/bot/logWatcher/watchers/tpsMonitor.js"));
   });
 
   it("returns null when server does not support TPS", () => {

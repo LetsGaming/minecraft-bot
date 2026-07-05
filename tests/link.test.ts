@@ -10,14 +10,14 @@ import { randomBytes } from "crypto";
 
 // ── Top-level mocks — must be at file scope for Vitest hoisting ───────────
 
-vi.mock("../src/utils/linkUtils.js", () => ({
+vi.mock("../src/common/utils/linkUtils.js", () => ({
   loadLinkCodes: vi.fn().mockResolvedValue({}),
   loadLinkedAccounts: vi.fn().mockResolvedValue({}),
   saveLinkCodes: vi.fn().mockResolvedValue(undefined),
   saveLinkedAccounts: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../src/logWatcher/logWatcher.js", () => ({
+vi.mock("../src/bot/logWatcher/logWatcher.js", () => ({
   registerLogCommand: vi.fn(),
 }));
 
@@ -52,7 +52,7 @@ describe("logWatcher link handler", () => {
     vi.useRealTimers();
     vi.clearAllMocks();
     // Reset module-level state (codes map, linkAttempts) to prevent bleed between tests.
-    const mod = await import("../src/logWatcher/commands/link.js");
+    const mod = await import("../src/bot/logWatcher/commands/link.js");
     mod._resetStateForTesting?.();
   });
 
@@ -66,13 +66,13 @@ describe("logWatcher link handler", () => {
       { discordId: string; expires: number; confirmed: boolean }
     > = {},
   ) {
-    const linkUtils = await import("../src/utils/linkUtils.js");
+    const linkUtils = await import("../src/common/utils/linkUtils.js");
     vi.mocked(linkUtils.loadLinkCodes).mockResolvedValue(initialCodes as never);
     vi.mocked(linkUtils.loadLinkedAccounts).mockResolvedValue({});
     vi.mocked(linkUtils.saveLinkCodes).mockResolvedValue(undefined);
     vi.mocked(linkUtils.saveLinkedAccounts).mockResolvedValue(undefined);
 
-    const mod = await import("../src/logWatcher/commands/link.js");
+    const mod = await import("../src/bot/logWatcher/commands/link.js");
     await mod.init();
     return mod;
   }
@@ -100,7 +100,7 @@ describe("logWatcher link handler", () => {
       null as never,
     );
 
-    const { saveLinkedAccounts } = await import("../src/utils/linkUtils.js");
+    const { saveLinkedAccounts } = await import("../src/common/utils/linkUtils.js");
     expect(vi.mocked(saveLinkedAccounts)).toHaveBeenCalled();
   });
 
@@ -115,7 +115,7 @@ describe("logWatcher link handler", () => {
       null as never,
     );
 
-    const { saveLinkedAccounts } = await import("../src/utils/linkUtils.js");
+    const { saveLinkedAccounts } = await import("../src/common/utils/linkUtils.js");
     expect(vi.mocked(saveLinkedAccounts)).not.toHaveBeenCalled();
   });
 
@@ -142,7 +142,7 @@ describe("logWatcher link handler", () => {
     // saveData() is called to clean up the expired code from disk — that's correct.
     // The real invariant is that the account was NOT linked: saveLinkedAccounts must
     // never have been called with 'discord-42' mapped to 'Steve'.
-    const { saveLinkedAccounts } = await import("../src/utils/linkUtils.js");
+    const { saveLinkedAccounts } = await import("../src/common/utils/linkUtils.js");
     const calls = vi.mocked(saveLinkedAccounts).mock.calls;
     for (const [linkedMap] of calls) {
       expect(
@@ -153,7 +153,7 @@ describe("logWatcher link handler", () => {
   });
 
   it("rejects linking a Minecraft account already owned by another Discord user", async () => {
-    const linkUtils = await import("../src/utils/linkUtils.js");
+    const linkUtils = await import("../src/common/utils/linkUtils.js");
     vi.mocked(linkUtils.loadLinkCodes).mockResolvedValue({
       ABCD1234: {
         discordId: "discord-2",
@@ -166,7 +166,7 @@ describe("logWatcher link handler", () => {
       "discord-1": "steve",
     } as never);
 
-    const mod = await import("../src/logWatcher/commands/link.js");
+    const mod = await import("../src/bot/logWatcher/commands/link.js");
     await mod.init();
 
     const dm = vi.fn().mockResolvedValue(undefined);
@@ -212,7 +212,7 @@ describe("logWatcher link handler", () => {
       mockClient as never,
       null as never,
     );
-    const { saveLinkedAccounts } = await import("../src/utils/linkUtils.js");
+    const { saveLinkedAccounts } = await import("../src/common/utils/linkUtils.js");
     const callsAfterFirst = vi.mocked(saveLinkedAccounts).mock.calls.length;
 
     // Immediate retry — should be rate-limited, no additional save call.

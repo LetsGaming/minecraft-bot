@@ -1,5 +1,15 @@
 # WebUI integration (preparation)
 
+> **Status (v3.6.0): SHIPPED.** The dashboard exists — backend at
+> `src/web/backend` (Fastify), frontend at `src/web/frontend` (Vue 3
+> Options API + Vite, an isolated subproject built to
+> `dist/web/frontend`). All three phases are implemented, plus
+> `/healthz` and Prometheus `/metrics`. The frontend-framework question
+> below was decided as **Vue 3 + Vite** (not SvelteKit) — rationale in
+> [decisions.md](decisions.md). This document is kept as the design
+> record; where it disagrees with the code, the code and decisions.md
+> win.
+
 The bot is structured so a web dashboard can be added
 later **without touching the core**. This page documents the seams that
 exist today and how an HTTP layer would use them. No web server ships with
@@ -28,7 +38,9 @@ A typical edit round-trip:
 ```
 GET  /api/config          → readRawConfig()          (redact token/apiKey/rconPassword!)
 POST /api/config/validate → validateCandidate(body)  (live form validation)
-PUT  /api/config          → writeConfig(body) then applyConfig(client)
+PUT  /api/config          → writeConfig(body); apply in-process via
+                            applyConfig(client), or cross-process via the
+                            fs watcher (see below)
 ```
 
 - `writeConfig` re-validates, then writes atomically (`config.json.tmp` +
@@ -46,10 +58,12 @@ and should be shown but not block saving.
 
 ## Form generation
 
-`config_structure.json` (repo root) is the annotated example of every
-field and stays in sync with the validator; use it as the schema source
-for rendering forms until a formal JSON Schema exists. The authoritative
-shape is `RawBotConfig` in `src/types/config.ts`.
+`config.schema.json` (repo root) is the formal JSON Schema — generated
+from `RawBotConfig` at build time (`npm run schema:generate`) and
+drift-checked in CI — and is what dashboard forms should render from.
+`config_structure.json` remains as the annotated, human-readable example
+of every field. The authoritative shape is `RawBotConfig` in
+`src/types/config.ts`.
 
 Multi-server semantics the UI should encode:
 

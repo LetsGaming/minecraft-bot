@@ -15,7 +15,7 @@ module.exports = {
   apps: [
     {
       name: "minecraft-bot",
-      script: "./dist/index.js",
+      script: "./dist/bot/index.js",
       cwd: __dirname,
 
       // ── Node configuration ──
@@ -53,6 +53,33 @@ module.exports = {
         NODE_ENV: "production",
         DEBUG: "",
       },
+    },
+
+    // ── Optional web dashboard (independent lifecycle from the bot) ──
+    // Requires "webui": { "enabled": true } in config.json plus
+    // WEBUI_CLIENT_SECRET / WEBUI_SESSION_SECRET in the environment.
+    // Start with: pm2 start ecosystem.config.cjs --only minecraft-bot-web
+    {
+      name: "minecraft-bot-web",
+      script: "./dist/web/index.js",
+      cwd: __dirname,
+      node_args: "--enable-source-maps",
+      interpreter: "node",
+      instances: 1,
+      exec_mode: "fork",
+      autorestart: true,
+      max_restarts: 10,
+      min_uptime: "10s",
+      restart_delay: 5000,
+      log_date_format: "YYYY-MM-DD HH:mm:ss",
+      error_file: "./logs/pm2-web-error.log",
+      out_file: "./logs/pm2-web-out.log",
+      merge_logs: true,
+      log_type: "json",
+      watch: false,
+      max_memory_restart: "256M",
+      env: { NODE_ENV: "development" },
+      env_production: { NODE_ENV: "production" },
     },
   ],
 };

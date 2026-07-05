@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── Global mocks for modUtils ─────────────────────────────────────────────
 
-vi.mock("../src/utils/serverAccess.js", () => ({
+vi.mock("../src/common/utils/serverAccess.js", () => ({
   readModSlugs: vi.fn(),
   logStreamUrl: vi.fn().mockReturnValue("https://api.example.com/stream"),
   tailLog: vi.fn().mockResolvedValue(""),
@@ -27,13 +27,13 @@ vi.mock("../src/utils/serverAccess.js", () => ({
   runScript: vi.fn().mockResolvedValue({ exitCode: 0, output: "", stderr: "" }),
 }));
 
-vi.mock("../src/utils/logger.js", () => ({
+vi.mock("../src/common/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
 // ── mocks for initMinecraftCommands ───────────────────────────────────────
 
-vi.mock("../src/config.js", () => ({
+vi.mock("../src/common/config.js", () => ({
   getServerIds: vi.fn().mockReturnValue([]),
   loadConfig: vi.fn().mockReturnValue({
     token: "tok",
@@ -48,12 +48,12 @@ vi.mock("../src/config.js", () => ({
   }),
 }));
 
-vi.mock("../src/utils/server.js", () => ({
+vi.mock("../src/common/utils/server.js", () => ({
   getAllInstances: vi.fn().mockReturnValue([]),
   getServerInstance: vi.fn().mockReturnValue(null),
 }));
 
-vi.mock("../src/logWatcher/logWatcher.js", () => ({
+vi.mock("../src/bot/logWatcher/logWatcher.js", () => ({
   LogWatcher: vi.fn().mockImplementation(() => ({
     register: vi.fn(),
     start: vi.fn().mockResolvedValue(undefined),
@@ -63,7 +63,7 @@ vi.mock("../src/logWatcher/logWatcher.js", () => ({
   getGlobalWatchers: vi.fn().mockReturnValue([]),
 }));
 
-vi.mock("../src/logWatcher/RemoteLogWatcher.js", () => ({
+vi.mock("../src/bot/logWatcher/RemoteLogWatcher.js", () => ({
   RemoteLogWatcher: vi.fn().mockImplementation(() => ({
     register: vi.fn(),
     start: vi.fn().mockResolvedValue(undefined),
@@ -71,36 +71,36 @@ vi.mock("../src/logWatcher/RemoteLogWatcher.js", () => ({
   })),
 }));
 
-vi.mock("../src/logWatcher/watchers/chatBridge.js", () => ({
+vi.mock("../src/bot/logWatcher/watchers/chatBridge.js", () => ({
   registerChatBridge: vi.fn(),
   setupDiscordToMc: vi.fn(),
 }));
 
-vi.mock("../src/logWatcher/watchers/joinLeave.js", () => ({
+vi.mock("../src/bot/logWatcher/watchers/joinLeave.js", () => ({
   registerJoinLeaveWatcher: vi.fn(),
 }));
 
-vi.mock("../src/logWatcher/watchers/deaths.js", () => ({
+vi.mock("../src/bot/logWatcher/watchers/deaths.js", () => ({
   registerDeathWatcher: vi.fn(),
 }));
 
-vi.mock("../src/logWatcher/watchers/advancements.js", () => ({
+vi.mock("../src/bot/logWatcher/watchers/advancements.js", () => ({
   registerAdvancementWatcher: vi.fn(),
 }));
 
-vi.mock("../src/logWatcher/watchers/serverEvents.js", () => ({
+vi.mock("../src/bot/logWatcher/watchers/serverEvents.js", () => ({
   registerServerEventWatcher: vi.fn(),
 }));
 
-vi.mock("../src/logWatcher/watchers/sleepWatcher.js", () => ({
+vi.mock("../src/bot/logWatcher/watchers/sleepWatcher.js", () => ({
   registerSleepWatcher: vi.fn(),
 }));
 
-vi.mock("../src/logWatcher/watchers/tpsMonitor.js", () => ({
+vi.mock("../src/bot/logWatcher/watchers/tpsMonitor.js", () => ({
   startTpsMonitor: vi.fn().mockReturnValue(null),
 }));
 
-vi.mock("../src/logWatcher/watchers/leaderboardScheduler.js", () => ({
+vi.mock("../src/bot/logWatcher/watchers/leaderboardScheduler.js", () => ({
   startLeaderboardScheduler: vi
     .fn()
     .mockReturnValue({
@@ -109,26 +109,26 @@ vi.mock("../src/logWatcher/watchers/leaderboardScheduler.js", () => ({
     }),
 }));
 
-vi.mock("../src/logWatcher/watchers/statusEmbed.js", () => ({
+vi.mock("../src/bot/logWatcher/watchers/statusEmbed.js", () => ({
   startStatusEmbed: vi.fn().mockReturnValue(null),
   invalidateStatusChannelCache: vi.fn(),
 }));
 
-vi.mock("../src/logWatcher/watchers/downtimeMonitor.js", () => ({
+vi.mock("../src/bot/logWatcher/watchers/downtimeMonitor.js", () => ({
   startDowntimeMonitor: vi.fn().mockReturnValue({ unref: vi.fn() }),
   suppressAlerts: vi.fn(),
 }));
 
-vi.mock("../src/logWatcher/watchers/channelPurge.js", () => ({
+vi.mock("../src/bot/logWatcher/watchers/channelPurge.js", () => ({
   startChannelPurge: vi.fn(),
 }));
 
-vi.mock("../src/utils/uptimeTracker.js", () => ({
+vi.mock("../src/common/utils/uptimeTracker.js", () => ({
   startUptimeFlushScheduler: vi.fn().mockReturnValue({ unref: vi.fn() }),
   recordCheck: vi.fn().mockResolvedValue(undefined),
 }));
 
-import * as serverAccess from "../src/utils/serverAccess.js";
+import * as serverAccess from "../src/common/utils/serverAccess.js";
 
 // ══════════════════════════════════════════════════════════════════════════════
 // modUtils.getModList
@@ -138,7 +138,7 @@ describe("modUtils.getModList", () => {
   let getModList: (server: never) => Promise<unknown>;
   beforeEach(async () => {
     vi.stubGlobal("fetch", vi.fn());
-    ({ getModList } = await import("../src/utils/modUtils.js"));
+    ({ getModList } = await import("../src/common/utils/modUtils.js"));
   });
 
   const fakeServer = {
@@ -244,7 +244,7 @@ describe("initMinecraftCommands", () => {
   let initMinecraftCommands: (client: never) => Promise<void>;
   beforeEach(async () => {
     ({ initMinecraftCommands } =
-      await import("../src/logWatcher/initMinecraftCommands.js"));
+      await import("../src/bot/logWatcher/initMinecraftCommands.js"));
   });
 
   it("runs without throwing when no server instances are configured", async () => {
@@ -263,7 +263,7 @@ describe("initMinecraftCommands", () => {
 describe("logWatcher commands.ts", () => {
   it("exports a COMMANDS array (or similar)", async () => {
     // Just importing covers the module-level registration code
-    const mod = await import("../src/logWatcher/commands/commands.ts");
+    const mod = await import("../src/bot/logWatcher/commands/commands.js");
     // The module may export COMMANDS or similar; just ensure it imports cleanly
     expect(typeof mod).toBe("object");
   });

@@ -1,18 +1,18 @@
 {
   "name": "minecraft-bot",
-  "version": "3.5.1",
+  "version": "3.6.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/LetsGaming/minecraft-bot.git"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "type": "module",
-  "main": "dist/index.js",
+  "main": "dist/bot/index.js",
   "scripts": {
-    "build": "tsc",
-    "start": "node --enable-source-maps dist/index.js",
+    "build": "npm run schema:generate && tsc",
+    "start": "node --enable-source-maps dist/bot/index.js",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --max-warnings 0",
@@ -23,13 +23,17 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "setup": "node scripts/setup.mjs"
+    "setup": "node scripts/setup.mjs",
+    "schema:generate": "node scripts/generate-schema.mjs",
+    "schema:check": "node scripts/generate-schema.mjs --check",
+    "start:web": "node --enable-source-maps dist/web/index.js",
+    "build:web": "cd src/web/frontend && npm ci && npm run build",
+    "build:all": "npm run build && npm run build:web",
+    "i18n:check": "node scripts/check-locales.mjs"
   },
   "dependencies": {
-    "discord.js": "^14.26.4"
-  },
-  "overrides": {
-    "undici": "^6.27.0"
+    "discord.js": "^14.26.4",
+    "fastify": "^5.10.0"
   },
   "devDependencies": {
     "@types/node": "^25.9.2",
@@ -37,7 +41,11 @@
     "@typescript-eslint/parser": "^8.60.1",
     "@vitest/coverage-v8": "^4.1.8",
     "eslint": "^10.4.1",
+    "ts-json-schema-generator": "^2.9.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8"
+  },
+  "overrides": {
+    "undici": "^6.27.0"
   }
 }

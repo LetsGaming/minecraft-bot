@@ -134,7 +134,23 @@ Two bot features need wrapper routes added in wrapper v2.1:
 - **`/server prune-stats`** (`DELETE /instances/:id/stats/:uuid`): explicit, admin-gated deletion of orphaned stats files. On older wrappers the deletion silently degrades — prune-stats reports 0 deleted files instead of failing.
 - **Servers without a whitelist** (`GET /instances/:id/usercache`, wrapper v2.2): returns the server's `usercache.json` so the bot can resolve player names when the whitelist is disabled. Older wrappers without the route are fine — name resolution then uses only the whitelist, which on whitelist-less servers means empty leaderboards and "player not found" in `/stats` until the wrapper is updated.
 
-Update the wrapper to get all three; no bot-side configuration changes are needed.
+- **Host metrics + version handshake** (`GET /instances/:id/info`, wrapper ≥ 1.2.0 of the info contract): a JSON object with a `version` field (the wrapper's semver) and a `host` block carrying the numbers the bot reads locally for local servers:
+
+  ```json
+  {
+    "version": "1.2.0",
+    "host": {
+      "process": { "pid": 1234, "cpuPercent": 3.5, "rssBytes": 2147483648 },
+      "disks": [
+        { "path": "/srv/minecraft", "usedPercent": 71, "availableBytes": 32212254720, "totalBytes": 107374182400 }
+      ]
+    }
+  }
+  ```
+
+  With this route, `/status` shows the Host section for remote servers too, the disk-full alert monitors remote disks, and the bot warns at startup when the wrapper is older than it expects (`MIN_WRAPPER_VERSION`). Older wrappers without the route degrade exactly to the previous behaviour: no host section, no remote disk alerts, one startup warning.
+
+Update the wrapper to get all of these; no bot-side configuration changes are needed.
 
 ## Step 3: Verify
 

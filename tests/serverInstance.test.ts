@@ -12,16 +12,16 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/utils/logger.js", () => ({
+vi.mock("../src/common/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../src/shell/execCommand.js", () => ({
+vi.mock("../src/common/shell/execCommand.js", () => ({
   execSafe: vi.fn().mockResolvedValue(null),
   isSudoPermissionError: vi.fn().mockReturnValue(false),
 }));
 
-vi.mock("../src/rcon/RconClient.js", () => ({
+vi.mock("../src/common/rcon/RconClient.js", () => ({
   RconClient: vi.fn().mockImplementation(
     class {
       send = vi.fn();
@@ -35,8 +35,8 @@ vi.mock("../src/rcon/RconClient.js", () => ({
   ),
 }));
 
-import { RconClient } from "../src/rcon/RconClient.js";
-import { ServerInstance } from "../src/utils/server.js";
+import { RconClient } from "../src/common/rcon/RconClient.js";
+import { ServerInstance } from "../src/common/utils/server.js";
 
 const rconCfg = {
   id: "survival",

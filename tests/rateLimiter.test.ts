@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 // We import the module fresh in each test via dynamic import so the
 // internal bucket Map starts clean. However, since module state is shared
 // within a process, we reset via the exported helpers instead.
-import { consumeToken, cooldownSeconds } from "../src/utils/rateLimiter.js";
+import { consumeToken, cooldownSeconds } from "../src/common/utils/rateLimiter.js";
 
 // Use a unique prefix per test file to avoid cross-test bucket collisions
 const uid = (n: number) => `__test_rate__${n}_${Date.now()}`;

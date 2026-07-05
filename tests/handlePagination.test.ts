@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/utils/logger.js", () => ({
+vi.mock("../src/common/utils/logger.js", () => ({
   log: {
     info: vi.fn(),
     warn: vi.fn(),
@@ -15,7 +15,7 @@ vi.mock("../src/utils/logger.js", () => ({
   },
 }));
 
-import { handlePagination } from "../src/utils/embedUtils.js";
+import { handlePagination } from "../src/bot/utils/embedUtils.js";
 
 function makeCollector() {
   const handlers = new Map<string, (...args: never[]) => unknown>();

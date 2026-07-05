@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/utils/statUtils.js", () => ({
+vi.mock("../src/common/utils/statUtils.js", () => ({
   loadStats: vi.fn(),
   flattenStats: vi.fn().mockReturnValue([]),
   filterStats: vi.fn((stats) => stats),
@@ -14,31 +14,31 @@ vi.mock("../src/utils/statUtils.js", () => ({
   invalidateAllStatsCache: vi.fn(),
 }));
 
-vi.mock("../src/utils/snapshotUtils.js", () => ({
+vi.mock("../src/common/utils/snapshotUtils.js", () => ({
   getSnapshotForDailyDiff: vi.fn(),
 }));
 
-vi.mock("../src/utils/statEmbeds.js", () => ({
+vi.mock("../src/bot/utils/statEmbeds.js", () => ({
   buildStatsEmbeds: vi.fn().mockReturnValue([{ type: "embed" }]),
 }));
 
-vi.mock("../src/utils/playerUtils.js", () => ({
+vi.mock("../src/common/utils/playerUtils.js", () => ({
   findPlayer: vi.fn(),
   getPlayerNames: vi.fn().mockResolvedValue([]),
   getPlayerNamesChoices: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock("../src/utils/guildRouter.js", () => ({
+vi.mock("../src/bot/utils/guildRouter.js", () => ({
   resolveServer: vi.fn(),
 }));
 
-vi.mock("../src/utils/embedUtils.js", () => ({
+vi.mock("../src/bot/utils/embedUtils.js", () => ({
   createPaginationButtons: vi.fn().mockReturnValue({ type: "buttons" }),
   handlePagination: vi.fn().mockResolvedValue(undefined),
   createErrorEmbed: vi.fn().mockReturnValue({ type: "error-embed" }),
 }));
 
-vi.mock("../src/utils/logger.js", () => ({
+vi.mock("../src/common/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -46,12 +46,12 @@ import {
   loadStats,
   flattenStats,
   filterStats,
-} from "../src/utils/statUtils.js";
-import { findPlayer } from "../src/utils/playerUtils.js";
-import { resolveServer } from "../src/utils/guildRouter.js";
-import { getSnapshotForDailyDiff } from "../src/utils/snapshotUtils.js";
-import { buildStatsEmbeds } from "../src/utils/statEmbeds.js";
-import { execute } from "../src/commands/stats/stats.js";
+} from "../src/common/utils/statUtils.js";
+import { findPlayer } from "../src/common/utils/playerUtils.js";
+import { resolveServer } from "../src/bot/utils/guildRouter.js";
+import { getSnapshotForDailyDiff } from "../src/common/utils/snapshotUtils.js";
+import { buildStatsEmbeds } from "../src/bot/utils/statEmbeds.js";
+import { execute } from "../src/bot/commands/stats/stats.js";
 import type { ChatInputCommandInteraction } from "discord.js";
 
 const fakeServer = { id: "survival" } as never;

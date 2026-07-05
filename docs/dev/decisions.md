@@ -117,3 +117,59 @@ The enforceable rules derived from these decisions live in [coding-guidelines.md
 **Problem:** The original `Math.random()` link codes were brute-forceable within the 5-minute expiry window by spamming `!link` guesses in chat.
 
 **Decision:** `crypto.randomBytes(4)` hex codes (4 billion combinations) plus a 3-second per-player cooldown on `!link` attempts.
+
+---
+
+## Source layout: `src/bot` / `src/common` / `src/web`
+
+**Problem:** The dashboard must run as a separate process but share the config service, server access, and stores — without ever pulling discord.js into the web process or letting web code call into the running bot.
+
+**Decision:** Three layers enforced by ESLint boundary rules: `src/common` (process-agnostic; imports neither sibling), `src/bot` (Discord process), `src/web` (dashboard; may import common only). `applyConfig` was split out of the config service into `src/bot/utils/applyConfig.ts` because applying touches the live Discord client — the web side only ever *writes* config (`configService.writeConfig`) and lets the bot's fs-watcher pick it up. A few `src/common/types` files import discord.js **types only** (`import type`), which is safe: type-only imports are erased at compile time, so the web bundle never loads discord.js.
+
+---
+
+## Per-guild locale via AsyncLocalStorage
+
+**Problem:** `guilds.<id>.language` must localize ~150 existing `t()` call sites, many of them in layers that are deliberately Discord-agnostic (statUtils, stores) — threading a `guildId` parameter through all of them would couple those layers to Discord.
+
+**Decision:** An ambient guild context in `AsyncLocalStorage`, entered once per slash command (withErrorHandling) and per guild in every broadcast loop (`notifyGuilds`, alert monitors). `t()` consults context → global language → en; an explicit `guildId` argument always wins. In-game strings and DMs deliberately stay on the global language: one server instance can serve several guilds, so there is no single correct guild to borrow a locale from.
+
+---
+
+## Dashboard frontend: Vue 3 (Options API) + Vite, isolated subproject
+
+**Problem:** The plan doc left the frontend framework open (SvelteKit vs. lighter). Requirements: easy to extend, zero interference with the bot's toolchain, slim runtime.
+
+**Decision:** Vue 3 with the Options API (maintainer's strongest stack) built by Vite as a small SPA — no SSR, no adapter, Fastify stays the only runtime and serves `dist/web/frontend` statically. The frontend is a self-contained subproject (`src/web/frontend/` with its own package.json and tsconfig) excluded from the root tsconfig/ESLint/vitest, so the bot's strict-TS build never sees `.vue` files. SvelteKit was rejected because it brings its own server; with `adapter-static` it degrades to "just a compiler", at which point Vite+SPA is the simpler shape.
+
+---
+
+## Dashboard auth: hand-rolled OAuth2 + HMAC cookies, user-ID admin gate
+
+**Problem:** The dashboard needs login, but every auth dependency is attack surface in a tool that can restart servers.
+
+**Decision:** The Discord OAuth2 identify flow is three fetch calls; sessions are stateless HMAC-signed cookies (`WEBUI_SESSION_SECRET`), and the admin list is re-checked on **every request** so removal from `adminUsers` locks out immediately. Only user-ID entries qualify — resolving role entries would need guild member fetches with a bot token, so roles stay a Discord-side permission (documented in permissions.md).
+
+---
+
+## Bot liveness for the dashboard: heartbeat file
+
+**Problem:** The dashboard is a separate process and must show whether the bot is alive without holding a connection to it.
+
+**Decision:** The bot overwrites `data/runtime.json` every ~60 s; the dashboard treats a timestamp older than 150 s as down. File-based because both processes already share the data directory — a socket or HTTP channel would add a failure mode for a single boolean.
+
+---
+
+## defineCommand: optional last argument (`"name?"`)
+
+**Problem:** `!waypoints [category]` needs an argument that may be omitted; defineCommand only knew required tokens and the greedy `"name..."` form.
+
+**Decision:** A `"name?"` suffix mirroring the greedy extension: optional, last-position-only (anything else is ambiguous), regex `(?:\s+(\S+))?`, handler receives `undefined` when omitted. Handler arg maps are now typed `Record<string, string | undefined>`, which matches how handlers already treated them under `noUncheckedIndexedAccess`.
+
+---
+
+## Milestone announcements: silent first-pass seeding
+
+**Problem:** Enabling milestones on an established server would announce every veteran's entire history at once — dozens of pings that mean nothing.
+
+**Decision:** The first pass per server+stat records current values as already-announced without posting, so announcements begin with the next real crossing. A per-pass cap (10) additionally bounds the blast radius of any config change.

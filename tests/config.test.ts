@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import { writeFileSync, mkdirSync } from "fs";
 
 // Must use a plain string literal in the factory (no variable closures)
-vi.mock("../src/utils/utils.js", () => ({
+vi.mock("../src/common/utils/utils.js", () => ({
   getRootDir: () => "/tmp/config-test",
   loadJson: vi.fn(),
   saveJson: vi.fn(),
@@ -24,7 +24,7 @@ import {
   getGuildConfig,
   getServerIds,
   getServerChoices,
-} from "../src/config.js";
+} from "../src/common/config.js";
 
 const validConfig = {
   token: "test.bot.token.12345",

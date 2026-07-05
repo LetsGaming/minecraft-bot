@@ -6,11 +6,11 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/utils/logger.js", () => ({
+vi.mock("../src/common/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../src/utils/utils.js", () => ({
+vi.mock("../src/common/utils/utils.js", () => ({
   getRootDir: vi.fn().mockReturnValue("/tmp"),
   loadJson: vi.fn(),
   saveJson: vi.fn().mockResolvedValue(undefined),
@@ -18,18 +18,18 @@ vi.mock("../src/utils/utils.js", () => ({
 
 // The migration resolves its target server from the configured server list
 // (dynamic import inside loadClaimedStore — vi.mock intercepts it too).
-vi.mock("../src/config.js", () => ({
+vi.mock("../src/common/config.js", () => ({
   getServerIds: vi.fn().mockReturnValue(["survival", "creative"]),
 }));
 
-import { loadJson, saveJson } from "../src/utils/utils.js";
-import { getServerIds } from "../src/config.js";
-import { log } from "../src/utils/logger.js";
+import { loadJson, saveJson } from "../src/common/utils/utils.js";
+import { getServerIds } from "../src/common/config.js";
+import { log } from "../src/common/utils/logger.js";
 import {
   loadClaimedStore,
   getServerClaims,
   saveClaimedStore,
-} from "../src/utils/dailyStore.js";
+} from "../src/common/utils/dailyStore.js";
 
 const record = (lastClaim: number) => ({
   lastClaim,

@@ -9,11 +9,11 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/utils/logger.js", () => ({
+vi.mock("../src/common/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../src/config.js", () => ({
+vi.mock("../src/common/config.js", () => ({
   getServerIds: vi.fn().mockReturnValue([]),
   loadConfig: vi.fn().mockReturnValue({
     token: "tok",
@@ -36,7 +36,7 @@ const createdWatchers: Array<{
   serverId: string;
 }> = [];
 
-vi.mock("../src/logWatcher/logWatcher.js", () => ({
+vi.mock("../src/bot/logWatcher/logWatcher.js", () => ({
   // NOTE: must be a `function` (not an arrow) so `new LogWatcher(...)` works.
   LogWatcher: vi.fn().mockImplementation(function (server: { id: string }) {
     const w = {
@@ -52,32 +52,32 @@ vi.mock("../src/logWatcher/logWatcher.js", () => ({
   getGlobalWatchers: vi.fn().mockReturnValue([]),
 }));
 
-vi.mock("../src/logWatcher/RemoteLogWatcher.js", () => ({
+vi.mock("../src/bot/logWatcher/RemoteLogWatcher.js", () => ({
   RemoteLogWatcher: vi.fn(),
 }));
 
-vi.mock("../src/logWatcher/watchers/chatBridge.js", () => ({
+vi.mock("../src/bot/logWatcher/watchers/chatBridge.js", () => ({
   registerChatBridge: vi.fn(),
   setupDiscordToMc: vi.fn(),
 }));
-vi.mock("../src/logWatcher/watchers/joinLeave.js", () => ({
+vi.mock("../src/bot/logWatcher/watchers/joinLeave.js", () => ({
   registerJoinLeaveWatcher: vi.fn(),
 }));
-vi.mock("../src/logWatcher/watchers/deaths.js", () => ({
+vi.mock("../src/bot/logWatcher/watchers/deaths.js", () => ({
   registerDeathWatcher: vi.fn(),
 }));
-vi.mock("../src/logWatcher/watchers/advancements.js", () => ({
+vi.mock("../src/bot/logWatcher/watchers/advancements.js", () => ({
   registerAdvancementWatcher: vi.fn(),
 }));
-vi.mock("../src/logWatcher/watchers/serverEvents.js", () => ({
+vi.mock("../src/bot/logWatcher/watchers/serverEvents.js", () => ({
   registerServerEventWatcher: vi.fn(),
 }));
-vi.mock("../src/logWatcher/watchers/sleepWatcher.js", () => ({
+vi.mock("../src/bot/logWatcher/watchers/sleepWatcher.js", () => ({
   registerSleepWatcher: vi.fn(),
 }));
 
 const tpsTimers: Array<ReturnType<typeof setInterval>> = [];
-vi.mock("../src/logWatcher/watchers/tpsMonitor.js", () => ({
+vi.mock("../src/bot/logWatcher/watchers/tpsMonitor.js", () => ({
   startTpsMonitor: vi.fn().mockImplementation(() => {
     const t = setInterval(() => {}, 1_000_000);
     t.unref();
@@ -86,31 +86,31 @@ vi.mock("../src/logWatcher/watchers/tpsMonitor.js", () => ({
   }),
 }));
 
-vi.mock("../src/logWatcher/watchers/leaderboardScheduler.js", () => ({
+vi.mock("../src/bot/logWatcher/watchers/leaderboardScheduler.js", () => ({
   startLeaderboardScheduler: vi.fn(),
 }));
-vi.mock("../src/logWatcher/watchers/statusEmbed.js", () => ({
+vi.mock("../src/bot/logWatcher/watchers/statusEmbed.js", () => ({
   startStatusEmbed: vi.fn(),
 }));
-vi.mock("../src/logWatcher/watchers/downtimeMonitor.js", () => ({
+vi.mock("../src/bot/logWatcher/watchers/downtimeMonitor.js", () => ({
   startDowntimeMonitor: vi.fn(),
 }));
-vi.mock("../src/logWatcher/watchers/channelPurge.js", () => ({
+vi.mock("../src/bot/logWatcher/watchers/channelPurge.js", () => ({
   startChannelPurge: vi.fn(),
 }));
-vi.mock("../src/utils/uptimeTracker.js", () => ({
+vi.mock("../src/common/utils/uptimeTracker.js", () => ({
   startUptimeFlushScheduler: vi.fn(),
 }));
 
-import { reconcileServers } from "../src/logWatcher/initMinecraftCommands.js";
+import { reconcileServers } from "../src/bot/logWatcher/initMinecraftCommands.js";
 import {
   initServers,
   getAllInstances,
   getServerInstance,
   removeServerInstance,
-} from "../src/utils/server.js";
-import { startTpsMonitor } from "../src/logWatcher/watchers/tpsMonitor.js";
-import type { BotConfig, ServerConfig } from "../src/types/index.js";
+} from "../src/common/utils/server.js";
+import { startTpsMonitor } from "../src/bot/logWatcher/watchers/tpsMonitor.js";
+import type { BotConfig, ServerConfig } from "../src/common/types/index.js";
 import type { Client } from "discord.js";
 
 const fakeClient = {} as Client;

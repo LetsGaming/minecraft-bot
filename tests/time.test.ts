@@ -6,7 +6,7 @@ import {
   nextMidnightEpoch,
   msUntilMidnight,
   TZ,
-} from "../src/utils/time.js";
+} from "../src/common/utils/time.js";
 
 describe("TZ constant", () => {
   it("is a non-empty string", () => {

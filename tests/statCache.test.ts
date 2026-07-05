@@ -9,13 +9,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ── Top-level mocks ────────────────────────────────────────────────────────
 
-vi.mock("../src/utils/serverAccess.js", () => ({
+vi.mock("../src/common/utils/serverAccess.js", () => ({
   readUserCache: vi.fn().mockResolvedValue([]),
   listStatsUuids: vi.fn().mockResolvedValue(["abc123", "def456"]),
   readStats: vi.fn().mockResolvedValue({ stats: {} }),
 }));
 
-vi.mock("../src/utils/server.js", () => ({
+vi.mock("../src/common/utils/server.js", () => ({
   getServerInstance: vi.fn().mockReturnValue({
     config: { id: "default", serverDir: "/fake/server" },
     // minimal ServerInstance shape loadAllStats requires
@@ -29,8 +29,8 @@ vi.mock("../src/utils/server.js", () => ({
 import {
   loadAllStats,
   invalidateAllStatsCache,
-} from "../src/utils/statUtils.js";
-import * as serverAccess from "../src/utils/serverAccess.js";
+} from "../src/common/utils/statUtils.js";
+import * as serverAccess from "../src/common/utils/serverAccess.js";
 
 beforeEach(() => {
   vi.clearAllMocks();

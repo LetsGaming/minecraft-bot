@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── Top-level mocks ────────────────────────────────────────────────────────
-vi.mock("../src/utils/utils.js", () => ({
+vi.mock("../src/common/utils/utils.js", () => ({
   loadJson: vi.fn().mockResolvedValue({}),
   saveJson: vi.fn().mockResolvedValue(undefined),
   getRootDir: vi.fn().mockReturnValue("/tmp"),
 }));
 
-vi.mock("../src/utils/logger.js", () => ({
+vi.mock("../src/common/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -16,8 +16,8 @@ import {
   getUptimeStats,
   flushUptimeHistory,
   startUptimeFlushScheduler,
-} from "../src/utils/uptimeTracker.js";
-import { saveJson } from "../src/utils/utils.js";
+} from "../src/common/utils/uptimeTracker.js";
+import { saveJson } from "../src/common/utils/utils.js";
 
 // Each test uses a unique server ID to avoid module-level state pollution
 let serverIdCounter = 0;

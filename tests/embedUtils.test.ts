@@ -9,7 +9,7 @@ import {
   createEmbedWithThumbnail,
   createPlayerEmbed,
   createPaginationButtons,
-} from "../src/utils/embedUtils.js";
+} from "../src/bot/utils/embedUtils.js";
 
 // ── createEmbed ──────────────────────────────────────────────────────────────
 

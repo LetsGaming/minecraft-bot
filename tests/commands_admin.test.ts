@@ -3,12 +3,12 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/commands/middleware.js", () => ({
+vi.mock("../src/bot/commands/middleware.js", () => ({
   withErrorHandling: vi.fn((fn) => fn),
   requireServerAdmin: vi.fn((fn) => fn),
 }));
 
-vi.mock("../src/config.js", () => ({
+vi.mock("../src/common/config.js", () => ({
   loadConfig: vi.fn().mockReturnValue({
     adminUsers: ["admin1"],
     servers: {
@@ -37,7 +37,7 @@ vi.mock("../src/config.js", () => ({
   getServerIds: vi.fn().mockReturnValue(["survival"]),
 }));
 
-vi.mock("../src/utils/embedUtils.js", () => ({
+vi.mock("../src/bot/utils/embedUtils.js", () => ({
   createEmbed: vi.fn().mockImplementation((opts) => ({
     _opts: opts,
     addFields: vi.fn().mockReturnThis(),
@@ -47,34 +47,34 @@ vi.mock("../src/utils/embedUtils.js", () => ({
   createSuccessEmbed: vi.fn().mockReturnValue({ type: "success" }),
 }));
 
-vi.mock("../src/utils/logger.js", () => ({
+vi.mock("../src/common/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../src/utils/adminAudit.js", () => ({
+vi.mock("../src/common/utils/adminAudit.js", () => ({
   recordAdminAction: vi.fn().mockResolvedValue(undefined),
   loadAdminAudit: vi.fn().mockResolvedValue([]),
 }));
 
 // /config reload now applies server changes live via reconciliation
-vi.mock("../src/logWatcher/initMinecraftCommands.js", () => ({
+vi.mock("../src/bot/logWatcher/initMinecraftCommands.js", () => ({
   reconcileServers: vi
     .fn()
     .mockResolvedValue({ added: [], removed: [], changed: [] }),
 }));
 
-vi.mock("../src/logWatcher/logWatcher.js", () => ({
+vi.mock("../src/bot/logWatcher/logWatcher.js", () => ({
   registerLogCommand: vi.fn(),
   getGlobalWatchers: vi.fn().mockReturnValue([]),
 }));
 
-vi.mock("../src/utils/utils.js", () => ({
+vi.mock("../src/common/utils/utils.js", () => ({
   getRootDir: vi.fn().mockReturnValue("/tmp"),
   loadJson: vi.fn().mockResolvedValue({}),
   saveJson: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../src/utils/server.js", () => ({
+vi.mock("../src/common/utils/server.js", () => ({
   getAllInstances: vi.fn().mockReturnValue([]),
   getServerInstance: vi.fn().mockReturnValue({ id: "survival" }),
 }));
@@ -107,7 +107,7 @@ beforeEach(() => {
 describe("/config admin command — show subcommand", () => {
   let execute: (i: never) => Promise<void>;
   beforeEach(async () => {
-    ({ execute } = await import("../src/commands/admin/config.js"));
+    ({ execute } = await import("../src/bot/commands/admin/config.js"));
   });
 
   it("replies with config embed on 'show'", async () => {
@@ -120,7 +120,7 @@ describe("/config admin command — show subcommand", () => {
 describe("/config admin command — reload subcommand", () => {
   let execute: (i: never) => Promise<void>;
   beforeEach(async () => {
-    ({ execute } = await import("../src/commands/admin/config.js"));
+    ({ execute } = await import("../src/bot/commands/admin/config.js"));
   });
 
   it("replies with success embed after reloading config", async () => {
@@ -131,14 +131,14 @@ describe("/config admin command — reload subcommand", () => {
 
   it("reconciles server changes and reports them as applied live", async () => {
     const { reconcileServers } = await import(
-      "../src/logWatcher/initMinecraftCommands.js"
+      "../src/bot/logWatcher/initMinecraftCommands.js"
     );
     vi.mocked(reconcileServers).mockResolvedValue({
       added: ["creative"],
       removed: ["old"],
       changed: ["survival"],
     });
-    const { createSuccessEmbed } = await import("../src/utils/embedUtils.js");
+    const { createSuccessEmbed } = await import("../src/bot/utils/embedUtils.js");
 
     const interaction = makeInteraction("reload");
     await execute(interaction as never);
@@ -157,21 +157,21 @@ describe("/config admin command — reload subcommand", () => {
 
 describe("logWatcher !seed command", () => {
   it("registers via init() without throwing", async () => {
-    const { init } = await import("../src/logWatcher/commands/seed.js");
+    const { init } = await import("../src/bot/logWatcher/commands/seed.js");
     expect(() => init()).not.toThrow();
   });
 });
 
 describe("logWatcher !netherportal command", () => {
   it("registers via init() without throwing", async () => {
-    const { init } = await import("../src/logWatcher/commands/netherportal.js");
+    const { init } = await import("../src/bot/logWatcher/commands/netherportal.js");
     expect(() => init()).not.toThrow();
   });
 });
 
 describe("logWatcher !chunkbase command", () => {
   it("registers via init() without throwing", async () => {
-    const { init } = await import("../src/logWatcher/commands/chunkbase.js");
+    const { init } = await import("../src/bot/logWatcher/commands/chunkbase.js");
     expect(() => init()).not.toThrow();
   });
 });

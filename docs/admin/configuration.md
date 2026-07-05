@@ -55,7 +55,7 @@ To find an ID: enable Developer Mode (Discord Settings → Advanced), right-clic
 "language": "de"
 ```
 
-Locale for user-visible bot strings (`"en"` default, `"de"` available). Currently covers the newer commands (`/whois`, `/daily-reminder`); older commands are migrated key-by-key — see the localization section in [../dev/architecture.md](../dev/architecture.md).
+Locale for user-visible bot strings (`"en"` default, `"de"` available). Individual guilds can override it with `guilds.<id>.language` — embeds and command replies then localize per guild, while in-game strings and DMs stay on the global language (one Minecraft server can serve several guilds, so there is no single correct guild to borrow a locale from).
 
 ## Servers
 
@@ -138,15 +138,39 @@ Each Discord server is configured independently. The key is the guild ID. Every 
 | `defaultServer` | server ID | Used when a command is run without an explicit `server` option. |
 | `adminUsers` | user/role IDs | Admins **scoped to this guild** — same semantics as the global list, but only valid for commands issued here, and only against servers this guild may target. The global `adminUsers` list remains operator-level. |
 | `allowedServers` | server IDs | Which servers commands from this guild may target, including via the explicit `server:` option. **Only enforced when more than one guild is configured.** When omitted, the allowed set is derived from the servers referenced in this guild's config (`defaultServer` plus any feature `server` fields). The guild's `defaultServer` is always allowed. |
-| `chatBridge` | one or more `{ channelId, server }` | Two-way chat between a Discord channel and **exactly one** server. Use an array for one channel per server. See [Chat bridges](#chat-bridges-one-channel--one-server). |
+| `language` | `"en"` / `"de"` | Per-guild language for embeds and replies; overrides the global `language`. |
+| `chatBridge` | one or more `{ channelId, server, useWebhook }` | Two-way chat between a Discord channel and **exactly one** server. Use an array for one channel per server. With `"useWebhook": true` MC→Discord lines appear as the player (name + head) via a channel webhook (bot needs Manage Webhooks; falls back to the embed form on any webhook problem). See [Chat bridges](#chat-bridges-one-channel--one-server). |
 | `notifications` | `channelId`, `events`, `server` | Posts join/leave/death/advancement/start/stop events. Remove event names you do not want. `server` scopes the source (see [Server scoping](#server-scoping-one-several-or-all)); the source server is shown in the embed footer when more than one server is configured. |
-| `leaderboard` | `channelId`, `interval`, `server` | Auto-posts a period leaderboard (playtime and blocks mined). `interval` is `daily`, `weekly`, or `monthly`. With a `server` list, one leaderboard is posted per server (prefixed with the server name). |
-| `tpsAlerts` | `channelId`, `server` | Warns when TPS drops below `tpsWarningThreshold`. `server` scopes which servers alert. |
-| `downtimeAlerts` | `channelId`, `server` | Alerts on unexpected downtime and recovery. `server` scopes which servers are monitored. |
+| `leaderboard` | `channelId`, `interval`, `server`, `categories` | Auto-posts period leaderboards. `interval` is `daily`, `weekly`, or `monthly`. With a `server` list, one set is posted per server. `categories` picks the boards (any `/leaderboard` stat key plus `"streak"` / `"longest_streak"`, max 10); default `["playtime", "mined"]`. |
+| `tpsAlerts` | `channelId`, `server`, `mentionRole` | Warns when TPS drops below `tpsWarningThreshold`. `server` scopes which servers alert; `mentionRole` pings a role with each alert. |
+| `downtimeAlerts` | `channelId`, `server`, `mentionRole` | Alerts on unexpected downtime and recovery (host-disk and backup-age alerts use this channel too). `mentionRole` pings a role with each alert. |
 | `statusEmbed` | `enabled` | Self-provisioning live status display, see below. |
 | `channelPurge` | `channelId` | Deletes all messages in the channel daily at local midnight, except pinned messages and the status embed. |
+| `console` | `channelId` | Target channel for the `/console live` relay: an admin can stream a server's raw log into this (admin-only!) channel, batched and flood-protected. |
+| `whitelistApplications` | `channelId`, `adminChannelId`, `mentionRole` | Button-based whitelist applications: the bot posts a persistent **Apply** button into `channelId`; applications (Minecraft name + optional note, server select in multi-server guilds) queue in `adminChannelId` with Approve/Deny buttons that survive restarts. Approval takes the same path as `/whitelist` and DMs the applicant. `mentionRole` pings a role on new applications. Both channel IDs are required for the feature to arm. |
 
 Details on how each feature behaves are in [automated-features.md](automated-features.md).
+
+### Linked role and reports
+
+Two optional per-guild fields round out the account-link and moderation story:
+
+```json
+"guilds": {
+  "123456789012345678": {
+    "linkedRole": "234567890123456789",
+    "reports": {
+      "channelId": "345678901234567890",
+      "mentionRole": "456789012345678901",
+      "server": "smp"
+    }
+  }
+}
+```
+
+`linkedRole` is assigned automatically when a member links their Minecraft account (`/link` → `!link CODE`) and removed again on `/unlink`. The bot needs **Manage Roles** and must sit **above** the role in the role list; failures are written to the admin audit log and never break the link itself.
+
+`reports` routes the in-game `!report <message>` command: the report lands as an embed (player head, message, server, timestamp) in `channelId`, optionally pinging `mentionRole`. `server` scopes which instances may report into this guild — same semantics as every other scoped feature. Without a configured report channel, players get told reports aren't set up rather than reporting into the void.
 
 ### Server scoping: one, several, or all
 
@@ -209,6 +233,15 @@ The bot needs the Manage Channels permission for this feature.
 | `tpsWarningThreshold` | `15` | TPS below this value triggers a warning. Normal is 20. |
 | `tpsPollIntervalMs` | `60000` | TPS polling interval in milliseconds. Minimum 1000. |
 | `leaderboardInterval` | `"weekly"` | Fallback interval for guilds without their own `leaderboard.interval`. |
+| `presence` | off | Bot presence with live player count, e.g. "Playing 7 online @ smp". `{ "enabled": true }` aggregates across all servers; pin one with `"server": "smp"`. `format` supports `{online}`, `{max}`, `{server}`. While the pinned server is down (or, unpinned, while EVERY instance is down) the presence switches to the `downFormat` template (default `"⛔ {server} offline"`) with idle status. Updates on the status cadence (60 s); flipping presence on/off applies on config reload. |
+| `deathCoords` | off | `{ "dmLinked": true }` DMs a linked player their death coordinates plus a Chunkbase link whenever they die. The in-game `!deathpos` command works regardless of this flag. |
+| `hostAlerts` | `{ "diskWarnPercent": 90 }` | Disk-full early warning: when a monitored path reaches the threshold, each guild's `downtimeAlerts` channel gets one alert (with hysteresis and an all-clear). Remote instances are covered through the wrapper's `/info` (wrapper ≥ 1.2.0). `0` disables. Add `"backupMaxAgeHours": 26` to also alert when the NEWEST backup of a server is older than that (clears automatically when a fresh backup appears); off by default. |
+| `waypoints` | `{ "maxPerServer": 100 }` | Per-server cap on community waypoints. |
+| `limits` | defaults | Rate-limit overrides: `slashCapacity`/`slashWindowMs` (default 5 per 30 s) and `bridgeCapacity`/`bridgeWindowMs` (default 8 per 10 s). Applied at startup. |
+| `updateNotifier` | `{ "enabled": true }` | Daily GitHub release check; logs when a newer release exists. `"dmAdmins": true` additionally DMs the operator-level admins once per new version. `"enabled": false` opts out. |
+| `schedules` | off | Scheduled restarts per server: `"schedules": { "smp": { "restart": { "time": "04:00", "days": ["MO","TH"], "warnMinutes": [15, 5, 1] } } }`. Countdown warnings go in-game (`/say`) and to notification channels (event `scheduledRestart`); the restart uses the suite's restart script with downtime alerts suppressed, and is admin-audited. `days` omitted = daily. Applies live on config reload. |
+| `milestones` | off | Milestone announcements per leaderboard stat key, thresholds in the stat's native unit (playtime is ticks: 100 h = `7200000`): `"milestones": { "playtime": [7200000], "diamonds": [100, 1000] }`. Announced in-game and via the `milestone` notification event. First activation seeds silently so veterans' whole histories are not blasted at once. |
+| `webui` | off | Web dashboard (separate process, `npm run start:web`): `{ "enabled": true, "port": 8130, "host": "127.0.0.1", "publicUrl": "https://panel.example.com" }`. Secrets come from the environment (`WEBUI_CLIENT_SECRET`, `WEBUI_SESSION_SECRET`). See [../dev/webui-integration.md](../dev/webui-integration.md). |
 
 ## Command toggles
 
@@ -243,6 +276,8 @@ Environment variables take precedence over `config.json`. This is how Docker and
 | `DISCORD_CLIENT_ID` | `clientId` |
 | `RCON_PASSWORD` | `rconPassword` for all servers |
 | `RCON_PASSWORD_<SERVER_ID>` | `rconPassword` for one server. The ID is uppercased and non-alphanumerics become `_`, so server `my-smp` reads `RCON_PASSWORD_MY_SMP`. |
+| `WEBUI_CLIENT_SECRET` | Discord OAuth2 client secret for the dashboard login (no config.json equivalent — env only). |
+| `WEBUI_SESSION_SECRET` | Dashboard cookie-signing key (env only; any long random string). |
 
 ## Hot reload
 
@@ -254,5 +289,8 @@ What applies live:
 - **Adding a server entry**: the instance is created and its log watcher, notifications, TPS monitor, snapshots, and downtime checks start immediately.
 - **Removing a server entry**: its log watcher and TPS monitor are stopped, the RCON connection is closed, and the instance is dropped from routing.
 - **Suite capabilities** (management scripts, backup layout, mod manifest) are re-detected for every server on each reload — installing the setup suite for an existing server takes effect immediately, except that a `/backup` or `/mods` command skipped at startup (because no server had the capability) is only registered after a restart.
+- **Presence / status embed** timers are armed or disarmed on reload, so flipping `presence.enabled` or a guild's `statusEmbed.enabled` no longer needs a restart.
+- **Restart schedules** are rebuilt from the fresh config on every reload.
+- The reload reply (and the file-watcher log) summarizes guild- and feature-level changes (`~ guild 1112…: chatBridge added`), so edits are visible even when no server was added or removed.
 
 One limitation remains: **changing the settings of an existing server entry** (e.g. its RCON host, port, or password) is not applied live, because the running instance keeps the connection it was built with. The reload reports such servers as restart-required. Workaround without a full restart: temporarily remove the entry, reload, re-add it with the new settings, and reload again.

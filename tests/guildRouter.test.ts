@@ -1,24 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── Mock server + config modules ────────────────────────────────────────────
-vi.mock("../src/utils/server.js", () => ({
+vi.mock("../src/common/utils/server.js", () => ({
   getServerInstance: vi.fn(),
   getGuildServer: vi.fn(),
 }));
 
-vi.mock("../src/config.js", () => ({
+vi.mock("../src/common/config.js", () => ({
   loadConfig: vi.fn(),
 }));
 
-import { getServerInstance, getGuildServer } from "../src/utils/server.js";
-import { loadConfig } from "../src/config.js";
+import { getServerInstance, getGuildServer } from "../src/common/utils/server.js";
+import { loadConfig } from "../src/common/config.js";
 import {
   resolveServer,
   tryResolveServer,
   getAllowedServerIds,
   serverInScope,
-} from "../src/utils/guildRouter.js";
-import type { BotConfig } from "../src/types/index.js";
+} from "../src/bot/utils/guildRouter.js";
+import type { BotConfig } from "../src/common/types/index.js";
 import type { ChatInputCommandInteraction } from "discord.js";
 
 // Minimal interaction stub

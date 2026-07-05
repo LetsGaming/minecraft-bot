@@ -7,16 +7,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── Shared mocks ──────────────────────────────────────────────────────────
 
-vi.mock("../src/commands/middleware.js", () => ({
+vi.mock("../src/bot/commands/middleware.js", () => ({
   withErrorHandling: vi.fn((fn) => fn),
   requireServerAdmin: vi.fn((fn) => fn),
 }));
 
-vi.mock("../src/utils/guildRouter.js", () => ({
+vi.mock("../src/bot/utils/guildRouter.js", () => ({
   resolveServer: vi.fn(),
 }));
 
-vi.mock("../src/utils/embedUtils.js", () => ({
+vi.mock("../src/bot/utils/embedUtils.js", () => ({
   createEmbed: vi.fn().mockImplementation((opts) => ({
     _opts: opts,
     addFields: vi.fn().mockReturnThis(),
@@ -26,27 +26,27 @@ vi.mock("../src/utils/embedUtils.js", () => ({
   createPlayerEmbed: vi.fn().mockReturnValue({ type: "player-embed" }),
 }));
 
-vi.mock("../src/utils/logger.js", () => ({
+vi.mock("../src/common/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../src/utils/linkUtils.js", () => ({
+vi.mock("../src/common/utils/linkUtils.js", () => ({
   getLinkedAccount: vi.fn().mockResolvedValue(null),
   loadLinkedAccounts: vi.fn().mockResolvedValue({}),
   loadLinkCodes: vi.fn().mockResolvedValue({}),
 }));
 
-vi.mock("../src/utils/playerUtils.js", () => ({
+vi.mock("../src/common/utils/playerUtils.js", () => ({
   getLinkedAccount: vi.fn(),
   getPlayerCoords: vi.fn().mockResolvedValue(null),
   getOnlinePlayers: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock("../src/utils/modUtils.js", () => ({
+vi.mock("../src/common/utils/modUtils.js", () => ({
   getModList: vi.fn(),
 }));
 
-vi.mock("../src/utils/time.js", () => ({
+vi.mock("../src/common/utils/time.js", () => ({
   formatTime: vi.fn().mockReturnValue("12:00"),
   TZ: "UTC",
   formatDate: vi.fn(),
@@ -55,9 +55,9 @@ vi.mock("../src/utils/time.js", () => ({
   msUntilMidnight: vi.fn(),
 }));
 
-import { resolveServer } from "../src/utils/guildRouter.js";
-import { getLinkedAccount } from "../src/utils/linkUtils.js";
-import { getModList } from "../src/utils/modUtils.js";
+import { resolveServer } from "../src/bot/utils/guildRouter.js";
+import { getLinkedAccount } from "../src/common/utils/linkUtils.js";
+import { getModList } from "../src/common/utils/modUtils.js";
 
 const fakeServer = {
   id: "survival",
@@ -91,7 +91,7 @@ beforeEach(() => {
 describe("/mods command", () => {
   let execute: (i: never) => Promise<void>;
   beforeEach(async () => {
-    ({ execute } = await import("../src/commands/info/mods.js"));
+    ({ execute } = await import("../src/bot/commands/info/mods.js"));
   });
 
   it("replies with mod list embed when mods are available", async () => {
@@ -136,7 +136,7 @@ describe("/mods command", () => {
 describe("/netherportal command", () => {
   let execute: (i: never) => Promise<void>;
   beforeEach(async () => {
-    ({ execute } = await import("../src/commands/info/netherportal.js"));
+    ({ execute } = await import("../src/bot/commands/info/netherportal.js"));
   });
 
   it("replies with error when user has no linked account", async () => {
@@ -148,7 +148,7 @@ describe("/netherportal command", () => {
 
   it("replies with error when player coordinates are not found", async () => {
     vi.mocked(getLinkedAccount).mockResolvedValue("Steve");
-    const { getPlayerCoords } = await import("../src/utils/playerUtils.js");
+    const { getPlayerCoords } = await import("../src/common/utils/playerUtils.js");
     vi.mocked(getPlayerCoords).mockResolvedValue(null);
     const interaction = makeInteraction();
     await execute(interaction);
@@ -157,7 +157,7 @@ describe("/netherportal command", () => {
 
   it("replies with portal coords when player is in overworld", async () => {
     vi.mocked(getLinkedAccount).mockResolvedValue("Steve");
-    const { getPlayerCoords } = await import("../src/utils/playerUtils.js");
+    const { getPlayerCoords } = await import("../src/common/utils/playerUtils.js");
     vi.mocked(getPlayerCoords).mockResolvedValue({
       x: 800,
       y: 64,
@@ -177,7 +177,7 @@ describe("/netherportal command", () => {
 describe("/chunkbase command", () => {
   let execute: (i: never) => Promise<void>;
   beforeEach(async () => {
-    ({ execute } = await import("../src/commands/info/chunkbase.js"));
+    ({ execute } = await import("../src/bot/commands/info/chunkbase.js"));
   });
 
   it("replies with chunkbase link when seed is available", async () => {
@@ -215,7 +215,7 @@ describe("/playerhead command", () => {
         json: vi.fn().mockResolvedValue({ id: "uuid-99", name: "Notch" }),
       }),
     );
-    ({ execute } = await import("../src/commands/connection/playerhead.js"));
+    ({ execute } = await import("../src/bot/commands/connection/playerhead.js"));
   });
 
   it("replies with player head embed when player is found", async () => {
@@ -259,7 +259,7 @@ describe("/playerhead command", () => {
 describe("serverAccess.logStreamUrl", () => {
   let logStreamUrl: (cfg: never) => string;
   beforeEach(async () => {
-    ({ logStreamUrl } = await import("../src/utils/serverAccess.js"));
+    ({ logStreamUrl } = await import("../src/common/utils/serverAccess.js"));
   });
 
   it("builds the SSE stream URL from apiUrl including instance id", () => {
@@ -288,10 +288,10 @@ describe("serverAccess.logStreamUrl", () => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 describe("RemoteLogWatcher", () => {
-  let RemoteLogWatcher: typeof import("../src/logWatcher/RemoteLogWatcher.js").RemoteLogWatcher;
+  let RemoteLogWatcher: typeof import("../src/bot/logWatcher/RemoteLogWatcher.js").RemoteLogWatcher;
   beforeEach(async () => {
     ({ RemoteLogWatcher } =
-      await import("../src/logWatcher/RemoteLogWatcher.js"));
+      await import("../src/bot/logWatcher/RemoteLogWatcher.js"));
   });
 
   const fakeRemoteServer = {
@@ -330,7 +330,7 @@ describe("discordChannel — renameVoiceChannelIfChanged", () => {
   ) => Promise<boolean>;
   beforeEach(async () => {
     ({ renameVoiceChannelIfChanged } =
-      await import("../src/utils/discordChannel.js"));
+      await import("../src/bot/utils/discordChannel.js"));
   });
 
   it("returns false without API call when name is unchanged", async () => {

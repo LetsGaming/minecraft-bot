@@ -6,17 +6,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── Shared mocks ───────────────────────────────────────────────────────────
-vi.mock("../src/commands/middleware.js", () => ({
+vi.mock("../src/bot/commands/middleware.js", () => ({
   withErrorHandling: vi.fn((fn) => fn),
   requireServerAdmin: vi.fn((fn) => fn),
   isServerAdmin: vi.fn().mockReturnValue(true),
 }));
 
-vi.mock("../src/utils/guildRouter.js", () => ({
+vi.mock("../src/bot/utils/guildRouter.js", () => ({
   resolveServer: vi.fn(),
 }));
 
-vi.mock("../src/utils/embedUtils.js", () => ({
+vi.mock("../src/bot/utils/embedUtils.js", () => ({
   createEmbed: vi.fn().mockImplementation((opts) => ({
     _opts: opts,
     addFields: vi.fn().mockReturnThis(),
@@ -33,27 +33,27 @@ vi.mock("../src/utils/embedUtils.js", () => ({
     }),
 }));
 
-vi.mock("../src/utils/logger.js", () => ({
+vi.mock("../src/common/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../src/utils/adminAudit.js", () => ({
+vi.mock("../src/common/utils/adminAudit.js", () => ({
   recordAdminAction: vi.fn().mockResolvedValue(undefined),
   loadAdminAudit: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock("../src/utils/serverAccess.js", () => ({
+vi.mock("../src/common/utils/serverAccess.js", () => ({
   readUserCache: vi.fn().mockResolvedValue([]),
   readBackups: vi.fn(),
   runScript: vi.fn(),
 }));
 
-vi.mock("../src/logWatcher/watchers/downtimeMonitor.js", () => ({
+vi.mock("../src/bot/logWatcher/watchers/downtimeMonitor.js", () => ({
   suppressAlerts: vi.fn(),
 }));
 
-import { resolveServer } from "../src/utils/guildRouter.js";
-import * as serverAccess from "../src/utils/serverAccess.js";
+import { resolveServer } from "../src/bot/utils/guildRouter.js";
+import * as serverAccess from "../src/common/utils/serverAccess.js";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -109,7 +109,7 @@ beforeEach(() => {
 describe("/status command", () => {
   let execute: (i: never) => Promise<void>;
   beforeEach(async () => {
-    ({ execute } = await import("../src/commands/info/status.js"));
+    ({ execute } = await import("../src/bot/commands/info/status.js"));
   });
 
   it("replies with an online embed when server is running", async () => {
@@ -153,7 +153,7 @@ describe("/status command", () => {
 describe("/tps command", () => {
   let execute: (i: never) => Promise<void>;
   beforeEach(async () => {
-    ({ execute } = await import("../src/commands/server/tps.js"));
+    ({ execute } = await import("../src/bot/commands/server/tps.js"));
   });
 
   it("replies with TPS embed on success", async () => {
@@ -208,7 +208,7 @@ describe("/tps command", () => {
 describe("/seed command", () => {
   let execute: (i: never) => Promise<void>;
   beforeEach(async () => {
-    ({ execute } = await import("../src/commands/info/seed.js"));
+    ({ execute } = await import("../src/bot/commands/info/seed.js"));
   });
 
   it("replies with the world seed", async () => {
@@ -235,7 +235,7 @@ describe("/seed command", () => {
 describe("/say command", () => {
   let execute: (i: never) => Promise<void>;
   beforeEach(async () => {
-    ({ execute } = await import("../src/commands/communication/say.js"));
+    ({ execute } = await import("../src/bot/commands/communication/say.js"));
   });
 
   it("sends the message and replies", async () => {
@@ -265,7 +265,7 @@ describe("/say command", () => {
 describe("/backup command", () => {
   let execute: (i: never) => Promise<void>;
   beforeEach(async () => {
-    ({ execute } = await import("../src/commands/server/backup.js"));
+    ({ execute } = await import("../src/bot/commands/server/backup.js"));
   });
 
   it("replies with backup info when backups exist", async () => {
@@ -305,7 +305,7 @@ describe("/backup command", () => {
 describe("/server control command", () => {
   let execute: (i: never) => Promise<void>;
   beforeEach(async () => {
-    ({ execute } = await import("../src/commands/server/control.js"));
+    ({ execute } = await import("../src/bot/commands/server/control.js"));
   });
 
   it("runs status subcommand via runScript", async () => {
@@ -328,7 +328,7 @@ describe("/server control command", () => {
   });
 
   it("rejects script subcommands with a friendly error on probed plain servers", async () => {
-    const serverAccess = await import("../src/utils/serverAccess.js");
+    const serverAccess = await import("../src/common/utils/serverAccess.js");
     const server = makeServer("plain", {
       capabilities: {
         scripts: {
@@ -386,7 +386,7 @@ describe("/server control command", () => {
       stderr: "",
     } as never);
     const { suppressAlerts } =
-      await import("../src/logWatcher/watchers/downtimeMonitor.js");
+      await import("../src/bot/logWatcher/watchers/downtimeMonitor.js");
     const interaction = makeInteraction({
       options: {
         getString: vi.fn().mockReturnValue(null),

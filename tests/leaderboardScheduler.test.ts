@@ -6,53 +6,56 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-vi.mock("../src/utils/logger.js", () => ({
+vi.mock("../src/common/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../src/utils/utils.js", () => ({
+vi.mock("../src/common/utils/utils.js", () => ({
   getRootDir: () => "/tmp/lbsched",
   loadJson: vi.fn().mockResolvedValue({}),
   saveJson: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../src/config.js", () => ({
+vi.mock("../src/common/config.js", () => ({
   loadConfig: vi.fn().mockReturnValue({ leaderboardInterval: "daily" }),
 }));
 
-vi.mock("../src/utils/server.js", () => ({
+vi.mock("../src/common/utils/server.js", () => ({
   getAllInstances: vi.fn().mockReturnValue([]),
   getServerInstance: vi.fn().mockReturnValue(null),
 }));
 
-vi.mock("../src/utils/statUtils.js", () => ({
+vi.mock("../src/common/utils/statUtils.js", () => ({
   buildLeaderboard: vi.fn().mockResolvedValue({
     entries: [],
     title: "LB",
     description: "",
     footerText: "",
   }),
+  // The scheduler validates configured categories against this map;
+  // only truthiness is consulted here.
+  LEADERBOARD_STATS: { playtime: {}, mined: {} },
 }));
 
-vi.mock("../src/utils/statEmbeds.js", () => ({
+vi.mock("../src/bot/utils/statEmbeds.js", () => ({
   buildLeaderboardEmbed: vi.fn().mockReturnValue({
     setFooter: vi.fn().mockReturnThis(),
   }),
 }));
 
-vi.mock("../src/utils/snapshotUtils.js", () => ({
+vi.mock("../src/common/utils/snapshotUtils.js", () => ({
   takeSnapshot: vi.fn().mockResolvedValue({}),
   getSnapshotClosestTo: vi.fn().mockResolvedValue(null),
 }));
 
 const TICK = 60 * 60_000 + 1; // just past 1-hour CHECK_INTERVAL_MS
 
-import { startLeaderboardScheduler } from "../src/logWatcher/watchers/leaderboardScheduler.js";
-import * as utils from "../src/utils/utils.js";
-import * as srvMod from "../src/utils/server.js";
-import * as statUtils from "../src/utils/statUtils.js";
-import * as snapUtils from "../src/utils/snapshotUtils.js";
-import { log } from "../src/utils/logger.js";
+import { startLeaderboardScheduler } from "../src/bot/logWatcher/watchers/leaderboardScheduler.js";
+import * as utils from "../src/common/utils/utils.js";
+import * as srvMod from "../src/common/utils/server.js";
+import * as statUtils from "../src/common/utils/statUtils.js";
+import * as snapUtils from "../src/common/utils/snapshotUtils.js";
+import { log } from "../src/common/utils/logger.js";
 
 function cleanup(r: unknown) {
   if (r && typeof r === "object") {
@@ -160,7 +163,7 @@ it("warns and skips when no server instance is found", async () => {
 
 it("uses 'no snapshot available' footer text when there is no snapshot", async () => {
   vi.mocked(snapUtils.getSnapshotClosestTo).mockResolvedValue(null);
-  const { buildLeaderboardEmbed } = await import("../src/utils/statEmbeds.js");
+  const { buildLeaderboardEmbed } = await import("../src/bot/utils/statEmbeds.js");
   const setFooter = vi.fn().mockReturnThis();
   vi.mocked(buildLeaderboardEmbed).mockReturnValue({ setFooter } as never);
 
@@ -185,7 +188,7 @@ describe("checkAndPost — snapshot exists", () => {
     } as never);
     const setFooter = vi.fn().mockReturnThis();
     vi.mocked(
-      (await import("../src/utils/statEmbeds.js")).buildLeaderboardEmbed,
+      (await import("../src/bot/utils/statEmbeds.js")).buildLeaderboardEmbed,
     ).mockReturnValue({ setFooter } as never);
 
     const r = startLeaderboardScheduler(fakeClient(), {

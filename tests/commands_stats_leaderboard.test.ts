@@ -4,16 +4,16 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/commands/middleware.js", () => ({
+vi.mock("../src/bot/commands/middleware.js", () => ({
   withErrorHandling: vi.fn((fn) => fn),
   requireServerAdmin: vi.fn((fn) => fn),
 }));
 
-vi.mock("../src/utils/guildRouter.js", () => ({
+vi.mock("../src/bot/utils/guildRouter.js", () => ({
   resolveServer: vi.fn(),
 }));
 
-vi.mock("../src/utils/statUtils.js", () => ({
+vi.mock("../src/common/utils/statUtils.js", () => ({
   LEADERBOARD_STATS: {
     playtime: {
       label: "Playtime",
@@ -39,17 +39,17 @@ vi.mock("../src/utils/statUtils.js", () => ({
   invalidateAllStatsCache: vi.fn(),
 }));
 
-vi.mock("../src/utils/statEmbeds.js", () => ({
+vi.mock("../src/bot/utils/statEmbeds.js", () => ({
   buildLeaderboardEmbed: vi.fn().mockReturnValue({ type: "leaderboard-embed" }),
   buildStatsEmbeds: vi.fn().mockReturnValue([]),
 }));
 
-vi.mock("../src/utils/playerUtils.js", () => ({
+vi.mock("../src/common/utils/playerUtils.js", () => ({
   findPlayer: vi.fn(),
   getPlayerNames: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock("../src/utils/embedUtils.js", () => ({
+vi.mock("../src/bot/utils/embedUtils.js", () => ({
   createEmbed: vi
     .fn()
     .mockReturnValue({
@@ -59,37 +59,37 @@ vi.mock("../src/utils/embedUtils.js", () => ({
   createErrorEmbed: vi.fn().mockReturnValue({ type: "error-embed" }),
 }));
 
-vi.mock("../src/utils/logger.js", () => ({
+vi.mock("../src/common/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../src/utils/utils.js", () => ({
+vi.mock("../src/common/utils/utils.js", () => ({
   getRootDir: vi.fn().mockReturnValue("/tmp"),
   loadJson: vi.fn().mockResolvedValue({}),
   saveJson: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../src/utils/server.js", () => ({
+vi.mock("../src/common/utils/server.js", () => ({
   getAllInstances: vi.fn().mockReturnValue([]),
   getServerInstance: vi.fn(),
 }));
 
-vi.mock("../src/config.js", () => ({
+vi.mock("../src/common/config.js", () => ({
   loadConfig: vi.fn().mockReturnValue({
     leaderboardInterval: "daily",
     adminUsers: [],
   }),
 }));
 
-vi.mock("../src/utils/snapshotUtils.js", () => ({
+vi.mock("../src/common/utils/snapshotUtils.js", () => ({
   takeSnapshot: vi.fn().mockResolvedValue({}),
   getSnapshotClosestTo: vi.fn().mockResolvedValue(null),
 }));
 
-import { resolveServer } from "../src/utils/guildRouter.js";
-import { buildLeaderboard } from "../src/utils/statUtils.js";
-import { findPlayer } from "../src/utils/playerUtils.js";
-import { loadStats } from "../src/utils/statUtils.js";
+import { resolveServer } from "../src/bot/utils/guildRouter.js";
+import { buildLeaderboard } from "../src/common/utils/statUtils.js";
+import { findPlayer } from "../src/common/utils/playerUtils.js";
+import { loadStats } from "../src/common/utils/statUtils.js";
 
 const fakeServer = { id: "survival" } as never;
 const leaderboardData = {
@@ -127,7 +127,7 @@ beforeEach(() => {
 describe("/leaderboard command", () => {
   let execute: (i: never) => Promise<void>;
   beforeEach(async () => {
-    ({ execute } = await import("../src/commands/stats/leaderboard.js"));
+    ({ execute } = await import("../src/bot/commands/stats/leaderboard.js"));
   });
 
   it("calls buildLeaderboard with the selected stat", async () => {
@@ -167,7 +167,7 @@ describe("/leaderboard command", () => {
 describe("/top command", () => {
   let execute: (i: never) => Promise<void>;
   beforeEach(async () => {
-    ({ execute } = await import("../src/commands/stats/top.js"));
+    ({ execute } = await import("../src/bot/commands/stats/top.js"));
   });
 
   it("calls buildLeaderboard with the selected stat", async () => {
@@ -186,7 +186,7 @@ describe("/top command", () => {
 describe("/playtime command", () => {
   let execute: (i: never) => Promise<void>;
   beforeEach(async () => {
-    ({ execute } = await import("../src/commands/stats/playtime.js"));
+    ({ execute } = await import("../src/bot/commands/stats/playtime.js"));
   });
 
   it("replies with error when player not found", async () => {
@@ -238,7 +238,7 @@ describe("startLeaderboardScheduler", () => {
   ) => unknown;
   beforeEach(async () => {
     ({ startLeaderboardScheduler } =
-      await import("../src/logWatcher/watchers/leaderboardScheduler.js"));
+      await import("../src/bot/logWatcher/watchers/leaderboardScheduler.js"));
   });
 
   it("returns a timer object (SchedulerTimers with snapshotTimer + postTimer)", () => {

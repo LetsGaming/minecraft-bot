@@ -6,23 +6,23 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/utils/server.js", () => ({
+vi.mock("../src/common/utils/server.js", () => ({
   getAllInstances: vi.fn(),
   getServerInstance: vi.fn(),
   getGuildServer: vi.fn(),
 }));
 
-vi.mock("../src/utils/guildRouter.js", () => ({
+vi.mock("../src/bot/utils/guildRouter.js", () => ({
   resolveServer: vi.fn(),
   // Null = unrestricted (single-tenant), matching these scenarios.
   getAllowedServerIds: vi.fn().mockReturnValue(null),
 }));
 
-vi.mock("../src/utils/uptimeTracker.js", () => ({
+vi.mock("../src/common/utils/uptimeTracker.js", () => ({
   getUptimeStats: vi.fn(),
 }));
 
-vi.mock("../src/utils/embedUtils.js", () => ({
+vi.mock("../src/bot/utils/embedUtils.js", () => ({
   createEmbed: vi.fn().mockImplementation((opts) => {
     // Return a minimal object that quacks like EmbedBuilder
     const fields: Array<{ name: string; value: string; inline: boolean }> = [];
@@ -43,16 +43,16 @@ vi.mock("../src/utils/embedUtils.js", () => ({
   }),
 }));
 
-vi.mock("../src/commands/middleware.js", () => ({
+vi.mock("../src/bot/commands/middleware.js", () => ({
   withErrorHandling: vi.fn((fn) => fn),
 }));
 
-import { getAllInstances } from "../src/utils/server.js";
-import { resolveServer } from "../src/utils/guildRouter.js";
-import { getUptimeStats } from "../src/utils/uptimeTracker.js";
-import { execute } from "../src/commands/info/uptime.js";
+import { getAllInstances } from "../src/common/utils/server.js";
+import { resolveServer } from "../src/bot/utils/guildRouter.js";
+import { getUptimeStats } from "../src/common/utils/uptimeTracker.js";
+import { execute } from "../src/bot/commands/info/uptime.js";
 import type { ChatInputCommandInteraction } from "discord.js";
-import type { UptimeStats } from "../src/utils/uptimeTracker.js";
+import type { UptimeStats } from "../src/common/utils/uptimeTracker.js";
 
 function makeInteraction(
   serverId: string | null = null,

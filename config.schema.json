@@ -1,0 +1,582 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "minecraft-bot config.json",
+  "description": "Generated from RawBotConfig (src/common/types/config.ts) by scripts/generate-schema.mjs — do not edit by hand.",
+  "$ref": "#/definitions/RawBotConfig",
+  "definitions": {
+    "RawBotConfig": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "type": "string"
+        },
+        "clientId": {
+          "type": "string"
+        },
+        "servers": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RawServerConfig"
+          }
+        },
+        "guilds": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/GuildConfig"
+          }
+        },
+        "adminUsers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "May contain Discord user IDs and/or role IDs."
+        },
+        "language": {
+          "type": "string",
+          "description": "Locale for user-visible bot strings (\"en\" | \"de\", default \"en\")."
+        },
+        "commands": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/CommandOverrideConfig"
+          }
+        },
+        "leaderboard": {
+          "type": "object",
+          "additionalProperties": {}
+        },
+        "tpsWarningThreshold": {
+          "type": "number"
+        },
+        "tpsPollIntervalMs": {
+          "type": "number"
+        },
+        "leaderboardInterval": {
+          "$ref": "#/definitions/LeaderboardInterval"
+        },
+        "presence": {
+          "$ref": "#/definitions/PresenceConfig"
+        },
+        "deathCoords": {
+          "$ref": "#/definitions/DeathCoordsConfig"
+        },
+        "hostAlerts": {
+          "$ref": "#/definitions/HostAlertsConfig"
+        },
+        "waypoints": {
+          "$ref": "#/definitions/WaypointsConfig"
+        },
+        "limits": {
+          "$ref": "#/definitions/LimitsConfig"
+        },
+        "updateNotifier": {
+          "$ref": "#/definitions/UpdateNotifierConfig"
+        },
+        "schedules": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/ServerScheduleConfig"
+          },
+          "description": "Scheduled restarts (and future scheduled actions) per server."
+        },
+        "milestones": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "description": "Milestone announcement thresholds per leaderboard stat key, in the stat's NATIVE unit (playtime = ticks, distances = cm, counters = counts). First activation seeds silently; see milestoneWatcher."
+        },
+        "webui": {
+          "$ref": "#/definitions/WebUiConfig",
+          "description": "Web dashboard settings (see WebUiConfig)."
+        }
+      },
+      "required": [
+        "token",
+        "clientId"
+      ],
+      "additionalProperties": false
+    },
+    "RawServerConfig": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "serverDir": {
+          "type": "string"
+        },
+        "linuxUser": {
+          "type": "string"
+        },
+        "screenSession": {
+          "type": "string"
+        },
+        "useRcon": {
+          "type": "boolean"
+        },
+        "rconHost": {
+          "type": "string"
+        },
+        "rconPort": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "rconPassword": {
+          "type": "string"
+        },
+        "scriptDir": {
+          "type": "string"
+        },
+        "apiUrl": {
+          "type": "string",
+          "description": "Base URL of the API wrapper running on the MC server VM. Example: \"http://192.168.1.10:3000\" (trusted LAN) or \"https://mc-api.example.com\" (anything beyond the LAN). When set, all filesystem/shell operations for this instance are forwarded to that API wrapper instead of running locally. Omit (or leave empty) for same-VM / local operation — existing behaviour.\n\nPlaintext http:// is only accepted for loopback/private/LAN hosts — the x-api-key and all commands travel unencrypted. Public hosts require https:// (or an explicit allowInsecureHttp override)."
+        },
+        "apiKey": {
+          "type": "string",
+          "description": "Shared secret sent as x-api-key to the API wrapper."
+        },
+        "allowInsecureHttp": {
+          "type": "boolean",
+          "description": "Opt-out for the plaintext-HTTP-to-public-host rejection. Only for hosts that ARE on a trusted segment but can't be detected as such (e.g. internal DNS names). The key and all commands still travel unencrypted — a loud warning is logged at startup."
+        }
+      },
+      "additionalProperties": false
+    },
+    "GuildConfig": {
+      "type": "object",
+      "properties": {
+        "defaultServer": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string",
+          "description": "Locale for user-visible bot strings in THIS guild (\"en\" | \"de\"). Falls back to the global `language` when unset. Applies to slash command replies and per-guild notifications; in-game (!command) strings and DMs follow the global language, since a server instance can serve several guilds."
+        },
+        "adminUsers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Admins scoped to THIS guild (Discord user IDs and/or role IDs, same semantics as the global adminUsers list). Entries here can use admin commands only in this guild, and only against servers this guild is allowed to target. The global adminUsers list remains operator-level (valid everywhere)."
+        },
+        "allowedServers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Which server instances commands issued from this guild may target (including via the explicit `server:` option). When unset, the allowed set is derived from the servers referenced in this guild's config (defaultServer, chatBridge.server, notifications.server, …). Only enforced in multi-guild deployments — single-guild setups keep full access to every configured server, as before."
+        },
+        "notifications": {
+          "$ref": "#/definitions/GuildNotificationConfig"
+        },
+        "chatBridge": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/GuildChatBridgeConfig"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/GuildChatBridgeConfig"
+              }
+            }
+          ],
+          "description": "One bridge, or several (one Discord channel per server)."
+        },
+        "leaderboard": {
+          "$ref": "#/definitions/GuildLeaderboardConfig"
+        },
+        "statusEmbed": {
+          "$ref": "#/definitions/GuildStatusEmbedConfig"
+        },
+        "downtimeAlerts": {
+          "$ref": "#/definitions/GuildDowntimeAlertsConfig"
+        },
+        "tpsAlerts": {
+          "$ref": "#/definitions/GuildTpsAlertsConfig"
+        },
+        "channelPurge": {
+          "$ref": "#/definitions/GuildChannelPurgeConfig"
+        },
+        "linkedRole": {
+          "type": "string",
+          "description": "Role ID assigned to a member when they link their Minecraft account (and removed again on unlink). Requires the bot to have Manage Roles and to sit above the role in the hierarchy — failures are written to the admin audit log and never fail the link itself."
+        },
+        "reports": {
+          "$ref": "#/definitions/GuildReportsConfig",
+          "description": "In-game `!report` → Discord routing for this guild."
+        },
+        "console": {
+          "$ref": "#/definitions/GuildConsoleConfig",
+          "description": "Admin-only live console relay target for `/console live`."
+        },
+        "whitelistApplications": {
+          "$ref": "#/definitions/GuildWhitelistApplicationsConfig",
+          "description": "Button-based whitelist application flow."
+        }
+      },
+      "additionalProperties": false
+    },
+    "GuildNotificationConfig": {
+      "type": "object",
+      "properties": {
+        "channelId": {
+          "type": "string"
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "server": {
+          "$ref": "#/definitions/ServerScope",
+          "description": "Which server(s) to receive events from — see ServerScope."
+        }
+      },
+      "additionalProperties": false
+    },
+    "ServerScope": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ],
+      "description": "Server scoping for guild push features (notifications, TPS/downtime alerts, leaderboard): a single server ID, an explicit list of IDs, or — when omitted — every server this guild can see (all servers in single-guild deployments, the guild's allowed set in multi-guild ones)."
+    },
+    "GuildChatBridgeConfig": {
+      "type": "object",
+      "properties": {
+        "channelId": {
+          "type": "string"
+        },
+        "server": {
+          "type": "string"
+        },
+        "useWebhook": {
+          "type": "boolean",
+          "description": "Relay MC→Discord chat through a channel webhook so each line shows the player's name and head as the message author instead of a bot embed. Needs Manage Webhooks in the channel; when the webhook can't be created or used the bridge falls back to the embed form rather than dropping chat."
+        }
+      },
+      "additionalProperties": false,
+      "description": "One chat bridge = one Discord channel bound to exactly ONE server, in both directions. `server` may be omitted only when it is unambiguous (guild defaultServer set, or a single configured server). A guild can define several bridges (one channel per server) by using an array."
+    },
+    "GuildLeaderboardConfig": {
+      "type": "object",
+      "properties": {
+        "channelId": {
+          "type": "string"
+        },
+        "interval": {
+          "$ref": "#/definitions/LeaderboardInterval"
+        },
+        "server": {
+          "$ref": "#/definitions/ServerScope",
+          "description": "Which server instance(s) to post leaderboards for — one ID, a list (one leaderboard embed per server), or unset for the guild's default."
+        },
+        "categories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Which categories the scheduled post includes (one embed per entry). Any LEADERBOARD_STATS key plus \"streak\" / \"longest_streak\"; default [\"playtime\", \"mined\"] — the pre-configurable behaviour."
+        }
+      },
+      "additionalProperties": false
+    },
+    "LeaderboardInterval": {
+      "type": "string",
+      "enum": [
+        "daily",
+        "weekly",
+        "monthly"
+      ]
+    },
+    "GuildStatusEmbedConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "description": "The status embed feature is fully self-provisioning — the bot creates its own category and channels. No channelId configuration is required. Set `enabled: true` in your guild config to activate it."
+    },
+    "GuildDowntimeAlertsConfig": {
+      "type": "object",
+      "properties": {
+        "channelId": {
+          "type": "string"
+        },
+        "server": {
+          "$ref": "#/definitions/ServerScope",
+          "description": "One server ID, a list, or unset = every server this guild can see."
+        },
+        "mentionRole": {
+          "type": "string",
+          "description": "Role ID mentioned on every downtime, disk, and backup-age alert in this guild, so the on-call person gets pinged instead of hoping someone reads the channel."
+        }
+      },
+      "additionalProperties": false
+    },
+    "GuildTpsAlertsConfig": {
+      "type": "object",
+      "properties": {
+        "channelId": {
+          "type": "string"
+        },
+        "server": {
+          "$ref": "#/definitions/ServerScope",
+          "description": "One server ID, a list, or unset = every server this guild can see."
+        },
+        "mentionRole": {
+          "type": "string",
+          "description": "Role ID mentioned on every low-TPS alert in this guild."
+        }
+      },
+      "additionalProperties": false
+    },
+    "GuildChannelPurgeConfig": {
+      "type": "object",
+      "properties": {
+        "channelId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "GuildReportsConfig": {
+      "type": "object",
+      "properties": {
+        "channelId": {
+          "type": "string"
+        },
+        "mentionRole": {
+          "type": "string",
+          "description": "Role ID mentioned on every report (e.g. a"
+        },
+        "server": {
+          "$ref": "#/definitions/ServerScope",
+          "description": "One server ID, a list, or unset = every server this guild can see."
+        }
+      },
+      "additionalProperties": false,
+      "description": "In-game `!report` routing: the Discord channel that receives report embeds, an optional role to mention on each report, and the usual server scope (unset = every server this guild can see)."
+    },
+    "GuildConsoleConfig": {
+      "type": "object",
+      "properties": {
+        "channelId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Admin console access: the channel `/console live` relays a server's raw log into. The relay itself is toggled per server at runtime with `/console live enable|disable`; without a channelId here the toggle has nowhere to send."
+    },
+    "GuildWhitelistApplicationsConfig": {
+      "type": "object",
+      "properties": {
+        "channelId": {
+          "type": "string"
+        },
+        "adminChannelId": {
+          "type": "string"
+        },
+        "mentionRole": {
+          "type": "string",
+          "description": "Optional role pinged on every new application."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Button-based whitelist applications. Both channels are required for the feature to arm: the prompt lives in channelId, applications queue in adminChannelId (which should be admin-only — the decision buttons enforce the admin check regardless)."
+    },
+    "CommandOverrideConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "url": {
+          "type": "string"
+        },
+        "adminOnly": {
+          "type": "boolean",
+          "description": "Gate this command behind the admin check (global adminUsers or the issuing guild's adminUsers). Useful for commands that write to the game console but are open by default, e.g. `\"say\": { \"adminOnly\": true }`."
+        }
+      },
+      "additionalProperties": false
+    },
+    "PresenceConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "server": {
+          "type": "string",
+          "description": "Show counts for this server only (default: aggregate of all)."
+        },
+        "format": {
+          "type": "string",
+          "description": "Display template, default \"{online} online @ {server}\"."
+        },
+        "downFormat": {
+          "type": "string",
+          "description": "Template shown when the pinned server is offline (or, without a pinned server, when EVERY instance is down). Same placeholders as `format`; default \"⛔ {server} offline\". The bot's status switches to idle while down, so the member list reflects it at a glance."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Bot presence in the Discord member list, updated on the status-embed cadence. `format` supports {online}, {max} and {server} placeholders. With `server` unset the counts aggregate across every configured instance ({server} then reads \"N servers\") — a multi-tenant process has a single presence, so aggregate/first-server is the honest default."
+    },
+    "DeathCoordsConfig": {
+      "type": "object",
+      "properties": {
+        "dmLinked": {
+          "type": "boolean",
+          "description": "DM the linked Discord account with death coordinates and a Chunkbase link whenever a linked player dies. The in-game `!deathpos` command is always available regardless of this flag."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Death-coordinate recovery options for the deaths watcher."
+    },
+    "HostAlertsConfig": {
+      "type": "object",
+      "properties": {
+        "diskWarnPercent": {
+          "type": "number",
+          "description": "Alert (once, with hysteresis) when a monitored path's disk usage reaches this percentage. Default 90; alerts go to each guild's downtimeAlerts channel. Set to 0 to disable."
+        },
+        "backupMaxAgeHours": {
+          "type": "number",
+          "description": "Alert when the NEWEST backup of a server is older than this many hours (stale backups are the failure nobody notices until it matters). Off by default; alerts go to each guild's downtimeAlerts channel and clear automatically when a fresh backup appears. Only servers whose capability probe found the suite backup layout are checked."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Host resource monitoring (disk-full early warning)."
+    },
+    "WaypointsConfig": {
+      "type": "object",
+      "properties": {
+        "maxPerServer": {
+          "type": "number",
+          "description": "Per-server cap on stored waypoints (default 100). Raise it once a server actually hits the limit; the file and the in-game list grow with it."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Community waypoint options."
+    },
+    "LimitsConfig": {
+      "type": "object",
+      "properties": {
+        "slashCapacity": {
+          "type": "number",
+          "description": "Slash commands per user per window (default 5 per 30s)."
+        },
+        "slashWindowMs": {
+          "type": "number"
+        },
+        "bridgeCapacity": {
+          "type": "number",
+          "description": "Bridge messages per user per window (default 8 per 10s)."
+        },
+        "bridgeWindowMs": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Rate-limit overrides for very active servers. Both limiters are per-user token buckets; capacity is the burst size, the window is how long a full refill takes. Defaults match the previous constants."
+    },
+    "UpdateNotifierConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Set false to skip the daily release check entirely."
+        },
+        "dmAdmins": {
+          "type": "boolean",
+          "description": "DM operator-level admins (user-ID entries in the global adminUsers list) once per newer release. Off by default — the log line alone is the default behaviour."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Daily GitHub-release check. Enabled by default; opt out here."
+    },
+    "ServerScheduleConfig": {
+      "type": "object",
+      "properties": {
+        "restart": {
+          "$ref": "#/definitions/ServerRestartSchedule"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Per-server schedule entries, keyed by server ID at the top level."
+    },
+    "ServerRestartSchedule": {
+      "type": "object",
+      "properties": {
+        "time": {
+          "type": "string",
+          "description": "Wall-clock time \"HH:MM\" in the process TZ."
+        },
+        "days": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Weekday codes (\"SU\"..\"SA\"); omitted = every day."
+        },
+        "warnMinutes": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "Countdown warnings in minutes before the restart (default 15,5,1)."
+        }
+      },
+      "required": [
+        "time"
+      ],
+      "additionalProperties": false,
+      "description": "One server's scheduled restart."
+    },
+    "WebUiConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "port": {
+          "type": "number",
+          "description": "HTTP port (default 8130)."
+        },
+        "host": {
+          "type": "string",
+          "description": "Bind address (default 127.0.0.1 — put a reverse proxy in front)."
+        },
+        "clientId": {
+          "type": "string",
+          "description": "Discord application client ID for the OAuth2 login. Falls back to the bot's clientId when omitted (same application)."
+        },
+        "publicUrl": {
+          "type": "string",
+          "description": "Public base URL of the dashboard (e.g. \"https://panel.example.com\") used to build the OAuth2 redirect URI. Default: http://localhost:<port>."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Web dashboard (separate process, `npm run start:web`). Off by default. Secrets come from the environment, never from this file: WEBUI_CLIENT_SECRET (Discord OAuth2) and WEBUI_SESSION_SECRET (cookie signing)."
+    }
+  }
+}

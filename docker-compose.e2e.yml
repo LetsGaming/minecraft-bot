@@ -1,0 +1,29 @@
+# E2E smoke stack: one throwaway Paper server with RCON enabled.
+# scripts/e2e-smoke.mjs talks to it through the bot's own RCON layer —
+# no Discord token needed, the smoke test exercises the server-facing
+# half of the stack (the Discord half is covered by unit tests).
+#
+# Local usage:
+#   docker compose -f docker-compose.e2e.yml up -d --wait
+#   node scripts/e2e-smoke.mjs
+#   docker compose -f docker-compose.e2e.yml down -v
+services:
+  paper:
+    image: itzg/minecraft-server:java21
+    environment:
+      EULA: "TRUE"
+      TYPE: PAPER
+      VERSION: LATEST
+      MEMORY: 1G
+      ONLINE_MODE: "FALSE"
+      ENABLE_RCON: "TRUE"
+      RCON_PASSWORD: e2e-smoke-password
+      RCON_PORT: "25575"
+    ports:
+      - "25575:25575"
+    healthcheck:
+      test: ["CMD", "mc-health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 90s

@@ -3,15 +3,15 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-vi.mock("../src/utils/logger.js", () => ({
+vi.mock("../src/common/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock("../src/config.js", () => ({
+vi.mock("../src/common/config.js", () => ({
   loadConfig: vi
     .fn()
     .mockReturnValue({ tpsWarningThreshold: 15, tpsPollIntervalMs: 100 }),
 }));
-vi.mock("../src/utils/embedUtils.js", () => ({
+vi.mock("../src/bot/utils/embedUtils.js", () => ({
   createEmbed: vi
     .fn()
     .mockReturnValue({
@@ -21,7 +21,7 @@ vi.mock("../src/utils/embedUtils.js", () => ({
 }));
 
 const TICK = 200;
-import { startTpsMonitor } from "../src/logWatcher/watchers/tpsMonitor.js";
+import { startTpsMonitor } from "../src/bot/logWatcher/watchers/tpsMonitor.js";
 
 function srv(id: string, tps: unknown) {
   return {
@@ -63,7 +63,7 @@ it("sends a warning embed when TPS drops below threshold (Paper 3-value)", async
 });
 
 it("includes 1m/5m/15m addFields for Paper TPS (has tps5m)", async () => {
-  const { createEmbed } = await import("../src/utils/embedUtils.js");
+  const { createEmbed } = await import("../src/bot/utils/embedUtils.js");
   const addFields = vi.fn().mockReturnThis();
   vi.mocked(createEmbed).mockReturnValue({
     addFields,
@@ -84,7 +84,7 @@ it("includes 1m/5m/15m addFields for Paper TPS (has tps5m)", async () => {
 });
 
 it("includes TPS + MSPT addFields for vanilla format (no tps5m)", async () => {
-  const { createEmbed } = await import("../src/utils/embedUtils.js");
+  const { createEmbed } = await import("../src/bot/utils/embedUtils.js");
   const addFields = vi.fn().mockReturnThis();
   vi.mocked(createEmbed).mockReturnValue({
     addFields,
@@ -147,7 +147,7 @@ it("does not crash when getTps() throws", async () => {
 });
 
 it("uses red color (0xff0000) for critically low TPS (< 10)", async () => {
-  const { createEmbed } = await import("../src/utils/embedUtils.js");
+  const { createEmbed } = await import("../src/bot/utils/embedUtils.js");
   vi.mocked(createEmbed).mockClear();
   const t = startTpsMonitor(
     srv("red", { tps1m: 5, tps5m: 6, tps15m: 7 }),
@@ -162,7 +162,7 @@ it("uses red color (0xff0000) for critically low TPS (< 10)", async () => {
 });
 
 it("uses amber color (0xffaa00) for TPS between 10 and threshold", async () => {
-  const { createEmbed } = await import("../src/utils/embedUtils.js");
+  const { createEmbed } = await import("../src/bot/utils/embedUtils.js");
   vi.mocked(createEmbed).mockClear();
   const t = startTpsMonitor(
     srv("amber", { tps1m: 12, tps5m: 13, tps15m: 14 }),

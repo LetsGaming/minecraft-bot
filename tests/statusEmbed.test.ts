@@ -3,22 +3,22 @@
  */
 import { describe, it, expect, vi } from "vitest";
 
-vi.mock("../src/utils/utils.js", () => ({
+vi.mock("../src/common/utils/utils.js", () => ({
   getRootDir: vi.fn().mockReturnValue("/tmp"),
   loadJson: vi.fn().mockResolvedValue({}),
   saveJson: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../src/utils/server.js", () => ({
+vi.mock("../src/common/utils/server.js", () => ({
   getAllInstances: vi.fn().mockReturnValue([]),
   getServerInstance: vi.fn(),
 }));
 
-vi.mock("../src/utils/logger.js", () => ({
+vi.mock("../src/common/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../src/utils/embedUtils.js", () => ({
+vi.mock("../src/bot/utils/embedUtils.js", () => ({
   createEmbed: vi
     .fn()
     .mockReturnValue({
@@ -28,14 +28,14 @@ vi.mock("../src/utils/embedUtils.js", () => ({
     }),
 }));
 
-vi.mock("../src/utils/discordChannel.js", () => ({
+vi.mock("../src/bot/utils/discordChannel.js", () => ({
   ensureManagedCategory: vi.fn(),
   ensureTextChannel: vi.fn(),
   ensureVoiceChannel: vi.fn(),
   renameVoiceChannelIfChanged: vi.fn(),
 }));
 
-import { invalidateStatusChannelCache } from "../src/logWatcher/watchers/statusEmbed.js";
+import { invalidateStatusChannelCache } from "../src/bot/logWatcher/watchers/statusEmbed.js";
 
 describe("invalidateStatusChannelCache", () => {
   it("runs without throwing", () => {

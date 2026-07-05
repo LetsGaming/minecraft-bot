@@ -16,7 +16,25 @@ A Discord bot for managing one or more Minecraft servers. Bridges chat between D
 - **Daily rewards** — Linked players can claim daily in-game item rewards with streak bonuses.
 - **In-game commands** — Players can use `!commands` in Minecraft chat for Chunkbase links, nether portal math, and more.
 - **Event notifications** — Join/leave, deaths, advancements, and server start/stop events posted to Discord.
-- **Multi-server** — All features work across multiple server instances from a single bot.
+- **Community waypoints** — Players save and share named coordinates in-game (`!waypoint`), browsable from Discord (`/waypoints`).
+- **Cross-platform polls** — One poll, votable via Discord buttons and in-game `!vote`, with linked accounts counted once.
+- **Advancement challenges** — "First player to earn X wins" events with automatic winner detection and optional item bonuses.
+- **Offline daily claims** — `/daily` while offline queues the reward for the next join instead of breaking the streak.
+- **Sessions & last-seen** — Per-player session history (`/sessions`), surfaced in `/whois` too.
+- **Admin notes & reports** — `/note` keeps moderation memory per player; in-game `!report` reaches the admin channel.
+- **Auto-role on link** — Members get a configurable role when they link their Minecraft account.
+- **Host monitoring** — Process RAM/CPU and disk usage in `/status`, plus disk-full early-warning alerts.
+- **Web dashboard** — Optional browser panel (separate process): Discord-OAuth2 admin login, live status, schema-driven config editing, server operations, log tail, and a Prometheus `/metrics` endpoint.
+- **Scheduled restarts** — Wall-clock restarts per server with in-game countdown warnings and Discord notifications.
+- **Whitelist applications** — Players apply via a button + modal; admins approve or deny from a queue channel.
+- **Console access** — `/console tail` and an opt-in, flood-protected live log relay into an admin channel.
+- **Moderation shortcuts** — `/kick`, `/ban`, `/pardon` with reasons, all audit-logged.
+- **Activity insights** — `/activity` shows when a server is busy (24h sparkline + busiest hours); `/profile` is the one-stop player card.
+- **Watch notifications** — One-shot DMs when a server recovers or a friend joins (`/watch`).
+- **Milestones** — Automatic "X just passed 1,000 hours" shout-outs, in-game and on Discord.
+- **Webhook chat bridge** — MC chat can appear as the player (name + head) instead of a bot embed.
+- **Per-guild language** — English and German, switchable per Discord server.
+- **Multi-server** — All features work across multiple server instances from a single bot, including span polls across servers.
 
 ---
 

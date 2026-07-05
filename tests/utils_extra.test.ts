@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { stripLogPrefix } from "../src/utils/utils.js";
+import { stripLogPrefix } from "../src/common/utils/utils.js";
 
 describe("stripLogPrefix", () => {
   it("returns empty string for empty input", () => {

@@ -39,6 +39,22 @@ A non-admin running any of these gets a clean "You do not have permission to use
 
 In addition, every user is rate-limited to 5 slash commands per 30 seconds to protect the RCON connection from spam, and the Discord→Minecraft chat bridge has its own per-user limit (bursts of up to 8 messages per 10 seconds; messages beyond that get a ⏳ reaction instead of reaching the game).
 
+## The new admin commands (3.6.0)
+
+| Command | What it does |
+|---|---|
+| `/kick`, `/ban`, `/pardon` | Thin moderation shortcuts over the console commands; the reason (if any) reaches the player/ban list and the audit log. |
+| `/console tail` | The last N log lines, ephemeral. |
+| `/console live enable\|disable` | Toggle the batched live log relay into the guild's `console.channelId` — an exposure decision, so it is audited. |
+| `/daily-admin move\|reset\|show` | Repair tooling for per-server daily-claim records (e.g. streaks stranded on the wrong server by the v2 migration). Mutations are audited. |
+| `/poll create servers:` | Span polls across several instances — every listed ID passes the same tenant-isolation check as the `server:` option. |
+
+Whitelist-application decisions (the Approve/Deny buttons) enforce exactly the same admin check as slash commands, regardless of who can see the queue channel.
+
+### Dashboard access
+
+The web dashboard logs in via Discord OAuth2 and admits only **user-ID entries** of the global `adminUsers` and each guild's `adminUsers`. Role entries cannot be resolved there (that would require guild member lookups) — roles remain a Discord-side permission. Removing a user ID from the lists locks them out of the dashboard immediately (sessions are re-checked per request).
+
 ## Whitelist management
 
 Add a player:

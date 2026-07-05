@@ -38,6 +38,46 @@ export default [
     },
   },
   {
-    ignores: ["dist/", "node_modules/", "vitest.config.ts"],
+    // Layer boundary: src/common imports nothing from src/bot or src/web.
+    // Bot and web both import common; nothing else crosses (see
+    // docs/dev/dashboard-and-features-plan.md — structure that cannot
+    // drift silently, same idea as the single config write path).
+    files: ["src/common/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/bot/**", "**/web/**"],
+              message:
+                "src/common must not import from src/bot or src/web — move the Discord/HTTP half out or split the module (see dashboard-and-features-plan.md).",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // The web backend talks to the bot only through files and stores —
+    // never by importing bot modules (independent lifecycles).
+    files: ["src/web/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/bot/**"],
+              message:
+                "src/web must not import from src/bot — the processes have independent lifecycles; share code via src/common.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    ignores: ["dist/", "node_modules/", "vitest.config.ts", "src/web/frontend/"],
   },
 ];

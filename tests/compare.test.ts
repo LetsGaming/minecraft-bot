@@ -4,8 +4,8 @@
  */
 import { describe, it, expect } from "vitest";
 import { EmbedBuilder } from "discord.js";
-import { buildComparisonEmbeds } from "../src/commands/stats/compare.js";
-import type { FlattenedStat } from "../src/types/index.js";
+import { buildComparisonEmbeds } from "../src/bot/commands/stats/compare.js";
+import type { FlattenedStat } from "../src/common/types/index.js";
 
 const player1Stats: FlattenedStat[] = [
   {

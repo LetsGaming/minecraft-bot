@@ -10,6 +10,10 @@ COPY tsconfig.json ./
 COPY src/ ./src/
 RUN npx tsc
 
+# Dashboard frontend (isolated Vite subproject → dist/web/frontend).
+# Its node_modules never reach the runtime image.
+RUN cd src/web/frontend && npm ci && npm run build
+
 # ── Runtime stage ─────────────────────────────────────────────────────────────
 FROM node:20.19-alpine AS runtime
 
@@ -50,4 +54,6 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
   CMD grep -q node /proc/1/cmdline || exit 1
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
-CMD ["node", "--enable-source-maps", "dist/index.js"]
+# Default: the bot. For the dashboard, run the same image with
+#   command: ["node", "--enable-source-maps", "dist/web/index.js"]
+CMD ["node", "--enable-source-maps", "dist/bot/index.js"]

@@ -1,24 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── Top-level mocks ────────────────────────────────────────────────────────
-vi.mock("../src/config.js", () => ({
+vi.mock("../src/common/config.js", () => ({
   loadConfig: vi.fn(),
 }));
 
-vi.mock("../src/utils/embedUtils.js", () => ({
+vi.mock("../src/bot/utils/embedUtils.js", () => ({
   createErrorEmbed: vi.fn().mockReturnValue({ type: "error-embed" }),
 }));
 
-vi.mock("../src/utils/logger.js", () => ({
+vi.mock("../src/common/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-import { loadConfig } from "../src/config.js";
+import { loadConfig } from "../src/common/config.js";
 import {
   isServerAdmin,
   requireServerAdmin,
   withErrorHandling,
-} from "../src/commands/middleware.js";
+} from "../src/bot/commands/middleware.js";
 import type { ChatInputCommandInteraction } from "discord.js";
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -81,7 +81,7 @@ describe("isServerAdmin", () => {
     vi.mocked(loadConfig).mockReturnValue({
       adminUsers: ["admin1", "role-mod-123"],
     } as never);
-    const { isServerAdmin } = await import("../src/commands/middleware.js");
+    const { isServerAdmin } = await import("../src/bot/commands/middleware.js");
     expect(isServerAdmin("someuser", ["role-other", "role-mod-123"])).toBe(
       true,
     );
@@ -123,7 +123,7 @@ describe("isServerAdmin", () => {
   });
 
   it("getMemberRoleIds handles cached and raw member shapes", async () => {
-    const { getMemberRoleIds } = await import("../src/commands/middleware.js");
+    const { getMemberRoleIds } = await import("../src/bot/commands/middleware.js");
     // Raw API shape: roles is a string array
     expect(
       getMemberRoleIds({ member: { roles: ["r1", "r2"] } } as never),

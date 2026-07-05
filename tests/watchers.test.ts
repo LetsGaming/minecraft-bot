@@ -7,13 +7,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── Logger mock ────────────────────────────────────────────────────────────
-vi.mock("../src/utils/logger.js", () => ({
+vi.mock("../src/common/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
 // Scope helper: replicate the pure semantics (string eq, list
 // membership, unset = unrestricted) without pulling in the config chain.
-vi.mock("../src/utils/guildRouter.js", () => ({
+vi.mock("../src/bot/utils/guildRouter.js", () => ({
   serverInScope: vi.fn(
     (scope: string | string[] | undefined, serverId: string) =>
       typeof scope === "string"
@@ -26,17 +26,17 @@ vi.mock("../src/utils/guildRouter.js", () => ({
 }));
 
 // ── embedUtils mock ────────────────────────────────────────────────────────
-vi.mock("../src/utils/embedUtils.js", () => ({
+vi.mock("../src/bot/utils/embedUtils.js", () => ({
   createPlayerEmbed: vi.fn().mockReturnValue({ type: "player-embed" }),
   createEmbed: vi.fn().mockReturnValue({ type: "base-embed" }),
 }));
 
-import { registerJoinLeaveWatcher } from "../src/logWatcher/watchers/joinLeave.js";
-import { registerChatBridge } from "../src/logWatcher/watchers/chatBridge.js";
-import { registerDeathWatcher } from "../src/logWatcher/watchers/deaths.js";
-import { registerServerEventWatcher } from "../src/logWatcher/watchers/serverEvents.js";
-import { registerAdvancementWatcher } from "../src/logWatcher/watchers/advancements.js";
-import type { ILogWatcher } from "../src/logWatcher/logWatcher.js";
+import { registerJoinLeaveWatcher } from "../src/bot/logWatcher/watchers/joinLeave.js";
+import { registerChatBridge } from "../src/bot/logWatcher/watchers/chatBridge.js";
+import { registerDeathWatcher } from "../src/bot/logWatcher/watchers/deaths.js";
+import { registerServerEventWatcher } from "../src/bot/logWatcher/watchers/serverEvents.js";
+import { registerAdvancementWatcher } from "../src/bot/logWatcher/watchers/advancements.js";
+import type { ILogWatcher } from "../src/bot/logWatcher/logWatcher.js";
 import type { Client } from "discord.js";
 
 // ── Mock ILogWatcher factory ───────────────────────────────────────────────

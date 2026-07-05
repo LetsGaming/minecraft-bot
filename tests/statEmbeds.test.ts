@@ -3,9 +3,9 @@ import { EmbedBuilder } from "discord.js";
 import {
   buildLeaderboardEmbed,
   buildStatsEmbeds,
-} from "../src/utils/statEmbeds.js";
-import type { LeaderboardData } from "../src/utils/statUtils.js";
-import type { FlattenedStat } from "../src/types/index.js";
+} from "../src/bot/utils/statEmbeds.js";
+import type { LeaderboardData } from "../src/common/utils/statUtils.js";
+import type { FlattenedStat } from "../src/common/types/index.js";
 
 // ── buildLeaderboardEmbed ────────────────────────────────────────────────────
 

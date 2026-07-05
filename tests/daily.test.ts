@@ -10,24 +10,24 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ── Top-level mocks — must be at file scope for Vitest hoisting ───────────
 
-vi.mock("../src/utils/linkUtils.js", () => ({
+vi.mock("../src/common/utils/linkUtils.js", () => ({
   isLinked: vi.fn(),
   getLinkedAccount: vi.fn(),
 }));
 
-vi.mock("../src/utils/playerUtils.js", () => ({
+vi.mock("../src/common/utils/playerUtils.js", () => ({
   getOnlinePlayers: vi.fn(),
 }));
 
-vi.mock("../src/utils/guildRouter.js", () => ({
+vi.mock("../src/bot/utils/guildRouter.js", () => ({
   resolveServer: vi.fn(),
 }));
 
-vi.mock("../src/utils/embedUtils.js", () => ({
+vi.mock("../src/bot/utils/embedUtils.js", () => ({
   createErrorEmbed: vi.fn().mockReturnValue({}),
 }));
 
-vi.mock("../src/utils/utils.js", () => ({
+vi.mock("../src/common/utils/utils.js", () => ({
   getRootDir: vi.fn().mockReturnValue("/tmp"),
   loadJson: vi.fn(),
   saveJson: vi.fn(),
@@ -40,7 +40,7 @@ const DAILY_COOLDOWN = 24 * 60 * 60 * 1000;
 const TWO_DAYS = 2 * DAILY_COOLDOWN + 1;
 
 const { calcStreak, pick, deriveMaxStreak } =
-  await import("../src/commands/connection/daily/daily.js");
+  await import("../src/bot/commands/connection/daily/daily.js");
 
 describe("calcStreak", () => {
   it("increments streak on consecutive claim", () => {
@@ -193,10 +193,10 @@ describe("claimLock — concurrent claim prevention", () => {
   }
 
   it("blocks a second concurrent execution for the same user", async () => {
-    const utils = await import("../src/utils/utils.js");
-    const linkUtils = await import("../src/utils/linkUtils.js");
-    const playerUtils = await import("../src/utils/playerUtils.js");
-    const guildRouter = await import("../src/utils/guildRouter.js");
+    const utils = await import("../src/common/utils/utils.js");
+    const linkUtils = await import("../src/common/utils/linkUtils.js");
+    const playerUtils = await import("../src/common/utils/playerUtils.js");
+    const guildRouter = await import("../src/bot/utils/guildRouter.js");
 
     vi.mocked(linkUtils.isLinked).mockResolvedValue(true);
     vi.mocked(linkUtils.getLinkedAccount).mockResolvedValue("Steve");
@@ -223,7 +223,7 @@ describe("claimLock — concurrent claim prevention", () => {
     vi.mocked(utils.saveJson).mockReturnValue(savePending as never);
 
     const { execute } =
-      await import("../src/commands/connection/daily/daily.js");
+      await import("../src/bot/commands/connection/daily/daily.js");
 
     const i1 = makeInteraction();
     const i2 = makeInteraction();
@@ -247,13 +247,13 @@ describe("claimLock — concurrent claim prevention", () => {
   });
 
   it("allows a second execution for a different user", async () => {
-    const linkUtils = await import("../src/utils/linkUtils.js");
+    const linkUtils = await import("../src/common/utils/linkUtils.js");
 
     // Fail fast after the lock check — we only care that neither user gets blocked.
     vi.mocked(linkUtils.isLinked).mockResolvedValue(false);
 
     const { execute } =
-      await import("../src/commands/connection/daily/daily.js");
+      await import("../src/bot/commands/connection/daily/daily.js");
 
     const iA = makeInteraction("user-A");
     const iB = makeInteraction("user-B");
@@ -281,10 +281,10 @@ describe("claim persistence", () => {
   });
 
   async function runClaim(existingUserData: Record<string, unknown>) {
-    const utils = await import("../src/utils/utils.js");
-    const linkUtils = await import("../src/utils/linkUtils.js");
-    const playerUtils = await import("../src/utils/playerUtils.js");
-    const guildRouter = await import("../src/utils/guildRouter.js");
+    const utils = await import("../src/common/utils/utils.js");
+    const linkUtils = await import("../src/common/utils/linkUtils.js");
+    const playerUtils = await import("../src/common/utils/playerUtils.js");
+    const guildRouter = await import("../src/bot/utils/guildRouter.js");
 
     // Mocked modules are singletons across vi.resetModules() — the call
     // history of earlier describes (claimLock) leaks into this one. Clear
@@ -311,7 +311,7 @@ describe("claim persistence", () => {
     );
 
     const { execute } = await import(
-      "../src/commands/connection/daily/daily.js"
+      "../src/bot/commands/connection/daily/daily.js"
     );
     const interaction = {
       user: { id: "user-1" },
@@ -384,10 +384,10 @@ describe("per-server claim independence", () => {
   });
 
   it("a cooldown on one server does not block claiming on another", async () => {
-    const utils = await import("../src/utils/utils.js");
-    const linkUtils = await import("../src/utils/linkUtils.js");
-    const playerUtils = await import("../src/utils/playerUtils.js");
-    const guildRouter = await import("../src/utils/guildRouter.js");
+    const utils = await import("../src/common/utils/utils.js");
+    const linkUtils = await import("../src/common/utils/linkUtils.js");
+    const playerUtils = await import("../src/common/utils/playerUtils.js");
+    const guildRouter = await import("../src/bot/utils/guildRouter.js");
 
     vi.mocked(utils.saveJson).mockClear();
     vi.mocked(utils.loadJson).mockClear();
@@ -423,7 +423,7 @@ describe("per-server claim independence", () => {
     );
 
     const { execute } = await import(
-      "../src/commands/connection/daily/daily.js"
+      "../src/bot/commands/connection/daily/daily.js"
     );
     const interaction = {
       user: { id: "user-1" },

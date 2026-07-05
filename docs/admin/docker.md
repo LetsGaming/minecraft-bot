@@ -4,6 +4,16 @@ Docker is the recommended way to run the bot. It is self-contained, restart-safe
 
 One thing to understand up front: the container cannot reach `screen` sessions or the Minecraft server's filesystem, even on the same machine. Server access from Docker always goes through the [API wrapper](remote-setup.md), which runs directly on the Minecraft host.
 
+## Prebuilt images (GHCR)
+
+Every release publishes an image to GitHub Container Registry:
+
+```bash
+docker pull ghcr.io/letsgaming/minecraft-bot:latest   # or a version tag like v3.6.0
+```
+
+Building locally (below) remains fully supported and is what the compose files default to.
+
 ## Prerequisites
 
 - Docker Engine 24+ and Docker Compose v2.24+

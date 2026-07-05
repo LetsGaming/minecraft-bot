@@ -9,11 +9,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── Shared mocks ──────────────────────────────────────────────────────────
 
-vi.mock("../src/utils/logger.js", () => ({
+vi.mock("../src/common/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../src/utils/embedUtils.js", () => ({
+vi.mock("../src/bot/utils/embedUtils.js", () => ({
   createEmbed: vi
     .fn()
     .mockReturnValue({
@@ -23,7 +23,7 @@ vi.mock("../src/utils/embedUtils.js", () => ({
   createErrorEmbed: vi.fn().mockReturnValue({ type: "error-embed" }),
 }));
 
-vi.mock("../src/utils/utils.js", () => ({
+vi.mock("../src/common/utils/utils.js", () => ({
   getRootDir: vi.fn().mockReturnValue("/tmp"),
   loadJson: vi.fn().mockResolvedValue({}),
   saveJson: vi.fn().mockResolvedValue(undefined),
@@ -39,11 +39,11 @@ vi.mock("../src/utils/utils.js", () => ({
   stripLogPrefix: vi.fn((l) => l),
 }));
 
-vi.mock("../src/utils/uptimeTracker.js", () => ({
+vi.mock("../src/common/utils/uptimeTracker.js", () => ({
   recordCheck: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../src/config.js", () => ({
+vi.mock("../src/common/config.js", () => ({
   loadConfig: vi.fn().mockReturnValue({
     tpsWarningThreshold: 15,
     tpsPollIntervalMs: 5_000,
@@ -63,7 +63,7 @@ describe("setupDiscordToMc", () => {
 
   beforeEach(async () => {
     ({ setupDiscordToMc } =
-      await import("../src/logWatcher/watchers/chatBridge.js"));
+      await import("../src/bot/logWatcher/watchers/chatBridge.js"));
   });
 
   function makeClient() {
@@ -186,7 +186,7 @@ describe("playerUtils", () => {
   ) => Promise<Array<{ name: string; value: string }>>;
 
   beforeEach(async () => {
-    const mod = await import("../src/utils/playerUtils.js");
+    const mod = await import("../src/common/utils/playerUtils.js");
     findPlayer = mod.findPlayer;
     getPlayerNames = mod.getPlayerNames;
     getPlayerCount = mod.getPlayerCount;
@@ -274,7 +274,7 @@ describe("downtimeMonitor — state machine", () => {
 
   beforeEach(async () => {
     ({ startDowntimeMonitor, suppressAlerts } =
-      await import("../src/logWatcher/watchers/downtimeMonitor.js"));
+      await import("../src/bot/logWatcher/watchers/downtimeMonitor.js"));
     vi.clearAllMocks();
   });
 

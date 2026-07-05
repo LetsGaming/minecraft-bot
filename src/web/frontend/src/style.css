@@ -1,0 +1,90 @@
+:root {
+  --bg: #14161a;
+  --panel: #1d2026;
+  --border: #2c3038;
+  --text: #e4e6ea;
+  --muted: #8a8f98;
+  --accent: #4aa3ff;
+  --good: #4ade80;
+  --mid: #fbbf24;
+  --bad: #f87171;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 system-ui, sans-serif;
+}
+.shell { max-width: 1080px; margin: 0 auto; padding: 0 16px 48px; }
+header {
+  display: flex; align-items: center; gap: 24px;
+  padding: 14px 0; border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+header h1 { font-size: 18px; margin: 0; }
+nav { display: flex; gap: 4px; }
+nav button {
+  background: none; border: none; color: var(--muted);
+  padding: 8px 12px; cursor: pointer; font-size: 15px; border-radius: 6px;
+}
+nav button.active, nav button:hover { color: var(--text); background: var(--panel); }
+.session { margin-left: auto; display: flex; gap: 10px; align-items: center; color: var(--muted); }
+.banner {
+  background: #7c2d12; color: #fed7aa; padding: 10px 14px;
+  border-radius: 8px; margin: 14px 0;
+}
+main { padding-top: 20px; }
+.center { text-align: center; padding: 48px 0; }
+.login .button {
+  display: inline-block; background: #5865f2; color: white;
+  padding: 10px 20px; border-radius: 8px; text-decoration: none; margin-top: 12px;
+}
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+.card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+.card-head { display: flex; justify-content: space-between; align-items: baseline; }
+.card h3 { margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.dot.up { background: var(--good); }
+.dot.down { background: var(--bad); }
+.tps.good { color: var(--good); }
+.tps.mid { color: var(--mid); }
+.tps.bad { color: var(--bad); }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.ops { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+button {
+  background: var(--panel); border: 1px solid var(--border); color: var(--text);
+  padding: 6px 12px; border-radius: 6px; cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: 0.5; cursor: default; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #0b1220; font-weight: 600; }
+button.ghost { border: none; background: none; color: var(--muted); }
+.log {
+  background: #0b0d10; border-radius: 8px; padding: 10px; margin-top: 10px;
+  font: 12px/1.5 ui-monospace, monospace; max-height: 320px; overflow: auto;
+  white-space: pre-wrap; word-break: break-all;
+}
+.message { color: var(--accent); margin-top: 14px; }
+.audit { width: 100%; border-collapse: collapse; }
+.audit th, .audit td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); font-size: 14px; }
+.config .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.raw { width: 100%; min-height: 480px; background: #0b0d10; color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px; padding: 12px;
+  font: 13px/1.5 ui-monospace, monospace; }
+.field { display: block; margin: 10px 0; }
+.field > span { display: block; font-weight: 600; margin-bottom: 4px; }
+.field.row { display: flex; align-items: center; gap: 8px; }
+.field.row > span { margin: 0; }
+.field input[type="text"], .field input[type="number"], .field select, .field textarea {
+  width: 100%; max-width: 480px; background: #0b0d10; color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; font-size: 14px;
+}
+.field textarea { min-height: 120px; font-family: ui-monospace, monospace; max-width: 640px; }
+.hint { display: block; color: var(--muted); font-size: 12.5px; font-weight: normal; margin-top: 3px; }
+.error { color: var(--bad); font-size: 13px; }
+fieldset.group { border: 1px solid var(--border); border-radius: 8px; margin: 14px 0; padding: 4px 14px 12px; }
+fieldset.group legend { font-weight: 700; padding: 0 6px; }
+.errors { background: #450a0a; color: #fecaca; border-radius: 8px; padding: 10px 14px; margin: 10px 0; }
+.warnings { background: #422006; color: #fde68a; border-radius: 8px; padding: 6px 14px; margin: 10px 0; }

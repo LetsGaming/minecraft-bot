@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── Top-level mocks ────────────────────────────────────────────────────────
-vi.mock("../src/utils/utils.js", () => ({
+vi.mock("../src/common/utils/utils.js", () => ({
   getRootDir: vi.fn().mockReturnValue("/tmp"),
   loadJson: vi.fn().mockResolvedValue({}),
   saveJson: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../src/utils/time.js", () => ({
+vi.mock("../src/common/utils/time.js", () => ({
   formatDatetime: vi.fn().mockReturnValue("2025-01-01 12:00:00"),
   TZ: "UTC",
   formatDate: vi.fn(),
@@ -16,13 +16,13 @@ vi.mock("../src/utils/time.js", () => ({
   msUntilMidnight: vi.fn(),
 }));
 
-import { loadJson, saveJson } from "../src/utils/utils.js";
+import { loadJson, saveJson } from "../src/common/utils/utils.js";
 import {
   loadAudit,
   recordAdd,
   recordRemove,
   getAuditEntry,
-} from "../src/utils/whitelistAudit.js";
+} from "../src/common/utils/whitelistAudit.js";
 
 beforeEach(() => {
   vi.clearAllMocks();

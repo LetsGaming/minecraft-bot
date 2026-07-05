@@ -44,7 +44,8 @@
       "chatBridge": [
         {
           "channelId": "CHANNEL_ID",
-          "server": "survival"
+          "server": "survival",
+          "useWebhook": false
         },
         {
           "channelId": "OTHER_CHANNEL_ID",
@@ -53,7 +54,10 @@
       ],
       "notifications": {
         "channelId": "CHANNEL_ID",
-        "server": ["survival", "creative"],
+        "server": [
+          "survival",
+          "creative"
+        ],
         "events": [
           "join",
           "leave",
@@ -66,21 +70,36 @@
       "leaderboard": {
         "channelId": "CHANNEL_ID",
         "interval": "weekly",
-        "server": "survival"
+        "server": "survival",
+        "categories": [
+          "playtime",
+          "mined"
+        ]
       },
       "tpsAlerts": {
         "channelId": "CHANNEL_ID",
-        "server": "survival"
+        "server": "survival",
+        "mentionRole": ""
       },
       "statusEmbed": {
         "enabled": true
       },
       "downtimeAlerts": {
         "channelId": "CHANNEL_ID",
-        "server": "survival"
+        "server": "survival",
+        "mentionRole": ""
       },
       "channelPurge": {
         "channelId": "CHANNEL_ID"
+      },
+      "language": "en",
+      "console": {
+        "channelId": ""
+      },
+      "whitelistApplications": {
+        "channelId": "",
+        "adminChannelId": "",
+        "mentionRole": ""
       }
     }
   },
@@ -97,5 +116,58 @@
     "say": {
       "adminOnly": false
     }
+  },
+  "presence": {
+    "enabled": false,
+    "server": "",
+    "format": "{online} online @ {server}",
+    "downFormat": "⛔ {server} offline"
+  },
+  "hostAlerts": {
+    "diskWarnPercent": 90,
+    "backupMaxAgeHours": 0
+  },
+  "waypoints": {
+    "maxPerServer": 100
+  },
+  "limits": {
+    "slashCapacity": 5,
+    "slashWindowMs": 30000,
+    "bridgeCapacity": 8,
+    "bridgeWindowMs": 10000
+  },
+  "updateNotifier": {
+    "enabled": true,
+    "dmAdmins": false
+  },
+  "schedules": {
+    "your-server-id": {
+      "restart": {
+        "time": "04:00",
+        "days": [
+          "MO",
+          "TH"
+        ],
+        "warnMinutes": [
+          15,
+          5,
+          1
+        ]
+      }
+    }
+  },
+  "milestones": {
+    "playtime": [
+      7200000
+    ],
+    "diamonds": [
+      1000
+    ]
+  },
+  "webui": {
+    "enabled": false,
+    "port": 8130,
+    "host": "127.0.0.1",
+    "publicUrl": ""
   }
 }

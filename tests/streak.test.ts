@@ -4,22 +4,22 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/utils/utils.js", () => ({
+vi.mock("../src/common/utils/utils.js", () => ({
   getRootDir: vi.fn().mockReturnValue("/tmp"),
   loadJson: vi.fn().mockResolvedValue({}),
   saveJson: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../src/utils/embedUtils.js", () => ({
+vi.mock("../src/bot/utils/embedUtils.js", () => ({
   createErrorEmbed: vi.fn().mockReturnValue({ type: "error-embed" }),
 }));
 
-vi.mock("../src/utils/guildRouter.js", () => ({
+vi.mock("../src/bot/utils/guildRouter.js", () => ({
   resolveServer: vi.fn().mockReturnValue({ id: "main" }),
 }));
 
-import { loadJson } from "../src/utils/utils.js";
-import { execute } from "../src/commands/connection/daily/streak.js";
+import { loadJson } from "../src/common/utils/utils.js";
+import { execute } from "../src/bot/commands/connection/daily/streak.js";
 import type { ChatInputCommandInteraction } from "discord.js";
 
 function makeInteraction(userId = "user1"): ChatInputCommandInteraction {

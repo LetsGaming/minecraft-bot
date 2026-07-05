@@ -4,17 +4,17 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/commands/middleware.js", () => ({
+vi.mock("../src/bot/commands/middleware.js", () => ({
   withErrorHandling: vi.fn((fn) => fn),
   requireServerAdmin: vi.fn((fn) => fn),
   isServerAdmin: vi.fn().mockReturnValue(true),
 }));
 
-vi.mock("../src/utils/guildRouter.js", () => ({
+vi.mock("../src/bot/utils/guildRouter.js", () => ({
   resolveServer: vi.fn(),
 }));
 
-vi.mock("../src/utils/embedUtils.js", () => ({
+vi.mock("../src/bot/utils/embedUtils.js", () => ({
   createEmbed: vi.fn().mockImplementation((opts) => ({
     _opts: opts,
     addFields: vi.fn().mockReturnThis(),
@@ -27,18 +27,18 @@ vi.mock("../src/utils/embedUtils.js", () => ({
   handlePagination: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../src/utils/logger.js", () => ({
+vi.mock("../src/common/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../src/utils/whitelistAudit.js", () => ({
+vi.mock("../src/common/utils/whitelistAudit.js", () => ({
   recordAdd: vi.fn().mockResolvedValue(undefined),
   recordRemove: vi.fn().mockResolvedValue(undefined),
   getAuditEntry: vi.fn().mockResolvedValue(null),
   loadAudit: vi.fn().mockResolvedValue({}),
 }));
 
-vi.mock("../src/utils/utils.js", () => ({
+vi.mock("../src/common/utils/utils.js", () => ({
   getRootDir: vi.fn().mockReturnValue("/tmp"),
   loadJson: vi.fn().mockResolvedValue({}),
   loadWhitelist: vi.fn().mockResolvedValue([
@@ -54,13 +54,13 @@ vi.mock("../src/utils/utils.js", () => ({
 }));
 
 // /map now reads through loadConfig() instead of loadJson(config.json)
-vi.mock("../src/config.js", () => ({
+vi.mock("../src/common/config.js", () => ({
   loadConfig: vi.fn().mockReturnValue({ commands: {} }),
 }));
 
-import { resolveServer } from "../src/utils/guildRouter.js";
-import { loadWhitelist, invalidateWhitelistCache } from "../src/utils/utils.js";
-import { loadConfig } from "../src/config.js";
+import { resolveServer } from "../src/bot/utils/guildRouter.js";
+import { loadWhitelist, invalidateWhitelistCache } from "../src/common/utils/utils.js";
+import { loadConfig } from "../src/common/config.js";
 
 function makeServer(id = "survival") {
   return {
@@ -117,7 +117,7 @@ describe("/whitelist command", () => {
         json: vi.fn().mockResolvedValue({ id: "uuid-99", name: "Steve" }),
       }),
     );
-    ({ execute } = await import("../src/commands/whitelist.js"));
+    ({ execute } = await import("../src/bot/commands/whitelist.js"));
   });
 
   it("whitelists a valid player and replies with success", async () => {
@@ -167,7 +167,7 @@ describe("/whitelist command", () => {
 describe("/unwhitelist command", () => {
   let execute: (i: never) => Promise<void>;
   beforeEach(async () => {
-    ({ execute } = await import("../src/commands/unwhitelist.js"));
+    ({ execute } = await import("../src/bot/commands/unwhitelist.js"));
   });
 
   it("removes a player and replies with success", async () => {
@@ -203,7 +203,7 @@ describe("/verify command", () => {
         json: vi.fn().mockResolvedValue({ id: "uuid-99", name: "Alex" }),
       }),
     );
-    ({ execute } = await import("../src/commands/verify.js"));
+    ({ execute } = await import("../src/bot/commands/verify.js"));
   });
 
   it("verifies a player and replies with success", async () => {
@@ -228,7 +228,7 @@ describe("/verify command", () => {
 describe("/whitelisted command", () => {
   let execute: (i: never) => Promise<void>;
   beforeEach(async () => {
-    ({ execute } = await import("../src/commands/info/whitelisted.js"));
+    ({ execute } = await import("../src/bot/commands/info/whitelisted.js"));
   });
 
   it("replies with the list of whitelisted players", async () => {
@@ -267,7 +267,7 @@ describe("/whitelisted command", () => {
 describe("/clear command", () => {
   let execute: (i: never) => Promise<void>;
   beforeEach(async () => {
-    ({ execute } = await import("../src/commands/moderation/clear.js"));
+    ({ execute } = await import("../src/bot/commands/moderation/clear.js"));
   });
 
   it("bulk-deletes messages and replies with count", async () => {
@@ -302,7 +302,7 @@ describe("/clear command", () => {
 describe("/map command", () => {
   let execute: (i: never) => Promise<void>;
   beforeEach(async () => {
-    ({ execute } = await import("../src/commands/general/map.js"));
+    ({ execute } = await import("../src/bot/commands/general/map.js"));
   });
 
   it("replies with error when map URL is not configured", async () => {

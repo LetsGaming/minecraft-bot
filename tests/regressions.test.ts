@@ -7,11 +7,11 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/utils/logger.js", () => ({
+vi.mock("../src/common/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../src/utils/serverAccess.js", () => ({
+vi.mock("../src/common/utils/serverAccess.js", () => ({
   readWhitelist: vi.fn().mockResolvedValue([{ name: "Alice", uuid: "u1" }]),
   readStats: vi.fn().mockResolvedValue({ stats: {} }),
   readUserCache: vi.fn().mockResolvedValue([]),
@@ -21,19 +21,19 @@ vi.mock("../src/utils/serverAccess.js", () => ({
   tailLog: vi.fn().mockResolvedValue(""),
 }));
 
-vi.mock("../src/config.js", () => ({
+vi.mock("../src/common/config.js", () => ({
   loadConfig: vi.fn().mockReturnValue({ servers: {}, guilds: {} }),
 }));
 
-import * as serverAccess from "../src/utils/serverAccess.js";
+import * as serverAccess from "../src/common/utils/serverAccess.js";
 import {
   loadWhitelist,
   loadKnownPlayers,
   invalidateWhitelistCache,
-} from "../src/utils/utils.js";
-import { buildLeaderboard, invalidateAllStatsCache } from "../src/utils/statUtils.js";
-import { initServers, getServerInstance, getFirstInstance } from "../src/utils/server.js";
-import type { ServerInstance } from "../src/utils/server.js";
+} from "../src/common/utils/utils.js";
+import { buildLeaderboard, invalidateAllStatsCache } from "../src/common/utils/statUtils.js";
+import { initServers, getServerInstance, getFirstInstance } from "../src/common/utils/server.js";
+import type { ServerInstance } from "../src/common/utils/server.js";
 
 function makeServer(id = "survival"): ServerInstance {
   return { id, config: { id, useRcon: false } } as unknown as ServerInstance;
@@ -123,7 +123,7 @@ describe("strict server instance lookup", () => {
 describe("daily give() item prefixing", () => {
   it("prefixes bare IDs and leaves namespaced IDs untouched", async () => {
     const { give } = await import(
-      "../src/commands/connection/daily/daily.js"
+      "../src/bot/commands/connection/daily/daily.js"
     );
     const sendCommand = vi.fn().mockResolvedValue(null);
     const srv = {
@@ -145,7 +145,7 @@ describe("daily give() item prefixing", () => {
 
   it("fails the claim when an RCON server does not confirm the give", async () => {
     const { give } = await import(
-      "../src/commands/connection/daily/daily.js"
+      "../src/bot/commands/connection/daily/daily.js"
     );
     const srv = {
       id: "s",

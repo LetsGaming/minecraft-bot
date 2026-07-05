@@ -9,7 +9,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/utils/logger.js", () => ({
+vi.mock("../src/common/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -19,17 +19,17 @@ const mockConfig = {
   servers: {},
   guilds: {},
 };
-vi.mock("../src/config.js", () => ({
+vi.mock("../src/common/config.js", () => ({
   loadConfig: vi.fn(() => mockConfig),
 }));
 
-vi.mock("../src/utils/whitelistAudit.js", () => ({
+vi.mock("../src/common/utils/whitelistAudit.js", () => ({
   getAuditEntry: vi.fn(),
 }));
-vi.mock("../src/utils/linkUtils.js", () => ({
+vi.mock("../src/common/utils/linkUtils.js", () => ({
   loadLinkedAccounts: vi.fn().mockResolvedValue({}),
 }));
-vi.mock("../src/utils/dailyStore.js", () => ({
+vi.mock("../src/common/utils/dailyStore.js", () => ({
   loadClaimedStore: vi
     .fn()
     .mockResolvedValue({ version: 2, servers: {} }),
@@ -45,22 +45,22 @@ vi.mock("../src/utils/dailyStore.js", () => ({
 
 // reminder.ts resolves the target server and checks the instance count
 // for its reply suffix.
-vi.mock("../src/utils/guildRouter.js", () => ({
+vi.mock("../src/bot/utils/guildRouter.js", () => ({
   resolveServer: vi.fn().mockReturnValue({ id: "main" }),
 }));
-vi.mock("../src/utils/server.js", () => ({
+vi.mock("../src/common/utils/server.js", () => ({
   getAllInstances: vi.fn().mockReturnValue([]),
 }));
 
-import { t } from "../src/utils/i18n.js";
-import { buildSparkline } from "../src/utils/uptimeTracker.js";
-import { processDailyReminders } from "../src/logWatcher/watchers/dailyReminderScheduler.js";
-import { getAuditEntry } from "../src/utils/whitelistAudit.js";
-import { loadLinkedAccounts } from "../src/utils/linkUtils.js";
+import { t, runWithGuildLocale } from "../src/common/utils/i18n.js";
+import { buildSparkline } from "../src/common/utils/uptimeTracker.js";
+import { processDailyReminders } from "../src/bot/logWatcher/watchers/dailyReminderScheduler.js";
+import { getAuditEntry } from "../src/common/utils/whitelistAudit.js";
+import { loadLinkedAccounts } from "../src/common/utils/linkUtils.js";
 import {
   loadClaimedStore,
   saveClaimedStore,
-} from "../src/utils/dailyStore.js";
+} from "../src/common/utils/dailyStore.js";
 import type { Client } from "discord.js";
 
 beforeEach(() => {
@@ -100,6 +100,39 @@ describe("i18n t()", () => {
       "**Bob** is not a valid Minecraft username.",
     );
     expect(t("whois.title", {})).toBe("Whois — {username}");
+  });
+
+  it("prefers guilds.<id>.language over the global language", () => {
+    mockConfig.language = "en";
+    (mockConfig.guilds as Record<string, unknown>)["g1"] = { language: "de" };
+    expect(t("common.serverNotFound", undefined, "g1")).toBe(
+      "Server nicht gefunden.",
+    );
+    // Unknown guild → global.
+    expect(t("common.serverNotFound", undefined, "g2")).toBe(
+      "Server not found.",
+    );
+    delete (mockConfig.guilds as Record<string, unknown>)["g1"];
+  });
+
+  it("consults the ambient guild context; explicit guildId wins", () => {
+    mockConfig.language = "en";
+    (mockConfig.guilds as Record<string, unknown>)["g-de"] = { language: "de" };
+
+    const ambient = runWithGuildLocale("g-de", () =>
+      t("common.serverNotFound"),
+    );
+    expect(ambient).toBe("Server nicht gefunden.");
+
+    // Explicit argument overrides the ambient context.
+    const explicit = runWithGuildLocale("g-de", () =>
+      t("common.serverNotFound", undefined, "unknown-guild"),
+    );
+    expect(explicit).toBe("Server not found.");
+
+    // Outside any context: global language.
+    expect(t("common.serverNotFound")).toBe("Server not found.");
+    delete (mockConfig.guilds as Record<string, unknown>)["g-de"];
   });
 });
 
@@ -297,7 +330,7 @@ describe("/daily-reminder command", () => {
       },
     } as never);
     const { execute } = await import(
-      "../src/commands/connection/daily/reminder.js"
+      "../src/bot/commands/connection/daily/reminder.js"
     );
 
     await execute(makeInteraction(true));
@@ -318,7 +351,7 @@ describe("/daily-reminder command", () => {
 
   it("creates a zeroed record for users who never claimed", async () => {
     const { execute } = await import(
-      "../src/commands/connection/daily/reminder.js"
+      "../src/bot/commands/connection/daily/reminder.js"
     );
     await execute(makeInteraction(true));
     const saved = vi.mocked(saveClaimedStore).mock.calls[0]![0] as {
@@ -361,7 +394,7 @@ describe("/whois command", () => {
       "discord-9": "steve",
     } as never);
 
-    const { execute } = await import("../src/commands/admin/whois.js");
+    const { execute } = await import("../src/bot/commands/admin/whois.js");
     const interaction = makeInteraction("Steve");
     await execute(interaction);
 
@@ -389,14 +422,14 @@ describe("/whois command", () => {
 
   it("replies with the no-data message when nothing is known", async () => {
     vi.mocked(getAuditEntry).mockResolvedValue(null);
-    const { execute } = await import("../src/commands/admin/whois.js");
+    const { execute } = await import("../src/bot/commands/admin/whois.js");
     const interaction = makeInteraction("Ghost");
     await execute(interaction);
     expect(errorText(interaction)).toMatch(/No whitelist or link data/);
   });
 
   it("rejects invalid usernames before any lookup", async () => {
-    const { execute } = await import("../src/commands/admin/whois.js");
+    const { execute } = await import("../src/bot/commands/admin/whois.js");
     const interaction = makeInteraction("bad name");
     await execute(interaction);
     expect(errorText(interaction)).toMatch(/not a valid/);
@@ -404,7 +437,7 @@ describe("/whois command", () => {
   });
 
   it("denies non-admins", async () => {
-    const { execute } = await import("../src/commands/admin/whois.js");
+    const { execute } = await import("../src/bot/commands/admin/whois.js");
     const interaction = makeInteraction("Steve");
     (interaction as { user: { id: string } }).user.id = "rando";
     await execute(interaction);

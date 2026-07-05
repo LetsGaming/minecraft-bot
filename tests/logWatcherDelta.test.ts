@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { LogWatcher } from "../src/logWatcher/logWatcher.js";
-import type { ServerInstance } from "../src/utils/server.js";
+import { LogWatcher } from "../src/bot/logWatcher/logWatcher.js";
+import type { ServerInstance } from "../src/common/utils/server.js";
 
 // 1 MB — must match MAX_DELTA_BYTES in logWatcher.ts
 const MAX_DELTA = 1024 * 1024;

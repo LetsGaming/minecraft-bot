@@ -3,19 +3,19 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/utils/utils.js", () => ({
+vi.mock("../src/common/utils/utils.js", () => ({
   getRootDir: vi.fn().mockReturnValue("/tmp"),
   loadJson: vi.fn().mockResolvedValue({}),
   saveJson: vi.fn().mockResolvedValue(undefined),
 }));
 
-import { loadJson } from "../src/utils/utils.js";
+import { loadJson } from "../src/common/utils/utils.js";
 import {
   isLinked,
   getLinkedAccount,
   loadLinkedAccounts,
   loadLinkCodes,
-} from "../src/utils/linkUtils.js";
+} from "../src/common/utils/linkUtils.js";
 
 beforeEach(() => {
   vi.clearAllMocks();

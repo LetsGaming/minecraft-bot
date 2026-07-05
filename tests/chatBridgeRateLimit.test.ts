@@ -6,11 +6,11 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/utils/logger.js", () => ({
+vi.mock("../src/common/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../src/utils/embedUtils.js", () => ({
+vi.mock("../src/bot/utils/embedUtils.js", () => ({
   createPlayerEmbed: vi.fn().mockReturnValue({ type: "player-embed" }),
 }));
 
@@ -52,7 +52,7 @@ describe("Discord→MC bridge rate limiting", () => {
     // Fresh module per test → fresh token buckets.
     vi.resetModules();
     ({ setupDiscordToMc } = await import(
-      "../src/logWatcher/watchers/chatBridge.js"
+      "../src/bot/logWatcher/watchers/chatBridge.js"
     ));
   });
 
