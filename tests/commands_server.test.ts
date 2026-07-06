@@ -33,16 +33,16 @@ vi.mock("../src/bot/utils/embedUtils.js", () => ({
     }),
 }));
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../src/common/utils/adminAudit.js", () => ({
+vi.mock("../src/core/utils/adminAudit.js", () => ({
   recordAdminAction: vi.fn().mockResolvedValue(undefined),
   loadAdminAudit: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock("../src/common/utils/serverAccess.js", () => ({
+vi.mock("../src/core/utils/serverAccess.js", () => ({
   readUserCache: vi.fn().mockResolvedValue([]),
   readBackups: vi.fn(),
   runScript: vi.fn(),
@@ -53,7 +53,7 @@ vi.mock("../src/bot/logWatcher/watchers/downtimeMonitor.js", () => ({
 }));
 
 import { resolveServer } from "../src/bot/utils/guildRouter.js";
-import * as serverAccess from "../src/common/utils/serverAccess.js";
+import * as serverAccess from "../src/core/utils/serverAccess.js";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -328,7 +328,7 @@ describe("/server control command", () => {
   });
 
   it("rejects script subcommands with a friendly error on probed plain servers", async () => {
-    const serverAccess = await import("../src/common/utils/serverAccess.js");
+    const serverAccess = await import("../src/core/utils/serverAccess.js");
     const server = makeServer("plain", {
       capabilities: {
         scripts: {

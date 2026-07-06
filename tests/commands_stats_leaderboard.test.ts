@@ -13,7 +13,7 @@ vi.mock("../src/bot/utils/guildRouter.js", () => ({
   resolveServer: vi.fn(),
 }));
 
-vi.mock("../src/common/utils/statUtils.js", () => ({
+vi.mock("../src/core/utils/statUtils.js", () => ({
   LEADERBOARD_STATS: {
     playtime: {
       label: "Playtime",
@@ -44,7 +44,7 @@ vi.mock("../src/bot/utils/statEmbeds.js", () => ({
   buildStatsEmbeds: vi.fn().mockReturnValue([]),
 }));
 
-vi.mock("../src/common/utils/playerUtils.js", () => ({
+vi.mock("../src/core/utils/playerUtils.js", () => ({
   findPlayer: vi.fn(),
   getPlayerNames: vi.fn().mockResolvedValue([]),
 }));
@@ -59,37 +59,37 @@ vi.mock("../src/bot/utils/embedUtils.js", () => ({
   createErrorEmbed: vi.fn().mockReturnValue({ type: "error-embed" }),
 }));
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../src/common/utils/utils.js", () => ({
+vi.mock("../src/core/utils/utils.js", () => ({
   getRootDir: vi.fn().mockReturnValue("/tmp"),
   loadJson: vi.fn().mockResolvedValue({}),
   saveJson: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../src/common/utils/server.js", () => ({
+vi.mock("../src/core/utils/server.js", () => ({
   getAllInstances: vi.fn().mockReturnValue([]),
   getServerInstance: vi.fn(),
 }));
 
-vi.mock("../src/common/config.js", () => ({
+vi.mock("../src/core/config.js", () => ({
   loadConfig: vi.fn().mockReturnValue({
     leaderboardInterval: "daily",
     adminUsers: [],
   }),
 }));
 
-vi.mock("../src/common/utils/snapshotUtils.js", () => ({
+vi.mock("../src/core/utils/snapshotUtils.js", () => ({
   takeSnapshot: vi.fn().mockResolvedValue({}),
   getSnapshotClosestTo: vi.fn().mockResolvedValue(null),
 }));
 
 import { resolveServer } from "../src/bot/utils/guildRouter.js";
-import { buildLeaderboard } from "../src/common/utils/statUtils.js";
-import { findPlayer } from "../src/common/utils/playerUtils.js";
-import { loadStats } from "../src/common/utils/statUtils.js";
+import { buildLeaderboard } from "../src/core/utils/statUtils.js";
+import { findPlayer } from "../src/core/utils/playerUtils.js";
+import { loadStats } from "../src/core/utils/statUtils.js";
 
 const fakeServer = { id: "survival" } as never;
 const leaderboardData = {

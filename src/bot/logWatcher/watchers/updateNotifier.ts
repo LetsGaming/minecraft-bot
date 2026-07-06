@@ -9,16 +9,16 @@
  * restarts don't re-ping anyone.
  */
 import fs from "fs";
-import path from "path";
 import { type Client } from "discord.js";
-import { loadConfig } from "../../../common/config.js";
-import { loadJson, saveJson, getRootDir } from "../../../common/utils/utils.js";
-import { versionAtLeast } from "../../../common/utils/serverAccess.js";
-import { log } from "../../../common/utils/logger.js";
+import { loadConfig } from "@mcbot/core/config.js";
+import path from "path";
+import { getRootDir } from "@mcbot/core/utils/utils.js";
+import { kvGet, kvSet } from "@mcbot/core/db/kv.js";
+import { versionAtLeast } from "@mcbot/core/utils/serverAccess.js";
+import { log } from "@mcbot/core/utils/logger.js";
 
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const INITIAL_DELAY_MS = 60_000;
-const STATE_PATH = path.resolve(getRootDir(), "data", "updateNotifier.json");
 const RELEASES_URL =
   "https://api.github.com/repos/LetsGaming/minecraft-bot/releases/latest";
 
@@ -89,14 +89,15 @@ async function runCheck(client: Client): Promise<void> {
 
   if (cfg?.dmAdmins !== true) return;
 
-  const state = ((await loadJson(STATE_PATH).catch(() => ({}))) ??
-    {}) as NotifierState;
+  const state = kvGet<NotifierState>("updateNotifier") ?? {};
   if (state.lastNotifiedVersion === latest) return; // already pinged for this one
 
   await notifyAdmins(client, latest);
-  await saveJson(STATE_PATH, { lastNotifiedVersion: latest }).catch(() => {
+  try {
+    kvSet("updateNotifier", { lastNotifiedVersion: latest });
+  } catch {
     /* re-notifying after a failed save beats losing the nudge */
-  });
+  }
 }
 
 export function startUpdateNotifier(

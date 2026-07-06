@@ -1,0 +1,24 @@
+{
+  "name": "@mcbot/core",
+  "version": "4.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Process-agnostic core: config service, data layer (SQLite + JSON), server access, RCON, locales. Imported by bot and web; imports neither.",
+  "exports": {
+    "./*.js": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    }
+  },
+  "dependencies": {
+    "@mcbot/schema": "*",
+    "better-sqlite3": "^12.4.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "discord.js": "^14.26.4"
+  },
+  "scripts": {
+    "build": "tsc -b"
+  }
+}

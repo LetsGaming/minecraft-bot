@@ -6,26 +6,26 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../src/common/utils/utils.js", () => ({
+vi.mock("../src/core/utils/utils.js", () => ({
   getRootDir: () => "/tmp/lbsched",
   loadJson: vi.fn().mockResolvedValue({}),
   saveJson: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../src/common/config.js", () => ({
+vi.mock("../src/core/config.js", () => ({
   loadConfig: vi.fn().mockReturnValue({ leaderboardInterval: "daily" }),
 }));
 
-vi.mock("../src/common/utils/server.js", () => ({
+vi.mock("../src/core/utils/server.js", () => ({
   getAllInstances: vi.fn().mockReturnValue([]),
   getServerInstance: vi.fn().mockReturnValue(null),
 }));
 
-vi.mock("../src/common/utils/statUtils.js", () => ({
+vi.mock("../src/core/utils/statUtils.js", () => ({
   buildLeaderboard: vi.fn().mockResolvedValue({
     entries: [],
     title: "LB",
@@ -43,7 +43,7 @@ vi.mock("../src/bot/utils/statEmbeds.js", () => ({
   }),
 }));
 
-vi.mock("../src/common/utils/snapshotUtils.js", () => ({
+vi.mock("../src/core/utils/snapshotUtils.js", () => ({
   takeSnapshot: vi.fn().mockResolvedValue({}),
   getSnapshotClosestTo: vi.fn().mockResolvedValue(null),
 }));
@@ -51,11 +51,13 @@ vi.mock("../src/common/utils/snapshotUtils.js", () => ({
 const TICK = 60 * 60_000 + 1; // just past 1-hour CHECK_INTERVAL_MS
 
 import { startLeaderboardScheduler } from "../src/bot/logWatcher/watchers/leaderboardScheduler.js";
-import * as utils from "../src/common/utils/utils.js";
-import * as srvMod from "../src/common/utils/server.js";
-import * as statUtils from "../src/common/utils/statUtils.js";
-import * as snapUtils from "../src/common/utils/snapshotUtils.js";
-import { log } from "../src/common/utils/logger.js";
+import { kvGet, kvSet } from "../src/core/db/kv.js";
+import { closeDbForTesting } from "../src/core/db/index.js";
+import * as utils from "../src/core/utils/utils.js";
+import * as srvMod from "../src/core/utils/server.js";
+import * as statUtils from "../src/core/utils/statUtils.js";
+import * as snapUtils from "../src/core/utils/snapshotUtils.js";
+import { log } from "../src/core/utils/logger.js";
 
 function cleanup(r: unknown) {
   if (r && typeof r === "object") {
@@ -76,6 +78,7 @@ function fakeClient(send = vi.fn().mockResolvedValue(undefined)) {
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
+  closeDbForTesting(); // schedule lives in kv — isolate tests from each other
   vi.mocked(utils.loadJson).mockResolvedValue({});
   vi.mocked(srvMod.getServerInstance).mockReturnValue({
     id: "survival",
@@ -116,7 +119,7 @@ it("warns and skips a guild with an unrecognized interval string", async () => {
 // ── Branch 3: interval not yet elapsed ───────────────────────────────────
 
 it("skips posting when the last post was too recent", async () => {
-  vi.mocked(utils.loadJson).mockResolvedValue({ g1: Date.now() - 60_000 }); // 1 min ago
+  kvSet("leaderboardSchedule", { g1: Date.now() - 60_000 }); // 1 min ago
   const send = vi.fn();
   const r = startLeaderboardScheduler(fakeClient(send), {
     g1: { leaderboard: { channelId: "ch1" } },
@@ -217,8 +220,10 @@ it("saves the schedule timestamp even when buildLeaderboard throws", async () =>
     g1: { leaderboard: { channelId: "ch1" } },
   } as never);
   await vi.advanceTimersByTimeAsync(TICK);
-  // saveJson must be called — advancing the schedule prevents retry-spam
-  expect(vi.mocked(utils.saveJson)).toHaveBeenCalled();
+  // The schedule must be persisted — advancing it prevents retry-spam.
+  expect(kvGet("leaderboardSchedule")).toMatchObject({
+    g1: expect.any(Number),
+  });
   cleanup(r);
 });
 

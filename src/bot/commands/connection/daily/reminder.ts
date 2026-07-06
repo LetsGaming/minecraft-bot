@@ -8,11 +8,11 @@ import {
   loadClaimedStore,
   getServerClaims,
   saveClaimedStore,
-} from "../../../../common/utils/dailyStore.js";
+} from "@mcbot/core/utils/dailyStore.js";
 import { withErrorHandling } from "../../middleware.js";
 import { resolveServer } from "../../../utils/guildRouter.js";
-import { getAllInstances } from "../../../../common/utils/server.js";
-import { t } from "../../../../common/utils/i18n.js";
+import { getAllInstances } from "@mcbot/core/utils/server.js";
+import { t } from "@mcbot/core/utils/i18n.js";
 
 export const data = new SlashCommandBuilder()
   .setName("daily-reminder")

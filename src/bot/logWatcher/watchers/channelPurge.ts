@@ -1,19 +1,12 @@
-import path from "path";
 import type { Client, Message, TextChannel } from "discord.js";
-import { loadJson, getRootDir } from "../../../common/utils/utils.js";
-import { log } from "../../../common/utils/logger.js";
-import { nextMidnightEpoch } from "../../../common/utils/time.js";
-import type { GuildConfig, StatusMessageState } from "../../../common/types/index.js";
-
-const STATUS_STATE_PATH = path.resolve(
-  getRootDir(),
-  "data",
-  "statusMessages.json",
-);
+import { kvGet } from "@mcbot/core/db/kv.js";
+import { log } from "@mcbot/core/utils/logger.js";
+import { nextMidnightEpoch } from "@mcbot/core/utils/time.js";
+import type { GuildConfig, StatusMessageState } from "@mcbot/core/types/index.js";
 
 /**
  * Purge all messages in a channel except for:
- *  - The status embed message (tracked in data/statusMessages.json)
+ *  - The status embed message (tracked in kv_store["statusMessages"])
  *  - Any pinned messages
  */
 async function purgeChannel(
@@ -42,11 +35,11 @@ async function purgeChannel(
 
   // 1. Status embed message
   try {
-    const state = (await loadJson(STATUS_STATE_PATH)) as StatusMessageState;
+    const state = kvGet<StatusMessageState>("statusMessages") ?? {};
     const entry = state[guildId];
     if (entry?.messageId) protectedIds.add(entry.messageId);
   } catch {
-    /* no state file yet */
+    /* store not readable — protect nothing extra */
   }
 
   // 2. Pinned messages

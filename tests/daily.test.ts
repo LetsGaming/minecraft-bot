@@ -10,12 +10,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ── Top-level mocks — must be at file scope for Vitest hoisting ───────────
 
-vi.mock("../src/common/utils/linkUtils.js", () => ({
+vi.mock("../src/core/utils/linkUtils.js", () => ({
   isLinked: vi.fn(),
   getLinkedAccount: vi.fn(),
 }));
 
-vi.mock("../src/common/utils/playerUtils.js", () => ({
+vi.mock("../src/core/utils/playerUtils.js", () => ({
   getOnlinePlayers: vi.fn(),
 }));
 
@@ -27,7 +27,7 @@ vi.mock("../src/bot/utils/embedUtils.js", () => ({
   createErrorEmbed: vi.fn().mockReturnValue({}),
 }));
 
-vi.mock("../src/common/utils/utils.js", () => ({
+vi.mock("../src/core/utils/utils.js", () => ({
   getRootDir: vi.fn().mockReturnValue("/tmp"),
   loadJson: vi.fn(),
   saveJson: vi.fn(),
@@ -35,6 +35,13 @@ vi.mock("../src/common/utils/utils.js", () => ({
 
 // ── calcStreak & pick ──────────────────────────────────────────────────────
 // Pure functions — import directly without Discord/FS side-effects.
+
+import { kvGet, kvSet } from "../src/core/db/kv.js";
+import { closeDbForTesting } from "../src/core/db/index.js";
+
+beforeEach(() => {
+  closeDbForTesting(); // fresh in-memory DB per test (claims live in kv now)
+});
 
 const DAILY_COOLDOWN = 24 * 60 * 60 * 1000;
 const TWO_DAYS = 2 * DAILY_COOLDOWN + 1;
@@ -193,34 +200,30 @@ describe("claimLock — concurrent claim prevention", () => {
   }
 
   it("blocks a second concurrent execution for the same user", async () => {
-    const utils = await import("../src/common/utils/utils.js");
-    const linkUtils = await import("../src/common/utils/linkUtils.js");
-    const playerUtils = await import("../src/common/utils/playerUtils.js");
+    const utils = await import("../src/core/utils/utils.js");
+    const linkUtils = await import("../src/core/utils/linkUtils.js");
+    const playerUtils = await import("../src/core/utils/playerUtils.js");
     const guildRouter = await import("../src/bot/utils/guildRouter.js");
 
     vi.mocked(linkUtils.isLinked).mockResolvedValue(true);
     vi.mocked(linkUtils.getLinkedAccount).mockResolvedValue("Steve");
     vi.mocked(playerUtils.getOnlinePlayers).mockResolvedValue(["Steve"]);
+    // A give that never answers — keeps the first execution inside the
+    // lock (claims persist synchronously to kv now, so the held awaitable
+    // has to be the RCON round-trip, not the save).
+    let releaseSend!: () => void;
+    const sendPending = new Promise<string | null>((res) => {
+      releaseSend = () => res(null);
+    });
     vi.mocked(guildRouter.resolveServer).mockReturnValue({
       id: "main",
-      sendCommand: vi.fn().mockResolvedValue(null),
+      sendCommand: vi.fn().mockReturnValue(sendPending),
     } as never);
     vi.mocked(utils.getRootDir).mockReturnValue("/tmp");
-    vi.mocked(utils.loadJson).mockImplementation(async (file: unknown) =>
-      String(file).includes("claimedDaily")
-        ? { version: 2, servers: {} }
-        : {
-            default: [{ item: "minecraft:diamond", amount: 1, weight: 1 }],
-            streakBonuses: {},
-          },
-    );
-
-    // saveJson that never resolves — keeps the first execution inside the lock.
-    let releaseSave!: () => void;
-    const savePending = new Promise<void>((res) => {
-      releaseSave = res;
+    vi.mocked(utils.loadJson).mockResolvedValue({
+      default: [{ item: "minecraft:diamond", amount: 1, weight: 1 }],
+      streakBonuses: {},
     });
-    vi.mocked(utils.saveJson).mockReturnValue(savePending as never);
 
     const { execute } =
       await import("../src/bot/commands/connection/daily/daily.js");
@@ -228,7 +231,7 @@ describe("claimLock — concurrent claim prevention", () => {
     const i1 = makeInteraction();
     const i2 = makeInteraction();
 
-    // Start first execution — hangs at saveJson.
+    // Start first execution — hangs inside give() at sendCommand.
     const p1 = execute(i1 as never);
     // Yield so i1 enters the lock before i2 starts.
     await new Promise((r) => setTimeout(r, 0));
@@ -242,12 +245,12 @@ describe("claimLock — concurrent claim prevention", () => {
     );
 
     // Release the first execution.
-    releaseSave();
+    releaseSend();
     await p1;
   });
 
   it("allows a second execution for a different user", async () => {
-    const linkUtils = await import("../src/common/utils/linkUtils.js");
+    const linkUtils = await import("../src/core/utils/linkUtils.js");
 
     // Fail fast after the lock check — we only care that neither user gets blocked.
     vi.mocked(linkUtils.isLinked).mockResolvedValue(false);
@@ -281,9 +284,9 @@ describe("claim persistence", () => {
   });
 
   async function runClaim(existingUserData: Record<string, unknown>) {
-    const utils = await import("../src/common/utils/utils.js");
-    const linkUtils = await import("../src/common/utils/linkUtils.js");
-    const playerUtils = await import("../src/common/utils/playerUtils.js");
+    const utils = await import("../src/core/utils/utils.js");
+    const linkUtils = await import("../src/core/utils/linkUtils.js");
+    const playerUtils = await import("../src/core/utils/playerUtils.js");
     const guildRouter = await import("../src/bot/utils/guildRouter.js");
 
     // Mocked modules are singletons across vi.resetModules() — the call
@@ -300,15 +303,19 @@ describe("claim persistence", () => {
       sendCommand: vi.fn().mockResolvedValue(null),
     } as never);
     vi.mocked(utils.getRootDir).mockReturnValue("/tmp");
-    vi.mocked(utils.saveJson).mockResolvedValue(undefined);
-    vi.mocked(utils.loadJson).mockImplementation(async (file: string) =>
-      file.includes("claimedDaily")
-        ? { version: 2, servers: { main: { "user-1": existingUserData } } }
-        : {
-            default: [{ item: "minecraft:diamond", amount: 1, weight: 1 }],
-            streakBonuses: {},
-          },
-    );
+    // vi.resetModules() gives daily.js a fresh db module instance — seed
+    // and read through the SAME registry, not the file-scope import.
+    const { kvGet, kvSet } = await import("../src/core/db/kv.js");
+    const { closeDbForTesting } = await import("../src/core/db/index.js");
+    closeDbForTesting();
+    kvSet("claimedDaily", {
+      version: 2,
+      servers: { main: { "user-1": existingUserData } },
+    });
+    vi.mocked(utils.loadJson).mockResolvedValue({
+      default: [{ item: "minecraft:diamond", amount: 1, weight: 1 }],
+      streakBonuses: {},
+    });
 
     const { execute } = await import(
       "../src/bot/commands/connection/daily/daily.js"
@@ -321,17 +328,13 @@ describe("claim persistence", () => {
     };
     await execute(interaction as never);
 
-    const claimSaves = vi
-      .mocked(utils.saveJson)
-      .mock.calls.filter(([file]) => String(file).includes("claimedDaily"));
-    const saveCall = claimSaves[claimSaves.length - 1];
-    expect(saveCall).toBeDefined();
-    const store = saveCall![1] as {
+    const store = kvGet<{
       version: number;
       servers: Record<string, Record<string, unknown>>;
-    };
-    expect(store.version).toBe(2);
-    return store.servers["main"]!["user-1"]!;
+    }>("claimedDaily");
+    expect(store).not.toBeNull();
+    expect(store!.version).toBe(2);
+    return store!.servers["main"]!["user-1"]!;
   }
 
   it("caps the per-user reward history at 30 entries", async () => {
@@ -384,9 +387,9 @@ describe("per-server claim independence", () => {
   });
 
   it("a cooldown on one server does not block claiming on another", async () => {
-    const utils = await import("../src/common/utils/utils.js");
-    const linkUtils = await import("../src/common/utils/linkUtils.js");
-    const playerUtils = await import("../src/common/utils/playerUtils.js");
+    const utils = await import("../src/core/utils/utils.js");
+    const linkUtils = await import("../src/core/utils/linkUtils.js");
+    const playerUtils = await import("../src/core/utils/playerUtils.js");
     const guildRouter = await import("../src/bot/utils/guildRouter.js");
 
     vi.mocked(utils.saveJson).mockClear();
@@ -401,7 +404,9 @@ describe("per-server claim independence", () => {
       sendCommand: vi.fn().mockResolvedValue(null),
     } as never);
     vi.mocked(utils.getRootDir).mockReturnValue("/tmp");
-    vi.mocked(utils.saveJson).mockResolvedValue(undefined);
+    const { kvGet, kvSet } = await import("../src/core/db/kv.js");
+    const { closeDbForTesting } = await import("../src/core/db/index.js");
+    closeDbForTesting();
 
     const freshClaimOnOther = {
       lastClaim: Date.now(), // just claimed there — cooldown active
@@ -410,17 +415,14 @@ describe("per-server claim independence", () => {
       longestStreak: 3,
       rewards: [],
     };
-    vi.mocked(utils.loadJson).mockImplementation(async (file: string) =>
-      file.includes("claimedDaily")
-        ? {
-            version: 2,
-            servers: { other: { "user-1": { ...freshClaimOnOther } } },
-          }
-        : {
-            default: [{ item: "minecraft:diamond", amount: 1, weight: 1 }],
-            streakBonuses: {},
-          },
-    );
+    kvSet("claimedDaily", {
+      version: 2,
+      servers: { other: { "user-1": { ...freshClaimOnOther } } },
+    });
+    vi.mocked(utils.loadJson).mockResolvedValue({
+      default: [{ item: "minecraft:diamond", amount: 1, weight: 1 }],
+      streakBonuses: {},
+    });
 
     const { execute } = await import(
       "../src/bot/commands/connection/daily/daily.js"
@@ -433,18 +435,14 @@ describe("per-server claim independence", () => {
     };
     await execute(interaction as never);
 
-    const claimSaves = vi
-      .mocked(utils.saveJson)
-      .mock.calls.filter(([file]) => String(file).includes("claimedDaily"));
-    const saveCall = claimSaves[claimSaves.length - 1];
     // The claim on "main" went through despite the cooldown on "other"…
-    expect(saveCall).toBeDefined();
-    const store = saveCall![1] as {
+    const store = kvGet<{
       servers: Record<
         string,
         Record<string, { lastClaim: number; rewards: unknown[] }>
       >;
-    };
+    }>("claimedDaily")!;
+    expect(store).toBeTruthy();
     expect(store.servers["main"]!["user-1"]!.rewards).toHaveLength(1);
     // …and the "other" server's record is untouched.
     expect(store.servers["other"]!["user-1"]!.lastClaim).toBe(

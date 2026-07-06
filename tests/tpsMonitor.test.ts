@@ -3,10 +3,10 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock("../src/common/config.js", () => ({
+vi.mock("../src/core/config.js", () => ({
   loadConfig: vi
     .fn()
     .mockReturnValue({ tpsWarningThreshold: 15, tpsPollIntervalMs: 100 }),

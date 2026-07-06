@@ -11,7 +11,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -34,7 +34,7 @@ import {
   readBackups,
   runScript,
   logStreamUrl,
-} from "../src/common/utils/serverAccess.js";
+} from "../src/core/utils/serverAccess.js";
 
 function jsonResponse(data: unknown, ok = true) {
   return {

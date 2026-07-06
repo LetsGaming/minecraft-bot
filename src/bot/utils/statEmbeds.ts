@@ -5,8 +5,8 @@ import {
   formatPlaytime,
   formatDistance,
   type LeaderboardData,
-} from "../../common/utils/statUtils.js";
-import type { FlattenedStat } from "../../common/types/index.js";
+} from "@mcbot/core/utils/statUtils.js";
+import type { FlattenedStat } from "@mcbot/core/types/index.js";
 
 /**
  * Converts plain leaderboard data (from buildLeaderboard) into a Discord EmbedBuilder.

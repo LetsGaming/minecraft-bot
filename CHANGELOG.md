@@ -4,6 +4,96 @@ All notable changes to this project are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+## [4.0.0] — 2026-07-05
+
+Workspace restructure + a real data layer. Upgrading: `npm ci && npm run build` (Node 20+; 24 LTS recommended) — data migrates itself on first start, including the snapshots directory.
+
+### Changed
+
+- **npm workspaces layout.** Code stays under `src/`, now as four
+  workspaces: `src/bot` (the product), `src/web` (one package — Fastify
+  backend + Vue frontend, one build, one artifact), `src/core`
+  (process-agnostic core) and `src/schema` (isomorphic contracts).
+  `discord.js` exists only in the bot's dependency tree, vite/vue only in
+  the dashboard's; ESLint boundary rules and workspace-scoped installs
+  (`npm ci -w @mcbot/bot`) enforce the direction. One root lockfile — the
+  frontend's nested npm project is gone. Build output lives inside each
+  workspace; deploy paths changed: `src/bot/dist/index.js` and
+  `src/web/dist/backend/index.js` (PM2 ecosystem + Dockerfile updated).
+- **SQLite data layer for machine-written state** (`data/bot.db`, via
+  better-sqlite3 behind a small driver seam;
+  `MCBOT_SQLITE_DRIVER=node` selects the built-in `node:sqlite` on hosts
+  without a compile toolchain, Node ≥ 22.13). Ownership decides the
+  medium: hand-edited files stay JSON (`dailyRewards.json`, configs),
+  every machine-written store lives in the database — audit trails,
+  account links + link codes, watches, player notes, waypoints, sessions,
+  challenges, polls, daily claims + pending rewards, watcher states,
+  uptime checks, player-count history, and hourly stat snapshots. The
+  time-series stores got real tables: recording an uptime check or a
+  player-count sample is now one INSERT/UPSERT instead of rewriting a
+  43k-entry JSON file. Snapshots are keyed `(server_id, ts)` in the
+  database — the multi-server keying fix, structurally. Both processes
+  run idempotent migrations at boot; every legacy JSON store imports once
+  and is kept as `*.imported` (the snapshots directory as
+  `snapshots.imported/`).
+- **`PUT /api/config` uses optimistic concurrency.** `GET` returns
+  `{ hash, config }`; `PUT` takes `{ baseHash, config }` and answers 409
+  when `config.json` changed underneath the editor (second admin, bot
+  write, hand edit). The dashboard surfaces the conflict and reloads its
+  baseline.
+- Docker: images build on `node:24-alpine`; the Dockerfile gained
+  separate `bot` (default) and `web` targets — the dashboard image
+  contains zero bot code — plus toolchain-bearing dependency stages that
+  compile better-sqlite3 on Alpine so the runtime images stay slim. `docker compose --profile web up -d` starts the
+  dashboard alongside the bot (own healthcheck against `/healthz`, no
+  `depends_on` — the processes stay independent).
+
+### Fixed
+
+- **Dashboard showed every server offline** (and `/metrics` emitted no
+  per-server gauges): the web process never initialized its server
+  registry. It now runs its own instances by design — server control and
+  config edits keep working while the bot is down.
+- **Admin audit entries could be lost** when a dashboard action raced a
+  bot action: both processes appended to the same JSON file with no
+  cross-process coordination. Appends are single inserts in SQLite now.
+- **Concurrent `/link` completions could drop an update** (read-modify-
+  write on shared maps). The whole issue/confirm/unlink flow is
+  transactional; the in-game handler's module-level code cache — which
+  also went stale against codes issued after startup — is gone.
+- **After `/unlink`, `/link` claimed "already linked" forever**: the old
+  flow inferred link state from leftover confirmed codes, which unlink
+  never cleaned. Link state now comes from the links table itself.
+- `/metrics` collects all servers in parallel instead of serially, and
+  can be gated with a bearer token (`WEBUI_METRICS_TOKEN`).
+
+### Added
+
+- `MCBOT_SQLITE_DRIVER` env switch between the shipped better-sqlite3
+  driver and the built-in `node:sqlite` fallback.
+- `WEBUI_HOST` / `WEBUI_PORT` environment overrides for the dashboard
+  bind address (config.json is shared with the bot; where to bind is an
+  environment concern — compose sets `0.0.0.0` for the container).
+- `MCBOT_DB_PATH` override for the SQLite store location.
+
+
+### Added
+
+- **Scoped command settings**: every command (slash and in-game) now
+  takes `enabled` / `adminOnly` at three scopes — global `commands`,
+  per guild (`guilds.<id>.commands`, slash) and per server
+  (`servers.<id>.commands`, in-game) — merged field-by-field and
+  enforced live at dispatch time. `adminOnly` for in-game commands
+  checks the player's linked Discord account against the global admin
+  list; built-in admin commands stay admin-gated regardless. `/help`
+  hides commands disabled for the guild.
+- **Commands tab in the dashboard**: a matrix editor over those blocks
+  with a scope selector, inherit/on/off tri-states, and the effective
+  value per scope, backed by a command manifest the bot writes at
+  startup (`GET /api/commands`).
+
 ## [3.6.0] — 2026-07-05
 
 The roadmap batch: everything from `docs/ROADMAP.md` shipped in one

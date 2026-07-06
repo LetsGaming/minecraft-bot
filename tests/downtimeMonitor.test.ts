@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -26,7 +26,7 @@ vi.mock("../src/bot/utils/guildRouter.js", () => ({
   getAllowedServerIds: vi.fn().mockReturnValue(null),
 }));
 
-vi.mock("../src/common/utils/uptimeTracker.js", () => ({
+vi.mock("../src/core/utils/uptimeTracker.js", () => ({
   recordCheck: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -117,7 +117,7 @@ describe("suppressAlerts()", () => {
 
 describe("startDowntimeMonitor — online server", () => {
   it("records each check via recordCheck", async () => {
-    const { recordCheck } = await import("../src/common/utils/uptimeTracker.js");
+    const { recordCheck } = await import("../src/core/utils/uptimeTracker.js");
     const id = uid();
     const timer = startDowntimeMonitor(
       [fakeServer(id, true)],

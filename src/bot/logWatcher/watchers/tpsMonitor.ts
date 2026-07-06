@@ -1,12 +1,12 @@
 import { type Client } from "discord.js";
-import { log } from "../../../common/utils/logger.js";
+import { log } from "@mcbot/core/utils/logger.js";
 import { serverInScope } from "../../utils/guildRouter.js";
-import { loadConfig } from "../../../common/config.js";
+import { loadConfig } from "@mcbot/core/config.js";
 import { createEmbed } from "../../utils/embedUtils.js";
 import { roleMention } from "../../utils/alertUtils.js";
-import { t, runWithGuildLocale } from "../../../common/utils/i18n.js";
-import type { ServerInstance } from "../../../common/utils/server.js";
-import type { GuildConfig, PaperTpsResult } from "../../../common/types/index.js";
+import { t, runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
+import type { ServerInstance } from "@mcbot/core/utils/server.js";
+import type { GuildConfig, PaperTpsResult } from "@mcbot/core/types/index.js";
 
 const warned = new Map<string, number>();
 

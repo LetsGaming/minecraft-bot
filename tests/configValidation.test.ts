@@ -6,11 +6,11 @@
  */
 import { describe, it, expect, vi } from "vitest";
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-import { validateCandidateConfig } from "../src/common/config.js";
+import { validateCandidateConfig } from "../src/core/config.js";
 
 const base = { token: "t", clientId: "c" };
 

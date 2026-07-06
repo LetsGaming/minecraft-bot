@@ -6,8 +6,8 @@ import { withErrorHandling } from "../middleware.js";
 import {
   getHostResources,
   formatBytes,
-} from "../../../common/utils/hostResources.js";
-import { t } from "../../../common/utils/i18n.js";
+} from "@mcbot/core/utils/hostResources.js";
+import { t } from "@mcbot/core/utils/i18n.js";
 
 export const data = new SlashCommandBuilder()
   .setName("status")

@@ -2,7 +2,7 @@ import { SlashCommandBuilder } from "discord.js";
 import { resolveServer } from "../../utils/guildRouter.js";
 
 import { withErrorHandling } from "../middleware.js";
-import { sanitizeForConsole } from "../../../common/utils/sanitize.js";
+import { sanitizeForConsole } from "@mcbot/core/utils/sanitize.js";
 
 export const data = new SlashCommandBuilder()
   .setName("say")

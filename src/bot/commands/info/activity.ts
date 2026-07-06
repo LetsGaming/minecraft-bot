@@ -11,9 +11,9 @@ import {
   loadPlayerCountStore,
   buildActivitySparkline,
   busiestHours,
-} from "../../../common/utils/playerCountHistory.js";
-import { TZ } from "../../../common/utils/time.js";
-import { t } from "../../../common/utils/i18n.js";
+} from "@mcbot/core/utils/playerCountHistory.js";
+import { TZ } from "@mcbot/core/utils/time.js";
+import { t } from "@mcbot/core/utils/i18n.js";
 
 export const data = new SlashCommandBuilder()
   .setName("activity")

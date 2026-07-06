@@ -13,10 +13,10 @@ import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embedUtils.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { resolveServer } from "../../utils/guildRouter.js";
-import { findPlayer } from "../../../common/utils/playerUtils.js";
-import { isValidMcName } from "../../../common/utils/sanitize.js";
-import { recordAdminAction } from "../../../common/utils/adminAudit.js";
-import { formatDatetime } from "../../../common/utils/time.js";
+import { findPlayer } from "@mcbot/core/utils/playerUtils.js";
+import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
+import { recordAdminAction } from "@mcbot/core/utils/adminAudit.js";
+import { formatDatetime } from "@mcbot/core/utils/time.js";
 import {
   loadNotesStore,
   saveNotesStore,
@@ -26,8 +26,8 @@ import {
   findNotesByName,
   MAX_NOTES_PER_PLAYER,
   type PlayerNotesEntry,
-} from "../../../common/utils/noteStore.js";
-import { t } from "../../../common/utils/i18n.js";
+} from "@mcbot/core/utils/noteStore.js";
+import { t } from "@mcbot/core/utils/i18n.js";
 import type { ChatInputCommandInteraction } from "discord.js";
 
 const MAX_NOTE_LENGTH = 300;

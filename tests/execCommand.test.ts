@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, vi } from "vitest";
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -16,7 +16,7 @@ import {
   isSudoPermissionError,
   sudoHelpMessage,
   execSafe,
-} from "../src/common/shell/execCommand.js";
+} from "../src/core/shell/execCommand.js";
 
 // ── isSudoPermissionError ─────────────────────────────────────────────────
 //

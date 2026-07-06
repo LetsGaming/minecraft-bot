@@ -8,7 +8,7 @@ vi.mock("../src/bot/commands/middleware.js", () => ({
   requireServerAdmin: vi.fn((fn) => fn),
 }));
 
-vi.mock("../src/common/config.js", () => ({
+vi.mock("../src/core/config.js", () => ({
   loadConfig: vi.fn().mockReturnValue({
     adminUsers: ["admin1"],
     servers: {
@@ -47,11 +47,11 @@ vi.mock("../src/bot/utils/embedUtils.js", () => ({
   createSuccessEmbed: vi.fn().mockReturnValue({ type: "success" }),
 }));
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../src/common/utils/adminAudit.js", () => ({
+vi.mock("../src/core/utils/adminAudit.js", () => ({
   recordAdminAction: vi.fn().mockResolvedValue(undefined),
   loadAdminAudit: vi.fn().mockResolvedValue([]),
 }));
@@ -68,13 +68,13 @@ vi.mock("../src/bot/logWatcher/logWatcher.js", () => ({
   getGlobalWatchers: vi.fn().mockReturnValue([]),
 }));
 
-vi.mock("../src/common/utils/utils.js", () => ({
+vi.mock("../src/core/utils/utils.js", () => ({
   getRootDir: vi.fn().mockReturnValue("/tmp"),
   loadJson: vi.fn().mockResolvedValue({}),
   saveJson: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../src/common/utils/server.js", () => ({
+vi.mock("../src/core/utils/server.js", () => ({
   getAllInstances: vi.fn().mockReturnValue([]),
   getServerInstance: vi.fn().mockReturnValue({ id: "survival" }),
 }));

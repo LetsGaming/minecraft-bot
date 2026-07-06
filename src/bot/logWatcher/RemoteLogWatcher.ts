@@ -7,11 +7,11 @@
  * initMinecraftCommands can treat both the same way.
  */
 
-import { log } from "../../common/utils/logger.js";
-import { logStreamUrl } from "../../common/utils/serverAccess.js";
+import { log } from "@mcbot/core/utils/logger.js";
+import { logStreamUrl } from "@mcbot/core/utils/serverAccess.js";
 import type { Client } from "discord.js";
-import type { ServerInstance } from "../../common/utils/server.js";
-import type { LogHandler, LogWatcherEntry } from "../../common/types/index.js";
+import type { ServerInstance } from "@mcbot/core/utils/server.js";
+import type { LogHandler, LogWatcherEntry } from "@mcbot/core/types/index.js";
 
 const RECONNECT_BASE_MS = 5_000;
 const RECONNECT_MAX_MS = 60_000;

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { saveJson, loadJson } from "../src/common/utils/utils.js";
+import { saveJson, loadJson } from "../src/core/utils/utils.js";
 import { promises as fs } from "fs";
 import path from "path";
 import os from "os";

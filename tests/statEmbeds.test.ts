@@ -4,8 +4,8 @@ import {
   buildLeaderboardEmbed,
   buildStatsEmbeds,
 } from "../src/bot/utils/statEmbeds.js";
-import type { LeaderboardData } from "../src/common/utils/statUtils.js";
-import type { FlattenedStat } from "../src/common/types/index.js";
+import type { LeaderboardData } from "../src/core/utils/statUtils.js";
+import type { FlattenedStat } from "../src/core/types/index.js";
 
 // ── buildLeaderboardEmbed ────────────────────────────────────────────────────
 

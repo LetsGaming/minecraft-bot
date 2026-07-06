@@ -40,32 +40,13 @@ export function apiSend<T>(
   }).then((r) => handle<T>(r));
 }
 
-// ── Shapes mirrored from the backend ──
-export interface ServerStatus {
-  id: string;
-  online: boolean;
-  players: { online: number; max: number; names: string[] };
-  tps: number | null;
-  host: {
-    process: { rssBytes: number; cpuPercent: number } | null;
-    disks: Array<{ path: string; usedPercent: number }>;
-  } | null;
-}
-
-export interface StatusResponse {
-  bot: {
-    alive: boolean;
-    lastBeat: number | null;
-    startedAt: number | null;
-    version: string | null;
-  };
-  servers: ServerStatus[];
-}
-
-export interface AuditEntry {
-  at: string;
-  action: string;
-  server: string | null;
-  by: string;
-  detail?: string;
-}
+// ── Shapes shared with the backend (@mcbot/schema — one definition,
+// both sides import it, drift is impossible) ──
+export type {
+  ServerStatus,
+  StatusResponse,
+  AuditEntry,
+  ConfigResponse,
+  ConfigWriteRequest,
+  ConfigWriteConflict,
+} from "@mcbot/schema";

@@ -17,7 +17,6 @@
  * working across restarts. data/whitelistApplications.json owns the
  * pending queue and the prompt-message bookkeeping.
  */
-import path from "path";
 import { randomBytes } from "crypto";
 import {
   ActionRowBuilder,
@@ -34,26 +33,20 @@ import {
   type ButtonInteraction,
   type ModalSubmitInteraction,
 } from "discord.js";
-import { loadJson, saveJson, getRootDir } from "../../common/utils/utils.js";
-import { loadConfig, getServerIds } from "../../common/config.js";
-import { getServerInstance } from "../../common/utils/server.js";
+import { kvGet, kvSet } from "@mcbot/core/db/kv.js";
+import { loadConfig, getServerIds } from "@mcbot/core/config.js";
+import { getServerInstance } from "@mcbot/core/utils/server.js";
 import { getAllowedServerIds } from "../utils/guildRouter.js";
 import { isServerAdmin, getMemberRoleIds } from "../commands/middleware.js";
 import { performWhitelistAdd } from "../commands/shared/whitelistAdd.js";
 import { createEmbed } from "../utils/embedUtils.js";
 import { roleMention } from "../utils/alertUtils.js";
-import { recordAdminAction } from "../../common/utils/adminAudit.js";
-import { isValidMcName } from "../../common/utils/sanitize.js";
-import { t, runWithGuildLocale } from "../../common/utils/i18n.js";
-import { log } from "../../common/utils/logger.js";
+import { recordAdminAction } from "@mcbot/core/utils/adminAudit.js";
+import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
+import { t, runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
+import { log } from "@mcbot/core/utils/logger.js";
 import type { ChatInputCommandInteraction } from "discord.js";
-import type { GuildConfig } from "../../common/types/index.js";
-
-const STORE_PATH = path.resolve(
-  getRootDir(),
-  "data",
-  "whitelistApplications.json",
-);
+import type { GuildConfig } from "@mcbot/core/types/index.js";
 
 const APPLY_ID = "wlapp:apply";
 const MODAL_ID = "wlapp:modal";
@@ -87,9 +80,7 @@ interface ApplicationStore {
 }
 
 async function loadStore(): Promise<ApplicationStore> {
-  const raw = (await loadJson(STORE_PATH).catch(() => ({}))) as
-    | Partial<ApplicationStore>
-    | null;
+  const raw = kvGet<Partial<ApplicationStore>>("whitelistApplications");
   return {
     version: 1,
     prompts: raw?.prompts ?? {},
@@ -98,7 +89,7 @@ async function loadStore(): Promise<ApplicationStore> {
 }
 
 async function saveStore(store: ApplicationStore): Promise<void> {
-  return saveJson(STORE_PATH, store);
+  kvSet("whitelistApplications", store);
 }
 
 /** The server IDs this guild's applications may target. */

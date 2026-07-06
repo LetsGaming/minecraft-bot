@@ -3,7 +3,7 @@ import { createEmbed } from "../../utils/embedUtils.js";
 import { resolveServer } from "../../utils/guildRouter.js";
 
 import { withErrorHandling } from "../middleware.js";
-import type { PaperTpsResult } from "../../../common/types/minecraft.js";
+import type { PaperTpsResult } from "@mcbot/core/types/minecraft.js";
 
 export const data = new SlashCommandBuilder()
   .setName("tps")

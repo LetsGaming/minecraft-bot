@@ -1,5 +1,8 @@
 # Dashboard and feature planning notes
 
+> **Historical document.** Layout references (`src/bot`, `src/web`, the nested frontend npm project) predate the v4.0 workspace restructure — see [architecture.md](architecture.md) for the current tree and [decisions.md](decisions.md) (v4.0 entries) for what changed and why. The reasoning recorded here still applies.
+
+
 > **Status (v3.6.0): SHIPPED.** The dashboard exists — backend at
 > `src/web/backend` (Fastify), frontend at `src/web/frontend` (Vue 3
 > Options API + Vite, an isolated subproject built to

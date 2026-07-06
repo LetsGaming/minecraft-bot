@@ -22,11 +22,11 @@ import {
   loadClaimedStore,
   saveClaimedStore,
   getServerClaims,
-} from "../../../common/utils/dailyStore.js";
-import { getServerIds } from "../../../common/config.js";
-import { recordAdminAction } from "../../../common/utils/adminAudit.js";
-import { t } from "../../../common/utils/i18n.js";
-import { formatDatetime } from "../../../common/utils/time.js";
+} from "@mcbot/core/utils/dailyStore.js";
+import { getServerIds } from "@mcbot/core/config.js";
+import { recordAdminAction } from "@mcbot/core/utils/adminAudit.js";
+import { t } from "@mcbot/core/utils/i18n.js";
+import { formatDatetime } from "@mcbot/core/utils/time.js";
 
 export const data = new SlashCommandBuilder()
   .setName("daily-admin")

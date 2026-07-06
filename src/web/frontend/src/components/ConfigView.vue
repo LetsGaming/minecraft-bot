@@ -55,6 +55,7 @@
 <script lang="ts">
 import { defineComponent } from "vue";
 import { apiGet, apiSend } from "../api";
+import type { ConfigResponse } from "../api";
 import SchemaField from "./SchemaField.vue";
 
 interface JsonSchema {
@@ -71,6 +72,7 @@ export default defineComponent({
       model: null as Record<string, unknown> | null,
       rawMode: false,
       rawText: "",
+      baseHash: "",
       errors: [] as string[],
       warnings: [] as string[],
       saving: false,
@@ -98,7 +100,9 @@ export default defineComponent({
   },
   async mounted() {
     try {
-      this.model = await apiGet<Record<string, unknown>>("/api/config");
+      const res = await apiGet<ConfigResponse>("/api/config");
+      this.model = res.config as Record<string, unknown>;
+      this.baseHash = res.hash;
       this.rawText = JSON.stringify(this.model, null, 2);
     } catch (err) {
       this.errors = [`Could not load config: ${(err as Error).message}`];
@@ -112,6 +116,12 @@ export default defineComponent({
     }
   },
   methods: {
+    async reloadConfig() {
+      const res = await apiGet<ConfigResponse>("/api/config");
+      this.model = res.config as Record<string, unknown>;
+      this.baseHash = res.hash;
+      if (this.rawMode) this.rawText = JSON.stringify(this.model, null, 2);
+    },
     setTop(key: string, value: unknown) {
       if (!this.model) return;
       if (value === undefined) delete this.model[key];
@@ -137,17 +147,24 @@ export default defineComponent({
         const res = await apiSend<{ ok: boolean; warnings: string[] }>(
           "PUT",
           "/api/config",
-          body,
+          { baseHash: this.baseHash, config: body },
         );
         this.warnings = res.warnings;
         this.saved = true;
-        this.model = await apiGet<Record<string, unknown>>("/api/config");
-        if (this.rawMode) this.rawText = JSON.stringify(this.model, null, 2);
+        await this.reloadConfig();
       } catch (err) {
         const message = (err as Error).message;
-        this.errors = message.startsWith("[")
-          ? (JSON.parse(message) as string[])
-          : [message];
+        if (message.includes("changed since you loaded it")) {
+          // 409: someone else wrote config.json underneath this editor.
+          // Surface it and refresh the baseline so the next save can work
+          // once the admin has re-applied their changes.
+          this.errors = [message];
+          await this.reloadConfig().catch(() => {});
+        } else {
+          this.errors = message.startsWith("[")
+            ? (JSON.parse(message) as string[])
+            : [message];
+        }
       } finally {
         this.saving = false;
       }

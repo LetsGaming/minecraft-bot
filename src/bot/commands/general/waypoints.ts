@@ -18,8 +18,8 @@ import {
   loadWaypointStore,
   getServerWaypoints,
   type Waypoint,
-} from "../../../common/utils/waypointStore.js";
-import { t } from "../../../common/utils/i18n.js";
+} from "@mcbot/core/utils/waypointStore.js";
+import { t } from "@mcbot/core/utils/i18n.js";
 
 const PER_PAGE = 10;
 

@@ -2,10 +2,10 @@ import fs from "fs/promises";
 import fsSync from "fs";
 import path from "path";
 import readline from "readline";
-import { log } from "../../common/utils/logger.js";
+import { log } from "@mcbot/core/utils/logger.js";
 import type { Client } from "discord.js";
-import type { ServerInstance } from "../../common/utils/server.js";
-import type { LogHandler, LogWatcherEntry, ILogWatcher } from "../../common/types/index.js";
+import type { ServerInstance } from "@mcbot/core/utils/server.js";
+import type { LogHandler, LogWatcherEntry, ILogWatcher } from "@mcbot/core/types/index.js";
 
 export type { ILogWatcher };
 

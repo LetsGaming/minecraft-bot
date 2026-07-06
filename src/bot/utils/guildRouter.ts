@@ -10,12 +10,12 @@
  * not be able to target guild B's server via the explicit `server:` option,
  * so every resolved server is checked against the issuing guild's allowed set.
  */
-import { getServerInstance, getGuildServer } from "../../common/utils/server.js";
-import { loadConfig } from "../../common/config.js";
+import { getServerInstance, getGuildServer } from "@mcbot/core/utils/server.js";
+import { loadConfig } from "@mcbot/core/config.js";
 import { isServerAdmin } from "../commands/middleware.js";
 import type { ChatInputCommandInteraction } from "discord.js";
-import type { ServerInstance } from "../../common/utils/server.js";
-import type { GuildConfig } from "../../common/types/index.js";
+import type { ServerInstance } from "@mcbot/core/utils/server.js";
+import type { GuildConfig } from "@mcbot/core/types/index.js";
 
 /** Normalize a ServerScope (string | string[] | undefined) to a list. */
 function scopeToList(scope: string | string[] | undefined): string[] {

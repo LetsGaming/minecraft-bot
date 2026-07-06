@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/common/utils/statUtils.js", () => ({
+vi.mock("../src/core/utils/statUtils.js", () => ({
   loadStats: vi.fn(),
   flattenStats: vi.fn().mockReturnValue([]),
   filterStats: vi.fn((stats) => stats),
@@ -14,7 +14,7 @@ vi.mock("../src/common/utils/statUtils.js", () => ({
   invalidateAllStatsCache: vi.fn(),
 }));
 
-vi.mock("../src/common/utils/snapshotUtils.js", () => ({
+vi.mock("../src/core/utils/snapshotUtils.js", () => ({
   getSnapshotForDailyDiff: vi.fn(),
 }));
 
@@ -22,7 +22,7 @@ vi.mock("../src/bot/utils/statEmbeds.js", () => ({
   buildStatsEmbeds: vi.fn().mockReturnValue([{ type: "embed" }]),
 }));
 
-vi.mock("../src/common/utils/playerUtils.js", () => ({
+vi.mock("../src/core/utils/playerUtils.js", () => ({
   findPlayer: vi.fn(),
   getPlayerNames: vi.fn().mockResolvedValue([]),
   getPlayerNamesChoices: vi.fn().mockResolvedValue([]),
@@ -38,7 +38,7 @@ vi.mock("../src/bot/utils/embedUtils.js", () => ({
   createErrorEmbed: vi.fn().mockReturnValue({ type: "error-embed" }),
 }));
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -46,10 +46,10 @@ import {
   loadStats,
   flattenStats,
   filterStats,
-} from "../src/common/utils/statUtils.js";
-import { findPlayer } from "../src/common/utils/playerUtils.js";
+} from "../src/core/utils/statUtils.js";
+import { findPlayer } from "../src/core/utils/playerUtils.js";
 import { resolveServer } from "../src/bot/utils/guildRouter.js";
-import { getSnapshotForDailyDiff } from "../src/common/utils/snapshotUtils.js";
+import { getSnapshotForDailyDiff } from "../src/core/utils/snapshotUtils.js";
 import { buildStatsEmbeds } from "../src/bot/utils/statEmbeds.js";
 import { execute } from "../src/bot/commands/stats/stats.js";
 import type { ChatInputCommandInteraction } from "discord.js";

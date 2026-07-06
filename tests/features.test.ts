@@ -9,7 +9,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -19,17 +19,17 @@ const mockConfig = {
   servers: {},
   guilds: {},
 };
-vi.mock("../src/common/config.js", () => ({
+vi.mock("../src/core/config.js", () => ({
   loadConfig: vi.fn(() => mockConfig),
 }));
 
-vi.mock("../src/common/utils/whitelistAudit.js", () => ({
+vi.mock("../src/core/utils/whitelistAudit.js", () => ({
   getAuditEntry: vi.fn(),
 }));
-vi.mock("../src/common/utils/linkUtils.js", () => ({
+vi.mock("../src/core/utils/linkUtils.js", () => ({
   loadLinkedAccounts: vi.fn().mockResolvedValue({}),
 }));
-vi.mock("../src/common/utils/dailyStore.js", () => ({
+vi.mock("../src/core/utils/dailyStore.js", () => ({
   loadClaimedStore: vi
     .fn()
     .mockResolvedValue({ version: 2, servers: {} }),
@@ -48,19 +48,19 @@ vi.mock("../src/common/utils/dailyStore.js", () => ({
 vi.mock("../src/bot/utils/guildRouter.js", () => ({
   resolveServer: vi.fn().mockReturnValue({ id: "main" }),
 }));
-vi.mock("../src/common/utils/server.js", () => ({
+vi.mock("../src/core/utils/server.js", () => ({
   getAllInstances: vi.fn().mockReturnValue([]),
 }));
 
-import { t, runWithGuildLocale } from "../src/common/utils/i18n.js";
-import { buildSparkline } from "../src/common/utils/uptimeTracker.js";
+import { t, runWithGuildLocale } from "../src/core/utils/i18n.js";
+import { buildSparkline } from "../src/core/utils/uptimeTracker.js";
 import { processDailyReminders } from "../src/bot/logWatcher/watchers/dailyReminderScheduler.js";
-import { getAuditEntry } from "../src/common/utils/whitelistAudit.js";
-import { loadLinkedAccounts } from "../src/common/utils/linkUtils.js";
+import { getAuditEntry } from "../src/core/utils/whitelistAudit.js";
+import { loadLinkedAccounts } from "../src/core/utils/linkUtils.js";
 import {
   loadClaimedStore,
   saveClaimedStore,
-} from "../src/common/utils/dailyStore.js";
+} from "../src/core/utils/dailyStore.js";
 import type { Client } from "discord.js";
 
 beforeEach(() => {

@@ -13,8 +13,8 @@ import type {
   EmbedOptions,
   EmbedWithThumbnailOptions,
   EmbedStyleOptions,
-} from "../../common/types/index.js";
-import { log } from "../../common/utils/logger.js";
+} from "@mcbot/core/types/index.js";
+import { log } from "@mcbot/core/utils/logger.js";
 
 /**
  * Creates a customizable embed.

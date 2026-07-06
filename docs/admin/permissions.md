@@ -51,6 +51,10 @@ In addition, every user is rate-limited to 5 slash commands per 30 seconds to pr
 
 Whitelist-application decisions (the Approve/Deny buttons) enforce exactly the same admin check as slash commands, regardless of who can see the queue channel.
 
+### Per-command `adminOnly`
+
+Any command can be gated behind the admin check via command settings — globally, per guild (slash), or per server (in-game); see [configuration.md](configuration.md#command-settings-per-command-three-scopes). Two invariants: `adminOnly: false` can never open a **built-in** admin command (their own gate always runs), and in-game `adminOnly` requires the player's linked Discord account to be a **global** admin (no guild context exists in game chat).
+
 ### Dashboard access
 
 The web dashboard logs in via Discord OAuth2 and admits only **user-ID entries** of the global `adminUsers` and each guild's `adminUsers`. Role entries cannot be resolved there (that would require guild member lookups) — roles remain a Discord-side permission. Removing a user ID from the lists locks them out of the dashboard immediately (sessions are re-checked per request).

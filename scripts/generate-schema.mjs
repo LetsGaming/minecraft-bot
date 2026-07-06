@@ -2,7 +2,7 @@
  * Generate config.schema.json from the RawBotConfig TypeScript type.
  *
  * This is the single source of truth chain the WebUI plan depends on:
- * RawBotConfig (src/common/types/config.ts) → config.schema.json → editor
+ * RawBotConfig (src/schema/config.ts) → config.schema.json → editor
  * autocompletion via $schema in config.template.json, Fastify request
  * validation in the future dashboard backend, and schema-driven config
  * forms in dashboard phase 2.
@@ -21,8 +21,8 @@ const root = path.resolve(__dirname, "..");
 const outPath = path.join(root, "config.schema.json");
 
 const config = {
-  path: path.join(root, "src/common/types/config.ts"),
-  tsconfig: path.join(root, "tsconfig.json"),
+  path: path.join(root, "src/schema/config.ts"),
+  tsconfig: path.join(root, "src/schema/tsconfig.schemagen.json"),
   type: "RawBotConfig",
   expose: "export",
   topRef: true,
@@ -38,7 +38,7 @@ const output = {
   $schema: "http://json-schema.org/draft-07/schema#",
   title: "minecraft-bot config.json",
   description:
-    "Generated from RawBotConfig (src/common/types/config.ts) by scripts/generate-schema.mjs — do not edit by hand.",
+    "Generated from RawBotConfig (src/schema/config.ts) by scripts/generate-schema.mjs — do not edit by hand.",
   ...schema,
 };
 

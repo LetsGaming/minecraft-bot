@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "minecraft-bot config.json",
-  "description": "Generated from RawBotConfig (src/common/types/config.ts) by scripts/generate-schema.mjs — do not edit by hand.",
+  "description": "Generated from RawBotConfig (src/schema/config.ts) by scripts/generate-schema.mjs — do not edit by hand.",
   "$ref": "#/definitions/RawBotConfig",
   "definitions": {
     "RawBotConfig": {
@@ -145,9 +145,34 @@
         "allowInsecureHttp": {
           "type": "boolean",
           "description": "Opt-out for the plaintext-HTTP-to-public-host rejection. Only for hosts that ARE on a trusted segment but can't be detected as such (e.g. internal DNS names). The key and all commands still travel unencrypted — a loud warning is logged at startup."
+        },
+        "commands": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/CommandOverrideConfig"
+          },
+          "description": "Per-server command overrides for IN-GAME !commands, merged field-by-field over the global `commands` block (see CommandOverrideConfig). Slash commands scope per guild instead."
         }
       },
       "additionalProperties": false
+    },
+    "CommandOverrideConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "false hides the command in the scope. A command disabled globally but enabled in one scope stays registered and is gated at dispatch."
+        },
+        "url": {
+          "type": "string"
+        },
+        "adminOnly": {
+          "type": "boolean",
+          "description": "Gate this command behind the admin check. For slash commands that is the global adminUsers list or the issuing guild's adminUsers; for in-game commands the player's LINKED Discord account must be a global admin. This can only ADD a restriction — built-in admin commands (/server, /config, …) stay admin-gated regardless of what is configured here."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Per-command settings, resolvable at three scopes: globally (`commands`), per guild (`guilds.<id>.commands`, slash commands), and per server (`servers.<id>.commands`, in-game !commands). Resolution is FIELD-BY-FIELD: a scope override only changes the fields it sets and inherits the rest, so future fields added here automatically get the same scoped fallback (see common/utils/commandPolicy.ts)."
     },
     "GuildConfig": {
       "type": "object",
@@ -220,6 +245,13 @@
         "whitelistApplications": {
           "$ref": "#/definitions/GuildWhitelistApplicationsConfig",
           "description": "Button-based whitelist application flow."
+        },
+        "commands": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/CommandOverrideConfig"
+          },
+          "description": "Per-guild command overrides for SLASH commands, merged field-by-field over the global `commands` block (see CommandOverrideConfig)."
         }
       },
       "additionalProperties": false
@@ -402,22 +434,6 @@
       },
       "additionalProperties": false,
       "description": "Button-based whitelist applications. Both channels are required for the feature to arm: the prompt lives in channelId, applications queue in adminChannelId (which should be admin-only — the decision buttons enforce the admin check regardless)."
-    },
-    "CommandOverrideConfig": {
-      "type": "object",
-      "properties": {
-        "enabled": {
-          "type": "boolean"
-        },
-        "url": {
-          "type": "string"
-        },
-        "adminOnly": {
-          "type": "boolean",
-          "description": "Gate this command behind the admin check (global adminUsers or the issuing guild's adminUsers). Useful for commands that write to the game console but are open by default, e.g. `\"say\": { \"adminOnly\": true }`."
-        }
-      },
-      "additionalProperties": false
     },
     "PresenceConfig": {
       "type": "object",

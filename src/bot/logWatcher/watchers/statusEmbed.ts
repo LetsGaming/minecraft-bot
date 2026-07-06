@@ -1,4 +1,3 @@
-import path from "path";
 import {
   ActivityType,
   type Client,
@@ -6,12 +5,12 @@ import {
   type VoiceChannel,
   type EmbedBuilder,
 } from "discord.js";
-import { loadConfig } from "../../../common/config.js";
-import { getAllInstances } from "../../../common/utils/server.js";
+import { loadConfig } from "@mcbot/core/config.js";
+import { getAllInstances } from "@mcbot/core/utils/server.js";
 import { getAllowedServerIds } from "../../utils/guildRouter.js";
-import { loadJson, saveJson, getRootDir } from "../../../common/utils/utils.js";
-import { recordPlayerCountSample } from "../../../common/utils/playerCountHistory.js";
-import { log } from "../../../common/utils/logger.js";
+import { kvGet, kvSet } from "@mcbot/core/db/kv.js";
+import { recordPlayerCountSample } from "@mcbot/core/utils/playerCountHistory.js";
+import { log } from "@mcbot/core/utils/logger.js";
 import { createEmbed } from "../../utils/embedUtils.js";
 import {
   ensureManagedCategory,
@@ -24,11 +23,10 @@ import type {
   StatusChannelState,
   StatusMessageState,
   TpsResult,
-} from "../../../common/types/index.js";
+} from "@mcbot/core/types/index.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const STATE_PATH = path.resolve(getRootDir(), "data", "statusMessages.json");
 const UPDATE_INTERVAL_MS = 60 * 1_000;
 const INITIAL_DELAY_MS = 5_000;
 
@@ -82,15 +80,11 @@ export function invalidateStatusChannelCache(): void {
 // ─── Persistence ──────────────────────────────────────────────────────────────
 
 async function loadState(): Promise<StatusMessageState> {
-  // Deliberately resilient: this is recreatable operational
-  // state, not user data. loadJson already logged loudly and tried the
-  // .bak before this fallback runs — starting fresh here is harmless.
-  const data = await loadJson(STATE_PATH).catch(() => ({}));
-  return (data as StatusMessageState) ?? {};
+  return kvGet<StatusMessageState>("statusMessages") ?? {};
 }
 
 async function saveState(state: StatusMessageState): Promise<void> {
-  await saveJson(STATE_PATH, state);
+  kvSet("statusMessages", state);
 }
 
 // ─── Channel provisioning ─────────────────────────────────────────────────────

@@ -1,11 +1,11 @@
 import { SlashCommandBuilder, codeBlock } from "discord.js";
-import { loadConfig, reloadConfig } from "../../../common/config.js";
-import { summarizeConfigChanges } from "../../../common/utils/configDiff.js";
+import { loadConfig, reloadConfig } from "@mcbot/core/config.js";
+import { summarizeConfigChanges } from "@mcbot/core/utils/configDiff.js";
 import { reconcileServers } from "../../logWatcher/initMinecraftCommands.js";
 import { createEmbed, createSuccessEmbed } from "../../utils/embedUtils.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
-import { log } from "../../../common/utils/logger.js";
-import { recordAdminAction } from "../../../common/utils/adminAudit.js";
+import { log } from "@mcbot/core/utils/logger.js";
+import { recordAdminAction } from "@mcbot/core/utils/adminAudit.js";
 
 export const data = new SlashCommandBuilder()
   .setName("config")

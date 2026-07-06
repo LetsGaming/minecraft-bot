@@ -20,22 +20,21 @@
  * that get posted. data/milestones.json is the single owner of that
  * state.
  */
-import path from "path";
 import { type Client } from "discord.js";
-import { loadConfig } from "../../../common/config.js";
-import { getAllInstances } from "../../../common/utils/server.js";
+import { loadConfig } from "@mcbot/core/config.js";
+import { getAllInstances } from "@mcbot/core/utils/server.js";
 import {
   LEADERBOARD_STATS,
   loadAllStats,
   flattenStats,
-} from "../../../common/utils/statUtils.js";
-import { loadKnownPlayers, loadJson, saveJson, getRootDir } from "../../../common/utils/utils.js";
+} from "@mcbot/core/utils/statUtils.js";
+import { loadKnownPlayers } from "@mcbot/core/utils/utils.js";
+import { kvGet, kvSet } from "@mcbot/core/db/kv.js";
 import { createEmbed } from "../../utils/embedUtils.js";
 import { broadcastNotification } from "./notifyGuilds.js";
-import { t } from "../../../common/utils/i18n.js";
-import { log } from "../../../common/utils/logger.js";
+import { t } from "@mcbot/core/utils/i18n.js";
+import { log } from "@mcbot/core/utils/logger.js";
 
-const STATE_PATH = path.resolve(getRootDir(), "data", "milestones.json");
 const CHECK_INTERVAL_MS = 60 * 60_000;
 const INITIAL_DELAY_MS = 5 * 60_000;
 /** Cap announcements per pass so a config change can't flood channels. */
@@ -49,9 +48,7 @@ interface MilestoneState {
 }
 
 async function loadState(): Promise<MilestoneState> {
-  const raw = (await loadJson(STATE_PATH).catch(() => ({}))) as
-    | Partial<MilestoneState>
-    | null;
+  const raw = kvGet<Partial<MilestoneState>>("milestones");
   return { servers: raw?.servers ?? {}, seeded: raw?.seeded ?? {} };
 }
 
@@ -131,7 +128,7 @@ async function runPass(client: Client): Promise<void> {
     }
   }
 
-  if (dirty) await saveJson(STATE_PATH, state);
+  if (dirty) kvSet("milestones", state);
 }
 
 async function announce(

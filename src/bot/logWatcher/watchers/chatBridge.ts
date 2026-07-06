@@ -1,14 +1,14 @@
 import { type Client, type Webhook } from "discord.js";
-import { log } from "../../../common/utils/logger.js";
+import { log } from "@mcbot/core/utils/logger.js";
 import { createPlayerEmbed } from "../../utils/embedUtils.js";
 import type { ILogWatcher } from "../logWatcher.js";
-import type { ServerInstance } from "../../../common/utils/server.js";
-import type { GuildConfig, GuildChatBridgeConfig } from "../../../common/types/index.js";
-import { sanitizeForConsole } from "../../../common/utils/sanitize.js";
+import type { ServerInstance } from "@mcbot/core/utils/server.js";
+import type { GuildConfig, GuildChatBridgeConfig } from "@mcbot/core/types/index.js";
+import { sanitizeForConsole } from "@mcbot/core/utils/sanitize.js";
 import {
   createRateLimiter,
   bridgeLimiterSettings,
-} from "../../../common/utils/rateLimiter.js";
+} from "@mcbot/core/utils/rateLimiter.js";
 
 const CHAT_REGEX = /\[.+?\]: <(?:\[AFK\]\s*)?([^>]+)>\s+(.+)/;
 

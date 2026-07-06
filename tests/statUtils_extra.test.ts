@@ -6,8 +6,8 @@ import {
   humanizeKey,
   LEADERBOARD_STATS,
   invalidateAllStatsCache,
-} from "../src/common/utils/statUtils.js";
-import type { FlattenedStat } from "../src/common/types/index.js";
+} from "../src/core/utils/statUtils.js";
+import type { FlattenedStat } from "../src/core/types/index.js";
 
 // ── formatPlaytime ────────────────────────────────────────────────────────────
 

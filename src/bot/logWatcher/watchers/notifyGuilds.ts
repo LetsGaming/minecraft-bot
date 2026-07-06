@@ -10,11 +10,11 @@
  *    one-guild/two-server setup got mixed events with no label).
  */
 import { type Client, type EmbedBuilder } from "discord.js";
-import { getAllInstances } from "../../../common/utils/server.js";
-import { log } from "../../../common/utils/logger.js";
-import { runWithGuildLocale } from "../../../common/utils/i18n.js";
+import { getAllInstances } from "@mcbot/core/utils/server.js";
+import { log } from "@mcbot/core/utils/logger.js";
+import { runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
 import { serverInScope } from "../../utils/guildRouter.js";
-import type { GuildConfig } from "../../../common/types/index.js";
+import type { GuildConfig } from "@mcbot/core/types/index.js";
 
 // Shared player-name pattern source. \w+ alone silently drops Bedrock
 // players whose names Geyser/Floodgate prefixes with "." — every

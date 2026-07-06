@@ -15,9 +15,9 @@
  *   GET  /api/servers/:id/log      phase 3: log tail
  *   POST /api/servers/:id/prune-stats  phase 3 (?dryRun=1 supported)
  *   /healthz, /metrics             unauthenticated probes
- *   everything else                static Vue frontend (dist/web/frontend)
+ *   everything else                static Vue frontend (src/web/dist/frontend)
  *
- * The web process may import src/common only (ESLint boundary): status
+ * The web process may import @mcbot/core and @mcbot/schema only (ESLint boundary): status
  * comes from the same ServerInstance layer the bot uses, config writes
  * go through configService.writeConfig — never through the bot.
  */
@@ -25,16 +25,17 @@ import Fastify, { type FastifyInstance } from "fastify";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { loadConfig, getServerIds } from "../../common/config.js";
+import { loadConfig, getServerIds } from "@mcbot/core/config.js";
 import {
   readRawConfig,
   validateCandidate,
   writeConfig,
-} from "../../common/utils/configService.js";
+  configFileHash,
+} from "@mcbot/core/utils/configService.js";
 import {
   getServerInstance,
   getAllInstances,
-} from "../../common/utils/server.js";
+} from "@mcbot/core/utils/server.js";
 import {
   runScript,
   tailLog,
@@ -42,19 +43,21 @@ import {
   deleteStatsFile,
   readWhitelist,
   readUserCache,
-} from "../../common/utils/serverAccess.js";
-import { getUptimeStats } from "../../common/utils/uptimeTracker.js";
+} from "@mcbot/core/utils/serverAccess.js";
+import { getUptimeStats } from "@mcbot/core/utils/uptimeTracker.js";
 import {
   loadAdminAudit,
   recordAdminAction,
-} from "../../common/utils/adminAudit.js";
-import { getHostResources } from "../../common/utils/hostResources.js";
+} from "@mcbot/core/utils/adminAudit.js";
+import { getHostResources } from "@mcbot/core/utils/hostResources.js";
 import {
   readRuntimeHeartbeat,
   heartbeatIsFresh,
-} from "../../common/utils/runtimeHeartbeat.js";
-import { loadPlayerCountStore } from "../../common/utils/playerCountHistory.js";
-import { log } from "../../common/utils/logger.js";
+} from "@mcbot/core/utils/runtimeHeartbeat.js";
+import { readCommandManifest } from "@mcbot/core/utils/commandManifest.js";
+import { resolveCommandPolicy } from "@mcbot/core/utils/commandPolicy.js";
+import { loadPlayerCountStore } from "@mcbot/core/utils/playerCountHistory.js";
+import { log } from "@mcbot/core/utils/logger.js";
 import {
   buildAuthorizeUrl,
   verifyState,
@@ -66,22 +69,15 @@ import {
   requireAdminSession,
 } from "./auth.js";
 import { toSafeConfig, mergeSecretPlaceholders } from "./safeConfig.js";
-import type { RawBotConfig } from "../../common/types/index.js";
+import type { RawBotConfig } from "@mcbot/core/types/index.js";
+import type {
+  ServerStatus,
+  ConfigWriteRequest,
+} from "@mcbot/schema/contract.js";
 
 const SCRIPT_ACTIONS = new Set(["start", "stop", "restart", "backup"]);
 
 // ── Live status (phase 1) ─────────────────────────────────────────────────
-
-interface ServerStatus {
-  id: string;
-  online: boolean;
-  players: { online: number; max: number; names: string[] };
-  tps: number | null;
-  host: {
-    process: { rssBytes: number; cpuPercent: number } | null;
-    disks: Array<{ path: string; usedPercent: number }>;
-  } | null;
-}
 
 async function collectStatus(serverId: string): Promise<ServerStatus> {
   const server = getServerInstance(serverId);
@@ -148,7 +144,7 @@ const CONTENT_TYPES: Record<string, string> = {
 };
 
 function frontendDir(): string {
-  // dist/web/backend/server.js → dist/web/frontend
+  // src/web/dist/backend/server.js → src/web/dist/frontend
   const here = path.dirname(fileURLToPath(import.meta.url));
   return path.resolve(here, "..", "frontend");
 }
@@ -250,7 +246,64 @@ export function buildServer(): FastifyInstance {
       return { entries: entries.slice(-n).reverse() };
     });
 
-    api.get("/api/config", async () => toSafeConfig(readRawConfig()));
+    api.get("/api/config", async () => ({
+      hash: configFileHash(),
+      config: toSafeConfig(readRawConfig()),
+    }));
+
+    /**
+     * Everything the Commands view needs in one call: the manifest the
+     * bot wrote at startup (ALL commands, incl. disabled), the raw
+     * override blocks at each scope, and the effective policy per
+     * command per scope (so the UI can show what "inherit" resolves to).
+     */
+    api.get("/api/commands", async (_req, reply) => {
+      const manifest = await readCommandManifest();
+      if (!manifest) {
+        return reply.code(503).send({
+          error:
+            "Command manifest not written yet — start the bot once so it can discover its commands.",
+        });
+      }
+      const raw = readRawConfig();
+      const guildIds = Object.keys(raw.guilds ?? {});
+      const serverIds = Object.keys(raw.servers ?? {});
+
+      const effective = (
+        name: string,
+      ): Record<string, { enabled: boolean; adminOnly: boolean }> => {
+        const out: Record<string, { enabled: boolean; adminOnly: boolean }> = {
+          global: resolveCommandPolicy(name),
+        };
+        for (const gid of guildIds) {
+          out[`guild:${gid}`] = resolveCommandPolicy(name, { guildId: gid });
+        }
+        for (const sid of serverIds) {
+          out[`server:${sid}`] = resolveCommandPolicy(name, { serverId: sid });
+        }
+        return out;
+      };
+
+      return {
+        manifest,
+        scopes: { guildIds, serverIds },
+        overrides: {
+          global: raw.commands ?? {},
+          guilds: Object.fromEntries(
+            guildIds.map((gid) => [gid, raw.guilds?.[gid]?.commands ?? {}]),
+          ),
+          servers: Object.fromEntries(
+            serverIds.map((sid) => [sid, raw.servers?.[sid]?.commands ?? {}]),
+          ),
+        },
+        effective: Object.fromEntries(
+          [...manifest.slash, ...manifest.ingame].map((c) => [
+            c.name,
+            effective(c.name),
+          ]),
+        ),
+      };
+    });
 
     // Phase 2 — schema-driven editing
     api.get("/api/config/schema", async (_req, reply) => {
@@ -270,10 +323,35 @@ export function buildServer(): FastifyInstance {
     });
 
     api.put("/api/config", async (req, reply) => {
-      const submitted = req.body as RawBotConfig;
-      if (typeof submitted !== "object" || submitted === null) {
-        return reply.code(400).send({ errors: ["Body must be a config object"] });
+      const body = req.body as ConfigWriteRequest;
+      if (
+        typeof body !== "object" ||
+        body === null ||
+        typeof body.baseHash !== "string" ||
+        typeof body.config !== "object" ||
+        body.config === null
+      ) {
+        return reply
+          .code(400)
+          .send({ errors: ["Body must be { baseHash, config }"] });
       }
+
+      // Optimistic concurrency: the edit must be based on the config that
+      // is on disk right now. Two dashboard admins — or an admin racing
+      // the bot's own /config command — get a 409 instead of a silent
+      // last-write-wins clobber.
+      const currentHash = configFileHash();
+      if (body.baseHash !== currentHash) {
+        return reply.code(409).send({
+          error: "conflict",
+          message:
+            "config.json changed since you loaded it (another admin, the " +
+            "bot, or a hand edit). Reload the config and re-apply your changes.",
+          currentHash,
+        });
+      }
+
+      const submitted = body.config as RawBotConfig;
       const current = readRawConfig();
       const merged = mergeSecretPlaceholders(submitted, current);
 
@@ -389,7 +467,17 @@ export function buildServer(): FastifyInstance {
     return { web: "ok", bot: heartbeatIsFresh(beat) ? "ok" : "stale" };
   });
 
-  app.get("/metrics", async (_req, reply) => {
+  app.get("/metrics", async (req, reply) => {
+    // Optional bearer gate: player names and infrastructure state should
+    // not be world-readable by default once the port is exposed. Unset
+    // token = open (backwards compatible for loopback-only setups).
+    const token = process.env.WEBUI_METRICS_TOKEN;
+    if (token) {
+      const auth = req.headers.authorization ?? "";
+      if (auth !== `Bearer ${token}`) {
+        return reply.code(401).send("unauthorized");
+      }
+    }
     const lines: string[] = [];
     const push = (name: string, help: string, type: string): void => {
       lines.push(`# HELP ${name} ${help}`, `# TYPE ${name} ${type}`);
@@ -402,9 +490,16 @@ export function buildServer(): FastifyInstance {
     push("mcbot_server_online", "1 when the server responds", "gauge");
     push("mcbot_players_online", "Players currently online", "gauge");
     push("mcbot_server_tps", "1-minute TPS (absent when unsupported)", "gauge");
-    for (const inst of getAllInstances()) {
-      const status = await collectStatus(inst.id).catch(() => null);
-      const label = `{server="${inst.id}"}`;
+    // Parallel: a scrape must not pay serial RCON round-trips per server.
+    const statuses = await Promise.all(
+      getAllInstances().map((inst) =>
+        collectStatus(inst.id)
+          .catch(() => null)
+          .then((status) => ({ id: inst.id, status })),
+      ),
+    );
+    for (const { id, status } of statuses) {
+      const label = `{server="${id}"}`;
       lines.push(`mcbot_server_online${label} ${status?.online ? 1 : 0}`);
       lines.push(`mcbot_players_online${label} ${status?.players.online ?? 0}`);
       if (status?.tps !== null && status?.tps !== undefined) {
@@ -447,8 +542,12 @@ export function buildServer(): FastifyInstance {
 
 export async function startWebServer(): Promise<FastifyInstance> {
   const cfg = loadConfig();
-  const port = cfg.webui?.port ?? 8130;
-  const host = cfg.webui?.host ?? "127.0.0.1";
+  // Env beats config (same contract as every other secret/deploy knob):
+  // config.json is shared with the bot, so per-environment bind details
+  // like "0.0.0.0 inside the container" belong to the environment.
+  const port =
+    Number(process.env.WEBUI_PORT) || cfg.webui?.port || 8130;
+  const host = process.env.WEBUI_HOST ?? cfg.webui?.host ?? "127.0.0.1";
 
   const app = buildServer();
   await app.listen({ port, host });

@@ -23,23 +23,24 @@ const mockConfig = {
   webui: { enabled: true, port: 8130 },
 };
 
-vi.mock("../src/common/config.js", () => ({
+vi.mock("../src/core/config.js", () => ({
   loadConfig: vi.fn(() => mockConfig),
   getServerIds: vi.fn(() => ["smp"]),
 }));
 
-vi.mock("../src/common/utils/configService.js", () => ({
+vi.mock("../src/core/utils/configService.js", () => ({
   readRawConfig: vi.fn(() => JSON.parse(JSON.stringify(mockConfig))),
   validateCandidate: vi.fn(() => ({ valid: true, errors: [], warnings: ["w1"] })),
   writeConfig: vi.fn(async () => {}),
+  configFileHash: vi.fn(() => "hash-1"),
 }));
 
-vi.mock("../src/common/utils/server.js", () => ({
+vi.mock("../src/core/utils/server.js", () => ({
   getServerInstance: vi.fn(() => null),
   getAllInstances: vi.fn(() => []),
 }));
 
-vi.mock("../src/common/utils/serverAccess.js", () => ({
+vi.mock("../src/core/utils/serverAccess.js", () => ({
   runScript: vi.fn(),
   tailLog: vi.fn(),
   listStatsUuids: vi.fn(),
@@ -48,22 +49,22 @@ vi.mock("../src/common/utils/serverAccess.js", () => ({
   readUserCache: vi.fn(),
 }));
 
-vi.mock("../src/common/utils/uptimeTracker.js", () => ({
+vi.mock("../src/core/utils/uptimeTracker.js", () => ({
   getUptimeStats: vi.fn(async () => ({ sparkline: "" })),
 }));
 
-vi.mock("../src/common/utils/adminAudit.js", () => ({
+vi.mock("../src/core/utils/adminAudit.js", () => ({
   loadAdminAudit: vi.fn(async () => [
     { at: "2026-01-01", action: "kick", server: "smp", by: "a", byId: "1", guildId: null },
   ]),
   recordAdminAction: vi.fn(async () => {}),
 }));
 
-vi.mock("../src/common/utils/hostResources.js", () => ({
+vi.mock("../src/core/utils/hostResources.js", () => ({
   getHostResources: vi.fn(async () => null),
 }));
 
-vi.mock("../src/common/utils/runtimeHeartbeat.js", () => ({
+vi.mock("../src/core/utils/runtimeHeartbeat.js", () => ({
   readRuntimeHeartbeat: vi.fn(async () => ({
     at: Date.now(),
     startedAt: Date.now() - 1000,
@@ -73,8 +74,16 @@ vi.mock("../src/common/utils/runtimeHeartbeat.js", () => ({
   heartbeatIsFresh: vi.fn(() => true),
 }));
 
-vi.mock("../src/common/utils/playerCountHistory.js", () => ({
+vi.mock("../src/core/utils/playerCountHistory.js", () => ({
   loadPlayerCountStore: vi.fn(async () => ({ version: 1, servers: {} })),
+}));
+
+vi.mock("../src/core/utils/commandManifest.js", () => ({
+  readCommandManifest: vi.fn(async () => ({
+    slash: [{ name: "say", description: "s" }],
+    ingame: [{ name: "vote", description: "v" }],
+    updatedAt: 1,
+  })),
 }));
 
 import {
@@ -89,7 +98,7 @@ import {
   SECRET_PLACEHOLDER,
 } from "../src/web/backend/safeConfig.js";
 import { buildServer } from "../src/web/backend/server.js";
-import type { RawBotConfig } from "../src/common/types/index.js";
+import type { RawBotConfig } from "../src/core/types/index.js";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -237,13 +246,15 @@ describe("web routes", () => {
       headers: { cookie: adminCookie() },
     });
     expect(config.statusCode).toBe(200);
-    expect(config.json().token).toBe(SECRET_PLACEHOLDER);
+    // { hash, config } — the hash is the optimistic-concurrency baseline.
+    expect(config.json().hash).toBe("hash-1");
+    expect(config.json().config.token).toBe(SECRET_PLACEHOLDER);
     await app.close();
   });
 
   it("PUT /api/config merges placeholders and writes on valid input", async () => {
     const { writeConfig, validateCandidate } = await import(
-      "../src/common/utils/configService.js"
+      "../src/core/utils/configService.js"
     );
     const app = buildServer();
     const submitted = toSafeConfig(mockConfig as unknown as RawBotConfig);
@@ -252,7 +263,7 @@ describe("web routes", () => {
       method: "PUT",
       url: "/api/config",
       headers: { cookie: adminCookie(), "content-type": "application/json" },
-      payload: submitted,
+      payload: { baseHash: "hash-1", config: submitted },
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ ok: true, warnings: ["w1"] });
@@ -266,7 +277,7 @@ describe("web routes", () => {
 
   it("PUT /api/config returns 422 with errors on invalid input", async () => {
     const { validateCandidate, writeConfig } = await import(
-      "../src/common/utils/configService.js"
+      "../src/core/utils/configService.js"
     );
     vi.mocked(validateCandidate).mockReturnValueOnce({
       valid: false,
@@ -278,11 +289,49 @@ describe("web routes", () => {
       method: "PUT",
       url: "/api/config",
       headers: { cookie: adminCookie(), "content-type": "application/json" },
-      payload: {},
+      payload: { baseHash: "hash-1", config: {} },
     });
     expect(res.statusCode).toBe(422);
     expect(res.json().errors).toEqual(["  - bad thing"]);
     expect(vi.mocked(writeConfig)).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("PUT /api/config returns 409 when config.json changed underneath the editor", async () => {
+    const { writeConfig } = await import(
+      "../src/core/utils/configService.js"
+    );
+    const app = buildServer();
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/config",
+      headers: { cookie: adminCookie(), "content-type": "application/json" },
+      payload: { baseHash: "stale-hash", config: {} },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toBe("conflict");
+    expect(res.json().currentHash).toBe("hash-1");
+    expect(vi.mocked(writeConfig)).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("serves the command matrix to an admin session", async () => {
+    const app = buildServer();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/commands",
+      headers: { cookie: adminCookie() },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.manifest.slash[0].name).toBe("say");
+    expect(body.scopes.serverIds).toEqual(["smp"]);
+    // Effective policies exist for every scope key.
+    expect(body.effective.say.global).toEqual({
+      enabled: true,
+      adminOnly: false,
+    });
+    expect(body.effective.vote["server:smp"]).toBeDefined();
     await app.close();
   });
 

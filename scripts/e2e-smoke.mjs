@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * e2e-smoke.mjs — talks to the docker-compose.e2e.yml Paper server
- * through the bot's OWN RCON layer (dist/common/rcon), so a protocol or
+ * through the bot's OWN RCON layer (src/core/dist/rcon), so a protocol or
  * framing regression fails here before it fails in production.
  *
  * Checks: connect, `list` responds, whitelist add → shows up in
@@ -13,7 +13,7 @@ import { fileURLToPath } from "url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const { RconClient } = await import(
-  `file://${path.join(root, "dist", "common", "rcon", "RconClient.js")}`
+  `file://${path.join(root, "src", "core", "dist", "rcon", "RconClient.js")}`
 );
 
 const HOST = process.env.E2E_RCON_HOST ?? "127.0.0.1";

@@ -3,18 +3,18 @@
  */
 import { describe, it, expect, vi } from "vitest";
 
-vi.mock("../src/common/utils/utils.js", () => ({
+vi.mock("../src/core/utils/utils.js", () => ({
   getRootDir: vi.fn().mockReturnValue("/tmp"),
   loadJson: vi.fn().mockResolvedValue({}),
   saveJson: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../src/common/utils/server.js", () => ({
+vi.mock("../src/core/utils/server.js", () => ({
   getAllInstances: vi.fn().mockReturnValue([]),
   getServerInstance: vi.fn(),
 }));
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 

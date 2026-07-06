@@ -9,14 +9,11 @@
  * server from flooding the channel or the Discord rate limit — the
  * roadmap's stated condition for the live variant.
  */
-import path from "path";
 import { type Client } from "discord.js";
-import { loadJson, saveJson, getRootDir } from "../../../common/utils/utils.js";
-import { loadConfig } from "../../../common/config.js";
-import { log } from "../../../common/utils/logger.js";
+import { kvGet, kvSet } from "@mcbot/core/db/kv.js";
+import { loadConfig } from "@mcbot/core/config.js";
+import { log } from "@mcbot/core/utils/logger.js";
 import type { ILogWatcher } from "../logWatcher.js";
-
-const STATE_PATH = path.resolve(getRootDir(), "data", "consoleRelay.json");
 
 const FLUSH_INTERVAL_MS = 3_000;
 /** Discord message budget per flush (codeblock fences + margin < 2000). */
@@ -31,16 +28,14 @@ export interface ConsoleRelayState {
 }
 
 export async function loadConsoleRelayState(): Promise<ConsoleRelayState> {
-  const raw = (await loadJson(STATE_PATH).catch(() => ({}))) as Partial<
-    ConsoleRelayState
-  > | null;
+  const raw = kvGet<Partial<ConsoleRelayState>>("consoleRelay");
   return { guilds: raw?.guilds ?? {} };
 }
 
 export async function saveConsoleRelayState(
   state: ConsoleRelayState,
 ): Promise<void> {
-  return saveJson(STATE_PATH, state);
+  kvSet("consoleRelay", state);
 }
 
 /** Flip the relay for one guild+server; returns the new value. */

@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, MessageFlags, type ChatInputCommandInteraction} from "discord.js";
 import { randomBytes } from "crypto";
-import { loadLinkCodes, saveLinkCodes } from "../../../common/utils/linkUtils.js";
+import { issueLinkCode } from "@mcbot/core/utils/linkUtils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("link")
@@ -11,47 +11,29 @@ export async function execute(
 ): Promise<void> {
   const userId = interaction.user.id;
 
-  const codes = await loadLinkCodes();
+  // issueLinkCode is atomic: prune-expired + pending/linked checks + insert
+  // happen in one transaction, so two concurrent /link invocations can't
+  // race each other (or the in-game confirmation) anymore.
+  const result = await issueLinkCode(userId, generateCode());
 
-  // Check if user already has a pending code
-  for (const code in codes) {
-    const current = codes[code];
-    if (!current) continue;
-
-    if (current.discordId === userId) {
-      // Check if the existing code is still valid
-      if (current.expires > Date.now()) {
-        await interaction.reply({
-          content: `⚠️ You already have a pending link code: \`${code}\`. Please use that code or wait for it to expire before generating a new one.`,
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      } else if (current.confirmed) {
-        await interaction.reply({
-          content: `⚠️ You have already linked your account. If you want to link a different Minecraft account, please unlink first.`,
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      } else {
-        // Remove expired code
-        delete codes[code];
-      }
-    }
+  if (result.status === "pending") {
+    await interaction.reply({
+      content: `⚠️ You already have a pending link code: \`${result.code}\`. Please use that code or wait for it to expire before generating a new one.`,
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
   }
 
-  const code = generateCode();
-  const expires = Date.now() + 5 * 60 * 1000;
-
-  codes[code] = {
-    discordId: userId,
-    expires,
-    confirmed: false,
-  };
-
-  await saveLinkCodes(codes);
+  if (result.status === "already-linked") {
+    await interaction.reply({
+      content: `⚠️ You have already linked your account. If you want to link a different Minecraft account, please unlink first.`,
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
 
   await interaction.reply({
-    content: `🧩 To link your Minecraft account, join the server and type:\n\`!link ${code}\`\n(This code expires in 5 minutes)`,
+    content: `🧩 To link your Minecraft account, join the server and type:\n\`!link ${result.code}\`\n(This code expires in 5 minutes)`,
     flags: MessageFlags.Ephemeral,
   });
 }

@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist/backend",
+    "rootDir": "./backend"
+  },
+  "include": ["backend/**/*.ts"],
+  "references": [{ "path": "../core" }, { "path": "../schema" }]
+}

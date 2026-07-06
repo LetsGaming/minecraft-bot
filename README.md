@@ -64,7 +64,7 @@ See [docs/docker.md](docs/docker.md) for the full guide, including the static `c
 
 For running directly on the host with Node.js and PM2:
 
-**Prerequisites:** Node.js 18+, a Discord bot token, a Minecraft server with RCON enabled or running in a `screen` session.
+**Prerequisites:** Node.js 20+ (24 LTS recommended), a Discord bot token, a Minecraft server with RCON enabled or running in a `screen` session. The data layer uses better-sqlite3 (prebuilt on common platforms; compiles during `npm ci` on Alpine — the Dockerfile handles that).
 
 ```bash
 git clone <your-repo-url> minecraft-bot
@@ -123,10 +123,28 @@ Full documentation lives in [`docs/index.md`](docs/index.md).
 
 ## Development
 
+The repository is an npm workspace — the layout mirrors the product: the bot is the main artifact, the dashboard its optional extension, and both build on shared packages.
+
+```
+src/bot        the Discord bot — the product
+src/web        the dashboard: ONE package, backend/ (Fastify) + frontend/ (Vue)
+src/core       process-agnostic core: config, data layer, server access, RCON
+src/schema     isomorphic contracts: config types + web API DTOs (browser-safe)
+```
+
+`src/bot` never imports `src/web` and vice versa — both import the packages, and ESLint boundary rules plus workspace-scoped installs enforce it. Either process runs, restarts, and works without the other. Build output lives inside each workspace (`src/bot/dist`, `src/web/dist/…`).
+
 ```bash
+npm ci                # one install for every workspace (single root lockfile)
+npm run build         # schema gen + bot (packages build via project references)
+npm run build:all     # everything, incl. the dashboard backend + frontend
+npm start             # run the bot        (node src/bot/dist/index.js)
+npm run start:web     # run the dashboard  (node src/web/dist/backend/index.js)
+
 npm test              # Run all tests once
 npm run test:watch    # Watch mode
 npm run test:coverage # Coverage report
+npm run lint          # ESLint incl. the layer-boundary rules
 ```
 
 See [docs/decisions.md](docs/decisions.md) for architectural decisions and Golden Rules enforced in code review.
@@ -135,16 +153,12 @@ See [docs/decisions.md](docs/decisions.md) for architectural decisions and Golde
 
 ## Data Files
 
-The bot stores runtime data in the `data/` directory (or `bot_data` Docker volume):
+Runtime state lives in the `data/` directory (or `bot_data` Docker volume). Machine-written state sits in a single SQLite database; human-edited and simpler stores remain JSON:
 
-| File | Purpose |
+| Location | Purpose |
 |---|---|
-| `linkedAccounts.json` | Discord ↔ Minecraft account links |
-| `linkCodes.json` | Pending link codes (expire after 5 min) |
-| `claimedDaily.json` | Daily reward claim history and streaks |
-| `whitelistAudit.json` | Who whitelisted/unwhitelisted whom and when |
-| `leaderboardSchedule.json` | Last leaderboard post timestamp per guild |
-| `statusMessages.json` | Stored message IDs for persistent status embeds |
-| `snapshots/` | Hourly stat snapshots for delta leaderboards |
+| `bot.db` | SQLite store for every machine-written state: account links, audit trails, watches, notes, waypoints, sessions, polls, challenges, daily claims + pending rewards, watcher states, uptime + activity history, and hourly stat snapshots. Both the bot and the dashboard write here safely (WAL). |
+| `dailyRewards.json` | Reward pool — edited by hand, which is why it stays JSON |
+| `runtime.json` / `commandManifest.json` | Process contract files between bot and dashboard (liveness beacon, discovered commands) |
 
-These are all auto-created on first use. The `snapshots/` directory is self-cleaning — old snapshots are pruned automatically.
+Everything is auto-created on first use; on the first start after upgrading from 3.x, all old JSON stores (and the `snapshots/` directory) import into `bot.db` automatically and are kept as `*.imported`. Snapshot retention is self-cleaning. Details: [docs/dev/data-storage.md](docs/dev/data-storage.md).

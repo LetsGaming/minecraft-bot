@@ -11,8 +11,8 @@
  * player gets a clear "could not …" message instead of silence.
  */
 import { defineCommand } from "../defineCommand.js";
-import { isSlimeChunk, blockToChunk } from "../../../common/utils/slimeChunk.js";
-import { t } from "../../../common/utils/i18n.js";
+import { isSlimeChunk, blockToChunk } from "@mcbot/core/utils/slimeChunk.js";
+import { t } from "@mcbot/core/utils/i18n.js";
 
 const cmd = defineCommand({
   name: "slime",

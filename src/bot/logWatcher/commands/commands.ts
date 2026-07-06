@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { defineCommand } from "../defineCommand.js";
-import type { InGameCommandInfo } from "../../../common/types/index.js";
+import type { InGameCommandInfo } from "@mcbot/core/types/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

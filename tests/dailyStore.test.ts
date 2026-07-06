@@ -6,11 +6,11 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../src/common/utils/utils.js", () => ({
+vi.mock("../src/core/utils/utils.js", () => ({
   getRootDir: vi.fn().mockReturnValue("/tmp"),
   loadJson: vi.fn(),
   saveJson: vi.fn().mockResolvedValue(undefined),
@@ -18,18 +18,19 @@ vi.mock("../src/common/utils/utils.js", () => ({
 
 // The migration resolves its target server from the configured server list
 // (dynamic import inside loadClaimedStore — vi.mock intercepts it too).
-vi.mock("../src/common/config.js", () => ({
+vi.mock("../src/core/config.js", () => ({
   getServerIds: vi.fn().mockReturnValue(["survival", "creative"]),
 }));
 
-import { loadJson, saveJson } from "../src/common/utils/utils.js";
-import { getServerIds } from "../src/common/config.js";
-import { log } from "../src/common/utils/logger.js";
+import { kvGet, kvSet } from "../src/core/db/kv.js";
+import { closeDbForTesting } from "../src/core/db/index.js";
+import { getServerIds } from "../src/core/config.js";
+import { log } from "../src/core/utils/logger.js";
 import {
   loadClaimedStore,
   getServerClaims,
   saveClaimedStore,
-} from "../src/common/utils/dailyStore.js";
+} from "../src/core/utils/dailyStore.js";
 
 const record = (lastClaim: number) => ({
   lastClaim,
@@ -41,32 +42,32 @@ const record = (lastClaim: number) => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  closeDbForTesting(); // fresh in-memory DB per test
   vi.mocked(getServerIds).mockReturnValue(["survival", "creative"]);
 });
 
 describe("loadClaimedStore", () => {
-  it("passes a v2 store through untouched (no save, no warning)", async () => {
+  it("passes a v2 store through untouched (no migration, no warning)", async () => {
     const store = {
       version: 2,
       servers: { survival: { u1: record(123) } },
     };
-    vi.mocked(loadJson).mockResolvedValue(store);
+    kvSet("claimedDaily", store);
 
     const loaded = await loadClaimedStore();
-    expect(loaded).toBe(store);
-    expect(saveJson).not.toHaveBeenCalled();
+    expect(loaded).toEqual(store);
     expect(log.warn).not.toHaveBeenCalled();
   });
 
-  it("returns a fresh empty v2 store for an empty file", async () => {
-    vi.mocked(loadJson).mockResolvedValue({});
+  it("returns a fresh empty v2 store when nothing is stored", async () => {
     const loaded = await loadClaimedStore();
     expect(loaded).toEqual({ version: 2, servers: {} });
-    expect(saveJson).not.toHaveBeenCalled();
   });
 
   it("migrates a legacy v1 map under the first configured server and persists once", async () => {
-    vi.mocked(loadJson).mockResolvedValue({
+    // A pre-v2 flat map — exactly what the legacy importer stores verbatim
+    // when upgrading an ancient claimedDaily.json.
+    kvSet("claimedDaily", {
       u1: record(111),
       u2: record(222),
     });
@@ -78,10 +79,9 @@ describe("loadClaimedStore", () => {
     expect(loaded.servers["survival"]!["u1"]!.lastClaim).toBe(111);
     expect(loaded.servers["survival"]!["u2"]!.lastClaim).toBe(222);
 
-    // Persisted exactly once so the migration never re-runs
-    expect(saveJson).toHaveBeenCalledTimes(1);
-    const [, saved] = vi.mocked(saveJson).mock.calls[0]!;
-    expect((saved as { version: number }).version).toBe(2);
+    // Persisted so the migration never re-runs
+    const persisted = kvGet<{ version: number }>("claimedDaily");
+    expect(persisted?.version).toBe(2);
 
     expect(log.warn).toHaveBeenCalledWith(
       "daily",
@@ -91,7 +91,7 @@ describe("loadClaimedStore", () => {
 
   it('falls back to "default" when no servers are configured', async () => {
     vi.mocked(getServerIds).mockReturnValue([]);
-    vi.mocked(loadJson).mockResolvedValue({ u1: record(1) });
+    kvSet("claimedDaily", { u1: record(1) });
 
     const loaded = await loadClaimedStore();
     expect(Object.keys(loaded.servers)).toEqual(["default"]);
@@ -120,12 +120,9 @@ describe("getServerClaims", () => {
 });
 
 describe("saveClaimedStore", () => {
-  it("writes the whole store to claimedDaily.json", async () => {
+  it('writes the whole store to kv_store["claimedDaily"]', async () => {
     const store = { version: 2 as const, servers: {} };
     await saveClaimedStore(store);
-    expect(saveJson).toHaveBeenCalledWith(
-      expect.stringContaining("claimedDaily.json"),
-      store,
-    );
+    expect(kvGet("claimedDaily")).toEqual(store);
   });
 });

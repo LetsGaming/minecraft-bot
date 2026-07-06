@@ -8,8 +8,9 @@ import {
   createPaginationButtons,
   handlePagination,
 } from "../../utils/embedUtils.js";
-import type { BotClient } from "../../../common/types/index.js";
-import { log } from "../../../common/utils/logger.js";
+import type { BotClient } from "@mcbot/core/types/index.js";
+import { log } from "@mcbot/core/utils/logger.js";
+import { resolveCommandPolicy } from "@mcbot/core/utils/commandPolicy.js";
 
 export const data = new SlashCommandBuilder()
   .setName("help")
@@ -18,7 +19,15 @@ export const data = new SlashCommandBuilder()
 export async function execute(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
-  const commands = [...(interaction.client as BotClient).commands.values()];
+  // Hide commands that are disabled for THIS guild — /help should match
+  // what the guild can actually run (registration is enabled-anywhere).
+  const commands = [
+    ...(interaction.client as BotClient).commands.values(),
+  ].filter(
+    (cmd) =>
+      resolveCommandPolicy(cmd.data.name, { guildId: interaction.guild?.id })
+        .enabled,
+  );
   const pageSize = 5;
   const totalPages = Math.ceil(commands.length / pageSize);
 

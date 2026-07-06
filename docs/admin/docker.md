@@ -126,3 +126,17 @@ services:
       DEBUG: "true"
       NODE_ENV: development
 ```
+
+
+## The web dashboard (optional)
+
+The dashboard ships as a separate image target from the same Dockerfile and is opt-in via a compose profile:
+
+```bash
+docker compose --profile web up -d        # bot + dashboard
+docker compose --profile web up -d web    # dashboard only
+```
+
+Requires `"webui": { "enabled": true }` in the config plus `WEBUI_CLIENT_SECRET` / `WEBUI_SESSION_SECRET` in `.env`. Compose already sets `WEBUI_HOST=0.0.0.0` inside the container and publishes the port on the **host's loopback only** (`127.0.0.1:8130`) — put a TLS-terminating reverse proxy in front before exposing it further. Optionally set `WEBUI_METRICS_TOKEN` to require `Authorization: Bearer <token>` on `/metrics`.
+
+There is deliberately no `depends_on`: the dashboard and the bot have independent lifecycles — either runs and works without the other. They share the config file and the `bot_data` volume (JSON stores + the SQLite database in WAL mode), which also means both containers must run on the same host.

@@ -39,6 +39,7 @@
         v-else-if="activeTab === 'status'"
         @bot-state="botDown = !$event"
       />
+      <CommandsView v-else-if="activeTab === 'commands'" />
       <ConfigView v-else-if="activeTab === 'config'" />
       <AuditView v-else-if="activeTab === 'audit'" />
     </main>
@@ -49,12 +50,13 @@
 import { defineComponent } from "vue";
 import { apiGet, apiSend, UnauthorizedError } from "./api";
 import StatusView from "./components/StatusView.vue";
+import CommandsView from "./components/CommandsView.vue";
 import ConfigView from "./components/ConfigView.vue";
 import AuditView from "./components/AuditView.vue";
 
 export default defineComponent({
   name: "App",
-  components: { StatusView, ConfigView, AuditView },
+  components: { StatusView, CommandsView, ConfigView, AuditView },
   data() {
     return {
       loading: true,
@@ -63,6 +65,7 @@ export default defineComponent({
       botDown: false,
       tabs: [
         { id: "status", label: "Status" },
+        { id: "commands", label: "Commands" },
         { id: "config", label: "Config" },
         { id: "audit", label: "Audit" },
       ],

@@ -5,7 +5,7 @@ import {
 } from "discord.js";
 import { createSuccessEmbed } from "../../utils/embedUtils.js";
 import { withErrorHandling } from "../middleware.js";
-import { log } from "../../../common/utils/logger.js";
+import { log } from "@mcbot/core/utils/logger.js";
 
 export const data = new SlashCommandBuilder()
   .setName("clear")

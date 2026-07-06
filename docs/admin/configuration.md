@@ -146,6 +146,7 @@ Each Discord server is configured independently. The key is the guild ID. Every 
 | `downtimeAlerts` | `channelId`, `server`, `mentionRole` | Alerts on unexpected downtime and recovery (host-disk and backup-age alerts use this channel too). `mentionRole` pings a role with each alert. |
 | `statusEmbed` | `enabled` | Self-provisioning live status display, see below. |
 | `channelPurge` | `channelId` | Deletes all messages in the channel daily at local midnight, except pinned messages and the status embed. |
+| `commands` | per-command settings | Per-guild overrides for slash commands (enabled / adminOnly), merged field-by-field over the global `commands` block — see [Command settings](#command-settings-per-command-three-scopes). |
 | `console` | `channelId` | Target channel for the `/console live` relay: an admin can stream a server's raw log into this (admin-only!) channel, batched and flood-protected. |
 | `whitelistApplications` | `channelId`, `adminChannelId`, `mentionRole` | Button-based whitelist applications: the bot posts a persistent **Apply** button into `channelId`; applications (Minecraft name + optional note, server select in multi-server guilds) queue in `adminChannelId` with Approve/Deny buttons that survive restarts. Approval takes the same path as `/whitelist` and DMs the applicant. `mentionRole` pings a role on new applications. Both channel IDs are required for the feature to arm. |
 
@@ -243,28 +244,49 @@ The bot needs the Manage Channels permission for this feature.
 | `milestones` | off | Milestone announcements per leaderboard stat key, thresholds in the stat's native unit (playtime is ticks: 100 h = `7200000`): `"milestones": { "playtime": [7200000], "diamonds": [100, 1000] }`. Announced in-game and via the `milestone` notification event. First activation seeds silently so veterans' whole histories are not blasted at once. |
 | `webui` | off | Web dashboard (separate process, `npm run start:web`): `{ "enabled": true, "port": 8130, "host": "127.0.0.1", "publicUrl": "https://panel.example.com" }`. Secrets come from the environment (`WEBUI_CLIENT_SECRET`, `WEBUI_SESSION_SECRET`). See [../dev/webui-integration.md](../dev/webui-integration.md). |
 
-## Command toggles
+## Command settings (per command, three scopes)
 
-Disable a command (slash or in-game) by its name. Disabled commands are not registered at all.
+Every command — slash and in-game — takes per-command settings, resolvable at three scopes:
+
+| Scope | Block | Governs |
+|---|---|---|
+| Global | top-level `commands` | fallback for everything |
+| Per guild | `guilds.<id>.commands` | **slash** commands issued in that guild |
+| Per server | `servers.<id>.commands` | **in-game** `!commands` on that server |
+
+Resolution is **field-by-field**: a scoped entry only changes the fields it sets and inherits the rest from the global block (which in turn falls back to the defaults `enabled: true`, `adminOnly: false`). Any field added to command settings in the future automatically gets the same scoped fallback.
 
 ```json
 "commands": {
   "map":  { "enabled": false, "url": "https://map.example.com" },
-  "seed": { "enabled": true }
+  "say":  { "adminOnly": true }
+},
+"guilds": {
+  "111222333444555666": {
+    "commands": {
+      "say":  { "adminOnly": false },
+      "poll": { "enabled": false }
+    }
+  }
+},
+"servers": {
+  "creative": {
+    "commands": {
+      "slime": { "enabled": false }
+    }
+  }
 }
 ```
 
-The `map` command additionally needs the `url` field pointing to your Dynmap/Bluemap instance. Command toggles apply to in-game commands too: `"link": { "enabled": false }` disables `!link`.
+In this example `/say` is admin-only everywhere except guild `1112…`, `/poll` is hidden in that one guild, and `!slime` doesn't respond on the creative server.
 
-Any slash command can additionally be gated behind the admin check with `adminOnly`:
+**Fields:**
 
-```json
-"commands": {
-  "say": { "adminOnly": true }
-}
-```
+- `enabled` — `false` hides the command in the scope. Slash commands reply with an ephemeral "disabled here"; in-game commands behave as nonexistent (silent). Enforcement happens at dispatch time, so `/config reload` and dashboard edits apply immediately. One exception: a command disabled in **every** scope is not registered at all, so re-enabling it from that state needs one bot restart.
+- `adminOnly` — gates the command behind the admin check. For slash commands that is the global `adminUsers` or the issuing guild's `adminUsers`; for in-game commands the player's **linked Discord account** must pass the global admin check (game chat has no guild context, so guild-scoped admin lists don't apply there). `adminOnly` can only **add** a restriction: built-in admin commands (`/server`, `/config`, `/kick`, …) keep their own admin gate no matter what is configured here.
+- `url` — used by `/map` only, pointing at your Dynmap/Bluemap instance.
 
-This uses the same check as the built-in admin commands (global `adminUsers`, or the issuing guild's `adminUsers`). It is most useful for `/say`, which writes to the game chat and is open to everyone by default. The setting is read live, so `/config reload` applies it without a restart. Note that `/say` and the chat bridge are also rate-limited per user (the bridge allows short bursts of 8 messages per 10 seconds), so a flood cannot saturate the game console either way.
+The web dashboard has a **Commands** tab that edits exactly these blocks with a scope selector and shows the effective value per scope. Note that `/say` and the chat bridge are also rate-limited per user (the bridge allows short bursts), so a flood cannot saturate the game console either way.
 
 ## Environment variable overrides
 

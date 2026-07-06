@@ -1,0 +1,27 @@
+{
+  "name": "@mcbot/web",
+  "version": "4.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The web dashboard \u2014 an optional extension of the bot. Backend (Fastify) and frontend (Vue SPA) are one unit: one package, one build, one artifact. Runs with or without the bot; never imports it.",
+  "main": "dist/backend/index.js",
+  "dependencies": {
+    "@mcbot/core": "*",
+    "@mcbot/schema": "*",
+    "fastify": "^5.10.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "typescript": "^6.0.3",
+    "vite": "^6.0.5",
+    "vue": "^3.5.13",
+    "vue-tsc": "^2.2.0"
+  },
+  "scripts": {
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:backend": "tsc -b",
+    "build:frontend": "vue-tsc -p frontend/tsconfig.json --noEmit && vite build --config frontend/vite.config.ts",
+    "dev:frontend": "vite --config frontend/vite.config.ts",
+    "start": "node --enable-source-maps dist/backend/index.js"
+  }
+}

@@ -14,7 +14,12 @@
       "useRcon": true,
       "rconHost": "localhost",
       "rconPort": 25575,
-      "rconPassword": "your-rcon-password"
+      "rconPassword": "your-rcon-password",
+      "commands": {
+        "slime": {
+          "enabled": true
+        }
+      }
     },
     "creative": {
       "serverDir": "/home/minecraft/minecraft-server/creative",
@@ -100,6 +105,11 @@
         "channelId": "",
         "adminChannelId": "",
         "mentionRole": ""
+      },
+      "commands": {
+        "say": {
+          "adminOnly": false
+        }
       }
     }
   },

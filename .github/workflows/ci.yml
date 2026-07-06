@@ -16,7 +16,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # engines requires >= 22.13 (node:sqlite); CI runs the LTS that
+          # ships it stable.
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
@@ -47,9 +49,11 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
-          cache-dependency-path: src/web/frontend/package-lock.json
 
-      - name: Build dashboard frontend
-        run: npm run build:web
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build dashboard (backend + frontend)
+        run: npm run build:all

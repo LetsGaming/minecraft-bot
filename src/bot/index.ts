@@ -11,34 +11,47 @@ import {
 import { readdirSync, statSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { loadConfig, getServerIds, watchConfig } from "../common/config.js";
-import { summarizeConfigChanges } from "../common/utils/configDiff.js";
-import { consumeToken, cooldownSeconds } from "../common/utils/rateLimiter.js";
+import { loadConfig, getServerIds, watchConfig } from "@mcbot/core/config.js";
+import { summarizeConfigChanges } from "@mcbot/core/utils/configDiff.js";
+import { consumeToken, cooldownSeconds } from "@mcbot/core/utils/rateLimiter.js";
+import {
+  resolveCommandPolicy,
+  commandEnabledAnywhere,
+} from "@mcbot/core/utils/commandPolicy.js";
+import { t } from "@mcbot/core/utils/i18n.js";
+import { registerManifestCommands } from "@mcbot/core/utils/commandManifest.js";
+
+/** Slash commands discovered at load, for the dashboard manifest. */
+const manifestSlash: Array<{ name: string; description: string }> = [];
 import {
   isServerAdmin,
   getMemberRoleIds,
 } from "./commands/middleware.js";
-import { initServers, getAllInstances } from "../common/utils/server.js";
+import { initServers, getAllInstances } from "@mcbot/core/utils/server.js";
+import { getDb } from "@mcbot/core/db/index.js";
 import {
   capabilityCommandSkips,
   capabilitySummary,
-} from "../common/utils/capabilities.js";
-import { migrateLegacySnapshots } from "../common/utils/snapshotUtils.js";
+} from "@mcbot/core/utils/capabilities.js";
+import { migrateLegacySnapshots } from "@mcbot/core/utils/snapshotUtils.js";
 import { tryResolveServer } from "./utils/guildRouter.js";
 import {
   initMinecraftCommands,
   reconcileServers,
 } from "./logWatcher/initMinecraftCommands.js";
-import { log } from "../common/utils/logger.js";
-import { flushUptimeHistory } from "../common/utils/uptimeTracker.js";
+import { log } from "@mcbot/core/utils/logger.js";
+import { flushUptimeHistory } from "@mcbot/core/utils/uptimeTracker.js";
 import { invalidateStatusChannelCache } from "./logWatcher/watchers/statusEmbed.js";
-import type { BotCommand, BotClient } from "../common/types/index.js";
+import type { BotCommand, BotClient } from "@mcbot/core/types/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const config = loadConfig();
 
 // Initialize all server instances
 initServers(config.servers);
+// Open the SQLite store early: schema migrations and the one-time legacy
+// JSON import run here, before any command can touch a store.
+getDb();
 
 // Probe which setup-suite artifacts each server provides. The result
 // gates command registration below and per-invocation checks in the
@@ -58,9 +71,7 @@ for (const inst of getAllInstances()) {
 // expects (missing /info, or /info.version < MIN_WRAPPER_VERSION), so
 // silent feature mismatches surface at startup instead of in the field.
 {
-  const { verifyWrapperVersion } = await import(
-    "../common/utils/serverAccess.js"
-  );
+  const { verifyWrapperVersion } = await import("@mcbot/core/utils/serverAccess.js");
   await Promise.all(
     getAllInstances().map((inst) => verifyWrapperVersion(inst.config)),
   );
@@ -69,9 +80,7 @@ for (const inst of getAllInstances()) {
 // Heartbeat file for the (optional) dashboard process: a fresh
 // data/runtime.json means "bot alive", stale means banner in the UI.
 {
-  const { startRuntimeHeartbeat } = await import(
-    "../common/utils/runtimeHeartbeat.js"
-  );
+  const { startRuntimeHeartbeat } = await import("@mcbot/core/utils/runtimeHeartbeat.js");
   const { currentVersion } = await import(
     "./logWatcher/watchers/updateNotifier.js"
   );
@@ -160,8 +169,16 @@ async function loadCommands(): Promise<void> {
       const cmd = (await import(path.resolve(file))) as Partial<BotCommand>;
       if (!cmd.data || !cmd.execute) continue;
       const name = cmd.data.name;
-      const enabled = config.commands?.[name]?.enabled ?? true;
-      if (!enabled) {
+      // Collect for the dashboard manifest BEFORE any skip, so disabled
+      // commands can still be re-enabled from the UI.
+      manifestSlash.push({
+        name,
+        description: cmd.data.description ?? "",
+      });
+      // Only a command disabled in EVERY scope (global + all guild
+      // overrides) is skipped entirely; anything else stays registered
+      // and is gated per guild at dispatch time.
+      if (!commandEnabledAnywhere(name)) {
         log.info("commands", `Skipping disabled: /${name}`);
         continue;
       }
@@ -179,6 +196,9 @@ async function loadCommands(): Promise<void> {
       log.error("commands", `Failed to load ${file}: ${msg}`);
     }
   }
+
+  // Dashboard manifest: the web process cannot discover commands itself.
+  registerManifestCommands("slash", manifestSlash);
 }
 
 async function registerGlobalCommands(): Promise<void> {
@@ -250,7 +270,7 @@ void (async () => {
       // Player name autocomplete
       if (["player", "player1", "player2"].includes(focused.name)) {
         try {
-          const { getPlayerNames } = await import("../common/utils/playerUtils.js");
+          const { getPlayerNames } = await import("@mcbot/core/utils/playerUtils.js");
           const server = tryResolveServer(
             autocomplete as unknown as ChatInputCommandInteraction,
           );
@@ -293,10 +313,26 @@ void (async () => {
     const command = commands.get(chatInteraction.commandName);
     if (!command) return;
 
-    // Commands marked adminOnly in config (e.g. "say") use the same check
-    // as requireServerAdmin. Read via loadConfig() at dispatch time so
-    // config reloads apply without a restart.
-    if (loadConfig().commands?.[chatInteraction.commandName]?.adminOnly) {
+    // Effective per-command policy for THIS guild (guild override →
+    // global block → defaults), resolved at dispatch time so config
+    // reloads and dashboard edits apply without a restart. `adminOnly`
+    // uses the same check as requireServerAdmin; built-in admin
+    // commands additionally keep their own wrapper regardless.
+    const policy = resolveCommandPolicy(chatInteraction.commandName, {
+      guildId: chatInteraction.guild?.id,
+    });
+    if (!policy.enabled) {
+      await chatInteraction.reply({
+        content: t(
+          "command.disabledHere",
+          { command: chatInteraction.commandName },
+          chatInteraction.guild?.id,
+        ),
+        flags: MessageFlags.Ephemeral as number,
+      });
+      return;
+    }
+    if (policy.adminOnly) {
       const allowed = isServerAdmin(
         chatInteraction.user.id,
         getMemberRoleIds(chatInteraction),

@@ -2,16 +2,16 @@
  * applyConfig — the bot-only half of the config-editing seam.
  *
  * readRawConfig / validateCandidate / writeConfig are file-based and live
- * in src/common/utils/configService.ts, usable from any process. Applying
+ * in @mcbot/core (utils/configService.ts), usable from any process. Applying
  * a config to the RUNNING bot (reload cache + reconcile instances and
  * watchers) requires the live Discord client, so it lives here. The web
  * backend never imports this: it writes via writeConfig and lets the
  * bot's fs watcher pick the change up.
  */
 import type { Client } from "discord.js";
-import { reloadConfig } from "../../common/config.js";
+import { reloadConfig } from "@mcbot/core/config.js";
 import { reconcileServers } from "../logWatcher/initMinecraftCommands.js";
-import type { BotConfig } from "../../common/types/index.js";
+import type { BotConfig } from "@mcbot/core/types/index.js";
 
 /**
  * Reload the config cache and reconcile running server instances and

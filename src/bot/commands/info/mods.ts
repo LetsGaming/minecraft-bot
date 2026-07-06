@@ -13,11 +13,11 @@
 
 import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embedUtils.js";
-import { getModList, type ModInfo } from "../../../common/utils/modUtils.js";
+import { getModList, type ModInfo } from "@mcbot/core/utils/modUtils.js";
 import { withErrorHandling } from "../middleware.js";
 import { resolveServer } from "../../utils/guildRouter.js";
-import { requireCapability } from "../../../common/utils/capabilities.js";
-import { formatTime } from "../../../common/utils/time.js";
+import { requireCapability } from "@mcbot/core/utils/capabilities.js";
+import { formatTime } from "@mcbot/core/utils/time.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 

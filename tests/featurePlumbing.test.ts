@@ -5,11 +5,11 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-import { validateCandidateConfig } from "../src/common/config.js";
+import { validateCandidateConfig } from "../src/core/config.js";
 
 const base = {
   token: "t",
@@ -94,7 +94,7 @@ describe("validateCandidateConfig — new feature blocks", () => {
 
 describe("ServerInstance.getLastDeathLocation", () => {
   it("parses the RCON NBT response including the dimension", async () => {
-    const { ServerInstance } = await import("../src/common/utils/server.js");
+    const { ServerInstance } = await import("../src/core/utils/server.js");
     const server = new ServerInstance("smp", {
       screenSession: "smp",
       serverDir: "/srv",
@@ -115,7 +115,7 @@ describe("ServerInstance.getLastDeathLocation", () => {
   });
 
   it("returns null when the tag is missing (never died)", async () => {
-    const { ServerInstance } = await import("../src/common/utils/server.js");
+    const { ServerInstance } = await import("../src/core/utils/server.js");
     const server = new ServerInstance("smp", {
       screenSession: "smp",
       serverDir: "/srv",
@@ -136,16 +136,16 @@ describe("advancement watcher — challenge win", () => {
   beforeEach(() => vi.resetModules());
 
   async function setup(storeData: unknown) {
-    vi.doMock("../src/common/utils/utils.js", () => ({
+    vi.doMock("../src/core/utils/utils.js", () => ({
       getRootDir: vi.fn().mockReturnValue("/tmp"),
-      loadJson: vi.fn().mockResolvedValue(storeData),
+      loadJson: vi.fn().mockResolvedValue({}),
       saveJson: vi.fn().mockResolvedValue(undefined),
     }));
-    vi.doMock("../src/common/config.js", () => ({
+    vi.doMock("../src/core/config.js", () => ({
       loadConfig: vi.fn().mockReturnValue({ language: "en", guilds: {} }),
       getServerIds: vi.fn().mockReturnValue(["smp"]),
     }));
-    vi.doMock("../src/common/utils/adminAudit.js", () => ({
+    vi.doMock("../src/core/utils/adminAudit.js", () => ({
       recordAdminAction: vi.fn().mockResolvedValue(undefined),
     }));
     const broadcastNotification = vi.fn().mockResolvedValue(undefined);
@@ -154,11 +154,18 @@ describe("advancement watcher — challenge win", () => {
       PLAYER_NAME: String.raw`\.?[a-zA-Z0-9_]{1,32}`,
     }));
 
+    // vi.resetModules() gives the watcher a fresh db module — seed and
+    // read through that registry, not the file-scope one.
+    const { closeDbForTesting } = await import("../src/core/db/index.js");
+    const { kvGet, kvSet } = await import("../src/core/db/kv.js");
+    closeDbForTesting();
+    kvSet("challenges", storeData);
+
     const { registerAdvancementWatcher } = await import(
       "../src/bot/logWatcher/watchers/advancements.js"
     );
-    const { recordAdminAction } = await import("../src/common/utils/adminAudit.js");
-    const { saveJson } = await import("../src/common/utils/utils.js");
+    const { recordAdminAction } = await import("../src/core/utils/adminAudit.js");
+    const { saveJson } = await import("../src/core/utils/utils.js");
 
     let handler!: (m: RegExpExecArray) => Promise<void>;
     let regex!: RegExp;
@@ -180,6 +187,7 @@ describe("advancement watcher — challenge win", () => {
       broadcastNotification,
       recordAdminAction: vi.mocked(recordAdminAction),
       saveJson: vi.mocked(saveJson),
+      kvGet,
     };
   }
 
@@ -205,7 +213,10 @@ describe("advancement watcher — challenge win", () => {
     const ctx = await setup(store);
     await ctx.run(line("Alice", "stone age")); // case-insensitive
 
-    const challenge = (store.servers.smp as Array<Record<string, unknown>>)[0]!;
+    const after = ctx.kvGet("challenges") as {
+      servers: Record<string, Array<Record<string, unknown>>>;
+    };
+    const challenge = after.servers["smp"]![0]!;
     expect(challenge["status"]).toBe("won");
     expect(challenge["wonBy"]).toBe("Alice");
     // Advancement embed + challenge-won embed both broadcast.
@@ -238,7 +249,10 @@ describe("advancement watcher — challenge win", () => {
     const ctx = await setup(store);
     await ctx.run(line("Alice", "Stone Age"));
 
-    const challenge = (store.servers.smp as Array<Record<string, unknown>>)[0]!;
+    const after = ctx.kvGet("challenges") as {
+      servers: Record<string, Array<Record<string, unknown>>>;
+    };
+    const challenge = after.servers["smp"]![0]!;
     expect(challenge["status"]).toBe("expired"); // not won — it was stale
     expect(ctx.recordAdminAction).not.toHaveBeenCalled();
     // Only the regular advancement embed went out.
@@ -264,26 +278,28 @@ describe("advancement watcher — challenge win", () => {
       },
       pending: { version: 1, servers: {} },
     };
-    vi.doMock("../src/common/utils/utils.js", () => ({
+    vi.doMock("../src/core/utils/utils.js", () => ({
       getRootDir: vi.fn().mockReturnValue("/tmp"),
-      loadJson: vi.fn((p: string) =>
-        Promise.resolve(
-          p.includes("pendingRewards") ? stores.pending : stores.challenges,
-        ),
-      ),
+      loadJson: vi.fn().mockResolvedValue({}),
       saveJson: vi.fn().mockResolvedValue(undefined),
     }));
-    vi.doMock("../src/common/config.js", () => ({
+    vi.doMock("../src/core/config.js", () => ({
       loadConfig: vi.fn().mockReturnValue({ language: "en", guilds: {} }),
       getServerIds: vi.fn().mockReturnValue(["smp"]),
     }));
-    vi.doMock("../src/common/utils/adminAudit.js", () => ({
+    vi.doMock("../src/core/utils/adminAudit.js", () => ({
       recordAdminAction: vi.fn().mockResolvedValue(undefined),
     }));
     vi.doMock("../src/bot/logWatcher/watchers/notifyGuilds.js", () => ({
       broadcastNotification: vi.fn().mockResolvedValue(undefined),
       PLAYER_NAME: String.raw`\.?[a-zA-Z0-9_]{1,32}`,
     }));
+
+    const { closeDbForTesting } = await import("../src/core/db/index.js");
+    const { kvGet, kvSet } = await import("../src/core/db/kv.js");
+    closeDbForTesting();
+    kvSet("challenges", stores.challenges);
+    kvSet("pendingRewards", stores.pending);
 
     const { registerAdvancementWatcher } = await import(
       "../src/bot/logWatcher/watchers/advancements.js"
@@ -305,7 +321,7 @@ describe("advancement watcher — challenge win", () => {
     registerAdvancementWatcher(logWatcher as never, {} as never, {});
     await handler(regex.exec(line("Alice", "Stone Age"))!);
 
-    const pending = stores.pending as {
+    const pending = kvGet("pendingRewards") as {
       servers: Record<string, Record<string, Array<{ items: unknown[] }>>>;
     };
     expect(pending.servers["smp"]!["alice"]).toHaveLength(1);

@@ -11,9 +11,9 @@ import {
   savePollStore,
   getOpenPollForServer,
   voterKeyForMc,
-} from "../../../common/utils/pollStore.js";
-import { loadLinkedAccounts } from "../../../common/utils/linkUtils.js";
-import { t } from "../../../common/utils/i18n.js";
+} from "@mcbot/core/utils/pollStore.js";
+import { loadLinkedAccounts } from "@mcbot/core/utils/linkUtils.js";
+import { t } from "@mcbot/core/utils/i18n.js";
 
 const cmd = defineCommand({
   name: "vote",

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateApiUrl } from "../src/common/config.js";
+import { validateApiUrl } from "../src/core/config.js";
 
 // The remote API wrapper carries full server-control authority
 // behind a static x-api-key. Plaintext HTTP is only acceptable on a

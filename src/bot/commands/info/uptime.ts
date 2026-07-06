@@ -1,11 +1,11 @@
 import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embedUtils.js";
-import { getAllInstances } from "../../../common/utils/server.js";
+import { getAllInstances } from "@mcbot/core/utils/server.js";
 import {
   resolveServer,
   getAllowedServerIds,
 } from "../../utils/guildRouter.js";
-import { getUptimeStats } from "../../../common/utils/uptimeTracker.js";
+import { getUptimeStats } from "@mcbot/core/utils/uptimeTracker.js";
 import { withErrorHandling } from "../middleware.js";
 
 function formatDuration(ms: number): string {

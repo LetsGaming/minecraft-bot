@@ -1,13 +1,17 @@
 import { registerLogCommand } from "./logWatcher.js";
+import { resolveCommandPolicy } from "@mcbot/core/utils/commandPolicy.js";
+import { loadLinkedAccounts } from "@mcbot/core/utils/linkUtils.js";
+import { isServerAdmin } from "../commands/middleware.js";
+import { t } from "@mcbot/core/utils/i18n.js";
 import type { Client } from "discord.js";
-import type { ServerInstance } from "../../common/utils/server.js";
+import type { ServerInstance } from "@mcbot/core/utils/server.js";
 import type {
   InGameCommandDefinition,
   InGameCommandResult,
   InGameCommandInfo,
-} from "../../common/types/index.js";
-import { log } from "../../common/utils/logger.js";
-import { isValidMcName } from "../../common/utils/sanitize.js";
+} from "@mcbot/core/types/index.js";
+import { log } from "@mcbot/core/utils/logger.js";
+import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
 
 const cooldowns = new Map<string, number>();
 
@@ -93,6 +97,36 @@ export function defineCommand({
             `Ignoring !${name} from non-conforming username: ${JSON.stringify(username.slice(0, 32))}`,
           );
           return;
+        }
+
+        // ── Per-server command policy (live; reload/dashboard-safe) ──
+        // A command disabled for this server behaves as nonexistent:
+        // silent skip, debug log only. `adminOnly` requires the player's
+        // LINKED Discord account to pass the global admin check (there
+        // is no guild context in game chat, so guild-scoped admin lists
+        // do not apply here).
+        const policy = resolveCommandPolicy(name, { serverId: server?.id });
+        if (!policy.enabled) {
+          log.debug(
+            "commands",
+            `!${name} ignored on ${server?.id} (disabled for this server)`,
+          );
+          return;
+        }
+        if (policy.adminOnly) {
+          const linked = await loadLinkedAccounts().catch(
+            () => ({}) as Record<string, string>,
+          );
+          const lowerName = username.toLowerCase();
+          const discordId = Object.entries(linked).find(
+            ([, mc]) => mc.toLowerCase() === lowerName,
+          )?.[0];
+          if (!discordId || !isServerAdmin(discordId)) {
+            await server.sendCommand(
+              `/msg ${username} ${t("command.adminOnlyInGame", { command: name })}`,
+            );
+            return;
+          }
         }
 
         // ── Cooldown check ──

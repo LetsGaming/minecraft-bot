@@ -1,18 +1,18 @@
 import { type Client } from "discord.js";
 import { createPlayerEmbed } from "../../utils/embedUtils.js";
 import type { ILogWatcher } from "../logWatcher.js";
-import type { GuildConfig } from "../../../common/types/index.js";
+import type { GuildConfig } from "@mcbot/core/types/index.js";
 import { broadcastNotification, PLAYER_NAME } from "./notifyGuilds.js";
 import {
   loadSessionStore,
   saveSessionStore,
   openSession,
   closeSession,
-} from "../../../common/utils/sessionStore.js";
+} from "@mcbot/core/utils/sessionStore.js";
 import { deliverPendingRewards } from "../../commands/connection/daily/daily.js";
-import { log } from "../../../common/utils/logger.js";
+import { log } from "@mcbot/core/utils/logger.js";
 import { fireWatches } from "./watchFirer.js";
-import type { ServerInstance } from "../../../common/utils/server.js";
+import type { ServerInstance } from "@mcbot/core/utils/server.js";
 
 // PLAYER_NAME captures Bedrock names prefixed with "." by
 // Geyser/Floodgate in addition to vanilla [a-zA-Z0-9_] names.

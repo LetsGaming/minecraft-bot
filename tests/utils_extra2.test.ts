@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── Shared mocks ──────────────────────────────────────────────────────────
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -23,7 +23,7 @@ vi.mock("../src/bot/utils/embedUtils.js", () => ({
   createErrorEmbed: vi.fn().mockReturnValue({ type: "error-embed" }),
 }));
 
-vi.mock("../src/common/utils/utils.js", () => ({
+vi.mock("../src/core/utils/utils.js", () => ({
   getRootDir: vi.fn().mockReturnValue("/tmp"),
   loadJson: vi.fn().mockResolvedValue({}),
   saveJson: vi.fn().mockResolvedValue(undefined),
@@ -39,11 +39,11 @@ vi.mock("../src/common/utils/utils.js", () => ({
   stripLogPrefix: vi.fn((l) => l),
 }));
 
-vi.mock("../src/common/utils/uptimeTracker.js", () => ({
+vi.mock("../src/core/utils/uptimeTracker.js", () => ({
   recordCheck: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../src/common/config.js", () => ({
+vi.mock("../src/core/config.js", () => ({
   loadConfig: vi.fn().mockReturnValue({
     tpsWarningThreshold: 15,
     tpsPollIntervalMs: 5_000,
@@ -186,7 +186,7 @@ describe("playerUtils", () => {
   ) => Promise<Array<{ name: string; value: string }>>;
 
   beforeEach(async () => {
-    const mod = await import("../src/common/utils/playerUtils.js");
+    const mod = await import("../src/core/utils/playerUtils.js");
     findPlayer = mod.findPlayer;
     getPlayerNames = mod.getPlayerNames;
     getPlayerCount = mod.getPlayerCount;

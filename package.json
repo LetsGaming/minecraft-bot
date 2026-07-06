@@ -1,6 +1,6 @@
 {
   "name": "minecraft-bot",
-  "version": "3.6.0",
+  "version": "4.0.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/LetsGaming/minecraft-bot.git"
@@ -9,12 +9,21 @@
     "node": ">=20"
   },
   "type": "module",
-  "main": "dist/bot/index.js",
+  "private": true,
+  "workspaces": [
+    "src/schema",
+    "src/core",
+    "src/bot",
+    "src/web"
+  ],
   "scripts": {
-    "build": "npm run schema:generate && tsc",
-    "start": "node --enable-source-maps dist/bot/index.js",
-    "dev": "tsc --watch",
-    "typecheck": "tsc --noEmit",
+    "build": "npm run schema:generate && tsc -b src/bot",
+    "build:web": "npm run build --workspace=@mcbot/web",
+    "build:all": "npm run schema:generate && tsc -b src/bot src/web && npm run build:frontend --workspace=@mcbot/web",
+    "start": "node --enable-source-maps src/bot/dist/index.js",
+    "start:web": "node --enable-source-maps src/web/dist/backend/index.js",
+    "dev": "tsc -b src/bot src/web --watch",
+    "typecheck": "tsc -b src/bot src/web",
     "lint": "eslint src --max-warnings 0",
     "pm2:start": "pm2 start ecosystem.config.cjs --env production",
     "pm2:stop": "pm2 stop minecraft-bot",
@@ -26,14 +35,8 @@
     "setup": "node scripts/setup.mjs",
     "schema:generate": "node scripts/generate-schema.mjs",
     "schema:check": "node scripts/generate-schema.mjs --check",
-    "start:web": "node --enable-source-maps dist/web/index.js",
-    "build:web": "cd src/web/frontend && npm ci && npm run build",
-    "build:all": "npm run build && npm run build:web",
-    "i18n:check": "node scripts/check-locales.mjs"
-  },
-  "dependencies": {
-    "discord.js": "^14.26.4",
-    "fastify": "^5.10.0"
+    "i18n:check": "node scripts/check-locales.mjs",
+    "clean": "tsc -b --clean src/bot src/web && rm -rf src/web/dist"
   },
   "devDependencies": {
     "@types/node": "^25.9.2",

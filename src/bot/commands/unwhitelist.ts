@@ -3,9 +3,9 @@ import { resolveServer } from "../utils/guildRouter.js";
 
 import { createSuccessEmbed } from "../utils/embedUtils.js";
 import { withErrorHandling, requireServerAdmin } from "./middleware.js";
-import { recordRemove } from "../../common/utils/whitelistAudit.js";
-import { invalidateWhitelistCache } from "../../common/utils/utils.js";
-import { isValidMcName } from "../../common/utils/sanitize.js";
+import { recordRemove } from "@mcbot/core/utils/whitelistAudit.js";
+import { invalidateWhitelistCache } from "@mcbot/core/utils/utils.js";
+import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
 
 export const data = new SlashCommandBuilder()
   .setName("unwhitelist")

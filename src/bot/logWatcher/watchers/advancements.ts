@@ -1,24 +1,24 @@
 import { type Client } from "discord.js";
 import { createPlayerEmbed, createEmbed } from "../../utils/embedUtils.js";
 import type { ILogWatcher } from "../logWatcher.js";
-import type { GuildConfig } from "../../../common/types/index.js";
+import type { GuildConfig } from "@mcbot/core/types/index.js";
 import { broadcastNotification, PLAYER_NAME } from "./notifyGuilds.js";
 import {
   loadChallengeStore,
   saveChallengeStore,
   expireStale,
   getActiveChallenge,
-} from "../../../common/utils/challengeStore.js";
+} from "@mcbot/core/utils/challengeStore.js";
 import {
   loadPendingRewards,
   savePendingRewards,
   getServerPending,
-} from "../../../common/utils/dailyStore.js";
+} from "@mcbot/core/utils/dailyStore.js";
 import { give } from "../../commands/connection/daily/daily.js";
-import { recordAdminAction } from "../../../common/utils/adminAudit.js";
-import { t } from "../../../common/utils/i18n.js";
-import { log } from "../../../common/utils/logger.js";
-import type { ServerInstance } from "../../../common/utils/server.js";
+import { recordAdminAction } from "@mcbot/core/utils/adminAudit.js";
+import { t } from "@mcbot/core/utils/i18n.js";
+import { log } from "@mcbot/core/utils/logger.js";
+import type { ServerInstance } from "@mcbot/core/utils/server.js";
 
 // Use PLAYER_NAME (not \w+) so Bedrock players with "."-prefixed
 // names get advancement notifications too.

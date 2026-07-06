@@ -9,15 +9,15 @@ import {
   getServerInstance,
   addServerInstance,
   removeServerInstance,
-} from "../../common/utils/server.js";
-import { loadConfig, getServerIds } from "../../common/config.js";
-import { log } from "../../common/utils/logger.js";
+} from "@mcbot/core/utils/server.js";
+import { loadConfig, getServerIds } from "@mcbot/core/config.js";
+import { log } from "@mcbot/core/utils/logger.js";
 import type { Client } from "discord.js";
 import type {
   BotConfig,
   GuildConfig,
   InGameCommandResult,
-} from "../../common/types/index.js";
+} from "@mcbot/core/types/index.js";
 
 // Watchers
 import { registerChatBridge, setupDiscordToMc } from "./watchers/chatBridge.js";
@@ -38,9 +38,14 @@ import { startHostResourcesMonitor } from "./watchers/hostResourcesMonitor.js";
 import { startPollScheduler } from "./watchers/pollScheduler.js";
 import { registerSleepWatcher } from "./watchers/sleepWatcher.js";
 import { registerConsoleRelay } from "./watchers/consoleRelay.js";
-import { startUptimeFlushScheduler } from "../../common/utils/uptimeTracker.js";
+import { startUptimeFlushScheduler } from "@mcbot/core/utils/uptimeTracker.js";
 import { startUpdateNotifier } from "./watchers/updateNotifier.js";
-import { startPlayerCountSampler } from "../../common/utils/playerCountHistory.js";
+import { startPlayerCountSampler } from "@mcbot/core/utils/playerCountHistory.js";
+import { commandEnabledAnywhere } from "@mcbot/core/utils/commandPolicy.js";
+import {
+  registerManifestCommands,
+  flushCommandManifest,
+} from "@mcbot/core/utils/commandManifest.js";
 import { reconcileRestartSchedules } from "./watchers/restartScheduler.js";
 import { startMilestoneWatcher } from "./watchers/milestoneWatcher.js";
 import { ensureApplicationPrompts } from "../interactions/whitelistApplications.js";
@@ -113,12 +118,12 @@ function unwireServer(serverId: string): void {
 export async function initMinecraftCommands(client: Client): Promise<void> {
   const cfg = loadConfig();
   const guildConfigs = cfg.guilds;
-  const commandOverrides = cfg.commands ?? {};
 
   // ── 1. Load in-game !command definitions (registers them globally) ──
   const commandsDir = path.join(__dirname, "commands");
   const commandFiles = getCommandFiles(commandsDir);
 
+  const manifestIngame: Array<{ name: string; description: string }> = [];
   for (const file of commandFiles) {
     try {
       const mod = (await import(
@@ -128,7 +133,13 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
       };
       if (typeof mod.init !== "function") continue;
       const name = path.basename(file, ".js");
-      if ((commandOverrides[name]?.enabled ?? true) === false) {
+      manifestIngame.push({
+        name,
+        description: mod.COMMAND_INFO?.description ?? "",
+      });
+      // Only skip when disabled in EVERY scope; per-server enablement is
+      // enforced live at dispatch inside defineCommand.
+      if (!commandEnabledAnywhere(name)) {
         log.info("commands", `Skipping disabled: !${name}`);
         continue;
       }
@@ -139,6 +150,8 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
       log.error("commands", `Failed to load ${file}: ${msg}`);
     }
   }
+  registerManifestCommands("ingame", manifestIngame);
+  await flushCommandManifest();
 
   // ── 2. Create a LogWatcher for each server instance ──
   const instances = getAllInstances();

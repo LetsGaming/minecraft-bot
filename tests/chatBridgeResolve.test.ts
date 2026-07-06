@@ -10,7 +10,7 @@
  */
 import { describe, it, expect, vi } from "vitest";
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock("../src/bot/utils/embedUtils.js", () => ({
@@ -18,7 +18,7 @@ vi.mock("../src/bot/utils/embedUtils.js", () => ({
 }));
 
 import { resolveGuildBridges } from "../src/bot/logWatcher/watchers/chatBridge.js";
-import type { GuildConfig } from "../src/common/types/index.js";
+import type { GuildConfig } from "../src/core/types/index.js";
 
 const gc = (partial: Partial<GuildConfig>): GuildConfig => partial;
 

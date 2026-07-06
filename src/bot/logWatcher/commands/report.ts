@@ -12,12 +12,12 @@
  * keeps the channel spam-resistant.
  */
 import { defineCommand } from "../defineCommand.js";
-import { loadConfig } from "../../../common/config.js";
+import { loadConfig } from "@mcbot/core/config.js";
 import { serverInScope } from "../../utils/guildRouter.js";
 import { createPlayerEmbed } from "../../utils/embedUtils.js";
-import { stripControlChars } from "../../../common/utils/sanitize.js";
-import { t } from "../../../common/utils/i18n.js";
-import { log } from "../../../common/utils/logger.js";
+import { stripControlChars } from "@mcbot/core/utils/sanitize.js";
+import { t } from "@mcbot/core/utils/i18n.js";
+import { log } from "@mcbot/core/utils/logger.js";
 
 const MAX_REPORT_LENGTH = 500;
 

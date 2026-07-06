@@ -10,11 +10,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import net from "net";
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-import { RconClient } from "../src/common/rcon/RconClient.js";
+import { RconClient } from "../src/core/rcon/RconClient.js";
 
 // ── RCON wire-format helpers ───────────────────────────────────────────────
 

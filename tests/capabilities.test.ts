@@ -13,19 +13,19 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-import { detectCapabilities } from "../src/common/utils/serverAccess.js";
+import { detectCapabilities } from "../src/core/utils/serverAccess.js";
 import {
   capabilityCommandSkips,
   capabilitySummary,
   requireCapability,
-} from "../src/common/utils/capabilities.js";
-import { allCapabilities } from "../src/common/types/index.js";
-import type { ServerCapabilities, ServerConfig } from "../src/common/types/index.js";
-import type { ServerInstance } from "../src/common/utils/server.js";
+} from "../src/core/utils/capabilities.js";
+import { allCapabilities } from "../src/core/types/index.js";
+import type { ServerCapabilities, ServerConfig } from "../src/core/types/index.js";
+import type { ServerInstance } from "../src/core/utils/server.js";
 
 let root: string;
 
@@ -267,7 +267,7 @@ describe("deleteStatsFile — remote wrapper", () => {
   const UUID = "550e8400-e29b-41d4-a716-446655440000";
 
   it("calls DELETE /stats/:uuid and returns the wrapper's verdict", async () => {
-    const { deleteStatsFile } = await import("../src/common/utils/serverAccess.js");
+    const { deleteStatsFile } = await import("../src/core/utils/serverAccess.js");
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(Response.json({ deleted: true }));
@@ -288,7 +288,7 @@ describe("deleteStatsFile — remote wrapper", () => {
   });
 
   it("degrades to false on wrappers without the route", async () => {
-    const { deleteStatsFile } = await import("../src/common/utils/serverAccess.js");
+    const { deleteStatsFile } = await import("../src/core/utils/serverAccess.js");
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(new Response("Cannot DELETE", { status: 404 }));

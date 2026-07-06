@@ -1,3 +1,13 @@
+/**
+ * Snapshot store — table-backed (snapshots in data/bot.db) since v4.0.
+ *
+ * The read/cleanup contracts are unchanged from the file era: closest-
+ * not-after baseline with oldest fallback, v2-only daily-diff baselines,
+ * and the keep-newest / latest-per-day / 31-day retention policy.
+ * migrateLegacySnapshots now IMPORTS the old snapshot files (both
+ * layouts) into the table and retires the directory as
+ * data/snapshots.imported — covered against a real temp tree.
+ */
 import {
   describe,
   it,
@@ -13,25 +23,24 @@ import path from "path";
 // IMPORTANT: vi.mock is hoisted before const declarations, so the factory
 // must use a plain string literal — not a variable — for getRootDir's return value.
 const SNAP_ROOT = "/tmp/mc-bot-snap-test-" + process.pid;
-// Snapshots are now stored per server under data/snapshots/<serverId>/
 const SERVER_ID = "survival";
-const SNAPSHOTS_DIR = SNAP_ROOT + "/data/snapshots/" + SERVER_ID;
+const SNAPSHOTS_BASE = path.join(SNAP_ROOT, "data", "snapshots");
 
-vi.mock("../src/common/utils/utils.js", () => ({
+vi.mock("../src/core/utils/utils.js", () => ({
   // String literals inline — no TDZ risk
   getRootDir: () => "/tmp/mc-bot-snap-test-" + process.pid,
   loadJson: vi.fn(),
   saveJson: vi.fn(),
 }));
 
-vi.mock("../src/common/utils/statUtils.js", () => ({
+vi.mock("../src/core/utils/statUtils.js", () => ({
   loadAllStats: vi.fn().mockResolvedValue({}),
   flattenStats: vi.fn().mockReturnValue([]),
   LEADERBOARD_STATS: {},
   invalidateAllStatsCache: vi.fn(),
 }));
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -40,21 +49,23 @@ import {
   getSnapshotForDailyDiff,
   cleanupSnapshots,
   migrateLegacySnapshots,
-} from "../src/common/utils/snapshotUtils.js";
-import { mkdir as mkdirP } from "fs/promises";
-import type { SnapshotData } from "../src/common/types/index.js";
+} from "../src/core/utils/snapshotUtils.js";
+import { getDb, closeDbForTesting } from "../src/core/db/index.js";
+import type { SnapshotData } from "../src/core/types/index.js";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
-async function writeSnapshot(
+function insertSnapshot(
   timestamp: number,
   version = 2,
   withFlatStats = true,
-): Promise<void> {
+  serverId = SERVER_ID,
+  players: SnapshotData["players"] = { "uuid-1": { playtime: 1000 } },
+): void {
   const data: SnapshotData = {
     version,
     timestamp,
-    players: { "uuid-1": { playtime: 1000 } },
+    players,
     ...(withFlatStats
       ? {
           flatStats: {
@@ -63,31 +74,33 @@ async function writeSnapshot(
         }
       : {}),
   };
-  await writeFile(
-    path.join(SNAPSHOTS_DIR, `${timestamp}.json`),
-    JSON.stringify(data),
-  );
+  getDb()
+    .prepare(
+      "INSERT INTO snapshots (server_id, ts, payload) VALUES (?, ?, ?)",
+    )
+    .run(serverId, timestamp, JSON.stringify(data));
 }
 
-async function listSnapshotFiles(): Promise<string[]> {
-  return readdir(SNAPSHOTS_DIR).catch(() => []);
+function listSnapshotTs(serverId = SERVER_ID): number[] {
+  return (
+    getDb()
+      .prepare("SELECT ts FROM snapshots WHERE server_id = ? ORDER BY ts ASC")
+      .all(serverId) as unknown as Array<{ ts: number }>
+  ).map((r) => r.ts);
 }
 
 // ── lifecycle ──────────────────────────────────────────────────────────────
 
 beforeAll(async () => {
-  await mkdir(SNAPSHOTS_DIR, { recursive: true });
+  await mkdir(SNAPSHOTS_BASE, { recursive: true });
 });
 
 afterAll(async () => {
   await rm(SNAP_ROOT, { recursive: true, force: true });
 });
 
-beforeEach(async () => {
-  const files = await listSnapshotFiles();
-  await Promise.all(
-    files.map((f) => rm(path.join(SNAPSHOTS_DIR, f), { force: true })),
-  );
+beforeEach(() => {
+  closeDbForTesting(); // fresh in-memory DB per test
 });
 
 // ── getSnapshotClosestTo ───────────────────────────────────────────────────
@@ -99,7 +112,7 @@ describe("getSnapshotClosestTo", () => {
 
   it("returns the only snapshot when there is exactly one", async () => {
     const ts = Date.now() - 1000;
-    await writeSnapshot(ts);
+    insertSnapshot(ts);
     const result = await getSnapshotClosestTo(SERVER_ID, Date.now());
     expect(result).not.toBeNull();
     expect(result!.timestamp).toBe(ts);
@@ -107,9 +120,9 @@ describe("getSnapshotClosestTo", () => {
 
   it("returns the snapshot closest to but not after the target", async () => {
     const now = Date.now();
-    await writeSnapshot(now - 3000);
-    await writeSnapshot(now - 1000); // closer
-    await writeSnapshot(now + 5000); // after target — excluded
+    insertSnapshot(now - 3000);
+    insertSnapshot(now - 1000); // closer
+    insertSnapshot(now + 5000); // after target — excluded
 
     const result = await getSnapshotClosestTo(SERVER_ID, now);
     expect(result!.timestamp).toBe(now - 1000);
@@ -118,8 +131,8 @@ describe("getSnapshotClosestTo", () => {
   it("falls back to the oldest when all snapshots are newer than target", async () => {
     const now = Date.now();
     const oldest = now + 1000;
-    await writeSnapshot(oldest);
-    await writeSnapshot(now + 2000);
+    insertSnapshot(oldest);
+    insertSnapshot(now + 2000);
 
     const result = await getSnapshotClosestTo(SERVER_ID, now - 10000);
     expect(result!.timestamp).toBe(oldest);
@@ -127,7 +140,7 @@ describe("getSnapshotClosestTo", () => {
 
   it("parses JSON and returns a full SnapshotData object", async () => {
     const ts = Date.now() - 500;
-    await writeSnapshot(ts);
+    insertSnapshot(ts);
     const result = await getSnapshotClosestTo(SERVER_ID, Date.now());
     expect(result).toHaveProperty("timestamp");
     expect(result).toHaveProperty("players");
@@ -144,7 +157,7 @@ describe("getSnapshotForDailyDiff", () => {
 
   it("returns null when all snapshots are older than the target", async () => {
     const now = Date.now();
-    await writeSnapshot(now - 100_000);
+    insertSnapshot(now - 100_000);
 
     const result = await getSnapshotForDailyDiff(SERVER_ID, now - 1000);
     expect(result).toBeNull();
@@ -153,7 +166,7 @@ describe("getSnapshotForDailyDiff", () => {
   it("returns a v2 snapshot within the target window", async () => {
     const now = Date.now();
     const target = now - 86400_000;
-    await writeSnapshot(target + 1000, 2, true);
+    insertSnapshot(target + 1000, 2, true);
 
     const result = await getSnapshotForDailyDiff(SERVER_ID, target);
     expect(result).not.toBeNull();
@@ -163,7 +176,7 @@ describe("getSnapshotForDailyDiff", () => {
   it("skips snapshots without flatStats (v1 legacy format)", async () => {
     const now = Date.now();
     const target = now - 86400_000;
-    await writeSnapshot(target + 1000, 1, false);
+    insertSnapshot(target + 1000, 1, false);
 
     const result = await getSnapshotForDailyDiff(SERVER_ID, target);
     expect(result).toBeNull();
@@ -174,8 +187,8 @@ describe("getSnapshotForDailyDiff", () => {
     const target = now - 86400_000;
     const ts1 = target + 1000;
     const ts2 = target + 10000;
-    await writeSnapshot(ts1, 2, true);
-    await writeSnapshot(ts2, 2, true);
+    insertSnapshot(ts1, 2, true);
+    insertSnapshot(ts2, 2, true);
 
     const result = await getSnapshotForDailyDiff(SERVER_ID, target);
     expect(result!.timestamp).toBe(ts1);
@@ -185,40 +198,36 @@ describe("getSnapshotForDailyDiff", () => {
 // ── cleanupSnapshots ───────────────────────────────────────────────────────
 
 describe("cleanupSnapshots", () => {
-  it("does not throw when directory is empty", async () => {
+  it("does not throw when the table is empty", async () => {
     await expect(cleanupSnapshots(SERVER_ID)).resolves.toBeUndefined();
   });
 
   it("keeps the newest snapshot even if very old", async () => {
     const veryOld = Date.now() - 32 * 24 * 60 * 60 * 1000;
-    await writeSnapshot(veryOld);
+    insertSnapshot(veryOld);
 
     await cleanupSnapshots(SERVER_ID);
 
-    const remaining = await listSnapshotFiles();
-    expect(remaining).toHaveLength(1);
+    expect(listSnapshotTs()).toHaveLength(1);
   });
 
   it("keeps recent snapshots untouched", async () => {
     const recent = Date.now() - 60_000;
-    await writeSnapshot(recent);
+    insertSnapshot(recent);
 
     await cleanupSnapshots(SERVER_ID);
 
-    const remaining = await listSnapshotFiles();
-    expect(remaining).toHaveLength(1);
+    expect(listSnapshotTs()).toHaveLength(1);
   });
 
   it("keeps only the latest snapshot for days older than 24h", async () => {
     const dayStart = Date.now() - 2 * 24 * 60 * 60 * 1000;
-    await writeSnapshot(dayStart + 1000); // earlier on that day
-    await writeSnapshot(dayStart + 5000); // later — should win
+    insertSnapshot(dayStart + 1000); // earlier on that day
+    insertSnapshot(dayStart + 5000); // later — should win
 
     await cleanupSnapshots(SERVER_ID);
 
-    const remaining = await listSnapshotFiles();
-    expect(remaining).toHaveLength(1);
-    expect(remaining[0]).toBe(`${dayStart + 5000}.json`);
+    expect(listSnapshotTs()).toEqual([dayStart + 5000]);
   });
 });
 
@@ -228,21 +237,12 @@ describe("per-server snapshot isolation", () => {
   it("does not return another server's snapshot as a baseline", async () => {
     const now = Date.now();
     // Snapshot for "survival" (the default test server)
-    await writeSnapshot(now - 5000);
+    insertSnapshot(now - 5000);
 
     // Snapshot for a second server at a closer timestamp
-    const otherDir = SNAP_ROOT + "/data/snapshots/creative";
-    await mkdirP(otherDir, { recursive: true });
-    const otherData: SnapshotData = {
-      version: 2,
-      timestamp: now - 1000,
-      players: { "uuid-other": { playtime: 999 } },
-      flatStats: { "uuid-other": { "minecraft:custom.minecraft:play_time": 999 } },
-    };
-    await writeFile(
-      path.join(otherDir, `${now - 1000}.json`),
-      JSON.stringify(otherData),
-    );
+    insertSnapshot(now - 1000, 2, true, "creative", {
+      "uuid-other": { playtime: 999 },
+    });
 
     const result = await getSnapshotClosestTo(SERVER_ID, now);
     // Must be survival's snapshot — never the closer-in-time creative one
@@ -252,32 +252,54 @@ describe("per-server snapshot isolation", () => {
     const other = await getSnapshotClosestTo("creative", now);
     expect(other?.players["uuid-other"]).toBeDefined();
     expect(other?.players["uuid-1"]).toBeUndefined();
-
-    await rm(otherDir, { recursive: true, force: true });
   });
 });
 
 // ── Legacy migration ─────────────────────────────────────────────────
 
 describe("migrateLegacySnapshots", () => {
-  it("moves loose snapshot files into the first server's directory", async () => {
-    const ts = Date.now() - 12345;
-    const looseFile = path.join(SNAP_ROOT, "data", "snapshots", `${ts}.json`);
+  it("imports legacy snapshot files (both layouts) and retires the directory", async () => {
+    // Ancient loose file (pre per-server directories) → first server.
+    const looseTs = Date.now() - 12345;
     await writeFile(
-      looseFile,
-      JSON.stringify({ version: 2, timestamp: ts, players: {}, flatStats: {} }),
+      path.join(SNAPSHOTS_BASE, `${looseTs}.json`),
+      JSON.stringify({
+        version: 2,
+        timestamp: looseTs,
+        players: {},
+        flatStats: {},
+      }),
+    );
+    // Per-server layout → its own server id.
+    const dirTs = Date.now() - 5000;
+    await mkdir(path.join(SNAPSHOTS_BASE, "creative"), { recursive: true });
+    await writeFile(
+      path.join(SNAPSHOTS_BASE, "creative", `${dirTs}.json`),
+      JSON.stringify({
+        version: 2,
+        timestamp: dirTs,
+        players: {},
+        flatStats: {},
+      }),
     );
 
     await migrateLegacySnapshots(SERVER_ID);
 
-    const migrated = await listSnapshotFiles();
-    expect(migrated).toContain(`${ts}.json`);
-    // Loose file is gone
-    const base = await readdir(path.join(SNAP_ROOT, "data", "snapshots"));
-    expect(base.filter((f) => f.endsWith(".json"))).toHaveLength(0);
+    expect(listSnapshotTs()).toContain(looseTs);
+    expect(listSnapshotTs("creative")).toContain(dirTs);
+
+    // The directory was retired, not deleted.
+    await expect(readdir(SNAPSHOTS_BASE)).rejects.toThrow();
+    const retired = await readdir(
+      path.join(SNAP_ROOT, "data", "snapshots.imported"),
+    );
+    expect(retired).toContain(`${looseTs}.json`);
+    expect(retired).toContain("creative");
   });
 
   it("is a no-op when there is nothing to migrate", async () => {
+    // The directory was renamed away by the previous test.
     await expect(migrateLegacySnapshots(SERVER_ID)).resolves.toBeUndefined();
+    expect(listSnapshotTs()).toHaveLength(0);
   });
 });

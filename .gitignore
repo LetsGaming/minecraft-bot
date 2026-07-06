@@ -3,5 +3,10 @@ config.json
 data/*
 !data/dailyRewards.json
 logs/
-dist/
+**/dist/
+*.tsbuildinfo
 coverage/
+
+# SQLite store + retired legacy JSON (imported on first 4.0 start)
+data/bot.db*
+data/*.imported

@@ -8,9 +8,9 @@ import { type Client } from "discord.js";
 import {
   takeMatchingWatches,
   type WatchKind,
-} from "../../../common/utils/watchStore.js";
-import { t } from "../../../common/utils/i18n.js";
-import { log } from "../../../common/utils/logger.js";
+} from "@mcbot/core/utils/watchStore.js";
+import { t } from "@mcbot/core/utils/i18n.js";
+import { log } from "@mcbot/core/utils/logger.js";
 
 export function fireWatches(
   client: Client,

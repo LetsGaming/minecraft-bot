@@ -1,0 +1,12 @@
+{
+  // Used only by scripts/generate-schema.mjs: ts-json-schema-generator
+  // builds its own program and cannot cope with composite projects
+  // (TS6307). Same flags as the real build, minus composite/emit.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["dist"]
+}

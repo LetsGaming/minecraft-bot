@@ -4,18 +4,19 @@
  * The plan calls the lifecycle edges "the critical part": crashes emit no
  * leave lines, restarts can orphan open sessions, and a join with a
  * session already open means the leave was missed. All covered here on
- * pure store objects; persistence (loadJson/saveJson) is exercised via
- * the load fallback test.
+ * pure store objects; persistence (kv_store["sessions"]) is exercised via
+ * the load fallback test against the real in-memory database.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/common/utils/utils.js", () => ({
+vi.mock("../src/core/utils/utils.js", () => ({
   getRootDir: vi.fn().mockReturnValue("/tmp"),
   loadJson: vi.fn(),
   saveJson: vi.fn().mockResolvedValue(undefined),
 }));
 
-import { loadJson } from "../src/common/utils/utils.js";
+import { kvSet } from "../src/core/db/kv.js";
+import { closeDbForTesting } from "../src/core/db/index.js";
 import {
   loadSessionStore,
   getServerSessions,
@@ -26,26 +27,29 @@ import {
   totalPlaytimeMs,
   MAX_SESSIONS_PER_PLAYER,
   type SessionStore,
-} from "../src/common/utils/sessionStore.js";
+} from "../src/core/utils/sessionStore.js";
 
 const fresh = (): SessionStore => ({ version: 1, servers: {} });
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  closeDbForTesting(); // fresh in-memory DB per test
+});
 
 describe("loadSessionStore", () => {
   it("returns an empty v1 store for missing/invalid data", async () => {
-    vi.mocked(loadJson).mockResolvedValue(null);
     expect(await loadSessionStore()).toEqual({ version: 1, servers: {} });
 
-    vi.mocked(loadJson).mockResolvedValue({ bogus: true });
+    kvSet("sessions", { bogus: true });
     expect(await loadSessionStore()).toEqual({ version: 1, servers: {} });
   });
 
   it("passes a valid v1 store through", async () => {
     const store = fresh();
     openSession(store, "smp", "Alice", 1000);
-    vi.mocked(loadJson).mockResolvedValue(store);
-    expect(await loadSessionStore()).toBe(store);
+    kvSet("sessions", store);
+    // Round-trips through JSON in the kv table — equality, not identity.
+    expect(await loadSessionStore()).toEqual(store);
   });
 });
 

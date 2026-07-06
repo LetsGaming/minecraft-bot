@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── Global mocks for modUtils ─────────────────────────────────────────────
 
-vi.mock("../src/common/utils/serverAccess.js", () => ({
+vi.mock("../src/core/utils/serverAccess.js", () => ({
   readModSlugs: vi.fn(),
   logStreamUrl: vi.fn().mockReturnValue("https://api.example.com/stream"),
   tailLog: vi.fn().mockResolvedValue(""),
@@ -27,13 +27,13 @@ vi.mock("../src/common/utils/serverAccess.js", () => ({
   runScript: vi.fn().mockResolvedValue({ exitCode: 0, output: "", stderr: "" }),
 }));
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
 // ── mocks for initMinecraftCommands ───────────────────────────────────────
 
-vi.mock("../src/common/config.js", () => ({
+vi.mock("../src/core/config.js", () => ({
   getServerIds: vi.fn().mockReturnValue([]),
   loadConfig: vi.fn().mockReturnValue({
     token: "tok",
@@ -48,7 +48,7 @@ vi.mock("../src/common/config.js", () => ({
   }),
 }));
 
-vi.mock("../src/common/utils/server.js", () => ({
+vi.mock("../src/core/utils/server.js", () => ({
   getAllInstances: vi.fn().mockReturnValue([]),
   getServerInstance: vi.fn().mockReturnValue(null),
 }));
@@ -123,12 +123,12 @@ vi.mock("../src/bot/logWatcher/watchers/channelPurge.js", () => ({
   startChannelPurge: vi.fn(),
 }));
 
-vi.mock("../src/common/utils/uptimeTracker.js", () => ({
+vi.mock("../src/core/utils/uptimeTracker.js", () => ({
   startUptimeFlushScheduler: vi.fn().mockReturnValue({ unref: vi.fn() }),
   recordCheck: vi.fn().mockResolvedValue(undefined),
 }));
 
-import * as serverAccess from "../src/common/utils/serverAccess.js";
+import * as serverAccess from "../src/core/utils/serverAccess.js";
 
 // ══════════════════════════════════════════════════════════════════════════════
 // modUtils.getModList
@@ -138,7 +138,7 @@ describe("modUtils.getModList", () => {
   let getModList: (server: never) => Promise<unknown>;
   beforeEach(async () => {
     vi.stubGlobal("fetch", vi.fn());
-    ({ getModList } = await import("../src/common/utils/modUtils.js"));
+    ({ getModList } = await import("../src/core/utils/modUtils.js"));
   });
 
   const fakeServer = {

@@ -9,11 +9,11 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../src/common/config.js", () => ({
+vi.mock("../src/core/config.js", () => ({
   getServerIds: vi.fn().mockReturnValue([]),
   loadConfig: vi.fn().mockReturnValue({
     token: "tok",
@@ -98,7 +98,7 @@ vi.mock("../src/bot/logWatcher/watchers/downtimeMonitor.js", () => ({
 vi.mock("../src/bot/logWatcher/watchers/channelPurge.js", () => ({
   startChannelPurge: vi.fn(),
 }));
-vi.mock("../src/common/utils/uptimeTracker.js", () => ({
+vi.mock("../src/core/utils/uptimeTracker.js", () => ({
   startUptimeFlushScheduler: vi.fn(),
 }));
 
@@ -108,9 +108,9 @@ import {
   getAllInstances,
   getServerInstance,
   removeServerInstance,
-} from "../src/common/utils/server.js";
+} from "../src/core/utils/server.js";
 import { startTpsMonitor } from "../src/bot/logWatcher/watchers/tpsMonitor.js";
-import type { BotConfig, ServerConfig } from "../src/common/types/index.js";
+import type { BotConfig, ServerConfig } from "../src/core/types/index.js";
 import type { Client } from "discord.js";
 
 const fakeClient = {} as Client;

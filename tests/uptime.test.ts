@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/common/utils/server.js", () => ({
+vi.mock("../src/core/utils/server.js", () => ({
   getAllInstances: vi.fn(),
   getServerInstance: vi.fn(),
   getGuildServer: vi.fn(),
@@ -18,7 +18,7 @@ vi.mock("../src/bot/utils/guildRouter.js", () => ({
   getAllowedServerIds: vi.fn().mockReturnValue(null),
 }));
 
-vi.mock("../src/common/utils/uptimeTracker.js", () => ({
+vi.mock("../src/core/utils/uptimeTracker.js", () => ({
   getUptimeStats: vi.fn(),
 }));
 
@@ -47,12 +47,12 @@ vi.mock("../src/bot/commands/middleware.js", () => ({
   withErrorHandling: vi.fn((fn) => fn),
 }));
 
-import { getAllInstances } from "../src/common/utils/server.js";
+import { getAllInstances } from "../src/core/utils/server.js";
 import { resolveServer } from "../src/bot/utils/guildRouter.js";
-import { getUptimeStats } from "../src/common/utils/uptimeTracker.js";
+import { getUptimeStats } from "../src/core/utils/uptimeTracker.js";
 import { execute } from "../src/bot/commands/info/uptime.js";
 import type { ChatInputCommandInteraction } from "discord.js";
-import type { UptimeStats } from "../src/common/utils/uptimeTracker.js";
+import type { UptimeStats } from "../src/core/utils/uptimeTracker.js";
 
 function makeInteraction(
   serverId: string | null = null,

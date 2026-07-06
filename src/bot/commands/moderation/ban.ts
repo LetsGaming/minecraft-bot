@@ -10,9 +10,9 @@ import { SlashCommandBuilder } from "discord.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { resolveServer } from "../../utils/guildRouter.js";
 import { createSuccessEmbed } from "../../utils/embedUtils.js";
-import { recordAdminAction } from "../../../common/utils/adminAudit.js";
-import { isValidMcName } from "../../../common/utils/sanitize.js";
-import { t } from "../../../common/utils/i18n.js";
+import { recordAdminAction } from "@mcbot/core/utils/adminAudit.js";
+import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
+import { t } from "@mcbot/core/utils/i18n.js";
 
 import { MAX_REASON_LENGTH, sanitizeReason } from "./kick.js";
 

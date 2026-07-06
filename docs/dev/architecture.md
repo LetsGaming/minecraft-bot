@@ -16,12 +16,18 @@ Everything a command or watcher wants from a Minecraft server goes through a `Se
 
 ## Directory map
 
-Since 3.6.0 the source splits into three top-level layers so the web
-dashboard can run as its own process against the shared core:
+Since 4.0 the repo is an npm workspace whose layout mirrors the product
+hierarchy — the bot is the main artifact, the dashboard its optional
+extension, both standing on shared packages — while the code stays under
+`src/`, where this repo has always kept it. Each workspace carries its own
+`package.json`/`tsconfig.json`, with sources directly inside and build
+output in a per-workspace `dist/` (a package's `exports` map cannot point
+outside its own directory).
 
 ```
 src/
-├── bot/                      The Discord process (dist/bot/index.js)
+├── bot/  (@mcbot/bot)        The product — the Discord process
+│   │                         (npm start → src/bot/dist/index.js)
 │   ├── index.ts              Entry point: client, command loading/registration,
 │   │                         interaction dispatch, rate limiting, heartbeat
 │   ├── commands/             Slash commands, one file per command
@@ -37,23 +43,35 @@ src/
 │   │   └── watchers/         Log-driven and timer-driven background features
 │   └── utils/                Discord-facing helpers: embedUtils, guildRouter,
 │                             statEmbeds, alertUtils, applyConfig, …
-├── common/                   Process-agnostic core (no discord.js at runtime)
+│
+├── web/  (@mcbot/web)        The extension — ONE package, backend + frontend
+│   │                         (npm run start:web → src/web/dist/backend/index.js)
+│   ├── backend/index.ts      Entry point (webui.enabled gate, own server
+│   │                         registry, opens the shared SQLite store)
+│   ├── backend/…             Fastify server, auth, safeConfig, routes
+│   └── frontend/             Vue 3 + Vite SPA (deps live in src/web/package.json;
+│                             builds to src/web/dist/frontend, served by the backend)
+│
+├── core/  (@mcbot/core)      Process-agnostic core (discord.js: type-only)
 │   ├── config.ts             Config loading, validation, env overrides, hot reload
+│   ├── db/                   SQLite layer: driver seam, connection, migrations,
+│   │                         legacy import, kv blob store
 │   ├── locales/              en.ts / de.ts string tables (npm run i18n:check)
 │   ├── rcon/RconClient.ts    Pure RCON protocol: TCP, packets, auth, dispatch
 │   ├── shell/execCommand.ts  execFile wrapper (no shell), sudo error detection
-│   ├── types/                All shared interfaces, re-exported via types/index.ts
+│   ├── types/                Shared interfaces, re-exported via types/index.ts
 │   └── utils/                server.ts, serverAccess.ts, statUtils, stores,
 │                             configService, time, logger, i18n, heartbeat, …
-└── web/                      The dashboard process (dist/web/index.js)
-    ├── index.ts              Entry point (webui.enabled gate)
-    ├── backend/              Fastify server, auth, safeConfig, routes
-    └── frontend/             Vue 3 + Vite subproject (own package.json,
-                              excluded from the root toolchain; builds to
-                              dist/web/frontend, served by the backend)
+│
+└── schema/  (@mcbot/schema)  Isomorphic contracts — config types (the JSON-
+                              Schema source) + web API DTOs. Types only, no Node
+                              imports: the browser frontend bundles this package.
 ```
 
-Tests live in `tests/` (vitest), infrastructure at the root (Dockerfile, compose, PM2 ecosystem, GitHub workflows, setup wizard under `scripts/`).
+Imports across workspaces use package specifiers (`@mcbot/core/utils/logger.js`),
+never relative paths. Tests live in `tests/` (vitest, one suite for all
+workspaces), infrastructure at the root (Dockerfile with `bot`/`web` targets,
+compose, PM2 ecosystem, GitHub workflows, setup wizard under `scripts/`).
 
 ## The layers, bottom up
 
@@ -178,7 +196,9 @@ These are enforced in review (see [coding-guidelines.md](coding-guidelines.md) f
 | `statEmbeds` | statUtils, embedUtils, discord.js | server.ts, config.ts |
 | `RconClient` | net, logger | everything else |
 | `serverAccess` | fs, child_process, types | discord.js, commands |
-| `src/common/**` | other common modules | `src/bot`, `src/web` |
-| `src/web/**` | `src/common` | `src/bot`, discord.js at runtime |
+| `src/core/**` | core + `@mcbot/schema` | `src/bot`, `src/web` |
+| `src/schema/**` | nothing (types only) | every workspace, Node built-ins |
+| `src/web/**` | `@mcbot/core`, `@mcbot/schema` | `src/bot`, discord.js at runtime |
+| `src/bot/**` | `@mcbot/core`, `@mcbot/schema` | `src/web` |
 
-The first rows are enforced in review; the last two are enforced by ESLint boundary rules (`eslint.config.js`). The point of the table: Discord rendering, game logic, and transport stay separable, so each can be tested without the others — and the dashboard can never call into the running bot (it writes config through `configService.writeConfig`; the bot's fs-watcher applies it).
+The first rows are enforced in review; the workspace rows are enforced twice — by ESLint boundary rules (`eslint.config.js`) and by the dependency trees themselves (`npm ci -w @mcbot/web` cannot even install discord.js). The point of the table: Discord rendering, game logic, and transport stay separable, so each can be tested without the others — and the dashboard can never call into the running bot (it writes config through `configService.writeConfig`; the bot's fs-watcher applies it). Both directions of independence are load-bearing: the bot never references its extension, and the dashboard runs its own `ServerInstance` registry so server control and config edits keep working while the bot is down.

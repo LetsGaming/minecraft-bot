@@ -9,12 +9,12 @@ import { SlashCommandBuilder } from "discord.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { resolveServer } from "../../utils/guildRouter.js";
 import { createSuccessEmbed } from "../../utils/embedUtils.js";
-import { recordAdminAction } from "../../../common/utils/adminAudit.js";
+import { recordAdminAction } from "@mcbot/core/utils/adminAudit.js";
 import {
   isValidMcName,
   stripControlChars,
-} from "../../../common/utils/sanitize.js";
-import { t } from "../../../common/utils/i18n.js";
+} from "@mcbot/core/utils/sanitize.js";
+import { t } from "@mcbot/core/utils/i18n.js";
 
 /** Console commands cap at 256 chars; leave room for name + verb. */
 export const MAX_REASON_LENGTH = 160;

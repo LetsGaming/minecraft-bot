@@ -1,14 +1,14 @@
 import { type Client } from "discord.js";
 import { createPlayerEmbed } from "../../utils/embedUtils.js";
 import type { ILogWatcher } from "../logWatcher.js";
-import type { GuildConfig } from "../../../common/types/index.js";
+import type { GuildConfig } from "@mcbot/core/types/index.js";
 import { broadcastNotification, PLAYER_NAME } from "./notifyGuilds.js";
-import { loadConfig } from "../../../common/config.js";
-import { loadLinkedAccounts } from "../../../common/utils/linkUtils.js";
-import { buildChunkbaseUrl } from "../../../common/utils/chunkbaseUrl.js";
-import { t } from "../../../common/utils/i18n.js";
-import { log } from "../../../common/utils/logger.js";
-import type { ServerInstance } from "../../../common/utils/server.js";
+import { loadConfig } from "@mcbot/core/config.js";
+import { loadLinkedAccounts } from "@mcbot/core/utils/linkUtils.js";
+import { buildChunkbaseUrl } from "@mcbot/core/utils/chunkbaseUrl.js";
+import { t } from "@mcbot/core/utils/i18n.js";
+import { log } from "@mcbot/core/utils/logger.js";
+import type { ServerInstance } from "@mcbot/core/utils/server.js";
 
 // Use PLAYER_NAME (not \w+) so Bedrock players with "."-prefixed
 // names get death notifications too.

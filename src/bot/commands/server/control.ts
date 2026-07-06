@@ -7,12 +7,12 @@ import {
 import { resolveServer } from "../../utils/guildRouter.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { suppressAlerts } from "../../logWatcher/watchers/downtimeMonitor.js";
-import { log } from "../../../common/utils/logger.js";
-import { recordAdminAction } from "../../../common/utils/adminAudit.js";
-import * as serverAccess from "../../../common/utils/serverAccess.js";
-import { requireCapability } from "../../../common/utils/capabilities.js";
-import { loadAllStats } from "../../../common/utils/statUtils.js";
-import { loadWhitelist, deleteStats } from "../../../common/utils/utils.js";
+import { log } from "@mcbot/core/utils/logger.js";
+import { recordAdminAction } from "@mcbot/core/utils/adminAudit.js";
+import * as serverAccess from "@mcbot/core/utils/serverAccess.js";
+import { requireCapability } from "@mcbot/core/utils/capabilities.js";
+import { loadAllStats } from "@mcbot/core/utils/statUtils.js";
+import { loadWhitelist, deleteStats } from "@mcbot/core/utils/utils.js";
 
 /**
  * Script paths relative to the scripts directory.

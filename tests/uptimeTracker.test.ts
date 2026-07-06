@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── Top-level mocks ────────────────────────────────────────────────────────
-vi.mock("../src/common/utils/utils.js", () => ({
+vi.mock("../src/core/utils/utils.js", () => ({
   loadJson: vi.fn().mockResolvedValue({}),
   saveJson: vi.fn().mockResolvedValue(undefined),
   getRootDir: vi.fn().mockReturnValue("/tmp"),
 }));
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -16,8 +16,8 @@ import {
   getUptimeStats,
   flushUptimeHistory,
   startUptimeFlushScheduler,
-} from "../src/common/utils/uptimeTracker.js";
-import { saveJson } from "../src/common/utils/utils.js";
+} from "../src/core/utils/uptimeTracker.js";
+import { getDb } from "../src/core/db/index.js";
 
 // Each test uses a unique server ID to avoid module-level state pollution
 let serverIdCounter = 0;
@@ -151,14 +151,16 @@ describe("getUptimeStats return shape", () => {
 // ── flushUptimeHistory ─────────────────────────────────────────────────────
 
 describe("flushUptimeHistory", () => {
-  it("calls saveJson when there are dirty changes", async () => {
+  it("recordCheck persists immediately — no flush needed", async () => {
     const sid = nextServerId();
-    await recordCheck(sid, true); // marks dirty
-    await flushUptimeHistory();
-    expect(saveJson).toHaveBeenCalled();
+    await recordCheck(sid, true);
+    const row = getDb()
+      .prepare("SELECT COUNT(*) AS n FROM uptime_checks WHERE server_id = ?")
+      .get(sid) as { n: number };
+    expect(row.n).toBe(1);
   });
 
-  it("resolves without error", async () => {
+  it("resolves without error (kept as a compatibility no-op)", async () => {
     await expect(flushUptimeHistory()).resolves.toBeUndefined();
   });
 });

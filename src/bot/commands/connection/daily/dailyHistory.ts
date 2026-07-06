@@ -9,11 +9,11 @@ import { SlashCommandBuilder } from "discord.js";
 import {
   loadClaimedStore,
   getServerClaims,
-} from "../../../../common/utils/dailyStore.js";
+} from "@mcbot/core/utils/dailyStore.js";
 import { resolveServer } from "../../../utils/guildRouter.js";
 import { createEmbed } from "../../../utils/embedUtils.js";
 import { withErrorHandling } from "../../middleware.js";
-import { t } from "../../../../common/utils/i18n.js";
+import { t } from "@mcbot/core/utils/i18n.js";
 
 const MAX_SHOWN = 15;
 

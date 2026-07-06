@@ -1,14 +1,14 @@
 import { type Client } from "discord.js";
 import { createEmbed } from "../../utils/embedUtils.js";
 import type { ILogWatcher } from "../logWatcher.js";
-import type { GuildConfig } from "../../../common/types/index.js";
+import type { GuildConfig } from "@mcbot/core/types/index.js";
 import { broadcastNotification } from "./notifyGuilds.js";
 import {
   loadSessionStore,
   saveSessionStore,
   closeAllOpenSessions,
-} from "../../../common/utils/sessionStore.js";
-import { log } from "../../../common/utils/logger.js";
+} from "@mcbot/core/utils/sessionStore.js";
+import { log } from "@mcbot/core/utils/logger.js";
 
 const START_REGEX = /\[.+?\].*:\s+Done \([\d.]+s\)!/;
 const STOP_REGEX = /\[.+?\].*:\s+Stopping server/;

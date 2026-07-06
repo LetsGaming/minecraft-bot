@@ -1,34 +1,28 @@
-import path from "path";
 import type { Client } from "discord.js";
-import { loadConfig } from "../../../common/config.js";
+import { loadConfig } from "@mcbot/core/config.js";
 import {
   buildLeaderboard,
   LEADERBOARD_STATS,
-} from "../../../common/utils/statUtils.js";
+} from "@mcbot/core/utils/statUtils.js";
 import {
   isStreakStatKey,
   buildStreakLeaderboard,
-} from "../../../common/utils/streakLeaderboard.js";
+} from "@mcbot/core/utils/streakLeaderboard.js";
 import { buildLeaderboardEmbed } from "../../utils/statEmbeds.js";
 import {
   takeSnapshot,
   getSnapshotClosestTo,
-} from "../../../common/utils/snapshotUtils.js";
-import { loadJson, saveJson, getRootDir } from "../../../common/utils/utils.js";
-import { log } from "../../../common/utils/logger.js";
-import { getAllInstances, getServerInstance } from "../../../common/utils/server.js";
+} from "@mcbot/core/utils/snapshotUtils.js";
+import { kvGet, kvSet } from "@mcbot/core/db/kv.js";
+import { log } from "@mcbot/core/utils/logger.js";
+import { getAllInstances, getServerInstance } from "@mcbot/core/utils/server.js";
 import type {
   GuildConfig,
   LeaderboardInterval,
   LeaderboardScheduleState,
-} from "../../../common/types/index.js";
-import type { ServerInstance } from "../../../common/utils/server.js";
+} from "@mcbot/core/types/index.js";
+import type { ServerInstance } from "@mcbot/core/utils/server.js";
 
-const SCHEDULE_PATH = path.resolve(
-  getRootDir(),
-  "data",
-  "leaderboardSchedule.json",
-);
 const CHECK_INTERVAL_MS = 60 * 60 * 1000;
 const SNAPSHOT_INTERVAL_MS = 60 * 60 * 1000;
 
@@ -45,15 +39,11 @@ const INTERVAL_LABELS: Record<LeaderboardInterval, string> = {
 };
 
 async function loadSchedule(): Promise<LeaderboardScheduleState> {
-  // Deliberately resilient: this is recreatable operational
-  // state, not user data. loadJson already logged loudly and tried the
-  // .bak before this fallback runs — starting fresh here is harmless.
-  const data = await loadJson(SCHEDULE_PATH).catch(() => ({}));
-  return (data as LeaderboardScheduleState) || {};
+  return kvGet<LeaderboardScheduleState>("leaderboardSchedule") ?? {};
 }
 
 async function saveSchedule(schedule: LeaderboardScheduleState): Promise<void> {
-  await saveJson(SCHEDULE_PATH, schedule);
+  kvSet("leaderboardSchedule", schedule);
 }
 
 interface SchedulerTimers {

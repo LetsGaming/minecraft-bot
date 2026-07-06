@@ -11,7 +11,7 @@
  * Works on the RAW config (what's on disk), not the resolved one — the
  * dashboard edits the file, resolution happens in the bot process.
  */
-import type { RawBotConfig } from "../../common/types/index.js";
+import type { RawBotConfig } from "@mcbot/core/types/index.js";
 
 export const SECRET_PLACEHOLDER = "•••••";
 

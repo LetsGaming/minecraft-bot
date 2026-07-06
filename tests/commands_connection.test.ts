@@ -6,15 +6,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── Shared mocks ──────────────────────────────────────────────────────────
-vi.mock("../src/common/utils/linkUtils.js", () => ({
-  LINKED_ACCOUNTS_PATH: "/tmp/linked.json",
-  LINK_CODES_PATH: "/tmp/codes.json",
+vi.mock("../src/core/utils/linkUtils.js", () => ({
+  LINK_CODE_TTL_MS: 5 * 60 * 1000,
   loadLinkedAccounts: vi.fn().mockResolvedValue({}),
   saveLinkedAccounts: vi.fn().mockResolvedValue(undefined),
   loadLinkCodes: vi.fn().mockResolvedValue({}),
   saveLinkCodes: vi.fn().mockResolvedValue(undefined),
   isLinked: vi.fn().mockResolvedValue(false),
   getLinkedAccount: vi.fn().mockResolvedValue(null),
+  issueLinkCode: vi.fn(),
+  confirmLinkCode: vi.fn(),
+  unlinkAccount: vi.fn().mockResolvedValue(false),
 }));
 
 vi.mock("../src/bot/utils/embedUtils.js", () => ({
@@ -35,11 +37,11 @@ vi.mock("../src/bot/utils/embedUtils.js", () => ({
   handlePagination: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../src/common/utils/time.js", () => ({
+vi.mock("../src/core/utils/time.js", () => ({
   nextMidnightEpoch: vi.fn().mockReturnValue(Date.now() + 3_600_000),
   msUntilMidnight: vi.fn().mockReturnValue(3_600_000),
   formatDate: vi.fn(),
@@ -48,13 +50,13 @@ vi.mock("../src/common/utils/time.js", () => ({
   TZ: "UTC",
 }));
 
-vi.mock("../src/common/utils/utils.js", () => ({
+vi.mock("../src/core/utils/utils.js", () => ({
   getRootDir: vi.fn().mockReturnValue("/tmp"),
   loadJson: vi.fn().mockResolvedValue({}),
   saveJson: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../src/common/config.js", () => ({
+vi.mock("../src/core/config.js", () => ({
   loadConfig: vi.fn().mockReturnValue({
     adminUsers: [],
     servers: {},
@@ -77,7 +79,7 @@ vi.mock("../src/bot/commands/middleware.js", () => ({
   isServerAdmin: vi.fn().mockReturnValue(true),
 }));
 
-vi.mock("../src/common/utils/uptimeTracker.js", () => ({
+vi.mock("../src/core/utils/uptimeTracker.js", () => ({
   recordCheck: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -86,7 +88,9 @@ import {
   loadLinkedAccounts,
   saveLinkedAccounts,
   getLinkedAccount,
-} from "../src/common/utils/linkUtils.js";
+  issueLinkCode,
+  unlinkAccount,
+} from "../src/core/utils/linkUtils.js";
 import type { ChatInputCommandInteraction } from "discord.js";
 
 function makeInteraction(overrides: Record<string, unknown> = {}) {
@@ -127,22 +131,30 @@ describe("/link command", () => {
     ({ execute } = await import("../src/bot/commands/connection/link.js"));
   });
 
-  it("replies with ephemeral code when user has no existing codes", async () => {
-    vi.mocked(loadLinkCodes).mockResolvedValue({});
+  it("replies with ephemeral code when the store issues one", async () => {
+    vi.mocked(issueLinkCode).mockResolvedValue({
+      status: "issued",
+      code: "ABCD1234",
+      expires: Date.now() + 300_000,
+    });
     const interaction = makeInteraction();
     await execute(interaction as never);
+    expect(issueLinkCode).toHaveBeenCalledWith(
+      "user123",
+      expect.stringMatching(/^[0-9A-F]{8}$/),
+    );
     expect(interaction.reply).toHaveBeenCalledWith(
-      expect.objectContaining({ flags: expect.anything() }),
+      expect.objectContaining({
+        content: expect.stringContaining("ABCD1234"),
+        flags: expect.anything(),
+      }),
     );
   });
 
-  it("replies with 'already pending' when valid unexpired code exists", async () => {
-    vi.mocked(loadLinkCodes).mockResolvedValue({
-      ABC123: {
-        discordId: "user123",
-        expires: Date.now() + 300_000,
-        confirmed: false,
-      },
+  it("replies with 'already pending' when the store reports a pending code", async () => {
+    vi.mocked(issueLinkCode).mockResolvedValue({
+      status: "pending",
+      code: "ABC123",
     });
     const interaction = makeInteraction();
     await execute(interaction as never);
@@ -153,14 +165,8 @@ describe("/link command", () => {
     );
   });
 
-  it("replies with 'already linked' when confirmed code is expired", async () => {
-    vi.mocked(loadLinkCodes).mockResolvedValue({
-      OLD123: {
-        discordId: "user123",
-        expires: Date.now() - 1,
-        confirmed: true,
-      },
-    });
+  it("replies with 'already linked' when an account link exists", async () => {
+    vi.mocked(issueLinkCode).mockResolvedValue({ status: "already-linked" });
     const interaction = makeInteraction();
     await execute(interaction as never);
     expect(interaction.reply).toHaveBeenCalledWith(
@@ -170,18 +176,21 @@ describe("/link command", () => {
     );
   });
 
-  it("removes expired code and issues new one", async () => {
-    vi.mocked(loadLinkCodes).mockResolvedValue({
-      EXP123: {
-        discordId: "user123",
-        expires: Date.now() - 1,
-        confirmed: false,
-      },
+  it("relies on the store to prune expired codes and issue a new one", async () => {
+    // Pruning happens inside issueLinkCode's transaction now; the command
+    // only relays the result.
+    vi.mocked(issueLinkCode).mockResolvedValue({
+      status: "issued",
+      code: "NEW45678",
+      expires: Date.now() + 300_000,
     });
     const interaction = makeInteraction();
     await execute(interaction as never);
-    // Should reply with a new code
-    expect(interaction.reply).toHaveBeenCalled();
+    expect(interaction.reply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: expect.stringContaining("NEW45678"),
+      }),
+    );
   });
 });
 
@@ -227,7 +236,7 @@ describe("/unlink command", () => {
   });
 
   it("replies with 'not linked' when user has no linked account", async () => {
-    vi.mocked(loadLinkedAccounts).mockResolvedValue({});
+    vi.mocked(unlinkAccount).mockResolvedValue(false);
     const interaction = makeInteraction();
     await execute(interaction as never);
     expect(interaction.reply).toHaveBeenCalledWith(
@@ -238,10 +247,10 @@ describe("/unlink command", () => {
   });
 
   it("unlinks the account and replies with success", async () => {
-    vi.mocked(loadLinkedAccounts).mockResolvedValue({ user123: "Steve" });
+    vi.mocked(unlinkAccount).mockResolvedValue(true);
     const interaction = makeInteraction();
     await execute(interaction as never);
-    expect(saveLinkedAccounts).toHaveBeenCalledWith({});
+    expect(unlinkAccount).toHaveBeenCalledWith("user123");
     expect(interaction.reply).toHaveBeenCalledWith(
       expect.objectContaining({ content: expect.stringContaining("unlinked") }),
     );
@@ -284,7 +293,7 @@ describe("startChannelPurge", () => {
   });
 
   it("logs and returns when no guilds have purge configured", async () => {
-    const { log } = vi.mocked(await import("../src/common/utils/logger.js"));
+    const { log } = vi.mocked(await import("../src/core/utils/logger.js"));
     startChannelPurge(null as never, {});
     expect(vi.mocked(log.info)).toHaveBeenCalledWith(
       "purge",

@@ -1,0 +1,17 @@
+{
+  "name": "@mcbot/bot",
+  "version": "4.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The Discord bot \u2014 the main product. Owns the gateway, commands, watchers, and all Discord-facing behavior.",
+  "main": "dist/index.js",
+  "dependencies": {
+    "@mcbot/core": "*",
+    "@mcbot/schema": "*",
+    "discord.js": "^14.26.4"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "start": "node --enable-source-maps dist/index.js"
+  }
+}

@@ -170,8 +170,8 @@ function build({ prune = false } = {}) {
   run(hasLockfile ? "npm ci" : "npm install");
 
   info("Compiling TypeScript...");
-  run("npx tsc");
-  info("Build complete → dist/");
+  run("npm run build");
+  info("Build complete → src/bot/dist/ (workspaces built via project references)");
 
   if (prune) {
     info("Pruning devDependencies...");

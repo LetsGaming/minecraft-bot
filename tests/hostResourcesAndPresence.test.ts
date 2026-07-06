@@ -4,27 +4,27 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock("../src/common/shell/execCommand.js", () => ({
+vi.mock("../src/core/shell/execCommand.js", () => ({
   execSafe: vi.fn(),
 }));
-vi.mock("../src/common/config.js", () => ({
+vi.mock("../src/core/config.js", () => ({
   loadConfig: vi.fn().mockReturnValue({ language: "en", guilds: {} }),
 }));
 
-import { execSafe } from "../src/common/shell/execCommand.js";
-import { loadConfig } from "../src/common/config.js";
+import { execSafe } from "../src/core/shell/execCommand.js";
+import { loadConfig } from "../src/core/config.js";
 import {
   getDiskUsage,
   getServerProcessUsage,
   monitoredPaths,
   getHostResources,
   formatBytes,
-} from "../src/common/utils/hostResources.js";
+} from "../src/core/utils/hostResources.js";
 import { updateBotPresence } from "../src/bot/logWatcher/watchers/statusEmbed.js";
-import type { ServerInstance } from "../src/common/utils/server.js";
+import type { ServerInstance } from "../src/core/utils/server.js";
 import type { Client } from "discord.js";
 
 beforeEach(() => vi.clearAllMocks());

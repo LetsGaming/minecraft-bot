@@ -1,13 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+/**
+ * adminAudit.test.ts — SQLite-backed admin audit log.
+ *
+ * Runs against a real in-memory database (tests/setup.ts). This store is
+ * the reason the DB layer exists: both processes append to it, and the
+ * JSON version could drop entries under a cross-process race.
+ */
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-// ── Top-level mocks (same pattern as whitelistAudit.test.ts) ───────────────
-vi.mock("../src/common/utils/utils.js", () => ({
-  getRootDir: vi.fn().mockReturnValue("/tmp"),
-  loadJson: vi.fn().mockResolvedValue({}),
-  saveJson: vi.fn().mockResolvedValue(undefined),
-}));
-
-vi.mock("../src/common/utils/time.js", () => ({
+vi.mock("../src/core/utils/time.js", () => ({
   formatDatetime: vi.fn().mockReturnValue("2026-07-03 12:00:00"),
   TZ: "UTC",
   formatDate: vi.fn(),
@@ -16,22 +16,25 @@ vi.mock("../src/common/utils/time.js", () => ({
   msUntilMidnight: vi.fn(),
 }));
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-import { loadJson, saveJson } from "../src/common/utils/utils.js";
-import { log } from "../src/common/utils/logger.js";
+import { log } from "../src/core/utils/logger.js";
+import { closeDbForTesting } from "../src/core/db/index.js";
 import {
   loadAdminAudit,
   recordAdminAction,
-} from "../src/common/utils/adminAudit.js";
-import type { AdminAuditEntry } from "../src/common/utils/adminAudit.js";
+} from "../src/core/utils/adminAudit.js";
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(loadJson).mockResolvedValue({});
-  vi.mocked(saveJson).mockResolvedValue(undefined);
+  closeDbForTesting();
+});
+
+afterEach(() => {
+  process.env.MCBOT_DB_PATH = ":memory:";
+  closeDbForTesting();
 });
 
 describe("adminAudit", () => {
@@ -44,11 +47,9 @@ describe("adminAudit", () => {
       guildId: "guildA",
     });
 
-    expect(saveJson).toHaveBeenCalledTimes(1);
-    const [, payload] = vi.mocked(saveJson).mock.calls[0]!;
-    const entries = (payload as { entries: AdminAuditEntry[] }).entries;
+    const entries = await loadAdminAudit();
     expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({
+    expect(entries[0]).toEqual({
       at: "2026-07-03 12:00:00",
       action: "server stop",
       server: "survival",
@@ -58,52 +59,47 @@ describe("adminAudit", () => {
     });
   });
 
-  it("appends to existing entries and preserves order", async () => {
-    vi.mocked(loadJson).mockResolvedValue({
-      entries: [{ at: "x", action: "server start", server: "s", by: "a", byId: "1", guildId: null }],
-    });
+  it("defaults server/guildId to null and keeps detail when given", async () => {
     await recordAdminAction({
-      action: "config reload",
-      by: "op#0002",
+      action: "config write",
+      by: "web:admin",
       byId: "222",
+      detail: "2 keys changed",
     });
-    const [, payload] = vi.mocked(saveJson).mock.calls[0]!;
-    const entries = (payload as { entries: AdminAuditEntry[] }).entries;
-    expect(entries).toHaveLength(2);
-    expect(entries[1]!.action).toBe("config reload");
-    expect(entries[1]!.server).toBeNull();
+    const [entry] = await loadAdminAudit();
+    expect(entry!.server).toBeNull();
+    expect(entry!.guildId).toBeNull();
+    expect(entry!.detail).toBe("2 keys changed");
   });
 
-  it("caps the log at 500 entries (bounded growth)", async () => {
-    const many = Array.from({ length: 500 }, (_, i) => ({
-      at: "t",
-      action: `a${i}`,
-      server: null,
-      by: "x",
-      byId: "y",
-      guildId: null,
-    }));
-    vi.mocked(loadJson).mockResolvedValue({ entries: many });
-    await recordAdminAction({ action: "newest", by: "x", byId: "y" });
-    const [, payload] = vi.mocked(saveJson).mock.calls[0]!;
-    const entries = (payload as { entries: AdminAuditEntry[] }).entries;
+  it("returns entries oldest-first, like the old JSON array", async () => {
+    await recordAdminAction({ action: "first", by: "a", byId: "1" });
+    await recordAdminAction({ action: "second", by: "a", byId: "1" });
+    const entries = await loadAdminAudit();
+    expect(entries.map((e) => e.action)).toEqual(["first", "second"]);
+  });
+
+  it("caps retention at 500 entries, dropping the oldest", async () => {
+    for (let i = 0; i < 505; i++) {
+      await recordAdminAction({ action: `a${i}`, by: "x", byId: "1" });
+    }
+    const entries = await loadAdminAudit();
     expect(entries).toHaveLength(500);
-    expect(entries[entries.length - 1]!.action).toBe("newest");
-    expect(entries[0]!.action).toBe("a1"); // oldest entry dropped
+    expect(entries[0]!.action).toBe("a5");
+    expect(entries[499]!.action).toBe("a504");
   });
 
-  it("never throws — audit failure must not block the admin action", async () => {
-    vi.mocked(saveJson).mockRejectedValue(new Error("disk full"));
+  it("never throws when the store is unusable — logs instead", async () => {
+    // Point the store somewhere it cannot possibly open.
+    closeDbForTesting();
+    process.env.MCBOT_DB_PATH = "/proc/nonexistent/nope/bot.db";
+
     await expect(
-      recordAdminAction({ action: "server stop", by: "x", byId: "y" }),
+      recordAdminAction({ action: "server stop", by: "a", byId: "1" }),
     ).resolves.toBeUndefined();
-    expect(log.error).toHaveBeenCalled();
-  });
-
-  it("loadAdminAudit tolerates a missing/foreign-shaped store", async () => {
-    vi.mocked(loadJson).mockResolvedValue({});
-    expect(await loadAdminAudit()).toEqual([]);
-    vi.mocked(loadJson).mockResolvedValue({ entries: "not-an-array" });
-    expect(await loadAdminAudit()).toEqual([]);
+    expect(vi.mocked(log.error)).toHaveBeenCalledWith(
+      "adminAudit",
+      expect.stringContaining('Failed to record "server stop"'),
+    );
   });
 });

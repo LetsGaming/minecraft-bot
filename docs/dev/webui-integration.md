@@ -56,6 +56,10 @@ Validation errors are human-readable strings (one per problem, already
 indented) — render them as-is next to the form. `warnings` are non-fatal
 and should be shown but not block saving.
 
+## The Commands tab
+
+`GET /api/commands` returns everything the per-command settings UI needs in one call: the command manifest (written by the bot to `data/commandManifest.json` at startup — the web process cannot discover commands itself), the raw override blocks at every scope, and the **effective** policy per command per scope so "inherit" can display what it resolves to. Saving goes through the normal whole-config `PUT /api/config`. If the manifest is missing (bot never started), the route answers 503 with an actionable message.
+
 ## Form generation
 
 `config.schema.json` (repo root) is the formal JSON Schema — generated

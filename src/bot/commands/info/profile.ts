@@ -10,21 +10,21 @@ import { SlashCommandBuilder, time as discordTime } from "discord.js";
 import { createPlayerEmbed } from "../../utils/embedUtils.js";
 import { resolveServer } from "../../utils/guildRouter.js";
 import { withErrorHandling } from "../middleware.js";
-import { isValidMcName } from "../../../common/utils/sanitize.js";
-import { loadLinkedAccounts } from "../../../common/utils/linkUtils.js";
-import { getAuditEntry } from "../../../common/utils/whitelistAudit.js";
+import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
+import { loadLinkedAccounts } from "@mcbot/core/utils/linkUtils.js";
+import { getAuditEntry } from "@mcbot/core/utils/whitelistAudit.js";
 import {
   loadSessionStore,
   getServerSessions,
   isOnlineNow,
   totalPlaytimeMs,
-} from "../../../common/utils/sessionStore.js";
+} from "@mcbot/core/utils/sessionStore.js";
 import {
   loadClaimedStore,
   getServerClaims,
-} from "../../../common/utils/dailyStore.js";
-import { formatPlaytime } from "../../../common/utils/statUtils.js";
-import { t } from "../../../common/utils/i18n.js";
+} from "@mcbot/core/utils/dailyStore.js";
+import { formatPlaytime } from "@mcbot/core/utils/statUtils.js";
+import { t } from "@mcbot/core/utils/i18n.js";
 
 export const data = new SlashCommandBuilder()
   .setName("profile")

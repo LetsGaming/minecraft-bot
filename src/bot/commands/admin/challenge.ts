@@ -15,9 +15,9 @@ import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embedUtils.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { resolveServer } from "../../utils/guildRouter.js";
-import { recordAdminAction } from "../../../common/utils/adminAudit.js";
+import { recordAdminAction } from "@mcbot/core/utils/adminAudit.js";
 import { broadcastNotification } from "../../logWatcher/watchers/notifyGuilds.js";
-import { loadConfig } from "../../../common/config.js";
+import { loadConfig } from "@mcbot/core/config.js";
 import {
   loadChallengeStore,
   saveChallengeStore,
@@ -26,9 +26,9 @@ import {
   getLatestChallenge,
   addChallenge,
   type Challenge,
-} from "../../../common/utils/challengeStore.js";
-import { t } from "../../../common/utils/i18n.js";
-import { log } from "../../../common/utils/logger.js";
+} from "@mcbot/core/utils/challengeStore.js";
+import { t } from "@mcbot/core/utils/i18n.js";
+import { log } from "@mcbot/core/utils/logger.js";
 
 const MAX_DURATION_HOURS = 24 * 14; // two weeks
 

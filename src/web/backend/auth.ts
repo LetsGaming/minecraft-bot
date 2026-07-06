@@ -14,7 +14,7 @@
  *   WEBUI_SESSION_SECRET  cookie-signing key (any long random string)
  */
 import { createHmac, timingSafeEqual, randomBytes } from "crypto";
-import { loadConfig } from "../../common/config.js";
+import { loadConfig } from "@mcbot/core/config.js";
 import type { FastifyReply, FastifyRequest } from "fastify";
 
 export const SESSION_COOKIE = "mcbot_session";

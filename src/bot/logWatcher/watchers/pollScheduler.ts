@@ -30,11 +30,11 @@ import {
   tallyPoll,
   voterKeyForDiscord,
   type Poll,
-} from "../../../common/utils/pollStore.js";
-import { getServerInstance } from "../../../common/utils/server.js";
+} from "@mcbot/core/utils/pollStore.js";
+import { getServerInstance } from "@mcbot/core/utils/server.js";
 import { createEmbed } from "../../utils/embedUtils.js";
-import { t } from "../../../common/utils/i18n.js";
-import { log } from "../../../common/utils/logger.js";
+import { t } from "@mcbot/core/utils/i18n.js";
+import { log } from "@mcbot/core/utils/logger.js";
 
 const MAX_TIMEOUT_MS = 2 ** 31 - 1; // setTimeout cap; poll durations are far below
 

@@ -1,26 +1,12 @@
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "Node16",
-    "moduleResolution": "Node16",
-    "lib": ["ES2022"],
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
-    "exactOptionalPropertyTypes": false,
-    "noUncheckedIndexedAccess": true
-  },
-  "include": ["./src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "docs", "data", "tests", "src/web/frontend"]
+  // Solution-style root: no files of its own, just the project graph.
+  // `tsc -b` from the root builds everything; editors resolve each file
+  // through its workspace's own tsconfig.
+  "files": [],
+  "references": [
+    { "path": "src/schema" },
+    { "path": "src/core" },
+    { "path": "src/bot" },
+    { "path": "src/web" }
+  ]
 }

@@ -1,7 +1,7 @@
 import { type Client } from "discord.js";
-import { log } from "../../../common/utils/logger.js";
+import { log } from "@mcbot/core/utils/logger.js";
 import type { ILogWatcher } from "../logWatcher.js";
-import type { ServerInstance } from "../../../common/utils/server.js";
+import type { ServerInstance } from "@mcbot/core/utils/server.js";
 
 // Matches in-game chat: [timestamp] [server thread/INFO]: <PlayerName> Liege wie
 // Captures (1) the player name, (2) the raw message text

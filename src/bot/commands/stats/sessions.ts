@@ -9,14 +9,14 @@ import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embedUtils.js";
 import { resolveServer } from "../../utils/guildRouter.js";
 import { withErrorHandling } from "../middleware.js";
-import { isValidMcName } from "../../../common/utils/sanitize.js";
+import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
 import {
   loadSessionStore,
   getServerSessions,
   isOnlineNow,
   totalPlaytimeMs,
-} from "../../../common/utils/sessionStore.js";
-import { t } from "../../../common/utils/i18n.js";
+} from "@mcbot/core/utils/sessionStore.js";
+import { t } from "@mcbot/core/utils/i18n.js";
 
 const SHOWN_SESSIONS = 10;
 

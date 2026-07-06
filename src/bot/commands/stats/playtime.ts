@@ -7,11 +7,11 @@ import {
   flattenStats,
   findPlayTimeStat,
   formatPlaytime,
-} from "../../../common/utils/statUtils.js";
-import { findPlayer } from "../../../common/utils/playerUtils.js";
+} from "@mcbot/core/utils/statUtils.js";
+import { findPlayer } from "@mcbot/core/utils/playerUtils.js";
 import { resolveServer } from "../../utils/guildRouter.js";
 import { createEmbed, createErrorEmbed } from "../../utils/embedUtils.js";
-import { log } from "../../../common/utils/logger.js";
+import { log } from "@mcbot/core/utils/logger.js";
 
 export const data = new SlashCommandBuilder()
   .setName("playtime")

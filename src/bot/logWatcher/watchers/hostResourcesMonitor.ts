@@ -12,22 +12,22 @@
  * are skipped — exactly the previous behaviour.
  */
 import { type Client } from "discord.js";
-import { log } from "../../../common/utils/logger.js";
+import { log } from "@mcbot/core/utils/logger.js";
 import { serverInScope } from "../../utils/guildRouter.js";
 import { createEmbed } from "../../utils/embedUtils.js";
-import { loadConfig } from "../../../common/config.js";
-import { readBackups } from "../../../common/utils/serverAccess.js";
+import { loadConfig } from "@mcbot/core/config.js";
+import { readBackups } from "@mcbot/core/utils/serverAccess.js";
 import {
   getDiskUsage,
   getHostResources,
   monitoredPaths,
   formatBytes,
-} from "../../../common/utils/hostResources.js";
-import type { DiskUsage } from "../../../common/utils/hostResources.js";
-import { t, runWithGuildLocale } from "../../../common/utils/i18n.js";
+} from "@mcbot/core/utils/hostResources.js";
+import type { DiskUsage } from "@mcbot/core/utils/hostResources.js";
+import { t, runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
 import { roleMention } from "../../utils/alertUtils.js";
-import type { ServerInstance } from "../../../common/utils/server.js";
-import type { GuildConfig } from "../../../common/types/index.js";
+import type { ServerInstance } from "@mcbot/core/utils/server.js";
+import type { GuildConfig } from "@mcbot/core/types/index.js";
 
 const CHECK_INTERVAL_MS = 5 * 60 * 1000; // disks fill slowly
 const HYSTERESIS_PERCENT = 5;

@@ -8,8 +8,8 @@ import { defineCommand } from "../defineCommand.js";
 import {
   loadWaypointStore,
   getServerWaypoints,
-} from "../../../common/utils/waypointStore.js";
-import { t } from "../../../common/utils/i18n.js";
+} from "@mcbot/core/utils/waypointStore.js";
+import { t } from "@mcbot/core/utils/i18n.js";
 
 const MAX_CHAT_LINES = 15;
 

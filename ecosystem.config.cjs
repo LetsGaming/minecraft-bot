@@ -15,7 +15,7 @@ module.exports = {
   apps: [
     {
       name: "minecraft-bot",
-      script: "./dist/bot/index.js",
+      script: "./src/bot/dist/index.js",
       cwd: __dirname,
 
       // ── Node configuration ──
@@ -39,7 +39,7 @@ module.exports = {
 
       // ── File watching (development convenience, disable in prod) ──
       watch: false,
-      ignore_watch: ["node_modules", "logs", "data", "dist", ".git"],
+      ignore_watch: ["node_modules", "logs", "data", "**/dist", ".git"],
 
       // ── Resource limits ──
       max_memory_restart: "512M",
@@ -61,7 +61,7 @@ module.exports = {
     // Start with: pm2 start ecosystem.config.cjs --only minecraft-bot-web
     {
       name: "minecraft-bot-web",
-      script: "./dist/web/index.js",
+      script: "./src/web/dist/backend/index.js",
       cwd: __dirname,
       node_args: "--enable-source-maps",
       interpreter: "node",

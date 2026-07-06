@@ -22,9 +22,9 @@ import {
   isValidWaypointName,
   isValidWaypointCategory,
   waypointCap,
-} from "../../../common/utils/waypointStore.js";
-import { t } from "../../../common/utils/i18n.js";
-import type { ServerInstance } from "../../../common/utils/server.js";
+} from "@mcbot/core/utils/waypointStore.js";
+import { t } from "@mcbot/core/utils/i18n.js";
+import type { ServerInstance } from "@mcbot/core/utils/server.js";
 
 async function msg(
   server: ServerInstance,

@@ -1,10 +1,12 @@
 /**
  * streak.test.ts — /streak command execute logic
- * Tests getStreakData and getNextBonusStreak via mocked loadJson.
+ * Tests getStreakData and getNextBonusStreak — claims seeded into the
+ * real in-memory kv store; loadJson only serves dailyRewards.json (the
+ * hand-edited file that stays JSON).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/common/utils/utils.js", () => ({
+vi.mock("../src/core/utils/utils.js", () => ({
   getRootDir: vi.fn().mockReturnValue("/tmp"),
   loadJson: vi.fn().mockResolvedValue({}),
   saveJson: vi.fn().mockResolvedValue(undefined),
@@ -18,7 +20,9 @@ vi.mock("../src/bot/utils/guildRouter.js", () => ({
   resolveServer: vi.fn().mockReturnValue({ id: "main" }),
 }));
 
-import { loadJson } from "../src/common/utils/utils.js";
+import { loadJson } from "../src/core/utils/utils.js";
+import { kvSet } from "../src/core/db/kv.js";
+import { closeDbForTesting } from "../src/core/db/index.js";
 import { execute } from "../src/bot/commands/connection/daily/streak.js";
 import type { ChatInputCommandInteraction } from "discord.js";
 
@@ -35,6 +39,7 @@ function makeInteraction(userId = "user1"): ChatInputCommandInteraction {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  closeDbForTesting(); // fresh in-memory DB per test
   vi.mocked(loadJson).mockResolvedValue({});
 });
 
@@ -49,16 +54,15 @@ describe("streak execute", () => {
   });
 
   it("replies with streak info when user has data and no rewards config", async () => {
-    vi.mocked(loadJson)
-      .mockResolvedValueOnce({
-        version: 2,
-        servers: {
-          main: {
-            user1: { currentStreak: 7, longestStreak: 14, bonusStreak: 7 },
-          },
+    kvSet("claimedDaily", {
+      version: 2,
+      servers: {
+        main: {
+          user1: { currentStreak: 7, longestStreak: 14, bonusStreak: 7 },
         },
-      })
-      .mockResolvedValueOnce({}); // no dailyRewards config
+      },
+    });
+    vi.mocked(loadJson).mockResolvedValue({}); // no dailyRewards config
 
     const interaction = makeInteraction();
     await execute(interaction);
@@ -68,18 +72,17 @@ describe("streak execute", () => {
   });
 
   it("includes next bonus streak when rewards config has a higher milestone", async () => {
-    vi.mocked(loadJson)
-      .mockResolvedValueOnce({
-        version: 2,
-        servers: {
-          main: {
-            user1: { currentStreak: 5, longestStreak: 5, bonusStreak: 5 },
-          },
+    kvSet("claimedDaily", {
+      version: 2,
+      servers: {
+        main: {
+          user1: { currentStreak: 5, longestStreak: 5, bonusStreak: 5 },
         },
-      })
-      .mockResolvedValueOnce({
-        streakBonuses: { "7": "bonus_item", "14": "better_bonus" },
-      });
+      },
+    });
+    vi.mocked(loadJson).mockResolvedValue({
+      streakBonuses: { "7": "bonus_item", "14": "better_bonus" },
+    });
 
     const interaction = makeInteraction();
     await execute(interaction);
@@ -90,18 +93,17 @@ describe("streak execute", () => {
   });
 
   it("shows N/A when all bonuses are already surpassed", async () => {
-    vi.mocked(loadJson)
-      .mockResolvedValueOnce({
-        version: 2,
-        servers: {
-          main: {
-            user1: { currentStreak: 100, longestStreak: 100, bonusStreak: 100 },
-          },
+    kvSet("claimedDaily", {
+      version: 2,
+      servers: {
+        main: {
+          user1: { currentStreak: 100, longestStreak: 100, bonusStreak: 100 },
         },
-      })
-      .mockResolvedValueOnce({
-        streakBonuses: { "7": "item1", "14": "item2" },
-      });
+      },
+    });
+    vi.mocked(loadJson).mockResolvedValue({
+      streakBonuses: { "7": "item1", "14": "item2" },
+    });
 
     const interaction = makeInteraction();
     await execute(interaction);

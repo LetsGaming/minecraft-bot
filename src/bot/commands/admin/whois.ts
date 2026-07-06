@@ -7,21 +7,21 @@
 import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embedUtils.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
-import { getAuditEntry } from "../../../common/utils/whitelistAudit.js";
-import { loadLinkedAccounts } from "../../../common/utils/linkUtils.js";
-import { isValidMcName } from "../../../common/utils/sanitize.js";
+import { getAuditEntry } from "@mcbot/core/utils/whitelistAudit.js";
+import { loadLinkedAccounts } from "@mcbot/core/utils/linkUtils.js";
+import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
 import {
   loadSessionStore,
   isOnlineNow,
   type SessionStore,
-} from "../../../common/utils/sessionStore.js";
+} from "@mcbot/core/utils/sessionStore.js";
 import {
   loadNotesStore,
   getNotesByUuid,
   findNotesByName,
   type PlayerNotesStore,
-} from "../../../common/utils/noteStore.js";
-import { t } from "../../../common/utils/i18n.js";
+} from "@mcbot/core/utils/noteStore.js";
+import { t } from "@mcbot/core/utils/i18n.js";
 
 /**
  * Most recent activity for a name across every server's session data:

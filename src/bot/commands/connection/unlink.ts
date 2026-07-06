@@ -3,10 +3,7 @@ import {
   MessageFlags,
   type ChatInputCommandInteraction,
 } from "discord.js";
-import {
-  loadLinkedAccounts,
-  saveLinkedAccounts,
-} from "../../../common/utils/linkUtils.js";
+import { unlinkAccount } from "@mcbot/core/utils/linkUtils.js";
 import { syncLinkedRole } from "../../utils/linkedRole.js";
 
 export const data = new SlashCommandBuilder()
@@ -18,10 +15,9 @@ export async function execute(
 ): Promise<void> {
   const userId = interaction.user.id;
 
-  const linkedAccounts = await loadLinkedAccounts().catch(
-    (): Record<string, string> => ({}),
-  );
-  if (!(userId in linkedAccounts)) {
+  // Atomic check-and-delete: no load/mutate/save round-trip to race.
+  const removed = await unlinkAccount(userId).catch(() => false);
+  if (!removed) {
     await interaction.reply({
       content:
         "❌ Your Discord account is not linked to any Minecraft account.",
@@ -30,8 +26,6 @@ export async function execute(
     return;
   }
 
-  delete linkedAccounts[userId];
-  await saveLinkedAccounts(linkedAccounts);
   // Remove the auto-assigned linked role again; never fails the unlink.
   await syncLinkedRole(interaction.client, userId, "remove");
   await interaction.reply({

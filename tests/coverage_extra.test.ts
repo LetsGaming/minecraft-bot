@@ -7,7 +7,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -18,7 +18,7 @@ vi.mock("../src/bot/utils/embedUtils.js", () => ({
   }),
 }));
 
-vi.mock("../src/common/config.js", () => ({
+vi.mock("../src/core/config.js", () => ({
   loadConfig: vi.fn().mockReturnValue({
     tpsWarningThreshold: 15,
     tpsPollIntervalMs: 100, // short for testing
@@ -35,7 +35,7 @@ vi.mock("../src/bot/logWatcher/logWatcher.js", () => ({
   getGlobalWatchers: vi.fn().mockReturnValue([]),
 }));
 
-vi.mock("../src/common/utils/serverAccess.js", () => ({
+vi.mock("../src/core/utils/serverAccess.js", () => ({
   readUserCache: vi.fn().mockResolvedValue([]),
   tailLog: vi.fn().mockResolvedValue(""),
   isRunning: vi.fn().mockResolvedValue(true),
@@ -50,12 +50,12 @@ vi.mock("../src/common/utils/serverAccess.js", () => ({
   getTps: vi.fn().mockResolvedValue({ tps1m: 20 }),
 }));
 
-vi.mock("../src/common/shell/execCommand.js", () => ({
+vi.mock("../src/core/shell/execCommand.js", () => ({
   execSafe: vi.fn().mockResolvedValue(null),
   isSudoPermissionError: vi.fn().mockReturnValue(false),
 }));
 
-vi.mock("../src/common/rcon/RconClient.js", () => ({
+vi.mock("../src/core/rcon/RconClient.js", () => ({
   RconClient: vi.fn().mockImplementation(() => ({
     connect: vi.fn(),
     disconnect: vi.fn(),
@@ -136,7 +136,7 @@ describe("ServerInstance methods", () => {
 
   beforeEach(async () => {
     vi.resetModules();
-    ({ ServerInstance } = await import("../src/common/utils/server.js"));
+    ({ ServerInstance } = await import("../src/core/utils/server.js"));
     vi.clearAllMocks();
   });
 
@@ -186,7 +186,7 @@ describe("ServerInstance methods", () => {
       scriptDir: "",
     } as never;
     const inst = new ServerInstance(localCfg);
-    const { tailLog } = await import("../src/common/utils/serverAccess.js");
+    const { tailLog } = await import("../src/core/utils/serverAccess.js");
     vi.mocked(tailLog).mockResolvedValue("no seed here");
     const seed = await inst.getSeed();
     // Without RCON and with no seed in log, returns null

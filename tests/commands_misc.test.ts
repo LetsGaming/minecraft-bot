@@ -26,27 +26,27 @@ vi.mock("../src/bot/utils/embedUtils.js", () => ({
   createPlayerEmbed: vi.fn().mockReturnValue({ type: "player-embed" }),
 }));
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../src/common/utils/linkUtils.js", () => ({
+vi.mock("../src/core/utils/linkUtils.js", () => ({
   getLinkedAccount: vi.fn().mockResolvedValue(null),
   loadLinkedAccounts: vi.fn().mockResolvedValue({}),
   loadLinkCodes: vi.fn().mockResolvedValue({}),
 }));
 
-vi.mock("../src/common/utils/playerUtils.js", () => ({
+vi.mock("../src/core/utils/playerUtils.js", () => ({
   getLinkedAccount: vi.fn(),
   getPlayerCoords: vi.fn().mockResolvedValue(null),
   getOnlinePlayers: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock("../src/common/utils/modUtils.js", () => ({
+vi.mock("../src/core/utils/modUtils.js", () => ({
   getModList: vi.fn(),
 }));
 
-vi.mock("../src/common/utils/time.js", () => ({
+vi.mock("../src/core/utils/time.js", () => ({
   formatTime: vi.fn().mockReturnValue("12:00"),
   TZ: "UTC",
   formatDate: vi.fn(),
@@ -56,8 +56,8 @@ vi.mock("../src/common/utils/time.js", () => ({
 }));
 
 import { resolveServer } from "../src/bot/utils/guildRouter.js";
-import { getLinkedAccount } from "../src/common/utils/linkUtils.js";
-import { getModList } from "../src/common/utils/modUtils.js";
+import { getLinkedAccount } from "../src/core/utils/linkUtils.js";
+import { getModList } from "../src/core/utils/modUtils.js";
 
 const fakeServer = {
   id: "survival",
@@ -148,7 +148,7 @@ describe("/netherportal command", () => {
 
   it("replies with error when player coordinates are not found", async () => {
     vi.mocked(getLinkedAccount).mockResolvedValue("Steve");
-    const { getPlayerCoords } = await import("../src/common/utils/playerUtils.js");
+    const { getPlayerCoords } = await import("../src/core/utils/playerUtils.js");
     vi.mocked(getPlayerCoords).mockResolvedValue(null);
     const interaction = makeInteraction();
     await execute(interaction);
@@ -157,7 +157,7 @@ describe("/netherportal command", () => {
 
   it("replies with portal coords when player is in overworld", async () => {
     vi.mocked(getLinkedAccount).mockResolvedValue("Steve");
-    const { getPlayerCoords } = await import("../src/common/utils/playerUtils.js");
+    const { getPlayerCoords } = await import("../src/core/utils/playerUtils.js");
     vi.mocked(getPlayerCoords).mockResolvedValue({
       x: 800,
       y: 64,
@@ -259,7 +259,7 @@ describe("/playerhead command", () => {
 describe("serverAccess.logStreamUrl", () => {
   let logStreamUrl: (cfg: never) => string;
   beforeEach(async () => {
-    ({ logStreamUrl } = await import("../src/common/utils/serverAccess.js"));
+    ({ logStreamUrl } = await import("../src/core/utils/serverAccess.js"));
   });
 
   it("builds the SSE stream URL from apiUrl including instance id", () => {

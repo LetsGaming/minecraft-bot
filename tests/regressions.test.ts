@@ -7,11 +7,11 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../src/common/utils/serverAccess.js", () => ({
+vi.mock("../src/core/utils/serverAccess.js", () => ({
   readWhitelist: vi.fn().mockResolvedValue([{ name: "Alice", uuid: "u1" }]),
   readStats: vi.fn().mockResolvedValue({ stats: {} }),
   readUserCache: vi.fn().mockResolvedValue([]),
@@ -21,19 +21,19 @@ vi.mock("../src/common/utils/serverAccess.js", () => ({
   tailLog: vi.fn().mockResolvedValue(""),
 }));
 
-vi.mock("../src/common/config.js", () => ({
+vi.mock("../src/core/config.js", () => ({
   loadConfig: vi.fn().mockReturnValue({ servers: {}, guilds: {} }),
 }));
 
-import * as serverAccess from "../src/common/utils/serverAccess.js";
+import * as serverAccess from "../src/core/utils/serverAccess.js";
 import {
   loadWhitelist,
   loadKnownPlayers,
   invalidateWhitelistCache,
-} from "../src/common/utils/utils.js";
-import { buildLeaderboard, invalidateAllStatsCache } from "../src/common/utils/statUtils.js";
-import { initServers, getServerInstance, getFirstInstance } from "../src/common/utils/server.js";
-import type { ServerInstance } from "../src/common/utils/server.js";
+} from "../src/core/utils/utils.js";
+import { buildLeaderboard, invalidateAllStatsCache } from "../src/core/utils/statUtils.js";
+import { initServers, getServerInstance, getFirstInstance } from "../src/core/utils/server.js";
+import type { ServerInstance } from "../src/core/utils/server.js";
 
 function makeServer(id = "survival"): ServerInstance {
   return { id, config: { id, useRcon: false } } as unknown as ServerInstance;

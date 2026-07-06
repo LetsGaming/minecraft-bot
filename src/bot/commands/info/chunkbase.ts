@@ -2,8 +2,8 @@ import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embedUtils.js";
 import { resolveServer } from "../../utils/guildRouter.js";
 
-import { getLinkedAccount } from "../../../common/utils/linkUtils.js";
-import { buildChunkbaseUrl } from "../../../common/utils/chunkbaseUrl.js";
+import { getLinkedAccount } from "@mcbot/core/utils/linkUtils.js";
+import { buildChunkbaseUrl } from "@mcbot/core/utils/chunkbaseUrl.js";
 import { withErrorHandling } from "../middleware.js";
 
 export const data = new SlashCommandBuilder()

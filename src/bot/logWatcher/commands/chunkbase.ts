@@ -1,5 +1,5 @@
 import { defineCommand } from "../defineCommand.js";
-import { buildChunkbaseUrl } from "../../../common/utils/chunkbaseUrl.js";
+import { buildChunkbaseUrl } from "@mcbot/core/utils/chunkbaseUrl.js";
 
 const cmd = defineCommand({
   name: "chunkbase",

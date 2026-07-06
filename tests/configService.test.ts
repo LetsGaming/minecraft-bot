@@ -10,7 +10,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -22,7 +22,7 @@ const mocks = vi.hoisted(() => ({
   reconcileServers: vi.fn(),
 }));
 
-vi.mock("../src/common/config.js", () => ({
+vi.mock("../src/core/config.js", () => ({
   getConfigPath: mocks.getConfigPath,
   validateCandidateConfig: mocks.validateCandidateConfig,
   reloadConfig: mocks.reloadConfig,
@@ -36,7 +36,7 @@ import {
   readRawConfig,
   validateCandidate,
   writeConfig,
-} from "../src/common/utils/configService.js";
+} from "../src/core/utils/configService.js";
 import { applyConfig } from "../src/bot/utils/applyConfig.js";
 
 let dir: string;

@@ -8,9 +8,9 @@ import {
   createPaginationButtons,
   handlePagination,
 } from "../../utils/embedUtils.js";
-import { loadWhitelist } from "../../../common/utils/utils.js";
+import { loadWhitelist } from "@mcbot/core/utils/utils.js";
 import { resolveServer } from "../../utils/guildRouter.js";
-import { log } from "../../../common/utils/logger.js";
+import { log } from "@mcbot/core/utils/logger.js";
 
 export const data = new SlashCommandBuilder()
   .setName("whitelisted")

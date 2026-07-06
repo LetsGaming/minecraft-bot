@@ -14,9 +14,9 @@ import type { Client } from "discord.js";
 import {
   loadClaimedStore,
   saveClaimedStore,
-} from "../../../common/utils/dailyStore.js";
-import { log } from "../../../common/utils/logger.js";
-import { t } from "../../../common/utils/i18n.js";
+} from "@mcbot/core/utils/dailyStore.js";
+import { log } from "@mcbot/core/utils/logger.js";
+import { t } from "@mcbot/core/utils/i18n.js";
 
 const CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const DAILY_COOLDOWN_MS = 24 * 60 * 60 * 1000;

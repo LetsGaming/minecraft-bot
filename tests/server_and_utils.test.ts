@@ -9,11 +9,11 @@ import { mkdtemp, rm } from "fs/promises";
 import os from "os";
 import path from "path";
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../src/common/config.js", () => ({
+vi.mock("../src/core/config.js", () => ({
   loadConfig: vi.fn().mockReturnValue({
     guilds: { guild1: { defaultServer: "survival" } },
     servers: {},
@@ -23,7 +23,7 @@ vi.mock("../src/common/config.js", () => ({
   }),
 }));
 
-vi.mock("../src/common/rcon/RconClient.js", () => ({
+vi.mock("../src/core/rcon/RconClient.js", () => ({
   RconClient: vi.fn().mockImplementation(() => ({
     connect: vi.fn(),
     disconnect: vi.fn(),
@@ -31,12 +31,12 @@ vi.mock("../src/common/rcon/RconClient.js", () => ({
   })),
 }));
 
-vi.mock("../src/common/shell/execCommand.js", () => ({
+vi.mock("../src/core/shell/execCommand.js", () => ({
   execSafe: vi.fn().mockResolvedValue(null),
   isSudoPermissionError: vi.fn().mockReturnValue(false),
 }));
 
-vi.mock("../src/common/utils/serverAccess.js", () => ({
+vi.mock("../src/core/utils/serverAccess.js", () => ({
   readUserCache: vi.fn().mockResolvedValue([]),
   tailLog: vi.fn().mockResolvedValue(""),
   isRunning: vi.fn().mockResolvedValue(false),
@@ -60,7 +60,7 @@ describe("server.ts — initServers / getServerInstance / getAllInstances", () =
   beforeEach(async () => {
     vi.resetModules();
     ({ initServers, getServerInstance, getAllInstances, getGuildServer } =
-      await import("../src/common/utils/server.js"));
+      await import("../src/core/utils/server.js"));
     vi.clearAllMocks();
   });
 
@@ -117,7 +117,7 @@ describe("ServerInstance", () => {
 
   beforeEach(async () => {
     vi.resetModules();
-    ({ ServerInstance } = await import("../src/common/utils/server.js"));
+    ({ ServerInstance } = await import("../src/core/utils/server.js"));
   });
 
   const localCfg = {
@@ -157,7 +157,7 @@ describe("utils.ensureDir", () => {
   let tmpDir: string;
 
   beforeEach(async () => {
-    ({ ensureDir } = await import("../src/common/utils/utils.js"));
+    ({ ensureDir } = await import("../src/core/utils/utils.js"));
     tmpDir = await mkdtemp(path.join(os.tmpdir(), "ensureDir-test-"));
   });
 
@@ -187,7 +187,7 @@ describe("utils.ensureDir", () => {
 describe("utils.getListOutput", () => {
   let getListOutput: (server?: never) => Promise<string | null>;
   beforeEach(async () => {
-    ({ getListOutput } = await import("../src/common/utils/utils.js"));
+    ({ getListOutput } = await import("../src/core/utils/utils.js"));
     vi.clearAllMocks();
   });
 
@@ -196,7 +196,7 @@ describe("utils.getListOutput", () => {
   });
 
   it("returns null when server never produces 'players online' in logs", async () => {
-    const { tailLog } = await import("../src/common/utils/serverAccess.js");
+    const { tailLog } = await import("../src/core/utils/serverAccess.js");
     vi.mocked(tailLog).mockResolvedValue("Server is starting...");
     const server = {
       id: "test-list",

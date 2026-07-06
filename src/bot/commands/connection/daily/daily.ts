@@ -13,20 +13,20 @@ import {
   savePendingRewards,
   getServerPending,
   MAX_PENDING_PER_PLAYER,
-} from "../../../../common/utils/dailyStore.js";
-import { t } from "../../../../common/utils/i18n.js";
-import { getOnlinePlayers } from "../../../../common/utils/playerUtils.js";
-import { isLinked, getLinkedAccount } from "../../../../common/utils/linkUtils.js";
+} from "@mcbot/core/utils/dailyStore.js";
+import { t } from "@mcbot/core/utils/i18n.js";
+import { getOnlinePlayers } from "@mcbot/core/utils/playerUtils.js";
+import { isLinked, getLinkedAccount } from "@mcbot/core/utils/linkUtils.js";
 import { createErrorEmbed } from "../../../utils/embedUtils.js";
 import type {
   DailyRewardsConfig,
   DailyRewardItem,
   UserClaimData,
-} from "../../../../common/types/index.js";
-import { log } from "../../../../common/utils/logger.js";
+} from "@mcbot/core/types/index.js";
+import { log } from "@mcbot/core/utils/logger.js";
 import { resolveServer } from "../../../utils/guildRouter.js";
-import { formatTime } from "../../../../common/utils/time.js";
-import type { ServerInstance } from "../../../../common/utils/server.js";
+import { formatTime } from "@mcbot/core/utils/time.js";
+import type { ServerInstance } from "@mcbot/core/utils/server.js";
 
 const DAILY_COOLDOWN = 24 * 60 * 60 * 1000;
 

@@ -9,7 +9,7 @@ import {
   humanizeKey,
   formatPlaytime,
   formatDistance,
-} from "../../../common/utils/statUtils.js";
+} from "@mcbot/core/utils/statUtils.js";
 import {
   createEmbed,
   createPaginationButtons,
@@ -17,11 +17,11 @@ import {
   createErrorEmbed,
   createInfoEmbed,
 } from "../../utils/embedUtils.js";
-import { findPlayer } from "../../../common/utils/playerUtils.js";
+import { findPlayer } from "@mcbot/core/utils/playerUtils.js";
 import { resolveServer } from "../../utils/guildRouter.js";
 import type { EmbedBuilder } from "discord.js";
-import type { FlattenedStat } from "../../../common/types/index.js";
-import { log } from "../../../common/utils/logger.js";
+import type { FlattenedStat } from "@mcbot/core/types/index.js";
+import { log } from "@mcbot/core/utils/logger.js";
 
 export const data = new SlashCommandBuilder()
   .setName("compare")

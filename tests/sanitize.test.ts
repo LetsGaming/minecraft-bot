@@ -7,7 +7,7 @@ import {
   sanitizeForConsole,
   stripControlChars,
   isValidMcName,
-} from "../src/common/utils/sanitize.js";
+} from "../src/core/utils/sanitize.js";
 
 describe("stripControlChars", () => {
   it("removes \\r and \\n (console command injection vector)", () => {

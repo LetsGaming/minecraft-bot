@@ -9,10 +9,10 @@
  * checks the shape); the hierarchy can only be checked here at runtime.
  */
 import type { Client } from "discord.js";
-import type { GuildConfig } from "../../common/types/index.js";
-import { loadConfig } from "../../common/config.js";
-import { recordAdminAction } from "../../common/utils/adminAudit.js";
-import { log } from "../../common/utils/logger.js";
+import type { GuildConfig } from "@mcbot/core/types/index.js";
+import { loadConfig } from "@mcbot/core/config.js";
+import { recordAdminAction } from "@mcbot/core/utils/adminAudit.js";
+import { log } from "@mcbot/core/utils/logger.js";
 
 export async function syncLinkedRole(
   client: Client,

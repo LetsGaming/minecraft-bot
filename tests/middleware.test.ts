@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── Top-level mocks ────────────────────────────────────────────────────────
-vi.mock("../src/common/config.js", () => ({
+vi.mock("../src/core/config.js", () => ({
   loadConfig: vi.fn(),
 }));
 
@@ -9,11 +9,11 @@ vi.mock("../src/bot/utils/embedUtils.js", () => ({
   createErrorEmbed: vi.fn().mockReturnValue({ type: "error-embed" }),
 }));
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-import { loadConfig } from "../src/common/config.js";
+import { loadConfig } from "../src/core/config.js";
 import {
   isServerAdmin,
   requireServerAdmin,

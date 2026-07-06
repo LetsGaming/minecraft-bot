@@ -7,13 +7,13 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
 import { registerSleepWatcher } from "../src/bot/logWatcher/watchers/sleepWatcher.js";
 import type { ILogWatcher } from "../src/bot/logWatcher/logWatcher.js";
-import type { ServerInstance } from "../src/common/utils/server.js";
+import type { ServerInstance } from "../src/core/utils/server.js";
 import type { Client } from "discord.js";
 
 // ── helpers ────────────────────────────────────────────────────────────────

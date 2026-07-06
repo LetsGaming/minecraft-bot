@@ -3,7 +3,7 @@ import {
   type ChatInputCommandInteraction,
 } from "discord.js";
 import { createEmbed, createErrorEmbed } from "../../utils/embedUtils.js";
-import { loadConfig } from "../../../common/config.js";
+import { loadConfig } from "@mcbot/core/config.js";
 
 export const data = new SlashCommandBuilder()
   .setName("map")

@@ -8,7 +8,7 @@
  * seed equivalence (seeds arrive as strings from ServerInstance.getSeed).
  */
 import { describe, it, expect } from "vitest";
-import { isSlimeChunk, blockToChunk } from "../src/common/utils/slimeChunk.js";
+import { isSlimeChunk, blockToChunk } from "../src/core/utils/slimeChunk.js";
 
 describe("blockToChunk", () => {
   it("floors positive and negative block coordinates", () => {

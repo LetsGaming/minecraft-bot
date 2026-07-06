@@ -32,9 +32,9 @@ import {
   assertMayTargetServerId,
   getAllowedServerIds,
 } from "../../utils/guildRouter.js";
-import { getServerIds } from "../../../common/config.js";
-import type { ServerInstance } from "../../../common/utils/server.js";
-import { recordAdminAction } from "../../../common/utils/adminAudit.js";
+import { getServerIds } from "@mcbot/core/config.js";
+import type { ServerInstance } from "@mcbot/core/utils/server.js";
+import { recordAdminAction } from "@mcbot/core/utils/adminAudit.js";
 import {
   loadPollStore,
   savePollStore,
@@ -44,14 +44,14 @@ import {
   MAX_POLL_OPTIONS,
   MIN_POLL_OPTIONS,
   type Poll,
-} from "../../../common/utils/pollStore.js";
+} from "@mcbot/core/utils/pollStore.js";
 import {
   armPoll,
   attachCollectorToMessage,
   closePoll,
 } from "../../logWatcher/watchers/pollScheduler.js";
-import { t } from "../../../common/utils/i18n.js";
-import { log } from "../../../common/utils/logger.js";
+import { t } from "@mcbot/core/utils/i18n.js";
+import { log } from "@mcbot/core/utils/logger.js";
 
 const DEFAULT_DURATION_HOURS = 24;
 const MAX_DURATION_HOURS = 24 * 7;

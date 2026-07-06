@@ -5,19 +5,19 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/common/utils/utils.js", () => ({
+vi.mock("../src/core/utils/utils.js", () => ({
   getRootDir: vi.fn().mockReturnValue("/tmp"),
   loadJson: vi.fn(),
   saveJson: vi.fn().mockResolvedValue(undefined),
 }));
 
-import { loadJson } from "../src/common/utils/utils.js";
+import { loadJson } from "../src/core/utils/utils.js";
 import {
   loadWaypointStore,
   getServerWaypoints,
   isValidWaypointName,
   type WaypointStore,
-} from "../src/common/utils/waypointStore.js";
+} from "../src/core/utils/waypointStore.js";
 import {
   addNote,
   removeNote,
@@ -25,7 +25,7 @@ import {
   findNotesByName,
   MAX_NOTES_PER_PLAYER,
   type PlayerNotesStore,
-} from "../src/common/utils/noteStore.js";
+} from "../src/core/utils/noteStore.js";
 import {
   expireStale,
   getActiveChallenge,
@@ -34,7 +34,7 @@ import {
   MAX_CHALLENGE_HISTORY,
   type ChallengeStore,
   type Challenge,
-} from "../src/common/utils/challengeStore.js";
+} from "../src/core/utils/challengeStore.js";
 import {
   savePollStore,
   getOpenPollForServer,
@@ -44,7 +44,7 @@ import {
   MAX_CLOSED_POLLS,
   type Poll,
   type PollStore,
-} from "../src/common/utils/pollStore.js";
+} from "../src/core/utils/pollStore.js";
 
 beforeEach(() => vi.clearAllMocks());
 

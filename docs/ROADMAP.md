@@ -39,7 +39,7 @@ releases with a GHCR image, a locale-parity CI gate, and a nightly RCON
 e2e smoke against a real Paper server.
 
 Layout note for anyone returning after 3.5.x: the source split into
-`src/bot` / `src/common` / `src/web` (ESLint-enforced boundaries) so the
+`bot/` / `packages/core` / `web-ui/` npm workspaces (ESLint- and dependency-tree-enforced boundaries) so the
 dashboard runs as its own process — see
 [dev/architecture.md](dev/architecture.md) and
 [dev/decisions.md](dev/decisions.md).

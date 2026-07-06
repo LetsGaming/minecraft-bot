@@ -19,9 +19,9 @@ import {
   saveWatchStore,
   newWatchId,
   MAX_WATCHES_PER_USER,
-} from "../../../common/utils/watchStore.js";
-import { isValidMcName } from "../../../common/utils/sanitize.js";
-import { t } from "../../../common/utils/i18n.js";
+} from "@mcbot/core/utils/watchStore.js";
+import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
+import { t } from "@mcbot/core/utils/i18n.js";
 
 export const data = new SlashCommandBuilder()
   .setName("watch")

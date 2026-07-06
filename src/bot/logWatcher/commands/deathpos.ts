@@ -12,7 +12,7 @@
  * available.
  */
 import { defineCommand } from "../defineCommand.js";
-import { t } from "../../../common/utils/i18n.js";
+import { t } from "@mcbot/core/utils/i18n.js";
 
 const cmd = defineCommand({
   name: "deathpos",

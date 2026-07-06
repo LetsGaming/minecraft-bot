@@ -9,31 +9,34 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock("../src/bot/logWatcher/logWatcher.js", () => ({
   registerLogCommand: vi.fn(),
 }));
-vi.mock("../src/common/config.js", () => ({
+vi.mock("../src/core/config.js", () => ({
   loadConfig: vi.fn().mockReturnValue({ language: "en", guilds: {} }),
 }));
 vi.mock("../src/bot/utils/guildRouter.js", () => ({
   serverInScope: vi.fn().mockReturnValue(true),
 }));
-vi.mock("../src/common/utils/linkUtils.js", () => ({
+vi.mock("../src/core/utils/linkUtils.js", () => ({
   loadLinkedAccounts: vi.fn().mockResolvedValue({}),
 }));
-vi.mock("../src/common/utils/utils.js", () => ({
+vi.mock("../src/core/utils/utils.js", () => ({
   getRootDir: vi.fn().mockReturnValue("/tmp"),
   loadJson: vi.fn(),
   saveJson: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { registerLogCommand } from "../src/bot/logWatcher/logWatcher.js";
-import { loadConfig } from "../src/common/config.js";
-import { loadJson } from "../src/common/utils/utils.js";
-import { loadLinkedAccounts } from "../src/common/utils/linkUtils.js";
+import { loadConfig } from "../src/core/config.js";
+import { kvSet } from "../src/core/db/kv.js";
+import { closeDbForTesting } from "../src/core/db/index.js";
+import { loadWaypointStore } from "../src/core/utils/waypointStore.js";
+import { loadPollStore } from "../src/core/utils/pollStore.js";
+import { loadLinkedAccounts } from "../src/core/utils/linkUtils.js";
 import { defineCommand } from "../src/bot/logWatcher/defineCommand.js";
 
 type Handler = (
@@ -58,6 +61,7 @@ const chatLine = (user: string, msg: string) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  closeDbForTesting(); // fresh in-memory DB per test
   vi.mocked(loadConfig).mockReturnValue({
     language: "en",
     guilds: {},
@@ -227,7 +231,7 @@ describe("!waypoint handler routing", () => {
   });
 
   const makeServer = (store: unknown) => {
-    vi.mocked(loadJson).mockResolvedValue(store);
+    kvSet("waypoints", store);
     return {
       id: "smp",
       sendCommand: vi.fn().mockResolvedValue(undefined),
@@ -244,9 +248,8 @@ describe("!waypoint handler routing", () => {
     const m = regex.exec(chatLine(user, "!waypoint set GuardianFarm"))!;
     await handler(m, null, server);
 
-    const wp = (
-      store as { servers: Record<string, Record<string, { x: number; z: number; author: string }>> }
-    ).servers["smp"]!["guardianfarm"]!;
+    const after = await loadWaypointStore();
+    const wp = after.servers["smp"]!["guardianfarm"]!;
     expect(wp).toMatchObject({ x: 10, z: -4, author: user });
   });
 
@@ -272,7 +275,9 @@ describe("!waypoint handler routing", () => {
     const m = regex.exec(chatLine(nextUser(), "!waypoint set base"))!;
     await handler(m, null, server);
 
-    expect(store.servers.smp.base.author).toBe("SomeoneElse");
+    expect((await loadWaypointStore()).servers["smp"]!["base"]!.author).toBe(
+      "SomeoneElse",
+    );
     const srv = server as { sendCommand: ReturnType<typeof vi.fn> };
     expect(srv.sendCommand).toHaveBeenCalledWith(
       expect.stringContaining("SomeoneElse"),
@@ -357,19 +362,20 @@ describe("!vote handler", () => {
 
   it("records an in-game vote under the mc key for unlinked players", async () => {
     const store = pollStore();
-    vi.mocked(loadJson).mockResolvedValue(store);
+    kvSet("polls", store);
     const user = nextUser();
 
     const m = regex.exec(chatLine(user, "!vote 2"))!;
     await handler(m, null, makeServer());
 
-    expect(store.polls[0]!.votes[`m:${user.toLowerCase()}`]).toBe(1);
+    const after = await loadPollStore();
+    expect(after.polls[0]!.votes[`m:${user.toLowerCase()}`]).toBe(1);
   });
 
   it("collapses linked players onto their Discord key (cross-platform dedupe)", async () => {
     const store = pollStore();
     store.polls[0]!.votes["d:777"] = 0; // earlier button vote
-    vi.mocked(loadJson).mockResolvedValue(store);
+    kvSet("polls", store);
     const user = nextUser();
     vi.mocked(loadLinkedAccounts).mockResolvedValue({ "777": user });
 
@@ -377,18 +383,18 @@ describe("!vote handler", () => {
     await handler(m, null, makeServer());
 
     // The button vote was overwritten, not duplicated.
-    expect(store.polls[0]!.votes).toEqual({ "d:777": 1 });
+    expect((await loadPollStore()).polls[0]!.votes).toEqual({ "d:777": 1 });
   });
 
   it("rejects out-of-range options with a hint", async () => {
     const store = pollStore();
-    vi.mocked(loadJson).mockResolvedValue(store);
+    kvSet("polls", store);
     const server = makeServer();
 
     const m = regex.exec(chatLine(nextUser(), "!vote 9"))!;
     await handler(m, null, server);
 
-    expect(store.polls[0]!.votes).toEqual({});
+    expect((await loadPollStore()).polls[0]!.votes).toEqual({});
     const srv = server as { sendCommand: ReturnType<typeof vi.fn> };
     expect(srv.sendCommand).toHaveBeenCalledWith(
       expect.stringContaining("between 1 and 2"),
@@ -396,7 +402,7 @@ describe("!vote handler", () => {
   });
 
   it("tells the player when no poll is open", async () => {
-    vi.mocked(loadJson).mockResolvedValue({ version: 1, polls: [] });
+    kvSet("polls", { version: 1, polls: [] });
     const server = makeServer();
     const m = regex.exec(chatLine(nextUser(), "!vote 1"))!;
     await handler(m, null, server);

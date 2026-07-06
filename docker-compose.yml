@@ -2,7 +2,9 @@ name: minecraft-bot
 
 services:
   bot:
-    build: .
+    build:
+      context: .
+      target: bot
     image: minecraft-bot:latest
     container_name: minecraft-bot
     restart: unless-stopped
@@ -54,6 +56,73 @@ services:
     # ── Logging ───────────────────────────────────────────────────────────────
     # Logs are also written to the bot_logs volume as logs/bot.log.
     # docker compose logs -f  shows live output from stdout.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── Web dashboard (optional extension — opt in with the "web" profile) ────
+  # Start both:      docker compose --profile web up -d
+  # Dashboard only:  docker compose --profile web up -d web
+  #
+  # Deliberately no depends_on: the dashboard and the bot have independent
+  # lifecycles — either runs, restarts, and works without the other. They
+  # share config.json and the data volume (JSON stores + SQLite in WAL
+  # mode), which also means: same host. The shared volume is the contract.
+  web:
+    build:
+      context: .
+      target: web
+    image: minecraft-bot-web:latest
+    container_name: minecraft-bot-web
+    restart: unless-stopped
+    profiles: ["web"]
+
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      NODE_ENV: production
+      # Inside a container the server must bind beyond loopback; publishing
+      # below still restricts it to the host's loopback.
+      WEBUI_HOST: 0.0.0.0
+      # WEBUI_METRICS_TOKEN: set in .env to gate /metrics with a bearer token
+
+    # Published on the HOST's loopback only. Put a TLS-terminating reverse
+    # proxy in front before exposing the dashboard to a LAN or the internet
+    # (see docs/dev/webui-integration.md).
+    ports:
+      - "127.0.0.1:8130:8130"
+
+    volumes:
+      - ./config.template.json:/app/config.template.json:ro
+      # - ./config.json:/app/config.json:ro
+      - bot_data:/app/data
+      - bot_logs:/app/logs
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8130/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+
     logging:
       driver: json-file
       options:

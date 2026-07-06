@@ -6,13 +6,13 @@
  */
 import { SlashCommandBuilder } from "discord.js";
 import { resolveServer } from "../../utils/guildRouter.js";
-import { invalidateWhitelistCache } from "../../../common/utils/utils.js";
-import { isValidMcName } from "../../../common/utils/sanitize.js";
+import { invalidateWhitelistCache } from "@mcbot/core/utils/utils.js";
+import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
 import { createSuccessEmbed } from "../../utils/embedUtils.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
-import { recordAdd } from "../../../common/utils/whitelistAudit.js";
-import type { MojangProfile } from "../../../common/types/index.js";
-import type { ServerInstance } from "../../../common/utils/server.js";
+import { recordAdd } from "@mcbot/core/utils/whitelistAudit.js";
+import type { MojangProfile } from "@mcbot/core/types/index.js";
+import type { ServerInstance } from "@mcbot/core/utils/server.js";
 
 export function buildWhitelistAddData(commandName: string): SlashCommandBuilder {
   return new SlashCommandBuilder()

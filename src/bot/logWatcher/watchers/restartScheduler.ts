@@ -23,24 +23,24 @@
  * drifts across DST changes) and on every config reload.
  */
 import { type Client } from "discord.js";
-import { loadConfig } from "../../../common/config.js";
-import { getServerInstance } from "../../../common/utils/server.js";
-import { runScript } from "../../../common/utils/serverAccess.js";
-import { recordAdminAction } from "../../../common/utils/adminAudit.js";
+import { loadConfig } from "@mcbot/core/config.js";
+import { getServerInstance } from "@mcbot/core/utils/server.js";
+import { runScript } from "@mcbot/core/utils/serverAccess.js";
+import { recordAdminAction } from "@mcbot/core/utils/adminAudit.js";
 import {
   nextTimeOfDayEpoch,
   localDayOfWeek,
   formatTime,
-} from "../../../common/utils/time.js";
-import { log } from "../../../common/utils/logger.js";
+} from "@mcbot/core/utils/time.js";
+import { log } from "@mcbot/core/utils/logger.js";
 import { createEmbed } from "../../utils/embedUtils.js";
 import { suppressAlerts } from "./downtimeMonitor.js";
 import { broadcastNotification } from "./notifyGuilds.js";
-import { t } from "../../../common/utils/i18n.js";
+import { t } from "@mcbot/core/utils/i18n.js";
 import type {
   BotConfig,
   ServerRestartSchedule,
-} from "../../../common/types/index.js";
+} from "@mcbot/core/types/index.js";
 
 const DEFAULT_WARN_MINUTES = [15, 5, 1];
 const DAY_CODES = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"] as const;

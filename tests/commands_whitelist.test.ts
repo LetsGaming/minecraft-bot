@@ -27,18 +27,18 @@ vi.mock("../src/bot/utils/embedUtils.js", () => ({
   handlePagination: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../src/common/utils/logger.js", () => ({
+vi.mock("../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../src/common/utils/whitelistAudit.js", () => ({
+vi.mock("../src/core/utils/whitelistAudit.js", () => ({
   recordAdd: vi.fn().mockResolvedValue(undefined),
   recordRemove: vi.fn().mockResolvedValue(undefined),
   getAuditEntry: vi.fn().mockResolvedValue(null),
   loadAudit: vi.fn().mockResolvedValue({}),
 }));
 
-vi.mock("../src/common/utils/utils.js", () => ({
+vi.mock("../src/core/utils/utils.js", () => ({
   getRootDir: vi.fn().mockReturnValue("/tmp"),
   loadJson: vi.fn().mockResolvedValue({}),
   loadWhitelist: vi.fn().mockResolvedValue([
@@ -54,13 +54,13 @@ vi.mock("../src/common/utils/utils.js", () => ({
 }));
 
 // /map now reads through loadConfig() instead of loadJson(config.json)
-vi.mock("../src/common/config.js", () => ({
+vi.mock("../src/core/config.js", () => ({
   loadConfig: vi.fn().mockReturnValue({ commands: {} }),
 }));
 
 import { resolveServer } from "../src/bot/utils/guildRouter.js";
-import { loadWhitelist, invalidateWhitelistCache } from "../src/common/utils/utils.js";
-import { loadConfig } from "../src/common/config.js";
+import { loadWhitelist, invalidateWhitelistCache } from "../src/core/utils/utils.js";
+import { loadConfig } from "../src/core/config.js";
 
 function makeServer(id = "survival") {
   return {

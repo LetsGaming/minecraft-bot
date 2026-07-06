@@ -3,8 +3,8 @@ import {
   type ChatInputCommandInteraction,
 } from "discord.js";
 import { createEmbed, createErrorEmbed } from "../../utils/embedUtils.js";
-import { getLinkedAccount } from "../../../common/utils/linkUtils.js";
-import { getPlayerCoords } from "../../../common/utils/playerUtils.js";
+import { getLinkedAccount } from "@mcbot/core/utils/linkUtils.js";
+import { getPlayerCoords } from "@mcbot/core/utils/playerUtils.js";
 import { resolveServer } from "../../utils/guildRouter.js";
 
 export const data = new SlashCommandBuilder()

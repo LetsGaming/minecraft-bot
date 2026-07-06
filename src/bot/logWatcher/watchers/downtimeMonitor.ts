@@ -1,18 +1,18 @@
 import { type Client } from "discord.js";
-import { log } from "../../../common/utils/logger.js";
+import { log } from "@mcbot/core/utils/logger.js";
 import { serverInScope } from "../../utils/guildRouter.js";
-import { recordCheck } from "../../../common/utils/uptimeTracker.js";
+import { recordCheck } from "@mcbot/core/utils/uptimeTracker.js";
 import { createEmbed } from "../../utils/embedUtils.js";
 import { roleMention } from "../../utils/alertUtils.js";
 import { fireWatches } from "./watchFirer.js";
-import { t, runWithGuildLocale } from "../../../common/utils/i18n.js";
+import { t, runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
 import {
   loadSessionStore,
   saveSessionStore,
   closeAllOpenSessions,
-} from "../../../common/utils/sessionStore.js";
-import type { ServerInstance } from "../../../common/utils/server.js";
-import type { DowntimeState, GuildConfig } from "../../../common/types/index.js";
+} from "@mcbot/core/utils/sessionStore.js";
+import type { ServerInstance } from "@mcbot/core/utils/server.js";
+import type { DowntimeState, GuildConfig } from "@mcbot/core/types/index.js";
 
 const CHECK_INTERVAL_MS = 60 * 1000;
 const FAILURES_BEFORE_ALERT = 3;

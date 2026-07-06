@@ -28,7 +28,7 @@ import type {
   ManagedCategory,
   EnsuredTextChannel,
   EnsuredVoiceChannel,
-} from "../../common/types/index.js";
+} from "@mcbot/core/types/index.js";
 
 export type { ManagedCategory, EnsuredTextChannel, EnsuredVoiceChannel };
 

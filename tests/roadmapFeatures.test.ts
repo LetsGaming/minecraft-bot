@@ -7,29 +7,34 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/common/utils/utils.js", () => ({
+vi.mock("../src/core/utils/utils.js", () => ({
   getRootDir: vi.fn().mockReturnValue("/tmp"),
   loadJson: vi.fn(),
   saveJson: vi.fn().mockResolvedValue(undefined),
   loadKnownPlayers: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock("../src/common/config.js", () => ({
+vi.mock("../src/core/utils/linkUtils.js", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  loadLinkedAccounts: vi.fn(async () => ({})),
+}));
+
+vi.mock("../src/core/config.js", () => ({
   loadConfig: vi.fn(() => ({ guilds: {}, servers: {}, adminUsers: [] })),
   getServerIds: vi.fn(() => ["smp", "creative"]),
 }));
 
-import { loadJson, saveJson } from "../src/common/utils/utils.js";
-import { summarizeConfigChanges } from "../src/common/utils/configDiff.js";
-import { versionAtLeast } from "../src/common/utils/serverAccess.js";
+import { loadJson, saveJson } from "../src/core/utils/utils.js";
+import { summarizeConfigChanges } from "../src/core/utils/configDiff.js";
+import { versionAtLeast } from "../src/core/utils/serverAccess.js";
 import { highestCrossed } from "../src/bot/logWatcher/watchers/milestoneWatcher.js";
-import { rewardPoolForServer } from "../src/common/utils/dailyStore.js";
+import { rewardPoolForServer } from "../src/core/utils/dailyStore.js";
 import {
   pollServerIds,
   getOpenPollForServer,
   type Poll,
   type PollStore,
-} from "../src/common/utils/pollStore.js";
+} from "../src/core/utils/pollStore.js";
 import {
   parseScheduleTime,
   nextScheduledRun,
@@ -38,18 +43,22 @@ import {
   buildActivitySparkline,
   busiestHours,
   type HourBucket,
-} from "../src/common/utils/playerCountHistory.js";
+} from "../src/core/utils/playerCountHistory.js";
 import { sanitizeLogLine } from "../src/bot/logWatcher/watchers/consoleRelay.js";
 import {
   takeMatchingWatches,
+  loadWatchStore,
   type WatchStore,
-} from "../src/common/utils/watchStore.js";
-import { buildStreakLeaderboard } from "../src/common/utils/streakLeaderboard.js";
-import { localDayOfWeek } from "../src/common/utils/time.js";
-import type { DailyRewardsConfig } from "../src/common/types/index.js";
+} from "../src/core/utils/watchStore.js";
+import { kvSet } from "../src/core/db/kv.js";
+import { closeDbForTesting } from "../src/core/db/index.js";
+import { buildStreakLeaderboard } from "../src/core/utils/streakLeaderboard.js";
+import { localDayOfWeek } from "../src/core/utils/time.js";
+import type { DailyRewardsConfig } from "../src/core/types/index.js";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  closeDbForTesting(); // fresh in-memory DB per test
 });
 
 // ── configDiff ──────────────────────────────────────────────────────────────
@@ -278,15 +287,15 @@ describe("takeMatchingWatches", () => {
   });
 
   it("removes and returns exactly the matching one-shots", async () => {
-    vi.mocked(loadJson).mockResolvedValue(store() as never);
+    kvSet("watches", store());
     const matched = await takeMatchingWatches({ kind: "server", serverId: "smp" });
     expect(matched.map((w) => w.id)).toEqual(["a"]);
-    const saved = vi.mocked(saveJson).mock.calls[0]![1] as WatchStore;
+    const saved: WatchStore = await loadWatchStore();
     expect(saved.watches.map((w) => w.id)).toEqual(["b", "c"]);
   });
 
   it("matches players case-insensitively and saves nothing on a miss", async () => {
-    vi.mocked(loadJson).mockResolvedValue(store() as never);
+    kvSet("watches", store());
     const matched = await takeMatchingWatches({
       kind: "player",
       serverId: "smp",
@@ -294,15 +303,15 @@ describe("takeMatchingWatches", () => {
     });
     expect(matched.map((w) => w.id)).toEqual(["b"]);
 
-    vi.mocked(saveJson).mockClear();
-    vi.mocked(loadJson).mockResolvedValue(store() as never);
+    kvSet("watches", store());
     const none = await takeMatchingWatches({
       kind: "player",
       serverId: "smp",
       player: "alex",
     });
     expect(none).toEqual([]);
-    expect(vi.mocked(saveJson)).not.toHaveBeenCalled();
+    // A miss writes nothing — the store is byte-for-byte the seeded one.
+    expect(await loadWatchStore()).toEqual(store());
   });
 });
 
@@ -310,23 +319,22 @@ describe("takeMatchingWatches", () => {
 
 describe("buildStreakLeaderboard", () => {
   it("ranks by the chosen key, resolves linked names, mentions the rest", async () => {
-    vi.mocked(loadJson).mockImplementation(async (p: unknown) => {
-      const file = String(p);
-      if (file.includes("claimedDaily")) {
-        return {
-          version: 2,
-          servers: {
-            smp: {
-              u1: { currentStreak: 5, longestStreak: 9, lastClaim: 0, bonusStreak: 0, rewards: [] },
-              u2: { currentStreak: 7, longestStreak: 7, lastClaim: 0, bonusStreak: 0, rewards: [] },
-              u3: { currentStreak: 0, longestStreak: 0, lastClaim: 0, bonusStreak: 0, rewards: [] },
-            },
-          },
-        };
-      }
-      if (file.includes("linked")) return { u1: "SteveMC" };
-      return {};
+    kvSet("claimedDaily", {
+      version: 2,
+      servers: {
+        smp: {
+          u1: { currentStreak: 5, longestStreak: 9, lastClaim: 0, bonusStreak: 0, rewards: [] },
+          u2: { currentStreak: 7, longestStreak: 7, lastClaim: 0, bonusStreak: 0, rewards: [] },
+          u3: { currentStreak: 0, longestStreak: 0, lastClaim: 0, bonusStreak: 0, rewards: [] },
+        },
+      },
     });
+    vi.mocked(loadJson).mockResolvedValue({});
+
+    const { loadLinkedAccounts } = await import(
+      "../src/core/utils/linkUtils.js"
+    );
+    vi.mocked(loadLinkedAccounts).mockResolvedValue({ u1: "SteveMC" });
 
     const current = await buildStreakLeaderboard("streak", "smp");
     expect(current.entries.map((e) => e.name)).toEqual(["<@u2>", "SteveMC"]);
