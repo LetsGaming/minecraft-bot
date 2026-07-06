@@ -26,6 +26,29 @@ project follows [Semantic Versioning](https://semver.org/).
   config (removal is always an explicit question), `commands` overrides
   at every scope, `milestones`, and unknown keys are preserved, and the
   written file carries `$schema` for editor autocompletion.
+- **Command overrides are configurable from the wizard** at all three
+  scopes: global `commands`, per-guild slash commands, and per-server
+  in-game `!commands`. Fields are tri-state (`on`/`off`/`inherit` — an
+  unset field inherits from the outer scope, matching the field-by-field
+  resolution in commandPolicy), answering `inherit` for every field
+  offers to remove the override entirely, and command names are
+  completed from `data/commandManifest.json` when the bot has run once
+  (free text accepted otherwise). The override fields themselves come
+  from the schema, so future `CommandOverrideConfig` fields appear in
+  the flow automatically.
+- **The wizard is Docker-aware.** Docker deployments keep `data/` in a
+  named volume, so `commandManifest.json` is not on the host — the
+  wizard now discovers the manifest through a chain: an explicit
+  `--manifest <path>` flag, the local `data/` file, then
+  `docker compose cp bot:/app/data/commandManifest.json` against the
+  compose project (works on stopped containers), with a free-text
+  fallback that prints the exact export commands. Post-write validation
+  no longer depends on a build: when `src/core/dist` is absent (typical
+  for Docker-only checkouts) the config is checked structurally against
+  `config.schema.json` (types, enums, required fields; preserved unknown
+  keys are not flagged). When a compose file is present, the closing
+  next-steps explain compose "Option B" — mounting the freshly written
+  `./config.json` read-only into the container.
 
 ### Security
 

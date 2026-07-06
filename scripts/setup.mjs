@@ -4,8 +4,17 @@
  * setup.mjs — Interactive configuration wizard for the Minecraft Discord Bot.
  *
  * Usage:
- *   node setup.mjs          Generate a new config.json interactively
- *   node setup.mjs --edit   Edit an existing config.json
+ *   node setup.mjs                    Generate a new config.json interactively
+ *   node setup.mjs --edit             Edit an existing config.json
+ *   node setup.mjs --manifest <path>  Use a specific commandManifest.json
+ *                                     (e.g. one exported from a container)
+ *
+ * DOCKER: the wizard writes plain ./config.json — exactly the file the
+ * compose setup's "Option B" mounts read-only into /app/config.json. In
+ * Docker deployments data/ is a NAMED VOLUME, so the command manifest is
+ * not on the host; the wizard transparently tries
+ * `docker compose cp bot:/app/data/commandManifest.json` when the local
+ * file is missing, and falls back to free-text command names otherwise.
  *
  * SCHEMA-DRIVEN: the wizard reads config.schema.json (generated from
  * RawBotConfig by `npm run schema:generate`, kept in sync by CI) and
@@ -24,9 +33,11 @@
  */
 
 import { createInterface } from "node:readline";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve, dirname } from "node:path";
+import { existsSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
+import { tmpdir } from "node:os";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CONFIG_PATH = resolve(ROOT, "config.json");
@@ -449,6 +460,257 @@ async function promptObject(name, node, existing, ctx) {
   return Object.keys(out).length ? out : undefined;
 }
 
+// ── Structural validation ──
+// Docker-only checkouts never build src/core/dist, so the bot's deep
+// validator is unavailable there. This walks the written config against
+// config.schema.json directly (types, enums, required fields) — weaker
+// than validateCandidate, but it runs everywhere the schema file exists.
+// Unknown keys are deliberately NOT flagged: the wizard preserves them.
+
+/**
+ * @param {any} value
+ * @param {any} rawNode
+ * @param {string} path
+ * @param {string[]} problems
+ */
+function structuralCheck(value, rawNode, path, problems) {
+  const node = deref(rawNode);
+  if (!node || (node.anyOf || node.oneOf)) return; // unions: skip, deep validator owns these
+  switch (node.type) {
+    case "string":
+      if (typeof value !== "string") {
+        problems.push(`${path}: expected a string`);
+      } else if (Array.isArray(node.enum) && !node.enum.includes(value)) {
+        problems.push(`${path}: must be one of ${node.enum.join(", ")}`);
+      }
+      return;
+    case "number":
+    case "integer":
+      if (typeof value !== "number" || Number.isNaN(value)) {
+        problems.push(`${path}: expected a number`);
+      }
+      return;
+    case "boolean":
+      if (typeof value !== "boolean") problems.push(`${path}: expected a boolean`);
+      return;
+    case "array":
+      if (!Array.isArray(value)) {
+        problems.push(`${path}: expected an array`);
+      } else if (node.items) {
+        value.forEach((v, i) => structuralCheck(v, node.items, `${path}[${i}]`, problems));
+      }
+      return;
+    case "object": {
+      if (typeof value !== "object" || value === null || Array.isArray(value)) {
+        problems.push(`${path}: expected an object`);
+        return;
+      }
+      for (const req of node.required ?? []) {
+        if (!(req in value)) problems.push(`${path}.${req}: required field is missing`);
+      }
+      for (const [k, v] of Object.entries(value)) {
+        if (k === "$schema") continue;
+        if (node.properties?.[k]) {
+          structuralCheck(v, node.properties[k], `${path}.${k}`, problems);
+        } else if (node.additionalProperties && typeof node.additionalProperties === "object") {
+          structuralCheck(v, node.additionalProperties, `${path}.${k}`, problems);
+        }
+        // Unknown key with no additionalProperties schema: preserved, not judged.
+      }
+      return;
+    }
+    default:
+      return; // untyped (Record<string, unknown> etc.) — nothing to check
+  }
+}
+
+// ── Command overrides ──
+// The `commands` blocks are tri-state per field: true / false / UNSET =
+// inherit from the outer scope (resolution is field-by-field, see
+// CommandOverrideConfig in the schema). A yes/no confirm cannot express
+// "inherit", so overrides get their own on/off/inherit prompting —
+// still schema-driven, so future override fields appear automatically.
+
+/** @param {string} p @returns {{ slash: any[], ingame: any[] } | null} */
+function readManifestFile(p) {
+  try {
+    const m = JSON.parse(readFileSync(p, "utf-8"));
+    return { slash: m.slash ?? [], ingame: m.ingame ?? [] };
+  } catch {
+    return null;
+  }
+}
+
+/** @type {{ manifest: { slash: any[], ingame: any[] } | null, source: string } | null} */
+let manifestCache = null;
+
+/**
+ * Find the command manifest, in order:
+ *   1. --manifest <path>          (explicit, e.g. exported from a container)
+ *   2. ROOT/data/commandManifest.json   (local / bind-mount layout)
+ *   3. `docker compose cp bot:/app/data/commandManifest.json` — Docker
+ *      deployments keep data/ in a NAMED volume, so the file is not on
+ *      the host; compose cp works even against a stopped container.
+ * Probed once per run; every failure falls through silently to
+ * free-text command names.
+ * @returns {{ manifest: { slash: any[], ingame: any[] } | null, source: string }}
+ */
+function loadCommandManifest() {
+  if (manifestCache) return manifestCache;
+
+  const flagIdx = process.argv.indexOf("--manifest");
+  if (flagIdx !== -1 && process.argv[flagIdx + 1]) {
+    const p = resolve(process.argv[flagIdx + 1]);
+    const m = existsSync(p) ? readManifestFile(p) : null;
+    if (!m) warn(`--manifest ${p} could not be read — continuing without it.`);
+    manifestCache = { manifest: m, source: `--manifest ${p}` };
+    return manifestCache;
+  }
+
+  const local = resolve(ROOT, "data", "commandManifest.json");
+  if (existsSync(local)) {
+    manifestCache = { manifest: readManifestFile(local), source: "data/commandManifest.json" };
+    return manifestCache;
+  }
+
+  const composeFile = ["docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"]
+    .map((f) => resolve(ROOT, f))
+    .find((p) => existsSync(p));
+  if (composeFile) {
+    const tmp = join(tmpdir(), `mcbot-manifest-${process.pid}.json`);
+    try {
+      execFileSync(
+        "docker",
+        ["compose", "cp", "bot:/app/data/commandManifest.json", tmp],
+        { cwd: ROOT, stdio: ["ignore", "ignore", "ignore"], timeout: 15000 },
+      );
+      const m = readManifestFile(tmp);
+      rmSync(tmp, { force: true });
+      if (m) {
+        manifestCache = { manifest: m, source: "docker compose (bot container data volume)" };
+        return manifestCache;
+      }
+    } catch {
+      rmSync(tmp, { force: true });
+      /* docker missing, container never created, or file absent — fall through */
+    }
+  }
+
+  manifestCache = { manifest: null, source: "" };
+  return manifestCache;
+}
+
+/**
+ * on/off/inherit prompt for a tri-state override field.
+ * @param {string} name
+ * @param {boolean | undefined} existing
+ * @returns {Promise<boolean | undefined>}
+ */
+async function promptTriState(name, existing) {
+  const cur =
+    existing === true ? "on" : existing === false ? "off" : "inherit";
+  for (;;) {
+    const v = (await prompt(`${name} (on/off/inherit)`, cur)).toLowerCase();
+    if (["on", "true", "y", "yes", "enable", "enabled"].includes(v)) return true;
+    if (["off", "false", "n", "no", "disable", "disabled"].includes(v)) return false;
+    if (["", "inherit", "unset", "default"].includes(v)) return undefined;
+    if (rlClosed) return existing;
+    warn("Answer on, off, or inherit.");
+  }
+}
+
+/**
+ * Interactive editor for a `commands` override block at one scope.
+ * Declining, or finishing without changes, keeps the existing block —
+ * never silently drops it.
+ * @param {string} scopeLabel Human description of the scope
+ * @param {"slash" | "ingame" | "both"} kind Which manifest half applies
+ * @param {Record<string, any> | undefined} existing
+ * @param {any} recordNode Schema node of the Record<string, CommandOverrideConfig>
+ * @returns {Promise<Record<string, any> | undefined>}
+ */
+async function configureCommandOverrides(scopeLabel, kind, existing, recordNode) {
+  const overrideSchema = deref(deref(recordNode)?.additionalProperties ?? {});
+  const has = existing !== undefined && Object.keys(existing).length > 0;
+
+  console.log();
+  describe(deref(recordNode)?.description);
+  if (!(await confirm(`Configure command overrides for ${scopeLabel}?`, false))) {
+    return existing; // untouched — preserve whatever is there
+  }
+
+  const { manifest, source } = loadCommandManifest();
+  /** @type {{name: string, description: string}[]} */
+  const known = manifest
+    ? kind === "both"
+      ? [...manifest.slash, ...manifest.ingame]
+      : manifest[kind]
+    : [];
+  if (known.length > 0) {
+    const names = [...new Set(known.map((c) => c.name))].sort();
+    hint(`Known ${kind === "both" ? "" : kind + " "}commands (${source}):`);
+    hint(names.join(", "));
+  } else {
+    hint("No command manifest found — free-text command names are accepted.");
+    hint("The bot writes it on startup; for name completion either run the");
+    hint("bot once locally, or in Docker export it and re-run the wizard:");
+    hint("  docker compose cp bot:/app/data/commandManifest.json ./manifest.json");
+    hint("  node scripts/setup.mjs --edit --manifest ./manifest.json");
+  }
+
+  /** @type {Record<string, any>} */
+  const out = { ...(existing ?? {}) };
+  if (has) {
+    for (const [cmd, ov] of Object.entries(out)) {
+      info(`Current: ${cmd} → ${JSON.stringify(ov)}`);
+    }
+  }
+
+  for (;;) {
+    const cmd = await prompt("Command name (empty to finish)");
+    if (!cmd) break;
+    if (known.length > 0 && !known.some((c) => c.name === cmd)) {
+      warn(`"${cmd}" is not in the manifest — kept anyway (manifest may be stale).`);
+    }
+    const entry = known.find((c) => c.name === cmd);
+    if (entry?.description) hint(entry.description);
+
+    const prev = out[cmd] ?? {};
+    /** @type {Record<string, any>} */
+    const override = {};
+    for (const [field, fieldNode] of Object.entries(overrideSchema.properties ?? {})) {
+      const fn = deref(fieldNode);
+      describe(fn?.description ?? /** @type {any} */ (fieldNode)?.description);
+      if (fn.type === "boolean") {
+        const v = await promptTriState(field, prev[field]);
+        if (v !== undefined) override[field] = v;
+      } else {
+        const v = await promptValue(field, fieldNode, prev[field], {
+          serverIds: [],
+          depth: 1,
+        });
+        if (v !== undefined) override[field] = v;
+      }
+    }
+
+    if (Object.keys(override).length === 0) {
+      if (out[cmd] !== undefined) {
+        if (await confirm(`Remove the existing override for "${cmd}"?`, false)) {
+          delete out[cmd];
+          info(`${cmd}: override removed (fully inherits again)`);
+        }
+      } else {
+        info(`${cmd}: everything inherits — no override written`);
+      }
+    } else {
+      out[cmd] = override;
+      info(`${cmd} → ${JSON.stringify(override)}`);
+    }
+  }
+
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 // ── Main ──
 
 async function main() {
@@ -637,7 +899,7 @@ async function main() {
   const CURATED = new Set(["token", "clientId", "adminUsers", "servers", "guilds"]);
   // Power-user blocks the wizard preserves but does not prompt for —
   // the dashboard's Commands view (or a text editor) is the better UI.
-  const PRESERVE_ONLY = new Set(["commands", "leaderboard", "milestones"]);
+  const PRESERVE_ONLY = new Set(["leaderboard", "milestones"]);
 
   heading("Global Settings");
   hint("Optional features and tuning. Enter keeps the shown default;");
@@ -645,6 +907,16 @@ async function main() {
 
   for (const [key, propNode] of Object.entries(rootProps)) {
     if (CURATED.has(key)) continue;
+    if (key === "commands") {
+      const v = await configureCommandOverrides(
+        "the GLOBAL scope (base for every guild and server)",
+        "both",
+        existing.commands,
+        propNode,
+      );
+      if (v !== undefined) config.commands = v;
+      continue;
+    }
     if (PRESERVE_ONLY.has(key)) {
       if (existing[key] !== undefined) {
         config[key] = existing[key];
@@ -710,7 +982,9 @@ async function main() {
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + "\n");
   info(`Config written to ${CONFIG_PATH}`);
 
-  // Best-effort validation with the bot's own validator (needs a build).
+  // Best-effort validation with the bot's own validator (needs a build);
+  // Docker-only checkouts fall back to a structural check against the
+  // schema, which needs no build at all.
   try {
     const mod = await import(
       new URL("../src/core/dist/utils/configService.js", import.meta.url).href
@@ -724,13 +998,37 @@ async function main() {
     }
     for (const w of result.warnings ?? []) warn(w);
   } catch {
-    hint("(Skipped deep validation — run `npm run build` to enable it.)");
+    if (schema) {
+      /** @type {string[]} */
+      const problems = [];
+      structuralCheck(config, rootNode, "config", problems);
+      if (problems.length === 0) {
+        info("Config passes the structural schema check.");
+        hint("(Full validation runs in the bot itself at startup.)");
+      } else {
+        warn("Structural schema check found problems:");
+        for (const p of problems) hint(`  ${p}`);
+      }
+    } else {
+      hint("(Skipped validation — no build and no config.schema.json found.)");
+    }
   }
 
   console.log();
   hint("Next steps:");
   hint("  node scripts/start.mjs setup   — Build & start the bot");
   hint("  node scripts/start.mjs dev     — Start in development mode");
+  const composePresent = ["docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"]
+    .some((f) => existsSync(resolve(ROOT, f)));
+  if (composePresent) {
+    console.log();
+    hint("Docker (compose config \"Option B\" — static config file):");
+    hint("  1. In docker-compose.yml, comment out the config.template.json");
+    hint("     mount and uncomment:  - ./config.json:/app/config.json:ro");
+    hint("  2. docker compose up -d          (add --profile web for the dashboard)");
+    hint("  The entrypoint uses a mounted config.json as-is — no template");
+    hint("  substitution happens when the file already exists.");
+  }
   console.log();
 
   rl.close();
@@ -868,8 +1166,19 @@ async function configureServer(id, existing, serverSchema) {
     }
   }
 
-  // Per-server command overrides are preserved, not prompted.
-  if (existing.commands) server.commands = existing.commands;
+  // In-game !command overrides for this server
+  const cmdNode = serverSchema.properties?.commands;
+  if (cmdNode) {
+    const v = await configureCommandOverrides(
+      `IN-GAME !commands on server "${id}"`,
+      "ingame",
+      existing.commands,
+      cmdNode,
+    );
+    if (v !== undefined) server.commands = v;
+  } else if (existing.commands) {
+    server.commands = existing.commands;
+  }
 
   return server;
 }
@@ -960,9 +1269,15 @@ async function configureGuild(guildId, existing, guildSchema, ctx) {
       continue;
     }
 
-    // ── Preserved, not prompted ──
+    // ── Slash-command overrides for this guild ──
     if (key === "commands") {
-      if (existing.commands) guild.commands = existing.commands;
+      const v = await configureCommandOverrides(
+        `SLASH commands in guild ${guildId}`,
+        "slash",
+        existing.commands,
+        propNode,
+      );
+      if (v !== undefined) guild.commands = v;
       continue;
     }
 
