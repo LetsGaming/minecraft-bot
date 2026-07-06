@@ -6,6 +6,27 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Setup wizard rewritten as schema-driven** (`scripts/setup.mjs`).
+  Prompts, hints, enums, and section structure now come from
+  `config.schema.json` (the generated, CI-synced schema), so new config
+  sections and fields appear in the wizard automatically the moment the
+  schema regenerates — no wizard edits needed. Only credential entry,
+  admin users, servers, and the per-guild feature walk stay hand-curated
+  for flow; everything else (presence, hostAlerts, limits, webui,
+  schedules, …) is generated. Highlights: **remote-instance setup**
+  (apiUrl/apiKey via the API wrapper, with the same transport rules as
+  the bot's own validateApiUrl — https ok, plain http only to
+  LAN/loopback, public http requires explicit allowInsecureHttp
+  consent); secrets masked in bracketed defaults; JSDoc descriptions
+  shown as inline help; Discord-ID validation on channel/role prompts;
+  post-write validation through the bot's own validator when a build
+  exists. Editing is lossless: declining a section keeps its existing
+  config (removal is always an explicit question), `commands` overrides
+  at every scope, `milestones`, and unknown keys are preserved, and the
+  written file carries `$schema` for editor autocompletion.
+
 ### Security
 
 - **Server events can no longer be forged from chat** (audit SEC-01).
