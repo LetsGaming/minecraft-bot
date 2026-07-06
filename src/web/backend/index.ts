@@ -10,7 +10,29 @@ import { getDb } from "@mcbot/core/db/index.js";
 import { startWebServer } from "./server.js";
 import { log } from "@mcbot/core/utils/logger.js";
 
-const cfg = loadConfig();
+// Last-resort diagnostics: in a container an uncaught error at startup
+// becomes exit 1 and Docker restarts in a loop. Make sure the reason is
+// always on stdout (where `docker compose logs` can see it) rather than
+// a bare, easily-missed stack.
+process.on("uncaughtException", (err) => {
+  log.error("web", `Uncaught exception: ${err.stack ?? err.message}`);
+  process.exit(1);
+});
+process.on("unhandledRejection", (reason) => {
+  const msg = reason instanceof Error ? (reason.stack ?? reason.message) : String(reason);
+  log.error("web", `Unhandled rejection: ${msg}`);
+  process.exit(1);
+});
+
+let cfg;
+try {
+  cfg = loadConfig();
+} catch (err) {
+  const msg = err instanceof Error ? err.message : String(err);
+  log.error("web", `Failed to load config.json: ${msg}`);
+  process.exit(1);
+}
+
 if (cfg.webui?.enabled !== true) {
   log.error(
     "web",

@@ -71,17 +71,21 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- **Web dashboard container no longer crash-loops on SQLite** (Docker).
-  The dashboard opens the shared SQLite store at startup via
-  `better-sqlite3`, whose native binding can fail to load on Alpine/musl
-  — `getDb()` then threw synchronously and the container exited 1 in a
-  restart loop, with no actionable log line. The `web` service in
-  `docker-compose.yml` now sets `MCBOT_SQLITE_DRIVER=node` (the built-in
-  `node:sqlite` driver — identical store format, zero native build; the
-  dashboard runs on Node 24), and the web entrypoint wraps the store
-  open in a clear error that names the fix instead of a bare stack
-  trace. Documented in `docs/admin/docker.md` with a troubleshooting
-  section. (The bot container is unaffected and keeps `better-sqlite3`.)
+- **Web dashboard startup failures are now diagnosable instead of a
+  silent exit-1 restart loop** (Docker). The dashboard entry point wraps
+  each startup step — config load, SQLite open — and installs
+  `uncaughtException` / `unhandledRejection` handlers, so any boot
+  failure prints one clear `[ERROR] [web]` line to stdout (visible in
+  `docker compose logs web`) rather than a raw stack on repeat. The most
+  common causes are documented in `docs/admin/docker.md`: a `config.json`
+  built by the wizard while the compose volume is still on the
+  `config.template.json` mount (empty `token`/`clientId` → validation
+  error), a `better-sqlite3` native-binding load failure, and a disabled
+  dashboard. Related hardening: the `web` service sets
+  `MCBOT_SQLITE_DRIVER=node` (built-in driver, no native build; the bot
+  keeps `better-sqlite3`), and the logger no longer crashes the process
+  when `logs/` is unwritable — it degrades to stdout with a warning
+  instead of dying on an unhandled stream error.
 
 - **CI: `npm run i18n:check` crashed with ENOENT** — the locale parity
   script still read the pre-workspace `src/common/locales/` path (and
