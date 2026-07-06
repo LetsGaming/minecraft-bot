@@ -71,6 +71,18 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Web dashboard container no longer crash-loops on SQLite** (Docker).
+  The dashboard opens the shared SQLite store at startup via
+  `better-sqlite3`, whose native binding can fail to load on Alpine/musl
+  — `getDb()` then threw synchronously and the container exited 1 in a
+  restart loop, with no actionable log line. The `web` service in
+  `docker-compose.yml` now sets `MCBOT_SQLITE_DRIVER=node` (the built-in
+  `node:sqlite` driver — identical store format, zero native build; the
+  dashboard runs on Node 24), and the web entrypoint wraps the store
+  open in a clear error that names the fix instead of a bare stack
+  trace. Documented in `docs/admin/docker.md` with a troubleshooting
+  section. (The bot container is unaffected and keeps `better-sqlite3`.)
+
 - **CI: `npm run i18n:check` crashed with ENOENT** — the locale parity
   script still read the pre-workspace `src/common/locales/` path (and
   `dist/common/locales/` for built output). It now resolves the

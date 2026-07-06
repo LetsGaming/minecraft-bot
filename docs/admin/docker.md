@@ -140,3 +140,18 @@ docker compose --profile web up -d web    # dashboard only
 Requires `"webui": { "enabled": true }` in the config plus `WEBUI_CLIENT_SECRET` / `WEBUI_SESSION_SECRET` in `.env`. Compose already sets `WEBUI_HOST=0.0.0.0` inside the container and publishes the port on the **host's loopback only** (`127.0.0.1:8130`) — put a TLS-terminating reverse proxy in front before exposing it further. Optionally set `WEBUI_METRICS_TOKEN` to require `Authorization: Bearer <token>` on `/metrics`.
 
 There is deliberately no `depends_on`: the dashboard and the bot have independent lifecycles — either runs and works without the other. They share the config file and the `bot_data` volume (JSON stores + the SQLite database in WAL mode), which also means both containers must run on the same host.
+
+### Troubleshooting: `minecraft-bot-web` stuck `Restarting (1)`
+
+The dashboard opens the shared SQLite store at startup, so a store it cannot open makes it exit 1 and Docker restarts it in a loop. Check the reason:
+
+```bash
+docker compose logs --tail=20 web
+```
+
+Common causes:
+
+- **`Failed to open the SQLite store: better-sqlite3 failed to load …`** — the native binding did not build for this image. The compose file sets `MCBOT_SQLITE_DRIVER=node` on the web service precisely to avoid this (the dashboard runs on Node 24 and uses the built-in `node:sqlite` driver — same store format, no native build). If you removed that line, put it back and rebuild: `docker compose up -d --build web`.
+- **`Dashboard is disabled …`** — `config.json` is missing `"webui": { "enabled": true }`. Re-run `node scripts/setup.mjs --edit`, enable the dashboard, and rebuild.
+
+The dashboard **boots without** `WEBUI_SESSION_SECRET` / `WEBUI_CLIENT_SECRET` (health checks pass), but OAuth login fails until both are set in `.env` — that is a login error, not a crash loop.

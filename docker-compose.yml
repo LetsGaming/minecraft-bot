@@ -87,7 +87,19 @@ services:
       # Inside a container the server must bind beyond loopback; publishing
       # below still restricts it to the host's loopback.
       WEBUI_HOST: 0.0.0.0
+      # The dashboard opens the shared SQLite store at startup. It runs on
+      # Node 24, so it uses the built-in node:sqlite driver (zero native
+      # build) rather than better-sqlite3 — one less thing that can fail to
+      # compile against Alpine/musl and crash-loop the container. The store
+      # format is identical; the bot may keep using better-sqlite3. Remove
+      # this only if you deliberately want the native driver here too.
+      MCBOT_SQLITE_DRIVER: node
       # WEBUI_METRICS_TOKEN: set in .env to gate /metrics with a bearer token
+      #
+      # The dashboard needs these two secrets to serve authenticated routes
+      # (it BOOTS without them, but OAuth login fails). Put them in .env:
+      #   WEBUI_SESSION_SECRET  cookie-signing key, >= 16 random chars
+      #   WEBUI_CLIENT_SECRET   Discord application OAuth2 secret
 
     # Published on the HOST's loopback only. Put a TLS-terminating reverse
     # proxy in front before exposing the dashboard to a LAN or the internet

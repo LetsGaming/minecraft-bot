@@ -29,7 +29,26 @@ initServers(cfg.servers);
 // Open the shared SQLite store now: migrations + legacy-JSON import run
 // here idempotently, so the dashboard has a current schema even when it
 // is the only process running.
-getDb();
+//
+// This is the single most common dashboard boot failure in containers:
+// the native better-sqlite3 binding can fail to load on Alpine/musl,
+// and getDb() throws synchronously → the container exits 1 and Docker
+// restarts it in a loop. Catch it here so the log line is actionable
+// (the fix is MCBOT_SQLITE_DRIVER=node, which compose sets by default
+// for this service) instead of a bare stack trace on repeat.
+try {
+  getDb();
+} catch (err) {
+  const msg = err instanceof Error ? err.message : String(err);
+  log.error(
+    "web",
+    `Failed to open the SQLite store: ${msg}\n` +
+      "  In Docker, set MCBOT_SQLITE_DRIVER=node on the web service to use " +
+      "the built-in driver (no native build). The default docker-compose.yml " +
+      "already does this — rebuild with `docker compose up -d --build web`.",
+  );
+  process.exit(1);
+}
 
 startWebServer().catch((err: unknown) => {
   const msg = err instanceof Error ? err.message : String(err);
