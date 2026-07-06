@@ -163,7 +163,7 @@ describe("joinLeave watcher — handler invocation", () => {
     registerJoinLeaveWatcher(watcher, client, { guild1: {} });
 
     const joinRegex = watcher._handlers[0]!.regex;
-    const match = joinRegex.exec("[12:00:00] [INFO]: Alice joined the game")!;
+    const match = joinRegex.exec("[12:00:00] [Server thread/INFO]: Alice joined the game")!;
     await watcher._handlers[0]!.handler(match, client, watcher.server);
 
     expect(channel.send).not.toHaveBeenCalled();
@@ -209,7 +209,7 @@ describe("chatBridge watcher — regex patterns", () => {
     registerChatBridge(watcher, makeClient(makeChannel()), {});
     const chatRegex = watcher._handlers[0]!.regex;
     expect(
-      chatRegex.exec("[12:00:00] [INFO]: Steve joined the game"),
+      chatRegex.exec("[12:00:00] [Server thread/INFO]: Steve joined the game"),
     ).toBeNull();
   });
 });
@@ -222,7 +222,7 @@ describe("chatBridge watcher — handler invocation", () => {
     registerChatBridge(watcher, client, guildConfigsWithNotifs, ["srv1"]);
 
     const chatRegex = watcher._handlers[0]!.regex;
-    const match = chatRegex.exec("[12:00:00] [INFO]: <Steve> Hello world")!;
+    const match = chatRegex.exec("[12:00:00] [Server thread/INFO]: <Steve> Hello world")!;
     await watcher._handlers[0]!.handler(match, client, watcher.server);
 
     expect(channel.send).toHaveBeenCalledOnce();
@@ -235,7 +235,7 @@ describe("chatBridge watcher — handler invocation", () => {
     registerChatBridge(watcher, client, guildConfigsWithNotifs, ["srv1"]);
 
     const chatRegex = watcher._handlers[0]!.regex;
-    const match = chatRegex.exec("[12:00:00] [INFO]: <Steve> !coords")!;
+    const match = chatRegex.exec("[12:00:00] [Server thread/INFO]: <Steve> !coords")!;
     await watcher._handlers[0]!.handler(match, client, watcher.server);
 
     expect(channel.send).not.toHaveBeenCalled();
@@ -248,7 +248,7 @@ describe("chatBridge watcher — handler invocation", () => {
     registerChatBridge(watcher, client, { guild1: {} });
 
     const chatRegex = watcher._handlers[0]!.regex;
-    const match = chatRegex.exec("[12:00:00] [INFO]: <Steve> Hello")!;
+    const match = chatRegex.exec("[12:00:00] [Server thread/INFO]: <Steve> Hello")!;
     await watcher._handlers[0]!.handler(match, client, watcher.server);
 
     expect(channel.send).not.toHaveBeenCalled();
@@ -267,16 +267,16 @@ describe("deaths watcher — regex patterns", () => {
   });
 
   const deathLines = [
-    "[12:00:00] [INFO]: Steve was slain by Zombie",
-    "[12:00:00] [INFO]: Alex was shot by Skeleton",
-    "[12:00:00] [INFO]: Notch drowned",
-    "[12:00:00] [INFO]: Herobrine fell from a high place",
-    "[12:00:00] [INFO]: Player burned to death",
-    "[12:00:00] [INFO]: PvpPro was killed by player",
-    "[12:00:00] [INFO]: Miner hit the ground too hard",
-    "[12:00:00] [INFO]: Explorer starved to death",
-    "[12:00:00] [INFO]: Boss blew up",
-    "[12:00:00] [INFO]: Diver suffocated in a wall",
+    "[12:00:00] [Server thread/INFO]: Steve was slain by Zombie",
+    "[12:00:00] [Server thread/INFO]: Alex was shot by Skeleton",
+    "[12:00:00] [Server thread/INFO]: Notch drowned",
+    "[12:00:00] [Server thread/INFO]: Herobrine fell from a high place",
+    "[12:00:00] [Server thread/INFO]: Player burned to death",
+    "[12:00:00] [Server thread/INFO]: PvpPro was killed by player",
+    "[12:00:00] [Server thread/INFO]: Miner hit the ground too hard",
+    "[12:00:00] [Server thread/INFO]: Explorer starved to death",
+    "[12:00:00] [Server thread/INFO]: Boss blew up",
+    "[12:00:00] [Server thread/INFO]: Diver suffocated in a wall",
   ];
 
   deathLines.forEach((line) => {
@@ -293,7 +293,7 @@ describe("deaths watcher — regex patterns", () => {
     registerDeathWatcher(watcher, makeClient(makeChannel()), {});
     const deathRegex = watcher._handlers[0]!.regex;
     const m = deathRegex.exec(
-      "[12:00:00] [INFO]: .BedrockPlayer was slain by Zombie",
+      "[12:00:00] [Server thread/INFO]: .BedrockPlayer was slain by Zombie",
     );
     expect(m).not.toBeNull();
     expect(m![1]).toBe(".BedrockPlayer");
@@ -304,7 +304,7 @@ describe("deaths watcher — regex patterns", () => {
     registerDeathWatcher(watcher, makeClient(makeChannel()), {});
     const deathRegex = watcher._handlers[0]!.regex;
     expect(
-      deathRegex.exec("[12:00:00] [INFO]: Steve joined the game"),
+      deathRegex.exec("[12:00:00] [Server thread/INFO]: Steve joined the game"),
     ).toBeNull();
   });
 });
@@ -318,7 +318,7 @@ describe("deaths watcher — handler invocation", () => {
 
     const deathRegex = watcher._handlers[0]!.regex;
     const match = deathRegex.exec(
-      "[12:00:00] [INFO]: Steve was slain by Zombie",
+      "[12:00:00] [Server thread/INFO]: Steve was slain by Zombie",
     )!;
     await watcher._handlers[0]!.handler(match, client, watcher.server);
 
@@ -360,7 +360,7 @@ describe("serverEvents watcher — regex patterns", () => {
     registerServerEventWatcher(watcher, makeClient(makeChannel()), {});
     expect(
       watcher._handlers[0]!.regex.exec(
-        "[12:00:00] [INFO]: Steve joined the game",
+        "[12:00:00] [Server thread/INFO]: Steve joined the game",
       ),
     ).toBeNull();
   });
@@ -374,7 +374,7 @@ describe("serverEvents watcher — handler invocation", () => {
     registerServerEventWatcher(watcher, client, guildConfigsWithNotifs);
 
     const startRegex = watcher._handlers[0]!.regex;
-    const match = startRegex.exec("[12:00:00] [INFO]: Done (1.0s)!")!;
+    const match = startRegex.exec("[12:00:00] [Server thread/INFO]: Done (1.0s)!")!;
     await watcher._handlers[0]!.handler(match, client, watcher.server);
 
     expect(channel.send).toHaveBeenCalledOnce();
@@ -388,11 +388,11 @@ describe("serverEvents watcher — handler invocation", () => {
 
     // Fire start first so there is an uptime to compute
     const startRegex = watcher._handlers[0]!.regex;
-    const startMatch = startRegex.exec("[12:00:00] [INFO]: Done (1.0s)!")!;
+    const startMatch = startRegex.exec("[12:00:00] [Server thread/INFO]: Done (1.0s)!")!;
     await watcher._handlers[0]!.handler(startMatch, client, watcher.server);
 
     const stopRegex = watcher._handlers[1]!.regex;
-    const stopMatch = stopRegex.exec("[12:00:01] [INFO]: Stopping server")!;
+    const stopMatch = stopRegex.exec("[12:00:01] [Server thread/INFO]: Stopping server")!;
     await watcher._handlers[1]!.handler(stopMatch, client, watcher.server);
 
     expect(channel.send).toHaveBeenCalledTimes(2);
@@ -415,7 +415,7 @@ describe("advancements watcher — regex patterns", () => {
     registerAdvancementWatcher(watcher, makeClient(makeChannel()), {});
     const advRegex = watcher._handlers[0]!.regex;
     const match = advRegex.exec(
-      "[12:00:00] [INFO]: Steve has made the advancement [A Furious Cocktail]",
+      "[12:00:00] [Server thread/INFO]: Steve has made the advancement [A Furious Cocktail]",
     );
     expect(match).not.toBeNull();
     expect(match![1]).toBe("Steve");
@@ -427,7 +427,7 @@ describe("advancements watcher — regex patterns", () => {
     registerAdvancementWatcher(watcher, makeClient(makeChannel()), {});
     const advRegex = watcher._handlers[0]!.regex;
     const match = advRegex.exec(
-      "[12:00:00] [INFO]: Alex has completed the challenge [How Did We Get Here?]",
+      "[12:00:00] [Server thread/INFO]: Alex has completed the challenge [How Did We Get Here?]",
     );
     expect(match).not.toBeNull();
     expect(match![1]).toBe("Alex");
@@ -440,7 +440,7 @@ describe("advancements watcher — regex patterns", () => {
     const advRegex = watcher._handlers[0]!.regex;
     expect(
       advRegex.exec(
-        "[12:00:00] [INFO]: Notch has reached the goal [Ice Bucket Challenge]",
+        "[12:00:00] [Server thread/INFO]: Notch has reached the goal [Ice Bucket Challenge]",
       ),
     ).not.toBeNull();
   });
@@ -450,7 +450,7 @@ describe("advancements watcher — regex patterns", () => {
     registerAdvancementWatcher(watcher, makeClient(makeChannel()), {});
     const advRegex = watcher._handlers[0]!.regex;
     expect(
-      advRegex.exec("[12:00:00] [INFO]: <Steve> I got an advancement!"),
+      advRegex.exec("[12:00:00] [Server thread/INFO]: <Steve> I got an advancement!"),
     ).toBeNull();
   });
 });
@@ -461,7 +461,7 @@ describe("advancements watcher — Bedrock names", () => {
     registerAdvancementWatcher(watcher, makeClient(makeChannel()), {});
     const advRegex = watcher._handlers[0]!.regex;
     const m = advRegex.exec(
-      "[12:00:00] [INFO]: .BedrockPlayer has made the advancement [Stone Age]",
+      "[12:00:00] [Server thread/INFO]: .BedrockPlayer has made the advancement [Stone Age]",
     );
     expect(m).not.toBeNull();
     expect(m![1]).toBe(".BedrockPlayer");
@@ -477,7 +477,7 @@ describe("advancements watcher — handler invocation", () => {
 
     const advRegex = watcher._handlers[0]!.regex;
     const match = advRegex.exec(
-      "[12:00:00] [INFO]: Steve has made the advancement [Stone Age]",
+      "[12:00:00] [Server thread/INFO]: Steve has made the advancement [Stone Age]",
     )!;
     await watcher._handlers[0]!.handler(match, client, watcher.server);
 
@@ -494,7 +494,7 @@ describe("advancements watcher — handler invocation", () => {
 
     const advRegex = watcher._handlers[0]!.regex;
     const match = advRegex.exec(
-      "[12:00:00] [INFO]: Steve has made the advancement [Stone Age]",
+      "[12:00:00] [Server thread/INFO]: Steve has made the advancement [Stone Age]",
     )!;
     await watcher._handlers[0]!.handler(match, client, watcher.server);
 
@@ -525,7 +525,7 @@ describe("notification server filter", () => {
 
     const joinRegex = watcher._handlers[0]!.regex;
     const match = joinRegex.exec(
-      "[12:00:00] [INFO]: Steve joined the game",
+      "[12:00:00] [Server thread/INFO]: Steve joined the game",
     )!;
     await watcher._handlers[0]!.handler(match, client, watcher.server);
 
@@ -540,7 +540,7 @@ describe("notification server filter", () => {
 
     const joinRegex = watcher._handlers[0]!.regex;
     const match = joinRegex.exec(
-      "[12:00:00] [INFO]: Steve joined the game",
+      "[12:00:00] [Server thread/INFO]: Steve joined the game",
     )!;
     await watcher._handlers[0]!.handler(match, client, watcher.server);
 

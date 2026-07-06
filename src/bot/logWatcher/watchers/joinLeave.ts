@@ -3,6 +3,7 @@ import { createPlayerEmbed } from "../../utils/embedUtils.js";
 import type { ILogWatcher } from "../logWatcher.js";
 import type { GuildConfig } from "@mcbot/core/types/index.js";
 import { broadcastNotification, PLAYER_NAME } from "./notifyGuilds.js";
+import { serverEventRegex, registerServerEvent } from "./serverLine.js";
 import {
   loadSessionStore,
   saveSessionStore,
@@ -16,12 +17,10 @@ import type { ServerInstance } from "@mcbot/core/utils/server.js";
 
 // PLAYER_NAME captures Bedrock names prefixed with "." by
 // Geyser/Floodgate in addition to vanilla [a-zA-Z0-9_] names.
-const JOIN_REGEX = new RegExp(
-  String.raw`\[.+?\].*:\s+(${PLAYER_NAME}) joined the game`,
-);
-const LEAVE_REGEX = new RegExp(
-  String.raw`\[.+?\].*:\s+(${PLAYER_NAME}) left the game`,
-);
+// SEC-01: anchored on the server thread tag — chat must not forge
+// join/leave events (they open/close sessions and deliver rewards).
+const JOIN_REGEX = serverEventRegex(String.raw`(${PLAYER_NAME}) joined the game`);
+const LEAVE_REGEX = serverEventRegex(String.raw`(${PLAYER_NAME}) left the game`);
 
 /**
  * Give a freshly joined player a moment to finish logging in before the
@@ -63,7 +62,7 @@ export function registerJoinLeaveWatcher(
 ): void {
   const serverId = logWatcher.server.id;
 
-  logWatcher.register(JOIN_REGEX, async (match) => {
+  registerServerEvent(logWatcher, JOIN_REGEX, async (match) => {
     const player = match[1]!;
     await recordSession(serverId, player, "join");
     scheduleRewardDelivery(logWatcher.server, player);
@@ -71,7 +70,7 @@ export function registerJoinLeaveWatcher(
     await notify(client, guildConfigs, serverId, player, "join");
   });
 
-  logWatcher.register(LEAVE_REGEX, async (match) => {
+  registerServerEvent(logWatcher, LEAVE_REGEX, async (match) => {
     const player = match[1]!;
     await recordSession(serverId, player, "leave");
     await notify(client, guildConfigs, serverId, player, "leave");

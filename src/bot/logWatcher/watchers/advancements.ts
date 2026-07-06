@@ -3,6 +3,7 @@ import { createPlayerEmbed, createEmbed } from "../../utils/embedUtils.js";
 import type { ILogWatcher } from "../logWatcher.js";
 import type { GuildConfig } from "@mcbot/core/types/index.js";
 import { broadcastNotification, PLAYER_NAME } from "./notifyGuilds.js";
+import { serverEventRegex, registerServerEvent } from "./serverLine.js";
 import {
   loadChallengeStore,
   saveChallengeStore,
@@ -22,8 +23,11 @@ import type { ServerInstance } from "@mcbot/core/utils/server.js";
 
 // Use PLAYER_NAME (not \w+) so Bedrock players with "."-prefixed
 // names get advancement notifications too.
-const ADV_REGEX = new RegExp(
-  String.raw`\[.+?\].*:\s+(${PLAYER_NAME}) has (?:made the advancement|completed the challenge|reached the goal) \[(.+?)\]`,
+// SEC-01: anchored on the server thread tag via serverEventRegex — a
+// chat line must never forge an advancement (the challenge path pays
+// out a real item bonus through give()).
+const ADV_REGEX = serverEventRegex(
+  String.raw`(${PLAYER_NAME}) has (?:made the advancement|completed the challenge|reached the goal) \[(.+?)\]`,
 );
 
 /**
@@ -128,7 +132,7 @@ export function registerAdvancementWatcher(
 ): void {
   const serverId = logWatcher.server.id;
 
-  logWatcher.register(ADV_REGEX, async (match) => {
+  registerServerEvent(logWatcher, ADV_REGEX, async (match) => {
     const [, player, advancement] = match;
     if (!player || !advancement) return;
 

@@ -214,6 +214,45 @@ describe("web routes", () => {
     await app.close();
   });
 
+  /**
+   * QUAL-01 route-table parity: after the server.ts split, every route
+   * must (a) still be registered — an unregistered /api path falls into
+   * the static not-found handler and returns 404, not 401 — and (b)
+   * still sit behind requireAdminSession. A route dropped during module
+   * extraction, or registered outside the gated scope, fails here.
+   */
+  it("registers the complete gated route table (QUAL-01 parity)", async () => {
+    const app = buildServer();
+    const gated: Array<[string, string]> = [
+      ["GET", "/api/status"],
+      ["GET", "/api/uptime/smp"],
+      ["GET", "/api/activity/smp"],
+      ["GET", "/api/audit"],
+      ["GET", "/api/config"],
+      ["GET", "/api/config/schema"],
+      ["PUT", "/api/config"],
+      ["GET", "/api/commands"],
+      ["POST", "/api/servers/smp/restart"],
+      ["GET", "/api/servers/smp/log"],
+      ["POST", "/api/servers/smp/prune-stats"],
+    ];
+    for (const [method, url] of gated) {
+      const res = await app.inject({ method: method as "GET", url });
+      expect(`${method} ${url} → ${res.statusCode}`).toBe(
+        `${method} ${url} → 401`,
+      );
+    }
+    // Public surface: exists and is NOT behind the session gate.
+    expect((await app.inject({ url: "/auth/login" })).statusCode).toBe(302);
+    expect(
+      (await app.inject({ method: "POST", url: "/auth/logout" })).statusCode,
+    ).toBe(200);
+    expect((await app.inject({ url: "/auth/callback" })).statusCode).toBe(400);
+    expect((await app.inject({ url: "/api/me" })).statusCode).toBe(401);
+    expect((await app.inject({ url: "/healthz" })).statusCode).toBe(200);
+    await app.close();
+  });
+
   it("rejects sessions of users no longer in adminUsers", async () => {
     const app = buildServer();
     const stranger = encodeSigned({

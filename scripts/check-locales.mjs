@@ -17,7 +17,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LOCALES = ["en", "de"];
 
 async function loadKeys(locale) {
-  const dist = path.join(root, "dist", "common", "locales", `${locale}.js`);
+  // Locales live in the @mcbot/core workspace (src/core/locales), which
+  // compiles to src/core/dist — not the pre-workspace src/common layout.
+  const dist = path.join(root, "src", "core", "dist", "locales", `${locale}.js`);
   if (fs.existsSync(dist)) {
     const mod = await import(`file://${dist}`);
     const table = mod.default ?? mod[locale] ?? Object.values(mod)[0];
@@ -25,7 +27,7 @@ async function loadKeys(locale) {
   }
   // Source fallback: every `"dotted.key":` at the start of a line.
   const src = fs.readFileSync(
-    path.join(root, "src", "common", "locales", `${locale}.ts`),
+    path.join(root, "src", "core", "locales", `${locale}.ts`),
     "utf-8",
   );
   const keys = new Set();

@@ -3,6 +3,7 @@ import { createPlayerEmbed } from "../../utils/embedUtils.js";
 import type { ILogWatcher } from "../logWatcher.js";
 import type { GuildConfig } from "@mcbot/core/types/index.js";
 import { broadcastNotification, PLAYER_NAME } from "./notifyGuilds.js";
+import { serverEventRegex, registerServerEvent } from "./serverLine.js";
 import { loadConfig } from "@mcbot/core/config.js";
 import { loadLinkedAccounts } from "@mcbot/core/utils/linkUtils.js";
 import { buildChunkbaseUrl } from "@mcbot/core/utils/chunkbaseUrl.js";
@@ -12,8 +13,48 @@ import type { ServerInstance } from "@mcbot/core/utils/server.js";
 
 // Use PLAYER_NAME (not \w+) so Bedrock players with "."-prefixed
 // names get death notifications too.
-const DEATH_REGEX = new RegExp(
-  String.raw`\[.+?\].*:\s+(${PLAYER_NAME})\s+(was slain|was shot|was killed|drowned|burned|fell|hit the ground|went off with a bang|blew up|was blown up|tried to swim|was impaled|was squished|was pummeled|was fireballed|starved|suffocated|was poked|experienced kinetic|was doomed|walked into|was pricked|died|withered away|was stung|was obliterated|was squashed|didn't want to live|was frozen|was skewered)(.*)$`,
+// QUAL-03: the death-message openers live in a table instead of a
+// 30-branch inline alternation — one place to extend (or localize)
+// when Mojang adds messages. Order is significant only in that longer
+// phrases sharing a prefix must come before their prefix ("was blown
+// up" is fine after "blew up" since they don't share one).
+const DEATH_PHRASES = [
+  "was slain",
+  "was shot",
+  "was killed",
+  "drowned",
+  "burned",
+  "fell",
+  "hit the ground",
+  "went off with a bang",
+  "blew up",
+  "was blown up",
+  "tried to swim",
+  "was impaled",
+  "was squished",
+  "was pummeled",
+  "was fireballed",
+  "starved",
+  "suffocated",
+  "was poked",
+  "experienced kinetic",
+  "was doomed",
+  "walked into",
+  "was pricked",
+  "died",
+  "withered away",
+  "was stung",
+  "was obliterated",
+  "was squashed",
+  "didn't want to live",
+  "was frozen",
+  "was skewered",
+] as const;
+
+// SEC-01: anchored on the server thread tag via serverEventRegex — a
+// chat message must not forge a death notification.
+const DEATH_REGEX = serverEventRegex(
+  String.raw`(${PLAYER_NAME})\s+(${DEATH_PHRASES.join("|")})(.*)$`,
   "i",
 );
 
@@ -65,7 +106,7 @@ export function registerDeathWatcher(
 ): void {
   const serverId = logWatcher.server.id;
 
-  logWatcher.register(DEATH_REGEX, async (match) => {
+  registerServerEvent(logWatcher, DEATH_REGEX, async (match) => {
     const player = match[1]!;
     const verb = match[2]!;
     const rest = match[3] ?? "";

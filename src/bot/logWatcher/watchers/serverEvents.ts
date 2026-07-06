@@ -3,6 +3,7 @@ import { createEmbed } from "../../utils/embedUtils.js";
 import type { ILogWatcher } from "../logWatcher.js";
 import type { GuildConfig } from "@mcbot/core/types/index.js";
 import { broadcastNotification } from "./notifyGuilds.js";
+import { serverEventRegex, registerServerEvent } from "./serverLine.js";
 import {
   loadSessionStore,
   saveSessionStore,
@@ -10,8 +11,10 @@ import {
 } from "@mcbot/core/utils/sessionStore.js";
 import { log } from "@mcbot/core/utils/logger.js";
 
-const START_REGEX = /\[.+?\].*:\s+Done \([\d.]+s\)!/;
-const STOP_REGEX = /\[.+?\].*:\s+Stopping server/;
+// SEC-01: anchored on the server thread tag — a chat message must not
+// forge start/stop (a forged stop closes every open play session).
+const START_REGEX = serverEventRegex(String.raw`Done \([\d.]+s\)!`);
+const STOP_REGEX = serverEventRegex(String.raw`Stopping server`);
 
 const startTimes = new Map<string, Date>();
 
@@ -46,7 +49,7 @@ export function registerServerEventWatcher(
 ): void {
   const serverId = logWatcher.server.id;
 
-  logWatcher.register(START_REGEX, async () => {
+  registerServerEvent(logWatcher, START_REGEX, async () => {
     startTimes.set(serverId, new Date());
     await notifyEvent(
       client,
@@ -59,7 +62,7 @@ export function registerServerEventWatcher(
     );
   });
 
-  logWatcher.register(STOP_REGEX, async () => {
+  registerServerEvent(logWatcher, STOP_REGEX, async () => {
     await closeSessions(serverId);
     let uptimeMsg = "";
     const started = startTimes.get(serverId);

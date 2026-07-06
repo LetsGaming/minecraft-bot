@@ -15,6 +15,34 @@ import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
 
 const cooldowns = new Map<string, number>();
 
+// BUG-01: the map keys on `command:player` and used to grow without
+// bound (a slow leak on busy servers with churny player bases). An
+// entry stops mattering once it is older than the LARGEST cooldown any
+// command declared, so a periodic sweep with that horizon keeps the map
+// proportional to *recent* activity. The timer is unref()'d — it must
+// never keep the process (or the test runner) alive.
+let maxCooldownMs = 0;
+const COOLDOWN_SWEEP_INTERVAL_MS = 10 * 60 * 1000;
+
+/** Remove entries no cooldown check can ever consult again. */
+export function sweepCooldowns(now = Date.now()): number {
+  let removed = 0;
+  for (const [key, lastUsed] of cooldowns) {
+    if (now - lastUsed > maxCooldownMs) {
+      cooldowns.delete(key);
+      removed++;
+    }
+  }
+  return removed;
+}
+
+/** Current number of tracked cooldown entries (test observability). */
+export function cooldownStoreSize(): number {
+  return cooldowns.size;
+}
+
+setInterval(() => sweepCooldowns(), COOLDOWN_SWEEP_INTERVAL_MS).unref();
+
 /**
  * Declarative in-game command definition with optional cooldowns.
  */
@@ -26,6 +54,9 @@ export function defineCommand({
   cooldown = 0,
   handler,
 }: InGameCommandDefinition): InGameCommandResult {
+  // BUG-01: the sweep horizon must cover the longest cooldown in play.
+  if (cooldown * 1000 > maxCooldownMs) maxCooldownMs = cooldown * 1000;
+
   const allNames = [name, ...aliases].map((n) => n.replace(/^!/, ""));
   const escapedNames = allNames.map((n) =>
     n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),

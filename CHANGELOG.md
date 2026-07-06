@@ -6,6 +6,57 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+
+- **Server events can no longer be forged from chat** (audit SEC-01).
+  The advancement, death, join/leave and start/stop watchers matched log
+  lines with a `\[.+?\].*:` prefix loose enough that a player's *chat
+  message* could fake any of them — including a forged challenge win
+  that paid out the configured item bonus through `give()`. Watcher
+  regexes are now anchored on the `[Server thread/INFO]` tag (Forge's
+  extra `[minecraft/MinecraftServer]` tag still matches), and a shared
+  dispatch guard (`registerServerEvent`) additionally drops any line
+  whose message segment opens with a `<name>` chat wrapper — the
+  portable backstop for forks with unusual thread names. Regression
+  suite `tests/eventForgery.test.ts` pins the audit's PoC lines.
+- **Dashboard 500 bodies no longer leak error detail** (audit SEC-04).
+  `/api/servers/:id/:action` (scripts) and `/api/servers/:id/log`
+  returned raw `err.message` — absolute paths and sudo/stderr fragments
+  included. The detail now goes to the server log; clients get a fixed
+  `{ "error": "internal error" }`.
+
+### Fixed
+
+- **CI: `npm run i18n:check` crashed with ENOENT** — the locale parity
+  script still read the pre-workspace `src/common/locales/` path (and
+  `dist/common/locales/` for built output). It now resolves the
+  `@mcbot/core` workspace locations (`src/core/locales/`,
+  `src/core/dist/locales/`).
+- **In-game command cooldown map no longer grows without bound**
+  (audit BUG-01). Entries keyed `command:player` were never evicted; a
+  10-minute sweep now removes anything older than the largest declared
+  cooldown (`sweepCooldowns()`, unref'd timer).
+
+### Changed
+
+- **Dashboard backend split into focused modules** (audit QUAL-01).
+  `src/web/backend/server.ts` mixed OAuth wiring, all ~15 routes, the
+  Prometheus exposition and static serving in one file. It is now a
+  78-line assembler that owns instance creation, the auth boundary and
+  registration order, delegating to `routes/auth.ts`,
+  `routes/monitoring.ts` (phase 1), `routes/config.ts` (phase 2),
+  `routes/servers.ts` (phase 3), `metrics.ts` (`/healthz` +
+  `/metrics`), `static.ts` (frontend serving) and `status.ts` (the one
+  status collector shared by `/api/status` and the metrics exposition)
+  — mirroring the wrapper's `app.ts` layout. No behavioral change;
+  `buildServer()`/`startWebServer()` keep their signatures, and a new
+  route-table parity test pins that every route stays registered and
+  behind `requireAdminSession`.
+- **Death-message matching is table-driven** (audit QUAL-03): the
+  30-branch inline alternation in `deaths.ts` is now a `DEATH_PHRASES`
+  table producing the identical regex — one place to extend when Mojang
+  adds messages, and a stepping stone for localized death events.
+
 ## [4.0.0] — 2026-07-05
 
 Workspace restructure + a real data layer. Upgrading: `npm ci && npm run build` (Node 20+; 24 LTS recommended) — data migrates itself on first start, including the snapshots directory.
