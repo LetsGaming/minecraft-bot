@@ -39,8 +39,8 @@
           :options="guildOptions"
           optionLabel="label"
           optionValue="id"
-          optionDisabled="disabled"
           placeholder="Select a Discord server"
+          filter
           class="w-full"
           @change="onGuildPicked"
         >
@@ -52,7 +52,6 @@
                 value="configured"
                 severity="secondary"
               />
-              <span v-else-if="option.disabled" class="muted small">no Manage Server</span>
             </div>
           </template>
         </Select>
@@ -61,21 +60,23 @@
           wizard is pre-filled with its current settings and will update it.
         </p>
 
-        <label class="field-label mt">Default Minecraft server for this guild</label>
-        <Select
-          v-model="defaultServer"
-          :options="serverOptions"
-          optionLabel="label"
-          optionValue="id"
-          :placeholder="serverOptions.length ? 'Select a server' : 'No servers configured'"
-          :disabled="serverOptions.length === 0"
-          showClear
-          class="w-full"
-        />
-        <p class="hint">
-          Features below post to this server unless you configure otherwise
-          later. With one server configured this is optional.
-        </p>
+        <template v-if="sysadmin">
+          <label class="field-label mt">Default Minecraft server for this guild</label>
+          <Select
+            v-model="defaultServer"
+            :options="serverOptions"
+            optionLabel="label"
+            optionValue="id"
+            :placeholder="serverOptions.length ? 'Select a server' : 'No servers configured'"
+            :disabled="serverOptions.length === 0"
+            showClear
+            class="w-full"
+          />
+          <p class="hint">
+            Features below post to this server unless you configure otherwise
+            later. With one server configured this is optional.
+          </p>
+        </template>
       </template>
     </section>
 
@@ -233,7 +234,7 @@
           label="Write config"
           icon="pi pi-check"
           :loading="writing"
-          @click="write"
+          @click="submit"
         />
       </div>
     </template>
@@ -249,70 +250,7 @@ import Button from "primevue/button";
 import Message from "primevue/message";
 import Tag from "primevue/tag";
 import ProgressSpinner from "primevue/progressspinner";
-import { apiGet, apiSend } from "../api";
-import type {
-  SetupGuild,
-  SetupChannel,
-  SetupRole,
-  ConfigResponse,
-} from "../api";
-
-type FeatureInput =
-  | "channel"
-  | "channel+webhook"
-  | "channel+interval"
-  | "channel+admin"
-  | "enabled"
-  | "role";
-interface FeatureDesc {
-  key: string;
-  label: string;
-  icon: string;
-  input: FeatureInput;
-  hint: string;
-}
-
-// Declarative feature set — order is the display order. Each maps to a
-// key in the guild config block. `server` is intentionally never asked
-// per-feature: an unset server inherits the guild's defaultServer (see
-// schema), which keeps this flow simple.
-const FEATURES: FeatureDesc[] = [
-  { key: "notifications", label: "Notifications", icon: "pi pi-bell", input: "channel", hint: "Join/leave and server-event messages." },
-  { key: "chatBridge", label: "Chat Bridge", icon: "pi pi-comments", input: "channel+webhook", hint: "Relay chat between Discord and Minecraft." },
-  { key: "leaderboard", label: "Leaderboard", icon: "pi pi-chart-bar", input: "channel+interval", hint: "Periodic stat leaderboards." },
-  { key: "statusEmbed", label: "Status Embed", icon: "pi pi-desktop", input: "enabled", hint: "Live status embed (creates its own channel)." },
-  { key: "downtimeAlerts", label: "Downtime Alerts", icon: "pi pi-exclamation-triangle", input: "channel", hint: "Alerts when a server goes down." },
-  { key: "tpsAlerts", label: "TPS Alerts", icon: "pi pi-gauge", input: "channel", hint: "Alerts on sustained low TPS." },
-  { key: "reports", label: "Reports", icon: "pi pi-flag", input: "channel", hint: "In-game !report routed to a channel." },
-  { key: "console", label: "Console Relay", icon: "pi pi-code", input: "channel", hint: "Admin-only live console via /console live." },
-  { key: "channelPurge", label: "Channel Purge", icon: "pi pi-trash", input: "channel", hint: "Auto-clear a channel on a schedule." },
-  { key: "whitelistApplications", label: "Whitelist Apps", icon: "pi pi-user-plus", input: "channel+admin", hint: "Application prompt + a staff review channel." },
-  { key: "linkedRole", label: "Linked Role", icon: "pi pi-id-card", input: "role", hint: "Role granted when a member links their account." },
-];
-
-interface FeatureModel {
-  enabled: boolean;
-  channelId: string | null;
-  adminChannelId: string | null;
-  roleId: string | null;
-  useWebhook: boolean;
-  interval: string;
-}
-
-function blankModel(): Record<string, FeatureModel> {
-  const m: Record<string, FeatureModel> = {};
-  for (const f of FEATURES) {
-    m[f.key] = {
-      enabled: false,
-      channelId: null,
-      adminChannelId: null,
-      roleId: null,
-      useWebhook: true,
-      interval: "weekly",
-    };
-  }
-  return m;
-}
+import { useGuildSetup, FEATURES, type FeatureDesc } from "../composables/useGuildSetup";
 
 export default defineComponent({
   name: "SetupWizard",
@@ -320,8 +258,12 @@ export default defineComponent({
   props: {
     visible: { type: Boolean, default: false },
     initialGuildId: { type: String, default: "" },
+    sysadmin: { type: Boolean, default: false },
   },
   emits: ["update:visible", "written"],
+  setup(props) {
+    return { ...useGuildSetup(() => props.sysadmin, () => props.initialGuildId) };
+  },
   data() {
     return {
       step: 0,
@@ -332,35 +274,20 @@ export default defineComponent({
         { value: "weekly", label: "Weekly" },
         { value: "monthly", label: "Monthly" },
       ],
-      // step 0
-      loadingGuilds: false,
-      guildError: "",
-      guilds: [] as SetupGuild[],
-      configuredGuildIds: [] as string[],
-      configuredServers: [] as string[],
-      guildId: "" as string,
-      defaultServer: null as string | null,
-      // step 1
-      loadingChannels: false,
-      channelError: "",
-      channels: [] as SetupChannel[],
-      roles: [] as SetupRole[],
-      channelsForGuild: "" as string,
-      model: blankModel(),
-      existingGuildBlock: {} as Record<string, unknown>,
-      // step 2
-      writing: false,
-      writeError: "",
     };
   },
   computed: {
     guildOptions() {
+      // Any guild the bot is in is configurable. A guild's configurability
+      // does not depend on the BOT holding Manage Guild (it is invited with
+      // a feature permission set that intentionally excludes it); the caller
+      // has already been authorized server-side for these guilds. We surface
+      // whether each is already configured, and never disable one.
       return this.guilds.map((g) => ({
         id: g.id,
         name: g.name,
         label: g.name,
         configured: this.configuredGuildIds.includes(g.id),
-        disabled: !g.manageable,
       }));
     },
     serverOptions() {
@@ -390,90 +317,13 @@ export default defineComponent({
   },
   watch: {
     visible(open: boolean) {
-      if (open) this.reset();
+      if (open) {
+        this.step = 0;
+        this.reset();
+      }
     },
   },
   methods: {
-    reset() {
-      this.step = 0;
-      this.guildId = "";
-      this.defaultServer = null;
-      this.model = blankModel();
-      this.existingGuildBlock = {};
-      this.writeError = "";
-      this.channelsForGuild = "";
-      void this.loadGuilds();
-    },
-    async loadGuilds() {
-      this.loadingGuilds = true;
-      this.guildError = "";
-      try {
-        const [guildsRes, cfgRes] = await Promise.all([
-          apiGet<{ guilds: SetupGuild[] }>("/api/setup/guilds"),
-          apiGet<ConfigResponse>("/api/config"),
-        ]);
-        this.guilds = guildsRes.guilds.sort((a, b) => a.name.localeCompare(b.name));
-        const cfg = cfgRes.config as {
-          guilds?: Record<string, unknown>;
-          servers?: Record<string, unknown>;
-        };
-        this.configuredGuildIds = Object.keys(cfg.guilds ?? {});
-        this.configuredServers = Object.keys(cfg.servers ?? {});
-        // Editing an existing guild: preselect it and seed from its block.
-        if (this.initialGuildId && this.guilds.some((g) => g.id === this.initialGuildId)) {
-          this.guildId = this.initialGuildId;
-          await this.seedFromExisting();
-        }
-      } catch (err) {
-        this.guildError = (err as Error).message;
-      } finally {
-        this.loadingGuilds = false;
-      }
-    },
-    onGuildPicked() {
-      // Seed defaultServer + feature model from any existing guild block,
-      // so re-running the wizard edits rather than blanks the config.
-      this.defaultServer = null;
-      this.model = blankModel();
-      this.existingGuildBlock = {};
-      if (!this.guildId) return;
-      void this.seedFromExisting();
-    },
-    async seedFromExisting() {
-      try {
-        const cfgRes = await apiGet<ConfigResponse>("/api/config");
-        const cfg = cfgRes.config as { guilds?: Record<string, Record<string, unknown>> };
-        const block = cfg.guilds?.[this.guildId];
-        if (!block) return;
-        this.existingGuildBlock = block;
-        this.defaultServer = (block.defaultServer as string) ?? null;
-        for (const f of FEATURES) {
-          const val = block[f.key];
-          if (val === undefined || val === null) continue;
-          const m = this.model[f.key];
-          if (f.key === "linkedRole") {
-            m.enabled = true;
-            m.roleId = val as string;
-          } else if (f.key === "statusEmbed") {
-            m.enabled = (val as { enabled?: boolean }).enabled === true;
-          } else {
-            const obj = val as {
-              channelId?: string;
-              adminChannelId?: string;
-              useWebhook?: boolean;
-              interval?: string;
-            };
-            m.enabled = true;
-            m.channelId = obj.channelId ?? null;
-            if (obj.adminChannelId) m.adminChannelId = obj.adminChannelId;
-            if (obj.useWebhook !== undefined) m.useWebhook = obj.useWebhook;
-            if (obj.interval) m.interval = obj.interval;
-          }
-        }
-      } catch {
-        /* seeding is best-effort; a fresh block is a fine fallback */
-      }
-    },
     async next() {
       if (this.step === 0) {
         await this.loadChannelsRoles();
@@ -484,26 +334,10 @@ export default defineComponent({
         this.step = 2;
       }
     },
-    async loadChannelsRoles() {
-      if (this.channelsForGuild === this.guildId && this.channels.length) return;
-      this.loadingChannels = true;
-      this.channelError = "";
-      try {
-        const [ch, rl] = await Promise.all([
-          apiGet<{ channels: SetupChannel[] }>(
-            `/api/setup/guilds/${encodeURIComponent(this.guildId)}/channels`,
-          ),
-          apiGet<{ roles: SetupRole[] }>(
-            `/api/setup/guilds/${encodeURIComponent(this.guildId)}/roles`,
-          ),
-        ]);
-        this.channels = ch.channels;
-        this.roles = rl.roles.filter((r) => r.assignable);
-        this.channelsForGuild = this.guildId;
-      } catch (err) {
-        this.channelError = (err as Error).message;
-      } finally {
-        this.loadingChannels = false;
+    async submit() {
+      if (await this.write()) {
+        this.$emit("written");
+        this.$emit("update:visible", false);
       }
     },
     channelName(id: string): string {
@@ -527,72 +361,6 @@ export default defineComponent({
       if (f.input === "channel+interval") return `${ch} · ${m.interval}`;
       if (f.input === "channel+admin") return `${ch} · review #${this.channelName(m.adminChannelId ?? "")}`;
       return ch;
-    },
-    buildGuildBlock(): Record<string, unknown> {
-      // Start from the existing block so we preserve fields the wizard
-      // doesn't manage (adminUsers, allowedServers, language, command
-      // overrides, …), then overlay the wizard's decisions.
-      const block: Record<string, unknown> = { ...this.existingGuildBlock };
-
-      if (this.defaultServer) block.defaultServer = this.defaultServer;
-      else delete block.defaultServer;
-
-      for (const f of FEATURES) {
-        const m = this.model[f.key];
-        if (!m.enabled) {
-          delete block[f.key];
-          continue;
-        }
-        if (f.key === "linkedRole") {
-          block.linkedRole = m.roleId;
-        } else if (f.key === "statusEmbed") {
-          block.statusEmbed = { enabled: true };
-        } else if (f.input === "channel+webhook") {
-          block[f.key] = { channelId: m.channelId, useWebhook: m.useWebhook };
-        } else if (f.input === "channel+interval") {
-          block[f.key] = { channelId: m.channelId, interval: m.interval };
-        } else if (f.input === "channel+admin") {
-          block[f.key] = { channelId: m.channelId, adminChannelId: m.adminChannelId };
-        } else {
-          block[f.key] = { channelId: m.channelId };
-        }
-      }
-      return block;
-    },
-    async write() {
-      this.writing = true;
-      this.writeError = "";
-      try {
-        // Fresh config for an up-to-date baseHash, merge our guild block.
-        const res = await apiGet<ConfigResponse>("/api/config");
-        const config = res.config as { guilds?: Record<string, unknown> };
-        config.guilds = { ...(config.guilds ?? {}), [this.guildId]: this.buildGuildBlock() };
-        await apiSend("PUT", "/api/config", { baseHash: res.hash, config });
-        this.$toast.add({
-          severity: "success",
-          summary: "Guild configured",
-          detail: `${this.guildName(this.guildId)} is set up. The bot reloads config automatically.`,
-          life: 4000,
-        });
-        this.$emit("written");
-        this.$emit("update:visible", false);
-      } catch (err) {
-        const message = (err as Error).message;
-        if (message.includes("409") || message.toLowerCase().includes("conflict")) {
-          this.writeError =
-            "Config changed underneath the wizard (someone else saved). Reopen the wizard to start from the current config.";
-        } else if (message.startsWith("[")) {
-          try {
-            this.writeError = (JSON.parse(message) as string[]).join("\n");
-          } catch {
-            this.writeError = message;
-          }
-        } else {
-          this.writeError = message;
-        }
-      } finally {
-        this.writing = false;
-      }
     },
   },
 });

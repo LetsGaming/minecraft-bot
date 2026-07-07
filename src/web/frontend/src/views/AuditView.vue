@@ -1,15 +1,13 @@
 <template>
   <div>
-    <div class="view-head">
-      <div>
-        <h2>Audit Log</h2>
-        <p class="muted small">Admin actions taken through the dashboard and the bot.</p>
-      </div>
-      <IconField v-if="entries.length">
-        <InputIcon class="pi pi-search" />
-        <InputText v-model="filter" placeholder="Filter…" size="small" />
-      </IconField>
-    </div>
+    <ViewHeader title="Audit Log" subtitle="Admin actions taken through the dashboard and the bot.">
+      <template v-if="entries.length" #actions>
+        <IconField>
+          <InputIcon class="pi pi-search" />
+          <InputText v-model="filter" placeholder="Filter…" size="small" />
+        </IconField>
+      </template>
+    </ViewHeader>
 
     <DataTable
       v-if="entries.length"
@@ -38,10 +36,9 @@
       </Column>
     </DataTable>
 
-    <div v-else class="empty">
-      <i class="pi pi-history" />
-      <p>No audit entries yet.</p>
-    </div>
+    <EmptyState v-else icon="pi pi-history">
+      No audit entries yet.
+    </EmptyState>
   </div>
 </template>
 
@@ -53,14 +50,20 @@ import Tag from "primevue/tag";
 import InputText from "primevue/inputtext";
 import IconField from "primevue/iconfield";
 import InputIcon from "primevue/inputicon";
-import { apiGet } from "../api";
 import type { AuditEntry } from "../api";
+import { useAudit } from "../composables/useAudit";
+import ViewHeader from "../components/ViewHeader.vue";
+import EmptyState from "../components/EmptyState.vue";
 
 export default defineComponent({
   name: "AuditView",
-  components: { DataTable, Column, Tag, InputText, IconField, InputIcon },
+  components: { DataTable, Column, Tag, InputText, IconField, InputIcon, ViewHeader, EmptyState },
+  setup() {
+    const { entries, load } = useAudit();
+    return { entries, load };
+  },
   data() {
-    return { entries: [] as AuditEntry[], filter: "" };
+    return { filter: "" };
   },
   computed: {
     filtered(): AuditEntry[] {
@@ -74,26 +77,7 @@ export default defineComponent({
     },
   },
   async mounted() {
-    try {
-      const res = await apiGet<{ entries: AuditEntry[] }>("/api/audit?limit=200");
-      this.entries = res.entries;
-    } catch (err) {
-      this.$toast.add({
-        severity: "error",
-        summary: "Failed to load audit log",
-        detail: (err as Error).message,
-        life: 4000,
-      });
-    }
+    await this.load();
   },
 });
 </script>
-
-<style scoped>
-.view-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; gap: 16px; }
-.view-head h2 { margin: 0 0 3px; font-size: 18px; font-weight: 500; }
-.view-head p { margin: 0; }
-.empty { text-align: center; padding: 56px 0; color: var(--mc-muted); }
-.empty i { font-size: 36px; opacity: 0.5; }
-.empty p { margin: 10px 0 0; }
-</style>

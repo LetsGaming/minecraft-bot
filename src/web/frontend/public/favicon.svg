@@ -1,0 +1,15 @@
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Minecraft bot dashboard">
+  <!-- Dark stone tile background, matching the dashboard card colour -->
+  <rect width="32" height="32" rx="7" fill="#191b1f"/>
+  <rect x="0.5" y="0.5" width="31" height="31" rx="6.5" fill="none" stroke="#2a2e34" stroke-width="1"/>
+
+  <!-- Isometric voxel block -->
+  <!-- Right face (darkest) -->
+  <path d="M16 16 L26 10.5 L26 21.5 L16 27 Z" fill="#237a41"/>
+  <!-- Left face (mid green) -->
+  <path d="M6 10.5 L16 16 L16 27 L6 21.5 Z" fill="#2f9d57"/>
+  <!-- Top face (bright grass) -->
+  <path d="M16 5 L26 10.5 L16 16 L6 10.5 Z" fill="#3ad07a"/>
+  <!-- Top edge highlight for a bit of lift -->
+  <path d="M16 5 L26 10.5 L16 16 L6 10.5 Z" fill="none" stroke="#5fe090" stroke-width="0.75" stroke-linejoin="round" opacity="0.6"/>
+</svg>

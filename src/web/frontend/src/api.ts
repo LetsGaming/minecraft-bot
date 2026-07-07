@@ -55,6 +55,8 @@ export type {
 export interface MeResponse {
   uid: string;
   tag: string;
+  sysadmin: boolean;
+  guildCount: number;
 }
 export interface InviteResponse {
   url: string;

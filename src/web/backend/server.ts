@@ -32,12 +32,13 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { loadConfig } from "@mcbot/core/config.js";
 import { log } from "@mcbot/core/utils/logger.js";
-import { requireAdminSession } from "./auth.js";
+import { requireSession, requireSysadmin } from "./auth.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerMonitoringRoutes } from "./routes/monitoring.js";
 import { registerConfigRoutes } from "./routes/config.js";
 import { registerServerRoutes } from "./routes/servers.js";
 import { registerSetupRoutes } from "./routes/setup.js";
+import { registerGuildConfigRoutes } from "./routes/guildConfig.js";
 import { registerProbeRoutes } from "./metrics.js";
 import { registerStaticFrontend } from "./static.js";
 
@@ -47,15 +48,23 @@ export function buildServer(): FastifyInstance {
   // ── Auth (the only routes outside the session gate) ──
   registerAuthRoutes(app);
 
-  // ── Authenticated API ── every /api route registered in this scope
-  // sits behind requireAdminSession; adding a route module here is the
-  // ONLY way it should ever be exposed.
+  // ── Sysadmin API ── server status/operations, host metrics, the full
+  // config, and the audit log. These expose the Minecraft server and
+  // secrets, so they require a sysadmin (a top-level adminUsers ID).
   app.register(async (api) => {
-    api.addHook("preHandler", requireAdminSession);
-    registerMonitoringRoutes(api); // phase 1 — read-only
-    registerConfigRoutes(api);     // phase 2 — schema-driven editing
-    registerServerRoutes(api);     // phase 3 — operations
-    registerSetupRoutes(api);      // phase 4 — guided guild setup (Discord reads)
+    api.addHook("preHandler", requireSysadmin);
+    registerMonitoringRoutes(api); // status + audit — read-only
+    registerConfigRoutes(api);     // full schema-driven config editing
+    registerServerRoutes(api);     // start/stop/restart/backup, log tail
+  });
+
+  // ── Guild-manager API ── any logged-in Discord user; each route checks
+  // canManageGuild for the specific guild it touches. These never expose
+  // the Minecraft server, other guilds, or global settings.
+  app.register(async (api) => {
+    api.addHook("preHandler", requireSession);
+    registerSetupRoutes(api);       // channels/roles + the caller's guilds
+    registerGuildConfigRoutes(api); // read/write one guild's config block
   });
 
   // ── Unauthenticated probes ──

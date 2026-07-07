@@ -11,11 +11,12 @@ import {
   buildAuthorizeUrl,
   verifyState,
   exchangeCode,
-  webAdminIds,
+  isSysadmin,
   sessionFromRequest,
   setSessionCookie,
   clearSessionCookie,
 } from "../auth.js";
+import { listBotGuilds } from "../discordRest.js";
 
 // Permissions the bot needs when joining a new guild. This is the
 // integer Discord bakes into the invite URL and pre-checks on the
@@ -44,15 +45,21 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     }
     const user = await exchangeCode(code);
     if (!user) return reply.code(502).send("Discord OAuth exchange failed.");
-    if (!webAdminIds().has(user.id)) {
-      return reply
-        .code(403)
-        .send(
-          "This Discord account is not in any adminUsers list. " +
-            "Role-based admin entries work in Discord only — the dashboard needs your user ID listed.",
-        );
+
+    // Any Discord user may log in (like a normal bot dashboard). Their
+    // guild-manager access is the intersection of the guilds they manage
+    // with the guilds the bot is actually in — so the session only ever
+    // grants control over guilds that both parties share. Sysadmin status
+    // is derived from config per request, not stored here.
+    let guildIds = user.guildIds;
+    try {
+      const botGuilds = new Set((await listBotGuilds()).map((g) => g.id));
+      guildIds = user.guildIds.filter((id) => botGuilds.has(id));
+    } catch {
+      /* can't confirm bot guilds → keep the user's manageable set as-is */
     }
-    setSessionCookie(reply, user);
+
+    setSessionCookie(reply, { id: user.id, tag: user.tag, guildIds });
     return reply.redirect("/");
   });
 
@@ -64,7 +71,15 @@ export function registerAuthRoutes(app: FastifyInstance): void {
   app.get("/api/me", async (req, reply) => {
     const session = sessionFromRequest(req);
     if (!session) return reply.code(401).send({ error: "unauthorized" });
-    return { uid: session.uid, tag: session.tag };
+    // The frontend uses `sysadmin` to decide which tabs to show, and
+    // `guildCount` to tell a guild manager whether they have anything to
+    // configure at all.
+    return {
+      uid: session.uid,
+      tag: session.tag,
+      sysadmin: isSysadmin(session),
+      guildCount: session.guilds.length,
+    };
   });
 
   // "Add to Server": the Discord OAuth2 authorize URL that invites the

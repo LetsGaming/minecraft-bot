@@ -14,7 +14,12 @@ export interface ServerStatus {
   tps: number | null;
   host: {
     process: { rssBytes: number; cpuPercent: number } | null;
-    disks: Array<{ path: string; usedPercent: number }>;
+    disks: Array<{
+      path: string;
+      usedPercent: number;
+      usedBytes: number;
+      totalBytes: number;
+    }>;
   } | null;
 }
 

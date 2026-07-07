@@ -50,6 +50,8 @@ export async function collectStatus(serverId: string): Promise<ServerStatus> {
         disks: host.disks.map((d) => ({
           path: d.path,
           usedPercent: d.usedPercent,
+          usedBytes: Math.max(d.totalBytes - d.availableBytes, 0),
+          totalBytes: d.totalBytes,
         })),
       };
     }

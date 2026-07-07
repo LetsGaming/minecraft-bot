@@ -1,13 +1,19 @@
 /**
- * Dashboard auth — hand-rolled Discord OAuth2 (identify scope) plus
- * stateless HMAC-signed session cookies. No auth framework: the flow is
- * three HTTP calls and a cookie, and every dependency in this process
- * is one more thing between an operator and their server console.
+ * Dashboard auth — hand-rolled Discord OAuth2 (identify + guilds scopes)
+ * plus stateless HMAC-signed session cookies. No auth framework: the flow
+ * is a few HTTP calls and a cookie.
  *
- * Admin gate: only USER-ID entries of the global `adminUsers` list and
- * each guild's `adminUsers` may log in. Role entries can't be resolved
- * here (that would need guild member fetches with a bot token) — roles
- * stay a Discord-side permission, which the docs state explicitly.
+ * Two roles, checked per request (not just at login):
+ *   - Sysadmin: a user ID in the TOP-LEVEL `adminUsers` list. Full access:
+ *     server status/operations, host metrics, the whole config, audit.
+ *   - Guild manager: any Discord user who has Manage Guild (or is owner/
+ *     admin) on a guild the bot is in. May configure that guild's bot
+ *     features and nothing else — never the Minecraft server, other
+ *     guilds, or global settings.
+ * Anyone can log in; what they can do is decided per route. The set of
+ * guilds a user manages is captured at login (from the `guilds` scope,
+ * intersected with the bot's guilds) and carried in the session; sysadmin
+ * status is re-derived from config on every request so it stays current.
  *
  * Secrets come from the environment only:
  *   WEBUI_CLIENT_SECRET   Discord application OAuth2 secret
@@ -25,6 +31,8 @@ export interface Session {
   uid: string;
   tag: string;
   exp: number;
+  /** Guild IDs this user can manage (Discord perms), captured at login. */
+  guilds: string[];
 }
 
 function sessionSecret(): string {
@@ -75,23 +83,62 @@ export function decodeSigned<T>(token: string | undefined): T | null {
   }
 }
 
-// ── Admin gate ────────────────────────────────────────────────────────────
+// ── Roles ─────────────────────────────────────────────────────────────────
 
 const SNOWFLAKE = /^\d{17,20}$/;
+const ADMINISTRATOR = 0x8n;
+const MANAGE_GUILD = 0x20n;
 
-/** Every user-ID admin entry, global and per guild. */
-export function webAdminIds(): Set<string> {
+/**
+ * Sysadmin user IDs: the TOP-LEVEL `adminUsers` list only. These are the
+ * operators who get server operations, host metrics, and global config.
+ * Per-guild `adminUsers` are a Discord-command concept, not sysadmins.
+ */
+export function globalAdminIds(): Set<string> {
   const cfg = loadConfig();
   const ids = new Set<string>();
   for (const entry of cfg.adminUsers ?? []) {
     if (SNOWFLAKE.test(entry)) ids.add(entry);
   }
-  for (const gcfg of Object.values(cfg.guilds ?? {})) {
-    for (const entry of gcfg.adminUsers ?? []) {
-      if (SNOWFLAKE.test(entry)) ids.add(entry);
+  return ids;
+}
+
+/** Re-derived from config every call, so removing a sysadmin is immediate. */
+export function isSysadmin(session: Session): boolean {
+  return globalAdminIds().has(session.uid);
+}
+
+/**
+ * May this session configure guild `guildId`? Sysadmins can manage every
+ * guild; everyone else only the guilds they had Manage Guild on at login.
+ */
+export function canManageGuild(session: Session, guildId: string): boolean {
+  return isSysadmin(session) || session.guilds.includes(guildId);
+}
+
+/**
+ * From Discord's `GET /users/@me/guilds` payload, the IDs of guilds the
+ * user can manage: owner, Administrator, or Manage Guild.
+ */
+export function manageableGuildIds(
+  guilds: Array<{ id: string; owner?: boolean; permissions?: string }>,
+): string[] {
+  const out: string[] = [];
+  for (const g of guilds) {
+    if (g.owner) {
+      out.push(g.id);
+      continue;
+    }
+    try {
+      const perms = BigInt(g.permissions ?? "0");
+      if ((perms & ADMINISTRATOR) === ADMINISTRATOR || (perms & MANAGE_GUILD) === MANAGE_GUILD) {
+        out.push(g.id);
+      }
+    } catch {
+      /* malformed permissions → not manageable */
     }
   }
-  return ids;
+  return out;
 }
 
 // ── OAuth2 endpoints ──────────────────────────────────────────────────────
@@ -123,7 +170,7 @@ export function buildAuthorizeUrl(): { url: string; state: string } {
     client_id: oauthClientId(),
     redirect_uri: redirectUri(),
     response_type: "code",
-    scope: "identify",
+    scope: "identify guilds",
     state,
     prompt: "none",
   });
@@ -135,10 +182,10 @@ export function verifyState(state: string | undefined): boolean {
   return !!parsed && parsed.exp > Date.now();
 }
 
-/** Exchange the OAuth code for the Discord user (id + tag). */
+/** Exchange the OAuth code for the Discord user (id + tag + manageable guilds). */
 export async function exchangeCode(
   code: string,
-): Promise<{ id: string; tag: string } | null> {
+): Promise<{ id: string; tag: string; guildIds: string[] } | null> {
   const tokenRes = await fetch("https://discord.com/api/oauth2/token", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -170,7 +217,29 @@ export async function exchangeCode(
     me.discriminator && me.discriminator !== "0"
       ? `${me.username}#${me.discriminator}`
       : (me.username ?? me.id);
-  return { id: me.id, tag };
+
+  // The user's guilds (with their permissions there) — how we know which
+  // guilds this person may configure. A failure here is non-fatal: they
+  // can still log in, just with no guild-manager access until next login.
+  let guildIds: string[] = [];
+  try {
+    const gRes = await fetch("https://discord.com/api/users/@me/guilds", {
+      headers: { authorization: `Bearer ${token.access_token}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (gRes.ok) {
+      const list = (await gRes.json()) as Array<{
+        id: string;
+        owner?: boolean;
+        permissions?: string;
+      }>;
+      guildIds = manageableGuildIds(list);
+    }
+  } catch {
+    /* guild fetch failed → no manager access this session */
+  }
+
+  return { id: me.id, tag, guildIds };
 }
 
 // ── Fastify glue ──────────────────────────────────────────────────────────
@@ -190,19 +259,22 @@ export function sessionFromRequest(req: FastifyRequest): Session | null {
   const cookies = parseCookies(req.headers.cookie);
   const session = decodeSigned<Session>(cookies[SESSION_COOKIE]);
   if (!session || session.exp <= Date.now()) return null;
-  // The admin list is re-checked on every request: removing someone
-  // from adminUsers locks them out immediately, not at cookie expiry.
-  if (!webAdminIds().has(session.uid)) return null;
+  // Any validly-signed, unexpired cookie is a logged-in user. What they
+  // may DO is decided per route (isSysadmin / canManageGuild), so there
+  // is no global admin gate here anymore.
+  if (!Array.isArray(session.guilds)) session.guilds = [];
   return session;
 }
 
 export function setSessionCookie(reply: FastifyReply, user: {
   id: string;
   tag: string;
+  guildIds: string[];
 }): void {
   const session: Session = {
     uid: user.id,
     tag: user.tag,
+    guilds: user.guildIds,
     exp: Date.now() + SESSION_TTL_MS,
   };
   const secure = publicBaseUrl().startsWith("https://") ? "; Secure" : "";
@@ -220,14 +292,31 @@ export function clearSessionCookie(reply: FastifyReply): void {
   );
 }
 
-/** preHandler: every /api route requires a valid admin session. */
-export async function requireAdminSession(
+/** preHandler: every /api route requires a valid (any) logged-in session. */
+export async function requireSession(
   req: FastifyRequest,
   reply: FastifyReply,
 ): Promise<void> {
   const session = sessionFromRequest(req);
   if (!session) {
     await reply.code(401).send({ error: "unauthorized" });
+    return;
+  }
+  (req as FastifyRequest & { session: Session }).session = session;
+}
+
+/** preHandler: sysadmin-only routes (server ops, host metrics, full config). */
+export async function requireSysadmin(
+  req: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  const session = sessionFromRequest(req);
+  if (!session) {
+    await reply.code(401).send({ error: "unauthorized" });
+    return;
+  }
+  if (!isSysadmin(session)) {
+    await reply.code(403).send({ error: "forbidden", detail: "Sysadmin access required." });
     return;
   }
   (req as FastifyRequest & { session: Session }).session = session;

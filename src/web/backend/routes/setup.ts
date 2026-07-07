@@ -1,27 +1,25 @@
 /**
- * Guided guild-setup routes (phase 4).
+ * Guided guild-setup reads: the guilds the caller may configure, and each
+ * guild's channels and roles, so the setup UI offers dropdowns instead of
+ * pasted snowflake IDs. Nothing here mutates config (that goes through the
+ * scoped guild-config routes).
  *
- * These back the dashboard's "set up a new guild" flow: they let the
- * browser read, straight from Discord, the guilds the bot is in and each
- * guild's channels and roles — so the setup UI offers dropdowns instead
- * of asking the admin to paste raw snowflake IDs. Writing the resulting
- * config still goes through the existing PUT /api/config path (optimistic
- * concurrency, server-side validation); nothing here mutates anything.
+ * Registered in the requireSession scope in server.ts. On top of that base
+ * login gate, the per-guild routes check canManageGuild, and the guild
+ * LIST is filtered to what the caller may manage — so a guild manager only
+ * ever sees and reads their own guilds. The server list is sysadmin-only.
  *
- * Registered inside server.ts's authenticated scope, so every route here
- * sits behind requireAdminSession like the rest of /api.
- *
- * Discord calls can fail (network, rate limit, a missing/invalid token,
- * or the bot not actually being in the guild). Each handler translates
- * those into a clean JSON error with a sensible status rather than a
- * 500 with a stack — the UI shows the message.
+ * Discord calls can fail (network, rate limit, missing/invalid token, bot
+ * not in the guild). Each handler maps those to a clean JSON error.
  */
 import type { FastifyInstance } from "fastify";
+import { readRawConfig } from "@mcbot/core/utils/configService.js";
 import {
   listBotGuilds,
   listGuildChannels,
   listGuildRoles,
 } from "../discordRest.js";
+import { sessionFromRequest, isSysadmin, canManageGuild } from "../auth.js";
 
 function statusFor(err: unknown): number {
   const msg = err instanceof Error ? err.message : String(err);
@@ -33,12 +31,16 @@ function statusFor(err: unknown): number {
 }
 
 export function registerSetupRoutes(app: FastifyInstance): void {
-  // Guilds the bot is a member of, each flagged with whether the bot has
-  // Manage Guild there. The UI surfaces manageable guilds as ready to
-  // configure and can still show the rest as "invite/permission needed".
-  app.get("/api/setup/guilds", async (_req, reply) => {
+  // The guilds the caller may configure: sysadmins see every guild the bot
+  // is in; everyone else only the guilds they manage. This is what feeds
+  // guild names/icons and the setup wizard's picker.
+  app.get("/api/setup/guilds", async (req, reply) => {
+    const session = sessionFromRequest(req)!;
     try {
-      const guilds = await listBotGuilds();
+      const all = await listBotGuilds();
+      const guilds = isSysadmin(session)
+        ? all
+        : all.filter((g) => session.guilds.includes(g.id));
       return { guilds };
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
@@ -46,10 +48,14 @@ export function registerSetupRoutes(app: FastifyInstance): void {
     }
   });
 
-  // Text/announcement channels for one guild, for the channel pickers.
+  // Text/announcement channels for one guild — only if the caller manages it.
   app.get<{ Params: { id: string } }>(
     "/api/setup/guilds/:id/channels",
     async (req, reply) => {
+      const session = sessionFromRequest(req)!;
+      if (!canManageGuild(session, req.params.id)) {
+        return reply.code(403).send({ error: "forbidden", detail: "You don't manage that guild." });
+      }
       try {
         const channels = await listGuildChannels(req.params.id);
         return { channels };
@@ -60,11 +66,14 @@ export function registerSetupRoutes(app: FastifyInstance): void {
     },
   );
 
-  // Assignable roles for one guild, for the role pickers (e.g. the linked
-  // role). @everyone and managed roles are already filtered out upstream.
+  // Assignable roles for one guild — only if the caller manages it.
   app.get<{ Params: { id: string } }>(
     "/api/setup/guilds/:id/roles",
     async (req, reply) => {
+      const session = sessionFromRequest(req)!;
+      if (!canManageGuild(session, req.params.id)) {
+        return reply.code(403).send({ error: "forbidden", detail: "You don't manage that guild." });
+      }
       try {
         const roles = await listGuildRoles(req.params.id);
         return { roles };
@@ -74,4 +83,16 @@ export function registerSetupRoutes(app: FastifyInstance): void {
       }
     },
   );
+
+  // The Minecraft server names, for the wizard's "default server" picker.
+  // Sysadmin-only: a guild manager should get no information about the
+  // Minecraft servers, so managers simply don't see this picker.
+  app.get("/api/setup/servers", async (req, reply) => {
+    const session = sessionFromRequest(req)!;
+    if (!isSysadmin(session)) {
+      return reply.code(403).send({ error: "forbidden", detail: "Sysadmin access required." });
+    }
+    const cfg = readRawConfig();
+    return { servers: Object.keys(cfg.servers ?? {}) };
+  });
 }

@@ -89,7 +89,7 @@ vi.mock("../src/core/utils/commandManifest.js", () => ({
 import {
   encodeSigned,
   decodeSigned,
-  webAdminIds,
+  globalAdminIds,
   SESSION_COOKIE,
 } from "../src/web/backend/auth.js";
 import {
@@ -125,12 +125,12 @@ describe("signed session tokens", () => {
   });
 });
 
-describe("webAdminIds", () => {
-  it("collects user-ID entries globally and per guild, skipping role names", () => {
-    const ids = webAdminIds();
-    expect(ids.has("111111111111111111")).toBe(true);
-    expect(ids.has("333333333333333333")).toBe(true);
-    expect(ids.has("admin-role-name")).toBe(false);
+describe("globalAdminIds (sysadmins)", () => {
+  it("collects TOP-LEVEL user-ID entries only, not per-guild or role names", () => {
+    const ids = globalAdminIds();
+    expect(ids.has("111111111111111111")).toBe(true); // top-level adminUser
+    expect(ids.has("333333333333333333")).toBe(false); // per-guild admin — NOT a sysadmin
+    expect(ids.has("admin-role-name")).toBe(false); // not a snowflake
   });
 });
 
@@ -183,6 +183,7 @@ function adminCookie(): string {
   const session = encodeSigned({
     uid: "111111111111111111",
     tag: "admin#1",
+    guilds: [],
     exp: Date.now() + 60_000,
   });
   return `${SESSION_COOKIE}=${session}`;
@@ -215,13 +216,12 @@ describe("web routes", () => {
   });
 
   /**
-   * QUAL-01 route-table parity: after the server.ts split, every route
-   * must (a) still be registered — an unregistered /api path falls into
-   * the static not-found handler and returns 404, not 401 — and (b)
-   * still sit behind requireAdminSession. A route dropped during module
-   * extraction, or registered outside the gated scope, fails here.
+   * Route-table parity: every /api route must (a) still be registered — an
+   * unregistered /api path falls into the static not-found handler and
+   * returns 404, not 401 — and (b) sit behind a session gate (the sysadmin
+   * scope or the logged-in scope). Without a cookie, both return 401.
    */
-  it("registers the complete gated route table (QUAL-01 parity)", async () => {
+  it("registers the complete gated route table (auth parity)", async () => {
     const app = buildServer();
     const gated: Array<[string, string]> = [
       ["GET", "/api/status"],
@@ -235,6 +235,12 @@ describe("web routes", () => {
       ["POST", "/api/servers/smp/restart"],
       ["GET", "/api/servers/smp/log"],
       ["POST", "/api/servers/smp/prune-stats"],
+      // Guild-manager scope (logged-in gate) — also 401 without a cookie.
+      ["GET", "/api/setup/guilds"],
+      ["GET", "/api/setup/servers"],
+      ["GET", "/api/guilds"],
+      ["GET", "/api/guilds/222222222222222222/config"],
+      ["PUT", "/api/guilds/222222222222222222/config"],
     ];
     for (const [method, url] of gated) {
       const res = await app.inject({ method: method as "GET", url });
@@ -253,19 +259,70 @@ describe("web routes", () => {
     await app.close();
   });
 
-  it("rejects sessions of users no longer in adminUsers", async () => {
+  it("logs in any Discord user but forbids non-sysadmins from server data", async () => {
     const app = buildServer();
-    const stranger = encodeSigned({
-      uid: "999999999999999999",
-      tag: "x",
-      exp: Date.now() + 60_000,
-    });
-    const res = await app.inject({
-      method: "GET",
-      url: "/api/status",
-      headers: { cookie: `${SESSION_COOKIE}=${stranger}` },
-    });
-    expect(res.statusCode).toBe(401);
+    const stranger =
+      `${SESSION_COOKIE}=` +
+      encodeSigned({ uid: "999999999999999999", tag: "x", guilds: [], exp: Date.now() + 60_000 });
+    // A valid signed cookie is a logged-in user, whoever they are.
+    const me = await app.inject({ method: "GET", url: "/api/me", headers: { cookie: stranger } });
+    expect(me.statusCode).toBe(200);
+    expect(me.json().sysadmin).toBe(false);
+    // But server status and the full config are sysadmin-only → 403, not 401.
+    expect(
+      (await app.inject({ method: "GET", url: "/api/status", headers: { cookie: stranger } })).statusCode,
+    ).toBe(403);
+    expect(
+      (await app.inject({ method: "GET", url: "/api/config", headers: { cookie: stranger } })).statusCode,
+    ).toBe(403);
+    expect(
+      (await app.inject({ method: "GET", url: "/api/setup/servers", headers: { cookie: stranger } })).statusCode,
+    ).toBe(403);
+    await app.close();
+  });
+
+  it("scopes guild config to the guilds a manager actually manages", async () => {
+    const app = buildServer();
+    const mgr =
+      `${SESSION_COOKIE}=` +
+      encodeSigned({
+        uid: "444444444444444444",
+        tag: "mgr",
+        guilds: ["222222222222222222"],
+        exp: Date.now() + 60_000,
+      });
+    // Their guild: readable.
+    expect(
+      (await app.inject({ method: "GET", url: "/api/guilds/222222222222222222/config", headers: { cookie: mgr } })).statusCode,
+    ).toBe(200);
+    // A guild they don't manage: forbidden.
+    expect(
+      (await app.inject({ method: "GET", url: "/api/guilds/999999999999999999/config", headers: { cookie: mgr } })).statusCode,
+    ).toBe(403);
+    // No writing to a guild they don't manage either.
+    expect(
+      (await app.inject({
+        method: "PUT",
+        url: "/api/guilds/999999999999999999/config",
+        headers: { cookie: mgr, "content-type": "application/json" },
+        payload: { baseHash: "hash-1", guildConfig: {} },
+      })).statusCode,
+    ).toBe(403);
+    // And still no server data.
+    expect(
+      (await app.inject({ method: "GET", url: "/api/status", headers: { cookie: mgr } })).statusCode,
+    ).toBe(403);
+    await app.close();
+  });
+
+  it("gives a sysadmin every guild's config and the server list", async () => {
+    const app = buildServer();
+    expect(
+      (await app.inject({ method: "GET", url: "/api/guilds/999999999999999999/config", headers: { cookie: adminCookie() } })).statusCode,
+    ).toBe(200);
+    const servers = await app.inject({ method: "GET", url: "/api/setup/servers", headers: { cookie: adminCookie() } });
+    expect(servers.statusCode).toBe(200);
+    expect(servers.json().servers).toContain("smp");
     await app.close();
   });
 

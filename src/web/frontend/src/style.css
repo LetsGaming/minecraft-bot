@@ -41,10 +41,6 @@ a { color: var(--mc-accent); }
 .mono { font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace; }
 
 /* Status dot */
-.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; }
-.dot.up { background: var(--mc-good); box-shadow: 0 0 6px rgba(74, 222, 128, 0.45); }
-.dot.down { background: var(--mc-bad); }
-.dot.stale { background: var(--mc-mid); }
 
 /* Scrollbar polish */
 ::-webkit-scrollbar { width: 10px; height: 10px; }

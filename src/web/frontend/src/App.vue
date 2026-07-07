@@ -30,30 +30,32 @@
           </div>
         </div>
 
-        <!-- Server switcher -->
-        <div class="switcher-label muted small">SERVER</div>
-        <div class="switcher">
-          <button
-            v-for="s in servers"
-            :key="s.id"
-            :class="['switch-item', { active: s.id === activeServer }]"
-            @click="activeServer = s.id"
-          >
-            <span :class="['dot', s.online ? 'up' : 'down']" />
-            <span class="switch-name">{{ s.id }}</span>
-            <span v-if="s.online && s.tps !== null" class="switch-tps muted small">
-              {{ s.tps.toFixed(0) }} TPS
-            </span>
-          </button>
-          <div v-if="servers.length === 0" class="muted small switcher-empty">
-            No servers configured
+        <!-- Server switcher (sysadmin only — exposes server state) -->
+        <template v-if="isSysadmin">
+          <div class="switcher-label muted small">SERVER</div>
+          <div class="switcher">
+            <button
+              v-for="s in servers"
+              :key="s.id"
+              :class="['switch-item', { active: s.id === activeServer }]"
+              @click="activeServer = s.id"
+            >
+              <StatusDot :state="s.online ? 'up' : 'down'" />
+              <span class="switch-name">{{ s.id }}</span>
+              <span v-if="s.online && s.tps !== null" class="switch-tps muted small">
+                {{ s.tps.toFixed(0) }} TPS
+              </span>
+            </button>
+            <div v-if="servers.length === 0" class="muted small switcher-empty">
+              No servers configured
+            </div>
           </div>
-        </div>
+        </template>
 
         <!-- Nav -->
         <nav class="nav">
           <button
-            v-for="item in nav"
+            v-for="item in visibleNav"
             :key="item.id"
             :class="['nav-item', { active: activeTab === item.id }]"
             @click="activeTab = item.id"
@@ -70,7 +72,7 @@
             icon="pi pi-plus-circle"
             class="w-full"
             :loading="inviting"
-            @click="addToServer"
+            @click="invite"
           />
           <p class="muted small cta-hint">Invite the bot to a new Discord guild.</p>
         </div>
@@ -95,7 +97,7 @@
 
       <main class="content">
         <Message
-          v-if="botDown"
+          v-if="botDown && isSysadmin"
           severity="warn"
           :closable="false"
           class="bot-down"
@@ -109,16 +111,22 @@
         </div>
 
         <template v-else>
+          <OverviewView v-if="activeTab === 'overview' && isSysadmin" @navigate="activeTab = $event" />
           <StatusView
+            v-if="isSysadmin"
             v-show="activeTab === 'status'"
             :active-server="activeServer"
             @bot-state="botDown = !$event"
             @servers="onServers"
           />
-          <GuildsView v-if="activeTab === 'guilds'" @goto-config="activeTab = 'config'" />
-          <CommandsView v-if="activeTab === 'commands'" />
-          <ConfigView v-if="activeTab === 'config'" />
-          <AuditView v-if="activeTab === 'audit'" />
+          <GuildsView
+            v-if="activeTab === 'guilds'"
+            :sysadmin="isSysadmin"
+            @goto-config="activeTab = 'config'"
+          />
+          <CommandsView v-if="activeTab === 'commands' && isSysadmin" />
+          <ConfigView v-if="activeTab === 'config' && isSysadmin" />
+          <AuditView v-if="activeTab === 'audit' && isSysadmin" />
         </template>
       </main>
     </div>
@@ -135,29 +143,35 @@ import Message from "primevue/message";
 import Toast from "primevue/toast";
 import ConfirmDialog from "primevue/confirmdialog";
 import { apiGet, apiSend, UnauthorizedError } from "./api";
-import type { MeResponse, InviteResponse, ServerStatus } from "./api";
-import StatusView from "./components/StatusView.vue";
-import GuildsView from "./components/GuildsView.vue";
-import CommandsView from "./components/CommandsView.vue";
-import ConfigView from "./components/ConfigView.vue";
-import AuditView from "./components/AuditView.vue";
+import type { MeResponse, ServerStatus } from "./api";
+import { useInvite } from "./composables/useInvite";
+import StatusDot from "./components/StatusDot.vue";
+import OverviewView from "./views/OverviewView.vue";
+import StatusView from "./views/StatusView.vue";
+import GuildsView from "./views/GuildsView.vue";
+import CommandsView from "./views/CommandsView.vue";
+import ConfigView from "./views/ConfigView.vue";
+import AuditView from "./views/AuditView.vue";
 
 export default defineComponent({
   name: "App",
   components: {
-    Button, Message, Toast, ConfirmDialog,
-    StatusView, GuildsView, CommandsView, ConfigView, AuditView,
+    Button, Message, Toast, ConfirmDialog, StatusDot,
+    OverviewView, StatusView, GuildsView, CommandsView, ConfigView, AuditView,
+  },
+  setup() {
+    return { ...useInvite() };
   },
   data() {
     return {
       loading: true,
       me: null as MeResponse | null,
       botDown: false,
-      inviting: false,
-      activeTab: "status",
+      activeTab: "overview",
       activeServer: "",
       servers: [] as ServerStatus[],
       nav: [
+        { id: "overview", label: "Overview", icon: "pi pi-th-large" },
         { id: "status", label: "Servers", icon: "pi pi-server" },
         { id: "guilds", label: "Guilds", icon: "pi pi-discord" },
         { id: "commands", label: "Commands", icon: "pi pi-bolt" },
@@ -166,9 +180,21 @@ export default defineComponent({
       ],
     };
   },
+  computed: {
+    isSysadmin(): boolean {
+      return !!this.me?.sysadmin;
+    },
+    visibleNav(): Array<{ id: string; label: string; icon: string }> {
+      // Guild managers only get the Guilds tab; everything else exposes the
+      // Minecraft server, global config, or the audit log (sysadmin-only).
+      return this.isSysadmin ? this.nav : this.nav.filter((n) => n.id === "guilds");
+    },
+  },
   async mounted() {
     try {
       this.me = await apiGet<MeResponse>("/api/me");
+      // Land somewhere the role can actually see.
+      this.activeTab = this.isSysadmin ? "overview" : "guilds";
     } catch (err) {
       if (!(err instanceof UnauthorizedError)) {
         // eslint-disable-next-line no-console
@@ -190,22 +216,6 @@ export default defineComponent({
         /* ignore */
       }
       this.me = null;
-    },
-    async addToServer() {
-      this.inviting = true;
-      try {
-        const res = await apiGet<InviteResponse>("/api/invite");
-        window.open(res.url, "_blank", "noopener");
-      } catch (err) {
-        this.$toast.add({
-          severity: "error",
-          summary: "Invite failed",
-          detail: (err as Error).message,
-          life: 4000,
-        });
-      } finally {
-        this.inviting = false;
-      }
     },
     onServers(servers: ServerStatus[]) {
       this.servers = servers;
