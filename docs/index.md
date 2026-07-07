@@ -39,6 +39,7 @@ You use the bot as a Discord member or Minecraft player.
 
 | I want to… | Read this |
 |---|---|
+| See the full feature list, grouped and explained | [features.md](features.md) |
 | See what is planned and what could come next | [ROADMAP.md](ROADMAP.md) |
 
 ## Developers (`docs/dev/`)

@@ -1,9 +1,9 @@
 {
   "name": "@mcbot/schema",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "private": true,
   "type": "module",
-  "description": "Isomorphic contracts: config shapes and web API DTOs. No Node-only imports \u2014 importable by bot, web backend, and the browser frontend alike.",
+  "description": "Isomorphic contracts: config shapes and web API DTOs. No Node-only imports — importable by bot, web backend, and the browser frontend alike.",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

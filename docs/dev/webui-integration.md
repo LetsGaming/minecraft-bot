@@ -56,6 +56,29 @@ Validation errors are human-readable strings (one per problem, already
 indented) — render them as-is next to the form. `warnings` are non-fatal
 and should be shown but not block saving.
 
+## Guided guild setup (phase 4)
+
+Three read-only routes let the setup wizard populate channel/role
+dropdowns from Discord so admins don't paste snowflake IDs:
+
+```
+GET /api/setup/guilds              → guilds the bot is in, each flagged
+                                     `manageable` (bot has Manage Guild
+                                     OR Administrator)
+GET /api/setup/guilds/:id/channels → text/announcement channels, sorted
+GET /api/setup/guilds/:id/roles    → assignable roles (no @everyone /
+                                     managed), sorted
+```
+
+These live in `routes/setup.ts` and call Discord's REST API from
+`discordRest.ts` using plain `fetch` with the **bot token** from
+`loadConfig()` — the web image intentionally has no discord.js. Responses
+are cached ~30s to stay clear of rate limits; upstream failures map to
+clean statuses (429 rate limit, 502 Discord error, 503 no token). The
+wizard never writes directly — it builds a guild config block and saves
+through the normal `PUT /api/config` path above, so validation and
+optimistic concurrency apply unchanged.
+
 ## The Commands tab
 
 `GET /api/commands` returns everything the per-command settings UI needs in one call: the command manifest (written by the bot to `data/commandManifest.json` at startup — the web process cannot discover commands itself), the raw override blocks at every scope, and the **effective** policy per command per scope so "inherit" can display what it resolves to. Saving goes through the normal whole-config `PUT /api/config`. If the manifest is missing (bot never started), the route answers 503 with an actionable message.

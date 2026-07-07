@@ -50,3 +50,34 @@ export type {
   ConfigWriteRequest,
   ConfigWriteConflict,
 } from "@mcbot/schema";
+
+// ── Dashboard-specific shapes (not in @mcbot/schema — web-only) ──
+export interface MeResponse {
+  uid: string;
+  tag: string;
+}
+export interface InviteResponse {
+  url: string;
+}
+
+// ── Guided guild setup (phase 4) — mirror discordRest.ts on the server ──
+export interface SetupGuild {
+  id: string;
+  name: string;
+  icon: string | null;
+  manageable: boolean;
+}
+export interface SetupChannel {
+  id: string;
+  name: string;
+  type: number;
+  position: number;
+  parentId: string | null;
+}
+export interface SetupRole {
+  id: string;
+  name: string;
+  color: number;
+  position: number;
+  assignable: boolean;
+}

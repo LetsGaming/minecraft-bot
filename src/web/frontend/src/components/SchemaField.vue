@@ -1,45 +1,59 @@
 <template>
   <!-- Boolean -->
-  <label v-if="kind === 'boolean'" class="field row">
-    <input
-      type="checkbox"
-      :checked="modelValue === true"
-      @change="emitValue(($event.target as HTMLInputElement).checked)"
+  <div v-if="kind === 'boolean'" class="field row">
+    <ToggleSwitch
+      :modelValue="modelValue === true"
+      @update:modelValue="emitValue($event)"
     />
-    <span>{{ name }}</span>
-    <span v-if="description" class="hint">{{ description }}</span>
-  </label>
+    <div class="label-block">
+      <span class="fname">{{ name }}</span>
+      <span v-if="description" class="hint">{{ description }}</span>
+    </div>
+  </div>
 
   <!-- Enum -->
-  <label v-else-if="kind === 'enum'" class="field">
-    <span>{{ name }}</span>
-    <select
-      :value="modelValue ?? ''"
-      @change="emitValue(($event.target as HTMLSelectElement).value || undefined)"
-    >
-      <option value="">(unset)</option>
-      <option v-for="opt in enumValues" :key="String(opt)" :value="opt">
-        {{ opt }}
-      </option>
-    </select>
-    <span v-if="description" class="hint">{{ description }}</span>
-  </label>
-
-  <!-- String / number -->
-  <label v-else-if="kind === 'string' || kind === 'number'" class="field">
-    <span>{{ name }}</span>
-    <input
-      :type="kind === 'number' ? 'number' : 'text'"
-      :value="modelValue ?? ''"
-      @input="onScalarInput(($event.target as HTMLInputElement).value)"
+  <div v-else-if="kind === 'enum'" class="field">
+    <label class="fname">{{ name }}</label>
+    <Select
+      :modelValue="modelValue ?? null"
+      :options="enumOptions"
+      optionLabel="label"
+      optionValue="value"
+      showClear
+      placeholder="(unset)"
+      class="fcontrol"
+      @update:modelValue="emitValue($event ?? undefined)"
     />
     <span v-if="description" class="hint">{{ description }}</span>
-  </label>
+  </div>
+
+  <!-- String -->
+  <div v-else-if="kind === 'string'" class="field">
+    <label class="fname">{{ name }}</label>
+    <InputText
+      :modelValue="(modelValue as string) ?? ''"
+      class="fcontrol"
+      @update:modelValue="onScalarInput($event ?? '')"
+    />
+    <span v-if="description" class="hint">{{ description }}</span>
+  </div>
+
+  <!-- Number -->
+  <div v-else-if="kind === 'number'" class="field">
+    <label class="fname">{{ name }}</label>
+    <InputNumber
+      :modelValue="(modelValue as number) ?? null"
+      class="fcontrol"
+      :useGrouping="false"
+      @update:modelValue="emitValue($event ?? undefined)"
+    />
+    <span v-if="description" class="hint">{{ description }}</span>
+  </div>
 
   <!-- Object with declared properties: recurse -->
-  <fieldset v-else-if="kind === 'object'" class="field group">
+  <fieldset v-else-if="kind === 'object'" class="group">
     <legend>{{ name }}</legend>
-    <p v-if="description" class="hint">{{ description }}</p>
+    <p v-if="description" class="hint group-hint">{{ description }}</p>
     <SchemaField
       v-for="(childSchema, key) in objectProps"
       :key="key"
@@ -51,20 +65,27 @@
   </fieldset>
 
   <!-- Everything else (arrays, records, unions): JSON textarea -->
-  <label v-else class="field">
-    <span>{{ name }} <em class="muted">(JSON)</em></span>
-    <textarea
-      :value="jsonText"
+  <div v-else class="field">
+    <label class="fname">{{ name }} <em class="muted">(JSON)</em></label>
+    <Textarea
+      :modelValue="jsonText"
       spellcheck="false"
-      @change="onJsonInput(($event.target as HTMLTextAreaElement).value)"
-    ></textarea>
-    <span v-if="jsonError" class="error">{{ jsonError }}</span>
+      autoResize
+      class="fcontrol json-area"
+      @update:modelValue="onJsonInput($event)"
+    />
+    <span v-if="jsonError" class="err">{{ jsonError }}</span>
     <span v-else-if="description" class="hint">{{ description }}</span>
-  </label>
+  </div>
 </template>
 
 <script lang="ts">
 import { defineComponent, type PropType } from "vue";
+import InputText from "primevue/inputtext";
+import InputNumber from "primevue/inputnumber";
+import Select from "primevue/select";
+import ToggleSwitch from "primevue/toggleswitch";
+import Textarea from "primevue/textarea";
 
 interface JsonSchemaNode {
   type?: string | string[];
@@ -76,12 +97,10 @@ interface JsonSchemaNode {
 
 export default defineComponent({
   name: "SchemaField",
+  components: { InputText, InputNumber, Select, ToggleSwitch, Textarea },
   props: {
     name: { type: String, required: true },
     schema: { type: Object as PropType<unknown>, required: true },
-    // `null` type = accept anything; typed via PropType<unknown> without
-    // a default so vue-tsc infers `unknown | undefined` instead of
-    // collapsing the prop to the default's type.
     modelValue: { type: null as unknown as PropType<unknown>, required: false },
   },
   emits: ["update:model-value"],
@@ -98,6 +117,9 @@ export default defineComponent({
     enumValues(): unknown[] {
       return this.node.enum ?? [];
     },
+    enumOptions(): { value: unknown; label: string }[] {
+      return this.enumValues.map((v) => ({ value: v, label: String(v) }));
+    },
     objectProps(): Record<string, unknown> {
       return this.node.properties ?? {};
     },
@@ -106,9 +128,7 @@ export default defineComponent({
     },
     kind(): string {
       if (this.enumValues.length > 0) return "enum";
-      const type = Array.isArray(this.node.type)
-        ? this.node.type[0]
-        : this.node.type;
+      const type = Array.isArray(this.node.type) ? this.node.type[0] : this.node.type;
       if (type === "boolean") return "boolean";
       if (type === "string") return "string";
       if (type === "number" || type === "integer") return "number";
@@ -116,9 +136,7 @@ export default defineComponent({
       return "json";
     },
     jsonText(): string {
-      return this.modelValue === undefined
-        ? ""
-        : JSON.stringify(this.modelValue, null, 2);
+      return this.modelValue === undefined ? "" : JSON.stringify(this.modelValue, null, 2);
     },
   },
   methods: {
@@ -127,7 +145,7 @@ export default defineComponent({
     },
     onScalarInput(raw: string) {
       if (raw === "") return this.emitValue(undefined);
-      this.emitValue(this.kind === "number" ? Number(raw) : raw);
+      this.emitValue(raw);
     },
     setChild(key: string, value: unknown) {
       const next = { ...this.objectValue };
@@ -147,3 +165,28 @@ export default defineComponent({
   },
 });
 </script>
+
+<style scoped>
+.field { display: flex; flex-direction: column; gap: 5px; margin: 12px 0; }
+.field.row { flex-direction: row; align-items: flex-start; gap: 12px; }
+.label-block { display: flex; flex-direction: column; gap: 2px; padding-top: 2px; }
+.fname { font-weight: 600; font-size: 14px; }
+.fcontrol { width: 100%; max-width: 480px; }
+.json-area { max-width: 640px; font-family: ui-monospace, monospace; font-size: 13px; }
+.hint { color: var(--mc-muted); font-size: 12.5px; line-height: 1.45; max-width: 60ch; }
+.group-hint { margin: 0 0 8px; }
+.err { color: var(--mc-bad); font-size: 12.5px; }
+
+.group {
+  border: 1px solid var(--mc-border);
+  border-radius: 10px;
+  margin: 14px 0;
+  padding: 6px 16px 14px;
+  background: rgba(255, 255, 255, 0.012);
+}
+.group legend {
+  font-weight: 700;
+  padding: 0 8px;
+  color: var(--mc-text);
+}
+</style>

@@ -1,164 +1,158 @@
 # Minecraft Discord Bot
 
-A Discord bot for managing one or more Minecraft servers. Bridges chat between Discord and Minecraft, tracks player stats, posts leaderboards, monitors server health, and gives admins control over the server without SSH.
+[![CI](https://github.com/LetsGaming/minecraft-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/LetsGaming/minecraft-bot/actions/workflows/ci.yml)
+[![Node.js](https://img.shields.io/badge/node-%E2%89%A520-3c873a)](https://nodejs.org)
+[![Release](https://img.shields.io/github/v/tag/LetsGaming/minecraft-bot?label=release&sort=semver)](https://github.com/LetsGaming/minecraft-bot/releases)
 
-## Features
+Run one or more Minecraft servers from Discord: a two-way chat bridge, player
+stats and scheduled leaderboards, health and performance monitoring, and full
+server control without touching SSH. An optional web dashboard adds a
+browser-based admin login, live status, and a guided per-guild setup.
 
-- **Chat bridge** — Messages flow both ways between a Discord channel and the Minecraft server chat.
-- **Server control** — Start, stop, and restart servers from Discord (admin-only).
-- **Player stats** — Playtime, kills, deaths, blocks mined, distance walked — per player and as leaderboards.
-- **Scheduled leaderboards** — Auto-posts a leaderboard (daily/weekly/monthly) showing only stats gained during that period.
-- **Live status embed** — A persistent, auto-updating embed showing server status, player list, and TPS.
-- **Downtime alerts** — Notifies a channel when a server goes down unexpectedly and again when it recovers.
-- **TPS alerts** — Warns when server performance drops below a threshold.
-- **Whitelist management** — Admin-only whitelist add/remove with an audit trail of who added whom.
-- **Account linking** — Players link their Discord and Minecraft accounts for personalized commands.
-- **Daily rewards** — Linked players can claim daily in-game item rewards with streak bonuses.
-- **In-game commands** — Players can use `!commands` in Minecraft chat for Chunkbase links, nether portal math, and more.
-- **Event notifications** — Join/leave, deaths, advancements, and server start/stop events posted to Discord.
-- **Community waypoints** — Players save and share named coordinates in-game (`!waypoint`), browsable from Discord (`/waypoints`).
-- **Cross-platform polls** — One poll, votable via Discord buttons and in-game `!vote`, with linked accounts counted once.
-- **Advancement challenges** — "First player to earn X wins" events with automatic winner detection and optional item bonuses.
-- **Offline daily claims** — `/daily` while offline queues the reward for the next join instead of breaking the streak.
-- **Sessions & last-seen** — Per-player session history (`/sessions`), surfaced in `/whois` too.
-- **Admin notes & reports** — `/note` keeps moderation memory per player; in-game `!report` reaches the admin channel.
-- **Auto-role on link** — Members get a configurable role when they link their Minecraft account.
-- **Host monitoring** — Process RAM/CPU and disk usage in `/status`, plus disk-full early-warning alerts.
-- **Web dashboard** — Optional browser panel (separate process): Discord-OAuth2 admin login, live status, schema-driven config editing, server operations, log tail, and a Prometheus `/metrics` endpoint.
-- **Scheduled restarts** — Wall-clock restarts per server with in-game countdown warnings and Discord notifications.
-- **Whitelist applications** — Players apply via a button + modal; admins approve or deny from a queue channel.
-- **Console access** — `/console tail` and an opt-in, flood-protected live log relay into an admin channel.
-- **Moderation shortcuts** — `/kick`, `/ban`, `/pardon` with reasons, all audit-logged.
-- **Activity insights** — `/activity` shows when a server is busy (24h sparkline + busiest hours); `/profile` is the one-stop player card.
-- **Watch notifications** — One-shot DMs when a server recovers or a friend joins (`/watch`).
-- **Milestones** — Automatic "X just passed 1,000 hours" shout-outs, in-game and on Discord.
-- **Webhook chat bridge** — MC chat can appear as the player (name + head) instead of a bot embed.
-- **Per-guild language** — English and German, switchable per Discord server.
-- **Multi-server** — All features work across multiple server instances from a single bot, including span polls across servers.
+The bot talks to each Minecraft server through a small [API wrapper](docs/admin/remote-setup.md)
+that can run on the same machine or a different one, so a single bot can manage
+several servers, local or remote.
 
----
+## Highlights
 
-## Quickstart
+- **Chat bridge** between Discord and in-game chat, optionally rendered as the
+  player (name and skin) via webhooks.
+- **Stats and leaderboards** per player, with daily/weekly/monthly boards that
+  count only the activity gained in that window.
+- **Monitoring** with a live status embed, downtime and low-TPS alerts, and
+  host RAM/CPU/disk readouts.
+- **Server control** from Discord (start, stop, restart, backup, scheduled
+  restarts with in-game countdowns), all admin-gated and audit-logged.
+- **Account linking** unlocking personalized commands, daily rewards with
+  streaks, a linked role, and whitelist self-service.
+- **Web dashboard** (optional, separate process) with Discord OAuth2 login,
+  server operations, schema-driven config editing, and a guided setup that
+  reads a guild's channels and roles from Discord.
 
-### Run with Docker (recommended)
+The full catalogue, grouped and explained, lives in [`docs/features.md`](docs/features.md).
 
-Docker is the recommended deployment path. The bot connects to your Minecraft server via the [API wrapper](docs/remote-setup.md), which can run on the same machine or a different one.
+## Quick start
+
+### Docker (recommended)
 
 ```bash
-git clone <your-repo-url> minecraft-bot && cd minecraft-bot
+git clone https://github.com/LetsGaming/minecraft-bot
+cd minecraft-bot
 
-# 1. Copy and fill in your environment variables
-cp .env.example .env
-# Edit .env — set DISCORD_TOKEN, DISCORD_CLIENT_ID, MC_API_URL, etc.
-
-# 2. Build and start
+cp .env.example .env          # set DISCORD_TOKEN, DISCORD_CLIENT_ID, MC_API_URL, …
 docker compose up -d
-
-# 3. Follow startup logs
 docker compose logs -f
 ```
 
-See [docs/docker.md](docs/docker.md) for the full guide, including the static `config.json` option for complex multi-server setups.
-
-### Run without Docker (PM2)
-
-For running directly on the host with Node.js and PM2:
-
-**Prerequisites:** Node.js 20+ (24 LTS recommended), a Discord bot token, a Minecraft server with RCON enabled or running in a `screen` session. The data layer uses better-sqlite3 (prebuilt on common platforms; compiles during `npm ci` on Alpine — the Dockerfile handles that).
+That path expands `config.template.json` from your `.env` at startup. For
+multi-server or more involved setups, generate a full `config.json` with the
+wizard and mount it instead:
 
 ```bash
-git clone <your-repo-url> minecraft-bot
+npm run setup                 # interactive; writes config.json
+```
+
+The [Docker guide](docs/admin/docker.md) covers both paths, the reverse-proxy
+setup for the dashboard, and troubleshooting.
+
+### Without Docker (PM2)
+
+Requires Node.js 20 or newer (24 LTS recommended) and a Minecraft server
+reachable over RCON or the API wrapper.
+
+```bash
+git clone https://github.com/LetsGaming/minecraft-bot
 cd minecraft-bot
-npm install
-```
-
-Copy the config template and fill in your values:
-
-```bash
-cp config_structure.json config.json
-```
-
-At minimum, set these fields in `config.json`:
-
-```json
-{
-  "token": "your-discord-bot-token",
-  "clientId": "your-discord-app-id",
-  "adminUsers": ["your-discord-user-id"],
-  "servers": {
-    "survival": {
-      "serverDir": "/path/to/your/minecraft/server",
-      "useRcon": true,
-      "rconPort": 25575,
-      "rconPassword": "your-rcon-password"
-    }
-  },
-  "guilds": {
-    "your-guild-id": {
-      "defaultServer": "survival"
-    }
-  }
-}
-```
-
-See [docs/configuration.md](docs/configuration.md) for the full config reference.
-
-```bash
+npm ci
+npm run setup                 # or: cp config_structure.json config.json and edit
 npm run pm2:start
 ```
 
-The bot registers slash commands globally on startup. They may take up to an hour to appear in Discord for the first time.
+Slash commands register globally on first start and can take up to an hour to
+appear in Discord the first time. Full instructions are in the
+[setup guide](docs/admin/setup.md) and [PM2 guide](docs/admin/pm2.md).
 
----
+## Web dashboard
+
+The dashboard is a separate process (`npm run start:web`, or the `web` profile
+in Docker). It offers a Discord OAuth2 admin login, live server status and
+operations, a schema-driven config editor, an audit log, a one-click invite to
+add the bot to a new server, and a guided per-guild setup that populates
+channel and role pickers directly from Discord. It exposes a Prometheus
+`/metrics` endpoint and runs independently of the bot: either process can be
+down without affecting the other. See the [dashboard docs](docs/admin/docker.md#the-web-dashboard-optional)
+for enabling and securing it.
 
 ## Documentation
 
-Full documentation lives in [`docs/index.md`](docs/index.md).
+Everything is indexed in [`docs/index.md`](docs/index.md).
 
-**For players** — how to link accounts, use stats, claim daily rewards, and use in-game commands.
+| Audience | Start here |
+|---|---|
+| Players | [Getting started](docs/user/getting-started.md), [commands](docs/user/commands.md), [linking](docs/user/linking.md) |
+| Admins | [Setup](docs/admin/setup.md), [configuration](docs/admin/configuration.md), [permissions](docs/admin/permissions.md), [automated features](docs/admin/automated-features.md) |
+| Deploying | [Docker](docs/admin/docker.md), [remote/API wrapper](docs/admin/remote-setup.md), [PM2](docs/admin/pm2.md) |
+| Contributors | [Architecture](docs/dev/architecture.md), [adding features](docs/dev/adding-features.md), [coding guidelines](docs/dev/coding-guidelines.md), [testing](docs/dev/testing.md) |
+| Reference | [Full feature list](docs/features.md), [roadmap](docs/ROADMAP.md) |
 
-**For admins** — full config reference, command list, automated features, and permission management.
+## Architecture
 
----
+The repository is a single npm workspace. The layout mirrors the product: the
+bot is the main artifact, the dashboard an optional extension, and both build on
+shared packages.
+
+```
+src/bot       the Discord bot (the product)
+src/web       the dashboard: one package, backend/ (Fastify) + frontend/ (Vue 3)
+src/core      process-agnostic core: config, data layer, server access, RCON
+src/schema    isomorphic contracts: config types + web API DTOs (browser-safe)
+```
+
+`src/bot` never imports `src/web` or vice versa. Both depend only on the shared
+packages, enforced by ESLint boundary rules and workspace-scoped installs, so
+either process runs and restarts independently. Design decisions and the rules
+enforced in review are in [`docs/dev/decisions.md`](docs/dev/decisions.md).
 
 ## Development
 
-The repository is an npm workspace — the layout mirrors the product: the bot is the main artifact, the dashboard its optional extension, and both build on shared packages.
-
-```
-src/bot        the Discord bot — the product
-src/web        the dashboard: ONE package, backend/ (Fastify) + frontend/ (Vue)
-src/core       process-agnostic core: config, data layer, server access, RCON
-src/schema     isomorphic contracts: config types + web API DTOs (browser-safe)
-```
-
-`src/bot` never imports `src/web` and vice versa — both import the packages, and ESLint boundary rules plus workspace-scoped installs enforce it. Either process runs, restarts, and works without the other. Build output lives inside each workspace (`src/bot/dist`, `src/web/dist/…`).
-
 ```bash
-npm ci                # one install for every workspace (single root lockfile)
-npm run build         # schema gen + bot (packages build via project references)
-npm run build:all     # everything, incl. the dashboard backend + frontend
-npm start             # run the bot        (node src/bot/dist/index.js)
-npm run start:web     # run the dashboard  (node src/web/dist/backend/index.js)
+npm ci                 # one install for every workspace (single root lockfile)
+npm run build          # schema generation + bot
+npm run build:all      # everything, including the dashboard backend and frontend
 
-npm test              # Run all tests once
-npm run test:watch    # Watch mode
-npm run test:coverage # Coverage report
-npm run lint          # ESLint incl. the layer-boundary rules
+npm start              # run the bot
+npm run start:web      # run the dashboard
+
+npm test               # run the test suite once
+npm run test:watch     # watch mode
+npm run test:coverage  # coverage report
+npm run lint           # ESLint, including the layer-boundary rules
+npm run typecheck      # tsc across bot and web
 ```
 
-See [docs/decisions.md](docs/decisions.md) for architectural decisions and Golden Rules enforced in code review.
+The config schema (`config.schema.json`) is generated from the TypeScript
+types; `npm run schema:check` verifies it is in sync, and CI enforces it along
+with locale parity (`npm run i18n:check`).
 
----
+## Data and state
 
-## Data Files
+Runtime state lives in `data/` (or the `bot_data` Docker volume). Machine-written
+state sits in a single SQLite database (`bot.db`, WAL mode) that both the bot and
+dashboard write to safely; hand-edited pools such as `dailyRewards.json` stay
+JSON. Everything is created on first use, and upgrading from 3.x imports the old
+JSON stores automatically. Details are in [`docs/dev/data-storage.md`](docs/dev/data-storage.md).
 
-Runtime state lives in the `data/` directory (or `bot_data` Docker volume). Machine-written state sits in a single SQLite database; human-edited and simpler stores remain JSON:
+## Contributing
 
-| Location | Purpose |
-|---|---|
-| `bot.db` | SQLite store for every machine-written state: account links, audit trails, watches, notes, waypoints, sessions, polls, challenges, daily claims + pending rewards, watcher states, uptime + activity history, and hourly stat snapshots. Both the bot and the dashboard write here safely (WAL). |
-| `dailyRewards.json` | Reward pool — edited by hand, which is why it stays JSON |
-| `runtime.json` / `commandManifest.json` | Process contract files between bot and dashboard (liveness beacon, discovered commands) |
+Issues and pull requests are welcome. Please read the
+[coding guidelines](docs/dev/coding-guidelines.md) and
+[architecture overview](docs/dev/architecture.md) first, keep the layer
+boundaries intact, and make sure `npm run lint`, `npm run typecheck`, and
+`npm test` pass. New user-facing strings need both English and German entries
+(`npm run i18n:check`).
 
-Everything is auto-created on first use; on the first start after upgrading from 3.x, all old JSON stores (and the `snapshots/` directory) import into `bot.db` automatically and are kept as `*.imported`. Snapshot retention is self-cleaning. Details: [docs/dev/data-storage.md](docs/dev/data-storage.md).
+## License
+
+No license has been set yet, so the default of exclusive copyright applies.
+A license file will be added; until then, contact the maintainer before reusing
+the code.

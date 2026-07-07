@@ -19,6 +19,9 @@
  *   POST /api/servers/:id/:action  phase 3: scripts      routes/servers.ts
  *   GET  /api/servers/:id/log      phase 3: log tail     routes/servers.ts
  *   POST /api/servers/:id/prune-stats  phase 3           routes/servers.ts
+ *   GET  /api/setup/guilds         phase 4: bot guilds   routes/setup.ts
+ *   GET  /api/setup/guilds/:id/channels  phase 4         routes/setup.ts
+ *   GET  /api/setup/guilds/:id/roles     phase 4         routes/setup.ts
  *   /healthz, /metrics             unauthenticated       metrics.ts
  *   everything else                static Vue frontend   static.ts
  *
@@ -34,6 +37,7 @@ import { registerAuthRoutes } from "./routes/auth.js";
 import { registerMonitoringRoutes } from "./routes/monitoring.js";
 import { registerConfigRoutes } from "./routes/config.js";
 import { registerServerRoutes } from "./routes/servers.js";
+import { registerSetupRoutes } from "./routes/setup.js";
 import { registerProbeRoutes } from "./metrics.js";
 import { registerStaticFrontend } from "./static.js";
 
@@ -51,6 +55,7 @@ export function buildServer(): FastifyInstance {
     registerMonitoringRoutes(api); // phase 1 — read-only
     registerConfigRoutes(api);     // phase 2 — schema-driven editing
     registerServerRoutes(api);     // phase 3 — operations
+    registerSetupRoutes(api);      // phase 4 — guided guild setup (Discord reads)
   });
 
   // ── Unauthenticated probes ──

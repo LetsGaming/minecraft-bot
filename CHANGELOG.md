@@ -6,116 +6,60 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [4.1.0] — 2026-07-07
+
 ### Added
 
-- **Setup wizard rewritten as schema-driven** (`scripts/setup.mjs`).
-  Prompts, hints, enums, and section structure now come from
-  `config.schema.json` (the generated, CI-synced schema), so new config
-  sections and fields appear in the wizard automatically the moment the
-  schema regenerates — no wizard edits needed. Only credential entry,
-  admin users, servers, and the per-guild feature walk stay hand-curated
-  for flow; everything else (presence, hostAlerts, limits, webui,
-  schedules, …) is generated. Highlights: **remote-instance setup**
-  (apiUrl/apiKey via the API wrapper, with the same transport rules as
-  the bot's own validateApiUrl — https ok, plain http only to
-  LAN/loopback, public http requires explicit allowInsecureHttp
-  consent); secrets masked in bracketed defaults; JSDoc descriptions
-  shown as inline help; Discord-ID validation on channel/role prompts;
-  post-write validation through the bot's own validator when a build
-  exists. Editing is lossless: declining a section keeps its existing
-  config (removal is always an explicit question), `commands` overrides
-  at every scope, `milestones`, and unknown keys are preserved, and the
-  written file carries `$schema` for editor autocompletion.
-- **Command overrides are configurable from the wizard** at all three
-  scopes: global `commands`, per-guild slash commands, and per-server
-  in-game `!commands`. Fields are tri-state (`on`/`off`/`inherit` — an
-  unset field inherits from the outer scope, matching the field-by-field
-  resolution in commandPolicy), answering `inherit` for every field
-  offers to remove the override entirely, and command names are
-  completed from `data/commandManifest.json` when the bot has run once
-  (free text accepted otherwise). The override fields themselves come
-  from the schema, so future `CommandOverrideConfig` fields appear in
-  the flow automatically.
-- **The wizard is Docker-aware.** Docker deployments keep `data/` in a
-  named volume, so `commandManifest.json` is not on the host — the
-  wizard now discovers the manifest through a chain: an explicit
-  `--manifest <path>` flag, the local `data/` file, then
-  `docker compose cp bot:/app/data/commandManifest.json` against the
-  compose project (works on stopped containers), with a free-text
-  fallback that prints the exact export commands. Post-write validation
-  no longer depends on a build: when `src/core/dist` is absent (typical
-  for Docker-only checkouts) the config is checked structurally against
-  `config.schema.json` (types, enums, required fields; preserved unknown
-  keys are not flagged). When a compose file is present, the closing
-  next-steps explain compose "Option B" — mounting the freshly written
-  `./config.json` read-only into the container.
-
-### Security
-
-- **Server events can no longer be forged from chat** (audit SEC-01).
-  The advancement, death, join/leave and start/stop watchers matched log
-  lines with a `\[.+?\].*:` prefix loose enough that a player's *chat
-  message* could fake any of them — including a forged challenge win
-  that paid out the configured item bonus through `give()`. Watcher
-  regexes are now anchored on the `[Server thread/INFO]` tag (Forge's
-  extra `[minecraft/MinecraftServer]` tag still matches), and a shared
-  dispatch guard (`registerServerEvent`) additionally drops any line
-  whose message segment opens with a `<name>` chat wrapper — the
-  portable backstop for forks with unusual thread names. Regression
-  suite `tests/eventForgery.test.ts` pins the audit's PoC lines.
-- **Dashboard 500 bodies no longer leak error detail** (audit SEC-04).
-  `/api/servers/:id/:action` (scripts) and `/api/servers/:id/log`
-  returned raw `err.message` — absolute paths and sudo/stderr fragments
-  included. The detail now goes to the server log; clients get a fixed
-  `{ "error": "internal error" }`.
-
-### Fixed
-
-- **Web dashboard startup failures are now diagnosable instead of a
-  silent exit-1 restart loop** (Docker). The dashboard entry point wraps
-  each startup step — config load, SQLite open — and installs
-  `uncaughtException` / `unhandledRejection` handlers, so any boot
-  failure prints one clear `[ERROR] [web]` line to stdout (visible in
-  `docker compose logs web`) rather than a raw stack on repeat. The most
-  common causes are documented in `docs/admin/docker.md`: a `config.json`
-  built by the wizard while the compose volume is still on the
-  `config.template.json` mount (empty `token`/`clientId` → validation
-  error), a `better-sqlite3` native-binding load failure, and a disabled
-  dashboard. Related hardening: the `web` service sets
-  `MCBOT_SQLITE_DRIVER=node` (built-in driver, no native build; the bot
-  keeps `better-sqlite3`), and the logger no longer crashes the process
-  when `logs/` is unwritable — it degrades to stdout with a warning
-  instead of dying on an unhandled stream error.
-
-- **CI: `npm run i18n:check` crashed with ENOENT** — the locale parity
-  script still read the pre-workspace `src/common/locales/` path (and
-  `dist/common/locales/` for built output). It now resolves the
-  `@mcbot/core` workspace locations (`src/core/locales/`,
-  `src/core/dist/locales/`).
-- **In-game command cooldown map no longer grows without bound**
-  (audit BUG-01). Entries keyed `command:player` were never evicted; a
-  10-minute sweep now removes anything older than the largest declared
-  cooldown (`sweepCooldowns()`, unref'd timer).
+- **Redesigned dashboard** — a sidebar layout (live server switcher +
+  feature nav), card/table views, and a dark PrimeVue theme with modern
+  selection cues. Covers Servers, Guilds, Commands, Config, and Audit.
+- **Add to Server** — a one-click invite button that opens the bot's
+  Discord OAuth2 URL with the right scopes and permissions
+  (`GET /api/invite`).
+- **Guided guild setup** — a wizard that reads a guild's channels and
+  roles from Discord and configures features (notifications, chat bridge,
+  leaderboard, downtime/TPS alerts, reports, console, whitelist apps,
+  linked role, …) with dropdowns instead of pasted IDs. Writes through
+  the existing validated `PUT /api/config`; re-running edits rather than
+  blanks an existing guild. Adds read-only routes `GET /api/setup/guilds`
+  and `.../guilds/:id/{channels,roles}`.
+- **Schema-driven setup wizard** (`scripts/setup.mjs`) — prompts now
+  generate from `config.schema.json`, so new config fields appear
+  automatically. Adds remote-instance setup (apiUrl/apiKey), secret
+  masking, lossless `--edit`, and tri-state command overrides at
+  global/guild/server scope.
+- **Docker-aware wizard** — finds `commandManifest.json` via `--manifest`,
+  the local file, or `docker compose cp` from the running bot, and
+  validates against the schema when no build is present.
 
 ### Changed
 
-- **Dashboard backend split into focused modules** (audit QUAL-01).
-  `src/web/backend/server.ts` mixed OAuth wiring, all ~15 routes, the
-  Prometheus exposition and static serving in one file. It is now a
-  78-line assembler that owns instance creation, the auth boundary and
-  registration order, delegating to `routes/auth.ts`,
-  `routes/monitoring.ts` (phase 1), `routes/config.ts` (phase 2),
-  `routes/servers.ts` (phase 3), `metrics.ts` (`/healthz` +
-  `/metrics`), `static.ts` (frontend serving) and `status.ts` (the one
-  status collector shared by `/api/status` and the metrics exposition)
-  — mirroring the wrapper's `app.ts` layout. No behavioral change;
-  `buildServer()`/`startWebServer()` keep their signatures, and a new
-  route-table parity test pins that every route stays registered and
-  behind `requireAdminSession`.
-- **Death-message matching is table-driven** (audit QUAL-03): the
-  30-branch inline alternation in `deaths.ts` is now a `DEATH_PHRASES`
-  table producing the identical regex — one place to extend when Mojang
-  adds messages, and a stepping stone for localized death events.
+- **Dashboard backend split** into focused route modules; `server.ts` is
+  now a thin assembler (audit QUAL-01). No behavioral change.
+- **Death-message matching is table-driven** (audit QUAL-03) — easier to
+  extend when Mojang adds messages.
+
+### Fixed
+
+- **Web dashboard no longer crash-loops silently** on startup — config,
+  SQLite, and logging failures now print one clear error instead of a
+  bare restart loop. The web container defaults to the built-in SQLite
+  driver (`MCBOT_SQLITE_DRIVER=node`); causes are documented in
+  `docs/admin/docker.md`.
+- **Commands-view save** sends `baseHash` correctly instead of writing a
+  stray `hash` key into `config.json`.
+- **In-game cooldown map no longer grows unbounded** (audit BUG-01) —
+  stale entries are swept.
+- **CI `i18n:check`** resolves the workspace locale paths (was ENOENT).
+
+### Security
+
+- **Server events can no longer be forged from chat** (audit SEC-01) —
+  watcher regexes are anchored to the server-thread log tag with a
+  chat-wrapper backstop, closing a forged-challenge payout. Includes a
+  regression suite.
+- **Dashboard 500s no longer leak error detail** (audit SEC-04) —
+  internals go to the log; clients get a generic message.
 
 ## [4.0.0] — 2026-07-05
 
