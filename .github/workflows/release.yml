@@ -34,7 +34,10 @@ jobs:
       - name: Pack release artifact
         run: |
           tar -czf minecraft-bot-${{ github.ref_name }}.tar.gz \
-            dist package.json package-lock.json config.schema.json \
+            src/schema/dist src/core/dist src/bot/dist src/web/dist \
+            src/schema/package.json src/core/package.json \
+            src/bot/package.json src/web/package.json \
+            package.json package-lock.json config.schema.json \
             README.md docs data/dailyRewards.json ecosystem.config.cjs \
             .env.example
 

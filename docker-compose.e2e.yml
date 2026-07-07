@@ -9,11 +9,15 @@
 #   docker compose -f docker-compose.e2e.yml down -v
 services:
   paper:
-    image: itzg/minecraft-server:java21
+    # Pinned for a reproducible smoke test. Paper 26.1+ requires Java 25,
+    # so the image tag and the server version are pinned together; bump
+    # both deliberately rather than letting VERSION: LATEST float (a new
+    # Paper that needs a newer Java would otherwise break unrelated PRs).
+    image: itzg/minecraft-server:java25
     environment:
       EULA: "TRUE"
       TYPE: PAPER
-      VERSION: LATEST
+      VERSION: "26.1.2"
       MEMORY: 1G
       ONLINE_MODE: "FALSE"
       ENABLE_RCON: "TRUE"
