@@ -1,6 +1,6 @@
 {
   "name": "@mcbot/bot",
-  "version": "4.2.0",
+  "version": "4.2.1",
   "private": true,
   "type": "module",
   "description": "The Discord bot — the main product. Owns the gateway, commands, watchers, and all Discord-facing behavior.",

@@ -64,7 +64,7 @@ export function validateCandidate(
 export async function writeConfig(
   candidate: RawBotConfig,
   meta?: SnapshotMeta,
-): Promise<{ warnings: string[] }> {
+): Promise<{ warnings: string[]; changed: boolean }> {
   const result = validateCandidateConfig(candidate);
   if (!result.valid) {
     throw new Error(
@@ -75,12 +75,29 @@ export async function writeConfig(
   const configPath = getConfigPath();
   const json = JSON.stringify(candidate, null, 2) + "\n";
 
-  // Read the config we're about to replace, for rollback history.
+  // Read the config we're about to replace, for the no-op check + rollback
+  // history.
   let previous: string | null = null;
   try {
     previous = await fsPromises.readFile(configPath, "utf-8");
   } catch {
-    // no existing config yet — nothing to snapshot
+    // no existing config yet — nothing to compare or snapshot
+  }
+
+  // No-op guard: if the candidate is semantically identical to what's on disk,
+  // don't rewrite the file or snapshot history — so a "Save" with no actual
+  // edits doesn't create audit/rollback noise. Normalise both sides (parse +
+  // re-stringify) so incidental formatting differences don't count as a change.
+  if (previous !== null) {
+    let prevNorm: string | null = null;
+    try {
+      prevNorm = JSON.stringify(JSON.parse(previous));
+    } catch {
+      prevNorm = null; // unparseable on-disk config → treat as a real write
+    }
+    if (prevNorm !== null && prevNorm === JSON.stringify(candidate)) {
+      return { warnings: result.warnings, changed: false };
+    }
   }
 
   // Write-then-rename so a crash can never leave a truncated config.json.
@@ -115,5 +132,5 @@ export async function writeConfig(
   if (previous !== null) snapshotConfig(previous, meta);
 
   log.info("config", `config.json updated programmatically (${configPath})`);
-  return { warnings: result.warnings };
+  return { warnings: result.warnings, changed: true };
 }

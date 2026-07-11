@@ -8,9 +8,6 @@
  * its own per-guild authorization on top of that base login gate.
  */
 import type { FastifyInstance } from "fastify";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
 import {
   readRawConfig,
   validateCandidate,
@@ -20,6 +17,7 @@ import {
 import { recordAdminAction } from "@mcbot/core/utils/adminAudit.js";
 import { sessionFromRequest, isSysadmin, canManageGuild, guildScopeFresh } from "../auth.js";
 import { listBotGuilds } from "../discordRest.js";
+import { readConfigSchema } from "../configSchema.js";
 import type { RawBotConfig } from "@mcbot/core/types/index.js";
 
 // Guild-block keys that count as "a feature is on". Mirrors the wizard;
@@ -79,31 +77,16 @@ export function registerGuildConfigRoutes(app: FastifyInstance): void {
   // here. Structure only — no secrets. Path resolution mirrors
   // /api/config/schema (same dir depth) so source + deployed trees both work.
   app.get("/api/guilds/config-schema", async (_req, reply) => {
-    const schemaPath = path.resolve(
-      path.dirname(fileURLToPath(import.meta.url)),
-      "..",
-      "..",
-      "..",
-      "..",
-      "config.schema.json",
-    );
-    try {
-      const full = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as {
-        definitions?: Record<string, unknown>;
-      };
-      const definitions = full.definitions ?? {};
-      const guildSchema = definitions.GuildConfig;
-      if (!guildSchema) {
-        return reply.code(503).send({
-          error: "Guild config schema unavailable — regenerate the schema.",
-        });
-      }
-      return { schema: guildSchema, definitions };
-    } catch {
+    const full = readConfigSchema();
+    const definitions = full?.definitions ?? {};
+    const guildSchema = definitions.GuildConfig;
+    if (!full || !guildSchema) {
       return reply.code(503).send({
-        error: "Config schema not generated yet — run schema:generate.",
+        error:
+          "Guild config schema unavailable — restart the bot to regenerate it.",
       });
     }
+    return { schema: guildSchema, definitions };
   });
 
   app.get<{ Params: { id: string } }>("/api/guilds/:id/config", async (req, reply) => {
@@ -167,13 +150,27 @@ export function registerGuildConfigRoutes(app: FastifyInstance): void {
       return reply.code(422).send({ errors: result.errors });
     }
 
-    await writeConfig(merged);
-    await recordAdminAction({
-      action: "guild config write (dashboard)",
-      by: session.tag,
-      byId: session.uid,
-      guildId,
-    });
-    return { ok: true, warnings: result.warnings };
+    let changed = true;
+    try {
+      ({ changed } = await writeConfig(merged, {
+        byTag: session.tag,
+        byId: session.uid,
+        note: `guild config write (${guildId})`,
+      }));
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : "Failed to write guild config.";
+      return reply.code(500).send({ error: msg });
+    }
+    // Only audit an actual change — a Save with no edits is a no-op.
+    if (changed) {
+      await recordAdminAction({
+        action: "guild config write (dashboard)",
+        by: session.tag,
+        byId: session.uid,
+        guildId,
+      });
+    }
+    return { ok: true, changed, warnings: result.warnings };
   });
 }

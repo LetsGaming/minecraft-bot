@@ -118,7 +118,9 @@
   "commands": {
     "map": {
       "enabled": false,
-      "url": "http://example.com/map"
+      "options": {
+        "url": ""
+      }
     },
     "seed": {
       "enabled": true

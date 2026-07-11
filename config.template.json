@@ -49,7 +49,9 @@
   "commands": {
     "map": {
       "enabled": false,
-      "url": ""
+      "options": {
+        "url": ""
+      }
     },
     "seed": {
       "enabled": true

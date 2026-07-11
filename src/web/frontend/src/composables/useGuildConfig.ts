@@ -63,16 +63,17 @@ export function useGuildConfig() {
     warnings.value = [];
     saving.value = true;
     try {
-      const res = await apiSend<{ ok: boolean; warnings: string[] }>(
+      const res = await apiSend<{ ok: boolean; changed?: boolean; warnings: string[] }>(
         "PUT",
         `/api/guilds/${currentGuildId}/config`,
         { baseHash: baseHash.value, guildConfig: model.value },
       );
       warnings.value = res.warnings ?? [];
+      const noChange = res.changed === false;
       toast.add({
-        severity: "success",
-        summary: "Guild config saved",
-        detail: "The bot applies it automatically.",
+        severity: noChange ? "info" : "success",
+        summary: noChange ? "No changes" : "Guild config saved",
+        detail: noChange ? "Nothing to save." : "The bot applies it automatically.",
         life: 3000,
       });
       await load(currentGuildId); // refresh hash for a follow-up save

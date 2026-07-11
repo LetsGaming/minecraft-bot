@@ -74,6 +74,26 @@ describe("writeConfig", () => {
     expect(fs.existsSync(`${configPath}.tmp`)).toBe(false);
   });
 
+  it("skips a no-op write and reports changed:false", async () => {
+    const cfg = { token: "t", clientId: "c" } as never;
+    const first = await writeConfig(cfg);
+    expect(first.changed).toBe(true);
+    const onDisk = fs.readFileSync(configPath, "utf-8");
+
+    // Writing the identical config again changes nothing.
+    const second = await writeConfig(cfg);
+    expect(second.changed).toBe(false);
+    expect(fs.readFileSync(configPath, "utf-8")).toBe(onDisk);
+    // No .bak is produced on a skipped write (nothing was replaced).
+    expect(fs.existsSync(`${configPath}.bak`)).toBe(false);
+  });
+
+  it("treats a real edit as changed:true", async () => {
+    await writeConfig({ token: "t", clientId: "c" } as never);
+    const res = await writeConfig({ token: "t2", clientId: "c" } as never);
+    expect(res.changed).toBe(true);
+  });
+
   it("writes the candidate atomically and backs up the previous file", async () => {
     fs.writeFileSync(configPath, '{"token":"old"}');
 

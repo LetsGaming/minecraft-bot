@@ -4,9 +4,6 @@
  * Split out of server.ts in the QUAL-01 refactor (2026-07 audit).
  */
 import type { FastifyInstance } from "fastify";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
 import {
   readRawConfig,
   validateCandidate,
@@ -25,6 +22,7 @@ import { resolveCommandPolicy } from "@mcbot/core/utils/commandPolicy.js";
 import { COMMAND_OPTIONS } from "@mcbot/schema";
 import { sessionFromRequest } from "../auth.js";
 import { HttpError, BadRequest, NotFound } from "../errors.js";
+import { readConfigSchema } from "../configSchema.js";
 import { toSafeConfig, mergeSecretPlaceholders } from "../safeConfig.js";
 import type { RawBotConfig } from "@mcbot/core/types/index.js";
 import type { ConfigWriteRequest } from "@mcbot/schema/contract.js";
@@ -91,26 +89,14 @@ export function registerConfigRoutes(api: FastifyInstance): void {
   });
 
   api.get("/api/config/schema", async (_req, reply) => {
-    // One directory deeper than the pre-split server.ts, so one more
-    // ".." — the resolved target is unchanged in both the source tree
-    // (vitest) and the compiled tree (dist/backend/routes/config.js).
-    const schemaPath = path.resolve(
-      path.dirname(fileURLToPath(import.meta.url)),
-      "..",
-      "..",
-      "..",
-      "..",
-      "config.schema.json",
-    );
-    try {
-      const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8"));
-      return schema;
-    } catch {
+    const schema = readConfigSchema();
+    if (!schema) {
       return reply.code(404).send({
         error:
           "Config schema not generated yet — restart the bot so it can write it.",
       });
     }
+    return schema;
   });
 
   api.put("/api/config", async (req, reply) => {
@@ -151,12 +137,13 @@ export function registerConfigRoutes(api: FastifyInstance): void {
     }
 
     const session = sessionFromRequest(req)!;
+    let changed = true;
     try {
-      await writeConfig(merged, {
+      ({ changed } = await writeConfig(merged, {
         byTag: session.tag,
         byId: session.uid,
         note: "config write (dashboard)",
-      });
+      }));
     } catch (err) {
       // writeConfig raises an actionable, operator-facing message (e.g. a
       // read-only/non-owned config path). Log it and surface it to the
@@ -165,12 +152,16 @@ export function registerConfigRoutes(api: FastifyInstance): void {
       log.error("web", `Config write failed: ${msg}`);
       throw new HttpError(500, msg);
     }
-    await recordAdminAction({
-      action: "config write (dashboard)",
-      by: session.tag,
-      byId: session.uid,
-    });
-    return { ok: true, warnings: result.warnings };
+    // Only record an audit entry when something actually changed — a Save with
+    // no edits is a no-op, not an auditable action.
+    if (changed) {
+      await recordAdminAction({
+        action: "config write (dashboard)",
+        by: session.tag,
+        byId: session.uid,
+      });
+    }
+    return { ok: true, changed, warnings: result.warnings };
   });
 
   // ── Config rollback history ──────────────────────────────────────────────
@@ -219,23 +210,26 @@ export function registerConfigRoutes(api: FastifyInstance): void {
       }
 
       const session = sessionFromRequest(req)!;
+      let changed = true;
       try {
-        await writeConfig(candidate, {
+        ({ changed } = await writeConfig(candidate, {
           byTag: session.tag,
           byId: session.uid,
           note: `rollback to #${id}`,
-        });
+        }));
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Rollback failed.";
         log.error("web", `Config rollback failed: ${msg}`);
         throw new HttpError(500, msg);
       }
-      await recordAdminAction({
-        action: `config rollback to #${id} (dashboard)`,
-        by: session.tag,
-        byId: session.uid,
-      });
-      return { ok: true, warnings: result.warnings };
+      if (changed) {
+        await recordAdminAction({
+          action: `config rollback to #${id} (dashboard)`,
+          by: session.tag,
+          byId: session.uid,
+        });
+      }
+      return { ok: true, changed, warnings: result.warnings };
     },
   );
 }

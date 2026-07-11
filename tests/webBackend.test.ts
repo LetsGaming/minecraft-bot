@@ -32,7 +32,7 @@ vi.mock("../src/core/config.js", () => ({
 vi.mock("../src/core/utils/configService.js", () => ({
   readRawConfig: vi.fn(() => JSON.parse(JSON.stringify(mockConfig))),
   validateCandidate: vi.fn(() => ({ valid: true, errors: [], warnings: ["w1"] })),
-  writeConfig: vi.fn(async () => {}),
+  writeConfig: vi.fn(async () => ({ warnings: [], changed: true })),
   configFileHash: vi.fn(() => "hash-1"),
 }));
 
@@ -416,12 +416,35 @@ describe("web routes", () => {
       payload: { baseHash: "hash-1", config: submitted },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ ok: true, warnings: ["w1"] });
+    expect(res.json()).toEqual({ ok: true, changed: true, warnings: ["w1"] });
 
     // The placeholder never reaches disk — the merge restored the token.
     const written = vi.mocked(writeConfig).mock.calls[0]![0] as RawBotConfig;
     expect(written.token).toBe("real-bot-token");
     expect(vi.mocked(validateCandidate)).toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("PUT /api/config with no actual change skips the audit entry", async () => {
+    const { writeConfig } = await import(
+      "../src/core/utils/configService.js"
+    );
+    const { recordAdminAction } = await import(
+      "../src/core/utils/adminAudit.js"
+    );
+    vi.mocked(writeConfig).mockResolvedValueOnce({ warnings: [], changed: false });
+    vi.mocked(recordAdminAction).mockClear();
+    const app = buildServer();
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/config",
+      headers: { cookie: adminCookie(), "content-type": "application/json" },
+      payload: { baseHash: "hash-1", config: toSafeConfig(mockConfig as unknown as RawBotConfig) },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().changed).toBe(false);
+    // A no-op is not an auditable action.
+    expect(vi.mocked(recordAdminAction)).not.toHaveBeenCalled();
     await app.close();
   });
 
