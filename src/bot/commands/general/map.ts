@@ -35,5 +35,10 @@ export async function execute(
 // Read through loadConfig() so env overrides, validation, and config
 // hot-reload apply — instead of re-reading config.json from disk directly.
 function getUrl(): string | null {
-  return loadConfig().commands["map"]?.url ?? null;
+  const cmd = loadConfig().commands["map"];
+  const opt = cmd?.options?.url;
+  if (typeof opt === "string" && opt) return opt;
+  // Back-compat: older configs stored the URL directly as `url`.
+  const legacy = (cmd as { url?: unknown } | undefined)?.url;
+  return typeof legacy === "string" && legacy ? legacy : null;
 }

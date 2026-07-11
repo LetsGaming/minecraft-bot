@@ -25,7 +25,10 @@ export function registerProbeRoutes(app: FastifyInstance): void {
     if (token) {
       const auth = req.headers.authorization ?? "";
       if (auth !== `Bearer ${token}`) {
-        return reply.code(401).send("unauthorized");
+        return reply.code(401).send({
+          error:
+            "This endpoint requires a valid bearer token (WEBUI_METRICS_TOKEN).",
+        });
       }
     }
     const lines: string[] = [];

@@ -163,8 +163,16 @@
           "type": "boolean",
           "description": "false hides the command in the scope. A command disabled globally but enabled in one scope stays registered and is gated at dispatch."
         },
-        "url": {
-          "type": "string"
+        "options": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          },
+          "description": "Arbitrary per-command settings (see COMMAND_OPTIONS for which commands expose what, and the dashboard's Commands tab for editing them). Stored as simple scalars, e.g. `{ url: \"https://map.example.com\" }` for /map."
         },
         "adminOnly": {
           "type": "boolean",

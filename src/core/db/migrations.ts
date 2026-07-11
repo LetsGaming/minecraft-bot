@@ -122,6 +122,27 @@ const MIGRATIONS: Migration[] = [
       );
     `,
   },
+  {
+    id: 3,
+    name: "config rollback history",
+    sql: `
+      -- Compact history of config states for dashboard rollback. Each row is
+      -- the config as it was BEFORE a write replaced it (gzip-compressed), so
+      -- reverting a row restores the config to just before that change. Kept
+      -- to a short time window (see configHistory.ts) — ts is epoch ms for
+      -- timezone-independent pruning; at is the display string.
+      CREATE TABLE config_history (
+        id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts        INTEGER NOT NULL,
+        at        TEXT NOT NULL,
+        by_tag    TEXT,
+        by_id     TEXT,
+        note      TEXT,
+        config_gz BLOB NOT NULL
+      );
+      CREATE INDEX config_history_ts ON config_history (ts);
+    `,
+  },
 ];
 
 export function runMigrations(db: SqlDatabase): void {

@@ -36,6 +36,19 @@ vi.mock("../src/core/utils/configService.js", () => ({
   configFileHash: vi.fn(() => "hash-1"),
 }));
 
+vi.mock("../src/core/utils/configHistory.js", () => ({
+  RETENTION_DAYS: 3,
+  snapshotConfig: vi.fn(),
+  listConfigHistory: vi.fn(() => [
+    { id: 2, ts: 2000, at: "2026-07-11 10:00:00", byTag: "admin#1", byId: "111", note: "config write (dashboard)" },
+    { id: 1, ts: 1000, at: "2026-07-11 09:00:00", byTag: "admin#1", byId: "111", note: "config write (dashboard)" },
+  ]),
+  // id 1 exists; anything else is gone (aged out / never existed).
+  getConfigSnapshot: vi.fn((id: number) =>
+    id === 1 ? JSON.stringify({ token: "restored" }) : null,
+  ),
+}));
+
 vi.mock("../src/core/utils/server.js", () => ({
   getServerInstance: vi.fn(() => null),
   getAllInstances: vi.fn(() => []),
@@ -333,6 +346,29 @@ describe("web routes", () => {
     await app.close();
   });
 
+  it("serves the GuildConfig schema to any logged-in guild manager", async () => {
+    const app = buildServer();
+    const mgr =
+      `${SESSION_COOKIE}=` +
+      encodeSigned({
+        uid: "444444444444444444",
+        tag: "mgr",
+        guilds: ["222222222222222222"],
+        exp: Date.now() + 60_000,
+      });
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/guilds/config-schema",
+      headers: { cookie: mgr },
+    });
+    expect(res.statusCode).toBe(200);
+    // The GuildConfig node (with feature properties) + all definitions for
+    // $ref resolution — structure only, no secrets.
+    expect(res.json().schema.properties).toBeTruthy();
+    expect(res.json().definitions).toBeTruthy();
+    await app.close();
+  });
+
   it("gives a sysadmin every guild's config and the server list", async () => {
     const app = buildServer();
     expect(
@@ -423,9 +459,77 @@ describe("web routes", () => {
       payload: { baseHash: "stale-hash", config: {} },
     });
     expect(res.statusCode).toBe(409);
-    expect(res.json().error).toBe("conflict");
+    expect(res.json().error).toMatch(/changed since you loaded it/i);
     expect(res.json().currentHash).toBe("hash-1");
     expect(vi.mocked(writeConfig)).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("lists config rollback history for an admin", async () => {
+    const app = buildServer();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/config/history",
+      headers: { cookie: adminCookie() },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().retentionDays).toBe(3);
+    expect(res.json().entries).toHaveLength(2);
+    expect(res.json().entries[0]).toMatchObject({ id: 2, by: "admin#1" });
+    await app.close();
+  });
+
+  it("rolls back to a stored snapshot (restores it via writeConfig)", async () => {
+    const { writeConfig } = await import(
+      "../src/core/utils/configService.js"
+    );
+    vi.mocked(writeConfig).mockClear();
+    const app = buildServer();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/config/history/1/rollback",
+      headers: { cookie: adminCookie() },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().ok).toBe(true);
+    // The stored snapshot was written back, tagged as a rollback.
+    const [cfg, meta] = vi.mocked(writeConfig).mock.calls[0]!;
+    expect(cfg).toEqual({ token: "restored" });
+    expect((meta as { note?: string })?.note).toMatch(/rollback to #1/);
+    await app.close();
+  });
+
+  it("returns a meaningful 404 when the snapshot has aged out", async () => {
+    const app = buildServer();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/config/history/999/rollback",
+      headers: { cookie: adminCookie() },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error).toMatch(/not found|aged out/i);
+    await app.close();
+  });
+
+  it("rejects a non-numeric history id with 400 (not a bare error)", async () => {
+    const app = buildServer();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/config/history/abc/rollback",
+      headers: { cookie: adminCookie() },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBeTruthy();
+    await app.close();
+  });
+
+  it("gates rollback behind sysadmin (401 without a session)", async () => {
+    const app = buildServer();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/config/history/1/rollback",
+    });
+    expect(res.statusCode).toBe(401);
     await app.close();
   });
 
@@ -446,10 +550,12 @@ describe("web routes", () => {
       adminOnly: false,
     });
     expect(body.effective.vote["server:smp"]).toBeDefined();
+    // The per-command option registry is included so the UI can render inputs.
+    expect(body.commandOptions.map.some((o: { key: string }) => o.key === "url")).toBe(true);
     await app.close();
   });
 
-  it("404s ops routes for unknown servers", async () => {
+  it("404s ops routes for unknown servers with a named message", async () => {
     const app = buildServer();
     const res = await app.inject({
       method: "POST",
@@ -457,6 +563,20 @@ describe("web routes", () => {
       headers: { cookie: adminCookie() },
     });
     expect(res.statusCode).toBe(404);
+    // Meaningful, not a bare "unknown server".
+    expect(res.json().error).toMatch(/no server named "nope"/i);
+    await app.close();
+  });
+
+  it("returns a meaningful 404 for an unknown API endpoint", async () => {
+    const app = buildServer();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/does-not-exist",
+      headers: { cookie: adminCookie() },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error).toMatch(/no such endpoint/i);
     await app.close();
   });
 });
@@ -495,7 +615,7 @@ describe("guild-scope freshness on writes (SEC-03)", () => {
   it("blocks the write once the guild scope has aged out", async () => {
     const res = await put(mgrCookie(Date.now() - 1000));
     expect(res.statusCode).toBe(403);
-    expect(res.json().detail).toMatch(/out of date/i);
+    expect(res.json().error).toMatch(/out of date/i);
   });
 
   it("blocks the write when the cookie predates the freshness field", async () => {

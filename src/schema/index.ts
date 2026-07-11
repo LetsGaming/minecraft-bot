@@ -17,3 +17,4 @@ export type * from "./contract.js";
 // setup wizard, and the validator import one shared definition — hence a
 // value re-export rather than `export type *`.
 export * from "./notifications.js";
+export * from "./commandOptions.js";

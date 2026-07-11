@@ -55,12 +55,23 @@
                 <GuildAvatar :guild-id="gid" :size="34" />
                 <span class="guild-name">{{ guildName(gid) }}</span>
               </div>
-              <Button
-                label="Edit setup"
-                icon="pi pi-sliders-h"
-                size="small"
-                @click="openWizard(gid)"
-              />
+              <div class="guild-actions">
+                <Button
+                  label="Edit config"
+                  icon="pi pi-sliders-h"
+                  size="small"
+                  @click="openConfigEditor(gid)"
+                />
+                <Button
+                  label="Setup wizard"
+                  icon="pi pi-magic"
+                  size="small"
+                  text
+                  severity="secondary"
+                  v-tooltip.top="'Step-by-step guided setup for the common features.'"
+                  @click="openWizard(gid)"
+                />
+              </div>
             </div>
 
             <div class="guild-features">
@@ -102,6 +113,13 @@
       :sysadmin="sysadmin"
       @written="reload"
     />
+
+    <GuildConfigEditor
+      v-model:visible="configEditorOpen"
+      :guild-id="configEditorGuildId"
+      :guild-name="guildName(configEditorGuildId)"
+      @saved="reload"
+    />
   </div>
 </template>
 
@@ -111,6 +129,7 @@ import Card from "primevue/card";
 import Button from "primevue/button";
 import Tag from "primevue/tag";
 import SetupWizard from "../components/SetupWizard.vue";
+import GuildConfigEditor from "../components/GuildConfigEditor.vue";
 import ViewHeader from "../components/ViewHeader.vue";
 import GuildAvatar from "../components/GuildAvatar.vue";
 import EmptyState from "../components/EmptyState.vue";
@@ -137,7 +156,7 @@ const FEATURES: { key: string; label: string; icon: string; hint: string }[] = [
 
 export default defineComponent({
   name: "GuildsView",
-  components: { Card, Button, Tag, SetupWizard, ViewHeader, GuildAvatar, EmptyState },
+  components: { Card, Button, Tag, SetupWizard, GuildConfigEditor, ViewHeader, GuildAvatar, EmptyState },
   props: {
     sysadmin: { type: Boolean, default: false },
   },
@@ -152,6 +171,8 @@ export default defineComponent({
     return {
       wizardOpen: false,
       wizardGuildId: "",
+      configEditorOpen: false,
+      configEditorGuildId: "",
     };
   },
   computed: {
@@ -172,6 +193,10 @@ export default defineComponent({
     openWizard(gid: string) {
       this.wizardGuildId = gid;
       this.wizardOpen = true;
+    },
+    openConfigEditor(gid: string) {
+      this.configEditorGuildId = gid;
+      this.configEditorOpen = true;
     },
     enabledFeatures(gid: string): { key: string; label: string; icon: string; hint: string }[] {
       const row = this.guildRows.find((g) => g.id === gid);
@@ -213,6 +238,7 @@ export default defineComponent({
   border-bottom: 0.5px solid var(--mc-border);
 }
 .guild-identity { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.guild-actions { display: flex; gap: 8px; flex-shrink: 0; }
 .guild-name {
   font-size: 15.5px; font-weight: 500;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

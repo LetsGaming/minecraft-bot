@@ -24,7 +24,7 @@ export function registerServerRoutes(api: FastifyInstance): void {
   api.post("/api/servers/:id/:action", async (req, reply) => {
     const { id, action } = req.params as { id: string; action: string };
     const server = getServerInstance(id);
-    if (!server) return reply.code(404).send({ error: "unknown server" });
+    if (!server) return reply.code(404).send({ error: `No server named "${id}" is configured.` });
     if (!SCRIPT_ACTIONS.has(action)) {
       return reply.code(400).send({ error: `unknown action "${action}"` });
     }
@@ -55,7 +55,7 @@ export function registerServerRoutes(api: FastifyInstance): void {
       // fragments to the browser — log the detail, return a fixed body.
       const msg = err instanceof Error ? err.message : String(err);
       log.error("web", `Script ${action} on ${id} failed: ${msg}`);
-      return reply.code(500).send({ error: "internal error" });
+      return reply.code(500).send({ error: "The operation failed unexpectedly — see the bot logs for details." });
     }
   });
 
@@ -63,7 +63,7 @@ export function registerServerRoutes(api: FastifyInstance): void {
     const { id } = req.params as { id: string };
     const { lines } = req.query as { lines?: string };
     const server = getServerInstance(id);
-    if (!server) return reply.code(404).send({ error: "unknown server" });
+    if (!server) return reply.code(404).send({ error: `No server named "${id}" is configured.` });
     const n = Math.min(Math.max(parseInt(lines ?? "50", 10) || 50, 1), 500);
     try {
       const raw = await tailLog(server.config, n);
@@ -72,7 +72,7 @@ export function registerServerRoutes(api: FastifyInstance): void {
       // SEC-04: same defense-in-depth as the scripts route above.
       const msg = err instanceof Error ? err.message : String(err);
       log.error("web", `Log tail for ${id} failed: ${msg}`);
-      return reply.code(500).send({ error: "internal error" });
+      return reply.code(500).send({ error: "The operation failed unexpectedly — see the bot logs for details." });
     }
   });
 
@@ -80,7 +80,7 @@ export function registerServerRoutes(api: FastifyInstance): void {
     const { id } = req.params as { id: string };
     const { dryRun } = req.query as { dryRun?: string };
     const server = getServerInstance(id);
-    if (!server) return reply.code(404).send({ error: "unknown server" });
+    if (!server) return reply.code(404).send({ error: `No server named "${id}" is configured.` });
 
     // Same rule as /server prune-stats: a UUID is prunable when
     // neither the whitelist nor the usercache can name it.

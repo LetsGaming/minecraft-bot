@@ -6,6 +6,57 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [4.2.0] — 2026-07-11
+
+### Added
+
+- **Config rollback** — the dashboard snapshots the config before each change
+  (gzip-compressed, kept for the last 3 days) and can restore any of them;
+  `GET /api/config/history` and `POST /api/config/history/:id/rollback`.
+- **Per-guild config editor** — edit a guild's whole configuration from a
+  schema-driven form (every field, with type-appropriate inputs) instead of
+  re-running the setup wizard.
+- **Per-command options** — commands can carry configurable options (e.g.
+  `/map`'s URL), edited in the Commands tab and declared in a `COMMAND_OPTIONS`
+  registry.
+- **Dashboard setup guard** — missing required config (`WEBUI_SESSION_SECRET`,
+  `WEBUI_CLIENT_SECRET`) now serves a clear setup page instead of an opaque 500.
+- `WEBUI_PUBLIC_URL` to set the dashboard's public URL behind a reverse proxy
+  (fixes the OAuth redirect and the session cookie's `Secure` flag).
+- `bump-version` script that updates the version across every manifest + the
+  changelog and can optionally tag/push a release.
+
+### Changed
+
+- **Command schema**: `commands.<name>.url` is replaced by a general
+  `commands.<name>.options` object. Existing `url` values are still honoured
+  (backward compatible).
+- **Meaningful errors everywhere** — API responses now carry a human-readable
+  message instead of terse codes (`forbidden`, `conflict`, `unknown server`,
+  …); unknown endpoints return a named 404.
+- **Docker deployment is fully `.env`-driven** — rewritten `docker-compose.yml`,
+  `docker-entrypoint.sh` and `.env.example`; the active config now lives in the
+  writable `data/` volume (`MCBOT_CONFIG_PATH`), seeded once on first start.
+
+### Fixed
+
+- A server is no longer reported offline after a single failed status request —
+  the remote-API path retries before declaring it down.
+- Config written from the dashboard no longer fails with `EACCES` on a
+  read-only/root-owned path; it is written to the process-owned `data/` volume.
+- Env-only secrets (`DISCORD_TOKEN`, …) are applied before validation, so a
+  config that omits them still boots.
+- The optimistic-concurrency 409 on config writes now surfaces to the dashboard
+  correctly (reload-and-retry).
+- Notification events that previously never fired now fire.
+
+### Security
+
+- `@fastify/helmet` with a tuned Content-Security-Policy on the dashboard.
+- Token-bucket rate limiting across the auth and mutating API routes.
+- Guild-manager scope now expires (2 h) and is re-checked on write, so a
+  demoted manager can't keep write access for the rest of a session.
+
 ## [4.1.0] — 2026-07-07
 
 ### Added

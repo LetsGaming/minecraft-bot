@@ -70,7 +70,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
 
   app.get("/api/me", async (req, reply) => {
     const session = sessionFromRequest(req);
-    if (!session) return reply.code(401).send({ error: "unauthorized" });
+    if (!session) return reply.code(401).send({ error: "Not signed in." });
     // The frontend uses `sysadmin` to decide which tabs to show, and
     // `guildCount` to tell a guild manager whether they have anything to
     // configure at all.
@@ -89,7 +89,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
   // /api — you must be a dashboard admin to see it.
   app.get("/api/invite", async (req, reply) => {
     const session = sessionFromRequest(req);
-    if (!session) return reply.code(401).send({ error: "unauthorized" });
+    if (!session) return reply.code(401).send({ error: "Not signed in." });
     const cfg = loadConfig();
     const clientId = cfg.webui?.clientId ?? cfg.clientId;
     const params = new URLSearchParams({

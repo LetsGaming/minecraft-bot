@@ -37,7 +37,7 @@ export function registerMonitoringRoutes(api: FastifyInstance): void {
   api.get("/api/uptime/:serverId", async (req, reply) => {
     const { serverId } = req.params as { serverId: string };
     if (!getServerIds().includes(serverId)) {
-      return reply.code(404).send({ error: "unknown server" });
+      return reply.code(404).send({ error: `No server named "${serverId}" is configured.` });
     }
     return getUptimeStats(serverId);
   });
@@ -45,7 +45,7 @@ export function registerMonitoringRoutes(api: FastifyInstance): void {
   api.get("/api/activity/:serverId", async (req, reply) => {
     const { serverId } = req.params as { serverId: string };
     if (!getServerIds().includes(serverId)) {
-      return reply.code(404).send({ error: "unknown server" });
+      return reply.code(404).send({ error: `No server named "${serverId}" is configured.` });
     }
     const store = await loadPlayerCountStore();
     return { serverId, series: store.servers[serverId] ?? [] };

@@ -14,11 +14,17 @@ import {
   configFileHash,
 } from "@mcbot/core/utils/configService.js";
 import { recordAdminAction } from "@mcbot/core/utils/adminAudit.js";
+import {
+  listConfigHistory,
+  getConfigSnapshot,
+  RETENTION_DAYS as CONFIG_HISTORY_RETENTION_DAYS,
+} from "@mcbot/core/utils/configHistory.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { readCommandManifest } from "@mcbot/core/utils/commandManifest.js";
 import { resolveCommandPolicy } from "@mcbot/core/utils/commandPolicy.js";
+import { COMMAND_OPTIONS } from "@mcbot/schema";
 import { sessionFromRequest } from "../auth.js";
-import { HttpError } from "../errors.js";
+import { HttpError, BadRequest, NotFound } from "../errors.js";
 import { toSafeConfig, mergeSecretPlaceholders } from "../safeConfig.js";
 import type { RawBotConfig } from "@mcbot/core/types/index.js";
 import type { ConfigWriteRequest } from "@mcbot/schema/contract.js";
@@ -65,6 +71,7 @@ export function registerConfigRoutes(api: FastifyInstance): void {
     return {
       manifest,
       scopes: { guildIds, serverIds },
+      commandOptions: COMMAND_OPTIONS,
       overrides: {
         global: raw.commands ?? {},
         guilds: Object.fromEntries(
@@ -99,7 +106,10 @@ export function registerConfigRoutes(api: FastifyInstance): void {
       const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8"));
       return schema;
     } catch {
-      return reply.code(404).send({ error: "schema not generated" });
+      return reply.code(404).send({
+        error:
+          "Config schema not generated yet — restart the bot so it can write it.",
+      });
     }
   });
 
@@ -124,8 +134,7 @@ export function registerConfigRoutes(api: FastifyInstance): void {
     const currentHash = configFileHash();
     if (body.baseHash !== currentHash) {
       return reply.code(409).send({
-        error: "conflict",
-        message:
+        error:
           "config.json changed since you loaded it (another admin, the " +
           "bot, or a hand edit). Reload the config and re-apply your changes.",
         currentHash,
@@ -141,8 +150,13 @@ export function registerConfigRoutes(api: FastifyInstance): void {
       return reply.code(422).send({ errors: result.errors });
     }
 
+    const session = sessionFromRequest(req)!;
     try {
-      await writeConfig(merged);
+      await writeConfig(merged, {
+        byTag: session.tag,
+        byId: session.uid,
+        note: "config write (dashboard)",
+      });
     } catch (err) {
       // writeConfig raises an actionable, operator-facing message (e.g. a
       // read-only/non-owned config path). Log it and surface it to the
@@ -151,7 +165,6 @@ export function registerConfigRoutes(api: FastifyInstance): void {
       log.error("web", `Config write failed: ${msg}`);
       throw new HttpError(500, msg);
     }
-    const session = sessionFromRequest(req)!;
     await recordAdminAction({
       action: "config write (dashboard)",
       by: session.tag,
@@ -159,4 +172,70 @@ export function registerConfigRoutes(api: FastifyInstance): void {
     });
     return { ok: true, warnings: result.warnings };
   });
+
+  // ── Config rollback history ──────────────────────────────────────────────
+  // Snapshots of the config as it was before each write (last few days only;
+  // see configHistory.ts). Reverting one restores that earlier state.
+  api.get("/api/config/history", async () => ({
+    retentionDays: CONFIG_HISTORY_RETENTION_DAYS,
+    entries: listConfigHistory().map((e) => ({
+      id: e.id,
+      at: e.at,
+      by: e.byTag,
+      note: e.note,
+    })),
+  }));
+
+  api.post<{ Params: { id: string } }>(
+    "/api/config/history/:id/rollback",
+    async (req, reply) => {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id)) {
+        throw new BadRequest("Invalid history entry id.");
+      }
+      const snapshot = getConfigSnapshot(id);
+      if (snapshot === null) {
+        throw new NotFound(
+          `Config history entry ${id} not found — it may have aged out ` +
+            `(history is kept for ${CONFIG_HISTORY_RETENTION_DAYS} days).`,
+        );
+      }
+
+      let candidate: RawBotConfig;
+      try {
+        candidate = JSON.parse(snapshot) as RawBotConfig;
+      } catch {
+        throw new HttpError(500, "Stored config snapshot is unreadable.");
+      }
+
+      const result = validateCandidate(candidate);
+      if (!result.valid) {
+        // A snapshot that no longer validates (e.g. it references a server
+        // since removed) — surface why rather than a bare 422.
+        return reply.code(422).send({
+          error: "The snapshot is no longer valid against the current schema.",
+          errors: result.errors,
+        });
+      }
+
+      const session = sessionFromRequest(req)!;
+      try {
+        await writeConfig(candidate, {
+          byTag: session.tag,
+          byId: session.uid,
+          note: `rollback to #${id}`,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Rollback failed.";
+        log.error("web", `Config rollback failed: ${msg}`);
+        throw new HttpError(500, msg);
+      }
+      await recordAdminAction({
+        action: `config rollback to #${id} (dashboard)`,
+        by: session.tag,
+        byId: session.uid,
+      });
+      return { ok: true, warnings: result.warnings };
+    },
+  );
 }

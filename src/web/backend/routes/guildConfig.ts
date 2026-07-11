@@ -8,6 +8,9 @@
  * its own per-guild authorization on top of that base login gate.
  */
 import type { FastifyInstance } from "fastify";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import {
   readRawConfig,
   validateCandidate,
@@ -51,7 +54,9 @@ export function registerGuildConfigRoutes(app: FastifyInstance): void {
       botGuildIds = (await listBotGuilds()).map((g) => g.id);
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
-      return reply.code(502).send({ error: "discord_error", detail });
+      return reply
+        .code(502)
+        .send({ error: `Couldn't reach Discord: ${detail}` });
     }
     const visible = isSysadmin(session)
       ? botGuildIds
@@ -69,10 +74,42 @@ export function registerGuildConfigRoutes(app: FastifyInstance): void {
   });
 
   /** One guild's config block (+ the full-config hash for concurrency). */
+  // Guild-managers (non-sysadmin) can't reach /api/config/schema, so expose
+  // just the GuildConfig definition + all definitions (for $ref resolution)
+  // here. Structure only — no secrets. Path resolution mirrors
+  // /api/config/schema (same dir depth) so source + deployed trees both work.
+  app.get("/api/guilds/config-schema", async (_req, reply) => {
+    const schemaPath = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "..",
+      "..",
+      "..",
+      "..",
+      "config.schema.json",
+    );
+    try {
+      const full = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as {
+        definitions?: Record<string, unknown>;
+      };
+      const definitions = full.definitions ?? {};
+      const guildSchema = definitions.GuildConfig;
+      if (!guildSchema) {
+        return reply.code(503).send({
+          error: "Guild config schema unavailable — regenerate the schema.",
+        });
+      }
+      return { schema: guildSchema, definitions };
+    } catch {
+      return reply.code(503).send({
+        error: "Config schema not generated yet — run schema:generate.",
+      });
+    }
+  });
+
   app.get<{ Params: { id: string } }>("/api/guilds/:id/config", async (req, reply) => {
     const session = sessionFromRequest(req)!;
     if (!canManageGuild(session, req.params.id)) {
-      return reply.code(403).send({ error: "forbidden", detail: "You don't manage that guild." });
+      return reply.code(403).send({ error: "You don't manage that guild." });
     }
     const cfg = readRawConfig();
     const block = (cfg.guilds ?? {})[req.params.id] ?? {};
@@ -84,7 +121,7 @@ export function registerGuildConfigRoutes(app: FastifyInstance): void {
     const session = sessionFromRequest(req)!;
     const guildId = req.params.id;
     if (!canManageGuild(session, guildId)) {
-      return reply.code(403).send({ error: "forbidden", detail: "You don't manage that guild." });
+      return reply.code(403).send({ error: "You don't manage that guild." });
     }
     // A non-sysadmin's captured guild scope must still be fresh to WRITE
     // (SEC-03): if it has aged out, a demoted manager could otherwise keep
@@ -92,8 +129,8 @@ export function registerGuildConfigRoutes(app: FastifyInstance): void {
     // current permissions.
     if (!isSysadmin(session) && !guildScopeFresh(session)) {
       return reply.code(403).send({
-        error: "forbidden",
-        detail: "Your guild permissions may be out of date — please log in again.",
+        error:
+          "Your guild permissions may be out of date — please log in again.",
       });
     }
 
@@ -110,8 +147,7 @@ export function registerGuildConfigRoutes(app: FastifyInstance): void {
     const currentHash = configFileHash();
     if (body.baseHash !== currentHash) {
       return reply.code(409).send({
-        error: "conflict",
-        message: "Config changed since you loaded it. Reload and re-apply.",
+        error: "Config changed since you loaded it. Reload and re-apply.",
         currentHash,
       });
     }

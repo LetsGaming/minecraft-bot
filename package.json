@@ -1,6 +1,6 @@
 {
   "name": "minecraft-bot",
-  "version": "4.1.2",
+  "version": "4.2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/LetsGaming/minecraft-bot.git"
@@ -36,6 +36,7 @@
     "schema:generate": "node scripts/generate-schema.mjs",
     "schema:check": "node scripts/generate-schema.mjs --check",
     "i18n:check": "node scripts/check-locales.mjs",
+    "bump-version": "node scripts/bump-version.mjs",
     "clean": "tsc -b --clean src/bot src/web && rm -rf src/web/dist"
   },
   "devDependencies": {

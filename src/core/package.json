@@ -1,6 +1,6 @@
 {
   "name": "@mcbot/core",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "private": true,
   "type": "module",
   "description": "Process-agnostic core: config service, data layer (SQLite + JSON), server access, RCON, locales. Imported by bot and web; imports neither.",

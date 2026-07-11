@@ -11,10 +11,15 @@ export class UnauthorizedError extends Error {
 async function handle<T>(res: Response): Promise<T> {
   if (res.status === 401) throw new UnauthorizedError();
   if (!res.ok) {
-    let detail = `${res.status}`;
+    let detail = `Request failed (${res.status})`;
     try {
       const body = await res.json();
-      detail = body.error ?? JSON.stringify(body.errors ?? body);
+      // Prefer a human message; fall back to a validation list, then the body.
+      detail =
+        body.error ??
+        body.message ??
+        body.detail ??
+        JSON.stringify(body.errors ?? body);
     } catch {
       /* keep status */
     }

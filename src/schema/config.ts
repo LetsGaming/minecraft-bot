@@ -251,7 +251,12 @@ export interface CommandOverrideConfig {
    * but enabled in one scope stays registered and is gated at dispatch.
    */
   enabled?: boolean;
-  url?: string;
+  /**
+   * Arbitrary per-command settings (see COMMAND_OPTIONS for which commands
+   * expose what, and the dashboard's Commands tab for editing them). Stored
+   * as simple scalars, e.g. `{ url: "https://map.example.com" }` for /map.
+   */
+  options?: Record<string, string | number | boolean>;
   /**
    * Gate this command behind the admin check. For slash commands that
    * is the global adminUsers list or the issuing guild's adminUsers;

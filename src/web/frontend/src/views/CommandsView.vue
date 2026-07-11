@@ -112,6 +112,39 @@
                   />
                 </div>
               </div>
+
+              <!-- Command-specific options (e.g. /map's URL) -->
+              <div v-if="optionSpecs(cmd.name).length" class="cmd-options">
+                <div
+                  v-for="opt in optionSpecs(cmd.name)"
+                  :key="opt.key"
+                  class="cmd-ctl"
+                >
+                  <span class="cmd-ctl-label muted small">{{ opt.label }}</span>
+                  <SelectButton
+                    v-if="opt.type === 'boolean'"
+                    :modelValue="optionValue(cmd.name, opt.key) || 'inherit'"
+                    :options="enabledOptions"
+                    optionLabel="label"
+                    optionValue="value"
+                    :allowEmpty="false"
+                    size="small"
+                    @update:modelValue="
+                      setOption(cmd.name, opt.key, $event === 'inherit' ? '' : $event, 'boolean')
+                    "
+                  />
+                  <InputText
+                    v-else
+                    :modelValue="optionValue(cmd.name, opt.key)"
+                    :placeholder="opt.placeholder ?? ''"
+                    :type="opt.type === 'number' ? 'number' : 'text'"
+                    size="small"
+                    class="cmd-opt-input"
+                    @update:modelValue="setOption(cmd.name, opt.key, $event ?? '', opt.type)"
+                  />
+                  <span v-if="opt.help" class="cmd-opt-help muted small">{{ opt.help }}</span>
+                </div>
+              </div>
             </div>
           </div>
         </AccordionContent>
@@ -285,6 +318,13 @@ export default defineComponent({
 .cmd-name { color: var(--mc-accent); font-family: ui-monospace, monospace; font-size: 13.5px; }
 .cmd-desc { margin: 0; line-height: 1.45; min-height: 2.6em; }
 .cmd-controls { display: flex; flex-direction: column; gap: 9px; margin-top: 2px; }
+.cmd-options {
+  display: flex; flex-direction: column; gap: 9px;
+  margin-top: 10px; padding-top: 10px;
+  border-top: 0.5px solid var(--mc-border);
+}
+.cmd-opt-input { width: 100%; }
+.cmd-opt-help { line-height: 1.35; }
 .cmd-ctl { display: flex; flex-direction: column; gap: 4px; }
 .cmd-ctl-label { letter-spacing: 0.02em; }
 .cmd-ctl :deep(.p-selectbutton) { display: flex; }

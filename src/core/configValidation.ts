@@ -185,8 +185,28 @@ export function validateCandidateConfig(
           errors.push(`  - ${label}.${cmd}.${key}: must be a boolean`);
         }
       }
-      if (o.url !== undefined && typeof o.url !== "string") {
-        errors.push(`  - ${label}.${cmd}.url: must be a string`);
+      if (o.options !== undefined) {
+        if (
+          typeof o.options !== "object" ||
+          o.options === null ||
+          Array.isArray(o.options)
+        ) {
+          errors.push(`  - ${label}.${cmd}.options: must be an object`);
+        } else {
+          for (const [k, v] of Object.entries(
+            o.options as Record<string, unknown>,
+          )) {
+            if (
+              typeof v !== "string" &&
+              typeof v !== "number" &&
+              typeof v !== "boolean"
+            ) {
+              errors.push(
+                `  - ${label}.${cmd}.options.${k}: must be a string, number, or boolean`,
+              );
+            }
+          }
+        }
       }
     }
   };

@@ -36,7 +36,9 @@ export function registerStaticFrontend(app: FastifyInstance): void {
   // ── Static frontend (everything unmatched) ──
   app.setNotFoundHandler(async (req, reply) => {
     if (req.method !== "GET" || req.url.startsWith("/api")) {
-      return reply.code(404).send({ error: "not found" });
+      return reply.code(404).send({
+        error: `No such endpoint: ${req.method} ${req.url.split("?")[0]}`,
+      });
     }
     const dir = frontendDir();
     // Path traversal guard: resolve and require the dir prefix.
@@ -44,7 +46,7 @@ export function registerStaticFrontend(app: FastifyInstance): void {
     const rel = urlPath === "/" ? "index.html" : urlPath.slice(1);
     const file = path.resolve(dir, rel);
     if (!file.startsWith(dir + path.sep) && file !== path.resolve(dir, "index.html")) {
-      return reply.code(404).send({ error: "not found" });
+      return reply.code(404).send({ error: "Not found." });
     }
     const target = fs.existsSync(file) && fs.statSync(file).isFile()
       ? file

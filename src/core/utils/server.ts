@@ -137,12 +137,23 @@ export class ServerInstance {
 
     // Remote server (no RCON): ask the API wrapper directly
     if (this.config.apiUrl) {
-      try {
-        const { isRunning } = await import("./serverAccess.js");
-        return await isRunning(this.config);
-      } catch {
-        return false;
+      const { isRunning } = await import("./serverAccess.js");
+      // Retry once before declaring offline (mirrors the RCON path above). A
+      // legitimate "not running" comes back as `false` and returns straight
+      // away; only a THROWN request error (timeout, a network blip, or a
+      // momentarily busy wrapper) is treated as transient and retried, so a
+      // single failed request never reports the server as down.
+      const RETRY_DELAY_MS = 500;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        if (attempt > 0)
+          await new Promise<void>((r) => setTimeout(r, RETRY_DELAY_MS));
+        try {
+          return await isRunning(this.config);
+        } catch {
+          // transient — retry once, then fall through to offline
+        }
       }
+      return false;
     }
 
     // Local server without RCON: check screen session

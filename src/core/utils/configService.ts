@@ -24,6 +24,7 @@ import {
   type ConfigValidationResult,
 } from "../config.js";
 import { log } from "./logger.js";
+import { snapshotConfig, type SnapshotMeta } from "./configHistory.js";
 import type { RawBotConfig } from "../types/index.js";
 
 /** Raw on-disk config (no env overrides, no variables.txt resolution). */
@@ -62,6 +63,7 @@ export function validateCandidate(
  */
 export async function writeConfig(
   candidate: RawBotConfig,
+  meta?: SnapshotMeta,
 ): Promise<{ warnings: string[] }> {
   const result = validateCandidateConfig(candidate);
   if (!result.valid) {
@@ -72,6 +74,14 @@ export async function writeConfig(
 
   const configPath = getConfigPath();
   const json = JSON.stringify(candidate, null, 2) + "\n";
+
+  // Read the config we're about to replace, for rollback history.
+  let previous: string | null = null;
+  try {
+    previous = await fsPromises.readFile(configPath, "utf-8");
+  } catch {
+    // no existing config yet — nothing to snapshot
+  }
 
   // Write-then-rename so a crash can never leave a truncated config.json.
   // This requires the config to live on a writable, process-owned path on a
@@ -99,6 +109,10 @@ export async function writeConfig(
         `from the dashboard.`,
     );
   }
+
+  // Record the replaced config into rollback history (best-effort — never
+  // fails the write). Skipped on the first write (no previous config).
+  if (previous !== null) snapshotConfig(previous, meta);
 
   log.info("config", `config.json updated programmatically (${configPath})`);
   return { warnings: result.warnings };

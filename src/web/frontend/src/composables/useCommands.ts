@@ -11,11 +11,20 @@ export interface ManifestEntry {
 export interface Override {
   enabled?: boolean;
   adminOnly?: boolean;
+  options?: Record<string, string | number | boolean>;
   [key: string]: unknown;
+}
+export interface CommandOptionSpec {
+  key: string;
+  type: "string" | "number" | "boolean";
+  label: string;
+  placeholder?: string;
+  help?: string;
 }
 export interface CommandsResponse {
   manifest: { slash: ManifestEntry[]; ingame: ManifestEntry[] };
   scopes: { guildIds: string[]; serverIds: string[] };
+  commandOptions: Record<string, CommandOptionSpec[]>;
   overrides: {
     global: Record<string, Override>;
     guilds: Record<string, Record<string, Override>>;
@@ -87,6 +96,43 @@ export function useCommands() {
     return data.value?.effective[name]?.[scope.value] ?? null;
   }
 
+  /** Which options a command exposes (map → [url], etc.). */
+  function optionSpecs(name: string): CommandOptionSpec[] {
+    return data.value?.commandOptions?.[name] ?? [];
+  }
+
+  /** Current value of a command option at this scope, as a string for inputs. */
+  function optionValue(name: string, key: string): string {
+    const v = currentBlock()[name]?.options?.[key];
+    return v === undefined ? "" : String(v);
+  }
+
+  /** Set/clear a command option (empty string clears it → inherits). */
+  function setOption(
+    name: string,
+    key: string,
+    raw: string,
+    type: "string" | "number" | "boolean",
+  ): void {
+    const block = currentBlock();
+    const entry = (block[name] ??= {});
+    const opts = (entry.options ??= {});
+    const trimmed = raw.trim();
+    if (trimmed === "") {
+      delete opts[key];
+    } else {
+      opts[key] =
+        type === "number"
+          ? Number(trimmed)
+          : type === "boolean"
+            ? trimmed === "true"
+            : trimmed;
+    }
+    if (Object.keys(opts).length === 0) delete entry.options;
+    if (Object.keys(entry).length === 0) delete block[name];
+    dirty.value = true;
+  }
+
   async function save(): Promise<void> {
     saving.value = true;
     try {
@@ -132,5 +178,6 @@ export function useCommands() {
   return {
     loadError, saving, dirty, scope, data, overrides,
     load, currentBlock, fieldValue, setField, effectiveFor, save,
+    optionSpecs, optionValue, setOption,
   };
 }

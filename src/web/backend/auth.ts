@@ -323,7 +323,9 @@ export async function requireSession(
 ): Promise<void> {
   const session = sessionFromRequest(req);
   if (!session) {
-    await reply.code(401).send({ error: "unauthorized" });
+    await reply.code(401).send({
+      error: "You're not signed in. Log in with Discord to continue.",
+    });
     return;
   }
   (req as FastifyRequest & { session: Session }).session = session;
@@ -336,11 +338,16 @@ export async function requireSysadmin(
 ): Promise<void> {
   const session = sessionFromRequest(req);
   if (!session) {
-    await reply.code(401).send({ error: "unauthorized" });
+    await reply.code(401).send({
+      error: "You're not signed in. Log in with Discord to continue.",
+    });
     return;
   }
   if (!isSysadmin(session)) {
-    await reply.code(403).send({ error: "forbidden", detail: "Sysadmin access required." });
+    await reply.code(403).send({
+      error:
+        "Sysadmin access required — your Discord account must be listed in adminUsers.",
+    });
     return;
   }
   (req as FastifyRequest & { session: Session }).session = session;

@@ -49,7 +49,7 @@ export function registerSetupRoutes(app: FastifyInstance): void {
       return { guilds };
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
-      return reply.code(statusFor(err)).send({ error: "discord_error", detail });
+      return reply.code(statusFor(err)).send({ error: `Couldn't reach Discord: ${detail}` });
     }
   });
 
@@ -59,14 +59,14 @@ export function registerSetupRoutes(app: FastifyInstance): void {
     async (req, reply) => {
       const session = sessionFromRequest(req)!;
       if (!canManageGuild(session, req.params.id)) {
-        return reply.code(403).send({ error: "forbidden", detail: "You don't manage that guild." });
+        return reply.code(403).send({ error: "You don't manage that guild." });
       }
       try {
         const channels = await listGuildChannels(req.params.id);
         return { channels };
       } catch (err) {
         const detail = err instanceof Error ? err.message : String(err);
-        return reply.code(statusFor(err)).send({ error: "discord_error", detail });
+        return reply.code(statusFor(err)).send({ error: `Couldn't reach Discord: ${detail}` });
       }
     },
   );
@@ -77,14 +77,14 @@ export function registerSetupRoutes(app: FastifyInstance): void {
     async (req, reply) => {
       const session = sessionFromRequest(req)!;
       if (!canManageGuild(session, req.params.id)) {
-        return reply.code(403).send({ error: "forbidden", detail: "You don't manage that guild." });
+        return reply.code(403).send({ error: "You don't manage that guild." });
       }
       try {
         const roles = await listGuildRoles(req.params.id);
         return { roles };
       } catch (err) {
         const detail = err instanceof Error ? err.message : String(err);
-        return reply.code(statusFor(err)).send({ error: "discord_error", detail });
+        return reply.code(statusFor(err)).send({ error: `Couldn't reach Discord: ${detail}` });
       }
     },
   );
@@ -95,7 +95,7 @@ export function registerSetupRoutes(app: FastifyInstance): void {
   app.get("/api/setup/servers", async (req, reply) => {
     const session = sessionFromRequest(req)!;
     if (!isSysadmin(session)) {
-      return reply.code(403).send({ error: "forbidden", detail: "Sysadmin access required." });
+      return reply.code(403).send({ error: "Sysadmin access required — this needs a bot super-admin." });
     }
     const cfg = readRawConfig();
     return { servers: Object.keys(cfg.servers ?? {}) };
