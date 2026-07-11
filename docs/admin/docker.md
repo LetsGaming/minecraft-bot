@@ -60,15 +60,14 @@ cp config_structure.json config.json
 # Fill it in; see admin/configuration.md for the full reference
 ```
 
-In `docker-compose.yml`, switch the volume mount:
+Then point `.env` at it — no compose edits:
 
-```yaml
-volumes:
-  # Comment out the template line:
-  # - ./config.template.json:/app/config.template.json:ro
-  # Uncomment the static line:
-  - ./config.json:/app/config.json:ro
+```bash
+# in .env
+MCBOT_CONFIG_FILE=./config.json
 ```
+
+`docker compose up -d` seeds that file (copied as-is) into the data/ volume on first start. To re-seed after changing it, clear the copy in the volume: `docker compose exec bot rm /app/data/config.json` and restart.
 
 Then `docker compose up -d`.
 
@@ -151,7 +150,7 @@ docker compose logs --tail=20 web
 
 Common causes:
 
-- **`Failed to load config.json: … token: required string … clientId: required string`** — the container is generating `config.json` from `config.template.json` via `envsubst`, but `DISCORD_TOKEN` / `DISCORD_CLIENT_ID` are empty in `.env`, so the template expands to blank required fields. This is the usual symptom of building a `config.json` with the wizard but leaving the compose volume on the **template** mount. Fix one of two ways: **(A)** use your wizard-built file — in *both* the `bot` and `web` services, comment out the `config.template.json` line and uncomment `- ./config.json:/app/config.json:ro`, then `docker compose --profile web up -d --build`; or **(B)** stay on the template and fill in `DISCORD_TOKEN` / `DISCORD_CLIENT_ID` / `DISCORD_ADMIN_USER_ID` in `.env`. Note the bot container can look healthy while the web one fails here, because the bot's `config.json` was generated on an earlier build when `.env` still had values — both services read the same config, so fix it for both.
+- **`Failed to load config.json: … token: required string … clientId: required string`** — the container seeded `config.json` from `config.template.json` via `envsubst`, but `DISCORD_TOKEN` / `DISCORD_CLIENT_ID` were empty in `.env`, so the template expanded to blank required fields. Fix one of two ways: **(A)** fill in `DISCORD_TOKEN` / `DISCORD_CLIENT_ID` / `DISCORD_ADMIN_USER_ID` in `.env`; or **(B)** use a hand-written config by setting `MCBOT_CONFIG_FILE=./config.json` in `.env`. Either way the seed already landed in the data/ volume, so clear it and restart to re-seed: `docker compose exec bot rm /app/data/config.json && docker compose up -d`. The bot and web containers share that one config, so this fixes both at once.
 - **`Failed to open the SQLite store: better-sqlite3 failed to load …`** — the native binding did not build for this image. The compose file sets `MCBOT_SQLITE_DRIVER=node` on the web service precisely to avoid this (the dashboard runs on Node 24 and uses the built-in `node:sqlite` driver — same store format, no native build). If you removed that line, put it back and rebuild: `docker compose up -d --build web`.
 - **`Dashboard is disabled …`** — `config.json` is missing `"webui": { "enabled": true }`. Re-run `node scripts/setup.mjs --edit`, enable the dashboard, and rebuild.
 
