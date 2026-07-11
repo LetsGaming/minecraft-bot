@@ -3,6 +3,7 @@ import { loadConfig, reloadConfig } from "@mcbot/core/config.js";
 import { summarizeConfigChanges } from "@mcbot/core/utils/configDiff.js";
 import { reconcileServers } from "../../logWatcher/initMinecraftCommands.js";
 import { createEmbed, createSuccessEmbed } from "../../utils/embedUtils.js";
+import { EmbedColor } from "../../utils/embedColors.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { recordAdminAction } from "@mcbot/core/utils/adminAudit.js";
@@ -149,7 +150,7 @@ export const execute = withErrorHandling(
 
     const embed = createEmbed({
       title: "⚙️ Bot Configuration",
-      color: 0x5865f2,
+      color: EmbedColor.Blurple,
     });
 
     embed.addFields(

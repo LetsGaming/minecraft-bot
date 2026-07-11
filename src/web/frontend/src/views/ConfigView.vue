@@ -49,6 +49,7 @@
         :key="key"
         :name="String(key)"
         :schema="propSchema"
+        :definitions="schema?.definitions"
         :model-value="model[key]"
         @update:model-value="setTop(String(key), $event)"
       />
@@ -66,6 +67,7 @@ import Textarea from "primevue/textarea";
 import ToggleSwitch from "primevue/toggleswitch";
 import Message from "primevue/message";
 import SchemaField from "../components/SchemaField.vue";
+import { derefNode } from "../components/schemaField";
 import ViewHeader from "../components/ViewHeader.vue";
 import { useConfig } from "../composables/useConfig";
 
@@ -77,7 +79,9 @@ export default defineComponent({
   },
   computed: {
     topLevelProps(): Record<string, unknown> {
-      return this.schema?.properties ?? {};
+      // The generated schema is a root `$ref` (topRef) to RawBotConfig, so
+      // resolve it before reading properties — otherwise the form is empty.
+      return derefNode(this.schema, this.schema?.definitions).properties ?? {};
     },
   },
   async mounted() {

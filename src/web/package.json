@@ -6,6 +6,7 @@
   "description": "The web dashboard — an optional extension of the bot. Backend (Fastify) and frontend (Vue SPA) are one unit: one package, one build, one artifact. Runs with or without the bot; never imports it.",
   "main": "dist/backend/index.js",
   "dependencies": {
+    "@fastify/helmet": "^13.1.0",
     "@mcbot/core": "*",
     "@mcbot/schema": "*",
     "@primevue/themes": "^4.5.4",

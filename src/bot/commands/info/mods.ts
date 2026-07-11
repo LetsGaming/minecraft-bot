@@ -13,6 +13,7 @@
 
 import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embedUtils.js";
+import { EmbedColor } from "../../utils/embedColors.js";
 import { getModList, type ModInfo } from "@mcbot/core/utils/modUtils.js";
 import { withErrorHandling } from "../middleware.js";
 import { resolveServer } from "../../utils/guildRouter.js";
@@ -97,7 +98,7 @@ export const execute = withErrorHandling(async (interaction) => {
   const embed = createEmbed({
     title: `🧩 Installed Mods — ${server.id}`,
     description: `**${total}** mods installed`,
-    color: 0x1bd96a, // Modrinth green
+    color: EmbedColor.Modrinth, // Modrinth green
   });
 
   addModFields(embed, "📦 Client + Server", modList.clientAndServer);

@@ -102,6 +102,24 @@ describe("writeConfig", () => {
     expect(fs.existsSync(configPath)).toBe(true);
     expect(fs.existsSync(`${configPath}.bak`)).toBe(false);
   });
+
+  it("maps an unwritable config path to an actionable error [BUG-04]", async () => {
+    // The shipped Docker failure was a raw EACCES (config at a root-owned /
+    // read-only path) surfacing as an opaque 500. A path under a nonexistent
+    // parent reproduces the write failure regardless of the test's uid (root
+    // bypasses chmod), and the mapped error must point at the real fix.
+    const unwritable = path.join(dir, "does-not-exist", "config.json");
+    mocks.getConfigPath.mockReturnValue(unwritable);
+
+    await expect(
+      writeConfig({ token: "t", clientId: "c" } as never),
+    ).rejects.toThrow(/writable path/);
+    await expect(
+      writeConfig({ token: "t", clientId: "c" } as never),
+    ).rejects.toThrow(/MCBOT_CONFIG_PATH/);
+    // No stray temp file left behind by the failed write.
+    expect(fs.existsSync(`${unwritable}.tmp`)).toBe(false);
+  });
 });
 
 describe("readRawConfig / validateCandidate", () => {

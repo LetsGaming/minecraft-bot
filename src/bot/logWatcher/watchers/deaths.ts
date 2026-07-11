@@ -1,5 +1,6 @@
 import { type Client } from "discord.js";
 import { createPlayerEmbed } from "../../utils/embedUtils.js";
+import { EmbedColor } from "../../utils/embedColors.js";
 import type { ILogWatcher } from "../logWatcher.js";
 import type { GuildConfig } from "@mcbot/core/types/index.js";
 import { broadcastNotification, PLAYER_NAME } from "./notifyGuilds.js";
@@ -120,7 +121,7 @@ export function registerDeathWatcher(
         createPlayerEmbed(player, {
           title: "☠️ Death",
           description: deathMessage,
-          color: 0xff5555,
+          color: EmbedColor.Error,
           ...(withServerFooter ? { footer: { text: serverId } } : {}),
         }),
     });

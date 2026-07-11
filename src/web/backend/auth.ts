@@ -26,6 +26,12 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 export const SESSION_COOKIE = "mcbot_session";
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const STATE_TTL_MS = 10 * 60 * 1000;
+// Guild-manager permissions are captured at login and can't be re-derived
+// mid-session (the OAuth token isn't stored). Trust that captured scope for
+// writes only this long, so a demoted manager loses config-write access
+// within the window instead of for the full session TTL (SEC-03). Sysadmin
+// status is re-derived per request from config, so sysadmins are unaffected.
+const GUILD_SCOPE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 export interface Session {
   uid: string;
@@ -33,6 +39,9 @@ export interface Session {
   exp: number;
   /** Guild IDs this user can manage (Discord perms), captured at login. */
   guilds: string[];
+  /** When the captured guild scope stops being trusted for writes (SEC-03).
+   *  Optional: cookies issued before this field existed lack it. */
+  gexp?: number;
 }
 
 function sessionSecret(): string {
@@ -114,6 +123,16 @@ export function isSysadmin(session: Session): boolean {
  */
 export function canManageGuild(session: Session, guildId: string): boolean {
   return isSysadmin(session) || session.guilds.includes(guildId);
+}
+
+/**
+ * Is the caller's captured guild scope still fresh enough to authorize a
+ * guild-config WRITE (SEC-03)? A missing gexp (cookie predates this check)
+ * counts as stale — fail closed, prompting a re-login that re-derives current
+ * membership. Reads keep using canManageGuild; only mutations require freshness.
+ */
+export function guildScopeFresh(session: Session): boolean {
+  return typeof session.gexp === "number" && session.gexp > Date.now();
 }
 
 /**
@@ -276,6 +295,7 @@ export function setSessionCookie(reply: FastifyReply, user: {
     tag: user.tag,
     guilds: user.guildIds,
     exp: Date.now() + SESSION_TTL_MS,
+    gexp: Date.now() + GUILD_SCOPE_TTL_MS,
   };
   const secure = publicBaseUrl().startsWith("https://") ? "; Secure" : "";
   reply.header(

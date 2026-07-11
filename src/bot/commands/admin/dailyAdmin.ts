@@ -18,6 +18,7 @@ import {
   createSuccessEmbed,
   createEmbed,
 } from "../../utils/embedUtils.js";
+import { EmbedColor } from "../../utils/embedColors.js";
 import {
   loadClaimedStore,
   saveClaimedStore,
@@ -192,7 +193,7 @@ export const execute = withErrorHandling(
       title: t("dailyAdmin.showTitle", { user: user.tag }),
       description:
         lines.length > 0 ? lines.join("\n") : t("dailyAdmin.showNone"),
-      color: 0x3498db,
+      color: EmbedColor.Info,
     });
     await interaction.editReply({ embeds: [embed] });
   }),

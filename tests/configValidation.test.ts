@@ -136,3 +136,58 @@ describe("validateCandidateConfig — server scope lists", () => {
     ).toHaveLength(0);
   });
 });
+
+describe("validateCandidateConfig — notifications events (BUG-05)", () => {
+  it("warns when a channel is set but events is an explicit empty list", () => {
+    const result = validateCandidateConfig({
+      ...base,
+      guilds: { g1: { notifications: { channelId: "c1", events: [] } } },
+    });
+    expect(result.valid).toBe(true);
+    const w = result.warnings.join("\n");
+    expect(w).toContain("notifications");
+    expect(w).toContain("no messages will be sent");
+  });
+
+  it("does not warn when events is omitted (dispatcher uses the default set)", () => {
+    const result = validateCandidateConfig({
+      ...base,
+      guilds: { g1: { notifications: { channelId: "c1" } } },
+    });
+    expect(result.valid).toBe(true);
+    expect(
+      result.warnings.filter((x) => x.includes("notifications")),
+    ).toHaveLength(0);
+  });
+
+  it("warns on an unknown event key that would never match", () => {
+    const result = validateCandidateConfig({
+      ...base,
+      guilds: { g1: { notifications: { channelId: "c1", events: ["advancment"] } } },
+    });
+    expect(result.valid).toBe(true);
+    const w = result.warnings.join("\n");
+    expect(w).toContain("unknown event");
+    expect(w).toContain("advancment");
+  });
+
+  it("accepts a valid non-default event key without warning", () => {
+    const result = validateCandidateConfig({
+      ...base,
+      guilds: { g1: { notifications: { channelId: "c1", events: ["milestone"] } } },
+    });
+    expect(result.valid).toBe(true);
+    expect(
+      result.warnings.filter((x) => x.includes("unknown event")),
+    ).toHaveLength(0);
+  });
+
+  it("rejects a non-array events value", () => {
+    const result = validateCandidateConfig({
+      ...base,
+      guilds: { g1: { notifications: { channelId: "c1", events: "join" } } },
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors.join("\n")).toContain("notifications.events");
+  });
+});

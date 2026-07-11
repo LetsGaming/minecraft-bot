@@ -16,6 +16,7 @@
  *   clobber each other; documented as F3 in the 4.0 rework).
  */
 import { getDb, withTransaction } from "../db/index.js";
+import { mapRows, col } from "../db/rows.js";
 import type { LinkCodesMap, LinkedAccountsMap } from "../types/index.js";
 
 export const LINK_CODE_TTL_MS = 5 * 60 * 1000;
@@ -23,9 +24,13 @@ export const LINK_CODE_TTL_MS = 5 * 60 * 1000;
 // ── Legacy map API (readers + whole-map writers) ──────────────────────────
 
 export async function loadLinkedAccounts(): Promise<LinkedAccountsMap> {
-  const rows = getDb()
-    .prepare("SELECT discord_id, mc_name FROM linked_accounts")
-    .all() as unknown as Array<{ discord_id: string; mc_name: string }>;
+  const rows = mapRows(
+    getDb().prepare("SELECT discord_id, mc_name FROM linked_accounts"),
+    (r) => ({
+      discord_id: col.text(r, "discord_id"),
+      mc_name: col.text(r, "mc_name"),
+    }),
+  );
   const map: LinkedAccountsMap = {};
   for (const r of rows) map[r.discord_id] = r.mc_name;
   return map;
@@ -47,14 +52,17 @@ export async function saveLinkedAccounts(
 }
 
 export async function loadLinkCodes(): Promise<LinkCodesMap> {
-  const rows = getDb()
-    .prepare("SELECT code, discord_id, expires, confirmed FROM link_codes")
-    .all() as unknown as Array<{
-    code: string;
-    discord_id: string;
-    expires: number;
-    confirmed: number;
-  }>;
+  const rows = mapRows(
+    getDb().prepare(
+      "SELECT code, discord_id, expires, confirmed FROM link_codes",
+    ),
+    (r) => ({
+      code: col.text(r, "code"),
+      discord_id: col.text(r, "discord_id"),
+      expires: col.int(r, "expires"),
+      confirmed: col.int(r, "confirmed"),
+    }),
+  );
   const map: LinkCodesMap = {};
   for (const r of rows) {
     map[r.code] = {
@@ -120,15 +128,17 @@ export async function issueLinkCode(
       .get(discordId);
     if (linkedRow) return { status: "already-linked" } as const;
 
-    const rows = db
-      .prepare(
+    const rows = mapRows(
+      db.prepare(
         "SELECT code, expires, confirmed FROM link_codes WHERE discord_id = ?",
-      )
-      .all(discordId) as unknown as Array<{
-      code: string;
-      expires: number;
-      confirmed: number;
-    }>;
+      ),
+      (r) => ({
+        code: col.text(r, "code"),
+        expires: col.int(r, "expires"),
+        confirmed: col.int(r, "confirmed"),
+      }),
+      discordId,
+    );
 
     for (const row of rows) {
       if (row.expires > now && row.confirmed === 0) {

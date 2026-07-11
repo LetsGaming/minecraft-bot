@@ -4,6 +4,7 @@ import {
   createErrorEmbed,
   createSuccessEmbed,
 } from "../../utils/embedUtils.js";
+import { EmbedColor } from "../../utils/embedColors.js";
 import { resolveServer } from "../../utils/guildRouter.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { suppressAlerts } from "../../logWatcher/watchers/downtimeMonitor.js";
@@ -194,7 +195,7 @@ export const execute = withErrorHandling(
                 `${orphans.length} stats file(s) belong to players not on the whitelist:\n` +
                 `\`\`\`\n${orphans.slice(0, 20).join("\n")}${orphans.length > 20 ? "\n..." : ""}\n\`\`\`\n` +
                 `Re-run with \`confirm: true\` to delete them permanently.`,
-              color: 0xffaa00,
+              color: EmbedColor.Warning,
             }),
           ],
         }));
@@ -237,7 +238,7 @@ export const execute = withErrorHandling(
             sub === "start"
               ? "Executing start script..."
               : "This may take up to 40 seconds (countdown + save)...",
-          color: 0xffaa00,
+          color: EmbedColor.Warning,
         }),
       ],
     });

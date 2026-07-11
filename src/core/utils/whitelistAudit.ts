@@ -9,6 +9,7 @@
  */
 import { formatDatetime } from "./time.js";
 import { getDb } from "../db/index.js";
+import { mapRow, mapRows, col } from "../db/rows.js";
 import type { WhitelistAuditEntry, WhitelistAuditMap } from "../types/index.js";
 
 interface AuditRow {
@@ -23,6 +24,28 @@ interface AuditRow {
   removed_by_id: string | null;
   removed_at: string | null;
   removed_from_server: string | null;
+}
+
+// Explicit column list (never SELECT *) shared by both read paths so the
+// mapper and the query can't drift apart.
+const AUDIT_COLUMNS =
+  "username_lower, username, uuid, added_by, added_by_id, added_at, " +
+  "server, removed_by, removed_by_id, removed_at, removed_from_server";
+
+function toAuditRow(r: Record<string, unknown>): AuditRow {
+  return {
+    username_lower: col.text(r, "username_lower"),
+    username: col.textOrNull(r, "username"),
+    uuid: col.textOrNull(r, "uuid"),
+    added_by: col.textOrNull(r, "added_by"),
+    added_by_id: col.textOrNull(r, "added_by_id"),
+    added_at: col.textOrNull(r, "added_at"),
+    server: col.textOrNull(r, "server"),
+    removed_by: col.textOrNull(r, "removed_by"),
+    removed_by_id: col.textOrNull(r, "removed_by_id"),
+    removed_at: col.textOrNull(r, "removed_at"),
+    removed_from_server: col.textOrNull(r, "removed_from_server"),
+  };
 }
 
 function rowToEntry(r: AuditRow): WhitelistAuditEntry {
@@ -42,9 +65,10 @@ function rowToEntry(r: AuditRow): WhitelistAuditEntry {
 
 /** Load the whole audit trail as the legacy map shape (lowercased keys). */
 export async function loadAudit(): Promise<WhitelistAuditMap> {
-  const rows = getDb()
-    .prepare("SELECT * FROM whitelist_audit")
-    .all() as unknown as AuditRow[];
+  const rows = mapRows(
+    getDb().prepare(`SELECT ${AUDIT_COLUMNS} FROM whitelist_audit`),
+    toAuditRow,
+  );
   const map: WhitelistAuditMap = {};
   for (const r of rows) map[r.username_lower] = rowToEntry(r);
   return map;
@@ -114,8 +138,11 @@ export async function recordRemove(
 export async function getAuditEntry(
   username: string,
 ): Promise<WhitelistAuditEntry | null> {
-  const row = getDb()
-    .prepare("SELECT * FROM whitelist_audit WHERE username_lower = ?")
-    .get(username.toLowerCase()) as AuditRow | undefined;
-  return row ? rowToEntry(row) : null;
+  return mapRow(
+    getDb().prepare(
+      `SELECT ${AUDIT_COLUMNS} FROM whitelist_audit WHERE username_lower = ?`,
+    ),
+    (r) => rowToEntry(toAuditRow(r)),
+    username.toLowerCase(),
+  );
 }

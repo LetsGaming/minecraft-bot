@@ -265,8 +265,9 @@
         "events": {
           "type": "array",
           "items": {
-            "type": "string"
-          }
+            "$ref": "#/definitions/NotificationEvent"
+          },
+          "description": "Which events to post. Omit to receive the default set (the dispatcher treats an absent list as DEFAULT_NOTIFICATION_EVENTS); an explicit empty list receives nothing."
         },
         "server": {
           "$ref": "#/definitions/ServerScope",
@@ -274,6 +275,21 @@
         }
       },
       "additionalProperties": false
+    },
+    "NotificationEvent": {
+      "type": "string",
+      "enum": [
+        "join",
+        "leave",
+        "death",
+        "advancement",
+        "challenge",
+        "milestone",
+        "start",
+        "stop",
+        "scheduledRestart"
+      ],
+      "description": "One of the broadcastable notification event keys."
     },
     "ServerScope": {
       "anyOf": [

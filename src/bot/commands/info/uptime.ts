@@ -1,5 +1,6 @@
 import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embedUtils.js";
+import { EmbedColor } from "../../utils/embedColors.js";
 import { getAllInstances } from "@mcbot/core/utils/server.js";
 import {
   resolveServer,
@@ -70,7 +71,7 @@ export const execute = withErrorHandling(async (interaction) => {
   // Multi-server overview
   const embed = createEmbed({
     title: "📈 Server Uptime",
-    color: 0x00bfff,
+    color: EmbedColor.Info,
   });
 
   for (const server of instances) {
@@ -113,10 +114,10 @@ function buildSingleEmbed(
     description: `${state}${since}`,
     color:
       stats.currentState === "online"
-        ? 0x55ff55
+        ? EmbedColor.Success
         : stats.currentState === "offline"
-          ? 0xff5555
-          : 0x888888,
+          ? EmbedColor.Error
+          : EmbedColor.Neutral,
   });
 
   embed.addFields(

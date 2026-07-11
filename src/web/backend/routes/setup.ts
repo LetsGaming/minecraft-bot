@@ -18,16 +18,21 @@ import {
   listBotGuilds,
   listGuildChannels,
   listGuildRoles,
+  DiscordApiError,
 } from "../discordRest.js";
 import { sessionFromRequest, isSysadmin, canManageGuild } from "../auth.js";
 
+// Map a failed Discord read to the HTTP status we return. Switches on the
+// typed DiscordApiError discriminator rather than matching error-message
+// substrings, which silently broke whenever the wording changed (QUAL-11).
 function statusFor(err: unknown): number {
-  const msg = err instanceof Error ? err.message : String(err);
-  if (msg.includes("rate limit")) return 429;
-  if (msg.includes("token is not configured")) return 503;
-  if (msg.includes("(403)")) return 403;
-  if (msg.includes("(404)")) return 404;
-  return 502; // upstream Discord error
+  if (err instanceof DiscordApiError) {
+    if (err.reason === "no-token") return 503;
+    if (err.reason === "rate-limit") return 429;
+    if (err.status === 403 || err.status === 404) return err.status;
+    return 502; // other upstream Discord error
+  }
+  return 502; // network / unknown
 }
 
 export function registerSetupRoutes(app: FastifyInstance): void {

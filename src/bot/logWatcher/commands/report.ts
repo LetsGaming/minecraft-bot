@@ -15,6 +15,7 @@ import { defineCommand } from "../defineCommand.js";
 import { loadConfig } from "@mcbot/core/config.js";
 import { serverInScope } from "../../utils/guildRouter.js";
 import { createPlayerEmbed } from "../../utils/embedUtils.js";
+import { EmbedColor } from "../../utils/embedColors.js";
 import { stripControlChars } from "@mcbot/core/utils/sanitize.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { log } from "@mcbot/core/utils/logger.js";
@@ -50,7 +51,7 @@ const cmd = defineCommand({
         const embed = createPlayerEmbed(username, {
           title: t("report.embedTitle", { player: username }),
           description: text,
-          color: 0xffa500,
+          color: EmbedColor.Warning,
           footer: { text: server.id },
         });
 

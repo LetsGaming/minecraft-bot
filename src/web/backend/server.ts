@@ -30,9 +30,12 @@
  * go through configService.writeConfig — never through the bot.
  */
 import Fastify, { type FastifyInstance } from "fastify";
+import helmet from "@fastify/helmet";
 import { loadConfig } from "@mcbot/core/config.js";
 import { log } from "@mcbot/core/utils/logger.js";
+import { registerErrorHandler } from "./errors.js";
 import { requireSession, requireSysadmin } from "./auth.js";
+import { registerRateLimiting } from "./rateLimit.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerMonitoringRoutes } from "./routes/monitoring.js";
 import { registerConfigRoutes } from "./routes/config.js";
@@ -44,6 +47,43 @@ import { registerStaticFrontend } from "./static.js";
 
 export function buildServer(): FastifyInstance {
   const app = Fastify({ logger: false, trustProxy: true });
+
+  // ── Security headers (SEC-01) ── registered first so they apply to every
+  // response, including the OAuth surface and the static SPA. The CSP is
+  // tuned for this app: PrimeVue injects inline styles (style-src
+  // 'unsafe-inline'), guild icons load from Discord's CDN (img-src), and the
+  // SPA's JS is Vite-bundled from our own origin (script-src 'self', no inline).
+  // frame-ancestors 'none' + X-Frame-Options: DENY close the clickjacking gap.
+  // upgrade-insecure-requests is left off: TLS is terminated by the reverse
+  // proxy in front (see docker-compose.yml), and forcing it would break a
+  // plain-http internal/dev deployment.
+  void app.register(helmet, {
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "https://cdn.discordapp.com"],
+        connectSrc: ["'self'"],
+        frameAncestors: ["'none'"],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        upgradeInsecureRequests: null,
+      },
+    },
+    frameguard: { action: "deny" },
+  });
+
+  // ── Rate limiting (SEC-02) ── one shared token-bucket over /auth/* and
+  // mutating /api/* (see rateLimit.ts). Runs before the auth gate so login
+  // and write abuse is rejected early.
+  registerRateLimiting(app);
+
+  // ── Central error handler (QUAL-10) ── one place maps thrown failures to a
+  // consistent response: typed HttpErrors render at their status; unexpected
+  // faults become a generic 500 with the detail logged, never leaked.
+  registerErrorHandler(app);
 
   // ── Auth (the only routes outside the session gate) ──
   registerAuthRoutes(app);

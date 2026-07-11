@@ -5,6 +5,7 @@
  */
 import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embedUtils.js";
+import { EmbedColor } from "../../utils/embedColors.js";
 import { resolveServer } from "../../utils/guildRouter.js";
 import { withErrorHandling } from "../middleware.js";
 import {
@@ -50,7 +51,7 @@ export const execute = withErrorHandling(async (interaction) => {
       `${t("activity.peak", { peak })}\n\n` +
       `${t("activity.busiest", { tz: TZ })}\n` +
       (busyLines.length > 0 ? busyLines.join("\n") : t("activity.noBusyData")),
-    color: 0x00bfff,
+    color: EmbedColor.Info,
     footer: { text: server.id },
   });
 

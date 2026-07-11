@@ -1,4 +1,5 @@
 import { getDb, withTransaction } from "../db/index.js";
+import { mapRows, col } from "../db/rows.js";
 import type { UptimeStats } from "../types/index.js";
 
 export type { UptimeStats };
@@ -92,11 +93,13 @@ export function buildSparkline(
 }
 
 export async function getUptimeStats(serverId: string): Promise<UptimeStats> {
-  const entries = getDb()
-    .prepare(
+  const entries = mapRows(
+    getDb().prepare(
       "SELECT t, up FROM uptime_checks WHERE server_id = ? ORDER BY t ASC",
-    )
-    .all(serverId) as unknown as CheckEntry[];
+    ),
+    (r): CheckEntry => ({ t: col.int(r, "t"), up: col.int(r, "up") }),
+    serverId,
+  );
 
   const now = Date.now();
   const DAY = 24 * 60 * 60 * 1000;

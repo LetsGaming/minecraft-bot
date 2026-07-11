@@ -13,3 +13,7 @@
 export type * from "./config.js";
 export type * from "./stats.js";
 export type * from "./contract.js";
+// Runtime values (the notification-event contract), so the dispatcher, the
+// setup wizard, and the validator import one shared definition — hence a
+// value re-export rather than `export type *`.
+export * from "./notifications.js";

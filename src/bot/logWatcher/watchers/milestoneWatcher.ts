@@ -31,6 +31,7 @@ import {
 import { loadKnownPlayers } from "@mcbot/core/utils/utils.js";
 import { kvGet, kvSet } from "@mcbot/core/db/kv.js";
 import { createEmbed } from "../../utils/embedUtils.js";
+import { EmbedColor } from "../../utils/embedColors.js";
 import { broadcastNotification } from "./notifyGuilds.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { log } from "@mcbot/core/utils/logger.js";
@@ -160,7 +161,7 @@ async function announce(
           value: formatted,
           stat: statLabel,
         }),
-        color: 0xffd700,
+        color: EmbedColor.Gold,
       });
       if (withServerFooter) embed.setFooter({ text: serverId });
       return embed;

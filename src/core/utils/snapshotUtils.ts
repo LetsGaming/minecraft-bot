@@ -9,6 +9,7 @@ import {
   invalidateAllStatsCache,
 } from "./statUtils.js";
 import { getDb, withTransaction } from "../db/index.js";
+import { mapRow, mapRows, col } from "../db/rows.js";
 import type { ServerInstance } from "./server.js";
 import { log } from "./logger.js";
 import type { SnapshotData } from "../types/index.js";
@@ -51,23 +52,30 @@ function flattenedToMap(
 }
 
 function tsList(serverId: string): number[] {
-  return (
-    getDb()
-      .prepare("SELECT ts FROM snapshots WHERE server_id = ? ORDER BY ts ASC")
-      .all(serverId) as unknown as Array<{ ts: number }>
-  ).map((r) => r.ts);
+  return mapRows(
+    getDb().prepare(
+      "SELECT ts FROM snapshots WHERE server_id = ? ORDER BY ts ASC",
+    ),
+    (r) => col.int(r, "ts"),
+    serverId,
+  );
 }
 
 function loadPayload(serverId: string, ts: number): SnapshotData | null {
-  const row = getDb()
-    .prepare("SELECT payload FROM snapshots WHERE server_id = ? AND ts = ?")
-    .get(serverId, ts) as { payload: string } | undefined;
-  if (!row) return null;
-  try {
-    return JSON.parse(row.payload) as SnapshotData;
-  } catch {
-    return null; // unreadable snapshot — treat like an unreadable file
-  }
+  return mapRow(
+    getDb().prepare(
+      "SELECT payload FROM snapshots WHERE server_id = ? AND ts = ?",
+    ),
+    (r) => {
+      try {
+        return col.json<SnapshotData>(r, "payload");
+      } catch {
+        return null; // unreadable snapshot — treat like an unreadable file
+      }
+    },
+    serverId,
+    ts,
+  );
 }
 
 /**
@@ -126,27 +134,33 @@ export async function getSnapshotClosestTo(
   targetTimestamp: number,
 ): Promise<SnapshotData | null> {
   const db = getDb();
-  const hit = db
-    .prepare(
+  const hit = mapRow(
+    db.prepare(
       `SELECT ts FROM snapshots WHERE server_id = ? AND ts <= ?
        ORDER BY ts DESC LIMIT 1`,
-    )
-    .get(serverId, targetTimestamp) as { ts: number } | undefined;
+    ),
+    (r) => col.int(r, "ts"),
+    serverId,
+    targetTimestamp,
+  );
 
   // If every snapshot is newer than the target (bot hasn't been running
   // for a full interval yet), fall back to the oldest available snapshot
   // so the leaderboard shows a partial-period baseline rather than
   // silently showing all-time stats.
-  const fallback = hit
-    ? undefined
-    : (db
-        .prepare(
-          "SELECT ts FROM snapshots WHERE server_id = ? ORDER BY ts ASC LIMIT 1",
-        )
-        .get(serverId) as { ts: number } | undefined);
+  const fallback =
+    hit !== null
+      ? null
+      : mapRow(
+          db.prepare(
+            "SELECT ts FROM snapshots WHERE server_id = ? ORDER BY ts ASC LIMIT 1",
+          ),
+          (r) => col.int(r, "ts"),
+          serverId,
+        );
 
-  const ts = hit?.ts ?? fallback?.ts;
-  if (ts === undefined) return null;
+  const ts = hit ?? fallback;
+  if (ts === null) return null;
   return loadPayload(serverId, ts);
 }
 

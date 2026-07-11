@@ -14,6 +14,7 @@ import { SlashCommandBuilder } from "discord.js";
 import { withErrorHandling } from "../middleware.js";
 import { resolveServer } from "../../utils/guildRouter.js";
 import { createSuccessEmbed, createEmbed } from "../../utils/embedUtils.js";
+import { EmbedColor } from "../../utils/embedColors.js";
 import {
   loadWatchStore,
   saveWatchStore,
@@ -89,7 +90,7 @@ export const execute = withErrorHandling(
       const embed = createEmbed({
         title: t("watch.listTitle"),
         description: lines.length > 0 ? lines.join("\n") : t("watch.listNone"),
-        color: 0x00bfff,
+        color: EmbedColor.Info,
       });
       await interaction.editReply({ embeds: [embed] });
       return;

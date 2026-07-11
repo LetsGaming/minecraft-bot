@@ -11,6 +11,7 @@
  */
 import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embedUtils.js";
+import { EmbedColor } from "../../utils/embedColors.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { resolveServer } from "../../utils/guildRouter.js";
 import { findPlayer } from "@mcbot/core/utils/playerUtils.js";
@@ -173,7 +174,7 @@ export const execute = withErrorHandling(
           createEmbed({
             title: t("note.addedTitle"),
             description: t("note.added", { player: resolved.name }),
-            color: 0x55ff55,
+            color: EmbedColor.Success,
           }),
         ],
       });
@@ -204,7 +205,7 @@ export const execute = withErrorHandling(
               index,
               player: resolved.name,
             }),
-            color: 0x55ff55,
+            color: EmbedColor.Success,
           }),
         ],
       });

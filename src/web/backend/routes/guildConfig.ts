@@ -15,7 +15,7 @@ import {
   configFileHash,
 } from "@mcbot/core/utils/configService.js";
 import { recordAdminAction } from "@mcbot/core/utils/adminAudit.js";
-import { sessionFromRequest, isSysadmin, canManageGuild } from "../auth.js";
+import { sessionFromRequest, isSysadmin, canManageGuild, guildScopeFresh } from "../auth.js";
 import { listBotGuilds } from "../discordRest.js";
 import type { RawBotConfig } from "@mcbot/core/types/index.js";
 
@@ -85,6 +85,16 @@ export function registerGuildConfigRoutes(app: FastifyInstance): void {
     const guildId = req.params.id;
     if (!canManageGuild(session, guildId)) {
       return reply.code(403).send({ error: "forbidden", detail: "You don't manage that guild." });
+    }
+    // A non-sysadmin's captured guild scope must still be fresh to WRITE
+    // (SEC-03): if it has aged out, a demoted manager could otherwise keep
+    // write access for the whole session, so require a re-login to re-derive
+    // current permissions.
+    if (!isSysadmin(session) && !guildScopeFresh(session)) {
+      return reply.code(403).send({
+        error: "forbidden",
+        detail: "Your guild permissions may be out of date — please log in again.",
+      });
     }
 
     const body = req.body as { baseHash?: string; guildConfig?: unknown };

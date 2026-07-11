@@ -14,9 +14,11 @@ import {
   configFileHash,
 } from "@mcbot/core/utils/configService.js";
 import { recordAdminAction } from "@mcbot/core/utils/adminAudit.js";
+import { log } from "@mcbot/core/utils/logger.js";
 import { readCommandManifest } from "@mcbot/core/utils/commandManifest.js";
 import { resolveCommandPolicy } from "@mcbot/core/utils/commandPolicy.js";
 import { sessionFromRequest } from "../auth.js";
+import { HttpError } from "../errors.js";
 import { toSafeConfig, mergeSecretPlaceholders } from "../safeConfig.js";
 import type { RawBotConfig } from "@mcbot/core/types/index.js";
 import type { ConfigWriteRequest } from "@mcbot/schema/contract.js";
@@ -139,7 +141,16 @@ export function registerConfigRoutes(api: FastifyInstance): void {
       return reply.code(422).send({ errors: result.errors });
     }
 
-    await writeConfig(merged);
+    try {
+      await writeConfig(merged);
+    } catch (err) {
+      // writeConfig raises an actionable, operator-facing message (e.g. a
+      // read-only/non-owned config path). Log it and surface it to the
+      // sysadmin editing config rather than falling through to a generic 500.
+      const msg = err instanceof Error ? err.message : "Failed to write config.";
+      log.error("web", `Config write failed: ${msg}`);
+      throw new HttpError(500, msg);
+    }
     const session = sessionFromRequest(req)!;
     await recordAdminAction({
       action: "config write (dashboard)",

@@ -3,6 +3,7 @@ import { log } from "@mcbot/core/utils/logger.js";
 import { serverInScope } from "../../utils/guildRouter.js";
 import { recordCheck } from "@mcbot/core/utils/uptimeTracker.js";
 import { createEmbed } from "../../utils/embedUtils.js";
+import { EmbedColor } from "../../utils/embedColors.js";
 import { roleMention } from "../../utils/alertUtils.js";
 import { fireWatches } from "./watchFirer.js";
 import { t, runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
@@ -129,7 +130,7 @@ async function checkServer(
           sendAlert(client, alertCfg.channelId!, {
             title: t("downtime.upTitle"),
             description: t("downtime.up", { server: server.id }),
-            color: 0x55ff55,
+            color: EmbedColor.Success,
             serverId: server.id,
             mentionRole: alertCfg.mentionRole,
           }),
@@ -188,7 +189,7 @@ async function checkServer(
               server: server.id,
               failures: state.consecutiveFailures,
             }),
-            color: 0xff5555,
+            color: EmbedColor.Error,
             serverId: server.id,
             mentionRole: alertCfg.mentionRole,
           }),

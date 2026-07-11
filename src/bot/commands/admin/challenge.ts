@@ -13,6 +13,7 @@
  */
 import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embedUtils.js";
+import { EmbedColor } from "../../utils/embedColors.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { resolveServer } from "../../utils/guildRouter.js";
 import { recordAdminAction } from "@mcbot/core/utils/adminAudit.js";
@@ -137,7 +138,7 @@ function statusEmbed(challenge: Challenge, serverId: string) {
       status: t(`challenge.status.${challenge.status}`),
     }),
     description: lines.join("\n"),
-    color: challenge.status === "active" ? 0xffd700 : 0x00bfff,
+    color: challenge.status === "active" ? EmbedColor.Gold : EmbedColor.Info,
     footer: { text: serverId },
   });
 }
@@ -184,7 +185,7 @@ export const execute = withErrorHandling(
             description: t("challenge.cancelled", {
               advancement: active.advancement,
             }),
-            color: 0xff5555,
+            color: EmbedColor.Error,
           }),
         ],
       });
@@ -243,7 +244,7 @@ export const execute = withErrorHandling(
           title: t("challenge.startedTitle"),
           description:
             t("challenge.startedEmbed", { advancement }) + rewardLine,
-          color: 0xffd700,
+          color: EmbedColor.Gold,
           ...(withServerFooter ? { footer: { text: server.id } } : {}),
         }),
     });

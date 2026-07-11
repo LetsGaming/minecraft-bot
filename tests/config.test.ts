@@ -135,6 +135,37 @@ describe("loadConfig", () => {
     reloadConfig();
   });
 
+  it("boots when the token is supplied ONLY via env (config omits it) [BUG-01]", () => {
+    // The documented Docker/K8s path: config.json carries no secret, the
+    // token arrives via DISCORD_TOKEN. Validation must see the override, so
+    // env overrides have to run before the required-field check.
+    writeConfig({ clientId: "cid", servers: { s: { serverDir: "/tmp/x" } } });
+    process.env.DISCORD_TOKEN = "secret-from-env";
+    try {
+      const cfg = reloadConfig();
+      expect(cfg.token).toBe("secret-from-env");
+    } finally {
+      delete process.env.DISCORD_TOKEN;
+    }
+  });
+
+  it("still fails boot when the token is absent from both config and env", () => {
+    writeConfig({ clientId: "cid" });
+    delete process.env.DISCORD_TOKEN;
+    expect(() => reloadConfig()).toThrow("token");
+  });
+
+  it("applies an env-only RCON password before validation too", () => {
+    writeConfig({ token: "tok", clientId: "cid", servers: { s: { serverDir: "/tmp/x" } } });
+    process.env.RCON_PASSWORD = "rcon-secret";
+    try {
+      const cfg = reloadConfig();
+      expect(cfg.servers["s"]!.rconPassword).toBe("rcon-secret");
+    } finally {
+      delete process.env.RCON_PASSWORD;
+    }
+  });
+
   it("uses legacy single-server format when no servers key", () => {
     writeConfig({
       token: "tok",

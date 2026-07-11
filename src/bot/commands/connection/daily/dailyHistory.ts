@@ -12,6 +12,7 @@ import {
 } from "@mcbot/core/utils/dailyStore.js";
 import { resolveServer } from "../../../utils/guildRouter.js";
 import { createEmbed } from "../../../utils/embedUtils.js";
+import { EmbedColor } from "../../../utils/embedColors.js";
 import { withErrorHandling } from "../../middleware.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 
@@ -53,7 +54,7 @@ export const execute = withErrorHandling(
     const embed = createEmbed({
       title: t("dailyHistory.title", { server: server.id }),
       description: lines.join("\n"),
-      color: 0x00bfff,
+      color: EmbedColor.Info,
       footer: {
         text: t("dailyHistory.footer", {
           shown: recent.length,

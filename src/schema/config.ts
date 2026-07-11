@@ -1,6 +1,7 @@
 // ── Config types ──────────────────────────────────────────────────────────────
 
 import type { LeaderboardInterval } from "./stats.js";
+import type { NotificationEvent } from "./notifications.js";
 
 export interface RawServerConfig {
   id?: string;
@@ -67,7 +68,12 @@ export type ServerScope = string | string[];
 
 export interface GuildNotificationConfig {
   channelId?: string;
-  events?: string[];
+  /**
+   * Which events to post. Omit to receive the default set (the dispatcher
+   * treats an absent list as DEFAULT_NOTIFICATION_EVENTS); an explicit empty
+   * list receives nothing.
+   */
+  events?: NotificationEvent[];
   /** Which server(s) to receive events from — see ServerScope. */
   server?: ServerScope;
 }

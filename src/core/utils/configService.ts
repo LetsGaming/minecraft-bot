@@ -74,14 +74,31 @@ export async function writeConfig(
   const json = JSON.stringify(candidate, null, 2) + "\n";
 
   // Write-then-rename so a crash can never leave a truncated config.json.
+  // This requires the config to live on a writable, process-owned path on a
+  // single filesystem — in Docker the data/ volume (see MCBOT_CONFIG_PATH).
+  // A raw EACCES/EROFS/EXDEV here (e.g. a root-owned dir or a read-only
+  // single-file bind mount) would otherwise surface to the dashboard as an
+  // opaque 500, so map it to an actionable message and don't leave a stray
+  // temp file behind.
   const tmp = `${configPath}.tmp`;
-  await fsPromises.writeFile(tmp, json);
   try {
-    await fsPromises.copyFile(configPath, `${configPath}.bak`);
-  } catch {
-    // no existing config yet — nothing to back up
+    await fsPromises.writeFile(tmp, json);
+    try {
+      await fsPromises.copyFile(configPath, `${configPath}.bak`);
+    } catch {
+      // no existing config yet — nothing to back up
+    }
+    await fsPromises.rename(tmp, configPath);
+  } catch (err) {
+    await fsPromises.rm(tmp, { force: true }).catch(() => {});
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Failed to write config to ${configPath}: ${reason}. The config must ` +
+        `live on a writable path owned by the bot (in Docker, the data/ ` +
+        `volume — set MCBOT_CONFIG_PATH); a read-only mount cannot be edited ` +
+        `from the dashboard.`,
+    );
   }
-  await fsPromises.rename(tmp, configPath);
 
   log.info("config", `config.json updated programmatically (${configPath})`);
   return { warnings: result.warnings };

@@ -1,5 +1,6 @@
 import { type Client } from "discord.js";
 import { createPlayerEmbed, createEmbed } from "../../utils/embedUtils.js";
+import { EmbedColor } from "../../utils/embedColors.js";
 import type { ILogWatcher } from "../logWatcher.js";
 import type { GuildConfig } from "@mcbot/core/types/index.js";
 import { broadcastNotification, PLAYER_NAME } from "./notifyGuilds.js";
@@ -86,7 +87,7 @@ async function handleChallenge(
             player,
             advancement: active.advancement,
           }) + rewardLine,
-        color: 0xffd700,
+        color: EmbedColor.Gold,
         ...(withServerFooter ? { footer: { text: server.id } } : {}),
       }),
   });
@@ -146,7 +147,7 @@ export function registerAdvancementWatcher(
         createPlayerEmbed(player, {
           title: isChallenge ? `✨ Completed challenge` : `⭐ Made advancement`,
           description: `**${advancement}**`,
-          color: isChallenge ? 0xa020f0 : 0x55ff55,
+          color: isChallenge ? EmbedColor.Challenge : EmbedColor.Success,
           ...(withServerFooter ? { footer: { text: serverId } } : {}),
         }),
     });

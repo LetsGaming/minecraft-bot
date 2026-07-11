@@ -1,7 +1,9 @@
 import { type Client } from "discord.js";
 import { createEmbed } from "../../utils/embedUtils.js";
+import { EmbedColor } from "../../utils/embedColors.js";
 import type { ILogWatcher } from "../logWatcher.js";
 import type { GuildConfig } from "@mcbot/core/types/index.js";
+import type { NotificationEvent } from "@mcbot/schema";
 import { broadcastNotification } from "./notifyGuilds.js";
 import { serverEventRegex, registerServerEvent } from "./serverLine.js";
 import {
@@ -57,7 +59,7 @@ export function registerServerEventWatcher(
       serverId,
       "start",
       "🟢 Server Started",
-      0x55ff55,
+      EmbedColor.Success,
       "Server is now online and ready for players.",
     );
   });
@@ -79,7 +81,7 @@ export function registerServerEventWatcher(
       serverId,
       "stop",
       "🔴 Server Stopped",
-      0xff5555,
+      EmbedColor.Error,
       `Server is shutting down.${uptimeMsg}`,
     );
   });
@@ -89,7 +91,7 @@ async function notifyEvent(
   client: Client,
   guildConfigs: Record<string, GuildConfig>,
   serverId: string,
-  event: string,
+  event: NotificationEvent,
   title: string,
   color: number,
   description: string,

@@ -40,6 +40,7 @@ import { getAllowedServerIds } from "../utils/guildRouter.js";
 import { isServerAdmin, getMemberRoleIds } from "../commands/middleware.js";
 import { performWhitelistAdd } from "../commands/shared/whitelistAdd.js";
 import { createEmbed } from "../utils/embedUtils.js";
+import { EmbedColor } from "../utils/embedColors.js";
 import { roleMention } from "../utils/alertUtils.js";
 import { recordAdminAction } from "@mcbot/core/utils/adminAudit.js";
 import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
@@ -151,7 +152,7 @@ export async function ensureApplicationPrompts(
             createEmbed({
               title: t("wlapp.promptTitle"),
               description: t("wlapp.promptBody"),
-              color: 0x55ff55,
+              color: EmbedColor.Success,
             }),
           ],
           components: [
@@ -383,10 +384,10 @@ function buildQueueEmbed(
     description: lines.join("\n"),
     color:
       app.status === "approved"
-        ? 0x55ff55
+        ? EmbedColor.Success
         : app.status === "denied"
-          ? 0xff5555
-          : 0xffaa00,
+          ? EmbedColor.Error
+          : EmbedColor.Warning,
     footer: { text: `wlapp:${app.id}` },
   });
 }

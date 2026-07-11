@@ -34,6 +34,7 @@ import {
 } from "@mcbot/core/utils/time.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { createEmbed } from "../../utils/embedUtils.js";
+import { EmbedColor } from "../../utils/embedColors.js";
 import { suppressAlerts } from "./downtimeMonitor.js";
 import { broadcastNotification } from "./notifyGuilds.js";
 import { t } from "@mcbot/core/utils/i18n.js";
@@ -119,7 +120,7 @@ async function announceWarning(
           minutes,
           time: formatTime(restartAt),
         }),
-        color: 0xffaa00,
+        color: EmbedColor.Warning,
       });
       if (withServerFooter) embed.setFooter({ text: serverId });
       return embed;
@@ -172,7 +173,7 @@ async function performRestart(
       const embed = createEmbed({
         title: t("schedule.doneTitle"),
         description: t("schedule.done", { server: serverId }),
-        color: 0x55ff55,
+        color: EmbedColor.Success,
       });
       if (withServerFooter) embed.setFooter({ text: serverId });
       return embed;

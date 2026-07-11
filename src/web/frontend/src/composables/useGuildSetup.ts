@@ -1,5 +1,6 @@
 import { ref, toValue } from "vue";
 import { useToast } from "primevue/usetoast";
+import { DEFAULT_NOTIFICATION_EVENTS } from "@mcbot/schema";
 import { apiGet, apiSend } from "../api";
 import type { SetupGuild, SetupChannel, SetupRole } from "../api";
 
@@ -242,6 +243,18 @@ export function useGuildSetup(
         block[f.key] = { channelId: m.channelId, interval: m.interval };
       } else if (f.input === "channel+admin") {
         block[f.key] = { channelId: m.channelId, adminChannelId: m.adminChannelId };
+      } else if (f.key === "notifications") {
+        // Notifications is the one channel feature that needs a second field:
+        // without `events` the dispatcher delivers nothing. Preserve a
+        // hand-authored selection when re-editing this guild; otherwise seed
+        // the default set (the same six the template and docs document).
+        const existing = existingGuildBlock.value.notifications as
+          | { events?: string[] }
+          | undefined;
+        block.notifications = {
+          channelId: m.channelId,
+          events: existing?.events ?? [...DEFAULT_NOTIFICATION_EVENTS],
+        };
       } else {
         block[f.key] = { channelId: m.channelId };
       }

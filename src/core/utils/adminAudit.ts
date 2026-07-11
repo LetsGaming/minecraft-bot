@@ -16,6 +16,7 @@
  * never block the admin action itself; it is logged instead.
  */
 import { getDb, withTransaction } from "../db/index.js";
+import { mapRows, col } from "../db/rows.js";
 import { formatDatetime } from "./time.js";
 import { log } from "./logger.js";
 
@@ -45,12 +46,21 @@ interface AdminAuditRow {
 
 /** All retained entries, oldest first (the order the JSON array had). */
 export async function loadAdminAudit(): Promise<AdminAuditEntry[]> {
-  const rows = getDb()
-    .prepare(
+  const rows = mapRows(
+    getDb().prepare(
       `SELECT at, action, server, by_tag, by_id, guild_id, detail
        FROM admin_audit ORDER BY id ASC`,
-    )
-    .all() as unknown as AdminAuditRow[];
+    ),
+    (r): AdminAuditRow => ({
+      at: col.text(r, "at"),
+      action: col.text(r, "action"),
+      server: col.textOrNull(r, "server"),
+      by_tag: col.text(r, "by_tag"),
+      by_id: col.text(r, "by_id"),
+      guild_id: col.textOrNull(r, "guild_id"),
+      detail: col.textOrNull(r, "detail"),
+    }),
+  );
   return rows.map((r) => ({
     at: r.at,
     action: r.action,

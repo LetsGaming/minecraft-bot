@@ -3,6 +3,7 @@ import { log } from "@mcbot/core/utils/logger.js";
 import { serverInScope } from "../../utils/guildRouter.js";
 import { loadConfig } from "@mcbot/core/config.js";
 import { createEmbed } from "../../utils/embedUtils.js";
+import { EmbedColor } from "../../utils/embedColors.js";
 import { roleMention } from "../../utils/alertUtils.js";
 import { t, runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
 import type { ServerInstance } from "@mcbot/core/utils/server.js";
@@ -48,7 +49,7 @@ export function startTpsMonitor(
               createEmbed({
                 title: t("tps.lowTitle"),
                 description: t("tps.low", { threshold }),
-                color: tps.tps1m < 10 ? 0xff0000 : 0xffaa00,
+                color: tps.tps1m < 10 ? EmbedColor.Critical : EmbedColor.Warning,
                 footer: { text: serverInstance.id },
               }),
             );

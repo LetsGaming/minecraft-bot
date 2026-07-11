@@ -1,5 +1,6 @@
 import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embedUtils.js";
+import { EmbedColor } from "../../utils/embedColors.js";
 import { resolveServer } from "../../utils/guildRouter.js";
 
 import { withErrorHandling } from "../middleware.js";
@@ -23,7 +24,7 @@ export const execute = withErrorHandling(async (interaction) => {
   if (!tps) throw new Error("Could not retrieve TPS. Server may be offline.");
 
   const tpsColor =
-    tps.tps1m >= 18 ? 0x55ff55 : tps.tps1m >= 15 ? 0xffaa00 : 0xff5555;
+    tps.tps1m >= 18 ? EmbedColor.Success : tps.tps1m >= 15 ? EmbedColor.Warning : EmbedColor.Error;
   const emoji = tps.tps1m >= 18 ? "🟢" : tps.tps1m >= 15 ? "🟡" : "🔴";
 
   const embed = createEmbed({

@@ -12,6 +12,7 @@ import { kvGet, kvSet } from "@mcbot/core/db/kv.js";
 import { recordPlayerCountSample } from "@mcbot/core/utils/playerCountHistory.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { createEmbed } from "../../utils/embedUtils.js";
+import { EmbedColor } from "../../utils/embedColors.js";
 import {
   ensureManagedCategory,
   ensureTextChannel,
@@ -312,7 +313,7 @@ function buildStatusEmbed(
 
   const embed = createEmbed({
     title: "📊 Server Status",
-    color: 0x00bfff,
+    color: EmbedColor.Info,
     footer: { text: "Updates every 60s" },
   });
 

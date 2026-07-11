@@ -33,6 +33,7 @@ import {
 } from "@mcbot/core/utils/pollStore.js";
 import { getServerInstance } from "@mcbot/core/utils/server.js";
 import { createEmbed } from "../../utils/embedUtils.js";
+import { EmbedColor } from "../../utils/embedColors.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { log } from "@mcbot/core/utils/logger.js";
 
@@ -184,7 +185,7 @@ export async function closePoll(client: Client, pollId: string): Promise<void> {
                 "poll.resultTotal",
                 { total },
               )}`,
-              color: 0xffd700,
+              color: EmbedColor.Gold,
               footer: { text: pollServerIds(poll).join(", ") },
             }),
           ],

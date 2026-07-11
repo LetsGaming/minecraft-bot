@@ -169,8 +169,10 @@ describe("createInfoEmbed", () => {
     expect(createInfoEmbed("info").toJSON().title).toBe("ℹ️ Info");
   });
 
-  it("uses blue color 0x3498db", () => {
-    expect(createInfoEmbed("msg").toJSON().color).toBe(0x3498db);
+  it("uses the shared Info blue (EmbedColor.Info)", () => {
+    // QUAL-09: createInfoEmbed used a second, conflicting blue (0x3498db);
+    // it now shares the one Info colour with createEmbed's default.
+    expect(createInfoEmbed("msg").toJSON().color).toBe(0x00bfff);
   });
 
   it("sets description", () => {
@@ -275,5 +277,24 @@ describe("createPaginationButtons", () => {
     const row = createPaginationButtons(0, 1);
     const components = row.toJSON().components;
     expect(components.every((c) => c.disabled)).toBe(true);
+  });
+});
+
+// ── EmbedColor palette (QUAL-09) ─────────────────────────────────────────────
+describe("EmbedColor palette", () => {
+  it("exposes the semantic colours as a single source", async () => {
+    const { EmbedColor } = await import("../src/bot/utils/embedColors.js");
+    expect(EmbedColor.Success).toBe(0x55ff55);
+    expect(EmbedColor.Error).toBe(0xff5555);
+    expect(EmbedColor.Info).toBe(0x00bfff);
+    expect(EmbedColor.Warning).toBe(0xffaa00);
+    expect(EmbedColor.Gold).toBe(0xffd700);
+  });
+
+  it("resolves the info colour to one value (createEmbed default === createInfoEmbed)", () => {
+    // Guards the two-blues drift the palette fixed.
+    const defaultInfo = createEmbed({ title: "x" }).toJSON().color;
+    const infoHelper = createInfoEmbed("y").toJSON().color;
+    expect(infoHelper).toBe(defaultInfo);
   });
 });

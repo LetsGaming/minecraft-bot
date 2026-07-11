@@ -59,12 +59,42 @@
       :key="key"
       :name="String(key)"
       :schema="childSchema"
+      :definitions="definitions"
       :model-value="objectValue[key]"
       @update:model-value="setChild(String(key), $event)"
     />
   </fieldset>
 
-  <!-- Everything else (arrays, records, unions): JSON textarea -->
+  <!-- Array of a fixed enum → multiselect (e.g. notification events) -->
+  <div v-else-if="kind === 'multiselect'" class="field">
+    <label class="fname">{{ name }}</label>
+    <MultiSelect
+      :modelValue="(modelValue as unknown[]) ?? []"
+      :options="arrayEnumOptions"
+      optionLabel="label"
+      optionValue="value"
+      display="chip"
+      filter
+      placeholder="(none)"
+      class="fcontrol"
+      @update:modelValue="emitArray($event)"
+    />
+    <span v-if="description" class="hint">{{ description }}</span>
+  </div>
+
+  <!-- Array of free-form strings → chips (e.g. adminUsers, allowedServers) -->
+  <div v-else-if="kind === 'chips'" class="field">
+    <label class="fname">{{ name }}</label>
+    <InputChips
+      :modelValue="(modelValue as string[]) ?? []"
+      separator=","
+      class="fcontrol"
+      @update:modelValue="emitArray($event)"
+    />
+    <span v-if="description" class="hint">{{ description }}</span>
+  </div>
+
+  <!-- Everything else (records, unions, arrays of objects): JSON textarea -->
   <div v-else class="field">
     <label class="fname">{{ name }} <em class="muted">(JSON)</em></label>
     <Textarea
@@ -84,24 +114,32 @@ import { defineComponent, type PropType } from "vue";
 import InputText from "primevue/inputtext";
 import InputNumber from "primevue/inputnumber";
 import Select from "primevue/select";
+import MultiSelect from "primevue/multiselect";
+import InputChips from "primevue/inputchips";
 import ToggleSwitch from "primevue/toggleswitch";
 import Textarea from "primevue/textarea";
-
-interface JsonSchemaNode {
-  type?: string | string[];
-  enum?: unknown[];
-  description?: string;
-  properties?: Record<string, unknown>;
-  additionalProperties?: unknown;
-}
+import {
+  derefNode,
+  classifyField,
+  arrayEnumOptions as arrayEnumOptionsFor,
+  type JsonSchemaNode,
+  type Definitions,
+} from "./schemaField.js";
 
 export default defineComponent({
   name: "SchemaField",
-  components: { InputText, InputNumber, Select, ToggleSwitch, Textarea },
+  components: { InputText, InputNumber, Select, MultiSelect, InputChips, ToggleSwitch, Textarea },
   props: {
     name: { type: String, required: true },
     schema: { type: Object as PropType<unknown>, required: true },
     modelValue: { type: null as unknown as PropType<unknown>, required: false },
+    /** The schema's `definitions` map, threaded down so `$ref`s resolve at
+     *  every depth (root topRef, enum item refs, …). */
+    definitions: {
+      type: Object as PropType<Definitions>,
+      required: false,
+      default: undefined,
+    },
   },
   emits: ["update:model-value"],
   data() {
@@ -109,7 +147,7 @@ export default defineComponent({
   },
   computed: {
     node(): JsonSchemaNode {
-      return (this.schema ?? {}) as JsonSchemaNode;
+      return derefNode(this.schema, this.definitions);
     },
     description(): string {
       return this.node.description ?? "";
@@ -120,6 +158,9 @@ export default defineComponent({
     enumOptions(): { value: unknown; label: string }[] {
       return this.enumValues.map((v) => ({ value: v, label: String(v) }));
     },
+    arrayEnumOptions(): { value: unknown; label: string }[] {
+      return arrayEnumOptionsFor(this.node, this.definitions);
+    },
     objectProps(): Record<string, unknown> {
       return this.node.properties ?? {};
     },
@@ -127,13 +168,7 @@ export default defineComponent({
       return (this.modelValue ?? {}) as Record<string, unknown>;
     },
     kind(): string {
-      if (this.enumValues.length > 0) return "enum";
-      const type = Array.isArray(this.node.type) ? this.node.type[0] : this.node.type;
-      if (type === "boolean") return "boolean";
-      if (type === "string") return "string";
-      if (type === "number" || type === "integer") return "number";
-      if (type === "object" && this.node.properties) return "object";
-      return "json";
+      return classifyField(this.node, this.definitions);
     },
     jsonText(): string {
       return this.modelValue === undefined ? "" : JSON.stringify(this.modelValue, null, 2);
@@ -142,6 +177,12 @@ export default defineComponent({
   methods: {
     emitValue(value: unknown) {
       this.$emit("update:model-value", value);
+    },
+    emitArray(value: unknown) {
+      // Empty selection → unset (drop the key), matching the scalar/object
+      // handling; a non-empty selection is emitted as-is.
+      const arr = Array.isArray(value) ? value : [];
+      this.emitValue(arr.length > 0 ? arr : undefined);
     },
     onScalarInput(raw: string) {
       if (raw === "") return this.emitValue(undefined);

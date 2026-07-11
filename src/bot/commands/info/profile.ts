@@ -8,6 +8,7 @@
  */
 import { SlashCommandBuilder, time as discordTime } from "discord.js";
 import { createPlayerEmbed } from "../../utils/embedUtils.js";
+import { EmbedColor } from "../../utils/embedColors.js";
 import { resolveServer } from "../../utils/guildRouter.js";
 import { withErrorHandling } from "../middleware.js";
 import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
@@ -132,7 +133,7 @@ export const execute = withErrorHandling(async (interaction) => {
     {
       title: t("profile.title", { player }),
       description: lines.join("\n"),
-      color: 0x00bfff,
+      color: EmbedColor.Info,
       footer: { text: server.id },
     },
     true,

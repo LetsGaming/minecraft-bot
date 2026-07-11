@@ -15,6 +15,7 @@ import type {
   EmbedStyleOptions,
 } from "@mcbot/core/types/index.js";
 import { log } from "@mcbot/core/utils/logger.js";
+import { EmbedColor } from "./embedColors.js";
 
 /**
  * Creates a customizable embed.
@@ -22,7 +23,7 @@ import { log } from "@mcbot/core/utils/logger.js";
 export function createEmbed({
   title,
   description,
-  color = 0x00bfff,
+  color = EmbedColor.Info,
   footer,
   timestamp = true,
   author,
@@ -69,7 +70,7 @@ export function createErrorEmbed(
   return createEmbed({
     title: "❌ Error",
     description: message,
-    color: 0xff5555,
+    color: EmbedColor.Error,
     footer,
     timestamp,
   });
@@ -85,7 +86,7 @@ export function createSuccessEmbed(
   return createEmbed({
     title: "✅ Success",
     description: message,
-    color: 0x55ff55,
+    color: EmbedColor.Success,
     footer,
     timestamp,
   });
@@ -101,7 +102,7 @@ export function createInfoEmbed(
   return createEmbed({
     title: "ℹ️ Info",
     description: message,
-    color: 0x3498db,
+    color: EmbedColor.Info,
     footer,
     timestamp,
   });
@@ -114,7 +115,7 @@ export function createEmbedWithThumbnail({
   title,
   description,
   thumbnail,
-  color = 0x00bfff,
+  color = EmbedColor.Info,
   footer,
   timestamp = true,
 }: EmbedWithThumbnailOptions): EmbedBuilder {

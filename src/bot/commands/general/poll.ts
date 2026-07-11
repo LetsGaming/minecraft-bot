@@ -26,6 +26,7 @@ import {
 } from "discord.js";
 import { randomBytes } from "crypto";
 import { createEmbed } from "../../utils/embedUtils.js";
+import { EmbedColor } from "../../utils/embedColors.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import {
   resolveServer,
@@ -139,7 +140,7 @@ function pollEmbed(poll: Poll) {
     description: `${optionLines.join("\n")}\n\n${t("poll.howToVote")}\n⏳ ${t(
       "poll.ends",
     )} <t:${Math.floor(poll.endsAt / 1000)}:R>`,
-    color: 0x00bfff,
+    color: EmbedColor.Info,
     footer: { text: pollServerIds(poll).join(", ") },
   });
 }
@@ -217,7 +218,7 @@ export const execute = withErrorHandling(
           createEmbed({
             title: t("poll.closedTitle"),
             description: t("poll.closed", { question: open.question }),
-            color: 0x55ff55,
+            color: EmbedColor.Success,
           }),
         ],
       });

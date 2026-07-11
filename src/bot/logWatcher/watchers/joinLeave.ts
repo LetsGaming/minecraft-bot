@@ -1,5 +1,6 @@
 import { type Client } from "discord.js";
 import { createPlayerEmbed } from "../../utils/embedUtils.js";
+import { EmbedColor } from "../../utils/embedColors.js";
 import type { ILogWatcher } from "../logWatcher.js";
 import type { GuildConfig } from "@mcbot/core/types/index.js";
 import { broadcastNotification, PLAYER_NAME } from "./notifyGuilds.js";
@@ -93,7 +94,7 @@ async function notify(
       createPlayerEmbed(player, {
         title: isJoin ? "Player Joined" : "Player Left",
         description: `${player} ${isJoin ? "joined" : "left"} the server`,
-        color: isJoin ? 0x55ff55 : 0xff5555,
+        color: isJoin ? EmbedColor.Success : EmbedColor.Error,
         ...(withServerFooter ? { footer: { text: serverId } } : {}),
       }),
   });

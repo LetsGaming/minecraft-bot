@@ -198,6 +198,23 @@ describe("web routes", () => {
     await app.close();
   });
 
+  it("sets security headers on responses (SEC-01)", async () => {
+    const app = buildServer();
+    const res = await app.inject({ method: "GET", url: "/healthz" });
+    const csp = res.headers["content-security-policy"];
+    expect(csp).toContain("default-src 'self'");
+    expect(csp).toContain("frame-ancestors 'none'");
+    // PrimeVue inline styles and Discord CDN avatars must be allowed.
+    expect(csp).toContain("style-src 'self' 'unsafe-inline'");
+    expect(csp).toContain("cdn.discordapp.com");
+    // TLS is the reverse proxy's job — don't force upgrades at the app.
+    expect(csp).not.toContain("upgrade-insecure-requests");
+    expect(res.headers["x-frame-options"]).toBe("DENY");
+    expect(res.headers["x-content-type-options"]).toBe("nosniff");
+    expect(res.headers["strict-transport-security"]).toBeDefined();
+    await app.close();
+  });
+
   it("metrics respond without auth in Prometheus format", async () => {
     const app = buildServer();
     const res = await app.inject({ method: "GET", url: "/metrics" });
@@ -440,5 +457,51 @@ describe("web routes", () => {
     });
     expect(res.statusCode).toBe(404);
     await app.close();
+  });
+});
+
+describe("guild-scope freshness on writes (SEC-03)", () => {
+  const managedGuild = "222222222222222222";
+  const putBody = { baseHash: "hash-1", guildConfig: {} };
+  function mgrCookie(gexp?: number): string {
+    return (
+      `${SESSION_COOKIE}=` +
+      encodeSigned({
+        uid: "444444444444444444",
+        tag: "mgr",
+        guilds: [managedGuild],
+        exp: Date.now() + 60_000,
+        ...(gexp !== undefined ? { gexp } : {}),
+      })
+    );
+  }
+  async function put(cookie: string) {
+    const app = buildServer();
+    const res = await app.inject({
+      method: "PUT",
+      url: `/api/guilds/${managedGuild}/config`,
+      headers: { cookie, "content-type": "application/json" },
+      payload: putBody,
+    });
+    await app.close();
+    return res;
+  }
+
+  it("allows a write when the captured guild scope is still fresh", async () => {
+    expect((await put(mgrCookie(Date.now() + 60_000))).statusCode).toBe(200);
+  });
+
+  it("blocks the write once the guild scope has aged out", async () => {
+    const res = await put(mgrCookie(Date.now() - 1000));
+    expect(res.statusCode).toBe(403);
+    expect(res.json().detail).toMatch(/out of date/i);
+  });
+
+  it("blocks the write when the cookie predates the freshness field", async () => {
+    expect((await put(mgrCookie())).statusCode).toBe(403);
+  });
+
+  it("does not require freshness for a sysadmin", async () => {
+    expect((await put(adminCookie())).statusCode).toBe(200);
   });
 });

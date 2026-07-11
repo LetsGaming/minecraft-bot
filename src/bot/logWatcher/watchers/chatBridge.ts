@@ -1,6 +1,7 @@
 import { type Client, type Webhook } from "discord.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { createPlayerEmbed } from "../../utils/embedUtils.js";
+import { EmbedColor } from "../../utils/embedColors.js";
 import type { ILogWatcher } from "../logWatcher.js";
 import type { ServerInstance } from "@mcbot/core/utils/server.js";
 import type { GuildConfig, GuildChatBridgeConfig } from "@mcbot/core/types/index.js";
@@ -206,7 +207,7 @@ export function registerChatBridge(
 
           const embed = createPlayerEmbed(player, {
             description: message,
-            color: 0x00bfff,
+            color: EmbedColor.Info,
           });
 
           await channel.send({ embeds: [embed] });

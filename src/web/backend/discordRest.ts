@@ -20,6 +20,25 @@ const API = "https://discord.com/api/v10";
 const TIMEOUT_MS = 10_000;
 const CACHE_TTL_MS = 30_000;
 
+/** Why a Discord read failed — a typed discriminator so callers map failures
+ *  to an HTTP status without parsing error strings (QUAL-11). */
+export type DiscordErrorReason = "no-token" | "rate-limit" | "http";
+
+/** A failed Discord REST call, carrying the upstream status when there is one. */
+export class DiscordApiError extends Error {
+  constructor(
+    message: string,
+    readonly reason: DiscordErrorReason,
+    /** Upstream Discord HTTP status when reason === "http"; null otherwise. */
+    readonly status: number | null = null,
+    /** Retry-after hint (seconds) for reason === "rate-limit". */
+    readonly retryAfterSeconds?: number,
+  ) {
+    super(message);
+    this.name = "DiscordApiError";
+  }
+}
+
 export interface DiscordGuild {
   id: string;
   name: string;
@@ -62,7 +81,10 @@ const cache = new Map<string, CacheEntry>();
 function botToken(): string {
   const cfg = loadConfig();
   if (!cfg.token) {
-    throw new Error("Bot token is not configured — cannot query Discord.");
+    throw new DiscordApiError(
+      "Bot token is not configured — cannot query Discord.",
+      "no-token",
+    );
   }
   return cfg.token;
 }
@@ -82,13 +104,19 @@ async function discordGet<T>(path: string, cacheKey?: string): Promise<T> {
   if (res.status === 429) {
     // Surface rate limits as a clear, retryable error rather than a
     // parsed-garbage failure. The retry-after is in seconds.
-    const retry = res.headers.get("retry-after") ?? "a few";
-    throw new Error(`Discord rate limit hit — retry in ${retry}s.`);
+    const retryHeader = res.headers.get("retry-after");
+    const retry = retryHeader ?? "a few";
+    throw new DiscordApiError(
+      `Discord rate limit hit — retry in ${retry}s.`,
+      "rate-limit",
+      429,
+      retryHeader ? Number(retryHeader) : undefined,
+    );
   }
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     log.warn("web", `Discord GET ${path} failed: ${res.status} ${body.slice(0, 200)}`);
-    throw new Error(`Discord API error (${res.status}).`);
+    throw new DiscordApiError(`Discord API error (${res.status}).`, "http", res.status);
   }
   const value = (await res.json()) as T;
   if (cacheKey) cache.set(cacheKey, { at: Date.now(), value });

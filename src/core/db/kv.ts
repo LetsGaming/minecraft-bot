@@ -13,13 +13,14 @@
  * data/bot.db.
  */
 import { getDb, withTransaction } from "./index.js";
+import { mapRow, col } from "./rows.js";
 
 export function kvGet<T>(key: string): T | null {
-  const row = getDb()
-    .prepare("SELECT value FROM kv_store WHERE key = ?")
-    .get(key) as { value: string } | undefined;
-  if (!row) return null;
-  return JSON.parse(row.value) as T;
+  return mapRow(
+    getDb().prepare("SELECT value FROM kv_store WHERE key = ?"),
+    (r) => col.json<T>(r, "value"),
+    key,
+  );
 }
 
 export function kvSet(key: string, value: unknown): void {

@@ -16,6 +16,7 @@
  * stable hour-of-day average without the file growing forever.
  */
 import { getDb, withTransaction } from "../db/index.js";
+import { mapRows, col } from "../db/rows.js";
 import { log } from "./logger.js";
 import { TZ } from "./time.js";
 import type { ServerInstance } from "./server.js";
@@ -41,17 +42,18 @@ export interface PlayerCountStore {
 }
 
 export async function loadPlayerCountStore(): Promise<PlayerCountStore> {
-  const rows = getDb()
-    .prepare(
+  const rows = mapRows(
+    getDb().prepare(
       "SELECT server_id, h, sum, max, samples FROM player_count_hours ORDER BY h ASC",
-    )
-    .all() as unknown as Array<{
-    server_id: string;
-    h: number;
-    sum: number;
-    max: number;
-    samples: number;
-  }>;
+    ),
+    (r) => ({
+      server_id: col.text(r, "server_id"),
+      h: col.int(r, "h"),
+      sum: col.int(r, "sum"),
+      max: col.int(r, "max"),
+      samples: col.int(r, "samples"),
+    }),
+  );
   const servers: Record<string, HourBucket[]> = {};
   for (const r of rows) {
     (servers[r.server_id] ??= []).push({

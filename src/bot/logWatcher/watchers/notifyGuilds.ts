@@ -13,6 +13,10 @@ import { type Client, type EmbedBuilder } from "discord.js";
 import { getAllInstances } from "@mcbot/core/utils/server.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
+import {
+  DEFAULT_NOTIFICATION_EVENTS,
+  type NotificationEvent,
+} from "@mcbot/schema";
 import { serverInScope } from "../../utils/guildRouter.js";
 import type { GuildConfig } from "@mcbot/core/types/index.js";
 
@@ -24,8 +28,8 @@ export const PLAYER_NAME = String.raw`[\w.]+`;
 export interface BroadcastOptions {
   /** Server the event originated from — used for the scope filter + footer. */
   serverId: string;
-  /** Event key matched against notifications.events. */
-  event: string;
+  /** Event key matched against notifications.events (a known event key). */
+  event: NotificationEvent;
   /** Embed factory — invoked per send so footer state isn't shared. */
   buildEmbed: (withServerFooter: boolean) => EmbedBuilder;
   /** Tag used for error logging (defaults to "notify"). */
@@ -44,7 +48,12 @@ export async function broadcastNotification(
   for (const [guildId, gcfg] of Object.entries(guildConfigs)) {
     const notif = gcfg.notifications;
     if (!notif?.channelId) continue;
-    if (!notif.events?.includes(event)) continue;
+    // An absent events list means "the default set" — a guild configured with
+    // only a channel (what the setup wizard used to write) still receives the
+    // common events instead of silently nothing. An explicit empty list is a
+    // deliberate opt-out and receives nothing.
+    const events = notif.events ?? DEFAULT_NOTIFICATION_EVENTS;
+    if (!events.includes(event)) continue;
     // serverInScope guarantees an unpinned channel never receives
     // another tenant's events.
     if (!serverInScope(notif.server, serverId, guildId)) continue;

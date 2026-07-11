@@ -15,6 +15,7 @@ import { type Client } from "discord.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { serverInScope } from "../../utils/guildRouter.js";
 import { createEmbed } from "../../utils/embedUtils.js";
+import { EmbedColor } from "../../utils/embedColors.js";
 import { loadConfig } from "@mcbot/core/config.js";
 import { readBackups } from "@mcbot/core/utils/serverAccess.js";
 import {
@@ -138,7 +139,7 @@ async function checkServer(
           percent: usage.usedPercent,
           free: formatBytes(usage.availableBytes),
         }),
-        color: 0xff5555,
+        color: EmbedColor.Error,
       }));
     } else if (
       alerted &&
@@ -152,7 +153,7 @@ async function checkServer(
           path: usage.path,
           percent: usage.usedPercent,
         }),
-        color: 0x55ff55,
+        color: EmbedColor.Success,
       }));
     }
   }
@@ -201,7 +202,7 @@ async function checkBackupAge(
         age: ageHours.toFixed(1),
         max: maxAgeHours,
       }),
-      color: 0xff5555,
+      color: EmbedColor.Error,
     }));
   } else if (alerted && ageHours < maxAgeHours) {
     backupAlertState.set(server.id, false);
@@ -211,7 +212,7 @@ async function checkBackupAge(
         server: server.id,
         age: ageHours < 1 ? "<1" : ageHours.toFixed(1),
       }),
-      color: 0x55ff55,
+      color: EmbedColor.Success,
     }));
   }
 }

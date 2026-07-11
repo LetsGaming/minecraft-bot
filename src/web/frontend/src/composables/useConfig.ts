@@ -4,7 +4,9 @@ import { apiGet, apiSend } from "../api";
 import type { ConfigResponse } from "../api";
 
 export interface JsonSchema {
+  $ref?: string;
   properties?: Record<string, unknown>;
+  definitions?: Record<string, unknown>;
 }
 
 /**
