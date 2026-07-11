@@ -100,10 +100,12 @@ services:
       # driver (zero native build) rather than better-sqlite3 — one less thing
       # that can fail to compile against Alpine/musl. Same store format.
       MCBOT_SQLITE_DRIVER: ${MCBOT_SQLITE_DRIVER:-node}
-      # Dashboard secrets (it BOOTS without them, but OAuth login fails). Set in
-      # .env: WEBUI_SESSION_SECRET (cookie key, >= 16 random chars) and
-      # WEBUI_CLIENT_SECRET (Discord OAuth2 secret). WEBUI_METRICS_TOKEN gates
-      # GET /metrics with a bearer token (unset = open).
+      # REQUIRED dashboard secrets — it serves a setup page until both are set:
+      #   WEBUI_SESSION_SECRET  cookie-signing key (>= 16 random chars)
+      #   WEBUI_CLIENT_SECRET   Discord OAuth2 secret
+      # Behind a reverse proxy, also set WEBUI_PUBLIC_URL (the public URL users
+      # reach) so Discord login redirects back correctly. WEBUI_METRICS_TOKEN
+      # gates GET /metrics with a bearer token (unset = open). All read from .env.
 
     # Published on WEBUI_BIND_ADDR (default loopback only). Expose to the LAN
     # with WEBUI_BIND_ADDR=0.0.0.0 — only behind a TLS reverse proxy.

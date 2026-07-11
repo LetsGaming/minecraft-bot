@@ -9,6 +9,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 process.env.WEBUI_SESSION_SECRET = "unit-test-session-secret";
+process.env.WEBUI_CLIENT_SECRET = "unit-test-client-secret";
 
 const mockConfig = {
   token: "real-bot-token",

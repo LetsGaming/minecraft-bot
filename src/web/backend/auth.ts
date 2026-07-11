@@ -170,10 +170,14 @@ export function oauthClientId(): string {
 export function publicBaseUrl(): string {
   const cfg = loadConfig();
   const port = cfg.webui?.port ?? 8130;
-  return (cfg.webui?.publicUrl ?? `http://localhost:${port}`).replace(
-    /\/$/,
-    "",
-  );
+  // Env beats config (same deploy-knob contract as the rest): behind a reverse
+  // proxy, WEBUI_PUBLIC_URL is what makes the OAuth redirect_uri and the
+  // cookie's Secure flag match the URL users actually reach.
+  const url =
+    process.env.WEBUI_PUBLIC_URL ??
+    cfg.webui?.publicUrl ??
+    `http://localhost:${port}`;
+  return url.replace(/\/$/, "");
 }
 
 export function redirectUri(): string {

@@ -34,6 +34,7 @@ import helmet from "@fastify/helmet";
 import { loadConfig } from "@mcbot/core/config.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { registerErrorHandler } from "./errors.js";
+import { registerSetupGuard } from "./requiredEnv.js";
 import { requireSession, requireSysadmin } from "./auth.js";
 import { registerRateLimiting } from "./rateLimit.js";
 import { registerAuthRoutes } from "./routes/auth.js";
@@ -74,6 +75,13 @@ export function buildServer(): FastifyInstance {
     },
     frameguard: { action: "deny" },
   });
+
+  // ── Required-config guard ── if a required secret (WEBUI_SESSION_SECRET /
+  // WEBUI_CLIENT_SECRET) is missing, serve a clear setup page instead of
+  // booting into a broken state where the first session op throws an opaque
+  // 500. Registers nothing when everything is set. Runs right after helmet so
+  // the page still gets security headers, and before the routes so it wins.
+  registerSetupGuard(app);
 
   // ── Rate limiting (SEC-02) ── one shared token-bucket over /auth/* and
   // mutating /api/* (see rateLimit.ts). Runs before the auth gate so login
