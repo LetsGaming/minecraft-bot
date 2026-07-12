@@ -10,6 +10,13 @@ declare module "vue" {
     $toast: ToastServiceMethods;
     $confirm: ConfirmationServiceMethods;
   }
+  // SchemaField is registered globally (main.ts) so the recursive field
+  // renderers (MapField / ArrayField) can reference it without importing it —
+  // which would create a value-initializer cycle. Declared here so their
+  // templates typecheck.
+  interface GlobalComponents {
+    SchemaField: (typeof import("./components/SchemaField.vue"))["default"];
+  }
 }
 
 export {};

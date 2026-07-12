@@ -69,7 +69,7 @@
   <div v-else-if="kind === 'multiselect'" class="field">
     <label class="fname">{{ name }}</label>
     <MultiSelect
-      :modelValue="(modelValue as unknown[]) ?? []"
+      :modelValue="arrayModel"
       :options="arrayEnumOptions"
       optionLabel="label"
       optionValue="value"
@@ -82,11 +82,11 @@
     <span v-if="description" class="hint">{{ description }}</span>
   </div>
 
-  <!-- Array of free-form strings → chips (e.g. adminUsers, allowedServers) -->
+  <!-- Array of free-form strings → chips (e.g. adminUsers, a ServerScope list) -->
   <div v-else-if="kind === 'chips'" class="field">
     <label class="fname">{{ name }}</label>
     <InputChips
-      :modelValue="(modelValue as string[]) ?? []"
+      :modelValue="(arrayModel as string[])"
       separator=","
       class="fcontrol"
       @update:modelValue="emitArray($event)"
@@ -94,7 +94,39 @@
     <span v-if="description" class="hint">{{ description }}</span>
   </div>
 
-  <!-- Everything else (records, unions, arrays of objects): JSON textarea -->
+  <!-- Array of numbers → chips with numeric coercion (e.g. warnMinutes) -->
+  <div v-else-if="kind === 'numberList'" class="field">
+    <label class="fname">{{ name }}</label>
+    <InputChips
+      :modelValue="(arrayModel as unknown[]).map(String)"
+      separator=","
+      class="fcontrol"
+      @update:modelValue="emitNumberArray($event)"
+    />
+    <span class="hint">Numbers, comma-separated.<template v-if="description"> {{ description }}</template></span>
+  </div>
+
+  <!-- Record<string, X> → key/value editor (reused MapField) -->
+  <MapField
+    v-else-if="kind === 'map'"
+    :name="name"
+    :schema="node"
+    :definitions="definitions"
+    :model-value="modelValue"
+    @update:model-value="emitValue($event)"
+  />
+
+  <!-- Array of objects (or X|X[] of objects) → item-list editor (ArrayField) -->
+  <ArrayField
+    v-else-if="kind === 'array'"
+    :name="name"
+    :schema="node"
+    :definitions="definitions"
+    :model-value="modelValue"
+    @update:model-value="emitValue($event)"
+  />
+
+  <!-- Genuine last resort (mixed-type unions, free-form objects): JSON -->
   <div v-else class="field">
     <label class="fname">{{ name }} <em class="muted">(JSON)</em></label>
     <Textarea
@@ -118,6 +150,8 @@ import MultiSelect from "primevue/multiselect";
 import InputChips from "primevue/inputchips";
 import ToggleSwitch from "primevue/toggleswitch";
 import Textarea from "primevue/textarea";
+import MapField from "./MapField.vue";
+import ArrayField from "./ArrayField.vue";
 import {
   derefNode,
   classifyField,
@@ -128,7 +162,7 @@ import {
 
 export default defineComponent({
   name: "SchemaField",
-  components: { InputText, InputNumber, Select, MultiSelect, InputChips, ToggleSwitch, Textarea },
+  components: { InputText, InputNumber, Select, MultiSelect, InputChips, ToggleSwitch, Textarea, MapField, ArrayField },
   props: {
     name: { type: String, required: true },
     schema: { type: Object as PropType<unknown>, required: true },
@@ -167,6 +201,13 @@ export default defineComponent({
     objectValue(): Record<string, unknown> {
       return (this.modelValue ?? {}) as Record<string, unknown>;
     },
+    // Coerce the value for array-like controls: an "X or X[]" union may hold a
+    // single value (e.g. ServerScope "smp") — present it as a one-item list.
+    arrayModel(): unknown[] {
+      const v = this.modelValue;
+      if (Array.isArray(v)) return v;
+      return v === undefined || v === null ? [] : [v];
+    },
     kind(): string {
       return classifyField(this.node, this.definitions);
     },
@@ -182,6 +223,13 @@ export default defineComponent({
       // Empty selection → unset (drop the key), matching the scalar/object
       // handling; a non-empty selection is emitted as-is.
       const arr = Array.isArray(value) ? value : [];
+      this.emitValue(arr.length > 0 ? arr : undefined);
+    },
+    emitNumberArray(value: unknown) {
+      // Chips come back as strings; coerce to numbers and drop non-numeric.
+      const arr = (Array.isArray(value) ? value : [])
+        .map((x) => Number(x))
+        .filter((n) => !Number.isNaN(n));
       this.emitValue(arr.length > 0 ? arr : undefined);
     },
     onScalarInput(raw: string) {

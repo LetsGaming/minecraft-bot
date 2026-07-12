@@ -6,6 +6,7 @@ import ToastService from "primevue/toastservice";
 import ConfirmationService from "primevue/confirmationservice";
 import Tooltip from "primevue/tooltip";
 import App from "./App.vue";
+import SchemaField from "./components/SchemaField.vue";
 import "primeicons/primeicons.css";
 import "./style.css";
 
@@ -85,4 +86,8 @@ app.use(PrimeVue, {
 app.use(ToastService);
 app.use(ConfirmationService);
 app.directive("tooltip", Tooltip);
+// Registered globally so the recursive field renderers (MapField / ArrayField)
+// can use <SchemaField> without importing it (which would create an import
+// cycle). See shims.d.ts for the matching type declaration.
+app.component("SchemaField", SchemaField);
 app.mount("#app");

@@ -1,6 +1,6 @@
 {
   "name": "@mcbot/web",
-  "version": "4.2.1",
+  "version": "4.2.2",
   "private": true,
   "type": "module",
   "description": "The web dashboard — an optional extension of the bot. Backend (Fastify) and frontend (Vue SPA) are one unit: one package, one build, one artifact. Runs with or without the bot; never imports it.",

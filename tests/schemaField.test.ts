@@ -8,6 +8,8 @@ import {
   derefNode,
   classifyField,
   arrayEnumOptions,
+  mapValueSchema,
+  arrayItemSchema,
 } from "../src/web/frontend/src/components/schemaField.js";
 
 // A slice of the generated schema's definitions.
@@ -68,13 +70,55 @@ describe("classifyField", () => {
     expect(k({ type: "array", items: { type: "string" } })).toBe("chips");
   });
 
-  it("falls back to JSON for records and complex/union nodes", () => {
-    // additionalProperties record (guilds/servers): no `properties` → JSON.
-    expect(k({ type: "object", additionalProperties: { $ref: "#/definitions/RawBotConfig" } })).toBe("json");
-    // anyOf union (ServerScope): JSON for now.
-    expect(k(defs.ServerScope)).toBe("json");
-    // array of objects: JSON.
-    expect(k({ type: "array", items: { type: "object" } })).toBe("json");
+  it("maps a Record<string,X> (additionalProperties) to a map editor", () => {
+    expect(
+      k({ type: "object", additionalProperties: { $ref: "#/definitions/RawBotConfig" } }),
+    ).toBe("map");
+  });
+
+  it("collapses an 'X or X[]' union to the matching list control", () => {
+    // ServerScope = string | string[] → chips (not JSON).
+    expect(k(defs.ServerScope)).toBe("chips");
+    // object | object[] (e.g. chatBridge) → array editor.
+    expect(
+      k({
+        anyOf: [
+          { type: "object", properties: {} },
+          { type: "array", items: { type: "object", properties: {} } },
+        ],
+      }),
+    ).toBe("array");
+  });
+
+  it("maps a number array to a number list", () => {
+    expect(k({ type: "array", items: { type: "integer" } })).toBe("numberList");
+  });
+
+  it("maps an array of objects to an array editor", () => {
+    expect(k({ type: "array", items: { type: "object", properties: {} } })).toBe("array");
+  });
+
+  it("falls back to JSON only as a genuine last resort (mixed-type union)", () => {
+    // A union that is NOT the X|X[] pattern has no sensible single control.
+    expect(k({ anyOf: [{ type: "string" }, { type: "number" }] })).toBe("json");
+  });
+});
+
+describe("map/array item schema helpers", () => {
+  it("mapValueSchema returns the additionalProperties schema (deref'd)", () => {
+    const v = mapValueSchema(
+      { type: "object", additionalProperties: { $ref: "#/definitions/NotificationEvent" } } as never,
+      defs,
+    );
+    expect(v.enum).toHaveLength(6);
+  });
+
+  it("arrayItemSchema returns the item schema, including through X|X[]", () => {
+    expect(
+      arrayItemSchema({ type: "array", items: { type: "string" } } as never, defs).type,
+    ).toBe("string");
+    // ServerScope collapses to array-of-string → item is a string.
+    expect(arrayItemSchema(defs.ServerScope as never, defs).type).toBe("string");
   });
 });
 
