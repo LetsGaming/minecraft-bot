@@ -131,3 +131,24 @@ export function arrayItemSchema(
 ): JsonSchemaNode {
   return derefNode(normalizeNode(node, defs).items, defs);
 }
+
+/** Kinds of entity a field references by ID (rendered as a named dropdown). */
+export type RefKind = "server" | "channel" | "role";
+
+/**
+ * Whether a field holds an ID reference to a known entity, by field name — so
+ * it can render a name dropdown instead of a raw-ID text box. Names are
+ * consistent in the schema: `*channelId` → channel, `*Role` (mentionRole,
+ * linkedRole) → role, `server` / `defaultServer` / `allowedServers` (all
+ * ServerScope) → server. Fields that mix IDs (e.g. adminUsers = users AND
+ * roles) intentionally don't match and stay free-form.
+ */
+export function referenceKind(name: string): RefKind | null {
+  const n = name.toLowerCase();
+  if (/channelid$/.test(n)) return "channel";
+  if (/role$/.test(n)) return "role";
+  if (n === "server" || n === "defaultserver" || n === "allowedservers") {
+    return "server";
+  }
+  return null;
+}

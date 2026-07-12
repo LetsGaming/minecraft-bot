@@ -27,6 +27,40 @@
     <span v-if="description" class="hint">{{ description }}</span>
   </div>
 
+  <!-- ID reference (single) → dropdown of entity names (channel/role/server) -->
+  <div v-else-if="refControl && !refControl.multi" class="field">
+    <label class="fname">{{ name }}</label>
+    <Select
+      :modelValue="modelValue ?? null"
+      :options="refControl.options"
+      optionLabel="label"
+      optionValue="id"
+      showClear
+      filter
+      placeholder="(unset)"
+      class="fcontrol"
+      @update:modelValue="emitValue($event ?? undefined)"
+    />
+    <span v-if="description" class="hint">{{ description }}</span>
+  </div>
+
+  <!-- ID reference (one or many) → multi-select of entity names -->
+  <div v-else-if="refControl && refControl.multi" class="field">
+    <label class="fname">{{ name }}</label>
+    <MultiSelect
+      :modelValue="arrayModel"
+      :options="refControl.options"
+      optionLabel="label"
+      optionValue="id"
+      display="chip"
+      filter
+      placeholder="(none)"
+      class="fcontrol"
+      @update:modelValue="emitArray($event)"
+    />
+    <span v-if="description" class="hint">{{ description }}</span>
+  </div>
+
   <!-- String -->
   <div v-else-if="kind === 'string'" class="field">
     <label class="fname">{{ name }}</label>
@@ -142,7 +176,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, type PropType } from "vue";
+import { defineComponent, inject, type PropType } from "vue";
 import InputText from "primevue/inputtext";
 import InputNumber from "primevue/inputnumber";
 import Select from "primevue/select";
@@ -155,10 +189,16 @@ import ArrayField from "./ArrayField.vue";
 import {
   derefNode,
   classifyField,
+  referenceKind,
   arrayEnumOptions as arrayEnumOptionsFor,
   type JsonSchemaNode,
   type Definitions,
 } from "./schemaField.js";
+import {
+  SchemaRefsKey,
+  type SchemaRefs,
+  type RefOption,
+} from "../composables/useSchemaRefs.js";
 
 export default defineComponent({
   name: "SchemaField",
@@ -176,6 +216,11 @@ export default defineComponent({
     },
   },
   emits: ["update:model-value"],
+  setup() {
+    // Named-entity options for ID fields, provided by the config editor.
+    // Absent (undefined) when no editor supplies them → text/chips fallback.
+    return { schemaRefs: inject(SchemaRefsKey, undefined) };
+  },
   data() {
     return { jsonError: "" };
   },
@@ -210,6 +255,19 @@ export default defineComponent({
     },
     kind(): string {
       return classifyField(this.node, this.definitions);
+    },
+    // If this field is an ID reference AND named options are available, render
+    // a dropdown of names instead of a raw-ID input. `multi` follows the field
+    // shape: a string is a single Select; a list (ServerScope, allowedServers,
+    // classified "chips") is a MultiSelect. No options → null → text fallback.
+    refControl(): { multi: boolean; options: RefOption[] } | null {
+      const rk = referenceKind(this.name);
+      if (!rk || !this.schemaRefs) return null;
+      const refs = this.schemaRefs as SchemaRefs;
+      const options =
+        rk === "server" ? refs.servers : rk === "channel" ? refs.channels : refs.roles;
+      if (!options || options.length === 0) return null;
+      return { multi: this.kind === "chips", options };
     },
     jsonText(): string {
       return this.modelValue === undefined ? "" : JSON.stringify(this.modelValue, null, 2);

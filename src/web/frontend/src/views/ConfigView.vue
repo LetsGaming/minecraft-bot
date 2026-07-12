@@ -61,13 +61,14 @@
 </template>
 
 <script lang="ts">
-import { defineComponent } from "vue";
+import { defineComponent, provide } from "vue";
 import Button from "primevue/button";
 import Textarea from "primevue/textarea";
 import ToggleSwitch from "primevue/toggleswitch";
 import Message from "primevue/message";
 import SchemaField from "../components/SchemaField.vue";
 import { derefNode } from "../components/schemaField";
+import { useSchemaRefs, SchemaRefsKey } from "../composables/useSchemaRefs";
 import ViewHeader from "../components/ViewHeader.vue";
 import { useConfig } from "../composables/useConfig";
 
@@ -75,7 +76,12 @@ export default defineComponent({
   name: "ConfigView",
   components: { SchemaField, Button, Textarea, ToggleSwitch, Message, ViewHeader },
   setup() {
-    return { ...useConfig() };
+    // Provide server options so ID fields (defaultServer, allowedServers, the
+    // per-feature `server` scope) render as name dropdowns. Channels/roles are
+    // guild-scoped and have no single-guild context here, so those stay text.
+    const refsApi = useSchemaRefs();
+    provide(SchemaRefsKey, refsApi.refs);
+    return { ...useConfig(), loadServerRefs: refsApi.loadServers };
   },
   computed: {
     topLevelProps(): Record<string, unknown> {
@@ -85,7 +91,7 @@ export default defineComponent({
     },
   },
   async mounted() {
-    await this.load();
+    await Promise.all([this.load(), this.loadServerRefs()]);
   },
 });
 </script>

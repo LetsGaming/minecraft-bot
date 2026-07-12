@@ -61,13 +61,14 @@
 </template>
 
 <script lang="ts">
-import { defineComponent } from "vue";
+import { defineComponent, provide } from "vue";
 import Dialog from "primevue/dialog";
 import Button from "primevue/button";
 import Message from "primevue/message";
 import SchemaField from "./SchemaField.vue";
 import { derefNode } from "./schemaField";
 import { useGuildConfig } from "../composables/useGuildConfig";
+import { useSchemaRefs, SchemaRefsKey } from "../composables/useSchemaRefs";
 
 export default defineComponent({
   name: "GuildConfigEditor",
@@ -79,7 +80,15 @@ export default defineComponent({
   },
   emits: ["update:visible", "saved"],
   setup() {
-    return { ...useGuildConfig() };
+    // Provide named-entity options (servers + this guild's channels/roles) so
+    // SchemaField renders ID fields as name dropdowns instead of text boxes.
+    const refsApi = useSchemaRefs();
+    provide(SchemaRefsKey, refsApi.refs);
+    return {
+      ...useGuildConfig(),
+      loadServers: refsApi.loadServers,
+      loadGuildRefs: refsApi.loadGuild,
+    };
   },
   computed: {
     topLevelProps(): Record<string, unknown> {
@@ -90,7 +99,11 @@ export default defineComponent({
   },
   watch: {
     visible(open: boolean): void {
-      if (open && this.guildId) void this.load(this.guildId);
+      if (open && this.guildId) {
+        void this.load(this.guildId);
+        void this.loadServers();
+        void this.loadGuildRefs(this.guildId);
+      }
     },
   },
   methods: {

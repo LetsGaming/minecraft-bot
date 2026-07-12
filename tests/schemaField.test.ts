@@ -10,6 +10,7 @@ import {
   arrayEnumOptions,
   mapValueSchema,
   arrayItemSchema,
+  referenceKind,
 } from "../src/web/frontend/src/components/schemaField.js";
 
 // A slice of the generated schema's definitions.
@@ -105,8 +106,7 @@ describe("classifyField", () => {
 });
 
 describe("map/array item schema helpers", () => {
-  it("mapValueSchema returns the additionalProperties schema (deref'd)", () => {
-    const v = mapValueSchema(
+  it("mapValueSchema returns the additionalProperties schema (deref'd)", () => {    const v = mapValueSchema(
       { type: "object", additionalProperties: { $ref: "#/definitions/NotificationEvent" } } as never,
       defs,
     );
@@ -133,5 +133,26 @@ describe("arrayEnumOptions", () => {
   });
   it("is empty for a non-enum array", () => {
     expect(arrayEnumOptions({ type: "array", items: { type: "string" } } as never, defs)).toEqual([]);
+  });
+});
+
+describe("referenceKind", () => {
+  it("detects channel-ID fields", () => {
+    expect(referenceKind("channelId")).toBe("channel");
+    expect(referenceKind("adminChannelId")).toBe("channel");
+  });
+  it("detects role fields", () => {
+    expect(referenceKind("mentionRole")).toBe("role");
+    expect(referenceKind("linkedRole")).toBe("role");
+  });
+  it("detects server-scope fields", () => {
+    expect(referenceKind("server")).toBe("server");
+    expect(referenceKind("defaultServer")).toBe("server");
+    expect(referenceKind("allowedServers")).toBe("server");
+  });
+  it("leaves mixed/other fields as free-form", () => {
+    expect(referenceKind("adminUsers")).toBeNull(); // users AND roles
+    expect(referenceKind("serverDir")).toBeNull(); // a path, not a ref
+    expect(referenceKind("enabled")).toBeNull();
   });
 });
