@@ -19,6 +19,8 @@ export const STREAK_STAT_KEYS = ["streak", "longest_streak"] as const;
 export type StreakStatKey = (typeof STREAK_STAT_KEYS)[number];
 
 export function isStreakStatKey(key: string): key is StreakStatKey {
+  // Widen the const tuple to readonly string[] so .includes accepts an
+  // arbitrary string (TS otherwise restricts the arg to the literal union).
   return (STREAK_STAT_KEYS as readonly string[]).includes(key);
 }
 
@@ -34,7 +36,7 @@ export async function buildStreakLeaderboard(
 ): Promise<LeaderboardData> {
   const [store, linked] = await Promise.all([
     loadClaimedStore(),
-    loadLinkedAccounts().catch(() => ({}) as Record<string, string>),
+    loadLinkedAccounts().catch((): Record<string, string> => ({})),
   ]);
   const claims = getServerClaims(store, serverId);
 

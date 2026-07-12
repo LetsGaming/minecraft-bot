@@ -51,7 +51,7 @@ export async function execute(
   if (claimLock.has(userId)) {
     await interaction.reply({
       content: "⏳ Already processing your claim — please wait.",
-      flags: MessageFlags.Ephemeral as number,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -113,7 +113,7 @@ async function _execute(
   if (delta < DAILY_COOLDOWN) {
     await interaction.reply({
       content: cooldownMsg(DAILY_COOLDOWN - delta),
-      flags: MessageFlags.Ephemeral as number,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -237,7 +237,7 @@ function errorReply(
         timestamp: new Date(),
       }),
     ],
-    flags: MessageFlags.Ephemeral as number,
+    flags: MessageFlags.Ephemeral,
   };
 }
 

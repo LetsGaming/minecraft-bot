@@ -7,7 +7,7 @@ import { EmbedColor } from "../../utils/embedColors.js";
 import { roleMention } from "../../utils/alertUtils.js";
 import { t, runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
 import type { ServerInstance } from "@mcbot/core/utils/server.js";
-import type { GuildConfig, PaperTpsResult } from "@mcbot/core/types/index.js";
+import type { GuildConfig } from "@mcbot/core/types/index.js";
 
 const warned = new Map<string, number>();
 
@@ -55,7 +55,7 @@ export function startTpsMonitor(
             );
 
             if ("tps5m" in tps && tps.tps5m !== undefined) {
-              const paperTps = tps as PaperTpsResult;
+              const paperTps = tps;
               embed.addFields(
                 {
                   name: "1 min",

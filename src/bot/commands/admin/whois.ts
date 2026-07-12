@@ -95,7 +95,7 @@ export const execute = withErrorHandling(
 
     const [audit, linked, sessions, notesStore] = await Promise.all([
       getAuditEntry(username),
-      loadLinkedAccounts().catch(() => ({}) as Record<string, string>),
+      loadLinkedAccounts().catch((): Record<string, string> => ({})),
       loadSessionStore().catch(
         (): SessionStore => ({ version: 1, servers: {} }),
       ),

@@ -82,6 +82,10 @@ export function summarizeConfigChanges(
   // ── Top level ──
   const beforeTop: Record<string, unknown> = {};
   const afterTop: Record<string, unknown> = {};
+  // before/after are always plain config objects; we widen them to an index
+  // type to read the declared TOP_LEVEL_KEYS generically. Interface types have
+  // no index signature, so reaching Record needs the `unknown as` step — safe
+  // here because the value is known to be an object, and every read is guarded.
   const beforeRec = before as unknown as Record<string, unknown>;
   const afterRec = after as unknown as Record<string, unknown>;
   for (const key of TOP_LEVEL_KEYS) {
@@ -109,6 +113,7 @@ export function summarizeConfigChanges(
       continue;
     }
     if (!b || !a) continue;
+    // Same known-object widening as above (see note) to diff a guild block.
     const parts = diffKeys(
       b as unknown as Record<string, unknown>,
       a as unknown as Record<string, unknown>,

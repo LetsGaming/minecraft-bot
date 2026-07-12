@@ -13,9 +13,23 @@
 import { getServerInstance, getGuildServer } from "@mcbot/core/utils/server.js";
 import { loadConfig } from "@mcbot/core/config.js";
 import { isServerAdmin } from "../commands/middleware.js";
-import type { ChatInputCommandInteraction } from "discord.js";
+import type {
+  ChatInputCommandInteraction,
+  AutocompleteInteraction,
+} from "discord.js";
 import type { ServerInstance } from "@mcbot/core/utils/server.js";
 import type { GuildConfig } from "@mcbot/core/types/index.js";
+
+/**
+ * The interaction shape server-resolution needs: it only reads the `server`
+ * string option and the guild, both of which a chat-command *and* an
+ * autocomplete interaction expose. Accepting the union lets autocomplete reuse
+ * the exact same guild→server resolution (to suggest player names) without
+ * force-casting one interaction class into another.
+ */
+type ServerContextInteraction =
+  | ChatInputCommandInteraction
+  | AutocompleteInteraction;
 
 /** Normalize a ServerScope (string | string[] | undefined) to a list. */
 function scopeToList(scope: string | string[] | undefined): string[] {
@@ -104,7 +118,7 @@ export function getAllowedServerIds(
  * Global admins (config.adminUsers) are exempt — they are the operator.
  */
 function assertGuildMayTarget(
-  interaction: ChatInputCommandInteraction,
+  interaction: ServerContextInteraction,
   server: ServerInstance,
 ): void {
   const allowed = getAllowedServerIds(interaction.guild?.id);
@@ -134,7 +148,7 @@ function assertGuildMayTarget(
  * unknown IDs and on IDs outside the guild's allowed set.
  */
 export function assertMayTargetServerId(
-  interaction: ChatInputCommandInteraction,
+  interaction: ServerContextInteraction,
   serverId: string,
 ): ServerInstance {
   const server = getServerInstance(serverId);
@@ -158,7 +172,7 @@ export function assertMayTargetServerId(
  *                 ID), or if this guild may not target the resolved server.
  */
 export function resolveServer(
-  interaction: ChatInputCommandInteraction,
+  interaction: ServerContextInteraction,
 ): ServerInstance {
   const explicit = interaction.options.getString("server");
   const server = explicit
@@ -182,7 +196,7 @@ export function resolveServer(
  * Use this when the command should handle the missing-server case itself.
  */
 export function tryResolveServer(
-  interaction: ChatInputCommandInteraction,
+  interaction: ServerContextInteraction,
 ): ServerInstance | null {
   try {
     return resolveServer(interaction);

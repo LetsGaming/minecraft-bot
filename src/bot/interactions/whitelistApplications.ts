@@ -46,7 +46,6 @@ import { recordAdminAction } from "@mcbot/core/utils/adminAudit.js";
 import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
 import { t, runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
 import { log } from "@mcbot/core/utils/logger.js";
-import type { ChatInputCommandInteraction } from "discord.js";
 import type { GuildConfig } from "@mcbot/core/types/index.js";
 
 const APPLY_ID = "wlapp:apply";
@@ -277,7 +276,7 @@ async function handleModalSubmit(
   const adminChannelId = cfg.adminChannelId;
 
   await runWithGuildLocale(guildId, async () => {
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral as number });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const mcName = interaction.fields.getTextInputValue("mcName").trim();
     const note = interaction.fields.getTextInputValue("note").trim();
@@ -403,15 +402,13 @@ async function handleDecisionButton(
     // admin check here (queue channels can be misconfigured as public).
     const allowed = isServerAdmin(
       interaction.user.id,
-      getMemberRoleIds(
-        interaction as unknown as ChatInputCommandInteraction,
-      ),
+      getMemberRoleIds(interaction),
       guildId,
     );
     if (!allowed) {
       await interaction.reply({
         content: t("wlapp.notAdmin"),
-        flags: MessageFlags.Ephemeral as number,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -429,7 +426,7 @@ async function handleDecisionButton(
       // Stale button (already decided, or the store was pruned).
       await interaction.followUp({
         content: t("wlapp.stale"),
-        flags: MessageFlags.Ephemeral as number,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -440,7 +437,7 @@ async function handleDecisionButton(
       if (!server) {
         await interaction.followUp({
           content: t("wlapp.serverGone", { server: app.serverId }),
-          flags: MessageFlags.Ephemeral as number,
+          flags: MessageFlags.Ephemeral,
         });
         return;
       }
@@ -454,7 +451,7 @@ async function handleDecisionButton(
         const msg = err instanceof Error ? err.message : String(err);
         await interaction.followUp({
           content: t("wlapp.approveFailed", { error: msg }),
-          flags: MessageFlags.Ephemeral as number,
+          flags: MessageFlags.Ephemeral,
         });
         return;
       }

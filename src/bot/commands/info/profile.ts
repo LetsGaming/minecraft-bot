@@ -43,7 +43,7 @@ export const data = new SlashCommandBuilder()
 export const execute = withErrorHandling(async (interaction) => {
   const server = resolveServer(interaction);
   const linked = await loadLinkedAccounts().catch(
-    () => ({}) as Record<string, string>,
+    (): Record<string, string> => ({}),
   );
 
   let player = interaction.options.getString("player")?.trim();

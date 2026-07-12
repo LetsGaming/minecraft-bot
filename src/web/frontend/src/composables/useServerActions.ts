@@ -1,4 +1,5 @@
 import { ref } from "vue";
+import { errorMessage } from "../utils/errorMessage";
 import { useToast } from "primevue/usetoast";
 import { useConfirm } from "primevue/useconfirm";
 import { apiGet, apiSend } from "../api";
@@ -56,7 +57,7 @@ export function useServerActions(refresh: () => Promise<unknown>) {
       toast.add({
         severity: "error",
         summary: `${capitalize(action)} failed`,
-        detail: (err as Error).message,
+        detail: errorMessage(err),
         life: 4000,
       });
     } finally {
@@ -80,7 +81,7 @@ export function useServerActions(refresh: () => Promise<unknown>) {
       toast.add({
         severity: "error",
         summary: "Log tail failed",
-        detail: (err as Error).message,
+        detail: errorMessage(err),
         life: 4000,
       });
     }

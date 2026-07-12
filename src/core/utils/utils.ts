@@ -241,9 +241,7 @@ const jsonCache = new Map<string, JsonCacheEntry>();
 const writeLocks = new Map<string, Promise<void>>();
 
 function isEnoent(err: unknown): boolean {
-  return (
-    err instanceof Error && (err as NodeJS.ErrnoException).code === "ENOENT"
-  );
+  return err instanceof Error && "code" in err && err.code === "ENOENT";
 }
 
 /**

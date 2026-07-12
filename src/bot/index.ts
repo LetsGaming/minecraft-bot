@@ -5,8 +5,7 @@ import {
   REST,
   Routes,
   MessageFlags,
-  type ChatInputCommandInteraction,
-  type AutocompleteInteraction,
+  type InteractionReplyOptions,
 } from "discord.js";
 import { readdirSync, statSync } from "fs";
 import path from "path";
@@ -104,6 +103,9 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
   ],
+  // discord.js's Client has no typed `commands` map; BotClient adds it and we
+  // populate it immediately below, so branding the freshly-made client here is
+  // the intended one-time widening (see the BotClient interface).
 }) as BotClient;
 
 // Re-cache automatically when config.json is edited on disk.
@@ -166,6 +168,9 @@ async function loadCommands(): Promise<void> {
   const files = getCommandFiles(path.join(__dirname, "commands"));
   for (const file of files) {
     try {
+      // Command modules are loaded dynamically, so their shape isn't known at
+      // compile time: import as Partial<BotCommand> and validate the required
+      // members (data + execute) below before the module is used.
       const cmd = (await import(path.resolve(file))) as Partial<BotCommand>;
       if (!cmd.data || !cmd.execute) continue;
       const name = cmd.data.name;
@@ -190,6 +195,7 @@ async function loadCommands(): Promise<void> {
         );
         continue;
       }
+      // data + execute were verified present above, so it's a complete command.
       commands.set(name, cmd as BotCommand);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -245,7 +251,7 @@ void (async () => {
   client.on("interactionCreate", async (interaction) => {
     // ── Autocomplete ──
     if (interaction.isAutocomplete()) {
-      const autocomplete = interaction as AutocompleteInteraction;
+      const autocomplete = interaction;
       const focused = autocomplete.options.getFocused(true);
 
       // Server autocomplete
@@ -271,9 +277,7 @@ void (async () => {
       if (["player", "player1", "player2"].includes(focused.name)) {
         try {
           const { getPlayerNames } = await import("@mcbot/core/utils/playerUtils.js");
-          const server = tryResolveServer(
-            autocomplete as unknown as ChatInputCommandInteraction,
-          );
+          const server = tryResolveServer(autocomplete);
           const names = server ? await getPlayerNames(server) : [];
           const filtered = names.filter((n) =>
             n.toLowerCase().startsWith(String(focused.value).toLowerCase()),
@@ -309,7 +313,7 @@ void (async () => {
 
     if (!interaction.isChatInputCommand()) return;
 
-    const chatInteraction = interaction as ChatInputCommandInteraction;
+    const chatInteraction = interaction;
     const command = commands.get(chatInteraction.commandName);
     if (!command) return;
 
@@ -328,7 +332,7 @@ void (async () => {
           { command: chatInteraction.commandName },
           chatInteraction.guild?.id,
         ),
-        flags: MessageFlags.Ephemeral as number,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -341,7 +345,7 @@ void (async () => {
       if (!allowed) {
         await chatInteraction.reply({
           content: "You do not have permission to use this command.",
-          flags: MessageFlags.Ephemeral as number,
+          flags: MessageFlags.Ephemeral,
         });
         return;
       }
@@ -353,7 +357,7 @@ void (async () => {
         const secs = cooldownSeconds(chatInteraction.user.id);
         await chatInteraction.reply({
           content: `Too many commands. Please wait ${secs}s.`,
-          flags: MessageFlags.Ephemeral as number,
+          flags: MessageFlags.Ephemeral,
         });
         return;
       }
@@ -361,9 +365,9 @@ void (async () => {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.error("command", `/${chatInteraction.commandName}: ${msg}`);
-      const errorMsg = {
+      const errorMsg: InteractionReplyOptions = {
         content: "❌ An error occurred.",
-        flags: MessageFlags.Ephemeral as number,
+        flags: MessageFlags.Ephemeral,
       };
       try {
         if (chatInteraction.replied || chatInteraction.deferred)

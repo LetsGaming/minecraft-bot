@@ -10,6 +10,7 @@
  * config.ts calls it at load time (see validateRawConfig).
  */
 import { NOTIFICATION_EVENTS, isNotificationEvent } from "@mcbot/schema";
+import { isRecord } from "./utils/objects.js";
 import type { RawBotConfig } from "./types/index.js";
 
 // ── Runtime schema validation ─────────────────────────────────────────────
@@ -135,6 +136,9 @@ export interface ConfigValidationResult {
 export function validateCandidateConfig(
   candidate: unknown,
 ): ConfigValidationResult {
+  // Kept as an explicit typeof guard (not isRecord) so `candidate` stays
+  // `unknown` here — that lets the entry assertion below be a single cast
+  // rather than the `unknown as` double cast a Record narrowing would force.
   if (
     typeof candidate !== "object" ||
     candidate === null ||
@@ -146,6 +150,10 @@ export function validateCandidateConfig(
       warnings: [],
     };
   }
+  // Loose input shape: every field below is validated defensively (typeof
+  // checks) before use, so asserting the raw type at the entry — after the
+  // object check above — is what lets us reference fields by name to validate
+  // them. This IS the validator; nothing downstream trusts the shape.
   const raw = candidate as RawBotConfig;
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -164,38 +172,26 @@ export function validateCandidateConfig(
     label: string,
   ): void => {
     if (block === undefined) return;
-    if (typeof block !== "object" || block === null || Array.isArray(block)) {
+    if (!isRecord(block)) {
       errors.push(`  - ${label}: must be an object keyed by command name`);
       return;
     }
-    for (const [cmd, override] of Object.entries(
-      block as Record<string, unknown>,
-    )) {
-      if (
-        typeof override !== "object" ||
-        override === null ||
-        Array.isArray(override)
-      ) {
+    for (const [cmd, override] of Object.entries(block)) {
+      if (!isRecord(override)) {
         errors.push(`  - ${label}.${cmd}: must be an object`);
         continue;
       }
-      const o = override as Record<string, unknown>;
+      const o = override;
       for (const key of ["enabled", "adminOnly"] as const) {
         if (o[key] !== undefined && typeof o[key] !== "boolean") {
           errors.push(`  - ${label}.${cmd}.${key}: must be a boolean`);
         }
       }
       if (o.options !== undefined) {
-        if (
-          typeof o.options !== "object" ||
-          o.options === null ||
-          Array.isArray(o.options)
-        ) {
+        if (!isRecord(o.options)) {
           errors.push(`  - ${label}.${cmd}.options: must be an object`);
         } else {
-          for (const [k, v] of Object.entries(
-            o.options as Record<string, unknown>,
-          )) {
+          for (const [k, v] of Object.entries(o.options)) {
             if (
               typeof v !== "string" &&
               typeof v !== "number" &&
@@ -690,14 +686,10 @@ export function validateCandidateConfig(
   }
 
   if (raw.limits !== undefined) {
-    if (
-      typeof raw.limits !== "object" ||
-      raw.limits === null ||
-      Array.isArray(raw.limits)
-    ) {
+    if (!isRecord(raw.limits)) {
       errors.push('  - limits: must be an object ({ "slashCapacity": 5 })');
     } else {
-      const l = raw.limits as Record<string, unknown>;
+      const l = raw.limits;
       for (const key of ["slashCapacity", "bridgeCapacity"]) {
         const v = l[key];
         if (v !== undefined && (typeof v !== "number" || v < 1)) {
@@ -735,17 +727,13 @@ export function validateCandidateConfig(
         }
         const restart = (entry as { restart?: unknown })?.restart;
         if (restart === undefined) continue;
-        if (
-          typeof restart !== "object" ||
-          restart === null ||
-          Array.isArray(restart)
-        ) {
+        if (!isRecord(restart)) {
           errors.push(
             `  - schedules.${sid}.restart: must be an object ({ "time": "04:00" })`,
           );
           continue;
         }
-        const r = restart as Record<string, unknown>;
+        const r = restart;
         if (
           typeof r.time !== "string" ||
           !/^([01]\d|2[0-3]):([0-5]\d)$/.test(r.time)
@@ -784,14 +772,10 @@ export function validateCandidateConfig(
   }
 
   if (raw.webui !== undefined) {
-    if (
-      typeof raw.webui !== "object" ||
-      raw.webui === null ||
-      Array.isArray(raw.webui)
-    ) {
+    if (!isRecord(raw.webui)) {
       errors.push('  - webui: must be an object ({ "enabled": true })');
     } else {
-      const w = raw.webui as Record<string, unknown>;
+      const w = raw.webui;
       if (w.enabled !== undefined && typeof w.enabled !== "boolean") {
         errors.push("  - webui.enabled: must be a boolean");
       }
@@ -836,17 +820,14 @@ export function validateCandidateConfig(
   }
 
   if (raw.updateNotifier !== undefined) {
-    if (
-      typeof raw.updateNotifier !== "object" ||
-      raw.updateNotifier === null ||
-      Array.isArray(raw.updateNotifier)
-    ) {
+    if (!isRecord(raw.updateNotifier)) {
       errors.push(
         '  - updateNotifier: must be an object ({ "enabled": false })',
       );
     } else {
+      const notifier = raw.updateNotifier;
       for (const key of ["enabled", "dmAdmins"] as const) {
-        const v = (raw.updateNotifier as Record<string, unknown>)[key];
+        const v = notifier[key];
         if (v !== undefined && typeof v !== "boolean") {
           errors.push(`  - updateNotifier.${key}: must be a boolean`);
         }

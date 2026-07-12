@@ -347,7 +347,7 @@ export default defineComponent({
       return this.guilds.find((g) => g.id === id)?.name ?? id;
     },
     roleDot(color: number) {
-      const hex = color ? `#${color.toString(16).padStart(6, "0")}` : "#8a9099";
+      const hex = color ? `#${color.toString(16).padStart(6, "0")}` : "var(--mc-muted)";
       return { background: hex };
     },
     reviewValue(f: FeatureDesc): string {
@@ -375,7 +375,7 @@ export default defineComponent({
   background: var(--mc-card); color: var(--mc-muted);
   border: 0.5px solid var(--mc-border-strong);
 }
-.step.active .step-num { background: var(--mc-accent); color: #06210f; border-color: var(--mc-accent); }
+.step.active .step-num { background: var(--mc-accent); color: var(--mc-on-accent); border-color: var(--mc-accent); }
 .step.active { color: var(--mc-text); }
 .step.done .step-num { background: rgba(52,197,106,.15); color: var(--mc-accent); border-color: var(--mc-accent-border); }
 
@@ -387,7 +387,7 @@ export default defineComponent({
 .field-label.mt { margin-top: 20px; }
 .w-full { width: 100%; }
 .hint { color: var(--mc-muted); font-size: 12.5px; line-height: 1.45; margin: 7px 0 0; }
-.warn-hint { color: #d9b25a; }
+.warn-hint { color: var(--mc-warn); }
 .top-hint { margin: 0 0 14px; }
 
 .guild-opt { display: flex; align-items: center; gap: 8px; justify-content: space-between; width: 100%; }

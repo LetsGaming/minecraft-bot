@@ -25,6 +25,8 @@ export function mapRows<T>(
   map: (row: Row) => T,
   ...params: unknown[]
 ): T[] {
+  // The single audited spot where a raw driver result is cast to Row; every
+  // field is then read through a checked `col.*` accessor by `map` (see header).
   return (stmt.all(...params) as Row[]).map(map);
 }
 
@@ -34,6 +36,7 @@ export function mapRow<T>(
   map: (row: Row) => T,
   ...params: unknown[]
 ): T | null {
+  // Audited raw→Row cast (see header); `map` reads fields via checked col.*.
   const row = stmt.get(...params) as Row | undefined;
   return row ? map(row) : null;
 }

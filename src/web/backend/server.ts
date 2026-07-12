@@ -35,6 +35,7 @@ import { loadConfig } from "@mcbot/core/config.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { registerErrorHandler } from "./errors.js";
 import { registerSetupGuard } from "./requiredEnv.js";
+import { DISCORD_CDN_URL } from "@mcbot/schema";
 import { requireSession, requireSysadmin } from "./auth.js";
 import { registerRateLimiting } from "./rateLimit.js";
 import { registerAuthRoutes } from "./routes/auth.js";
@@ -65,7 +66,7 @@ export function buildServer(): FastifyInstance {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", "data:", "https://cdn.discordapp.com"],
+        imgSrc: ["'self'", "data:", DISCORD_CDN_URL],
         connectSrc: ["'self'"],
         frameAncestors: ["'none'"],
         objectSrc: ["'none'"],
@@ -100,7 +101,10 @@ export function buildServer(): FastifyInstance {
   // config, and the audit log. These expose the Minecraft server and
   // secrets, so they require a sysadmin (a top-level adminUsers ID).
   app.register(async (api) => {
-    api.addHook("preHandler", requireSysadmin);
+    // onRequest (not preHandler) so the auth gate fails closed BEFORE Fastify
+    // validates a route's body schema — an unauthenticated caller gets 401,
+    // never a 400 that would confirm the endpoint's body shape to a stranger.
+    api.addHook("onRequest", requireSysadmin);
     registerMonitoringRoutes(api); // status + audit — read-only
     registerConfigRoutes(api);     // full schema-driven config editing
     registerServerRoutes(api);     // start/stop/restart/backup, log tail
@@ -110,7 +114,8 @@ export function buildServer(): FastifyInstance {
   // canManageGuild for the specific guild it touches. These never expose
   // the Minecraft server, other guilds, or global settings.
   app.register(async (api) => {
-    api.addHook("preHandler", requireSession);
+    // onRequest for the same fail-closed reason as the sysadmin scope above.
+    api.addHook("onRequest", requireSession);
     registerSetupRoutes(api);       // channels/roles + the caller's guilds
     registerGuildConfigRoutes(api); // read/write one guild's config block
   });

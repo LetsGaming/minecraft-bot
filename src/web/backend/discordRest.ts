@@ -15,8 +15,19 @@
  */
 import { loadConfig } from "@mcbot/core/config.js";
 import { log } from "@mcbot/core/utils/logger.js";
+import { isRecord } from "@mcbot/core/utils/objects.js";
+import {
+  type HttpError,
+  ServiceUnavailable,
+  TooManyRequests,
+  Forbidden,
+  NotFound,
+  BadGateway,
+} from "./errors.js";
 
-const API = "https://discord.com/api/v10";
+import { DISCORD_API_V10_BASE } from "@mcbot/schema";
+
+const API = DISCORD_API_V10_BASE;
 const TIMEOUT_MS = 10_000;
 const CACHE_TTL_MS = 30_000;
 
@@ -37,6 +48,32 @@ export class DiscordApiError extends Error {
     super(message);
     this.name = "DiscordApiError";
   }
+}
+
+/**
+ * Map a failed Discord read to the typed HTTP failure a route should throw, so
+ * the central error handler renders it (fastify.md / backend-apis.md: "one
+ * error handler over typed failures", not a hand-built `reply.code().send()`
+ * per call site). Switches on the DiscordApiError discriminator rather than
+ * matching message substrings (QUAL-11):
+ *   - no token configured        → 503 (operator needs to set it)
+ *   - Discord rate-limited us    → 429 (carry the retry hint)
+ *   - upstream 403 / 404         → pass through
+ *   - any other upstream/network → 502 (bad gateway)
+ * The client-facing message keeps the "Couldn't reach Discord" framing the
+ * dashboard already showed.
+ */
+export function discordHttpError(err: unknown): HttpError {
+  const detail = err instanceof Error ? err.message : String(err);
+  const message = `Couldn't reach Discord: ${detail}`;
+  if (err instanceof DiscordApiError) {
+    if (err.reason === "no-token") return new ServiceUnavailable(message);
+    if (err.reason === "rate-limit")
+      return new TooManyRequests(message, err.retryAfterSeconds);
+    if (err.status === 403) return new Forbidden(message);
+    if (err.status === 404) return new NotFound(message);
+  }
+  return new BadGateway(message);
 }
 
 export interface DiscordGuild {
@@ -89,10 +126,10 @@ function botToken(): string {
   return cfg.token;
 }
 
-async function discordGet<T>(path: string, cacheKey?: string): Promise<T> {
+async function discordGet(path: string, cacheKey?: string): Promise<unknown> {
   if (cacheKey) {
     const hit = cache.get(cacheKey);
-    if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.value as T;
+    if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.value;
   }
   const res = await fetch(`${API}${path}`, {
     headers: {
@@ -118,7 +155,7 @@ async function discordGet<T>(path: string, cacheKey?: string): Promise<T> {
     log.warn("web", `Discord GET ${path} failed: ${res.status} ${body.slice(0, 200)}`);
     throw new DiscordApiError(`Discord API error (${res.status}).`, "http", res.status);
   }
-  const value = (await res.json()) as T;
+  const value: unknown = await res.json();
   if (cacheKey) cache.set(cacheKey, { at: Date.now(), value });
   return value;
 }
@@ -129,37 +166,54 @@ async function discordGet<T>(path: string, cacheKey?: string): Promise<T> {
  * up here", and independent of which OAuth scopes the admin granted.
  */
 export async function listBotGuilds(): Promise<DiscordGuild[]> {
-  const raw = await discordGet<
-    { id: string; name: string; icon: string | null; permissions: string }[]
-  >("/users/@me/guilds", "guilds");
-  return raw.map((g) => {
+  const raw = await discordGet("/users/@me/guilds", "guilds");
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((g) => {
+    if (!isRecord(g)) return [];
+    const { id, name, icon, permissions } = g;
+    if (typeof id !== "string" || typeof name !== "string") return [];
     let manageable = false;
     try {
-      const perms = BigInt(g.permissions);
+      const perms = BigInt(typeof permissions === "string" ? permissions : "0");
       manageable =
         (perms & ADMINISTRATOR) === ADMINISTRATOR ||
         (perms & MANAGE_GUILD) === MANAGE_GUILD;
     } catch {
       /* malformed permissions string → treat as not manageable */
     }
-    return { id: g.id, name: g.name, icon: g.icon, manageable };
+    return [
+      { id, name, icon: typeof icon === "string" ? icon : null, manageable },
+    ];
   });
 }
 
 /** Text + announcement channels of a guild, sorted for display. */
 export async function listGuildChannels(guildId: string): Promise<DiscordChannel[]> {
-  const raw = await discordGet<
-    { id: string; name: string; type: number; position: number; parent_id: string | null }[]
-  >(`/guilds/${guildId}/channels`, `channels:${guildId}`);
+  const raw = await discordGet(`/guilds/${guildId}/channels`, `channels:${guildId}`);
+  if (!Array.isArray(raw)) return [];
   return raw
-    .filter((c) => c.type === 0 || c.type === 5) // text, announcement
-    .map((c) => ({
-      id: c.id,
-      name: c.name,
-      type: c.type,
-      position: c.position,
-      parentId: c.parent_id,
-    }))
+    .flatMap((c) => {
+      if (!isRecord(c)) return [];
+      const { id, name, type, position, parent_id } = c;
+      if (
+        typeof id !== "string" ||
+        typeof name !== "string" ||
+        typeof type !== "number"
+      ) {
+        return [];
+      }
+      // text, announcement
+      if (type !== 0 && type !== 5) return [];
+      return [
+        {
+          id,
+          name,
+          type,
+          position: typeof position === "number" ? position : 0,
+          parentId: typeof parent_id === "string" ? parent_id : null,
+        },
+      ];
+    })
     .sort((a, b) => a.position - b.position);
 }
 
@@ -169,16 +223,22 @@ export async function listGuildChannels(guildId: string): Promise<DiscordChannel
  * members, so they'd be dead options in a role picker.
  */
 export async function listGuildRoles(guildId: string): Promise<DiscordRole[]> {
-  const raw = await discordGet<
-    { id: string; name: string; color: number; position: number; managed: boolean }[]
-  >(`/guilds/${guildId}/roles`, `roles:${guildId}`);
+  const raw = await discordGet(`/guilds/${guildId}/roles`, `roles:${guildId}`);
+  if (!Array.isArray(raw)) return [];
   return raw
-    .map((r) => ({
-      id: r.id,
-      name: r.name,
-      color: r.color,
-      position: r.position,
-      assignable: !r.managed && r.id !== guildId,
-    }))
+    .flatMap((r) => {
+      if (!isRecord(r)) return [];
+      const { id, name, color, position, managed } = r;
+      if (typeof id !== "string" || typeof name !== "string") return [];
+      return [
+        {
+          id,
+          name,
+          color: typeof color === "number" ? color : 0,
+          position: typeof position === "number" ? position : 0,
+          assignable: managed !== true && id !== guildId,
+        },
+      ];
+    })
     .sort((a, b) => b.position - a.position);
 }

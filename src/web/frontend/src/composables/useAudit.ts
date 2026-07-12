@@ -1,4 +1,5 @@
 import { ref } from "vue";
+import { errorMessage } from "../utils/errorMessage";
 import { useToast } from "primevue/usetoast";
 import { apiGet } from "../api";
 import type { AuditEntry } from "../api";
@@ -21,7 +22,7 @@ export function useAudit() {
         toast.add({
           severity: "error",
           summary: "Failed to load audit log",
-          detail: (err as Error).message,
+          detail: errorMessage(err),
           life: 4000,
         });
       }

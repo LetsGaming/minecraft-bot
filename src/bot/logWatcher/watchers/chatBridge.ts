@@ -1,6 +1,7 @@
 import { type Client, type Webhook } from "discord.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { createPlayerEmbed } from "../../utils/embedUtils.js";
+import { playerAvatarUrl } from "../../utils/mcHeads.js";
 import { EmbedColor } from "../../utils/embedColors.js";
 import type { ILogWatcher } from "../logWatcher.js";
 import type { ServerInstance } from "@mcbot/core/utils/server.js";
@@ -194,7 +195,7 @@ export function registerChatBridge(
             if (hook) {
               await hook.send({
                 username: player.slice(0, 80),
-                avatarURL: `https://mc-heads.net/avatar/${encodeURIComponent(player)}/64`,
+                avatarURL: playerAvatarUrl(player),
                 content: message.slice(0, 2000),
                 allowedMentions: { parse: [] },
               });

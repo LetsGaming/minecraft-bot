@@ -649,3 +649,66 @@ describe("guild-scope freshness on writes (SEC-03)", () => {
     expect((await put(adminCookie())).statusCode).toBe(200);
   });
 });
+
+// Boundary behaviour introduced by the TypeBox route-schema refactor: write
+// bodies are validated at the edge (a malformed body is a 400 before the
+// handler runs), and the auth gate fails closed BEFORE that validation so a
+// stranger never gets a 400 that confirms the body shape.
+describe("route schema validation + fail-closed ordering", () => {
+  const managedGuild = "222222222222222222";
+  function mgrCookie(): string {
+    return (
+      `${SESSION_COOKIE}=` +
+      encodeSigned({
+        uid: "444444444444444444",
+        tag: "mgr",
+        guilds: [managedGuild],
+        exp: Date.now() + 60_000,
+        gexp: Date.now() + 60_000,
+      })
+    );
+  }
+  async function putConfig(body: unknown, cookie?: string) {
+    const app = buildServer();
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/config",
+      headers: {
+        "content-type": "application/json",
+        ...(cookie ? { cookie } : {}),
+      },
+      payload: body as object,
+    });
+    await app.close();
+    return res;
+  }
+
+  it("rejects a config write missing baseHash with 400", async () => {
+    const res = await putConfig({ config: {} }, adminCookie());
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("rejects a config write whose config is not an object with 400", async () => {
+    const res = await putConfig({ baseHash: "hash-1", config: 5 }, adminCookie());
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("fails closed: an unauthenticated malformed write is 401, not 400", async () => {
+    // The auth gate (onRequest) must run before body validation — otherwise a
+    // stranger sending garbage would learn the endpoint's body shape via 400.
+    const res = await putConfig({ config: 5 });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("rejects a malformed guild-config write body with 400", async () => {
+    const app = buildServer();
+    const res = await app.inject({
+      method: "PUT",
+      url: `/api/guilds/${managedGuild}/config`,
+      headers: { cookie: mgrCookie(), "content-type": "application/json" },
+      payload: { baseHash: "hash-1" }, // guildConfig missing
+    });
+    await app.close();
+    expect(res.statusCode).toBe(400);
+  });
+});

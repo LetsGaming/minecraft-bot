@@ -1,4 +1,5 @@
 import { ref } from "vue";
+import { errorMessage } from "../utils/errorMessage";
 import { apiGet } from "../api";
 import type { StatusResponse, ServerStatus } from "../api";
 
@@ -20,7 +21,7 @@ export function useServerStatus() {
       botAlive.value = res.bot.alive;
       return res;
     } catch (err) {
-      error.value = (err as Error).message;
+      error.value = errorMessage(err);
       return null;
     } finally {
       loading.value = false;

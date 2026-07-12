@@ -123,7 +123,7 @@ async function checkAndPost(
     const lb = gcfg.leaderboard;
     if (!lb?.channelId) continue;
 
-    const interval = (lb.interval ?? globalInterval) as LeaderboardInterval;
+    const interval = lb.interval ?? globalInterval;
     const intervalMs = INTERVAL_MS[interval];
     if (!intervalMs) {
       log.warn(

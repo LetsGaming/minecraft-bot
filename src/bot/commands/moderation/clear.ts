@@ -1,7 +1,6 @@
 import {
   PermissionFlagsBits,
   SlashCommandBuilder,
-  type TextChannel,
 } from "discord.js";
 import { createSuccessEmbed } from "../../utils/embedUtils.js";
 import { withErrorHandling } from "../middleware.js";
@@ -23,7 +22,7 @@ export const data = new SlashCommandBuilder()
 export const execute = withErrorHandling(
   async (interaction) => {
     const amount = interaction.options.getInteger("amount", true);
-    const channel = interaction.channel as TextChannel | null;
+    const channel = interaction.channel;
 
     if (!channel || !("bulkDelete" in channel)) {
       throw new Error("This command can only be used in a text channel.");

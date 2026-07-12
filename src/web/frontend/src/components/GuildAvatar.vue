@@ -12,6 +12,7 @@
 <script lang="ts">
 import { defineComponent } from "vue";
 import { useGuilds } from "../composables/useGuilds";
+import { DISCORD_CDN_URL } from "@mcbot/schema";
 
 // Renders a guild's Discord icon, or a coloured initial when there's no
 // icon (or the name isn't known yet). Self-contained: it resolves the
@@ -32,7 +33,7 @@ export default defineComponent({
       return this.guildIcon(this.guildId);
     },
     iconUrl(): string {
-      return `https://cdn.discordapp.com/icons/${this.guildId}/${this.iconHash}.png?size=64`;
+      return `${DISCORD_CDN_URL}/icons/${this.guildId}/${this.iconHash}.png?size=64`;
     },
     initial(): string {
       return this.guildName(this.guildId).charAt(0).toUpperCase();

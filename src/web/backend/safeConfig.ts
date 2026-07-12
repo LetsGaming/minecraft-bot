@@ -18,6 +18,9 @@ export const SECRET_PLACEHOLDER = "•••••";
 const SERVER_SECRET_KEYS = ["rconPassword", "apiKey"] as const;
 
 function clone<T>(value: T): T {
+  // Deep clone via JSON round-trip. Config is plain JSON data (no functions,
+  // dates, or cycles), so the structure of a T survives intact and the assert
+  // is sound.
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
@@ -28,9 +31,13 @@ export function toSafeConfig(raw: RawBotConfig): RawBotConfig {
     safe.token = SECRET_PLACEHOLDER;
   }
   for (const server of Object.values(safe.servers ?? {})) {
+    // Widen to an index type to mask secrets by key name: RawServerConfig is an
+    // interface (no index signature), so a dynamic — though known-set — key
+    // access needs this. Safe: `server` is always a config object.
+    const rec = server as Record<string, unknown>;
     for (const key of SERVER_SECRET_KEYS) {
-      const rec = server as Record<string, unknown>;
-      if (typeof rec[key] === "string" && (rec[key] as string).length > 0) {
+      const value = rec[key];
+      if (typeof value === "string" && value.length > 0) {
         rec[key] = SECRET_PLACEHOLDER;
       }
     }
@@ -52,10 +59,15 @@ export function mergeSecretPlaceholders(
 
   if (merged.token === SECRET_PLACEHOLDER) {
     if (typeof current.token === "string") merged.token = current.token;
+    // `token` is a declared field, so deleting it needs the index-type widening
+    // (you can't `delete` a statically-known property). This drops a masked
+    // token that has no stored value, rather than persisting the placeholder.
     else delete (merged as unknown as Record<string, unknown>).token;
   }
 
   for (const [id, server] of Object.entries(merged.servers ?? {})) {
+    // Same index-type widening as toSafeConfig (see note): mask/unmask secrets
+    // by key name over interface-typed server configs.
     const rec = server as Record<string, unknown>;
     const currentServer = current.servers?.[id] as
       | Record<string, unknown>

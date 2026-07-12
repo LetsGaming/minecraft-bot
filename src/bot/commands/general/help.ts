@@ -10,6 +10,7 @@ import {
 } from "../../utils/embedUtils.js";
 import type { BotClient } from "@mcbot/core/types/index.js";
 import { log } from "@mcbot/core/utils/logger.js";
+import { isRecord } from "@mcbot/core/utils/objects.js";
 import { resolveCommandPolicy } from "@mcbot/core/utils/commandPolicy.js";
 
 export const data = new SlashCommandBuilder()
@@ -22,6 +23,8 @@ export async function execute(
   // Hide commands that are disabled for THIS guild — /help should match
   // what the guild can actually run (registration is enabled-anywhere).
   const commands = [
+    // The running client is always the BotClient we branded at startup; this
+    // reads the `commands` map discord.js doesn't type on the base Client.
     ...(interaction.client as BotClient).commands.values(),
   ].filter(
     (cmd) =>
@@ -42,14 +45,24 @@ export async function execute(
     for (const command of pageCommands) {
       const cmdData = command.data;
       const { name, description } = cmdData;
-      const options =
-        "options" in cmdData
-          ? (cmdData.options as unknown as Array<{
-              name: string;
-              description: string;
-              required?: boolean;
-            }>)
-          : [];
+      // Read option metadata by narrowing each entry rather than casting the
+      // whole list: builder option objects expose name/description/required at
+      // runtime, and `required` only exists on basic option types.
+      const rawOptions: unknown[] = "options" in cmdData ? cmdData.options : [];
+      const options = rawOptions.flatMap((opt) => {
+        if (!isRecord(opt)) return [];
+        const { name: optName, description: optDescription, required } = opt;
+        if (typeof optName !== "string" || typeof optDescription !== "string") {
+          return [];
+        }
+        return [
+          {
+            name: optName,
+            description: optDescription,
+            required: typeof required === "boolean" ? required : undefined,
+          },
+        ];
+      });
 
       embed.addFields({
         name: `/${name}`,

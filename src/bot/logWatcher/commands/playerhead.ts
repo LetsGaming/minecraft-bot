@@ -1,6 +1,6 @@
 import { defineCommand } from "../defineCommand.js";
 import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
-import type { MojangProfile } from "@mcbot/core/types/index.js";
+import { fetchMojangProfile } from "@mcbot/core/utils/mojang.js";
 
 const cmd = defineCommand({
   name: "playerhead",
@@ -16,19 +16,16 @@ const cmd = defineCommand({
       );
       return;
     }
-    const res = await fetch(
-      `https://api.mojang.com/users/profiles/minecraft/${encodeURIComponent(player)}`,
-    );
-    if (!res.ok) {
+    const profile = await fetchMojangProfile(player);
+    if (!profile) {
       await server.sendCommand(
         `/msg ${username} Player "${player}" not found.`,
       );
       return;
     }
     // Use the canonical capitalization Mojang returns.
-    const profile = (await res.json()) as MojangProfile;
     await server.sendCommand(
-      `/give ${username} player_head[profile={name:"${profile.name ?? player}"}]`,
+      `/give ${username} player_head[profile={name:"${profile.name}"}]`,
     );
   },
 });

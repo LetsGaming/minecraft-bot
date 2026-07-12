@@ -132,7 +132,7 @@
   <div v-else-if="kind === 'numberList'" class="field">
     <label class="fname">{{ name }}</label>
     <InputChips
-      :modelValue="(arrayModel as unknown[]).map(String)"
+      :modelValue="arrayModel.map(String)"
       separator=","
       class="fcontrol"
       @update:modelValue="emitNumberArray($event)"
@@ -177,6 +177,8 @@
 
 <script lang="ts">
 import { defineComponent, inject, type PropType } from "vue";
+import { errorMessage } from "../utils/errorMessage";
+import { isRecord } from "../utils/isRecord";
 import InputText from "primevue/inputtext";
 import InputNumber from "primevue/inputnumber";
 import Select from "primevue/select";
@@ -196,7 +198,6 @@ import {
 } from "./schemaField.js";
 import {
   SchemaRefsKey,
-  type SchemaRefs,
   type RefOption,
 } from "../composables/useSchemaRefs.js";
 
@@ -244,7 +245,7 @@ export default defineComponent({
       return this.node.properties ?? {};
     },
     objectValue(): Record<string, unknown> {
-      return (this.modelValue ?? {}) as Record<string, unknown>;
+      return isRecord(this.modelValue) ? this.modelValue : {};
     },
     // Coerce the value for array-like controls: an "X or X[]" union may hold a
     // single value (e.g. ServerScope "smp") — present it as a one-item list.
@@ -263,7 +264,7 @@ export default defineComponent({
     refControl(): { multi: boolean; options: RefOption[] } | null {
       const rk = referenceKind(this.name);
       if (!rk || !this.schemaRefs) return null;
-      const refs = this.schemaRefs as SchemaRefs;
+      const refs = this.schemaRefs;
       const options =
         rk === "server" ? refs.servers : rk === "channel" ? refs.channels : refs.roles;
       if (!options || options.length === 0) return null;
@@ -306,7 +307,7 @@ export default defineComponent({
       try {
         this.emitValue(JSON.parse(raw));
       } catch (err) {
-        this.jsonError = `Invalid JSON: ${(err as Error).message}`;
+        this.jsonError = `Invalid JSON: ${errorMessage(err)}`;
       }
     },
   },

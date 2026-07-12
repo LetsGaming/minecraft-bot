@@ -2,6 +2,7 @@ import { getFirstInstance } from "./server.js";
 import type { ServerInstance } from "./server.js";
 import { loadKnownPlayers } from "./utils.js";
 import { log } from "./logger.js";
+import { isRecord } from "./objects.js";
 import * as serverAccess from "./serverAccess.js";
 import type {
   FlattenedStat,
@@ -315,7 +316,9 @@ export async function loadAllStats(
 export function flattenStats(statsFile: MinecraftStatsFile): FlattenedStat[] {
   const allStats: Record<string, unknown> = statsFile.stats
     ? statsFile.stats
-    : (statsFile as Record<string, unknown>);
+    : isRecord(statsFile)
+      ? statsFile
+      : {};
   const flattened: FlattenedStat[] = [];
 
   const keys = Object.keys(allStats);
@@ -342,9 +345,9 @@ export function flattenStats(statsFile: MinecraftStatsFile): FlattenedStat[] {
   } else {
     for (const category of keys) {
       const group = allStats[category];
-      if (typeof group !== "object" || group === null) continue;
+      if (!isRecord(group)) continue;
       for (const key of Object.keys(group)) {
-        const value = (group as Record<string, unknown>)[key];
+        const value = group[key];
         if (typeof value !== "number") continue;
         flattened.push({
           fullKey: `${category}.${key}`,

@@ -27,6 +27,8 @@ export type NotificationEvent = (typeof NOTIFICATION_EVENTS)[number];
 
 /** Type guard: is an arbitrary string a known notification event key? */
 export function isNotificationEvent(value: string): value is NotificationEvent {
+  // Widen the const tuple to readonly string[] so .includes accepts an
+  // arbitrary string (TS otherwise restricts the arg to the literal union).
   return (NOTIFICATION_EVENTS as readonly string[]).includes(value);
 }
 

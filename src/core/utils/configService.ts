@@ -29,6 +29,9 @@ import type { RawBotConfig } from "../types/index.js";
 
 /** Raw on-disk config (no env overrides, no variables.txt resolution). */
 export function readRawConfig(): RawBotConfig {
+  // Reads the operator's own config.json. Callers of the raw config (config
+  // diffing, secret masking) treat its shape defensively; this is the same
+  // parse-then-use pattern as loadConfig(), which runs full validation.
   return JSON.parse(
     fs.readFileSync(getConfigPath(), "utf-8"),
   ) as RawBotConfig;

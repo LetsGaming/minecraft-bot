@@ -67,6 +67,10 @@ export interface ClaimedDailyStore {
 // recovers from .bak; if even that fails, the command should fail loudly.
 
 export async function loadDailyRewardsConfig(): Promise<DailyRewardsConfig> {
+  // dailyRewards.json is an operator-authored config file bundled with the
+  // deployment; loadJson returns unknown, and we assert the config shape here.
+  // (Kept as a cast rather than a full parse: it's first-party config, and
+  // loadJson already recovers a corrupt file from its .bak — see above.)
   return (await loadJson(REWARDS_PATH)) as DailyRewardsConfig;
 }
 
@@ -81,8 +85,7 @@ function isV2Store(raw: unknown): raw is ClaimedDailyStore {
 }
 
 export async function loadClaimedStore(): Promise<ClaimedDailyStore> {
-  const raw = (kvGet<Record<string, unknown>>("claimedDaily") ??
-    {}) as Record<string, unknown>;
+  const raw = kvGet<Record<string, unknown>>("claimedDaily") ?? {};
 
   if (isV2Store(raw)) return raw;
 
@@ -105,6 +108,9 @@ export async function loadClaimedStore(): Promise<ClaimedDailyStore> {
 
   const store: ClaimedDailyStore = {
     version: 2,
+    // Legacy migration: the pre-v2 on-disk format was exactly a userId→claim
+    // map, i.e. a ClaimedDailyMap, so reinterpreting the flat `raw` as one is
+    // the format upgrade. This path runs once and is then persisted.
     servers: { [target]: raw as ClaimedDailyMap },
   };
   await saveClaimedStore(store); // persist so the migration never re-runs

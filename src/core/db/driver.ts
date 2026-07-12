@@ -62,6 +62,8 @@ export function openDatabase(path: string): SqlDatabase {
   // Note: v12 loads its native binding lazily — at construction, not at
   // require — so the constructor call must sit inside the same guard.
   try {
+    // `require` (CommonJS interop for the native module) is untyped; assert the
+    // constructor signature we call. See the note above on why it's lazy.
     const BetterSqlite3 = require("better-sqlite3") as new (
       p: string,
     ) => SqlDatabase;

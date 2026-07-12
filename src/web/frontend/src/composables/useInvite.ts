@@ -1,4 +1,5 @@
 import { ref } from "vue";
+import { errorMessage } from "../utils/errorMessage";
 import { useToast } from "primevue/usetoast";
 import { apiGet } from "../api";
 import type { InviteResponse } from "../api";
@@ -21,7 +22,7 @@ export function useInvite() {
       toast.add({
         severity: "error",
         summary: "Invite failed",
-        detail: (err as Error).message,
+        detail: errorMessage(err),
         life: 4000,
       });
     } finally {

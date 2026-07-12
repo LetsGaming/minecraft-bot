@@ -9,37 +9,37 @@
  * LIST is filtered to what the caller may manage — so a guild manager only
  * ever sees and reads their own guilds. The server list is sysadmin-only.
  *
- * Discord calls can fail (network, rate limit, missing/invalid token, bot
- * not in the guild). Each handler maps those to a clean JSON error.
+ * A failed Discord read becomes a typed HTTP failure via discordHttpError
+ * (which switches on the DiscordApiError discriminator, QUAL-11) and is
+ * rendered by the one error handler — no per-route reply.code().send().
  */
 import type { FastifyInstance } from "fastify";
+import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
 import { readRawConfig } from "@mcbot/core/utils/configService.js";
 import {
   listBotGuilds,
   listGuildChannels,
   listGuildRoles,
-  DiscordApiError,
+  discordHttpError,
 } from "../discordRest.js";
 import { sessionFromRequest, isSysadmin, canManageGuild } from "../auth.js";
+import { Forbidden } from "../errors.js";
+import { IdParams } from "./schemas.js";
 
-// Map a failed Discord read to the HTTP status we return. Switches on the
-// typed DiscordApiError discriminator rather than matching error-message
-// substrings, which silently broke whenever the wording changed (QUAL-11).
-function statusFor(err: unknown): number {
-  if (err instanceof DiscordApiError) {
-    if (err.reason === "no-token") return 503;
-    if (err.reason === "rate-limit") return 429;
-    if (err.status === 403 || err.status === 404) return err.status;
-    return 502; // other upstream Discord error
+/** The 403 a guild-scoped route throws when the caller doesn't manage it. */
+function assertManages(session: ReturnType<typeof sessionFromRequest>, guildId: string): void {
+  if (!canManageGuild(session!, guildId)) {
+    throw new Forbidden("You don't manage that guild.");
   }
-  return 502; // network / unknown
 }
 
 export function registerSetupRoutes(app: FastifyInstance): void {
+  const api = app.withTypeProvider<TypeBoxTypeProvider>();
+
   // The guilds the caller may configure: sysadmins see every guild the bot
   // is in; everyone else only the guilds they manage. This is what feeds
   // guild names/icons and the setup wizard's picker.
-  app.get("/api/setup/guilds", async (req, reply) => {
+  api.get("/api/setup/guilds", async (req) => {
     const session = sessionFromRequest(req)!;
     try {
       const all = await listBotGuilds();
@@ -48,43 +48,34 @@ export function registerSetupRoutes(app: FastifyInstance): void {
         : all.filter((g) => session.guilds.includes(g.id));
       return { guilds };
     } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err);
-      return reply.code(statusFor(err)).send({ error: `Couldn't reach Discord: ${detail}` });
+      throw discordHttpError(err);
     }
   });
 
   // Text/announcement channels for one guild — only if the caller manages it.
-  app.get<{ Params: { id: string } }>(
+  api.get(
     "/api/setup/guilds/:id/channels",
-    async (req, reply) => {
-      const session = sessionFromRequest(req)!;
-      if (!canManageGuild(session, req.params.id)) {
-        return reply.code(403).send({ error: "You don't manage that guild." });
-      }
+    { schema: { params: IdParams } },
+    async (req) => {
+      assertManages(sessionFromRequest(req), req.params.id);
       try {
-        const channels = await listGuildChannels(req.params.id);
-        return { channels };
+        return { channels: await listGuildChannels(req.params.id) };
       } catch (err) {
-        const detail = err instanceof Error ? err.message : String(err);
-        return reply.code(statusFor(err)).send({ error: `Couldn't reach Discord: ${detail}` });
+        throw discordHttpError(err);
       }
     },
   );
 
   // Assignable roles for one guild — only if the caller manages it.
-  app.get<{ Params: { id: string } }>(
+  api.get(
     "/api/setup/guilds/:id/roles",
-    async (req, reply) => {
-      const session = sessionFromRequest(req)!;
-      if (!canManageGuild(session, req.params.id)) {
-        return reply.code(403).send({ error: "You don't manage that guild." });
-      }
+    { schema: { params: IdParams } },
+    async (req) => {
+      assertManages(sessionFromRequest(req), req.params.id);
       try {
-        const roles = await listGuildRoles(req.params.id);
-        return { roles };
+        return { roles: await listGuildRoles(req.params.id) };
       } catch (err) {
-        const detail = err instanceof Error ? err.message : String(err);
-        return reply.code(statusFor(err)).send({ error: `Couldn't reach Discord: ${detail}` });
+        throw discordHttpError(err);
       }
     },
   );
@@ -92,10 +83,10 @@ export function registerSetupRoutes(app: FastifyInstance): void {
   // The Minecraft server names, for the wizard's "default server" picker.
   // Sysadmin-only: a guild manager should get no information about the
   // Minecraft servers, so managers simply don't see this picker.
-  app.get("/api/setup/servers", async (req, reply) => {
+  api.get("/api/setup/servers", async (req) => {
     const session = sessionFromRequest(req)!;
     if (!isSysadmin(session)) {
-      return reply.code(403).send({ error: "Sysadmin access required — this needs a bot super-admin." });
+      throw new Forbidden("Sysadmin access required — this needs a bot super-admin.");
     }
     const cfg = readRawConfig();
     return { servers: Object.keys(cfg.servers ?? {}) };

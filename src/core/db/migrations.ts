@@ -14,6 +14,7 @@
  * recorded and applies nothing.
  */
 import type { SqlDatabase } from "./driver.js";
+import { mapRows, col } from "./rows.js";
 import { log } from "../utils/logger.js";
 
 interface Migration {
@@ -156,10 +157,12 @@ export function runMigrations(db: SqlDatabase): void {
 
   db.exec("BEGIN IMMEDIATE");
   try {
-    const appliedRows = db
-      .prepare("SELECT id FROM schema_migrations")
-      .all() as Array<{ id: number }>;
-    const applied = new Set(appliedRows.map((r) => r.id));
+    const applied = new Set(
+      mapRows(
+        db.prepare("SELECT id FROM schema_migrations"),
+        (row) => col.int(row, "id"),
+      ),
+    );
 
     for (const m of MIGRATIONS) {
       if (applied.has(m.id)) continue;

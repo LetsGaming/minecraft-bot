@@ -25,6 +25,10 @@ async function handle<T>(res: Response): Promise<T> {
     }
     throw new Error(detail);
   }
+  // Responses come from this app's own backend, whose payloads are the shared
+  // contract types in @mcbot/schema (imported below). Asserting the caller's T
+  // reflects that contract — the frontend and backend share one definition, so
+  // a drift is a compile error there, not a silent mis-shape here.
   return res.json() as Promise<T>;
 }
 

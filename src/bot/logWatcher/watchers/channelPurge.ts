@@ -24,6 +24,10 @@ async function purgeChannel(
       );
       return;
     }
+    // The `"messages" in fetched` guard above proves this is a message-capable
+    // channel; discord.js's fetch() union can't be narrowed to a concrete
+    // TextChannel through an `in` check, and purge only ever runs against
+    // configured guild text channels, so we assert that concrete type here.
     channel = fetched as TextChannel;
   } catch {
     log.warn("purge", `Failed to fetch channel ${channelId}`);

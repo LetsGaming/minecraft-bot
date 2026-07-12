@@ -219,7 +219,7 @@ export default defineComponent({
 .hero-icon {
   width: 44px; height: 44px; flex: none;
   border-radius: 11px; display: grid; place-items: center;
-  background: #5865f2; color: #fff; font-size: 21px;
+  background: var(--mc-discord); color: var(--mc-on-brand); font-size: 21px;
 }
 .hero-body { flex: 1; }
 .hero-body h3 { margin: 0 0 2px; font-size: 14.5px; font-weight: 500; }

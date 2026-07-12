@@ -21,6 +21,13 @@
  */
 import { createHmac, timingSafeEqual, randomBytes } from "crypto";
 import { loadConfig } from "@mcbot/core/config.js";
+import { isRecord } from "@mcbot/core/utils/objects.js";
+import {
+  DISCORD_OAUTH_AUTHORIZE_URL,
+  DISCORD_OAUTH_TOKEN_URL,
+  DISCORD_USER_URL,
+  DISCORD_USER_GUILDS_URL,
+} from "@mcbot/schema";
 import type { FastifyReply, FastifyRequest } from "fastify";
 
 export const SESSION_COOKIE = "mcbot_session";
@@ -44,6 +51,9 @@ export interface Session {
   gexp?: number;
 }
 
+// Read from the environment on each call rather than cached at load: the setup
+// guard must observe the secret being absent at runtime (see webSetupGuard) and
+// surface a clear "dashboard not configured" error, not a stale value.
 function sessionSecret(): string {
   const secret = process.env.WEBUI_SESSION_SECRET;
   if (!secret || secret.length < 16) {
@@ -86,6 +96,10 @@ export function decodeSigned<T>(token: string | undefined): T | null {
   const b = Buffer.from(expected);
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
   try {
+    // The HMAC check above proves *we* produced this payload, so its JSON is
+    // trusted data, not arbitrary input — a generic cast to the caller's T is
+    // the intended contract of a signed-token decoder. Malformed JSON (only
+    // possible if our own signing changed) is caught and returns null.
     return JSON.parse(Buffer.from(payload, "base64url").toString()) as T;
   } catch {
     return null;
@@ -139,6 +153,30 @@ export function guildScopeFresh(session: Session): boolean {
  * From Discord's `GET /users/@me/guilds` payload, the IDs of guilds the
  * user can manage: owner, Administrator, or Manage Guild.
  */
+/**
+ * Narrow the raw Discord `/users/@me/guilds` body to just the fields we read.
+ * Discord is a third party, so its shape isn't ours to trust: an entry without
+ * a string `id` is dropped; `owner`/`permissions` stay optional (and
+ * manageableGuildIds already tolerates a missing/garbled permissions string).
+ */
+function parseDiscordGuilds(
+  raw: unknown,
+): Array<{ id: string; owner?: boolean; permissions?: string }> {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((g) => {
+    if (!isRecord(g)) return [];
+    const { id, owner, permissions } = g;
+    if (typeof id !== "string") return [];
+    return [
+      {
+        id,
+        owner: typeof owner === "boolean" ? owner : undefined,
+        permissions: typeof permissions === "string" ? permissions : undefined,
+      },
+    ];
+  });
+}
+
 export function manageableGuildIds(
   guilds: Array<{ id: string; owner?: boolean; permissions?: string }>,
 ): string[] {
@@ -197,7 +235,7 @@ export function buildAuthorizeUrl(): { url: string; state: string } {
     state,
     prompt: "none",
   });
-  return { url: `https://discord.com/oauth2/authorize?${params}`, state };
+  return { url: `${DISCORD_OAUTH_AUTHORIZE_URL}?${params}`, state };
 }
 
 export function verifyState(state: string | undefined): boolean {
@@ -209,7 +247,7 @@ export function verifyState(state: string | undefined): boolean {
 export async function exchangeCode(
   code: string,
 ): Promise<{ id: string; tag: string; guildIds: string[] } | null> {
-  const tokenRes = await fetch("https://discord.com/api/oauth2/token", {
+  const tokenRes = await fetch(DISCORD_OAUTH_TOKEN_URL, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -222,47 +260,48 @@ export async function exchangeCode(
     signal: AbortSignal.timeout(10_000),
   });
   if (!tokenRes.ok) return null;
-  const token = (await tokenRes.json()) as { access_token?: string };
-  if (!token.access_token) return null;
+  const tokenBody: unknown = await tokenRes.json();
+  const accessToken =
+    isRecord(tokenBody) && typeof tokenBody.access_token === "string"
+      ? tokenBody.access_token
+      : null;
+  if (!accessToken) return null;
 
-  const meRes = await fetch("https://discord.com/api/users/@me", {
-    headers: { authorization: `Bearer ${token.access_token}` },
+  const meRes = await fetch(DISCORD_USER_URL, {
+    headers: { authorization: `Bearer ${accessToken}` },
     signal: AbortSignal.timeout(10_000),
   });
   if (!meRes.ok) return null;
-  const me = (await meRes.json()) as {
-    id?: string;
-    username?: string;
-    discriminator?: string;
-  };
-  if (!me.id) return null;
+  const meBody: unknown = await meRes.json();
+  if (!isRecord(meBody) || typeof meBody.id !== "string") return null;
+  const id = meBody.id;
+  const username =
+    typeof meBody.username === "string" ? meBody.username : undefined;
+  const discriminator =
+    typeof meBody.discriminator === "string" ? meBody.discriminator : undefined;
   const tag =
-    me.discriminator && me.discriminator !== "0"
-      ? `${me.username}#${me.discriminator}`
-      : (me.username ?? me.id);
+    discriminator && discriminator !== "0"
+      ? `${username}#${discriminator}`
+      : (username ?? id);
 
   // The user's guilds (with their permissions there) — how we know which
   // guilds this person may configure. A failure here is non-fatal: they
   // can still log in, just with no guild-manager access until next login.
   let guildIds: string[] = [];
   try {
-    const gRes = await fetch("https://discord.com/api/users/@me/guilds", {
-      headers: { authorization: `Bearer ${token.access_token}` },
+    const gRes = await fetch(DISCORD_USER_GUILDS_URL, {
+      headers: { authorization: `Bearer ${accessToken}` },
       signal: AbortSignal.timeout(10_000),
     });
     if (gRes.ok) {
-      const list = (await gRes.json()) as Array<{
-        id: string;
-        owner?: boolean;
-        permissions?: string;
-      }>;
+      const list = parseDiscordGuilds(await gRes.json());
       guildIds = manageableGuildIds(list);
     }
   } catch {
     /* guild fetch failed → no manager access this session */
   }
 
-  return { id: me.id, tag, guildIds };
+  return { id, tag, guildIds };
 }
 
 // ── Fastify glue ──────────────────────────────────────────────────────────
@@ -316,7 +355,7 @@ export function clearSessionCookie(reply: FastifyReply): void {
   );
 }
 
-/** preHandler: every /api route requires a valid (any) logged-in session. */
+/** onRequest gate: every /api route requires a valid (any) logged-in session. */
 export async function requireSession(
   req: FastifyRequest,
   reply: FastifyReply,
@@ -328,10 +367,9 @@ export async function requireSession(
     });
     return;
   }
-  (req as FastifyRequest & { session: Session }).session = session;
 }
 
-/** preHandler: sysadmin-only routes (server ops, host metrics, full config). */
+/** onRequest gate: sysadmin-only routes (server ops, host metrics, full config). */
 export async function requireSysadmin(
   req: FastifyRequest,
   reply: FastifyReply,
@@ -350,5 +388,4 @@ export async function requireSysadmin(
     });
     return;
   }
-  (req as FastifyRequest & { session: Session }).session = session;
 }

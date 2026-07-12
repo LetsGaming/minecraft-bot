@@ -41,6 +41,7 @@
 
 <script lang="ts">
 import { defineComponent, type PropType } from "vue";
+import { isRecord } from "../utils/isRecord";
 import InputText from "primevue/inputtext";
 import Button from "primevue/button";
 import {
@@ -80,7 +81,7 @@ export default defineComponent({
   },
   computed: {
     model(): Record<string, unknown> {
-      return (this.modelValue ?? {}) as Record<string, unknown>;
+      return isRecord(this.modelValue) ? this.modelValue : {};
     },
     keys(): string[] {
       return Object.keys(this.model);

@@ -71,7 +71,7 @@ async function dmDeathCoords(
   player: string,
 ): Promise<void> {
   const linked = await loadLinkedAccounts().catch(
-    () => ({}) as Record<string, string>,
+    (): Record<string, string> => ({}),
   );
   const lower = player.toLowerCase();
   const discordId = Object.entries(linked).find(

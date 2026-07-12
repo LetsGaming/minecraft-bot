@@ -17,6 +17,7 @@
 import fs from "fs";
 import fsPromises from "fs/promises";
 import path from "path";
+import { isRecord } from "./objects.js";
 import { execFile, spawn } from "child_process";
 import { promisify } from "util";
 import { log } from "./logger.js";
@@ -58,6 +59,12 @@ function assertUuidFormat(uuid: string): void {
 
 // ── API helper ────────────────────────────────────────────────────────────
 
+// apiGet/apiPost/apiDelete talk to *our own* server wrapper, whose response
+// shapes are a versioned contract enforced at connect time by
+// verifyWrapperVersion() (see MIN_WRAPPER_VERSION). Casting the JSON to the
+// caller-specified T is therefore asserting a pinned first-party contract, not
+// blindly trusting arbitrary third-party JSON — a wrapper that changed a field
+// would fail the version gate, not silently mis-shape a response here.
 async function apiGet<T>(cfg: ServerConfig, route: string): Promise<T> {
   const url = `${cfg.apiUrl!.replace(/\/$/, "")}/instances/${cfg.id}${route}`;
   const headers: Record<string, string> = {};
@@ -72,7 +79,7 @@ async function apiGet<T>(cfg: ServerConfig, route: string): Promise<T> {
     const body = await res.text();
     throw new Error(`API ${route} → ${res.status}: ${body}`);
   }
-  return res.json() as Promise<T>;
+  return res.json() as Promise<T>; // pinned first-party contract (see note above)
 }
 
 async function apiPost<T>(
@@ -97,7 +104,7 @@ async function apiPost<T>(
     const text = await res.text();
     throw new Error(`API POST ${route} → ${res.status}: ${text}`);
   }
-  return res.json() as Promise<T>;
+  return res.json() as Promise<T>; // pinned first-party contract (see apiGet)
 }
 
 // ── Log tailing ───────────────────────────────────────────────────────────
@@ -188,7 +195,7 @@ async function apiDelete<T>(cfg: ServerConfig, route: string): Promise<T> {
     const text = await res.text();
     throw new Error(`API DELETE ${route} → ${res.status}: ${text}`);
   }
-  return res.json() as Promise<T>;
+  return res.json() as Promise<T>; // pinned first-party contract (see apiGet)
 }
 
 // ── Wrapper /info: version handshake + remote host metrics ───────────────
@@ -281,6 +288,23 @@ export async function verifyWrapperVersion(cfg: ServerConfig): Promise<void> {
 // ── Whitelist ─────────────────────────────────────────────────────────────
 
 /** Read whitelist.json for the given server. Returns [] on any error. */
+/**
+ * Narrow an unknown value parsed from whitelist.json / usercache.json to
+ * WhitelistEntry[]. Anything without a string `name` and `uuid` is dropped, so
+ * a malformed file yields fewer entries — never a wrongly-typed one that would
+ * blow up downstream. This is the single checked reader for both files.
+ */
+function toWhitelistEntries(data: unknown): WhitelistEntry[] {
+  if (!Array.isArray(data)) return [];
+  return data.flatMap((e) => {
+    if (!isRecord(e)) return [];
+    const { name, uuid } = e;
+    return typeof name === "string" && typeof uuid === "string"
+      ? [{ name, uuid }]
+      : [];
+  });
+}
+
 export async function readWhitelist(
   cfg: ServerConfig,
 ): Promise<WhitelistEntry[]> {
@@ -297,7 +321,7 @@ export async function readWhitelist(
       "utf-8",
     );
     const data: unknown = JSON.parse(raw);
-    return Array.isArray(data) ? (data as WhitelistEntry[]) : [];
+    return toWhitelistEntries(data);
   } catch {
     return [];
   }
@@ -331,10 +355,7 @@ export async function readUserCache(
       "utf-8",
     );
     const data: unknown = JSON.parse(raw);
-    if (!Array.isArray(data)) return [];
-    return (data as Array<{ name?: unknown; uuid?: unknown }>)
-      .filter((e) => typeof e?.name === "string" && typeof e?.uuid === "string")
-      .map((e) => ({ name: e.name as string, uuid: e.uuid as string }));
+    return toWhitelistEntries(data);
   } catch {
     return [];
   }
@@ -388,6 +409,11 @@ export async function readStats(
   const filePath = path.join(dir, `${uuid}.json`);
   try {
     const raw = await fsPromises.readFile(filePath, "utf-8");
+    // MinecraftStatsFile is an open Minecraft-authored shape (flat *or* nested,
+    // thousands of possible stat keys). Every downstream reader in statUtils
+    // walks it defensively (guards each access, tolerates missing keys), so a
+    // structural check here would add no safety — the consumer already assumes
+    // nothing about the shape. We deliberately keep the cast for that reason.
     return JSON.parse(raw) as MinecraftStatsFile;
   } catch {
     return null;

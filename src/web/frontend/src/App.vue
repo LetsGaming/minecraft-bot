@@ -197,7 +197,9 @@ export default defineComponent({
       this.activeTab = this.isSysadmin ? "overview" : "guilds";
     } catch (err) {
       if (!(err instanceof UnauthorizedError)) {
-        // eslint-disable-next-line no-console
+        // Browser context: console is the only error sink available, and an
+        // unexpected failure here (network, unexpected 5xx) is worth surfacing
+        // for debugging. A 401 is an expected "not signed in" and stays quiet.
         console.error(err);
       }
       this.me = null;
@@ -251,13 +253,13 @@ export default defineComponent({
 .login-hint { margin: 18px 0 22px; }
 .discord-btn { width: 100%; }
 :deep(.discord-btn.p-button) {
-  background: #5865f2;
-  border-color: #5865f2;
-  color: #fff;
+  background: var(--mc-discord);
+  border-color: var(--mc-discord);
+  color: var(--mc-on-brand);
 }
 :deep(.discord-btn.p-button:hover) {
-  background: #4752c4;
-  border-color: #4752c4;
+  background: var(--mc-discord-strong);
+  border-color: var(--mc-discord-strong);
 }
 
 .brand-mark {
@@ -265,7 +267,7 @@ export default defineComponent({
   border-radius: 14px;
   display: grid; place-items: center;
   margin: 0 auto;
-  background: #1e2b22;
+  background: var(--mc-accent-bg);
   border: 0.5px solid var(--mc-accent-border);
   color: var(--mc-accent);
   font-size: 26px;

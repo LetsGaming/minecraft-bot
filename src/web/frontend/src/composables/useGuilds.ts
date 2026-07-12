@@ -1,4 +1,5 @@
 import { ref } from "vue";
+import { errorMessage } from "../utils/errorMessage";
 import { apiGet } from "../api";
 import type { SetupGuild } from "../api";
 
@@ -23,7 +24,7 @@ async function load(force = false): Promise<void> {
     guilds.value = res.guilds;
     loaded.value = true;
   } catch (err) {
-    error.value = (err as Error).message;
+    error.value = errorMessage(err);
   } finally {
     loading.value = false;
   }

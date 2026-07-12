@@ -38,6 +38,10 @@ export type FieldKind =
 
 /** Follow `#/definitions/*` refs to the concrete node (cycle-guarded). */
 export function derefNode(node: unknown, defs: Definitions): JsonSchemaNode {
+  // Walks the generated config JSON schema, whose nodes are loosely typed
+  // (JsonSchemaNode has all-optional fields). We assert that shape while
+  // resolving $refs; the `typeof n.$ref === "string"` guard below is what
+  // actually gates each hop, so a non-conforming node just stops the walk.
   let n = (node ?? {}) as JsonSchemaNode;
   let guard = 0;
   while (n && typeof n.$ref === "string" && guard++ < 20) {

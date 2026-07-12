@@ -126,6 +126,8 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
   const manifestIngame: Array<{ name: string; description: string }> = [];
   for (const file of commandFiles) {
     try {
+      // Dynamically imported module — shape unknown at compile time. Assert the
+      // expected surface, then validate `init` is callable below before use.
       const mod = (await import(
         path.resolve(file)
       )) as Partial<InGameCommandResult> & {

@@ -16,6 +16,7 @@
 import fs from "fs";
 import path from "path";
 import type { SqlDatabase } from "./driver.js";
+import { mapRow, col } from "./rows.js";
 import { getRootDir } from "../utils/utils.js";
 import { log } from "../utils/logger.js";
 import type {
@@ -29,11 +30,15 @@ import type { AdminAuditEntry } from "../utils/adminAudit.js";
 // connection through getDb(), and this importer runs INSIDE getDb() before
 // the singleton is assigned — importing it would re-enter initialization
 // recursively. The importer only ever touches the handle it was given.
-function kvGetRaw(db: SqlDatabase, key: string): unknown | null {
-  const row = db
-    .prepare("SELECT value FROM kv_store WHERE key = ?")
-    .get(key) as { value: string } | undefined;
-  return row ? (JSON.parse(row.value) as unknown) : null;
+function kvGetRaw(db: SqlDatabase, key: string): unknown {
+  // rows.ts (mapRow/col) is safe to use here — unlike db/kv.ts it doesn't
+  // resolve the connection through getDb(), so there's no re-entrancy.
+  const value = mapRow(
+    db.prepare("SELECT value FROM kv_store WHERE key = ?"),
+    (r) => col.text(r, "value"),
+    key,
+  );
+  return value === null ? null : JSON.parse(value);
 }
 
 function kvSetRaw(db: SqlDatabase, key: string, value: unknown): void {
@@ -46,6 +51,15 @@ function dataPath(file: string): string {
   return path.resolve(getRootDir(), "data", file);
 }
 
+/**
+ * Read and JSON-parse a legacy data file, or null if absent/corrupt.
+ *
+ * Returns `unknown`; each caller asserts its file's historical shape (e.g.
+ * `as WhitelistAuditMap`). Those casts are deliberate: this is a one-time,
+ * best-effort migration of files this app itself wrote in an earlier version,
+ * and every consumer defends against missing keys while copying rows into the
+ * DB. A malformed file is warned about and skipped rather than trusted.
+ */
 function readLegacy(file: string): unknown | null {
   const p = dataPath(file);
   if (!fs.existsSync(p)) return null;

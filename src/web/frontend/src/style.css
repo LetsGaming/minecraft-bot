@@ -17,6 +17,14 @@
   --mc-good: #4ade80;
   --mc-mid: #fbbf24;
   --mc-bad: #e05858;
+  --mc-warn: #d9b25a;
+  /* Discord brand (matches the bot's EmbedColor.Blurple) + text on brand fill. */
+  --mc-discord: #5865f2;
+  --mc-discord-strong: #4752c4;
+  --mc-on-brand: #fff;
+  /* Accent-tinted surface + dark text that reads on an accent-filled element. */
+  --mc-accent-bg: #1e2b22;
+  --mc-on-accent: #06210f;
   --mc-sidebar-w: 210px;
 }
 

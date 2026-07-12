@@ -267,10 +267,10 @@ async function buildAllServerFields(): Promise<
   results.forEach((result, i) => {
     const instanceId = instances[i]?.id ?? `server-${i + 1}`;
     if (result.status === "fulfilled") {
-      map.set(instanceId, result.value as ServerFieldResult);
+      const value = result.value;
+      map.set(instanceId, value);
       // Feed the player-count history for free — this pass already paid
       // for the query. Never let bookkeeping break the status update.
-      const value = result.value as ServerFieldResult;
       if (value.online === true) {
         recordPlayerCountSample(instanceId, value.counts.online).catch(
           () => {},

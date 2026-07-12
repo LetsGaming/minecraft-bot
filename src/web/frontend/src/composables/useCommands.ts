@@ -1,4 +1,6 @@
 import { ref } from "vue";
+import { errorMessage, parseErrorList } from "../utils/errorMessage";
+import { isRecord } from "../utils/isRecord";
 import { useToast } from "primevue/usetoast";
 import { apiGet, apiSend } from "../api";
 import type { ConfigResponse } from "../api";
@@ -60,7 +62,7 @@ export function useCommands() {
       data.value = res;
       overrides.value = JSON.parse(JSON.stringify(res.overrides));
     } catch (err) {
-      loadError.value = (err as Error).message;
+      loadError.value = errorMessage(err);
     }
   }
 
@@ -140,15 +142,24 @@ export function useCommands() {
       // carries optimistic-concurrency info and never writes the
       // envelope's `hash` field into config.json itself.
       const res = await apiGet<ConfigResponse>("/api/config");
-      const config = res.config as Record<string, unknown>;
+      const config = isRecord(res.config) ? res.config : {};
       config.commands = overrides.value.global;
-      const guilds = (config.guilds ?? {}) as Record<string, Record<string, unknown>>;
+      // config.guilds / config.servers are maps of per-scope config objects in
+      // the schema-driven config; assert that nested shape to edit `.commands`
+      // in place. Each entry is guard-checked before it's touched.
+      const guilds = (config.guilds ?? {}) as Record<
+        string,
+        Record<string, unknown>
+      >;
       for (const [gid, block] of Object.entries(overrides.value.guilds)) {
         if (!guilds[gid]) continue;
         if (Object.keys(block).length > 0) guilds[gid].commands = block;
         else delete guilds[gid].commands;
       }
-      const servers = (config.servers ?? {}) as Record<string, Record<string, unknown>>;
+      const servers = (config.servers ?? {}) as Record<
+        string,
+        Record<string, unknown>
+      >;
       for (const [sid, block] of Object.entries(overrides.value.servers)) {
         if (!servers[sid]) continue;
         if (Object.keys(block).length > 0) servers[sid].commands = block;
@@ -165,10 +176,8 @@ export function useCommands() {
       });
       await load();
     } catch (err) {
-      const message = (err as Error).message;
-      const detail = message.startsWith("[")
-        ? (JSON.parse(message) as string[]).join("\n")
-        : message;
+      const message = errorMessage(err);
+      const detail = parseErrorList(message).join("\n");
       toast.add({ severity: "error", summary: "Save failed", detail, life: 5000 });
     } finally {
       saving.value = false;

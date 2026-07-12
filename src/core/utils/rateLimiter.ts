@@ -13,6 +13,7 @@
  */
 
 import { loadConfig } from "../config.js";
+import { isRecord } from "./objects.js";
 
 const PRUNE_INTERVAL_MS = 5 * 60_000; // prune idle buckets every 5 minutes
 
@@ -99,7 +100,8 @@ function configuredLimits(): {
 } {
   let limits: Record<string, unknown> = {};
   try {
-    limits = (loadConfig().limits ?? {}) as Record<string, unknown>;
+    const cfgLimits = loadConfig().limits;
+    if (isRecord(cfgLimits)) limits = cfgLimits;
   } catch {
     /* config unavailable (isolated tests, schema generator) — defaults */
   }

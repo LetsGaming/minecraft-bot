@@ -1,4 +1,6 @@
 import { ref, toValue } from "vue";
+import { errorMessage, parseErrorList } from "../utils/errorMessage";
+import { isRecord } from "../utils/isRecord";
 import { useToast } from "primevue/usetoast";
 import { DEFAULT_NOTIFICATION_EVENTS } from "@mcbot/schema";
 import { apiGet, apiSend } from "../api";
@@ -142,7 +144,7 @@ export function useGuildSetup(
         await seedFromExisting();
       }
     } catch (err) {
-      guildError.value = (err as Error).message;
+      guildError.value = errorMessage(err);
     } finally {
       loadingGuilds.value = false;
     }
@@ -166,28 +168,25 @@ export function useGuildSetup(
       const block = res.guildConfig;
       if (!block || Object.keys(block).length === 0) return;
       existingGuildBlock.value = block;
-      defaultServer.value = (block.defaultServer as string) ?? null;
+      defaultServer.value =
+        typeof block.defaultServer === "string" ? block.defaultServer : null;
       for (const f of FEATURES) {
         const val = block[f.key];
         if (val === undefined || val === null) continue;
         const m = model.value[f.key];
         if (f.key === "linkedRole") {
           m.enabled = true;
-          m.roleId = val as string;
+          m.roleId = typeof val === "string" ? val : "";
         } else if (f.key === "statusEmbed") {
-          m.enabled = (val as { enabled?: boolean }).enabled === true;
-        } else {
-          const obj = val as {
-            channelId?: string;
-            adminChannelId?: string;
-            useWebhook?: boolean;
-            interval?: string;
-          };
+          m.enabled = isRecord(val) && val.enabled === true;
+        } else if (isRecord(val)) {
           m.enabled = true;
-          m.channelId = obj.channelId ?? null;
-          if (obj.adminChannelId) m.adminChannelId = obj.adminChannelId;
-          if (obj.useWebhook !== undefined) m.useWebhook = obj.useWebhook;
-          if (obj.interval) m.interval = obj.interval;
+          m.channelId =
+            typeof val.channelId === "string" ? val.channelId : null;
+          if (typeof val.adminChannelId === "string")
+            m.adminChannelId = val.adminChannelId;
+          if (typeof val.useWebhook === "boolean") m.useWebhook = val.useWebhook;
+          if (typeof val.interval === "string") m.interval = val.interval;
         }
       }
     } catch {
@@ -212,7 +211,7 @@ export function useGuildSetup(
       roles.value = rl.roles.filter((r) => r.assignable);
       channelsForGuild.value = guildId.value;
     } catch (err) {
-      channelError.value = (err as Error).message;
+      channelError.value = errorMessage(err);
     } finally {
       loadingChannels.value = false;
     }
@@ -286,16 +285,12 @@ export function useGuildSetup(
       });
       return true;
     } catch (err) {
-      const message = (err as Error).message;
+      const message = errorMessage(err);
       if (message.includes("409") || message.toLowerCase().includes("conflict")) {
         writeError.value =
           "Config changed underneath the wizard (someone else saved). Reopen the wizard to start from the current config.";
       } else if (message.startsWith("[")) {
-        try {
-          writeError.value = (JSON.parse(message) as string[]).join("\n");
-        } catch {
-          writeError.value = message;
-        }
+        writeError.value = parseErrorList(message).join("\n");
       } else {
         writeError.value = message;
       }

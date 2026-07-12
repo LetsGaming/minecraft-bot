@@ -38,7 +38,7 @@ const cmd = defineCommand({
     }
 
     const linked = await loadLinkedAccounts().catch(
-      () => ({}) as Record<string, string>,
+      (): Record<string, string> => ({}),
     );
     poll.votes[voterKeyForMc(username, linked)] = idx;
     await savePollStore(store);

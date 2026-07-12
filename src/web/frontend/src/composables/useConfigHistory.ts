@@ -1,4 +1,5 @@
 import { ref } from "vue";
+import { errorMessage } from "../utils/errorMessage";
 import { useToast } from "primevue/usetoast";
 import { useConfirm } from "primevue/useconfirm";
 import { apiGet, apiSend } from "../api";
@@ -77,7 +78,7 @@ export function useConfigHistory() {
       toast.add({
         severity: "error",
         summary: "Rollback failed",
-        detail: (err as Error).message,
+        detail: errorMessage(err),
         life: 5000,
       });
     } finally {

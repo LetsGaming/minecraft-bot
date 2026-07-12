@@ -79,8 +79,9 @@ export async function ensureManagedCategory(
   const botUserId = guild.client.user!.id;
 
   const existing = guild.channels.cache.find(
-    (ch) => ch.type === ChannelType.GuildCategory && ch.name === categoryName,
-  ) as CategoryChannel | undefined;
+    (ch): ch is CategoryChannel =>
+      ch.type === ChannelType.GuildCategory && ch.name === categoryName,
+  );
 
   if (existing) return { category: existing, guild };
 
@@ -106,11 +107,11 @@ export async function ensureTextChannel(
   topic?: string,
 ): Promise<EnsuredTextChannel> {
   const existing = guild.channels.cache.find(
-    (ch) =>
+    (ch): ch is TextChannel =>
       ch.type === ChannelType.GuildText &&
       ch.parentId === categoryId &&
       ch.name === channelName,
-  ) as TextChannel | undefined;
+  );
 
   if (existing) return { channel: existing, categoryId };
 
@@ -124,7 +125,7 @@ export async function ensureTextChannel(
     permissionOverwrites: [],
   });
 
-  return { channel: channel as TextChannel, categoryId };
+  return { channel, categoryId };
 }
 
 // ─── Voice channel ────────────────────────────────────────────────────────────
@@ -141,11 +142,11 @@ export async function ensureVoiceChannel(
   channelName: string,
 ): Promise<EnsuredVoiceChannel> {
   const existing = guild.channels.cache.find(
-    (ch) =>
+    (ch): ch is VoiceChannel =>
       ch.type === ChannelType.GuildVoice &&
       ch.parentId === categoryId &&
       ch.name === channelName,
-  ) as VoiceChannel | undefined;
+  );
 
   if (existing) return { channel: existing, categoryId };
 
@@ -156,7 +157,7 @@ export async function ensureVoiceChannel(
     permissionOverwrites: [],
   });
 
-  return { channel: channel as VoiceChannel, categoryId };
+  return { channel, categoryId };
 }
 
 // ─── Voice channel rename ─────────────────────────────────────────────────────

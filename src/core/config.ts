@@ -141,6 +141,9 @@ export function loadConfig(): BotConfig {
   // An actionable message beats a raw JSON parse stack trace
   let raw: RawBotConfig;
   try {
+    // Optimistically typed on parse; validateRawConfig() below is the actual
+    // runtime gate — it throws an actionable error if the shape doesn't match,
+    // so a wrong config.json never reaches the resolution logic mis-typed.
     raw = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8")) as RawBotConfig;
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
@@ -165,7 +168,10 @@ export function loadConfig(): BotConfig {
       servers[id] = resolveServerConfig({ ...srv, id });
     }
   } else {
-    // Legacy single-server config — wrap it
+    // Legacy single-server config — wrap it. The top-level object doubles as a
+    // server block in this old format, so we deliberately reinterpret the
+    // whole raw config as one RawServerConfig (fields not present are resolved
+    // to defaults by resolveServerConfig).
     servers.default = resolveServerConfig({
       ...(raw as unknown as RawServerConfig),
       id: "default",
@@ -197,7 +203,7 @@ export function loadConfig(): BotConfig {
     ...(raw.schedules   ? { schedules:   raw.schedules }   : {}),
     ...(raw.milestones  ? { milestones:  raw.milestones }  : {}),
     ...(raw.webui       ? { webui:       raw.webui }       : {}),
-  }) as BotConfig;
+  });
 
   return _config;
 }
@@ -239,8 +245,7 @@ export function watchConfig(onChange?: (newConfig: BotConfig) => void): void {
           // Don't crash the bot on a malformed config save — the old config
           // stays active until a valid file is written.
           const msg = err instanceof Error ? err.message : String(err);
-          // eslint-disable-next-line no-console
-          console.error(`[config] Reload failed after file change: ${msg}`);
+          log.error("config", `Reload failed after file change: ${msg}`);
         }
       }, 300);
     });

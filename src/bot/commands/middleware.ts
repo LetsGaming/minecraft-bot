@@ -35,9 +35,13 @@ export function isServerAdmin(
  * Extract the role IDs from an interaction's member, handling both the
  * cached GuildMember shape (roles.cache Map) and the raw API shape
  * (roles as a string array).
+ *
+ * Typed by the only field it reads — `member` — so any interaction that
+ * carries one (chat command, button, autocomplete) can be passed directly,
+ * with no force-cast between discord.js's separate interaction classes.
  */
 export function getMemberRoleIds(
-  interaction: ChatInputCommandInteraction,
+  interaction: Pick<ChatInputCommandInteraction, "member">,
 ): string[] {
   const roles = interaction.member?.roles;
   if (!roles) return [];

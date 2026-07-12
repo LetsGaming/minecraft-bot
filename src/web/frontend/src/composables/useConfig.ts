@@ -1,4 +1,6 @@
 import { ref, watch } from "vue";
+import { errorMessage, parseErrorList } from "../utils/errorMessage";
+import { isRecord } from "../utils/isRecord";
 import { useToast } from "primevue/usetoast";
 import { apiGet, apiSend } from "../api";
 import type { ConfigResponse } from "../api";
@@ -46,11 +48,11 @@ export function useConfig() {
   async function load(): Promise<void> {
     try {
       const res = await apiGet<ConfigResponse>("/api/config");
-      model.value = res.config as Record<string, unknown>;
+      model.value = isRecord(res.config) ? res.config : {};
       baseHash.value = res.hash;
       rawText.value = JSON.stringify(model.value, null, 2);
     } catch (err) {
-      errors.value = [`Could not load config: ${(err as Error).message}`];
+      errors.value = [`Could not load config: ${errorMessage(err)}`];
       return;
     }
     try {
@@ -63,7 +65,7 @@ export function useConfig() {
 
   async function reload(): Promise<void> {
     const res = await apiGet<ConfigResponse>("/api/config");
-    model.value = res.config as Record<string, unknown>;
+    model.value = isRecord(res.config) ? res.config : {};
     baseHash.value = res.hash;
     if (rawMode.value) rawText.value = JSON.stringify(model.value, null, 2);
   }
@@ -83,7 +85,7 @@ export function useConfig() {
       try {
         body = JSON.parse(rawText.value);
       } catch (err) {
-        errors.value = [`Raw JSON does not parse: ${(err as Error).message}`];
+        errors.value = [`Raw JSON does not parse: ${errorMessage(err)}`];
         return;
       }
     }
@@ -104,7 +106,7 @@ export function useConfig() {
       });
       await reload();
     } catch (err) {
-      const message = (err as Error).message;
+      const message = errorMessage(err);
       if (message.includes("changed since you loaded it")) {
         // 409: someone else wrote config.json underneath this editor.
         // Surface it and refresh the baseline so the next save can work
@@ -112,9 +114,7 @@ export function useConfig() {
         errors.value = [message];
         await reload().catch(() => {});
       } else {
-        errors.value = message.startsWith("[")
-          ? (JSON.parse(message) as string[])
-          : [message];
+        errors.value = parseErrorList(message);
       }
     } finally {
       saving.value = false;

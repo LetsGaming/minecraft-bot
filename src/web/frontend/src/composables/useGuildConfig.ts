@@ -1,4 +1,5 @@
 import { ref } from "vue";
+import { errorMessage, parseErrorList } from "../utils/errorMessage";
 import { useToast } from "primevue/usetoast";
 import { apiGet, apiSend } from "../api";
 import type { JsonSchema } from "./useConfig";
@@ -46,7 +47,7 @@ export function useGuildConfig() {
         definitions.value = s.definitions;
       }
     } catch (err) {
-      errors.value = [`Could not load guild config: ${(err as Error).message}`];
+      errors.value = [`Could not load guild config: ${errorMessage(err)}`];
     } finally {
       loading.value = false;
     }
@@ -79,14 +80,12 @@ export function useGuildConfig() {
       await load(currentGuildId); // refresh hash for a follow-up save
       return true;
     } catch (err) {
-      const message = (err as Error).message;
+      const message = errorMessage(err);
       if (message.includes("changed since you loaded it")) {
         errors.value = [message];
         await load(currentGuildId).catch(() => {});
       } else {
-        errors.value = message.startsWith("[")
-          ? (JSON.parse(message) as string[])
-          : [message];
+        errors.value = parseErrorList(message);
       }
       return false;
     } finally {

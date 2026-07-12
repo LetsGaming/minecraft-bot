@@ -4,8 +4,14 @@
  * session in the first place). The crypto and cookie mechanics stay in
  * ../auth.ts; this module is just the route wiring. Split out of
  * server.ts in the QUAL-01 refactor (2026-07 audit).
+ *
+ * Note the two surfaces: /auth/callback is hit by a *browser* mid-redirect,
+ * so its failures stay plain-text (a JSON error body would just render as
+ * text in the address bar). The /api/* routes are the JSON API, so their
+ * "not signed in" is a typed Unauthorized through the one error handler.
  */
 import type { FastifyInstance } from "fastify";
+import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
 import { loadConfig } from "@mcbot/core/config.js";
 import {
   buildAuthorizeUrl,
@@ -17,6 +23,9 @@ import {
   clearSessionCookie,
 } from "../auth.js";
 import { listBotGuilds } from "../discordRest.js";
+import { Unauthorized } from "../errors.js";
+import { OAuthCallbackQuery } from "./schemas.js";
+import { DISCORD_OAUTH_AUTHORIZE_URL } from "@mcbot/schema";
 
 // Permissions the bot needs when joining a new guild. This is the
 // integer Discord bakes into the invite URL and pre-checks on the
@@ -33,44 +42,51 @@ const INVITE_PERMISSIONS = (
 ).toString();
 
 export function registerAuthRoutes(app: FastifyInstance): void {
-  app.get("/auth/login", async (_req, reply) => {
+  const api = app.withTypeProvider<TypeBoxTypeProvider>();
+
+  api.get("/auth/login", async (_req, reply) => {
     const { url } = buildAuthorizeUrl();
     return reply.redirect(url);
   });
 
-  app.get("/auth/callback", async (req, reply) => {
-    const { code, state } = req.query as { code?: string; state?: string };
-    if (!code || !verifyState(state)) {
-      return reply.code(400).send("Invalid OAuth state — try logging in again.");
-    }
-    const user = await exchangeCode(code);
-    if (!user) return reply.code(502).send("Discord OAuth exchange failed.");
+  api.get(
+    "/auth/callback",
+    { schema: { querystring: OAuthCallbackQuery } },
+    async (req, reply) => {
+      const { code, state } = req.query;
+      // Browser surface: plain-text, not the JSON error contract.
+      if (!code || !verifyState(state)) {
+        return reply.code(400).send("Invalid OAuth state — try logging in again.");
+      }
+      const user = await exchangeCode(code);
+      if (!user) return reply.code(502).send("Discord OAuth exchange failed.");
 
-    // Any Discord user may log in (like a normal bot dashboard). Their
-    // guild-manager access is the intersection of the guilds they manage
-    // with the guilds the bot is actually in — so the session only ever
-    // grants control over guilds that both parties share. Sysadmin status
-    // is derived from config per request, not stored here.
-    let guildIds = user.guildIds;
-    try {
-      const botGuilds = new Set((await listBotGuilds()).map((g) => g.id));
-      guildIds = user.guildIds.filter((id) => botGuilds.has(id));
-    } catch {
-      /* can't confirm bot guilds → keep the user's manageable set as-is */
-    }
+      // Any Discord user may log in (like a normal bot dashboard). Their
+      // guild-manager access is the intersection of the guilds they manage
+      // with the guilds the bot is actually in — so the session only ever
+      // grants control over guilds that both parties share. Sysadmin status
+      // is derived from config per request, not stored here.
+      let guildIds = user.guildIds;
+      try {
+        const botGuilds = new Set((await listBotGuilds()).map((g) => g.id));
+        guildIds = user.guildIds.filter((id) => botGuilds.has(id));
+      } catch {
+        /* can't confirm bot guilds → keep the user's manageable set as-is */
+      }
 
-    setSessionCookie(reply, { id: user.id, tag: user.tag, guildIds });
-    return reply.redirect("/");
-  });
+      setSessionCookie(reply, { id: user.id, tag: user.tag, guildIds });
+      return reply.redirect("/");
+    },
+  );
 
-  app.post("/auth/logout", async (_req, reply) => {
+  api.post("/auth/logout", async (_req, reply) => {
     clearSessionCookie(reply);
     return { ok: true };
   });
 
-  app.get("/api/me", async (req, reply) => {
+  api.get("/api/me", async (req) => {
     const session = sessionFromRequest(req);
-    if (!session) return reply.code(401).send({ error: "Not signed in." });
+    if (!session) throw new Unauthorized("Not signed in.");
     // The frontend uses `sysadmin` to decide which tabs to show, and
     // `guildCount` to tell a guild manager whether they have anything to
     // configure at all.
@@ -87,9 +103,9 @@ export function registerAuthRoutes(app: FastifyInstance): void {
   // permission set live in one place (config + INVITE_PERMISSIONS) and
   // are never hardcoded in the frontend. Session-gated like the rest of
   // /api — you must be a dashboard admin to see it.
-  app.get("/api/invite", async (req, reply) => {
+  api.get("/api/invite", async (req) => {
     const session = sessionFromRequest(req);
-    if (!session) return reply.code(401).send({ error: "Not signed in." });
+    if (!session) throw new Unauthorized("Not signed in.");
     const cfg = loadConfig();
     const clientId = cfg.webui?.clientId ?? cfg.clientId;
     const params = new URLSearchParams({
@@ -97,6 +113,6 @@ export function registerAuthRoutes(app: FastifyInstance): void {
       scope: "bot applications.commands",
       permissions: INVITE_PERMISSIONS,
     });
-    return { url: `https://discord.com/oauth2/authorize?${params.toString()}` };
+    return { url: `${DISCORD_OAUTH_AUTHORIZE_URL}?${params.toString()}` };
   });
 }

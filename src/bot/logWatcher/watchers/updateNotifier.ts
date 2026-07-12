@@ -16,11 +16,18 @@ import { getRootDir } from "@mcbot/core/utils/utils.js";
 import { kvGet, kvSet } from "@mcbot/core/db/kv.js";
 import { versionAtLeast } from "@mcbot/core/utils/serverAccess.js";
 import { log } from "@mcbot/core/utils/logger.js";
+import { isRecord } from "@mcbot/core/utils/objects.js";
 
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const INITIAL_DELAY_MS = 60_000;
-const RELEASES_URL =
-  "https://api.github.com/repos/LetsGaming/minecraft-bot/releases/latest";
+
+// The project's GitHub repo, in one place — the repo path was previously
+// baked into three separate URLs.
+const GITHUB_REPO = "LetsGaming/minecraft-bot";
+/** Human-facing releases page (shown to admins / logged). */
+const GITHUB_RELEASES_URL = `https://github.com/${GITHUB_REPO}/releases`;
+/** GitHub API endpoint for the latest release. */
+const GITHUB_LATEST_RELEASE_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
 
 interface NotifierState {
   lastNotifiedVersion?: string;
@@ -29,10 +36,12 @@ interface NotifierState {
 /** The running bot version, read from package.json next to the data dir. */
 export function currentVersion(): string {
   try {
-    const pkg = JSON.parse(
+    const pkg: unknown = JSON.parse(
       fs.readFileSync(path.resolve(getRootDir(), "package.json"), "utf-8"),
-    ) as { version?: string };
-    return pkg.version ?? "0.0.0";
+    );
+    return isRecord(pkg) && typeof pkg.version === "string"
+      ? pkg.version
+      : "0.0.0";
   } catch {
     return "0.0.0";
   }
@@ -41,13 +50,16 @@ export function currentVersion(): string {
 /** Latest release tag ("v3.6.0" → "3.6.0"), or null when unreachable. */
 export async function fetchLatestVersion(): Promise<string | null> {
   try {
-    const res = await fetch(RELEASES_URL, {
+    const res = await fetch(GITHUB_LATEST_RELEASE_API, {
       headers: { accept: "application/vnd.github+json" },
       signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) return null;
-    const body = (await res.json()) as { tag_name?: string };
-    const tag = body.tag_name?.trim();
+    const body: unknown = await res.json();
+    const tag =
+      isRecord(body) && typeof body.tag_name === "string"
+        ? body.tag_name.trim()
+        : "";
     return tag ? tag.replace(/^v/i, "") : null;
   } catch {
     return null;
@@ -63,7 +75,7 @@ async function notifyAdmins(client: Client, latest: string): Promise<void> {
       const user = await client.users.fetch(id);
       await user.send(
         `📦 minecraft-bot ${latest} is available (you run ${currentVersion()}). ` +
-          `Release notes: https://github.com/LetsGaming/minecraft-bot/releases`,
+          `Release notes: ${GITHUB_RELEASES_URL}`,
       );
     } catch {
       // closed DMs or unknown user — a missed nudge is not an error
@@ -84,7 +96,7 @@ async function runCheck(client: Client): Promise<void> {
   log.info(
     "update",
     `A newer release is available: ${latest} (running ${running}) — ` +
-      `https://github.com/LetsGaming/minecraft-bot/releases`,
+      `${GITHUB_RELEASES_URL}`,
   );
 
   if (cfg?.dmAdmins !== true) return;

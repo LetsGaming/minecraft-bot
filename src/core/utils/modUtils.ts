@@ -8,6 +8,7 @@
 
 import type { ServerInstance } from "./server.js";
 import type { ModSide, ModInfo, ModList } from "../types/index.js";
+import { isRecord } from "./objects.js";
 import * as serverAccess from "./serverAccess.js";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -92,6 +93,30 @@ export async function getModList(server: ServerInstance): Promise<ModList> {
   return modList;
 }
 
+/**
+ * Narrow the raw Modrinth `/projects` array to ModrinthProject[]. Modrinth is a
+ * third party, so its shape is not ours to trust: any entry missing one of the
+ * string fields we use is dropped, and a changed response fails here at the
+ * boundary rather than surfacing as `undefined` while building the mod list.
+ */
+function parseModrinthProjects(raw: unknown): ModrinthProject[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((p) => {
+    if (!isRecord(p)) return [];
+    const { slug, title, description, client_side, server_side } = p;
+    if (
+      typeof slug !== "string" ||
+      typeof title !== "string" ||
+      typeof description !== "string" ||
+      typeof client_side !== "string" ||
+      typeof server_side !== "string"
+    ) {
+      return [];
+    }
+    return [{ slug, title, description, client_side, server_side }];
+  });
+}
+
 async function fetchModrinthProjects(
   slugs: string[],
 ): Promise<ModrinthProject[]> {
@@ -104,7 +129,7 @@ async function fetchModrinthProjects(
   });
   if (!res.ok)
     throw new Error(`Modrinth API returned ${res.status}: ${res.statusText}`);
-  return res.json() as Promise<ModrinthProject[]>;
+  return parseModrinthProjects(await res.json());
 }
 
 function buildModList(projects: ModrinthProject[]): ModList {

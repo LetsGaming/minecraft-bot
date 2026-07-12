@@ -146,7 +146,7 @@ export function defineCommand({
         }
         if (policy.adminOnly) {
           const linked = await loadLinkedAccounts().catch(
-            () => ({}) as Record<string, string>,
+            (): Record<string, string> => ({}),
           );
           const lowerName = username.toLowerCase();
           const discordId = Object.entries(linked).find(

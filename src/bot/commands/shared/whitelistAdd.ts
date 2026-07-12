@@ -4,17 +4,22 @@
  * own command name. The two names are kept as intentional aliases (the docs
  * document them as such) so existing muscle memory keeps working.
  */
-import { SlashCommandBuilder } from "discord.js";
+import {
+  SlashCommandBuilder,
+  type SlashCommandOptionsOnlyBuilder,
+} from "discord.js";
 import { resolveServer } from "../../utils/guildRouter.js";
 import { invalidateWhitelistCache } from "@mcbot/core/utils/utils.js";
 import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
 import { createSuccessEmbed } from "../../utils/embedUtils.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { recordAdd } from "@mcbot/core/utils/whitelistAudit.js";
-import type { MojangProfile } from "@mcbot/core/types/index.js";
+import { fetchMojangProfile } from "@mcbot/core/utils/mojang.js";
 import type { ServerInstance } from "@mcbot/core/utils/server.js";
 
-export function buildWhitelistAddData(commandName: string): SlashCommandBuilder {
+export function buildWhitelistAddData(
+  commandName: string,
+): SlashCommandOptionsOnlyBuilder {
   return new SlashCommandBuilder()
     .setName(commandName)
     .setDescription("Verify a Minecraft username and whitelist it")
@@ -29,7 +34,7 @@ export function buildWhitelistAddData(commandName: string): SlashCommandBuilder 
         .setName("server")
         .setDescription("Server instance")
         .setAutocomplete(true),
-    ) as SlashCommandBuilder;
+    );
 }
 
 /**
@@ -50,12 +55,8 @@ export async function performWhitelistAdd(
     throw new Error(`**${username}** is not a valid Minecraft username.`);
   }
 
-  const res = await fetch(
-    `https://api.mojang.com/users/profiles/minecraft/${encodeURIComponent(username)}`,
-  );
-  if (!res.ok) throw new Error(`Username **${username}** not found.`);
-
-  const profile = (await res.json()) as MojangProfile;
+  const profile = await fetchMojangProfile(username);
+  if (!profile) throw new Error(`Username **${username}** not found.`);
 
   // Use the canonical capitalization Mojang returns so the
   // whitelist entry matches the in-game name exactly.

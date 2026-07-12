@@ -15,6 +15,7 @@ import type {
   EmbedStyleOptions,
 } from "@mcbot/core/types/index.js";
 import { log } from "@mcbot/core/utils/logger.js";
+import { playerAvatarUrl } from "./mcHeads.js";
 import { EmbedColor } from "./embedColors.js";
 
 /**
@@ -129,7 +130,7 @@ export function createPlayerEmbed(
   options: Omit<EmbedOptions, "author">,
   asThumbnail: boolean = false,
 ): EmbedBuilder {
-  const head = `https://mc-heads.net/avatar/${player}/64`;
+  const head = playerAvatarUrl(player);
   if (asThumbnail) {
     return createEmbedWithThumbnail({
       ...options,

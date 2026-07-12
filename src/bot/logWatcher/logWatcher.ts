@@ -147,7 +147,7 @@ export class LogWatcher {
 
       this.lastSize = readEnd + 1;
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      if (err instanceof Error && "code" in err && err.code === "ENOENT") {
         this.lastSize = 0;
       } else {
         const msg = err instanceof Error ? err.message : String(err);

@@ -1,4 +1,5 @@
 import { ref } from "vue";
+import { errorMessage } from "../utils/errorMessage";
 import { useToast } from "primevue/usetoast";
 import { apiGet } from "../api";
 
@@ -29,7 +30,7 @@ export function useMyGuilds() {
         toast.add({
           severity: "error",
           summary: "Failed to load guilds",
-          detail: (err as Error).message,
+          detail: errorMessage(err),
           life: 4000,
         });
       }

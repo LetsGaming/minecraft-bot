@@ -15,7 +15,7 @@ import {
   createErrorEmbed,
   createPlayerEmbed,
 } from "../../utils/embedUtils.js";
-import type { MojangProfile } from "@mcbot/core/types/index.js";
+import { fetchMojangProfile } from "@mcbot/core/utils/mojang.js";
 
 export const data = new SlashCommandBuilder()
   .setName("playerhead")
@@ -45,10 +45,8 @@ export async function execute(
     return;
   }
 
-  const res = await fetch(
-    `https://api.mojang.com/users/profiles/minecraft/${encodeURIComponent(mcname)}`,
-  );
-  if (!res.ok) {
+  const profile = await fetchMojangProfile(mcname);
+  if (!profile) {
     await interaction.reply({
       embeds: [createErrorEmbed(`Player \`${mcname}\` not found.`)],
       flags: MessageFlags.Ephemeral,
@@ -56,7 +54,7 @@ export async function execute(
     return;
   }
 
-  const { name } = (await res.json()) as MojangProfile;
+  const { name } = profile;
 
   const embed = createPlayerEmbed(name, {
     title: `${name}'s Head`,

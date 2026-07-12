@@ -18,3 +18,4 @@ export type * from "./contract.js";
 // value re-export rather than `export type *`.
 export * from "./notifications.js";
 export * from "./commandOptions.js";
+export * from "./discord.js";
