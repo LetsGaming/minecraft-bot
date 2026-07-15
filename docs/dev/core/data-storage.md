@@ -58,6 +58,31 @@ The rule from the guidelines follows from this: never `fs.writeFile` a state fil
 | Mod list per server | `minecraft/modUtils.ts` | keyed by file mtime | automatic when `downloaded_versions.json` changes |
 | Config | `config.ts` | until file change | `fs.watch` hot reload (debounced), `/config reload` |
 
+## Where player stats live on disk
+
+Minecraft writes one `<uuid>.json` per player, and **not always in the same
+place**:
+
+| Layout | Path | Seen on |
+|---|---|---|
+| Vanilla | `<serverDir>/<level-name>/stats/` | Unmodded servers; the documented default |
+| Modded | `<serverDir>/<level-name>/players/stats/` | A Fabric instance in the field, alongside `players/advancements/` |
+
+`statsDir()` in `server/serverAccess.ts` probes for these in order and returns
+the first that exists; the wrapper's `resolveStatsDir()` does the same for
+remote instances. When neither exists — a fresh world, before anyone has
+played — both return the vanilla path so messages name the expected location,
+and neither caches that miss, since the server creates the directory the first
+time somebody joins.
+
+**Probe, never assume.** With the wrong directory every read is an `ENOENT`,
+and `ENOENT` is exactly what a world nobody has played on looks like. So a path
+mismatch reads as "no stats yet": `listStatsUuids` returns `[]` with a 200, the
+bot believes it, every leaderboard is blank, and nothing in the chain logs an
+error. That is not hypothetical — it is how this was found. If you add a third
+layout, add it to `STATS_DIR_CANDIDATES` at both ends; the wrapper logs which
+directory it settled on at startup.
+
 ## Snapshots
 
 The leaderboard scheduler writes a full stat snapshot every hour per server into the `snapshots` table, keyed `(server_id, ts)` — the payload is the same document the old files held (legacy files of both historical layouts are imported into the table on startup, and the directory is retired as `snapshots.imported/`):

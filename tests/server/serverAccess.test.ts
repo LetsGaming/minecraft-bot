@@ -1,15 +1,19 @@
 /**
- * serverAccess.ts tests — exercises the apiUrl (remote) code paths.
+ * serverAccess.ts tests.
  *
  * Every exported function has two branches:
  *   if (cfg.apiUrl) → HTTP via fetch (apiGet / apiPost)
  *   else            → local filesystem / shell exec
  *
- * We test the remote branch by providing a cfg with apiUrl and mocking fetch.
- * The local (non-api) branch for simple functions (isRunning → false, getList → empty)
- * can be exercised without filesystem side-effects.
+ * The remote branch is tested with a cfg carrying apiUrl and a mocked fetch.
+ * The local branch is tested against real temp directories where the layout
+ * on disk is the whole point — statsDir below — and without filesystem
+ * side-effects otherwise (isRunning → false, getList → empty).
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
+import fs from "fs";
+import os from "os";
+import path from "path";
 
 vi.mock("../../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -20,6 +24,7 @@ const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
 import {
+  statsDir,
   tailLog,
   isRunning,
   getList,
@@ -412,5 +417,70 @@ describe("logStreamUrl", () => {
       apiUrl: "https://api.example.com/",
     } as never);
     expect(url).not.toContain("//instances");
+  });
+});
+
+// ── statsDir: the world's layout is not a given ───────────────────────────
+// Found in production on a Fabric instance: no <level>/stats directory at
+// all, the stat files under <level>/players/stats next to
+// players/advancements. This resolved one hardcoded path, so every read was
+// an ENOENT — indistinguishable from a world nobody has played on. Stats
+// read as empty and the leaderboards went blank, with no error anywhere.
+
+describe("statsDir (local) resolves the layout on disk", () => {
+  const roots: string[] = [];
+  afterAll(() => {
+    for (const r of roots) fs.rmSync(r, { recursive: true, force: true });
+  });
+
+  /** A local instance whose world keeps its stats at <level>/<rel>. */
+  function scaffold(rel: string[] | null): ServerConfig {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "statsdir-"));
+    roots.push(root);
+    fs.mkdirSync(path.join(root, "world"), { recursive: true });
+    fs.writeFileSync(path.join(root, "server.properties"), "level-name=world\n");
+    if (rel) fs.mkdirSync(path.join(root, "world", ...rel), { recursive: true });
+    return { id: "smp", serverDir: root, useRcon: false } as unknown as ServerConfig;
+  }
+
+  it("finds vanilla stats at <level>/stats", async () => {
+    const cfg = scaffold(["stats"]);
+    expect(await statsDir(cfg)).toBe(path.join(cfg.serverDir, "world", "stats"));
+  });
+
+  it("finds modded stats at <level>/players/stats", async () => {
+    const cfg = scaffold(["players", "stats"]);
+    expect(await statsDir(cfg)).toBe(
+      path.join(cfg.serverDir, "world", "players", "stats"),
+    );
+  });
+
+  it("prefers vanilla when a world somehow has both", async () => {
+    const cfg = scaffold(["stats"]);
+    fs.mkdirSync(path.join(cfg.serverDir, "world", "players", "stats"), {
+      recursive: true,
+    });
+    expect(await statsDir(cfg)).toBe(path.join(cfg.serverDir, "world", "stats"));
+  });
+
+  it("names the vanilla path when neither exists yet", async () => {
+    // A fresh world has no stats directory until somebody plays. Pointing at
+    // the canonical location keeps the resulting message useful.
+    const cfg = scaffold(null);
+    expect(await statsDir(cfg)).toBe(path.join(cfg.serverDir, "world", "stats"));
+  });
+
+  it("honours level-name rather than assuming 'world'", async () => {
+    const cfg = scaffold(null);
+    fs.writeFileSync(
+      path.join(cfg.serverDir, "server.properties"),
+      "level-name=survival\n",
+    );
+    fs.mkdirSync(path.join(cfg.serverDir, "survival", "players", "stats"), {
+      recursive: true,
+    });
+    expect(await statsDir(cfg)).toBe(
+      path.join(cfg.serverDir, "survival", "players", "stats"),
+    );
   });
 });

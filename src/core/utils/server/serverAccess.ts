@@ -461,10 +461,40 @@ export async function readLevelName(cfg: ServerConfig): Promise<string> {
 
 // ── Player stats ──────────────────────────────────────────────────────────
 
-/** Return the stats directory path (local only — used for cache keys). */
+/**
+ * Layouts a world may keep player stat files in, in order. Vanilla first —
+ * it is the documented default and what an unmodded server writes.
+ */
+const STATS_DIR_CANDIDATES = ["stats", path.join("players", "stats")];
+
+/**
+ * Return the stats directory for a local instance (also the cache key).
+ *
+ * This hardcoded `<level>/stats` until a Fabric server in the field turned
+ * out to keep its stats at `<level>/players/stats`, next to
+ * `players/advancements`, with no `<level>/stats` at all.
+ *
+ * Probing matters because the failure mode is silence: on the wrong path
+ * every read is an ENOENT, which is exactly what a world nobody has played
+ * on looks like. Stats read as empty, leaderboards go blank, and nothing
+ * anywhere reports an error.
+ */
 export async function statsDir(cfg: ServerConfig): Promise<string> {
   const levelName = await readLevelName(cfg);
-  return path.resolve(cfg.serverDir, levelName, "stats");
+  const base = path.resolve(cfg.serverDir, levelName);
+
+  for (const rel of STATS_DIR_CANDIDATES) {
+    const dir = path.join(base, rel);
+    try {
+      if ((await fsPromises.stat(dir)).isDirectory()) return dir;
+    } catch {
+      continue; // next candidate
+    }
+  }
+  // None exist yet — normal on a fresh world; the server creates one when
+  // somebody first plays. Name the vanilla path so errors point at the
+  // expected location, and do not cache the miss.
+  return path.join(base, STATS_DIR_CANDIDATES[0]!);
 }
 
 /** Load a single player's stats JSON. Returns null if not found. */

@@ -6,6 +6,17 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Player stats were invisible on servers that do not use the vanilla world
+  layout.** `statsDir()` resolved `<level-name>/stats` and nothing else; a
+  Fabric instance keeps its stat files at `<level-name>/players/stats`, next to
+  `players/advancements`, with no `<level-name>/stats` at all. Every read
+  missed, `/stats` and every leaderboard came back empty, and **nothing logged
+  an error** — on the wrong path a miss is an `ENOENT`, which is exactly what a
+  world nobody has played on looks like. Both layouts are now probed, at both
+  ends (the wrapper needs the same fix, ≥3.1.1). Requires no config change.
+
 ## [4.4.0] — 2026-07-15
 
 ### Added

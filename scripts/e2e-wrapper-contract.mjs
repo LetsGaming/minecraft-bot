@@ -139,7 +139,17 @@ function scaffold() {
   const backupsPath = path.join(dir, "backups");
 
   fs.mkdirSync(path.join(serverPath, "logs"), { recursive: true });
-  fs.mkdirSync(path.join(serverPath, "world", "stats"), { recursive: true });
+  // Deliberately the MODDED layout: <level>/players/stats, with no
+  // <level>/stats. This scaffold used the vanilla path, which is why it
+  // sailed past a real Fabric instance where every stat read 404'd. Both
+  // sides must resolve the directory rather than assume it — and the
+  // non-default layout is the one worth wiring end to end.
+  fs.mkdirSync(path.join(serverPath, "world", "players", "stats"), {
+    recursive: true,
+  });
+  fs.mkdirSync(path.join(serverPath, "world", "players", "advancements"), {
+    recursive: true,
+  });
   fs.mkdirSync(path.join(backupsPath, "hourly"), { recursive: true });
   fs.mkdirSync(path.join(scriptsDir, "common"), { recursive: true });
   fs.mkdirSync(path.join(scriptsDir, "backup"), { recursive: true });
@@ -155,7 +165,7 @@ function scaffold() {
     JSON.stringify([{ name: "Alex", uuid: "11111111-2222-3333-4444-555555555555", expiresOn: "x" }]),
   );
   fs.writeFileSync(
-    path.join(serverPath, "world", "stats", `${UUID}.json`),
+    path.join(serverPath, "world", "players", "stats", `${UUID}.json`),
     JSON.stringify({ stats: { "minecraft:custom": { "minecraft:play_time": 12345 } } }),
   );
   fs.writeFileSync(path.join(serverPath, "logs", "latest.log"), "line one\nline two\n");
@@ -378,7 +388,10 @@ check(
   typeof (await serverAccess.isRunning(cfg)) === "boolean",
   "not a boolean",
 );
-eq("listStatsUuids", await serverAccess.listStatsUuids(cfg), [UUID]);
+// The scaffold puts these at <level>/players/stats — reverting either
+// repo's resolver to the hardcoded <level>/stats fails right here.
+eq("listStatsUuids (modded <level>/players/stats layout)",
+   await serverAccess.listStatsUuids(cfg), [UUID]);
 
 const stats = await serverAccess.readStats(cfg, UUID);
 check(
