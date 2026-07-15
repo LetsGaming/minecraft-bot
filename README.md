@@ -92,7 +92,7 @@ Everything is indexed in [`docs/index.md`](docs/index.md).
 | Players | [Getting started](docs/user/getting-started.md), [commands](docs/user/commands.md), [linking](docs/user/linking.md) |
 | Admins | [Setup](docs/admin/setup.md), [configuration](docs/admin/configuration.md), [permissions](docs/admin/permissions.md), [automated features](docs/admin/automated-features.md) |
 | Deploying | [Docker](docs/admin/docker.md), [remote/API wrapper](docs/admin/remote-setup.md), [PM2](docs/admin/pm2.md) |
-| Contributors | [Architecture](docs/dev/architecture.md), [adding features](docs/dev/adding-features.md), [coding guidelines](docs/dev/coding-guidelines.md), [testing](docs/dev/testing.md) |
+| Contributors | [Developer docs](docs/dev/index.md) — [architecture](docs/dev/architecture.md), [adding features](docs/dev/adding-features.md), [coding guidelines](docs/dev/coding-guidelines.md), [testing](docs/dev/testing.md) |
 | Reference | [Full feature list](docs/features.md), [roadmap](docs/ROADMAP.md) |
 
 ## Architecture
@@ -140,7 +140,7 @@ Runtime state lives in `data/` (or the `bot_data` Docker volume). Machine-writte
 state sits in a single SQLite database (`bot.db`, WAL mode) that both the bot and
 dashboard write to safely; hand-edited pools such as `dailyRewards.json` stay
 JSON. Everything is created on first use, and upgrading from 3.x imports the old
-JSON stores automatically. Details are in [`docs/dev/data-storage.md`](docs/dev/data-storage.md).
+JSON stores automatically. Details are in [`docs/dev/core/data-storage.md`](docs/dev/core/data-storage.md).
 
 ## Contributing
 

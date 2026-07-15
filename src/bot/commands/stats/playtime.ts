@@ -7,10 +7,10 @@ import {
   flattenStats,
   findPlayTimeStat,
   formatPlaytime,
-} from "@mcbot/core/utils/statUtils.js";
-import { findPlayer } from "@mcbot/core/utils/playerUtils.js";
-import { resolveServer } from "../../utils/guildRouter.js";
-import { createEmbed, createErrorEmbed } from "../../utils/embedUtils.js";
+} from "@mcbot/core/utils/minecraft/statUtils.js";
+import { findPlayer } from "@mcbot/core/utils/minecraft/playerUtils.js";
+import { resolveServer } from "../../utils/guild/guildRouter.js";
+import { createEmbed, createErrorEmbed } from "../../utils/embeds/embedUtils.js";
 import { log } from "@mcbot/core/utils/logger.js";
 
 export const data = new SlashCommandBuilder()

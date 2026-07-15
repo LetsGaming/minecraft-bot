@@ -4,15 +4,15 @@
  * anyway. Answers "when is the server busy" without opening Grafana.
  */
 import { SlashCommandBuilder } from "discord.js";
-import { createEmbed } from "../../utils/embedUtils.js";
-import { EmbedColor } from "../../utils/embedColors.js";
-import { resolveServer } from "../../utils/guildRouter.js";
+import { createEmbed } from "../../utils/embeds/embedUtils.js";
+import { EmbedColor } from "../../utils/embeds/embedColors.js";
+import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { withErrorHandling } from "../middleware.js";
 import {
   loadPlayerCountStore,
   buildActivitySparkline,
   busiestHours,
-} from "@mcbot/core/utils/playerCountHistory.js";
+} from "@mcbot/core/utils/stores/playerCountHistory.js";
 import { TZ } from "@mcbot/core/utils/time.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 

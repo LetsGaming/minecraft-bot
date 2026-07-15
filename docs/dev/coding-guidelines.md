@@ -32,34 +32,41 @@ If a generator produces a partial file, complete it before committing. Every fil
 
 ### 4. No `console.*` outside `logger.ts`
 
-All output goes through `log.info/warn/error/debug(tag, message)` from `utils/logger.ts`. Structured, timestamped, tagged, written to stdout and `logs/bot.log`. ESLint enforces `no-console`.
+All output goes through `log.info/warn/error/debug(tag, message)` from `core/utils/logger.ts`. Structured, timestamped, tagged, written to stdout and `logs/bot.log`. ESLint enforces `no-console`.
 
-### 5. No naked `new EmbedBuilder()`
+### 5. No naked `new EmbedBuilder()`, no raw colour literals
 
-All embeds come from the factories in `utils/embedUtils.ts` (`createEmbed`, `createErrorEmbed`, `createSuccessEmbed`, `createInfoEmbed`, `createPlayerEmbed`). One place controls colors, timestamps, and styling.
+All embeds come from the factories in `bot/utils/embeds/embedUtils.ts` (`createEmbed`, `createErrorEmbed`, `createSuccessEmbed`, `createInfoEmbed`, `createPlayerEmbed`). One place controls colors, timestamps, and styling.
+
+Colours come from `EmbedColor` in `bot/utils/embeds/embedColors.ts` — never a raw `0x…` literal. The palette lived as scattered hex across 24 files once, with two different "info" blues; it is one const object now and stays that way.
 
 ### 6. No shell string interpolation
 
-Never build shell command strings. Use `execSafe(cmd, args)` from `shell/execCommand.ts` or the helpers in `serverAccess.ts`; both pass argument arrays to `execFile`/`spawn` with no shell, so user-controlled strings cannot inject metacharacters. Anything sent to the Minecraft console that contains user input must be length-capped and stripped of control characters (see the chat bridge for the reference implementation).
+Never build shell command strings. Use `execSafe(cmd, args)` from `core/shell/execCommand.ts` or the helpers in `serverAccess.ts`; both pass argument arrays to `execFile`/`spawn` with no shell, so user-controlled strings cannot inject metacharacters.
+
+Anything sent to the Minecraft console that contains user input goes through `core/utils/sanitize.ts` — `sanitizeForConsole`/`stripControlChars`, and names through `isValidMcName`. That module is the single tested implementation; never hand-roll a second copy. A `\n` in a chat message is a second console command.
 
 ### 7. One server resolver
 
-Commands get their target server from `resolveServer(interaction)` (or `tryResolveServer`) in `utils/guildRouter.ts`. Never call `getServerInstance`/`getGuildServer` directly from a command.
+Commands get their target server from `resolveServer(interaction)` (or `tryResolveServer`) in `bot/utils/guild/guildRouter.ts`. Never call `getServerInstance`/`getGuildServer` directly from a command — that resolver is the one enforcement point for tenant isolation, not a convenience wrapper.
 
-### 8. JSON state goes through `loadJson`/`saveJson`
+### 8. Persistence goes through its owner
 
-Bot-local state files under `data/` are read and written only via the helpers in `utils/utils.ts`. They provide the read cache and the per-file write lock; raw `fs.writeFile` on a state file reintroduces the lost-update race those helpers exist to prevent.
+Machine-written state lives in SQLite behind exactly one owning store module in `core/utils/stores/`. The remaining JSON files are read and written only via `loadJson`/`saveJson` in `core/utils/jsonStore.ts`, which provide the read cache and the per-file write lock; a raw `fs.writeFile` on a state file reintroduces the lost-update race those helpers exist to prevent.
+
+Which medium a new store belongs in is decided by ownership, not convenience — see [core/data-storage.md](core/data-storage.md).
+
+### 9. Never cast a query result
+
+Reads go through `mapRows`/`mapRow` with an explicit `col.*` per column, selecting named columns. `.all() as unknown as Row[]` type-checks and then hands every reader downstream an `undefined` the compiler promised could not exist — which is precisely the guarantee `noUncheckedIndexedAccess` is switched on for. `core/db/rows.ts` holds the only audited raw→Row cast in the codebase.
+
+### 10. No duplicated value across a boundary
+
+If two workspaces both need to know a name, a format, or a duration, it goes in `@mcbot/schema` as a const tuple with a derived union and a type guard. Not a literal in each layer. See [contracts.md](contracts.md) — every contract in that package exists because two layers already disagreed.
 
 ## Layer import rules
 
-| Layer | May import | Must not import |
-|---|---|---|
-| `commands/*` | guildRouter, embedUtils, middleware, statUtils, linkUtils, types | `fs`/`child_process` directly, RconClient |
-| `logWatcher/watchers/*` | server.ts, embedUtils, utils, logger, types | commands/* |
-| `statUtils`, `playerUtils` | utils, server, serverAccess, logger | embedUtils, discord.js |
-| `statEmbeds` | statUtils, embedUtils, discord.js | server.ts, config.ts |
-| `RconClient` | `net`, logger | everything else |
-| `serverAccess` | `fs`, `child_process`, types | discord.js, commands |
+The full table lives in [architecture.md](architecture.md#layer-import-rules) — workspace boundaries are enforced by ESLint and the dependency trees, module boundaries in review.
 
 Rationale: rendering (Discord), game logic, and transport stay independently testable. If your change needs to cross a line, the design is wrong; restructure instead of importing.
 
@@ -69,17 +76,18 @@ Rationale: rendering (Discord), game logic, and transport stay independently tes
 - **Error handling in commands** is the middleware's job. Inside `withErrorHandling`, throw `Error` with a user-readable message; it becomes the error embed. Do not build your own try/catch + reply ladder unless you need custom flow.
 - **Async file APIs** in request paths (`fs/promises`). Synchronous `fs` calls are acceptable only in startup code.
 - **Regex captures for player names** use `[\w.]+` to include Bedrock-prefixed names.
-- **Time and dates**: anything user-facing or wall-clock-scheduled uses the helpers in `utils/time.ts` (TZ-aware, DST-safe). Raw epoch arithmetic with `Date.now()` is fine.
-- **Types** live in `src/types/` and are re-exported through `types/index.ts`; import from there.
+- **Time and dates**: anything user-facing or wall-clock-scheduled uses the helpers in `core/utils/time.ts` (TZ-aware, DST-safe). Raw epoch arithmetic with `Date.now()` is fine. A duration another layer also depends on is a contract, not a constant.
+- **Types** live in `src/core/types/` and are re-exported through `types/index.ts`; import from there. Contracts shared with another workspace live in `@mcbot/schema` instead.
 - **One command per file**, named after the command. New files follow the structure of an existing sibling.
 - **Comments** explain why, not what. Reference fix IDs (like the existing B-xx annotations) when a non-obvious guard exists to prevent a regression.
+- **A `utils.ts` is not a home.** Files go in the directory that names their purpose; a grab-bag module is drift, and this repo has already paid for one.
 - **Line endings are LF.** `.gitattributes` enforces this on commit; configure your editor to match so diffs stay clean.
 
 ## Definition of done
 
 A change is done when:
 
-1. `npm run typecheck`, `npm run lint`, and `npm test` pass (CI runs exactly these on every push).
+1. `npm run typecheck`, `npm run lint`, `npm test`, `npm run schema:check`, and `npm run i18n:check` pass (CI runs these, plus `npm audit --audit-level=high`, on every push).
 2. New logic has tests; bug fixes have a regression test that fails without the fix.
 3. User-visible behavior is documented under `docs/`.
 4. `docs/dev/decisions.md` has an entry if the change makes a non-obvious architectural choice.

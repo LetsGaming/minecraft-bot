@@ -3,17 +3,19 @@ import {
   createEmbed,
   createErrorEmbed,
   createSuccessEmbed,
-} from "../../utils/embedUtils.js";
-import { EmbedColor } from "../../utils/embedColors.js";
-import { resolveServer } from "../../utils/guildRouter.js";
+} from "../../utils/embeds/embedUtils.js";
+import { EmbedColor } from "../../utils/embeds/embedColors.js";
+import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
-import { suppressAlerts } from "../../logWatcher/watchers/downtimeMonitor.js";
+import { suppressAlerts } from "../../logWatcher/watchers/monitors/downtimeMonitor.js";
 import { log } from "@mcbot/core/utils/logger.js";
-import { recordAdminAction } from "@mcbot/core/utils/adminAudit.js";
-import * as serverAccess from "@mcbot/core/utils/serverAccess.js";
-import { requireCapability } from "@mcbot/core/utils/capabilities.js";
-import { loadAllStats } from "@mcbot/core/utils/statUtils.js";
-import { loadWhitelist, deleteStats } from "@mcbot/core/utils/utils.js";
+import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
+import * as serverAccess from "@mcbot/core/utils/server/serverAccess.js";
+import { requireCapability } from "@mcbot/core/utils/server/capabilities.js";
+import { loadAllStats } from "@mcbot/core/utils/minecraft/statUtils.js";
+import { deleteStats } from "@mcbot/core/utils/minecraft/statUtils.js";
+import { loadWhitelist } from "@mcbot/core/utils/minecraft/whitelist.js";
+import { isDisruptiveServerAction } from "@mcbot/schema/serverActions.js";
 
 /**
  * Script paths relative to the scripts directory.
@@ -157,7 +159,7 @@ export const execute = withErrorHandling(
     }
 
     // Suppress downtime alerts for intentional stop/restart
-    if (sub === "stop" || sub === "restart") {
+    if (isDisruptiveServerAction(sub)) {
       suppressAlerts(server.id);
     }
 

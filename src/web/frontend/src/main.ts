@@ -6,7 +6,7 @@ import ToastService from "primevue/toastservice";
 import ConfirmationService from "primevue/confirmationservice";
 import Tooltip from "primevue/tooltip";
 import App from "./App.vue";
-import SchemaField from "./components/SchemaField.vue";
+import SchemaField from "./components/schema/SchemaField.vue";
 import "primeicons/primeicons.css";
 import "./style.css";
 

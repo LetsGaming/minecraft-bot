@@ -10,7 +10,7 @@ The enforceable rules derived from these decisions live in [coding-guidelines.md
 
 **Problem:** Two concurrent interactions (e.g. two players finishing `/link` at the same time) could both read the same JSON file, modify it independently, and write it back. Last write wins; the other change is silently lost.
 
-**Decision:** Per-file async mutex via a promise chain (`writeLocks` map in `utils/utils.ts`). Each write chains off the previous write to the same file, so writes serialize without a library dependency.
+**Decision:** Per-file async mutex via a promise chain (`writeLocks` map in `utils/jsonStore.ts`). Each write chains off the previous write to the same file, so writes serialize without a library dependency.
 
 **Trade-off:** If a write throws, the `.catch(() => {})` sentinel resets the chain cleanly, but that write is lost. Preferable to poisoning all future writes to the file.
 
@@ -42,7 +42,7 @@ The enforceable rules derived from these decisions live in [coding-guidelines.md
 
 ## `getRootDir()` as the single project-root resolver
 
-`findProjectRoot()` in `config.ts` and `getRootDir()` in `utils/utils.ts` were algorithmically identical. The former was deleted; everything imports `getRootDir()`.
+`findProjectRoot()` in `config.ts` and `getRootDir()` in the old `utils/utils.ts` were algorithmically identical. The former was deleted; everything imports `getRootDir()` (now `utils/paths.ts`).
 
 ---
 
@@ -218,7 +218,7 @@ npm workspaces over pnpm deliberately: native to the toolchain we already run, a
 
 **Problem:** The `saveJson()` mutex entry above overclaims. The promise chain serializes *writes* to a file — it never made *read-modify-write* atomic, so two concurrent `/link` completions in one process could still lose an update between the read and the queued write. Worse, once the dashboard became a second process, the per-process `writeLocks` map guarded nothing at all: `data/adminAudit.json` was appended from both processes, and a dashboard action racing a bot action silently dropped an audit entry.
 
-**Decision:** Machine-written state moves to SQLite; the ownership rule in [data-storage.md](data-storage.md) decides the medium from now on (human-authored + machine-read → JSON; machine-written → `data/bot.db`). WAL journal + `busy_timeout` make the two-process case safe; `withTransaction()` (BEGIN IMMEDIATE) makes read-modify-write one unit. First movers: `admin_audit` (the cross-process race), `whitelist_audit`, `linked_accounts` + `link_codes` (the in-process race — the whole confirm flow is now a single transaction, and the module-level code cache in the in-game `!link` handler is gone).
+**Decision:** Machine-written state moves to SQLite; the ownership rule in [data-storage.md](core/data-storage.md) decides the medium from now on (human-authored + machine-read → JSON; machine-written → `data/bot.db`). WAL journal + `busy_timeout` make the two-process case safe; `withTransaction()` (BEGIN IMMEDIATE) makes read-modify-write one unit. First movers: `admin_audit` (the cross-process race), `whitelist_audit`, `linked_accounts` + `link_codes` (the in-process race — the whole confirm flow is now a single transaction, and the module-level code cache in the in-game `!link` handler is gone).
 
 **Driver: better-sqlite3, by maintainer decision.** The zero-dependency `node:sqlite` route was on the table; the call was that better-sqlite3's maturity and performance are worth the one new dependency. It ships as the default behind a ~50-line seam (`src/core/db/driver.ts`): the stores speak a four-method interface both drivers satisfy identically — same SQL, same synchronous semantics, same transaction behavior. `MCBOT_SQLITE_DRIVER=node` selects the built-in `node:sqlite` instead, the documented escape hatch for hosts without a compile toolchain (needs Node ≥ 22.13; the default keeps `engines >= 20`). The one cost better-sqlite3 carries — native compilation on Alpine/musl — lives in the Dockerfile's dependency stages, not in user-facing steps. Two field notes encoded in the code: better-sqlite3 v12 loads its native binding **at construction, not at require**, so availability probes must open a real database; and no ORM — at ten-ish tables of trivial CRUD, raw SQL behind typed store functions is the more reviewable artifact. If a query builder ever earns its place, the swap is contained in `src/core/db/`.
 
@@ -248,3 +248,267 @@ npm workspaces over pnpm deliberately: native to the toolchain we already run, a
 
 **A lesson the sandbox caught before production could:** the legacy importer runs *inside* `getDb()` initialization — it must not call the public kv API, whose connection resolution re-enters `getDb()`. First boot on any deployment with a `sessions.json` recursed to stack overflow. The importer now carries its own raw helpers on the handle it was given; the boundary is documented in `importLegacy.ts`. Related guard from the same incident: the import (which *retires* its source files) never runs against a `:memory:` database — destroying durable files to feed an ephemeral store is exactly backwards, and tests run on `:memory:`.
 
+---
+
+## Snapshot retention is a rolling window, not calendar days
+
+**Problem:** Scheduled daily leaderboards showed far more than a day of data — on a
+server the bot had not been running long, close to all-time totals — and `/stats
+daily` reported windows well short of 24 hours. Both features were built
+correctly; the snapshots they needed were being deleted underneath them.
+
+The cause was the retention policy inherited verbatim from the file era (see the
+SQLite migration entry above): a calendar day was thinned to its last snapshot
+once that day's *first* snapshot aged past 24h. Yesterday's 00:00 snapshot is
+over 24h old at any time after midnight, so yesterday always collapsed — punching
+a hole through the rolling window exactly where both daily baselines are looked
+up. `getSnapshotClosestTo(now - 24h)` then landed on the day-before's survivor,
+26–48h back depending on the time of day; `getSnapshotForDailyDiff` landed on
+whatever had survived and shortened its window to match. It labelled the window
+honestly, which is why it read as "the numbers are wrong" rather than "the
+snapshots are gone".
+
+**Decision:** Retention is expressed in terms of what the readers look up, not in
+calendar days. Full resolution inside a rolling ~26h window (a day plus a margin
+over one snapshot interval, so both daily readers find a baseline on their side
+of the boundary), one per local day beyond it, a hard cap **derived** from
+`LONGEST_LEADERBOARD_INTERVAL_MS` rather than typed out, and the newest snapshot
+always kept.
+
+**Trade-off:** ~26 hourly snapshots retained instead of ~24, which is noise
+against a month of daily ones. Weekly and monthly baselines still land within a
+day of their period start; the footer reports the age actually used.
+
+**The lesson worth keeping:** the tests were green throughout. `cleanupSnapshots`
+had tests asserting row counts, and `buildLeaderboard` was mocked out of its own
+command tests, so nothing ever asked "after cleanup, what does the reader find?"
+Retention and its readers are one contract. `tests/minecraft/snapshotUtils.test.ts` now
+asserts them together.
+
+---
+
+## Directories are grouped by purpose; `utils.ts` is gone
+
+**Problem:** `core/utils/` was 37 flat files, and at its centre sat `utils.ts` —
+filesystem helpers, whitelist domain logic, JSON persistence, and log parsing in
+one module, imported by nearly everything. Nothing about a flat directory
+suggests where a new file belongs, so everything ambiguous landed in the
+grab-bag, and the grab-bag grew.
+
+**Decision:** Subdirectories by purpose, the same way `bot/commands/` has always
+been organised: `minecraft/`, `server/`, `stores/`, `config/`, `commands/`. The
+cross-cutting primitives (`logger`, `time`, `i18n`, `objects`, `sanitize`,
+`rateLimiter`, `paths`, `jsonStore`) stay at the root, because they are what
+every group depends on and no group owns.
+
+`utils.ts` was dissolved into the places its parts belonged: `paths.ts` and
+`jsonStore.ts` for the primitives, `minecraft/whitelist.ts` for the domain, and
+`getListOutput`/`stripLogPrefix` folded into `playerUtils.ts`, their only
+consumer. `deleteStats` moved into `statUtils.ts`, which removed a dynamic
+`import()` that existed only to break the cycle the misplacement created.
+`getLevelName` turned out to be dead and was deleted.
+
+The same treatment then went to every other directory that had outgrown flat:
+`watchers/` (21) split by what starts a feature — `log/`, `monitors/`,
+`schedulers/` — which is what the entry point's name already encoded;
+`logWatcher/commands/` took the *same category names as the slash commands*, so
+the two surfaces of one feature sit under matching paths; `core/types/` mirrors
+`utils/`; `web/backend/` grew `auth/`, `config/`, `status/`; the frontend's
+`components/` split into the config-form renderer and presentational primitives;
+and `tests/` (86 flat files) grouped by subject.
+
+`composables/` was left flat on purpose: twelve files all named `useX.ts`, where
+the naming convention already is the index. Not every count over ten is bloat —
+the question is whether a reader has to guess.
+
+**Trade-off:** One large mechanical diff, and a moment's adjustment for anyone
+with the old paths in muscle memory. The rule going forward: a file at a
+directory's root has to earn it — no domain knowledge, and more than one group
+depends on it. Anything that fits no group is doing two things and should be
+split before it becomes the next `utils.ts`.
+
+**One thing the move broke, worth knowing about:** `tsc -b --clean` only deletes
+output for sources it still knows about, so every renamed file left its old
+`.js` orphaned in `dist/`. The in-game command loader walks that directory, so
+an incremental build after the move registered all twelve commands twice. Fixed
+at the root (`clean` is now `rm -rf src/*/dist`) and defended at the loader,
+which refuses a duplicate name and says why. Any rename in this repo had this
+property; moving eighty files is just what made it visible.
+
+---
+
+## Migrations carry a checksum
+
+**Problem:** "Append only — never edit a shipped migration" was documentation.
+Editing one was silent: databases that had already applied it skipped the new
+SQL, so the schema and the code disagreed with no error anywhere, and only on
+already-deployed installations.
+
+**Decision:** `schema_migrations` records each migration's SQL checksum. A
+migration whose checksum no longer matches refuses to start, naming the
+migration and what to do about it. Whitespace is normalized before hashing, so
+reformatting the embedded template literal is free and a real edit is not.
+
+**Trade-off:** Databases predating the column adopt their current SQL as a
+baseline on the next start — there is nothing to compare against for those rows,
+so the guard only protects edits made from here on. Accepted: the alternative is
+refusing to start on every existing deployment.
+
+---
+
+## Values that cross a workspace boundary live in `@mcbot/schema`
+
+**Problem:** The same fact kept being restated per layer, and the copies drifted:
+the snowflake format was inlined in the config validator, the update notifier,
+and the dashboard's sysadmin gate; the server-action names existed as a `Set` in
+the dashboard route (four of them), a `Record<string, …>` in the script runner
+(five — the route's list had quietly fallen behind), and bare `sub === "stop"`
+comparisons in both front-ends; the leaderboard interval durations existed in the
+scheduler and, separately, as a hardcoded retention cap in the snapshot store.
+
+**Decision:** Each becomes one contract in `@mcbot/schema` — a const tuple, the
+union derived from it, a type guard — imported by every layer. The package was
+types-only before this; it now carries plain-data runtime values too, which the
+no-Node-imports rule already permitted and the frontend bundles fine.
+
+**Rationale beyond de-duplication:** the guard is what removes the cast. The
+dashboard route reached the capability flags through `scripts[action as "start"]`
+because `action` was a bare `string`; `isServerOperatorAction()` narrows it, so
+the lookup type-checks on its own. And deriving the retention cap from the
+interval table means a new interval cannot outlive the history its baseline needs
+— which is the class of bug the retention entry above documents.
+
+---
+
+## The wrapper publishes a generated manifest; the bot diffs against it
+
+**Problem:** A remote instance's API wrapper degrades one route at a time — a
+404 on `/usercache` becomes "no usercache names", a 404 on `/capabilities`
+becomes "assume everything works". Each fallback is correct on its own, and
+together they mean an outdated wrapper and a healthy one are indistinguishable.
+The only signal was `verifyWrapperVersion()`: a single semver compare that could
+not name a feature, and said nothing whatsoever about the wrapper being *newer*
+than the bot.
+
+It was also broken. `MIN_WRAPPER_VERSION` was `1.2.0` — the release the bot
+predicted `/info` would land in. The wrapper shipped `/info` in 3.0.0, two
+majors later, so no wrapper that answered the handshake was ever below the
+floor and the comparison was unreachable. A dead check guarding a silent
+failure mode.
+
+**Rejected:** serving `openapi.yaml` from the wrapper and diffing against that.
+It reads well until you notice the file is hand-maintained and has already
+lied — the 2.x spec described `/players`, `/logs`, `/action` and
+`/whitelist/{username}`, none of which ever existed, while omitting half the
+real routes. Feeding that to a mismatch check produces confident wrong answers,
+which is strictly worse than the honest 404 it would replace. Documentation
+cannot be the source of truth for a correctness check.
+
+**Decision:** `GET /manifest` on the wrapper, **generated from the
+implementation**: `routes` from Fastify's own `onRoute` hook, `scriptActions`
+from the same `SCRIPT_MAP` the runner validates against. Neither can describe
+something the process does not do. The bot holds the other end in
+`EXPECTED_WRAPPER_FEATURES` and reports four cases: missing, wrapper-behind,
+wrapper-ahead, and bot-doesn't-use-it. Each line names the fix, because
+"wrapper 3.0.0 is old" is not something an operator can act on.
+
+**What makes it work is the CI, not the endpoint.** Three checks on the wrapper
+side: every feature's routes must exist, every instance route must belong to a
+feature, and `openapi.yaml` must match the router. The second forces a new route
+to declare the capability it provides, so the bot cannot fail to hear about it —
+that is the actual fix for the class of bug. The third retires the spec drift
+that 3.0.0 had to clean up by hand. All three were verified to fail on real
+drift rather than merely pass.
+
+**Trade-off:** feature names are a cross-repo contract with no shared package
+(the wrapper deliberately depends on nothing of ours), so the two tables cannot
+be type-checked against each other. The contract e2e below closes that.
+
+**`MIN_WRAPPER_VERSION` survives** as the pre-manifest fallback, corrected to
+`3.0.0`. The lesson in the original value: a floor that nothing can fall below
+is not a floor, and a constant whose comment predicts another project's release
+schedule will be wrong.
+
+---
+
+## The cross-repo contract is tested by running both
+
+**Problem:** `serverAccess` ends every wrapper call with
+
+```ts
+return res.json() as Promise<T>; // pinned first-party contract
+```
+
+The cast is justified — the wrapper is first-party and versioned, not arbitrary
+input — but it is a promise nothing checks. If the wrapper renames a field, the
+bot compiles, the wrapper's tests pass, and a remote instance quietly returns
+`undefined`. The manifest and the script-action list have the same hole one
+level up: each repo can prove its own half is self-consistent, and neither can
+prove the two agree. Everything that had bitten us across this boundary —
+`MIN_WRAPPER_VERSION` predicting a release that never happened, the action list
+existing three times — was of that shape.
+
+**Decision:** `npm run e2e:contract` boots a real wrapper and drives it through
+the bot's real `serverAccess`, asserting the manifest diff, the action list, and
+every response shape. It runs from **both** repos' CI: the check lives here
+because it asserts this bot's expectations, and the wrapper's `contract`
+workflow checks the bot out and points it at itself, so a wrapper PR that breaks
+the bot fails in that PR.
+
+**The upstreams are faked, and that is not a compromise.** The wrapper talks to
+a scaffolded instance directory and a real RCON socket answering canned output.
+The contract under test is wrapper → bot; what sits behind the wrapper only has
+to make it produce a genuine response. Insisting on a real Paper server would
+have bought nothing and cost five minutes per run — the difference between a
+check that runs on every PR and one that runs nightly.
+
+**Verified by breaking it**, because a green cross-repo check proves very little
+on its own. Renaming the wrapper's `usercache` field fails `readUserCache` and
+nothing else; deleting a feature from its manifest fails the feature diff; adding
+a script action fails the action comparison. Each break trips exactly the check
+that should catch it.
+
+**Trade-off:** the two repos' CI are now coupled — a bot PR that expects a
+feature the wrapper has not shipped goes red until the wrapper lands. That is
+the ordering constraint made visible rather than a new one, and it is the whole
+point: the alternative is shipping a bot that expects a wrapper nobody built.
+
+**Not covered:** `/scripts/run` executes through `sudo -u`, which CI cannot do,
+so only its rejection path is exercised. The nightly Paper smoke covers the RCON
+layer against real Minecraft; this covers the wrapper boundary. Neither
+subsumes the other.
+
+---
+
+## Tests that assert against a copy of the code have been deleted
+
+**Problem:** Two test files re-implemented their subject inside the test and
+asserted against that. `tps.test.ts` copied `getTps`'s parsing and
+`_hasTpsCommand` logic into helpers, with a header claiming "each helper
+reproduces the exact logic from server.ts so a regression in the source will
+break the matching test" — which is exactly backwards, and the file existed
+specifically to guard two named regressions (Bug 1 and Bug 4) that it therefore
+did not guard. `validateConfig.test.ts` went further: it built an object
+literal, asserted the literal had the properties it had just been given, and
+copied an `if` from the validator into the test body to throw its own error and
+catch it.
+
+Twenty tests that could not fail for a real reason, inflating the count and the
+confidence.
+
+**Decision:** Delete both, after porting the behaviours they claimed onto the
+real subjects — the Bug 1 and Bug 4 guards now drive the actual `getTps` through
+its mocked RCON, and `tpsWarningThreshold` (which had no real coverage at all)
+is asserted against `validateCandidateConfig`. Each new test was verified by
+reintroducing the bug and watching it fail; the first attempt at the Bug 4 guard
+**passed against the broken code**, because the input never exercised the anchor.
+Writing a regression test and not breaking the code to check it is how the
+originals happened.
+
+**Trade-off:** the suite reports fewer tests. That number was measuring the
+wrong thing.
+
+**The general rule**, which [testing.md](testing.md) now states: mock the seam,
+never the subject. A test that mocks — or re-implements — what it is testing
+will pass forever and prove nothing. This repo has now produced that bug three
+times: the leaderboard command tests mocking `buildLeaderboard`, and these two.

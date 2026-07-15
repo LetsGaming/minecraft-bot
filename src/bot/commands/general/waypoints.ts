@@ -11,14 +11,14 @@ import {
   createEmbed,
   createPaginationButtons,
   handlePagination,
-} from "../../utils/embedUtils.js";
-import { resolveServer } from "../../utils/guildRouter.js";
+} from "../../utils/embeds/embedUtils.js";
+import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { withErrorHandling } from "../middleware.js";
 import {
   loadWaypointStore,
   getServerWaypoints,
   type Waypoint,
-} from "@mcbot/core/utils/waypointStore.js";
+} from "@mcbot/core/utils/stores/waypointStore.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 
 const PER_PAGE = 10;

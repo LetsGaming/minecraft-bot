@@ -3,8 +3,8 @@ import {
   MessageFlags,
   type ChatInputCommandInteraction,
 } from "discord.js";
-import { unlinkAccount } from "@mcbot/core/utils/linkUtils.js";
-import { syncLinkedRole } from "../../utils/linkedRole.js";
+import { unlinkAccount } from "@mcbot/core/utils/stores/linkUtils.js";
+import { syncLinkedRole } from "../../utils/guild/linkedRole.js";
 
 export const data = new SlashCommandBuilder()
   .setName("unlink")

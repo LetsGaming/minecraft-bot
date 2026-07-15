@@ -1,0 +1,64 @@
+# Cross-repo contract: this bot against a real api-wrapper.
+#
+# The bot's serverAccess casts the wrapper's JSON to the caller's type, so a
+# renamed field compiles here, passes the wrapper's own tests, and only shows
+# up as a remote instance quietly returning undefined. Neither repo's suite
+# can catch that alone; this job runs the two together.
+#
+# A red build here usually means the wrapper needs to land its half first —
+# that ordering is the point, not a nuisance.
+name: Wrapper contract
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      wrapper_ref:
+        description: "api-wrapper ref to test against"
+        required: false
+        default: main
+
+env:
+  # The api-wrapper repo. Note the repo and the package are named differently:
+  # the package is `mc-api-server`, the repo is `minecraft-server-api`.
+  WRAPPER_REPO: LetsGaming/minecraft-server-api
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the bot
+        uses: actions/checkout@v4
+        with:
+          path: bot
+
+      - name: Check out the api-wrapper
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.WRAPPER_REPO }}
+          ref: ${{ inputs.wrapper_ref || 'main' }}
+          path: api-wrapper
+
+      - uses: actions/setup-node@v4
+        with:
+          # The script imports the bot's built core, whose engines require
+          # >= 22.13 for node:sqlite.
+          node-version: 24
+
+      - name: Build the bot
+        working-directory: bot
+        run: npm ci && npm run build
+
+      - name: Build the wrapper
+        working-directory: api-wrapper
+        run: npm ci && npm run build
+
+      - name: Contract check
+        working-directory: bot
+        env:
+          WRAPPER_DIR: ${{ github.workspace }}/api-wrapper
+          E2E_DUMP_WRAPPER_LOG: "1"
+        run: npm run e2e:contract

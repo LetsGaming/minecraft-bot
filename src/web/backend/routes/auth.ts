@@ -21,8 +21,8 @@ import {
   sessionFromRequest,
   setSessionCookie,
   clearSessionCookie,
-} from "../auth.js";
-import { listBotGuilds } from "../discordRest.js";
+} from "../auth/auth.js";
+import { listBotGuilds } from "../auth/discordRest.js";
 import { Unauthorized } from "../errors.js";
 import { OAuthCallbackQuery } from "./schemas.js";
 import { DISCORD_OAUTH_AUTHORIZE_URL } from "@mcbot/schema";

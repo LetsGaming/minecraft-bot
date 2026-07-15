@@ -6,7 +6,7 @@ import type {
   SlashCommandBuilder,
   SlashCommandSubcommandsOnlyBuilder,
 } from "discord.js";
-import type { ServerInstance } from "../utils/server.js";
+import type { ServerInstance } from "../utils/server/server.js";
 
 export interface BotCommand {
   data:

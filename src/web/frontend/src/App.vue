@@ -145,7 +145,7 @@ import ConfirmDialog from "primevue/confirmdialog";
 import { apiGet, apiSend, UnauthorizedError } from "./api";
 import type { MeResponse, ServerStatus } from "./api";
 import { useInvite } from "./composables/useInvite";
-import StatusDot from "./components/StatusDot.vue";
+import StatusDot from "./components/ui/StatusDot.vue";
 import OverviewView from "./views/OverviewView.vue";
 import StatusView from "./views/StatusView.vue";
 import GuildsView from "./views/GuildsView.vue";

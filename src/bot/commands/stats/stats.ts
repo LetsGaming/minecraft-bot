@@ -2,17 +2,17 @@ import {
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
 } from "discord.js";
-import { loadStats, flattenStats, filterStats } from "@mcbot/core/utils/statUtils.js";
-import { getSnapshotForDailyDiff } from "@mcbot/core/utils/snapshotUtils.js";
-import { buildStatsEmbeds } from "../../utils/statEmbeds.js";
-import { findPlayer } from "@mcbot/core/utils/playerUtils.js";
-import { resolveServer } from "../../utils/guildRouter.js";
+import { loadStats, flattenStats, filterStats } from "@mcbot/core/utils/minecraft/statUtils.js";
+import { getSnapshotForDailyDiff } from "@mcbot/core/utils/minecraft/snapshotUtils.js";
+import { buildStatsEmbeds } from "../../utils/embeds/statEmbeds.js";
+import { findPlayer } from "@mcbot/core/utils/minecraft/playerUtils.js";
+import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import {
   createPaginationButtons,
   handlePagination,
   createErrorEmbed,
-} from "../../utils/embedUtils.js";
+} from "../../utils/embeds/embedUtils.js";
 import type { FlattenedStat } from "@mcbot/core/types/index.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;

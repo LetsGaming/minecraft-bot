@@ -2,10 +2,10 @@ import {
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
 } from "discord.js";
-import { createEmbed, createErrorEmbed } from "../../utils/embedUtils.js";
-import { getLinkedAccount } from "@mcbot/core/utils/linkUtils.js";
-import { getPlayerCoords } from "@mcbot/core/utils/playerUtils.js";
-import { resolveServer } from "../../utils/guildRouter.js";
+import { createEmbed, createErrorEmbed } from "../../utils/embeds/embedUtils.js";
+import { getLinkedAccount } from "@mcbot/core/utils/stores/linkUtils.js";
+import { getPlayerCoords } from "@mcbot/core/utils/minecraft/playerUtils.js";
+import { resolveServer } from "../../utils/guild/guildRouter.js";
 
 export const data = new SlashCommandBuilder()
   .setName("netherportal")

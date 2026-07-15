@@ -7,24 +7,24 @@
  * writes — everything here exists because some other feature tracked it.
  */
 import { SlashCommandBuilder, time as discordTime } from "discord.js";
-import { createPlayerEmbed } from "../../utils/embedUtils.js";
-import { EmbedColor } from "../../utils/embedColors.js";
-import { resolveServer } from "../../utils/guildRouter.js";
+import { createPlayerEmbed } from "../../utils/embeds/embedUtils.js";
+import { EmbedColor } from "../../utils/embeds/embedColors.js";
+import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { withErrorHandling } from "../middleware.js";
 import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
-import { loadLinkedAccounts } from "@mcbot/core/utils/linkUtils.js";
-import { getAuditEntry } from "@mcbot/core/utils/whitelistAudit.js";
+import { loadLinkedAccounts } from "@mcbot/core/utils/stores/linkUtils.js";
+import { getAuditEntry } from "@mcbot/core/utils/stores/whitelistAudit.js";
 import {
   loadSessionStore,
   getServerSessions,
   isOnlineNow,
   totalPlaytimeMs,
-} from "@mcbot/core/utils/sessionStore.js";
+} from "@mcbot/core/utils/stores/sessionStore.js";
 import {
   loadClaimedStore,
   getServerClaims,
-} from "@mcbot/core/utils/dailyStore.js";
-import { formatPlaytime } from "@mcbot/core/utils/statUtils.js";
+} from "@mcbot/core/utils/stores/dailyStore.js";
+import { formatPlaytime } from "@mcbot/core/utils/minecraft/statUtils.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 
 export const data = new SlashCommandBuilder()

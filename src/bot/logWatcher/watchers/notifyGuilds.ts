@@ -10,14 +10,14 @@
  *    one-guild/two-server setup got mixed events with no label).
  */
 import { type Client, type EmbedBuilder } from "discord.js";
-import { getAllInstances } from "@mcbot/core/utils/server.js";
+import { getAllInstances } from "@mcbot/core/utils/server/server.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
 import {
   DEFAULT_NOTIFICATION_EVENTS,
   type NotificationEvent,
 } from "@mcbot/schema";
-import { serverInScope } from "../../utils/guildRouter.js";
+import { serverInScope } from "../../utils/guild/guildRouter.js";
 import type { GuildConfig } from "@mcbot/core/types/index.js";
 
 // Shared player-name pattern source. \w+ alone silently drops Bedrock

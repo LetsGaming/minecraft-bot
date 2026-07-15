@@ -1,10 +1,10 @@
 import { SlashCommandBuilder } from "discord.js";
-import { resolveServer } from "../utils/guildRouter.js";
+import { resolveServer } from "../utils/guild/guildRouter.js";
 
-import { createSuccessEmbed } from "../utils/embedUtils.js";
+import { createSuccessEmbed } from "../utils/embeds/embedUtils.js";
 import { withErrorHandling, requireServerAdmin } from "./middleware.js";
-import { recordRemove } from "@mcbot/core/utils/whitelistAudit.js";
-import { invalidateWhitelistCache } from "@mcbot/core/utils/utils.js";
+import { recordRemove } from "@mcbot/core/utils/stores/whitelistAudit.js";
+import { invalidateWhitelistCache } from "@mcbot/core/utils/minecraft/whitelist.js";
 import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
 
 export const data = new SlashCommandBuilder()

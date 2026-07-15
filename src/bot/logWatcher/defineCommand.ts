@@ -1,10 +1,10 @@
 import { registerLogCommand } from "./logWatcher.js";
-import { resolveCommandPolicy } from "@mcbot/core/utils/commandPolicy.js";
-import { loadLinkedAccounts } from "@mcbot/core/utils/linkUtils.js";
+import { resolveCommandPolicy } from "@mcbot/core/utils/commands/commandPolicy.js";
+import { loadLinkedAccounts } from "@mcbot/core/utils/stores/linkUtils.js";
 import { isServerAdmin } from "../commands/middleware.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import type { Client } from "discord.js";
-import type { ServerInstance } from "@mcbot/core/utils/server.js";
+import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 import type {
   InGameCommandDefinition,
   InGameCommandResult,

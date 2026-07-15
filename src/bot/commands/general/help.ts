@@ -7,11 +7,11 @@ import {
   createEmbed,
   createPaginationButtons,
   handlePagination,
-} from "../../utils/embedUtils.js";
+} from "../../utils/embeds/embedUtils.js";
 import type { BotClient } from "@mcbot/core/types/index.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { isRecord } from "@mcbot/core/utils/objects.js";
-import { resolveCommandPolicy } from "@mcbot/core/utils/commandPolicy.js";
+import { resolveCommandPolicy } from "@mcbot/core/utils/commands/commandPolicy.js";
 
 export const data = new SlashCommandBuilder()
   .setName("help")

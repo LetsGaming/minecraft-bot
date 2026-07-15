@@ -6,8 +6,8 @@
  * /whois shows a compact cross-server last-seen line.
  */
 import { SlashCommandBuilder } from "discord.js";
-import { createEmbed } from "../../utils/embedUtils.js";
-import { resolveServer } from "../../utils/guildRouter.js";
+import { createEmbed } from "../../utils/embeds/embedUtils.js";
+import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { withErrorHandling } from "../middleware.js";
 import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
 import {
@@ -15,7 +15,7 @@ import {
   getServerSessions,
   isOnlineNow,
   totalPlaytimeMs,
-} from "@mcbot/core/utils/sessionStore.js";
+} from "@mcbot/core/utils/stores/sessionStore.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 
 const SHOWN_SESSIONS = 10;

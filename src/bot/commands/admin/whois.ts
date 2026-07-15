@@ -5,22 +5,22 @@
  * getAuditEntry().
  */
 import { SlashCommandBuilder } from "discord.js";
-import { createEmbed } from "../../utils/embedUtils.js";
+import { createEmbed } from "../../utils/embeds/embedUtils.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
-import { getAuditEntry } from "@mcbot/core/utils/whitelistAudit.js";
-import { loadLinkedAccounts } from "@mcbot/core/utils/linkUtils.js";
+import { getAuditEntry } from "@mcbot/core/utils/stores/whitelistAudit.js";
+import { loadLinkedAccounts } from "@mcbot/core/utils/stores/linkUtils.js";
 import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
 import {
   loadSessionStore,
   isOnlineNow,
   type SessionStore,
-} from "@mcbot/core/utils/sessionStore.js";
+} from "@mcbot/core/utils/stores/sessionStore.js";
 import {
   loadNotesStore,
   getNotesByUuid,
   findNotesByName,
   type PlayerNotesStore,
-} from "@mcbot/core/utils/noteStore.js";
+} from "@mcbot/core/utils/stores/noteStore.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 
 /**

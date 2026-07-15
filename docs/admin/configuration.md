@@ -242,7 +242,7 @@ The bot needs the Manage Channels permission for this feature.
 | `updateNotifier` | `{ "enabled": true }` | Daily GitHub release check; logs when a newer release exists. `"dmAdmins": true` additionally DMs the operator-level admins once per new version. `"enabled": false` opts out. |
 | `schedules` | off | Scheduled restarts per server: `"schedules": { "smp": { "restart": { "time": "04:00", "days": ["MO","TH"], "warnMinutes": [15, 5, 1] } } }`. Countdown warnings go in-game (`/say`) and to notification channels (event `scheduledRestart`); the restart uses the suite's restart script with downtime alerts suppressed, and is admin-audited. `days` omitted = daily. Applies live on config reload. |
 | `milestones` | off | Milestone announcements per leaderboard stat key, thresholds in the stat's native unit (playtime is ticks: 100 h = `7200000`): `"milestones": { "playtime": [7200000], "diamonds": [100, 1000] }`. Announced in-game and via the `milestone` notification event. First activation seeds silently so veterans' whole histories are not blasted at once. |
-| `webui` | off | Web dashboard (separate process, `npm run start:web`): `{ "enabled": true, "port": 8130, "host": "127.0.0.1", "publicUrl": "https://panel.example.com" }`. Secrets come from the environment (`WEBUI_CLIENT_SECRET`, `WEBUI_SESSION_SECRET`). See [../dev/webui-integration.md](../dev/webui-integration.md). |
+| `webui` | off | Web dashboard (separate process, `npm run start:web`): `{ "enabled": true, "port": 8130, "host": "127.0.0.1", "publicUrl": "https://panel.example.com" }`. Secrets come from the environment (`WEBUI_CLIENT_SECRET`, `WEBUI_SESSION_SECRET`). See [../dev/web/index.md](../dev/web/index.md). |
 
 ## Command settings (per command, three scopes)
 

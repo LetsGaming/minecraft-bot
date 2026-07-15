@@ -46,15 +46,22 @@ You use the bot as a Discord member or Minecraft player.
 
 You want to change the code or contribute.
 
+Start at [dev/index.md](dev/index.md) — it maps the rest. The docs are split
+the way the repo is: what is true everywhere sits in `dev/`, and each workspace
+has its own directory.
+
 | Topic | File |
 |---|---|
+| Map of the developer docs | [dev/index.md](dev/index.md) |
 | How the codebase is structured and why | [dev/architecture.md](dev/architecture.md) |
-| Adding commands, watchers, and features step by step | [dev/adding-features.md](dev/adding-features.md) |
+| Where a new command, watcher, or stat goes | [dev/adding-features.md](dev/adding-features.md) |
 | Coding rules enforced in review | [dev/coding-guidelines.md](dev/coding-guidelines.md) |
+| Shared contracts (`@mcbot/schema`) | [dev/contracts.md](dev/contracts.md) |
 | Running and writing tests | [dev/testing.md](dev/testing.md) |
-| Data files, caches, and snapshots | [dev/data-storage.md](dev/data-storage.md) |
 | Architectural decision log | [dev/decisions.md](dev/decisions.md) |
-| Using or extending the web dashboard (shipped in 3.6.0) | [dev/webui-integration.md](dev/webui-integration.md) |
+| The Discord process | [dev/bot/](dev/bot/index.md) |
+| Config, data layer, server access, Minecraft domain | [dev/core/](dev/core/index.md) |
+| The dashboard (backend + frontend) | [dev/web/](dev/web/index.md) |
 
 ## Quick reference
 
@@ -65,4 +72,4 @@ You want to change the code or contribute.
 | Check my playtime | [user/stats-and-leaderboards.md](user/stats-and-leaderboards.md) |
 | Whitelist a player | [admin/permissions.md](admin/permissions.md) |
 | Fix "sudo is not configured" errors | [admin/sudoers.md](admin/sudoers.md) |
-| Add a new slash command | [dev/adding-features.md](dev/adding-features.md) |
+| Add a new slash command | [dev/bot/commands.md](dev/bot/commands.md) |

@@ -9,16 +9,16 @@ import {
   humanizeKey,
   formatPlaytime,
   formatDistance,
-} from "@mcbot/core/utils/statUtils.js";
+} from "@mcbot/core/utils/minecraft/statUtils.js";
 import {
   createEmbed,
   createPaginationButtons,
   handlePagination,
   createErrorEmbed,
   createInfoEmbed,
-} from "../../utils/embedUtils.js";
-import { findPlayer } from "@mcbot/core/utils/playerUtils.js";
-import { resolveServer } from "../../utils/guildRouter.js";
+} from "../../utils/embeds/embedUtils.js";
+import { findPlayer } from "@mcbot/core/utils/minecraft/playerUtils.js";
+import { resolveServer } from "../../utils/guild/guildRouter.js";
 import type { EmbedBuilder } from "discord.js";
 import type { FlattenedStat } from "@mcbot/core/types/index.js";
 import { log } from "@mcbot/core/utils/logger.js";

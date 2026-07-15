@@ -7,9 +7,9 @@ import {
   createErrorEmbed,
   createPaginationButtons,
   handlePagination,
-} from "../../utils/embedUtils.js";
-import { loadWhitelist } from "@mcbot/core/utils/utils.js";
-import { resolveServer } from "../../utils/guildRouter.js";
+} from "../../utils/embeds/embedUtils.js";
+import { loadWhitelist } from "@mcbot/core/utils/minecraft/whitelist.js";
+import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { log } from "@mcbot/core/utils/logger.js";
 
 export const data = new SlashCommandBuilder()

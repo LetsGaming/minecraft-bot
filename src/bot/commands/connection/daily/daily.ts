@@ -13,20 +13,20 @@ import {
   savePendingRewards,
   getServerPending,
   MAX_PENDING_PER_PLAYER,
-} from "@mcbot/core/utils/dailyStore.js";
+} from "@mcbot/core/utils/stores/dailyStore.js";
 import { t } from "@mcbot/core/utils/i18n.js";
-import { getOnlinePlayers } from "@mcbot/core/utils/playerUtils.js";
-import { isLinked, getLinkedAccount } from "@mcbot/core/utils/linkUtils.js";
-import { createErrorEmbed } from "../../../utils/embedUtils.js";
+import { getOnlinePlayers } from "@mcbot/core/utils/minecraft/playerUtils.js";
+import { isLinked, getLinkedAccount } from "@mcbot/core/utils/stores/linkUtils.js";
+import { createErrorEmbed } from "../../../utils/embeds/embedUtils.js";
 import type {
   DailyRewardsConfig,
   DailyRewardItem,
   UserClaimData,
 } from "@mcbot/core/types/index.js";
 import { log } from "@mcbot/core/utils/logger.js";
-import { resolveServer } from "../../../utils/guildRouter.js";
+import { resolveServer } from "../../../utils/guild/guildRouter.js";
 import { formatTime } from "@mcbot/core/utils/time.js";
-import type { ServerInstance } from "@mcbot/core/utils/server.js";
+import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 
 const DAILY_COOLDOWN = 24 * 60 * 60 * 1000;
 

@@ -17,15 +17,15 @@ import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import {
   createSuccessEmbed,
   createEmbed,
-} from "../../utils/embedUtils.js";
-import { EmbedColor } from "../../utils/embedColors.js";
+} from "../../utils/embeds/embedUtils.js";
+import { EmbedColor } from "../../utils/embeds/embedColors.js";
 import {
   loadClaimedStore,
   saveClaimedStore,
   getServerClaims,
-} from "@mcbot/core/utils/dailyStore.js";
+} from "@mcbot/core/utils/stores/dailyStore.js";
 import { getServerIds } from "@mcbot/core/config.js";
-import { recordAdminAction } from "@mcbot/core/utils/adminAudit.js";
+import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { formatDatetime } from "@mcbot/core/utils/time.js";
 

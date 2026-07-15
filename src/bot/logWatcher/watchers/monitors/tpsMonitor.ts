@@ -1,0 +1,111 @@
+import { type Client } from "discord.js";
+import { log } from "@mcbot/core/utils/logger.js";
+import { serverInScope } from "../../../utils/guild/guildRouter.js";
+import { loadConfig } from "@mcbot/core/config.js";
+import { createEmbed } from "../../../utils/embeds/embedUtils.js";
+import { EmbedColor } from "../../../utils/embeds/embedColors.js";
+import { roleMention } from "../../../utils/embeds/alertUtils.js";
+import { t, runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
+import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
+import type { GuildConfig } from "@mcbot/core/types/index.js";
+
+const warned = new Map<string, number>();
+
+export function startTpsMonitor(
+  serverInstance: ServerInstance,
+  client: Client,
+  guildConfigs: Record<string, GuildConfig>,
+): ReturnType<typeof setInterval> | null {
+  const cfg = loadConfig();
+  const interval = cfg.tpsPollIntervalMs;
+  const threshold = cfg.tpsWarningThreshold;
+
+  if (!serverInstance.supportsTps) {
+    log.info(serverInstance.id, "TPS monitoring skipped (requires RCON)");
+    return null;
+  }
+
+  const timer = setInterval(async () => {
+    try {
+      const tps = await serverInstance.getTps();
+      if (!tps || tps.tps1m === null) return;
+
+      if (tps.tps1m < threshold) {
+        const lastWarn = warned.get(serverInstance.id) ?? 0;
+        if (Date.now() - lastWarn < 300000) return;
+        warned.set(serverInstance.id, Date.now());
+
+        for (const [guildId, gcfg] of Object.entries(guildConfigs)) {
+          const tpsAlert = gcfg.tpsAlerts;
+          if (!tpsAlert?.channelId) continue;
+          if (!serverInScope(tpsAlert.server, serverInstance.id, guildId))
+            continue;
+
+          try {
+            const channel = await client.channels.fetch(tpsAlert.channelId);
+            if (!channel || !("send" in channel)) continue;
+
+            const embed = runWithGuildLocale(guildId, () =>
+              createEmbed({
+                title: t("tps.lowTitle"),
+                description: t("tps.low", { threshold }),
+                color: tps.tps1m < 10 ? EmbedColor.Critical : EmbedColor.Warning,
+                footer: { text: serverInstance.id },
+              }),
+            );
+
+            if ("tps5m" in tps && tps.tps5m !== undefined) {
+              const paperTps = tps;
+              embed.addFields(
+                {
+                  name: "1 min",
+                  value: `${paperTps.tps1m.toFixed(1)}`,
+                  inline: true,
+                },
+                {
+                  name: "5 min",
+                  value: `${paperTps.tps5m.toFixed(1)}`,
+                  inline: true,
+                },
+                {
+                  name: "15 min",
+                  value: `${paperTps.tps15m.toFixed(1)}`,
+                  inline: true,
+                },
+              );
+            } else {
+              embed.addFields({
+                name: "TPS",
+                value: `${tps.tps1m.toFixed(1)}`,
+                inline: true,
+              });
+              if ("mspt" in tps && tps.mspt !== undefined) {
+                embed.addFields({
+                  name: "MSPT",
+                  value: `${tps.mspt.toFixed(1)}ms`,
+                  inline: true,
+                });
+              }
+            }
+
+            await channel.send({
+              embeds: [embed],
+              ...roleMention(tpsAlert.mentionRole),
+            });
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            log.error("tps", `Alert failed: ${msg}`);
+          }
+        }
+      }
+    } catch {
+      /* server might be down */
+    }
+  }, interval);
+
+  log.info(
+    serverInstance.id,
+    `TPS monitoring active (threshold: ${threshold}, interval: ${interval / 1000}s)`,
+  );
+  return timer;
+}

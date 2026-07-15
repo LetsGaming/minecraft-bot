@@ -11,7 +11,7 @@
  */
 import type { FastifyInstance } from "fastify";
 import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
-import { getServerInstance } from "@mcbot/core/utils/server.js";
+import { getServerInstance } from "@mcbot/core/utils/server/server.js";
 import {
   runScript,
   tailLog,
@@ -19,14 +19,13 @@ import {
   deleteStatsFile,
   readWhitelist,
   readUserCache,
-} from "@mcbot/core/utils/serverAccess.js";
-import { recordAdminAction } from "@mcbot/core/utils/adminAudit.js";
+} from "@mcbot/core/utils/server/serverAccess.js";
+import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { log } from "@mcbot/core/utils/logger.js";
-import { sessionFromRequest } from "../auth.js";
+import { sessionFromRequest } from "../auth/auth.js";
 import { BadRequest, NotFound, Conflict, HttpError } from "../errors.js";
 import { ServerActionParams, IdParams, LinesQuery, DryRunQuery } from "./schemas.js";
-
-const SCRIPT_ACTIONS = new Set(["start", "stop", "restart", "backup"]);
+import { isServerOperatorAction } from "@mcbot/schema/serverActions.js";
 
 /** The generic message returned when a server-side operation fails: SEC-04
  *  keeps absolute paths and sudo/stderr fragments out of the browser. */
@@ -51,10 +50,12 @@ export function registerServerRoutes(app: FastifyInstance): void {
       const server = requireServer(id);
       // Kept as a guard (not a schema enum) so the "unknown server" 404 still
       // precedes the "unknown action" 400 — the order the API has always had.
-      if (!SCRIPT_ACTIONS.has(action)) {
+      if (!isServerOperatorAction(action)) {
         throw new BadRequest(`unknown action "${action}"`);
       }
-      if (server.capabilities && !server.capabilities.scripts[action as "start"]) {
+      // `action` is now a ServerScriptAction, so the capability lookup below
+      // needs no cast — the guard is what proves the key is real.
+      if (server.capabilities && !server.capabilities.scripts[action]) {
         throw new Conflict(`server has no ${action} script (suite not installed?)`);
       }
 

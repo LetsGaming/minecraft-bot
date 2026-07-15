@@ -12,14 +12,14 @@
 import type { FastifyInstance } from "fastify";
 import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
 import { getServerIds } from "@mcbot/core/config.js";
-import { getUptimeStats } from "@mcbot/core/utils/uptimeTracker.js";
-import { loadAdminAudit } from "@mcbot/core/utils/adminAudit.js";
+import { getUptimeStats } from "@mcbot/core/utils/stores/uptimeTracker.js";
+import { loadAdminAudit } from "@mcbot/core/utils/stores/adminAudit.js";
 import {
   readRuntimeHeartbeat,
   heartbeatIsFresh,
-} from "@mcbot/core/utils/runtimeHeartbeat.js";
-import { loadPlayerCountStore } from "@mcbot/core/utils/playerCountHistory.js";
-import { collectStatus, offlineStatus } from "../status.js";
+} from "@mcbot/core/utils/server/runtimeHeartbeat.js";
+import { loadPlayerCountStore } from "@mcbot/core/utils/stores/playerCountHistory.js";
+import { collectStatus, offlineStatus } from "../status/status.js";
 import { NotFound } from "../errors.js";
 import { ServerIdParams, LimitQuery } from "./schemas.js";
 

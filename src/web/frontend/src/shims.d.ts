@@ -15,7 +15,7 @@ declare module "vue" {
   // which would create a value-initializer cycle. Declared here so their
   // templates typecheck.
   interface GlobalComponents {
-    SchemaField: (typeof import("./components/SchemaField.vue"))["default"];
+    SchemaField: (typeof import("./components/schema/SchemaField.vue"))["default"];
   }
 }
 

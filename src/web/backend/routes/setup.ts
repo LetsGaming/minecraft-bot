@@ -15,14 +15,14 @@
  */
 import type { FastifyInstance } from "fastify";
 import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
-import { readRawConfig } from "@mcbot/core/utils/configService.js";
+import { readRawConfig } from "@mcbot/core/utils/config/configService.js";
 import {
   listBotGuilds,
   listGuildChannels,
   listGuildRoles,
   discordHttpError,
-} from "../discordRest.js";
-import { sessionFromRequest, isSysadmin, canManageGuild } from "../auth.js";
+} from "../auth/discordRest.js";
+import { sessionFromRequest, isSysadmin, canManageGuild } from "../auth/auth.js";
 import { Forbidden } from "../errors.js";
 import { IdParams } from "./schemas.js";
 

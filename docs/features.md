@@ -163,4 +163,4 @@ a local one.
 
 **Durable state.** Machine-written state lives in a single SQLite database in WAL
 mode that both the bot and dashboard write to safely. Details are in
-[data storage](dev/data-storage.md).
+[data storage](dev/core/data-storage.md).

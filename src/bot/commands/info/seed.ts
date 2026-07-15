@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from "discord.js";
-import { createEmbed } from "../../utils/embedUtils.js";
-import { resolveServer } from "../../utils/guildRouter.js";
+import { createEmbed } from "../../utils/embeds/embedUtils.js";
+import { resolveServer } from "../../utils/guild/guildRouter.js";
 
 import { withErrorHandling } from "../middleware.js";
 

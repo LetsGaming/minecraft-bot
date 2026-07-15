@@ -16,12 +16,12 @@ import {
   validateCandidate,
   writeConfig,
   configFileHash,
-} from "@mcbot/core/utils/configService.js";
-import { recordAdminAction } from "@mcbot/core/utils/adminAudit.js";
+} from "@mcbot/core/utils/config/configService.js";
+import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { log } from "@mcbot/core/utils/logger.js";
-import { sessionFromRequest, isSysadmin, canManageGuild, guildScopeFresh } from "../auth.js";
-import { listBotGuilds, discordHttpError } from "../discordRest.js";
-import { readConfigSchema } from "../configSchema.js";
+import { sessionFromRequest, isSysadmin, canManageGuild, guildScopeFresh } from "../auth/auth.js";
+import { listBotGuilds, discordHttpError } from "../auth/discordRest.js";
+import { readConfigSchema } from "../config/configSchema.js";
 import { HttpError, Forbidden, Conflict, ValidationFailed, ServiceUnavailable } from "../errors.js";
 import type { RawBotConfig } from "@mcbot/core/types/index.js";
 import { IdParams, GuildConfigWriteBody, MutationResult } from "./schemas.js";

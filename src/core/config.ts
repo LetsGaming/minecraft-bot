@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { getRootDir } from "./utils/utils.js";
+import { getRootDir } from "./utils/paths.js";
 import { log } from "./utils/logger.js";
 import { validateCandidateConfig, validateApiUrl } from "./configValidation.js";
 import type {

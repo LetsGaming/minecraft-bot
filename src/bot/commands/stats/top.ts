@@ -1,13 +1,13 @@
 import { SlashCommandBuilder } from "discord.js";
-import { LEADERBOARD_STATS, buildLeaderboard } from "@mcbot/core/utils/statUtils.js";
+import { LEADERBOARD_STATS, buildLeaderboard } from "@mcbot/core/utils/minecraft/statUtils.js";
 import {
   isStreakStatKey,
   buildStreakLeaderboard,
   STREAK_STAT_LABELS,
-} from "@mcbot/core/utils/streakLeaderboard.js";
-import { buildLeaderboardEmbed } from "../../utils/statEmbeds.js";
+} from "@mcbot/core/utils/minecraft/streakLeaderboard.js";
+import { buildLeaderboardEmbed } from "../../utils/embeds/statEmbeds.js";
 import { withErrorHandling } from "../middleware.js";
-import { resolveServer } from "../../utils/guildRouter.js";
+import { resolveServer } from "../../utils/guild/guildRouter.js";
 
 const choices = [
   ...Object.entries(LEADERBOARD_STATS).map(([key, def]) => ({

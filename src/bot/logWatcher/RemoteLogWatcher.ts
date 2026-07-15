@@ -8,9 +8,9 @@
  */
 
 import { log } from "@mcbot/core/utils/logger.js";
-import { logStreamUrl } from "@mcbot/core/utils/serverAccess.js";
+import { logStreamUrl } from "@mcbot/core/utils/server/serverAccess.js";
 import type { Client } from "discord.js";
-import type { ServerInstance } from "@mcbot/core/utils/server.js";
+import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 import type { LogHandler, LogWatcherEntry } from "@mcbot/core/types/index.js";
 
 const RECONNECT_BASE_MS = 5_000;

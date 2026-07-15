@@ -3,6 +3,7 @@ import { errorMessage } from "../utils/errorMessage";
 import { useToast } from "primevue/usetoast";
 import { useConfirm } from "primevue/useconfirm";
 import { apiGet, apiSend } from "../api";
+import { isDisruptiveServerAction } from "@mcbot/schema/serverActions.js";
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
@@ -24,7 +25,7 @@ export function useServerActions(refresh: () => Promise<unknown>) {
   const logLines = ref<string[]>([]);
 
   async function runAction(serverId: string, action: string): Promise<void> {
-    if (action === "stop" || action === "restart") {
+    if (isDisruptiveServerAction(action)) {
       const ok = await new Promise<boolean>((resolve) => {
         confirm.require({
           message: `Really ${action} "${serverId}"?`,

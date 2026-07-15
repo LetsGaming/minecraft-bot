@@ -90,8 +90,8 @@ import Button from "primevue/button";
 import type { AuditEntry } from "../api";
 import { useAudit } from "../composables/useAudit";
 import { useConfigHistory } from "../composables/useConfigHistory";
-import ViewHeader from "../components/ViewHeader.vue";
-import EmptyState from "../components/EmptyState.vue";
+import ViewHeader from "../components/ui/ViewHeader.vue";
+import EmptyState from "../components/ui/EmptyState.vue";
 
 export default defineComponent({
   name: "AuditView",

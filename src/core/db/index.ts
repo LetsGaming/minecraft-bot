@@ -26,7 +26,7 @@
  */
 import path from "path";
 import { openDatabase, type SqlDatabase } from "./driver.js";
-import { getRootDir } from "../utils/utils.js";
+import { getRootDir } from "../utils/paths.js";
 import { log } from "../utils/logger.js";
 import { runMigrations } from "./migrations.js";
 import { importLegacyJson } from "./importLegacy.js";

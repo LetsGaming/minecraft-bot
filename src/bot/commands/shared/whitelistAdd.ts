@@ -8,14 +8,14 @@ import {
   SlashCommandBuilder,
   type SlashCommandOptionsOnlyBuilder,
 } from "discord.js";
-import { resolveServer } from "../../utils/guildRouter.js";
-import { invalidateWhitelistCache } from "@mcbot/core/utils/utils.js";
+import { resolveServer } from "../../utils/guild/guildRouter.js";
+import { invalidateWhitelistCache } from "@mcbot/core/utils/minecraft/whitelist.js";
 import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
-import { createSuccessEmbed } from "../../utils/embedUtils.js";
+import { createSuccessEmbed } from "../../utils/embeds/embedUtils.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
-import { recordAdd } from "@mcbot/core/utils/whitelistAudit.js";
-import { fetchMojangProfile } from "@mcbot/core/utils/mojang.js";
-import type { ServerInstance } from "@mcbot/core/utils/server.js";
+import { recordAdd } from "@mcbot/core/utils/stores/whitelistAudit.js";
+import { fetchMojangProfile } from "@mcbot/core/utils/minecraft/mojang.js";
+import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 
 export function buildWhitelistAddData(
   commandName: string,

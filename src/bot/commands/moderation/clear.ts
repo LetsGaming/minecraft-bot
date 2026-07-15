@@ -2,7 +2,7 @@ import {
   PermissionFlagsBits,
   SlashCommandBuilder,
 } from "discord.js";
-import { createSuccessEmbed } from "../../utils/embedUtils.js";
+import { createSuccessEmbed } from "../../utils/embeds/embedUtils.js";
 import { withErrorHandling } from "../middleware.js";
 import { log } from "@mcbot/core/utils/logger.js";
 

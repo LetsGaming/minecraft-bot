@@ -1,5 +1,5 @@
 /**
- * Discord URLs, in one place.
+ * Discord URLs and ID formats, in one place.
  *
  * The backend (OAuth flow, REST client, CSP) and the frontend (guild avatars)
  * all talk to the same Discord hosts. Centralizing them here — in the
@@ -8,6 +8,27 @@
  * hardcoded at each call site. Plain strings only (no Node built-ins), per the
  * package rule, so the browser bundle can import them too.
  */
+
+// ── ID format ───────────────────────────────────────────────────────────────
+
+/**
+ * A Discord snowflake: 17–20 digits. The config validator, the dashboard's
+ * sysadmin gate, and the update notifier all have to tell a user/role ID
+ * apart from something else in the same list, and each used to inline this
+ * regex — so a format change (Discord's IDs have grown a digit before) meant
+ * finding every copy. One definition, imported by all three.
+ */
+const SNOWFLAKE_PATTERN = /^\d{17,20}$/;
+
+/** Does this string have the shape of a Discord user/role/guild ID? */
+export function isSnowflake(value: string): boolean {
+  return SNOWFLAKE_PATTERN.test(value);
+}
+
+/** Human-readable form of the rule, for validator warnings. */
+export const SNOWFLAKE_DESCRIPTION = "17–20 digits";
+
+// ── Endpoints ───────────────────────────────────────────────────────────────
 
 /** Discord web origin — the OAuth2 authorize page lives here (not under /api). */
 export const DISCORD_BASE_URL = "https://discord.com";

@@ -11,11 +11,15 @@
  * runtime-only dependency — the frontend bundles it.
  */
 export type * from "./config.js";
-export type * from "./stats.js";
 export type * from "./contract.js";
+// Runtime values (the leaderboard-interval contract) alongside the stat
+// shapes, so the scheduler and the snapshot retention policy size periods
+// from one definition — hence a value re-export rather than `export type *`.
+export * from "./stats.js";
 // Runtime values (the notification-event contract), so the dispatcher, the
 // setup wizard, and the validator import one shared definition — hence a
 // value re-export rather than `export type *`.
 export * from "./notifications.js";
 export * from "./commandOptions.js";
 export * from "./discord.js";
+export * from "./serverActions.js";

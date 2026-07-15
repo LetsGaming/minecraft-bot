@@ -4,7 +4,7 @@ import path from "path";
 import readline from "readline";
 import { log } from "@mcbot/core/utils/logger.js";
 import type { Client } from "discord.js";
-import type { ServerInstance } from "@mcbot/core/utils/server.js";
+import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 import type { LogHandler, LogWatcherEntry, ILogWatcher } from "@mcbot/core/types/index.js";
 
 export type { ILogWatcher };

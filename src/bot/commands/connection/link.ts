@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, MessageFlags, type ChatInputCommandInteraction} from "discord.js";
 import { randomBytes } from "crypto";
-import { issueLinkCode } from "@mcbot/core/utils/linkUtils.js";
+import { issueLinkCode } from "@mcbot/core/utils/stores/linkUtils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("link")

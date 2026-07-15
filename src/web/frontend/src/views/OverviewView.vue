@@ -138,9 +138,9 @@ import { useGuilds } from "../composables/useGuilds";
 import { useMyGuilds } from "../composables/useMyGuilds";
 import { useAudit } from "../composables/useAudit";
 import { diskLabel } from "../utils/format";
-import ViewHeader from "../components/ViewHeader.vue";
-import StatusDot from "../components/StatusDot.vue";
-import GuildAvatar from "../components/GuildAvatar.vue";
+import ViewHeader from "../components/ui/ViewHeader.vue";
+import StatusDot from "../components/ui/StatusDot.vue";
+import GuildAvatar from "../components/ui/GuildAvatar.vue";
 
 interface Alert {
   level: "warn" | "danger";

@@ -13,15 +13,15 @@
  */
 import { SlashCommandBuilder, codeBlock } from "discord.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
-import { resolveServer } from "../../utils/guildRouter.js";
-import { createSuccessEmbed } from "../../utils/embedUtils.js";
-import { tailLog } from "@mcbot/core/utils/serverAccess.js";
-import { recordAdminAction } from "@mcbot/core/utils/adminAudit.js";
+import { resolveServer } from "../../utils/guild/guildRouter.js";
+import { createSuccessEmbed } from "../../utils/embeds/embedUtils.js";
+import { tailLog } from "@mcbot/core/utils/server/serverAccess.js";
+import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { loadConfig } from "@mcbot/core/config.js";
 import {
   setConsoleRelay,
   sanitizeLogLine,
-} from "../../logWatcher/watchers/consoleRelay.js";
+} from "../../logWatcher/watchers/log/consoleRelay.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 
 const MAX_TAIL_LINES = 100;

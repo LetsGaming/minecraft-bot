@@ -9,10 +9,10 @@ import { SlashCommandBuilder } from "discord.js";
 import {
   loadClaimedStore,
   getServerClaims,
-} from "@mcbot/core/utils/dailyStore.js";
-import { resolveServer } from "../../../utils/guildRouter.js";
-import { createEmbed } from "../../../utils/embedUtils.js";
-import { EmbedColor } from "../../../utils/embedColors.js";
+} from "@mcbot/core/utils/stores/dailyStore.js";
+import { resolveServer } from "../../../utils/guild/guildRouter.js";
+import { createEmbed } from "../../../utils/embeds/embedUtils.js";
+import { EmbedColor } from "../../../utils/embeds/embedColors.js";
 import { withErrorHandling } from "../../middleware.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 

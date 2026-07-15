@@ -36,7 +36,7 @@ import { log } from "@mcbot/core/utils/logger.js";
 import { registerErrorHandler } from "./errors.js";
 import { registerSetupGuard } from "./requiredEnv.js";
 import { DISCORD_CDN_URL } from "@mcbot/schema";
-import { requireSession, requireSysadmin } from "./auth.js";
+import { requireSession, requireSysadmin } from "./auth/auth.js";
 import { registerRateLimiting } from "./rateLimit.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerMonitoringRoutes } from "./routes/monitoring.js";
@@ -44,7 +44,7 @@ import { registerConfigRoutes } from "./routes/config.js";
 import { registerServerRoutes } from "./routes/servers.js";
 import { registerSetupRoutes } from "./routes/setup.js";
 import { registerGuildConfigRoutes } from "./routes/guildConfig.js";
-import { registerProbeRoutes } from "./metrics.js";
+import { registerProbeRoutes } from "./status/metrics.js";
 import { registerStaticFrontend } from "./static.js";
 
 export function buildServer(): FastifyInstance {

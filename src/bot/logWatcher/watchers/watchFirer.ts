@@ -8,7 +8,7 @@ import { type Client } from "discord.js";
 import {
   takeMatchingWatches,
   type WatchKind,
-} from "@mcbot/core/utils/watchStore.js";
+} from "@mcbot/core/utils/stores/watchStore.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { log } from "@mcbot/core/utils/logger.js";
 

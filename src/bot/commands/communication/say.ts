@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from "discord.js";
-import { resolveServer } from "../../utils/guildRouter.js";
+import { resolveServer } from "../../utils/guild/guildRouter.js";
 
 import { withErrorHandling } from "../middleware.js";
 import { sanitizeForConsole } from "@mcbot/core/utils/sanitize.js";

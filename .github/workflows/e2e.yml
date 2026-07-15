@@ -30,7 +30,7 @@ jobs:
         run: docker compose -f docker-compose.e2e.yml up -d --wait
 
       - name: Run the smoke script
-        run: node scripts/e2e-smoke.mjs
+        run: npm run e2e:smoke
 
       - name: Compose logs on failure
         if: failure()

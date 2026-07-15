@@ -7,15 +7,15 @@ import {
   ComponentType,
   type ChatInputCommandInteraction,
 } from "discord.js";
-import { getLinkedAccount } from "@mcbot/core/utils/linkUtils.js";
+import { getLinkedAccount } from "@mcbot/core/utils/stores/linkUtils.js";
 import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
-import { resolveServer } from "../../utils/guildRouter.js";
-import { getOnlinePlayers } from "@mcbot/core/utils/playerUtils.js";
+import { resolveServer } from "../../utils/guild/guildRouter.js";
+import { getOnlinePlayers } from "@mcbot/core/utils/minecraft/playerUtils.js";
 import {
   createErrorEmbed,
   createPlayerEmbed,
-} from "../../utils/embedUtils.js";
-import { fetchMojangProfile } from "@mcbot/core/utils/mojang.js";
+} from "../../utils/embeds/embedUtils.js";
+import { fetchMojangProfile } from "@mcbot/core/utils/minecraft/mojang.js";
 
 export const data = new SlashCommandBuilder()
   .setName("playerhead")

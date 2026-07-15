@@ -1,9 +1,9 @@
 import { SlashCommandBuilder } from "discord.js";
-import { createEmbed } from "../../utils/embedUtils.js";
-import { resolveServer } from "../../utils/guildRouter.js";
+import { createEmbed } from "../../utils/embeds/embedUtils.js";
+import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { withErrorHandling } from "../middleware.js";
-import * as serverAccess from "@mcbot/core/utils/serverAccess.js";
-import { requireCapability } from "@mcbot/core/utils/capabilities.js";
+import * as serverAccess from "@mcbot/core/utils/server/serverAccess.js";
+import { requireCapability } from "@mcbot/core/utils/server/capabilities.js";
 
 export const data = new SlashCommandBuilder()
   .setName("backup")

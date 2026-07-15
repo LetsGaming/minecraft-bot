@@ -20,7 +20,7 @@ import {
   createRateLimiter,
   type RateLimiter,
 } from "@mcbot/core/utils/rateLimiter.js";
-import { sessionFromRequest } from "./auth.js";
+import { sessionFromRequest } from "./auth/auth.js";
 
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 

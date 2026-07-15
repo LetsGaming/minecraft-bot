@@ -12,15 +12,15 @@
  */
 import { SlashCommandBuilder } from "discord.js";
 import { withErrorHandling } from "../middleware.js";
-import { resolveServer } from "../../utils/guildRouter.js";
-import { createSuccessEmbed, createEmbed } from "../../utils/embedUtils.js";
-import { EmbedColor } from "../../utils/embedColors.js";
+import { resolveServer } from "../../utils/guild/guildRouter.js";
+import { createSuccessEmbed, createEmbed } from "../../utils/embeds/embedUtils.js";
+import { EmbedColor } from "../../utils/embeds/embedColors.js";
 import {
   loadWatchStore,
   saveWatchStore,
   newWatchId,
   MAX_WATCHES_PER_USER,
-} from "@mcbot/core/utils/watchStore.js";
+} from "@mcbot/core/utils/stores/watchStore.js";
 import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 

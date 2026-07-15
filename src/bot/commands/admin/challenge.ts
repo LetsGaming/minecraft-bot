@@ -12,11 +12,11 @@
  * every start/cancel writes an admin-audit entry.
  */
 import { SlashCommandBuilder } from "discord.js";
-import { createEmbed } from "../../utils/embedUtils.js";
-import { EmbedColor } from "../../utils/embedColors.js";
+import { createEmbed } from "../../utils/embeds/embedUtils.js";
+import { EmbedColor } from "../../utils/embeds/embedColors.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
-import { resolveServer } from "../../utils/guildRouter.js";
-import { recordAdminAction } from "@mcbot/core/utils/adminAudit.js";
+import { resolveServer } from "../../utils/guild/guildRouter.js";
+import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { broadcastNotification } from "../../logWatcher/watchers/notifyGuilds.js";
 import { loadConfig } from "@mcbot/core/config.js";
 import {
@@ -27,7 +27,7 @@ import {
   getLatestChallenge,
   addChallenge,
   type Challenge,
-} from "@mcbot/core/utils/challengeStore.js";
+} from "@mcbot/core/utils/stores/challengeStore.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { log } from "@mcbot/core/utils/logger.js";
 

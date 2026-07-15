@@ -12,6 +12,7 @@
 import { NOTIFICATION_EVENTS, isNotificationEvent } from "@mcbot/schema";
 import { isRecord } from "./utils/objects.js";
 import type { RawBotConfig } from "./types/index.js";
+import { isSnowflake, SNOWFLAKE_DESCRIPTION } from "@mcbot/schema/discord.js";
 
 // ── Runtime schema validation ─────────────────────────────────────────────
 // TypeScript's type system only operates at compile time. A malformed
@@ -304,10 +305,10 @@ export function validateCandidateConfig(
             errors.push(
               `  - guilds.${gid}.linkedRole: must be a role ID string`,
             );
-          } else if (!/^\d{17,20}$/.test(guild.linkedRole)) {
+          } else if (!isSnowflake(guild.linkedRole)) {
             warnings.push(
               `guilds.${gid}.linkedRole "${guild.linkedRole}" does not look ` +
-                `like a Discord role ID (17–20 digits)`,
+                `like a Discord role ID (${SNOWFLAKE_DESCRIPTION})`,
             );
           }
         }
@@ -322,10 +323,10 @@ export function validateCandidateConfig(
                 errors.push(
                   `  - guilds.${gid}.${blockName}.mentionRole: must be a role ID string`,
                 );
-              } else if (!/^\d{17,20}$/.test(role)) {
+              } else if (!isSnowflake(role)) {
                 warnings.push(
                   `guilds.${gid}.${blockName}.mentionRole "${role}" does not ` +
-                    `look like a Discord role ID (17–20 digits)`,
+                    `look like a Discord role ID (${SNOWFLAKE_DESCRIPTION})`,
                 );
               }
             }

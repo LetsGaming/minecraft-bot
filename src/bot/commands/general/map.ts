@@ -2,7 +2,7 @@ import {
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
 } from "discord.js";
-import { createEmbed, createErrorEmbed } from "../../utils/embedUtils.js";
+import { createEmbed, createErrorEmbed } from "../../utils/embeds/embedUtils.js";
 import { loadConfig } from "@mcbot/core/config.js";
 
 export const data = new SlashCommandBuilder()

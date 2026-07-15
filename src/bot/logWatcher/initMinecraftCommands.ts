@@ -9,7 +9,7 @@ import {
   getServerInstance,
   addServerInstance,
   removeServerInstance,
-} from "@mcbot/core/utils/server.js";
+} from "@mcbot/core/utils/server/server.js";
 import { loadConfig, getServerIds } from "@mcbot/core/config.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import type { Client } from "discord.js";
@@ -20,34 +20,34 @@ import type {
 } from "@mcbot/core/types/index.js";
 
 // Watchers
-import { registerChatBridge, setupDiscordToMc } from "./watchers/chatBridge.js";
-import { registerJoinLeaveWatcher } from "./watchers/joinLeave.js";
-import { registerDeathWatcher } from "./watchers/deaths.js";
-import { registerAdvancementWatcher } from "./watchers/advancements.js";
-import { registerServerEventWatcher } from "./watchers/serverEvents.js";
-import { startTpsMonitor } from "./watchers/tpsMonitor.js";
-import { startLeaderboardScheduler } from "./watchers/leaderboardScheduler.js";
+import { registerChatBridge, setupDiscordToMc } from "./watchers/log/chatBridge.js";
+import { registerJoinLeaveWatcher } from "./watchers/log/joinLeave.js";
+import { registerDeathWatcher } from "./watchers/log/deaths.js";
+import { registerAdvancementWatcher } from "./watchers/log/advancements.js";
+import { registerServerEventWatcher } from "./watchers/log/serverEvents.js";
+import { startTpsMonitor } from "./watchers/monitors/tpsMonitor.js";
+import { startLeaderboardScheduler } from "./watchers/schedulers/leaderboardScheduler.js";
 import {
   startStatusEmbed,
   reconcileStatusEmbed,
-} from "./watchers/statusEmbed.js";
-import { startDowntimeMonitor } from "./watchers/downtimeMonitor.js";
-import { startDailyReminderScheduler } from "./watchers/dailyReminderScheduler.js";
-import { startChannelPurge } from "./watchers/channelPurge.js";
-import { startHostResourcesMonitor } from "./watchers/hostResourcesMonitor.js";
-import { startPollScheduler } from "./watchers/pollScheduler.js";
-import { registerSleepWatcher } from "./watchers/sleepWatcher.js";
-import { registerConsoleRelay } from "./watchers/consoleRelay.js";
-import { startUptimeFlushScheduler } from "@mcbot/core/utils/uptimeTracker.js";
-import { startUpdateNotifier } from "./watchers/updateNotifier.js";
-import { startPlayerCountSampler } from "@mcbot/core/utils/playerCountHistory.js";
-import { commandEnabledAnywhere } from "@mcbot/core/utils/commandPolicy.js";
+} from "./watchers/schedulers/statusEmbed.js";
+import { startDowntimeMonitor } from "./watchers/monitors/downtimeMonitor.js";
+import { startDailyReminderScheduler } from "./watchers/schedulers/dailyReminderScheduler.js";
+import { startChannelPurge } from "./watchers/schedulers/channelPurge.js";
+import { startHostResourcesMonitor } from "./watchers/monitors/hostResourcesMonitor.js";
+import { startPollScheduler } from "./watchers/schedulers/pollScheduler.js";
+import { registerSleepWatcher } from "./watchers/log/sleepWatcher.js";
+import { registerConsoleRelay } from "./watchers/log/consoleRelay.js";
+import { startUptimeFlushScheduler } from "@mcbot/core/utils/stores/uptimeTracker.js";
+import { startUpdateNotifier } from "./watchers/monitors/updateNotifier.js";
+import { startPlayerCountSampler } from "@mcbot/core/utils/stores/playerCountHistory.js";
+import { commandEnabledAnywhere } from "@mcbot/core/utils/commands/commandPolicy.js";
 import {
   registerManifestCommands,
   flushCommandManifest,
-} from "@mcbot/core/utils/commandManifest.js";
-import { reconcileRestartSchedules } from "./watchers/restartScheduler.js";
-import { startMilestoneWatcher } from "./watchers/milestoneWatcher.js";
+} from "@mcbot/core/utils/commands/commandManifest.js";
+import { reconcileRestartSchedules } from "./watchers/schedulers/restartScheduler.js";
+import { startMilestoneWatcher } from "./watchers/monitors/milestoneWatcher.js";
 import { ensureApplicationPrompts } from "../interactions/whitelistApplications.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -124,8 +124,27 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
   const commandFiles = getCommandFiles(commandsDir);
 
   const manifestIngame: Array<{ name: string; description: string }> = [];
+  // A command's identity is its filename — it is what !name dispatches on and
+  // what the `commands` config block keys enablement by. Two files claiming
+  // the same one is always a bug, and registering both means the player gets
+  // every reply twice. The usual cause is stale build output: tsc leaves a
+  // renamed file's old .js in dist forever, so an incremental build after a
+  // move has the command in both places. Refuse the second either way.
+  const loaded = new Map<string, string>();
   for (const file of commandFiles) {
     try {
+      const name = path.basename(file, ".js");
+      const first = loaded.get(name);
+      if (first !== undefined) {
+        log.warn(
+          "commands",
+          `Ignoring duplicate in-game command !${name} from ${file} — already ` +
+            `loaded from ${first}. If one of those is stale build output, run ` +
+            `'npm run clean' and rebuild.`,
+        );
+        continue;
+      }
+
       // Dynamically imported module — shape unknown at compile time. Assert the
       // expected surface, then validate `init` is callable below before use.
       const mod = (await import(
@@ -134,7 +153,7 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
         init?: () => void | Promise<void>;
       };
       if (typeof mod.init !== "function") continue;
-      const name = path.basename(file, ".js");
+      loaded.set(name, file);
       manifestIngame.push({
         name,
         description: mod.COMMAND_INFO?.description ?? "",

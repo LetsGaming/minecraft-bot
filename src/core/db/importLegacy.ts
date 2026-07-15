@@ -17,14 +17,14 @@ import fs from "fs";
 import path from "path";
 import type { SqlDatabase } from "./driver.js";
 import { mapRow, col } from "./rows.js";
-import { getRootDir } from "../utils/utils.js";
+import { getRootDir } from "../utils/paths.js";
 import { log } from "../utils/logger.js";
 import type {
   LinkCodesMap,
   LinkedAccountsMap,
   WhitelistAuditMap,
 } from "../types/index.js";
-import type { AdminAuditEntry } from "../utils/adminAudit.js";
+import type { AdminAuditEntry } from "../utils/stores/adminAudit.js";
 
 // Deliberately NOT the public kv API (db/kv.ts): that module resolves the
 // connection through getDb(), and this importer runs INSIDE getDb() before

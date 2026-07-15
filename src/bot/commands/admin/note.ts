@@ -10,13 +10,13 @@
  * Deliberately thin — annotations only, no ban database.
  */
 import { SlashCommandBuilder } from "discord.js";
-import { createEmbed } from "../../utils/embedUtils.js";
-import { EmbedColor } from "../../utils/embedColors.js";
+import { createEmbed } from "../../utils/embeds/embedUtils.js";
+import { EmbedColor } from "../../utils/embeds/embedColors.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
-import { resolveServer } from "../../utils/guildRouter.js";
-import { findPlayer } from "@mcbot/core/utils/playerUtils.js";
+import { resolveServer } from "../../utils/guild/guildRouter.js";
+import { findPlayer } from "@mcbot/core/utils/minecraft/playerUtils.js";
 import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
-import { recordAdminAction } from "@mcbot/core/utils/adminAudit.js";
+import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { formatDatetime } from "@mcbot/core/utils/time.js";
 import {
   loadNotesStore,
@@ -27,7 +27,7 @@ import {
   findNotesByName,
   MAX_NOTES_PER_PLAYER,
   type PlayerNotesEntry,
-} from "@mcbot/core/utils/noteStore.js";
+} from "@mcbot/core/utils/stores/noteStore.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import type { ChatInputCommandInteraction } from "discord.js";
 

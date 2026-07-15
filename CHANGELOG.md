@@ -6,6 +6,111 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [4.4.0] — 2026-07-15
+
+### Added
+
+- **The bot now reports which remote features it is missing, by name.** An API
+  wrapper that lacks a feature used to look identical to a healthy one — every
+  call degrades individually, so a 404 on `/usercache` just quietly became "no
+  usercache names". The bot now reads the wrapper's `GET /manifest` at startup
+  and names each gap and what it costs (`does not provide "usercache" — names
+  for players who are not on the whitelist`), in **both** directions: it also
+  reports features the wrapper offers that the bot is too old to use, which had
+  no mechanism at all. Wrappers predating `/manifest` fall back to the version
+  compare. Requires api-wrapper with `/manifest`; older ones keep working.
+
+- **Cross-repo contract check** (`npm run e2e:contract`) — runs the bot's real
+  `serverAccess` against a real api-wrapper process, so a renamed field on the
+  wrapper fails CI instead of silently returning `undefined` on remote
+  instances. `apiGet<T>` casts the wrapper's JSON, which no unit test on either
+  side can verify. Runs from both repos' CI; about ten seconds, no Minecraft
+  needed (scaffolded instance directory plus a real RCON socket).
+
+### Fixed
+
+- **`npm run clean` did not clean.** It ran `tsc -b --clean`, which only removes
+  output for sources TypeScript still knows about — so a renamed file left its
+  old `.js` in `dist/` forever. Because the in-game command loader walks that
+  directory, an incremental build after any rename registered every `!command`
+  twice, and players got two replies. Now `rm -rf src/*/dist`, which is what the
+  script always claimed to do. The loader also refuses a duplicate command name
+  and says why, since that is a bug however it happens.
+
+- **Two test files asserted against copies of the code they claimed to test**,
+  so the bugs they were named for could have been reintroduced with the suite
+  green. `tps.test.ts` re-implemented `getTps` inline (its header even claimed
+  "a regression in the source will break the matching test" — it would not), and
+  `validateConfig.test.ts` asserted that object literals had the properties it
+  had just given them. Both are gone; their real behaviours — the Bug 1 and
+  Bug 4 guards, and the `tpsWarningThreshold` check that had no coverage at all
+  — are now asserted against the actual implementations, and verified to fail
+  when those are broken. Test count drops by 15; signal does not.
+
+- **`MIN_WRAPPER_VERSION` was `1.2.0`, a version that never had `/info`.** The
+  endpoint shipped in wrapper 3.0.0, so every wrapper that answered the version
+  handshake was already above the floor and the comparison could never fail —
+  the one mechanism meant to surface an outdated wrapper was unreachable, and
+  the constant's comment asserted something untrue. Corrected to `3.0.0`, and
+  demoted to the pre-manifest fallback path.
+
+- **Period leaderboards and `/stats daily` used the wrong window.** Scheduled
+  daily boards anchored on a 26–48h-old baseline instead of 24h — on a
+  recently-installed bot, on the oldest snapshot there was, so a "daily" board
+  showed what looked like all-time totals — and `/stats daily` silently
+  shortened its window to match whatever had survived. Snapshot retention thinned
+  a whole calendar day as soon as that day's *first* snapshot aged past 24h,
+  which (since yesterday's 00:00 snapshot is always over 24h old) tore a hole
+  through the rolling window exactly where both daily baselines are looked up.
+  Retention is now a rolling window sized from what the readers need, and the
+  regression tests assert retention and the readers together.
+
+### Security
+
+- `/metrics` compared its bearer token with `!==`, which leaks the token's prefix
+  through timing. Every secret comparison in the dashboard now goes through one
+  constant-time `secretEquals()`.
+- Migrations record their SQL checksum. Editing a shipped migration used to be
+  silent — already-migrated databases skipped the new SQL, leaving schema and
+  code disagreeing — and now refuses to start.
+
+### Changed
+
+- **Every bloated directory is now grouped by purpose**, the way
+  `bot/commands/` always has been:
+  - `core/utils/` → `minecraft/`, `server/`, `stores/`, `config/`, `commands/`,
+    with the cross-cutting primitives at the root. The `utils.ts` grab-bag is
+    dissolved into `paths.ts`, `jsonStore.ts`, `minecraft/whitelist.ts`, and
+    the modules that were its only consumers; `getLevelName` was dead and is
+    gone.
+  - `bot/logWatcher/watchers/` (21 flat files) → `log/`, `monitors/`,
+    `schedulers/`, split by what starts them — which is what the entry point's
+    name already told you.
+  - `bot/logWatcher/commands/` → the **same categories as the slash commands**,
+    so the two surfaces of one feature match: `/seed` is `info/`, `!seed` is
+    `info/`.
+  - `core/types/` → grouped like `utils/`. Import through `types/index.ts` as
+    before; nothing else changes.
+  - `bot/utils/` → `embeds/`, `guild/`. `web/backend/` → `auth/`, `config/`,
+    `status/`, with the Fastify plumbing at the root.
+  - `web/frontend/components/` → `schema/` (the config editor's renderer) and
+    `ui/` (presentational primitives).
+  - `tests/` (86 flat files) → grouped by subject: `config/`, `db/`,
+    `minecraft/`, `server/`, `commands/`, `ingame/`, `watchers/`, `web/`,
+    `utils/`, `suites/`.
+- **Values that cross a workspace boundary moved into `@mcbot/schema`**: the
+  leaderboard interval durations (snapshot retention now derives its cap from
+  the longest one, so a new interval cannot outlive the history it needs), the
+  Discord snowflake format (was inlined in three layers), and the server-action
+  names (were a four-item `Set` in the dashboard, a five-key `Record` in the
+  script runner, and bare string comparisons in both front-ends). The action
+  guard also removes an unsafe cast from the dashboard's action route.
+- **The developer docs are split the way the repo is** — `docs/dev/` keeps what
+  is true everywhere, with `bot/`, `core/`, and `web/` directories beneath it,
+  and shipped design records moved to `dev/history/`. Corrected along the way:
+  the architecture doc still claimed there was no database (SQLite landed in
+  4.0), and `data-storage.md` documented `loadJson`'s failure mode backwards.
+
 ## [4.3.0] — 2026-07-12
 
 ## [4.2.2] — 2026-07-12

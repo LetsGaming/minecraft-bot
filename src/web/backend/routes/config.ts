@@ -16,18 +16,18 @@ import {
   validateCandidate,
   writeConfig,
   configFileHash,
-} from "@mcbot/core/utils/configService.js";
-import { recordAdminAction } from "@mcbot/core/utils/adminAudit.js";
+} from "@mcbot/core/utils/config/configService.js";
+import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import {
   listConfigHistory,
   getConfigSnapshot,
   RETENTION_DAYS as CONFIG_HISTORY_RETENTION_DAYS,
-} from "@mcbot/core/utils/configHistory.js";
+} from "@mcbot/core/utils/config/configHistory.js";
 import { log } from "@mcbot/core/utils/logger.js";
-import { readCommandManifest } from "@mcbot/core/utils/commandManifest.js";
-import { resolveCommandPolicy } from "@mcbot/core/utils/commandPolicy.js";
+import { readCommandManifest } from "@mcbot/core/utils/commands/commandManifest.js";
+import { resolveCommandPolicy } from "@mcbot/core/utils/commands/commandPolicy.js";
 import { COMMAND_OPTIONS } from "@mcbot/schema";
-import { sessionFromRequest } from "../auth.js";
+import { sessionFromRequest } from "../auth/auth.js";
 import {
   HttpError,
   BadRequest,
@@ -36,8 +36,8 @@ import {
   ValidationFailed,
   ServiceUnavailable,
 } from "../errors.js";
-import { readConfigSchema } from "../configSchema.js";
-import { toSafeConfig, mergeSecretPlaceholders } from "../safeConfig.js";
+import { readConfigSchema } from "../config/configSchema.js";
+import { toSafeConfig, mergeSecretPlaceholders } from "../config/safeConfig.js";
 import type { RawBotConfig } from "@mcbot/core/types/index.js";
 import { ConfigWriteBody, IdParams, MutationResult } from "./schemas.js";
 

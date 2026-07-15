@@ -4,7 +4,9 @@
  * dist/ is self-contained with no asset-copy step.
  *
  * Rules:
- *   - Append only. Never edit a shipped migration; add a new one.
+ *   - Append only. Never edit a shipped migration; add a new one. This is
+ *     enforced, not just documented: each applied migration's SQL checksum
+ *     is recorded, and a changed one refuses to start (see checksum()).
  *   - Each entry must be safe to apply exactly once, in order, on any
  *     database that has applied all previous entries.
  *
@@ -13,6 +15,7 @@
  * booting simultaneously serialize: the second sees the rows the first
  * recorded and applies nothing.
  */
+import { createHash } from "crypto";
 import type { SqlDatabase } from "./driver.js";
 import { mapRows, col } from "./rows.js";
 import { log } from "../utils/logger.js";
@@ -146,6 +149,19 @@ const MIGRATIONS: Migration[] = [
   },
 ];
 
+/**
+ * Fingerprint of a migration's SQL.
+ *
+ * Whitespace is collapsed before hashing so reindenting or reflowing an
+ * embedded template literal — a formatter run, say — doesn't trip the
+ * guard. Any change to the actual statements does.
+ */
+function checksum(sql: string): string {
+  return createHash("sha256")
+    .update(sql.replace(/\s+/g, " ").trim())
+    .digest("hex");
+}
+
 export function runMigrations(db: SqlDatabase): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -155,21 +171,55 @@ export function runMigrations(db: SqlDatabase): void {
     )
   `);
 
+  // Databases created before checksums were tracked have no such column,
+  // and SQLite has no ADD COLUMN IF NOT EXISTS — probe, then add once.
+  const columns = mapRows(db.prepare("PRAGMA table_info(schema_migrations)"), (row) =>
+    col.text(row, "name"),
+  );
+  if (!columns.includes("checksum")) {
+    db.exec("ALTER TABLE schema_migrations ADD COLUMN checksum TEXT");
+  }
+
   db.exec("BEGIN IMMEDIATE");
   try {
-    const applied = new Set(
+    const applied = new Map(
       mapRows(
-        db.prepare("SELECT id FROM schema_migrations"),
-        (row) => col.int(row, "id"),
+        db.prepare("SELECT id, checksum FROM schema_migrations"),
+        (row) => [col.int(row, "id"), col.textOrNull(row, "checksum")] as const,
       ),
     );
 
     for (const m of MIGRATIONS) {
-      if (applied.has(m.id)) continue;
+      const sum = checksum(m.sql);
+
+      if (applied.has(m.id)) {
+        const recorded = applied.get(m.id)!;
+        if (recorded === null) {
+          // Applied before checksums existed: there is nothing to compare
+          // against, so adopt the current SQL as this row's baseline.
+          db.prepare(
+            "UPDATE schema_migrations SET checksum = ? WHERE id = ?",
+          ).run(sum, m.id);
+        } else if (recorded !== sum) {
+          // A shipped migration was edited. The database still reflects the
+          // OLD statements, so every later assumption about the schema is
+          // now unverified — refuse rather than run on an unknown shape.
+          throw new Error(
+            `Migration ${m.id} ("${m.name}") has changed since it was applied ` +
+              `to this database (checksum ${recorded.slice(0, 12)} → ` +
+              `${sum.slice(0, 12)}). Migrations are append-only: revert the ` +
+              `edit and add a new migration instead. If the edit was ` +
+              `intentional and the database really does match it, update the ` +
+              `checksum column for id ${m.id} by hand.`,
+          );
+        }
+        continue;
+      }
+
       db.exec(m.sql);
       db.prepare(
-        "INSERT INTO schema_migrations (id, name, applied_at) VALUES (?, ?, ?)",
-      ).run(m.id, m.name, new Date().toISOString());
+        "INSERT INTO schema_migrations (id, name, applied_at, checksum) VALUES (?, ?, ?, ?)",
+      ).run(m.id, m.name, new Date().toISOString(), sum);
       log.info("db", `Applied migration ${m.id}: ${m.name}`);
     }
     db.exec("COMMIT");

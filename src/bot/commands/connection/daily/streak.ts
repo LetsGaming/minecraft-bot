@@ -8,9 +8,9 @@ import {
   loadClaimedStore,
   getServerClaims,
   rewardPoolForServer,
-} from "@mcbot/core/utils/dailyStore.js";
-import { resolveServer } from "../../../utils/guildRouter.js";
-import { createErrorEmbed } from "../../../utils/embedUtils.js";
+} from "@mcbot/core/utils/stores/dailyStore.js";
+import { resolveServer } from "../../../utils/guild/guildRouter.js";
+import { createErrorEmbed } from "../../../utils/embeds/embedUtils.js";
 import type { StreakData, NextBonusStreak } from "@mcbot/core/types/index.js";
 
 export const data = new SlashCommandBuilder()

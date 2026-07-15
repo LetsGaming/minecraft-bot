@@ -168,8 +168,8 @@ import AccordionHeader from "primevue/accordionheader";
 import AccordionContent from "primevue/accordioncontent";
 import { useGuilds } from "../composables/useGuilds";
 import { useCommands, type ManifestEntry } from "../composables/useCommands";
-import ViewHeader from "../components/ViewHeader.vue";
-import EmptyState from "../components/EmptyState.vue";
+import ViewHeader from "../components/ui/ViewHeader.vue";
+import EmptyState from "../components/ui/EmptyState.vue";
 
 interface Section {
   kind: string;

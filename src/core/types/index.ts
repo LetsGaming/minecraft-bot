@@ -1,25 +1,27 @@
 /**
- * Central type re-export hub for the Minecraft Discord bot.
+ * Central type re-export hub.
  *
- * No types are defined here — every type lives in its domain file.
- * Always import from this file, never from a sub-module directly.
+ * No types are defined here — every type lives in its domain file, grouped
+ * the same way `utils/` is. Always import from this file, never from a
+ * sub-module directly; the grouping is free to change, this path is not.
  *
- * Domain files:
- *   config.ts      — server/guild/bot config shapes
- *   commands.ts    — BotCommand, BotClient, in-game command system
- *   minecraft.ts   — whitelist, coords, TPS, stats file, Mojang API
- *   stats.ts       — flattened stats, leaderboard definitions, snapshots
- *   link.ts        — Discord↔Minecraft account linking
- *   rewards.ts     — daily rewards, streaks
- *   logWatcher.ts  — LogHandler, LogWatcherEntry, ILogWatcher
- *   embed.ts       — EmbedOptions and variants
- *   rcon.ts        — RCON packet/command types
- *   scheduler.ts   — scheduler state, downtime state, JSON cache
- *   backup.ts      — BackupDirInfo, BackupSummary, ScriptResult
- *   discord.ts     — managed channel helpers (ManagedCategory etc.)
- *   mods.ts        — ModSide, ModInfo, ModList
- *   uptime.ts      — UptimeStats
- *   leaderboard.ts — BuildLeaderboardOptions, LeaderboardData
+ *   minecraft/  the world and its players — whitelist, coords, TPS, stats
+ *               files, leaderboards, mods, backups
+ *   server/     the instance and how we reach it — capabilities, RCON,
+ *               uptime, the log watcher interface
+ *   stores/     shapes of persisted state — links, rewards and streaks,
+ *               scheduler and downtime state
+ *   discord/    Discord-facing shapes — managed channels, embed options
+ *   commands.ts the command system itself, used by both the slash and
+ *               in-game surfaces
+ *
+ * Config and stat contracts are not here: they live in `@mcbot/schema`,
+ * because the dashboard and its browser bundle need them too.
+ *
+ * (This header used to list every file, and had drifted — it still named
+ * config.ts and stats.ts long after both moved to @mcbot/schema, and never
+ * learned about capabilities.ts. Five group names go stale more slowly
+ * than fifteen filenames, and the directory listing is now the index.)
  */
 
 export type {
@@ -70,7 +72,7 @@ export type {
   MinecraftStatsFile,
   WhitelistAuditEntry,
   WhitelistAuditMap,
-} from "./minecraft.js";
+} from "./minecraft/minecraft.js";
 
 export type {
   FlattenedStat,
@@ -85,7 +87,7 @@ export type {
   LinkCode,
   LinkedAccountsMap,
   LinkCodesMap,
-} from "./link.js";
+} from "./stores/link.js";
 
 export type {
   DailyRewardItem,
@@ -93,24 +95,24 @@ export type {
   UserClaimData,
   StreakData,
   NextBonusStreak,
-} from "./rewards.js";
+} from "./stores/rewards.js";
 
 export type {
   LogHandler,
   LogWatcherEntry,
   ILogWatcher,
-} from "./logWatcher.js";
+} from "./server/logWatcher.js";
 
 export type {
   EmbedOptions,
   EmbedWithThumbnailOptions,
   EmbedStyleOptions,
-} from "./embed.js";
+} from "./discord/embed.js";
 
 export type {
   RconPacket,
   PendingRconCommand,
-} from "./rcon.js";
+} from "./server/rcon.js";
 
 export type {
   LeaderboardScheduleState,
@@ -118,35 +120,35 @@ export type {
   StatusMessageState,
   DowntimeState,
   JsonCacheEntry,
-} from "./scheduler.js";
+} from "./stores/scheduler.js";
 
 export type {
   BackupDirInfo,
   BackupSummary,
   ScriptResult,
-} from "./backup.js";
+} from "./minecraft/backup.js";
 
 export type {
   ServerCapabilities,
   ScriptCapabilities,
-} from "./capabilities.js";
-export { allCapabilities } from "./capabilities.js";
+} from "./server/capabilities.js";
+export { allCapabilities } from "./server/capabilities.js";
 
 export type {
   ManagedCategory,
   EnsuredTextChannel,
   EnsuredVoiceChannel,
-} from "./discord.js";
+} from "./discord/discord.js";
 
 export type {
   ModSide,
   ModInfo,
   ModList,
-} from "./mods.js";
+} from "./minecraft/mods.js";
 
-export type { UptimeStats } from "./uptime.js";
+export type { UptimeStats } from "./server/uptime.js";
 
 export type {
   BuildLeaderboardOptions,
   LeaderboardData,
-} from "./leaderboard.js";
+} from "./minecraft/leaderboard.js";

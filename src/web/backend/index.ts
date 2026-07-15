@@ -5,7 +5,7 @@
  * heartbeat file tells this process whether the bot is alive.
  */
 import { loadConfig } from "@mcbot/core/config.js";
-import { initServers } from "@mcbot/core/utils/server.js";
+import { initServers } from "@mcbot/core/utils/server/server.js";
 import { getDb } from "@mcbot/core/db/index.js";
 import { startWebServer } from "./server.js";
 import { log } from "@mcbot/core/utils/logger.js";

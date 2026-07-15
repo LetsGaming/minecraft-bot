@@ -11,14 +11,14 @@ import { readdirSync, statSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { loadConfig, getServerIds, watchConfig } from "@mcbot/core/config.js";
-import { summarizeConfigChanges } from "@mcbot/core/utils/configDiff.js";
+import { summarizeConfigChanges } from "@mcbot/core/utils/config/configDiff.js";
 import { consumeToken, cooldownSeconds } from "@mcbot/core/utils/rateLimiter.js";
 import {
   resolveCommandPolicy,
   commandEnabledAnywhere,
-} from "@mcbot/core/utils/commandPolicy.js";
+} from "@mcbot/core/utils/commands/commandPolicy.js";
 import { t } from "@mcbot/core/utils/i18n.js";
-import { registerManifestCommands } from "@mcbot/core/utils/commandManifest.js";
+import { registerManifestCommands } from "@mcbot/core/utils/commands/commandManifest.js";
 
 /** Slash commands discovered at load, for the dashboard manifest. */
 const manifestSlash: Array<{ name: string; description: string }> = [];
@@ -26,21 +26,21 @@ import {
   isServerAdmin,
   getMemberRoleIds,
 } from "./commands/middleware.js";
-import { initServers, getAllInstances } from "@mcbot/core/utils/server.js";
+import { initServers, getAllInstances } from "@mcbot/core/utils/server/server.js";
 import { getDb } from "@mcbot/core/db/index.js";
 import {
   capabilityCommandSkips,
   capabilitySummary,
-} from "@mcbot/core/utils/capabilities.js";
-import { migrateLegacySnapshots } from "@mcbot/core/utils/snapshotUtils.js";
-import { tryResolveServer } from "./utils/guildRouter.js";
+} from "@mcbot/core/utils/server/capabilities.js";
+import { migrateLegacySnapshots } from "@mcbot/core/utils/minecraft/snapshotUtils.js";
+import { tryResolveServer } from "./utils/guild/guildRouter.js";
 import {
   initMinecraftCommands,
   reconcileServers,
 } from "./logWatcher/initMinecraftCommands.js";
 import { log } from "@mcbot/core/utils/logger.js";
-import { flushUptimeHistory } from "@mcbot/core/utils/uptimeTracker.js";
-import { invalidateStatusChannelCache } from "./logWatcher/watchers/statusEmbed.js";
+import { flushUptimeHistory } from "@mcbot/core/utils/stores/uptimeTracker.js";
+import { invalidateStatusChannelCache } from "./logWatcher/watchers/schedulers/statusEmbed.js";
 import type { BotCommand, BotClient } from "@mcbot/core/types/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -66,22 +66,26 @@ for (const inst of getAllInstances()) {
   }
 }
 
-// Remote instances: warn once when the wrapper is older than this bot
-// expects (missing /info, or /info.version < MIN_WRAPPER_VERSION), so
-// silent feature mismatches surface at startup instead of in the field.
+// Remote instances: report once, per instance, where this bot and the
+// wrapper disagree about what exists — a missing feature otherwise only
+// shows up as a command quietly doing nothing.
 {
-  const { verifyWrapperVersion } = await import("@mcbot/core/utils/serverAccess.js");
+  const { verifyWrapperContract } = await import("@mcbot/core/utils/server/serverAccess.js");
+  const { currentVersion } = await import("./logWatcher/watchers/monitors/updateNotifier.js");
+  const botVersion = currentVersion();
   await Promise.all(
-    getAllInstances().map((inst) => verifyWrapperVersion(inst.config)),
+    getAllInstances().map((inst) =>
+      verifyWrapperContract(inst.config, botVersion),
+    ),
   );
 }
 
 // Heartbeat file for the (optional) dashboard process: a fresh
 // data/runtime.json means "bot alive", stale means banner in the UI.
 {
-  const { startRuntimeHeartbeat } = await import("@mcbot/core/utils/runtimeHeartbeat.js");
+  const { startRuntimeHeartbeat } = await import("@mcbot/core/utils/server/runtimeHeartbeat.js");
   const { currentVersion } = await import(
-    "./logWatcher/watchers/updateNotifier.js"
+    "./logWatcher/watchers/monitors/updateNotifier.js"
   );
   startRuntimeHeartbeat(currentVersion());
 }
@@ -259,7 +263,7 @@ void (async () => {
         // In multi-guild deployments, only suggest servers this
         // guild may target — no cross-tenant server-ID disclosure.
         const { getAllowedServerIds } = await import(
-          "./utils/guildRouter.js"
+          "./utils/guild/guildRouter.js"
         );
         const allowed = getAllowedServerIds(autocomplete.guild?.id ?? undefined);
         const ids = getServerIds().filter(
@@ -276,7 +280,7 @@ void (async () => {
       // Player name autocomplete
       if (["player", "player1", "player2"].includes(focused.name)) {
         try {
-          const { getPlayerNames } = await import("@mcbot/core/utils/playerUtils.js");
+          const { getPlayerNames } = await import("@mcbot/core/utils/minecraft/playerUtils.js");
           const server = tryResolveServer(autocomplete);
           const names = server ? await getPlayerNames(server) : [];
           const filtered = names.filter((n) =>

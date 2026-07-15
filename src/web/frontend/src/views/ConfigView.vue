@@ -66,10 +66,10 @@ import Button from "primevue/button";
 import Textarea from "primevue/textarea";
 import ToggleSwitch from "primevue/toggleswitch";
 import Message from "primevue/message";
-import SchemaField from "../components/SchemaField.vue";
-import { derefNode } from "../components/schemaField";
+import SchemaField from "../components/schema/SchemaField.vue";
+import { derefNode } from "../components/schema/schemaField";
 import { useSchemaRefs, SchemaRefsKey } from "../composables/useSchemaRefs";
-import ViewHeader from "../components/ViewHeader.vue";
+import ViewHeader from "../components/ui/ViewHeader.vue";
 import { useConfig } from "../composables/useConfig";
 
 export default defineComponent({

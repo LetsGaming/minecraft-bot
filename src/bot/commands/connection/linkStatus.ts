@@ -3,7 +3,7 @@ import {
   MessageFlags,
   type ChatInputCommandInteraction,
 } from "discord.js";
-import { getLinkedAccount } from "@mcbot/core/utils/linkUtils.js";
+import { getLinkedAccount } from "@mcbot/core/utils/stores/linkUtils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("linkstatus")

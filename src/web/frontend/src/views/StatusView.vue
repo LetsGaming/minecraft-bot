@@ -130,9 +130,9 @@ import { useToast } from "primevue/usetoast";
 import { formatBytes, diskLabel, tpsSeverity } from "../utils/format";
 import { useServerStatus } from "../composables/useServerStatus";
 import { useServerActions } from "../composables/useServerActions";
-import ViewHeader from "../components/ViewHeader.vue";
-import StatusDot from "../components/StatusDot.vue";
-import EmptyState from "../components/EmptyState.vue";
+import ViewHeader from "../components/ui/ViewHeader.vue";
+import StatusDot from "../components/ui/StatusDot.vue";
+import EmptyState from "../components/ui/EmptyState.vue";
 
 const REFRESH_MS = 15_000;
 

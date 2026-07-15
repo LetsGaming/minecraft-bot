@@ -12,12 +12,12 @@
  */
 
 import { SlashCommandBuilder } from "discord.js";
-import { createEmbed } from "../../utils/embedUtils.js";
-import { EmbedColor } from "../../utils/embedColors.js";
-import { getModList, type ModInfo } from "@mcbot/core/utils/modUtils.js";
+import { createEmbed } from "../../utils/embeds/embedUtils.js";
+import { EmbedColor } from "../../utils/embeds/embedColors.js";
+import { getModList, type ModInfo } from "@mcbot/core/utils/minecraft/modUtils.js";
 import { withErrorHandling } from "../middleware.js";
-import { resolveServer } from "../../utils/guildRouter.js";
-import { requireCapability } from "@mcbot/core/utils/capabilities.js";
+import { resolveServer } from "../../utils/guild/guildRouter.js";
+import { requireCapability } from "@mcbot/core/utils/server/capabilities.js";
 import { formatTime } from "@mcbot/core/utils/time.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────

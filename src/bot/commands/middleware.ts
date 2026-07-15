@@ -1,5 +1,5 @@
 import { MessageFlags, type ChatInputCommandInteraction } from "discord.js";
-import { createErrorEmbed } from "../utils/embedUtils.js";
+import { createErrorEmbed } from "../utils/embeds/embedUtils.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { loadConfig } from "@mcbot/core/config.js";
 import { runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
