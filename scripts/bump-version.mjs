@@ -11,8 +11,9 @@
  *
  * Flags:
  *   --dry-run   show what would change; write nothing, tag nothing
- *   --tag       after writing, commit the version files and create an
- *               annotated git tag v<version> (implies committing those files)
+ *   --tag       commit the version files (when the bump changed any) and
+ *               create an annotated git tag v<version>. Re-running with --tag
+ *               once the files are already committed only creates the tag.
  *   --push      push the branch + the tag — release.yml runs on v* tags and
  *               builds the GitHub release + GHCR image. Implies --tag.
  *   --yes       skip the confirmation prompt
@@ -141,12 +142,33 @@ async function confirm() {
   return /^y(es)?$/i.test(answer.trim());
 }
 
-const git = (...a) => execFileSync("git", a, { cwd: root, stdio: "pipe" }).toString().trim();
+// execFileSync hangs the captured stdio off the error object, and node prints
+// every own property of an uncaught error — rethrow a plain one with just the
+// message git actually wrote.
+const git = (...a) => {
+  try {
+    return execFileSync("git", a, { cwd: root, stdio: "pipe" }).toString().trim();
+  } catch (err) {
+    const detail = `${err.stdout ?? ""}${err.stderr ?? ""}`.trim();
+    throw new Error(`git ${a.join(" ")} failed:${detail ? `\n${detail}` : ` exit ${err.status}`}`);
+  }
+};
 
-// Guard: for a tag, the ONLY pending changes should be the version files we
-// are about to write — otherwise the release would tag half-committed work.
 if (doTag) {
   try {
+    // A tag is created once. Re-running a half-finished release should say so
+    // rather than dying inside git.
+    if (git("tag", "--list", tag)) {
+      console.error(
+        `\n! Tag ${tag} already exists — delete it first if you are redoing the release:` +
+          `\n    git tag -d ${tag}` +
+          `\n    git push origin :refs/tags/${tag}`,
+      );
+      process.exit(1);
+    }
+
+    // Guard: for a tag, the ONLY pending changes should be the version files we
+    // are about to write — otherwise the release would tag half-committed work.
     const dirty = git("status", "--porcelain")
       .split("\n")
       .map((l) => l.slice(3))
@@ -179,17 +201,23 @@ for (const e of edits) {
 
 if (!doTag) {
   console.log(
-    `\nDone. Commit these, then release with:\n` +
+    `\nDone. ${edits.length > 0 ? "Commit these, then release with:" : "Release with:"}\n` +
       `  node scripts/bump-version.mjs ${version} --tag --push`,
   );
   process.exit(0);
 }
 
 // ── Commit + tag (+ push) ─────────────────────────────────────────────────
-git("add", ...edits.map((e) => e.rel));
-git("commit", "-m", `chore(release): ${tag}`);
+// No edits is the normal case for the two-step flow: bump, commit the files
+// yourself, come back with --tag. Only the tag is left to do, and committing
+// nothing is an error in git.
+if (edits.length > 0) {
+  git("add", ...edits.map((e) => e.rel));
+  git("commit", "-m", `chore(release): ${tag}`);
+  console.log(`\n  committed ${edits.length} version file(s)`);
+}
 git("tag", "-a", tag, "-m", `Release ${tag}`);
-console.log(`\n  committed + tagged ${tag}`);
+console.log(`  tagged ${tag}`);
 
 if (doPush) {
   const branch = git("rev-parse", "--abbrev-ref", "HEAD");
