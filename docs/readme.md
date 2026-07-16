@@ -12,10 +12,9 @@ You host the bot and/or the Minecraft server.
 |---|---|
 | First-time setup (Discord app, invite, first start) | [admin/setup.md](admin/setup.md) |
 | Full `config.json` reference | [admin/configuration.md](admin/configuration.md) |
-| Running with Docker | [admin/docker.md](admin/docker.md) |
-| Running with PM2 (bare metal) | [admin/pm2.md](admin/pm2.md) |
-| Bot and Minecraft server on different machines | [admin/remote-setup.md](admin/remote-setup.md) |
-| Passwordless sudo for `/server` commands | [admin/sudoers.md](admin/sudoers.md) |
+| Running the bot with Docker | [admin/docker.md](admin/docker.md) |
+| Installing the API wrapper on the Minecraft host | [admin/remote-setup.md](admin/remote-setup.md) |
+| Upgrading from 4.x | [admin/migrating-to-5.md](admin/migrating-to-5.md) |
 | Admin permissions, whitelist, audit trail | [admin/permissions.md](admin/permissions.md) |
 | Configuring daily rewards and streak bonuses | [admin/daily-rewards.md](admin/daily-rewards.md) |
 | Automated features (bridge, alerts, status embed, ...) | [admin/automated-features.md](admin/automated-features.md) |
@@ -46,22 +45,22 @@ You use the bot as a Discord member or Minecraft player.
 
 You want to change the code or contribute.
 
-Start at [dev/index.md](dev/index.md) — it maps the rest. The docs are split
+Start at [dev/readme.md](dev/readme.md) — it maps the rest. The docs are split
 the way the repo is: what is true everywhere sits in `dev/`, and each workspace
 has its own directory.
 
 | Topic | File |
 |---|---|
-| Map of the developer docs | [dev/index.md](dev/index.md) |
+| Map of the developer docs | [dev/readme.md](dev/readme.md) |
 | How the codebase is structured and why | [dev/architecture.md](dev/architecture.md) |
 | Where a new command, watcher, or stat goes | [dev/adding-features.md](dev/adding-features.md) |
 | Coding rules enforced in review | [dev/coding-guidelines.md](dev/coding-guidelines.md) |
 | Shared contracts (`@mcbot/schema`) | [dev/contracts.md](dev/contracts.md) |
 | Running and writing tests | [dev/testing.md](dev/testing.md) |
 | Architectural decision log | [dev/decisions.md](dev/decisions.md) |
-| The Discord process | [dev/bot/](dev/bot/index.md) |
-| Config, data layer, server access, Minecraft domain | [dev/core/](dev/core/index.md) |
-| The dashboard (backend + frontend) | [dev/web/](dev/web/index.md) |
+| The Discord process | [dev/bot/](dev/bot/readme.md) |
+| Config, data layer, server access, Minecraft domain | [dev/core/](dev/core/readme.md) |
+| The dashboard (backend + frontend) | [dev/web/](dev/web/readme.md) |
 
 ## Quick reference
 
@@ -71,5 +70,4 @@ has its own directory.
 | Link my Discord to Minecraft | [user/linking.md](user/linking.md) |
 | Check my playtime | [user/stats-and-leaderboards.md](user/stats-and-leaderboards.md) |
 | Whitelist a player | [admin/permissions.md](admin/permissions.md) |
-| Fix "sudo is not configured" errors | [admin/sudoers.md](admin/sudoers.md) |
 | Add a new slash command | [dev/bot/commands.md](dev/bot/commands.md) |

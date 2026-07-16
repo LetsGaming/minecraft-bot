@@ -6,7 +6,11 @@ import { describe, it, expect } from "vitest";
 import { COMMAND_OPTIONS, commandOptionSpecs } from "../../src/schema/commandOptions.js";
 import { validateCandidateConfig } from "../../src/core/config.js";
 
-const base = { token: "t", clientId: "c" };
+const base = {
+  token: "t",
+  clientId: "c",
+  servers: { smp: { apiUrl: "http://192.168.1.10:3030", apiKey: "k" } },
+};
 
 describe("command option registry", () => {
   it("declares /map's URL option with a type + label", () => {

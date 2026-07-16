@@ -9,7 +9,6 @@ import type {
   RawBotConfig,
   RawServerConfig,
   ServerConfig,
-  VariablesMap,
 } from "./types/index.js";
 
 // Validation moved to its own module (QUAL-02); re-exported here so existing
@@ -52,62 +51,23 @@ export function getConfigPath(): string {
   return CONFIG_PATH;
 }
 
-// ── Variables.txt parser ──────────────────────────────────────────────────
-// Double-quoted values only, matching the api-server's parseVarsFile and
-// the usual shell convention — single quotes are passed through verbatim.
-function parseVariablesTxt(filePath: string): VariablesMap {
-  const vars: VariablesMap = {};
-  if (!fs.existsSync(filePath)) return vars;
-  for (const rawLine of fs.readFileSync(filePath, "utf-8").split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) continue;
-    // Branch 1: KEY="value"
-    const quoted = line.match(/^(\w+)="(.*)"$/);
-    if (quoted) { vars[quoted[1]!] = quoted[2]!; continue; }
-    // Branch 2: KEY=value (unquoted)
-    const unquoted = line.match(/^(\w+)=(.*)$/);
-    if (unquoted) vars[unquoted[1]!] = unquoted[2]!.trim();
-  }
-  return vars;
-}
 
 function resolveServerConfig(
   raw: RawServerConfig & { id: string },
 ): ServerConfig {
-  // Derive scriptDir from serverDir if not explicitly set
-  // Typical layout: /home/minecraft/minecraft-server/server       (serverDir)
-  //                 /home/minecraft/minecraft-server/scripts/server (scriptDir)
-  let scriptDir = raw.scriptDir ?? "";
-  if (!scriptDir && raw.serverDir) {
-    const instanceName = raw.screenSession ?? raw.id ?? "server";
-    const candidate = path.resolve(
-      raw.serverDir,
-      "..",
-      "scripts",
-      instanceName,
-    );
-    if (fs.existsSync(candidate)) scriptDir = candidate;
-  }
-
-  // variables.txt lives at {scriptDir}/common/variables.txt
-  const varsFile = scriptDir
-    ? path.join(scriptDir, "common", "variables.txt")
-    : null;
-  const sv =
-    varsFile && fs.existsSync(varsFile) ? parseVariablesTxt(varsFile) : {};
-
+  // Nothing to derive: since 5.0.0 an instance is a wrapper URL and a key.
+  // This used to walk the setup suite's directory layout to find scriptDir,
+  // then parse {scriptDir}/common/variables.txt for SERVER_PATH, USER,
+  // RCON_* and friends — a second implementation of what the wrapper's own
+  // parseVars.ts does, against a file on a machine the bot may not even
+  // share. The wrapper reads it now, and reports what it found.
   return {
-    id:            raw.id,
-    serverDir:     sv.SERVER_PATH    ?? raw.serverDir    ?? "",
-    linuxUser:     sv.USER           ?? raw.linuxUser    ?? "minecraft",
-    screenSession: sv.INSTANCE_NAME  ?? raw.screenSession ?? "server",
-    useRcon:       sv.USE_RCON === "true" || raw.useRcon === true,
-    rconHost:      sv.RCON_HOST      ?? raw.rconHost     ?? "localhost",
-    rconPort:      parseInt(String(sv.RCON_PORT ?? raw.rconPort ?? "25575"), 10),
-    rconPassword:  sv.RCON_PASSWORD  ?? raw.rconPassword ?? "",
-    scriptDir,
-    apiUrl:        raw.apiUrl,
-    apiKey:        raw.apiKey,
+    id: raw.id,
+    apiUrl: raw.apiUrl!,
+    apiKey: raw.apiKey!,
+    ...(raw.allowInsecureHttp !== undefined
+      ? { allowInsecureHttp: raw.allowInsecureHttp }
+      : {}),
     ...(raw.commands ? { commands: raw.commands } : {}),
   };
 }
@@ -123,14 +83,22 @@ function resolveServerConfig(
  * be in place before the required-field check runs — validating first would
  * reject the very value the override was about to fill in (BUG-01).
  */
+/** ENV_VAR-safe form of a server id: "smp-1" -> "SMP_1". */
+function envSuffix(id: string): string {
+  return id.toUpperCase().replace(/[^A-Z0-9]/g, "_");
+}
+
 function applyEnvOverrides(raw: RawBotConfig): void {
   if (process.env.DISCORD_TOKEN)     raw.token    = process.env.DISCORD_TOKEN;
   if (process.env.DISCORD_CLIENT_ID) raw.clientId = process.env.DISCORD_CLIENT_ID;
   if (raw.servers && typeof raw.servers === "object") {
     for (const [id, srv] of Object.entries(raw.servers)) {
-      const specific = `RCON_PASSWORD_${id.toUpperCase().replace(/[^A-Z0-9]/g, "_")}`;
-      if (process.env[specific]) srv.rconPassword = process.env[specific];
-      else if (process.env.RCON_PASSWORD) srv.rconPassword = process.env.RCON_PASSWORD;
+      // API_KEY_<ID> beats API_KEY, matching the shape RCON_PASSWORD_<ID>
+      // had before 5.0.0 — the bot no longer speaks RCON, so the wrapper's
+      // key is the only per-server secret it holds.
+      const specific = `API_KEY_${envSuffix(id)}`;
+      if (process.env[specific]) srv.apiKey = process.env[specific];
+      else if (process.env.API_KEY) srv.apiKey = process.env.API_KEY;
     }
   }
 }
@@ -162,20 +130,13 @@ export function loadConfig(): BotConfig {
   validateRawConfig(raw, CONFIG_PATH);
 
   // ── Resolve servers ──
+  // The pre-`servers` format, where the top-level object doubled as a single
+  // server block, is gone with local mode in 5.0.0: it only ever carried
+  // serverDir/linuxUser/rcon* at the root, and validateRawConfig now names
+  // those as removed. A config reaching here has a validated servers map.
   const servers: Record<string, ServerConfig> = {};
-  if (raw.servers && typeof raw.servers === "object") {
-    for (const [id, srv] of Object.entries(raw.servers)) {
-      servers[id] = resolveServerConfig({ ...srv, id });
-    }
-  } else {
-    // Legacy single-server config — wrap it. The top-level object doubles as a
-    // server block in this old format, so we deliberately reinterpret the
-    // whole raw config as one RawServerConfig (fields not present are resolved
-    // to defaults by resolveServerConfig).
-    servers.default = resolveServerConfig({
-      ...(raw as unknown as RawServerConfig),
-      id: "default",
-    });
+  for (const [id, srv] of Object.entries(raw.servers ?? {})) {
+    servers[id] = resolveServerConfig({ ...srv, id });
   }
 
   // ── Guild configs ──

@@ -24,6 +24,7 @@ import type {
   UserClaimData,
 } from "@mcbot/core/types/index.js";
 import { log } from "@mcbot/core/utils/logger.js";
+import * as serverAccess from "@mcbot/core/utils/server/serverAccess.js";
 import { resolveServer } from "../../../utils/guild/guildRouter.js";
 import { formatTime } from "@mcbot/core/utils/time.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
@@ -355,16 +356,43 @@ export async function give(
     return false;
   }
   const name = item.includes(":") ? item : `minecraft:${item}`;
-  const response = await server.sendCommand(`give ${player} ${name} ${amount}`);
 
-  // Only RCON returns command output; screen/remote fallbacks return null
-  // both on success and failure, so they can't be verified.
-  if (!server.config?.useRcon) return true;
-
-  if (response === null || !/\bGave\b/i.test(response)) {
+  // Deliberately not server.sendCommand(): it catches transport errors and
+  // returns null, which would make "the wrapper is down" indistinguishable
+  // from "the wrapper answered, but over screen, so there is no output". A
+  // reward hinges on that difference — one must be retried, the other must
+  // not be — so this path talks to the seam that still reports it.
+  //
+  // Before 5.0.0 this checked `useRcon` and returned true for every remote
+  // instance without looking at the reply at all. The wrapper was already
+  // relaying the console output, so a failed `give` was reported to the
+  // player as a successful claim.
+  let response: string | null;
+  try {
+    response = await serverAccess.sendCommand(
+      server.config,
+      `give ${player} ${name} ${amount}`,
+    );
+  } catch (err) {
+    // The command may never have reached the server. Report failure so the
+    // reward stays queued and is retried, rather than being marked delivered.
     log.error(
       "daily",
-      `Give not confirmed for ${player} (item=${name}): ${response ?? "no response"}`,
+      `Give failed for ${player} (item=${name}): ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return false;
+  }
+
+  // 200 with a null result: the wrapper reached the server over screen, which
+  // has no response channel. The command was sent; we simply cannot read the
+  // outcome. Reporting failure here would re-queue a reward the player
+  // already holds and re-give it on every join.
+  if (response === null) return true;
+
+  if (!/\bGave\b/i.test(response)) {
+    log.error(
+      "daily",
+      `Give not confirmed for ${player} (item=${name}): ${response}`,
     );
     return false;
   }

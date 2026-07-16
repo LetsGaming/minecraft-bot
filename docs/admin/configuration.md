@@ -61,49 +61,40 @@ Locale for user-visible bot strings (`"en"` default, `"de"` available). Individu
 
 Each Minecraft instance gets one entry. The key (here `"survival"`) is the server ID used everywhere else: in guild configs, in the `server` option of slash commands, and in autocomplete.
 
-Note: `scriptDir`, the `/backup` overview, and `/mods` assume a server installed with [minecraft-server-setup](https://github.com/LetsGaming/minecraft-server-setup). On a plain server, disable the dependent commands or provide compatible scripts; see [setup.md](setup.md#plain-server-or-setup-suite-server) for the feature matrix.
+Note: the `/backup` overview and `/mods` assume a server installed with [minecraft-server-setup](https://github.com/LetsGaming/minecraft-server-setup). On a plain server, disable the dependent commands or point the wrapper at compatible scripts; see [setup.md](setup.md#plain-server-or-setup-suite-server) for the feature matrix.
 
 ```json
 "servers": {
   "survival": {
-    "serverDir": "/home/minecraft/minecraft-server/survival",
-    "scriptDir": "/home/minecraft/minecraft-server/scripts/survival",
-    "linuxUser": "minecraft",
-    "screenSession": "survival",
-    "useRcon": true,
-    "rconHost": "localhost",
-    "rconPort": 25575,
-    "rconPassword": "your-rcon-password"
+    "apiUrl": "http://192.168.1.10:3030",
+    "apiKey": "sk_live_..."
   }
 }
 ```
 
 | Field | Required | Default | Description |
 |---|---|---|---|
-| `serverDir` | Yes (local) | | Absolute path to the server directory (contains `server.jar`, `whitelist.json`, `logs/`). |
-| `scriptDir` | No | derived | Directory with the management scripts (`start.sh`, `shutdown.sh`, `smart_restart.sh`, `backup/backup.sh`, `misc/status.sh`). If unset, the bot looks for `{serverDir}/../scripts/{screenSession}` and uses it when it exists. |
-| `linuxUser` | No | `minecraft` | The Linux user that owns the server process. Used for `sudo -u` and screen commands. |
-| `screenSession` | No | `server` | Name of the `screen` session. Only relevant when RCON is unavailable. |
-| `useRcon` | No | `false` | Talk to the server via RCON (recommended). Falls back to screen if an RCON call fails. |
-| `rconHost` | No | `localhost` | RCON hostname. |
-| `rconPort` | No | `25575` | Must match `rcon.port` in `server.properties`. |
-| `rconPassword` | No | | Must match `rcon.password`. Required when `useRcon` is `true`. |
-| `apiUrl` | No | | Base URL of the API wrapper for remote setups, e.g. `http://192.168.1.10:3000`. When set, all filesystem and script operations are routed through the wrapper. See [remote-setup.md](remote-setup.md). |
-| `apiKey` | No | | Shared secret for the API wrapper, sent as the `x-api-key` header. |
+| `apiUrl` | Yes | | Base URL of the [API wrapper](remote-setup.md) on the Minecraft host, e.g. `http://192.168.1.10:3030`. Everything the bot does to a server goes through it. |
+| `apiKey` | Yes | | Shared secret for that wrapper, sent as the `x-api-key` header. Can come from the environment instead — see below. |
+| `allowInsecureHttp` | No | `false` | Suppress the warning for a plaintext `apiUrl`. Only meaningful on a private network; for a public host the bot refuses to start regardless. |
+| `commands` | No | | Per-server command overrides. Same shape as the top-level `commands` block. |
 
-### variables.txt overrides
+Since 5.0.0 that is the whole server block. Everything else that used to live here — `serverDir`, `scriptDir`, `linuxUser`, `screenSession`, `useRcon`, `rconHost`, `rconPort`, `rconPassword` — described the Minecraft host, and now lives in the wrapper's config on that host. The bot refuses to start if any of them are still present and names them. See [migrating-to-5.md](migrating-to-5.md).
 
-If `scriptDir` points to a directory from the [minecraft-server-setup](https://github.com/LetsGaming/minecraft-server-setup) project, the bot reads `{scriptDir}/common/variables.txt` and the values there take precedence over `config.json`:
+### API keys from the environment
 
-| variables.txt key | Overrides |
+`apiKey` does not have to be in `config.json`:
+
+| Variable | Applies to |
 |---|---|
-| `SERVER_PATH` | `serverDir` |
-| `USER` | `linuxUser` |
-| `INSTANCE_NAME` | `screenSession` |
-| `USE_RCON` | `useRcon` |
-| `RCON_HOST`, `RCON_PORT`, `RCON_PASSWORD` | the matching `rcon*` fields |
+| `API_KEY_<SERVER_ID>` | that server (e.g. `API_KEY_SURVIVAL` for `"survival"`) |
+| `API_KEY` | every server without a more specific key |
 
-This keeps the bot and the server scripts in sync from a single source of truth. If a value in Discord looks different from what you set in `config.json`, check `variables.txt` first.
+The override is applied before validation, so a deployment that supplies keys only through the environment is not rejected for the value it is about to provide. It replaces `RCON_PASSWORD_<ID>`, which configured the bot's own RCON connection and no longer exists.
+
+### variables.txt
+
+The wrapper reads `{scriptsDir}/common/variables.txt` from a [minecraft-server-setup](https://github.com/LetsGaming/minecraft-server-setup) installation and takes `SERVER_PATH`, `USER`, `INSTANCE_NAME`, `USE_RCON`, and the `RCON_*` values from it, so the server scripts and the wrapper stay in sync from one source of truth. That file governs the wrapper's config, not the bot's — the bot has no fields left for it to override.
 
 ### Multiple servers
 
@@ -242,7 +233,7 @@ The bot needs the Manage Channels permission for this feature.
 | `updateNotifier` | `{ "enabled": true }` | Daily GitHub release check; logs when a newer release exists. `"dmAdmins": true` additionally DMs the operator-level admins once per new version. `"enabled": false` opts out. |
 | `schedules` | off | Scheduled restarts per server: `"schedules": { "smp": { "restart": { "time": "04:00", "days": ["MO","TH"], "warnMinutes": [15, 5, 1] } } }`. Countdown warnings go in-game (`/say`) and to notification channels (event `scheduledRestart`); the restart uses the suite's restart script with downtime alerts suppressed, and is admin-audited. `days` omitted = daily. Applies live on config reload. |
 | `milestones` | off | Milestone announcements per leaderboard stat key, thresholds in the stat's native unit (playtime is ticks: 100 h = `7200000`): `"milestones": { "playtime": [7200000], "diamonds": [100, 1000] }`. Announced in-game and via the `milestone` notification event. First activation seeds silently so veterans' whole histories are not blasted at once. |
-| `webui` | off | Web dashboard (separate process, `npm run start:web`): `{ "enabled": true, "port": 8130, "host": "127.0.0.1", "publicUrl": "https://panel.example.com" }`. Secrets come from the environment (`WEBUI_CLIENT_SECRET`, `WEBUI_SESSION_SECRET`). See [../dev/web/index.md](../dev/web/index.md). |
+| `webui` | off | Web dashboard (separate process, `npm run start:web`): `{ "enabled": true, "port": 8130, "host": "127.0.0.1", "publicUrl": "https://panel.example.com" }`. Secrets come from the environment (`WEBUI_CLIENT_SECRET`, `WEBUI_SESSION_SECRET`). See [../dev/web/readme.md](../dev/web/readme.md). |
 
 ## Command settings (per command, three scopes)
 

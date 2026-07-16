@@ -4,20 +4,74 @@ All notable changes to this project are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [5.0.0] - 2026-07-17
 
-### Fixed
+### ⚠️ BREAKING: local mode is gone. The bot now requires the API wrapper.
 
-- **Player stats were invisible on servers that do not use the vanilla world
-  layout.** `statsDir()` resolved `<level-name>/stats` and nothing else; a
-  Fabric instance keeps its stat files at `<level-name>/players/stats`, next to
-  `players/advancements`, with no `<level-name>/stats` at all. Every read
-  missed, `/stats` and every leaderboard came back empty, and **nothing logged
-  an error** — on the wrong path a miss is an `ENOENT`, which is exactly what a
-  world nobody has played on looks like. Both layouts are now probed, at both
-  ends (the wrapper needs the same fix, ≥3.1.1). Requires no config change.
+**If the bot currently reaches your server by reading its files, sending keys
+to a `screen` session, or opening its own RCON connection, it will not start
+after this upgrade until you install the
+[API wrapper](https://github.com/LetsGaming/minecraft-server-api) (3.1.1+) on
+the Minecraft host and repoint `config.json` at it.**
 
-## [4.4.0] — 2026-07-15
+The bot refuses to start rather than starting in a state that looks configured
+and is not. It names every removed field it finds:
+
+```
+Config validation failed:
+  - servers.survival: serverDir, linuxUser, useRcon configured local mode,
+    which was removed in 5.0.0. The bot now reaches every server through an
+    API wrapper. Move those settings into the wrapper's own config on the
+    Minecraft host, delete them here, and set apiUrl + apiKey.
+    See docs/admin/migrating-to-5.md. 4.3.x is the last release that
+    supported local deployment.
+```
+
+Migration guide: **[docs/admin/migrating-to-5.md](docs/admin/migrating-to-5.md)**.
+
+**4.3.x is the last release supporting local deployment, and it is
+end-of-life** — no fixes, no features, no security updates, permanently. There
+is no deprecation release in between: 4.3.x is where local mode stops.
+
+#### What was removed
+
+- **Per-server config fields**: `serverDir`, `scriptDir`, `linuxUser`,
+  `screenSession`, `useRcon`, `rconHost`, `rconPort`, `rconPassword`. They
+  describe the Minecraft host and now live in the wrapper's config there.
+  `apiUrl` and `apiKey` are both required.
+- **The pre-`servers` single-server format**, where the top-level object
+  doubled as one server block. It only ever carried local fields.
+- **`RCON_PASSWORD_<ID>` / `RCON_PASSWORD`** env overrides → replaced by
+  **`API_KEY_<ID>` / `API_KEY`**. (The wrapper still reads `RCON_PASSWORD_<ID>`
+  for its own connection: same name, different machine.)
+- `src/core/rcon/` (the bot's RCON client) and `src/core/shell/` (the
+  `execCommand`/sudo layer). The wrapper has both.
+- The `LogWatcher` file tailer — a second implementation of the wrapper's
+  `logStream.ts`, down to the same 1 MB/cycle catch-up cap. Every instance is
+  watched over the wrapper's SSE stream now.
+- `df`/`ps` host metrics. The wrapper's `/info` reports them, from the machine
+  they describe.
+- The RCON e2e smoke harness (`scripts/e2e-smoke.mjs`, `docker-compose.e2e.yml`,
+  the `e2e` workflow). The cross-repo contract test (`npm run e2e:contract`)
+  covers the seam that still exists.
+
+#### Why
+
+Every feature had two implementations — one against the filesystem, one against
+the wrapper — and they drifted. This is not theoretical; it is where the bugs
+below came from. The wrapper path was the tested one and the one most people
+ran. Removing the other one deleted ~570 lines from two files and made a class
+of bug impossible rather than fixed.
+
+#### Deployment
+
+**Docker is the supported way to run the bot**, and the dashboard ships with it.
+It is a Node application and nothing stops you running it directly, but that is
+not a supported configuration and there is no guide for it. The bot can now run
+anywhere that can reach the wrapper over HTTP — it no longer needs to sit on the
+Minecraft host.
+
+The dashboard still edits the bot's config, in the bot's container. Unchanged.
 
 ### Added
 
@@ -39,6 +93,52 @@ project follows [Semantic Versioning](https://semver.org/).
   needed (scaffolded instance directory plus a real RCON socket).
 
 ### Fixed
+
+- **`/stats <player>` errored for anyone who had never played.** The wrapper
+  answers 404 for a missing stats file, which is an answer, not a failure —
+  but `readStats` let it throw, so the command replied "Failed to retrieve
+  stats" and logged an ERROR where it should have shown the "Stats File Not
+  Found" embed it already has. A 500 still throws: a broken read must not look
+  like an empty one.
+- **Period leaderboards could silently report all-time totals.** If a stats
+  read returned nothing, `takeSnapshot` recorded an empty snapshot; baselines
+  resolve a missing player to zero, so one empty snapshot in the window made
+  every period board subtract nothing and present lifetime numbers labelled as
+  the period. It now refuses to record an empty snapshot and logs why, naming
+  the likely cause.
+- **Daily rewards were reported as delivered without being checked.** `give()`
+  verified the console's reply only when the bot held the RCON connection
+  itself; on every other server it returned success without looking. The
+  wrapper had been relaying that reply all along. It is now verified whenever
+  there is one — and a wrapper that cannot be reached is failure (the reward
+  stays queued), while a wrapper answering over screen with no output is
+  unverifiable but not failed (the reward is not re-given on every join). Those
+  two used to be the same `null`.
+
+- **`src/` now holds workspaces and nothing else, and CI enforces it**
+  (`npm run layout:check`). A stray file at `src/` root is invisible to every
+  gate: it belongs to no tsconfig project so `tsc` never compiles it, eslint
+  lints it without resolving imports so its broken ones pass, and vitest only
+  globs `tests/`. Two files from another repo sat there unnoticed. Nothing in
+  this repo should be able to hide from all three checks at once.
+
+- **`/compare` threw for any player with a real stat file.** The field chunker
+  summed line lengths against Discord's 1024-character limit, then joined the
+  lines with `\n` — so the value it sent was longer than the one it measured,
+  by one character per line. A chunk that counted 1020 shipped 1029 and the
+  field was rejected. It only bites once a category fills a chunk, which is why
+  it passed on thin fixtures and failed for everyone real: measured against the
+  actual function, 60 shared stats built fine and 100 threw. Established
+  players share thousands.
+
+- **Player stats were invisible on servers that do not use the vanilla world
+  layout.** `statsDir()` resolved `<level-name>/stats` and nothing else; a
+  Fabric instance keeps its stat files at `<level-name>/players/stats`, next to
+  `players/advancements`, with no `<level-name>/stats` at all. Every read
+  missed, `/stats` and every leaderboard came back empty, and **nothing logged
+  an error** — on the wrong path a miss is an `ENOENT`, which is exactly what a
+  world nobody has played on looks like. Both layouts are now probed, at both
+  ends (the wrapper needs the same fix, ≥3.1.1). Requires no config change.
 
 - **`npm run clean` did not clean.** It ran `tsc -b --clean`, which only removes
   output for sources TypeScript still knows about — so a renamed file left its
@@ -76,16 +176,19 @@ project follows [Semantic Versioning](https://semver.org/).
   Retention is now a rolling window sized from what the readers need, and the
   regression tests assert retention and the readers together.
 
-### Security
-
-- `/metrics` compared its bearer token with `!==`, which leaks the token's prefix
-  through timing. Every secret comparison in the dashboard now goes through one
-  constant-time `secretEquals()`.
-- Migrations record their SQL checksum. Editing a shipped migration used to be
-  silent — already-migrated databases skipped the new SQL, leaving schema and
-  code disagreeing — and now refuses to start.
-
 ### Changed
+
+- `ServerInstance.supportsTps` is always true — the wrapper answers `/tps` for
+  every instance. It used to depend on how the server was reached.
+- TPS parsing, and its Bug 1/2/4 regression guards, moved to the wrapper
+  (`tests/tps.test.ts` there), which owns the RCON connection and is therefore
+  the only side that sees a `tps` response. The wrapper had the fixes and no
+  tests; it now has both.
+- `/config show` lists each server's `apiUrl` instead of its RCON host and
+  Linux user.
+- `docs/admin/sudoers.md` and `docs/admin/pm2.md` are gone. Sudo is the
+  wrapper's requirement and the wrapper documents it; PM2 was a non-Docker
+  guide.
 
 - **Every bloated directory is now grouped by purpose**, the way
   `bot/commands/` always has been:
@@ -121,6 +224,17 @@ project follows [Semantic Versioning](https://semver.org/).
   and shipped design records moved to `dev/history/`. Corrected along the way:
   the architecture doc still claimed there was no database (SQLite landed in
   4.0), and `data-storage.md` documented `loadJson`'s failure mode backwards.
+
+### Security
+
+- `/metrics` compared its bearer token with `!==`, which leaks the token's prefix
+  through timing. Every secret comparison in the dashboard now goes through one
+  constant-time `secretEquals()`.
+- Migrations record their SQL checksum. Editing a shipped migration used to be
+  silent — already-migrated databases skipped the new SQL, leaving schema and
+  code disagreeing — and now refuses to start.
+
+## [Unreleased]
 
 ## [4.3.0] — 2026-07-12
 

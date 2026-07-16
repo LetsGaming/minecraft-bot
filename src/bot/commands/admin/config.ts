@@ -115,12 +115,9 @@ export const execute = withErrorHandling(
     const cfg = loadConfig();
 
     // Servers overview
-    const serverLines = Object.entries(cfg.servers).map(([id, srv]) => {
-      const rcon = srv.useRcon
-        ? `RCON ${srv.rconHost}:${srv.rconPort}`
-        : "screen only";
-      return `${id}: ${rcon} (user: ${srv.linuxUser})`;
-    });
+    const serverLines = Object.entries(cfg.servers).map(
+      ([id, srv]) => `${id}: ${srv.apiUrl}`,
+    );
 
     // Guild overview
     const guildLines = Object.entries(cfg.guilds).map(([guildId, gcfg]) => {

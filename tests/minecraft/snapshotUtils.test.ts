@@ -53,7 +53,10 @@ import {
   getSnapshotForDailyDiff,
   cleanupSnapshots,
   migrateLegacySnapshots,
+  takeSnapshot,
 } from "../../src/core/utils/minecraft/snapshotUtils.js";
+import { loadAllStats } from "../../src/core/utils/minecraft/statUtils.js";
+import { log } from "../../src/core/utils/logger.js";
 import { getDb, closeDbForTesting } from "../../src/core/db/index.js";
 import type { SnapshotData } from "../../src/core/types/index.js";
 
@@ -387,5 +390,90 @@ describe("migrateLegacySnapshots", () => {
     // The directory was renamed away by the previous test.
     await expect(migrateLegacySnapshots(SERVER_ID)).resolves.toBeUndefined();
     expect(listSnapshotTs()).toHaveLength(0);
+  });
+});
+
+// ── takeSnapshot never records an empty snapshot ──────────────────────────
+// Found in production: a remote instance whose wrapper could not read the
+// stats directory answered `{uuids: []}` with a 200, so loadAllStats
+// returned {} and every hourly snapshot recorded zero players. Baselines
+// are looked up by time and a missing player reads as zero
+// (`baseline[uuid] ?? 0`), so one of those in the window makes a period
+// board subtract nothing and report all-time totals as the period's gains.
+
+describe("takeSnapshot refuses to record an empty snapshot", () => {
+  const HOUR = 60 * 60 * 1000;
+
+  function fakeServer() {
+    return { id: SERVER_ID, config: { id: SERVER_ID } } as never;
+  }
+
+  function storedCount(): number {
+    return (
+      getDb()
+        .prepare("SELECT COUNT(*) AS n FROM snapshots WHERE server_id = ?")
+        .get(SERVER_ID) as { n: number }
+    ).n;
+  }
+
+  beforeEach(() => {
+    getDb().prepare("DELETE FROM snapshots WHERE server_id = ?").run(SERVER_ID);
+    vi.mocked(log.warn).mockClear();
+  });
+
+  it("writes nothing when no player stats are readable", async () => {
+    vi.mocked(loadAllStats).mockResolvedValue({});
+
+    await takeSnapshot(fakeServer());
+
+    expect(storedCount()).toBe(0);
+  });
+
+  it("says why, and names the likely cause", async () => {
+    vi.mocked(loadAllStats).mockResolvedValue({});
+
+    await takeSnapshot(fakeServer());
+
+    expect(log.warn).toHaveBeenCalledTimes(1);
+    const [tag, message] = vi.mocked(log.warn).mock.calls[0]!;
+    expect(tag).toBe("snapshots");
+    expect(message).toContain("zero baseline");
+    expect(message).toContain("stats directory");
+  });
+
+  it("still records a snapshot when a player does have stats", async () => {
+    vi.mocked(loadAllStats).mockResolvedValue({
+      "069a79f4-44e9-4726-a5be-fca90e38aaf5": {} as never,
+    });
+
+    await takeSnapshot(fakeServer());
+
+    expect(storedCount()).toBe(1);
+  });
+
+  it("leaves an existing baseline intact when a later read fails", async () => {
+    // The dangerous sequence: a good snapshot, then stats become unreadable.
+    // The good one must survive as the baseline; the empty read must not
+    // land beside it and win the "closest to now-24h" lookup.
+    const now = Date.now();
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(now - 24 * HOUR);
+      vi.mocked(loadAllStats).mockResolvedValue({
+        "069a79f4-44e9-4726-a5be-fca90e38aaf5": {} as never,
+      });
+      await takeSnapshot(fakeServer());
+
+      vi.setSystemTime(now);
+      vi.mocked(loadAllStats).mockResolvedValue({});
+      await takeSnapshot(fakeServer());
+
+      expect(storedCount()).toBe(1);
+      const baseline = await getSnapshotClosestTo(SERVER_ID, now - 24 * HOUR);
+      expect(baseline).not.toBeNull();
+      expect(Object.keys(baseline!.players)).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -1,14 +1,15 @@
 /**
- * ServerInstance response-parsing tests.
+ * ServerInstance response parsing.
  *
- * Every method that talks to RCON parses a string response with a regex.
- * A broken regex silently returns wrong data to callers.  These tests
- * control what RCON "says" and assert on the parsed, structured output.
+ * Every method here asks the wrapper to run a console command and parses
+ * the reply with a regex; a broken regex silently returns wrong data. The
+ * tests control what the console "says" and assert on the parsed output.
  *
- * Mock approach (Vitest 4+ requirement):
- *   vi.fn().mockImplementation(class { ... }) for constructor mocks.
- *   After `new ServerInstance(...)` the stub instance is retrieved via
- *   vi.mocked(RconClient).mock.instances[0].
+ * Before 5.0.0 this file mocked RconClient, because the class owned its own
+ * connection and a sudo/screen fallback. Both are gone — the wrapper owns
+ * RCON now — so the seam to mock is serverAccess. The TPS parsing that used
+ * to live here moved with the connection: see tests/tps.test.ts in the
+ * api-wrapper, including the Bug 1/2/4 regression guards.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -16,261 +17,41 @@ vi.mock("../../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../../src/core/shell/execCommand.js", () => ({
-  execSafe: vi.fn().mockResolvedValue(null),
-  isSudoPermissionError: vi.fn().mockReturnValue(false),
+const sendCommand = vi.fn();
+const isRunningFn = vi.fn();
+const getListFn = vi.fn();
+const getTpsFn = vi.fn();
+const tailLog = vi.fn();
+vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
+  sendCommand: (...a: unknown[]) => sendCommand(...a),
+  isRunning: (...a: unknown[]) => isRunningFn(...a),
+  getList: (...a: unknown[]) => getListFn(...a),
+  getTps: (...a: unknown[]) => getTpsFn(...a),
+  tailLog: (...a: unknown[]) => tailLog(...a),
 }));
 
-vi.mock("../../src/core/rcon/RconClient.js", () => ({
-  RconClient: vi.fn().mockImplementation(
-    class {
-      send = vi.fn();
-      trySend = vi.fn();
-      connect = vi.fn().mockResolvedValue(undefined);
-      disconnect = vi.fn();
-      get lastSuccessTime() {
-        return Date.now();
-      }
-    },
-  ),
-}));
-
-import { RconClient } from "../../src/core/rcon/RconClient.js";
 import { ServerInstance } from "../../src/core/utils/server/server.js";
+import type { ServerConfig } from "../../src/core/types/index.js";
 
-const rconCfg = {
+const cfg: ServerConfig = {
   id: "survival",
-  serverDir: "/tmp/fake",
-  linuxUser: "mc",
-  screenSession: "server",
-  useRcon: true,
-  rconHost: "127.0.0.1",
-  rconPort: 25575,
-  rconPassword: "pw",
-  scriptDir: "",
-} as never;
-
-// After `new ServerInstance(rconCfg)`, the ServerInstance constructor calls
-// `new RconClient(...)` once.  Vitest records that instance in mock.instances.
-function getSendMock(): ReturnType<typeof vi.fn> {
-  const inst = vi.mocked(RconClient).mock.instances.at(-1) as
-    | { send: ReturnType<typeof vi.fn> }
-    | undefined;
-  if (!inst) throw new Error("RconClient was never instantiated");
-  return inst.send;
-}
+  apiUrl: "http://127.0.0.1:3030",
+  apiKey: "k",
+};
 
 let inst: ServerInstance;
 
 beforeEach(() => {
-  vi.mocked(RconClient).mockClear();
-  inst = new ServerInstance(rconCfg);
-  getSendMock().mockReset();
+  for (const m of [sendCommand, isRunningFn, getListFn, getTpsFn, tailLog]) {
+    m.mockReset();
+  }
+  tailLog.mockResolvedValue("");
+  inst = new ServerInstance(cfg);
 });
-
-// ── getList() ─────────────────────────────────────────────────────────────
-
-describe("ServerInstance.getList()", () => {
-  it("parses a standard vanilla response", async () => {
-    getSendMock().mockResolvedValue(
-      "There are 2 of a max of 20 players online: Alice, Bob",
-    );
-    const r = await inst.getList();
-    expect(r.playerCount).toBe("2");
-    expect(r.maxPlayers).toBe("20");
-    expect(r.players).toEqual(["Alice", "Bob"]);
-  });
-
-  it("parses a Paper-style '/' separator", async () => {
-    getSendMock().mockResolvedValue(
-      "There are 3/20 players online: Steve, Alex, Notch",
-    );
-    const r = await inst.getList();
-    expect(r.playerCount).toBe("3");
-    expect(r.maxPlayers).toBe("20");
-    expect(r.players).toEqual(["Steve", "Alex", "Notch"]);
-  });
-
-  it("returns an empty player list when nobody is online", async () => {
-    getSendMock().mockResolvedValue(
-      "There are 0 of a max of 20 players online: ",
-    );
-    expect((await inst.getList()).players).toEqual([]);
-  });
-
-  it("returns safe defaults when RCON throws", async () => {
-    getSendMock().mockRejectedValue(new Error("RCON lost"));
-    const r = await inst.getList();
-    expect(r.playerCount).toBe("0");
-    expect(r.players).toEqual([]);
-  });
-});
-
-// ── getSeed() ─────────────────────────────────────────────────────────────
-
-describe("ServerInstance.getSeed()", () => {
-  it("parses a positive seed", async () => {
-    getSendMock().mockResolvedValue("Seed: [1234567890]");
-    expect(await inst.getSeed()).toBe("1234567890");
-  });
-
-  it("parses a negative seed", async () => {
-    getSendMock().mockResolvedValue("Seed: [-987654321]");
-    expect(await inst.getSeed()).toBe("-987654321");
-  });
-
-  it("caches the seed — only one RCON call even with repeated invocations", async () => {
-    getSendMock().mockResolvedValue("Seed: [111]");
-    await inst.getSeed();
-    await inst.getSeed();
-    expect(getSendMock()).toHaveBeenCalledTimes(1);
-  });
-});
-
-// ── getTps() — Paper/Spigot ────────────────────────────────────────────────
-
-describe("ServerInstance.getTps() — Paper tps command", () => {
-  it("parses 'TPS from last 1m, 5m, 15m: *N, *N, *N'", async () => {
-    getSendMock().mockResolvedValue(
-      "TPS from last 1m, 5m, 15m: *19.98, *19.99, *20.0",
-    );
-    const tps = await inst.getTps();
-    expect(tps?.tps1m).toBeCloseTo(19.98);
-    expect(tps?.tps5m).toBeCloseTo(19.99);
-    expect(tps?.tps15m).toBeCloseTo(20.0);
-  });
-
-  it("parses values without the '*' prefix", async () => {
-    getSendMock().mockResolvedValue(
-      "TPS from last 1m, 5m, 15m: 18.5, 19.0, 20.0",
-    );
-    expect((await inst.getTps())?.tps1m).toBeCloseTo(18.5);
-  });
-
-  it("returns tps1m < 15 for a degraded server (would trigger TPS alert)", async () => {
-    getSendMock().mockResolvedValue(
-      "TPS from last 1m, 5m, 15m: *8.2, *10.1, *15.4",
-    );
-    expect((await inst.getTps())!.tps1m).toBeLessThan(15);
-  });
-});
-
-// ── getTps() — the named regression guards ────────────────────────────────
-// These used to live in tests/tps.test.ts, which re-implemented getTps's
-// logic inline and asserted against the copy — so the two bugs they are
-// named for could have been reintroduced in server.ts with the suite still
-// green. Asserted against the real method here.
-
-describe("ServerInstance.getTps() — regression guards", () => {
-  it("does not match stray digits before the values (Bug 4)", async () => {
-    // Three comma-separated numbers that are neither after a colon nor at
-    // the start of a line. The fixed regex requires one or the other; the
-    // pre-fix one was unanchored and read this as a TPS triplet, reporting
-    // 12 TPS and firing a false Low TPS alert.
-    getSendMock().mockResolvedValue("Server ticking 12, 34, 56 ms behind");
-    expect(await inst.getTps()).toBeNull();
-  });
-
-  it("keeps trying `tps` after a network error (Bug 1)", async () => {
-    const send = getSendMock();
-
-    // A blip: the connection failed, which says nothing about whether the
-    // server supports `tps`. Treating it as "unsupported" permanently
-    // demoted Paper servers to the tick-query path, which they lack.
-    send.mockRejectedValueOnce(new Error("ECONNRESET"));
-    send.mockRejectedValueOnce(new Error("ECONNRESET")); // tick query too
-    expect(await inst.getTps()).toBeNull();
-
-    send.mockReset();
-    send.mockResolvedValue("TPS from last 1m, 5m, 15m: *20.0, *20.0, *20.0");
-    expect((await inst.getTps())?.tps1m).toBeCloseTo(20.0);
-    expect(send).toHaveBeenCalledWith("tps");
-  });
-
-  it("stops trying `tps` once the server says it is unknown", async () => {
-    const send = getSendMock();
-    send.mockResolvedValueOnce("Unknown command. Try /help");
-    send.mockResolvedValueOnce("Unknown command. Try /help"); // tick query
-    expect(await inst.getTps()).toBeNull();
-
-    // Now permanently skipped: the next poll goes straight to tick query.
-    send.mockReset();
-    send.mockResolvedValue("Average time per tick: 25.0 ms");
-    await inst.getTps();
-    expect(send).toHaveBeenCalledTimes(1);
-    expect(send).toHaveBeenCalledWith("tick query");
-  });
-
-  it("returns null for an empty response rather than a zero triplet", async () => {
-    getSendMock().mockResolvedValue("");
-    expect(await inst.getTps()).toBeNull();
-  });
-});
-
-// ── getTps() — vanilla tick query fallback ────────────────────────────────
-
-describe("ServerInstance.getTps() — vanilla tick query fallback", () => {
-  it("falls back to tick query when tps command is unknown", async () => {
-    getSendMock()
-      .mockResolvedValueOnce("Unknown command: tps")
-      .mockResolvedValue("Average time per tick: 50.0 ms");
-    expect((await inst.getTps())?.tps1m).toBeCloseTo(20.0); // 1000/50 = 20
-  });
-
-  it("includes MSPT in the result", async () => {
-    getSendMock()
-      .mockResolvedValueOnce("Unknown command: tps")
-      .mockResolvedValue("Average time per tick: 50.0 ms");
-    expect(((await inst.getTps()) as { mspt?: number })?.mspt).toBeCloseTo(
-      50.0,
-    );
-  });
-
-  it("includes P50/P95/P99 percentiles when the response contains them", async () => {
-    getSendMock()
-      .mockResolvedValueOnce("Unknown command: tps")
-      .mockResolvedValue(
-        "Average time per tick: 50.0 ms (P50: 48.0 ms, P95: 55.0 ms, P99: 62.0 ms)",
-      );
-    const tps = (await inst.getTps()) as {
-      p50?: number;
-      p95?: number;
-      p99?: number;
-    };
-    expect(tps?.p50).toBeCloseTo(48.0);
-    expect(tps?.p95).toBeCloseTo(55.0);
-    expect(tps?.p99).toBeCloseTo(62.0);
-  });
-
-  it("caps TPS at 20 even when MSPT is very small", async () => {
-    getSendMock()
-      .mockResolvedValueOnce("Unknown command: tps")
-      .mockResolvedValue("Average time per tick: 1.0 ms");
-    expect((await inst.getTps())!.tps1m).toBeLessThanOrEqual(20);
-  });
-
-  it("returns null when tick query is also unsupported", async () => {
-    getSendMock()
-      .mockResolvedValueOnce("Unknown command: tps")
-      .mockResolvedValue("Unknown command: tick");
-    expect(await inst.getTps()).toBeNull();
-  });
-
-  it("returns null when tick query response has no expected line (Bug 2 regression)", async () => {
-    // Bug 2 fix: return null, not { tps1m: 0 }, when the line is missing.
-    // A zero-TPS result would trigger a false Low TPS alert.
-    getSendMock()
-      .mockResolvedValueOnce("Unknown command: tps")
-      .mockResolvedValue("something completely unexpected");
-    expect(await inst.getTps()).toBeNull();
-  });
-});
-
-// ── getPlayerCoords() ─────────────────────────────────────────────────────
 
 describe("ServerInstance.getPlayerCoords()", () => {
-  it("parses RCON Pos response into x/y/z numbers", async () => {
-    getSendMock().mockResolvedValue(
+  it("parses a Pos response into x/y/z numbers", async () => {
+    sendCommand.mockResolvedValue(
       "Steve has the following entity data: [123.5d, 64.0d, -456.7d]",
     );
     const c = await inst.getPlayerCoords("Steve");
@@ -280,54 +61,106 @@ describe("ServerInstance.getPlayerCoords()", () => {
   });
 
   it("handles negative coordinates", async () => {
-    getSendMock().mockResolvedValue("data: [-1000.0d, 100.0d, -2000.5d]");
+    sendCommand.mockResolvedValue("data: [-1000.0d, 100.0d, -2000.5d]");
     const c = await inst.getPlayerCoords("Alex");
     expect(c?.x).toBeCloseTo(-1000.0);
     expect(c?.z).toBeCloseTo(-2000.5);
   });
 
   it("returns null when the player is not found", async () => {
-    getSendMock().mockResolvedValue("No entity was found");
+    sendCommand.mockResolvedValue("No entity was found");
     expect(await inst.getPlayerCoords("Ghost")).toBeNull();
   });
-});
 
-// ── getPlayerDimension() ──────────────────────────────────────────────────
-
-describe("ServerInstance.getPlayerDimension()", () => {
-  it("parses overworld", async () => {
-    getSendMock().mockResolvedValue('data: "minecraft:overworld"');
-    expect(await inst.getPlayerDimension("Steve")).toBe("overworld");
-  });
-
-  it("parses the_nether", async () => {
-    getSendMock().mockResolvedValue('data: "minecraft:the_nether"');
-    expect(await inst.getPlayerDimension("Steve")).toBe("the_nether");
-  });
-
-  it("parses the_end", async () => {
-    getSendMock().mockResolvedValue('data: "minecraft:the_end"');
-    expect(await inst.getPlayerDimension("Steve")).toBe("the_end");
-  });
-
-  it("defaults to overworld when response has no dimension pattern", async () => {
-    getSendMock().mockResolvedValue("No entity was found");
-    expect(await inst.getPlayerDimension("Ghost")).toBe("overworld");
+  it("falls back to the log when the wrapper has no reply channel", async () => {
+    // A null reply means the wrapper reached the server over screen, which
+    // has no response channel. The answer still lands in the log.
+    sendCommand.mockResolvedValue(null);
+    tailLog.mockResolvedValue("Steve has data: [1.0d, 2.0d, 3.0d]");
+    const c = await inst.getPlayerCoords("Steve");
+    expect(c).toEqual({ x: 1, y: 2, z: 3 });
   });
 });
 
-// ── isRunning() ───────────────────────────────────────────────────────────
+describe("ServerInstance.getSeed()", () => {
+  it("parses and caches the seed", async () => {
+    sendCommand.mockResolvedValue("Seed: [-4172144997902289642]");
+    expect(await inst.getSeed()).toBe("-4172144997902289642");
+
+    // Cached: a second call must not ask the server again.
+    sendCommand.mockReset();
+    expect(await inst.getSeed()).toBe("-4172144997902289642");
+    expect(sendCommand).not.toHaveBeenCalled();
+  });
+
+  it("returns null when the response has no seed", async () => {
+    sendCommand.mockResolvedValue("Unknown command");
+    expect(await inst.getSeed()).toBeNull();
+  });
+});
 
 describe("ServerInstance.isRunning()", () => {
-  it("returns true when a RCON probe succeeds", async () => {
-    getSendMock().mockResolvedValue(
-      "There are 0 of a max of 20 players online",
-    );
+  it("reports what the wrapper reports", async () => {
+    isRunningFn.mockResolvedValue(true);
     expect(await inst.isRunning()).toBe(true);
   });
 
-  it("returns false when all RCON probes fail", async () => {
-    getSendMock().mockRejectedValue(new Error("RCON timeout"));
+  it("returns false without retrying when the server is simply down", async () => {
+    // `false` is an answer, not a failure — retrying it would double every
+    // downtime check for no new information.
+    isRunningFn.mockResolvedValue(false);
     expect(await inst.isRunning()).toBe(false);
+    expect(isRunningFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries a thrown error once before declaring the server down", async () => {
+    // A timeout or a momentarily busy wrapper is transient; one failed
+    // request must not report a healthy server as offline.
+    isRunningFn.mockRejectedValueOnce(new Error("ETIMEDOUT"));
+    isRunningFn.mockResolvedValueOnce(true);
+    expect(await inst.isRunning()).toBe(true);
+    expect(isRunningFn).toHaveBeenCalledTimes(2);
+  });
+
+  it("gives up after the retry", async () => {
+    isRunningFn.mockRejectedValue(new Error("ETIMEDOUT"));
+    expect(await inst.isRunning()).toBe(false);
+    expect(isRunningFn).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("ServerInstance.getList()", () => {
+  it("passes the wrapper's player list through", async () => {
+    getListFn.mockResolvedValue({
+      playerCount: "2",
+      maxPlayers: "20",
+      players: ["Steve", "Alex"],
+    });
+    expect(await inst.getList()).toEqual({
+      playerCount: "2",
+      maxPlayers: "20",
+      players: ["Steve", "Alex"],
+    });
+  });
+
+  it("degrades to an empty list rather than throwing", async () => {
+    getListFn.mockRejectedValue(new Error("wrapper down"));
+    expect(await inst.getList()).toEqual({
+      playerCount: "0",
+      maxPlayers: "?",
+      players: [],
+    });
+  });
+});
+
+describe("ServerInstance.getTps()", () => {
+  it("delegates to the wrapper, which owns the parsing", async () => {
+    getTpsFn.mockResolvedValue({ tps1m: 19.9, raw: "..." });
+    expect((await inst.getTps())?.tps1m).toBeCloseTo(19.9);
+  });
+
+  it("returns null rather than throwing when the wrapper is unreachable", async () => {
+    getTpsFn.mockRejectedValue(new Error("ECONNREFUSED"));
+    expect(await inst.getTps()).toBeNull();
   });
 });

@@ -29,12 +29,16 @@ import {
   getServerChoices,
 } from "../../src/core/config.js";
 
+const minimalServers = {
+  s: { apiUrl: "http://127.0.0.1:3030", apiKey: "k" },
+};
+
 const validConfig = {
   token: "test.bot.token.12345",
   clientId: "123456789012345678",
   servers: {
-    survival: { serverDir: "/tmp/fake-server", linuxUser: "mc" },
-    creative: { serverDir: "/tmp/creative-server", linuxUser: "mc" },
+    survival: { apiUrl: "http://192.168.1.10:3030", apiKey: "k1" },
+    creative: { apiUrl: "http://192.168.1.11:3030", apiKey: "k2" },
   },
   guilds: {
     guild1: { defaultServer: "survival" },
@@ -81,13 +85,13 @@ describe("loadConfig", () => {
   });
 
   it("defaults tpsWarningThreshold to 15 when not set", () => {
-    writeConfig({ token: "tok", clientId: "cid" });
+    writeConfig({ token: "tok", clientId: "cid", servers: minimalServers });
     reloadConfig();
     expect(loadConfig().tpsWarningThreshold).toBe(15);
   });
 
   it("defaults tpsPollIntervalMs to 60000 when not set", () => {
-    writeConfig({ token: "tok", clientId: "cid" });
+    writeConfig({ token: "tok", clientId: "cid", servers: minimalServers });
     reloadConfig();
     expect(loadConfig().tpsPollIntervalMs).toBe(60_000);
   });
@@ -115,13 +119,48 @@ describe("loadConfig", () => {
     expect(() => reloadConfig()).toThrow("clientId: required string");
   });
 
-  it("throws when rconPort is out of range", () => {
+  it("names the migration when handed a 4.x server block", () => {
+    // The fields that configured local mode. Reporting a bare "apiUrl is
+    // required" at a config that was correct for the previous major tells
+    // the reader nothing about what happened or where the settings went.
     writeConfig({
       token: "tok",
       clientId: "cid",
-      servers: { srv: { rconPort: 99999 } },
+      servers: { srv: { serverDir: "/srv/mc", linuxUser: "mc", useRcon: true } },
     });
-    expect(() => reloadConfig()).toThrow("rconPort");
+    expect(() => reloadConfig()).toThrow(/removed in 5\.0\.0/);
+    expect(() => reloadConfig()).toThrow(/serverDir/);
+    expect(() => reloadConfig()).toThrow(/4\.3\.x/);
+  });
+
+  it("requires apiUrl on every server", () => {
+    writeConfig({ token: "tok", clientId: "cid", servers: { srv: {} } });
+    expect(() => reloadConfig()).toThrow(/apiUrl: required/);
+  });
+
+  it("requires apiKey on every server", () => {
+    writeConfig({
+      token: "tok",
+      clientId: "cid",
+      servers: { srv: { apiUrl: "http://192.168.1.10:3030" } },
+    });
+    expect(() => reloadConfig()).toThrow(/apiKey: required/);
+  });
+
+  it("accepts apiKey from the environment instead of the file", () => {
+    // The documented secrets path: the key never touches config.json.
+    writeConfig({
+      token: "tok",
+      clientId: "cid",
+      servers: { srv: { apiUrl: "http://192.168.1.10:3030" } },
+    });
+    process.env.API_KEY_SRV = "from-env";
+    try {
+      reloadConfig();
+      expect(loadConfig().servers["srv"]!.apiKey).toBe("from-env");
+    } finally {
+      delete process.env.API_KEY_SRV;
+    }
   });
 
   it("throws when tpsWarningThreshold is zero", () => {
@@ -142,7 +181,7 @@ describe("loadConfig", () => {
     // The documented Docker/K8s path: config.json carries no secret, the
     // token arrives via DISCORD_TOKEN. Validation must see the override, so
     // env overrides have to run before the required-field check.
-    writeConfig({ clientId: "cid", servers: { s: { serverDir: "/tmp/x" } } });
+    writeConfig({ clientId: "cid", servers: { s: { apiUrl: "http://127.0.0.1:3030", apiKey: "k" } } });
     process.env.DISCORD_TOKEN = "secret-from-env";
     try {
       const cfg = reloadConfig();
@@ -158,27 +197,41 @@ describe("loadConfig", () => {
     expect(() => reloadConfig()).toThrow("token");
   });
 
-  it("applies an env-only RCON password before validation too", () => {
-    writeConfig({ token: "tok", clientId: "cid", servers: { s: { serverDir: "/tmp/x" } } });
-    process.env.RCON_PASSWORD = "rcon-secret";
+  it("applies an env-only API key before validation too (BUG-01)", () => {
+    // Validation requires apiKey. If it ran before the override, a
+    // deployment that supplies the key only via the environment — the
+    // documented path — would be rejected for missing the very value the
+    // override was about to fill in.
+    writeConfig({
+      token: "tok",
+      clientId: "cid",
+      servers: { s: { apiUrl: "http://127.0.0.1:3030" } },
+    });
+    process.env.API_KEY = "env-secret";
     try {
       const cfg = reloadConfig();
-      expect(cfg.servers["s"]!.rconPassword).toBe("rcon-secret");
+      expect(cfg.servers["s"]!.apiKey).toBe("env-secret");
     } finally {
-      delete process.env.RCON_PASSWORD;
+      delete process.env.API_KEY;
     }
   });
 
-  it("uses legacy single-server format when no servers key", () => {
+  it("names the migration for the pre-5.0.0 single-server format", () => {
+    // The top-level object used to double as one server block. It only ever
+    // held local fields, so this config cannot be silently carried forward.
     writeConfig({
       token: "tok",
       clientId: "cid",
       serverDir: "/tmp/legacy-server",
       linuxUser: "mc",
     });
-    reloadConfig();
-    const cfg = loadConfig();
-    expect(cfg.servers["default"]).toBeTruthy();
+    expect(() => reloadConfig()).toThrow(/single-server format/);
+    expect(() => reloadConfig()).toThrow(/migrating-to-5\.md/);
+  });
+
+  it("requires a servers map", () => {
+    writeConfig({ token: "tok", clientId: "cid" });
+    expect(() => reloadConfig()).toThrow(/servers: required/);
   });
 });
 

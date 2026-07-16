@@ -37,8 +37,14 @@ const createdWatchers: Array<{
 }> = [];
 
 vi.mock("../../src/bot/logWatcher/logWatcher.js", () => ({
-  // NOTE: must be a `function` (not an arrow) so `new LogWatcher(...)` works.
-  LogWatcher: vi.fn().mockImplementation(function (server: { id: string }) {
+  registerLogCommand: vi.fn(),
+  getGlobalWatchers: vi.fn().mockReturnValue([]),
+}));
+
+vi.mock("../../src/bot/logWatcher/RemoteLogWatcher.js", () => ({
+  // NOTE: must be a `function` (not an arrow) so `new RemoteLogWatcher(...)`
+  // works. Every instance is watched through this since 5.0.0.
+  RemoteLogWatcher: vi.fn().mockImplementation(function (server: { id: string }) {
     const w = {
       register: vi.fn(),
       start: vi.fn().mockResolvedValue(undefined),
@@ -48,12 +54,6 @@ vi.mock("../../src/bot/logWatcher/logWatcher.js", () => ({
     createdWatchers.push(w);
     return w;
   }),
-  registerLogCommand: vi.fn(),
-  getGlobalWatchers: vi.fn().mockReturnValue([]),
-}));
-
-vi.mock("../../src/bot/logWatcher/RemoteLogWatcher.js", () => ({
-  RemoteLogWatcher: vi.fn(),
 }));
 
 vi.mock("../../src/bot/logWatcher/watchers/log/chatBridge.js", () => ({
@@ -118,14 +118,8 @@ const fakeClient = {} as Client;
 function srvCfg(id: string, extra: Partial<ServerConfig> = {}): ServerConfig {
   return {
     id,
-    serverDir: `/srv/${id}`,
-    linuxUser: "mc",
-    screenSession: id,
-    useRcon: false,
-    rconHost: "localhost",
-    rconPort: 25575,
-    rconPassword: "",
-    scriptDir: "",
+    apiUrl: `http://${id}.wrapper.local:3030`,
+    apiKey: "k",
     ...extra,
   };
 }
@@ -221,7 +215,9 @@ describe("reconcileServers", () => {
 
     const result = await reconcileServers(
       fakeClient,
-      botCfg({ survival: srvCfg("survival", { rconPort: 25599 }) }),
+      botCfg({
+        survival: srvCfg("survival", { apiUrl: "http://moved.local:3030" }),
+      }),
     );
 
     expect(result.changed).toEqual(["survival"]);
@@ -229,7 +225,9 @@ describe("reconcileServers", () => {
     expect(result.removed).toEqual([]);
     // Instance untouched — same object, original config
     expect(getServerInstance("survival")).toBe(before);
-    expect(getServerInstance("survival")!.config.rconPort).toBe(25575);
+    expect(getServerInstance("survival")!.config.apiUrl).toBe(
+      "http://survival.wrapper.local:3030",
+    );
   });
 
   it("is a no-op when the server list is unchanged", async () => {

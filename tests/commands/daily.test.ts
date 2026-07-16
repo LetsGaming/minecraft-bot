@@ -6,10 +6,14 @@
  *  - pick: weighted random item selection
  *  - claimLock: concurrent executions are blocked for the same user
  */
+import * as serverAccess from "../../src/core/utils/server/serverAccess.js";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ── Top-level mocks — must be at file scope for Vitest hoisting ───────────
 
+vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
+  sendCommand: vi.fn().mockResolvedValue(null),
+}));
 vi.mock("../../src/core/utils/stores/linkUtils.js", () => ({
   isLinked: vi.fn(),
   getLinkedAccount: vi.fn(),
@@ -212,16 +216,18 @@ describe("claimLock — concurrent claim prevention", () => {
     vi.mocked(linkUtils.isLinked).mockResolvedValue(true);
     vi.mocked(linkUtils.getLinkedAccount).mockResolvedValue("Steve");
     vi.mocked(playerUtils.getOnlinePlayers).mockResolvedValue(["Steve"]);
-    // A give that never answers — keeps the first execution inside the
-    // lock (claims persist synchronously to kv now, so the held awaitable
-    // has to be the RCON round-trip, not the save).
+    // A give that never answers — keeps the first execution inside the lock
+    // (claims persist synchronously to kv now, so the held awaitable has to
+    // be the round-trip to the server, not the save).
     let releaseSend!: () => void;
     const sendPending = new Promise<string | null>((res) => {
       releaseSend = () => res(null);
     });
+    vi.mocked(serverAccess.sendCommand).mockReturnValue(sendPending);
     vi.mocked(guildRouter.resolveServer).mockReturnValue({
       id: "main",
-      sendCommand: vi.fn().mockReturnValue(sendPending),
+      config: { apiUrl: "http://w:3030", apiKey: "k" },
+      sendCommand: vi.fn().mockResolvedValue("ok"),
     } as never);
     vi.mocked(paths.getRootDir).mockReturnValue("/tmp");
     vi.mocked(utils.loadJson).mockResolvedValue({
@@ -305,7 +311,8 @@ describe("claim persistence", () => {
     vi.mocked(playerUtils.getOnlinePlayers).mockResolvedValue(["Steve"]);
     vi.mocked(guildRouter.resolveServer).mockReturnValue({
       id: "main",
-      sendCommand: vi.fn().mockResolvedValue(null),
+      config: { apiUrl: "http://w:3030", apiKey: "k" },
+      sendCommand: vi.fn().mockResolvedValue("ok"),
     } as never);
     vi.mocked(paths.getRootDir).mockReturnValue("/tmp");
     // vi.resetModules() gives daily.js a fresh db module instance — seed
@@ -407,7 +414,8 @@ describe("per-server claim independence", () => {
     // The user targets "main" — while "other" is mid-cooldown.
     vi.mocked(guildRouter.resolveServer).mockReturnValue({
       id: "main",
-      sendCommand: vi.fn().mockResolvedValue(null),
+      config: { apiUrl: "http://w:3030", apiKey: "k" },
+      sendCommand: vi.fn().mockResolvedValue("ok"),
     } as never);
     vi.mocked(paths.getRootDir).mockReturnValue("/tmp");
     const { kvGet, kvSet } = await import("../../src/core/db/kv.js");

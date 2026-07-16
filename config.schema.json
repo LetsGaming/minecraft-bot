@@ -107,40 +107,13 @@
         "id": {
           "type": "string"
         },
-        "serverDir": {
-          "type": "string"
-        },
-        "linuxUser": {
-          "type": "string"
-        },
-        "screenSession": {
-          "type": "string"
-        },
-        "useRcon": {
-          "type": "boolean"
-        },
-        "rconHost": {
-          "type": "string"
-        },
-        "rconPort": {
-          "type": [
-            "string",
-            "number"
-          ]
-        },
-        "rconPassword": {
-          "type": "string"
-        },
-        "scriptDir": {
-          "type": "string"
-        },
         "apiUrl": {
           "type": "string",
-          "description": "Base URL of the API wrapper running on the MC server VM. Example: \"http://192.168.1.10:3000\" (trusted LAN) or \"https://mc-api.example.com\" (anything beyond the LAN). When set, all filesystem/shell operations for this instance are forwarded to that API wrapper instead of running locally. Omit (or leave empty) for same-VM / local operation — existing behaviour.\n\nPlaintext http:// is only accepted for loopback/private/LAN hosts — the x-api-key and all commands travel unencrypted. Public hosts require https:// (or an explicit allowInsecureHttp override)."
+          "description": "Base URL of the API wrapper on the Minecraft host. **Required** since 5.0.0: every filesystem, shell and RCON operation for this instance goes through it. Example: \"http://192.168.1.10:3030\" (trusted LAN) or \"https://mc-api.example.com\" (anything beyond the LAN).\n\nPlaintext http:// is only accepted for loopback/private/LAN hosts — the x-api-key and all commands travel unencrypted. Public hosts require https:// (or an explicit allowInsecureHttp override)."
         },
         "apiKey": {
           "type": "string",
-          "description": "Shared secret sent as x-api-key to the API wrapper."
+          "description": "Shared secret sent as x-api-key to the API wrapper. **Required**."
         },
         "allowInsecureHttp": {
           "type": "boolean",

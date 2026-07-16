@@ -1,103 +1,53 @@
 # Server access
 
-How the code reaches a Minecraft server. Three modules, stacked, each knowing
-less than the one above it: `RconClient` (protocol) → `serverAccess` (routing) →
-`ServerInstance` (operations).
+How the code reaches a Minecraft server. Two modules, stacked, the lower one
+knowing less than the upper: `serverAccess` (transport) → `ServerInstance`
+(operations).
 
-## `RconClient` — the protocol
+Everything goes to the [API wrapper](https://github.com/LetsGaming/minecraft-server-api)
+on the Minecraft host, over HTTP. The bot does not read the server's files,
+does not spawn its scripts, and does not open an RCON socket — the wrapper
+does all three, because it is the process that is actually on that machine.
 
-Socket lifecycle, binary packet encode/decode, the auth handshake,
-request/response correlation by packet ID, timeouts. It imports `net` and the
-logger, and nothing else. No Minecraft semantics, no Discord, no config.
+## `serverAccess` — the transport
 
-That is what makes it testable against an in-process mock socket
-(`tests/server/rconClient.test.ts` round-trips the packets), and it is the shape to
-copy for any future protocol client: dependency-injected, no ambient knowledge
-of the app it serves.
+One route per function, raw data back, no business logic. Nothing in the bot
+imports `fs` or `child_process` for server state; there is nothing to import it
+for.
 
-## `serverAccess` — the routing seam
+Until 5.0.0 this module was a *routing* seam with one rule — HTTP if
+`config.apiUrl` was set, local filesystem and `sudo -u` otherwise — and under
+it sat an `RconClient` and an `execCommand` layer. Both are gone. The two modes
+meant every feature was implemented twice, and they drifted: `/stats` answered
+differently for a player with no stats file, daily rewards were verified on one
+path and assumed on the other, and `sendCommand` silently preferred RCON over
+the wrapper when both were configured.
 
-One rule, and it is the whole module:
+Two functions do not simply assert-and-decode:
 
-> If `config.apiUrl` is set, the operation is an HTTP call to the API wrapper.
-> Otherwise it is the local implementation.
-
-Local means reading files, `tail`, and spawning scripts via `sudo -u`. Remote
-means the wrapper on the Minecraft host does that instead. Functions here are
-deliberately thin — routing plus raw data, no business logic — because the
-moment one of them makes a decision, that decision exists in only one of the two
-modes.
-
-**This is the only place in the codebase that imports `fs` or `child_process`
-for server data.** If a caller needs something from the server's disk, it gets a
-function here; it does not read the file itself. That is what makes remote
-instances work without a single `if (remote)` anywhere else.
-
-Responses from it are cast to the caller's `T` — that is asserting a pinned
-first-party contract that the feature check below protects, not trusting
-arbitrary JSON. The one exception is the manifest itself, which is parsed
-rather than cast: it *is* the check, so trusting its shape would assume what
-it exists to establish.
-
-## The wrapper feature contract
-
-Every wrapper call degrades on its own: a 404 on `/usercache` becomes "no
-usercache names", a 404 on `/capabilities` becomes "assume everything works".
-Individually that is right. Collectively it means **an outdated wrapper and a
-healthy one look identical**, which is exactly how a feature gap reaches
-production.
-
-`GET /manifest` on the wrapper closes that. It reports the wrapper version, a
-versioned feature list, the routes it serves, and the script actions its runner
-accepts — generated from Fastify's router and the runner's own action map, so
-it cannot claim something the wrapper does not do. (It is generated rather than
-being `openapi.yaml` for a concrete reason: that file is hand-maintained and has
-already drifted badly enough to describe four routes that never existed. A
-mismatch check reading it would be confidently wrong, which is worse than the
-honest 404 it replaces.)
-
-`wrapperContract.ts` holds the bot's half — `EXPECTED_WRAPPER_FEATURES`, one
-entry per feature with a version and a plain-English `degrades` string — and
-`verifyWrapperContract()` diffs the two at startup, **both directions**:
-
-| Case | Reported as |
-|---|---|
-| Bot wants it, wrapper lacks it | `does not provide "usercache" — names for players who are not on the whitelist. Update the wrapper.` |
-| Wrapper's feature version is older | `provides "host-info" v0, this bot expects v1 … Update the wrapper.` |
-| Wrapper's feature version is newer | `newer than the v1 bot 4.3.0 implements — may misbehave until the bot is updated.` |
-| Wrapper offers something the bot never uses | `offers features bot 4.3.0 does not use: backup-prune. Update the bot.` |
-
-The last two had no mechanism at all before: "the wrapper is ahead of the bot"
-was invisible.
-
-Feature names are a cross-repo contract with no shared package — the wrapper
-cannot depend on `@mcbot/schema`. The two ends are this table and the wrapper's
-`FEATURES` const, and the wrapper's CI holds up its side: every feature's routes
-must exist, every instance route must belong to a feature (so a new route cannot
-ship without the bot hearing about it), and `openapi.yaml` must match the router.
-
-**`MIN_WRAPPER_VERSION` is the fallback only.** Wrappers predating `/manifest`
-get the old coarse version compare. Set it to the release that introduced the
-endpoints the bot treats as baseline — currently `3.0.0` (`/info`, `/usercache`,
-capabilities). It read `1.2.0` until 2026-07: the version the bot *predicted*
-`/info` would land in. The wrapper shipped it two majors later, so no wrapper
-that answered `/info` was ever below the floor, the comparison was unreachable,
-and the constant documented something untrue. Worth remembering when bumping it
-— a floor you cannot fail is not a floor.
+- `readStats` treats a 404 as `null` — a player who has never played is an
+  answer, not a failure — while a 500 still throws.
+- `sendCommand` returns `null` when the wrapper reached the server over screen
+  and has no output to relay, which is distinct from the request failing.
 
 ## `ServerInstance` — the operations
 
 One instance per configured server, built at startup, held in a module-level
 registry (`getServerInstance`, `getAllInstances`, `getGuildServer`). It owns:
 
-- `sendCommand()`: RCON first, screen fallback, or the wrapper for remote
-  instances
+- `sendCommand()`, which catches transport errors and returns `null` — so
+  callers that must tell "unreachable" from "no output channel" (`give()` in
+  `daily.ts`) read `serverAccess` directly instead
 - `isRunning()`, `getList()`, `getTps()`, `getSeed()`, `getPlayerCoords()`,
   `getPlayerDimension()`
-- Small caches (seed, "does this server have a `/tps` command")
+- A seed cache. The "does this server have a `/tps` command" cache went with
+  the RCON client.
 
-**The canonical regexes for parsing RCON/NBT output live here and only here.**
-Every time one of them has been copied out, the copy drifted.
+**The canonical regexes for parsing console/NBT output live here and only
+here.** Every time one of them has been copied out, the copy drifted. TPS is
+the exception and for the same reason: the wrapper holds the connection, so it
+is the only side that sees a `tps` response, and it parses it. Those regexes
+and their regression guards live in the wrapper's `tests/tps.test.ts`.
 
 Commands do not reach the registry directly — they go through
 `resolveServer(interaction)`. See
@@ -109,9 +59,8 @@ The bot is designed for servers installed via the
 [minecraft-server-setup](https://github.com/LetsGaming/minecraft-server-setup)
 suite, but works against a plain server for everything that does not depend on
 suite artifacts. Rather than letting that surface as a raw ENOENT at invocation
-time, `detectCapabilities(cfg)` probes for the artifacts per server — locally
-with `fs.existsSync`, remotely via `GET /instances/:id/capabilities`, with a
-conservative all-true fallback for wrappers that predate the route. The result
+time, `detectCapabilities(cfg)` asks the wrapper — `GET /instances/:id/capabilities`,
+with a conservative all-true fallback for wrappers that predate the route. The result
 is cached on `ServerInstance.capabilities`, logged as a one-line summary at
 startup, and re-probed on every config reload, so installing the suite later is
 picked up without a restart (command registration excepted).

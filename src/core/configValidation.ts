@@ -9,7 +9,11 @@
  * any candidate — the dashboard validates edits through it before writing, and
  * config.ts calls it at load time (see validateRawConfig).
  */
-import { NOTIFICATION_EVENTS, isNotificationEvent } from "@mcbot/schema";
+import {
+  NOTIFICATION_EVENTS,
+  isNotificationEvent,
+  REMOVED_LOCAL_SERVER_FIELDS,
+} from "@mcbot/schema";
 import { isRecord } from "./utils/objects.js";
 import type { RawBotConfig } from "./types/index.js";
 import { isSnowflake, SNOWFLAKE_DESCRIPTION } from "@mcbot/schema/discord.js";
@@ -209,22 +213,61 @@ export function validateCandidateConfig(
   };
   validateCommandOverrides(raw.commands, "commands");
 
-  // Validate servers block if present
-  if (raw.servers !== undefined) {
+  // Validate servers block. Required since 5.0.0: the pre-`servers` format
+  // put a single local server's fields at the top level, and there is no
+  // local server any more.
+  if (raw.servers === undefined) {
+    const stale = REMOVED_LOCAL_SERVER_FIELDS.filter(
+      (f) => (raw as unknown as Record<string, unknown>)[f] !== undefined,
+    );
+    errors.push(
+      stale.length > 0
+        ? `  - servers: required. This looks like the pre-5.0.0 single-server ` +
+            `format (${stale.join(", ")} at the top level), which configured ` +
+            `local mode. See docs/admin/migrating-to-5.md — 4.3.x ` +
+            `is the last release that supported local deployment.`
+        : `  - servers: required — an object keyed by server id, each with ` +
+            `apiUrl and apiKey (e.g. { "survival": { "apiUrl": "...", "apiKey": "..." } }).`,
+    );
+  } else {
     if (typeof raw.servers !== "object" || Array.isArray(raw.servers)) {
       errors.push("  - servers: must be an object (e.g. { \"survival\": { ... } })");
     } else {
       for (const [id, srv] of Object.entries(raw.servers)) {
-        if (srv.rconPort !== undefined) {
-          const p = Number(srv.rconPort);
-          if (!Number.isInteger(p) || p < 1 || p > 65535) {
-            errors.push(`  - servers.${id}.rconPort: must be an integer between 1 and 65535`);
-          }
-        }
         validateCommandOverrides(srv.commands, `servers.${id}.commands`);
-        if (srv.apiUrl !== undefined && typeof srv.apiUrl !== "string") {
-          errors.push(`  - servers.${id}.apiUrl: must be a string URL`);
-        } else if (srv.apiUrl) {
+
+        // A 4.x config: say what happened and where the fields went, rather
+        // than reporting a bare "apiUrl is required" at someone whose config
+        // was correct for the previous major.
+        const stale = REMOVED_LOCAL_SERVER_FIELDS.filter(
+          (f) => (srv as Record<string, unknown>)[f] !== undefined,
+        );
+        if (stale.length > 0) {
+          errors.push(
+            `  - servers.${id}: ${stale.join(", ")} configured local mode, ` +
+              `which was removed in 5.0.0. The bot now reaches every server ` +
+              `through an API wrapper. Move those settings into the wrapper's ` +
+              `own config on the Minecraft host, delete them here, and set ` +
+              `apiUrl + apiKey. See docs/admin/migrating-to-5.md. ` +
+              `4.3.x is the last release that supported local deployment.`,
+          );
+        }
+
+        if (typeof srv.apiUrl !== "string" || srv.apiUrl.trim() === "") {
+          errors.push(
+            `  - servers.${id}.apiUrl: required — the base URL of the API ` +
+              `wrapper on the Minecraft host (e.g. "http://192.168.1.10:3030").`,
+          );
+        } else if (typeof srv.apiKey !== "string" || srv.apiKey.trim() === "") {
+          errors.push(
+            `  - servers.${id}.apiKey: required — the wrapper's shared secret. ` +
+              `Set it here, or supply API_KEY_${id
+                .toUpperCase()
+                .replace(/[^A-Z0-9]/g, "_")} / API_KEY in the environment.`,
+          );
+        }
+
+        if (typeof srv.apiUrl === "string" && srv.apiUrl.trim() !== "") {
           // Transport security for the remote API wrapper
           const check = validateApiUrl(
             srv.apiUrl,

@@ -12,6 +12,7 @@ vi.mock("../../src/core/utils/logger.js", () => ({
 }));
 
 vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
+  sendCommand: vi.fn().mockResolvedValue(null),
   readWhitelist: vi.fn().mockResolvedValue([{ name: "Alice", uuid: "u1" }]),
   readUserCache: vi.fn().mockResolvedValue([]),
   readStats: vi.fn().mockResolvedValue({ stats: {} }),
@@ -121,43 +122,43 @@ describe("daily give() item prefixing (M-12)", () => {
     const { give } = await import(
       "../../src/bot/commands/connection/daily/daily.js"
     );
-    const sendCommand = vi.fn().mockResolvedValue(null);
+    const sendCommand = vi.mocked(serverAccess.sendCommand);
+    sendCommand.mockResolvedValue(null);
     const srv = {
       id: "s",
-      config: { id: "s", useRcon: false },
-      sendCommand,
+      config: { id: "s", apiUrl: "http://w:3030", apiKey: "k" },
     } as unknown as ServerInstance;
 
     await give(srv, "Steve", { item: "diamond", amount: 2 });
     expect(sendCommand).toHaveBeenLastCalledWith(
+      srv.config,
       "give Steve minecraft:diamond 2",
     );
 
     await give(srv, "Steve", { item: "create:brass_ingot", amount: 1 });
     expect(sendCommand).toHaveBeenLastCalledWith(
+      srv.config,
       "give Steve create:brass_ingot 1",
     );
   });
 
-  it("fails the claim when an RCON server does not confirm the give (M-11)", async () => {
+  it("fails the claim when the console does not confirm the give (M-11)", async () => {
     const { give } = await import(
       "../../src/bot/commands/connection/daily/daily.js"
     );
     const srv = {
       id: "s",
-      config: { id: "s", useRcon: true },
-      sendCommand: vi
-        .fn()
-        .mockResolvedValue("Unknown item 'minecraft:not_an_item'"),
+      config: { id: "s", apiUrl: "http://w:3030", apiKey: "k" },
     } as unknown as ServerInstance;
 
+    vi.mocked(serverAccess.sendCommand).mockResolvedValue(
+      "Unknown item 'minecraft:not_an_item'",
+    );
     expect(await give(srv, "Steve", { item: "not_an_item" })).toBe(false);
 
-    const ok = {
-      id: "s",
-      config: { id: "s", useRcon: true },
-      sendCommand: vi.fn().mockResolvedValue("Gave 1 [Diamond] to Steve"),
-    } as unknown as ServerInstance;
-    expect(await give(ok, "Steve", { item: "diamond" })).toBe(true);
+    vi.mocked(serverAccess.sendCommand).mockResolvedValue(
+      "Gave 1 [Diamond] to Steve",
+    );
+    expect(await give(srv, "Steve", { item: "diamond" })).toBe(true);
   });
 });

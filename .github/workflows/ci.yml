@@ -30,6 +30,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Workspace layout (src/ holds workspaces only)
+        run: npm run layout:check
+
       - name: Locale parity (en/de)
         run: npm run i18n:check
 

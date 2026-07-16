@@ -118,6 +118,30 @@ export async function takeSnapshot(
     players,
     flatStats,
   };
+
+  // An empty snapshot is not "nobody has stats" — it is indistinguishable
+  // from "the stats could not be read", and recording it is worse than
+  // recording nothing. Baselines are looked up by time and a missing player
+  // reads as zero (statUtils: `baseline[uuid] ?? 0`), so one empty snapshot
+  // in the window makes every period board subtract nothing and report
+  // all-time totals as the period's gains — labelled as the period, which is
+  // the part that makes it a lie.
+  //
+  // Skipping costs nothing: with no baseline the readers return null and the
+  // callers say so, and a server nobody has played simply has no board yet.
+  if (Object.keys(players).length === 0) {
+    log.warn(
+      "snapshots",
+      `No player stats readable for ${server.id} — skipping this snapshot ` +
+        `rather than recording an empty one, which would act as a zero ` +
+        `baseline and make period leaderboards report all-time totals. ` +
+        `Expected on a server nobody has played yet; otherwise the stats ` +
+        `directory is unreadable (check the API wrapper's serverPath, the ` +
+        `world's level-name, and read permissions on <world>/stats).`,
+    );
+    return payload;
+  }
+
   getDb()
     .prepare(
       "INSERT OR REPLACE INTO snapshots (server_id, ts, payload) VALUES (?, ?, ?)",

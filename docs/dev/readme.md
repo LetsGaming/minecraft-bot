@@ -23,9 +23,9 @@ need to know it.
 
 | Workspace | What lives there | Docs |
 |---|---|---|
-| `@mcbot/bot` | The Discord process: commands, watchers, in-game commands | [bot/](bot/index.md) |
-| `@mcbot/core` | Config, data layer, server access, Minecraft domain | [core/](core/index.md) |
-| `@mcbot/web` | The optional dashboard: Fastify backend + Vue frontend | [web/](web/index.md) |
+| `@mcbot/bot` | The Discord process: commands, watchers, in-game commands | [bot/](bot/readme.md) |
+| `@mcbot/core` | Config, data layer, server access, Minecraft domain | [core/](core/readme.md) |
+| `@mcbot/web` | The optional dashboard: Fastify backend + Vue frontend | [web/](web/readme.md) |
 | `@mcbot/schema` | Isomorphic contracts shared by all three | [contracts.md](contracts.md) |
 
 `@mcbot/schema` has no directory of its own: it is small, and its whole point

@@ -3,30 +3,40 @@
 import type { LeaderboardInterval } from "./stats.js";
 import type { NotificationEvent } from "./notifications.js";
 
+/**
+ * The fields that configured local mode, removed in 5.0.0.
+ *
+ * Named here so validation can recognise a 4.x config and say what to do
+ * with it, instead of reporting a bare "apiUrl is required" at someone who
+ * has a perfectly good config for the previous major. Every one of these
+ * describes the machine the server runs on, and now belongs in the API
+ * wrapper's own config — which lives on that machine.
+ */
+export const REMOVED_LOCAL_SERVER_FIELDS = [
+  "serverDir",
+  "scriptDir",
+  "linuxUser",
+  "screenSession",
+  "useRcon",
+  "rconHost",
+  "rconPort",
+  "rconPassword",
+] as const;
+
 export interface RawServerConfig {
   id?: string;
-  serverDir?: string;
-  linuxUser?: string;
-  screenSession?: string;
-  useRcon?: boolean;
-  rconHost?: string;
-  rconPort?: string | number;
-  rconPassword?: string;
-  scriptDir?: string;
   /**
-   * Base URL of the API wrapper running on the MC server VM.
-   * Example: "http://192.168.1.10:3000" (trusted LAN) or
+   * Base URL of the API wrapper on the Minecraft host. **Required** since
+   * 5.0.0: every filesystem, shell and RCON operation for this instance
+   * goes through it. Example: "http://192.168.1.10:3030" (trusted LAN) or
    * "https://mc-api.example.com" (anything beyond the LAN).
-   * When set, all filesystem/shell operations for this instance are
-   * forwarded to that API wrapper instead of running locally.
-   * Omit (or leave empty) for same-VM / local operation — existing behaviour.
    *
-   * Plaintext http:// is only accepted for loopback/private/LAN
-   * hosts — the x-api-key and all commands travel unencrypted. Public
-   * hosts require https:// (or an explicit allowInsecureHttp override).
+   * Plaintext http:// is only accepted for loopback/private/LAN hosts —
+   * the x-api-key and all commands travel unencrypted. Public hosts
+   * require https:// (or an explicit allowInsecureHttp override).
    */
   apiUrl?: string;
-  /** Shared secret sent as x-api-key to the API wrapper. */
+  /** Shared secret sent as x-api-key to the API wrapper. **Required**. */
   apiKey?: string;
   /**
    * Opt-out for the plaintext-HTTP-to-public-host rejection.
@@ -43,18 +53,20 @@ export interface RawServerConfig {
   commands?: Record<string, CommandOverrideConfig>;
 }
 
+/**
+ * A resolved instance.
+ *
+ * Since 5.0.0 this carries no host knowledge at all: no paths, no user, no
+ * screen session, no RCON credentials. The bot reaches every server through
+ * an API wrapper, and those fields describe the wrapper's machine, not the
+ * bot's view of it. Keeping them here meant two implementations of one
+ * contract and two places to fix every host-shaped bug.
+ */
 export interface ServerConfig {
   id: string;
-  serverDir: string;
-  linuxUser: string;
-  screenSession: string;
-  useRcon: boolean;
-  rconHost: string;
-  rconPort: number;
-  rconPassword: string;
-  scriptDir: string;
-  apiUrl?: string;
-  apiKey?: string;
+  apiUrl: string;
+  apiKey: string;
+  allowInsecureHttp?: boolean;
   commands?: Record<string, CommandOverrideConfig>;
 }
 

@@ -87,7 +87,7 @@ pm2 start ecosystem.config.cjs --env production
 pm2 save && pm2 startup
 ```
 
-The script routes use `sudo -n` to run management scripts as the Minecraft user; configure sudoers as described in [sudoers.md](sudoers.md).
+The script routes use `sudo -n` to run management scripts as the Minecraft user; configure sudoers as described in the wrapper's own [docs/sudoers-setup.md](https://github.com/LetsGaming/minecraft-server-api/blob/main/docs/sudoers-setup.md). This is the wrapper's requirement, on the Minecraft host — the bot needs no sudo anywhere.
 
 Firewall: only allow the bot machine to reach the wrapper port.
 

@@ -14,10 +14,6 @@
  * routing and returning the raw data the caller needs.
  */
 
-import fs from "fs";
-import fsPromises from "fs/promises";
-import path from "path";
-import { isRecord } from "../objects.js";
 import {
   MIN_WRAPPER_VERSION,
   compareContract,
@@ -25,27 +21,17 @@ import {
   parseManifest,
   type WrapperManifest,
 } from "./wrapperContract.js";
-import { execFile, spawn } from "child_process";
-import { promisify } from "util";
 import { log } from "../logger.js";
-import {
-  isSudoPermissionError,
-  sudoHelpMessage,
-} from "../../shell/execCommand.js";
 import type {
   ServerConfig,
   WhitelistEntry,
   MinecraftStatsFile,
-  BackupDirInfo,
   BackupSummary,
   ScriptResult,
   ServerCapabilities,
   TpsResult,
 } from "../../types/index.js";
 import { allCapabilities } from "../../types/index.js";
-import type { ServerScriptAction } from "@mcbot/schema/serverActions.js";
-
-const execFileAsync = promisify(execFile);
 
 // ── UUID sink guard ───────────────────────────────────────────────────────
 
@@ -83,21 +69,32 @@ function instanceUrl(cfg: ServerConfig, route: string): string {
   return wrapperUrl(cfg, `/instances/${cfg.id}${route}`);
 }
 
-async function apiGet<T>(cfg: ServerConfig, route: string): Promise<T> {
-  const url = instanceUrl(cfg, route);
+/**
+ * GET an instance route without asserting the status, for the few callers
+ * that treat a specific one as data rather than as a failure.
+ */
+async function apiGetRaw(cfg: ServerConfig, route: string): Promise<Response> {
   const headers: Record<string, string> = {};
   if (cfg.apiKey) headers["x-api-key"] = cfg.apiKey;
   // Bug 3 fix: explicit timeout so a hung API server can't stall the poll
   // loop indefinitely. Node 18+ AbortSignal.timeout() is zero-dependency.
-  const res = await fetch(url, {
+  return fetch(instanceUrl(cfg, route), {
     headers,
     signal: AbortSignal.timeout(8_000),
   });
+}
+
+/** Assert a wrapper response is OK and decode it. */
+async function readApiJson<T>(res: Response, route: string): Promise<T> {
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`API ${route} → ${res.status}: ${body}`);
   }
   return res.json() as Promise<T>; // pinned first-party contract (see note above)
+}
+
+async function apiGet<T>(cfg: ServerConfig, route: string): Promise<T> {
+  return readApiJson<T>(await apiGetRaw(cfg, route), route);
 }
 
 async function apiPost<T>(
@@ -132,43 +129,26 @@ async function apiPost<T>(
  * Used as a fallback for seed/coord parsing and screen-mode getList.
  */
 export async function tailLog(cfg: ServerConfig, lines = 10): Promise<string> {
-  if (cfg.apiUrl) {
-    const { output } = await apiGet<{ output: string }>(
-      cfg,
-      `/logs/tail?lines=${lines}`,
-    );
-    return output;
-  }
-  const logFile = path.join(cfg.serverDir, "logs", "latest.log");
-  try {
-    // Use execFile (no shell) so logFile cannot inject shell metacharacters
-    // even if a future refactor sources cfg.serverDir from user input.
-    const { stdout } = await execFileAsync("tail", ["-n", String(lines), logFile]);
-    return stdout;
-  } catch {
-    return "";
-  }
+  const { output } = await apiGet<{ output: string }>(
+    cfg,
+    `/logs/tail?lines=${lines}`,
+  );
+  return output;
 }
 
 // ── Server status ────────────────────────────────────────────────────────
 
 /** Check whether the server is running. */
 export async function isRunning(cfg: ServerConfig): Promise<boolean> {
-  if (cfg.apiUrl) {
-    const { running } = await apiGet<{ running: boolean }>(cfg, "/running");
-    return running;
-  }
-  return false;
+  const { running } = await apiGet<{ running: boolean }>(cfg, "/running");
+  return running;
 }
 
 /** Get the current player list. */
 export async function getList(
   cfg: ServerConfig,
 ): Promise<{ playerCount: string; maxPlayers: string; players: string[] }> {
-  if (cfg.apiUrl) {
-    return apiGet(cfg, "/list");
-  }
-  return { playerCount: "0", maxPlayers: "?", players: [] };
+  return apiGet(cfg, "/list");
 }
 
 /** Send a command to the server (via RCON or screen on the remote host). */
@@ -176,28 +156,18 @@ export async function sendCommand(
   cfg: ServerConfig,
   command: string,
 ): Promise<string | null> {
-  if (cfg.apiUrl) {
-    const { result } = await apiPost<{ result: string | null }>(
-      cfg,
-      "/command",
-      { command },
-    );
-    return result;
-  }
-  return null;
+  const { result } = await apiPost<{ result: string | null }>(cfg, "/command", {
+    command,
+  });
+  return result;
 }
 
 /** Get TPS data from the server. Returns null if unavailable. */
-export async function getTps(
-  cfg: ServerConfig,
-): Promise<TpsResult | null> {
-  if (cfg.apiUrl) {
-    const { tps } = await apiGet<{
-      tps: TpsResult | null;
-    }>(cfg, "/tps");
-    return tps;
-  }
-  return null;
+export async function getTps(cfg: ServerConfig): Promise<TpsResult | null> {
+  const { tps } = await apiGet<{
+    tps: TpsResult | null;
+  }>(cfg, "/tps");
+  return tps;
 }
 
 async function apiDelete<T>(cfg: ServerConfig, route: string): Promise<T> {
@@ -362,44 +332,15 @@ export async function verifyWrapperContract(
 
 // ── Whitelist ─────────────────────────────────────────────────────────────
 
-/** Read whitelist.json for the given server. Returns [] on any error. */
-/**
- * Narrow an unknown value parsed from whitelist.json / usercache.json to
- * WhitelistEntry[]. Anything without a string `name` and `uuid` is dropped, so
- * a malformed file yields fewer entries — never a wrongly-typed one that would
- * blow up downstream. This is the single checked reader for both files.
- */
-function toWhitelistEntries(data: unknown): WhitelistEntry[] {
-  if (!Array.isArray(data)) return [];
-  return data.flatMap((e) => {
-    if (!isRecord(e)) return [];
-    const { name, uuid } = e;
-    return typeof name === "string" && typeof uuid === "string"
-      ? [{ name, uuid }]
-      : [];
-  });
-}
-
+/** Read the server's whitelist. */
 export async function readWhitelist(
   cfg: ServerConfig,
 ): Promise<WhitelistEntry[]> {
-  if (cfg.apiUrl) {
-    const { whitelist } = await apiGet<{ whitelist: WhitelistEntry[] }>(
-      cfg,
-      "/whitelist",
-    );
-    return whitelist;
-  }
-  try {
-    const raw = await fsPromises.readFile(
-      path.resolve(cfg.serverDir, "whitelist.json"),
-      "utf-8",
-    );
-    const data: unknown = JSON.parse(raw);
-    return toWhitelistEntries(data);
-  } catch {
-    return [];
-  }
+  const { whitelist } = await apiGet<{ whitelist: WhitelistEntry[] }>(
+    cfg,
+    "/whitelist",
+  );
+  return whitelist;
 }
 
 /**
@@ -411,27 +352,15 @@ export async function readWhitelist(
 export async function readUserCache(
   cfg: ServerConfig,
 ): Promise<WhitelistEntry[]> {
-  if (cfg.apiUrl) {
-    try {
-      const { usercache } = await apiGet<{ usercache: WhitelistEntry[] }>(
-        cfg,
-        "/usercache",
-      );
-      return Array.isArray(usercache) ? usercache : [];
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.debug("serverAccess", `usercache unavailable for ${cfg.id}: ${msg}`);
-      return [];
-    }
-  }
   try {
-    const raw = await fsPromises.readFile(
-      path.resolve(cfg.serverDir, "usercache.json"),
-      "utf-8",
+    const { usercache } = await apiGet<{ usercache: WhitelistEntry[] }>(
+      cfg,
+      "/usercache",
     );
-    const data: unknown = JSON.parse(raw);
-    return toWhitelistEntries(data);
-  } catch {
+    return Array.isArray(usercache) ? usercache : [];
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    log.debug("serverAccess", `usercache unavailable for ${cfg.id}: ${msg}`);
     return [];
   }
 }
@@ -440,62 +369,11 @@ export async function readUserCache(
 
 /** Read level-name from server.properties. Falls back to "world". */
 export async function readLevelName(cfg: ServerConfig): Promise<string> {
-  if (cfg.apiUrl) {
-    const { levelName } = await apiGet<{ levelName: string }>(
-      cfg,
-      "/level-name",
-    );
-    return levelName;
-  }
-  try {
-    const text = await fsPromises.readFile(
-      path.resolve(cfg.serverDir, "server.properties"),
-      "utf-8",
-    );
-    const m = text.match(/^level-name\s*=\s*(.+)$/m);
-    return m?.[1]?.trim() ?? "world";
-  } catch {
-    return "world";
-  }
+  const { levelName } = await apiGet<{ levelName: string }>(cfg, "/level-name");
+  return levelName;
 }
 
 // ── Player stats ──────────────────────────────────────────────────────────
-
-/**
- * Layouts a world may keep player stat files in, in order. Vanilla first —
- * it is the documented default and what an unmodded server writes.
- */
-const STATS_DIR_CANDIDATES = ["stats", path.join("players", "stats")];
-
-/**
- * Return the stats directory for a local instance (also the cache key).
- *
- * This hardcoded `<level>/stats` until a Fabric server in the field turned
- * out to keep its stats at `<level>/players/stats`, next to
- * `players/advancements`, with no `<level>/stats` at all.
- *
- * Probing matters because the failure mode is silence: on the wrong path
- * every read is an ENOENT, which is exactly what a world nobody has played
- * on looks like. Stats read as empty, leaderboards go blank, and nothing
- * anywhere reports an error.
- */
-export async function statsDir(cfg: ServerConfig): Promise<string> {
-  const levelName = await readLevelName(cfg);
-  const base = path.resolve(cfg.serverDir, levelName);
-
-  for (const rel of STATS_DIR_CANDIDATES) {
-    const dir = path.join(base, rel);
-    try {
-      if ((await fsPromises.stat(dir)).isDirectory()) return dir;
-    } catch {
-      continue; // next candidate
-    }
-  }
-  // None exist yet — normal on a fresh world; the server creates one when
-  // somebody first plays. Name the vanilla path so errors point at the
-  // expected location, and do not cache the miss.
-  return path.join(base, STATS_DIR_CANDIDATES[0]!);
-}
 
 /** Load a single player's stats JSON. Returns null if not found. */
 export async function readStats(
@@ -503,69 +381,43 @@ export async function readStats(
   uuid: string,
 ): Promise<MinecraftStatsFile | null> {
   assertUuidFormat(uuid); // guard the path/route sink
-  if (cfg.apiUrl) {
-    const { stats } = await apiGet<{ stats: MinecraftStatsFile | null }>(
-      cfg,
-      `/stats/${uuid}`,
-    );
-    return stats;
-  }
-  const dir = await statsDir(cfg);
-  const filePath = path.join(dir, `${uuid}.json`);
-  try {
-    const raw = await fsPromises.readFile(filePath, "utf-8");
-    // MinecraftStatsFile is an open Minecraft-authored shape (flat *or* nested,
-    // thousands of possible stat keys). Every downstream reader in statUtils
-    // walks it defensively (guards each access, tolerates missing keys), so a
-    // structural check here would add no safety — the consumer already assumes
-    // nothing about the shape. We deliberately keep the cast for that reason.
-    return JSON.parse(raw) as MinecraftStatsFile;
-  } catch {
-    return null;
-  }
+  // A player with no stats file is a normal answer, not a failure: they have
+  // simply never played here, and the wrapper says 404. Letting that throw
+  // surfaced as "Failed to retrieve stats" (and an ERROR log) instead of the
+  // "Stats File Not Found" reply the caller already handles. A 500 still
+  // throws — "the read broke" must not look like "this player has none".
+  const res = await apiGetRaw(cfg, `/stats/${uuid}`);
+  if (res.status === 404) return null;
+  const { stats } = await readApiJson<{ stats: MinecraftStatsFile | null }>(
+    res,
+    `/stats/${uuid}`,
+  );
+  return stats;
 }
 
 /** List all UUIDs that have a stats file on this server. */
 export async function listStatsUuids(cfg: ServerConfig): Promise<string[]> {
-  if (cfg.apiUrl) {
-    const { uuids } = await apiGet<{ uuids: string[] }>(cfg, "/stats");
-    return uuids;
-  }
-  const dir = await statsDir(cfg);
-  try {
-    const files = await fsPromises.readdir(dir);
-    return files.filter((f) => f.endsWith(".json")).map((f) => f.slice(0, -5));
-  } catch {
-    return [];
-  }
+  const { uuids } = await apiGet<{ uuids: string[] }>(cfg, "/stats");
+  return uuids;
 }
 
-/** Delete a stats file (local only — remote deletion is not exposed). */
+/** Delete a player's stats file via the wrapper. */
 export async function deleteStatsFile(
   cfg: ServerConfig,
   uuid: string,
 ): Promise<boolean> {
   assertUuidFormat(uuid); // guard the path/route sink
-  if (cfg.apiUrl) {
-    // The wrapper exposes DELETE /stats/:uuid so the
-    // admin-gated /server prune-stats works on remote instances too.
-    // Older wrappers without the route (or any transport error) degrade
-    // to "not deleted" — prune-stats then reports 0 deletions instead of
-    // failing the whole command.
-    try {
-      const { deleted } = await apiDelete<{ deleted: boolean }>(
-        cfg,
-        `/stats/${encodeURIComponent(uuid)}`,
-      );
-      return deleted === true;
-    } catch {
-      return false;
-    }
-  }
-  const dir = await statsDir(cfg);
+  // The wrapper exposes DELETE /stats/:uuid so the
+  // admin-gated /server prune-stats works on remote instances too.
+  // Older wrappers without the route (or any transport error) degrade
+  // to "not deleted" — prune-stats then reports 0 deletions instead of
+  // failing the whole command.
   try {
-    await fsPromises.rm(path.join(dir, `${uuid}.json`));
-    return true;
+    const { deleted } = await apiDelete<{ deleted: boolean }>(
+      cfg,
+      `/stats/${encodeURIComponent(uuid)}`,
+    );
+    return deleted === true;
   } catch {
     return false;
   }
@@ -581,88 +433,30 @@ export async function deleteStatsFile(
 export async function readModSlugs(
   cfg: ServerConfig,
 ): Promise<{ slugs: string[]; mtimeMs: number }> {
-  if (cfg.apiUrl) {
-    return apiGet<{ slugs: string[]; mtimeMs: number }>(cfg, "/mods");
-  }
-  const jsonPath = path.join(
-    cfg.scriptDir,
-    "common",
-    "downloaded_versions.json",
-  );
-  if (!fs.existsSync(jsonPath)) {
-    throw new Error(
-      `downloaded_versions.json not found at ${jsonPath}.\n` +
-        "Make sure scriptDir is correctly configured for this server.",
-    );
-  }
-  const stat = fs.statSync(jsonPath);
-  const raw = JSON.parse(fs.readFileSync(jsonPath, "utf-8")) as {
-    mods?: Record<string, unknown>;
-  };
-  return { slugs: Object.keys(raw.mods ?? {}), mtimeMs: stat.mtimeMs };
+  return apiGet<{ slugs: string[]; mtimeMs: number }>(cfg, "/mods");
 }
 
 // ── Backups ───────────────────────────────────────────────────────────────
 
 /** Scan the backup directories for a server. */
 export async function readBackups(cfg: ServerConfig): Promise<BackupSummary> {
-  if (cfg.apiUrl) {
-    const data = await apiGet<{
-      dirs: Array<{
-        dir: string;
-        count: number;
-        latestFile: string;
-        latestMtimeMs: number;
-        latestSizeBytes: number;
-      }>;
-      totalBytes: number;
-    }>(cfg, "/backups");
-    return {
-      dirs: data.dirs.map((d) => ({
-        ...d,
-        latestMtime: new Date(d.latestMtimeMs),
-      })),
-      totalBytes: data.totalBytes,
-    };
-  }
-
-  const backupsBase = path.resolve(
-    cfg.serverDir,
-    "..",
-    "backups",
-    cfg.screenSession,
-  );
-  const subdirs = [
-    "hourly",
-    "archives/daily",
-    "archives/weekly",
-    "archives/monthly",
-    "archives/update",
-  ];
-  const dirs: BackupDirInfo[] = [];
-  let totalBytes = 0;
-
-  for (const dir of subdirs) {
-    const fullDir = path.join(backupsBase, dir);
-    if (!fs.existsSync(fullDir)) continue;
-    const files = fs
-      .readdirSync(fullDir)
-      .filter((f) => f.endsWith(".tar.zst") || f.endsWith(".tar.gz"));
-    if (files.length === 0) continue;
-    files.sort().reverse();
-    const latest = files[0]!;
-    const stat = fs.statSync(path.join(fullDir, latest));
-    totalBytes += stat.size;
-    dirs.push({
-      dir,
-      count: files.length,
-      latestFile: latest,
-      latestMtime: stat.mtime,
-      latestSizeBytes: stat.size,
-    });
-  }
-
-  return { dirs, totalBytes };
+  const data = await apiGet<{
+    dirs: Array<{
+      dir: string;
+      count: number;
+      latestFile: string;
+      latestMtimeMs: number;
+      latestSizeBytes: number;
+    }>;
+    totalBytes: number;
+  }>(cfg, "/backups");
+  return {
+    dirs: data.dirs.map((d) => ({
+      ...d,
+      latestMtime: new Date(d.latestMtimeMs),
+    })),
+    totalBytes: data.totalBytes,
+  };
 }
 
 // ── Capability detection ───────────────────────────────────────────
@@ -682,55 +476,14 @@ export async function readBackups(cfg: ServerConfig): Promise<BackupSummary> {
 export async function detectCapabilities(
   cfg: ServerConfig,
 ): Promise<ServerCapabilities> {
-  if (cfg.apiUrl) {
-    try {
-      return await apiGet<ServerCapabilities>(cfg, "/capabilities");
-    } catch {
-      return allCapabilities();
-    }
+  try {
+    return await apiGet<ServerCapabilities>(cfg, "/capabilities");
+  } catch {
+    return allCapabilities();
   }
-
-  const scriptExists = (rel: string): boolean =>
-    !!cfg.scriptDir && fs.existsSync(path.join(cfg.scriptDir, rel));
-
-  const backupsBase = cfg.serverDir
-    ? path.resolve(cfg.serverDir, "..", "backups", cfg.screenSession)
-    : "";
-
-  return {
-    scripts: {
-      start: scriptExists(SCRIPT_MAP.start),
-      stop: scriptExists(SCRIPT_MAP.stop),
-      restart: scriptExists(SCRIPT_MAP.restart),
-      backup: scriptExists(SCRIPT_MAP.backup),
-      status: scriptExists(SCRIPT_MAP.status),
-    },
-    backups: !!backupsBase && fs.existsSync(backupsBase),
-    modManifest: scriptExists(path.join("common", "downloaded_versions.json")),
-    variablesFile: scriptExists(path.join("common", "variables.txt")),
-  };
 }
 
 // ── Script execution ──────────────────────────────────────────────────────
-
-const SCRIPT_MAP: Record<ServerScriptAction, string> = {
-  start: "start.sh",
-  stop: "shutdown.sh",
-  restart: "smart_restart.sh",
-  backup: "backup/backup.sh",
-  status: "misc/status.sh",
-};
-
-/** Ceiling for a script the table below doesn't name. */
-const DEFAULT_SCRIPT_TIMEOUT_MS = 120_000;
-
-const SCRIPT_TIMEOUTS: Record<ServerScriptAction, number> = {
-  start: 30_000,
-  stop: 60_000,
-  restart: 60_000,
-  backup: 300_000,
-  status: 15_000,
-};
 
 /**
  * Run a named server management script (start / stop / restart / backup / status).
@@ -742,92 +495,7 @@ export async function runScript(
   action: string,
   args: string[] = [],
 ): Promise<ScriptResult> {
-  if (cfg.apiUrl) {
-    return apiPost<ScriptResult>(cfg, "/scripts/run", { action, args });
-  }
-
-  const scriptRelPath = SCRIPT_MAP[action as ServerScriptAction] as
-    | string
-    | undefined;
-  if (!scriptRelPath) throw new Error(`Unknown script action: ${action}`);
-
-  const { scriptDir } = cfg;
-  if (!scriptDir) {
-    throw new Error(
-      "No scriptDir configured for this server.\n" +
-        "Set `scriptDir` in config.json or ensure the standard layout exists:\n" +
-        "`{serverDir}/../scripts/{instanceName}/`",
-    );
-  }
-
-  const scriptPath = path.join(scriptDir, scriptRelPath);
-  if (!fs.existsSync(scriptPath))
-    throw new Error(`Script not found: ${scriptPath}`);
-
-  const timeoutMs =
-    (SCRIPT_TIMEOUTS[action as ServerScriptAction] as number | undefined) ??
-    DEFAULT_SCRIPT_TIMEOUT_MS;
-
-  return new Promise((resolve, reject) => {
-    const child = spawn(
-      "sudo",
-      ["-n", "-u", cfg.linuxUser, "bash", scriptPath, ...args],
-      {
-        cwd: scriptDir,
-        env: { ...process.env, HOME: `/home/${cfg.linuxUser}` },
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    );
-
-    let stdout = "";
-    let stderr = "";
-    let killed = false;
-
-    const timer = setTimeout(() => {
-      killed = true;
-      child.kill("SIGTERM");
-      reject(
-        new Error(
-          `Script timed out after ${timeoutMs / 1000}s\n\nOutput:\n${stdout.slice(-500)}`,
-        ),
-      );
-    }, timeoutMs);
-
-    child.stdout.on("data", (d: Buffer) => {
-      stdout += d.toString();
-    });
-    child.stderr.on("data", (d: Buffer) => {
-      stderr += d.toString();
-    });
-
-    child.on("close", (code) => {
-      if (killed) return;
-      clearTimeout(timer);
-
-      const combined = stdout + "\n" + stderr;
-      if (/\[SUDO ERROR\]/i.test(combined)) {
-        reject(new Error(sudoHelpMessage("systemctl", cfg.linuxUser)));
-        return;
-      }
-      if (isSudoPermissionError(stderr)) {
-        reject(new Error(sudoHelpMessage("user-switch", cfg.linuxUser)));
-        return;
-      }
-
-      stderr = stderr
-        .split("\n")
-        .filter((l) => !l.includes("[sudo]") && !l.includes("password for"))
-        .join("\n")
-        .trim();
-
-      resolve({ output: stdout.trim(), stderr, exitCode: code });
-    });
-
-    child.on("error", (err) => {
-      clearTimeout(timer);
-      reject(new Error(`Failed to start script: ${err.message}`));
-    });
-  });
+  return apiPost<ScriptResult>(cfg, "/scripts/run", { action, args });
 }
 
 // ── Log streaming (SSE URL, used by RemoteLogWatcher) ────────────────────

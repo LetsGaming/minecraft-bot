@@ -3,8 +3,12 @@
  * LastDeathLocation NBT parser on ServerInstance, and the advancement →
  * challenge win path (state transition + announcements + bonus queueing).
  */
+import * as serverAccess from "../../src/core/utils/server/serverAccess.js";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
+  sendCommand: vi.fn(),
+}));
 vi.mock("../../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -15,12 +19,7 @@ const base = {
   token: "t",
   clientId: "c",
   servers: {
-    smp: {
-      screenSession: "smp",
-      serverDir: "/srv/mc/smp",
-      linuxUser: "mc-smp",
-      logFile: "logs/latest.log",
-    },
+    smp: { apiUrl: "http://192.168.1.10:3030", apiKey: "k" },
   },
   guilds: { g1: {} },
 };
@@ -174,8 +173,8 @@ describe("advancement watcher — challenge win", () => {
     const logWatcher = {
       server: {
         id: "smp",
-        config: { useRcon: true },
-        sendCommand: vi.fn().mockResolvedValue("Gave 1 [Diamond] to Alice"),
+        config: { apiUrl: "http://w:3030", apiKey: "k" },
+        sendCommand: vi.fn().mockResolvedValue("ok"),
       },
       register: (re: RegExp, fn: never) => {
         regex = re;
@@ -197,6 +196,9 @@ describe("advancement watcher — challenge win", () => {
     `[12:00:00] [Server thread/INFO]: ${player} has made the advancement [${adv}]`;
 
   it("first matching advancement wins the active challenge", async () => {
+    vi.mocked(serverAccess.sendCommand).mockResolvedValue(
+      "Gave 1 [Diamond] to Alice",
+    );
     const store = {
       version: 1,
       servers: {
@@ -226,10 +228,15 @@ describe("advancement watcher — challenge win", () => {
     expect(ctx.recordAdminAction).toHaveBeenCalledWith(
       expect.objectContaining({ action: "challenge won", by: "Alice" }),
     );
-    // Winner announcement + confirmed item give happened.
+    // Winner announcement + confirmed item give happened. The announcement
+    // goes through the instance; the give reads the wrapper seam directly so
+    // it can tell a failed request from a server with no output channel.
     const cmds = ctx.server.sendCommand.mock.calls.map(([c]: [string]) => c);
     expect(cmds.some((c) => c.startsWith("/tellraw @a"))).toBe(true);
-    expect(cmds.some((c) => c.startsWith("give Alice"))).toBe(true);
+    const gives = vi
+      .mocked(serverAccess.sendCommand)
+      .mock.calls.map(([, c]) => c);
+    expect(gives.some((c) => c.startsWith("give Alice"))).toBe(true);
   });
 
   it("ignores non-matching advancements and expires stale challenges lazily", async () => {
@@ -262,6 +269,7 @@ describe("advancement watcher — challenge win", () => {
   });
 
   it("queues the bonus item when the give is not confirmed", async () => {
+    vi.mocked(serverAccess.sendCommand).mockResolvedValue("Unknown item");
     const stores: Record<string, unknown> = {
       challenges: {
         version: 1,
@@ -315,7 +323,7 @@ describe("advancement watcher — challenge win", () => {
         id: "smp",
         config: { useRcon: true },
         // give NOT confirmed:
-        sendCommand: vi.fn().mockResolvedValue("Unknown item"),
+        sendCommand: vi.fn().mockResolvedValue("ok"),
       },
       register: (re: RegExp, fn: never) => {
         regex = re;

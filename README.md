@@ -55,22 +55,22 @@ npm run setup                 # interactive; writes config.json
 The [Docker guide](docs/admin/docker.md) covers both paths, the reverse-proxy
 setup for the dashboard, and troubleshooting.
 
-### Without Docker (PM2)
-
-Requires Node.js 20 or newer (24 LTS recommended) and a Minecraft server
-reachable over RCON or the API wrapper.
-
-```bash
-git clone https://github.com/LetsGaming/minecraft-bot
-cd minecraft-bot
-npm ci
-npm run setup                 # or: cp config_structure.json config.json and edit
-npm run pm2:start
-```
-
 Slash commands register globally on first start and can take up to an hour to
 appear in Discord the first time. Full instructions are in the
-[setup guide](docs/admin/setup.md) and [PM2 guide](docs/admin/pm2.md).
+[setup guide](docs/admin/setup.md).
+
+### The Minecraft side
+
+The bot reaches every server through the
+[API wrapper](https://github.com/LetsGaming/minecraft-server-api) (3.1.1+),
+which runs on the Minecraft host and owns the RCON connection, the files, and
+the management scripts. Installing it is
+[remote-setup.md](docs/admin/remote-setup.md); the bot itself can run anywhere
+that can reach it over HTTP.
+
+Docker is the supported way to run the bot. It is a Node application and
+nothing stops you running it directly, but that is not a supported
+configuration and there is no guide for it.
 
 ## Web dashboard
 
@@ -85,14 +85,14 @@ for enabling and securing it.
 
 ## Documentation
 
-Everything is indexed in [`docs/index.md`](docs/index.md).
+Everything is indexed in [`docs/readme.md`](docs/readme.md).
 
 | Audience | Start here |
 |---|---|
 | Players | [Getting started](docs/user/getting-started.md), [commands](docs/user/commands.md), [linking](docs/user/linking.md) |
 | Admins | [Setup](docs/admin/setup.md), [configuration](docs/admin/configuration.md), [permissions](docs/admin/permissions.md), [automated features](docs/admin/automated-features.md) |
-| Deploying | [Docker](docs/admin/docker.md), [remote/API wrapper](docs/admin/remote-setup.md), [PM2](docs/admin/pm2.md) |
-| Contributors | [Developer docs](docs/dev/index.md) — [architecture](docs/dev/architecture.md), [adding features](docs/dev/adding-features.md), [coding guidelines](docs/dev/coding-guidelines.md), [testing](docs/dev/testing.md) |
+| Deploying | [Docker](docs/admin/docker.md), [API wrapper](docs/admin/remote-setup.md), [upgrading from 4.x](docs/admin/migrating-to-5.md) |
+| Contributors | [Developer docs](docs/dev/readme.md) — [architecture](docs/dev/architecture.md), [adding features](docs/dev/adding-features.md), [coding guidelines](docs/dev/coding-guidelines.md), [testing](docs/dev/testing.md) |
 | Reference | [Full feature list](docs/features.md), [roadmap](docs/ROADMAP.md) |
 
 ## Architecture

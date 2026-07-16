@@ -400,6 +400,27 @@ check(
   JSON.stringify(stats),
 );
 
+// The gap that let a production bug through: this only ever asked for a UUID
+// that exists. A player who has never played is the common case — the wrapper
+// answers 404, and readStats used to let that throw, so /stats reported
+// "Failed to retrieve stats" (and logged an ERROR) for a player it should
+// have said "Stats File Not Found" about. A wrong answer that looks like a
+// broken bot is exactly what this seam exists to catch.
+try {
+  const missing = await serverAccess.readStats(
+    cfg,
+    "00000000-0000-4000-8000-000000000000",
+  );
+  eq("readStats returns null for a player with no stats file", missing, null);
+} catch (err) {
+  // Throwing *is* the regression, so catch it and report it as a failed
+  // check rather than letting it take the whole run down as a stack trace.
+  fail(
+    "readStats returns null for a player with no stats file",
+    `it threw instead: ${err instanceof Error ? err.message : String(err)}`,
+  );
+}
+
 const caps = await serverAccess.detectCapabilities(cfg);
 eq(
   "detectCapabilities.scripts matches ScriptCapabilities exactly",

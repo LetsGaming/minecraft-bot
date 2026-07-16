@@ -120,31 +120,21 @@ describe("ServerInstance", () => {
     ({ ServerInstance } = await import("../../src/core/utils/server/server.js"));
   });
 
-  const localCfg = {
+  const cfg = {
     id: "local",
-    serverDir: "/tmp",
-    linuxUser: "mc",
-    screenSession: "server",
-    useRcon: false,
-    rconHost: "localhost",
-    rconPort: 25575,
-    rconPassword: "",
-    scriptDir: "",
+    apiUrl: "http://127.0.0.1:3030",
+    apiKey: "k",
   } as never;
 
   it("constructs with correct id", () => {
-    const inst = new ServerInstance(localCfg);
+    const inst = new ServerInstance(cfg);
     expect(inst.id).toBe("local");
   });
 
-  it("useRcon is false when useRcon=false in config", () => {
-    const inst = new ServerInstance(localCfg);
-    expect(inst.useRcon).toBe(false);
-  });
-
-  it("supportsTps is false for screen-only server", () => {
-    const inst = new ServerInstance(localCfg);
-    expect(inst.supportsTps).toBe(false);
+  it("supportsTps is true — the wrapper answers /tps for every instance", () => {
+    // This used to depend on how the server was reached: RCON yes, screen no.
+    // There is one way to reach a server now, and it has the route.
+    expect(new ServerInstance(cfg).supportsTps).toBe(true);
   });
 });
 

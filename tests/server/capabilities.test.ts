@@ -86,62 +86,6 @@ afterAll(() => {
 
 // ── Detection ───────────────────────────────────────────────────────────────
 
-describe("detectCapabilities — suite server fixture", () => {
-  it("reports every capability as available", async () => {
-    const cap = await detectCapabilities(
-      cfg({
-        serverDir: path.join(root, "suite", "server"),
-        screenSession: "survival",
-        scriptDir: path.join(root, "suite", "scripts", "survival"),
-      }),
-    );
-    expect(cap).toEqual(allCapabilities());
-  });
-});
-
-describe("detectCapabilities — plain server fixture", () => {
-  it("reports no suite capabilities", async () => {
-    const cap = await detectCapabilities(
-      cfg({
-        serverDir: path.join(root, "plain", "server"),
-        screenSession: "plain",
-        scriptDir: "",
-      }),
-    );
-    expect(cap).toEqual({
-      scripts: {
-        start: false,
-        stop: false,
-        restart: false,
-        backup: false,
-        status: false,
-      },
-      backups: false,
-      modManifest: false,
-      variablesFile: false,
-    });
-  });
-
-  it("detects partial layouts script-by-script", async () => {
-    // Suite fixture minus a script: simulate by pointing scriptDir at a
-    // copy that only has start.sh
-    const partial = path.join(root, "partial-scripts");
-    fs.mkdirSync(partial, { recursive: true });
-    fs.writeFileSync(path.join(partial, "start.sh"), "#!/bin/bash\n");
-
-    const cap = await detectCapabilities(
-      cfg({
-        serverDir: path.join(root, "plain", "server"),
-        screenSession: "plain",
-        scriptDir: partial,
-      }),
-    );
-    expect(cap.scripts.start).toBe(true);
-    expect(cap.scripts.stop).toBe(false);
-    expect(cap.modManifest).toBe(false);
-  });
-});
-
 describe("detectCapabilities — remote wrapper", () => {
   it("falls back to all-true when the wrapper lacks the /capabilities route", async () => {
     const fetchSpy = vi

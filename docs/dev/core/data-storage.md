@@ -65,22 +65,24 @@ place**:
 
 | Layout | Path | Seen on |
 |---|---|---|
-| Vanilla | `<serverDir>/<level-name>/stats/` | Unmodded servers; the documented default |
-| Modded | `<serverDir>/<level-name>/players/stats/` | A Fabric instance in the field, alongside `players/advancements/` |
+| Vanilla | `<serverPath>/<level-name>/stats/` | Unmodded servers; the documented default |
+| Modded | `<serverPath>/<level-name>/players/stats/` | A Fabric instance in the field, alongside `players/advancements/` |
 
-`statsDir()` in `server/serverAccess.ts` probes for these in order and returns
-the first that exists; the wrapper's `resolveStatsDir()` does the same for
-remote instances. When neither exists — a fresh world, before anyone has
-played — both return the vanilla path so messages name the expected location,
-and neither caches that miss, since the server creates the directory the first
-time somebody joins.
+The wrapper's `resolveStatsDir()` probes for these in order and returns the
+first that exists. The bot had its own copy of this until 5.0.0, when it
+stopped reading the filesystem; the wrapper is on the machine with the world,
+so it is the only side that can look.
+
+When neither exists — a fresh world, before anyone has played — it returns the
+vanilla path so messages name the expected location, and does not cache that
+miss, since the server creates the directory the first time somebody joins.
 
 **Probe, never assume.** With the wrong directory every read is an `ENOENT`,
 and `ENOENT` is exactly what a world nobody has played on looks like. So a path
 mismatch reads as "no stats yet": `listStatsUuids` returns `[]` with a 200, the
 bot believes it, every leaderboard is blank, and nothing in the chain logs an
 error. That is not hypothetical — it is how this was found. If you add a third
-layout, add it to `STATS_DIR_CANDIDATES` at both ends; the wrapper logs which
+layout, add it to `STATS_DIR_CANDIDATES` in the wrapper; it logs which
 directory it settled on at startup.
 
 ## Snapshots

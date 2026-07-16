@@ -19,9 +19,7 @@ import { EmbedColor } from "../../../utils/embeds/embedColors.js";
 import { loadConfig } from "@mcbot/core/config.js";
 import { readBackups } from "@mcbot/core/utils/server/serverAccess.js";
 import {
-  getDiskUsage,
   getHostResources,
-  monitoredPaths,
   formatBytes,
 } from "@mcbot/core/utils/server/hostResources.js";
 import type { DiskUsage } from "@mcbot/core/utils/server/hostResources.js";
@@ -102,16 +100,10 @@ export function startHostResourcesMonitor(
   return timer;
 }
 
-/** Disk usages for one instance — df locally, wrapper /info remotely. */
+/** Disk usages for one instance, as the wrapper's /info reports them. */
 async function collectUsages(server: ServerInstance): Promise<DiskUsage[]> {
-  if (server.config.apiUrl) {
-    const host = await getHostResources(server);
-    return host?.disks ?? [];
-  }
-  const usages = await Promise.all(
-    monitoredPaths(server).map((dir) => getDiskUsage(dir)),
-  );
-  return usages.filter((u): u is DiskUsage => u !== null);
+  const host = await getHostResources(server);
+  return host?.disks ?? [];
 }
 
 async function checkServer(

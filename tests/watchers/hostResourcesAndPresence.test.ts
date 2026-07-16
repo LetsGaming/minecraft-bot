@@ -14,12 +14,8 @@ vi.mock("../../src/core/config.js", () => ({
   loadConfig: vi.fn().mockReturnValue({ language: "en", guilds: {} }),
 }));
 
-import { execSafe } from "../../src/core/shell/execCommand.js";
 import { loadConfig } from "../../src/core/config.js";
 import {
-  getDiskUsage,
-  getServerProcessUsage,
-  monitoredPaths,
   getHostResources,
   formatBytes,
 } from "../../src/core/utils/server/hostResources.js";
@@ -31,89 +27,25 @@ beforeEach(() => vi.clearAllMocks());
 
 // ── df parsing ──────────────────────────────────────────────────────────────
 
-describe("getDiskUsage", () => {
-  it("parses POSIX df output", async () => {
-    vi.mocked(execSafe).mockResolvedValue(
-      [
-        "Filesystem     1024-blocks      Used Available Capacity Mounted on",
-        "/dev/sda1        102400000  92160000  10240000      90% /",
-      ].join("\n"),
-    );
-    const usage = await getDiskUsage("/srv/minecraft");
-    expect(usage).toEqual({
-      path: "/srv/minecraft",
-      usedPercent: 90,
-      availableBytes: 10240000 * 1024,
-      totalBytes: 102400000 * 1024,
-    });
-    expect(execSafe).toHaveBeenCalledWith("df", ["-Pk", "/srv/minecraft"]);
-  });
-
-  it("returns null on missing or malformed output", async () => {
-    vi.mocked(execSafe).mockResolvedValue(null);
-    expect(await getDiskUsage("/x")).toBeNull();
-    vi.mocked(execSafe).mockResolvedValue("Filesystem only header");
-    expect(await getDiskUsage("/x")).toBeNull();
-    vi.mocked(execSafe).mockResolvedValue("head\nnot numbers at all\n");
-    expect(await getDiskUsage("/x")).toBeNull();
-  });
-});
-
-// ── ps parsing ──────────────────────────────────────────────────────────────
-
-describe("getServerProcessUsage", () => {
-  it("picks the biggest java process of the user", async () => {
-    vi.mocked(execSafe).mockResolvedValue(
-      [
-        "  101  0.5  20480 bash",
-        "  202 45.3 4096000 java",
-        "  203  1.0  512000 java",
-      ].join("\n"),
-    );
-    const usage = await getServerProcessUsage("mc-smp");
-    expect(usage).toEqual({
-      pid: 202,
-      cpuPercent: 45.3,
-      rssBytes: 4096000 * 1024,
-    });
-  });
-
-  it("returns null when no java process runs", async () => {
-    vi.mocked(execSafe).mockResolvedValue("  101 0.0 1000 bash\n");
-    expect(await getServerProcessUsage("mc-smp")).toBeNull();
-  });
-});
-
-// ── path selection + remote skip ────────────────────────────────────────────
-
-describe("monitoredPaths / getHostResources", () => {
+describe("getHostResources", () => {
   const srv = (over: Record<string, unknown> = {}) =>
     ({
       id: "smp",
-      config: { serverDir: "/srv/mc/smp", linuxUser: "mc-smp", ...over },
+      config: { apiUrl: "http://wrapper:8080", apiKey: "k", ...over },
       capabilities: { backups: true },
     }) as unknown as ServerInstance;
 
-  it("includes the suite backups dir only when the capability probe found it", () => {
-    expect(monitoredPaths(srv())).toEqual(["/srv/mc/smp", "/srv/mc/backups"]);
-    const plain = srv();
-    (plain as { capabilities: { backups: boolean } }).capabilities.backups =
-      false;
-    expect(monitoredPaths(plain)).toEqual(["/srv/mc/smp"]);
-  });
-
-  it("returns null for remote instances when /info is unreachable (pre-1.2.0 wrapper)", async () => {
+  it("returns null when /info is unreachable rather than guessing", async () => {
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
       .mockRejectedValue(new Error("ECONNREFUSED"));
     expect(
-      await getHostResources(srv({ apiUrl: "http://wrapper:8080" })),
+      await getHostResources(srv()),
     ).toBeNull();
-    expect(execSafe).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
   });
 
-  it("maps the wrapper /info host block for remote instances (wrapper >= 1.2.0)", async () => {
+  it("maps the wrapper /info host block, dropping malformed disk entries", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -128,12 +60,11 @@ describe("monitoredPaths / getHostResources", () => {
       }),
     } as unknown as Response);
 
-    const host = await getHostResources(srv({ apiUrl: "http://wrapper:8080" }));
+    const host = await getHostResources(srv());
     expect(host).not.toBeNull();
     expect(host!.process).toEqual({ pid: 42, cpuPercent: 3.5, rssBytes: 2048 });
     expect(host!.disks).toHaveLength(1);
     expect(host!.disks[0]!.path).toBe("/srv/mc");
-    expect(execSafe).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
   });
 });

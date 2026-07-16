@@ -52,16 +52,8 @@ function jsonResponse(data: unknown, ok = true) {
 
 const remoteCfg = {
   id: "survival",
-  serverDir: "/tmp/fake-server",
   apiUrl: "https://api.example.com",
   apiKey: "test-key",
-  linuxUser: "mc",
-} as never;
-
-const localCfg = {
-  id: "local",
-  serverDir: "/tmp/fake-server",
-  linuxUser: "mc",
 } as never;
 
 beforeEach(() => {
@@ -83,10 +75,6 @@ describe("tailLog", () => {
     );
   });
 
-  it("returns empty string for local cfg when log file doesn't exist", async () => {
-    const result = await tailLog(localCfg, 5);
-    expect(typeof result).toBe("string");
-  });
 });
 
 // ── isRunning ─────────────────────────────────────────────────────────────
@@ -102,9 +90,6 @@ describe("isRunning", () => {
     expect(await isRunning(remoteCfg)).toBe(false);
   });
 
-  it("returns false without API (local path)", async () => {
-    expect(await isRunning(localCfg)).toBe(false);
-  });
 });
 
 // ── getList ───────────────────────────────────────────────────────────────
@@ -123,11 +108,6 @@ describe("getList", () => {
     expect(list.players).toHaveLength(3);
   });
 
-  it("returns empty list without API", async () => {
-    const list = await getList(localCfg);
-    expect(list.playerCount).toBe("0");
-    expect(list.players).toHaveLength(0);
-  });
 });
 
 // ── sendCommand ───────────────────────────────────────────────────────────
@@ -143,9 +123,6 @@ describe("sendCommand", () => {
     );
   });
 
-  it("returns null without API", async () => {
-    expect(await sendCommand(localCfg, "/say hi")).toBeNull();
-  });
 });
 
 // ── getTps ────────────────────────────────────────────────────────────────
@@ -160,9 +137,6 @@ describe("getTps", () => {
     expect(tps?.tps1m).toBe(20);
   });
 
-  it("returns null without API", async () => {
-    expect(await getTps(localCfg)).toBeNull();
-  });
 });
 
 // ── readWhitelist ─────────────────────────────────────────────────────────
@@ -177,10 +151,6 @@ describe("readWhitelist", () => {
     expect(list[0]!.name).toBe("Steve");
   });
 
-  it("returns empty array for local cfg when whitelist.json doesn't exist", async () => {
-    const list = await readWhitelist(localCfg);
-    expect(list).toEqual([]);
-  });
 });
 
 // ── readUserCache ─────────────────────────────────────────────────────────
@@ -201,34 +171,7 @@ describe("readUserCache", () => {
     expect(list).toEqual([]);
   });
 
-  it("returns [] for local cfg when usercache.json doesn't exist", async () => {
-    const list = await readUserCache(localCfg);
-    expect(list).toEqual([]);
-  });
 
-  it("parses local usercache.json and drops malformed entries", async () => {
-    const fs = await import("fs");
-    const os = await import("os");
-    const path = await import("path");
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "usercache-"));
-    fs.writeFileSync(
-      path.join(dir, "usercache.json"),
-      JSON.stringify([
-        { name: "Casey", uuid: "u1", expiresOn: "2026-08-01" },
-        { name: 42, uuid: "broken" },
-        { uuid: "u3" },
-      ]),
-    );
-    try {
-      const list = await readUserCache({
-        id: "local",
-        serverDir: dir,
-      } as never);
-      expect(list).toEqual([{ name: "Casey", uuid: "u1" }]);
-    } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
-  });
 });
 
 // ── readLevelName ─────────────────────────────────────────────────────────
@@ -240,10 +183,6 @@ describe("readLevelName", () => {
     expect(name).toBe("world_name");
   });
 
-  it("returns 'world' as fallback for local cfg", async () => {
-    const name = await readLevelName(localCfg);
-    expect(name).toBe("world");
-  });
 });
 
 // ── readStats ─────────────────────────────────────────────────────────────
@@ -256,11 +195,6 @@ describe("readStats", () => {
     expect(stats).toEqual(fakeStats);
   });
 
-  it("returns null for local cfg when file doesn't exist", async () => {
-    // readLevelName falls back to "world", then stats dir doesn't exist
-    const stats = await readStats(localCfg, "11111111-2222-3333-4444-555555555555");
-    expect(stats).toBeNull();
-  });
 });
 
 // ── listStatsUuids ────────────────────────────────────────────────────────
@@ -274,10 +208,6 @@ describe("listStatsUuids", () => {
     expect(uuids).toEqual(["u1", "u2", "u3"]);
   });
 
-  it("returns empty array for local cfg when stats dir doesn't exist", async () => {
-    const uuids = await listStatsUuids(localCfg);
-    expect(uuids).toEqual([]);
-  });
 });
 
 // ── deleteStatsFile ───────────────────────────────────────────────────────
@@ -289,10 +219,6 @@ describe("deleteStatsFile", () => {
     expect(result).toBe(false);
   });
 
-  it("returns false for local when file doesn't exist", async () => {
-    const result = await deleteStatsFile(localCfg, "00000000000000000000000000000000");
-    expect(result).toBe(false);
-  });
 });
 
 // ── UUID sinks reject malformed input before path/URL build ───────────────
@@ -311,9 +237,6 @@ describe("uuid format assertion at sinks", () => {
       await expect(readStats(remoteCfg, bad)).rejects.toThrow(
         /Invalid UUID format/,
       );
-      await expect(readStats(localCfg, bad)).rejects.toThrow(
-        /Invalid UUID format/,
-      );
     }
     expect(mockFetch).not.toHaveBeenCalled();
   });
@@ -323,21 +246,26 @@ describe("uuid format assertion at sinks", () => {
       await expect(deleteStatsFile(remoteCfg, bad)).rejects.toThrow(
         /Invalid UUID format/,
       );
-      await expect(deleteStatsFile(localCfg, bad)).rejects.toThrow(
-        /Invalid UUID format/,
-      );
     }
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it("accepts both dashed and dashless Minecraft UUID shapes", async () => {
-    // 36-char dashed and 32-char raw hex are both valid on-disk formats.
-    await expect(
-      readStats(localCfg, "11111111-2222-3333-4444-555555555555"),
-    ).resolves.toBeNull(); // file simply doesn't exist
-    await expect(
-      readStats(localCfg, "11111111222233334444555555555555"),
-    ).resolves.toBeNull();
+    // 36-char dashed and 32-char raw hex are both valid on-disk formats, so
+    // the guard must let each through to the wrapper rather than reject it.
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 404,
+      json: vi.fn(),
+      text: vi.fn().mockResolvedValue('{"error":"Stats not found"}'),
+    });
+    for (const uuid of [
+      "11111111-2222-3333-4444-555555555555",
+      "11111111222233334444555555555555",
+    ]) {
+      await expect(readStats(remoteCfg, uuid)).resolves.toBeNull();
+    }
+    expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -366,12 +294,6 @@ describe("readBackups", () => {
     expect(result.totalBytes).toBe(3_145_728);
   });
 
-  it("returns empty dirs for local when backup base does not exist", async () => {
-    const localWithSession = { ...localCfg, screenSession: "server" } as never;
-    const result = await readBackups(localWithSession);
-    expect(result.dirs).toEqual([]);
-    expect(result.totalBytes).toBe(0);
-  });
 });
 
 // ── runScript ─────────────────────────────────────────────────────────────
@@ -420,67 +342,48 @@ describe("logStreamUrl", () => {
   });
 });
 
-// ── statsDir: the world's layout is not a given ───────────────────────────
-// Found in production on a Fabric instance: no <level>/stats directory at
-// all, the stat files under <level>/players/stats next to
-// players/advancements. This resolved one hardcoded path, so every read was
-// an ENOENT — indistinguishable from a world nobody has played on. Stats
-// read as empty and the leaderboards went blank, with no error anywhere.
+// A player who has never played is the common case: the wrapper answers 404
+// and readStats used to let that throw, so /stats replied "Failed to retrieve
+// stats" and logged an ERROR for what is simply "no stats yet". The 404 is
+// the wrapper telling us something specific; treating it as a transport
+// failure throws that away.
+describe("readStats — a missing stats file is an answer, not a failure", () => {
+  beforeEach(() => mockFetch.mockReset());
 
-describe("statsDir (local) resolves the layout on disk", () => {
-  const roots: string[] = [];
-  afterAll(() => {
-    for (const r of roots) fs.rmSync(r, { recursive: true, force: true });
-  });
-
-  /** A local instance whose world keeps its stats at <level>/<rel>. */
-  function scaffold(rel: string[] | null): ServerConfig {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "statsdir-"));
-    roots.push(root);
-    fs.mkdirSync(path.join(root, "world"), { recursive: true });
-    fs.writeFileSync(path.join(root, "server.properties"), "level-name=world\n");
-    if (rel) fs.mkdirSync(path.join(root, "world", ...rel), { recursive: true });
-    return { id: "smp", serverDir: root, useRcon: false } as unknown as ServerConfig;
-  }
-
-  it("finds vanilla stats at <level>/stats", async () => {
-    const cfg = scaffold(["stats"]);
-    expect(await statsDir(cfg)).toBe(path.join(cfg.serverDir, "world", "stats"));
-  });
-
-  it("finds modded stats at <level>/players/stats", async () => {
-    const cfg = scaffold(["players", "stats"]);
-    expect(await statsDir(cfg)).toBe(
-      path.join(cfg.serverDir, "world", "players", "stats"),
-    );
-  });
-
-  it("prefers vanilla when a world somehow has both", async () => {
-    const cfg = scaffold(["stats"]);
-    fs.mkdirSync(path.join(cfg.serverDir, "world", "players", "stats"), {
-      recursive: true,
+  it("returns null when the wrapper says 404, rather than throwing", async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 404,
+      json: vi.fn(),
+      text: vi.fn().mockResolvedValue('{"error":"Stats not found"}'),
     });
-    expect(await statsDir(cfg)).toBe(path.join(cfg.serverDir, "world", "stats"));
+
+    await expect(
+      readStats(remoteCfg, "069a79f4-44e9-4726-a5be-fca90e38aaf5"),
+    ).resolves.toBeNull();
   });
 
-  it("names the vanilla path when neither exists yet", async () => {
-    // A fresh world has no stats directory until somebody plays. Pointing at
-    // the canonical location keeps the resulting message useful.
-    const cfg = scaffold(null);
-    expect(await statsDir(cfg)).toBe(path.join(cfg.serverDir, "world", "stats"));
-  });
-
-  it("honours level-name rather than assuming 'world'", async () => {
-    const cfg = scaffold(null);
-    fs.writeFileSync(
-      path.join(cfg.serverDir, "server.properties"),
-      "level-name=survival\n",
-    );
-    fs.mkdirSync(path.join(cfg.serverDir, "survival", "players", "stats"), {
-      recursive: true,
+  it("still throws on a real wrapper failure", async () => {
+    // 500 is not "this player has no stats" — it means the read itself broke,
+    // and swallowing it would look identical to a player who never played.
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: vi.fn(),
+      text: vi.fn().mockResolvedValue('{"error":"Internal server error"}'),
     });
-    expect(await statsDir(cfg)).toBe(
-      path.join(cfg.serverDir, "survival", "players", "stats"),
-    );
+
+    await expect(
+      readStats(remoteCfg, "069a79f4-44e9-4726-a5be-fca90e38aaf5"),
+    ).rejects.toThrow(/500/);
+  });
+
+  it("returns the stats document when the wrapper has one", async () => {
+    const doc = { stats: { "minecraft:custom": { "minecraft:play_time": 42 } } };
+    mockFetch.mockResolvedValue(jsonResponse({ stats: doc }));
+
+    await expect(
+      readStats(remoteCfg, "069a79f4-44e9-4726-a5be-fca90e38aaf5"),
+    ).resolves.toEqual(doc);
   });
 });

@@ -52,20 +52,9 @@ function classifySide(project: ModrinthProject): ModSide {
 
 // ── Core lookup ───────────────────────────────────────────────────────────
 
-/**
- * Get the mod list for the given server instance.
- * Works for both local and remote instances — routing is handled by serverAccess.
- */
+/** Get the mod list for the given server instance. */
 export async function getModList(server: ServerInstance): Promise<ModList> {
   const cfg = server.config;
-
-  if (!cfg.apiUrl && !cfg.scriptDir) {
-    throw new Error(
-      `No scriptDir configured for server '${cfg.id}'.\n` +
-        "The mods list is read from {scriptDir}/common/downloaded_versions.json.",
-    );
-  }
-
   const { slugs, mtimeMs } = await serverAccess.readModSlugs(cfg);
   const cacheKey = `${cfg.id}:${mtimeMs}`;
   const cached = cache.get(cacheKey);

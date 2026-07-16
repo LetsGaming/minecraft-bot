@@ -27,7 +27,7 @@ regenerating — not writing a shape check by hand.
 
 ## Secrets
 
-`token`, `rconPassword`, and `apiKey` are env-injectable and never committed.
+`token` and `apiKey` are env-injectable and never committed.
 The dashboard masks them on read and merges the placeholders back on write
 (`web/backend/safeConfig.ts`). **A new secret field has to be added to
 `SERVER_SECRET_KEYS`**, or it leaves the process in a config GET the first time

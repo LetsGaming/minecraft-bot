@@ -4,8 +4,8 @@ How the repo is laid out, what each layer is allowed to know, and which rules
 keep it that way. Read this once before touching anything; it makes the rest of
 the code predictable.
 
-Workspace-specific detail lives with the workspace: [bot/](bot/index.md),
-[core/](core/index.md), [web/](web/index.md).
+Workspace-specific detail lives with the workspace: [bot/](bot/readme.md),
+[core/](core/readme.md), [web/](web/readme.md).
 
 ## The 30-second version
 
@@ -13,18 +13,24 @@ The bot is a single Node.js process (TypeScript, ESM, discord.js v14). It has
 two inputs and one abstraction in the middle:
 
 ```
-Discord interactions ─┐                       ┌─ RCON (direct TCP)
-                      ├─▶  ServerInstance  ───┼─ screen + sudo (local shell)
-Server log lines  ────┘    (per MC server)    └─ API wrapper (HTTP, remote)
+Discord interactions ─┐
+                      ├─▶  ServerInstance  ───▶  API wrapper (HTTP)  ──▶  MC server
+Server log lines  ────┘    (per MC server)
 ```
 
 Everything a command or watcher wants from a Minecraft server goes through a
-`ServerInstance`. The instance decides whether that means RCON, a screen
-session, or an HTTP call to the remote API wrapper. Callers never know or care
-which.
+`ServerInstance`, and every `ServerInstance` reaches its server over HTTP
+through the [API wrapper](https://github.com/LetsGaming/minecraft-server-api)
+on the Minecraft host. The wrapper owns the RCON connection, the filesystem,
+and the management scripts.
+
+Until 5.0.0 the bot could also do those things itself when it happened to share
+a machine with the server, and every feature was written twice — once against
+the filesystem, once against the wrapper. The two halves drifted, which is
+where several shipped bugs came from. One path now.
 
 The dashboard is a second, optional process. It shares the config file and the
-database with the bot and calls into it never: see [web/index.md](web/index.md).
+database with the bot and calls into it never: see [web/readme.md](web/readme.md).
 
 ## The workspaces
 
@@ -58,39 +64,39 @@ under `scripts/`).
 
 ## The layers, bottom up
 
-The first three are `core`; the fourth is `bot`. Each layer may call downward
-and never upward.
+The first two are `core`; the third is `bot`. Each layer may call downward and
+never upward.
 
-### 1. Protocol: `RconClient`
+### 1. Transport: `serverAccess.ts`
 
-A pure RCON implementation: socket lifecycle, binary packet encode/decode, auth
-handshake, request/response correlation by packet ID, timeouts. It imports only
-`net` and the logger. It knows nothing about Minecraft semantics or Discord,
-which is what makes it mockable in tests. Concurrent callers during connect are
-queued in a waiter list instead of polling.
+The wrapper's HTTP client, and the bot's only door to a Minecraft server.
+Functions are deliberately thin: one route each, raw data back, no business
+logic. Nothing in the bot imports `fs` or `child_process` for server state,
+because there is nothing to import it for — the files are on another machine.
 
-### 2. Access routing: `serverAccess.ts`
+`RconClient` and the `execCommand`/sudo layer used to sit under this and are
+gone as of 5.0.0. The wrapper has them.
 
-One rule: if `config.apiUrl` is set, the operation becomes an HTTP call to the
-API wrapper; otherwise it is the local implementation (file reads, `tail`,
-spawning scripts via `sudo -u`). Functions are deliberately thin: routing plus
-raw data, no business logic. Every operation that touches the filesystem or
-shell for server data lives here, so callers never import `fs` or
-`child_process` for server state.
-
-### 3. Game operations: `ServerInstance`
+### 2. Game operations: `ServerInstance`
 
 One instance per configured server, created at startup and held in a
-module-level registry. It owns `sendCommand()` (RCON first, screen fallback, or
-wrapper for remote instances), the state readers (`isRunning`, `getList`,
-`getTps`, `getSeed`, `getPlayerCoords`, `getPlayerDimension`), and a few small
-caches. The canonical regexes for parsing RCON/NBT output live here and only
-here. Details in [core/server-access.md](core/server-access.md).
+module-level registry. It holds no connection: it owns `sendCommand()`, the
+state readers (`isRunning`, `getList`, `getTps`, `getSeed`, `getPlayerCoords`,
+`getPlayerDimension`), and a few small caches, each delegating to
+`serverAccess`. The canonical regexes for parsing console/NBT output live here
+and only here — except TPS, which the wrapper parses because it is the side
+that sees the response. Details in [core/server-access.md](core/server-access.md).
 
-### 4. Feature logic: commands and watchers
+Note `sendCommand()` catches transport errors and returns null, which makes
+"the wrapper is unreachable" look like "the wrapper answered over screen, with
+no output to give". Callers that care about the difference — `give()` in
+`daily.ts` is the one — read `serverAccess` directly, where a failed request
+still throws.
+
+### 3. Feature logic: commands and watchers
 
 Slash commands, in-game `!commands`, and log/timer watchers — all of it `bot`,
-all of it documented in [bot/index.md](bot/index.md).
+all of it documented in [bot/readme.md](bot/readme.md).
 
 ## Server resolution
 
@@ -194,10 +200,10 @@ in mind when changing `serverAccess.ts`:
 
 | Code | Suite artifact |
 |---|---|
-| `serverAccess.runScript` (used by `/server *`) | `start.sh`, `shutdown.sh`, `smart_restart.sh`, `misc/status.sh`, `backup/backup.sh` in `scriptDir`; backup accepts `--archive` |
+| `serverAccess.runScript` (used by `/server *`) | `start.sh`, `shutdown.sh`, `smart_restart.sh`, `misc/status.sh`, `backup/backup.sh` in the wrapper's `scriptsDir`; backup accepts `--archive` |
 | `serverAccess` backup info (used by `/backup`) | Tier layout `backups/hourly` and `backups/archives/{daily,weekly,monthly,update}` |
-| `modUtils` (used by `/mods`) | `{scriptDir}/common/downloaded_versions.json` |
-| `config.ts` overrides | `{scriptDir}/common/variables.txt` |
+| `modUtils` (used by `/mods`) | `{scriptsDir}/common/downloaded_versions.json`, read by the wrapper |
+| the wrapper's own config | `{scriptsDir}/common/variables.txt` — the bot has no fields left for it to override |
 | The remote API wrapper | Is itself part of the suite ecosystem |
 
 Everything else (RCON, log parsing, stats, whitelist) works against a plain
@@ -217,12 +223,11 @@ review.
 | `src/core/**` | core + `@mcbot/schema` | `src/bot`, `src/web` |
 | `src/bot/**` | `@mcbot/core`, `@mcbot/schema` | `src/web` |
 | `src/web/**` | `@mcbot/core`, `@mcbot/schema` | `src/bot`, discord.js at runtime |
-| `bot/commands/*` | guildRouter, embeds, middleware, core utils, types | `fs`/`child_process` directly, RconClient |
+| `bot/commands/*` | guildRouter, embeds, middleware, core utils, types | `fs`/`child_process` for server state |
 | `bot/logWatcher/watchers/**` | `ServerInstance`, embeds, logger | `bot/commands/*` |
 | `core/utils/minecraft/*` | core utils, server, serverAccess, logger | embeds, discord.js |
 | `bot/utils/embeds/statEmbeds` | statUtils, embedUtils, discord.js | server.ts, config.ts |
-| `core/rcon/RconClient` | `net`, logger | everything else |
-| `core/utils/server/serverAccess` | `fs`, `child_process`, types | discord.js, `bot/commands` |
+| `core/utils/server/serverAccess` | `fetch`, types | discord.js, `bot/commands`, `fs`, `child_process` |
 
 The point of the table: Discord rendering, game logic, and transport stay
 separable, so each can be tested without the others — and the dashboard can

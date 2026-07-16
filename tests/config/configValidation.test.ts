@@ -12,7 +12,13 @@ vi.mock("../../src/core/utils/logger.js", () => ({
 
 import { validateCandidateConfig } from "../../src/core/config.js";
 
-const base = { token: "t", clientId: "c" };
+/** A wrapper-backed server, the only shape there is since 5.0.0. */
+const srv = (host = "127.0.0.1") => ({
+  apiUrl: `http://${host}:3030`,
+  apiKey: "k",
+});
+
+const base = { token: "t", clientId: "c", servers: { a: srv() } };
 
 describe("validateCandidateConfig — basics", () => {
   it("rejects a non-object root", () => {
@@ -26,7 +32,7 @@ describe("validateCandidateConfig — basics", () => {
   it("accepts a minimal config and reports missing token/clientId", () => {
     expect(validateCandidateConfig(base).valid).toBe(true);
 
-    const missing = validateCandidateConfig({ token: "t" });
+    const missing = validateCandidateConfig({ token: "t", servers: { a: srv() } });
     expect(missing.valid).toBe(false);
     expect(missing.errors.join("\n")).toContain("clientId");
   });
@@ -53,7 +59,7 @@ describe("validateCandidateConfig — basics", () => {
 });
 
 describe("validateCandidateConfig — chat bridge rules", () => {
-  const twoServers = { a: {}, b: {} };
+  const twoServers = { a: srv("192.168.1.10"), b: srv("192.168.1.11") };
 
   it("errors when a bridge is ambiguous (multi-server, no pin, no default)", () => {
     const result = validateCandidateConfig({
@@ -80,7 +86,7 @@ describe("validateCandidateConfig — chat bridge rules", () => {
   it("accepts an unpinned bridge when only one server is configured", () => {
     const result = validateCandidateConfig({
       ...base,
-      servers: { only: {} },
+      servers: { only: srv() },
       guilds: { g1: { chatBridge: { channelId: "ch1" } } },
     });
     expect(result.valid).toBe(true);
@@ -126,7 +132,7 @@ describe("validateCandidateConfig — server scope lists", () => {
   it("warns about unknown server IDs inside a scope array", () => {
     const result = validateCandidateConfig({
       ...base,
-      servers: { a: {}, b: {} },
+      servers: { a: srv('192.168.1.10'), b: srv('192.168.1.11') },
       guilds: {
         g1: {
           defaultServer: "a",
@@ -142,7 +148,7 @@ describe("validateCandidateConfig — server scope lists", () => {
   it("does not warn when every listed server exists", () => {
     const result = validateCandidateConfig({
       ...base,
-      servers: { a: {}, b: {} },
+      servers: { a: srv('192.168.1.10'), b: srv('192.168.1.11') },
       guilds: {
         g1: {
           defaultServer: "a",

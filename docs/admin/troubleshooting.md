@@ -18,36 +18,35 @@ If the message is `Failed to load config.json`, the file is missing or not valid
 
 Your server was probably not installed with [minecraft-server-setup](https://github.com/LetsGaming/minecraft-server-setup). These features call into files that suite creates: the management scripts (`start.sh`, `shutdown.sh`, `smart_restart.sh`, `misc/status.sh`, `backup/backup.sh`), the tiered backup directories, and `common/downloaded_versions.json` for `/mods`.
 
-Your options, in order of effort: disable the affected commands in the `commands` config block, provide your own compatible scripts in `scriptDir`, or migrate the server to the suite. The full matrix of what works without the suite is in [setup.md](setup.md#plain-server-or-setup-suite-server). Everything RCON- and log-based is unaffected.
+Your options, in order of effort: disable the affected commands in the `commands` config block, point the **wrapper's** `scriptsDir` at your own compatible scripts, or migrate the server to the suite. The full matrix of what works without the suite is in [setup.md](setup.md#plain-server-or-setup-suite-server). Everything console- and log-based is unaffected.
 
-If the server *was* set up with the suite, the error means `scriptDir` points to the wrong place. It must contain the scripts directly (e.g. `/opt/mc/scripts/survival/start.sh`), and remember the auto-derivation: unset, it resolves to `{serverDir}/../scripts/{screenSession}`.
+If the server *was* set up with the suite, the error means the wrapper's `scriptsDir` points to the wrong place. It must contain the scripts directly (e.g. `/opt/mc/scripts/survival/start.sh`). Since 5.0.0 this is configured on the Minecraft host, in the wrapper — not in the bot's config.
 
 ## "Sudo is not configured correctly"
 
-`/server` commands need passwordless sudo for two separate hops, and the error tells you which one failed:
-
-- "The bot's OS user cannot switch to X via sudo -u" → Layer 1 missing.
-- "The X user cannot run systemctl via sudo" → Layer 2 missing.
-
-Full setup and verification commands: [sudoers.md](sudoers.md).
+Passwordless sudo is the **wrapper's** requirement, on the Minecraft host: it is what runs the management scripts and reaches the `screen` session. The bot only relays the error. See the wrapper's own documentation for the two hops it needs.
 
 ## RCON keeps failing / "RCON failed, screen fallback"
 
-- `rcon.password` in `server.properties` must match `rconPassword` in the bot config (or the `RCON_PASSWORD` env var, which overrides the config).
+RCON is the wrapper's connection, so this is diagnosed on the Minecraft host:
+
+- `rcon.password` in `server.properties` must match the wrapper's `rconPassword` (or its `RCON_PASSWORD_<ID>` env var).
 - `enable-rcon=true` set and the Minecraft server restarted afterwards?
-- From the bot machine: `nc -zv <rconHost> <rconPort>` should connect. If not, it is a firewall or wrong-host problem.
+- From the wrapper's machine: `nc -zv <rconHost> <rconPort>` should connect. If not, it is a firewall or wrong-host problem.
 - An "RCON auth failed" log line means the connection works but the password is wrong.
+
+Without RCON the wrapper falls back to `screen`, which cannot read command responses. Anything that verifies its own result — daily rewards, challenge payouts — then has to assume it worked.
 
 ## The bot says a server is offline but it is running
 
-- RCON path: the probe sends `list` with a 3-second timeout and retries once. A heavily lagging server can miss that window; check TPS.
-- Screen path: the bot looks for a screen session named `screenSession` owned by `linuxUser`, via sudo. Run `sudo -n -u <linuxUser> screen -list` as the bot user; if that asks for a password, see [sudoers.md](sudoers.md).
-- Remote path: `curl -H "x-api-key: ..." http://<wrapper>/instances/<id>/running` should return `{"running":true}`.
+- `curl -H "x-api-key: ..." http://<wrapper>/instances/<id>/running` should return `{"running":true}`. If it does, the problem is between the bot and the wrapper (`apiUrl`, firewall, key); if it does not, it is between the wrapper and the server.
+- The probe sends `list` with a 3-second timeout and retries once. A heavily lagging server can miss that window; check TPS.
+- A thrown request is retried once before the bot reports a server down, so a single blip does not show as an outage. Two in a row does.
 
 ## Chat bridge only works in one direction
 
 - Discord → Minecraft missing: the **Message Content Intent** is probably disabled. Enable it in the Developer Portal (Bot page) and restart the bot.
-- Minecraft → Discord missing: the log watcher cannot read the server log. For local setups, check that `serverDir` is right and the bot user can read `logs/latest.log`. For remote setups, check the wrapper's SSE stream (`Remote log stream connected` should appear in the bot log).
+- Minecraft → Discord missing: the log watcher cannot read the server log. Check the wrapper's SSE stream — `Remote log stream connected` should appear in the bot log. If it does not, the wrapper cannot read `logs/latest.log` (check its `serverPath` and file permissions on the Minecraft host).
 
 ## A freshly whitelisted player is "not found" in /stats or autocomplete
 

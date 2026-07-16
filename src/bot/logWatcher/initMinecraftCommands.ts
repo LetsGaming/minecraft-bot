@@ -1,7 +1,7 @@
 import path from "path";
 import { fileURLToPath } from "url";
 import { readdirSync, statSync } from "fs";
-import { LogWatcher, getGlobalWatchers } from "./logWatcher.js";
+import { getGlobalWatchers } from "./logWatcher.js";
 import { RemoteLogWatcher } from "./RemoteLogWatcher.js";
 import {
   getAllInstances,
@@ -68,7 +68,7 @@ function getCommandFiles(dir: string): string[] {
 // reconciliation can tear it down again when the server is removed.
 
 interface ServerHandles {
-  watcher: LogWatcher | RemoteLogWatcher;
+  watcher: RemoteLogWatcher;
   tpsTimer: ReturnType<typeof setInterval> | null;
 }
 
@@ -79,10 +79,8 @@ async function wireServer(
   client: Client,
   guildConfigs: Record<string, GuildConfig>,
 ): Promise<void> {
-  // Remote instances stream logs over SSE; local instances watch the file directly.
-  const watcher = server.config.apiUrl
-    ? new RemoteLogWatcher(server)
-    : new LogWatcher(server);
+  // Every instance streams its log over the wrapper's SSE endpoint.
+  const watcher = new RemoteLogWatcher(server);
 
   for (const { regex, handler } of getGlobalWatchers()) {
     watcher.register(regex, handler);

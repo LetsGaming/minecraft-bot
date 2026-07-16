@@ -7,19 +7,21 @@ This guide takes you from nothing to a running bot. No prior Discord bot experie
 The fastest path, if you just want it running:
 
 1. Create the Discord application ([Step 1](#step-1-create-the-discord-application) below) — you need the **bot token**, the **application ID**, and the bot invited to your server.
-2. On the machine that will run the bot:
+2. On the Minecraft host: install the [API wrapper](remote-setup.md) (3.1.1+). The bot reaches every server through it — it owns the RCON connection, the server's files, and the management scripts. Note its URL and API key.
+3. On the machine that will run the bot (anywhere that can reach the wrapper over HTTP):
 
    ```bash
    git clone <this repo> && cd minecraft-bot
    npm install
    npm run setup     # interactive wizard → writes config.json
-   npm run build
-   npm start
+   docker compose up -d
    ```
 
-The wizard asks for the token, IDs, your Minecraft server location (local path or [remote API wrapper](remote-setup.md)), and which optional features you want — nothing else. The bot validates the result on start and tells you exactly what to fix if something is off. Everything the wizard skipped can be added later in `config.json` ([full reference](configuration.md)); the file is hot-reloaded.
+The wizard asks for the token, IDs, each server's wrapper URL and API key, and which optional features you want — nothing else. The bot validates the result on start and tells you exactly what to fix if something is off. Everything the wizard skipped can be added later in `config.json` ([full reference](configuration.md)); the file is hot-reloaded.
 
-For a permanent installation (auto-restart, boot persistence) continue with [Docker](docker.md) or [PM2](pm2.md) once the bot works.
+**Docker is the supported way to run the bot**, and the dashboard ships with it — see [docker.md](docker.md). It is a Node application and nothing stops you running `npm start` directly, but that is not a supported configuration and there is no guide for it.
+
+Upgrading from 4.x? See [migrating-to-5.md](migrating-to-5.md) — 5.0.0 removed local mode, and 4.3.x is the last release that supported it.
 
 ## Plain server or setup-suite server?
 
@@ -34,7 +36,7 @@ What works where:
 | TPS + downtime monitoring, uptime, whitelist, seed/map tools | ✅ | ✅ |
 | `/server start` / `stop` / `restart` / `status` | ❌ needs `start.sh`, `shutdown.sh`, `smart_restart.sh`, `misc/status.sh` | ✅ |
 | `/server backup` and the `/backup` overview | ❌ needs `backup/backup.sh` and the suite's backup tier layout | ✅ |
-| `/mods` | ❌ needs `{scriptDir}/common/downloaded_versions.json` | ✅ |
+| `/mods` | ❌ needs `{scriptsDir}/common/downloaded_versions.json` on the wrapper's host | ✅ |
 | `variables.txt` config sync | ❌ | ✅ |
 
 Three ways to proceed:
@@ -50,7 +52,7 @@ Three ways to proceed:
    }
    ```
 
-3. **Plain server, own scripts**: point `scriptDir` at a directory providing the five scripts above with the same names and you get `/server` back without the suite. Your scripts receive no arguments (except backup, which gets `--archive` for archive backups) and must be runnable non-interactively as `linuxUser`.
+3. **Plain server, own scripts**: point the wrapper's `scriptsDir` at a directory providing the five scripts above with the same names and you get `/server` back without the suite. Your scripts receive no arguments (except backup, which gets `--archive` for archive backups) and must be runnable non-interactively as the wrapper's configured user. This is configured on the Minecraft host, in the wrapper — the bot has no filesystem access to your server.
 
 ## What you need
 
@@ -95,18 +97,17 @@ rcon.port=25575
 rcon.password=pick-a-strong-password
 ```
 
-Restart the Minecraft server afterwards. RCON is strongly recommended. Without it the bot falls back to `screen` sessions, which is slower, needs sudo configuration, and cannot read command responses.
+Restart the Minecraft server afterwards. The **wrapper** connects to RCON — the bot never does — so this password goes in the wrapper's config, on the Minecraft host, not in `config.json`.
 
-If the bot runs on a different machine than the Minecraft server (this includes the bot running in Docker on the same host), you also need the API wrapper. See [remote-setup.md](remote-setup.md).
+RCON is strongly recommended. Without it the wrapper falls back to `screen`, which is slower, needs sudo configuration, and cannot read command responses, so anything that verifies its own result (daily rewards, challenge payouts) can only assume it worked.
 
-## Step 5: Choose how to run the bot
+Then install the wrapper itself: [remote-setup.md](remote-setup.md). This is required — the bot has no other way to reach a server.
 
-| Path | When to pick it | Guide |
-|---|---|---|
-| Docker | Recommended. Self-contained, restart-safe, no Node.js install needed. Requires the API wrapper for server access. | [docker.md](docker.md) |
-| PM2 on the host | Bot runs directly on the same machine as the Minecraft server, with full filesystem access. | [pm2.md](pm2.md) |
+## Step 5: Run the bot
 
-Both guides include the config step. The full reference for every config field is in [configuration.md](configuration.md).
+[Docker](docker.md) is the supported way, and the dashboard ships with it. The guide includes the config step; the full reference for every config field is in [configuration.md](configuration.md).
+
+The bot can run anywhere that can reach the wrapper over HTTP — it no longer needs to be on the Minecraft host, or to have any access to its filesystem.
 
 There is also an interactive wizard that builds `config.json` for you by asking questions:
 

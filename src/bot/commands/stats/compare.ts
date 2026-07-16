@@ -140,6 +140,9 @@ interface ComparisonLine {
   line: string;
 }
 
+/** Discord's hard limit on an embed field's value. */
+const FIELD_VALUE_LIMIT = 1024;
+
 export function buildComparisonEmbeds(
   flat1: FlattenedStat[],
   flat2: FlattenedStat[],
@@ -197,12 +200,28 @@ export function buildComparisonEmbeds(
       const chunk: string[] = [];
       let chunkLength = 0;
 
+      // The field value is chunk.join("\n"), so it is the sum of the line
+      // lengths PLUS one newline between each. Counting only the lines let a
+      // chunk that measured 1020 ship 1029 and Discord rejects any field
+      // over 1024 — which is why /compare worked on thin data and threw for
+      // anyone with a real stat file. `chunk.length` is the separator count
+      // this line would need (one per line already in the chunk).
       while (
         index < lines.length &&
-        chunkLength + lines[index]!.length < 1024
+        chunkLength + chunk.length + lines[index]!.length <= FIELD_VALUE_LIMIT
       ) {
         chunk.push(lines[index]!);
         chunkLength += lines[index]!.length;
+        index++;
+      }
+
+      // A single line longer than the whole limit can never satisfy the
+      // condition above, so the chunk would stay empty, `index` would never
+      // advance, and the loop would spin forever emitting empty fields.
+      // Not reachable with today's line format, which is exactly why it
+      // would be missed if the format ever changed.
+      if (chunk.length === 0) {
+        chunk.push(lines[index]!.slice(0, FIELD_VALUE_LIMIT - 1) + "…");
         index++;
       }
 

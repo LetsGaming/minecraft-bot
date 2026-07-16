@@ -71,12 +71,12 @@ it:
   takes effect immediately rather than at the next login.
 - Cookies are `HttpOnly` + `SameSite=Lax`, and `Secure` in production.
 
-Which gate a route needs is in [index.md](index.md#the-two-apis). Get that
+Which gate a route needs is in [readme.md](readme.md#the-two-apis). Get that
 decision right before writing the handler.
 
 ## Secrets
 
-`safeConfig.ts` masks `token`, `rconPassword`, and `apiKey` on read and merges
+`safeConfig.ts` masks `token` and `apiKey` on read and merges
 the placeholders back on write, so the browser never receives a real secret and
 an edit round-trip cannot blank one out.
 

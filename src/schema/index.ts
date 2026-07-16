@@ -11,6 +11,10 @@
  * runtime-only dependency — the frontend bundles it.
  */
 export type * from "./config.js";
+// One runtime value lives in config.ts: the list of fields that configured
+// local mode before 5.0.0, so the validator can recognise a 4.x config and
+// point at the migration instead of reporting a bare "apiUrl is required".
+export { REMOVED_LOCAL_SERVER_FIELDS } from "./config.js";
 export type * from "./contract.js";
 // Runtime values (the leaderboard-interval contract) alongside the stat
 // shapes, so the scheduler and the snapshot retention policy size periods
