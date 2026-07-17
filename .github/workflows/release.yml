@@ -1,6 +1,9 @@
 # Release — on a version tag: full build (bot + dashboard), a tarball
 # artifact attached to the GitHub release, and a Docker image pushed to
 # GHCR (ghcr.io/<owner>/minecraft-bot:<version> + :latest).
+#
+# The release body is the CHANGELOG.md section for the tag, followed by
+# GitHub's generated notes (What's Changed / Full Changelog).
 name: Release
 
 on:
@@ -41,10 +44,36 @@ jobs:
             README.md docs data/dailyRewards.json ecosystem.config.cjs \
             .env.example
 
+      # generate_release_notes builds "What's Changed" out of merged pull
+      # requests only — anything pushed straight to main is invisible to it,
+      # which is why every release since v4.1.0 has come out as a bare compare
+      # link. The CHANGELOG section for the tag is the actual summary, and the
+      # API pre-pends `body` to the generated notes, so the release reads:
+      # our prose first, then What's Changed / Full Changelog.
+      #
+      # Matched on the "## [x.y.z]" prefix, so the dash and date that follow
+      # can be anything (the bump script writes an em dash, hand-written
+      # sections have used a hyphen).
+      - name: Extract the CHANGELOG section for this tag
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v heading="## [$version]" '
+            index($0, heading) == 1 { found = 1; next }
+            found && /^## \[/       { exit }
+            found                   { print }
+          ' CHANGELOG.md | sed -e '/./,$!d' > "$RUNNER_TEMP/release-notes.md"
+
+          if [ -s "$RUNNER_TEMP/release-notes.md" ]; then
+            echo "Release body: $(wc -l < "$RUNNER_TEMP/release-notes.md") lines from CHANGELOG.md"
+          else
+            echo "::warning::CHANGELOG.md has no '## [$version]' section (or it is empty) — the release will only carry the generated notes."
+          fi
+
       - name: Attach artifact to the GitHub release
         uses: softprops/action-gh-release@v2
         with:
           files: minecraft-bot-${{ github.ref_name }}.tar.gz
+          body_path: ${{ runner.temp }}/release-notes.md
           generate_release_notes: true
           overwrite_files: true
 
