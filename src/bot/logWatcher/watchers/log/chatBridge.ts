@@ -11,6 +11,10 @@ import {
   createRateLimiter,
   bridgeLimiterSettings,
 } from "@mcbot/core/utils/rateLimiter.js";
+import {
+  resolveGuildConfigs,
+  type GuildConfigSource,
+} from "../../../utils/guild/guildConfigs.js";
 
 const CHAT_REGEX = /\[.+?\]: <(?:\[AFK\]\s*)?([^>]+)>\s+(.+)/;
 
@@ -95,8 +99,11 @@ export function resolveGuildBridges(
   return { bridges, problems };
 }
 
-/** Log bridge misconfigurations once at setup time. */
-function reportBridgeProblems(
+/**
+ * Log bridge misconfigurations. Called at setup and again after a config
+ * reload, so a bad bridge in a guild added later is still reported.
+ */
+export function reportBridgeProblems(
   guildConfigs: Record<string, GuildConfig>,
   allServerIds: string[],
   tag: string,
@@ -167,10 +174,14 @@ async function bridgeWebhook(
 export function registerChatBridge(
   logWatcher: ILogWatcher,
   client: Client,
-  guildConfigs: Record<string, GuildConfig>,
+  guildConfigs: GuildConfigSource,
   allServerIds: string[] = [],
 ): void {
-  reportBridgeProblems(guildConfigs, allServerIds, "chatBridge");
+  reportBridgeProblems(
+    resolveGuildConfigs(guildConfigs),
+    allServerIds,
+    "chatBridge",
+  );
 
   logWatcher.register(CHAT_REGEX, async (match) => {
     const [, player, message] = match;
@@ -179,7 +190,12 @@ export function registerChatBridge(
 
     const serverId = logWatcher.server.id;
 
-    for (const [guildId, gcfg] of Object.entries(guildConfigs)) {
+    // Bridges are resolved from the CURRENT config on every line. The
+    // watcher is wired once per server at startup, so reading the
+    // wired-in snapshot meant a guild added later never got any chat.
+    for (const [guildId, gcfg] of Object.entries(
+      resolveGuildConfigs(guildConfigs),
+    )) {
       const { bridges } = resolveGuildBridges(gcfg, allServerIds);
 
       // Only channels bound to THIS server receive its chat.
@@ -231,7 +247,7 @@ export function registerChatBridge(
  */
 export function setupDiscordToMc(
   client: Client,
-  guildConfigs: Record<string, GuildConfig>,
+  guildConfigs: GuildConfigSource,
   getServerInstance: (id: string | undefined) => ServerInstance | null,
   allServerIds: string[] = [],
 ): void {
@@ -240,7 +256,7 @@ export function setupDiscordToMc(
     const guildId = msg.guild?.id;
     if (!guildId) return;
 
-    const gcfg = guildConfigs[guildId];
+    const gcfg = resolveGuildConfigs(guildConfigs)[guildId];
     if (!gcfg?.chatBridge) return;
 
     const { bridges } = resolveGuildBridges(gcfg, allServerIds);

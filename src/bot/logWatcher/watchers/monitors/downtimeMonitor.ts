@@ -1,6 +1,10 @@
 import { type Client } from "discord.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { serverInScope } from "../../../utils/guild/guildRouter.js";
+import {
+  guildsWith,
+  type GuildConfigSource,
+} from "../../../utils/guild/guildConfigs.js";
 import { recordCheck } from "@mcbot/core/utils/stores/uptimeTracker.js";
 import { createEmbed } from "../../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../../utils/embeds/embedColors.js";
@@ -61,19 +65,21 @@ export function suppressAlerts(
 export function startDowntimeMonitor(
   servers: ServerInstance[] | (() => ServerInstance[]),
   client: Client,
-  guildConfigs: Record<string, GuildConfig>,
+  guildConfigs: GuildConfigSource,
 ): ReturnType<typeof setInterval> {
   const getServers = typeof servers === "function" ? servers : () => servers;
 
-  const guildsWithAlerts = Object.entries(guildConfigs).filter(
-    ([, cfg]) => cfg.downtimeAlerts?.channelId,
-  );
+  // Resolved per tick, not once: a guild whose downtimeAlerts block is
+  // added on config reload has to start receiving alerts without a restart.
+  const alertGuilds = (): Array<[string, GuildConfig]> =>
+    guildsWith(guildConfigs, (cfg) => !!cfg.downtimeAlerts?.channelId);
 
-  if (guildsWithAlerts.length === 0) {
+  if (alertGuilds().length === 0) {
     log.info("downtime", "No downtime alert channels configured");
   }
 
   const timer = setInterval(async () => {
+    const guildsWithAlerts = alertGuilds();
     for (const server of getServers()) {
       try {
         await checkServer(server, client, guildsWithAlerts);
@@ -86,7 +92,7 @@ export function startDowntimeMonitor(
 
   log.info(
     "downtime",
-    `Monitor active for ${getServers().length} server(s), alerting ${guildsWithAlerts.length} guild(s)`,
+    `Monitor active for ${getServers().length} server(s), alerting ${alertGuilds().length} guild(s)`,
   );
   return timer;
 }

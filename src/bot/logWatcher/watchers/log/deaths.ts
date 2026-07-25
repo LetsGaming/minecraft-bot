@@ -2,8 +2,8 @@ import { type Client } from "discord.js";
 import { createPlayerEmbed } from "../../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../../utils/embeds/embedColors.js";
 import type { ILogWatcher } from "../../logWatcher.js";
-import type { GuildConfig } from "@mcbot/core/types/index.js";
 import { broadcastNotification, PLAYER_NAME } from "../notifyGuilds.js";
+import type { GuildConfigSource } from "../../../utils/guild/guildConfigs.js";
 import { serverEventRegex, registerServerEvent } from "./serverLine.js";
 import { loadConfig } from "@mcbot/core/config.js";
 import { loadLinkedAccounts } from "@mcbot/core/utils/stores/linkUtils.js";
@@ -103,7 +103,7 @@ async function dmDeathCoords(
 export function registerDeathWatcher(
   logWatcher: ILogWatcher,
   client: Client,
-  guildConfigs: Record<string, GuildConfig>,
+  guildConfigs: GuildConfigSource,
 ): void {
   const serverId = logWatcher.server.id;
 

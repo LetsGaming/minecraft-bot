@@ -16,9 +16,12 @@ import {
 import { kvGet, kvSet } from "@mcbot/core/db/kv.js";
 import { LEADERBOARD_INTERVAL_MS } from "@mcbot/schema/stats.js";
 import { log } from "@mcbot/core/utils/logger.js";
+import {
+  resolveGuildConfigs,
+  type GuildConfigSource,
+} from "../../../utils/guild/guildConfigs.js";
 import { getAllInstances, getServerInstance } from "@mcbot/core/utils/server/server.js";
 import type {
-  GuildConfig,
   LeaderboardInterval,
   LeaderboardScheduleState,
 } from "@mcbot/core/types/index.js";
@@ -52,7 +55,7 @@ interface SchedulerTimers {
  */
 export function startLeaderboardScheduler(
   client: Client,
-  guildConfigs: Record<string, GuildConfig>,
+  guildConfigs: GuildConfigSource,
 ): ReturnType<typeof setInterval> | SchedulerTimers {
   const cfg = loadConfig();
   const globalInterval = cfg.leaderboardInterval;
@@ -74,16 +77,18 @@ export function startLeaderboardScheduler(
       takeSnapshot(server).catch(() => {});
   }, 10000);
 
-  // ── Leaderboard posting: only if any guild has it configured ──
-  const hasAnyConfig = Object.values(guildConfigs).some(
-    (g) => g.leaderboard?.channelId,
-  );
+  // ── Leaderboard posting ──
+  // The post timer is always armed and checkAndPost re-reads the guild
+  // block each hour: bailing out here used to make "no leaderboard channel
+  // at startup" permanent, so a guild configured later never posted.
+  const hasAnyConfig = Object.values(
+    resolveGuildConfigs(guildConfigs),
+  ).some((g) => g.leaderboard?.channelId);
   if (!hasAnyConfig) {
     log.info(
       "leaderboard",
-      "No leaderboard channels configured, scheduler inactive (snapshots still running)",
+      "No leaderboard channels configured yet — scheduler armed, config re-read hourly",
     );
-    return snapshotTimer;
   }
 
   const postTimer = setInterval(async () => {
@@ -109,13 +114,15 @@ export function startLeaderboardScheduler(
 
 async function checkAndPost(
   client: Client,
-  guildConfigs: Record<string, GuildConfig>,
+  guildConfigs: GuildConfigSource,
   globalInterval: LeaderboardInterval,
 ): Promise<void> {
   const schedule = await loadSchedule();
   const now = Date.now();
 
-  for (const [guildId, gcfg] of Object.entries(guildConfigs)) {
+  for (const [guildId, gcfg] of Object.entries(
+    resolveGuildConfigs(guildConfigs),
+  )) {
     const lb = gcfg.leaderboard;
     if (!lb?.channelId) continue;
 

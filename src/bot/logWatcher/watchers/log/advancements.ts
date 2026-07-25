@@ -2,8 +2,8 @@ import { type Client } from "discord.js";
 import { createPlayerEmbed, createEmbed } from "../../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../../utils/embeds/embedColors.js";
 import type { ILogWatcher } from "../../logWatcher.js";
-import type { GuildConfig } from "@mcbot/core/types/index.js";
 import { broadcastNotification, PLAYER_NAME } from "../notifyGuilds.js";
+import type { GuildConfigSource } from "../../../utils/guild/guildConfigs.js";
 import { serverEventRegex, registerServerEvent } from "./serverLine.js";
 import {
   loadChallengeStore,
@@ -42,7 +42,7 @@ const ADV_REGEX = serverEventRegex(
  */
 async function handleChallenge(
   client: Client,
-  guildConfigs: Record<string, GuildConfig>,
+  guildConfigs: GuildConfigSource,
   server: ServerInstance,
   player: string,
   advancement: string,
@@ -129,7 +129,7 @@ async function handleChallenge(
 export function registerAdvancementWatcher(
   logWatcher: ILogWatcher,
   client: Client,
-  guildConfigs: Record<string, GuildConfig>,
+  guildConfigs: GuildConfigSource,
 ): void {
   const serverId = logWatcher.server.id;
 

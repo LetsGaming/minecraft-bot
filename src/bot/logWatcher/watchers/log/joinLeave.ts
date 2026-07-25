@@ -2,8 +2,8 @@ import { type Client } from "discord.js";
 import { createPlayerEmbed } from "../../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../../utils/embeds/embedColors.js";
 import type { ILogWatcher } from "../../logWatcher.js";
-import type { GuildConfig } from "@mcbot/core/types/index.js";
 import { broadcastNotification, PLAYER_NAME } from "../notifyGuilds.js";
+import type { GuildConfigSource } from "../../../utils/guild/guildConfigs.js";
 import { serverEventRegex, registerServerEvent } from "./serverLine.js";
 import {
   loadSessionStore,
@@ -59,7 +59,7 @@ function scheduleRewardDelivery(server: ServerInstance, player: string): void {
 export function registerJoinLeaveWatcher(
   logWatcher: ILogWatcher,
   client: Client,
-  guildConfigs: Record<string, GuildConfig>,
+  guildConfigs: GuildConfigSource,
 ): void {
   const serverId = logWatcher.server.id;
 
@@ -80,7 +80,7 @@ export function registerJoinLeaveWatcher(
 
 async function notify(
   client: Client,
-  guildConfigs: Record<string, GuildConfig>,
+  guildConfigs: GuildConfigSource,
   serverId: string,
   player: string,
   event: "join" | "leave",

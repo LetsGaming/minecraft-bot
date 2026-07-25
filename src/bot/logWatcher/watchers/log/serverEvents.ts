@@ -2,9 +2,9 @@ import { type Client } from "discord.js";
 import { createEmbed } from "../../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../../utils/embeds/embedColors.js";
 import type { ILogWatcher } from "../../logWatcher.js";
-import type { GuildConfig } from "@mcbot/core/types/index.js";
 import type { NotificationEvent } from "@mcbot/schema";
 import { broadcastNotification } from "../notifyGuilds.js";
+import type { GuildConfigSource } from "../../../utils/guild/guildConfigs.js";
 import { serverEventRegex, registerServerEvent } from "./serverLine.js";
 import {
   loadSessionStore,
@@ -47,7 +47,7 @@ async function closeSessions(serverId: string): Promise<void> {
 export function registerServerEventWatcher(
   logWatcher: ILogWatcher,
   client: Client,
-  guildConfigs: Record<string, GuildConfig>,
+  guildConfigs: GuildConfigSource,
 ): void {
   const serverId = logWatcher.server.id;
 
@@ -89,7 +89,7 @@ export function registerServerEventWatcher(
 
 async function notifyEvent(
   client: Client,
-  guildConfigs: Record<string, GuildConfig>,
+  guildConfigs: GuildConfigSource,
   serverId: string,
   event: NotificationEvent,
   title: string,

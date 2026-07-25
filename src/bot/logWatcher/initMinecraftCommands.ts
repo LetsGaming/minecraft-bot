@@ -15,12 +15,20 @@ import { log } from "@mcbot/core/utils/logger.js";
 import type { Client } from "discord.js";
 import type {
   BotConfig,
-  GuildConfig,
   InGameCommandResult,
 } from "@mcbot/core/types/index.js";
 
 // Watchers
-import { registerChatBridge, setupDiscordToMc } from "./watchers/log/chatBridge.js";
+import {
+  registerChatBridge,
+  setupDiscordToMc,
+  reportBridgeProblems,
+  invalidateWebhookCache,
+} from "./watchers/log/chatBridge.js";
+import {
+  liveGuildConfigs,
+  type GuildConfigSource,
+} from "../utils/guild/guildConfigs.js";
 import { registerJoinLeaveWatcher } from "./watchers/log/joinLeave.js";
 import { registerDeathWatcher } from "./watchers/log/deaths.js";
 import { registerAdvancementWatcher } from "./watchers/log/advancements.js";
@@ -77,7 +85,7 @@ const serverHandles = new Map<string, ServerHandles>();
 async function wireServer(
   server: ReturnType<typeof getAllInstances>[number],
   client: Client,
-  guildConfigs: Record<string, GuildConfig>,
+  guildConfigs: GuildConfigSource,
 ): Promise<void> {
   // Every instance streams its log over the wrapper's SSE endpoint.
   const watcher = new RemoteLogWatcher(server);
@@ -115,6 +123,13 @@ function unwireServer(serverId: string): void {
 
 export async function initMinecraftCommands(client: Client): Promise<void> {
   const cfg = loadConfig();
+  // Long-lived watchers, monitors and schedulers get the PROVIDER, not a
+  // snapshot: they are wired once and run for the process lifetime, and
+  // reconcileServers only reconciles the `servers` block — so a snapshot
+  // here meant a guild added by a later config reload never reached them
+  // (its chatBridge, notifications, alerts and purge stayed dead until a
+  // full restart). Callers that are themselves re-run on reload
+  // (statusEmbed, application prompts) keep taking the current record.
   const guildConfigs = cfg.guilds;
 
   // ── 1. Load in-game !command definitions (registers them globally) ──
@@ -176,7 +191,7 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
   const instances = getAllInstances();
 
   for (const server of instances) {
-    await wireServer(server, client, guildConfigs);
+    await wireServer(server, client, liveGuildConfigs);
   }
 
   // ── 3. Discord → MC chat bridge ──
@@ -184,13 +199,13 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
   // the channel a message is typed in decides which server it reaches.
   setupDiscordToMc(
     client,
-    guildConfigs,
+    liveGuildConfigs,
     (id) => (id ? getServerInstance(id) : getFirstInstance()),
     getServerIds(),
   );
 
   // ── 4. Scheduled leaderboard auto-poster ──
-  startLeaderboardScheduler(client, guildConfigs);
+  startLeaderboardScheduler(client, liveGuildConfigs);
 
   // ── 5. Persistent status embed ──
   startStatusEmbed(client, guildConfigs);
@@ -201,10 +216,10 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
   // ── 6. Downtime monitor ──
   // Pass the provider so reconciled server additions/removals are
   // monitored without restarting the timer.
-  startDowntimeMonitor(getAllInstances, client, guildConfigs);
+  startDowntimeMonitor(getAllInstances, client, liveGuildConfigs);
 
   // Disk-full early warning for local instances (hostAlerts config).
-  startHostResourcesMonitor(getAllInstances, client, guildConfigs);
+  startHostResourcesMonitor(getAllInstances, client, liveGuildConfigs);
 
   // Re-arm open polls (close timers + button collectors) after restart.
   startPollScheduler(client);
@@ -213,7 +228,7 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
   startUptimeFlushScheduler();
 
   // ── 8. Daily channel purge ──
-  startChannelPurge(client, guildConfigs);
+  startChannelPurge(client, liveGuildConfigs);
 
   // ── 9. Daily release check (opt-out via updateNotifier.enabled) ──
   startUpdateNotifier(client);
@@ -311,7 +326,7 @@ async function doReconcile(
   for (const id of added) {
     const inst = addServerInstance(configured[id]!);
     try {
-      await wireServer(inst, client, freshConfig.guilds);
+      await wireServer(inst, client, liveGuildConfigs);
       log.info("reconcile", `Server added and watchers started: ${id}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -351,6 +366,17 @@ async function doReconcile(
     const msg = err instanceof Error ? err.message : String(err);
     log.warn("reconcile", `Restart-schedule reconcile failed: ${msg}`);
   }
+
+  // Guild blocks are re-read live by the watchers themselves, but a
+  // newly added guild's bridge misconfiguration would otherwise only be
+  // reported at startup — surface it here instead. The webhook cache is
+  // dropped at the same time so a re-pointed bridge channel re-resolves.
+  reportBridgeProblems(
+    freshConfig.guilds,
+    Object.keys(freshConfig.servers),
+    "chatBridge",
+  );
+  invalidateWebhookCache();
 
   // New/changed whitelistApplications blocks get their prompt posted.
   await ensureApplicationPrompts(client, freshConfig.guilds).catch((err) => {

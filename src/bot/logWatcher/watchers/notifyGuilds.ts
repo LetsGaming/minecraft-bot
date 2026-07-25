@@ -18,7 +18,10 @@ import {
   type NotificationEvent,
 } from "@mcbot/schema";
 import { serverInScope } from "../../utils/guild/guildRouter.js";
-import type { GuildConfig } from "@mcbot/core/types/index.js";
+import {
+  resolveGuildConfigs,
+  type GuildConfigSource,
+} from "../../utils/guild/guildConfigs.js";
 
 // Shared player-name pattern source. \w+ alone silently drops Bedrock
 // players whose names Geyser/Floodgate prefixes with "." — every
@@ -38,14 +41,18 @@ export interface BroadcastOptions {
 
 export async function broadcastNotification(
   client: Client,
-  guildConfigs: Record<string, GuildConfig>,
+  guildConfigs: GuildConfigSource,
   { serverId, event, buildEmbed, logTag = "notify" }: BroadcastOptions,
 ): Promise<void> {
   // Footer shows the source server when more than one server exists,
   // regardless of how many guilds are configured.
   const withServerFooter = getAllInstances().length > 1;
 
-  for (const [guildId, gcfg] of Object.entries(guildConfigs)) {
+  // Resolved per event: the watcher is wired once at startup, so a fixed
+  // record would never see a guild added by a later config reload.
+  for (const [guildId, gcfg] of Object.entries(
+    resolveGuildConfigs(guildConfigs),
+  )) {
     const notif = gcfg.notifications;
     if (!notif?.channelId) continue;
     // An absent events list means "the default set" — a guild configured with

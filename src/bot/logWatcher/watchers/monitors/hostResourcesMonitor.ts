@@ -14,6 +14,10 @@
 import { type Client } from "discord.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { serverInScope } from "../../../utils/guild/guildRouter.js";
+import {
+  guildsWith,
+  type GuildConfigSource,
+} from "../../../utils/guild/guildConfigs.js";
 import { createEmbed } from "../../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../../utils/embeds/embedColors.js";
 import { loadConfig } from "@mcbot/core/config.js";
@@ -47,15 +51,17 @@ export function _resetStateForTesting(): void {
 export function startHostResourcesMonitor(
   servers: ServerInstance[] | (() => ServerInstance[]),
   client: Client,
-  guildConfigs: Record<string, GuildConfig>,
+  guildConfigs: GuildConfigSource,
 ): ReturnType<typeof setInterval> | null {
   const getServers = typeof servers === "function" ? servers : () => servers;
 
-  const guildsWithAlerts = Object.entries(guildConfigs).filter(
-    ([, cfg]) => cfg.downtimeAlerts?.channelId,
-  );
-
   const timer = setInterval(async () => {
+    // Same freshness rule as the threshold below: read the guild list per
+    // tick so a reload can add an alert target without a restart.
+    const guildsWithAlerts = guildsWith(
+      guildConfigs,
+      (cfg) => !!cfg.downtimeAlerts?.channelId,
+    );
     // Threshold is read fresh each tick so /config reload applies live;
     // 0 disables without restarting the timer.
     let threshold = DEFAULT_DISK_WARN_PERCENT;
@@ -95,7 +101,8 @@ export function startHostResourcesMonitor(
 
   log.info(
     "hostAlerts",
-    `Disk monitor active, alerting ${guildsWithAlerts.length} guild(s)`,
+    `Disk monitor active, alerting ` +
+      `${guildsWith(guildConfigs, (c) => !!c.downtimeAlerts?.channelId).length} guild(s)`,
   );
   return timer;
 }

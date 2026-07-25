@@ -1,20 +1,23 @@
 import { type Client } from "discord.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { serverInScope } from "../../../utils/guild/guildRouter.js";
+import {
+  resolveGuildConfigs,
+  type GuildConfigSource,
+} from "../../../utils/guild/guildConfigs.js";
 import { loadConfig } from "@mcbot/core/config.js";
 import { createEmbed } from "../../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../../utils/embeds/embedColors.js";
 import { roleMention } from "../../../utils/embeds/alertUtils.js";
 import { t, runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
-import type { GuildConfig } from "@mcbot/core/types/index.js";
 
 const warned = new Map<string, number>();
 
 export function startTpsMonitor(
   serverInstance: ServerInstance,
   client: Client,
-  guildConfigs: Record<string, GuildConfig>,
+  guildConfigs: GuildConfigSource,
 ): ReturnType<typeof setInterval> | null {
   const cfg = loadConfig();
   const interval = cfg.tpsPollIntervalMs;
@@ -35,7 +38,10 @@ export function startTpsMonitor(
         if (Date.now() - lastWarn < 300000) return;
         warned.set(serverInstance.id, Date.now());
 
-        for (const [guildId, gcfg] of Object.entries(guildConfigs)) {
+        // Resolved per alert — the timer is armed once per server.
+        for (const [guildId, gcfg] of Object.entries(
+          resolveGuildConfigs(guildConfigs),
+        )) {
           const tpsAlert = gcfg.tpsAlerts;
           if (!tpsAlert?.channelId) continue;
           if (!serverInScope(tpsAlert.server, serverInstance.id, guildId))

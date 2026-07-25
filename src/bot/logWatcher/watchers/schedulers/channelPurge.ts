@@ -2,6 +2,10 @@ import type { Client, Message, TextChannel } from "discord.js";
 import { kvGet } from "@mcbot/core/db/kv.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { nextMidnightEpoch } from "@mcbot/core/utils/time.js";
+import {
+  guildsWith,
+  type GuildConfigSource,
+} from "../../../utils/guild/guildConfigs.js";
 import type { GuildConfig, StatusMessageState } from "@mcbot/core/types/index.js";
 
 /**
@@ -123,19 +127,24 @@ async function purgeChannel(
  */
 export function startChannelPurge(
   client: Client,
-  guildConfigs: Record<string, GuildConfig>,
+  guildConfigs: GuildConfigSource,
 ): void {
-  const guildsWithPurge = Object.entries(guildConfigs).filter(
-    ([, cfg]) => cfg.channelPurge?.channelId,
-  );
+  // Targets are resolved when the purge RUNS, not when it is scheduled:
+  // returning early here used to leave the daily timer unscheduled for the
+  // whole process, so a channelPurge block added on config reload (or a
+  // second guild configured later) never purged anything.
+  const purgeTargets = (): Array<[string, GuildConfig]> =>
+    guildsWith(guildConfigs, (cfg) => !!cfg.channelPurge?.channelId);
 
-  if (guildsWithPurge.length === 0) {
-    log.info("purge", "No channel purge targets configured, skipping");
-    return;
+  if (purgeTargets().length === 0) {
+    log.info(
+      "purge",
+      "No channel purge targets configured yet — timer armed, targets re-read at each run",
+    );
   }
 
   const runPurge = async (): Promise<void> => {
-    for (const [guildId, gcfg] of guildsWithPurge) {
+    for (const [guildId, gcfg] of purgeTargets()) {
       const channelId = gcfg.channelPurge?.channelId;
       if (!channelId) continue;
 
@@ -156,7 +165,7 @@ export function startChannelPurge(
     const delayHours = (delay / 3_600_000).toFixed(1);
     log.info(
       "purge",
-      `Next channel purge in ${delayHours}h (${guildsWithPurge.length} guild(s))`,
+      `Next channel purge in ${delayHours}h (${purgeTargets().length} guild(s))`,
     );
     setTimeout(async () => {
       await runPurge().catch((err) => {

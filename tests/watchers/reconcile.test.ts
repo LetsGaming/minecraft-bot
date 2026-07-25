@@ -59,6 +59,10 @@ vi.mock("../../src/bot/logWatcher/RemoteLogWatcher.js", () => ({
 vi.mock("../../src/bot/logWatcher/watchers/log/chatBridge.js", () => ({
   registerChatBridge: vi.fn(),
   setupDiscordToMc: vi.fn(),
+  // Re-run by doReconcile so a guild added on reload still gets its bridge
+  // misconfigurations reported and its webhook handles re-resolved.
+  reportBridgeProblems: vi.fn(),
+  invalidateWebhookCache: vi.fn(),
 }));
 vi.mock("../../src/bot/logWatcher/watchers/log/joinLeave.js", () => ({
   registerJoinLeaveWatcher: vi.fn(),
