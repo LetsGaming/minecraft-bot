@@ -61,6 +61,12 @@ export const EXPECTED_WRAPPER_FEATURES: Record<string, ExpectedFeature> = {
     version: 1,
     degrades: "status, /players, /tps — the server appears permanently offline",
   },
+  "server-health": {
+    version: 1,
+    degrades:
+      "telling a stopped server from a merely loaded one — a lag spike is " +
+      "reported as downtime, and the wrapper being unreachable looks the same",
+  },
   "log-stream": {
     version: 1,
     degrades: "in-game !commands, the chat bridge, and every log watcher",

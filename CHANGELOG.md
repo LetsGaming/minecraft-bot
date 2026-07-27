@@ -4,6 +4,121 @@ All notable changes to this project are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **The bot can now ask the Minecraft server directly, with no wrapper
+  involved.** `serverPing.ts` speaks the standard server-list ping — the same
+  handshake a vanilla client uses to draw a row in the multiplayer list. It
+  needs no authentication, no plugin, and nothing from the API wrapper.
+
+  This is what makes the state model above worth having. Previously, when the
+  wrapper was down the bot's honest answer was "I cannot tell you anything
+  about this server" — a poor answer when a player can open their server list
+  and see it sitting there with four people on it. The information was always
+  available; the bot just had one route to it.
+
+  The ping is a **second opinion, consulted whenever the first is anything
+  other than "all good"**. That covers three cases:
+
+  - the wrapper is unreachable → the ping reports the server online with a
+    live player count, so the bot says *"Online — 4/20 players. API wrapper
+    unreachable, so controls, logs and stats are down"* instead of "Offline";
+  - the wrapper says `offline` but the server answers a ping → the ping wins
+    (a status response is proof; the wrapper's probes are inference) and the
+    bot logs that the wrapper's instance config is likely wrong;
+  - the wrapper says `unresponsive` → the state stands, but the ping supplies
+    the player count the wrapper could not.
+
+  Player names from a ping are a capped, best-effort **sample** — servers
+  publish at most a dozen and plugins can suppress it entirely — so they are
+  flagged as such and never rendered as a full roster. The counts are exact.
+
+  Configured automatically: the host comes from `apiUrl` (the wrapper runs on
+  the Minecraft host) and the port from the `gamePort` the wrapper reports,
+  falling back to 25565. `pingHost`, `pingPort` and `disableDirectPing`
+  override it for split deployments or a firewalled game port.
+
+- **Server state is now three-valued, and "we could not ask" is one of them.**
+
+  "Offline" used to mean three different things. `isRunning()` asked the API
+  wrapper, and anything that was not a clean `true` became offline — a wrapper
+  that was down, a wrapper that timed out, and a Minecraft server that had
+  genuinely stopped. Two of those three are wrong, and they are the common
+  ones: the wrapper is a separate process on the server host that gets
+  restarted and updated while Minecraft carries on with players on it.
+
+  `@mcbot/schema` now defines `ServerState` — `online`, `unresponsive`,
+  `offline`, `unknown` — as one axis, and `WrapperState` (`up` /
+  `unreachable`) as a second, independent one. That independence is the point:
+  the wrapper being down says nothing about whether players are on the server,
+  and `unknown` now means *every* channel failed, which is a far smaller claim
+  than the one it replaced. `ServerInstance.getHealth()` is the way to read
+  both; `isRunning()` remains as "up in some form" for callers that only branch
+  on whether it is worth querying.
+
+  Note the two predicates: `serverIsResponsive()` asks about the *server*,
+  `canQueryServer()` additionally requires a reachable wrapper. They came
+  apart the moment the bot learned to ping directly — a server can be
+  demonstrably online while every query against it fails — and a caller that
+  checks the wrong one asks for a player list it cannot get and renders the
+  zeros it gets back.
+
+  Needs wrapper 3.2.0+ for the full distinction. Against an older wrapper the
+  bot falls back to `/running` and says so in the startup contract report.
+
+### Fixed
+
+- **A lag spike was reported as a server outage.** The downtime monitor read
+  one boolean, so a server too loaded to answer RCON crossed the three-failure
+  threshold and got a "🔴 Server Down" alert. Worse than the wrong message: it
+  also wrote a `0` into the uptime history and closed every open play session
+  as a crash. `unresponsive` now counts as up, and neither happens.
+
+- **An unreachable API wrapper was reported as a server outage.** Same three
+  consequences, from a cause that says nothing at all about the Minecraft
+  server. It now gets its own alert on a longer five-check fuse, with a
+  recovery notice — and, because of the direct ping above, that alert says
+  what the server itself is doing in the same breath, since an operator woken
+  by it needs to know whether players are affected before anything else. When
+  the ping confirms the server is up, uptime is recorded as **up**; only when
+  nothing answers at all is the sample skipped, because a missing sample is
+  honest where a fabricated `false` is not. `/status`, the status embed, and
+  the dashboard each report the two facts separately instead of rendering
+  every one of them as "Offline".
+
+- **Player-count history recorded lag spikes as players leaving.** The sampler
+  skipped only servers that were down, so an unresponsive one was sampled,
+  `getList()` returned zeros, and the activity chart drew an exodus. It now
+  samples only responsive servers and leaves a gap otherwise.
+
+- **`mcbot_server_online` conflated three incidents into one alert.** Split
+  into `mcbot_wrapper_up`, `mcbot_server_up` and `mcbot_server_online`.
+  `mcbot_server_up` is **absent**, not `0`, when the wrapper did not answer —
+  a `0` there is a claim of an outage that was never established, and an
+  absent series breaks alert rules loudly instead.
+
+- **The chat bridge lagged behind in-game chat, worst with webhooks on.**
+  Two compounding causes, both since fixed:
+
+  `RemoteLogWatcher` awaited handler dispatch inside the SSE read loop, so the
+  socket sat idle for the whole of every handler's Discord round-trip and each
+  chat line waited for the previous line's HTTP request. Handlers still run in
+  order, one at a time — the *reader* no longer waits for them.
+
+  The bridge itself awaited each send inline, which held up every other
+  watcher for that server too. Sends are now queued per channel: ordered
+  within a channel, parallel across them. Webhook execution is the slow case
+  (its own rate-limit bucket, plus Discord fetching an mc-heads avatar it has
+  not cached), which is why the lag appeared with `useWebhook` and not
+  without it. Webhooks are also resolved once at setup and reload, instead of
+  on the first chat message of a session, and concurrent resolutions are
+  deduplicated.
+
+  Note: sends are no longer globally ordered across channels. Two guilds
+  bridging the same server may receive the same line in either order.
+
 ## [5.0.0] - 2026-07-17
 
 ### ⚠️ BREAKING: local mode is gone. The bot now requires the API wrapper.

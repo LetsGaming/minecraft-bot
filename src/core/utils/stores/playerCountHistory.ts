@@ -18,6 +18,7 @@
 import { getDb, withTransaction } from "../../db/index.js";
 import { mapRows, col } from "../../db/rows.js";
 import { log } from "../logger.js";
+import { canQueryServer } from "@mcbot/schema/serverState.js";
 import { TZ } from "../time.js";
 import type { ServerInstance } from "../server/server.js";
 
@@ -131,7 +132,12 @@ export function startPlayerCountSampler(
       const last = lastSampleAt.get(server.id) ?? 0;
       if (Date.now() - last < FRESH_SAMPLE_MS) continue;
       try {
-        if (!(await server.isRunning())) continue;
+        // Queryable, not merely up. A server that is unresponsive — or one
+        // that is fine but whose wrapper is down — answers getList() with
+        // zeros, and a zero here is indistinguishable from a genuinely empty
+        // server. Sampling either would draw the incident as a player exodus
+        // on the activity chart. Skipping leaves a gap, which is honest.
+        if (!canQueryServer(await server.getHealth())) continue;
         const list = await server.getList();
         const online = parseInt(String(list.playerCount), 10) || 0;
         await recordPlayerCountSample(server.id, online);

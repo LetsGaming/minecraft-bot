@@ -172,6 +172,26 @@ export const de: Record<string, string> = {
   "downtime.downTitle": "🔴 Server offline",
   "downtime.down":
     "**{server}** scheint offline zu sein.\n{failures} Prüfungen in Folge fehlgeschlagen.",
+  "downtime.apiDownTitle": "🟠 Server-API nicht erreichbar",
+  "downtime.apiDown":
+    "Die API-Wrapper von **{server}** antwortet seit {failures} Prüfungen nicht.\nDer Minecraft-Server selbst läuft möglicherweise weiterhin — sein Zustand ist derzeit **unbekannt**, nicht offline.",
+  "downtime.apiUpTitle": "✅ Server-API wieder erreichbar",
+  "downtime.apiUp": "Die API-Wrapper von **{server}** antwortet wieder.",
+  "downtime.apiDownServerKnown":
+    "Der Minecraft-Server selbst hat auf einen direkten Ping geantwortet und ist **{state}** — Spieler sind nicht betroffen, aber Server-Steuerung, Chat-Bridge und Statistiken fehlen, bis die Wrapper wieder läuft.",
+  "downtime.apiDownServerUnknown":
+    "Der Minecraft-Server hat ebenfalls nicht auf einen direkten Ping geantwortet, sein Zustand ist daher **unbekannt** — er läuft möglicherweise noch.",
+  "state.online": "Online",
+  "state.unresponsive": "Antwortet nicht",
+  "state.offline": "Offline",
+  "state.unknown": "Zustand unbekannt",
+  "state.unresponsiveHint":
+    "Der Server-Prozess läuft, antwortet aber nicht auf Befehle — er startet möglicherweise gerade oder ist stark ausgelastet.",
+  "state.unknownHint":
+    "Weder die API-Wrapper des Servers noch der Server selbst haben geantwortet, daher konnte der Zustand nicht ermittelt werden. Prüfe, ob der Host erreichbar ist.",
+  "state.wrapperDownHint":
+    "Der Server selbst ist erreichbar, seine API-Wrapper jedoch nicht — Server-Steuerung, Chat-Bridge, Statistiken und Log-Überwachung sind daher nicht verfügbar, bis sie wieder läuft.",
+  "state.viaPing": "per direktem Server-Ping",
   "tps.lowTitle": "⚠️ Niedrige-TPS-Warnung",
   "tps.low": "Die Server-TPS sind unter {threshold} gefallen",
 

@@ -4,6 +4,11 @@ import { resolveServer } from "../../utils/guild/guildRouter.js";
 
 import { withErrorHandling } from "../middleware.js";
 import {
+  describeHealth,
+  describePlayers,
+} from "../../utils/embeds/serverStateDisplay.js";
+import { canQueryServer } from "@mcbot/schema/serverState.js";
+import {
   getHostResources,
   formatBytes,
 } from "@mcbot/core/utils/server/hostResources.js";
@@ -21,14 +26,26 @@ export const execute = withErrorHandling(async (interaction) => {
   const server = resolveServer(interaction);
   if (!server) throw new Error("Server not found.");
 
-  const running = await server.isRunning();
+  const health = await server.getHealth();
+  const display = describeHealth(health);
   const botPing = interaction.client.ws.ping;
   const roundTrip = Date.now() - sent;
 
-  if (!running) {
+  // Only a responsive server can be asked for a player list. The other three
+  // states each need their own answer — "Offline", "up but not answering",
+  // and "we could not reach the API wrapper" are different facts, and this
+  // reply used to give all of them as "**Offline**".
+  if (!canQueryServer(health)) {
+    // A direct ping can still supply counts with the wrapper down, so show
+    // them — "online, 4 players, controls unavailable" is the whole point.
+    const players = describePlayers(health);
     const embed = createEmbed({
       title: `Server Status — ${server.id}`,
-      description: "**Offline**",
+      description:
+        `${display.emoji} **${display.label}**` +
+        (players ? ` — ${players}` : "") +
+        (display.hint ? `\n${display.hint}` : ""),
+      color: display.color,
     });
     embed.addFields(
       { name: "Bot Ping", value: `${botPing}ms`, inline: true },
@@ -41,7 +58,8 @@ export const execute = withErrorHandling(async (interaction) => {
   const { playerCount, maxPlayers, players } = await server.getList();
   const embed = createEmbed({
     title: `Server Status — ${server.id}`,
-    description: `**Online** — ${playerCount}/${maxPlayers} players`,
+    description: `${display.emoji} **${display.label}** — ${playerCount}/${maxPlayers} players`,
+    color: display.color,
   });
   if (players.length > 0)
     embed.addFields({

@@ -30,7 +30,7 @@
         <template #title>
           <div class="card-head">
             <span class="card-title">
-              <StatusDot :state="server.online ? 'up' : 'down'" />
+              <StatusDot :state="statusDot(server)" />
               {{ server.id }}
             </span>
             <Tag
@@ -39,7 +39,12 @@
               :value="`${server.tps.toFixed(1)} TPS`"
               rounded
             />
-            <Tag v-else-if="!server.online" severity="danger" value="Offline" rounded />
+            <Tag
+              v-else-if="!server.online"
+              :severity="stateSeverity(server.state)"
+              :value="stateLabel(server.state)"
+              rounded
+            />
           </div>
         </template>
 
@@ -53,10 +58,20 @@
               <span class="muted small">players online</span>
             </div>
             <div v-else class="offline-note muted small">
-              This server is not responding right now.
+              {{ stateExplanation(server.state) }}
             </div>
 
-            <div v-if="server.online && server.players.names.length" class="names">
+            <!-- The wrapper is a separate fact from the server's state, so it
+                 gets its own line — including when the server is perfectly
+                 fine and only the controls are gone. -->
+            <div v-if="wrapperNote(server)" class="wrapper-note small">
+              <i class="pi pi-link" /> {{ wrapperNote(server) }}
+            </div>
+
+            <div v-if="server.players.names.length" class="names">
+              <span v-if="server.players.sampled" class="muted small names-note">
+                Sample of players online (the server publishes a partial list):
+              </span>
               <Tag
                 v-for="name in server.players.names"
                 :key="name"
@@ -127,7 +142,16 @@ import Card from "primevue/card";
 import Button from "primevue/button";
 import Tag from "primevue/tag";
 import { useToast } from "primevue/usetoast";
-import { formatBytes, diskLabel, tpsSeverity } from "../utils/format";
+import {
+  formatBytes,
+  diskLabel,
+  tpsSeverity,
+  statusDot,
+  stateLabel,
+  stateSeverity,
+  stateExplanation,
+  wrapperNote,
+} from "../utils/format";
 import { useServerStatus } from "../composables/useServerStatus";
 import { useServerActions } from "../composables/useServerActions";
 import ViewHeader from "../components/ui/ViewHeader.vue";
@@ -164,6 +188,7 @@ export default defineComponent({
       servers, refreshing: loading, refresh,
       busy, logServer, logLines, runAction, toggleLog,
       formatBytes, diskLabel, tpsSeverity,
+      statusDot, stateLabel, stateSeverity, stateExplanation, wrapperNote,
     };
   },
   data() {
@@ -226,6 +251,8 @@ function capitalize(s: string): string {
 .players { display: flex; align-items: baseline; gap: 8px; }
 .players-count { font-size: 27px; font-weight: 500; }
 .offline-note { padding: 6px 0; }
+.wrapper-note { margin-top: 8px; color: var(--mc-mid); display: flex; gap: 6px; align-items: baseline; }
+.names-note { flex-basis: 100%; margin-bottom: 2px; }
 .names { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 11px; }
 
 /* Metrics row — labelled key/value pairs */

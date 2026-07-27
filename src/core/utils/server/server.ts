@@ -9,6 +9,12 @@
  * server had just been told.
  */
 import { log } from "../logger.js";
+import {
+  serverIsUp,
+  stateIsKnown,
+  unknownHealth,
+  type ServerHealth,
+} from "@mcbot/schema/serverState.js";
 import type { ServerCapabilities } from "../../types/index.js";
 import { loadConfig } from "../../config.js";
 import type {
@@ -58,23 +64,44 @@ export class ServerInstance {
     }
   }
 
-  async isRunning(): Promise<boolean> {
-    const { isRunning } = await import("./serverAccess.js");
-    // A legitimate "not running" comes back as `false` and returns straight
-    // away; only a THROWN request error (timeout, a network blip, or a
-    // momentarily busy wrapper) is treated as transient and retried, so a
-    // single failed request never reports the server as down.
+  /**
+   * What this server is doing, from whichever channel could tell — the API
+   * wrapper, or a direct server-list ping when the wrapper is down.
+   *
+   * Only `unknown` is retried, and reaching it means *both* channels failed.
+   * Any channel that answered has already told us what the server is doing;
+   * asking again would not improve the answer, and re-probing a server that
+   * is `unresponsive` precisely because it is loaded just adds load. A single
+   * dropped packet, though, must not turn into a state change, so a total
+   * failure gets one more chance.
+   */
+  async getHealth(): Promise<ServerHealth> {
+    const { getHealth } = await import("./serverAccess.js");
     const RETRY_DELAY_MS = 500;
+    let last: ServerHealth = unknownHealth("no attempt made");
     for (let attempt = 0; attempt < 2; attempt++) {
       if (attempt > 0)
         await new Promise<void>((r) => setTimeout(r, RETRY_DELAY_MS));
-      try {
-        return await isRunning(this.config);
-      } catch {
-        // transient — retry once, then fall through to offline
-      }
+      last = await getHealth(this.config);
+      if (stateIsKnown(last)) return last;
     }
-    return false;
+    log.debug(
+      this.id,
+      `neither the API wrapper nor a direct ping answered: ${last.reason ?? "unknown"}`,
+    );
+    return last;
+  }
+
+  /**
+   * Up in some form — process running, whether or not it is answering.
+   *
+   * Deliberately false for `unknown`: we established nothing, and a
+   * boolean has nowhere to put that. Callers that show state to a human, or
+   * decide whether to alert, must use getHealth() instead — this is for the
+   * ones that only branch on "can I bother querying it".
+   */
+  async isRunning(): Promise<boolean> {
+    return serverIsUp(await this.getHealth());
   }
 
   async getList(): Promise<ServerListResult> {

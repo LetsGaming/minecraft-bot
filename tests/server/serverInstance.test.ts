@@ -18,13 +18,13 @@ vi.mock("../../src/core/utils/logger.js", () => ({
 }));
 
 const sendCommand = vi.fn();
-const isRunningFn = vi.fn();
+const getHealthFn = vi.fn();
 const getListFn = vi.fn();
 const getTpsFn = vi.fn();
 const tailLog = vi.fn();
 vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
   sendCommand: (...a: unknown[]) => sendCommand(...a),
-  isRunning: (...a: unknown[]) => isRunningFn(...a),
+  getHealth: (...a: unknown[]) => getHealthFn(...a),
   getList: (...a: unknown[]) => getListFn(...a),
   getTps: (...a: unknown[]) => getTpsFn(...a),
   tailLog: (...a: unknown[]) => tailLog(...a),
@@ -42,7 +42,7 @@ const cfg: ServerConfig = {
 let inst: ServerInstance;
 
 beforeEach(() => {
-  for (const m of [sendCommand, isRunningFn, getListFn, getTpsFn, tailLog]) {
+  for (const m of [sendCommand, getHealthFn, getListFn, getTpsFn, tailLog]) {
     m.mockReset();
   }
   tailLog.mockResolvedValue("");
@@ -100,32 +100,50 @@ describe("ServerInstance.getSeed()", () => {
 });
 
 describe("ServerInstance.isRunning()", () => {
+  // isRunning() is now a view over getHealth(): "the process is up", rather
+  // than the old "RCON answered inside three seconds". The distinction is the
+  // whole point — see tests/server/serverHealth.test.ts for the full model.
+  const health = (state: string) => ({
+    state,
+    processUp: state === "online" || state === "unresponsive",
+    rcon: "responsive",
+    probe: "socket",
+    reason: null,
+    checkedAt: Date.now(),
+  });
+
   it("reports what the wrapper reports", async () => {
-    isRunningFn.mockResolvedValue(true);
+    getHealthFn.mockResolvedValue(health("online"));
     expect(await inst.isRunning()).toBe(true);
   });
 
   it("returns false without retrying when the server is simply down", async () => {
-    // `false` is an answer, not a failure — retrying it would double every
-    // downtime check for no new information.
-    isRunningFn.mockResolvedValue(false);
+    // A wrapper that says "offline" has answered — retrying it would double
+    // every downtime check for no new information.
+    getHealthFn.mockResolvedValue(health("offline"));
     expect(await inst.isRunning()).toBe(false);
-    expect(isRunningFn).toHaveBeenCalledTimes(1);
+    expect(getHealthFn).toHaveBeenCalledTimes(1);
   });
 
-  it("retries a thrown error once before declaring the server down", async () => {
-    // A timeout or a momentarily busy wrapper is transient; one failed
-    // request must not report a healthy server as offline.
-    isRunningFn.mockRejectedValueOnce(new Error("ETIMEDOUT"));
-    isRunningFn.mockResolvedValueOnce(true);
+  it("counts a loaded, unresponsive server as running", async () => {
+    getHealthFn.mockResolvedValue(health("unresponsive"));
     expect(await inst.isRunning()).toBe(true);
-    expect(isRunningFn).toHaveBeenCalledTimes(2);
+    expect(getHealthFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries once when nothing answered, before giving up", async () => {
+    // A timeout or a momentarily busy wrapper is transient; one failed
+    // request must not change what we report about the server.
+    getHealthFn.mockResolvedValueOnce(health("unknown", "unreachable"));
+    getHealthFn.mockResolvedValueOnce(health("online"));
+    expect(await inst.isRunning()).toBe(true);
+    expect(getHealthFn).toHaveBeenCalledTimes(2);
   });
 
   it("gives up after the retry", async () => {
-    isRunningFn.mockRejectedValue(new Error("ETIMEDOUT"));
+    getHealthFn.mockResolvedValue(health("unknown", "unreachable"));
     expect(await inst.isRunning()).toBe(false);
-    expect(isRunningFn).toHaveBeenCalledTimes(2);
+    expect(getHealthFn).toHaveBeenCalledTimes(2);
   });
 });
 

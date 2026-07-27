@@ -50,6 +50,28 @@ export interface RawServerConfig {
    * field-by-field over the global `commands` block (see
    * CommandOverrideConfig). Slash commands scope per guild instead.
    */
+  /**
+   * Host to send a direct Minecraft server-list ping to, when the API wrapper
+   * cannot be reached. Defaults to the hostname in `apiUrl` — the wrapper
+   * runs on the Minecraft host, so that is already the right machine. Set
+   * this only when the game server answers on a different address than the
+   * wrapper (a proxy, or a split deployment).
+   */
+  pingHost?: string;
+  /**
+   * Port for that ping. Defaults to whatever the wrapper last reported as the
+   * server's `server-port`, and to 25565 before it has ever answered.
+   */
+  pingPort?: number;
+  /**
+   * Turn the direct ping off entirely.
+   *
+   * The ping is what lets the bot still report "online, 4 players" while the
+   * wrapper is down, so switching it off means going back to "state unknown"
+   * for that case. Only worth it if the game port is firewalled off from the
+   * bot, or the server runs with `enable-status=false`.
+   */
+  disableDirectPing?: boolean;
   commands?: Record<string, CommandOverrideConfig>;
 }
 
@@ -67,6 +89,10 @@ export interface ServerConfig {
   apiUrl: string;
   apiKey: string;
   allowInsecureHttp?: boolean;
+  /** See RawServerConfig — the direct-ping fallback when the wrapper is down. */
+  pingHost?: string;
+  pingPort?: number;
+  disableDirectPing?: boolean;
   commands?: Record<string, CommandOverrideConfig>;
 }
 

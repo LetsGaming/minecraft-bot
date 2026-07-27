@@ -6,7 +6,10 @@
 import { defineComponent, type PropType } from "vue";
 
 // The small status indicator used for servers and the bot process.
-// up = online/healthy, down = offline, stale = degraded (heartbeat lost).
+//   up    = healthy / answering
+//   down  = confirmed stopped
+//   stale = up but not answering, or state unknown (wrapper unreachable,
+//           heartbeat lost). Deliberately not red: nothing is confirmed down.
 export default defineComponent({
   name: "StatusDot",
   props: {

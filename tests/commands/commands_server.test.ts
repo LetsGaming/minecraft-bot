@@ -57,10 +57,29 @@ import * as serverAccess from "../../src/core/utils/server/serverAccess.js";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
+/** A health value for one of the four server states. */
+function health(state: string, wrapper = "up") {
+  return {
+    state,
+    source: wrapper === "up" ? "wrapper" : state === "unknown" ? "none" : "ping",
+    wrapper,
+    processUp: state === "online" || state === "unresponsive",
+    rcon: state === "online" && wrapper === "up" ? "responsive" : "unknown",
+    probe: state === "offline" ? "none" : "socket",
+    players:
+      wrapper === "unreachable" && state === "online"
+        ? { online: 4, max: 20, names: ["Alice"], sampled: true }
+        : null,
+    reason: null,
+    checkedAt: Date.now(),
+  };
+}
+
 function makeServer(id = "survival", overrides: Record<string, unknown> = {}) {
   return {
     id,
     config: { id, serverDir: "/fake" },
+    getHealth: vi.fn().mockResolvedValue(health("online")),
     isRunning: vi.fn().mockResolvedValue(true),
     getList: vi
       .fn()
@@ -122,12 +141,63 @@ describe("/status command", () => {
 
   it("replies with an offline embed when server is not running", async () => {
     const server = makeServer("survival", {
-      isRunning: vi.fn().mockResolvedValue(false),
+      getHealth: vi.fn().mockResolvedValue(health("offline")),
     });
     vi.mocked(resolveServer).mockReturnValue(server);
     const interaction = makeInteraction();
     await execute(interaction);
     expect(interaction.editReply).toHaveBeenCalled();
+  });
+
+  it.each([
+    ["unresponsive", "Not responding"],
+    ["unknown", "State unknown"],
+    ["offline", "Offline"],
+  ])(
+    "distinguishes %s from the other non-online states in the reply",
+    async (state, label) => {
+      // The bug: all three of these rendered as "**Offline**". They are
+      // different facts and the embed has to say which one it is.
+      const server = makeServer("survival", {
+        getHealth: vi
+          .fn()
+          .mockResolvedValue(health(state, state === "unknown" ? "unreachable" : "up")),
+      });
+      vi.mocked(resolveServer).mockReturnValue(server);
+      const interaction = makeInteraction();
+      await execute(interaction);
+
+      // The mocked createEmbed keeps its options on `_opts`, which is where
+      // the state copy lands.
+      const call = vi.mocked(interaction.editReply).mock.calls[0]![0] as {
+        embeds: Array<{ _opts?: { description?: string } }>;
+      };
+      expect(call.embeds[0]?._opts?.description).toContain(label);
+      // …and a non-online server is never asked for a player list.
+      expect(server.getList).not.toHaveBeenCalled();
+    },
+  );
+
+  it("reports players from a direct ping when the wrapper is down", async () => {
+    // The case that motivated the whole ping fallback: the server is online
+    // with people on it, and only the bot's route to it has failed. Saying
+    // "Offline" — or even "State unknown" — is the wrong message.
+    const server = makeServer("survival", {
+      getHealth: vi.fn().mockResolvedValue(health("online", "unreachable")),
+    });
+    vi.mocked(resolveServer).mockReturnValue(server);
+    const interaction = makeInteraction();
+    await execute(interaction);
+
+    const call = vi.mocked(interaction.editReply).mock.calls[0]![0] as {
+      embeds: Array<{ _opts?: { description?: string } }>;
+    };
+    const description = call.embeds[0]?._opts?.description ?? "";
+    expect(description).toContain("Online");
+    expect(description).toContain("4/20 players");
+    expect(description).not.toContain("Offline");
+    // The wrapper being down still has to be said — controls are gone.
+    expect(description.toLowerCase()).toContain("wrapper");
   });
 
   it("throws when resolveServer returns nothing", async () => {

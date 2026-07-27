@@ -60,6 +60,14 @@ export type {
   ConfigWriteConflict,
 } from "@mcbot/schema";
 
+// Runtime values, not just types: the views switch on these, and comparing
+// against string literals in each component is how the states drift apart.
+// Re-exported as values, not just types: the views switch on these, and
+// comparing against string literals in each component is how the set of
+// states drifts apart. The `const` and the type share a name, so this one
+// line carries both.
+export { ServerState, RconState, WrapperState, HealthSource } from "@mcbot/schema";
+
 // ── Dashboard-specific shapes (not in @mcbot/schema — web-only) ──
 export interface MeResponse {
   uid: string;

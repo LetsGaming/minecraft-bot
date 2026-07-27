@@ -68,6 +68,13 @@ function resolveServerConfig(
     ...(raw.allowInsecureHttp !== undefined
       ? { allowInsecureHttp: raw.allowInsecureHttp }
       : {}),
+    // Direct-ping overrides. All optional: the defaults (apiUrl's host, the
+    // wrapper-reported game port) are right for a normal single-host setup.
+    ...(raw.pingHost ? { pingHost: raw.pingHost } : {}),
+    ...(raw.pingPort !== undefined ? { pingPort: raw.pingPort } : {}),
+    ...(raw.disableDirectPing !== undefined
+      ? { disableDirectPing: raw.disableDirectPing }
+      : {}),
     ...(raw.commands ? { commands: raw.commands } : {}),
   };
 }

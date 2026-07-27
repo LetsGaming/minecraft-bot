@@ -50,12 +50,48 @@ import {
 let _idSeq = 0;
 const uid = () => `srv-${++_idSeq}`;
 
-function fakeServer(id: string, online: boolean | Error) {
+/**
+ * A health value. `wrapper` is a second, independent axis — that separation is
+ * the thing under test, so it has to be settable on its own.
+ */
+function health(state: string, wrapper = "up") {
+  return {
+    state,
+    source: wrapper === "up" ? "wrapper" : state === "unknown" ? "none" : "ping",
+    wrapper,
+    processUp: state === "online" || state === "unresponsive",
+    rcon: state === "online" && wrapper === "up" ? "responsive" : "unknown",
+    probe: state === "offline" ? "none" : "socket",
+    players:
+      wrapper === "unreachable" && state === "online"
+        ? { online: 4, max: 20, names: ["Alice"], sampled: true }
+        : null,
+    reason: wrapper === "unreachable" ? "ECONNREFUSED" : null,
+    checkedAt: Date.now(),
+  };
+}
+
+/** Wrapper down, but the server answered a direct ping with players on it. */
+const PINGED_ONLINE = () => health("online", "unreachable");
+/** Wrapper down AND the game port silent — the only true "we don't know". */
+const NOTHING_ANSWERED = () => health("unknown", "unreachable");
+
+/**
+ * `online` is a boolean for the legacy cases (true → online, false →
+ * offline), a state string for the new ones, or an Error to assert the
+ * monitor survives a throwing probe.
+ */
+function fakeServer(
+  id: string,
+  online: boolean | string | Error | ReturnType<typeof health>,
+) {
   return {
     id,
-    isRunning: vi.fn().mockImplementation(async () => {
+    getHealth: vi.fn().mockImplementation(async () => {
       if (online instanceof Error) throw online;
-      return online;
+      if (typeof online === "string") return health(online);
+      if (typeof online === "object") return online;
+      return health(online ? "online" : "offline");
     }),
   } as never;
 }
@@ -132,7 +168,7 @@ describe("startDowntimeMonitor — online server", () => {
   it("sends a recovery embed after the server comes back online", async () => {
     const id = uid();
     const send = vi.fn().mockResolvedValue(undefined);
-    const srv = { id, isRunning: vi.fn().mockResolvedValue(false) } as never;
+    const srv = { id, getHealth: vi.fn().mockResolvedValue(health("offline")) } as never;
     const timer = startDowntimeMonitor([srv], fakeClient(send), guildsFor());
 
     // Three offline ticks → downtime alert
@@ -140,7 +176,7 @@ describe("startDowntimeMonitor — online server", () => {
     expect(send).toHaveBeenCalledTimes(1);
 
     // Server recovers
-    vi.mocked(srv.isRunning).mockResolvedValue(true);
+    vi.mocked(srv.getHealth).mockResolvedValue(health("online"));
     await vi.advanceTimersByTimeAsync(TICK);
 
     expect(send).toHaveBeenCalledTimes(2);
@@ -200,13 +236,144 @@ describe("startDowntimeMonitor — offline server", () => {
     clearInterval(timer);
   });
 
-  it("handles isRunning() throwing without crashing the monitor", async () => {
+  it("handles getHealth() throwing without crashing the monitor", async () => {
     const timer = startDowntimeMonitor(
       [fakeServer(uid(), new Error("RCON gone"))],
       fakeClient(),
       guildsFor(),
     );
     await vi.advanceTimersByTimeAsync(TICK); // must not throw
+    clearInterval(timer);
+  });
+});
+
+// ── unreachable wrapper — the bug this monitor got wrong ───────────────────
+
+describe("startDowntimeMonitor — the API wrapper is unreachable", () => {
+  // The wrapper is a separate process on the server host. When it stops
+  // answering, the Minecraft server is usually still up with players on it —
+  // and since the bot now pings the server directly, it can say so.
+
+  it("never reports the server down while a ping says it is online", async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    const timer = startDowntimeMonitor(
+      [fakeServer(uid(), PINGED_ONLINE())],
+      fakeClient(send),
+      guildsFor(),
+    );
+    // Past the server threshold (3) but short of the wrapper one (5).
+    for (let i = 0; i < 4; i++) await vi.advanceTimersByTimeAsync(TICK);
+    expect(send).not.toHaveBeenCalled();
+    clearInterval(timer);
+  });
+
+  it("records the server as UP — the ping established that", async () => {
+    const { recordCheck } = await import("../../src/core/utils/stores/uptimeTracker.js");
+    vi.mocked(recordCheck).mockClear();
+    const id = uid();
+    const timer = startDowntimeMonitor(
+      [fakeServer(id, PINGED_ONLINE())],
+      fakeClient(),
+      guildsFor(),
+    );
+    await vi.advanceTimersByTimeAsync(TICK);
+    // The old code recorded `false` here, quietly poisoning uptime every time
+    // the wrapper was restarted. It is not even a gap now — we know it is up.
+    expect(vi.mocked(recordCheck)).toHaveBeenCalledWith(id, true);
+    clearInterval(timer);
+  });
+
+  it("still raises its own alert — controls are gone even though players are fine", async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    const timer = startDowntimeMonitor(
+      [fakeServer(uid(), PINGED_ONLINE())],
+      fakeClient(send),
+      guildsFor(),
+    );
+    for (let i = 0; i < 5; i++) await vi.advanceTimersByTimeAsync(TICK);
+    expect(send).toHaveBeenCalledTimes(1);
+    // …and does not repeat it while the wrapper stays down.
+    for (let i = 0; i < 5; i++) await vi.advanceTimersByTimeAsync(TICK);
+    expect(send).toHaveBeenCalledTimes(1);
+    clearInterval(timer);
+  });
+
+  it("clears the wrapper alert as soon as the wrapper answers again", async () => {
+    const id = uid();
+    const send = vi.fn().mockResolvedValue(undefined);
+    const srv = fakeServer(id, PINGED_ONLINE()) as unknown as {
+      getHealth: ReturnType<typeof vi.fn>;
+    };
+    const timer = startDowntimeMonitor(
+      [srv as never],
+      fakeClient(send),
+      guildsFor(),
+    );
+    for (let i = 0; i < 5; i++) await vi.advanceTimersByTimeAsync(TICK);
+    expect(send).toHaveBeenCalledTimes(1);
+
+    srv.getHealth.mockResolvedValue(health("online"));
+    await vi.advanceTimersByTimeAsync(TICK);
+    expect(send).toHaveBeenCalledTimes(2); // recovery notice
+    clearInterval(timer);
+  });
+});
+
+describe("startDowntimeMonitor — nothing answered at all", () => {
+  // Both channels failed. This is the only case where the bot genuinely
+  // cannot say, and it should be rare.
+
+  it("records no uptime sample — a missing sample beats a fabricated one", async () => {
+    const { recordCheck } = await import("../../src/core/utils/stores/uptimeTracker.js");
+    vi.mocked(recordCheck).mockClear();
+    const timer = startDowntimeMonitor(
+      [fakeServer(uid(), NOTHING_ANSWERED())],
+      fakeClient(),
+      guildsFor(),
+    );
+    for (let i = 0; i < 4; i++) await vi.advanceTimersByTimeAsync(TICK);
+    expect(vi.mocked(recordCheck)).not.toHaveBeenCalled();
+    clearInterval(timer);
+  });
+
+  it("never raises a server-down alert on an unknown state", async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    const timer = startDowntimeMonitor(
+      [fakeServer(uid(), NOTHING_ANSWERED())],
+      fakeClient(send),
+      guildsFor(),
+    );
+    for (let i = 0; i < 4; i++) await vi.advanceTimersByTimeAsync(TICK);
+    expect(send).not.toHaveBeenCalled();
+    clearInterval(timer);
+  });
+});
+
+// ── unresponsive server — up, but not answering ────────────────────────────
+
+describe("startDowntimeMonitor — the server is loaded but running", () => {
+  it("does not alert: a lag spike is not an outage", async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    const timer = startDowntimeMonitor(
+      [fakeServer(uid(), "unresponsive")],
+      fakeClient(send),
+      guildsFor(),
+    );
+    for (let i = 0; i < 8; i++) await vi.advanceTimersByTimeAsync(TICK);
+    expect(send).not.toHaveBeenCalled();
+    clearInterval(timer);
+  });
+
+  it("records it as uptime — the process is up", async () => {
+    const { recordCheck } = await import("../../src/core/utils/stores/uptimeTracker.js");
+    const id = uid();
+    const timer = startDowntimeMonitor(
+      [fakeServer(id, "unresponsive")],
+      fakeClient(),
+      guildsFor(),
+    );
+    await vi.advanceTimersByTimeAsync(TICK);
+    expect(vi.mocked(recordCheck)).toHaveBeenCalledWith(id, true);
     clearInterval(timer);
   });
 });

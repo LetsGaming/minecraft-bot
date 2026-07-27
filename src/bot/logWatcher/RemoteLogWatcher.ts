@@ -15,6 +15,8 @@ import type { LogHandler, LogWatcherEntry } from "@mcbot/core/types/index.js";
 
 const RECONNECT_BASE_MS = 5_000;
 const RECONNECT_MAX_MS = 60_000;
+/** Depth at which the handler queue is falling behind enough to say so. */
+const QUEUE_WARN_DEPTH = 50;
 
 export class RemoteLogWatcher {
   readonly server: ServerInstance;
@@ -24,6 +26,23 @@ export class RemoteLogWatcher {
   private _reconnectDelay = RECONNECT_BASE_MS;
   private _reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private _abortController: AbortController | null = null;
+  /**
+   * Serialises handler dispatch without the socket reader waiting on it.
+   *
+   * The read loop used to `await this._dispatch(line)`, so the SSE socket sat
+   * idle for the whole of every handler's Discord round-trip — and handlers
+   * run serially, so line N+1 waited for line N's HTTP request to finish. On
+   * a chatty server that compounds into seconds of visible lag between
+   * someone typing in game and the message appearing in Discord.
+   *
+   * Handlers still run one at a time and in order (several of them depend on
+   * that — join/leave bookkeeping, session tracking). The change is only that
+   * the *reader* no longer blocks on the queue, so incoming lines are drained
+   * from the socket at network speed and buffered here instead of applying
+   * backpressure all the way to the wrapper's fan-out.
+   */
+  private _queue: Promise<void> = Promise.resolve();
+  private _queueDepth = 0;
 
   constructor(server: ServerInstance) {
     this.server = server;
@@ -118,7 +137,7 @@ export class RemoteLogWatcher {
             if (!json) continue;
             try {
               const { line } = JSON.parse(json) as { line: string };
-              await this._dispatch(line);
+              this._enqueue(line);
             } catch {
               /* malformed — skip */
             }
@@ -145,6 +164,30 @@ export class RemoteLogWatcher {
       this._connect();
     }, this._reconnectDelay);
     this._reconnectDelay = Math.min(this._reconnectDelay * 2, RECONNECT_MAX_MS);
+  }
+
+  /**
+   * Hand a line to the ordered handler queue and return immediately.
+   *
+   * The depth counter exists to make a stuck handler visible: without it a
+   * queue that stops draining looks exactly like a quiet server. It only
+   * warns — dropping lines would lose chat, and slow-but-correct beats fast
+   * and lossy for this.
+   */
+  private _enqueue(line: string): void {
+    this._queueDepth++;
+    if (this._queueDepth === QUEUE_WARN_DEPTH) {
+      log.warn(
+        this.server.id,
+        `Log handler queue is ${this._queueDepth} lines deep — Discord ` +
+          `round-trips are not keeping up with the log`,
+      );
+    }
+    this._queue = this._queue
+      .then(() => this._dispatch(line))
+      .finally(() => {
+        this._queueDepth--;
+      });
   }
 
   private async _dispatch(line: string): Promise<void> {

@@ -40,7 +40,7 @@
               :class="['switch-item', { active: s.id === activeServer }]"
               @click="activeServer = s.id"
             >
-              <StatusDot :state="s.online ? 'up' : 'down'" />
+              <StatusDot :state="statusDot(s)" />
               <span class="switch-name">{{ s.id }}</span>
               <span v-if="s.online && s.tps !== null" class="switch-tps muted small">
                 {{ s.tps.toFixed(0) }} TPS
@@ -146,6 +146,7 @@ import { apiGet, apiSend, UnauthorizedError } from "./api";
 import type { MeResponse, ServerStatus } from "./api";
 import { useInvite } from "./composables/useInvite";
 import StatusDot from "./components/ui/StatusDot.vue";
+import { statusDot } from "./utils/format";
 import OverviewView from "./views/OverviewView.vue";
 import StatusView from "./views/StatusView.vue";
 import GuildsView from "./views/GuildsView.vue";
@@ -160,7 +161,7 @@ export default defineComponent({
     OverviewView, StatusView, GuildsView, CommandsView, ConfigView, AuditView,
   },
   setup() {
-    return { ...useInvite() };
+    return { ...useInvite(), statusDot };
   },
   data() {
     return {

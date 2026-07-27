@@ -121,10 +121,15 @@ const WEBHOOK_NAME = "minecraft-bot bridge";
 // channelId → webhook (null = tried and failed; retry on next reload
 // only, not per message, so a missing permission can't spam the API).
 const webhookCache = new Map<string, Webhook | null>();
+// channelId → resolution in flight. Without this, the first burst of chat
+// after a (re)start starts one channels.fetch + fetchWebhooks pair per line,
+// because none of them has finished populating the cache yet.
+const webhookPending = new Map<string, Promise<Webhook | null>>();
 
 /** Exposed for tests / reconcile. */
 export function invalidateWebhookCache(): void {
   webhookCache.clear();
+  webhookPending.clear();
 }
 
 /**
@@ -133,11 +138,27 @@ export function invalidateWebhookCache(): void {
  * webhooks or the bot lacks Manage Webhooks — callers fall back to the
  * embed form.
  */
-async function bridgeWebhook(
+function bridgeWebhook(
   client: Client,
   channelId: string,
 ): Promise<Webhook | null> {
-  if (webhookCache.has(channelId)) return webhookCache.get(channelId)!;
+  if (webhookCache.has(channelId)) {
+    return Promise.resolve(webhookCache.get(channelId)!);
+  }
+  const pending = webhookPending.get(channelId);
+  if (pending) return pending;
+
+  const resolving = resolveWebhook(client, channelId).finally(() => {
+    webhookPending.delete(channelId);
+  });
+  webhookPending.set(channelId, resolving);
+  return resolving;
+}
+
+async function resolveWebhook(
+  client: Client,
+  channelId: string,
+): Promise<Webhook | null> {
   try {
     const channel = await client.channels.fetch(channelId);
     if (
@@ -171,6 +192,90 @@ async function bridgeWebhook(
   }
 }
 
+// ── Outbound send queue ────────────────────────────────────────────────────
+// One ordered queue per Discord channel, so a slow send delays only the
+// channel it is on.
+//
+// Why this exists: the handler used to await each send inline, and log
+// handlers run one at a time on the watcher's dispatch queue. So a chat line
+// held up every *other* watcher — joins, deaths, in-game commands — for the
+// duration of a Discord round-trip, and the next chat line waited for this
+// one. Webhook execution is the slow case (its own rate-limit bucket, plus
+// Discord fetching the mc-heads avatar it has not cached yet), which is
+// exactly why the lag showed up with useWebhook on and not without it.
+//
+// Ordering still matters within a channel — chat arriving out of order reads
+// as nonsense — so this serialises per channel rather than firing everything
+// in parallel.
+const sendQueues = new Map<string, Promise<void>>();
+const queueDepth = new Map<string, number>();
+
+/** Depth at which a channel is far enough behind to be worth logging. */
+const SEND_QUEUE_WARN_DEPTH = 25;
+
+/** Exposed for tests: drain every pending send. */
+export async function flushBridgeQueues(): Promise<void> {
+  await Promise.all([...sendQueues.values()]);
+}
+
+/**
+ * Queue a send for one channel and return immediately.
+ *
+ * Errors are logged, never rethrown: a rejected link in the chain would
+ * strand every message queued behind it on that channel.
+ */
+function enqueueSend(
+  channelId: string,
+  send: () => Promise<void>,
+  describe: string,
+): void {
+  const depth = (queueDepth.get(channelId) ?? 0) + 1;
+  queueDepth.set(channelId, depth);
+  if (depth === SEND_QUEUE_WARN_DEPTH) {
+    log.warn(
+      "chatBridge",
+      `Channel ${channelId} is ${depth} messages behind — Discord sends are ` +
+        `slower than in-game chat`,
+    );
+  }
+
+  const previous = sendQueues.get(channelId) ?? Promise.resolve();
+  const next = previous
+    .then(send)
+    .catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.error("chatBridge", `${describe}: ${msg}`);
+    })
+    .finally(() => {
+      queueDepth.set(channelId, (queueDepth.get(channelId) ?? 1) - 1);
+      // Drop the entry once this was the last link, so channels removed from
+      // the config do not accumulate resolved promises forever.
+      if (sendQueues.get(channelId) === next) sendQueues.delete(channelId);
+    });
+  sendQueues.set(channelId, next);
+}
+
+/**
+ * Resolve every configured bridge webhook up front.
+ *
+ * Called at setup and after a config reload. Without it the first in-game
+ * message of a session pays a channels.fetch plus a fetchWebhooks (and
+ * possibly a createWebhook) before anything reaches Discord — which is the
+ * one message an operator is most likely to be watching for after a restart.
+ */
+export function prewarmBridgeWebhooks(
+  client: Client,
+  guildConfigs: GuildConfigSource,
+  allServerIds: string[],
+): void {
+  for (const gcfg of Object.values(resolveGuildConfigs(guildConfigs))) {
+    for (const bridge of resolveGuildBridges(gcfg, allServerIds).bridges) {
+      if (!bridge.useWebhook) continue;
+      void bridgeWebhook(client, bridge.channelId);
+    }
+  }
+}
+
 export function registerChatBridge(
   logWatcher: ILogWatcher,
   client: Client,
@@ -183,7 +288,13 @@ export function registerChatBridge(
     "chatBridge",
   );
 
-  logWatcher.register(CHAT_REGEX, async (match) => {
+  prewarmBridgeWebhooks(client, guildConfigs, allServerIds);
+
+  // Note the missing `async`: this handler queues and returns. It must not
+  // await Discord — the watcher dispatches handlers one at a time, so waiting
+  // here holds up every other watcher for this server as well as the next
+  // chat line. Sends are ordered per channel by enqueueSend instead.
+  logWatcher.register(CHAT_REGEX, (match) => {
     const [, player, message] = match;
     if (!player || !message) return;
     if (message.startsWith("!")) return;
@@ -202,41 +313,52 @@ export function registerChatBridge(
       for (const bridge of bridges) {
         if (bridge.serverId !== serverId) continue;
 
-        try {
-          // Webhook form: the player IS the message author (name +
-          // head), which reads like a real conversation. Any webhook
-          // problem degrades to the embed form instead of losing chat.
-          if (bridge.useWebhook) {
-            const hook = await bridgeWebhook(client, bridge.channelId);
-            if (hook) {
-              await hook.send({
-                username: player.slice(0, 80),
-                avatarURL: playerAvatarUrl(player),
-                content: message.slice(0, 2000),
-                allowedMentions: { parse: [] },
-              });
-              continue;
-            }
-          }
-
-          const channel = await client.channels.fetch(bridge.channelId);
-          if (!channel || !("send" in channel)) continue;
-
-          const embed = createPlayerEmbed(player, {
-            description: message,
-            color: EmbedColor.Info,
-          });
-
-          await channel.send({ embeds: [embed] });
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          log.error(
-            "chatBridge",
-            `Failed to send to guild ${guildId}: ${msg}`,
-          );
-        }
+        enqueueSend(
+          bridge.channelId,
+          () => deliver(client, bridge, player, message),
+          `Failed to send to guild ${guildId}`,
+        );
       }
     }
+  });
+}
+
+/**
+ * Put one in-game line into one Discord channel.
+ *
+ * Webhook form: the player IS the message author (name + head), which reads
+ * like a real conversation. Any webhook problem degrades to the embed form
+ * rather than losing the message.
+ */
+async function deliver(
+  client: Client,
+  bridge: ResolvedBridge,
+  player: string,
+  message: string,
+): Promise<void> {
+  if (bridge.useWebhook) {
+    const hook = await bridgeWebhook(client, bridge.channelId);
+    if (hook) {
+      await hook.send({
+        username: player.slice(0, 80),
+        avatarURL: playerAvatarUrl(player),
+        content: message.slice(0, 2000),
+        allowedMentions: { parse: [] },
+      });
+      return;
+    }
+  }
+
+  const channel = await client.channels.fetch(bridge.channelId);
+  if (!channel || !("send" in channel)) return;
+
+  await channel.send({
+    embeds: [
+      createPlayerEmbed(player, {
+        description: message,
+        color: EmbedColor.Info,
+      }),
+    ],
   });
 }
 

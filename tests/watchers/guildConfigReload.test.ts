@@ -39,7 +39,10 @@ vi.mock("../../src/bot/utils/guild/guildRouter.js", () => ({
 import type { Client } from "discord.js";
 import type { GuildConfig } from "../../src/core/types/index.js";
 import type { ILogWatcher } from "../../src/bot/logWatcher/logWatcher.js";
-import { registerChatBridge } from "../../src/bot/logWatcher/watchers/log/chatBridge.js";
+import {
+  registerChatBridge,
+  flushBridgeQueues,
+} from "../../src/bot/logWatcher/watchers/log/chatBridge.js";
 import { broadcastNotification } from "../../src/bot/logWatcher/watchers/notifyGuilds.js";
 
 type GuildConfigs = Record<string, GuildConfig>;
@@ -107,6 +110,10 @@ function fakeWatcher(): {
         const match = line.match(regex);
         if (match) await handler(match);
       }
+      // The chat bridge queues its sends per channel rather than awaiting
+      // them inline, so the handler returning does not mean Discord has been
+      // called yet. Drain before asserting.
+      await flushBridgeQueues();
     },
   };
 }
@@ -134,7 +141,9 @@ describe("guild config is resolved live, not snapshotted at wiring time", () => 
     sentTo.length = 0;
 
     await emit(CHAT_LINE);
-    expect(sentTo).toEqual(["chan-a", "chan-b"]);
+    // Set, not sequence: sends are ordered *within* a channel but run in
+    // parallel across channels, so one slow guild cannot hold up another.
+    expect([...sentTo].sort()).toEqual(["chan-a", "chan-b"]);
   });
 
   it("stops bridging to a guild removed from the config", async () => {
@@ -144,7 +153,7 @@ describe("guild config is resolved live, not snapshotted at wiring time", () => 
 
     registerChatBridge(watcher, client, liveConfigs, ["smp"]);
     await emit(CHAT_LINE);
-    expect(sentTo).toEqual(["chan-a", "chan-b"]);
+    expect([...sentTo].sort()).toEqual(["chan-a", "chan-b"]);
 
     // Live resolution has to cut both ways: a removal applies too.
     onDisk = guildA;

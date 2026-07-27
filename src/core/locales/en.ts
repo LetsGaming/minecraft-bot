@@ -178,6 +178,26 @@ export const en: Record<string, string> = {
   "downtime.downTitle": "🔴 Server Down",
   "downtime.down":
     "**{server}** appears to be offline.\nFailed {failures} consecutive checks.",
+  "downtime.apiDownTitle": "🟠 Server API Unreachable",
+  "downtime.apiDown":
+    "The API wrapper for **{server}** has not answered for {failures} checks.\nThe Minecraft server itself may well still be running — its state is currently **unknown**, not offline.",
+  "downtime.apiUpTitle": "✅ Server API Reachable",
+  "downtime.apiUp": "The API wrapper for **{server}** is answering again.",
+  "downtime.apiDownServerKnown":
+    "The Minecraft server itself answered a direct ping and is **{state}** — players are unaffected, but server controls, the chat bridge and stats are down until the wrapper is back.",
+  "downtime.apiDownServerUnknown":
+    "The Minecraft server did not answer a direct ping either, so its state is **unknown** — it may or may not still be running.",
+  "state.online": "Online",
+  "state.unresponsive": "Not responding",
+  "state.offline": "Offline",
+  "state.unknown": "State unknown",
+  "state.unresponsiveHint":
+    "The server process is running but is not answering commands — it may be starting up or under heavy load.",
+  "state.unknownHint":
+    "Neither the server's API wrapper nor the server itself answered, so its state could not be determined. Check that the host is reachable.",
+  "state.wrapperDownHint":
+    "The server itself is reachable, but its API wrapper is not — so server controls, the chat bridge, stats and log watching are unavailable until it is back.",
+  "state.viaPing": "via direct server ping",
   "tps.lowTitle": "⚠️ Low TPS Warning",
   "tps.low": "Server TPS has dropped below {threshold}",
 

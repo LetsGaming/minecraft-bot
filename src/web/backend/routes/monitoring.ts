@@ -19,7 +19,7 @@ import {
   heartbeatIsFresh,
 } from "@mcbot/core/utils/server/runtimeHeartbeat.js";
 import { loadPlayerCountStore } from "@mcbot/core/utils/stores/playerCountHistory.js";
-import { collectStatus, offlineStatus } from "../status/status.js";
+import { collectStatus, unknownStatus } from "../status/status.js";
 import { NotFound } from "../errors.js";
 import { ServerIdParams, LimitQuery } from "./schemas.js";
 
@@ -42,7 +42,7 @@ export function registerMonitoringRoutes(app: FastifyInstance): void {
     const beat = await readRuntimeHeartbeat();
     const servers = await Promise.all(
       getServerIds().map((id) =>
-        collectStatus(id).catch(() => offlineStatus(id)),
+        collectStatus(id).catch(() => unknownStatus(id)),
       ),
     );
     return {

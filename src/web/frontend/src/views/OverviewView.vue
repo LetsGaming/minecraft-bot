@@ -69,7 +69,7 @@
         <ul v-else class="server-list">
           <li v-for="s in servers" :key="s.id" class="server-row">
             <span class="s-name">
-              <StatusDot :state="s.online ? 'up' : 'down'" />
+              <StatusDot :state="statusDot(s)" />
               {{ s.id }}
             </span>
             <span class="s-meta muted small">
@@ -77,7 +77,7 @@
                 {{ s.players.online }}/{{ s.players.max }} players
                 <span v-if="s.tps !== null" class="s-tps">· {{ s.tps.toFixed(0) }} TPS</span>
               </template>
-              <template v-else>offline</template>
+              <template v-else>{{ stateLabel(s.state).toLowerCase() }}</template>
             </span>
           </li>
         </ul>
@@ -137,7 +137,8 @@ import { useServerStatus } from "../composables/useServerStatus";
 import { useGuilds } from "../composables/useGuilds";
 import { useMyGuilds } from "../composables/useMyGuilds";
 import { useAudit } from "../composables/useAudit";
-import { diskLabel } from "../utils/format";
+import { diskLabel, statusDot, stateLabel } from "../utils/format";
+import { ServerState, WrapperState } from "../api";
 import ViewHeader from "../components/ui/ViewHeader.vue";
 import StatusDot from "../components/ui/StatusDot.vue";
 import GuildAvatar from "../components/ui/GuildAvatar.vue";
@@ -162,6 +163,7 @@ export default defineComponent({
     return {
       servers, botAlive, loading, refresh,
       guildName, loadGuildNames, myGuilds, loadMyGuilds, recent, loadRecent,
+      statusDot, stateLabel,
     };
   },
   data() {
@@ -192,8 +194,38 @@ export default defineComponent({
         out.push({ level: "danger", icon: "pi pi-times-circle", text: "Bot process heartbeat is stale — status may be outdated." });
       }
       for (const s of this.servers) {
-        if (!s.online) {
+        // The wrapper is its own axis: it can be down while the server is
+        // demonstrably fine, and that is worth saying on its own rather than
+        // being folded into the server's state. Not `continue` — a server can
+        // be both unresponsive and missing its wrapper.
+        if (s.wrapper === WrapperState.Unreachable && s.state !== ServerState.Unknown) {
+          out.push({
+            level: "warn",
+            icon: "pi pi-link",
+            text: `${s.id}: API wrapper unreachable — controls, logs and stats are down. The server itself is ${stateLabel(s.state).toLowerCase()}.`,
+          });
+        }
+        // Three different incidents, three different alerts. Collapsed into
+        // one "is offline" line, a wrapper restart and a lag spike both read
+        // as an outage — and the actual outage looked no worse than either.
+        if (s.state === ServerState.Offline) {
           out.push({ level: "danger", icon: "pi pi-times-circle", text: `${s.id} is offline.` });
+          continue;
+        }
+        if (s.state === ServerState.Unknown) {
+          out.push({
+            level: "warn",
+            icon: "pi pi-question-circle",
+            text: `${s.id}: neither its API wrapper nor the server answered — state unknown.`,
+          });
+          continue;
+        }
+        if (s.state === ServerState.Unresponsive) {
+          out.push({
+            level: "warn",
+            icon: "pi pi-clock",
+            text: `${s.id} is running but not answering commands — starting up, or under heavy load.`,
+          });
           continue;
         }
         if (s.tps !== null && s.tps < 15) {

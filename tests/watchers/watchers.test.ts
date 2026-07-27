@@ -32,7 +32,10 @@ vi.mock("../../src/bot/utils/embeds/embedUtils.js", () => ({
 }));
 
 import { registerJoinLeaveWatcher } from "../../src/bot/logWatcher/watchers/log/joinLeave.js";
-import { registerChatBridge } from "../../src/bot/logWatcher/watchers/log/chatBridge.js";
+import {
+  registerChatBridge,
+  flushBridgeQueues,
+} from "../../src/bot/logWatcher/watchers/log/chatBridge.js";
 import { registerDeathWatcher } from "../../src/bot/logWatcher/watchers/log/deaths.js";
 import { registerServerEventWatcher } from "../../src/bot/logWatcher/watchers/log/serverEvents.js";
 import { registerAdvancementWatcher } from "../../src/bot/logWatcher/watchers/log/advancements.js";
@@ -224,6 +227,9 @@ describe("chatBridge watcher — handler invocation", () => {
     const chatRegex = watcher._handlers[0]!.regex;
     const match = chatRegex.exec("[12:00:00] [Server thread/INFO]: <Steve> Hello world")!;
     await watcher._handlers[0]!.handler(match, client, watcher.server);
+    // The handler queues the send and returns — deliberately, so a Discord
+    // round-trip cannot stall the log-watcher dispatch loop. Drain it here.
+    await flushBridgeQueues();
 
     expect(channel.send).toHaveBeenCalledOnce();
   });

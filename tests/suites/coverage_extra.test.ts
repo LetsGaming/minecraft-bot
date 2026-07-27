@@ -39,6 +39,14 @@ vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
   readUserCache: vi.fn().mockResolvedValue([]),
   tailLog: vi.fn().mockResolvedValue(""),
   isRunning: vi.fn().mockResolvedValue(true),
+  getHealth: vi.fn().mockResolvedValue({
+    state: "online",
+    processUp: true,
+    rcon: "responsive",
+    probe: "rcon",
+    reason: null,
+    checkedAt: Date.now(),
+  }),
   getList: vi
     .fn()
     .mockResolvedValue({
@@ -154,7 +162,7 @@ describe("ServerInstance methods", () => {
     apiKey: "key",
   } as never;
 
-  it("isRunning() delegates to serverAccess.isRunning", async () => {
+  it("isRunning() delegates to serverAccess.getHealth", async () => {
     const inst = new ServerInstance(remoteCfg);
     const result = await inst.isRunning();
     expect(result).toBe(true);

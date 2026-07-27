@@ -27,3 +27,7 @@ export * from "./notifications.js";
 export * from "./commandOptions.js";
 export * from "./discord.js";
 export * from "./serverActions.js";
+// Runtime values (the ServerState / RconState contract), shared by the bot's
+// status paths, the web backend, and the Vue frontend — a value re-export so
+// all three switch on one definition rather than three sets of literals.
+export * from "./serverState.js";

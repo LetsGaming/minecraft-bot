@@ -7,10 +7,47 @@
  * This module must stay isomorphic: types only, no Node imports.
  */
 
+import type {
+  ServerState,
+  RconState,
+  WrapperState,
+  HealthSource,
+} from "./serverState.js";
+
 export interface ServerStatus {
   id: string;
+  /**
+   * The three-way answer: what the server is doing, or that the API wrapper
+   * did not answer so we could not ask. Prefer this over `online` — it is the
+   * only field that can tell "the server stopped" from "the wrapper is down".
+   */
+  state: ServerState;
+  /** Whether RCON is answering, reported separately from liveness. */
+  rcon: RconState;
+  /**
+   * Whether the API wrapper answered. Independent of `state`: the server can
+   * be demonstrably online (via a direct ping) while this is `unreachable`,
+   * which means players are fine but every control is gone.
+   */
+  wrapper: WrapperState;
+  /** Which channel established `state` — the wrapper, or a direct ping. */
+  source: HealthSource;
+  /**
+   * Legacy convenience: `state === "online"`. Kept because a good deal of the
+   * UI only needs the green/not-green split, and because a dashboard build
+   * older than this field keeps working.
+   */
   online: boolean;
-  players: { online: number; max: number; names: string[] };
+  players: {
+    online: number;
+    max: number;
+    names: string[];
+    /**
+     * True when `names` is a capped sample from a direct ping rather than the
+     * full roster. The counts are exact either way; the names are not.
+     */
+    sampled: boolean;
+  };
   tps: number | null;
   host: {
     process: { rssBytes: number; cpuPercent: number } | null;

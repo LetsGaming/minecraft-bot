@@ -14,6 +14,15 @@ import { log } from "@mcbot/core/utils/logger.js";
 import { createEmbed } from "../../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../../utils/embeds/embedColors.js";
 import {
+  describeHealth,
+  describePlayers,
+} from "../../../utils/embeds/serverStateDisplay.js";
+import {
+  canQueryServer,
+  unknownHealth,
+  type ServerHealth,
+} from "@mcbot/schema/serverState.js";
+import {
   ensureManagedCategory,
   ensureTextChannel,
   ensureVoiceChannel,
@@ -191,19 +200,46 @@ async function buildServerField(
   counts: PlayerCounts;
   online: boolean;
 }> {
-  let isOnline = false;
   let tps: TpsResult | null = null;
   const counts: PlayerCounts = { online: 0, max: 0 };
 
-  // Check online status before TPS — running both in parallel on a cold RCON
+  // Check health before TPS — running both in parallel on a cold RCON
   // connection can poison the internal _hasTpsCommand cache permanently.
+  let health: ServerHealth;
   try {
-    isOnline = await server.isRunning();
-  } catch {
-    /* treat as offline */
+    health = await server.getHealth();
+  } catch (err) {
+    health = unknownHealth(err instanceof Error ? err.message : String(err));
   }
 
-  if (isOnline && server.supportsTps) {
+  const display = describeHealth(health);
+
+  // Anything short of responsive gets its state and nothing else: no player
+  // count, no TPS. Reporting "0/20 players" for a server that simply did not
+  // answer is a fabricated number, and it read as an empty server.
+  if (!canQueryServer(health)) {
+    // Counts from a direct ping still count. A server whose wrapper is down
+    // is not a blank row — it has players on it.
+    if (health.players) {
+      counts.online = health.players.online;
+      counts.max = health.players.max;
+    }
+    const players = describePlayers(health);
+    return {
+      field: {
+        name: server.id,
+        value:
+          `${display.emoji} ${display.label}` +
+          (players ? ` — ${players}` : "") +
+          (display.hint ? `\n${display.hint}` : ""),
+        inline: isInline,
+      },
+      counts,
+      online: false,
+    };
+  }
+
+  if (server.supportsTps) {
     try {
       tps = await server.getTps();
     } catch {
@@ -211,15 +247,7 @@ async function buildServerField(
     }
   }
 
-  if (!isOnline) {
-    return {
-      field: { name: server.id, value: "🔴 Offline", inline: isInline },
-      counts,
-      online: false,
-    };
-  }
-
-  let statusLine = "🟢 Online";
+  let statusLine = `${display.emoji} ${display.label}`;
 
   try {
     const list = await server.getList();
@@ -228,7 +256,7 @@ async function buildServerField(
     const players: string[] = list.players ?? [];
 
     statusLine =
-      `🟢 Online — ${counts.online}/${counts.max} players` +
+      `${display.emoji} ${display.label} — ${counts.online}/${counts.max} players` +
       buildTpsLine(tps) +
       buildPlayerListLine(players);
   } catch {

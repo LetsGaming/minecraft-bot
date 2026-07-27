@@ -119,12 +119,23 @@
           "type": "boolean",
           "description": "Opt-out for the plaintext-HTTP-to-public-host rejection. Only for hosts that ARE on a trusted segment but can't be detected as such (e.g. internal DNS names). The key and all commands still travel unencrypted — a loud warning is logged at startup."
         },
+        "pingHost": {
+          "type": "string",
+          "description": "Host to send a direct Minecraft server-list ping to, when the API wrapper cannot be reached. Defaults to the hostname in `apiUrl` — the wrapper runs on the Minecraft host, so that is already the right machine. Set this only when the game server answers on a different address than the wrapper (a proxy, or a split deployment)."
+        },
+        "pingPort": {
+          "type": "number",
+          "description": "Port for that ping. Defaults to whatever the wrapper last reported as the server's `server-port`, and to 25565 before it has ever answered."
+        },
+        "disableDirectPing": {
+          "type": "boolean",
+          "description": "Turn the direct ping off entirely.\n\nThe ping is what lets the bot still report \"online, 4 players\" while the wrapper is down, so switching it off means going back to \"state unknown\" for that case. Only worth it if the game port is firewalled off from the bot, or the server runs with `enable-status=false`."
+        },
         "commands": {
           "type": "object",
           "additionalProperties": {
             "$ref": "#/definitions/CommandOverrideConfig"
-          },
-          "description": "Per-server command overrides for IN-GAME !commands, merged field-by-field over the global `commands` block (see CommandOverrideConfig). Slash commands scope per guild instead."
+          }
         }
       },
       "additionalProperties": false

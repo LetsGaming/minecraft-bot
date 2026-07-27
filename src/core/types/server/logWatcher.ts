@@ -3,11 +3,22 @@
 import type { Client } from "discord.js";
 import type { ServerInstance } from "../../utils/server/server.js";
 
+/**
+ * A log-line handler. May be synchronous.
+ *
+ * Returning void is not a shortcut — it is how a handler says "I have taken
+ * ownership of this line and the dispatcher should not wait for me". The chat
+ * bridge does exactly that: it queues the Discord send per channel and
+ * returns, because handlers are dispatched one at a time and awaiting a
+ * network round-trip in one of them stalls every other watcher for the same
+ * server. A handler that returns a promise is still awaited, so ordering
+ * guarantees are unchanged for the ones that need them.
+ */
 export type LogHandler = (
   match: RegExpExecArray,
   client: Client,
   server: ServerInstance,
-) => Promise<void>;
+) => void | Promise<void>;
 
 export interface LogWatcherEntry {
   regex: RegExp;

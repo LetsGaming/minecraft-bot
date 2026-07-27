@@ -1,3 +1,5 @@
+import type { ServerState } from "@mcbot/schema/serverState.js";
+
 // ── Scheduler & status state types ───────────────────────────────────────────
 
 export interface LeaderboardScheduleState {
@@ -25,10 +27,21 @@ export interface StatusMessageState {
 }
 
 export interface DowntimeState {
+  /** Consecutive checks that found the server process stopped. */
   consecutiveFailures: number;
+  /** A "server down" alert is currently outstanding. */
   alerted: boolean;
+  /**
+   * Consecutive checks where the API wrapper itself did not answer. Tracked
+   * apart from `consecutiveFailures` because it is a different incident with
+   * a different fix — and because counting it as downtime is what made a
+   * wrapper restart look like a server crash.
+   */
+  consecutiveUnreachable: number;
+  /** An "API wrapper unreachable" alert is currently outstanding. */
+  wrapperAlerted: boolean;
   suppressUntil: number;
-  lastKnownState: "online" | "offline" | null;
+  lastKnownState: ServerState | null;
 }
 
 export interface JsonCacheEntry {
