@@ -15,6 +15,7 @@ import {
   resolveGuildConfigs,
   type GuildConfigSource,
 } from "../../../utils/guild/guildConfigs.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 const CHAT_REGEX = /\[.+?\]: <(?:\[AFK\]\s*)?([^>]+)>\s+(.+)/;
 
@@ -182,10 +183,9 @@ async function resolveWebhook(
     webhookCache.set(channelId, hook);
     return hook;
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
     log.warn(
       "chatBridge",
-      `Webhook unavailable for channel ${channelId} (falling back to embeds): ${msg}`,
+      `Webhook unavailable for channel ${channelId} (falling back to embeds): ${errMsg(err)}`,
     );
     webhookCache.set(channelId, null);
     return null;
@@ -243,8 +243,7 @@ function enqueueSend(
   const next = previous
     .then(send)
     .catch((err: unknown) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.error("chatBridge", `${describe}: ${msg}`);
+      log.error("chatBridge", `${describe}: ${errMsg(err)}`);
     })
     .finally(() => {
       queueDepth.set(channelId, (queueDepth.get(channelId) ?? 1) - 1);

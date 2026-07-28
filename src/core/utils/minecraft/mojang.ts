@@ -6,6 +6,7 @@
  * raw JSON to a domain `MojangProfile`. Callers get a validated value or `null`;
  * a changed upstream shape fails here at the boundary, not deep inside a command.
  */
+import { fetchJson } from "../http.js";
 import type { MojangProfile } from "../../types/index.js";
 import { isRecord } from "../objects.js";
 
@@ -35,15 +36,12 @@ export function parseMojangProfile(raw: unknown): MojangProfile | null {
 export async function fetchMojangProfile(
   username: string,
 ): Promise<MojangProfile | null> {
-  let res: Response;
-  try {
-    res = await fetch(`${PROFILE_ENDPOINT}/${encodeURIComponent(username)}`, {
-      signal: AbortSignal.timeout(MOJANG_TIMEOUT_MS),
-    });
-  } catch {
-    // Timeout or network failure — degrade to "not found" for the caller.
-    return null;
-  }
-  if (!res.ok) return null;
-  return parseMojangProfile(await res.json());
+  const result = await fetchJson(
+    `${PROFILE_ENDPOINT}/${encodeURIComponent(username)}`,
+    { timeoutMs: MOJANG_TIMEOUT_MS },
+  );
+  // Unknown name (404), upstream down, or a timeout all mean the same
+  // thing to callers here: no usable profile.
+  if (!result.ok) return null;
+  return parseMojangProfile(result.value);
 }

@@ -12,7 +12,10 @@ import { EmbedColor } from "../../utils/embeds/embedColors.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { withErrorHandling } from "../middleware.js";
 import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
-import { loadLinkedAccounts } from "@mcbot/core/utils/stores/linkUtils.js";
+import {
+  loadLinkedAccountsOrEmpty,
+  findDiscordIdByMcName,
+} from "@mcbot/core/utils/stores/linkUtils.js";
 import { getAuditEntry } from "@mcbot/core/utils/stores/whitelistAudit.js";
 import {
   loadSessionStore,
@@ -42,9 +45,7 @@ export const data = new SlashCommandBuilder()
 
 export const execute = withErrorHandling(async (interaction) => {
   const server = resolveServer(interaction);
-  const linked = await loadLinkedAccounts().catch(
-    (): Record<string, string> => ({}),
-  );
+  const linked = await loadLinkedAccountsOrEmpty();
 
   let player = interaction.options.getString("player")?.trim();
   if (!player) {
@@ -56,10 +57,8 @@ export const execute = withErrorHandling(async (interaction) => {
   }
 
   // Reverse link lookup: which Discord account owns this MC name?
-  const lowerPlayer = player.toLowerCase();
-  const ownerId = Object.entries(linked).find(
-    ([, mc]) => mc.toLowerCase() === lowerPlayer,
-  )?.[0];
+  const ownerId = findDiscordIdByMcName(linked, player);
+  const lowerPlayer = player.toLowerCase(); // session store is keyed lowercase
 
   const [audit, sessions, claims] = await Promise.all([
     getAuditEntry(player).catch(() => null),

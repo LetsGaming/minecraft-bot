@@ -11,6 +11,7 @@
  */
 import type { FastifyInstance } from "fastify";
 import { log } from "@mcbot/core/utils/logger.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 export class HttpError extends Error {
   readonly statusCode: number;
@@ -106,7 +107,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
     }
     const statusCode = (err as { statusCode?: unknown }).statusCode;
     if (typeof statusCode === "number" && statusCode < 500) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = errMsg(err);
       return reply.code(statusCode).send({ error: message });
     }
     const detail =

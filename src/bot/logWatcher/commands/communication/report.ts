@@ -19,6 +19,7 @@ import { EmbedColor } from "../../../utils/embeds/embedColors.js";
 import { stripControlChars } from "@mcbot/core/utils/sanitize.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { log } from "@mcbot/core/utils/logger.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 const MAX_REPORT_LENGTH = 500;
 
@@ -63,8 +64,7 @@ const cmd = defineCommand({
         });
         delivered++;
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        log.error("report", `Failed to deliver report to ${guildId}: ${msg}`);
+        log.error("report", `Failed to deliver report to ${guildId}: ${errMsg(err)}`);
       }
     }
 

@@ -12,6 +12,7 @@ import { logStreamUrl } from "@mcbot/core/utils/server/serverAccess.js";
 import type { Client } from "discord.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 import type { LogHandler, LogWatcherEntry } from "@mcbot/core/types/index.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 const RECONNECT_BASE_MS = 5_000;
 const RECONNECT_MAX_MS = 60_000;
@@ -199,7 +200,7 @@ export class RemoteLogWatcher {
         } catch (err) {
           log.error(
             this.server.id,
-            `Log handler error: ${err instanceof Error ? err.message : String(err)}`,
+            `Log handler error: ${errMsg(err)}`,
           );
         }
       }

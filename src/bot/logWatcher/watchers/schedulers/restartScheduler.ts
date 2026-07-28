@@ -42,6 +42,7 @@ import type {
   BotConfig,
   ServerRestartSchedule,
 } from "@mcbot/core/types/index.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 const DEFAULT_WARN_MINUTES = [15, 5, 1];
 const DAY_CODES = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"] as const;
@@ -162,8 +163,7 @@ async function performRestart(
       );
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    log.error("schedule", `${serverId}: scheduled restart failed: ${msg}`);
+    log.error("schedule", `${serverId}: scheduled restart failed: ${errMsg(err)}`);
   }
 
   await broadcastNotification(client, loadConfig().guilds, {
@@ -210,8 +210,7 @@ function armServer(
       setTimeout(() => {
         announceWarning(client, serverId, minutes, runAt).catch(
           (err: unknown) => {
-            const msg = err instanceof Error ? err.message : String(err);
-            log.warn("schedule", `${serverId}: warning failed: ${msg}`);
+            log.warn("schedule", `${serverId}: warning failed: ${errMsg(err)}`);
           },
         );
       }, warnAt - Date.now()),
@@ -222,8 +221,7 @@ function armServer(
     setTimeout(() => {
       performRestart(client, serverId)
         .catch((err: unknown) => {
-          const msg = err instanceof Error ? err.message : String(err);
-          log.error("schedule", `${serverId}: restart run failed: ${msg}`);
+          log.error("schedule", `${serverId}: restart run failed: ${errMsg(err)}`);
         })
         .finally(() => {
           // Wall-clock rescheduling after each run — see module docs.

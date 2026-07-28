@@ -17,6 +17,7 @@ import type {
 import { log } from "@mcbot/core/utils/logger.js";
 import { playerAvatarUrl } from "../mcHeads.js";
 import { EmbedColor } from "./embedColors.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 /**
  * Creates a customizable embed.
@@ -226,8 +227,7 @@ export async function handlePagination(
         components: [createPaginationButtons(page, totalPages)],
       });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.warn("pagination", `Failed to update page: ${msg}`);
+      log.warn("pagination", `Failed to update page: ${errMsg(err)}`);
     }
   });
 
@@ -236,8 +236,7 @@ export async function handlePagination(
     try {
       await message.edit({ components: [] });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.warn("pagination", `Failed to remove buttons after timeout: ${msg}`);
+      log.warn("pagination", `Failed to remove buttons after timeout: ${errMsg(err)}`);
     }
   });
 }

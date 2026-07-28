@@ -26,6 +26,7 @@ import type {
   LeaderboardScheduleState,
 } from "@mcbot/core/types/index.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 const HOUR_MS = 60 * 60 * 1000;
 const CHECK_INTERVAL_MS = HOUR_MS;
@@ -66,8 +67,7 @@ export function startLeaderboardScheduler(
       try {
         await takeSnapshot(server);
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        log.error("snapshots", `Snapshot failed for ${server.id}: ${msg}`);
+        log.error("snapshots", `Snapshot failed for ${server.id}: ${errMsg(err)}`);
       }
     }
   }, SNAPSHOT_INTERVAL_MS);
@@ -95,8 +95,7 @@ export function startLeaderboardScheduler(
     try {
       await checkAndPost(client, guildConfigs, globalInterval);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.error("leaderboard", `Scheduler error: ${msg}`);
+      log.error("leaderboard", `Scheduler error: ${errMsg(err)}`);
     }
   }, CHECK_INTERVAL_MS);
 
@@ -242,8 +241,7 @@ async function checkAndPost(
         `Posted ${interval} leaderboard for guild ${guildId}`,
       );
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.error("leaderboard", `Failed to post for guild ${guildId}: ${msg}`);
+      log.error("leaderboard", `Failed to post for guild ${guildId}: ${errMsg(err)}`);
       // Advance the schedule timestamp even on failure so a permanently
       // broken channel (deleted, missing permissions) doesn't cause hourly
       // retry spam. The next post will be attempted after the normal interval.

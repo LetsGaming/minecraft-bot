@@ -11,6 +11,7 @@ import {
 import { loadWhitelist } from "@mcbot/core/utils/minecraft/whitelist.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { log } from "@mcbot/core/utils/logger.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 export const data = new SlashCommandBuilder()
   .setName("whitelisted")
@@ -67,7 +68,7 @@ export async function execute(
       await handlePagination(message, interaction, embeds);
     }
   } catch (err) {
-    log.error("whitelisted", err instanceof Error ? err.message : String(err));
+    log.error("whitelisted", errMsg(err));
     await interaction.editReply({
       embeds: [createErrorEmbed("Failed to read the Whitelist.")],
     });

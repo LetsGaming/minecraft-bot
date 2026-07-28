@@ -1,3 +1,4 @@
+import { formatBytes } from "@mcbot/schema";
 import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embeds/embedUtils.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
@@ -10,7 +11,6 @@ import {
 import { canQueryServer } from "@mcbot/schema/serverState.js";
 import {
   getHostResources,
-  formatBytes,
 } from "@mcbot/core/utils/server/hostResources.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 

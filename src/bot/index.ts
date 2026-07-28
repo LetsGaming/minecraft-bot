@@ -42,6 +42,7 @@ import { log } from "@mcbot/core/utils/logger.js";
 import { flushUptimeHistory } from "@mcbot/core/utils/stores/uptimeTracker.js";
 import { invalidateStatusChannelCache } from "./logWatcher/watchers/schedulers/statusEmbed.js";
 import type { BotCommand, BotClient } from "@mcbot/core/types/index.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const config = loadConfig();
@@ -61,8 +62,7 @@ for (const inst of getAllInstances()) {
     const cap = await inst.probeCapabilities();
     log.info("capabilities", `${inst.id}: ${capabilitySummary(cap)}`);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    log.warn("capabilities", `Probe failed for ${inst.id}: ${msg}`);
+    log.warn("capabilities", `Probe failed for ${inst.id}: ${errMsg(err)}`);
   }
 }
 
@@ -95,8 +95,7 @@ for (const inst of getAllInstances()) {
 const firstServerId = Object.keys(config.servers)[0];
 if (firstServerId) {
   migrateLegacySnapshots(firstServerId).catch((err) => {
-    const msg = err instanceof Error ? err.message : String(err);
-    log.warn("snapshots", `Legacy snapshot migration failed: ${msg}`);
+    log.warn("snapshots", `Legacy snapshot migration failed: ${errMsg(err)}`);
   });
 }
 
@@ -138,8 +137,7 @@ watchConfig((fresh) => {
       }
     })
     .catch((err) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.error("config", `Reconciliation after reload failed: ${msg}`);
+      log.error("config", `Reconciliation after reload failed: ${errMsg(err)}`);
     });
 });
 
@@ -202,8 +200,7 @@ async function loadCommands(): Promise<void> {
       // data + execute were verified present above, so it's a complete command.
       commands.set(name, cmd as BotCommand);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.error("commands", `Failed to load ${file}: ${msg}`);
+      log.error("commands", `Failed to load ${file}: ${errMsg(err)}`);
     }
   }
 
@@ -221,8 +218,7 @@ async function registerGlobalCommands(): Promise<void> {
     });
     log.info("commands", `${commandData.length} slash commands registered.`);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    log.error("commands", `Failed to register: ${msg}`);
+    log.error("commands", `Failed to register: ${errMsg(err)}`);
   }
 }
 
@@ -243,8 +239,7 @@ void (async () => {
     try {
       await initMinecraftCommands(client);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.error("init", `Failed to initialize MC commands: ${msg}`);
+      log.error("init", `Failed to initialize MC commands: ${errMsg(err)}`);
     }
   });
 
@@ -309,8 +304,7 @@ void (async () => {
         );
         if (await handleWhitelistApplicationInteraction(interaction)) return;
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        log.error("wlapp", `Interaction failed: ${msg}`);
+        log.error("wlapp", `Interaction failed: ${errMsg(err)}`);
         return;
       }
     }
@@ -367,8 +361,7 @@ void (async () => {
       }
       await command.execute(chatInteraction);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.error("command", `/${chatInteraction.commandName}: ${msg}`);
+      log.error("command", `/${chatInteraction.commandName}: ${errMsg(err)}`);
       const errorMsg: InteractionReplyOptions = {
         content: "❌ An error occurred.",
         flags: MessageFlags.Ephemeral,
@@ -397,8 +390,7 @@ async function shutdown(signal: string): Promise<void> {
   try {
     await flushUptimeHistory();
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    log.error("bot", `Failed to flush uptime history on shutdown: ${msg}`);
+    log.error("bot", `Failed to flush uptime history on shutdown: ${errMsg(err)}`);
   }
   process.exit(0);
 }

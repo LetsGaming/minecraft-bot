@@ -21,6 +21,7 @@ import { log } from "../logger.js";
 import { canQueryServer } from "@mcbot/schema/serverState.js";
 import { TZ } from "../time.js";
 import type { ServerInstance } from "../server/server.js";
+import { errMsg } from "../error.js";
 
 export const RETENTION_HOURS = 14 * 24;
 const SAMPLER_INTERVAL_MS = 5 * 60_000;
@@ -142,8 +143,7 @@ export function startPlayerCountSampler(
         const online = parseInt(String(list.playerCount), 10) || 0;
         await recordPlayerCountSample(server.id, online);
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        log.warn("activity", `Sample failed for ${server.id}: ${msg}`);
+        log.warn("activity", `Sample failed for ${server.id}: ${errMsg(err)}`);
       }
     }
   }, SAMPLER_INTERVAL_MS);

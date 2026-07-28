@@ -6,11 +6,15 @@ import { broadcastNotification, PLAYER_NAME } from "../notifyGuilds.js";
 import type { GuildConfigSource } from "../../../utils/guild/guildConfigs.js";
 import { serverEventRegex, registerServerEvent } from "./serverLine.js";
 import { loadConfig } from "@mcbot/core/config.js";
-import { loadLinkedAccounts } from "@mcbot/core/utils/stores/linkUtils.js";
+import {
+  loadLinkedAccountsOrEmpty,
+  findDiscordIdByMcName,
+} from "@mcbot/core/utils/stores/linkUtils.js";
 import { buildChunkbaseUrl } from "@mcbot/core/utils/minecraft/chunkbaseUrl.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 // Use PLAYER_NAME (not \w+) so Bedrock players with "."-prefixed
 // names get death notifications too.
@@ -70,13 +74,8 @@ async function dmDeathCoords(
   server: ServerInstance,
   player: string,
 ): Promise<void> {
-  const linked = await loadLinkedAccounts().catch(
-    (): Record<string, string> => ({}),
-  );
-  const lower = player.toLowerCase();
-  const discordId = Object.entries(linked).find(
-    ([, mcName]) => mcName.toLowerCase() === lower,
-  )?.[0];
+  const linked = await loadLinkedAccountsOrEmpty();
+  const discordId = findDiscordIdByMcName(linked, player);
   if (!discordId) return;
 
   const loc = await server.getLastDeathLocation(player);
@@ -136,8 +135,7 @@ export function registerDeathWatcher(
       try {
         await dmDeathCoords(client, logWatcher.server, player);
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        log.warn("deaths", `Death-coords DM for ${player} failed: ${msg}`);
+        log.warn("deaths", `Death-coords DM for ${player} failed: ${errMsg(err)}`);
       }
     }
   });

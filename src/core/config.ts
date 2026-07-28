@@ -18,6 +18,7 @@ export type {
   ApiUrlValidation,
   ConfigValidationResult,
 } from "./configValidation.js";
+import { errMsg } from "./utils/error.js";
 
 const PROJECT_ROOT = getRootDir();
 // The active config.json. Overridable via MCBOT_CONFIG_PATH so a deployment
@@ -121,7 +122,7 @@ export function loadConfig(): BotConfig {
     // so a wrong config.json never reaches the resolution logic mis-typed.
     raw = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8")) as RawBotConfig;
   } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err);
+    const reason = errMsg(err);
     throw new Error(
       `Failed to load config.json at ${CONFIG_PATH}: ${reason}\n` +
       "Make sure the file exists and contains valid JSON.",
@@ -212,8 +213,7 @@ export function watchConfig(onChange?: (newConfig: BotConfig) => void): void {
         } catch (err) {
           // Don't crash the bot on a malformed config save — the old config
           // stays active until a valid file is written.
-          const msg = err instanceof Error ? err.message : String(err);
-          log.error("config", `Reload failed after file change: ${msg}`);
+          log.error("config", `Reload failed after file change: ${errMsg(err)}`);
         }
       }, 300);
     });

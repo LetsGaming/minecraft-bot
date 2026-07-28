@@ -26,6 +26,7 @@ import {
 import { log } from "../logger.js";
 import { snapshotConfig, type SnapshotMeta } from "./configHistory.js";
 import type { RawBotConfig } from "../../types/index.js";
+import { errMsg } from "../error.js";
 
 /** Raw on-disk config (no env overrides, no variables.txt resolution). */
 export function readRawConfig(): RawBotConfig {
@@ -121,7 +122,7 @@ export async function writeConfig(
     await fsPromises.rename(tmp, configPath);
   } catch (err) {
     await fsPromises.rm(tmp, { force: true }).catch(() => {});
-    const reason = err instanceof Error ? err.message : String(err);
+    const reason = errMsg(err);
     throw new Error(
       `Failed to write config to ${configPath}: ${reason}. The config must ` +
         `live on a writable path owned by the bot (in Docker, the data/ ` +

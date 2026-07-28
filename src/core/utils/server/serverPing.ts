@@ -28,6 +28,7 @@
  * no dependency on the wrapper. Callers pass a host and port.
  */
 import net from "net";
+import { errMsg } from "../error.js";
 
 /** Default `server-port` in server.properties. */
 export const DEFAULT_MINECRAFT_PORT = 25565;
@@ -266,7 +267,7 @@ export function pingMinecraftServer(
       } catch (err) {
         finish({
           kind: "error",
-          reason: err instanceof Error ? err.message : String(err),
+          reason: errMsg(err),
         });
       }
     });

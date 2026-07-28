@@ -13,6 +13,7 @@ import type { GuildConfig } from "@mcbot/core/types/index.js";
 import { loadConfig } from "@mcbot/core/config.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { log } from "@mcbot/core/utils/logger.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 export async function syncLinkedRole(
   client: Client,
@@ -50,7 +51,7 @@ export async function syncLinkedRole(
         `${action === "add" ? "Assigned" : "Removed"} role ${roleId} for ${discordId} in ${guildId}`,
       );
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = errMsg(err);
       log.warn(
         "linkedRole",
         `Failed to ${action} role ${roleId} for ${discordId} in ${guildId}: ${msg}`,

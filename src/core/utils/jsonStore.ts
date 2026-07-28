@@ -16,6 +16,7 @@ import path from "path";
 import { ensureDir } from "./paths.js";
 import { log } from "./logger.js";
 import type { JsonCacheEntry } from "../types/index.js";
+import { errMsg } from "./error.js";
 
 const jsonCache = new Map<string, JsonCacheEntry>();
 const writeLocks = new Map<string, Promise<void>>();
@@ -44,7 +45,7 @@ export async function loadJson(file: string): Promise<unknown> {
   } catch (err) {
     if (isEnoent(err)) return {};
 
-    const reason = err instanceof Error ? err.message : String(err);
+    const reason = errMsg(err);
     const base = path.basename(file);
     log.error(
       "storage",
@@ -95,7 +96,7 @@ export async function saveJson(file: string, data: unknown): Promise<void> {
       await fsPromises.writeFile(bakTmp, json);
       await fsPromises.rename(bakTmp, `${file}.bak`);
     } catch (bakErr) {
-      const reason = bakErr instanceof Error ? bakErr.message : String(bakErr);
+      const reason = errMsg(bakErr);
       log.warn(
         "storage",
         `Could not write backup for ${path.basename(file)}: ${reason}`,

@@ -25,6 +25,7 @@ import {
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 import type { ServerHealth } from "@mcbot/schema/serverState.js";
 import type { DowntimeState, GuildConfig } from "@mcbot/core/types/index.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 const CHECK_INTERVAL_MS = 60 * 1000;
 const FAILURES_BEFORE_ALERT = 3;
@@ -102,8 +103,7 @@ export function startDowntimeMonitor(
       try {
         await checkServer(server, client, guildsWithAlerts);
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        log.error("downtime", `Check error for ${server.id}: ${msg}`);
+        log.error("downtime", `Check error for ${server.id}: ${errMsg(err)}`);
       }
     }
   }, CHECK_INTERVAL_MS);
@@ -130,7 +130,7 @@ async function checkServer(
     // getHealth() encodes its failures in the value, so reaching this is a bug
     // in the call path rather than an outage — but it is still not evidence
     // about the server, so it degrades to the same "we don't know".
-    health = unknownHealth(err instanceof Error ? err.message : String(err), now);
+    health = unknownHealth(errMsg(err), now);
   }
 
   // ── The API wrapper ─────────────────────────────────────────────────────
@@ -248,10 +248,9 @@ async function checkServer(
           );
         }
       })().catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : String(err);
         log.warn(
           "sessions",
-          `Failed to close sessions for ${server.id}: ${msg}`,
+          `Failed to close sessions for ${server.id}: ${errMsg(err)}`,
         );
       });
 
@@ -327,7 +326,6 @@ async function sendAlert(
 
     await channel.send({ embeds: [embed], ...roleMention(mentionRole) });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    log.error("downtime", `Failed to send alert: ${msg}`);
+    log.error("downtime", `Failed to send alert: ${errMsg(err)}`);
   }
 }

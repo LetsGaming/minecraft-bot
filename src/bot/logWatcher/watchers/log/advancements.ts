@@ -16,11 +16,12 @@ import {
   savePendingRewards,
   getServerPending,
 } from "@mcbot/core/utils/stores/dailyStore.js";
-import { give } from "../../../commands/connection/daily/daily.js";
+import { give } from "@mcbot/core/utils/minecraft/rewards.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 // Use PLAYER_NAME (not \w+) so Bedrock players with "."-prefixed
 // names get advancement notifications too.
@@ -161,8 +162,7 @@ export function registerAdvancementWatcher(
         advancement,
       );
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.error("challenges", `Challenge handling failed: ${msg}`);
+      log.error("challenges", `Challenge handling failed: ${errMsg(err)}`);
     }
   });
 }

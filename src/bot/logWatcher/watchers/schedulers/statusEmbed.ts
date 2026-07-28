@@ -34,6 +34,7 @@ import type {
   StatusMessageState,
   TpsResult,
 } from "@mcbot/core/types/index.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -174,7 +175,7 @@ async function provisionGuildChannels(
   } catch (err) {
     log.error(
       "status",
-      `Failed to provision channels for guild ${guildId}: ${err instanceof Error ? err.message : String(err)}`,
+      `Failed to provision channels for guild ${guildId}: ${errMsg(err)}`,
     );
     return null;
   }
@@ -209,7 +210,7 @@ async function buildServerField(
   try {
     health = await server.getHealth();
   } catch (err) {
-    health = unknownHealth(err instanceof Error ? err.message : String(err));
+    health = unknownHealth(errMsg(err));
   }
 
   const display = describeHealth(health);
@@ -392,7 +393,7 @@ async function sendOrUpdateEmbed(
   } catch (err) {
     log.error(
       "status",
-      `Failed to send embed for guild ${guildId}: ${err instanceof Error ? err.message : String(err)}`,
+      `Failed to send embed for guild ${guildId}: ${errMsg(err)}`,
     );
   }
 }
@@ -425,7 +426,7 @@ async function updatePlayerCountVoiceChannel(
   } catch (err) {
     log.warn(
       "status",
-      `Failed to rename voice channel for guild ${guildId}: ${err instanceof Error ? err.message : String(err)}`,
+      `Failed to rename voice channel for guild ${guildId}: ${errMsg(err)}`,
     );
   }
 }
@@ -545,7 +546,7 @@ export function updateBotPresence(
   } catch (err) {
     log.warn(
       "presence",
-      `Failed to set presence: ${err instanceof Error ? err.message : String(err)}`,
+      `Failed to set presence: ${errMsg(err)}`,
     );
   }
 }
@@ -577,7 +578,7 @@ async function runStatusPass(
   } catch (err) {
     log.error(
       "status",
-      `Failed to build embed: ${err instanceof Error ? err.message : String(err)}`,
+      `Failed to build embed: ${errMsg(err)}`,
     );
     return;
   }
@@ -600,7 +601,7 @@ async function runStatusPass(
   } catch (err) {
     log.error(
       "status",
-      `Failed to load state: ${err instanceof Error ? err.message : String(err)}`,
+      `Failed to load state: ${errMsg(err)}`,
     );
     return;
   }
@@ -614,7 +615,7 @@ async function runStatusPass(
     } catch (err) {
       log.error(
         "status",
-        `Update failed for guild ${guildId}: ${err instanceof Error ? err.message : String(err)}`,
+        `Update failed for guild ${guildId}: ${errMsg(err)}`,
       );
     }
   }

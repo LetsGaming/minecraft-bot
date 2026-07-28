@@ -237,6 +237,8 @@ export const en: Record<string, string> = {
   "moderation.pardoned": "Unbanned **{player}** on **{server}**.",
   "moderation.bannedTemp":
     "Banned **{player}** on **{server}** for **{duration}** — until {until}.",
+  "tempban.dmExpired":
+    "Your temporary ban on **{server}** has expired — **{player}** can join again. Please keep to the rules.",
   "moderation.invalidDuration":
     "`{input}` is not a valid duration. Use e.g. `30m`, `2h`, `3d`, `1w`, `2mo`, `1.5y` (max 10y).",
 

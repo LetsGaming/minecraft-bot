@@ -30,6 +30,7 @@ import {
 } from "@mcbot/core/utils/stores/challengeStore.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { log } from "@mcbot/core/utils/logger.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 const MAX_DURATION_HOURS = 24 * 14; // two weeks
 
@@ -257,8 +258,7 @@ export const execute = withErrorHandling(
         })}`,
       );
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.warn("challenges", `In-game announcement failed: ${msg}`);
+      log.warn("challenges", `In-game announcement failed: ${errMsg(err)}`);
     }
 
     await interaction.editReply({

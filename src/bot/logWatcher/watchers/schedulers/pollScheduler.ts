@@ -36,6 +36,7 @@ import { createEmbed } from "../../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../../utils/embeds/embedColors.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { log } from "@mcbot/core/utils/logger.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 const MAX_TIMEOUT_MS = 2 ** 31 - 1; // setTimeout cap; poll durations are far below
 
@@ -58,10 +59,9 @@ export function startPollScheduler(client: Client): void {
         try {
           await attachCollector(client, poll);
         } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
           log.warn(
             "polls",
-            `Could not re-attach collector for poll ${poll.id}: ${msg}`,
+            `Could not re-attach collector for poll ${poll.id}: ${errMsg(err)}`,
           );
         }
       }
@@ -69,8 +69,7 @@ export function startPollScheduler(client: Client): void {
         log.info("polls", `Resumed ${open.length} open poll(s)`);
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.error("polls", `Failed to resume polls: ${msg}`);
+      log.error("polls", `Failed to resume polls: ${errMsg(err)}`);
     }
   })();
 }
@@ -82,8 +81,7 @@ export function armPoll(client: Client, poll: Poll): void {
   const delay = Math.min(Math.max(0, poll.endsAt - Date.now()), MAX_TIMEOUT_MS);
   const timer = setTimeout(() => {
     void closePoll(client, poll.id).catch((err: unknown) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.error("polls", `Failed to close poll ${poll.id}: ${msg}`);
+      log.error("polls", `Failed to close poll ${poll.id}: ${errMsg(err)}`);
     });
   }, delay);
   closeTimers.set(poll.id, timer);
@@ -134,8 +132,7 @@ export function attachCollectorToMessage(
         flags: MessageFlags.Ephemeral,
       });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.error("polls", `Vote handling failed: ${msg}`);
+      log.error("polls", `Vote handling failed: ${errMsg(err)}`);
     }
   });
 }
@@ -193,8 +190,7 @@ export async function closePoll(client: Client, pollId: string): Promise<void> {
       }
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    log.error("polls", `Failed to announce results on Discord: ${msg}`);
+    log.error("polls", `Failed to announce results on Discord: ${errMsg(err)}`);
   }
 
   // In-game side: every participating instance gets the results.
@@ -218,10 +214,9 @@ export async function closePoll(client: Client, pollId: string): Promise<void> {
         );
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
       log.warn(
         "polls",
-        `Failed to announce results in-game on ${serverId}: ${msg}`,
+        `Failed to announce results in-game on ${serverId}: ${errMsg(err)}`,
       );
     }
   }

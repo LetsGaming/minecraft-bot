@@ -3,11 +3,9 @@ import type { ServerStatus } from "../api";
 // Small presentation helpers shared across views, so formatting logic
 // lives in one place rather than being copy-pasted per component.
 
-/** Bytes → a compact "8.6 GB" / "512 MB" string. */
-export function formatBytes(bytes: number): string {
-  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
-  return `${Math.round(bytes / 1024 ** 2)} MB`;
-}
+// Byte formatting is shared with the bot's embeds, so it lives in the
+// isomorphic package; re-exported here so components keep one import.
+export { formatBytes } from "@mcbot/schema";
 
 /**
  * A raw disk path with a bare "4%" means nothing in a UI. Derive a role

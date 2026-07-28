@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { formatDatetime } from "./time.js";
+import { errMsg } from "./error.js";
 
 const LOG_DIR = path.resolve(process.cwd(), "logs");
 
@@ -49,7 +50,7 @@ function initFileLogging() {
   } catch (err) {
     // Synchronous failure (usually mkdir/EACCES on the logs mount).
     stream = null;
-    fileLoggingDisabledReason = err instanceof Error ? err.message : String(err);
+    fileLoggingDisabledReason = errMsg(err);
   }
 }
 

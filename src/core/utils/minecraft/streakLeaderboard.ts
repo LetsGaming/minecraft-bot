@@ -12,7 +12,7 @@ import {
   loadClaimedStore,
   getServerClaims,
 } from "../stores/dailyStore.js";
-import { loadLinkedAccounts } from "../stores/linkUtils.js";
+import { loadLinkedAccountsOrEmpty } from "../stores/linkUtils.js";
 import type { LeaderboardData } from "../../types/index.js";
 
 export const STREAK_STAT_KEYS = ["streak", "longest_streak"] as const;
@@ -36,7 +36,7 @@ export async function buildStreakLeaderboard(
 ): Promise<LeaderboardData> {
   const [store, linked] = await Promise.all([
     loadClaimedStore(),
-    loadLinkedAccounts().catch((): Record<string, string> => ({})),
+    loadLinkedAccountsOrEmpty(),
   ]);
   const claims = getServerClaims(store, serverId);
 

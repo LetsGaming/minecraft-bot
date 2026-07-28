@@ -6,6 +6,7 @@
  * Cache is keyed by server ID + mtime so it invalidates automatically.
  */
 
+import { fetchJson, describeFailure } from "../http.js";
 import type { ServerInstance } from "../server/server.js";
 import type { ModSide, ModInfo, ModList } from "../../types/index.js";
 import { isRecord } from "../objects.js";
@@ -111,14 +112,17 @@ async function fetchModrinthProjects(
 ): Promise<ModrinthProject[]> {
   const ids = JSON.stringify(slugs);
   const url = `${MODRINTH_API}/projects?ids=${encodeURIComponent(ids)}`;
-  const res = await fetch(url, {
+  const result = await fetchJson(url, {
     headers: {
       "User-Agent": "minecraft-discord-bot (contact via server admin)",
     },
   });
-  if (!res.ok)
-    throw new Error(`Modrinth API returned ${res.status}: ${res.statusText}`);
-  return parseModrinthProjects(await res.json());
+  // This one had no timeout before: a stalled Modrinth would hang /mods
+  // indefinitely. fetchJson always applies one.
+  if (!result.ok) {
+    throw new Error(`Modrinth API: ${describeFailure(result.failure)}`);
+  }
+  return parseModrinthProjects(result.value);
 }
 
 function buildModList(projects: ModrinthProject[]): ModList {

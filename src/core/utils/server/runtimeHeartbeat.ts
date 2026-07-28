@@ -10,6 +10,7 @@ import path from "path";
 import { loadJson, saveJson } from "../jsonStore.js";
 import { getRootDir } from "../paths.js";
 import { log } from "../logger.js";
+import { errMsg } from "../error.js";
 
 const RUNTIME_PATH = path.resolve(getRootDir(), "data", "runtime.json");
 
@@ -36,8 +37,7 @@ export function startRuntimeHeartbeat(version: string): void {
       pid: process.pid,
       version,
     } satisfies RuntimeHeartbeat).catch((err: unknown) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.warn("heartbeat", `Write failed: ${msg}`);
+      log.warn("heartbeat", `Write failed: ${errMsg(err)}`);
     });
   };
   beat();

@@ -11,10 +11,11 @@ import {
   openSession,
   closeSession,
 } from "@mcbot/core/utils/stores/sessionStore.js";
-import { deliverPendingRewards } from "../../../commands/connection/daily/daily.js";
+import { deliverPendingRewards } from "@mcbot/core/utils/minecraft/rewards.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { fireWatches } from "../watchFirer.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 // PLAYER_NAME captures Bedrock names prefixed with "." by
 // Geyser/Floodgate in addition to vanilla [a-zA-Z0-9_] names.
@@ -42,16 +43,14 @@ async function recordSession(
     else closeSession(store, serverId, player);
     await saveSessionStore(store);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    log.warn("sessions", `Failed to record ${event} for ${player}: ${msg}`);
+    log.warn("sessions", `Failed to record ${event} for ${player}: ${errMsg(err)}`);
   }
 }
 
 function scheduleRewardDelivery(server: ServerInstance, player: string): void {
   setTimeout(() => {
     void deliverPendingRewards(server, player).catch((err: unknown) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.warn("daily", `Pending-reward delivery for ${player} failed: ${msg}`);
+      log.warn("daily", `Pending-reward delivery for ${player} failed: ${errMsg(err)}`);
     });
   }, DELIVERY_DELAY_MS);
 }

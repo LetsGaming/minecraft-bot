@@ -7,6 +7,7 @@ import {
   type GuildConfigSource,
 } from "../../../utils/guild/guildConfigs.js";
 import type { GuildConfig, StatusMessageState } from "@mcbot/core/types/index.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 /**
  * Purge all messages in a channel except for:
@@ -96,8 +97,7 @@ async function purgeChannel(
         const deleted = await channel.bulkDelete(bulkable, true);
         totalDeleted += deleted.size;
       } catch (err) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        log.error("purge", `Bulk delete failed: ${errMsg}`);
+        log.error("purge", `Bulk delete failed: ${errMsg(err)}`);
       }
     } else if (bulkable.length === 1) {
       old.push(bulkable[0]!);
@@ -151,8 +151,7 @@ export function startChannelPurge(
       try {
         await purgeChannel(client, guildId, channelId);
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        log.error("purge", `Purge failed for guild ${guildId}: ${msg}`);
+        log.error("purge", `Purge failed for guild ${guildId}: ${errMsg(err)}`);
       }
     }
   };
@@ -169,8 +168,7 @@ export function startChannelPurge(
     );
     setTimeout(async () => {
       await runPurge().catch((err) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        log.error("purge", `Purge failed: ${msg}`);
+        log.error("purge", `Purge failed: ${errMsg(err)}`);
       });
       scheduleNextPurge();
     }, delay);

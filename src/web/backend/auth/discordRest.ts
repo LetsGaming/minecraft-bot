@@ -26,6 +26,7 @@ import {
 } from "../errors.js";
 
 import { DISCORD_API_V10_BASE } from "@mcbot/schema";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 const API = DISCORD_API_V10_BASE;
 const TIMEOUT_MS = 10_000;
@@ -64,7 +65,7 @@ export class DiscordApiError extends Error {
  * dashboard already showed.
  */
 export function discordHttpError(err: unknown): HttpError {
-  const detail = err instanceof Error ? err.message : String(err);
+  const detail = errMsg(err);
   const message = `Couldn't reach Discord: ${detail}`;
   if (err instanceof DiscordApiError) {
     if (err.reason === "no-token") return new ServiceUnavailable(message);

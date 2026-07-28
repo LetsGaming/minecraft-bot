@@ -10,6 +10,7 @@
  * exactly one new DM. DM failures (closed DMs) still advance
  * lastReminderAt so the bot never hammers a user who blocks DMs.
  */
+import { DAILY_COOLDOWN_MS } from "@mcbot/core/utils/minecraft/rewards.js";
 import type { Client } from "discord.js";
 import {
   loadClaimedStore,
@@ -17,9 +18,9 @@ import {
 } from "@mcbot/core/utils/stores/dailyStore.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { t } from "@mcbot/core/utils/i18n.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 const CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
-const DAILY_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 /**
  * One reminder pass. Exported for tests; the scheduler calls it on an
@@ -59,8 +60,7 @@ export async function processDailyReminders(
       } catch (err) {
         // Closed DMs or unknown user — lastReminderAt is already advanced,
         // so this user is skipped until their next claim.
-        const msg = err instanceof Error ? err.message : String(err);
-        log.debug("dailyReminder", `DM to ${userId} failed: ${msg}`);
+        log.debug("dailyReminder", `DM to ${userId} failed: ${errMsg(err)}`);
       }
     }
   }
@@ -74,8 +74,7 @@ export function startDailyReminderScheduler(
 ): ReturnType<typeof setInterval> {
   const timer = setInterval(() => {
     processDailyReminders(client).catch((err) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.error("dailyReminder", `Reminder pass failed: ${msg}`);
+      log.error("dailyReminder", `Reminder pass failed: ${errMsg(err)}`);
     });
   }, CHECK_INTERVAL_MS);
 

@@ -5,6 +5,7 @@
  * is the full view (per-server session list + recent playtime), while
  * /whois shows a compact cross-server last-seen line.
  */
+import { formatDuration } from "@mcbot/core/utils/duration.js";
 import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embeds/embedUtils.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
@@ -33,13 +34,6 @@ export const data = new SlashCommandBuilder()
   .addStringOption((o) =>
     o.setName("server").setDescription("Server instance").setAutocomplete(true),
   );
-
-function formatDuration(ms: number): string {
-  const totalMinutes = Math.floor(ms / 60_000);
-  const h = Math.floor(totalMinutes / 60);
-  const m = totalMinutes % 60;
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
-}
 
 export const execute = withErrorHandling(async (interaction) => {
   const playerName = interaction.options.getString("player", true);

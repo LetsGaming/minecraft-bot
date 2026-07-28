@@ -2,6 +2,7 @@ import { type Client } from "discord.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import type { ILogWatcher } from "../../logWatcher.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 // Matches in-game chat: [timestamp] [server thread/INFO]: <PlayerName> Liege wie
 // Captures (1) the player name, (2) the raw message text
@@ -485,8 +486,7 @@ export function registerSleepWatcher(logWatcher: ILogWatcher): void {
       try {
         await sendTitleToAwake(server, triggerPlayer, pair);
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        log.error("sleepWatcher", `Failed to send title: ${msg}`);
+        log.error("sleepWatcher", `Failed to send title: ${errMsg(err)}`);
       }
     },
   );

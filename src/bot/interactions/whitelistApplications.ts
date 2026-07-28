@@ -47,6 +47,7 @@ import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
 import { t, runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import type { GuildConfig } from "@mcbot/core/types/index.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 const APPLY_ID = "wlapp:apply";
 const MODAL_ID = "wlapp:modal";
@@ -171,8 +172,7 @@ export async function ensureApplicationPrompts(
       dirty = true;
       log.info("wlapp", `Posted application prompt for guild ${guildId}`);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.warn("wlapp", `Prompt setup failed for guild ${guildId}: ${msg}`);
+      log.warn("wlapp", `Prompt setup failed for guild ${guildId}: ${errMsg(err)}`);
     }
   }
 
@@ -448,7 +448,7 @@ async function handleDecisionButton(
         });
         app.mcName = canonical;
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
+        const msg = errMsg(err);
         await interaction.followUp({
           content: t("wlapp.approveFailed", { error: msg }),
           flags: MessageFlags.Ephemeral,

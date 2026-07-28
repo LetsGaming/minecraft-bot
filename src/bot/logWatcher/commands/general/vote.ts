@@ -12,7 +12,7 @@ import {
   getOpenPollForServer,
   voterKeyForMc,
 } from "@mcbot/core/utils/stores/pollStore.js";
-import { loadLinkedAccounts } from "@mcbot/core/utils/stores/linkUtils.js";
+import { loadLinkedAccountsOrEmpty } from "@mcbot/core/utils/stores/linkUtils.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 
 const cmd = defineCommand({
@@ -37,9 +37,7 @@ const cmd = defineCommand({
       return;
     }
 
-    const linked = await loadLinkedAccounts().catch(
-      (): Record<string, string> => ({}),
-    );
+    const linked = await loadLinkedAccountsOrEmpty();
     poll.votes[voterKeyForMc(username, linked)] = idx;
     await savePollStore(store);
 

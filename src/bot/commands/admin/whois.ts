@@ -8,7 +8,10 @@ import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embeds/embedUtils.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { getAuditEntry } from "@mcbot/core/utils/stores/whitelistAudit.js";
-import { loadLinkedAccounts } from "@mcbot/core/utils/stores/linkUtils.js";
+import {
+  loadLinkedAccountsOrEmpty,
+  findDiscordIdByMcName,
+} from "@mcbot/core/utils/stores/linkUtils.js";
 import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
 import {
   loadSessionStore,
@@ -95,7 +98,7 @@ export const execute = withErrorHandling(
 
     const [audit, linked, sessions, notesStore] = await Promise.all([
       getAuditEntry(username),
-      loadLinkedAccounts().catch((): Record<string, string> => ({})),
+      loadLinkedAccountsOrEmpty(),
       loadSessionStore().catch(
         (): SessionStore => ({ version: 1, servers: {} }),
       ),
@@ -105,11 +108,7 @@ export const execute = withErrorHandling(
     ]);
 
     // Reverse lookup: which Discord account linked this Minecraft name?
-    const lower = username.toLowerCase();
-    const linkedDiscordId =
-      Object.entries(linked).find(
-        ([, mcName]) => mcName.toLowerCase() === lower,
-      )?.[0] ?? null;
+    const linkedDiscordId = findDiscordIdByMcName(linked, username);
 
     if (!audit && !linkedDiscordId) {
       throw new Error(t("whois.noData", { username }));

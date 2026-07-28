@@ -13,6 +13,7 @@ import { getDb, withTransaction } from "../../db/index.js";
 import { mapRows, col } from "../../db/rows.js";
 import { formatDatetime } from "../time.js";
 import { log } from "../logger.js";
+import { errMsg } from "../error.js";
 
 export const RETENTION_DAYS = 3;
 const RETENTION_MS = RETENTION_DAYS * 24 * 60 * 60 * 1000;
@@ -61,8 +62,7 @@ export function snapshotConfig(configJson: string, meta: SnapshotMeta = {}): voi
       );
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    log.error("configHistory", `Failed to snapshot config: ${msg}`);
+    log.error("configHistory", `Failed to snapshot config: ${errMsg(err)}`);
   }
 }
 

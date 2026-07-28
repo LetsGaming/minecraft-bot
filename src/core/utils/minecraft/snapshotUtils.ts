@@ -14,6 +14,7 @@ import type { ServerInstance } from "../server/server.js";
 import { log } from "../logger.js";
 import type { SnapshotData } from "../../types/index.js";
 import { LONGEST_LEADERBOARD_INTERVAL_MS } from "@mcbot/schema/stats.js";
+import { errMsg } from "../error.js";
 
 // Snapshots live in the snapshots table keyed (server_id, ts) — the key
 // the old per-server directories encoded in paths, and the one the
@@ -342,8 +343,7 @@ export async function migrateLegacySnapshots(
       ins.run(serverId, ts, raw);
       imported++;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.warn("snapshots", `Import skipped ${filePath}: ${msg}`);
+      log.warn("snapshots", `Import skipped ${filePath}: ${errMsg(err)}`);
     }
   };
 
@@ -380,8 +380,7 @@ export async function migrateLegacySnapshots(
       `${SNAPSHOTS_BASE_DIR}.imported`,
     );
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    log.warn("snapshots", `Could not retire snapshots dir: ${msg}`);
+    log.warn("snapshots", `Could not retire snapshots dir: ${errMsg(err)}`);
   }
 
   if (imported > 0) {

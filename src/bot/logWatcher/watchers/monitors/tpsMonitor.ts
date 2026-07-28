@@ -11,6 +11,7 @@ import { EmbedColor } from "../../../utils/embeds/embedColors.js";
 import { roleMention } from "../../../utils/embeds/alertUtils.js";
 import { t, runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 const warned = new Map<string, number>();
 
@@ -99,8 +100,7 @@ export function startTpsMonitor(
               ...roleMention(tpsAlert.mentionRole),
             });
           } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            log.error("tps", `Alert failed: ${msg}`);
+            log.error("tps", `Alert failed: ${errMsg(err)}`);
           }
         }
       }

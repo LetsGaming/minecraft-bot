@@ -9,6 +9,7 @@ import { initServers } from "@mcbot/core/utils/server/server.js";
 import { getDb } from "@mcbot/core/db/index.js";
 import { startWebServer } from "./server.js";
 import { log } from "@mcbot/core/utils/logger.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 // Last-resort diagnostics: in a container an uncaught error at startup
 // becomes exit 1 and Docker restarts in a loop. Make sure the reason is
@@ -28,8 +29,7 @@ let cfg;
 try {
   cfg = loadConfig();
 } catch (err) {
-  const msg = err instanceof Error ? err.message : String(err);
-  log.error("web", `Failed to load config.json: ${msg}`);
+  log.error("web", `Failed to load config.json: ${errMsg(err)}`);
   process.exit(1);
 }
 
@@ -61,10 +61,9 @@ initServers(cfg.servers);
 try {
   getDb();
 } catch (err) {
-  const msg = err instanceof Error ? err.message : String(err);
   log.error(
     "web",
-    `Failed to open the SQLite store: ${msg}\n` +
+    `Failed to open the SQLite store: ${errMsg(err)}\n` +
       "  In Docker, set MCBOT_SQLITE_DRIVER=node on the web service to use " +
       "the built-in driver (no native build). The default docker-compose.yml " +
       "already does this — rebuild with `docker compose up -d --build web`.",
@@ -73,7 +72,6 @@ try {
 }
 
 startWebServer().catch((err: unknown) => {
-  const msg = err instanceof Error ? err.message : String(err);
-  log.error("web", `Failed to start: ${msg}`);
+  log.error("web", `Failed to start: ${errMsg(err)}`);
   process.exit(1);
 });

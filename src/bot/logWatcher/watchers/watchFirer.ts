@@ -11,6 +11,7 @@ import {
 } from "@mcbot/core/utils/stores/watchStore.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { log } from "@mcbot/core/utils/logger.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 export function fireWatches(
   client: Client,
@@ -35,7 +36,6 @@ export function fireWatches(
       }
     }
   })().catch((err: unknown) => {
-    const msg = err instanceof Error ? err.message : String(err);
-    log.warn("watch", `Firing watches failed: ${msg}`);
+    log.warn("watch", `Firing watches failed: ${errMsg(err)}`);
   });
 }

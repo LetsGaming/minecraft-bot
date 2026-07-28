@@ -35,6 +35,7 @@ import { EmbedColor } from "../../../utils/embeds/embedColors.js";
 import { broadcastNotification } from "../notifyGuilds.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { log } from "@mcbot/core/utils/logger.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 const CHECK_INTERVAL_MS = 60 * 60_000;
 const INITIAL_DELAY_MS = 5 * 60_000;
@@ -85,8 +86,7 @@ async function runPass(client: Client): Promise<void> {
       const players = await loadKnownPlayers(false, server);
       names = Object.fromEntries(players.map((p) => [p.uuid, p.name]));
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.warn("milestones", `Stats unavailable for ${server.id}: ${msg}`);
+      log.warn("milestones", `Stats unavailable for ${server.id}: ${errMsg(err)}`);
       continue;
     }
 
@@ -182,8 +182,7 @@ export function startMilestoneWatcher(
 
   const tick = (): void => {
     runPass(client).catch((err: unknown) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.error("milestones", `Pass failed: ${msg}`);
+      log.error("milestones", `Pass failed: ${errMsg(err)}`);
     });
   };
   setTimeout(tick, INITIAL_DELAY_MS);

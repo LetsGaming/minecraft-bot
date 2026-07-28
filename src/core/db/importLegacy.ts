@@ -25,6 +25,7 @@ import type {
   WhitelistAuditMap,
 } from "../types/index.js";
 import type { AdminAuditEntry } from "../utils/stores/adminAudit.js";
+import { errMsg } from "../utils/error.js";
 
 // Deliberately NOT the public kv API (db/kv.ts): that module resolves the
 // connection through getDb(), and this importer runs INSIDE getDb() before
@@ -69,8 +70,7 @@ function readLegacy(file: string): unknown | null {
     // A corrupt legacy file must not brick startup — but it also must
     // not be silently skipped-and-renamed. Leave it in place and warn;
     // the table stays empty until the operator restores or removes it.
-    const msg = err instanceof Error ? err.message : String(err);
-    log.warn("db", `Legacy ${file} is unreadable (${msg}) — not imported`);
+    log.warn("db", `Legacy ${file} is unreadable (${errMsg(err)}) — not imported`);
     return null;
   }
 }

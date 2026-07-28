@@ -12,6 +12,7 @@ import type { BotClient } from "@mcbot/core/types/index.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { isRecord } from "@mcbot/core/utils/objects.js";
 import { resolveCommandPolicy } from "@mcbot/core/utils/commands/commandPolicy.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 export const data = new SlashCommandBuilder()
   .setName("help")
@@ -99,8 +100,7 @@ export async function execute(
   try {
     message = await interaction.fetchReply();
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    log.warn("help", `Could not fetch interaction reply: ${msg}`);
+    log.warn("help", `Could not fetch interaction reply: ${errMsg(err)}`);
     return;
   }
 

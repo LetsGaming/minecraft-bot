@@ -23,6 +23,7 @@ import type {
   ServerListResult,
   TpsResult,
 } from "../../types/index.js";
+import { errMsg } from "../error.js";
 
 // ── ServerInstance ──
 
@@ -58,7 +59,7 @@ export class ServerInstance {
       const { sendCommand } = await import("./serverAccess.js");
       return await sendCommand(this.config, command);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = errMsg(err);
       log.warn(this.id, `sendCommand failed: ${message}`);
       return null;
     }

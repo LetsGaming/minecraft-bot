@@ -77,7 +77,7 @@ See [daily-rewards.md](daily-rewards.md).
 |---|---|---|
 | `/clear` | `amount` | Bulk-deletes the last 1 to 100 messages in the current channel. Only visible to members with the Manage Messages permission. Messages older than 14 days cannot be bulk-deleted (Discord restriction). |
 | `/kick` | `player`, (`reason`), (`server`) | Admin: kick a player. The reason is shown to the player and written to the admin audit log. |
-| `/ban` | `player`, (`duration`), (`reason`), (`server`) | Admin: ban a player (vanilla ban list), audited. `duration` (`30m`, `2h`, `3d`, `1w`, `2mo`, `1.5y`, max `10y`) makes it a timed ban — the bot pardons automatically when it runs out. Omit it for a permanent ban. |
+| `/ban` | `player`, (`duration`), (`reason`), (`server`) | Admin: ban a player (vanilla ban list), audited. `duration` (`30m`, `2h`, `3d`, `1w`, `2mo`, `1.5y`, max `10y`) makes it a timed ban — the bot pardons automatically when it runs out. Omit it for a permanent ban. Players with a linked Discord account are DM'd when the ban lifts. |
 | `/pardon` | `player`, (`server`) | Admin: unban a player, audited. |
 
 ## Admin commands

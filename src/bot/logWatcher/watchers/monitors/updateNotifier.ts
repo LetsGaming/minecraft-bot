@@ -8,6 +8,7 @@
  * controls the DM half. The last version notified about is persisted so
  * restarts don't re-ping anyone.
  */
+import { fetchJson, describeFailure } from "@mcbot/core/utils/http.js";
 import fs from "fs";
 import { type Client } from "discord.js";
 import { loadConfig } from "@mcbot/core/config.js";
@@ -18,6 +19,7 @@ import { versionAtLeast } from "@mcbot/core/utils/server/serverAccess.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { isRecord } from "@mcbot/core/utils/objects.js";
 import { isSnowflake } from "@mcbot/schema/discord.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const INITIAL_DELAY_MS = 60_000;
@@ -50,21 +52,22 @@ export function currentVersion(): string {
 
 /** Latest release tag ("v3.6.0" → "3.6.0"), or null when unreachable. */
 export async function fetchLatestVersion(): Promise<string | null> {
-  try {
-    const res = await fetch(GITHUB_LATEST_RELEASE_API, {
-      headers: { accept: "application/vnd.github+json" },
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!res.ok) return null;
-    const body: unknown = await res.json();
-    const tag =
-      isRecord(body) && typeof body.tag_name === "string"
-        ? body.tag_name.trim()
-        : "";
-    return tag ? tag.replace(/^v/i, "") : null;
-  } catch {
+  const result = await fetchJson(GITHUB_LATEST_RELEASE_API, {
+    headers: { accept: "application/vnd.github+json" },
+  });
+  if (!result.ok) {
+    log.debug(
+      "updateNotifier",
+      `Release check failed: ${describeFailure(result.failure)}`,
+    );
     return null;
   }
+  const body = result.value;
+  const tag =
+    isRecord(body) && typeof body.tag_name === "string"
+      ? body.tag_name.trim()
+      : "";
+  return tag ? tag.replace(/^v/i, "") : null;
 }
 
 async function notifyAdmins(client: Client, latest: string): Promise<void> {
@@ -127,8 +130,7 @@ export function startUpdateNotifier(
 
   const tick = (): void => {
     runCheck(client).catch((err: unknown) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.warn("update", `Release check failed: ${msg}`);
+      log.warn("update", `Release check failed: ${errMsg(err)}`);
     });
   };
 

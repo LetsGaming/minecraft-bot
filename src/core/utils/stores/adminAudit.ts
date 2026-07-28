@@ -19,6 +19,7 @@ import { getDb, withTransaction } from "../../db/index.js";
 import { mapRows, col } from "../../db/rows.js";
 import { formatDatetime } from "../time.js";
 import { log } from "../logger.js";
+import { errMsg } from "../error.js";
 
 /** Keep the newest N entries — enough for "who restarted the server last
  *  month", bounded so the table can't grow forever. */
@@ -106,7 +107,6 @@ export async function recordAdminAction(entry: {
       ).run(MAX_ENTRIES);
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    log.error("adminAudit", `Failed to record "${entry.action}": ${msg}`);
+    log.error("adminAudit", `Failed to record "${entry.action}": ${errMsg(err)}`);
   }
 }

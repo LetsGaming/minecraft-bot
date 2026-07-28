@@ -2,6 +2,7 @@ import { defineCommand } from "../../defineCommand.js";
 import { confirmLinkCode } from "@mcbot/core/utils/stores/linkUtils.js";
 import { syncLinkedRole } from "../../../utils/guild/linkedRole.js";
 import { log } from "@mcbot/core/utils/logger.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 // Rate-limit per-player !link attempts to prevent brute-forcing codes.
 // Tracks the timestamp of the last attempt per Minecraft username.
@@ -28,7 +29,7 @@ const cmd = defineCommand({
       (err: unknown) => {
         log.error(
           "link",
-          `Link store error: ${err instanceof Error ? err.message : String(err)}`,
+          `Link store error: ${errMsg(err)}`,
         );
         return null;
       },

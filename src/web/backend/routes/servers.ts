@@ -26,6 +26,7 @@ import { sessionFromRequest } from "../auth/auth.js";
 import { BadRequest, NotFound, Conflict, HttpError } from "../errors.js";
 import { ServerActionParams, IdParams, LinesQuery, DryRunQuery } from "./schemas.js";
 import { isServerOperatorAction } from "@mcbot/schema/serverActions.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 /** The generic message returned when a server-side operation fails: SEC-04
  *  keeps absolute paths and sudo/stderr fragments out of the browser. */
@@ -76,8 +77,7 @@ export function registerServerRoutes(app: FastifyInstance): void {
           stderr: result.stderr.slice(-4000),
         };
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        log.error("web", `Script ${action} on ${id} failed: ${msg}`);
+        log.error("web", `Script ${action} on ${id} failed: ${errMsg(err)}`);
         throw new HttpError(500, OPERATION_FAILED);
       }
     },
@@ -93,8 +93,7 @@ export function registerServerRoutes(app: FastifyInstance): void {
         const raw = await tailLog(server.config, n);
         return { lines: raw.split("\n").filter(Boolean) };
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        log.error("web", `Log tail for ${req.params.id} failed: ${msg}`);
+        log.error("web", `Log tail for ${req.params.id} failed: ${errMsg(err)}`);
         throw new HttpError(500, OPERATION_FAILED);
       }
     },

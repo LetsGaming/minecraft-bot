@@ -12,6 +12,7 @@ import {
   closeAllOpenSessions,
 } from "@mcbot/core/utils/stores/sessionStore.js";
 import { log } from "@mcbot/core/utils/logger.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 // SEC-01: anchored on the server thread tag — a chat message must not
 // forge start/stop (a forged stop closes every open play session).
@@ -39,8 +40,7 @@ async function closeSessions(serverId: string): Promise<void> {
       );
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    log.warn("sessions", `Failed to close sessions for ${serverId}: ${msg}`);
+    log.warn("sessions", `Failed to close sessions for ${serverId}: ${errMsg(err)}`);
   }
 }
 

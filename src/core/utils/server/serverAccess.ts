@@ -520,6 +520,7 @@ export {
   type WrapperManifest,
   type ContractReport,
 } from "./wrapperContract.js";
+import { errMsg } from "../error.js";
 
 export interface RemoteHostInfo {
   process?: {
@@ -677,8 +678,7 @@ export async function readUserCache(
     );
     return Array.isArray(usercache) ? usercache : [];
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    log.debug("serverAccess", `usercache unavailable for ${cfg.id}: ${msg}`);
+    log.debug("serverAccess", `usercache unavailable for ${cfg.id}: ${errMsg(err)}`);
     return [];
   }
 }

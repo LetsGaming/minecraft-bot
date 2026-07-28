@@ -14,6 +14,7 @@ import { kvGet, kvSet } from "@mcbot/core/db/kv.js";
 import { loadConfig } from "@mcbot/core/config.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import type { ILogWatcher } from "../../logWatcher.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 const FLUSH_INTERVAL_MS = 3_000;
 /** Discord message budget per flush (codeblock fences + margin < 2000). */
@@ -135,8 +136,7 @@ async function flush(client: Client): Promise<void> {
         if (!channel || !("send" in channel)) continue;
         await channel.send({ content });
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        log.warn("console", `Relay send failed for ${serverId}: ${msg}`);
+        log.warn("console", `Relay send failed for ${serverId}: ${errMsg(err)}`);
       }
     }
   }
@@ -166,8 +166,7 @@ export function registerConsoleRelay(
   if (!flushTimer) {
     flushTimer = setInterval(() => {
       flush(client).catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        log.warn("console", `Relay flush failed: ${msg}`);
+        log.warn("console", `Relay flush failed: ${errMsg(err)}`);
       });
     }, FLUSH_INTERVAL_MS);
   }

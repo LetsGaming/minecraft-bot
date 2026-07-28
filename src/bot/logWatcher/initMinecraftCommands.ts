@@ -58,6 +58,7 @@ import {
 import { reconcileRestartSchedules } from "./watchers/schedulers/restartScheduler.js";
 import { startMilestoneWatcher } from "./watchers/monitors/milestoneWatcher.js";
 import { ensureApplicationPrompts } from "../interactions/whitelistApplications.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -181,8 +182,7 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
       await mod.init();
       log.info("commands", `Loaded !${name}`);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.error("commands", `Failed to load ${file}: ${msg}`);
+      log.error("commands", `Failed to load ${file}: ${errMsg(err)}`);
     }
   }
   registerManifestCommands("ingame", manifestIngame);
@@ -226,7 +226,7 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
   startPollScheduler(client);
 
   // Re-arm timed bans; anything that expired during downtime is pardoned now.
-  startTempBanScheduler();
+  startTempBanScheduler(client);
 
   // ── 7. Uptime flush scheduler ──
   startUptimeFlushScheduler();
@@ -250,8 +250,7 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
 
   // ── 13. Whitelist application prompts ──
   await ensureApplicationPrompts(client, guildConfigs).catch((err) => {
-    const msg = err instanceof Error ? err.message : String(err);
-    log.warn("wlapp", `Prompt setup failed: ${msg}`);
+    log.warn("wlapp", `Prompt setup failed: ${errMsg(err)}`);
   });
 
   log.info(
@@ -333,8 +332,7 @@ async function doReconcile(
       await wireServer(inst, client, liveGuildConfigs);
       log.info("reconcile", `Server added and watchers started: ${id}`);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.error("reconcile", `Failed to wire added server ${id}: ${msg}`);
+      log.error("reconcile", `Failed to wire added server ${id}: ${errMsg(err)}`);
     }
   }
 
@@ -347,8 +345,7 @@ async function doReconcile(
       try {
         await inst.probeCapabilities();
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        log.warn("reconcile", `Capability probe failed for ${inst.id}: ${msg}`);
+        log.warn("reconcile", `Capability probe failed for ${inst.id}: ${errMsg(err)}`);
       }
     }),
   );
@@ -358,8 +355,7 @@ async function doReconcile(
   try {
     reconcileStatusEmbed(client, freshConfig);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    log.warn("reconcile", `Status/presence reconcile failed: ${msg}`);
+    log.warn("reconcile", `Status/presence reconcile failed: ${errMsg(err)}`);
   }
 
   // Restart schedules are cheap to rebuild — clear + re-arm from the
@@ -367,8 +363,7 @@ async function doReconcile(
   try {
     reconcileRestartSchedules(client, freshConfig);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    log.warn("reconcile", `Restart-schedule reconcile failed: ${msg}`);
+    log.warn("reconcile", `Restart-schedule reconcile failed: ${errMsg(err)}`);
   }
 
   // Guild blocks are re-read live by the watchers themselves, but a
@@ -384,8 +379,7 @@ async function doReconcile(
 
   // New/changed whitelistApplications blocks get their prompt posted.
   await ensureApplicationPrompts(client, freshConfig.guilds).catch((err) => {
-    const msg = err instanceof Error ? err.message : String(err);
-    log.warn("reconcile", `Application-prompt reconcile failed: ${msg}`);
+    log.warn("reconcile", `Application-prompt reconcile failed: ${errMsg(err)}`);
   });
 
   if (changed.length > 0) {

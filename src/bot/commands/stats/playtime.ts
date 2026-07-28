@@ -12,6 +12,7 @@ import { findPlayer } from "@mcbot/core/utils/minecraft/playerUtils.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { createEmbed, createErrorEmbed } from "../../utils/embeds/embedUtils.js";
 import { log } from "@mcbot/core/utils/logger.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 export const data = new SlashCommandBuilder()
   .setName("playtime")
@@ -83,7 +84,7 @@ export async function execute(
 
     await interaction.editReply({ embeds: [embed] });
   } catch (err) {
-    log.error("playtime", err instanceof Error ? err.message : String(err));
+    log.error("playtime", errMsg(err));
     await interaction.editReply({
       embeds: [
         createErrorEmbed("An unexpected error occurred.", {

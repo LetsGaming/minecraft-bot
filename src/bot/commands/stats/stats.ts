@@ -14,6 +14,7 @@ import {
   createErrorEmbed,
 } from "../../utils/embeds/embedUtils.js";
 import type { FlattenedStat } from "@mcbot/core/types/index.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -133,7 +134,7 @@ async function runPlayer(
       await handlePagination(message, interaction, embeds);
     }
   } catch (err) {
-    log.error("stats", err instanceof Error ? err.message : String(err));
+    log.error("stats", errMsg(err));
     await interaction.editReply({
       embeds: [createErrorEmbed("Failed to retrieve stats.")],
     });
@@ -249,7 +250,7 @@ async function runDaily(
       await handlePagination(message, interaction, embeds);
     }
   } catch (err) {
-    log.error("stats", err instanceof Error ? err.message : String(err));
+    log.error("stats", errMsg(err));
     await interaction.editReply({
       embeds: [createErrorEmbed("Failed to retrieve daily stats.")],
     });

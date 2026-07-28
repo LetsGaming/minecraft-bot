@@ -1,6 +1,9 @@
 import { registerLogCommand } from "./logWatcher.js";
 import { resolveCommandPolicy } from "@mcbot/core/utils/commands/commandPolicy.js";
-import { loadLinkedAccounts } from "@mcbot/core/utils/stores/linkUtils.js";
+import {
+  loadLinkedAccountsOrEmpty,
+  findDiscordIdByMcName,
+} from "@mcbot/core/utils/stores/linkUtils.js";
 import { isServerAdmin } from "../commands/middleware.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import type { Client } from "discord.js";
@@ -12,6 +15,7 @@ import type {
 } from "@mcbot/core/types/index.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 const cooldowns = new Map<string, number>();
 
@@ -145,13 +149,8 @@ export function defineCommand({
           return;
         }
         if (policy.adminOnly) {
-          const linked = await loadLinkedAccounts().catch(
-            (): Record<string, string> => ({}),
-          );
-          const lowerName = username.toLowerCase();
-          const discordId = Object.entries(linked).find(
-            ([, mc]) => mc.toLowerCase() === lowerName,
-          )?.[0];
+          const linked = await loadLinkedAccountsOrEmpty();
+          const discordId = findDiscordIdByMcName(linked, username);
           if (!discordId || !isServerAdmin(discordId)) {
             await server.sendCommand(
               `/msg ${username} ${t("command.adminOnlyInGame", { command: name })}`,
@@ -188,7 +187,7 @@ export function defineCommand({
         } catch (err) {
           log.error(
             "commands",
-            `Error in !${name} for ${username}: ${err instanceof Error ? err.message : String(err)}`,
+            `Error in !${name} for ${username}: ${errMsg(err)}`,
           );
         }
       },

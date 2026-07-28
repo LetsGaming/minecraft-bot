@@ -53,6 +53,7 @@ import {
 } from "../../logWatcher/watchers/schedulers/pollScheduler.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { log } from "@mcbot/core/utils/logger.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 const DEFAULT_DURATION_HOURS = 24;
 const MAX_DURATION_HOURS = 24 * 7;
@@ -333,10 +334,9 @@ export const execute = withErrorHandling(
           })}`,
         );
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
         log.warn(
           "polls",
-          `In-game poll announcement failed on ${inst.id}: ${msg}`,
+          `In-game poll announcement failed on ${inst.id}: ${errMsg(err)}`,
         );
       }
     }

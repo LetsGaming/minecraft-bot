@@ -1,3 +1,4 @@
+import { formatDuration } from "@mcbot/core/utils/duration.js";
 import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../utils/embeds/embedColors.js";
@@ -8,19 +9,6 @@ import {
 } from "../../utils/guild/guildRouter.js";
 import { getUptimeStats } from "@mcbot/core/utils/stores/uptimeTracker.js";
 import { withErrorHandling } from "../middleware.js";
-
-function formatDuration(ms: number): string {
-  const s = Math.floor(ms / 1000);
-  const d = Math.floor(s / 86400);
-  const h = Math.floor((s % 86400) / 3600);
-  const m = Math.floor((s % 3600) / 60);
-
-  const parts: string[] = [];
-  if (d > 0) parts.push(`${d}d`);
-  if (h > 0) parts.push(`${h}h`);
-  if (m > 0 || parts.length === 0) parts.push(`${m}m`);
-  return parts.join(" ");
-}
 
 function uptimeBar(pct: number | null, width = 10): string {
   if (pct === null) return "░".repeat(width) + " no data";

@@ -11,6 +11,7 @@
  * Remote instances with a wrapper older than 1.2.0 (no /info host block)
  * are skipped — exactly the previous behaviour.
  */
+import { formatBytes } from "@mcbot/schema";
 import { type Client } from "discord.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { serverInScope } from "../../../utils/guild/guildRouter.js";
@@ -24,13 +25,13 @@ import { loadConfig } from "@mcbot/core/config.js";
 import { readBackups } from "@mcbot/core/utils/server/serverAccess.js";
 import {
   getHostResources,
-  formatBytes,
 } from "@mcbot/core/utils/server/hostResources.js";
 import type { DiskUsage } from "@mcbot/core/utils/server/hostResources.js";
 import { t, runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
 import { roleMention } from "../../../utils/embeds/alertUtils.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 import type { GuildConfig } from "@mcbot/core/types/index.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 const CHECK_INTERVAL_MS = 5 * 60 * 1000; // disks fill slowly
 const HYSTERESIS_PERCENT = 5;
@@ -93,8 +94,7 @@ export function startHostResourcesMonitor(
           );
         }
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        log.error("hostAlerts", `Check error for ${server.id}: ${msg}`);
+        log.error("hostAlerts", `Check error for ${server.id}: ${errMsg(err)}`);
       }
     }
   }, CHECK_INTERVAL_MS);
@@ -239,8 +239,7 @@ export async function broadcast(
         ...roleMention(alertCfg.mentionRole),
       });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.error(logTag, `Failed to send alert: ${msg}`);
+      log.error(logTag, `Failed to send alert: ${errMsg(err)}`);
     }
   }
 }

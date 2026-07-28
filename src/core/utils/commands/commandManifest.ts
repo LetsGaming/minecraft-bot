@@ -10,6 +10,7 @@ import path from "path";
 import { loadJson, saveJson } from "../jsonStore.js";
 import { getRootDir } from "../paths.js";
 import { log } from "../logger.js";
+import { errMsg } from "../error.js";
 
 const MANIFEST_PATH = path.resolve(
   getRootDir(),
@@ -57,8 +58,7 @@ export async function flushCommandManifest(): Promise<void> {
       updatedAt: Date.now(),
     } satisfies CommandManifest);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    log.warn("commands", `Manifest write failed: ${msg}`);
+    log.warn("commands", `Manifest write failed: ${errMsg(err)}`);
   }
 }
 

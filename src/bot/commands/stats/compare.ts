@@ -22,6 +22,7 @@ import { resolveServer } from "../../utils/guild/guildRouter.js";
 import type { EmbedBuilder } from "discord.js";
 import type { FlattenedStat } from "@mcbot/core/types/index.js";
 import { log } from "@mcbot/core/utils/logger.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
 export const data = new SlashCommandBuilder()
   .setName("compare")
@@ -125,7 +126,7 @@ export async function execute(
   } catch (error) {
     log.error(
       "compare",
-      `Error comparing players: ${error instanceof Error ? error.message : String(error)}`,
+      `Error comparing players: ${errMsg(error)}`,
     );
     await interaction.editReply({
       embeds: [
