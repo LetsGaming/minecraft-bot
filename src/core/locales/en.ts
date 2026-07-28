@@ -235,6 +235,10 @@ export const en: Record<string, string> = {
   "moderation.kicked": "Kicked **{player}** from **{server}**.",
   "moderation.banned": "Banned **{player}** on **{server}**.",
   "moderation.pardoned": "Unbanned **{player}** on **{server}**.",
+  "moderation.bannedTemp":
+    "Banned **{player}** on **{server}** for **{duration}** — until {until}.",
+  "moderation.invalidDuration":
+    "`{input}` is not a valid duration. Use e.g. `30m`, `2h`, `3d`, `1w`, `2mo`, `1.5y` (max 10y).",
 
   // ── /activity ──
   "activity.title": "📈 Activity — {server}",

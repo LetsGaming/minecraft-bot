@@ -2,7 +2,9 @@
  * /pardon — moderation shortcut (admin).
  *
  * Removes a player from the vanilla ban list; the action lands in the
- * admin audit log like /kick and /ban.
+ * admin audit log like /kick and /ban. A pending timed-ban release for
+ * the same player is dropped too, so the scheduler doesn't fire a second
+ * pardon later (harmless, but it would pollute the audit log).
  */
 import { SlashCommandBuilder } from "discord.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
@@ -10,6 +12,8 @@ import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { createSuccessEmbed } from "../../utils/embeds/embedUtils.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
+import { removeTempBan } from "@mcbot/core/utils/stores/tempBanStore.js";
+import { cancelTempBanTimer } from "../../logWatcher/watchers/schedulers/tempBanScheduler.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 
 export const data = new SlashCommandBuilder()
@@ -34,6 +38,9 @@ export const execute = withErrorHandling(
     const server = resolveServer(interaction);
 
     await server.sendCommand(`/pardon ${player}`);
+
+    cancelTempBanTimer(server.id, player);
+    await removeTempBan(server.id, player);
 
     await recordAdminAction({
       action: "pardon",

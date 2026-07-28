@@ -43,7 +43,7 @@ In addition, every user is rate-limited to 5 slash commands per 30 seconds to pr
 
 | Command | What it does |
 |---|---|
-| `/kick`, `/ban`, `/pardon` | Thin moderation shortcuts over the console commands; the reason (if any) reaches the player/ban list and the audit log. |
+| `/kick`, `/ban`, `/pardon` | Thin moderation shortcuts over the console commands; the reason (if any) reaches the player/ban list and the audit log. A `/ban` with a `duration` is a plain vanilla ban plus a bot-side release timer (Minecraft has no expiry of its own); it survives restarts and is dropped if `/pardon` beats the clock. |
 | `/console tail` | The last N log lines, ephemeral. |
 | `/console live enable\|disable` | Toggle the batched live log relay into the guild's `console.channelId` — an exposure decision, so it is audited. |
 | `/daily-admin move\|reset\|show` | Repair tooling for per-server daily-claim records (e.g. streaks stranded on the wrong server by the v2 migration). Mutations are audited. |

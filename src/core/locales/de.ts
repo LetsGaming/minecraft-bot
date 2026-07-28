@@ -229,6 +229,10 @@ export const de: Record<string, string> = {
   "moderation.kicked": "**{player}** von **{server}** gekickt.",
   "moderation.banned": "**{player}** auf **{server}** gebannt.",
   "moderation.pardoned": "**{player}** auf **{server}** entbannt.",
+  "moderation.bannedTemp":
+    "**{player}** auf **{server}** für **{duration}** gebannt — bis {until}.",
+  "moderation.invalidDuration":
+    "`{input}` ist keine gültige Dauer. Nutze z. B. `30m`, `2h`, `3d`, `1w`, `2mo`, `1.5y` (max. 10y).",
 
   // ── /activity ──
   "activity.title": "📈 Aktivität — {server}",

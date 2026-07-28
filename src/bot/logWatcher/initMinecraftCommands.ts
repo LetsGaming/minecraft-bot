@@ -44,6 +44,7 @@ import { startDailyReminderScheduler } from "./watchers/schedulers/dailyReminder
 import { startChannelPurge } from "./watchers/schedulers/channelPurge.js";
 import { startHostResourcesMonitor } from "./watchers/monitors/hostResourcesMonitor.js";
 import { startPollScheduler } from "./watchers/schedulers/pollScheduler.js";
+import { startTempBanScheduler } from "./watchers/schedulers/tempBanScheduler.js";
 import { registerSleepWatcher } from "./watchers/log/sleepWatcher.js";
 import { registerConsoleRelay } from "./watchers/log/consoleRelay.js";
 import { startUptimeFlushScheduler } from "@mcbot/core/utils/stores/uptimeTracker.js";
@@ -223,6 +224,9 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
 
   // Re-arm open polls (close timers + button collectors) after restart.
   startPollScheduler(client);
+
+  // Re-arm timed bans; anything that expired during downtime is pardoned now.
+  startTempBanScheduler();
 
   // ── 7. Uptime flush scheduler ──
   startUptimeFlushScheduler();

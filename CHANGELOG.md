@@ -8,6 +8,16 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **`/ban` takes a duration.** `duration: 30m | 2h | 3d | 1w | 2mo | 1.5y`
+  (max `10y`, segments may be combined as `1d12h`) turns a ban into a timed
+  one; leaving it out keeps the old permanent behaviour. Minecraft's ban list
+  has no expiry, so the ban itself stays a plain vanilla `/ban` — the server
+  enforces it even while the bot is offline — and only the release is
+  scheduled bot-side. Pending releases persist in `kv_store["tempBans"]`, are
+  re-armed on startup (anything that ran out during downtime is pardoned on
+  the next boot), and are dropped when `/pardon` beats the clock. The expiry
+  pardon is written to the admin audit log as `tempban-expired`.
+
 - **The bot can now ask the Minecraft server directly, with no wrapper
   involved.** `serverPing.ts` speaks the standard server-list ping — the same
   handshake a vanilla client uses to draw a row in the multiplayer list. It
