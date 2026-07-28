@@ -7,7 +7,10 @@
  * next start instead of silently becoming permanent.
  *
  * setTimeout tops out at ~24.8 days, well under the durations this
- * accepts, so long waits re-arm in chunks rather than firing early.
+ * accepts, so the wait goes through scheduleAt (core/utils/longTimer).
+ *
+ * If the player has a linked Discord account they get a DM when the ban
+ * lifts. Best-effort by design: a closed DM must never stop the pardon.
  */
 import {
   loadTempBanStore,
@@ -17,51 +20,74 @@ import {
   type TempBan,
 } from "@mcbot/core/utils/stores/tempBanStore.js";
 import { getServerInstance } from "@mcbot/core/utils/server/server.js";
+import {
+  loadLinkedAccountsOrEmpty,
+  findDiscordIdByMcName,
+} from "@mcbot/core/utils/stores/linkUtils.js";
+import { t } from "@mcbot/core/utils/i18n.js";
+import type { Client } from "discord.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
+import { scheduleAt, type LongTimer } from "@mcbot/core/utils/longTimer.js";
 import { log } from "@mcbot/core/utils/logger.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 
-const MAX_TIMEOUT_MS = 2 ** 31 - 1;
-
-const timers = new Map<string, ReturnType<typeof setTimeout>>();
+const timers = new Map<string, LongTimer>();
 
 /** Exposed for tests. */
 export function _resetStateForTesting(): void {
-  for (const timer of timers.values()) clearTimeout(timer);
+  for (const timer of timers.values()) timer.cancel();
   timers.clear();
 }
 
 /** Cancel a pending release (manual /pardon beat the clock). */
 export function cancelTempBanTimer(serverId: string, player: string): void {
   const key = tempBanKey(serverId, player);
-  const timer = timers.get(key);
-  if (timer) clearTimeout(timer);
+  timers.get(key)?.cancel();
   timers.delete(key);
 }
 
+/**
+ * DM the linked Discord account that the ban has lifted.
+ *
+ * Best-effort: unlinked players, closed DMs, and deleted accounts are all
+ * normal outcomes here, so nothing throws upward. The DM follows the
+ * global language — like every other DM, there is no guild to resolve a
+ * locale from.
+ */
+async function notifyPlayer(client: Client, ban: TempBan): Promise<void> {
+  try {
+    const linked = await loadLinkedAccountsOrEmpty();
+    const discordId = findDiscordIdByMcName(linked, ban.player);
+    if (!discordId) return;
+
+    const user = await client.users.fetch(discordId);
+    await user.send(
+      t("tempban.dmExpired", { player: ban.player, server: ban.serverId }),
+    );
+  } catch (err) {
+    log.debug("tempban", `Expiry DM for ${ban.player} failed: ${errMsg(err)}`);
+  }
+}
+
 /** Arm (or re-arm) the release timer for one ban. */
-export function armTempBan(ban: TempBan): void {
+export function armTempBan(client: Client, ban: TempBan): void {
   const key = tempBanKey(ban.serverId, ban.player);
   cancelTempBanTimer(ban.serverId, ban.player);
 
-  const remaining = Math.max(0, ban.expiresAt - Date.now());
-  const delay = Math.min(remaining, MAX_TIMEOUT_MS);
-  const timer = setTimeout(() => {
+  const timer = scheduleAt(ban.expiresAt, () => {
     timers.delete(key);
-    // Long ban: this tick was only a chunk of the wait, so arm the next.
-    if (Date.now() < ban.expiresAt) {
-      armTempBan(ban);
-      return;
-    }
-    void expireTempBan(ban).catch((err: unknown) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.error("tempban", `Failed to release ${ban.player}: ${msg}`);
+    void expireTempBan(client, ban).catch((err: unknown) => {
+      log.error("tempban", `Failed to release ${ban.player}: ${errMsg(err)}`);
     });
-  }, delay);
+  });
   timers.set(key, timer);
 }
 
 /** Issue the pardon and drop the entry. Idempotent. */
-export async function expireTempBan(ban: TempBan): Promise<void> {
+export async function expireTempBan(
+  client: Client,
+  ban: TempBan,
+): Promise<void> {
   const server = getServerInstance(ban.serverId);
   if (!server) {
     // Instance gone from config — nothing to pardon on, so stop tracking
@@ -86,34 +112,34 @@ export async function expireTempBan(ban: TempBan): Promise<void> {
     detail: `${ban.player} (banned by ${ban.by})`,
   });
 
+  await notifyPlayer(client, ban);
+
   log.info("tempban", `Released ${ban.player} on ${ban.serverId}`);
 }
 
 /** Re-arm every pending release at startup; release overdue ones now. */
-export function startTempBanScheduler(): void {
+export function startTempBanScheduler(client: Client): void {
   void (async () => {
     try {
       const store = await loadTempBanStore();
       const bans = listTempBans(store);
       for (const ban of bans) {
         if (ban.expiresAt <= Date.now()) {
-          await expireTempBan(ban).catch((err: unknown) => {
-            const msg = err instanceof Error ? err.message : String(err);
+          await expireTempBan(client, ban).catch((err: unknown) => {
             log.error(
               "tempban",
-              `Failed to release overdue ban for ${ban.player}: ${msg}`,
+              `Failed to release overdue ban for ${ban.player}: ${errMsg(err)}`,
             );
           });
         } else {
-          armTempBan(ban);
+          armTempBan(client, ban);
         }
       }
       if (bans.length > 0) {
         log.info("tempban", `Resumed ${bans.length} timed ban(s)`);
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.error("tempban", `Failed to resume timed bans: ${msg}`);
+      log.error("tempban", `Failed to resume timed bans: ${errMsg(err)}`);
     }
   })();
 }

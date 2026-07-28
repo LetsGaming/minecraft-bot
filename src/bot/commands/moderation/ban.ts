@@ -17,7 +17,11 @@ import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { createSuccessEmbed } from "../../utils/embeds/embedUtils.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
-import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
+import {
+  isValidMcName,
+  sanitizeReason,
+  MAX_REASON_LENGTH,
+} from "@mcbot/core/utils/sanitize.js";
 import {
   parseDuration,
   formatDuration,
@@ -28,8 +32,6 @@ import {
 } from "@mcbot/core/utils/stores/tempBanStore.js";
 import { armTempBan } from "../../logWatcher/watchers/schedulers/tempBanScheduler.js";
 import { t } from "@mcbot/core/utils/i18n.js";
-
-import { MAX_REASON_LENGTH, sanitizeReason } from "./kick.js";
 
 export const data = new SlashCommandBuilder()
   .setName("ban")
@@ -98,7 +100,7 @@ export const execute = withErrorHandling(
         reason,
       };
       await putTempBan(ban);
-      armTempBan(ban);
+      armTempBan(interaction.client, ban);
     }
 
     await recordAdminAction({

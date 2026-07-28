@@ -26,6 +26,9 @@ export * from "./stats.js";
 export * from "./notifications.js";
 export * from "./commandOptions.js";
 export * from "./discord.js";
+// Runtime values (formatBytes), shared by the bot embeds and the dashboard —
+// the two had drifting copies before.
+export * from "./format.js";
 export * from "./serverActions.js";
 // Runtime values (the ServerState / RconState contract), shared by the bot's
 // status paths, the web backend, and the Vue frontend — a value re-export so

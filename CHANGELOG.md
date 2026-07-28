@@ -6,6 +6,48 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Config validation is schema-driven.** Types, requiredness, enums and
+  numeric bounds are now checked with Ajv against the generated
+  `config.schema.json` (`configSchemaCheck.ts`); `configValidation.ts` keeps
+  only what a JSON Schema cannot express — 4.x migration detection, apiUrl
+  transport rules, snowflake shapes, unknown-server references, chat-bridge
+  ambiguity, tenant-scoping nudges, `HH:MM`, port ranges. The two
+  descriptions of the same shape can no longer drift. Numeric bounds moved
+  onto `RawBotConfig` as `@minimum`/`@maximum` annotations, so the schema
+  carries them. Two deliberate softenings: an unknown top-level key and an
+  unrecognised `notifications.events` entry now warn instead of blocking
+  boot, so a config written for a newer version still starts. A missing
+  `config.schema.json` degrades to semantic-only checks with a warning
+  rather than refusing to start.
+- **One `errMsg` for unknown throws.** Replaced 107 copies of the
+  `err instanceof Error ? err.message : String(err)` ternary. The shared one
+  also unpacks `AggregateError`, appends `Error.cause` (where fetch and
+  `node:sqlite` hide the real reason), and reports a thrown object's message
+  instead of `[object Object]`.
+- **Reward rules moved out of the `/daily` command** into
+  `core/utils/minecraft/rewards.ts`. The `advancements` and `joinLeave`
+  watchers imported `give`/`deliverPendingRewards` from a Discord
+  interaction handler; they now depend on core instead.
+- **One `formatDuration` and one `formatBytes`.** `formatDuration` had three
+  implementations with three different renderings (`/sessions` showed a
+  3-day session as `72h 5m`); `formatBytes` had two that had already
+  drifted, so the same figure read `512 KB` in Discord and `0 MB` in the
+  dashboard. `formatBytes` now lives in `@mcbot/schema`, the one package
+  both the Node side and the browser bundle import.
+- **`fetchJson` for upstream calls** (`core/utils/http.ts`): one timeout,
+  one typed `FetchResult` instead of throw-or-null. Fixes a real hang — the
+  Modrinth call had no timeout, so a stalled upstream blocked `/mods`
+  indefinitely.
+- **`sanitizeReason`/`MAX_REASON_LENGTH` moved to `core/utils/sanitize.ts`**
+  from `kick.ts`, where the sibling moderation commands were importing them.
+- **`scheduleAt` (`core/utils/longTimer.ts`)** owns the setTimeout-overflow
+  handling that two schedulers had implemented differently.
+- **`loadLinkedAccountsOrEmpty`** replaces seven copies of
+  `loadLinkedAccounts().catch(() => ({}))`, and logs the failure those seven
+  copies each swallowed silently.
+
 ### Added
 
 - **`/ban` takes a duration.** `duration: 30m | 2h | 3d | 1w | 2mo | 1.5y`
@@ -16,7 +58,14 @@ project follows [Semantic Versioning](https://semver.org/).
   scheduled bot-side. Pending releases persist in `kv_store["tempBans"]`, are
   re-armed on startup (anything that ran out during downtime is pardoned on
   the next boot), and are dropped when `/pardon` beats the clock. The expiry
-  pardon is written to the admin audit log as `tempban-expired`.
+  pardon is written to the admin audit log as `tempban-expired`. If the
+  player has a linked Discord account they get a DM the moment the ban
+  lifts — best-effort, so closed DMs or a deleted account never block the
+  pardon itself.
+- **`findDiscordIdByMcName` in `linkUtils`.** The name → Discord-ID reverse
+  scan existed as four hand-rolled copies (`whois`, `profile`, `deaths`,
+  `defineCommand`); they now share one case-insensitive helper, which the
+  timed-ban DM also uses.
 
 - **The bot can now ask the Minecraft server directly, with no wrapper
   involved.** `serverPing.ts` speaks the standard server-list ping — the same

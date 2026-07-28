@@ -7,7 +7,7 @@
  * we must mock BEFORE importing config.ts, and use a plain string literal.
  */
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
-import { writeFileSync, mkdirSync } from "fs";
+import { writeFileSync, mkdirSync, copyFileSync } from "fs";
 
 // Must use a plain string literal in the factory (no variable closures)
 vi.mock("../../src/core/utils/jsonStore.js", () => ({
@@ -56,6 +56,12 @@ function writeConfig(cfg: object): void {
 
 beforeAll(() => {
   mkdirSync("/tmp/config-test", { recursive: true });
+  // getRootDir is mocked to this directory, and the validator reads
+  // config.schema.json from the root — so the fake root needs it too.
+  copyFileSync(
+    new URL("../../config.schema.json", import.meta.url).pathname,
+    "/tmp/config-test/config.schema.json",
+  );
 });
 
 beforeEach(() => {
@@ -111,12 +117,12 @@ describe("loadConfig", () => {
 
   it("throws on validation failure — missing token", () => {
     writeConfig({ clientId: "cid" });
-    expect(() => reloadConfig()).toThrow("token: required string");
+    expect(() => reloadConfig()).toThrow("token: required");
   });
 
   it("throws on validation failure — missing clientId", () => {
     writeConfig({ token: "tok" });
-    expect(() => reloadConfig()).toThrow("clientId: required string");
+    expect(() => reloadConfig()).toThrow("clientId: required");
   });
 
   it("names the migration when handed a 4.x server block", () => {

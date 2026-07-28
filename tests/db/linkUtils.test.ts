@@ -24,6 +24,7 @@ import {
   issueLinkCode,
   confirmLinkCode,
   unlinkAccount,
+  findDiscordIdByMcName,
 } from "../../src/core/utils/stores/linkUtils.js";
 
 beforeEach(() => {
@@ -164,5 +165,22 @@ describe("unlinkAccount", () => {
 
   it("reports false when there was nothing to remove", async () => {
     expect(await unlinkAccount("ghost")).toBe(false);
+  });
+});
+
+describe("findDiscordIdByMcName", () => {
+  const linked = { u1: "Steve", u2: "Alex" };
+
+  it("finds the owner of a name", () => {
+    expect(findDiscordIdByMcName(linked, "Alex")).toBe("u2");
+  });
+
+  it("ignores casing, since log lines and /link input can disagree", () => {
+    expect(findDiscordIdByMcName(linked, "sTeVe")).toBe("u1");
+  });
+
+  it("returns null for an unlinked name and an empty map", () => {
+    expect(findDiscordIdByMcName(linked, "Herobrine")).toBeNull();
+    expect(findDiscordIdByMcName({}, "Steve")).toBeNull();
   });
 });

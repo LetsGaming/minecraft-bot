@@ -26,9 +26,18 @@ vi.mock("../../src/core/config.js", () => ({
 vi.mock("../../src/core/utils/stores/whitelistAudit.js", () => ({
   getAuditEntry: vi.fn(),
 }));
-vi.mock("../../src/core/utils/stores/linkUtils.js", () => ({
-  loadLinkedAccounts: vi.fn().mockResolvedValue({}),
-}));
+vi.mock("../../src/core/utils/stores/linkUtils.js", async () => {
+  // Only the I/O is stubbed; findDiscordIdByMcName is a pure helper the
+  // commands under test rely on, so keep the real one.
+  const actual = await vi.importActual<
+    typeof import("../../src/core/utils/stores/linkUtils.js")
+  >("../../src/core/utils/stores/linkUtils.js");
+  return {
+    ...actual,
+    loadLinkedAccounts: vi.fn().mockResolvedValue({}),
+    loadLinkedAccountsOrEmpty: vi.fn().mockResolvedValue({}),
+  };
+});
 vi.mock("../../src/core/utils/stores/dailyStore.js", () => ({
   loadClaimedStore: vi
     .fn()
@@ -56,7 +65,7 @@ import { t, runWithGuildLocale } from "../../src/core/utils/i18n.js";
 import { buildSparkline } from "../../src/core/utils/stores/uptimeTracker.js";
 import { processDailyReminders } from "../../src/bot/logWatcher/watchers/schedulers/dailyReminderScheduler.js";
 import { getAuditEntry } from "../../src/core/utils/stores/whitelistAudit.js";
-import { loadLinkedAccounts } from "../../src/core/utils/stores/linkUtils.js";
+import { loadLinkedAccountsOrEmpty } from "../../src/core/utils/stores/linkUtils.js";
 import {
   loadClaimedStore,
   saveClaimedStore,
@@ -66,7 +75,7 @@ import type { Client } from "discord.js";
 beforeEach(() => {
   vi.clearAllMocks();
   mockConfig.language = "en";
-  vi.mocked(loadLinkedAccounts).mockResolvedValue({});
+  vi.mocked(loadLinkedAccountsOrEmpty).mockResolvedValue({});
   vi.mocked(loadClaimedStore).mockResolvedValue({ version: 2, servers: {} });
 });
 
@@ -390,7 +399,7 @@ describe("/whois command", () => {
       addedAt: "2026-01-01 12:00",
       server: "survival",
     } as never);
-    vi.mocked(loadLinkedAccounts).mockResolvedValue({
+    vi.mocked(loadLinkedAccountsOrEmpty).mockResolvedValue({
       "discord-9": "steve",
     } as never);
 

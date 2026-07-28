@@ -120,7 +120,7 @@ describe("strict server instance lookup (H-01)", () => {
 describe("daily give() item prefixing (M-12)", () => {
   it("prefixes bare IDs and leaves namespaced IDs untouched", async () => {
     const { give } = await import(
-      "../../src/bot/commands/connection/daily/daily.js"
+      "../../src/core/utils/minecraft/rewards.js"
     );
     const sendCommand = vi.mocked(serverAccess.sendCommand);
     sendCommand.mockResolvedValue(null);
@@ -144,7 +144,7 @@ describe("daily give() item prefixing (M-12)", () => {
 
   it("fails the claim when the console does not confirm the give (M-11)", async () => {
     const { give } = await import(
-      "../../src/bot/commands/connection/daily/daily.js"
+      "../../src/core/utils/minecraft/rewards.js"
     );
     const srv = {
       id: "s",

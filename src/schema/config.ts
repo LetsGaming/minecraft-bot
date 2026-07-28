@@ -344,11 +344,19 @@ export interface DeathCoordsConfig {
  * long a full refill takes. Defaults match the previous constants.
  */
 export interface LimitsConfig {
-  /** Slash commands per user per window (default 5 per 30s). */
+  /**
+   * Slash commands per user per window (default 5 per 30s).
+   * @minimum 1
+   */
   slashCapacity?: number;
+  /** @minimum 1000 */
   slashWindowMs?: number;
-  /** Bridge messages per user per window (default 8 per 10s). */
+  /**
+   * Bridge messages per user per window (default 8 per 10s).
+   * @minimum 1
+   */
   bridgeCapacity?: number;
+  /** @minimum 1000 */
   bridgeWindowMs?: number;
 }
 
@@ -358,7 +366,10 @@ export interface ServerRestartSchedule {
   time: string;
   /** Weekday codes ("SU".."SA"); omitted = every day. */
   days?: string[];
-  /** Countdown warnings in minutes before the restart (default 15,5,1). */
+  /**
+   * Countdown warnings in minutes before the restart (default 15,5,1).
+   * @items.exclusiveMinimum 0
+   */
   warnMinutes?: number[];
 }
 
@@ -420,6 +431,10 @@ export interface HostAlertsConfig {
    * reaches this percentage. Default 90; alerts go to each guild's
    * downtimeAlerts channel. Set to 0 to disable.
    */
+  /**
+   * @minimum 0
+   * @maximum 100
+   */
   diskWarnPercent?: number;
   /**
    * Alert when the NEWEST backup of a server is older than this many
@@ -429,6 +444,7 @@ export interface HostAlertsConfig {
    * servers whose capability probe found the suite backup layout are
    * checked.
    */
+  /** @minimum 0 */
   backupMaxAgeHours?: number;
 }
 
@@ -443,7 +459,12 @@ export interface RawBotConfig {
   language?: string;
   commands?: Record<string, CommandOverrideConfig>;
   leaderboard?: Record<string, unknown>;
+  /**
+   * TPS below this triggers an alert (default 15).
+   * @exclusiveMinimum 0
+   */
   tpsWarningThreshold?: number;
+  /** @minimum 1000 */
   tpsPollIntervalMs?: number;
   leaderboardInterval?: LeaderboardInterval;
   presence?: PresenceConfig;

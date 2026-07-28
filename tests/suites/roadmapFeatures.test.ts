@@ -23,6 +23,7 @@ vi.mock("../../src/core/utils/minecraft/whitelist.js", () => ({
 vi.mock("../../src/core/utils/stores/linkUtils.js", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   loadLinkedAccounts: vi.fn(async () => ({})),
+  loadLinkedAccountsOrEmpty: vi.fn(async () => ({})),
 }));
 
 vi.mock("../../src/core/config.js", () => ({
@@ -337,10 +338,10 @@ describe("buildStreakLeaderboard", () => {
     });
     vi.mocked(loadJson).mockResolvedValue({});
 
-    const { loadLinkedAccounts } = await import(
+    const { loadLinkedAccountsOrEmpty } = await import(
       "../../src/core/utils/stores/linkUtils.js"
     );
-    vi.mocked(loadLinkedAccounts).mockResolvedValue({ u1: "SteveMC" });
+    vi.mocked(loadLinkedAccountsOrEmpty).mockResolvedValue({ u1: "SteveMC" });
 
     const current = await buildStreakLeaderboard("streak", "smp");
     expect(current.entries.map((e) => e.name)).toEqual(["<@u2>", "SteveMC"]);

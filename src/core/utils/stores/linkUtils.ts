@@ -18,8 +18,50 @@
 import { getDb, withTransaction } from "../../db/index.js";
 import { mapRows, col } from "../../db/rows.js";
 import type { LinkCodesMap, LinkedAccountsMap } from "../../types/index.js";
+import { errMsg } from "../error.js";
+import { log } from "../logger.js";
 
 export const LINK_CODE_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * The link map, or an empty one if the read fails.
+ *
+ * Every reader of this map treats "no links" as a normal state — a
+ * profile without a Discord account, a death without a DM — so a DB
+ * error should degrade the feature, not throw through it. Seven callers
+ * had each written the same `.catch(() => ({}))`, which meant seven
+ * places silently swallowed a real database failure. Swallowing happens
+ * once, here, and it is logged.
+ */
+export async function loadLinkedAccountsOrEmpty(): Promise<LinkedAccountsMap> {
+  try {
+    return await loadLinkedAccounts();
+  } catch (err) {
+    log.warn("links", `Could not read linked accounts: ${errMsg(err)}`);
+    return {};
+  }
+}
+
+/**
+ * Reverse lookup: which Discord account owns this Minecraft name?
+ *
+ * The map is keyed by Discord ID, so every reader that starts from a
+ * player name has to scan it — case-insensitively, because the vanilla
+ * name casing a log line carries need not match what /link stored. That
+ * scan existed as four hand-rolled copies (whois, profile, deaths,
+ * defineCommand); this is the only one. Don't write a fifth.
+ */
+export function findDiscordIdByMcName(
+  linked: LinkedAccountsMap,
+  mcName: string,
+): string | null {
+  const lower = mcName.toLowerCase();
+  return (
+    Object.entries(linked).find(
+      ([, name]) => name.toLowerCase() === lower,
+    )?.[0] ?? null
+  );
+}
 
 // ── Legacy map API (readers + whole-map writers) ──────────────────────────
 

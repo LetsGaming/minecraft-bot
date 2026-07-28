@@ -23,6 +23,7 @@ vi.mock("../../src/bot/utils/guild/guildRouter.js", () => ({
 }));
 vi.mock("../../src/core/utils/stores/linkUtils.js", () => ({
   loadLinkedAccounts: vi.fn().mockResolvedValue({}),
+    loadLinkedAccountsOrEmpty: vi.fn().mockResolvedValue({}),
 }));
 vi.mock("../../src/core/utils/jsonStore.js", () => ({
   loadJson: vi.fn(),
@@ -39,7 +40,7 @@ import { kvSet } from "../../src/core/db/kv.js";
 import { closeDbForTesting } from "../../src/core/db/index.js";
 import { loadWaypointStore } from "../../src/core/utils/stores/waypointStore.js";
 import { loadPollStore } from "../../src/core/utils/stores/pollStore.js";
-import { loadLinkedAccounts } from "../../src/core/utils/stores/linkUtils.js";
+import { loadLinkedAccountsOrEmpty } from "../../src/core/utils/stores/linkUtils.js";
 import { defineCommand } from "../../src/bot/logWatcher/defineCommand.js";
 
 type Handler = (
@@ -69,7 +70,7 @@ beforeEach(() => {
     language: "en",
     guilds: {},
   } as never);
-  vi.mocked(loadLinkedAccounts).mockResolvedValue({});
+  vi.mocked(loadLinkedAccountsOrEmpty).mockResolvedValue({});
 });
 
 // ── defineCommand greedy args ───────────────────────────────────────────────
@@ -380,7 +381,7 @@ describe("!vote handler", () => {
     store.polls[0]!.votes["d:777"] = 0; // earlier button vote
     kvSet("polls", store);
     const user = nextUser();
-    vi.mocked(loadLinkedAccounts).mockResolvedValue({ "777": user });
+    vi.mocked(loadLinkedAccountsOrEmpty).mockResolvedValue({ "777": user });
 
     const m = regex.exec(chatLine(user, "!vote 2"))!;
     await handler(m, null, makeServer());

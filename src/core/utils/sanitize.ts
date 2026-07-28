@@ -56,3 +56,19 @@ const MC_NAME_REGEX = /^[\w.]{1,17}$/;
 export function isValidMcName(name: string): boolean {
   return MC_NAME_REGEX.test(name);
 }
+
+/**
+ * Moderation reason cap. Console commands top out at 256 chars; this
+ * leaves room for the verb and a 17-char name in front of the reason.
+ */
+export const MAX_REASON_LENGTH = 160;
+
+/**
+ * Sanitize a moderation reason (/kick, /ban) for the console.
+ *
+ * Lived in kick.ts and was imported from there by the sibling commands —
+ * a shared console-input rule outside the one module that owns them.
+ */
+export function sanitizeReason(raw: string | null): string {
+  return stripControlChars(raw ?? "").slice(0, MAX_REASON_LENGTH).trim();
+}

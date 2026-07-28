@@ -57,7 +57,7 @@ import {
   MAX_PENDING_PER_PLAYER,
   type PendingRewardsStore,
 } from "../../src/core/utils/stores/dailyStore.js";
-import { deliverPendingRewards } from "../../src/bot/commands/connection/daily/daily.js";
+import { deliverPendingRewards } from "../../src/core/utils/minecraft/rewards.js";
 import type { ServerInstance } from "../../src/core/utils/server/server.js";
 
 const pendingStore = (

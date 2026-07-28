@@ -53,8 +53,10 @@ beforeEach(() => {
 const DAILY_COOLDOWN = 24 * 60 * 60 * 1000;
 const TWO_DAYS = 2 * DAILY_COOLDOWN + 1;
 
-const { calcStreak, pick, deriveMaxStreak } =
-  await import("../../src/bot/commands/connection/daily/daily.js");
+// The pure reward rules moved to core; the command only formats them now.
+const { calcStreak, pick, deriveMaxStreak } = await import(
+  "../../src/core/utils/minecraft/rewards.js"
+);
 
 describe("calcStreak", () => {
   it("increments streak on consecutive claim", () => {

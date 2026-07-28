@@ -47,10 +47,13 @@
           "additionalProperties": {}
         },
         "tpsWarningThreshold": {
-          "type": "number"
+          "type": "number",
+          "description": "TPS below this triggers an alert (default 15).",
+          "exclusiveMinimum": 0
         },
         "tpsPollIntervalMs": {
-          "type": "number"
+          "type": "number",
+          "minimum": 1000
         },
         "leaderboardInterval": {
           "$ref": "#/definitions/LeaderboardInterval"
@@ -481,11 +484,12 @@
       "properties": {
         "diskWarnPercent": {
           "type": "number",
-          "description": "Alert (once, with hysteresis) when a monitored path's disk usage reaches this percentage. Default 90; alerts go to each guild's downtimeAlerts channel. Set to 0 to disable."
+          "minimum": 0,
+          "maximum": 100
         },
         "backupMaxAgeHours": {
           "type": "number",
-          "description": "Alert when the NEWEST backup of a server is older than this many hours (stale backups are the failure nobody notices until it matters). Off by default; alerts go to each guild's downtimeAlerts channel and clear automatically when a fresh backup appears. Only servers whose capability probe found the suite backup layout are checked."
+          "minimum": 0
         }
       },
       "additionalProperties": false,
@@ -507,17 +511,21 @@
       "properties": {
         "slashCapacity": {
           "type": "number",
-          "description": "Slash commands per user per window (default 5 per 30s)."
+          "description": "Slash commands per user per window (default 5 per 30s).",
+          "minimum": 1
         },
         "slashWindowMs": {
-          "type": "number"
+          "type": "number",
+          "minimum": 1000
         },
         "bridgeCapacity": {
           "type": "number",
-          "description": "Bridge messages per user per window (default 8 per 10s)."
+          "description": "Bridge messages per user per window (default 8 per 10s).",
+          "minimum": 1
         },
         "bridgeWindowMs": {
-          "type": "number"
+          "type": "number",
+          "minimum": 1000
         }
       },
       "additionalProperties": false,
