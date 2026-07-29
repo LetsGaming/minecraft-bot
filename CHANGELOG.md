@@ -6,8 +6,32 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **In-game tips are delivered in game.** The `!deathpos` tip rode along on
+  the death-coordinates DM, which only linked players receive — so a tip
+  about an in-game command was behind a Discord link and never reached the
+  players who had not linked. Event tips are now whispered to the player
+  they concern, linked or not; the DM keeps the coordinates, which is the
+  part that needs Discord.
+- **Tips no longer advertise disabled commands.** The join nudges, the
+  follow-up hints and the death DM all recommended commands without checking
+  command policy, so a server with `daily` switched off still told every new
+  player to run it — and following the tip landed them on "unknown command",
+  which is worse than never being told. All three now go through one
+  `isAdvertisable` check covering global, per-guild and per-server
+  overrides, plus admin-only commands offered to non-admins.
+
 ### Added
 
+- **Event tips are a registry.** `EVENT_TIPS`
+  (`src/core/utils/minecraft/eventTips.ts`) declares which command to mention
+  after which in-game event; the ledger, the give-up rule and the
+  disabled-command check are shared. Adding one is an entry plus a locale
+  string. First new entry: a death caused by another player mentions
+  `!report` instead of `!deathpos` — PvP is the one moment reporting is
+  obvious, and keeping it separate means mob deaths never show it and a
+  player kill does not spend a `!deathpos` mention.
 - **Command usage is measured.** A `command_usage` table records every
   successful slash and in-game invocation (command, surface, user, guild,
   server), pruned to 90 days. Raw events rather than a counter because two

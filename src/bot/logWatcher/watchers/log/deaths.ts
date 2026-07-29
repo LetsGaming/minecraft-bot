@@ -1,9 +1,7 @@
 import {
-  loadSuggestionLedger,
-  getSuggestionRecord,
-  recordSuggestion,
-  mcSubject,
-} from "@mcbot/core/utils/stores/suggestionLedger.js";
+  deliverEventTip,
+  tipForEvent,
+} from "@mcbot/core/utils/minecraft/eventTips.js";
 import { type Client } from "discord.js";
 import { createPlayerEmbed } from "../../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../../utils/embeds/embedColors.js";
@@ -69,12 +67,6 @@ const DEATH_REGEX = serverEventRegex(
   "i",
 );
 
-/** Ledger id for the "!deathpos exists" mention on the death DM. */
-const DEATHPOS_HINT = "deathpos";
-
-/** Mentions before it stops. Two is enough to be noticed and not nag. */
-const MAX_DEATHPOS_MENTIONS = 2;
-
 /**
  * DM the linked Discord account with the death coordinates and a
  * Chunkbase link (config `deathCoords.dmLinked`). Best-effort by design:
@@ -107,23 +99,36 @@ async function dmDeathCoords(
     lines.push(buildChunkbaseUrl(seed, loc.dimension, loc.x, loc.z));
   }
 
-  // The one moment !deathpos is obviously useful is right after a death —
-  // and a player reading this DM has just proved they care where they
-  // died. Mentioned a couple of times, then never again: the ledger keeps
-  // this from becoming a footer on every death DM forever.
-  const ledger = await loadSuggestionLedger();
-  const record = getSuggestionRecord(ledger, mcSubject(player), DEATHPOS_HINT);
-  const mentionDeathpos =
-    !record?.dismissed && (record?.count ?? 0) < MAX_DEATHPOS_MENTIONS;
-  if (mentionDeathpos) {
-    lines.push(t("deathpos.hint"));
-  }
-
   const user = await client.users.fetch(discordId);
   await user.send(lines.join("\n"));
+}
 
-  if (mentionDeathpos) {
-    await recordSuggestion(mcSubject(player), DEATHPOS_HINT);
+/**
+ * Was this death caused by another player?
+ *
+ * Vanilla writes "X was slain by Y" for a mob and for a player alike, so
+ * the message alone cannot say. Y being online right now is the practical
+ * test: a player kill requires the killer to be on the server, and a mob
+ * name will not appear in the player list. Wrong only in the harmless
+ * direction — a mob named after an online player suppresses one tip.
+ *
+ * Any failure reads as "not PvP": the plain death tip is the safe default.
+ */
+async function wasKilledByPlayer(
+  server: ServerInstance,
+  victim: string,
+  rest: string,
+): Promise<boolean> {
+  const killer = /\bby\s+([A-Za-z0-9_.]{1,17})/u.exec(rest)?.[1];
+  if (!killer || killer.toLowerCase() === victim.toLowerCase()) return false;
+
+  try {
+    const list = await server.getList();
+    return (list.players ?? []).some(
+      (name: string) => name.toLowerCase() === killer.toLowerCase(),
+    );
+  } catch {
+    return false;
   }
 }
 
@@ -152,6 +157,25 @@ export function registerDeathWatcher(
           ...(withServerFooter ? { footer: { text: serverId } } : {}),
         }),
     });
+
+    // In game, and before the DM branch: the tips point at in-game
+    // commands, so gating them on a linked Discord account would have hidden
+    // them from exactly the players who have not linked yet. Whispered to
+    // whoever just died, linked or not.
+    //
+    // Whether this was PvP costs a player-list call, so it is only asked
+    // when the PvP tip could still be shown — otherwise every death on the
+    // server would pay for a tip that ran out weeks ago. If it has run out,
+    // "death" is the right event anyway: they still died somewhere.
+    const pvpTipPossible = await tipForEvent("death-by-player", {
+      player,
+      serverId,
+    });
+    const event =
+      pvpTipPossible && (await wasKilledByPlayer(logWatcher.server, player, rest))
+        ? "death-by-player"
+        : "death";
+    await deliverEventTip(logWatcher.server, event, player);
 
     let dmLinked = false;
     try {

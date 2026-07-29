@@ -81,6 +81,22 @@ describe("selectHint", () => {
     ).toMatchObject({ id: "stats-leaderboard", kind: "mention" });
   });
 
+  it("does not offer a companion the operator disabled", async () => {
+    claimedStore.servers = { [SERVER]: { [USER]: { lastClaim: 1 } } };
+    mockConfig.commands = { "daily-reminder": { enabled: false } };
+    expect(await selectHint("daily", { userId: USER, serverId: SERVER })).toBeNull();
+  });
+
+  it("does not offer an admin-only companion to an ordinary user", async () => {
+    mockConfig.commands = { leaderboard: { adminOnly: true } };
+    expect(
+      await selectHint("stats", { userId: USER, serverId: SERVER, isAdmin: false }),
+    ).toBeNull();
+    expect(
+      await selectHint("stats", { userId: USER, serverId: SERVER, isAdmin: true }),
+    ).toMatchObject({ id: "stats-leaderboard" });
+  });
+
   it("stays silent when nudges are switched off", async () => {
     mockConfig.featureNudges = { enabled: false };
     expect(await selectHint("daily", { userId: USER, serverId: SERVER })).toBeNull();

@@ -142,6 +142,53 @@ the feature to one language.
 Set `enabled: false` to turn it off entirely. State lives in
 `kv_store["featureNudges"]`, so counts survive restarts.
 
+## Event tips
+
+A tip that fires when something happens in game, whispered to the player it
+concerns. Dying mentions `!deathpos`; a death caused by *another player*
+mentions `!report` instead.
+
+Delivery is always in game, never a Discord DM. These tips point at in-game
+commands, and a DM only reaches players who have linked an account — which
+would hide `!deathpos` from precisely the players who have not linked and
+most need to hear about it.
+
+Adding one is an entry in `EVENT_TIPS` (`src/core/utils/minecraft/eventTips.ts`):
+
+```ts
+{
+  id: "report-pvp",          // ledger key — unique, not the command name
+  event: "death-by-player",  // when it fires
+  surface: "ingame",         // where the advertised command is typed
+  advertises: "report",      // checked against command policy before showing
+  textKey: "report.hint",    // i18n key, needs an en and a de entry
+}
+```
+
+Then, if the event is new, raise it from the watcher that sees it:
+
+```ts
+await deliverEventTip(logWatcher.server, "death-by-player", player);
+```
+
+That selects, whispers and records in one call. The ledger, the give-up
+rule and the disabled-command check are handled for every tip. Recording
+happens only after the whisper actually goes out, so a failed send does not
+spend one of the player's two mentions.
+
+`tipForEvent` / `markEventTipSent` are available separately for callers that
+need to batch the tip into a message they were already sending.
+
+Two rules worth knowing when you add one:
+
+- **Pick the moment, not the command.** A tip is worth showing only where
+  the player has just demonstrated they want the thing it points at.
+- **Give each tip its own id.** One command can be advertised by several
+  events, and each should run out separately.
+- **Do not put a tip behind a feature the player may not have.** Advertising
+  an in-game command through Discord only reaches linked players; an
+  unlinked player is usually the one who needed telling.
+
 ## Follow-up hints
 
 When a feature has an obvious companion, the reply that uses it offers the
@@ -155,6 +202,8 @@ Rules, all of them there to keep it from becoming noise:
 - Two offers per hint per user, then it stops.
 - "No thanks" is permanent, and outranks the count.
 - Buttons carry stable ids, so an offer made before a restart still works.
+- Never offered for a command that is disabled, or for an admin-only
+  command shown to a non-admin (`advertises` names the command to check).
 
 Adding a pair is one entry in `HINTS` (`src/bot/utils/hints/followUps.ts`):
 when it applies, the button label, and what pressing it does. It shares the

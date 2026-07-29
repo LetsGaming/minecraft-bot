@@ -384,4 +384,6 @@ export const en: Record<string, string> = {
     "✨ marks the {count} command(s) you have not tried yet — they are listed first.",
   "deathpos.hint":
     "Tip: type !deathpos in chat to get these coordinates again at any time.",
+  "report.hint":
+    "Tip: if that was unfair, type !report <what happened> in chat and the admins will see it.",
 };

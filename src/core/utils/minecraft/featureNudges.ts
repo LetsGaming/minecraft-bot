@@ -43,6 +43,7 @@ import {
   loadLinkedAccountsOrEmpty,
 } from "../stores/linkUtils.js";
 import { loadClaimedStore, getServerClaims } from "../stores/dailyStore.js";
+import { isAdvertisable } from "./eventTips.js";
 import { loadConfig } from "../../config.js";
 import { t } from "../i18n.js";
 import { log } from "../logger.js";
@@ -106,6 +107,7 @@ export function chooseNudge(
   ledger: SuggestionLedger,
   settings: NudgeSettings,
   now: number = Date.now(),
+  serverId?: string,
 ): NudgeKind | null {
   if (!settings.enabled) return null;
 
@@ -117,6 +119,11 @@ export function chooseNudge(
       ? "daily"
       : null;
   if (!candidate) return null;
+
+  // Never advertise a command the operator turned off. Following the tip
+  // would land the player on "unknown command", which is worse than never
+  // having been told.
+  if (!isAdvertisable(candidate, { serverId })) return null;
 
   const record = getSuggestionRecord(ledger, mcSubject(player), candidate);
   if (!record) return candidate;
@@ -167,7 +174,14 @@ export async function maybeNudge(
       loadSuggestionLedger(),
     ]);
 
-    const kind = chooseNudge(player, progress, ledger, settings, now);
+    const kind = chooseNudge(
+      player,
+      progress,
+      ledger,
+      settings,
+      now,
+      server.id,
+    );
     if (!kind) return null;
 
     const remaining =

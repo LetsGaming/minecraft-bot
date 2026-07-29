@@ -55,6 +55,8 @@ import {
   getAllInstances,
 } from "@mcbot/core/utils/server/server.js";
 import { resolveServer } from "../guild/guildRouter.js";
+import { isAdvertisable } from "@mcbot/core/utils/minecraft/eventTips.js";
+import { isServerAdmin, getMemberRoleIds } from "../../commands/middleware.js";
 import { loadConfig } from "@mcbot/core/config.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { log } from "@mcbot/core/utils/logger.js";
@@ -69,6 +71,10 @@ export const HINT_PREFIX = "hint";
 export interface HintContext {
   userId: string;
   serverId: string;
+  /** For the command-policy check — a guild may disable what global allows. */
+  guildId?: string | null;
+  /** Admin-only companions are only offered to admins. */
+  isAdmin?: boolean;
 }
 
 /**
@@ -89,6 +95,12 @@ interface HintBase {
   id: string;
   /** The command whose reply this rides along on. */
   after: string;
+  /**
+   * The command this hint points at. Checked against command policy, so a
+   * companion the operator disabled is never offered — pressing the button
+   * or following the tip would otherwise fail.
+   */
+  advertises: string;
   /**
    * Is this worth offering right now? Returns false when the companion is
    * already on, or when the reply did not raise the question — offering
@@ -123,6 +135,7 @@ export const HINTS: FollowUpHint[] = [
     // least likely to hear about it. This closes that loop.
     id: "daily-reminder",
     after: "daily",
+    advertises: "daily-reminder",
     labelKey: "hint.dailyReminder.label",
     confirmKey: "hint.dailyReminder.confirm",
     applies: async ({ userId, serverId }) => {
@@ -152,6 +165,7 @@ export const HINTS: FollowUpHint[] = [
     kind: "action",
     id: "watch-server",
     after: "status",
+    advertises: "watch",
     labelKey: "hint.watchServer.label",
     confirmKey: "hint.watchServer.confirm",
     applies: async ({ userId, serverId }) => {
@@ -185,6 +199,7 @@ export const HINTS: FollowUpHint[] = [
     kind: "mention",
     id: "stats-leaderboard",
     after: "stats",
+    advertises: "leaderboard",
     textKey: "hint.statsLeaderboard",
     applies: () => Promise.resolve(true),
   },
@@ -194,6 +209,7 @@ export const HINTS: FollowUpHint[] = [
     kind: "mention",
     id: "playtime-activity",
     after: "playtime",
+    advertises: "activity",
     textKey: "hint.playtimeActivity",
     applies: () => Promise.resolve(true),
   },
@@ -202,6 +218,7 @@ export const HINTS: FollowUpHint[] = [
     kind: "mention",
     id: "seed-chunkbase",
     after: "seed",
+    advertises: "chunkbase",
     textKey: "hint.seedChunkbase",
     applies: () => Promise.resolve(true),
   },
@@ -247,6 +264,15 @@ export async function selectHint(
 
   for (const hint of HINTS) {
     if (hint.after !== command) continue;
+    if (
+      !isAdvertisable(
+        hint.advertises,
+        { guildId: ctx.guildId ?? undefined, serverId: ctx.serverId },
+        ctx.isAdmin ?? false,
+      )
+    ) {
+      continue;
+    }
     if (!hintIsAvailable(ledger, ctx.userId, hint.id)) continue;
     if (!(await hint.applies(ctx))) continue;
     return hint;
@@ -301,7 +327,16 @@ export async function attachFollowUpHint(
     }
     if (!serverId) return;
 
-    const ctx = { userId: interaction.user.id, serverId };
+    const ctx: HintContext = {
+      userId: interaction.user.id,
+      serverId,
+      guildId: interaction.guild?.id ?? null,
+      isAdmin: isServerAdmin(
+        interaction.user.id,
+        getMemberRoleIds(interaction),
+        interaction.guild?.id,
+      ),
+    };
     const hint = await selectHint(interaction.commandName, ctx);
     if (!hint) return;
 

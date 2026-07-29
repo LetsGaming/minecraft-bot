@@ -17,6 +17,7 @@ import {
   type PlayerProgress,
 } from "../../src/core/utils/minecraft/featureNudges.js";
 import type { SuggestionLedger } from "../../src/core/utils/stores/suggestionLedger.js";
+import * as tips from "../../src/core/utils/minecraft/eventTips.js";
 
 const settings: NudgeSettings = {
   enabled: true,
@@ -91,6 +92,16 @@ describe("chooseNudge — restraint", () => {
   it("matches the player case-insensitively", () => {
     const store = storeWith("steve", "link", MAX_NUDGES_PER_FEATURE, 0);
     expect(chooseNudge("SteVe", NEW_PLAYER, store, settings, now)).toBeNull();
+  });
+
+  it("does not advertise a command the operator disabled", () => {
+    // The bug this covers: a server with /daily switched off still told
+    // every new player to run it.
+    const spy = vi.spyOn(tips, "isAdvertisable").mockReturnValue(false);
+    expect(
+      chooseNudge("Steve", NEW_PLAYER, emptyStore(), settings, now, "survival"),
+    ).toBeNull();
+    spy.mockRestore();
   });
 
   it("says nothing at all when disabled", () => {
