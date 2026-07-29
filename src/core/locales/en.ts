@@ -60,6 +60,7 @@ export const en: Record<string, string> = {
   "waypoint.limitReached": "This server already has {max} waypoints.",
   "waypoint.saved": '📍 Saved waypoint "{name}" at {x} / {y} / {z}.',
   "waypoint.deleted": 'Deleted waypoint "{name}".',
+  "waypoint.deletedByAdmin": 'Deleted waypoint "{name}" (created by {author}).',
   "waypoint.notFound": 'No waypoint named "{name}". Use !waypoints to list all.',
   "waypoint.result": "📍 {name}: {x} / {y} / {z} ({dimension}) — set by {author}",
   "waypoint.noneInGame": "No waypoints yet. Create one with: !waypoint set <name>",
@@ -164,8 +165,11 @@ export const en: Record<string, string> = {
 
   // ── host resources ──
   "status.hostTitle": "Host",
-  "status.hostProcess": "Process: {ram} RAM, {cpu}% CPU",
-  "status.hostDisk": "`{path}`: {percent}% used ({free} free)",
+  "status.hostMachine": "Machine: {ram} / {ramTotal} RAM, {cpu}% CPU ({cores} cores)",
+  "status.hostProcess": "Server process: {ram} RAM, {cpu}% CPU",
+  "status.hostFilesystem": "{mount} — {percent}% used, {free} free of {total}",
+  "status.hostDir": "\u00a0\u00a0`{path}`: {size}",
+  "status.hostDirUnknown": "\u00a0\u00a0`{path}`: size unavailable",
   "hostAlerts.diskFullTitle": "⚠️ Disk space warning",
   "hostAlerts.diskFull":
     "**{server}**: `{path}` is at **{percent}%** disk usage ({free} free). Backups and world saves may start failing.",
@@ -350,4 +354,34 @@ export const en: Record<string, string> = {
   "command.disabledHere": "`/{command}` is disabled here.",
   "command.adminOnlyInGame":
     "!{command} is admin-only on this server (your linked Discord account must be a bot admin).",
+  "nudge.link":
+    "Tip: link your Discord to unlock rewards and stats — run /link in Discord, then type !link <code> here in chat.",
+  "nudge.daily":
+    "Tip: you're linked! Run /daily in Discord once a day for a free reward — it lands in your inventory, even if you claim it while offline.",
+  "nudge.lastTime":
+    "(That's the last time I'll mention it.)",
+  "hint.dailyReminder.label":
+    "Remind me next time",
+  "hint.dailyReminder.confirm":
+    "Reminders on — I'll DM you when your next daily is ready. Turn them off any time with /daily-reminder.",
+  "hint.noThanks":
+    "No thanks",
+  "hint.notYours":
+    "That button belongs to someone else's reply.",
+  "hint.failed":
+    "Could not turn that on — please try the command directly.",
+  "hint.watchServer.label":
+    "Notify me when it's back",
+  "hint.watchServer.confirm":
+    "I'll DM you once the server is back online. Make sure your DMs are open — manage watches with /watch.",
+  "hint.statsLeaderboard":
+    "Tip: /leaderboard ranks everyone on the same stat, and /compare puts two players side by side.",
+  "hint.playtimeActivity":
+    "Tip: /activity shows when the server is actually busy, so you can catch other players online.",
+  "hint.seedChunkbase":
+    "Tip: /chunkbase opens this seed in a map viewer, and /slime finds slime chunks in it.",
+  "help.newToYou":
+    "✨ marks the {count} command(s) you have not tried yet — they are listed first.",
+  "deathpos.hint":
+    "Tip: type !deathpos in chat to get these coordinates again at any time.",
 };

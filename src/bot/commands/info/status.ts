@@ -79,6 +79,20 @@ export const execute = withErrorHandling(async (interaction) => {
     const host = await getHostResources(server);
     if (host) {
       const lines: string[] = [];
+
+      // Machine first, then the process inside it — the old embed showed
+      // only the Java process under a heading that said "Host", which read
+      // as the machine being at 90% when it was idle.
+      if (host.machine) {
+        lines.push(
+          t("status.hostMachine", {
+            ram: formatBytes(host.machine.memUsedBytes),
+            ramTotal: formatBytes(host.machine.memTotalBytes),
+            cpu: host.machine.cpuPercent.toFixed(0),
+            cores: host.machine.cpuCount,
+          }),
+        );
+      }
       if (host.process) {
         lines.push(
           t("status.hostProcess", {
@@ -87,14 +101,35 @@ export const execute = withErrorHandling(async (interaction) => {
           }),
         );
       }
+
+      // One line per filesystem, with the directories that sit on it
+      // underneath. Printing df figures per directory made two dirs on one
+      // disk look like two disks with a coincidentally identical free space.
+      const byFilesystem = new Map<string, typeof host.disks>();
       for (const disk of host.disks) {
+        const key = disk.filesystem.mountPoint || disk.path;
+        byFilesystem.set(key, [...(byFilesystem.get(key) ?? []), disk]);
+      }
+      for (const [mount, disks] of byFilesystem) {
+        const fs = disks[0]!.filesystem;
         lines.push(
-          t("status.hostDisk", {
-            path: disk.path,
-            percent: disk.usedPercent,
-            free: formatBytes(disk.availableBytes),
+          t("status.hostFilesystem", {
+            mount,
+            percent: fs.usedPercent,
+            free: formatBytes(fs.availableBytes),
+            total: formatBytes(fs.totalBytes),
           }),
         );
+        for (const disk of disks) {
+          lines.push(
+            disk.sizeBytes === null
+              ? t("status.hostDirUnknown", { path: disk.path })
+              : t("status.hostDir", {
+                  path: disk.path,
+                  size: formatBytes(disk.sizeBytes),
+                }),
+          );
+        }
       }
       if (lines.length > 0) {
         embed.addFields({

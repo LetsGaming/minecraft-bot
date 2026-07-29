@@ -1,3 +1,9 @@
+import {
+  loadSuggestionLedger,
+  getSuggestionRecord,
+  recordSuggestion,
+  mcSubject,
+} from "@mcbot/core/utils/stores/suggestionLedger.js";
 import { type Client } from "discord.js";
 import { createPlayerEmbed } from "../../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../../utils/embeds/embedColors.js";
@@ -63,6 +69,12 @@ const DEATH_REGEX = serverEventRegex(
   "i",
 );
 
+/** Ledger id for the "!deathpos exists" mention on the death DM. */
+const DEATHPOS_HINT = "deathpos";
+
+/** Mentions before it stops. Two is enough to be noticed and not nag. */
+const MAX_DEATHPOS_MENTIONS = 2;
+
 /**
  * DM the linked Discord account with the death coordinates and a
  * Chunkbase link (config `deathCoords.dmLinked`). Best-effort by design:
@@ -95,8 +107,24 @@ async function dmDeathCoords(
     lines.push(buildChunkbaseUrl(seed, loc.dimension, loc.x, loc.z));
   }
 
+  // The one moment !deathpos is obviously useful is right after a death —
+  // and a player reading this DM has just proved they care where they
+  // died. Mentioned a couple of times, then never again: the ledger keeps
+  // this from becoming a footer on every death DM forever.
+  const ledger = await loadSuggestionLedger();
+  const record = getSuggestionRecord(ledger, mcSubject(player), DEATHPOS_HINT);
+  const mentionDeathpos =
+    !record?.dismissed && (record?.count ?? 0) < MAX_DEATHPOS_MENTIONS;
+  if (mentionDeathpos) {
+    lines.push(t("deathpos.hint"));
+  }
+
   const user = await client.users.fetch(discordId);
   await user.send(lines.join("\n"));
+
+  if (mentionDeathpos) {
+    await recordSuggestion(mcSubject(player), DEATHPOS_HINT);
+  }
 }
 
 export function registerDeathWatcher(

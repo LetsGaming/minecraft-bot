@@ -1,26 +1,45 @@
 /**
  * Centralised time helpers.
  *
- * All display-facing helpers read the runtime timezone from the TZ environment
- * variable (set via docker-compose) so the bot always shows local time without
- * any hardcoded zone strings scattered across the codebase.
+ * Everything the bot *stores* is UTC epoch milliseconds — samples, audit
+ * rows, cooldowns, ban expiries. Timezones exist only at the edges, where a
+ * human reads a time or a wall-clock schedule fires, and every helper here
+ * takes that zone explicitly.
  *
- * Epoch/timestamp arithmetic (Date.now(), getTime(), …) is intentionally left
- * alone — those are always UTC milliseconds and are correct as-is.
+ * It used to come from a single `TZ` environment variable, which made the
+ * whole process live in one zone: a bot serving guilds in Berlin and Denver
+ * purged both their channels at Berlin midnight. The zone is now a parameter,
+ * resolved per guild (Discord-facing) or per schedule (server-facing) — see
+ * timezones.ts. UTC is the default everywhere, so anything that forgets to
+ * pass one is merely zone-neutral rather than silently wrong for someone.
+ *
+ * Epoch arithmetic (Date.now(), getTime(), …) is deliberately untouched:
+ * those are UTC milliseconds and are correct as they stand.
  */
 
-/** The timezone configured for this process (e.g. "Europe/Berlin"). */
-export const TZ: string = process.env.TZ ?? "UTC";
+/** The zone used when a caller has no reason to prefer another. */
+export const UTC = "UTC";
 
-// ── Formatting ────────────────────────────────────────────────────────────────
+/** Is this a zone Intl will accept? Guards config input before it is used. */
+export function isValidTimeZone(tz: string): boolean {
+  if (tz.trim() === "") return false;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz }).format(0);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
-/**
- * Format a date as "YYYY-MM-DD HH:MM:SS" in the configured timezone.
- * Used by the logger and anywhere a compact local datetime string is needed.
- */
-export function formatDatetime(date: Date | number = new Date()): string {
+// ── Formatting ────────────────────────────────────────────────────────────
+
+/** "YYYY-MM-DD HH:MM:SS" in `tz`. */
+export function formatDatetime(
+  date: Date | number = new Date(),
+  tz: string = UTC,
+): string {
   return new Date(date).toLocaleString("sv-SE", {
-    timeZone: TZ,
+    timeZone: tz,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -32,41 +51,44 @@ export function formatDatetime(date: Date | number = new Date()): string {
 }
 
 /**
- * Format a date as "YYYY-MM-DD" in the configured timezone.
- * Use this for day-bucketing instead of toISOString().slice(0,10) (which is UTC).
+ * "YYYY-MM-DD" in `tz`.
+ * Use this for day-bucketing rather than toISOString().slice(0,10), which is
+ * always UTC and puts a 01:00 Berlin event on the previous day.
  */
-export function formatDate(date: Date | number = new Date()): string {
+export function formatDate(
+  date: Date | number = new Date(),
+  tz: string = UTC,
+): string {
   return new Date(date).toLocaleString("sv-SE", {
-    timeZone: TZ,
+    timeZone: tz,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   });
 }
 
-/**
- * Format a date as "HH:MM" in the configured timezone.
- * Use this for user-facing "ready at …" times instead of toLocaleTimeString.
- */
-export function formatTime(date: Date | number = new Date()): string {
+/** "HH:MM" in `tz`, for user-facing "ready at …" times. */
+export function formatTime(
+  date: Date | number = new Date(),
+  tz: string = UTC,
+): string {
   return new Date(date).toLocaleString("sv-SE", {
-    timeZone: TZ,
+    timeZone: tz,
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
   });
 }
 
-// ── Scheduling helpers ────────────────────────────────────────────────────────
+// ── Scheduling helpers ────────────────────────────────────────────────────
 
 /**
- * Return the UTC offset in milliseconds for a given epoch time in TZ.
- * Positive means TZ is ahead of UTC (e.g. Europe/Berlin in summer = +7_200_000).
+ * UTC offset in milliseconds for `epochMs` in `tz`.
+ * Positive means the zone is ahead of UTC (Berlin in summer = +7_200_000).
  */
-function getTzOffsetMs(epochMs: number): number {
-  const d = new Date(epochMs);
+function getTzOffsetMs(epochMs: number, tz: string): number {
   const localParts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: TZ,
+    timeZone: tz,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -75,99 +97,90 @@ function getTzOffsetMs(epochMs: number): number {
     second: "2-digit",
     hour12: false,
   })
-    .format(d)
+    .format(new Date(epochMs))
     .replace(",", "")
     .replace(" 24:", " 00:"); // midnight edge case
 
-  const localEpoch = new Date(localParts + "Z").getTime();
-  return epochMs - localEpoch;
+  return epochMs - new Date(localParts + "Z").getTime();
 }
 
-/**
- * The UTC epoch (ms) of the next local midnight (00:00:00) in TZ.
- *
- * Uses only Intl APIs — never constructs a `new Date(year, month, day)` which
- * would silently use the *system* timezone instead of TZ, producing an offset
- * that is wrong whenever system-TZ ≠ TZ (e.g. container locale = UTC,
- * TZ = Europe/Berlin gives a 1–2 h error before any correction can run).
- *
- * Algorithm:
- *  1. Find today's date components in TZ via Intl.
- *  2. Build the ISO wall-clock string "YYYY-MM-(DD+1)T00:00:00Z" — treating it
- *     as UTC gives a naïve epoch with no system-TZ involvement.
- *  3. Subtract the TZ offset at that naïve epoch to arrive at the true UTC
- *     epoch for local midnight. One-step correction; exact for all IANA zones.
- */
-export function nextMidnightEpoch(): number {
-  const now = Date.now();
-
-  // Step 1: today's date in TZ
-  const [year, month, day] = new Intl.DateTimeFormat("en-CA", {
-    timeZone: TZ,
+/** Calendar date in `tz` for an epoch, as [year, month(1-12), day]. */
+function localDateParts(
+  epochMs: number,
+  tz: string,
+): [year: number, month: number, day: number] {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   })
-    .format(new Date(now))
+    .format(new Date(epochMs))
     .split("-")
     .map(Number) as [number, number, number];
-
-  // Step 2: tomorrow 00:00:00 as a naïve UTC epoch (no system-TZ involved)
-  const tomorrowIso = `${year}-${String(month).padStart(2, "0")}-${String(day + 1).padStart(2, "0")}T00:00:00Z`;
-  const naiveEpoch = new Date(tomorrowIso).getTime();
-
-  // Step 3: add the TZ offset to land on the correct UTC epoch for midnight.
-  return naiveEpoch + getTzOffsetMs(naiveEpoch);
 }
 
 /**
- * Milliseconds until the next local midnight in TZ.
- * Used for scheduling daily tasks (channel purge, etc.).
- */
-export function msUntilMidnight(): number {
-  return nextMidnightEpoch() - Date.now();
-}
-
-/**
- * The UTC epoch (ms) of the next occurrence of HH:MM local time in TZ,
- * strictly after `fromMs`. Same Intl-only construction as
- * nextMidnightEpoch (never `new Date(y, m, d)`, which would use the
- * SYSTEM timezone) — one-step offset correction, exact for IANA zones
- * across DST changes.
+ * The UTC epoch of the next `hour:minute` in `tz`, strictly after `fromMs`.
+ *
+ * Built from Intl and Date.UTC only — never `new Date(y, m, d)`, which would
+ * quietly use the *system* zone and be off by the difference whenever the
+ * container's zone is not the caller's. Date.UTC also normalises overflow
+ * (Jan 32 → Feb 1), which the old midnight helper did not: it pasted
+ * `day + 1` into an ISO string, so on the last day of every month it built
+ * "2026-01-32T00:00:00Z", got Invalid Date, and returned NaN. A NaN delay
+ * makes setTimeout fire immediately, so the nightly channel purge misfired
+ * every month-end. One code path now serves both, and it is the correct one.
  */
 export function nextTimeOfDayEpoch(
   hour: number,
   minute: number,
+  tz: string = UTC,
   fromMs: number = Date.now(),
 ): number {
-  const [year, month, day] = new Intl.DateTimeFormat("en-CA", {
-    timeZone: TZ,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  })
-    .format(new Date(fromMs))
-    .split("-")
-    .map(Number) as [number, number, number];
+  const [year, month, day] = localDateParts(fromMs, tz);
 
   const candidateFor = (dayOffset: number): number => {
-    // Date.UTC normalizes day overflow (e.g. Jan 32 → Feb 1) for us.
     const naive = Date.UTC(year, month - 1, day + dayOffset, hour, minute, 0);
-    return naive + getTzOffsetMs(naive);
+    return naive + getTzOffsetMs(naive, tz);
   };
 
   const today = candidateFor(0);
   return today > fromMs ? today : candidateFor(1);
 }
 
-/**
- * The local (TZ) day of week for an epoch, as 0–6 with Sunday = 0.
- * Used by wall-clock schedulers that restrict runs to certain weekdays.
- */
-export function localDayOfWeek(epochMs: number): number {
+/** The UTC epoch of the next local midnight in `tz`. */
+export function nextMidnightEpoch(
+  tz: string = UTC,
+  fromMs: number = Date.now(),
+): number {
+  return nextTimeOfDayEpoch(0, 0, tz, fromMs);
+}
+
+/** Milliseconds until the next local midnight in `tz`. */
+export function msUntilMidnight(
+  tz: string = UTC,
+  fromMs: number = Date.now(),
+): number {
+  return nextMidnightEpoch(tz, fromMs) - fromMs;
+}
+
+/** Day of week in `tz` for an epoch, 0–6 with Sunday = 0. */
+export function localDayOfWeek(epochMs: number, tz: string = UTC): number {
   const name = new Intl.DateTimeFormat("en-US", {
-    timeZone: TZ,
+    timeZone: tz,
     weekday: "short",
   }).format(new Date(epochMs));
   return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(name);
+}
+
+/** Hour of day (0–23) in `tz` for an epoch. */
+export function localHourOfDay(epochMs: number, tz: string = UTC): number {
+  return Number(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      hour: "2-digit",
+      hour12: false,
+    }).format(new Date(epochMs)),
+  );
 }

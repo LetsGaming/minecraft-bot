@@ -33,7 +33,7 @@ Fill in `.env`:
 
 | Variable | Where to find it |
 |---|---|
-| `TZ` | Your timezone, e.g. `Europe/Berlin`. Controls log timestamps and the daily purge schedule. |
+| ~~`TZ`~~ | Removed. The bot stores everything in UTC and takes wall-clock zones from `config.json` instead: `guilds.<id>.timezone` for the channel purge and `/activity`, `schedules.<server>.timezone` for restarts, and a global `timezone` as the default for both. |
 | `DISCORD_TOKEN` | Developer Portal → your app → Bot → Token |
 | `DISCORD_CLIENT_ID` | Developer Portal → General Information → Application ID |
 | `DISCORD_ADMIN_USER_ID` | Right-click your name in Discord → Copy User ID |

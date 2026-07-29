@@ -250,18 +250,40 @@ async function buildServerField(
 
   let statusLine = `${display.emoji} ${display.label}`;
 
+  // Health already carries counts (from the wrapper, or from a direct ping
+  // when the wrapper is down). Seed from it so a failed /list degrades to a
+  // slightly stale number instead of zero — this branch used to leave the
+  // counts at 0 while still reporting the server as up, which is where
+  // "0 online" came from for a server people were playing on.
+  if (health.players) {
+    counts.online = health.players.online;
+    counts.max = health.players.max;
+  }
+
   try {
     const list = await server.getList();
-    counts.online = parseInt(String(list.playerCount), 10) || 0;
-    counts.max = parseInt(String(list.maxPlayers), 10) || 0;
+    const online = parseInt(String(list.playerCount), 10);
+    const max = parseInt(String(list.maxPlayers), 10);
+    // NaN means the wrapper answered in a shape we do not understand —
+    // keep the health figure rather than overwriting it with zero.
+    if (Number.isFinite(online)) counts.online = online;
+    if (Number.isFinite(max)) counts.max = max;
     const players: string[] = list.players ?? [];
 
     statusLine =
       `${display.emoji} ${display.label} — ${counts.online}/${counts.max} players` +
       buildTpsLine(tps) +
       buildPlayerListLine(players);
-  } catch {
-    statusLine += buildTpsLine(tps);
+  } catch (err) {
+    // Silent until now: a /list that always threw looked like an empty
+    // server forever, with nothing in the log to say otherwise.
+    log.debug(
+      "status",
+      `${server.id}: /list failed, using health counts: ${errMsg(err)}`,
+    );
+    statusLine =
+      `${display.emoji} ${display.label} — ${counts.online}/${counts.max} players` +
+      buildTpsLine(tps);
   }
 
   return {

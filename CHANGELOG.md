@@ -6,7 +6,99 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Command usage is measured.** A `command_usage` table records every
+  successful slash and in-game invocation (command, surface, user, guild,
+  server), pruned to 90 days. Raw events rather than a counter because two
+  different questions are asked of it: how often was each command used, and
+  which commands has *this* user never run. Recording never throws — a
+  failed metric must not fail the command it was measuring.
+- **The dashboard's Commands page shows usage.** Each command now carries
+  "N uses by M people in 30 days", or an explicit "Not used in 30 days".
+  Uses and distinct people are counted separately, so one enthusiast running
+  something ten times is not mistaken for adoption. It went on the existing
+  page rather than a new one: what a command does, whether it is on, and
+  whether anyone uses it are one question asked three ways, and the third
+  only becomes actionable next to the other two.
+- **`/help` leads with what you have not tried.** Commands the caller has
+  never run are sorted first and marked ✨, turning a reference list into a
+  recommendation without hiding anything.
+- **The death DM mentions `!deathpos`.** A player reading it has just proved
+  they care where they died, which is the only moment that command is
+  obviously useful. Twice, then never again.
+- **Follow-up hints: features suggest their pair, at the moment of use.**
+  Five pairs so far — `/daily` offers to switch on its reminder, `/status`
+  on a *down* server offers to `/watch` it back online (both one-tap
+  buttons), and `/stats`, `/playtime` and `/seed` each name the command
+  that answers the question they raise (`/leaderboard`, `/activity`,
+  `/chunkbase`). Attached once in `withErrorHandling`, after the command
+  returns without throwing — so an errored command can never advertise
+  anything, and a new pair is a registry entry with no other wiring.
+  Claiming a `/daily` reward now offers a one-tap button to switch on the
+  reminder for the next one — the person who just claimed is exactly the
+  person who wants it, and would never have gone looking for
+  `/daily-reminder`. A button rather than a command name because the cost of
+  saying yes should be lower than the cost of reading the offer. At most one
+  hint per reply, never offered for something already switched on, stops
+  after two offers, and "No thanks" is permanent. `HINTS` in
+  `bot/utils/hints/followUps.ts` is a registry: a new pair is one entry
+  saying when it applies, what the button says, and what it does. Shares the
+  `featureNudges.enabled` switch.
+- **In-game nudges for `/link` and `/daily`.** The chat bridge is the only
+  feature with real traffic because it needs no learning; everything else
+  starts with a Discord command players have never been shown. On join, the
+  bot now whispers a player about exactly one thing they are missing.
+  Deliberately narrow: `/daily` requires a linked account, so the funnel is
+  strictly link → daily and nobody is told about a step they cannot take or
+  a feature they already use. It gives up after 3 mentions of a feature
+  (48h apart), and the last one says so. Triggered by the join event, never
+  by message content — matching words would quietly make it English-only.
+  Configure with `featureNudges` (`enabled`, `maxPerFeature`,
+  `cooldownHours`); on by default.
+
 ### Changed
+
+- **Timezones are per guild and per schedule; the `TZ` env var is gone.**
+  Everything stored stays UTC epoch ms; a zone is applied only where a human
+  reads a time or a wall-clock schedule fires. `guilds.<id>.timezone` covers
+  Discord-facing wall-clock (nightly channel purge, "busiest hour" in
+  `/activity`), `schedules.<server>.timezone` covers server-facing wall-clock
+  (restarts — a 04:00 restart belongs to the machine's operator, and a server
+  watched by two guilds has no guild answer), and a global `timezone` is the
+  default for both. All default to UTC. The channel purge now runs one timer
+  per guild at that guild's midnight instead of one process-wide timer.
+  Embed timestamps need none of this: they are Discord `<t:…>` markers and
+  render in each reader's own zone.
+- **Fixed: `nextMidnightEpoch()` returned NaN on the last day of every
+  month**, so the nightly channel purge misfired every month-end. It pasted
+  `day + 1` into an ISO string ("2026-01-32T00:00:00Z" → Invalid Date); it
+  now shares the `Date.UTC` path that already normalised overflow correctly.
+- **Fixed: `/status` host metrics.** `process.cpuPercent` came from
+  `ps -o pcpu`, the average over the process's whole lifetime — a server
+  that generated terrain at startup reported ~90% forever while idle. It is
+  now sampled from `/proc/<pid>/stat`. A new whole-machine block reports the
+  CPU and RAM an operator actually means; nothing was gathering it before,
+  despite the section being headed "Host".
+- **Fixed: disk figures in `/status` were per filesystem, labelled per
+  directory.** The server dir and the backups dir usually share a filesystem,
+  so both printed identical `df` numbers, which reads as two disks that
+  coincidentally match. Each directory now reports its own size (`du`) under
+  a single filesystem line that names the mount point. Disk-space alerts are
+  deduped by mount point, so one full disk raises one alert rather than one
+  per monitored directory.
+- **Fixed: presence reporting "0 online" for populated servers.** When the
+  health check passed but `/list` threw, `buildServerField` left the counts
+  at zero while still reporting the server as up — and said nothing in the
+  log. It now falls back to the health counts, ignores an unparseable
+  response instead of overwriting with zero, and logs the failure.
+- **Waypoints can be deleted by a bot admin**, not only by their author. A
+  waypoint outlives the player who set it; author-only deletion left editing
+  the store by hand as the only option. Uses the same linked-Discord admin
+  check as `adminOnly` in-game commands.
+- **Wrapper `host-info` is v2** (`minecraft-server-api`), declared through
+  the existing feature manifest. The bot reads v1 wrappers too —
+  `normaliseDisk` lifts the old shape — it simply shows less.
 
 - **Config validation is schema-driven.** Types, requiredness, enums and
   numeric bounds are now checked with Ajv against the generated

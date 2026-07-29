@@ -45,6 +45,7 @@ import { startChannelPurge } from "./watchers/schedulers/channelPurge.js";
 import { startHostResourcesMonitor } from "./watchers/monitors/hostResourcesMonitor.js";
 import { startPollScheduler } from "./watchers/schedulers/pollScheduler.js";
 import { startTempBanScheduler } from "./watchers/schedulers/tempBanScheduler.js";
+import { pruneCommandUsage } from "@mcbot/core/utils/commands/commandUsage.js";
 import { registerSleepWatcher } from "./watchers/log/sleepWatcher.js";
 import { registerConsoleRelay } from "./watchers/log/consoleRelay.js";
 import { startUptimeFlushScheduler } from "@mcbot/core/utils/stores/uptimeTracker.js";
@@ -227,6 +228,12 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
 
   // Re-arm timed bans; anything that expired during downtime is pardoned now.
   startTempBanScheduler(client);
+
+  // Usage rows past the retention window. Once at startup and once a day
+  // after — the table only grows by a few hundred rows a day, so this is
+  // housekeeping rather than anything time-critical.
+  pruneCommandUsage();
+  setInterval(() => pruneCommandUsage(), 24 * 60 * 60 * 1000).unref();
 
   // ── 7. Uptime flush scheduler ──
   startUptimeFlushScheduler();

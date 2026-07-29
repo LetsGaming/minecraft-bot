@@ -12,6 +12,8 @@ import type { BotClient } from "@mcbot/core/types/index.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { isRecord } from "@mcbot/core/utils/objects.js";
 import { resolveCommandPolicy } from "@mcbot/core/utils/commands/commandPolicy.js";
+import { commandsUsedBy } from "@mcbot/core/utils/commands/commandUsage.js";
+import { t } from "@mcbot/core/utils/i18n.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
 export const data = new SlashCommandBuilder()
@@ -32,17 +34,32 @@ export async function execute(
       resolveCommandPolicy(cmd.data.name, { guildId: interaction.guild?.id })
         .enabled,
   );
+  // Sort what the user has never run to the front.
+  //
+  // /help was a reference list: every command, alphabetical, and the
+  // interesting ones buried on page 4 where nobody looked. Leading with
+  // the unfamiliar turns it into a recommendation without hiding anything
+  // — the full list is still here, just ordered by what is new to *this*
+  // reader. Ties keep their original order, so the listing stays stable.
+  const used = commandsUsedBy(interaction.user.id);
+  const unseen = commands.filter((cmd) => !used.has(cmd.data.name));
+  const seen = commands.filter((cmd) => used.has(cmd.data.name));
+  const ordered = [...unseen, ...seen];
+
   const pageSize = 5;
-  const totalPages = Math.ceil(commands.length / pageSize);
+  const totalPages = Math.ceil(ordered.length / pageSize);
 
   const embeds = [];
 
   for (let i = 0; i < totalPages; i++) {
     const embed = createEmbed({
       title: `📖 Command Help (Page ${i + 1}/${totalPages})`,
+      ...(i === 0 && unseen.length > 0
+        ? { description: t("help.newToYou", { count: unseen.length }) }
+        : {}),
     });
 
-    const pageCommands = commands.slice(i * pageSize, (i + 1) * pageSize);
+    const pageCommands = ordered.slice(i * pageSize, (i + 1) * pageSize);
     for (const command of pageCommands) {
       const cmdData = command.data;
       const { name, description } = cmdData;
@@ -66,7 +83,7 @@ export async function execute(
       });
 
       embed.addFields({
-        name: `/${name}`,
+        name: used.has(name) ? `/${name}` : `/${name} ✨`,
         value: `**Description:**\n${description}`,
         inline: false,
       });

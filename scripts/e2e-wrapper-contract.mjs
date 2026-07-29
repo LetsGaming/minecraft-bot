@@ -366,17 +366,49 @@ check(
   info?.host !== undefined && Array.isArray(info.host.disks),
   JSON.stringify(info?.host),
 );
+// host-info v2. The bot still reads v1 (hostResources.normaliseDisk lifts it),
+// but this repo pair is built together, so the wrapper under test must be
+// current — accepting v1 here would let a stale wrapper pass as fresh.
 check(
-  "disk entries carry the four fields the disk alert reads",
-  (info?.host?.disks ?? []).every(
-    (d) =>
-      typeof d.path === "string" &&
-      typeof d.usedPercent === "number" &&
-      typeof d.availableBytes === "number" &&
-      typeof d.totalBytes === "number",
-  ),
+  "the whole-machine block is present and plausible",
+  typeof info?.host?.host?.cpuPercent === "number" &&
+    info.host.host.cpuPercent >= 0 &&
+    info.host.host.cpuPercent <= 100 &&
+    typeof info.host.host.memTotalBytes === "number" &&
+    info.host.host.memUsedBytes > 0 &&
+    info.host.host.memUsedBytes <= info.host.host.memTotalBytes &&
+    info.host.host.cpuCount >= 1,
+  JSON.stringify(info?.host?.host),
+);
+check(
+  "disk entries carry the directory size and the filesystem it sits on",
+  (info?.host?.disks ?? []).length > 0 &&
+    (info?.host?.disks ?? []).every(
+      (d) =>
+        typeof d.path === "string" &&
+        (d.sizeBytes === null || typeof d.sizeBytes === "number") &&
+        typeof d.filesystem?.mountPoint === "string" &&
+        typeof d.filesystem.usedPercent === "number" &&
+        typeof d.filesystem.availableBytes === "number" &&
+        typeof d.filesystem.totalBytes === "number",
+    ),
   JSON.stringify(info?.host?.disks),
 );
+// The bug this shape exists to fix: the scaffold puts the server dir and the
+// backups dir on one filesystem with different contents. Identical sizes
+// would mean du was not consulted and df is being reported per directory
+// again, which is what made two directories look like two disks.
+{
+  const dirs = info?.host?.disks ?? [];
+  const sizes = dirs.map((d) => d.sizeBytes);
+  check(
+    "two directories on one filesystem report their own sizes, not the filesystem's",
+    dirs.length >= 2 &&
+      new Set(dirs.map((d) => d.filesystem.mountPoint)).size === 1 &&
+      new Set(sizes).size === sizes.length,
+    JSON.stringify(sizes),
+  );
+}
 
 eq("readWhitelist", await serverAccess.readWhitelist(cfg), [{ name: "Steve", uuid: UUID }]);
 eq("readUserCache", await serverAccess.readUserCache(cfg), [

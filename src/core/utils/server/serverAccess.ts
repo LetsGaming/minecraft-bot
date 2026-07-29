@@ -522,17 +522,44 @@ export {
 } from "./wrapperContract.js";
 import { errMsg } from "../error.js";
 
+/**
+ * The `host` block of the wrapper's /info.
+ *
+ * Every field is optional because this is read from wrappers of several
+ * ages: host-info v1 sent `process` + a flat `disks`, v2 adds the
+ * whole-machine `host` block and moves the filesystem figures under
+ * `disks[].filesystem` alongside a per-directory `sizeBytes`. Both shapes
+ * are accepted; hostResources normalises them.
+ */
 export interface RemoteHostInfo {
   process?: {
     pid: number;
     cpuPercent: number;
     rssBytes: number;
   } | null;
+  /** Whole machine. v2+; null on non-Linux hosts. */
+  host?: {
+    cpuPercent: number;
+    cpuCount: number;
+    memTotalBytes: number;
+    memUsedBytes: number;
+    uptimeSeconds: number;
+  } | null;
   disks?: Array<{
     path: string;
-    usedPercent: number;
-    availableBytes: number;
-    totalBytes: number;
+    /** v2+: the directory's own size. null when du timed out. */
+    sizeBytes?: number | null;
+    /** v2+. */
+    filesystem?: {
+      mountPoint: string;
+      usedPercent: number;
+      availableBytes: number;
+      totalBytes: number;
+    };
+    /** v1 flat fields, kept so an un-upgraded wrapper still reports. */
+    usedPercent?: number;
+    availableBytes?: number;
+    totalBytes?: number;
   }>;
 }
 

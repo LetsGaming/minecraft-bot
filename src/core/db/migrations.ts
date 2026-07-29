@@ -147,6 +147,31 @@ const MIGRATIONS: Migration[] = [
       CREATE INDEX config_history_ts ON config_history (ts);
     `,
   },
+  {
+    id: 4,
+    name: "command usage counters",
+    sql: `
+      -- One row per command invocation. Two questions are asked of it, and
+      -- they want different shapes, so it stays as raw events rather than a
+      -- pre-aggregated counter:
+      --   the dashboard: how often was each command used in the last N days
+      --   /help:         which commands has THIS user never run
+      -- ts is epoch ms for timezone-independent pruning (see commandUsage.ts,
+      -- which trims to a fixed window).
+      CREATE TABLE command_usage (
+        id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts        INTEGER NOT NULL,
+        command   TEXT NOT NULL,
+        surface   TEXT NOT NULL,   -- 'slash' | 'ingame'
+        user_id   TEXT,            -- Discord id; null for unlinked in-game use
+        guild_id  TEXT,
+        server_id TEXT
+      );
+      CREATE INDEX command_usage_ts ON command_usage (ts);
+      CREATE INDEX command_usage_command ON command_usage (command, ts);
+      CREATE INDEX command_usage_user ON command_usage (user_id, command);
+    `,
+  },
 ];
 
 /**

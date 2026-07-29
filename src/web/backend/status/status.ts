@@ -78,11 +78,17 @@ export async function collectStatus(serverId: string): Promise<ServerStatus> {
         process: host.process
           ? { rssBytes: host.process.rssBytes, cpuPercent: host.process.cpuPercent }
           : null,
+        machine: host.machine,
         disks: host.disks.map((d) => ({
           path: d.path,
-          usedPercent: d.usedPercent,
-          usedBytes: Math.max(d.totalBytes - d.availableBytes, 0),
-          totalBytes: d.totalBytes,
+          sizeBytes: d.sizeBytes,
+          mountPoint: d.filesystem.mountPoint,
+          usedPercent: d.filesystem.usedPercent,
+          usedBytes: Math.max(
+            d.filesystem.totalBytes - d.filesystem.availableBytes,
+            0,
+          ),
+          totalBytes: d.filesystem.totalBytes,
         })),
       };
     }

@@ -36,6 +36,10 @@
           "type": "string",
           "description": "Locale for user-visible bot strings (\"en\" | \"de\", default \"en\")."
         },
+        "timezone": {
+          "type": "string",
+          "description": "Default IANA timezone for wall-clock features, used when a guild or a schedule does not set its own. Default UTC — the zone everything is stored in, so an unconfigured deployment is coherent rather than dependent on the container's clock.\n\nThis replaces the TZ environment variable, which forced one zone on the whole process: a bot serving guilds in Berlin and Denver purged both at Berlin midnight."
+        },
         "commands": {
           "type": "object",
           "additionalProperties": {
@@ -76,12 +80,15 @@
         "updateNotifier": {
           "$ref": "#/definitions/UpdateNotifierConfig"
         },
+        "featureNudges": {
+          "$ref": "#/definitions/FeatureNudgeConfig",
+          "description": "In-game discoverability nudges (see FeatureNudgeConfig)."
+        },
         "schedules": {
           "type": "object",
           "additionalProperties": {
             "$ref": "#/definitions/ServerScheduleConfig"
-          },
-          "description": "Scheduled restarts (and future scheduled actions) per server."
+          }
         },
         "milestones": {
           "type": "object",
@@ -178,6 +185,10 @@
         "language": {
           "type": "string",
           "description": "Locale for user-visible bot strings in THIS guild (\"en\" | \"de\"). Falls back to the global `language` when unset. Applies to slash command replies and per-guild notifications; in-game (!command) strings and DMs follow the global language, since a server instance can serve several guilds."
+        },
+        "timezone": {
+          "type": "string",
+          "description": "IANA timezone for THIS guild's wall-clock features — the nightly channel purge, \"busiest hour\" in /activity, and anything else that has to pick one local midnight. Falls back to the global `timezone`, then UTC.\n\nTimestamps in embeds do not need this: those are sent as Discord `<t:…>` markers and render in each reader's own zone.\n\nExample: \"Europe/Berlin\"."
         },
         "adminUsers": {
           "type": "array",
@@ -546,15 +557,39 @@
       "additionalProperties": false,
       "description": "Daily GitHub-release check. Enabled by default; opt out here."
     },
+    "FeatureNudgeConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Default true."
+        },
+        "maxPerFeature": {
+          "type": "number",
+          "description": "Give up after this many mentions of one feature to one player. Someone told three times has decided. Default 3.",
+          "minimum": 1
+        },
+        "cooldownHours": {
+          "type": "number",
+          "description": "Minimum gap between two mentions of the same feature to the same player. Default 48.",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false,
+      "description": "In-game nudges that tell players `/link` and `/daily` exist.\n\nOn by default: the features are useless to a player who never hears about them, and the limits below are what keep it from becoming spam."
+    },
     "ServerScheduleConfig": {
       "type": "object",
       "properties": {
         "restart": {
           "$ref": "#/definitions/ServerRestartSchedule"
+        },
+        "timezone": {
+          "type": "string",
+          "description": "IANA timezone the times in this block are written in.\n\nServer-scoped rather than guild-scoped on purpose: a 04:00 restart belongs to the machine's operator, and when two guilds watch one server there is no guild answer to give. Falls back to the global `timezone`, then UTC."
         }
       },
-      "additionalProperties": false,
-      "description": "Per-server schedule entries, keyed by server ID at the top level."
+      "additionalProperties": false
     },
     "ServerRestartSchedule": {
       "type": "object",

@@ -213,17 +213,17 @@ describe("restart schedules", () => {
 
   it("nextScheduledRun is strictly in the future and on an allowed day", () => {
     const from = Date.UTC(2026, 0, 5, 12, 0, 0); // fixed reference
-    const run = nextScheduledRun({ time: "04:00" }, from);
+    const run = nextScheduledRun({ time: "04:00" }, "UTC", from);
     expect(run).not.toBeNull();
     expect(run!).toBeGreaterThan(from);
     expect(run! - from).toBeLessThanOrEqual(24 * 3_600_000 + 3_600_000);
 
     const dayCodes = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"] as const;
-    const onlyMonday = nextScheduledRun({ time: "04:00", days: ["MO"] }, from);
+    const onlyMonday = nextScheduledRun({ time: "04:00", days: ["MO"] }, "UTC", from);
     expect(onlyMonday).not.toBeNull();
     expect(dayCodes[localDayOfWeek(onlyMonday!)]).toBe("MO");
 
-    expect(nextScheduledRun({ time: "04:00", days: ["XX"] }, from)).toBeNull();
+    expect(nextScheduledRun({ time: "04:00", days: ["XX"] }, "UTC", from)).toBeNull();
     expect(nextScheduledRun({ time: "bad" }, from)).toBeNull();
   });
 });
@@ -256,7 +256,7 @@ describe("playerCountHistory math", () => {
       { h: base + 24 * HOUR, sum: 20, max: 20, samples: 1 }, // same local hour next day
       { h: base + HOUR, sum: 2, max: 2, samples: 1 },
     ];
-    const busy = busiestHours(series, 2);
+    const busy = busiestHours(series, "UTC", 2);
     expect(busy).toHaveLength(2);
     expect(busy[0]!.avg).toBe(15); // (10 + 20) / 2
     expect(busy[1]!.avg).toBe(2);

@@ -12,6 +12,10 @@ import {
   closeSession,
 } from "@mcbot/core/utils/stores/sessionStore.js";
 import { deliverPendingRewards } from "@mcbot/core/utils/minecraft/rewards.js";
+import {
+  maybeNudge,
+  NUDGE_DELAY_MS,
+} from "@mcbot/core/utils/minecraft/featureNudges.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { fireWatches } from "../watchFirer.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
@@ -55,6 +59,21 @@ function scheduleRewardDelivery(server: ServerInstance, player: string): void {
   }, DELIVERY_DELAY_MS);
 }
 
+/**
+ * Whisper a discoverability tip a little after the join, if this player is
+ * missing a step of the link → daily funnel.
+ *
+ * Fire-and-forget on its own timer for the same reason as reward delivery:
+ * log handlers run serially, so waiting here would stall every other
+ * watcher. Errors are swallowed inside maybeNudge — a tip is the least
+ * important thing the bot does.
+ */
+function scheduleNudge(server: ServerInstance, player: string): void {
+  setTimeout(() => {
+    void maybeNudge(server, player);
+  }, NUDGE_DELAY_MS).unref();
+}
+
 export function registerJoinLeaveWatcher(
   logWatcher: ILogWatcher,
   client: Client,
@@ -66,6 +85,7 @@ export function registerJoinLeaveWatcher(
     const player = match[1]!;
     await recordSession(serverId, player, "join");
     scheduleRewardDelivery(logWatcher.server, player);
+    scheduleNudge(logWatcher.server, player);
     fireWatches(client, { kind: "player", serverId, player });
     await notify(client, guildConfigs, serverId, player, "join");
   });

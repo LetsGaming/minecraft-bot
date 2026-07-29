@@ -10,9 +10,13 @@
  * ServerInstance helpers (RCON-authoritative with the screen log-poll
  * fallback), storage goes through waypointStore (atomic saveJson).
  *
- * Overwrite/delete are restricted to the original author — everyone can
- * read, nobody can stomp someone else's point. `!waypoints` (separate
- * command) lists everything.
+ * Overwrite is restricted to the original author — everyone can read,
+ * nobody can stomp someone else's point. Delete allows the author *or* a
+ * server admin: a waypoint outlives its creator leaving the server, and
+ * with author-only deletion the only way to remove one was to edit the
+ * store by hand. Admin here is the same check `adminOnly` commands use —
+ * the player's linked Discord account against the global admin list.
+ * `!waypoints` (separate command) lists everything.
  */
 import { defineCommand } from "../../defineCommand.js";
 import {
@@ -24,7 +28,19 @@ import {
   waypointCap,
 } from "@mcbot/core/utils/stores/waypointStore.js";
 import { t } from "@mcbot/core/utils/i18n.js";
+import {
+  loadLinkedAccountsOrEmpty,
+  findDiscordIdByMcName,
+} from "@mcbot/core/utils/stores/linkUtils.js";
+import { isServerAdmin } from "../../../commands/middleware.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
+
+/** Is this in-game player a bot admin? Requires a linked Discord account. */
+async function isAdminPlayer(username: string): Promise<boolean> {
+  const linked = await loadLinkedAccountsOrEmpty();
+  const discordId = findDiscordIdByMcName(linked, username);
+  return discordId !== null && isServerAdmin(discordId);
+}
 
 async function msg(
   server: ServerInstance,
@@ -110,7 +126,8 @@ async function deleteWaypoint(
     await msg(server, username, t("waypoint.notFound", { name }));
     return;
   }
-  if (existing.author.toLowerCase() !== username.toLowerCase()) {
+  const isAuthor = existing.author.toLowerCase() === username.toLowerCase();
+  if (!isAuthor && !(await isAdminPlayer(username))) {
     await msg(
       server,
       username,
@@ -121,7 +138,16 @@ async function deleteWaypoint(
 
   delete waypoints[key];
   await saveWaypointStore(store);
-  await msg(server, username, t("waypoint.deleted", { name: existing.name }));
+  await msg(
+    server,
+    username,
+    isAuthor
+      ? t("waypoint.deleted", { name: existing.name })
+      : t("waypoint.deletedByAdmin", {
+          name: existing.name,
+          author: existing.author,
+        }),
+  );
 }
 
 async function lookupWaypoint(

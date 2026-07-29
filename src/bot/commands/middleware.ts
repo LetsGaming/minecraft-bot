@@ -74,6 +74,9 @@ export function requireServerAdmin(execute: CommandExecutor): CommandExecutor {
   };
 }
 
+import { attachFollowUpHint } from "../utils/hints/followUps.js";
+import { recordCommandUsage } from "@mcbot/core/utils/commands/commandUsage.js";
+
 interface ErrorHandlingOptions {
   defer?: boolean;
   ephemeral?: boolean;
@@ -100,6 +103,25 @@ export function withErrorHandling(
       // (guilds.<id>.language, falling back to the global setting).
       await runWithGuildLocale(interaction.guild?.id, () =>
         execute(interaction),
+      );
+
+      // Same reason as the hint below: this is the point at which the
+      // command is known to have succeeded, so a failed invocation does
+      // not count as usage.
+      recordCommandUsage({
+        command: interaction.commandName,
+        surface: "slash",
+        userId: interaction.user.id,
+        guildId: interaction.guild?.id ?? null,
+      });
+
+      // The command answered without throwing, which is the only place
+      // that knows the reply is worth riding along on. Putting this here
+      // rather than in each command means a new hint needs a registry
+      // entry and nothing else — and an errored command can never
+      // advertise anything, because this line is not reached.
+      await runWithGuildLocale(interaction.guild?.id, () =>
+        attachFollowUpHint(interaction),
       );
     } catch (err) {
       const message =

@@ -22,6 +22,7 @@
  * TZ-aware helpers and re-armed after each run (a fixed 24h interval
  * drifts across DST changes) and on every config reload.
  */
+import { scheduleTimeZone } from "@mcbot/core/utils/config/timezones.js";
 import { type Client } from "discord.js";
 import { loadConfig } from "@mcbot/core/config.js";
 import { getServerInstance } from "@mcbot/core/utils/server/server.js";
@@ -57,11 +58,16 @@ export function parseScheduleTime(
 }
 
 /**
- * The next epoch at which this schedule fires: the next HH:MM in TZ whose
+ * The next epoch at which this schedule fires: the next HH:MM in `tz` whose
  * local weekday is allowed. Exported for tests.
+ *
+ * The zone is the *schedule's*, not a guild's — a 04:00 restart belongs to
+ * the machine's operator, and a server watched by two guilds has no guild
+ * answer to give.
  */
 export function nextScheduledRun(
   schedule: ServerRestartSchedule,
+  tz: string,
   fromMs: number = Date.now(),
 ): number | null {
   const parsed = parseScheduleTime(schedule.time);
@@ -72,11 +78,11 @@ export function nextScheduledRun(
       ? new Set(schedule.days.map((d) => d.toUpperCase()))
       : null;
 
-  let candidate = nextTimeOfDayEpoch(parsed.hour, parsed.minute, fromMs);
+  let candidate = nextTimeOfDayEpoch(parsed.hour, parsed.minute, tz, fromMs);
   for (let i = 0; i < 8; i++) {
-    const dayCode = DAY_CODES[localDayOfWeek(candidate)]!;
+    const dayCode = DAY_CODES[localDayOfWeek(candidate, tz)]!;
     if (!allowed || allowed.has(dayCode)) return candidate;
-    candidate = nextTimeOfDayEpoch(parsed.hour, parsed.minute, candidate);
+    candidate = nextTimeOfDayEpoch(parsed.hour, parsed.minute, tz, candidate);
   }
   return null; // days list contains no valid codes
 }
@@ -189,11 +195,14 @@ function armServer(
 ): void {
   clearServerTimers(serverId);
 
-  const runAt = nextScheduledRun(schedule);
+  // The schedule's own zone — see timezones.ts for why this is not the
+  // guild's.
+  const tz = scheduleTimeZone(serverId);
+  const runAt = nextScheduledRun(schedule, tz);
   if (runAt === null) {
     log.warn(
       "schedule",
-      `${serverId}: invalid restart schedule (time "${schedule.time}", days ${JSON.stringify(schedule.days ?? [])}) — not armed`,
+      `${serverId}: invalid restart schedule (time "${schedule.time}", days ${JSON.stringify(schedule.days ?? [])}, tz ${tz}) — not armed`,
     );
     return;
   }

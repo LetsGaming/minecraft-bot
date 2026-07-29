@@ -86,6 +86,9 @@
                 <Tag :value="effectiveLabel(cmd.name)" :severity="effectiveSeverity(cmd.name)" />
               </div>
               <p class="cmd-desc muted small">{{ cmd.description }}</p>
+              <p class="cmd-usage small" :class="usageClass(cmd.name)">
+                {{ usageLabel(cmd.name) }}
+              </p>
               <div class="cmd-controls">
                 <div class="cmd-ctl">
                   <span class="cmd-ctl-label muted small">Enabled</span>
@@ -245,6 +248,24 @@ export default defineComponent({
     await this.load();
   },
   methods: {
+    /**
+     * Usage over the reporting window, or an explicit "unused" — the
+     * distinction the whole column exists for. An unused command is
+     * either badly advertised or worth deleting, and silence would hide
+     * both.
+     */
+    usageLabel(name: string): string {
+      const window = this.data?.usage?.windowDays ?? 30;
+      const row = this.data?.usage?.byCommand?.[name];
+      if (!row || row.count === 0) return `Not used in ${window} days`;
+      const uses = row.count === 1 ? "1 use" : `${row.count} uses`;
+      const users = row.users === 1 ? "1 person" : `${row.users} people`;
+      return `${uses} by ${users} in ${window} days`;
+    },
+    usageClass(name: string): string {
+      const row = this.data?.usage?.byCommand?.[name];
+      return !row || row.count === 0 ? "usage-none" : "usage-some";
+    },
     filtered(section: Section): ManifestEntry[] {
       const q = this.query.trim().toLowerCase();
       if (!q) return section.commands;
@@ -283,6 +304,16 @@ export default defineComponent({
 </script>
 
 <style scoped>
+.cmd-usage {
+  margin: 0.25rem 0 0;
+}
+.usage-none {
+  color: var(--mc-warn, #d08a2a);
+}
+.usage-some {
+  color: var(--mc-muted);
+}
+
 .controls { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 12px; }
 .ctl-label { display: block; margin-bottom: 5px; letter-spacing: 0.02em; }
 .scope-field { flex: 1; min-width: 240px; }

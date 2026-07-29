@@ -2,6 +2,8 @@ import type { Client, Message, TextChannel } from "discord.js";
 import { kvGet } from "@mcbot/core/db/kv.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { nextMidnightEpoch } from "@mcbot/core/utils/time.js";
+import { guildTimeZone } from "@mcbot/core/utils/config/timezones.js";
+import { scheduleAt, type LongTimer } from "@mcbot/core/utils/longTimer.js";
 import {
   guildsWith,
   type GuildConfigSource,
@@ -143,36 +145,67 @@ export function startChannelPurge(
     );
   }
 
-  const runPurge = async (): Promise<void> => {
-    for (const [guildId, gcfg] of purgeTargets()) {
-      const channelId = gcfg.channelPurge?.channelId;
-      if (!channelId) continue;
+  /** One timer per guild — each fires at *that guild's* midnight. */
+  const timers = new Map<string, LongTimer>();
 
-      try {
-        await purgeChannel(client, guildId, channelId);
-      } catch (err) {
-        log.error("purge", `Purge failed for guild ${guildId}: ${errMsg(err)}`);
-      }
+  const purgeGuild = async (guildId: string): Promise<void> => {
+    // Re-read config at fire time: the channel may have changed, or the
+    // feature been turned off, since the timer was armed.
+    const cfg = purgeTargets().find(([id]) => id === guildId)?.[1];
+    const channelId = cfg?.channelPurge?.channelId;
+    if (!channelId) return;
+    try {
+      await purgeChannel(client, guildId, channelId);
+    } catch (err) {
+      log.error("purge", `Purge failed for guild ${guildId}: ${errMsg(err)}`);
     }
   };
 
-  // Self-rescheduling: always wait until the *next* local midnight in TZ.
-  // A fixed setInterval(86400000) would drift by ±1 h on DST transitions;
-  // re-computing from nextMidnightEpoch() on every iteration stays exact.
-  function scheduleNextPurge(): void {
-    const delay = nextMidnightEpoch() - Date.now();
-    const delayHours = (delay / 3_600_000).toFixed(1);
-    log.info(
+  /**
+   * Arm the next purge for one guild, at midnight in its own timezone.
+   *
+   * Re-computed after every run rather than a fixed 24h interval: an
+   * interval drifts by an hour at each DST transition, and the guild's
+   * configured zone can change under a /config reload.
+   */
+  function scheduleGuild(guildId: string): void {
+    timers.get(guildId)?.cancel();
+    const tz = guildTimeZone(guildId);
+    const due = nextMidnightEpoch(tz);
+    log.debug(
       "purge",
-      `Next channel purge in ${delayHours}h (${purgeTargets().length} guild(s))`,
+      `Guild ${guildId}: next purge at ${new Date(due).toISOString()} (midnight ${tz})`,
     );
-    setTimeout(async () => {
-      await runPurge().catch((err) => {
-        log.error("purge", `Purge failed: ${errMsg(err)}`);
-      });
-      scheduleNextPurge();
-    }, delay);
+    timers.set(
+      guildId,
+      scheduleAt(due, () => {
+        void purgeGuild(guildId).finally(() => {
+          syncTimers(); // picks up config changes, then re-arms this guild
+        });
+      }),
+    );
   }
 
-  scheduleNextPurge();
+  /**
+   * Reconcile timers with config: arm guilds that gained a purge channel,
+   * drop those that lost one. Called at startup and after each run, so a
+   * guild configured at runtime joins at its next midnight.
+   */
+  function syncTimers(): void {
+    const wanted = new Set(purgeTargets().map(([id]) => id));
+    for (const guildId of timers.keys()) {
+      if (!wanted.has(guildId)) {
+        timers.get(guildId)?.cancel();
+        timers.delete(guildId);
+      }
+    }
+    for (const guildId of wanted) scheduleGuild(guildId);
+  }
+
+  syncTimers();
+
+  // Re-check config on a slow tick as well: without it, a deployment with
+  // no purge targets at boot would never arm anything, because the only
+  // other reconcile point is the end of a run that never happens.
+  setInterval(syncTimers, 60 * 60 * 1000).unref();
 }

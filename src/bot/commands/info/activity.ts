@@ -13,7 +13,7 @@ import {
   buildActivitySparkline,
   busiestHours,
 } from "@mcbot/core/utils/stores/playerCountHistory.js";
-import { TZ } from "@mcbot/core/utils/time.js";
+import { guildTimeZone } from "@mcbot/core/utils/config/timezones.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 
 export const data = new SlashCommandBuilder()
@@ -34,7 +34,9 @@ export const execute = withErrorHandling(async (interaction) => {
 
   const now = Date.now();
   const { line, peak } = buildActivitySparkline(series, now, 24);
-  const busy = busiestHours(series, 3);
+  // The asking guild's zone: "busiest hour" only means something local.
+  const tz = guildTimeZone(interaction.guild?.id ?? null);
+  const busy = busiestHours(series, tz, 3);
 
   const busyLines = busy.map((b) =>
     t("activity.busyLine", {
@@ -49,7 +51,7 @@ export const execute = withErrorHandling(async (interaction) => {
     description:
       `${t("activity.last24h")}\n\`${line}\`\n` +
       `${t("activity.peak", { peak })}\n\n` +
-      `${t("activity.busiest", { tz: TZ })}\n` +
+      `${t("activity.busiest", { tz })}\n` +
       (busyLines.length > 0 ? busyLines.join("\n") : t("activity.noBusyData")),
     color: EmbedColor.Info,
     footer: { text: server.id },

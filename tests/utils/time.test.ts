@@ -5,13 +5,15 @@ import {
   formatTime,
   nextMidnightEpoch,
   msUntilMidnight,
-  TZ,
+  isValidTimeZone,
 } from "../../src/core/utils/time.js";
 
-describe("TZ constant", () => {
-  it("is a non-empty string", () => {
-    expect(typeof TZ).toBe("string");
-    expect(TZ.length).toBeGreaterThan(0);
+describe("isValidTimeZone", () => {
+  it("accepts IANA zones and rejects anything Intl will not take", () => {
+    expect(isValidTimeZone("Europe/Berlin")).toBe(true);
+    expect(isValidTimeZone("UTC")).toBe(true);
+    expect(isValidTimeZone("Mars/Olympus")).toBe(false);
+    expect(isValidTimeZone("")).toBe(false);
   });
 });
 

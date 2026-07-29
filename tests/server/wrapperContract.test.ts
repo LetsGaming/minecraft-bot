@@ -109,7 +109,7 @@ describe("compareContract", () => {
     expect(report.outdated).toEqual([
       {
         name: "host-info",
-        want: 1,
+        want: EXPECTED_WRAPPER_FEATURES["host-info"]!.version,
         have: 0,
         degrades: EXPECTED_WRAPPER_FEATURES["host-info"]!.degrades,
       },

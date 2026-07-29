@@ -78,7 +78,7 @@ Snapshots are pruned automatically: full hourly resolution for the last day, one
 
 **Config key:** `channelPurge`
 
-Once a day at local midnight (your `TZ`, DST-safe), deletes every message in the configured channel except pinned messages and the status embed. Useful for keeping a bot-spam or bridge channel clean. Messages older than 14 days are deleted one by one (a Discord API restriction), which is slower but works.
+Once a day at midnight in that guild's timezone (`guilds.<id>.timezone`, falling back to the global `timezone`, then UTC; DST-safe), deletes every message in the configured channel except pinned messages and the status embed. Useful for keeping a bot-spam or bridge channel clean. Messages older than 14 days are deleted one by one (a Discord API restriction), which is slower but works.
 
 ## Sleep prompt (built-in, no config)
 
@@ -86,7 +86,7 @@ A small community feature for German-speaking servers: when a player lying in be
 
 ## Scheduled restarts
 
-`schedules.<serverId>.restart` restarts a server on a wall-clock schedule (`"time": "04:00"`, optional `days` as `["SU".."SA"]`, default daily). Players get `/say` countdown warnings at the configured `warnMinutes` (default 15/5/1), notification channels get the same via the `scheduledRestart` event, downtime alerts are suppressed around the restart, and the run lands in the admin audit log. Timers are TZ-aware and re-armed after each run and on every config reload — a schedule edit applies live.
+`schedules.<serverId>.restart` restarts a server on a wall-clock schedule (`"time": "04:00"`, optional `days` as `["SU".."SA"]`, default daily). Players get `/say` countdown warnings at the configured `warnMinutes` (default 15/5/1), notification channels get the same via the `scheduledRestart` event, downtime alerts are suppressed around the restart, and the run lands in the admin audit log. Times are read in `schedules.<serverId>.timezone` (falling back to the global `timezone`, then UTC) — the zone belongs to the server's operator, not to any guild, since two guilds can watch one server. Timers are DST-aware and re-armed after each run and on every config reload — a schedule edit applies live.
 
 ## Milestone announcements
 
@@ -119,3 +119,59 @@ The bot overwrites `data/runtime.json` about once a minute. The web dashboard (a
 ## Log watcher (infrastructure)
 
 Everything event-driven (bridge, notifications, in-game commands, sleep prompt) runs on the log watcher. For local servers it tails `logs/latest.log` using filesystem events with a 1-second polling fallback, capped at 1 MB per read cycle so a huge backlog after a restart cannot stall the bot. For remote servers it consumes the API wrapper's SSE stream with automatic reconnects. No configuration needed; it starts for every server.
+
+## Feature nudges
+
+On join, a player who has not linked their Discord account gets a one-line
+whisper about `/link`; a linked player who has never claimed a daily reward
+gets one about `/daily`. One tip per join at most, never a list, and never
+about a feature the player already uses — `/daily` needs a linked account,
+so the order is fixed.
+
+The bot gives up after three mentions of a feature to the same player
+(minimum 48h apart), and the third one says it is the last. Someone told
+three times has decided.
+
+The trigger is the join event, not chat content: matching words would tie
+the feature to one language.
+
+```json
+"featureNudges": { "enabled": true, "maxPerFeature": 3, "cooldownHours": 48 }
+```
+
+Set `enabled: false` to turn it off entirely. State lives in
+`kv_store["featureNudges"]`, so counts survive restarts.
+
+## Follow-up hints
+
+When a feature has an obvious companion, the reply that uses it offers the
+companion as a button. Currently: claiming `/daily` offers to switch on the
+reminder for the next one.
+
+Rules, all of them there to keep it from becoming noise:
+
+- One hint per reply, never a list.
+- Never offered for something the user already has on.
+- Two offers per hint per user, then it stops.
+- "No thanks" is permanent, and outranks the count.
+- Buttons carry stable ids, so an offer made before a restart still works.
+
+Adding a pair is one entry in `HINTS` (`src/bot/utils/hints/followUps.ts`):
+when it applies, the button label, and what pressing it does. It shares the
+`featureNudges.enabled` switch — one idea, one setting.
+
+## Command usage
+
+Every successful command — slash and in-game — is recorded in the
+`command_usage` table (command, surface, Discord user where known, guild,
+server), kept for 90 days and pruned daily.
+
+Two things read it. The dashboard's **Commands** page shows "N uses by M
+people in 30 days" per command, or "Not used in 30 days" — uses and distinct
+people are counted separately so one enthusiast is not mistaken for
+adoption. And `/help` sorts the commands the caller has never run to the
+front, marked with ✨.
+
+The point is to make an unused feature visible. An unused command is either
+badly advertised or worth deleting, and the enable/admin controls on the
+same page are what let you tell which.

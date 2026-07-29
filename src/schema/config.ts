@@ -231,6 +231,18 @@ export interface GuildConfig {
    */
   language?: string;
   /**
+   * IANA timezone for THIS guild's wall-clock features — the nightly
+   * channel purge, "busiest hour" in /activity, and anything else that
+   * has to pick one local midnight. Falls back to the global `timezone`,
+   * then UTC.
+   *
+   * Timestamps in embeds do not need this: those are sent as Discord
+   * `<t:…>` markers and render in each reader's own zone.
+   *
+   * Example: "Europe/Berlin".
+   */
+  timezone?: string;
+  /**
    * Admins scoped to THIS guild (Discord user IDs and/or role IDs,
    * same semantics as the global adminUsers list). Entries here can use
    * admin commands only in this guild, and only against servers this guild
@@ -374,8 +386,40 @@ export interface ServerRestartSchedule {
 }
 
 /** Per-server schedule entries, keyed by server ID at the top level. */
+/**
+ * In-game nudges that tell players `/link` and `/daily` exist.
+ *
+ * On by default: the features are useless to a player who never hears
+ * about them, and the limits below are what keep it from becoming spam.
+ */
+export interface FeatureNudgeConfig {
+  /** Default true. */
+  enabled?: boolean;
+  /**
+   * Give up after this many mentions of one feature to one player.
+   * Someone told three times has decided. Default 3.
+   * @minimum 1
+   */
+  maxPerFeature?: number;
+  /**
+   * Minimum gap between two mentions of the same feature to the same
+   * player. Default 48.
+   * @minimum 1
+   */
+  cooldownHours?: number;
+}
+
 export interface ServerScheduleConfig {
   restart?: ServerRestartSchedule;
+  /**
+   * IANA timezone the times in this block are written in.
+   *
+   * Server-scoped rather than guild-scoped on purpose: a 04:00 restart
+   * belongs to the machine's operator, and when two guilds watch one
+   * server there is no guild answer to give. Falls back to the global
+   * `timezone`, then UTC.
+   */
+  timezone?: string;
 }
 
 /**
@@ -457,6 +501,17 @@ export interface RawBotConfig {
   adminUsers?: string[];
   /** Locale for user-visible bot strings ("en" | "de", default "en"). */
   language?: string;
+  /**
+   * Default IANA timezone for wall-clock features, used when a guild or a
+   * schedule does not set its own. Default UTC — the zone everything is
+   * stored in, so an unconfigured deployment is coherent rather than
+   * dependent on the container's clock.
+   *
+   * This replaces the TZ environment variable, which forced one zone on
+   * the whole process: a bot serving guilds in Berlin and Denver purged
+   * both at Berlin midnight.
+   */
+  timezone?: string;
   commands?: Record<string, CommandOverrideConfig>;
   leaderboard?: Record<string, unknown>;
   /**
@@ -474,6 +529,8 @@ export interface RawBotConfig {
   limits?: LimitsConfig;
   updateNotifier?: UpdateNotifierConfig;
   /** Scheduled restarts (and future scheduled actions) per server. */
+  /** In-game discoverability nudges (see FeatureNudgeConfig). */
+  featureNudges?: FeatureNudgeConfig;
   schedules?: Record<string, ServerScheduleConfig>;
   /**
    * Milestone announcement thresholds per leaderboard stat key, in the
@@ -505,9 +562,13 @@ export interface BotConfig {
   waypoints?: WaypointsConfig;
   limits?: LimitsConfig;
   updateNotifier?: UpdateNotifierConfig;
+  /** In-game discoverability nudges (see FeatureNudgeConfig). */
+  featureNudges?: FeatureNudgeConfig;
   schedules?: Record<string, ServerScheduleConfig>;
   milestones?: Record<string, number[]>;
   webui?: WebUiConfig;
+  /** Default IANA timezone for wall-clock features. Default UTC. */
+  timezone?: string;
 }
 
 /** Variables.txt key-value map */

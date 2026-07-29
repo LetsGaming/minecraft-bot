@@ -107,10 +107,27 @@ export function startHostResourcesMonitor(
   return timer;
 }
 
-/** Disk usages for one instance, as the wrapper's /info reports them. */
+/**
+ * Disk usages for one instance, one entry per *filesystem*.
+ *
+ * The alert is about a filesystem filling up, and the server directory and
+ * the backups directory usually share one — so reporting both meant two
+ * identical alerts for one disk. Deduped by mount point where the wrapper
+ * names it (host-info v2); an older wrapper sends no mount point, and
+ * per-path alerts are the best that can be done with what it says.
+ */
 async function collectUsages(server: ServerInstance): Promise<DiskUsage[]> {
   const host = await getHostResources(server);
-  return host?.disks ?? [];
+  const disks = host?.disks ?? [];
+
+  const seen = new Set<string>();
+  return disks.filter((d) => {
+    const mount = d.filesystem.mountPoint;
+    if (mount === "") return true;
+    if (seen.has(mount)) return false;
+    seen.add(mount);
+    return true;
+  });
 }
 
 async function checkServer(
@@ -120,29 +137,30 @@ async function checkServer(
   threshold: number,
 ): Promise<void> {
   for (const usage of await collectUsages(server)) {
-
-    const key = `${server.id}:${usage.path}`;
+    // Key on the filesystem, not the path: the alert tracks a disk, and
+    // keying on the path would re-fire when the monitored dirs change.
+    const key = `${server.id}:${usage.filesystem.mountPoint || usage.path}`;
     const alerted = alertState.get(key) ?? false;
 
-    if (!alerted && usage.usedPercent >= threshold) {
+    if (!alerted && usage.filesystem.usedPercent >= threshold) {
       alertState.set(key, true);
       log.warn(
         "hostAlerts",
-        `${server.id}: ${usage.path} at ${usage.usedPercent}% (threshold ${threshold}%)`,
+        `${server.id}: ${usage.path} at ${usage.filesystem.usedPercent}% (threshold ${threshold}%)`,
       );
       await broadcast(client, guildsWithAlerts, server.id, () => ({
         title: t("hostAlerts.diskFullTitle"),
         description: t("hostAlerts.diskFull", {
           server: server.id,
           path: usage.path,
-          percent: usage.usedPercent,
-          free: formatBytes(usage.availableBytes),
+          percent: usage.filesystem.usedPercent,
+          free: formatBytes(usage.filesystem.availableBytes),
         }),
         color: EmbedColor.Error,
       }));
     } else if (
       alerted &&
-      usage.usedPercent <= threshold - HYSTERESIS_PERCENT
+      usage.filesystem.usedPercent <= threshold - HYSTERESIS_PERCENT
     ) {
       alertState.set(key, false);
       await broadcast(client, guildsWithAlerts, server.id, () => ({
@@ -150,7 +168,7 @@ async function checkServer(
         description: t("hostAlerts.diskOk", {
           server: server.id,
           path: usage.path,
-          percent: usage.usedPercent,
+          percent: usage.filesystem.usedPercent,
         }),
         color: EmbedColor.Success,
       }));

@@ -19,7 +19,7 @@ import { getDb, withTransaction } from "../../db/index.js";
 import { mapRows, col } from "../../db/rows.js";
 import { log } from "../logger.js";
 import { canQueryServer } from "@mcbot/schema/serverState.js";
-import { TZ } from "../time.js";
+import { localHourOfDay, UTC } from "../time.js";
 import type { ServerInstance } from "../server/server.js";
 import { errMsg } from "../error.js";
 
@@ -187,35 +187,29 @@ export function buildActivitySparkline(
 }
 
 export interface BusyHour {
-  /** Local hour of day (0–23) in the configured TZ. */
+  /** Hour of day (0–23) in the timezone the caller asked for. */
   hour: number;
   avg: number;
 }
 
-/** Local hour of day for an epoch, respecting the configured TZ. */
-function localHour(epochMs: number): number {
-  return Number(
-    new Intl.DateTimeFormat("en-GB", {
-      timeZone: TZ,
-      hour: "2-digit",
-      hour12: false,
-    }).format(new Date(epochMs)),
-  );
-}
-
 /**
- * The busiest local hours of day, averaged over the whole retained
+ * The busiest hours of day in `tz`, averaged over the whole retained
  * series. Buckets without samples don't count against an hour.
+ *
+ * Samples are stored as UTC epochs; the zone is applied only when
+ * bucketing for display, so the same series answers correctly for a guild
+ * in Berlin and one in Denver.
  */
 export function busiestHours(
   series: ReadonlyArray<HourBucket>,
+  tz: string = UTC,
   top = 3,
 ): BusyHour[] {
   const sums = new Array<number>(24).fill(0);
   const counts = new Array<number>(24).fill(0);
   for (const b of series) {
     if (b.samples === 0) continue;
-    const hour = localHour(b.h);
+    const hour = localHourOfDay(b.h, tz);
     sums[hour]! += b.sum / b.samples;
     counts[hour]! += 1;
   }

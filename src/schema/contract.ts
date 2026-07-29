@@ -50,9 +50,22 @@ export interface ServerStatus {
   };
   tps: number | null;
   host: {
+    /** The Minecraft process. cpuPercent is sampled and can exceed 100. */
     process: { rssBytes: number; cpuPercent: number } | null;
+    /** The whole machine. null from wrappers older than host-info v2. */
+    machine: {
+      cpuPercent: number;
+      cpuCount: number;
+      memTotalBytes: number;
+      memUsedBytes: number;
+      uptimeSeconds: number;
+    } | null;
     disks: Array<{
       path: string;
+      /** The directory's own size. null when the wrapper could not measure it. */
+      sizeBytes: number | null;
+      /** Filesystem this directory sits on. "" from a pre-v2 wrapper. */
+      mountPoint: string;
       usedPercent: number;
       usedBytes: number;
       totalBytes: number;

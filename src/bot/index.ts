@@ -307,6 +307,18 @@ void (async () => {
         log.error("wlapp", `Interaction failed: ${errMsg(err)}`);
         return;
       }
+
+      // Follow-up hint buttons ("enable reminders?") use stable customIds
+      // for the same reason — an offer made before a restart still works.
+      try {
+        const { handleFollowUpHintInteraction } = await import(
+          "./interactions/followUpHints.js"
+        );
+        if (await handleFollowUpHintInteraction(interaction)) return;
+      } catch (err) {
+        log.error("hint", `Interaction failed: ${errMsg(err)}`);
+        return;
+      }
     }
 
     if (!interaction.isChatInputCommand()) return;

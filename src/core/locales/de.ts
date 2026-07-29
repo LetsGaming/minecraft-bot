@@ -54,6 +54,7 @@ export const de: Record<string, string> = {
   "waypoint.limitReached": "Dieser Server hat bereits {max} Waypoints.",
   "waypoint.saved": '📍 Waypoint "{name}" bei {x} / {y} / {z} gespeichert.',
   "waypoint.deleted": 'Waypoint "{name}" gelöscht.',
+  "waypoint.deletedByAdmin": 'Waypoint "{name}" gelöscht (erstellt von {author}).',
   "waypoint.notFound": 'Kein Waypoint namens "{name}". Mit !waypoints alle anzeigen.',
   "waypoint.result": "📍 {name}: {x} / {y} / {z} ({dimension}) — gesetzt von {author}",
   "waypoint.noneInGame": "Noch keine Waypoints. Erstelle einen mit: !waypoint set <name>",
@@ -158,8 +159,11 @@ export const de: Record<string, string> = {
 
   // ── host resources ──
   "status.hostTitle": "Host",
-  "status.hostProcess": "Prozess: {ram} RAM, {cpu}% CPU",
-  "status.hostDisk": "`{path}`: {percent}% belegt ({free} frei)",
+  "status.hostMachine": "Maschine: {ram} / {ramTotal} RAM, {cpu}% CPU ({cores} Kerne)",
+  "status.hostProcess": "Serverprozess: {ram} RAM, {cpu}% CPU",
+  "status.hostFilesystem": "{mount} — {percent}% belegt, {free} frei von {total}",
+  "status.hostDir": "\u00a0\u00a0`{path}`: {size}",
+  "status.hostDirUnknown": "\u00a0\u00a0`{path}`: Größe nicht verfügbar",
   "hostAlerts.diskFullTitle": "⚠️ Speicherplatz-Warnung",
   "hostAlerts.diskFull":
     "**{server}**: `{path}` ist zu **{percent}%** belegt ({free} frei). Backups und Welt-Speicherung könnten bald fehlschlagen.",
@@ -344,4 +348,34 @@ export const de: Record<string, string> = {
   "command.disabledHere": "`/{command}` ist hier deaktiviert.",
   "command.adminOnlyInGame":
     "!{command} ist auf diesem Server nur für Admins (dein verknüpfter Discord-Account muss Bot-Admin sein).",
+  "nudge.link":
+    "Tipp: Verbinde dein Discord für Belohnungen und Statistiken — nutze /link in Discord und tippe dann hier !link <code> in den Chat.",
+  "nudge.daily":
+    "Tipp: Du bist verbunden! Nutze einmal täglich /daily in Discord für eine Gratis-Belohnung — sie landet in deinem Inventar, auch wenn du offline bist.",
+  "nudge.lastTime":
+    "(Das war das letzte Mal, dass ich das erwähne.)",
+  "hint.dailyReminder.label":
+    "Erinnere mich",
+  "hint.dailyReminder.confirm":
+    "Erinnerungen an — ich schreibe dir per DM, sobald dein nächstes Daily bereit ist. Jederzeit abschaltbar mit /daily-reminder.",
+  "hint.noThanks":
+    "Nein danke",
+  "hint.notYours":
+    "Dieser Button gehört zur Antwort einer anderen Person.",
+  "hint.failed":
+    "Konnte das nicht aktivieren — bitte nutze den Befehl direkt.",
+  "hint.watchServer.label":
+    "Benachrichtige mich",
+  "hint.watchServer.confirm":
+    "Ich schreibe dir per DM, sobald der Server wieder online ist. Deine DMs müssen offen sein — verwalten kannst du das mit /watch.",
+  "hint.statsLeaderboard":
+    "Tipp: /leaderboard sortiert alle nach derselben Statistik, und /compare stellt zwei Spieler nebeneinander.",
+  "hint.playtimeActivity":
+    "Tipp: /activity zeigt, wann auf dem Server wirklich etwas los ist — praktisch, um andere Spieler anzutreffen.",
+  "hint.seedChunkbase":
+    "Tipp: /chunkbase öffnet diesen Seed in einer Kartenansicht, und /slime findet darin Slime-Chunks.",
+  "help.newToYou":
+    "✨ markiert die {count} Befehle, die du noch nicht ausprobiert hast — sie stehen zuerst.",
+  "deathpos.hint":
+    "Tipp: Tippe !deathpos in den Chat, um diese Koordinaten jederzeit erneut zu bekommen.",
 };

@@ -72,8 +72,13 @@ export const EXPECTED_WRAPPER_FEATURES: Record<string, ExpectedFeature> = {
     degrades: "in-game !commands, the chat bridge, and every log watcher",
   },
   "host-info": {
-    version: 1,
-    degrades: "host RAM/CPU in the status embed, and disk-space alerts",
+    // v2: whole-machine CPU/RAM, a sampled (not lifetime-average) process
+    // CPU, and per-directory disk sizes. The bot still reads a v1 wrapper —
+    // normaliseDisk lifts the old shape — it just shows less.
+    version: 2,
+    degrades:
+      "whole-machine CPU/RAM and per-directory sizes in the status embed; " +
+      "a v1 wrapper reports only the Java process and its filesystem",
   },
   usercache: {
     version: 1,

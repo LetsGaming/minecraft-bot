@@ -25,6 +25,18 @@ export interface CommandOptionSpec {
 }
 export interface CommandsResponse {
   manifest: { slash: ManifestEntry[]; ingame: ManifestEntry[] };
+  /**
+   * How often each command was actually used, over `windowDays`.
+   * Commands absent from `byCommand` were not used at all — the manifest
+   * is the full list, so a missing entry is a real zero.
+   */
+  usage: {
+    windowDays: number;
+    byCommand: Record<
+      string,
+      { count: number; users: number; lastUsedAt: number | null }
+    >;
+  };
   scopes: { guildIds: string[]; serverIds: string[] };
   commandOptions: Record<string, CommandOptionSpec[]>;
   overrides: {

@@ -47,7 +47,11 @@ vi.mock("../../src/core/utils/time.js", () => ({
   formatDate: vi.fn(),
   formatDatetime: vi.fn().mockReturnValue("2025-01-01 00:00:00"),
   formatTime: vi.fn(),
-  TZ: "UTC",
+  UTC: "UTC",
+  isValidTimeZone: () => true,
+  localHourOfDay: vi.fn().mockReturnValue(0),
+  localDayOfWeek: vi.fn().mockReturnValue(0),
+  nextTimeOfDayEpoch: vi.fn().mockReturnValue(Date.now() + 3_600_000),
 }));
 
 vi.mock("../../src/core/utils/jsonStore.js", () => ({

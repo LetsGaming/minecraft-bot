@@ -26,6 +26,10 @@ import {
 import { log } from "@mcbot/core/utils/logger.js";
 import { readCommandManifest } from "@mcbot/core/utils/commands/commandManifest.js";
 import { resolveCommandPolicy } from "@mcbot/core/utils/commands/commandPolicy.js";
+import {
+  usageByCommand,
+  USAGE_WINDOW_DAYS,
+} from "@mcbot/core/utils/commands/commandUsage.js";
 import { COMMAND_OPTIONS } from "@mcbot/schema";
 import { sessionFromRequest } from "../auth/auth.js";
 import {
@@ -81,8 +85,29 @@ export function registerConfigRoutes(app: FastifyInstance): void {
       return out;
     };
 
+    // Usage rides along on the command list rather than getting a page of
+    // its own: "what does this command do", "is it on", and "does anyone
+    // use it" are one question asked three ways, and the answer to the
+    // third is what makes the first two actionable — an unused command is
+    // either badly advertised or worth deleting, and the operator needs
+    // both other columns to tell which.
+    const usage = usageByCommand(USAGE_WINDOW_DAYS);
+    const usageByName: Record<
+      string,
+      { count: number; users: number; lastUsedAt: number | null }
+    > = {};
+    for (const row of usage) {
+      const existing = usageByName[row.command];
+      usageByName[row.command] = {
+        count: (existing?.count ?? 0) + row.count,
+        users: Math.max(existing?.users ?? 0, row.users),
+        lastUsedAt: Math.max(existing?.lastUsedAt ?? 0, row.lastUsedAt ?? 0) || null,
+      };
+    }
+
     return {
       manifest,
+      usage: { windowDays: USAGE_WINDOW_DAYS, byCommand: usageByName },
       scopes: { guildIds, serverIds },
       commandOptions: COMMAND_OPTIONS,
       overrides: {

@@ -1,3 +1,4 @@
+import { recordCommandUsage } from "@mcbot/core/utils/commands/commandUsage.js";
 import { registerLogCommand } from "./logWatcher.js";
 import { resolveCommandPolicy } from "@mcbot/core/utils/commands/commandPolicy.js";
 import {
@@ -184,6 +185,19 @@ export function defineCommand({
 
         try {
           await handler(username, parsedArgs, client, server);
+          // After the handler, so a command that threw is not counted.
+          // The Discord id may be absent — plenty of players use !commands
+          // without ever linking, and those uses still count for the
+          // dashboard even though they cannot count for /help.
+          recordCommandUsage({
+            command: name,
+            surface: "ingame",
+            userId: findDiscordIdByMcName(
+              await loadLinkedAccountsOrEmpty(),
+              username,
+            ),
+            serverId: server?.id ?? null,
+          });
         } catch (err) {
           log.error(
             "commands",
