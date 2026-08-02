@@ -6,6 +6,22 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The cross-repo contract check failed on the normal release order.** A
+  wrapper offering features the bot does not consume yet was treated as a
+  disagreement, so the very state that additive wrapper releases are *supposed*
+  to produce — wrapper first, bot half second — turned the wrapper's CI red
+  until both repositories caught up. Demanding lockstep releases across two
+  repos is not a thing anyone can actually do.
+
+  The four gap categories are no longer one thing. `missing`, `outdated` and
+  `ahead` still fail: in each of those the bot calls something the wrapper
+  cannot serve, or reads a shape that moved under it. `unused` is now a note,
+  because nothing calls those routes until the bot half ships. The distinction
+  is named once in `contractHasBlockingGaps()` rather than encoded in the
+  script, and both workflows' error text now describes what actually fails.
+
 ### Added
 
 - **Mod config editor** (needs wrapper 3.4.0). Browse and edit mod settings from

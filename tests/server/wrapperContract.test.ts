@@ -21,6 +21,7 @@ import {
   EXPECTED_WRAPPER_FEATURES,
   parseManifest,
   compareContract,
+  contractHasBlockingGaps,
   contractIsClean,
   describeContract,
   logContractReport,
@@ -134,6 +135,56 @@ describe("compareContract", () => {
     ]);
     // Nothing is missing — the wrapper is ahead, not behind.
     expect(report.missing).toEqual([]);
+  });
+});
+
+describe("contractHasBlockingGaps", () => {
+  const empty = { missing: [], outdated: [], ahead: [], unused: [] };
+
+  it("is false for a clean report", () => {
+    expect(contractHasBlockingGaps(empty)).toBe(false);
+  });
+
+  it("does NOT block on features the bot has not learned yet", () => {
+    // The normal state between an additive wrapper release and the bot half
+    // that consumes it. Nothing calls those routes, so nothing can break —
+    // and additive wrapper features land first by design, so blocking here
+    // would demand lockstep releases across two repositories.
+    expect(
+      contractHasBlockingGaps({
+        ...empty,
+        unused: [{ name: "mod-configs", summary: "config editing" }],
+      }),
+    ).toBe(false);
+  });
+
+  it("blocks when the bot calls something the wrapper cannot serve", () => {
+    expect(
+      contractHasBlockingGaps({
+        ...empty,
+        missing: [{ name: "backup-files", degrades: "the backup panel" }],
+      }),
+    ).toBe(true);
+  });
+
+  it("blocks on an outdated wrapper feature", () => {
+    expect(
+      contractHasBlockingGaps({
+        ...empty,
+        outdated: [{ name: "server-health", want: 2, have: 1, degrades: "health" }],
+      }),
+    ).toBe(true);
+  });
+
+  it("blocks when a feature the bot READS moved ahead of it", () => {
+    // Different from `unused`: the bot actively parses this feature's shape,
+    // and the wrapper has changed its contract version underneath.
+    expect(
+      contractHasBlockingGaps({
+        ...empty,
+        ahead: [{ name: "backups", want: 1, have: 2 }],
+      }),
+    ).toBe(true);
   });
 });
 

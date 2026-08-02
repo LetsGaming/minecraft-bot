@@ -119,6 +119,11 @@ function fail(what, detail) {
 function check(what, cond, detail = "") {
   cond ? ok(what) : fail(what, detail);
 }
+/** Reported, not counted. For states that are expected rather than wrong. */
+function note(what, detail = "") {
+  console.log(`  \u001b[33m~\u001b[0m ${what}`);
+  if (detail) console.log(`      ${detail}`);
+}
 function eq(what, actual, expected) {
   const a = JSON.stringify(actual);
   const e = JSON.stringify(expected);
@@ -373,10 +378,24 @@ check(
   gaps.join("\n      "),
 );
 check(
-  "the wrapper offers nothing this bot is too old to use",
-  report.ahead.length === 0 && report.unused.length === 0,
+  "no feature the bot reads has moved to a contract version it does not implement",
+  report.ahead.length === 0,
   gaps.join("\n      "),
 );
+// Deliberately not a failure. A wrapper serving features the bot has never
+// heard of is the normal state between an additive wrapper release and the bot
+// half that consumes it — and that order is the one the workflows tell you to
+// use. Nothing calls those routes, so nothing can break. Failing here would
+// mean every wrapper feature must land in lockstep with its bot side, in two
+// separate repositories, which is not a thing anyone can do.
+if (report.unused.length > 0) {
+  note(
+    "the wrapper offers features this bot does not use yet (expected, not a failure)",
+    report.unused.map((f) => f.name).join(", "),
+  );
+} else {
+  ok("the wrapper offers nothing this bot is unaware of");
+}
 
 console.log("\n── the script-action contract");
 eq(

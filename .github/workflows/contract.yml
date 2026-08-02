@@ -70,10 +70,13 @@ jobs:
           # problem. Say which it is.
           if ! npm run e2e:contract; then
             echo "::error::Contract check failed against ${WRAPPER_REPO}@main."
-            echo "If the failures are missing FEATURES or unknown script actions,"
-            echo "this branch expects a wrapper that has not been merged yet."
-            echo "Additive wrapper features land first, then the bot half."
-            echo "If the wrapper's half is already on its default branch, this is"
-            echo "a real disagreement — read the per-check output above."
+            echo "This fails only on a real disagreement: a feature the bot CALLS"
+            echo "that the wrapper cannot serve, or one whose contract version has"
+            echo "moved under it."
+            echo "A wrapper offering features this bot does not use yet is reported"
+            echo "as a note, not a failure — additive wrapper features land first"
+            echo "by design, and nothing calls those routes until the bot half ships."
+            echo "So if you see missing FEATURES or unknown script actions here, this"
+            echo "branch expects a wrapper that has not been merged yet."
             exit 1
           fi
