@@ -14,6 +14,32 @@ import type {
   HealthSource,
 } from "./serverState.js";
 
+/**
+ * One archive in a server's backups directory (wrapper >= 3.3.0).
+ *
+ * `id` is an opaque handle produced by the wrapper's index and is the ONLY
+ * file reference any client sends back — no layer here, in the dashboard, or
+ * in the browser ever names a path.
+ *
+ * Lives here rather than in @mcbot/core because the browser reads it: the
+ * frontend bundles @mcbot/schema, and core is off-limits to it (core imports
+ * Node built-ins). core re-exports these for its own callers.
+ */
+export interface BackupFileInfo {
+  id: string;
+  tier: string;
+  name: string;
+  sizeBytes: number;
+  mtimeMs: number;
+}
+
+export interface BackupFileIndex {
+  files: BackupFileInfo[];
+  /** Pass back as `cursor`. Null when the listing is complete. */
+  nextCursor: string | null;
+  total: number;
+}
+
 export interface ServerStatus {
   id: string;
   /**

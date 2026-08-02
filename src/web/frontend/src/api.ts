@@ -79,6 +79,9 @@ export {
   ALL_SERVERS,
 } from "@mcbot/schema";
 export type { Capability, GrantableCapability } from "@mcbot/schema";
+// `export ... from` re-exports without binding locally, and MeResponse below
+// uses the name — so it needs a real import as well.
+import type { GrantableCapability } from "@mcbot/schema";
 
 // ── Dashboard-specific shapes (not in @mcbot/schema — web-only) ──
 export interface MeResponse {

@@ -23,7 +23,7 @@
     "start": "node --enable-source-maps src/bot/dist/index.js",
     "start:web": "node --enable-source-maps src/web/dist/backend/index.js",
     "dev": "tsc -b src/bot src/web --watch",
-    "typecheck": "tsc -b src/bot src/web",
+    "typecheck": "tsc -b src/bot src/web && npm run typecheck:frontend --workspace=@mcbot/web",
     "lint": "eslint src --max-warnings 0",
     "pm2:start": "pm2 start ecosystem.config.cjs --env production",
     "pm2:stop": "pm2 stop minecraft-bot",

@@ -81,6 +81,22 @@ project follows [Semantic Versioning](https://semver.org/).
   direct tests this code has had — it shipped inside the log watcher for a year
   with only integration coverage.
 
+- **`npm run typecheck` did not typecheck the frontend.** `tsc -b src/bot
+  src/web` builds the dashboard's *backend* project; the `.vue` files and
+  everything under `frontend/src` need `vue-tsc`, which only ran inside
+  `build:all`. So the command a developer runs before pushing reported green
+  while the dashboard build was broken — which is worse than having no command,
+  because it is trusted. `typecheck` now runs both, and a new
+  `typecheck:frontend` script in `@mcbot/web` exposes the frontend half on its
+  own.
+
+- **Backup DTOs were declared in `@mcbot/core` but re-exported from
+  `@mcbot/schema`.** `BackupFileInfo` and `BackupFileIndex` are read by the
+  browser, and the frontend cannot import core (core imports Node built-ins),
+  so a shape both sides read belongs in schema by definition. Declared in
+  `schema/contract.ts` beside `ServerStatus`; core re-exports them so its own
+  callers are unaffected.
+
 - **The cross-repo contract check scaffolded an incomplete suite layout.** Its
   fake server directory wrote five script files from a hard-coded list, so
   adding `rollback` to the shared action set left `capabilities.scripts.rollback`

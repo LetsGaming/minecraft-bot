@@ -3,7 +3,7 @@
     <ViewHeader title="Console" subtitle="Live server log, and a command line into it.">
       <template #actions>
         <span :class="['conn', connected ? 'up' : 'down']">
-          <StatusDot :state="connected ? 'online' : 'unknown'" />
+          <StatusDot :state="connected ? 'up' : 'down'" />
           {{ connected ? "Live" : statusDetail || "Disconnected" }}
         </span>
       </template>
