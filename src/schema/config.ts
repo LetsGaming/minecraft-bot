@@ -2,6 +2,7 @@
 
 import type { LeaderboardInterval } from "./stats.js";
 import type { NotificationEvent } from "./notifications.js";
+import type { CapabilityGrants } from "./capabilities.js";
 
 /**
  * The fields that configured local mode, removed in 5.0.0.
@@ -444,6 +445,40 @@ export interface WebUiConfig {
    * used to build the OAuth2 redirect URI. Default: http://localhost:<port>.
    */
   publicUrl?: string;
+  /**
+   * Host-side capability grants: Discord user ID → server id (or "*") →
+   * capabilities. Lets an operator delegate part of the host API without
+   * handing over `adminUsers`, which is all of it.
+   *
+   * ```jsonc
+   * "grants": {
+   *   "123456789012345678": { "survival": ["config:read", "config:write"] }
+   * }
+   * ```
+   *
+   * A user in the top-level `adminUsers` holds every capability already and
+   * needs no entry here. `bot:config` is not grantable: editing this file is
+   * sysadmin-only, which is also what stops a grantee escalating themselves.
+   * See schema/capabilities.ts.
+   */
+  grants?: CapabilityGrants;
+  /** Live console settings (see WebUiConsoleConfig). */
+  console?: WebUiConsoleConfig;
+}
+
+/** The dashboard's live console (DSH-01/DSH-02). */
+export interface WebUiConsoleConfig {
+  /**
+   * Commands refused by the console, matched on the first word after any
+   * leading slashes, case-insensitively — so one entry covers `stop`, `/stop`
+   * and `STOP`.
+   *
+   * Omit the key to use the defaults (`stop`, `op`, `deop`). An explicit empty
+   * array is not "use defaults", it is "block nothing": the console then
+   * accepts anything RCON does, which is a deliberate choice an operator can
+   * make and should have to make on purpose.
+   */
+  blockedCommands?: string[];
 }
 
 /** Daily GitHub-release check. Enabled by default; opt out here. */

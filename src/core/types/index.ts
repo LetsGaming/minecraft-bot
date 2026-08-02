@@ -125,6 +125,8 @@ export type {
 export type {
   BackupDirInfo,
   BackupSummary,
+  BackupFileInfo,
+  BackupFileIndex,
   ScriptResult,
 } from "./minecraft/backup.js";
 

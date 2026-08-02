@@ -3,7 +3,10 @@ import { errorMessage } from "../utils/errorMessage";
 import { useToast } from "primevue/usetoast";
 import { useConfirm } from "primevue/useconfirm";
 import { apiGet, apiSend } from "../api";
-import { isDisruptiveServerAction } from "@mcbot/schema/serverActions.js";
+import {
+  isDisruptiveServerAction,
+  isIrreversibleServerAction,
+} from "@mcbot/schema/serverActions.js";
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
@@ -24,8 +27,40 @@ export function useServerActions(refresh: () => Promise<unknown>) {
   const logServer = ref("");
   const logLines = ref<string[]>([]);
 
+  /**
+   * Confirm an action the operator cannot take back.
+   *
+   * A separate dialog rather than the disruptive one with harsher wording:
+   * clicking OK is a reflex, and the point of this one is to interrupt the
+   * reflex. Typing the server's name is the smallest thing that cannot be
+   * done by accident. A rollback replaces the world; "restart" is a question
+   * you can answer wrong and recover from, this is not.
+   */
+  async function confirmIrreversible(
+    serverId: string,
+    action: string,
+  ): Promise<boolean> {
+    const typed = window.prompt(
+      `This will ${action} "${serverId}" and cannot be undone.\n\n` +
+        `Type the server name to confirm:`,
+    );
+    if (typed === null) return false;
+    if (typed.trim() !== serverId) {
+      toast.add({
+        severity: "warn",
+        summary: `${capitalize(action)} cancelled`,
+        detail: "The name did not match.",
+        life: 3000,
+      });
+      return false;
+    }
+    return true;
+  }
+
   async function runAction(serverId: string, action: string): Promise<void> {
-    if (isDisruptiveServerAction(action)) {
+    if (isIrreversibleServerAction(action)) {
+      if (!(await confirmIrreversible(serverId, action))) return;
+    } else if (isDisruptiveServerAction(action)) {
       const ok = await new Promise<boolean>((resolve) => {
         confirm.require({
           message: `Really ${action} "${serverId}"?`,

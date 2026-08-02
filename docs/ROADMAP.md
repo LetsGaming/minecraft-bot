@@ -1,12 +1,12 @@
 # Roadmap
 
-Last updated: July 2026, written against **v3.6.0** — the release that
-shipped this roadmap.
+Last updated: August 2026, against **v5.1.0**.
 
-Everything that was "committed", "planned", or listed as a sized idea in
-the previous revision of this document landed in 3.6.0 (see
-CHANGELOG.md). This revision records what shipped, the one item that was
-deliberately deferred, and the state going forward.
+This revision folds in two releases the document had fallen behind on:
+5.0.0 (remote-only, `minecraft-server-api` becomes the single path to a
+host) and 5.1.0 (the dashboard absorbs the standalone server-manager
+panel). Items from the 3.6.0 revision are kept below where they are still
+open.
 
 ## The short version
 
@@ -22,7 +22,13 @@ deliberately deferred, and the state going forward.
 | Operator ideas (scheduled restarts, console access, moderation shortcuts, player-count history, backup staleness, update notifier, per-server reward pools, configurable limits, alert role mentions) | ✅ shipped in 3.6.0 |
 | Maintenance (e2e nightly, i18n check, engines, wrapper handshake) | ✅ shipped in 3.6.0 |
 | Web dashboard, phase 4 (public status/leaderboard pages) | open — only if there is demand |
+| Replacing the retired panel's public status page | ✅ decided in 5.1.0: no |
 | Cross-server network chat | deliberately deferred (see below) |
+| Remote-only: drop RCON/screen/local file access | ✅ shipped in 5.0.0 |
+| Dashboard live updates (SSE) | ✅ shipped in 5.1.0 as the live console |
+| Per-capability dashboard access | ✅ shipped in 5.1.0 |
+| Retire minecraft-server-manager | ✅ shipped in 5.1.0 |
+| Mod config editor | open — sized below |
 
 ## Where things stand
 
@@ -38,11 +44,32 @@ metrics). Process-wise the repo now has a CHANGELOG, tag-driven
 releases with a GHCR image, a locale-parity CI gate, and a nightly RCON
 e2e smoke against a real Paper server.
 
-Layout note for anyone returning after 3.5.x: the source split into
-`bot/` / `packages/core` / `web-ui/` npm workspaces (ESLint- and dependency-tree-enforced boundaries) so the
-dashboard runs as its own process — see
+Layout note for anyone returning after 3.5.x: the source split into npm
+workspaces with ESLint- and dependency-tree-enforced boundaries so the dashboard
+runs as its own process. Since 5.0.0 they live under `src/` as `src/bot`,
+`src/core`, `src/schema` and `src/web` — see
 [dev/architecture.md](dev/architecture.md) and
 [dev/decisions.md](dev/decisions.md).
+
+## What 5.x changed
+
+**5.0.0** removed every local path to a Minecraft server. RCON, `screen`,
+`sudo` and local file tailing are gone; the companion
+`minecraft-server-api` wrapper is the only way in. The motivation was that
+every feature written twice — once local, once remote — had drifted, and
+the drift shipped as bugs.
+
+**5.1.0** applied the same argument one layer out. The standalone
+`minecraft-server-manager` panel ran on the Minecraft host and duplicated
+the wrapper: its own RCON client, its own script runner, its own instance
+registry. Its whole feature set now lives in the dashboard, reached through
+the wrapper like everything else. See
+[admin/retiring-server-manager.md](admin/retiring-server-manager.md).
+
+That work also replaced the dashboard's single sysadmin gate with per-route
+capabilities, because the panel's features (console, backup download,
+restore, rollback) made "one grant for everything host-side" untenable. See
+[admin/capabilities.md](admin/capabilities.md).
 
 ## Deliberately deferred
 
@@ -58,10 +85,25 @@ dashboard runs as its own process — see
 ## Open, uncommitted
 
 - **Dashboard phase 4** — public (login-free) status and leaderboard
-  pages. Everything else stays admin-only. Only if there is demand.
-- **Dashboard live updates** — the status view polls every 15 s; an SSE
-  channel from the backend would make it feel live and could also carry
-  the log tail. Small, purely additive.
+  pages. Everything else stays admin-only. Only if there is demand, and
+  5.1.0 did not create any: the retired panel's login-free status page was
+  looked at and dropped rather than replaced, so this stays exactly the
+  open idea it has always been. If it is ever built it should be designed
+  as a public page, not reconstructed from what the panel exposed.
+- **Mod config editor** — browse and edit mod config files from the
+  dashboard, for people who cannot SSH. The interesting half is that
+  Forge/NeoForge TOML files document themselves in comments (`Range:`,
+  `Allowed Values:`, `Default:`), so a schema can be derived and fed to the
+  existing renderer; Fabric JSON and plugin YAML fall back to inferred
+  types. Non-trivial: needs a format-preserving writer (parse-and-reserialize
+  destroys the comments that *are* the documentation), a wrapper file API
+  with the same opaque-handle addressing the backup routes use, and
+  snapshots before every write. Ship read-only first.
+- **A local break-glass login** — the retired panel had one; the dashboard
+  is Discord-OAuth2 only. Deliberately not rebuilt, on the grounds that SSH
+  plus the wrapper API key already covers it
+  ([admin/emergency-access.md](admin/emergency-access.md)). Revisit if that
+  runbook turns out to be needed more than about once a year.
 - **Whitelist-application niceties** — an application history view for
   admins (the store already keeps decided applications) and optional
   auto-role on approval.

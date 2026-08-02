@@ -92,6 +92,7 @@ Everything is indexed in [`docs/readme.md`](docs/readme.md).
 | Players | [Getting started](docs/user/getting-started.md), [commands](docs/user/commands.md), [linking](docs/user/linking.md) |
 | Admins | [Setup](docs/admin/setup.md), [configuration](docs/admin/configuration.md), [permissions](docs/admin/permissions.md), [automated features](docs/admin/automated-features.md) |
 | Deploying | [Docker](docs/admin/docker.md), [API wrapper](docs/admin/remote-setup.md), [upgrading from 4.x](docs/admin/migrating-to-5.md) |
+| Dashboard | [Access and grants](docs/admin/capabilities.md), [emergency access](docs/admin/emergency-access.md), [retiring the old panel](docs/admin/retiring-server-manager.md) |
 | Contributors | [Developer docs](docs/dev/readme.md) — [architecture](docs/dev/architecture.md), [adding features](docs/dev/adding-features.md), [coding guidelines](docs/dev/coding-guidelines.md), [testing](docs/dev/testing.md) |
 | Reference | [Full feature list](docs/features.md), [roadmap](docs/ROADMAP.md) |
 

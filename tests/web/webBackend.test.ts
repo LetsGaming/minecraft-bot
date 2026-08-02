@@ -299,7 +299,8 @@ describe("web routes", () => {
     const me = await app.inject({ method: "GET", url: "/api/me", headers: { cookie: stranger } });
     expect(me.statusCode).toBe(200);
     expect(me.json().sysadmin).toBe(false);
-    // But server status and the full config are sysadmin-only → 403, not 401.
+    // But host-side data needs a capability → 403, not 401. A user with no
+    // grants holds none of them, which is what a plain Discord login is.
     expect(
       (await app.inject({ method: "GET", url: "/api/status", headers: { cookie: stranger } })).statusCode,
     ).toBe(403);

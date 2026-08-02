@@ -11,6 +11,7 @@ export const SERVER_SCRIPT_ACTIONS = [
   "start",
   "stop",
   "restart",
+  "rollback",
   "backup",
   "status",
 ] as const;
@@ -26,6 +27,7 @@ export const SERVER_OPERATOR_ACTIONS = [
   "start",
   "stop",
   "restart",
+  "rollback",
   "backup",
 ] as const satisfies readonly ServerScriptAction[];
 
@@ -48,7 +50,26 @@ export function isServerOperatorAction(
 export const DISRUPTIVE_SERVER_ACTIONS = [
   "stop",
   "restart",
+  "rollback",
 ] as const satisfies readonly ServerOperatorAction[];
+
+/**
+ * Actions that cannot be undone, so the confirm has to be more than an OK
+ * button: both front-ends make the operator type the server's name.
+ *
+ * A rollback replaces the world from the suite's snapshot. "Restart" asks a
+ * question the operator can answer wrong and recover from; this one they
+ * cannot, so the two get different dialogs rather than the same one with
+ * scarier wording.
+ */
+export const IRREVERSIBLE_SERVER_ACTIONS = [
+  "rollback",
+] as const satisfies readonly ServerOperatorAction[];
+
+/** Does this action destroy state that cannot be recovered from the UI? */
+export function isIrreversibleServerAction(value: string): boolean {
+  return (IRREVERSIBLE_SERVER_ACTIONS as readonly string[]).includes(value);
+}
 
 /** Does this action interrupt players, warranting a confirm step? */
 export function isDisruptiveServerAction(value: string): boolean {

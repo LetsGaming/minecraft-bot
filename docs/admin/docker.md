@@ -9,7 +9,7 @@ One thing to understand up front: the container cannot reach `screen` sessions o
 Every release publishes an image to GitHub Container Registry:
 
 ```bash
-docker pull ghcr.io/letsgaming/minecraft-bot:latest   # or a version tag like v3.6.0
+docker pull ghcr.io/letsgaming/minecraft-bot:latest   # or a version tag like v5.1.0
 ```
 
 Building locally (below) remains fully supported and is what the compose files default to.

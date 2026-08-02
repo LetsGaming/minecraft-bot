@@ -640,10 +640,60 @@
         "publicUrl": {
           "type": "string",
           "description": "Public base URL of the dashboard (e.g. \"https://panel.example.com\") used to build the OAuth2 redirect URI. Default: http://localhost:<port>."
+        },
+        "grants": {
+          "$ref": "#/definitions/CapabilityGrants",
+          "description": "Host-side capability grants: Discord user ID → server id (or \"*\") → capabilities. Lets an operator delegate part of the host API without handing over `adminUsers`, which is all of it.\n\n```jsonc \"grants\": {   \"123456789012345678\": { \"survival\": [\"config:read\", \"config:write\"] } } ```\n\nA user in the top-level `adminUsers` holds every capability already and needs no entry here. `bot:config` is not grantable: editing this file is sysadmin-only, which is also what stops a grantee escalating themselves. See schema/capabilities.ts."
+        },
+        "console": {
+          "$ref": "#/definitions/WebUiConsoleConfig",
+          "description": "Live console settings (see WebUiConsoleConfig)."
         }
       },
       "additionalProperties": false,
       "description": "Web dashboard (separate process, `npm run start:web`). Off by default. Secrets come from the environment, never from this file: WEBUI_CLIENT_SECRET (Discord OAuth2) and WEBUI_SESSION_SECRET (cookie signing)."
+    },
+    "CapabilityGrants": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/GrantableCapability"
+          }
+        }
+      },
+      "description": "Grants, as stored under `webui.grants` in config.json.\n\nShape: Discord user ID → server id (or `\"*\"`) → capabilities.\n\n```jsonc {   \"123456789012345678\": { \"survival\": [\"config:read\", \"config:write\"] },   \"234567890123456789\": { \"*\": [\"server:read\", \"server:control\"] } } ```\n\nGrants live in config.json rather than the database so they inherit the \"config.json is the shared source of truth\" contract: the fs watcher picks a change up live, and the schema-driven editor renders them for free. Editing them therefore needs `bot:config`, so only a sysadmin can escalate anyone, including themselves. That self-reference is intended."
+    },
+    "GrantableCapability": {
+      "type": "string",
+      "enum": [
+        "server:read",
+        "audit:read",
+        "server:control",
+        "backup:create",
+        "config:read",
+        "server:console",
+        "backup:download",
+        "config:write",
+        "backup:restore",
+        "server:rollback"
+      ]
+    },
+    "WebUiConsoleConfig": {
+      "type": "object",
+      "properties": {
+        "blockedCommands": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Commands refused by the console, matched on the first word after any leading slashes, case-insensitively — so one entry covers `stop`, `/stop` and `STOP`.\n\nOmit the key to use the defaults (`stop`, `op`, `deop`). An explicit empty array is not \"use defaults\", it is \"block nothing\": the console then accepts anything RCON does, which is a deliberate choice an operator can make and should have to make on purpose."
+        }
+      },
+      "additionalProperties": false,
+      "description": "The dashboard's live console (DSH-01/DSH-02)."
     }
   }
 }

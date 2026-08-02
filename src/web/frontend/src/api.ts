@@ -52,6 +52,8 @@ export function apiSend<T>(
 // ── Shapes shared with the backend (@mcbot/schema — one definition,
 // both sides import it, drift is impossible) ──
 export type {
+  BackupFileInfo,
+  BackupFileIndex,
   ServerStatus,
   StatusResponse,
   AuditEntry,
@@ -68,12 +70,28 @@ export type {
 // line carries both.
 export { ServerState, RconState, WrapperState, HealthSource } from "@mcbot/schema";
 
+// The capability contract, as values: the views decide what to render from
+// the caller's grants, and comparing against string literals per component is
+// exactly how the set would drift from the backend's.
+export {
+  GRANTABLE_CAPABILITIES,
+  IRREVERSIBLE_CAPABILITIES,
+  ALL_SERVERS,
+} from "@mcbot/schema";
+export type { Capability, GrantableCapability } from "@mcbot/schema";
+
 // ── Dashboard-specific shapes (not in @mcbot/schema — web-only) ──
 export interface MeResponse {
   uid: string;
   tag: string;
   sysadmin: boolean;
   guildCount: number;
+  /**
+   * What the caller may do, keyed by server id plus "*" for fleet-wide
+   * grants. A sysadmin gets every capability on every server, so the views
+   * need no separate branch for them.
+   */
+  capabilities: Record<string, GrantableCapability[]>;
 }
 export interface InviteResponse {
   url: string;

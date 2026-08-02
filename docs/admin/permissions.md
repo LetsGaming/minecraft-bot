@@ -39,7 +39,7 @@ A non-admin running any of these gets a clean "You do not have permission to use
 
 In addition, every user is rate-limited to 5 slash commands per 30 seconds to protect the RCON connection from spam, and the Discord→Minecraft chat bridge has its own per-user limit (bursts of up to 8 messages per 10 seconds; messages beyond that get a ⏳ reaction instead of reaching the game).
 
-## The new admin commands (3.6.0)
+## Admin commands
 
 | Command | What it does |
 |---|---|
@@ -57,7 +57,15 @@ Any command can be gated behind the admin check via command settings — globall
 
 ### Dashboard access
 
-The web dashboard logs in via Discord OAuth2 and admits only **user-ID entries** of the global `adminUsers` and each guild's `adminUsers`. Role entries cannot be resolved there (that would require guild member lookups) — roles remain a Discord-side permission. Removing a user ID from the lists locks them out of the dashboard immediately (sessions are re-checked per request).
+The web dashboard logs in via Discord OAuth2. Who gets what depends on which of three things you are:
+
+- **A user ID in the global `adminUsers`** — a sysadmin. Every capability on every server, plus `config.json`.
+- **Someone with Manage Guild on a guild the bot is in** — the guild-manager side. You can edit that guild's config block and nothing else. You never see the Minecraft host.
+- **Someone listed in `webui.grants`** — exactly the capabilities granted to you, per server. This is how you hand out part of the host API without handing over all of it. See [capabilities.md](capabilities.md).
+
+Role entries cannot be resolved for dashboard login (that would require guild member lookups), so roles remain a Discord-side permission. Removing a user ID from `adminUsers` or from `webui.grants` locks them out immediately: both are re-read on every request, so revoking applies on the next click rather than at the next login.
+
+Per-guild `adminUsers` are a Discord-command concept and grant nothing on the host side of the dashboard.
 
 ## Whitelist management
 

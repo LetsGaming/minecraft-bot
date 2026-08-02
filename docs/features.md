@@ -127,8 +127,14 @@ such as Chunkbase links, nether-portal coordinate math, and more. See
 
 Optional and running as its own process, the dashboard provides:
 
-- Discord OAuth2 admin login, restricted to the configured admin users.
-- Live server status and operations (start/stop/restart/backup, log tail).
+- Discord OAuth2 login. Sysadmins get everything; anyone else gets exactly the
+  capabilities granted to them, per server, so mod-config access can be handed
+  out without handing over the console or the config file.
+- Live server status and operations (start, stop, restart, backup, rollback,
+  log tail).
+- A live console: the server's log streamed as it happens, with a command line
+  into it and a configurable deny-list.
+- Backups: every archive listed, downloadable, and restorable.
 - A schema-driven config editor with server-side validation and optimistic
   concurrency, so two editors cannot silently overwrite each other.
 - A per-command policy view for enabling, disabling, or gating commands per

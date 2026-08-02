@@ -49,6 +49,22 @@ export interface ServerStatus {
     sampled: boolean;
   };
   tps: number | null;
+  /**
+   * What this server's wrapper advertises it can do.
+   *
+   * The UI gates on this rather than on the dashboard's own version: a
+   * Restore button should appear because the wrapper said restore exists, not
+   * because this build knows the feature. Null when the wrapper did not
+   * answer, in which case the UI shows no controls it cannot honour.
+   */
+  features: {
+    /** The suite scripts this instance actually has. */
+    scripts: Record<string, boolean>;
+    /** backup/restore.sh exists (wrapper >= 3.3.0). */
+    restore: boolean;
+    /** The wrapper serves the archive index and download (>= 3.3.0). */
+    backupFiles: boolean;
+  } | null;
   host: {
     /** The Minecraft process. cpuPercent is sampled and can exceed 100. */
     process: { rssBytes: number; cpuPercent: number } | null;

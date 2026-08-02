@@ -7,7 +7,8 @@
  * Registered in the requireSession scope in server.ts. On top of that base
  * login gate, the per-guild routes check canManageGuild, and the guild
  * LIST is filtered to what the caller may manage — so a guild manager only
- * ever sees and reads their own guilds. The server list is sysadmin-only.
+ * ever sees and reads their own guilds. The Minecraft server list is filtered
+ * to the caller's host capabilities, so a guild manager sees none of it.
  *
  * A failed Discord read becomes a typed HTTP failure via discordHttpError
  * (which switches on the DiscordApiError discriminator, QUAL-11) and is
@@ -23,6 +24,7 @@ import {
   discordHttpError,
 } from "../auth/discordRest.js";
 import { sessionFromRequest, isSysadmin, canManageGuild } from "../auth/auth.js";
+import { visibleServerIds } from "../auth/capabilities.js";
 import { Forbidden } from "../errors.js";
 import { IdParams } from "./schemas.js";
 
@@ -81,14 +83,24 @@ export function registerSetupRoutes(app: FastifyInstance): void {
   );
 
   // The Minecraft server names, for the wizard's "default server" picker.
-  // Sysadmin-only: a guild manager should get no information about the
-  // Minecraft servers, so managers simply don't see this picker.
+  //
+  // Filtered to what the caller may read, not gated on sysadmin. It was
+  // sysadmin-only because that used to be the only way to have any host-side
+  // access at all; with capability grants (RBAC-01) that would mean someone
+  // who can see a server in /api/status gets a 403 asking for its name here,
+  // which is an inconsistency rather than a protection. A caller with no host
+  // capabilities still gets an empty list, which is the old behaviour for
+  // everyone it was actually protecting against.
   api.get("/api/setup/servers", async (req) => {
     const session = sessionFromRequest(req)!;
-    if (!isSysadmin(session)) {
-      throw new Forbidden("Sysadmin access required — this needs a bot super-admin.");
-    }
     const cfg = readRawConfig();
-    return { servers: Object.keys(cfg.servers ?? {}) };
+    const servers = visibleServerIds(session, Object.keys(cfg.servers ?? {}));
+    // Still a 403 for a caller with no host access at all, rather than an
+    // empty 200. "You have no business here" and "there is nothing here" are
+    // different answers, and a guild manager should get the first one.
+    if (servers.length === 0 && !isSysadmin(session)) {
+      throw new Forbidden("You don't have access to any servers.");
+    }
+    return { servers };
   });
 }

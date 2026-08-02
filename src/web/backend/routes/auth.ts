@@ -12,7 +12,7 @@
  */
 import type { FastifyInstance } from "fastify";
 import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
-import { loadConfig } from "@mcbot/core/config.js";
+import { loadConfig, getServerIds } from "@mcbot/core/config.js";
 import {
   buildAuthorizeUrl,
   verifyState,
@@ -22,6 +22,7 @@ import {
   setSessionCookie,
   clearSessionCookie,
 } from "../auth/auth.js";
+import { capabilityMap } from "../auth/capabilities.js";
 import { listBotGuilds } from "../auth/discordRest.js";
 import { Unauthorized } from "../errors.js";
 import { OAuthCallbackQuery } from "./schemas.js";
@@ -90,11 +91,18 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     // The frontend uses `sysadmin` to decide which tabs to show, and
     // `guildCount` to tell a guild manager whether they have anything to
     // configure at all.
+    //
+    // `capabilities` is what a non-sysadmin renders from (DSH-05): the views
+    // decide what to show from this map rather than probing for 403s, so
+    // someone holding only config:read/config:write on one server never sees a
+    // Servers tab whose every button fails on click. Keyed by server id, plus
+    // "*" for the fleet-wide grants.
     return {
       uid: session.uid,
       tag: session.tag,
       sysadmin: isSysadmin(session),
       guildCount: session.guilds.length,
+      capabilities: capabilityMap(session, getServerIds()),
     };
   });
 

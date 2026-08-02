@@ -13,7 +13,9 @@ a framework would be more surface than solution.
 | `errors.ts` | Typed HTTP failures and the single error handler |
 | `rateLimit.ts`, `static.ts`, `requiredEnv.ts` | The rest of the app plumbing `server.ts` wires |
 | `auth/auth.ts` | Sessions, OAuth, roles, `secretEquals` |
+| `auth/capabilities.ts` | The host-scope gate, the boot assertion, capability resolution |
 | `auth/discordRest.ts` | The Discord REST client |
+| `console/consoleHub.ts` | One wrapper log stream per server, fanned out to viewers |
 | `config/safeConfig.ts` | Masking secrets out, merging placeholders back in |
 | `config/configSchema.ts` | The generated schema the config editor renders |
 | `status/status.ts` | Collecting server status (the same core layer the bot uses) |
@@ -70,6 +72,53 @@ it:
 - Roles are **re-derived from config on every request**, so removing a sysadmin
   takes effect immediately rather than at the next login.
 - Cookies are `HttpOnly` + `SameSite=Lax`, and `Secure` in production.
+
+### Authorization is per route
+
+`auth.ts` answers *who is this*. `auth/capabilities.ts` answers *may they do
+this*, and it does so per route rather than per scope:
+
+```ts
+api.post("/api/servers/:id/command", {
+  schema: { params: IdParams, body: ConsoleCommandBody },
+  config: { capability: "server:console", scope: "server", param: "id" },
+}, handler);
+```
+
+One `onRequest` hook on the host scope reads that `config` and enforces it. Three
+things about it are load-bearing:
+
+- **`scope` has no default.** `server` checks that server's grants plus the
+  wildcard block; `global` checks the wildcard block only; `any` lets a
+  per-server grantee through so the *handler* can filter a collection. Inferring
+  it is how a fleet-wide route quietly accepts a single-server grant.
+- **`any` obliges the handler to filter.** Use `visibleServerIds` and send only
+  what the caller may display. Hiding rows client-side is not filtering.
+- **A route with no rule will not boot.** `assertCapabilitiesDeclared` is an
+  `onRoute` hook registered inside the host scope; it throws during
+  `buildServer()` for a missing capability, an unknown one, a missing `scope`,
+  or a `server` scope naming a param the path does not contain.
+
+Adding a host route therefore means picking a capability. If none of the
+existing ones fit, that is a signal to add one to
+`@mcbot/schema/capabilities.ts` — and to regenerate `config.schema.json`, since
+the grants editor renders from it.
+
+The full rationale, including what this does *not* protect against, is in
+[readme.md](readme.md#capabilities).
+
+### Streaming responses
+
+Two routes hand the client a stream rather than a body: the console SSE relay
+(`routes/console.ts`) and backup downloads (`routes/backups.ts`).
+
+Both exist because the wrapper's API key must never reach a browser, so the
+dashboard proxies. For downloads that means a multi-gigabyte archive passes
+through this process, and it must do so in constant memory: pipe
+`Readable.fromWeb(upstream.body)` and forward `Content-Length`, `Content-Range`
+and `Accept-Ranges`. Never `arrayBuffer()`. There is a test asserting the reply
+receives a `Readable` and not a Buffer, because a small fixture passes either
+way and the difference only shows up on a real world.
 
 Which gate a route needs is in [readme.md](readme.md#the-two-apis). Get that
 decision right before writing the handler.

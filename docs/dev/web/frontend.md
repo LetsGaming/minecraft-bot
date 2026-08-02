@@ -7,7 +7,8 @@ lives in a component or on the server.
 ```
 src/web/frontend/src/
 ├── api.ts          apiGet / apiSend / handle<T> — every request goes through here
-├── views/          One per route: Overview, Status, Config, Guilds, Commands, Audit
+├── views/          One per tab: Overview, Status, Console, Backups, Guilds,
+│                   Commands, Config, Audit
 ├── components/
 │   ├── schema/     The config editor's field renderer (SchemaField and friends)
 │   ├── ui/         Presentational primitives: EmptyState, StatusDot, ViewHeader…
@@ -47,6 +48,54 @@ in that package and this build breaks.
 `useServerActions` importing `isDisruptiveServerAction` from schema is the
 pattern. The confirm dialog and the bot's confirm prompt then cannot disagree
 about which actions are worth confirming, because there is one list.
+
+The same applies to `isBlockedConsoleCommand`, which the console composable uses
+to grey out a command before sending it. The backend enforces the deny-list with
+that identical function, so the UI cannot promise something the backend refuses,
+or the reverse.
+
+## Render from capabilities, never from 403s
+
+`useCapabilities` holds what the signed-in user may do, populated once from
+`/api/me`. Views decide what to show from it.
+
+The rule is that a control the caller cannot use should not be drawn, rather
+than drawn and failing on click. Someone holding only `config:read` and
+`config:write` on one server should see the config editor for that server and no
+Servers tab at all — not six tabs that all 403.
+
+Two shapes to keep straight:
+
+- `can(capability, serverId)` mirrors the backend's lookup exactly, including
+  the strict case: with no `serverId` it asks about the fleet-wide grant only.
+- `canAnywhere(capability)` is for tab visibility, where the question is whether
+  there is any server worth showing the tab for.
+
+This is presentation, not enforcement. The gate is the backend's `onRequest`
+hook; nothing here is a security boundary.
+
+Gate on the **wrapper's** advertised features too, not on this build's version.
+`ServerStatus.features` carries what each server's wrapper says it can do, so a
+suite without `rollback.sh` shows no Rollback button and a wrapper too old for
+the backup index hides the Backups tab. A hidden tab is better than one that
+errors when opened.
+
+## Long-lived streams
+
+`useConsole` is the only composable that holds an `EventSource`. Two things
+about it generalise:
+
+- It is **per-view state, not a module singleton**. Two people can reasonably
+  watch two different servers, and a shared instance would make the second
+  hijack the first. Contrast `useGuilds`, which caches a fetch every view wants
+  the same answer from.
+- It caps what it keeps. The console holds a ring buffer of ~2000 lines; without
+  that, a busy modded server turns every log line into a DOM node and the tab
+  becomes unusable over lunch.
+
+No ticket or token is needed: `EventSource` sends the session cookie on a
+same-origin request, which is why the stream authenticates the same way every
+other call does.
 
 ## Styling
 

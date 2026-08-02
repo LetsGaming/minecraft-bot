@@ -107,7 +107,7 @@
           <div class="card-foot">
             <div class="ops">
               <Button
-                v-for="action in actions"
+                v-for="action in actionsFor(server)"
                 :key="action"
                 :label="capitalize(action)"
                 :icon="actionIcon(action)"
@@ -119,6 +119,7 @@
               />
             </div>
             <Button
+              v-if="can('server:read', server.id)"
               :label="logServer === server.id ? 'Hide log' : 'View log'"
               icon="pi pi-align-left"
               size="small"
@@ -152,8 +153,11 @@ import {
   stateExplanation,
   wrapperNote,
 } from "../utils/format";
+import { SERVER_OPERATOR_ACTIONS } from "@mcbot/schema/serverActions.js";
+import type { ServerStatus } from "../api";
 import { useServerStatus } from "../composables/useServerStatus";
 import { useServerActions } from "../composables/useServerActions";
+import { useCapabilities } from "../composables/useCapabilities";
 import ViewHeader from "../components/ui/ViewHeader.vue";
 import StatusDot from "../components/ui/StatusDot.vue";
 import EmptyState from "../components/ui/EmptyState.vue";
@@ -183,17 +187,36 @@ export default defineComponent({
     }
 
     const { busy, logServer, logLines, runAction, toggleLog } = useServerActions(refresh);
+    const { can } = useCapabilities();
+
+    /**
+     * The operator actions this user may run on THIS server.
+     *
+     * Rendered from the shared action set rather than a local literal copy,
+     * and filtered per server because a grant is per server: someone may
+     * restart smp and only read creative.
+     */
+    function actionsFor(server: ServerStatus): readonly string[] {
+      if (!can("server:control", server.id)) return [];
+      // Gated on what the wrapper advertised, not on this build's version: a
+      // suite without rollback.sh should not offer a Rollback button that
+      // 409s. A wrapper too old to report features gets the full set, which
+      // is the behaviour that shipped before capabilities existed.
+      const scripts = server.features?.scripts;
+      if (!scripts) return SERVER_OPERATOR_ACTIONS;
+      return SERVER_OPERATOR_ACTIONS.filter((a) => scripts[a] !== false);
+    }
 
     return {
       servers, refreshing: loading, refresh,
       busy, logServer, logLines, runAction, toggleLog,
+      can, actionsFor,
       formatBytes, diskLabel, tpsSeverity,
       statusDot, stateLabel, stateSeverity, stateExplanation, wrapperNote,
     };
   },
   data() {
     return {
-      actions: ["start", "stop", "restart", "backup"] as const,
       timer: 0 as ReturnType<typeof setInterval> | 0,
     };
   },

@@ -30,6 +30,13 @@ export * from "./discord.js";
 // the two had drifting copies before.
 export * from "./format.js";
 export * from "./serverActions.js";
+// Runtime values (the capability contract), shared by the dashboard's route
+// declarations, its authorization gate, and the frontend that renders from
+// /api/me — one definition rather than three sets of literals.
+export * from "./capabilities.js";
+// Runtime values (the console deny-list contract), so the route that enforces
+// it and the editor that greys a command out share one matching rule.
+export * from "./consoleCommands.js";
 // Runtime values (the ServerState / RconState contract), shared by the bot's
 // status paths, the web backend, and the Vue frontend — a value re-export so
 // all three switch on one definition rather than three sets of literals.

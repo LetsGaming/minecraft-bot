@@ -22,6 +22,7 @@ import {
   type WrapperManifest,
 } from "./wrapperContract.js";
 import { log } from "../logger.js";
+import { SseLineStream } from "../sseLineStream.js";
 import { isRecord } from "../objects.js";
 import {
   HealthSource,
@@ -41,6 +42,7 @@ import type {
   WhitelistEntry,
   MinecraftStatsFile,
   BackupSummary,
+  BackupFileIndex,
   ScriptResult,
   ServerCapabilities,
   TpsResult,
@@ -804,6 +806,84 @@ export async function readBackups(cfg: ServerConfig): Promise<BackupSummary> {
   };
 }
 
+/**
+ * One page of the archive index (wrapper >= 3.3.0).
+ *
+ * The `id` on each entry is an opaque handle. It is the only file reference
+ * this client ever sends back, and the wrapper resolves it against a listing
+ * it builds itself — so no caller, here or in the browser, is ever in a
+ * position to name a path.
+ */
+export async function indexBackupFiles(
+  cfg: ServerConfig,
+  opts: { cursor?: string; limit?: number } = {},
+): Promise<BackupFileIndex> {
+  const params = new URLSearchParams();
+  if (opts.cursor) params.set("cursor", opts.cursor);
+  if (opts.limit !== undefined) params.set("limit", String(opts.limit));
+  const query = params.toString();
+  return apiGet<BackupFileIndex>(
+    cfg,
+    `/backups/files${query ? `?${query}` : ""}`,
+  );
+}
+
+/**
+ * Open a backup download and hand back the live response.
+ *
+ * Deliberately NOT `apiGet`: that decodes JSON into memory, and these
+ * archives are measured in gigabytes. The caller gets the Response with its
+ * body still unread so it can pipe it straight through; buffering here would
+ * take the dashboard process down on the first big world.
+ *
+ * `range` is forwarded verbatim so a browser's resume request reaches the
+ * wrapper intact, and there is no timeout: a multi-gigabyte transfer is
+ * legitimately slower than any figure that would make sense as a ceiling.
+ */
+export async function openBackupDownload(
+  cfg: ServerConfig,
+  fileId: string,
+  range?: string,
+): Promise<Response> {
+  const headers: Record<string, string> = {};
+  if (cfg.apiKey) headers["x-api-key"] = cfg.apiKey;
+  if (range) headers["range"] = range;
+  return fetch(
+    instanceUrl(cfg, `/backups/files/${encodeURIComponent(fileId)}/download`),
+    { headers },
+  );
+}
+
+/**
+ * Restore the world from one archive.
+ *
+ * Its own wrapper route rather than a script action, because the path it
+ * needs cannot be a script argument (the wrapper's arg validator forbids "/"
+ * so a client can never hand a path to a spawned shell). The wrapper resolves
+ * the id to a path itself.
+ *
+ * The timeout is the wrapper's, not ours: a restore unpacks a whole world,
+ * and giving up on this side while the script keeps running would report a
+ * failure that is actually still in progress.
+ */
+export async function restoreBackupFile(
+  cfg: ServerConfig,
+  fileId: string,
+): Promise<ScriptResult> {
+  const url = instanceUrl(
+    cfg,
+    `/backups/files/${encodeURIComponent(fileId)}/restore`,
+  );
+  const headers: Record<string, string> = {};
+  if (cfg.apiKey) headers["x-api-key"] = cfg.apiKey;
+  const res = await fetch(url, { method: "POST", headers });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`API POST /backups/restore → ${res.status}: ${text}`);
+  }
+  return res.json() as Promise<ScriptResult>;
+}
+
 // ── Capability detection ───────────────────────────────────────────
 
 /**
@@ -843,11 +923,57 @@ export async function runScript(
   return apiPost<ScriptResult>(cfg, "/scripts/run", { action, args });
 }
 
-// ── Log streaming (SSE URL, used by RemoteLogWatcher) ────────────────────
+// ── Log streaming (SSE, used by the bot's watcher and the dashboard) ──────
 
 /** Returns the SSE endpoint URL for a remote instance's log stream. */
 export function logStreamUrl(cfg: ServerConfig): string {
   if (!cfg.apiUrl)
     throw new Error(`logStreamUrl called on local instance '${cfg.id}'`);
   return `${cfg.apiUrl.replace(/\/$/, "")}/instances/${cfg.id}/logs/stream`;
+}
+
+/** What a caller of openLogStream cares about. */
+export interface LogStreamHandlers {
+  /** One log line, already unwrapped from its SSE frame. */
+  onLine: (line: string) => void;
+  onConnect?: () => void;
+  onDisconnect?: (reason: string) => void;
+}
+
+/**
+ * Open the wrapper's log stream for one instance.
+ *
+ * This is the only place that knows the wrapper sends `{"line": "..."}` in
+ * each `data:` frame, and the only place that attaches the API key to a
+ * stream. `SseLineStream` underneath is pure transport and knows neither —
+ * the split is what lets the transport be tested without a wrapper and keeps
+ * the wrapper's payload contract in the module that owns every other route.
+ *
+ * The returned stream is NOT started; call `.start()`. Callers own the
+ * lifetime and must `.stop()` it.
+ */
+export function openLogStream(
+  cfg: ServerConfig,
+  handlers: LogStreamHandlers,
+): SseLineStream {
+  const headers: Record<string, string> = {};
+  if (cfg.apiKey) headers["x-api-key"] = cfg.apiKey;
+
+  return new SseLineStream({
+    url: logStreamUrl(cfg),
+    headers,
+    scope: cfg.id,
+    onData: (payload) => {
+      try {
+        const { line } = JSON.parse(payload) as { line?: unknown };
+        // A frame without a string line is a wrapper we don't understand, not
+        // an empty log line: drop it rather than emitting "undefined".
+        if (typeof line === "string") handlers.onLine(line);
+      } catch {
+        /* malformed frame — skip, the next one is independent */
+      }
+    },
+    ...(handlers.onConnect ? { onConnect: handlers.onConnect } : {}),
+    ...(handlers.onDisconnect ? { onDisconnect: handlers.onDisconnect } : {}),
+  });
 }

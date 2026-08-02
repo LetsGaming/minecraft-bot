@@ -27,7 +27,9 @@ pure functions — `@mcbot/schema` used to be types-only, and no longer is
 | `notifications.ts` | The notification event keys and the default set |
 | `commandOptions.ts` | Slash-command option names shared by bot and dashboard |
 | `discord.ts` | Discord origins/endpoints, and the snowflake ID format |
-| `serverActions.ts` | The management-script action names, and which of them are operator-triggerable |
+| `serverActions.ts` | The management-script action names, which are operator-triggerable, which are disruptive, and which are irreversible |
+| `capabilities.ts` | Dashboard capabilities, the grant shape, and the resolution rules the gate and the UI both use |
+| `consoleCommands.ts` | The console deny-list: normalisation and matching, shared by the route that enforces it and the editor that greys a command out |
 
 ## When something becomes a contract
 

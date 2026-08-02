@@ -19,6 +19,11 @@
  *   POST /api/servers/:id/:action  phase 3: scripts      routes/servers.ts
  *   GET  /api/servers/:id/log      phase 3: log tail     routes/servers.ts
  *   POST /api/servers/:id/prune-stats  phase 3           routes/servers.ts
+ *   GET  /api/servers/:id/console/stream  live console SSE  routes/console.ts
+ *   POST /api/servers/:id/command         console input     routes/console.ts
+ *   GET  /api/servers/:id/backups/files   archive index     routes/backups.ts
+ *   GET  .../backups/files/:fileId/download  streamed        routes/backups.ts
+ *   POST .../backups/files/:fileId/restore   destructive     routes/backups.ts
  *   GET  /api/setup/guilds         phase 4: bot guilds   routes/setup.ts
  *   GET  /api/setup/guilds/:id/channels  phase 4         routes/setup.ts
  *   GET  /api/setup/guilds/:id/roles     phase 4         routes/setup.ts
@@ -36,12 +41,18 @@ import { log } from "@mcbot/core/utils/logger.js";
 import { registerErrorHandler } from "./errors.js";
 import { registerSetupGuard } from "./requiredEnv.js";
 import { DISCORD_CDN_URL } from "@mcbot/schema";
-import { requireSession, requireSysadmin } from "./auth/auth.js";
+import { requireSession } from "./auth/auth.js";
+import {
+  capabilityGate,
+  assertCapabilitiesDeclared,
+} from "./auth/capabilities.js";
 import { registerRateLimiting } from "./rateLimit.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerMonitoringRoutes } from "./routes/monitoring.js";
 import { registerConfigRoutes } from "./routes/config.js";
 import { registerServerRoutes } from "./routes/servers.js";
+import { registerConsoleRoutes } from "./routes/console.js";
+import { registerBackupRoutes } from "./routes/backups.js";
 import { registerSetupRoutes } from "./routes/setup.js";
 import { registerGuildConfigRoutes } from "./routes/guildConfig.js";
 import { registerProbeRoutes } from "./status/metrics.js";
@@ -97,17 +108,27 @@ export function buildServer(): FastifyInstance {
   // ── Auth (the only routes outside the session gate) ──
   registerAuthRoutes(app);
 
-  // ── Sysadmin API ── server status/operations, host metrics, the full
-  // config, and the audit log. These expose the Minecraft server and
-  // secrets, so they require a sysadmin (a top-level adminUsers ID).
+  // ── Host API ── server status/operations, host metrics, the full config,
+  // and the audit log. Everything here reaches the Minecraft host, so every
+  // route declares the capability it needs and the gate enforces it per
+  // request (RBAC-02). Sysadmins hold every capability implicitly, so this is
+  // a widening for delegation, not a change for the operator.
   app.register(async (api) => {
+    // Registered before the routes: onRoute fires as each one registers, so a
+    // route with no declared capability throws here during buildServer()
+    // rather than serving unguarded (RBAC-03).
+    assertCapabilitiesDeclared(api);
     // onRequest (not preHandler) so the auth gate fails closed BEFORE Fastify
     // validates a route's body schema — an unauthenticated caller gets 401,
     // never a 400 that would confirm the endpoint's body shape to a stranger.
-    api.addHook("onRequest", requireSysadmin);
+    // Routing has already happened at this point, so req.params is populated
+    // and a server-scoped rule can read it.
+    api.addHook("onRequest", capabilityGate);
     registerMonitoringRoutes(api); // status + audit — read-only
     registerConfigRoutes(api);     // full schema-driven config editing
     registerServerRoutes(api);     // start/stop/restart/backup, log tail
+    registerConsoleRoutes(api);    // live console: SSE relay + command input
+    registerBackupRoutes(api);     // archive index, streamed download, restore
   });
 
   // ── Guild-manager API ── any logged-in Discord user; each route checks

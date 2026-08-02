@@ -17,7 +17,7 @@ Bot machine                 Minecraft machine
 
 Multiple Minecraft machines are supported: each gets its own wrapper, and the bot connects to each independently. You can also mix local and remote instances freely in one bot.
 
-What goes through the wrapper: file reads (stats, whitelist, server.properties, mod list, backups), log streaming (SSE), and script execution (start/stop/restart/backup/status). RCON traffic goes directly from the bot to the Minecraft server and bypasses the wrapper, as long as the RCON port is reachable from the bot machine.
+What goes through the wrapper: **everything**. File reads (stats, whitelist, server.properties, mod list, backups), log streaming (SSE), console commands, script execution (start, stop, restart, rollback, backup, status), and backup download and restore. Since 5.0.0 there is no second path — no local filesystem access, no direct RCON from the bot, no `sudo`. One way in means one place for a bug, which is why the two-mode design was removed.
 
 ## Step 1: Deploy the wrapper on the Minecraft host
 
@@ -128,7 +128,21 @@ Prefer fixing the transport over setting the flag — anyone on the network path
 
 ## Wrapper version notes
 
-Two bot features need wrapper routes added in wrapper v2.1:
+The bot reads the wrapper's `GET /manifest` at startup and prints what is
+missing, so you generally do not need this table — run the bot and read the
+report. What follows is what each feature costs you if the wrapper is older.
+
+**Wrapper 3.3.0** is what the current dashboard wants:
+
+- **Backup archives** (`backup-files`, `backup-restore`): listing individual
+  archives, downloading one, and restoring from one. Without it the dashboard
+  hides its Backups tab entirely rather than showing a panel that errors on
+  open, and you keep the per-tier summary that `/backup` has always shown.
+- **Rollback** (`rollback` in the script actions): the Rollback button is hidden
+  when the wrapper does not advertise `rollback.sh`.
+
+Older features, kept here for anyone upgrading from further back. Two need
+wrapper routes added in v2.1:
 
 - **Capability detection** (`GET /instances/:id/capabilities`): lets the bot know which setup-suite artifacts the remote instance provides. Older wrappers without the route are fine — the bot then assumes everything is available and errors surface at invocation time, exactly as before.
 - **`/server prune-stats`** (`DELETE /instances/:id/stats/:uuid`): explicit, admin-gated deletion of orphaned stats files. On older wrappers the deletion silently degrades — prune-stats reports 0 deleted files instead of failing.
@@ -168,5 +182,5 @@ Then start the bot and run `/status` in Discord.
 ## Notes
 
 - All wrapper HTTP calls from the bot have timeouts (8 s for reads, 30 s for script POSTs), so a hung wrapper cannot stall the bot.
-- Log events stream over SSE (`GET /instances/:id/logs/stream`). The bot reconnects automatically with exponential backoff (5 s up to 60 s).
-- Use a long random `apiKey`. The wrapper can run scripts and read files; treat the key like a password — and pair it with the transport rules above (HTTPS or trusted LAN only).
+- Log events stream over SSE (`GET /instances/:id/logs/stream`). The bot reconnects automatically with exponential backoff (5 s up to 60 s). The dashboard's console uses the same feed, but the whole dashboard is **one** client from the wrapper's side no matter how many browsers are open — the wrapper caps concurrent stream clients per instance, and per-tab connections would let the panel starve the chat bridge.
+- Use a long random `apiKey`. The wrapper can run scripts, read files, download whole worlds and restore them; treat the key like a password — and pair it with the transport rules above (HTTPS or trusted LAN only). Anyone holding it bypasses every dashboard permission, which is why it never reaches a browser: the dashboard proxies every wrapper call, including downloads.

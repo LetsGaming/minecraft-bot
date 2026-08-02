@@ -19,6 +19,7 @@
  * validation stays where it belongs.
  */
 import { Type, type Static } from "@sinclair/typebox";
+import { MAX_CONSOLE_COMMAND_LENGTH } from "@mcbot/schema/consoleCommands.js";
 
 /** An arbitrary JSON object whose contents are validated elsewhere. Rejects
  *  non-objects (a null / array / scalar body) at the boundary; the deep check
@@ -32,6 +33,13 @@ export type ServerIdParams = Static<typeof ServerIdParams>;
 
 export const IdParams = Type.Object({ id: Type.String() });
 export type IdParams = Static<typeof IdParams>;
+
+/** A server plus one of its backup archives, addressed by opaque id. */
+export const BackupFileParams = Type.Object({
+  id: Type.String(),
+  fileId: Type.String(),
+});
+export type BackupFileParams = Static<typeof BackupFileParams>;
 
 export const ServerActionParams = Type.Object({
   id: Type.String(),
@@ -50,6 +58,12 @@ export type LimitQuery = Static<typeof LimitQuery>;
 export const LinesQuery = Type.Object({ lines: Type.Optional(Type.String()) });
 export type LinesQuery = Static<typeof LinesQuery>;
 
+export const BackupIndexQuery = Type.Object({
+  cursor: Type.Optional(Type.String()),
+  limit: Type.Optional(Type.String()),
+});
+export type BackupIndexQuery = Static<typeof BackupIndexQuery>;
+
 export const DryRunQuery = Type.Object({ dryRun: Type.Optional(Type.String()) });
 export type DryRunQuery = Static<typeof DryRunQuery>;
 
@@ -66,6 +80,13 @@ export const ConfigWriteBody = Type.Object({
   config: AnyObject,
 });
 export type ConfigWriteBody = Static<typeof ConfigWriteBody>;
+
+/** A console command. The length ceiling is a transport limit and belongs in
+ *  the schema; the deny-list is a policy decision and lives in the handler. */
+export const ConsoleCommandBody = Type.Object({
+  command: Type.String({ minLength: 1, maxLength: MAX_CONSOLE_COMMAND_LENGTH }),
+});
+export type ConsoleCommandBody = Static<typeof ConsoleCommandBody>;
 
 export const GuildConfigWriteBody = Type.Object({
   baseHash: Type.String(),

@@ -44,11 +44,23 @@ import { readConfigSchema } from "../config/configSchema.js";
 import { toSafeConfig, mergeSecretPlaceholders } from "../config/safeConfig.js";
 import type { RawBotConfig } from "@mcbot/core/types/index.js";
 import { ConfigWriteBody, IdParams, MutationResult } from "./schemas.js";
+import type { CapabilityRule } from "../auth/capabilities.js";
+
+/**
+ * Every route in this file reads or writes config.json, which carries the
+ * Discord token and every RCON password. `bot:config` is therefore sysadmin by
+ * definition and can never appear in a grant (schema/capabilities.ts) — named
+ * once here rather than repeated per route.
+ */
+const BOT_CONFIG = {
+  capability: "bot:config",
+  scope: "global",
+} as const satisfies CapabilityRule;
 
 export function registerConfigRoutes(app: FastifyInstance): void {
   const api = app.withTypeProvider<TypeBoxTypeProvider>();
 
-  api.get("/api/config", async () => ({
+  api.get("/api/config", { config: BOT_CONFIG }, async () => ({
     hash: configFileHash(),
     config: toSafeConfig(readRawConfig()),
   }));
@@ -59,7 +71,7 @@ export function registerConfigRoutes(app: FastifyInstance): void {
    * override blocks at each scope, and the effective policy per
    * command per scope (so the UI can show what "inherit" resolves to).
    */
-  api.get("/api/commands", async () => {
+  api.get("/api/commands", { config: BOT_CONFIG }, async () => {
     const manifest = await readCommandManifest();
     if (!manifest) {
       throw new ServiceUnavailable(
@@ -128,7 +140,7 @@ export function registerConfigRoutes(app: FastifyInstance): void {
     };
   });
 
-  api.get("/api/config/schema", async () => {
+  api.get("/api/config/schema", { config: BOT_CONFIG }, async () => {
     const schema = readConfigSchema();
     if (!schema) {
       throw new NotFound(
@@ -140,7 +152,10 @@ export function registerConfigRoutes(app: FastifyInstance): void {
 
   api.put(
     "/api/config",
-    { schema: { body: ConfigWriteBody, response: { 200: MutationResult } } },
+    {
+      schema: { body: ConfigWriteBody, response: { 200: MutationResult } },
+      config: BOT_CONFIG,
+    },
     async (req) => {
       const { baseHash, config } = req.body;
 
@@ -200,7 +215,7 @@ export function registerConfigRoutes(app: FastifyInstance): void {
   // ── Config rollback history ──────────────────────────────────────────────
   // Snapshots of the config as it was before each write (last few days only;
   // see configHistory.ts). Reverting one restores that earlier state.
-  api.get("/api/config/history", async () => ({
+  api.get("/api/config/history", { config: BOT_CONFIG }, async () => ({
     retentionDays: CONFIG_HISTORY_RETENTION_DAYS,
     entries: listConfigHistory().map((e) => ({
       id: e.id,
@@ -212,7 +227,12 @@ export function registerConfigRoutes(app: FastifyInstance): void {
 
   api.post(
     "/api/config/history/:id/rollback",
-    { schema: { params: IdParams, response: { 200: MutationResult } } },
+    {
+      // `:id` is a config-history entry, NOT a server. Hence "global": a
+      // server-scoped rule would have read this param as a server id.
+      schema: { params: IdParams, response: { 200: MutationResult } },
+      config: BOT_CONFIG,
+    },
     async (req) => {
       const id = Number(req.params.id);
       if (!Number.isInteger(id)) {

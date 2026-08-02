@@ -102,6 +102,16 @@ export const EXPECTED_WRAPPER_FEATURES: Record<string, ExpectedFeature> = {
   },
   mods: { version: 1, degrades: "/mods" },
   backups: { version: 1, degrades: "/backup" },
+  "backup-files": {
+    version: 1,
+    degrades:
+      "the dashboard's backup panel — archives cannot be listed or downloaded, " +
+      "only the per-tier summary is available",
+  },
+  "backup-restore": {
+    version: 1,
+    degrades: "restoring a world from the dashboard",
+  },
   "rcon-command": {
     version: 1,
     degrades: "every command that talks to the server console",

@@ -15,6 +15,9 @@ You host the bot and/or the Minecraft server.
 | Running the bot with Docker | [admin/docker.md](admin/docker.md) |
 | Installing the API wrapper on the Minecraft host | [admin/remote-setup.md](admin/remote-setup.md) |
 | Upgrading from 4.x | [admin/migrating-to-5.md](admin/migrating-to-5.md) |
+| Retiring the standalone server-manager panel | [admin/retiring-server-manager.md](admin/retiring-server-manager.md) |
+| Dashboard access: capabilities and grants | [admin/capabilities.md](admin/capabilities.md) |
+| Getting in when the dashboard is down | [admin/emergency-access.md](admin/emergency-access.md) |
 | Admin permissions, whitelist, audit trail | [admin/permissions.md](admin/permissions.md) |
 | Configuring daily rewards and streak bonuses | [admin/daily-rewards.md](admin/daily-rewards.md) |
 | Automated features (bridge, alerts, status embed, ...) | [admin/automated-features.md](admin/automated-features.md) |

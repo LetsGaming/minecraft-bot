@@ -20,6 +20,12 @@ export interface ServerCapabilities {
   scripts: ScriptCapabilities;
   /** Suite backup directory layout next to serverDir. */
   backups: boolean;
+  /**
+   * {scriptDir}/backup/restore.sh. Not part of `scripts` because it is not a
+   * scripts/run action: restore takes a resolved path, so the wrapper gives it
+   * a dedicated route rather than exposing it to the argument allowlist.
+   */
+  restore: boolean;
   /** {scriptDir}/common/downloaded_versions.json (powers /mods). */
   modManifest: boolean;
   /** {scriptDir}/common/variables.txt (config override source). */
@@ -33,10 +39,12 @@ export function allCapabilities(): ServerCapabilities {
       start: true,
       stop: true,
       restart: true,
+      rollback: true,
       backup: true,
       status: true,
     },
     backups: true,
+    restore: true,
     modManifest: true,
     variablesFile: true,
   };

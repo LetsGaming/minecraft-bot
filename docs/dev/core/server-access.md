@@ -30,6 +30,24 @@ Two functions do not simply assert-and-decode:
 - `sendCommand` returns `null` when the wrapper reached the server over screen
   and has no output to relay, which is distinct from the request failing.
 
+Three functions deliberately bypass the `apiGet` decode path, because JSON in
+memory is the wrong shape for what they carry:
+
+- `openLogStream` opens the wrapper's SSE feed and returns a live
+  `SseLineStream`. It is the only place that knows the wrapper sends
+  `{"line": …}` per frame; the transport underneath knows nothing about
+  Minecraft, Discord, or what a payload means. Both the bot's log watcher and
+  the dashboard's console hub consume it, which is the point — there was one
+  working SSE client in the repo and it lived somewhere `web` could not import.
+- `openBackupDownload` returns the `Response` with its body **unread**, so the
+  caller can pipe it. These archives run to gigabytes; decoding one to hand it
+  on would take the process down.
+- `restoreBackupFile` posts to a dedicated wrapper route rather than running a
+  script action. The wrapper's argument validator forbids `/` so a client can
+  never hand a path to a spawned shell, and `restore.sh` needs an absolute path
+  — so the wrapper resolves an opaque backup id to a path itself, and no caller
+  on this side ever names one.
+
 ## `ServerInstance` — the operations
 
 One instance per configured server, built at startup, held in a module-level
@@ -79,8 +97,21 @@ behaviour for anything that skips probing.
 
 The script names themselves are a shared contract
 (`@mcbot/schema/serverActions.js`), not a literal per layer — the capability
-flags derive from the same tuple, so adding a script fails the build everywhere
-it has to be handled.
+flags derive from the same tuple (`ScriptCapabilities` is
+`Record<ServerScriptAction, boolean>`), so adding a script fails the build
+everywhere it has to be handled. Adding `rollback` in 5.1.0 is the worked
+example: one entry in the tuple, and the compiler named every site that had to
+change.
+
+`restore` sits on `ServerCapabilities` **outside** `scripts`, because it is not
+a script action — see `restoreBackupFile` above.
+
+Capabilities answer "does this instance have the artifact". They cannot answer
+"is this wrapper new enough to serve that route", which is what the manifest is
+for: `EXPECTED_WRAPPER_FEATURES` in `wrapperContract.ts` lists every feature
+this bot knows about with what is lost without it, and the startup report prints
+the gaps. The dashboard reads the same manifest to decide whether to show its
+Backups tab.
 
 Suite-dependent additions still belong behind a `serverAccess` function, so the
 contract stays in one file, plus a flag in `detectCapabilities` and a gate at

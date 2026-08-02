@@ -5,8 +5,10 @@
  * server.ts in the QUAL-01 refactor (2026-07 audit).
  *
  * Params/query are validated + typed from the shared schemas; the domain
- * guards (server exists, action allowed, capability present) throw typed
- * failures rendered by the one error handler. SEC-04 stands: an internal
+ * guards (server exists, action allowed, wrapper capability present) throw
+ * typed failures rendered by the one error handler. Authorization is separate
+ * and earlier: each route declares the user capability it needs in `config`,
+ * enforced by the host scope's onRequest gate (auth/capabilities.ts). SEC-04 stands: an internal
  * failure logs its detail and returns a fixed, path-free message.
  */
 import type { FastifyInstance } from "fastify";
@@ -43,9 +45,16 @@ function requireServer(id: string): NonNullable<ReturnType<typeof getServerInsta
 export function registerServerRoutes(app: FastifyInstance): void {
   const api = app.withTypeProvider<TypeBoxTypeProvider>();
 
+  // server:control, not a per-action capability: start, stop, restart and
+  // backup are all reversible and all interrupt the same people. The two
+  // irreversible operations (restore, rollback) get their own routes and their
+  // own capabilities rather than joining this one (RBAC-01).
   api.post(
     "/api/servers/:id/:action",
-    { schema: { params: ServerActionParams } },
+    {
+      schema: { params: ServerActionParams },
+      config: { capability: "server:control", scope: "server", param: "id" },
+    },
     async (req) => {
       const { id, action } = req.params;
       const server = requireServer(id);
@@ -85,7 +94,10 @@ export function registerServerRoutes(app: FastifyInstance): void {
 
   api.get(
     "/api/servers/:id/log",
-    { schema: { params: IdParams, querystring: LinesQuery } },
+    {
+      schema: { params: IdParams, querystring: LinesQuery },
+      config: { capability: "server:read", scope: "server", param: "id" },
+    },
     async (req) => {
       const server = requireServer(req.params.id);
       const n = Math.min(Math.max(parseInt(req.query.lines ?? "50", 10) || 50, 1), 500);
@@ -99,9 +111,15 @@ export function registerServerRoutes(app: FastifyInstance): void {
     },
   );
 
+  // Deleting stats files is destructive but bounded and re-derivable from the
+  // server itself, so it sits with the other reversible operations rather than
+  // earning a capability of its own.
   api.post(
     "/api/servers/:id/prune-stats",
-    { schema: { params: IdParams, querystring: DryRunQuery } },
+    {
+      schema: { params: IdParams, querystring: DryRunQuery },
+      config: { capability: "server:control", scope: "server", param: "id" },
+    },
     async (req) => {
       const server = requireServer(req.params.id);
 

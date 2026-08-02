@@ -81,6 +81,57 @@ Per-user rate limit: 5 commands per rolling 30 seconds. It protects the RCON con
 
 That is by design: the feature self-heals. To remove the channels permanently, disable the feature for the guild first (`"statusEmbed": { "enabled": false }`), reload the config, then delete the channels.
 
+## Dashboard: the Backups tab is missing
+
+The wrapper on that host is older than 3.3.0, so it cannot serve the archive
+index. The tab is hidden rather than shown-and-broken. Check with:
+
+```bash
+curl -s -H "x-api-key: $MC_API_KEY" http://127.0.0.1:3000/manifest | jq '.wrapper, (.features | keys)'
+```
+
+You want `backup-files` in that list. The same applies to the Rollback button
+and `rollback.sh`.
+
+## Dashboard: someone can log in but sees nothing
+
+They authenticated with Discord but hold no capabilities. That is the correct
+outcome for anyone who is neither in `adminUsers`, nor listed in
+`webui.grants`, nor a manager of a guild the bot is in.
+
+Give them what they need under `webui.grants` — see
+[capabilities.md](capabilities.md). Grants are re-read per request, so it
+applies on their next click without a restart.
+
+If they *are* listed and still see nothing, check the spelling of the
+capabilities: an unknown string is dropped silently rather than erroring, so
+`"server:reed"` grants nothing. The Config view renders the list as a picker,
+which avoids the problem entirely.
+
+## Dashboard: "This route has no capability rule" / the web process will not start
+
+A host route was added without declaring a capability, and the boot assertion
+refused to start rather than serve it unguarded. The error names the route. Add
+`config: { capability: …, scope: … }` to its route options — see
+[../dev/web/backend.md](../dev/web/backend.md#authorization-is-per-route).
+
+## Dashboard: a console command comes back "blocked"
+
+It is in `webui.console.blockedCommands`, or in the default deny-list
+(`stop`, `op`, `deop`) if you never set one. Matching is on the first word after
+any leading slashes, so `/stop` and `stop` are the same entry.
+
+The deny-list is a dashboard policy, not a server one: the same command still
+works over SSH and through the wrapper directly. If you need it gone, edit the
+list rather than working around it.
+
+## Dashboard: the console shows "Reconnecting…"
+
+The dashboard's connection to that server's wrapper dropped. It retries by
+itself with backoff, so this usually clears. If it does not, the wrapper is
+unreachable — check `/health` on the wrapper host, and see the wrapper's own
+logs. The Servers view will show the same server with an unreachable wrapper.
+
 ## Getting more detail
 
 Set the `DEBUG` environment variable to any value (in `.env`, the PM2 ecosystem file, or the compose file) and restart. The bot then logs debug-level messages too.

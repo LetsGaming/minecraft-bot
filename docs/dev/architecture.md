@@ -227,7 +227,9 @@ review.
 | `bot/logWatcher/watchers/**` | `ServerInstance`, embeds, logger | `bot/commands/*` |
 | `core/utils/minecraft/*` | core utils, server, serverAccess, logger | embeds, discord.js |
 | `bot/utils/embeds/statEmbeds` | statUtils, embedUtils, discord.js | server.ts, config.ts |
-| `core/utils/server/serverAccess` | `fetch`, types | discord.js, `bot/commands`, `fs`, `child_process` |
+| `core/utils/server/serverAccess` | `fetch`, types, `sseLineStream` | discord.js, `bot/commands`, `fs`, `child_process` |
+| `core/utils/sseLineStream` | `fetch`, logger | discord.js, Minecraft or wrapper payload shapes |
+| `web/backend/console/consoleHub` | `serverAccess`, logger | discord.js, `bot/*`, Fastify types |
 
 The point of the table: Discord rendering, game logic, and transport stay
 separable, so each can be tested without the others — and the dashboard can

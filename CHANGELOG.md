@@ -6,6 +6,111 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **The dashboard absorbs the standalone server-manager panel.** Everything
+  `minecraft-server-manager` did is now in the dashboard, reached through the
+  API wrapper like every other server operation. Migration and decommissioning
+  steps: [docs/admin/retiring-server-manager.md](docs/admin/retiring-server-manager.md).
+
+  The panel was not a second dashboard so much as a second *wrapper*: it ran on
+  the Minecraft host, shelled out to the same setup-suite scripts, and carried
+  its own RCON client, `variables.txt` parser and instance registry. Two
+  privileged local agents on one host, for one capability — the same
+  duplication 5.0.0 spent a major version removing, one layer out.
+
+- **Per-capability dashboard access** (`webui.grants`). Host-side routes used
+  to share one `requireSysadmin` gate, which made "read the status page" and
+  "restore a backup over the live world" the same grant. Adding the console,
+  backups and rollback made that untenable, and it could not express the case
+  the panel's retirement created: someone who may tune a mod setting and
+  nothing else.
+
+  Capabilities are per server and grouped by blast radius rather than
+  seniority. `server:console` is deliberately separate from `server:control` —
+  one console command can op an account or ban a player, a restart cannot.
+  `bot:config` is not grantable at all, since editing `config.json` is what
+  controls who has what. See [docs/admin/capabilities.md](docs/admin/capabilities.md).
+
+  Authorization is now declared per route and enforced by one hook, with a boot
+  assertion that refuses to start if a host route carries no rule. Forgetting
+  the gate is a crash on startup rather than an open endpoint.
+
+- **Live console.** A relayed log stream plus a command line, replacing the
+  panel's WebSocket terminal. SSE rather than a WebSocket, which removed code
+  instead of adding it: a browser cannot set headers on a WebSocket handshake,
+  so the panel needed a one-time-ticket endpoint and store to keep its JWT out
+  of URLs. `EventSource` sends the session cookie, so none of that exists here.
+
+  One upstream connection per server, fanned out to every viewer. Not one per
+  browser tab: the wrapper caps concurrent log-stream clients per instance and
+  the bot's own watcher already holds one, so per-tab connections would let the
+  dashboard starve the chat bridge by being used.
+
+- **Console command deny-list** (`webui.console.blockedCommands`, defaulting to
+  `stop`, `op`, `deop`). Enforced in the backend, never only in the UI. Matching
+  is on the first word after any leading slashes, case-insensitively, so one
+  entry covers `stop`, `/stop` and `STOP` — the panel compared raw strings, so
+  a deny entry of `stop` did nothing against `/stop`.
+
+- **Backups panel**: archive listing, download and restore, plus **rollback**
+  on the Servers view. Needs wrapper 3.3.0+; the dashboard hides what an older
+  wrapper cannot serve rather than offering buttons that fail.
+
+  Downloads stream through the dashboard rather than being buffered — the API
+  key must never reach a browser, so a multi-gigabyte archive passes through
+  this process, and it does so in constant memory. `Content-Length` and `Range`
+  are forwarded, so the browser draws its own progress and can resume.
+
+- **`SseLineStream` in `@mcbot/core`.** The SSE transport extracted out of
+  `RemoteLogWatcher` so the dashboard could use it without a second copy of the
+  connect/backoff loop. The watcher keeps its ordered dispatch queue, which
+  exists because its handlers make Discord round-trips; the console writes
+  straight to open responses and needs none.
+
+- **`ServerStatus.features`** — what each server's wrapper advertises, from its
+  capability probe and manifest. The UI gates on this rather than on its own
+  version, so a suite without `rollback.sh` shows no Rollback button.
+
+### Fixed
+
+- **A stop during the SSE handshake could leave the stream running.** `stop()`
+  aborts the request, but if the response had already resolved the abort was
+  too late: the reader went on to report a connection, fire `onConnect` and
+  start reading a stream the caller had just cancelled. Found by the first
+  direct tests this code has had — it shipped inside the log watcher for a year
+  with only integration coverage.
+
+- **`/api/setup/servers` was inconsistent with grants.** It was sysadmin-only,
+  which predates capabilities; a user who can see a server in `/api/status`
+  received a 403 asking for its name. Now filtered to the caller's visible
+  servers, still a 403 for anyone with no host access at all.
+
+### Changed
+
+- `requireSysadmin` is removed rather than deprecated. A coarse gate sitting
+  next to the fine-grained one is an invitation to reintroduce the problem the
+  fine-grained one exists to solve. `isSysadmin` remains.
+
+### Not carried over from the server-manager panel
+
+Two of the panel's features were considered and deliberately left behind. Both
+are decisions rather than oversights, so they are written down here:
+
+- **The local username/password login.** The dashboard stays Discord-OAuth2
+  only. The fallback that login provided already exists in a better form — SSH
+  plus the wrapper's API key — and a second authentication surface on the game
+  host is a poor trade for the rare case where you have neither. The runbook is
+  [docs/admin/emergency-access.md](docs/admin/emergency-access.md); it asks you
+  to note the date each time you need it, which is the signal for revisiting
+  this.
+
+- **The public, login-free status page.** The dashboard has no public surface;
+  every route requires a session. Login-free status and leaderboard pages remain
+  an open roadmap idea, to be designed as such if there is ever demand, rather
+  than reconstructed from what the panel happened to expose.
+
+
 ### Fixed
 
 - **In-game tips are delivered in game.** The `!deathpos` tip rode along on
@@ -523,8 +628,6 @@ The dashboard still edits the bot's config, in the bot's container. Unchanged.
 - Migrations record their SQL checksum. Editing a shipped migration used to be
   silent — already-migrated databases skipped the new SQL, leaving schema and
   code disagreeing — and now refuses to start.
-
-## [Unreleased]
 
 ## [4.3.0] — 2026-07-12
 

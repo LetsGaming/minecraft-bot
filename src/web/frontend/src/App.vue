@@ -30,8 +30,11 @@
           </div>
         </div>
 
-        <!-- Server switcher (sysadmin only — exposes server state) -->
-        <template v-if="isSysadmin">
+        <!-- Server switcher. /api/status already returns only the servers the
+             caller may read, so the list needs no client-side filter: an empty
+             list is either "none configured" or "none granted", and both read
+             the same to the person looking at it. -->
+        <template v-if="canAnywhere('server:read')">
           <div class="switcher-label muted small">SERVER</div>
           <div class="switcher">
             <button
@@ -110,23 +113,46 @@
           <i class="pi pi-spin pi-spinner" style="font-size: 1.5rem" />
         </div>
 
+        <!-- Signed in and granted nothing. Better one clear line than an
+             empty shell that looks broken. -->
+        <EmptyState v-else-if="hasNothing" icon="pi pi-lock">
+          Your account has no dashboard access yet.
+          <template #action>
+            <span class="muted small">
+              Ask an operator to grant you access under <strong>webui.grants</strong>.
+            </span>
+          </template>
+        </EmptyState>
+
+        <!-- Each view is gated by the same predicate as its tab, so the two
+             can never disagree. -->
         <template v-else>
-          <OverviewView v-if="activeTab === 'overview' && isSysadmin" @navigate="activeTab = $event" />
+          <OverviewView v-if="activeTab === 'overview' && shows('overview')" @navigate="activeTab = $event" />
           <StatusView
-            v-if="isSysadmin"
+            v-if="shows('status')"
             v-show="activeTab === 'status'"
             :active-server="activeServer"
             @bot-state="botDown = !$event"
             @servers="onServers"
           />
+          <ConsoleView
+            v-if="activeTab === 'console' && shows('console')"
+            :server-ids="servers.map((s) => s.id)"
+            :active-server="activeServer"
+          />
+          <BackupsView
+            v-if="activeTab === 'backups' && shows('backups')"
+            :server-ids="servers.map((s) => s.id)"
+            :active-server="activeServer"
+          />
           <GuildsView
-            v-if="activeTab === 'guilds'"
+            v-if="activeTab === 'guilds' && shows('guilds')"
             :sysadmin="isSysadmin"
             @goto-config="activeTab = 'config'"
           />
-          <CommandsView v-if="activeTab === 'commands' && isSysadmin" />
-          <ConfigView v-if="activeTab === 'config' && isSysadmin" />
-          <AuditView v-if="activeTab === 'audit' && isSysadmin" />
+          <CommandsView v-if="activeTab === 'commands' && shows('commands')" />
+          <ConfigView v-if="activeTab === 'config' && shows('config')" />
+          <AuditView v-if="activeTab === 'audit' && shows('audit')" />
         </template>
       </main>
     </div>
@@ -143,25 +169,38 @@ import Message from "primevue/message";
 import Toast from "primevue/toast";
 import ConfirmDialog from "primevue/confirmdialog";
 import { apiGet, apiSend, UnauthorizedError } from "./api";
-import type { MeResponse, ServerStatus } from "./api";
+import type { MeResponse, ServerStatus, GrantableCapability } from "./api";
+import { useCapabilities, setCapabilities } from "./composables/useCapabilities";
 import { useInvite } from "./composables/useInvite";
 import StatusDot from "./components/ui/StatusDot.vue";
+import EmptyState from "./components/ui/EmptyState.vue";
 import { statusDot } from "./utils/format";
 import OverviewView from "./views/OverviewView.vue";
 import StatusView from "./views/StatusView.vue";
+import ConsoleView from "./views/ConsoleView.vue";
+import BackupsView from "./views/BackupsView.vue";
 import GuildsView from "./views/GuildsView.vue";
 import CommandsView from "./views/CommandsView.vue";
 import ConfigView from "./views/ConfigView.vue";
 import AuditView from "./views/AuditView.vue";
 
+/** A sidebar entry and the condition for showing it. */
+interface NavItem {
+  id: string;
+  label: string;
+  icon: string;
+  gate: GrantableCapability | "sysadmin" | "guild";
+}
+
 export default defineComponent({
   name: "App",
   components: {
-    Button, Message, Toast, ConfirmDialog, StatusDot,
-    OverviewView, StatusView, GuildsView, CommandsView, ConfigView, AuditView,
+    Button, Message, Toast, ConfirmDialog, StatusDot, EmptyState,
+    OverviewView, StatusView, ConsoleView, BackupsView, GuildsView, CommandsView,
+    ConfigView, AuditView,
   },
   setup() {
-    return { ...useInvite(), statusDot };
+    return { ...useInvite(), ...useCapabilities(), statusDot };
   },
   data() {
     return {
@@ -171,31 +210,46 @@ export default defineComponent({
       activeTab: "overview",
       activeServer: "",
       servers: [] as ServerStatus[],
+      // One table drives the sidebar and the view switch below, so a tab
+      // can't be visible and its view gated differently (or the reverse).
+      //
+      // `gate` is a capability, or one of two things a capability can't
+      // express: "sysadmin" for the config surface (bot:config is never
+      // granted, by design) and "guild" for the Discord-side tab, which has
+      // nothing to do with host access.
       nav: [
-        { id: "overview", label: "Overview", icon: "pi pi-th-large" },
-        { id: "status", label: "Servers", icon: "pi pi-server" },
-        { id: "guilds", label: "Guilds", icon: "pi pi-discord" },
-        { id: "commands", label: "Commands", icon: "pi pi-bolt" },
-        { id: "config", label: "Config", icon: "pi pi-sliders-h" },
-        { id: "audit", label: "Audit Log", icon: "pi pi-history" },
-      ],
+        { id: "overview", label: "Overview", icon: "pi pi-th-large", gate: "server:read" },
+        { id: "status", label: "Servers", icon: "pi pi-server", gate: "server:read" },
+        { id: "console", label: "Console", icon: "pi pi-desktop", gate: "server:read" },
+        { id: "backups", label: "Backups", icon: "pi pi-box", gate: "server:read" },
+        { id: "guilds", label: "Guilds", icon: "pi pi-discord", gate: "guild" },
+        { id: "commands", label: "Commands", icon: "pi pi-bolt", gate: "sysadmin" },
+        { id: "config", label: "Config", icon: "pi pi-sliders-h", gate: "sysadmin" },
+        { id: "audit", label: "Audit Log", icon: "pi pi-history", gate: "audit:read" },
+      ] as NavItem[],
     };
   },
   computed: {
     isSysadmin(): boolean {
       return !!this.me?.sysadmin;
     },
-    visibleNav(): Array<{ id: string; label: string; icon: string }> {
-      // Guild managers only get the Guilds tab; everything else exposes the
-      // Minecraft server, global config, or the audit log (sysadmin-only).
-      return this.isSysadmin ? this.nav : this.nav.filter((n) => n.id === "guilds");
+    visibleNav(): NavItem[] {
+      return this.nav.filter((item) => this.navAllowed(item));
+    },
+    /** Signed in, but granted nothing: one honest empty state beats six
+     *  tabs that all 403. */
+    hasNothing(): boolean {
+      return this.visibleNav.length === 0;
     },
   },
   async mounted() {
     try {
       this.me = await apiGet<MeResponse>("/api/me");
-      // Land somewhere the role can actually see.
-      this.activeTab = this.isSysadmin ? "overview" : "guilds";
+      // One owner of this request, so the composable is populated rather than
+      // fetching for itself (see useCapabilities).
+      setCapabilities(this.me.capabilities);
+      // Land on the first tab this user can actually see, whatever that is.
+      this.activeTab = this.visibleNav[0]?.id ?? "";
     } catch (err) {
       if (!(err instanceof UnauthorizedError)) {
         // Browser context: console is the only error sink available, and an
@@ -204,11 +258,31 @@ export default defineComponent({
         console.error(err);
       }
       this.me = null;
+      setCapabilities(undefined);
     } finally {
       this.loading = false;
     }
   },
   methods: {
+    /** Is this tab id one the caller may see? The view switch reads the same
+     *  answer the sidebar does. */
+    shows(id: string): boolean {
+      return this.visibleNav.some((item) => item.id === id);
+    },
+    navAllowed(item: NavItem): boolean {
+      if (item.gate === "sysadmin") return this.isSysadmin;
+      if (item.gate === "guild") return this.isSysadmin || (this.me?.guildCount ?? 0) > 0;
+      if (!this.canAnywhere(item.gate)) return false;
+      // The Backups panel needs a wrapper new enough to serve the archive
+      // index. Hiding the tab is better than showing one that errors on open:
+      // an operator running an older wrapper should see nothing missing, not
+      // something broken. Servers load after /api/me, so the tab appears once
+      // the first status poll answers.
+      if (item.id === "backups") {
+        return this.servers.some((s) => s.features?.backupFiles === true);
+      }
+      return true;
+    },
     goLogin() {
       window.location.href = "/auth/login";
     },
