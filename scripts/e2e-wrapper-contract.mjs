@@ -30,6 +30,50 @@ import { spawn } from "child_process";
 import { fileURLToPath } from "url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const dist = (p) => `file://${path.join(root, "src", ...p)}`;
+
+// Hoisted above the scaffold on purpose: the fake suite layout is built FROM
+// the shared action list, so an action added there cannot be silently absent
+// from the fixture. (The build has already run by the time this script does.)
+const { SERVER_SCRIPT_ACTIONS } = await import(dist(["schema", "dist", "serverActions.js"]));
+
+/**
+ * The suite filename behind each action — this repo's mirror of the wrapper's
+ * SCRIPT_MAP. The bot's contract is the action NAMES; the `.sh` files are the
+ * wrapper's business, so the mapping has to be restated here to scaffold a
+ * believable layout. Keyed by SERVER_SCRIPT_ACTIONS and checked below, so the
+ * restatement cannot quietly fall behind.
+ */
+const SCRIPT_FILES = {
+  start: "start.sh",
+  stop: "shutdown.sh",
+  restart: "smart_restart.sh",
+  rollback: "rollback.sh",
+  backup: "backup/backup.sh",
+  status: "misc/status.sh",
+};
+
+/**
+ * Suite artifacts the capability probe looks for that are NOT script actions.
+ *
+ * `restore.sh` is the case: the wrapper gives restore its own route rather than
+ * a scripts/run action, because it needs an absolute path and the argument
+ * validator forbids "/". It still has to exist for `capabilities.restore` to
+ * come back true.
+ */
+const EXTRA_SUITE_SCRIPTS = ["backup/restore.sh"];
+
+const unmappedActions = SERVER_SCRIPT_ACTIONS.filter((a) => !SCRIPT_FILES[a]);
+if (unmappedActions.length > 0) {
+  console.error(
+    `✖ e2e scaffold has no script filename for: ${unmappedActions.join(", ")}\n` +
+      `  Add it to SCRIPT_FILES in this file (mirror of the wrapper's SCRIPT_MAP).\n` +
+      `  Without it the capability probe reports the action false and the\n` +
+      `  contract check fails somewhere far away from the actual cause.`,
+  );
+  process.exit(1);
+}
+
 const WRAPPER_DIR = path.resolve(process.env.WRAPPER_DIR ?? "../api-wrapper");
 const API_KEY = "e2e-contract-key-0123456789";
 const API_PORT = Number(process.env.E2E_API_PORT ?? 8137);
@@ -182,8 +226,12 @@ function scaffold() {
       },
     }),
   );
-  // Capability probes only check for existence.
-  for (const rel of ["start.sh", "shutdown.sh", "smart_restart.sh", "backup/backup.sh", "misc/status.sh"]) {
+  // Capability probes only check for existence, so an empty stub is enough.
+  for (const rel of [
+    ...SERVER_SCRIPT_ACTIONS.map((a) => SCRIPT_FILES[a]),
+    ...EXTRA_SUITE_SCRIPTS,
+  ]) {
+    fs.mkdirSync(path.dirname(path.join(scriptsDir, rel)), { recursive: true });
     fs.writeFileSync(path.join(scriptsDir, rel), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
   }
   cleanups.push(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -276,9 +324,7 @@ const paths = scaffold();
 await startFakeRcon();
 const { logs } = await startWrapper(paths);
 
-const dist = (p) => `file://${path.join(root, "src", ...p)}`;
 const serverAccess = await import(dist(["core", "dist", "utils", "server", "serverAccess.js"]));
-const { SERVER_SCRIPT_ACTIONS } = await import(dist(["schema", "dist", "serverActions.js"]));
 const { EXPECTED_WRAPPER_FEATURES, compareContract, describeContract } = await import(
   dist(["core", "dist", "utils", "server", "wrapperContract.js"])
 );
@@ -464,7 +510,11 @@ check(
   Object.values(caps.scripts).every((v) => v === true),
   JSON.stringify(caps),
 );
-check("capabilities carries the non-script flags too", caps.backups === true && caps.modManifest === true, JSON.stringify(caps));
+check(
+  "capabilities carries the non-script flags too",
+  caps.backups === true && caps.modManifest === true && caps.restore === true,
+  JSON.stringify(caps),
+);
 
 const mods = await serverAccess.readModSlugs(cfg);
 check(

@@ -81,6 +81,14 @@ project follows [Semantic Versioning](https://semver.org/).
   direct tests this code has had — it shipped inside the log watcher for a year
   with only integration coverage.
 
+- **The cross-repo contract check scaffolded an incomplete suite layout.** Its
+  fake server directory wrote five script files from a hard-coded list, so
+  adding `rollback` to the shared action set left `capabilities.scripts.rollback`
+  false and failed the check with a message pointing nowhere near the cause.
+  `restore.sh` was missing for the same reason. The fixture is now built from
+  `SERVER_SCRIPT_ACTIONS`, and an action with no filename mapping aborts the run
+  up front saying exactly what to add.
+
 - **`/api/setup/servers` was inconsistent with grants.** It was sysadmin-only,
   which predates capabilities; a user who can see a server in `/api/status`
   received a 403 asking for its name. Now filtered to the caller's visible

@@ -61,4 +61,19 @@ jobs:
         env:
           WRAPPER_DIR: ${{ github.workspace }}/api-wrapper
           E2E_DUMP_WRAPPER_LOG: "1"
-        run: npm run e2e:contract
+        run: |
+          # Land order matters and this is the job that notices when it was
+          # wrong. The check runs this branch against the wrapper's DEFAULT
+          # branch, so a bot change that expects a new wrapper feature fails
+          # here until the wrapper's half is merged — correctly, but the raw
+          # output reads like a broken contract rather than a sequencing
+          # problem. Say which it is.
+          if ! npm run e2e:contract; then
+            echo "::error::Contract check failed against ${WRAPPER_REPO}@main."
+            echo "If the failures are missing FEATURES or unknown script actions,"
+            echo "this branch expects a wrapper that has not been merged yet."
+            echo "Additive wrapper features land first, then the bot half."
+            echo "If the wrapper's half is already on its default branch, this is"
+            echo "a real disagreement — read the per-check output above."
+            exit 1
+          fi
