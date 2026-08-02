@@ -36,11 +36,15 @@ const mockConfig = {
 
 const {
   indexBackupFilesMock,
+  detectCapabilitiesMock,
+  getRemoteManifestMock,
   openBackupDownloadMock,
   restoreBackupFileMock,
   recordAdminActionMock,
 } = vi.hoisted(() => ({
   indexBackupFilesMock: vi.fn(),
+  detectCapabilitiesMock: vi.fn(),
+  getRemoteManifestMock: vi.fn(),
   openBackupDownloadMock: vi.fn(),
   restoreBackupFileMock: vi.fn(),
   recordAdminActionMock: vi.fn(async () => {}),
@@ -52,6 +56,8 @@ vi.mock("../../src/core/config.js", () => ({
 }));
 
 vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
+  detectCapabilities: detectCapabilitiesMock,
+  getRemoteManifest: getRemoteManifestMock,
   indexBackupFiles: indexBackupFilesMock,
   openBackupDownload: openBackupDownloadMock,
   restoreBackupFile: restoreBackupFileMock,
@@ -66,8 +72,26 @@ vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
 }));
 
 vi.mock("../../src/core/utils/server/server.js", () => ({
+  // getHealth is required: collectStatus calls it first, and an instance
+  // without it falls through to unknownStatus — which reports features: null
+  // and would make these tests pass or fail for the wrong reason.
   getServerInstance: vi.fn((id: string) =>
-    id === "smp" ? { config: { id: "smp", apiKey: "k-1" }, capabilities: null } : null,
+    id === "smp"
+      ? {
+          id: "smp",
+          config: { id: "smp", apiKey: "k-1" },
+          capabilities: null,
+          getHealth: async () => ({
+            state: "online",
+            rcon: "responsive",
+            wrapper: "up",
+            source: "wrapper",
+            players: { online: 0, max: 20, names: [], sampled: false },
+          }),
+          getList: async () => ({ playerCount: 0, maxPlayers: 20, players: [] }),
+          getTps: async () => null,
+        }
+      : null,
   ),
   getAllInstances: vi.fn(() => []),
 }));
@@ -108,6 +132,7 @@ vi.mock("../../src/core/utils/commands/commandManifest.js", () => ({
 
 import { encodeSigned, SESSION_COOKIE } from "../../src/web/backend/auth/auth.js";
 import { buildServer } from "../../src/web/backend/server.js";
+import { clearFeatureCache } from "../../src/web/backend/status/status.js";
 
 const FILE_ID = "AbCdEfGhIjKlMnOpQrStUv";
 
@@ -141,6 +166,9 @@ function upstream(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // The probe is cached for five minutes, so without this each test would be
+  // answered by whatever the first one happened to ask.
+  clearFeatureCache();
   indexBackupFilesMock.mockResolvedValue({
     files: [
       { id: FILE_ID, tier: "hourly", name: "world-01.tar.zst", sizeBytes: 2048, mtimeMs: 1 },
@@ -149,6 +177,94 @@ beforeEach(() => {
     total: 1,
   });
   restoreBackupFileMock.mockResolvedValue({ output: "done", stderr: "", exitCode: 0 });
+  detectCapabilitiesMock.mockResolvedValue({
+    scripts: { start: true, stop: true, restart: true, rollback: true, backup: true, status: true },
+    backups: true,
+    restore: true,
+    modManifest: true,
+    variablesFile: true,
+  });
+  getRemoteManifestMock.mockResolvedValue({
+    wrapper: "3.3.0",
+    features: { "backup-files": { version: 1 }, "backup-restore": { version: 1 } },
+  });
+});
+
+// ── The gate that decides whether the Backups tab exists at all ────────────
+
+describe("/api/status features", () => {
+  it("probes the wrapper itself rather than reading the bot's field", async () => {
+    // The bug this pins: `features` was built from ServerInstance.capabilities,
+    // which only the BOT process ever populates. In the dashboard it is null
+    // forever, so backupFiles was never true and the Backups tab was hidden on
+    // every host — the feature was shipped and invisible.
+    const app = buildServer();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/status",
+      headers: { cookie: cookieFor(SYSADMIN) },
+    });
+    expect(res.statusCode).toBe(200);
+    const server = res.json().servers[0];
+    expect(detectCapabilitiesMock).toHaveBeenCalled();
+    expect(server.features).not.toBeNull();
+    expect(server.features.backupFiles).toBe(true);
+    expect(server.features.restore).toBe(true);
+    expect(server.features.scripts.rollback).toBe(true);
+  });
+
+  it("reports backupFiles false for a wrapper that does not serve the index", async () => {
+    getRemoteManifestMock.mockResolvedValue({ wrapper: "3.2.0", features: {} });
+    const app = buildServer();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/status",
+      headers: { cookie: cookieFor(SYSADMIN) },
+    });
+    expect(res.json().servers[0].features.backupFiles).toBe(false);
+  });
+
+  it("still reports features when the server is stopped", async () => {
+    // Regression: features was assigned after collectStatus's early returns,
+    // so a stopped server reported none — and the Backups tab vanished at the
+    // exact moment someone would want to restore one.
+    const { getServerInstance } = await import("../../src/core/utils/server/server.js");
+    vi.mocked(getServerInstance).mockReturnValueOnce({
+      id: "smp",
+      config: { id: "smp", apiKey: "k-1" },
+      capabilities: null,
+      getHealth: async () => ({
+        state: "offline",
+        rcon: "unknown",
+        wrapper: "unreachable",
+        source: "none",
+        players: null,
+      }),
+    } as never);
+
+    const app = buildServer();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/status",
+      headers: { cookie: cookieFor(SYSADMIN) },
+    });
+    const server = res.json().servers[0];
+    expect(server.state).toBe("offline");
+    expect(server.features?.backupFiles).toBe(true);
+  });
+
+  it("reports null, not false, when the wrapper cannot be reached", async () => {
+    // "Could not ask" must stay distinguishable from "does not have it": the
+    // UI shows the tab on null, so an outage does not look like a regression.
+    detectCapabilitiesMock.mockRejectedValue(new Error("unreachable"));
+    const app = buildServer();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/status",
+      headers: { cookie: cookieFor(SYSADMIN) },
+    });
+    expect(res.json().servers[0].features).toBeNull();
+  });
 });
 
 // ── The index ───────────────────────────────────────────────────────────────

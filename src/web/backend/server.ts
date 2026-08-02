@@ -24,6 +24,8 @@
  *   GET  /api/servers/:id/backups/files   archive index     routes/backups.ts
  *   GET  .../backups/files/:fileId/download  streamed        routes/backups.ts
  *   POST .../backups/files/:fileId/restore   destructive     routes/backups.ts
+ *   GET  /api/servers/:id/configs         mod config index  routes/modConfigs.ts
+ *   PUT  .../configs/:fileId              spliced write     routes/modConfigs.ts
  *   GET  /api/setup/guilds         phase 4: bot guilds   routes/setup.ts
  *   GET  /api/setup/guilds/:id/channels  phase 4         routes/setup.ts
  *   GET  /api/setup/guilds/:id/roles     phase 4         routes/setup.ts
@@ -53,6 +55,7 @@ import { registerConfigRoutes } from "./routes/config.js";
 import { registerServerRoutes } from "./routes/servers.js";
 import { registerConsoleRoutes } from "./routes/console.js";
 import { registerBackupRoutes } from "./routes/backups.js";
+import { registerModConfigRoutes } from "./routes/modConfigs.js";
 import { registerSetupRoutes } from "./routes/setup.js";
 import { registerGuildConfigRoutes } from "./routes/guildConfig.js";
 import { registerProbeRoutes } from "./status/metrics.js";
@@ -129,6 +132,7 @@ export function buildServer(): FastifyInstance {
     registerServerRoutes(api);     // start/stop/restart/backup, log tail
     registerConsoleRoutes(api);    // live console: SSE relay + command input
     registerBackupRoutes(api);     // archive index, streamed download, restore
+    registerModConfigRoutes(api);  // mod config editor: index, read, write, revert
   });
 
   // ── Guild-manager API ── any logged-in Discord user; each route checks

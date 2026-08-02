@@ -19,7 +19,7 @@
  * one leaves, so an idle dashboard holds no wrapper connections at all.
  */
 import type { ServerConfig } from "@mcbot/core/types/index.js";
-import { openLogStream } from "@mcbot/core/utils/server/serverAccess.js";
+import { openLogStream, tailLog } from "@mcbot/core/utils/server/serverAccess.js";
 import type { SseLineStream } from "@mcbot/core/utils/sseLineStream.js";
 import { log } from "@mcbot/core/utils/logger.js";
 
@@ -31,14 +31,25 @@ export type ConsoleEvent =
 export type ConsoleSubscriber = (event: ConsoleEvent) => void;
 
 /**
- * How many recent lines a new viewer gets on connect.
+ * How many recent lines a viewer gets on connect.
  *
- * Without this, opening the console shows an empty box until the server next
- * says something, which on a quiet night reads as broken. Small on purpose:
- * the backlog is a hint about what just happened, not a log viewer. Anyone
- * wanting history has the log tail endpoint.
+ * Filled two ways, and the first one is the one that matters:
+ *
+ *   On the FIRST viewer the hub fetches the tail over HTTP, because the SSE
+ *   stream only carries lines written after it connects. Without that, opening
+ *   the console on a quiet server shows an empty box until something happens —
+ *   which reads as "broken", not "idle". The original version only seeded this
+ *   from lines the hub had already seen, so it fixed the problem for the
+ *   second viewer and left it in place for the first.
+ *
+ *   After that, live lines append here so late joiners get context too.
+ *
+ * Small on purpose: a hint about what just happened, not a log viewer.
  */
-const BACKLOG_LINES = 200;
+const BACKLOG_LINES = 100;
+
+/** Cap on the priming fetch, so a slow wrapper cannot hold the stream shut. */
+const PRIME_TIMEOUT_MS = 8_000;
 
 interface Channel {
   stream: SseLineStream;
@@ -80,7 +91,39 @@ function createChannel(cfg: ServerConfig): Channel {
     },
   });
 
+  void primeAndStart(channel, cfg);
   return channel;
+}
+
+/**
+ * Seed the backlog from the log tail, then open the live stream.
+ *
+ * Sequenced rather than parallel so the lines arrive in the order they were
+ * written: priming after the stream is already delivering would interleave old
+ * lines into the middle of new ones. The wait is one HTTP round trip.
+ *
+ * A failure here is not fatal. If the tail cannot be fetched the console just
+ * starts empty, which is the old behaviour — far better than never opening the
+ * live stream at all.
+ */
+async function primeAndStart(channel: Channel, cfg: ServerConfig): Promise<void> {
+  try {
+    const text = await Promise.race([
+      tailLog(cfg, BACKLOG_LINES),
+      new Promise<string>((_, reject) =>
+        setTimeout(() => reject(new Error("prime timed out")), PRIME_TIMEOUT_MS),
+      ),
+    ]);
+    const lines = text.split("\n").filter((l) => l.length > 0);
+    channel.backlog = lines.slice(-BACKLOG_LINES);
+    // Emitted as well as stored: the first viewer subscribed before this
+    // resolved, so replaying the backlog at subscribe time missed them.
+    for (const line of channel.backlog) emit(channel, { type: "line", line });
+  } catch (err) {
+    log.warn(cfg.id, `Console backlog unavailable: ${String(err)}`);
+  } finally {
+    channel.stream.start();
+  }
 }
 
 /**
@@ -125,9 +168,9 @@ export function subscribe(
   }
   channel.subscribers.add(subscriber);
 
-  // start() is idempotent, so calling it per subscriber is safe and saves a
-  // separate "is it running" flag here.
-  channel.stream.start();
+  // Note: the stream is NOT started here. primeAndStart owns that, so the
+  // backlog is in before live lines begin — starting it per subscriber would
+  // race the priming fetch and interleave old lines into new ones.
 
   // Replay before reporting state, so the viewer sees context first and then
   // learns whether the feed is live.

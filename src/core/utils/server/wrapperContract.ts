@@ -112,6 +112,12 @@ export const EXPECTED_WRAPPER_FEATURES: Record<string, ExpectedFeature> = {
     version: 1,
     degrades: "restoring a world from the dashboard",
   },
+  "mod-configs": {
+    version: 1,
+    degrades:
+      "the dashboard's mod config editor — mod settings can only be changed " +
+      "by editing files on the host",
+  },
   "rcon-command": {
     version: 1,
     degrades: "every command that talks to the server console",

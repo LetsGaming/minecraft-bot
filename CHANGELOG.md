@@ -8,6 +8,51 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Mod config editor** (needs wrapper 3.4.0). Browse and edit mod settings from
+  the dashboard, for the people who cannot SSH — which was the reason the
+  capability system exists at all: `config:read` and `config:write` are per
+  server, so that grant hands out this view and no console, no backups, and no
+  `config.json`.
+
+  Supports Forge/NeoForge `.toml`, Fabric `.json`/`.json5`, and `.properties`
+  including `server.properties`.
+
+  **Comments survive.** A save splices new values over the old ones and leaves
+  everything else byte-identical — comments, key order, spacing. Parsing a file
+  into an object and writing it back would throw away the `#Range:`,
+  `#Allowed Values:` and `#Default:` lines that are the only documentation a
+  mod author wrote, and turn every save into a whole-file diff. The round-trip
+  test asserts byte identity per format, which is what keeps that true as
+  adapters are added.
+
+  **The schema comes from the file.** Those same comment directives become a
+  numeric range, a select, and help text, so no one hand-writes a schema per
+  mod. Files that document nothing (Fabric, mostly) fall back to types inferred
+  from the values and labels inferred from the key names.
+
+  **Nothing the adapter did not understand is editable.** A multi-line array or
+  an `[[array of table]]` is shown read-only rather than rewritten by a parser
+  that half-followed it.
+
+  Writes are guarded twice: an ETag, so a stale editor cannot overwrite a file a
+  mod rewrote at shutdown, and a re-parse after splicing that refuses the write
+  if the structure changed. Every write snapshots the previous contents first,
+  with one-click revert. Audited with what changed.
+
+  The client sends the values it changed, never the document — the server
+  re-reads the file and splices. A client that could post arbitrary text would
+  make every one of those guards decorative.
+
+  Wrapper side: config files are addressed by an opaque id from an index, with
+  an allow-list of roots (`config/`, `defaultconfigs/`, `world/serverconfig/`,
+  `plugins/`, plus `server.properties`), a realpath containment check, symlinks
+  neither followed nor listed, and a 1 MiB cap. `ops.json` and the world are
+  deliberately unreachable: an editor that can touch those is a remote shell
+  with extra steps.
+
+
+### Added
+
 - **The dashboard absorbs the standalone server-manager panel.** Everything
   `minecraft-server-manager` did is now in the dashboard, reached through the
   API wrapper like every other server operation. Migration and decommissioning
@@ -81,6 +126,32 @@ project follows [Semantic Versioning](https://semver.org/).
   direct tests this code has had — it shipped inside the log watcher for a year
   with only integration coverage.
 
+- **The Backups tab was hidden on every host, so the whole backup feature was
+  invisible.** `ServerStatus.features` was built from
+  `ServerInstance.capabilities`, which only the *bot* process ever fills — the
+  dashboard runs as its own process and shares nothing but `config.json`, so
+  that field is null there forever. The dashboard now probes the wrapper itself
+  (capabilities + manifest, cached 5 minutes, resettable via
+  `clearFeatureCache()`).
+
+- **Features were reported only for a running server.** The probe sat after
+  `collectStatus`'s early returns, so a stopped or unresponsive server reported
+  none at all — and the Backups tab disappeared at the exact moment someone
+  would want to restore one. What the wrapper can do does not depend on whether
+  Minecraft is running, so it is probed before those returns.
+
+  Related: an unreachable wrapper now reports `features: null` meaning "could
+  not ask", and the UI treats that as *available* rather than absent. Hiding
+  half the interface during an outage made the outage look like a regression.
+
+- **The console showed nothing until the server next spoke.** The SSE stream
+  only carries lines written after it connects, and the backlog was seeded only
+  from lines the hub had already seen — which solved the problem for the second
+  viewer and left it in place for the first. The hub now fetches the last 100
+  lines over HTTP and emits them *before* starting the live stream, so the order
+  stays "what already happened, then what happens next". A failed fetch logs and
+  opens the stream anyway.
+
 - **`npm run typecheck` did not typecheck the frontend.** `tsc -b src/bot
   src/web` builds the dashboard's *backend* project; the `.vue` files and
   everything under `frontend/src` need `vue-tsc`, which only ran inside
@@ -111,6 +182,10 @@ project follows [Semantic Versioning](https://semver.org/).
   servers, still a 403 for anyone with no host access at all.
 
 ### Changed
+
+- **The Servers view no longer has a "View log" button.** It fetched a fixed
+  tail into an inline pane; the Console tab streams the same log live and can
+  send commands. Two ways to read one log, one of them worse.
 
 - `requireSysadmin` is removed rather than deprecated. A coarse gate sitting
   next to the fine-grained one is an invitation to reintroduce the problem the

@@ -884,6 +884,88 @@ export async function restoreBackupFile(
   return res.json() as Promise<ScriptResult>;
 }
 
+// ── Mod config files (wrapper >= 3.4.0) ────────────────────────────
+
+/** One editable config file. `id` is opaque; no caller ever names a path. */
+export interface ConfigFileInfo {
+  id: string;
+  relPath: string;
+  modId: string;
+  format: string;
+  sizeBytes: number;
+  mtimeMs: number;
+}
+
+export interface ConfigFileContents {
+  text: string;
+  etag: string;
+  file: ConfigFileInfo;
+  snapshots: string[];
+}
+
+export async function indexConfigFiles(
+  cfg: ServerConfig,
+): Promise<ConfigFileInfo[]> {
+  const { files } = await apiGet<{ files: ConfigFileInfo[] }>(cfg, "/configs");
+  return files;
+}
+
+export async function readConfigFile(
+  cfg: ServerConfig,
+  fileId: string,
+): Promise<ConfigFileContents> {
+  return apiGet<ConfigFileContents>(
+    cfg,
+    `/configs/${encodeURIComponent(fileId)}`,
+  );
+}
+
+/**
+ * Write a config file back.
+ *
+ * `etag` is required all the way down, so a stale editor cannot overwrite a
+ * file the game rewrote at shutdown. A mismatch comes back as a typed
+ * conflict rather than an exception, because it is an expected outcome the UI
+ * has to explain, not a failure.
+ */
+export async function writeConfigFile(
+  cfg: ServerConfig,
+  fileId: string,
+  text: string,
+  etag: string,
+): Promise<
+  { ok: true; etag: string; snapshot: string } | { ok: false; conflict: true }
+> {
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    "if-match": etag,
+  };
+  if (cfg.apiKey) headers["x-api-key"] = cfg.apiKey;
+
+  const res = await fetch(
+    instanceUrl(cfg, `/configs/${encodeURIComponent(fileId)}`),
+    { method: "PUT", headers, body: JSON.stringify({ text }) },
+  );
+  if (res.status === 412) return { ok: false, conflict: true };
+  if (!res.ok) {
+    throw new Error(`API PUT /configs → ${res.status}: ${await res.text()}`);
+  }
+  const body = (await res.json()) as { etag: string; snapshot: string };
+  return { ok: true, ...body };
+}
+
+export async function revertConfigFile(
+  cfg: ServerConfig,
+  fileId: string,
+  snapshot: string,
+): Promise<{ etag: string }> {
+  return apiPost<{ etag: string }>(
+    cfg,
+    `/configs/${encodeURIComponent(fileId)}/revert`,
+    { snapshot },
+  );
+}
+
 // ── Capability detection ───────────────────────────────────────────
 
 /**

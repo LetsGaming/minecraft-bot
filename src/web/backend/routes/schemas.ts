@@ -34,6 +34,36 @@ export type ServerIdParams = Static<typeof ServerIdParams>;
 export const IdParams = Type.Object({ id: Type.String() });
 export type IdParams = Static<typeof IdParams>;
 
+/** A server plus one of its config files, addressed by opaque id. */
+export const ConfigFileParams = Type.Object({
+  id: Type.String(),
+  fileId: Type.String(),
+});
+export type ConfigFileParams = Static<typeof ConfigFileParams>;
+
+/**
+ * The values that changed, not the document.
+ *
+ * The client never posts a whole file: the server re-reads the current text
+ * and splices these in, so the writer's guards stay meaningful.
+ */
+export const ModConfigWriteBody = Type.Object({
+  etag: Type.String({ minLength: 1 }),
+  edits: Type.Array(
+    Type.Object({
+      path: Type.Array(Type.String({ minLength: 1 }), { minItems: 1, maxItems: 8 }),
+      value: Type.Unknown(),
+    }),
+    { minItems: 1, maxItems: 500 },
+  ),
+});
+export type ModConfigWriteBody = Static<typeof ModConfigWriteBody>;
+
+export const ModConfigRevertBody = Type.Object({
+  snapshot: Type.String({ minLength: 1, maxLength: 64 }),
+});
+export type ModConfigRevertBody = Static<typeof ModConfigRevertBody>;
+
 /** A server plus one of its backup archives, addressed by opaque id. */
 export const BackupFileParams = Type.Object({
   id: Type.String(),

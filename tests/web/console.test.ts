@@ -39,10 +39,11 @@ vi.mock("../../src/core/config.js", () => ({
 
 // vi.mock factories are hoisted above every const in the file, so the spies
 // they close over have to be created inside vi.hoisted().
-const { sendCommandMock, openLogStreamMock, recordAdminActionMock } = vi.hoisted(
+const { sendCommandMock, openLogStreamMock, tailLogMock, recordAdminActionMock } = vi.hoisted(
   () => ({
     sendCommandMock: vi.fn(async () => "There are 2 players online"),
     openLogStreamMock: vi.fn(),
+    tailLogMock: vi.fn(async () => ""),
     recordAdminActionMock: vi.fn(async () => {}),
   }),
 );
@@ -51,7 +52,7 @@ vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
   sendCommand: sendCommandMock,
   openLogStream: openLogStreamMock,
   runScript: vi.fn(),
-  tailLog: vi.fn(async () => ""),
+  tailLog: tailLogMock,
   listStatsUuids: vi.fn(async () => []),
   deleteStatsFile: vi.fn(),
   readWhitelist: vi.fn(async () => []),
@@ -243,6 +244,40 @@ describe("consoleHub", () => {
     expect(seenA).toEqual(["hello"]);
     expect(seenB).toEqual(["hello"]);
     a(); b();
+  });
+
+  it("primes the backlog from the log tail before the stream starts", async () => {
+    // The bug this pins: the SSE stream only carries lines written after it
+    // connects, so the FIRST viewer used to see an empty pane until the server
+    // next said something — which reads as broken, not idle.
+    const stream = fakeStream();
+    openLogStreamMock.mockReturnValue(stream);
+    tailLogMock.mockResolvedValue("old line 1\nold line 2\n");
+
+    const seen: ConsoleEvent[] = [];
+    const off = subscribe(cfg, (e) => seen.push(e));
+
+    // Priming is one HTTP round trip; the stream must not start before it.
+    expect(stream.started).toBe(0);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(seen.filter((e) => e.type === "line").map((e) => (e as { line: string }).line))
+      .toEqual(["old line 1", "old line 2"]);
+    expect(stream.started).toBe(1);
+    expect(tailLogMock).toHaveBeenCalledWith(expect.anything(), 100);
+    off();
+  });
+
+  it("still opens the live stream when the tail cannot be fetched", async () => {
+    // A missing backlog is a worse console, not a broken one.
+    const stream = fakeStream();
+    openLogStreamMock.mockReturnValue(stream);
+    tailLogMock.mockRejectedValue(new Error("wrapper unreachable"));
+
+    const off = subscribe(cfg, () => {});
+    await new Promise((r) => setTimeout(r, 0));
+    expect(stream.started).toBe(1);
+    off();
   });
 
   it("replays the backlog to a viewer who joins late", () => {

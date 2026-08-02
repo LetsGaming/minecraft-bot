@@ -118,19 +118,8 @@
                 @click="runAction(server.id, action)"
               />
             </div>
-            <Button
-              v-if="can('server:read', server.id)"
-              :label="logServer === server.id ? 'Hide log' : 'View log'"
-              icon="pi pi-align-left"
-              size="small"
-              severity="secondary"
-              text
-              :disabled="busy === server.id"
-              @click="toggleLog(server.id)"
-            />
           </div>
 
-          <pre v-if="logServer === server.id" class="log mono">{{ logLines.join("\n") }}</pre>
         </template>
       </Card>
     </div>
@@ -186,7 +175,9 @@ export default defineComponent({
       }
     }
 
-    const { busy, logServer, logLines, runAction, toggleLog } = useServerActions(refresh);
+    // Log viewing moved to the Console tab, which streams live instead of
+    // fetching a fixed tail — this view keeps only the operator actions.
+    const { busy, runAction } = useServerActions(refresh);
     const { can } = useCapabilities();
 
     /**
@@ -209,7 +200,7 @@ export default defineComponent({
 
     return {
       servers, refreshing: loading, refresh,
-      busy, logServer, logLines, runAction, toggleLog,
+      busy, runAction,
       can, actionsFor,
       formatBytes, diskLabel, tpsSeverity,
       statusDot, stateLabel, stateSeverity, stateExplanation, wrapperNote,

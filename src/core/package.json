@@ -1,6 +1,6 @@
 {
   "name": "@mcbot/core",
-  "version": "5.1.0",
+  "version": "5.2.0",
   "private": true,
   "type": "module",
   "description": "Process-agnostic core: config service, data layer (SQLite + JSON), server access, RCON, locales. Imported by bot and web; imports neither.",
@@ -13,7 +13,8 @@
   "dependencies": {
     "@mcbot/schema": "*",
     "ajv": "^8.20.0",
-    "better-sqlite3": "^12.4.1"
+    "better-sqlite3": "^12.4.1",
+    "jsonc-parser": "^3.3.1"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

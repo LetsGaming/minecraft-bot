@@ -145,6 +145,11 @@
             :server-ids="servers.map((s) => s.id)"
             :active-server="activeServer"
           />
+          <ModConfigView
+            v-if="activeTab === 'modconfig' && shows('modconfig')"
+            :server-ids="servers.map((s) => s.id)"
+            :active-server="activeServer"
+          />
           <GuildsView
             v-if="activeTab === 'guilds' && shows('guilds')"
             :sysadmin="isSysadmin"
@@ -179,6 +184,7 @@ import OverviewView from "./views/OverviewView.vue";
 import StatusView from "./views/StatusView.vue";
 import ConsoleView from "./views/ConsoleView.vue";
 import BackupsView from "./views/BackupsView.vue";
+import ModConfigView from "./views/ModConfigView.vue";
 import GuildsView from "./views/GuildsView.vue";
 import CommandsView from "./views/CommandsView.vue";
 import ConfigView from "./views/ConfigView.vue";
@@ -196,8 +202,8 @@ export default defineComponent({
   name: "App",
   components: {
     Button, Message, Toast, ConfirmDialog, StatusDot, EmptyState,
-    OverviewView, StatusView, ConsoleView, BackupsView, GuildsView, CommandsView,
-    ConfigView, AuditView,
+    OverviewView, StatusView, ConsoleView, BackupsView, ModConfigView, GuildsView,
+    CommandsView, ConfigView, AuditView,
   },
   setup() {
     return { ...useInvite(), ...useCapabilities(), statusDot };
@@ -222,6 +228,7 @@ export default defineComponent({
         { id: "status", label: "Servers", icon: "pi pi-server", gate: "server:read" },
         { id: "console", label: "Console", icon: "pi pi-desktop", gate: "server:read" },
         { id: "backups", label: "Backups", icon: "pi pi-box", gate: "server:read" },
+        { id: "modconfig", label: "Mod Config", icon: "pi pi-sliders-h", gate: "config:read" },
         { id: "guilds", label: "Guilds", icon: "pi pi-discord", gate: "guild" },
         { id: "commands", label: "Commands", icon: "pi pi-bolt", gate: "sysadmin" },
         { id: "config", label: "Config", icon: "pi pi-sliders-h", gate: "sysadmin" },
@@ -274,12 +281,15 @@ export default defineComponent({
       if (item.gate === "guild") return this.isSysadmin || (this.me?.guildCount ?? 0) > 0;
       if (!this.canAnywhere(item.gate)) return false;
       // The Backups panel needs a wrapper new enough to serve the archive
-      // index. Hiding the tab is better than showing one that errors on open:
-      // an operator running an older wrapper should see nothing missing, not
-      // something broken. Servers load after /api/me, so the tab appears once
-      // the first status poll answers.
+      // index, so hide it when one positively says it cannot — better than a
+      // tab that errors on open.
+      //
+      // `!== false` and not `=== true`: null means "could not ask the wrapper"
+      // (unreachable, or still loading), and that must not hide the tab. It
+      // matches how action buttons already treat unknown, and it avoids an
+      // outage looking like the feature disappeared.
       if (item.id === "backups") {
-        return this.servers.some((s) => s.features?.backupFiles === true);
+        return this.servers.some((s) => s.features?.backupFiles !== false);
       }
       return true;
     },
