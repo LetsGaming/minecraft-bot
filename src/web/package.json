@@ -12,7 +12,7 @@
     "@mcbot/schema": "*",
     "@primevue/themes": "^4.5.4",
     "@sinclair/typebox": "^0.34.52",
-    "fastify": "^5.10.0",
+    "fastify": "^5.11.0",
     "primeicons": "^7.0.0",
     "primevue": "^4.5.5"
   },
