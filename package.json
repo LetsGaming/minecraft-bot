@@ -43,11 +43,11 @@
     "e2e:dashboard": "node scripts/e2e-dashboard-reports.mjs"
   },
   "devDependencies": {
-    "@types/node": "^25.9.2",
-    "@typescript-eslint/eslint-plugin": "^8.60.1",
+    "@types/node": "^25.9.5",
+    "@typescript-eslint/eslint-plugin": "^8.66.0",
     "@typescript-eslint/parser": "^8.60.1",
-    "@vitest/coverage-v8": "^4.1.8",
-    "eslint": "^10.4.1",
+    "@vitest/coverage-v8": "^4.1.10",
+    "eslint": "^10.8.0",
     "ts-json-schema-generator": "^2.9.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8"
