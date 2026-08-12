@@ -15,7 +15,7 @@ import {
   MAX_PENDING_PER_PLAYER,
 } from "@mcbot/core/utils/stores/dailyStore.js";
 import { t } from "@mcbot/core/utils/i18n.js";
-import { getOnlinePlayers } from "@mcbot/core/utils/minecraft/playerUtils.js";
+import { getOnlinePlayers, isPlayerOnline } from "@mcbot/core/utils/minecraft/playerUtils.js";
 import { isLinked, getLinkedAccount } from "@mcbot/core/utils/stores/linkUtils.js";
 import { createErrorEmbed } from "../../../utils/embeds/embedUtils.js";
 import type {
@@ -119,7 +119,7 @@ async function _execute(
     return;
   }
 
-  const online = (await getOnlinePlayers(server)).includes(username);
+  const online = isPlayerOnline(await getOnlinePlayers(server), username);
 
   const { currentStreak, bonusStreak, longestStreak } = calcStreak(
     userData,

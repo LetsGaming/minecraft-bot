@@ -2,23 +2,14 @@
   <div>
     <ViewHeader title="Guilds" subtitle="Discord servers the bot is configured for, and how to add more." />
 
-    <!-- Add-to-server hero -->
-    <div class="hero">
-      <div class="hero-icon"><i class="pi pi-discord" /></div>
-      <div class="hero-body">
-        <h3>Add the bot to a new server</h3>
-        <p class="muted">
-          Invite the bot to any Discord server you manage. After it joins,
-          set up its features below with a couple of clicks.
-        </p>
-      </div>
-      <Button
-        label="Add to Server"
-        icon="pi pi-external-link"
-        :loading="inviting"
-        @click="invite"
-      />
-    </div>
+    <!-- The invite action lives in the sidebar, on every page. Repeating it
+         here as a hero made it the third copy of one button and pushed the
+         list this page exists for below the fold. -->
+    <p class="invite-note muted small">
+      <i class="pi pi-discord" />
+      Not listed? Use <strong>Add to Server</strong> in the sidebar to invite the
+      bot to a Discord server you manage, then set it up here.
+    </p>
 
     <div v-if="loading" class="center muted">
       <i class="pi pi-spin pi-spinner" style="font-size: 1.4rem" />
@@ -38,7 +29,7 @@
       <EmptyState v-if="guildIds.length === 0" icon="pi pi-inbox">
         No guilds configured yet.
         <template #action>
-          <div class="muted small" style="margin-bottom: 12px">Invite the bot above, then set up its first guild.</div>
+          <div class="muted small" style="margin-bottom: 12px">Invite the bot with <strong>Add to Server</strong> in the sidebar, then set up its first guild.</div>
           <Button
             label="Set up first guild"
             icon="pi pi-plus"
@@ -208,22 +199,12 @@ export default defineComponent({
 </script>
 
 <style scoped>
-.hero {
-  display: flex; align-items: center; gap: 18px;
-  background: linear-gradient(100deg, rgba(52, 197, 106, 0.09), rgba(25, 27, 31, 0.2) 60%);
-  border: 0.5px solid var(--mc-border);
-  border-radius: 11px;
-  padding: 15px 18px;
-  margin-bottom: 26px;
+.invite-note {
+  display: flex; align-items: baseline; gap: 8px;
+  max-width: 78ch; margin: 0 0 18px;
 }
-.hero-icon {
-  width: 44px; height: 44px; flex: none;
-  border-radius: 11px; display: grid; place-items: center;
-  background: var(--mc-discord); color: var(--mc-on-brand); font-size: 21px;
-}
-.hero-body { flex: 1; }
-.hero-body h3 { margin: 0 0 2px; font-size: 14.5px; font-weight: 500; }
-.hero-body p { margin: 0; max-width: 62ch; }
+.invite-note i { color: var(--mc-discord); }
+
 
 .section-label {
   display: flex; justify-content: space-between; align-items: center;

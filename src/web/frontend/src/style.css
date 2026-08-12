@@ -25,7 +25,24 @@
   /* Accent-tinted surface + dark text that reads on an accent-filled element. */
   --mc-accent-bg: #1e2b22;
   --mc-on-accent: #06210f;
+
+  /* Semantic aliases. Views ask for the meaning, not the swatch, so a
+     severity can be retuned in one place. `--mc-danger` was referenced by
+     ConsoleView with a raw blue-red fallback before it existed. */
+  --mc-danger: var(--mc-bad);
+  --mc-hover: #22252a;
+
+  /* Shape + type. `--mc-radius` and `--mc-mono` were both used in view
+     styles while undefined, so those panes rendered with square corners
+     and the browser's default monospace instead of the intended stack. */
+  --mc-radius: 10px;
+  --mc-radius-sm: 7px;
+  --mc-mono: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+
+  /* Shell metrics. The content column was capped at 1160px and pinned
+     left, so on a wide display more than half the viewport was empty. */
   --mc-sidebar-w: 210px;
+  --mc-content-max: 1720px;
 }
 
 * { box-sizing: border-box; }
@@ -46,9 +63,7 @@ a { color: var(--mc-accent); }
 .small { font-size: 13px; }
 .stack { display: flex; flex-direction: column; gap: 4px; }
 .row-between { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.mono { font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace; }
-
-/* Status dot */
+.mono { font-family: var(--mc-mono); }
 
 /* Scrollbar polish */
 ::-webkit-scrollbar { width: 10px; height: 10px; }

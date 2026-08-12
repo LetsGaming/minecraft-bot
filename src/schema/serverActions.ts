@@ -6,6 +6,8 @@
 // literals, a `Record<string, …>`, or a bare `sub === "stop"` — which is how
 // the dashboard's list quietly drifted out of sync with the runner's.
 
+import { ServerState } from "./serverState.js";
+
 /** Every management script the suite exposes. */
 export const SERVER_SCRIPT_ACTIONS = [
   "start",
@@ -74,4 +76,40 @@ export function isIrreversibleServerAction(value: string): boolean {
 /** Does this action interrupt players, warranting a confirm step? */
 export function isDisruptiveServerAction(value: string): boolean {
   return (DISRUPTIVE_SERVER_ACTIONS as readonly string[]).includes(value);
+}
+
+/**
+ * Whether an action is worth offering against a server in this state.
+ *
+ * The dashboard rendered every granted action as live regardless of state, so
+ * a server sitting at 20 TPS still showed an enabled, primary-styled "Start"
+ * — the one button on the card that could only fail. Offering an impossible
+ * action is a state-visibility bug, not a permissions one: the operator reads
+ * the button as an available choice and learns otherwise from an error toast.
+ *
+ * `Unknown` deliberately allows everything. We established nothing about the
+ * server, and disabling the controls on ignorance would hide exactly the
+ * buttons someone needs when a host is misbehaving.
+ */
+export function isActionApplicable(
+  action: ServerOperatorAction,
+  state: ServerState,
+): boolean {
+  if (state === ServerState.Unknown) return true;
+  const running =
+    state === ServerState.Online || state === ServerState.Unresponsive;
+  switch (action) {
+    // Nothing to start when it is already up.
+    case "start":
+      return !running;
+    // Both need a live process to talk to.
+    case "stop":
+    case "restart":
+      return running;
+    // A world-file operation: it needs the server *stopped*, and the suite's
+    // script stops it first, so it stays offered either way.
+    case "rollback":
+    case "backup":
+      return true;
+  }
 }

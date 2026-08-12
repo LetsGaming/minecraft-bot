@@ -7,7 +7,7 @@
     />
     <div class="label-block">
       <span class="fname">{{ name }}</span>
-      <span v-if="description" class="hint">{{ description }}</span>
+      <FieldHint :text="description" />
     </div>
   </div>
 
@@ -24,7 +24,7 @@
       class="fcontrol"
       @update:modelValue="emitValue($event ?? undefined)"
     />
-    <span v-if="description" class="hint">{{ description }}</span>
+    <FieldHint :text="description" />
   </div>
 
   <!-- ID reference (single) → dropdown of entity names (channel/role/server) -->
@@ -41,7 +41,7 @@
       class="fcontrol"
       @update:modelValue="emitValue($event ?? undefined)"
     />
-    <span v-if="description" class="hint">{{ description }}</span>
+    <FieldHint :text="description" />
   </div>
 
   <!-- ID reference (one or many) → multi-select of entity names -->
@@ -58,7 +58,7 @@
       class="fcontrol"
       @update:modelValue="emitArray($event)"
     />
-    <span v-if="description" class="hint">{{ description }}</span>
+    <FieldHint :text="description" />
   </div>
 
   <!-- String -->
@@ -69,7 +69,7 @@
       class="fcontrol"
       @update:modelValue="onScalarInput($event ?? '')"
     />
-    <span v-if="description" class="hint">{{ description }}</span>
+    <FieldHint :text="description" />
   </div>
 
   <!-- Number -->
@@ -81,13 +81,13 @@
       :useGrouping="false"
       @update:modelValue="emitValue($event ?? undefined)"
     />
-    <span v-if="description" class="hint">{{ description }}</span>
+    <FieldHint :text="description" />
   </div>
 
   <!-- Object with declared properties: recurse -->
   <fieldset v-else-if="kind === 'object'" class="group">
     <legend>{{ name }}</legend>
-    <p v-if="description" class="hint group-hint">{{ description }}</p>
+    <FieldHint v-if="description" :text="description" class="group-hint" />
     <SchemaField
       v-for="(childSchema, key) in objectProps"
       :key="key"
@@ -113,7 +113,7 @@
       class="fcontrol"
       @update:modelValue="emitArray($event)"
     />
-    <span v-if="description" class="hint">{{ description }}</span>
+    <FieldHint :text="description" />
   </div>
 
   <!-- Array of free-form strings → chips (e.g. adminUsers, a ServerScope list) -->
@@ -125,7 +125,7 @@
       class="fcontrol"
       @update:modelValue="emitArray($event)"
     />
-    <span v-if="description" class="hint">{{ description }}</span>
+    <FieldHint :text="description" />
   </div>
 
   <!-- Array of numbers → chips with numeric coercion (e.g. warnMinutes) -->
@@ -137,7 +137,7 @@
       class="fcontrol"
       @update:modelValue="emitNumberArray($event)"
     />
-    <span class="hint">Numbers, comma-separated.<template v-if="description"> {{ description }}</template></span>
+    <FieldHint :text="`Numbers, comma-separated.${description ? ' ' + description : ''}`" />
   </div>
 
   <!-- Record<string, X> → key/value editor (reused MapField) -->
@@ -171,7 +171,7 @@
       @update:modelValue="onJsonInput($event)"
     />
     <span v-if="jsonError" class="err">{{ jsonError }}</span>
-    <span v-else-if="description" class="hint">{{ description }}</span>
+    <FieldHint v-else :text="description" />
   </div>
 </template>
 
@@ -188,6 +188,7 @@ import ToggleSwitch from "primevue/toggleswitch";
 import Textarea from "primevue/textarea";
 import MapField from "./MapField.vue";
 import ArrayField from "./ArrayField.vue";
+import FieldHint from "../ui/FieldHint.vue";
 import {
   derefNode,
   classifyField,
@@ -203,7 +204,10 @@ import {
 
 export default defineComponent({
   name: "SchemaField",
-  components: { InputText, InputNumber, Select, MultiSelect, InputChips, ToggleSwitch, Textarea, MapField, ArrayField },
+  components: {
+    InputText, InputNumber, Select, MultiSelect, InputChips, ToggleSwitch,
+    Textarea, MapField, ArrayField, FieldHint,
+  },
   props: {
     name: { type: String, required: true },
     schema: { type: Object as PropType<unknown>, required: true },
@@ -270,6 +274,28 @@ export default defineComponent({
       if (!options || options.length === 0) return null;
       return { multi: this.kind === "chips", options };
     },
+    /**
+     * When an ID field falls back to a text box, say why.
+     *
+     * A bare input holding a snowflake is indistinguishable from a design
+     * decision. Naming the cause turns it into a temporary state ("still
+     * loading") or an actionable one ("the bot cannot list this guild's
+     * channels"), and stops it reading as the way the product works.
+     */
+    refFallbackNote(): string {
+      const rk = referenceKind(this.name);
+      if (!rk || rk === "server" || this.refControl) return "";
+      switch (this.schemaRefs?.status) {
+        case "loading":
+          return `Loading ${rk}s…`;
+        case "unavailable":
+          return `Can't list this guild's ${rk}s right now — enter an ID, or reopen once the bot can reach it.`;
+        case "ready":
+          return `This guild has no ${rk} the bot can use.`;
+        default:
+          return "";
+      }
+    },
     jsonText(): string {
       return this.modelValue === undefined ? "" : JSON.stringify(this.modelValue, null, 2);
     },
@@ -315,13 +341,13 @@ export default defineComponent({
 </script>
 
 <style scoped>
+.ref-note { color: var(--mc-mid); display: block; margin-top: 3px; }
 .field { display: flex; flex-direction: column; gap: 5px; margin: 12px 0; }
 .field.row { flex-direction: row; align-items: flex-start; gap: 12px; }
 .label-block { display: flex; flex-direction: column; gap: 2px; padding-top: 2px; }
 .fname { font-weight: 600; font-size: 14px; }
 .fcontrol { width: 100%; max-width: 480px; }
 .json-area { max-width: 640px; font-family: ui-monospace, monospace; font-size: 13px; }
-.hint { color: var(--mc-muted); font-size: 12.5px; line-height: 1.45; max-width: 60ch; }
 .group-hint { margin: 0 0 8px; }
 .err { color: var(--mc-bad); font-size: 12.5px; }
 

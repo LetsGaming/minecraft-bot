@@ -15,6 +15,8 @@ import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../utils/embeds/embedColors.js";
 import { getModList, type ModInfo } from "@mcbot/core/utils/minecraft/modUtils.js";
+import { readThrough } from "@mcbot/core/utils/wrapper/lastKnown.js";
+import { relativeAge } from "@mcbot/core/utils/relativeTime.js";
 import { withErrorHandling } from "../middleware.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { requireCapability } from "@mcbot/core/utils/server/capabilities.js";
@@ -88,7 +90,16 @@ export const execute = withErrorHandling(async (interaction) => {
     "a mod manifest (common/downloaded_versions.json)",
   );
 
-  const modList = await getModList(server);
+  // Read through the shared last-known cache, so a wrapper blip shows the mod
+  // list from the last successful read rather than an error. The list a client
+  // needs changes only on a mod update, so a slightly old one is still right
+  // far more often than not. Same cache the dashboard uses — one source, one
+  // behaviour.
+  const { value: modList, stale } = await readThrough(
+    server.id,
+    "modList",
+    () => getModList(server),
+  );
 
   const total =
     modList.serverOnly.length +
@@ -105,8 +116,15 @@ export const execute = withErrorHandling(async (interaction) => {
   addModFields(embed, "🔧 Optional (client)", modList.clientOptional);
   addModFields(embed, "🔒 Server-only", modList.serverOnly);
 
+  // When this came from the cache during an outage, say so — the same honesty
+  // the dashboard's stale banner gives: an old list shown as current is worse
+  // than an old list labelled old.
   const fetchedAt = formatTime(modList.fetchedAt);
-  embed.setFooter({ text: `Data from Modrinth · last fetched ${fetchedAt}` });
+  embed.setFooter({
+    text: stale
+      ? `Last known list from ${relativeAge(stale.asOf)} — the server isn't answering right now`
+      : `Data from Modrinth · last fetched ${fetchedAt}`,
+  });
 
   await interaction.editReply({ embeds: [embed] });
 });

@@ -1,30 +1,21 @@
 <template>
   <fieldset class="group">
     <legend>{{ name }}</legend>
-    <p v-if="description" class="hint group-hint">{{ description }}</p>
+    <FieldHint v-if="description" :text="description" class="group-hint" />
 
     <div v-if="keys.length === 0" class="muted small map-empty">No entries yet.</div>
 
-    <div v-for="key in keys" :key="key" class="map-entry">
-      <div class="map-entry-top">
-        <code class="map-key">{{ key }}</code>
-        <Button
-          icon="pi pi-trash"
-          text
-          severity="secondary"
-          size="small"
-          v-tooltip.top="'Remove'"
-          @click="removeKey(key)"
-        />
-      </div>
-      <SchemaField
-        :name="key"
-        :schema="valueSchema"
-        :definitions="definitions"
-        :model-value="model[key]"
-        @update:model-value="setValue(key, $event)"
-      />
-    </div>
+    <MapEntry
+      v-for="key in keys"
+      :key="key"
+      :map-name="name"
+      :entry-key="key"
+      :value-schema="valueSchema"
+      :definitions="definitions"
+      :model-value="model[key]"
+      @update:model-value="setValue(key, $event)"
+      @remove="removeKey"
+    />
 
     <div class="map-add">
       <InputText
@@ -44,6 +35,8 @@ import { defineComponent, type PropType } from "vue";
 import { isRecord } from "../../utils/isRecord";
 import InputText from "primevue/inputtext";
 import Button from "primevue/button";
+import FieldHint from "../ui/FieldHint.vue";
+import MapEntry from "./MapEntry.vue";
 import {
   mapValueSchema,
   classifyField,
@@ -64,6 +57,8 @@ export default defineComponent({
   components: {
     InputText,
     Button,
+    FieldHint,
+    MapEntry,
   },
   props: {
     name: { type: String, required: true },
@@ -139,20 +134,6 @@ export default defineComponent({
 </script>
 
 <style scoped>
-.map-entry {
-  border-left: 2px solid var(--mc-border);
-  padding-left: 12px;
-  margin: 10px 0;
-}
-.map-entry-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.map-key {
-  font-weight: 600;
-}
 .map-add {
   display: flex;
   gap: 8px;
@@ -165,11 +146,6 @@ export default defineComponent({
 .err {
   color: var(--mc-bad);
   font-size: 12.5px;
-}
-.hint {
-  color: var(--mc-muted);
-  font-size: 12.5px;
-  line-height: 1.45;
 }
 .group-hint {
   margin: 0 0 8px;

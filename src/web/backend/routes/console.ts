@@ -34,7 +34,8 @@ import { IdParams, ConsoleCommandBody } from "./schemas.js";
 
 /** Same contract as servers.ts: an internal failure says nothing specific. */
 const COMMAND_FAILED =
-  "The command could not be delivered — see the bot logs for details.";
+  "The command couldn't be delivered — the wrapper isn't answering. " +
+  "Console commands run in the moment, so this one wasn't queued; try again once the server is reachable.";
 
 function requireServer(id: string): NonNullable<ReturnType<typeof getServerInstance>> {
   const server = getServerInstance(id);

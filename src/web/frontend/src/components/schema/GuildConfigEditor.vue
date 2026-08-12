@@ -79,15 +79,20 @@ export default defineComponent({
     guildName: { type: String, default: "" },
   },
   emits: ["update:visible", "saved"],
-  setup() {
+  setup(props) {
     // Provide named-entity options (servers + this guild's channels/roles) so
     // SchemaField renders ID fields as name dropdowns instead of text boxes.
+    // The scope is a live view onto the shared per-guild cache, so it is the
+    // same object the config page hands its matching entry: one guild, one
+    // channel list, whichever editor you opened.
     const refsApi = useSchemaRefs();
-    provide(SchemaRefsKey, refsApi.refs);
+    // Follows the prop: this dialog is one instance reused for every guild,
+    // so a scope captured at setup would pin it to whichever opened first.
+    provide(SchemaRefsKey, refsApi.dynamicGuildScope(() => props.guildId));
     return {
       ...useGuildConfig(),
       loadServers: refsApi.loadServers,
-      loadGuildRefs: refsApi.loadGuild,
+      loadGuildRefs: refsApi.loadGuildRefs,
     };
   },
   computed: {

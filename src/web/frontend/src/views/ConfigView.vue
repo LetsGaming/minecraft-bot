@@ -68,7 +68,13 @@ import ToggleSwitch from "primevue/toggleswitch";
 import Message from "primevue/message";
 import SchemaField from "../components/schema/SchemaField.vue";
 import { derefNode } from "../components/schema/schemaField";
-import { useSchemaRefs, SchemaRefsKey } from "../composables/useSchemaRefs";
+import {
+  useSchemaRefs,
+  SchemaRefsKey,
+  MapKeyLabelKey,
+  SchemaScopeKey,
+} from "../composables/useSchemaRefs";
+import { useGuilds } from "../composables/useGuilds";
 import ViewHeader from "../components/ui/ViewHeader.vue";
 import { useConfig } from "../composables/useConfig";
 
@@ -80,8 +86,31 @@ export default defineComponent({
     // per-feature `server` scope) render as name dropdowns. Channels/roles are
     // guild-scoped and have no single-guild context here, so those stay text.
     const refsApi = useSchemaRefs();
-    provide(SchemaRefsKey, refsApi.refs);
-    return { ...useConfig(), loadServerRefs: refsApi.loadServers };
+    const { guildName, load: loadGuildNames } = useGuilds();
+
+    // Global scope for the top-level fields (servers, language, timezone…),
+    // which have no guild and should say so rather than look unloaded.
+    provide(SchemaRefsKey, refsApi.globalScope);
+
+    // Name the `guilds` map's entries from the same source the Guilds page
+    // uses, so the two surfaces cannot disagree about what a guild is called.
+    provide(MapKeyLabelKey, (mapName: string, key: string) =>
+      mapName === "guilds" ? guildName(key) : undefined,
+    );
+
+    // Give each guild entry its own channels and roles. This is what closes
+    // the gap between this page and the single-guild modal: the same
+    // `channelId` field now renders as a #channel picker in both, and a
+    // picker inside one guild can only ever offer that guild's channels.
+    provide(SchemaScopeKey, (mapName: string, key: string) =>
+      mapName === "guilds" ? refsApi.scopeForGuild(key) : undefined,
+    );
+
+    return {
+      ...useConfig(),
+      loadServerRefs: refsApi.loadServers,
+      loadGuildNames,
+    };
   },
   computed: {
     topLevelProps(): Record<string, unknown> {
@@ -91,7 +120,7 @@ export default defineComponent({
     },
   },
   async mounted() {
-    await Promise.all([this.load(), this.loadServerRefs()]);
+    await Promise.all([this.load(), this.loadServerRefs(), this.loadGuildNames()]);
   },
 });
 </script>

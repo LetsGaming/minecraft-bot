@@ -1,5 +1,9 @@
 <template>
   <div>
+    <StaleBanner
+      :stale="stale"
+      write-note="Restore and download both go through the wrapper, so they're unavailable until it answers."
+    />
     <ViewHeader title="Backups" subtitle="Archives on the server, newest first.">
       <template #actions>
         <Button
@@ -44,7 +48,15 @@
         </template>
       </EmptyState>
 
-      <table v-else class="backups">
+      <div v-else class="summary">
+        <span class="sum-main">{{ files.length }} of {{ total }} archives</span>
+        <span class="muted small">{{ formatBytes(shownBytes) }} shown</span>
+        <span v-if="newest" class="muted small" :title="timestampTitle(newest)">
+          newest {{ relativeAge(newest) }}
+        </span>
+      </div>
+
+      <table v-if="files.length" class="backups">
         <thead>
           <tr>
             <th>Archive</th>
@@ -57,9 +69,11 @@
         <tbody>
           <tr v-for="file in files" :key="file.id">
             <td class="mono name">{{ file.name }}</td>
-            <td><Tag :value="file.tier" severity="secondary" /></td>
+            <td><Tag :value="tierLabel(file.tier)" severity="secondary" /></td>
             <td class="num">{{ formatBytes(file.sizeBytes) }}</td>
-            <td class="muted small">{{ age(file.mtimeMs) }}</td>
+            <td class="muted small" :title="timestampTitle(file.mtimeMs)">
+              {{ relativeAge(file.mtimeMs) }}
+            </td>
             <td class="actions-col">
               <Button
                 v-if="can('backup:download', current)"
@@ -86,12 +100,8 @@
         </tbody>
       </table>
 
-      <div v-if="files.length > 0" class="foot">
-        <span class="muted small">
-          Showing {{ files.length }} of {{ total }}
-        </span>
+      <div v-if="hasMore" class="foot">
         <Button
-          v-if="hasMore"
           label="Load more"
           size="small"
           severity="secondary"
@@ -111,24 +121,45 @@ import Tag from "primevue/tag";
 import Message from "primevue/message";
 import { useToast } from "primevue/usetoast";
 import { formatBytes } from "@mcbot/schema";
+import { tierLabel } from "../utils/format";
+import { relativeAge, timestampTitle } from "../utils/time";
 import { useBackups } from "../composables/useBackups";
 import { useCapabilities } from "../composables/useCapabilities";
 import ViewHeader from "../components/ui/ViewHeader.vue";
+import StaleBanner from "../components/ui/StaleBanner.vue";
 import EmptyState from "../components/ui/EmptyState.vue";
 import type { BackupFileInfo } from "../api";
 
 export default defineComponent({
   name: "BackupsView",
-  components: { Button, Tag, Message, ViewHeader, EmptyState },
+  components: { Button, Tag, Message, ViewHeader, StaleBanner, EmptyState },
   props: {
     serverIds: { type: Array as () => string[], default: () => [] },
     activeServer: { type: String, default: "" },
   },
   setup() {
-    return { ...useBackups(), ...useCapabilities(), formatBytes, toast: useToast() };
+    return {
+      ...useBackups(),
+      ...useCapabilities(),
+      formatBytes, tierLabel, relativeAge, timestampTitle,
+      toast: useToast(),
+    };
   },
   data() {
     return { current: "" };
+  },
+  computed: {
+    /**
+     * What the listed archives occupy. The page could say how many files
+     * there were but never what they cost, which is the number that decides
+     * whether a retention tier needs trimming.
+     */
+    shownBytes(): number {
+      return this.files.reduce((sum, f) => sum + f.sizeBytes, 0);
+    },
+    newest(): number | null {
+      return this.files[0]?.mtimeMs ?? null;
+    },
   },
   watch: {
     activeServer(id: string) {
@@ -154,12 +185,6 @@ export default defineComponent({
     },
     reload(): Promise<void> {
       return this.load(this.current);
-    },
-    age(mtimeMs: number): string {
-      const hours = (Date.now() - mtimeMs) / 3_600_000;
-      if (hours < 1) return `${Math.max(1, Math.round(hours * 60))} min ago`;
-      if (hours < 48) return `${Math.round(hours)} h ago`;
-      return `${Math.round(hours / 24)} days ago`;
     },
     /**
      * Restore asks for the server's name, typed.
@@ -217,8 +242,14 @@ export default defineComponent({
 
 .foot {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
-  padding-top: 10px;
+  padding-top: 12px;
 }
+
+.summary {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 14px;
+  padding: 0 8px 10px;
+}
+.sum-main { font-size: 14px; }
 </style>

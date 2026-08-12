@@ -73,9 +73,70 @@ export function useCommands() {
       const res = await apiGet<CommandsResponse>("/api/commands");
       data.value = res;
       overrides.value = JSON.parse(JSON.stringify(res.overrides));
+      dirty.value = false;
     } catch (err) {
       loadError.value = errorMessage(err);
     }
+  }
+
+  /**
+   * Throw the edits away and go back to what the server last confirmed.
+   *
+   * Without this the only exit from a half-finished change was reloading the
+   * page, which is a destructive action dressed as a browser control: it
+   * looks identical to the one that keeps your work.
+   */
+  function discard(): void {
+    if (!data.value) return;
+    overrides.value = JSON.parse(JSON.stringify(data.value.overrides));
+    dirty.value = false;
+  }
+
+  /** How many commands carry an override at the current scope. */
+  function overriddenCount(): number {
+    return Object.keys(currentBlock()).length;
+  }
+
+  /** Does this command differ from what it would inherit at this scope? */
+  function isOverridden(name: string): boolean {
+    return currentBlock()[name] !== undefined;
+  }
+
+  /** How many commands were edited but not yet saved, across every scope. */
+  function pendingCount(): number {
+    if (!data.value) return 0;
+    const before = data.value.overrides;
+    const after = overrides.value;
+    let count = 0;
+    const compare = (
+      a: Record<string, Override> | undefined,
+      b: Record<string, Override> | undefined,
+    ): void => {
+      const names = new Set([...Object.keys(a ?? {}), ...Object.keys(b ?? {})]);
+      for (const name of names) {
+        if (JSON.stringify(a?.[name]) !== JSON.stringify(b?.[name])) count += 1;
+      }
+    };
+    compare(before.global, after.global);
+    for (const gid of new Set([...Object.keys(before.guilds), ...Object.keys(after.guilds)])) {
+      compare(before.guilds[gid], after.guilds[gid]);
+    }
+    for (const sid of new Set([...Object.keys(before.servers), ...Object.keys(after.servers)])) {
+      compare(before.servers[sid], after.servers[sid]);
+    }
+    return count;
+  }
+
+  /**
+   * Clear every override at the current scope in one step.
+   *
+   * Undoing 45 commands one segmented control at a time is not a workflow,
+   * and it is the exact thing someone wants after experimenting on a guild.
+   */
+  function resetScope(): void {
+    const block = currentBlock();
+    for (const name of Object.keys(block)) delete block[name];
+    dirty.value = true;
   }
 
   /** The mutable override block for the currently selected scope. */
@@ -200,5 +261,6 @@ export function useCommands() {
     loadError, saving, dirty, scope, data, overrides,
     load, currentBlock, fieldValue, setField, effectiveFor, save,
     optionSpecs, optionValue, setOption,
+    discard, resetScope, isOverridden, overriddenCount, pendingCount,
   };
 }

@@ -23,6 +23,8 @@ import {
 } from "@mcbot/core/utils/server/serverAccess.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { log } from "@mcbot/core/utils/logger.js";
+import { readThrough } from "@mcbot/core/utils/wrapper/lastKnown.js";
+import { recordIntent } from "@mcbot/core/utils/wrapper/deferredIntents.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 import { sessionFromRequest } from "../auth/auth.js";
 import { BadRequest, NotFound, HttpError } from "../errors.js";
@@ -68,11 +70,21 @@ export function registerBackupRoutes(app: FastifyInstance): void {
     async (req) => {
       const server = requireServer(req.params.id);
       const limit = parseInt(req.query.limit ?? "50", 10);
+      const opts = {
+        ...(req.query.cursor ? { cursor: req.query.cursor } : {}),
+        limit: Number.isNaN(limit) ? 50 : Math.min(Math.max(limit, 1), 200),
+      };
       try {
-        return await indexBackupFiles(server.config, {
-          ...(req.query.cursor ? { cursor: req.query.cursor } : {}),
-          limit: Number.isNaN(limit) ? 50 : Math.min(Math.max(limit, 1), 200),
-        });
+        // Only the first page is remembered. A cursor points into a listing
+        // that no longer exists once the wrapper is gone, so replaying one
+        // from cache would hand back a page that never joins up.
+        if (req.query.cursor) return await indexBackupFiles(server.config, opts);
+        const { value, stale } = await readThrough(
+          req.params.id,
+          "backupIndex",
+          () => indexBackupFiles(server.config, opts),
+        );
+        return { ...value, stale };
       } catch (err) {
         log.error("web", `Backup index for ${req.params.id} failed: ${errMsg(err)}`);
         throw new HttpError(502, OPERATION_FAILED);
@@ -165,6 +177,18 @@ export function registerBackupRoutes(app: FastifyInstance): void {
           stderr: result.stderr.slice(-4000),
         };
       } catch (err) {
+        // A restore is the most destructive thing here, so it is the last
+        // thing that should ever replay unattended: a restore queued at 14:00
+        // and applied at 17:00 discards three hours of play nobody agreed to
+        // lose. Remembered as an intent, never as a queued action.
+        recordIntent({
+          serverId: req.params.id,
+          action: "restore",
+          target: fileId,
+          attemptedAt: Date.now(),
+          byTag: sessionFromRequest(req)!.tag,
+          reason: errMsg(err),
+        });
         log.error("web", `Restore on ${req.params.id} failed: ${errMsg(err)}`);
         throw new HttpError(502, OPERATION_FAILED);
       }

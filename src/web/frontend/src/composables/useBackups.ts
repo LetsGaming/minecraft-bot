@@ -1,5 +1,6 @@
 import { ref, computed } from "vue";
 import { apiGet, apiSend } from "../api";
+import type { StaleInfo } from "@mcbot/schema/contract.js";
 import { errorMessage } from "../utils/errorMessage";
 import type { BackupFileInfo } from "../api";
 
@@ -16,6 +17,8 @@ const PAGE_SIZE = 50;
 export function useBackups() {
   const files = ref<BackupFileInfo[]>([]);
   const total = ref(0);
+  /** Set when the index came from cache because the wrapper did not answer. */
+  const stale = ref<StaleInfo | null>(null);
   const cursor = ref<string | null>(null);
   const loading = ref(false);
   const restoring = ref("");
@@ -37,6 +40,7 @@ export function useBackups() {
         files: BackupFileInfo[];
         nextCursor: string | null;
         total: number;
+        stale?: StaleInfo | null;
       }>(
         `/api/servers/${encodeURIComponent(id)}/backups/files?${params.toString()}`,
       );
@@ -44,6 +48,7 @@ export function useBackups() {
       files.value = append ? [...files.value, ...res.files] : res.files;
       cursor.value = res.nextCursor;
       total.value = res.total;
+      stale.value = res.stale ?? null;
     } catch (err) {
       error.value = errorMessage(err);
       if (!append) files.value = [];
@@ -93,6 +98,7 @@ export function useBackups() {
   return {
     files,
     total,
+    stale,
     loading,
     restoring,
     error,

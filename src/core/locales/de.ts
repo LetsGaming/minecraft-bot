@@ -2,6 +2,20 @@
  * German locale. Keys missing here fall back to English per key.
  */
 export const de: Record<string, string> = {
+  // ── info (how to join) ──
+  "info.title": "Beitreten — {server}",
+  "info.address": "Adresse",
+  "info.addressUnset": "Nicht veröffentlicht. Adresse bei einem Admin erfragen.",
+  "info.version": "Minecraft-Version",
+  "info.versionUnknown": "Unbekannt — der Server hat nicht geantwortet.",
+  "info.loader": "Loader",
+  "info.loaderUnknown": "Nicht gemeldet",
+  "info.modpack": "Modpack",
+  "info.required": "Benötigte Mods",
+  "info.requiredCount": "{count} Mod(s) müssen auf dem Client installiert sein. Liste unter `/mods`.",
+  "info.requiredUnknown": "Die Modliste ist derzeit nicht lesbar.",
+  "info.vanillaJoin": "Keine — ein Vanilla-Client kann beitreten.",
+
   // ── common ──
   "common.serverNotFound": "Server nicht gefunden.",
   "common.noPermission": "Du hast keine Berechtigung für diesen Befehl.",

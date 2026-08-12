@@ -64,6 +64,28 @@ export const ModConfigRevertBody = Type.Object({
 });
 export type ModConfigRevertBody = Static<typeof ModConfigRevertBody>;
 
+/**
+ * Resolving one conflicted queued edit.
+ *
+ * `currentValue` is echoed back by the client rather than re-read here on
+ * purpose: it is the value the operator was actually shown when they chose.
+ * Re-reading would rebase onto a value they never saw if the file changed
+ * again between the preview and the click.
+ */
+export const QueueResolveBody = Type.Object({
+  fileId: Type.String({ minLength: 1, maxLength: 64 }),
+  keyPath: Type.Array(Type.String({ minLength: 1 }), { minItems: 1, maxItems: 8 }),
+  choice: Type.Union([Type.Literal("queued"), Type.Literal("current")]),
+  currentValue: Type.Optional(Type.Unknown()),
+});
+export type QueueResolveBody = Static<typeof QueueResolveBody>;
+
+/** Which stat a leaderboard ranks by. Validated against the catalogue. */
+export const LeaderboardQuery = Type.Object({
+  stat: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
+});
+export type LeaderboardQuery = Static<typeof LeaderboardQuery>;
+
 /** A server plus one of its backup archives, addressed by opaque id. */
 export const BackupFileParams = Type.Object({
   id: Type.String(),

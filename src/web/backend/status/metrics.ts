@@ -77,7 +77,12 @@ export function registerProbeRoutes(app: FastifyInstance): void {
         );
       }
       lines.push(`mcbot_server_online${label} ${status?.online ? 1 : 0}`);
-      lines.push(`mcbot_players_online${label} ${status?.players.online ?? 0}`);
+      // A gauge of 0 for "unknown" is indistinguishable from an empty
+      // server and would draw a real dip on a dashboard. Absent is the
+      // honest encoding, and Prometheus already handles a missing sample.
+      if (status?.players) {
+        lines.push(`mcbot_players_online${label} ${status.players.online}`);
+      }
       if (status?.tps !== null && status?.tps !== undefined) {
         lines.push(`mcbot_server_tps${label} ${status.tps}`);
       }

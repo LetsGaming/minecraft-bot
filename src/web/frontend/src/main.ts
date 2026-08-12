@@ -68,6 +68,32 @@ const MinecraftPreset = definePreset(Aura, {
       },
     },
   },
+  components: {
+    toggleswitch: {
+      colorScheme: {
+        dark: {
+          root: {
+            // Aura's dark off-state track is `{surface.700}`, which in this
+            // preset is #24272c — the same value as the hairline border and a
+            // hair off the card background. The track vanished, leaving a lone
+            // grey handle that read as a bullet or a radio button rather than
+            // a switch that happened to be off. On a mod config panel two
+            // toggles looked like decoration next to one green pill.
+            background: "{surface.600}",
+            hoverBackground: "{surface.500}",
+            borderColor: "{surface.500}",
+            hoverBorderColor: "{surface.400}",
+            checkedBackground: "{primary.color}",
+            checkedHoverBackground: "{primary.hover.color}",
+          },
+          handle: {
+            background: "{surface.200}",
+            hoverBackground: "{surface.100}",
+          },
+        },
+      },
+    },
+  },
 });
 
 const app = createApp(App);

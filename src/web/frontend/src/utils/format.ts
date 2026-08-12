@@ -19,9 +19,106 @@ export function diskLabel(path: string): string {
   return "Disk";
 }
 
+/**
+ * Players as text, with "we don't know" kept distinct from "nobody".
+ *
+ * A null roster used to arrive here as 0/0 and render as a confident
+ * "0 players online" during exactly the moments the interface had no idea.
+ */
+export function playersLabel(
+  players: { online: number; max: number } | null,
+): string {
+  return players ? `${players.online}/${players.max}` : "—";
+}
+
 /** TPS → a PrimeVue severity for tags/accents. */
 export function tpsSeverity(tps: number): "success" | "warn" | "danger" {
   return tps >= 18 ? "success" : tps >= 12 ? "warn" : "danger";
+}
+
+/** A disk as the status payload reports it, plus the paths that resolved to it. */
+export interface MergedDisk {
+  label: string;
+  paths: string[];
+  usedBytes: number;
+  totalBytes: number;
+  usedPercent: number;
+}
+
+/**
+ * Collapse disks that are demonstrably the same volume.
+ *
+ * The suite's server and backup directories are usually two paths on one
+ * filesystem, so the card showed "Server disk 42.6 GB / 119.0 GB · 33% used"
+ * and "Backups disk 42.6 GB / 119.0 GB · 33% used" side by side. Identical
+ * numbers twice reads as a rendering bug, and it costs the reader a moment
+ * every time to work out that it is not one.
+ *
+ * Identical used *and* total bytes is the signal: two genuinely separate
+ * volumes agreeing to the byte on both figures does not happen in practice,
+ * and if it ever did, the merged row still states the truth — it just lists
+ * both roles against one meter.
+ */
+export function mergeDisks(
+  disks: readonly { path: string; usedBytes: number; totalBytes: number; usedPercent: number }[],
+): MergedDisk[] {
+  const byVolume = new Map<string, MergedDisk>();
+  for (const disk of disks) {
+    const key = `${disk.usedBytes}:${disk.totalBytes}`;
+    const existing = byVolume.get(key);
+    if (existing) {
+      existing.paths.push(disk.path);
+      const role = diskLabel(disk.path);
+      // "Server disk" + "Backups disk" → "Server + backups disk".
+      if (!existing.label.toLowerCase().includes(role.split(" ")[0]!.toLowerCase())) {
+        existing.label = `${existing.label.replace(/ disk$/i, "")} + ${role.replace(/ disk$/i, "").toLowerCase()} disk`;
+      }
+      continue;
+    }
+    byVolume.set(key, {
+      label: diskLabel(disk.path),
+      paths: [disk.path],
+      usedBytes: disk.usedBytes,
+      totalBytes: disk.totalBytes,
+      usedPercent: disk.usedPercent,
+    });
+  }
+  return [...byVolume.values()];
+}
+
+/** Fullness → a severity, so a meter warns at the same point the alert list does. */
+export function diskSeverity(usedPercent: number): "good" | "mid" | "bad" {
+  if (usedPercent >= 90) return "bad";
+  if (usedPercent >= 75) return "mid";
+  return "good";
+}
+
+/**
+ * A backup tier as a person would say it.
+ *
+ * The wrapper names tiers by where it files them (`hourly`,
+ * `archives/daily`, `archives/update`), and the table printed those paths
+ * verbatim — so the retention tier, which is the one thing that column
+ * exists to communicate, arrived as a storage detail with a slash in it.
+ */
+export function tierLabel(tier: string): string {
+  const leaf = tier.split("/").pop() ?? tier;
+  switch (leaf.toLowerCase()) {
+    case "hourly":
+      return "Hourly";
+    case "daily":
+      return "Daily";
+    case "weekly":
+      return "Weekly";
+    case "monthly":
+      return "Monthly";
+    case "update":
+      return "Pre-update";
+    case "manual":
+      return "Manual";
+    default:
+      return leaf.charAt(0).toUpperCase() + leaf.slice(1);
+  }
 }
 
 // ── Server state presentation ───────────────────────────────────────────────

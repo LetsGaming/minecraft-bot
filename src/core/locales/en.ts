@@ -10,6 +10,20 @@
  * without a German counterpart is fine — de falls back to en per key.
  */
 export const en: Record<string, string> = {
+  // ── info (how to join) ──
+  "info.title": "How to join — {server}",
+  "info.address": "Address",
+  "info.addressUnset": "Not published. Ask an admin for the join address.",
+  "info.version": "Minecraft version",
+  "info.versionUnknown": "Unknown — the server did not answer.",
+  "info.loader": "Loader",
+  "info.loaderUnknown": "Not reported",
+  "info.modpack": "Modpack",
+  "info.required": "Required mods",
+  "info.requiredCount": "{count} mod(s) must be installed on the client. See `/mods` for the list.",
+  "info.requiredUnknown": "Could not read the mod list right now.",
+  "info.vanillaJoin": "None — a vanilla client can join.",
+
   // ── common ──
   "common.serverNotFound": "Server not found.",
   "common.noPermission": "You do not have permission to use this command.",

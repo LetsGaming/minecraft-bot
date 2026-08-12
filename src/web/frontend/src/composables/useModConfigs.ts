@@ -1,6 +1,8 @@
 import { ref, computed } from "vue";
 import { apiGet, apiSend } from "../api";
 import { errorMessage } from "../utils/errorMessage";
+import { disambiguateLabels } from "../utils/fieldLabels";
+import type { StaleInfo, QueuedWriteResult } from "@mcbot/schema/contract.js";
 
 /**
  * The mod config editor's client half.
@@ -12,6 +14,18 @@ import { errorMessage } from "../utils/errorMessage";
  * in, so the writer's guards — comment preservation, structure check, ETag —
  * stay meaningful instead of being decorative around a blob the browser sent.
  */
+
+/** A queued edit whose key moved on disk while it waited. */
+export interface EditConflict {
+  keyPath: string[];
+  queued: unknown;
+  base: unknown;
+  current: unknown;
+  queuedAt: number;
+  byTag: string | null;
+  /** Which file it belongs to. Present on preview results. */
+  fileId?: string;
+}
 
 export interface ConfigFileInfo {
   id: string;
@@ -25,6 +39,12 @@ export interface ConfigFileInfo {
 export interface ConfigField {
   path: string[];
   label: string;
+  /**
+   * The label as rendered: qualified by its parent key when the bare label
+   * repeats inside the same file. Derived on load, never per keystroke, so
+   * a field cannot rename itself while someone is searching.
+   */
+  displayLabel?: string;
   kind: "string" | "number" | "boolean" | "stringList" | "numberList" | "unknown";
   value: unknown;
   description?: string;
@@ -36,6 +56,8 @@ export interface ConfigField {
 }
 
 interface FileContents {
+  /** Present when this was served from cache rather than read live. */
+  stale?: StaleInfo | null;
   file: ConfigFileInfo;
   etag: string;
   snapshots: string[];
@@ -47,6 +69,78 @@ interface FileContents {
 export function useModConfigs() {
   const files = ref<ConfigFileInfo[]>([]);
   const current = ref<FileContents | null>(null);
+  /**
+   * Set when the backend served a cached read because the wrapper did not
+   * answer. Kept as two separate signals because they degrade independently:
+   * the file list can be live while a specific file is stale, and vice versa.
+   */
+  const indexStale = ref<StaleInfo | null>(null);
+  const fileStale = ref<StaleInfo | null>(null);
+  /**
+   * Set when a save was held because the wrapper was unreachable. The change
+   * is safe but nothing has been written, which is a materially different
+   * outcome from a save and is never reported as one.
+   */
+  const queued = ref<QueuedWriteResult | null>(null);
+  /** How many edits are waiting across every file on this server. */
+  const pendingCount = ref(0);
+  /** Queued edits whose key changed on disk while they waited. */
+  const conflicts = ref<EditConflict[]>([]);
+
+  async function refreshPending(): Promise<void> {
+    try {
+      const res = await apiGet<{ pending: unknown[] }>(
+        `/api/servers/${encodeURIComponent(serverId)}/configs-queue`,
+      );
+      pendingCount.value = res.pending.length;
+    } catch {
+      // Not knowing how many are queued must not break the editor.
+      pendingCount.value = 0;
+    }
+    // The preview needs the wrapper, so it is allowed to fail on its own
+    // without taking the count with it: knowing three edits are waiting is
+    // useful even when we cannot yet say whether any of them conflict.
+    try {
+      const preview = await apiGet<{ conflicts: EditConflict[] }>(
+        `/api/servers/${encodeURIComponent(serverId)}/configs-queue/preview`,
+      );
+      conflicts.value = preview.conflicts;
+    } catch {
+      conflicts.value = [];
+    }
+  }
+
+  /**
+   * Resolve one conflict.
+   *
+   * "Keep mine" rebases onto the value the operator was shown, so the edit
+   * flows through the ordinary flush rather than a second write path that
+   * only conflict resolution would use.
+   */
+  async function resolveConflict(
+    conflict: EditConflict,
+    choice: "queued" | "current",
+  ): Promise<void> {
+    const fileId = conflict.fileId ?? current.value?.file.id;
+    if (!fileId) return;
+    await apiSend("POST", `/api/servers/${encodeURIComponent(serverId)}/configs-queue/resolve`, {
+      fileId,
+      keyPath: conflict.keyPath,
+      choice,
+      currentValue: conflict.current,
+    });
+    await refreshPending();
+  }
+
+  /** Push everything held for this server now that the wrapper answers. */
+  async function flushQueue(): Promise<{ applied: number; conflicts: unknown[] }> {
+    const res = await apiSend<{ applied: number; conflicts: unknown[] }>(
+      "POST",
+      `/api/servers/${encodeURIComponent(serverId)}/configs-queue/flush`,
+    );
+    await refreshPending();
+    return res;
+  }
   const loading = ref(false);
   const saving = ref(false);
   const error = ref("");
@@ -81,7 +175,7 @@ export function useModConfigs() {
     if (!q) return all;
     return all.filter(
       (f) =>
-        f.label.toLowerCase().includes(q) ||
+        (f.displayLabel ?? f.label).toLowerCase().includes(q) ||
         f.path.join(".").toLowerCase().includes(q) ||
         (f.description ?? "").toLowerCase().includes(q),
     );
@@ -105,13 +199,15 @@ export function useModConfigs() {
     current.value = null;
     pending.value = {};
     try {
-      const res = await apiGet<{ files: ConfigFileInfo[] }>(
+      const res = await apiGet<{ files: ConfigFileInfo[]; stale?: StaleInfo | null }>(
         `/api/servers/${encodeURIComponent(id)}/configs`,
       );
       files.value = res.files;
+      indexStale.value = res.stale ?? null;
     } catch (err) {
       error.value = errorMessage(err);
       files.value = [];
+      indexStale.value = null;
     } finally {
       loading.value = false;
     }
@@ -122,12 +218,18 @@ export function useModConfigs() {
     error.value = "";
     pending.value = {};
     try {
-      current.value = await apiGet<FileContents>(
+      const contents = await apiGet<FileContents>(
         `/api/servers/${encodeURIComponent(serverId)}/configs/${encodeURIComponent(fileId)}`,
       );
+      current.value = {
+        ...contents,
+        fields: disambiguateLabels(contents.fields),
+      };
+      fileStale.value = contents.stale ?? null;
     } catch (err) {
       error.value = errorMessage(err);
       current.value = null;
+      fileStale.value = null;
     } finally {
       loading.value = false;
     }
@@ -210,11 +312,22 @@ export function useModConfigs() {
         path: key.split("\u0000"),
         value,
       }));
-      const res = await apiSend<{ etag: string; snapshot: string }>(
+      const res = await apiSend<
+        { etag: string; snapshot: string } | QueuedWriteResult
+      >(
         "PUT",
         `/api/servers/${encodeURIComponent(serverId)}/configs/${encodeURIComponent(current.value.file.id)}`,
         { etag: current.value.etag, edits },
       );
+      if ("queued" in res) {
+        // Held, not written. The pending edits deliberately stay in the form:
+        // the queue is the durable copy, but a form that emptied itself would
+        // tell the operator their change had landed.
+        queued.value = res;
+        await refreshPending();
+        return true;
+      }
+      queued.value = null;
       // Re-read rather than patching locally: the file on disk is the truth,
       // and the snapshot list has just grown.
       await openFile(current.value.file.id);
@@ -249,6 +362,8 @@ export function useModConfigs() {
   }
 
   return {
+    indexStale, fileStale, queued, pendingCount, conflicts,
+    refreshPending, flushQueue, resolveConflict,
     files, current, loading, saving, error, search, pending,
     dirty, byMod, visibleFields,
     loadFiles, openFile, setValue, setFromInput, valueOf, isDirty, discard, save, revert,

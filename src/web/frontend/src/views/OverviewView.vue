@@ -73,8 +73,8 @@
               {{ s.id }}
             </span>
             <span class="s-meta muted small">
-              <template v-if="s.online">
-                {{ s.players.online }}/{{ s.players.max }} players
+              <template v-if="stateIsUp(s.state)">
+                {{ playersLabel(s.players) }} players
                 <span v-if="s.tps !== null" class="s-tps">· {{ s.tps.toFixed(0) }} TPS</span>
               </template>
               <template v-else>{{ stateLabel(s.state).toLowerCase() }}</template>
@@ -112,19 +112,12 @@
               <span v-if="e.server" class="mono small">{{ e.server }}</span>
               <span class="muted small">{{ e.by }}</span>
             </span>
-            <span class="a-time muted small mono">{{ shortTime(e.at) }}</span>
+            <span class="a-time muted small mono" :title="timestampTitle(e.at)">
+              {{ relativeAge(e.at) }}
+            </span>
           </li>
         </ul>
       </section>
-    </div>
-
-    <!-- Quick links -->
-    <div class="quick-links">
-      <button v-for="link in links" :key="link.id" class="q-link" @click="$emit('navigate', link.id)">
-        <i :class="link.icon" />
-        <span>{{ link.label }}</span>
-        <i class="pi pi-arrow-right q-arrow" />
-      </button>
     </div>
   </div>
 </template>
@@ -137,7 +130,9 @@ import { useServerStatus } from "../composables/useServerStatus";
 import { useGuilds } from "../composables/useGuilds";
 import { useMyGuilds } from "../composables/useMyGuilds";
 import { useAudit } from "../composables/useAudit";
-import { diskLabel, statusDot, stateLabel } from "../utils/format";
+import { diskLabel, statusDot, stateLabel, playersLabel } from "../utils/format";
+import { stateIsUp } from "@mcbot/schema/serverState.js";
+import { relativeAge, timestampTitle } from "../utils/time";
 import { ServerState, WrapperState } from "../api";
 import ViewHeader from "../components/ui/ViewHeader.vue";
 import StatusDot from "../components/ui/StatusDot.vue";
@@ -163,19 +158,12 @@ export default defineComponent({
     return {
       servers, botAlive, loading, refresh,
       guildName, loadGuildNames, myGuilds, loadMyGuilds, recent, loadRecent,
-      statusDot, stateLabel,
+      statusDot, stateLabel, relativeAge, timestampTitle, playersLabel, stateIsUp,
     };
   },
   data() {
     return {
       timer: 0 as ReturnType<typeof setInterval> | 0,
-      links: [
-        { id: "status", label: "Servers", icon: "pi pi-server" },
-        { id: "guilds", label: "Guilds", icon: "pi pi-discord" },
-        { id: "commands", label: "Commands", icon: "pi pi-bolt" },
-        { id: "config", label: "Config", icon: "pi pi-sliders-h" },
-        { id: "audit", label: "Audit Log", icon: "pi pi-history" },
-      ],
     };
   },
   computed: {
@@ -183,10 +171,13 @@ export default defineComponent({
       return this.myGuilds.filter((g) => g.configured).map((g) => g.id);
     },
     serversOnline(): number {
-      return this.servers.filter((s) => s.online).length;
+      return this.servers.filter((s) => stateIsUp(s.state)).length;
     },
     totalPlayers(): number {
-      return this.servers.reduce((sum, s) => sum + (s.online ? s.players.online : 0), 0);
+      // Only servers that actually reported a roster contribute. Treating an
+      // unknown as zero made the headline number quietly wrong instead of
+      // visibly incomplete.
+      return this.servers.reduce((sum, s) => sum + (s.players?.online ?? 0), 0);
     },
     alerts(): Alert[] {
       const out: Alert[] = [];
@@ -254,28 +245,13 @@ export default defineComponent({
       // silently so a hiccup there doesn't pop error toasts on the overview.
       await Promise.all([this.refresh(), this.loadMyGuilds(true), this.loadRecent(6, true)]);
     },
-    shortTime(at: string): string {
-      // Audit timestamps may be ISO or an already-formatted string. Parse
-      // when possible and show a compact local date+time; otherwise show
-      // the raw value rather than something misleading.
-      const d = new Date(at);
-      if (!Number.isNaN(d.getTime())) {
-        return d.toLocaleString(undefined, {
-          month: "short",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-      }
-      return at;
-    },
   },
 });
 </script>
 
 <style scoped>
 /* Summary tiles */
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
 .tile {
   background: var(--mc-surface); border: 0.5px solid var(--mc-border);
   border-radius: 11px; padding: 15px 17px; display: flex; flex-direction: column; gap: 3px;
@@ -285,7 +261,7 @@ export default defineComponent({
 .tile-label { letter-spacing: 0.02em; }
 
 /* Panel grid */
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; }
 .panel { background: var(--mc-surface); border: 0.5px solid var(--mc-border); border-radius: 11px; padding: 4px 16px 12px; }
 .panel-head {
   display: flex; align-items: center; justify-content: space-between;
@@ -317,17 +293,4 @@ export default defineComponent({
 .a-detail { flex: 1; display: flex; gap: 8px; align-items: center; min-width: 0; overflow: hidden; }
 .a-time { flex: none; }
 
-/* Quick links */
-.quick-links { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 16px; }
-.q-link {
-  display: flex; align-items: center; gap: 9px;
-  background: var(--mc-surface); border: 0.5px solid var(--mc-border);
-  border-radius: 10px; padding: 12px 14px; cursor: pointer;
-  color: var(--mc-text); font-size: 14px; text-align: left;
-  transition: border-color 0.15s, background 0.15s;
-}
-.q-link:hover { border-color: var(--mc-accent-border); background: var(--mc-card); }
-.q-link > i:first-child { color: var(--mc-accent); font-size: 15px; }
-.q-link span { flex: 1; }
-.q-arrow { color: var(--mc-dim); font-size: 12px; }
 </style>

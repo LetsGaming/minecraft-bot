@@ -19,10 +19,14 @@
       </div>
       <DataTable :value="history" size="small" stripedRows class="audit-table">
         <Column field="at" header="When" style="width: 190px">
-          <template #body="{ data }"><span class="muted mono small">{{ data.at }}</span></template>
+          <template #body="{ data }">
+            <span class="muted mono small" :title="timestampTitle(data.at)">
+              {{ relativeAge(data.at) }}
+            </span>
+          </template>
         </Column>
         <Column field="note" header="Change">
-          <template #body="{ data }">{{ data.note ?? "config change" }}</template>
+          <template #body="{ data }">{{ humanise(data.note ?? "config change") }}</template>
         </Column>
         <Column field="by" header="By" style="width: 200px">
           <template #body="{ data }"><span class="small">{{ data.by ?? "—" }}</span></template>
@@ -55,10 +59,14 @@
       stripedRows
       class="audit-table"
     >
-      <Column field="at" header="When" style="width: 190px">
-        <template #body="{ data }"><span class="muted mono small">{{ data.at }}</span></template>
+      <Column field="at" header="When" style="width: 190px" sortable>
+        <template #body="{ data }">
+          <span class="muted mono small" :title="timestampTitle(data.at)">
+            {{ relativeAge(data.at) }}
+          </span>
+        </template>
       </Column>
-      <Column field="action" header="Action">
+      <Column field="action" header="Action" sortable>
         <template #body="{ data }"><Tag :value="data.action" severity="secondary" /></template>
       </Column>
       <Column field="server" header="Server" style="width: 130px">
@@ -68,7 +76,9 @@
         <template #body="{ data }"><span class="small">{{ data.by }}</span></template>
       </Column>
       <Column field="detail" header="Detail">
-        <template #body="{ data }"><span class="muted small">{{ data.detail ?? "" }}</span></template>
+        <template #body="{ data }">
+          <span class="muted small">{{ humanise(data.detail ?? "") }}</span>
+        </template>
       </Column>
     </DataTable>
 
@@ -90,6 +100,9 @@ import Button from "primevue/button";
 import type { AuditEntry } from "../api";
 import { useAudit } from "../composables/useAudit";
 import { useConfigHistory } from "../composables/useConfigHistory";
+import { relativeAge, timestampTitle } from "../utils/time";
+import { humaniseIds } from "../utils/humaniseIds";
+import { useGuilds } from "../composables/useGuilds";
 import ViewHeader from "../components/ui/ViewHeader.vue";
 import EmptyState from "../components/ui/EmptyState.vue";
 
@@ -105,7 +118,11 @@ export default defineComponent({
       load: loadHistory,
       confirmRollback,
     } = useConfigHistory();
-    return { entries, load, history, retentionDays, busyId, loadHistory, confirmRollback };
+    const { knownGuildName, load: loadGuildNames } = useGuilds();
+    return {
+      entries, load, history, retentionDays, busyId, loadHistory, confirmRollback,
+      relativeAge, timestampTitle, knownGuildName, loadGuildNames,
+    };
   },
   data() {
     return { filter: "" };
@@ -121,8 +138,14 @@ export default defineComponent({
       );
     },
   },
+  methods: {
+    /** Guild IDs inside server-composed text, shown as names where known. */
+    humanise(text: string): string {
+      return humaniseIds(text, this.knownGuildName);
+    },
+  },
   async mounted() {
-    await Promise.all([this.load(), this.loadHistory()]);
+    await Promise.all([this.load(), this.loadHistory(), this.loadGuildNames()]);
   },
 });
 </script>

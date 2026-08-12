@@ -25,6 +25,36 @@ import type {
  * frontend bundles @mcbot/schema, and core is off-limits to it (core imports
  * Node built-ins). core re-exports these for its own callers.
  */
+/**
+ * Attached to any response served from the last-known cache instead of a live
+ * wrapper read.
+ *
+ * Present means "this was true at `asOf`, and we could not confirm it just
+ * now". Absent means live. The UI must render the difference: stale data
+ * shown as current is a worse failure than the error it replaces.
+ */
+export interface StaleInfo {
+  /** When this value was last read successfully. */
+  asOf: number;
+  /** Why the live read failed. Diagnostic, for logs and tooltips. */
+  reason: string;
+}
+
+/**
+ * What a config write returns when the wrapper was unreachable and the edit
+ * was held instead of applied.
+ *
+ * `queued: true` is the discriminant the UI switches on: the operator's change
+ * is safe but nothing has been written yet, which is a materially different
+ * outcome from a save and must not be reported as one.
+ */
+export interface QueuedWriteResult {
+  queued: true;
+  queuedAt: number;
+  /** The key paths held, so the form can mark exactly those fields. */
+  keys: string[][];
+}
+
 export interface BackupFileInfo {
   id: string;
   tier: string;
@@ -38,6 +68,8 @@ export interface BackupFileIndex {
   /** Pass back as `cursor`. Null when the listing is complete. */
   nextCursor: string | null;
   total: number;
+  /** Set when served from cache because the wrapper did not answer. */
+  stale?: StaleInfo | null;
 }
 
 export interface ServerStatus {
@@ -59,11 +91,20 @@ export interface ServerStatus {
   /** Which channel established `state` — the wrapper, or a direct ping. */
   source: HealthSource;
   /**
-   * Legacy convenience: `state === "online"`. Kept because a good deal of the
-   * UI only needs the green/not-green split, and because a dashboard build
-   * older than this field keeps working.
+   * Legacy convenience: `state === "online"` exactly, kept so a dashboard
+   * build older than `state` keeps working.
+   *
+   * Do NOT use this for "is the server up". It excludes `unresponsive`, which
+   * is up, so anything gating on it disagrees with the bot. Call
+   * `stateIsUp(state)` — the same predicate the bot uses.
    */
   online: boolean;
+  /**
+   * Null when no channel could establish a roster, which is not the same fact
+   * as an empty server. It used to be flattened to `{ online: 0, max: 0 }`,
+   * so a wrapper blip rendered as a confident "0/0 players online" — the
+   * interface asserting nobody is playing at the exact moment it has no idea.
+   */
   players: {
     online: number;
     max: number;
@@ -73,8 +114,14 @@ export interface ServerStatus {
      * full roster. The counts are exact either way; the names are not.
      */
     sampled: boolean;
-  };
+  } | null;
   tps: number | null;
+  /**
+   * Set when `tps`/`host` came from the last successful wrapper read rather
+   * than this poll. The liveness fields around them are always current — only
+   * the wrapper-derived metrics are old.
+   */
+  metricsStale?: StaleInfo | null;
   /**
    * What this server's wrapper advertises it can do.
    *

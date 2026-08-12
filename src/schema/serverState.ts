@@ -121,10 +121,23 @@ export interface ServerHealth {
  * nothing, and claiming otherwise is the same class of lie as the original bug.
  */
 export function serverIsUp(health: ServerHealth): boolean {
-  return (
-    health.state === ServerState.Online ||
-    health.state === ServerState.Unresponsive
-  );
+  return stateIsUp(health.state);
+}
+
+/**
+ * The same rule, over a bare state.
+ *
+ * The dashboard receives a DTO, not a `ServerHealth`, so it could not call
+ * `serverIsUp` and grew its own answer instead: it gated on the DTO's legacy
+ * `online` flag, which is `state === "online"` exactly. The two disagreed on
+ * precisely the state this module exists to model — an unresponsive server is
+ * up, the bot said so, and the dashboard called it down, hid its player count
+ * and counted it out of "servers online".
+ *
+ * Both sides now call this. A future state joins the "up" set once, here.
+ */
+export function stateIsUp(state: ServerState): boolean {
+  return state === ServerState.Online || state === ServerState.Unresponsive;
 }
 
 /** Did anything manage to tell us? False only when every channel failed. */

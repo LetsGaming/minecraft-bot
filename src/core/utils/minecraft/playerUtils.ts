@@ -124,6 +124,24 @@ export async function getOnlinePlayers(
 }
 
 /**
+ * Is this player on the server right now?
+ *
+ * Minecraft names are case-preserving but matched case-insensitively, and
+ * every other comparison in this codebase normalises before comparing. The
+ * daily command did not: it ran `getOnlinePlayers().includes(username)`
+ * against the name stored at link time, so a player who linked as
+ * "letsgamingde" and appears in the roster as "LetsGamingDE" was never seen
+ * as online, and every claim took the offline path forever.
+ */
+export function isPlayerOnline(
+  onlinePlayers: readonly string[],
+  username: string,
+): boolean {
+  const lower = username.toLowerCase();
+  return onlinePlayers.some((p) => p.toLowerCase() === lower);
+}
+
+/**
  * Get player coordinates — delegates to ServerInstance which owns the
  * single canonical implementation of the coordinate regex.
  */

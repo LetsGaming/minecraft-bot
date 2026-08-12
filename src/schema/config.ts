@@ -73,6 +73,31 @@ export interface RawServerConfig {
    * bot, or the server runs with `enable-status=false`.
    */
   disableDirectPing?: boolean;
+  /**
+   * The address players type into the Minecraft client, e.g. "mc.example.com"
+   * or "play.example.com:25566".
+   *
+   * Deliberately separate from `apiUrl` and `pingHost`: those are how the
+   * *bot* reaches the host, and on a normal deployment they are a LAN IP or
+   * an internal DNS name that nobody outside can connect to. Publishing
+   * either as the join address is how a member ends up trying to connect to
+   * 192.168.1.10. Unset means `/info` says the address is not published
+   * rather than guessing one.
+   */
+  publicAddress?: string;
+  /**
+   * The modpack players need, when this server runs one.
+   *
+   * `url` should point at whatever a member can actually install from
+   * (Modrinth, CurseForge, a launcher share link). Without this, the answer
+   * to "what do I need to join" is a mod list a person has to assemble by
+   * hand, which is why it was being answered by a human in chat every time.
+   */
+  modpack?: {
+    name: string;
+    version?: string;
+    url?: string;
+  };
   commands?: Record<string, CommandOverrideConfig>;
 }
 
@@ -94,6 +119,31 @@ export interface ServerConfig {
   pingHost?: string;
   pingPort?: number;
   disableDirectPing?: boolean;
+  /**
+   * The address players type into the Minecraft client, e.g. "mc.example.com"
+   * or "play.example.com:25566".
+   *
+   * Deliberately separate from `apiUrl` and `pingHost`: those are how the
+   * *bot* reaches the host, and on a normal deployment they are a LAN IP or
+   * an internal DNS name that nobody outside can connect to. Publishing
+   * either as the join address is how a member ends up trying to connect to
+   * 192.168.1.10. Unset means `/info` says the address is not published
+   * rather than guessing one.
+   */
+  publicAddress?: string;
+  /**
+   * The modpack players need, when this server runs one.
+   *
+   * `url` should point at whatever a member can actually install from
+   * (Modrinth, CurseForge, a launcher share link). Without this, the answer
+   * to "what do I need to join" is a mod list a person has to assemble by
+   * hand, which is why it was being answered by a human in chat every time.
+   */
+  modpack?: {
+    name: string;
+    version?: string;
+    url?: string;
+  };
   commands?: Record<string, CommandOverrideConfig>;
 }
 

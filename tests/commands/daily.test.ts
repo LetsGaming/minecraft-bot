@@ -19,7 +19,11 @@ vi.mock("../../src/core/utils/stores/linkUtils.js", () => ({
   getLinkedAccount: vi.fn(),
 }));
 
-vi.mock("../../src/core/utils/minecraft/playerUtils.js", () => ({
+// Only the IO is stubbed. `isPlayerOnline` is a pure name comparison and is
+// deliberately left real: it is the thing the online/offline branch turns on,
+// so faking it here would test the mock instead of the matching rule.
+vi.mock("../../src/core/utils/minecraft/playerUtils.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/core/utils/minecraft/playerUtils.js")>()),
   getOnlinePlayers: vi.fn(),
 }));
 

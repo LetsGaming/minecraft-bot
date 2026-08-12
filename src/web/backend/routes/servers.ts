@@ -24,6 +24,12 @@ import {
 } from "@mcbot/core/utils/server/serverAccess.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { log } from "@mcbot/core/utils/logger.js";
+import { readThrough } from "@mcbot/core/utils/wrapper/lastKnown.js";
+import {
+  recordIntent,
+  listIntents,
+  clearIntent,
+} from "@mcbot/core/utils/wrapper/deferredIntents.js";
 import { sessionFromRequest } from "../auth/auth.js";
 import { BadRequest, NotFound, Conflict, HttpError } from "../errors.js";
 import { ServerActionParams, IdParams, LinesQuery, DryRunQuery } from "./schemas.js";
@@ -49,6 +55,28 @@ export function registerServerRoutes(app: FastifyInstance): void {
   // backup are all reversible and all interrupt the same people. The two
   // irreversible operations (restore, rollback) get their own routes and their
   // own capabilities rather than joining this one (RBAC-01).
+  /** Actions that could not run while the wrapper was away, still offerable. */
+  api.get(
+    "/api/servers/:id/pending-actions",
+    {
+      schema: { params: IdParams },
+      config: { capability: "server:read", scope: "server", param: "id" },
+    },
+    async (req) => ({ intents: listIntents(req.params.id) }),
+  );
+
+  api.delete(
+    "/api/servers/:id/pending-actions/:action",
+    {
+      schema: { params: ServerActionParams },
+      config: { capability: "server:control", scope: "server", param: "id" },
+    },
+    async (req) => {
+      clearIntent(req.params.id, req.params.action);
+      return { ok: true };
+    },
+  );
+
   api.post(
     "/api/servers/:id/:action",
     {
@@ -79,6 +107,9 @@ export function registerServerRoutes(app: FastifyInstance): void {
 
       try {
         const result = await runScript(server.config, action);
+        // Granted: the operator got what they were asking for, so stop
+        // offering it back to them.
+        clearIntent(id, action);
         return {
           ok: result.exitCode === 0,
           exitCode: result.exitCode,
@@ -86,8 +117,19 @@ export function registerServerRoutes(app: FastifyInstance): void {
           stderr: result.stderr.slice(-4000),
         };
       } catch (err) {
+        // Remember the wish, never the act. A restart or rollback that fires
+        // by itself hours later kicks players nobody warned, or discards play
+        // nobody meant to lose. The dashboard will offer this back as a
+        // one-click retry once the wrapper answers, with a person present.
+        recordIntent({
+          serverId: id,
+          action,
+          attemptedAt: Date.now(),
+          byTag: session.tag,
+          reason: errMsg(err),
+        });
         log.error("web", `Script ${action} on ${id} failed: ${errMsg(err)}`);
-        throw new HttpError(500, OPERATION_FAILED);
+        throw new HttpError(503, `The wrapper did not answer, so "${action}" did not run. It is offered again once the wrapper is back.`);
       }
     },
   );
@@ -102,8 +144,13 @@ export function registerServerRoutes(app: FastifyInstance): void {
       const server = requireServer(req.params.id);
       const n = Math.min(Math.max(parseInt(req.query.lines ?? "50", 10) || 50, 1), 500);
       try {
-        const raw = await tailLog(server.config, n);
-        return { lines: raw.split("\n").filter(Boolean) };
+        // The last log we managed to read is the single most useful thing to
+        // show when the wrapper stops answering: it very often contains the
+        // reason it stopped answering.
+        const { value, stale } = await readThrough(req.params.id, "logTail", () =>
+          tailLog(server.config, n),
+        );
+        return { lines: value.split("\n").filter(Boolean), stale };
       } catch (err) {
         log.error("web", `Log tail for ${req.params.id} failed: ${errMsg(err)}`);
         throw new HttpError(500, OPERATION_FAILED);

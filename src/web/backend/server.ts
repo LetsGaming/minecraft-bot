@@ -56,6 +56,7 @@ import { registerServerRoutes } from "./routes/servers.js";
 import { registerConsoleRoutes } from "./routes/console.js";
 import { registerBackupRoutes } from "./routes/backups.js";
 import { registerModConfigRoutes } from "./routes/modConfigs.js";
+import { registerAnalyticsRoutes } from "./routes/analytics.js";
 import { registerSetupRoutes } from "./routes/setup.js";
 import { registerGuildConfigRoutes } from "./routes/guildConfig.js";
 import { registerProbeRoutes } from "./status/metrics.js";
@@ -133,6 +134,7 @@ export function buildServer(): FastifyInstance {
     registerConsoleRoutes(api);    // live console: SSE relay + command input
     registerBackupRoutes(api);     // archive index, streamed download, restore
     registerModConfigRoutes(api);  // mod config editor: index, read, write, revert
+    registerAnalyticsRoutes(api);  // uptime, activity, command usage — bot history
   });
 
   // ── Guild-manager API ── any logged-in Discord user; each route checks

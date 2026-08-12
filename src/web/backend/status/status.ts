@@ -19,6 +19,8 @@ import {
   canQueryServer,
 } from "@mcbot/schema/serverState.js";
 import type { ServerStatus } from "@mcbot/schema/contract.js";
+import { noteWrapperState } from "@mcbot/core/utils/wrapper/queueFlush.js";
+import { remember, recall } from "@mcbot/core/utils/wrapper/lastKnown.js";
 
 export async function collectStatus(serverId: string): Promise<ServerStatus> {
   const server = getServerInstance(serverId);
@@ -33,8 +35,9 @@ export async function collectStatus(serverId: string): Promise<ServerStatus> {
     source: health.source,
     online: health.state === ServerState.Online,
     // A direct ping supplies counts even with the wrapper down, so take
-    // whatever the answering channel managed to give us before deciding
-    // there is nothing to show.
+    // whatever the answering channel managed to give us. When none could,
+    // this stays null: "we don't know" and "nobody is online" are different
+    // claims and the UI has to be able to tell them apart.
     players: health.players
       ? {
           online: health.players.online,
@@ -42,7 +45,7 @@ export async function collectStatus(serverId: string): Promise<ServerStatus> {
           names: health.players.names,
           sampled: health.players.sampled,
         }
-      : { online: 0, max: 0, names: [], sampled: false },
+      : null,
     tps: null,
     features: null,
     host: null,
@@ -55,26 +58,42 @@ export async function collectStatus(serverId: string): Promise<ServerStatus> {
   // restore one.
   base.features = await wrapperFeatures(server);
 
-  // Everything below goes through the wrapper, so there is nothing more to
-  // collect without it — the ping's player counts are already in `base`.
-  if (health.wrapper !== WrapperState.Up) return base;
+  // The status poll is the one thing that already watches every wrapper on a
+  // timer, so it is where a "the wrapper came back" edge is cheapest to spot.
+  // Fires only on the transition, never on every healthy poll — see
+  // noteWrapperState.
+  noteWrapperState(serverId, health.wrapper === WrapperState.Up);
+
+  // Everything below goes through the wrapper. Without it, fall back to the
+  // last enrichment we managed — disks, TPS and host metrics simply vanished
+  // from the card during an outage, which is when someone is most likely
+  // looking at it to work out whether the box itself is in trouble.
+  if (health.wrapper !== WrapperState.Up) return withLastKnownEnrichment(serverId, base);
 
   // An unresponsive server is up but not answering commands, so asking it for
   // a player list, TPS or host metrics only produces zeros. The UI renders the
   // state instead of pretending to numbers.
-  if (!canQueryServer(health)) return base;
+  if (!canQueryServer(health)) return withLastKnownEnrichment(serverId, base);
 
   try {
     const list = await server.getList();
-    base.players = {
-      online: parseInt(String(list.playerCount), 10) || 0,
-      max: parseInt(String(list.maxPlayers), 10) || 0,
-      names: list.players ?? [],
-      // The wrapper reads the real roster over RCON — not a sample.
-      sampled: false,
-    };
+    const online = parseInt(String(list.playerCount), 10);
+    const max = parseInt(String(list.maxPlayers), 10);
+    // `getList()` answers `{ playerCount: "0", maxPlayers: "?" }` when its own
+    // call failed, so an unparseable max is the tell that this is the sentinel
+    // rather than a real reading. Writing it through would replace a good
+    // ping-derived roster with a confident, invented "0 players".
+    if (Number.isFinite(online) && Number.isFinite(max)) {
+      base.players = {
+        online,
+        max,
+        names: list.players ?? [],
+        // The wrapper reads the real roster over RCON — not a sample.
+        sampled: false,
+      };
+    }
   } catch {
-    return base;
+    return withLastKnownEnrichment(serverId, base);
   }
 
   try {
@@ -107,7 +126,56 @@ export async function collectStatus(serverId: string): Promise<ServerStatus> {
   } catch {
     /* host metrics stay null */
   }
+
+  rememberEnrichment(serverId, base);
   return base;
+}
+
+/**
+ * The wrapper-derived half of a status: the fields a direct ping cannot supply.
+ *
+ * Cached and replayed as a unit rather than field by field, because they are
+ * one observation of one moment. Mixing a fresh TPS with an hour-old disk
+ * reading would produce a card that never existed.
+ */
+interface Enrichment {
+  tps: ServerStatus["tps"];
+  host: ServerStatus["host"];
+  players: ServerStatus["players"];
+}
+
+function rememberEnrichment(serverId: string, status: ServerStatus): void {
+  // Only worth keeping if we actually learned something beyond the ping.
+  if (status.host === null && status.tps === null) return;
+  remember(serverId, "statusEnrichment", {
+    tps: status.tps,
+    host: status.host,
+    players: status.players,
+  } satisfies Enrichment);
+}
+
+/**
+ * Fill a wrapper-less status from the last one we managed to enrich.
+ *
+ * `state`, `rcon`, `wrapper` and the ping's own player counts are deliberately
+ * NOT taken from cache: those are live facts this poll just established, and
+ * replacing them with old ones would be the failure this whole feature exists
+ * to avoid — an interface asserting something it does not know.
+ *
+ * Only the fields the wrapper alone can answer are restored, and `staleSince`
+ * marks them so the card can say the metrics are from earlier.
+ */
+function withLastKnownEnrichment(serverId: string, base: ServerStatus): ServerStatus {
+  const cached = recall<Enrichment>(serverId, "statusEnrichment", "wrapper unreachable");
+  if (!cached) return base;
+  return {
+    ...base,
+    tps: cached.value.tps,
+    host: cached.value.host,
+    // A live ping beats a cached roster; only fall back when it had none.
+    players: base.players ?? cached.value.players,
+    metricsStale: cached.stale,
+  };
 }
 
 /**

@@ -41,10 +41,22 @@ function guildName(id: string): string {
   return `Server …${id.slice(-4)}`;
 }
 
+/**
+ * The guild's real name, or undefined when it genuinely isn't known.
+ *
+ * `guildName` always returns something printable, which is right for a
+ * heading and wrong for substitution: replacing an ID inside a log line with
+ * "Server …3999" would destroy the one identifier that line carried without
+ * putting a real name in its place.
+ */
+function knownGuildName(id: string): string | undefined {
+  return guilds.value.find((g) => g.id === id)?.name;
+}
+
 function guildIcon(id: string): string | null {
   return guilds.value.find((g) => g.id === id)?.icon ?? null;
 }
 
 export function useGuilds() {
-  return { guilds, loaded, loading, error, load, guildName, guildIcon };
+  return { guilds, loaded, loading, error, load, guildName, knownGuildName, guildIcon };
 }

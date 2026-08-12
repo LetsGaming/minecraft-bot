@@ -76,6 +76,9 @@ function resolveServerConfig(
     ...(raw.disableDirectPing !== undefined
       ? { disableDirectPing: raw.disableDirectPing }
       : {}),
+    // Player-facing identity: how to join, and what to install first.
+    ...(raw.publicAddress ? { publicAddress: raw.publicAddress } : {}),
+    ...(raw.modpack ? { modpack: raw.modpack } : {}),
     ...(raw.commands ? { commands: raw.commands } : {}),
   };
 }

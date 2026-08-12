@@ -34,13 +34,13 @@
               {{ server.id }}
             </span>
             <Tag
-              v-if="server.online && server.tps !== null"
+              v-if="stateIsUp(server.state) && server.tps !== null"
               :severity="tpsSeverity(server.tps)"
               :value="`${server.tps.toFixed(1)} TPS`"
               rounded
             />
             <Tag
-              v-else-if="!server.online"
+              v-else-if="!stateIsUp(server.state)"
               :severity="stateSeverity(server.state)"
               :value="stateLabel(server.state)"
               rounded
@@ -51,9 +51,12 @@
         <template #content>
           <!-- Players -->
           <div class="card-body">
-            <div v-if="server.online" class="players">
+            <div v-if="stateIsUp(server.state)" class="players">
               <span class="players-count">
-                {{ server.players.online }}<span class="muted">/{{ server.players.max }}</span>
+                <template v-if="server.players">
+                  {{ server.players.online }}<span class="muted">/{{ server.players.max }}</span>
+                </template>
+                <span v-else class="muted" v-tooltip.top="'No channel could supply a roster just now.'">—</span>
               </span>
               <span class="muted small">players online</span>
             </div>
@@ -68,12 +71,12 @@
               <i class="pi pi-link" /> {{ wrapperNote(server) }}
             </div>
 
-            <div v-if="server.players.names.length" class="names">
+            <div v-if="server.players?.names.length" class="names">
               <span v-if="server.players.sampled" class="muted small names-note">
                 Sample of players online (the server publishes a partial list):
               </span>
               <Tag
-                v-for="name in server.players.names"
+                v-for="name in server.players!.names"
                 :key="name"
                 :value="name"
                 severity="secondary"
@@ -92,19 +95,58 @@
               <span class="m-value">{{ server.host.process.cpuPercent.toFixed(0) }}%</span>
             </div>
             <div
-              v-for="disk in server.host.disks"
-              :key="disk.path"
+              v-for="disk in mergeDisks(server.host.disks)"
+              :key="disk.paths.join('|')"
               class="metric metric-disk"
-              v-tooltip.top="disk.path"
+              v-tooltip.top="disk.paths.join('\n')"
             >
-              <span class="m-label">{{ diskLabel(disk.path) }}</span>
+              <span class="m-label">{{ disk.label }}</span>
               <span class="m-value">{{ formatBytes(disk.usedBytes) }} / {{ formatBytes(disk.totalBytes) }}</span>
+              <!-- A meter, not just a number: 33% and 91% read identically as
+                   text and very differently as a bar. -->
+              <span class="m-meter" :aria-label="`${disk.usedPercent}% used`">
+                <span
+                  :class="['m-meter-fill', diskSeverity(disk.usedPercent)]"
+                  :style="{ width: `${Math.min(100, disk.usedPercent)}%` }"
+                />
+              </span>
               <span class="m-sub muted">{{ disk.usedPercent }}% used</span>
             </div>
           </div>
 
           <!-- Actions -->
           <div class="card-foot">
+            <!-- Actions that could not run while the wrapper was away. Never
+                 replayed automatically: a restart or restore firing by itself
+                 hours later is the one outcome nobody wants. -->
+            <div v-if="intentsFor(server.id).length" class="intents">
+              <span class="muted small">Didn't run while the wrapper was down:</span>
+              <span
+                v-for="intent in intentsFor(server.id)"
+                :key="intent.action"
+                class="intent"
+              >
+                <Button
+                  :label="`Retry ${intent.action}`"
+                  icon="pi pi-replay"
+                  size="small"
+                  severity="secondary"
+                  outlined
+                  :disabled="!isActionApplicable(intent.action, server.state)"
+                  v-tooltip.top="`Tried ${relativeAge(intent.attemptedAt)} by ${intent.byTag}. ${intent.reason}`"
+                  @click="runAction(server.id, intent.action)"
+                />
+                <Button
+                  icon="pi pi-times"
+                  size="small"
+                  text
+                  severity="secondary"
+                  v-tooltip.top="'Dismiss'"
+                  @click="dismissIntent(server.id, intent.action)"
+                />
+              </span>
+            </div>
+
             <div class="ops">
               <Button
                 v-for="action in actionsFor(server)"
@@ -113,8 +155,9 @@
                 :icon="actionIcon(action)"
                 size="small"
                 :severity="actionSeverity(action)"
-                :outlined="action !== 'start'"
-                :disabled="busy === server.id"
+                :outlined="!isPrimaryAction(action, server)"
+                :disabled="busy === server.id || !isActionApplicable(action, server.state)"
+                v-tooltip.top="unavailableReason(action, server)"
                 @click="runAction(server.id, action)"
               />
             </div>
@@ -134,7 +177,8 @@ import Tag from "primevue/tag";
 import { useToast } from "primevue/usetoast";
 import {
   formatBytes,
-  diskLabel,
+  mergeDisks,
+  diskSeverity,
   tpsSeverity,
   statusDot,
   stateLabel,
@@ -142,7 +186,22 @@ import {
   stateExplanation,
   wrapperNote,
 } from "../utils/format";
-import { SERVER_OPERATOR_ACTIONS } from "@mcbot/schema/serverActions.js";
+import {
+  SERVER_OPERATOR_ACTIONS,
+  isActionApplicable,
+  type ServerOperatorAction,
+} from "@mcbot/schema/serverActions.js";
+import { ServerState, stateIsUp } from "@mcbot/schema/serverState.js";
+import { relativeAge, timestampTitle } from "../utils/time";
+import { apiGet, apiSend } from "../api";
+
+interface PendingIntent {
+  action: ServerOperatorAction;
+  target?: string;
+  attemptedAt: number;
+  byTag: string;
+  reason: string;
+}
 import type { ServerStatus } from "../api";
 import { useServerStatus } from "../composables/useServerStatus";
 import { useServerActions } from "../composables/useServerActions";
@@ -187,7 +246,7 @@ export default defineComponent({
      * and filtered per server because a grant is per server: someone may
      * restart smp and only read creative.
      */
-    function actionsFor(server: ServerStatus): readonly string[] {
+    function actionsFor(server: ServerStatus): readonly ServerOperatorAction[] {
       if (!can("server:control", server.id)) return [];
       // Gated on what the wrapper advertised, not on this build's version: a
       // suite without rollback.sh should not offer a Rollback button that
@@ -201,24 +260,62 @@ export default defineComponent({
     return {
       servers, refreshing: loading, refresh,
       busy, runAction,
-      can, actionsFor,
-      formatBytes, diskLabel, tpsSeverity,
+      can, actionsFor, isActionApplicable,
+      formatBytes, mergeDisks, diskSeverity, tpsSeverity, stateIsUp,
+      relativeAge, timestampTitle,
       statusDot, stateLabel, stateSeverity, stateExplanation, wrapperNote,
     };
   },
   data() {
     return {
       timer: 0 as ReturnType<typeof setInterval> | 0,
+      pendingIntents: {} as Record<string, PendingIntent[]>,
     };
   },
   async mounted() {
     await this.refresh();
-    this.timer = setInterval(() => void this.refresh(), REFRESH_MS);
+    await this.loadIntents();
+    this.timer = setInterval(() => {
+      void this.refresh();
+      void this.loadIntents();
+    }, REFRESH_MS);
   },
   unmounted() {
     if (this.timer) clearInterval(this.timer);
   },
   methods: {
+    intentsFor(serverId: string): PendingIntent[] {
+      return this.pendingIntents[serverId] ?? [];
+    },
+    /**
+     * Poll alongside status. Intents expire server-side, so a stale list here
+     * corrects itself rather than offering a retry nobody still wants.
+     */
+    async loadIntents(): Promise<void> {
+      const results = await Promise.all(
+        this.servers.map(async (server) => {
+          try {
+            const res = await apiGet<{ intents: PendingIntent[] }>(
+              `/api/servers/${encodeURIComponent(server.id)}/pending-actions`,
+            );
+            return [server.id, res.intents] as const;
+          } catch {
+            return [server.id, []] as const;
+          }
+        }),
+      );
+      this.pendingIntents = Object.fromEntries(results);
+    },
+    async dismissIntent(serverId: string, action: string): Promise<void> {
+      try {
+        await apiSend(
+          "DELETE",
+          `/api/servers/${encodeURIComponent(serverId)}/pending-actions/${encodeURIComponent(action)}`,
+        );
+      } finally {
+        await this.loadIntents();
+      }
+    },
     actionIcon(action: string): string {
       return {
         start: "pi pi-play",
@@ -231,6 +328,29 @@ export default defineComponent({
       if (action === "start") return "success";
       if (action === "stop") return "danger";
       return "secondary";
+    },
+    /**
+     * Exactly one filled button per card, and it is whichever action the
+     * server's state actually invites. A permanently filled "Start" on a
+     * running server made the one impossible action the loudest one.
+     */
+    isPrimaryAction(action: ServerOperatorAction, server: ServerStatus): boolean {
+      if (!isActionApplicable(action, server.state)) return false;
+      return server.state === ServerState.Offline
+        ? action === "start"
+        : action === "restart";
+    },
+    /**
+     * Why a disabled button is disabled. A greyed control with no explanation
+     * reads as a permissions problem or a bug; naming the state turns it into
+     * information about the server.
+     */
+    unavailableReason(action: ServerOperatorAction, server: ServerStatus): string {
+      if (this.busy === server.id) return "Another action is still running.";
+      if (isActionApplicable(action, server.state)) return "";
+      return action === "start"
+        ? `${server.id} is already running.`
+        : `${server.id} is not running.`;
     },
     capitalize(s: string): string {
       return capitalize(s);
@@ -281,10 +401,23 @@ function capitalize(s: string): string {
   background: var(--mc-card);
   min-width: 84px;
 }
+.metrics-stale { color: var(--mc-mid); margin: 0 0 8px; display: flex; align-items: center; gap: 6px; }
+.metrics-stale i { font-size: 11px; }
+.intents { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.intent { display: inline-flex; align-items: center; gap: 2px; }
+
 .m-label { font-size: 10.5px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--mc-dim); }
 .m-value { font-size: 14px; color: var(--mc-text); }
 .m-sub { font-size: 11px; }
-.metric-disk { min-width: 120px; }
+.metric-disk { min-width: 150px; flex: 1 1 150px; max-width: 260px; }
+.m-meter {
+  display: block; height: 4px; margin: 5px 0 3px;
+  border-radius: 999px; background: var(--mc-border-strong); overflow: hidden;
+}
+.m-meter-fill { display: block; height: 100%; border-radius: 999px; }
+.m-meter-fill.good { background: var(--mc-accent); }
+.m-meter-fill.mid { background: var(--mc-mid); }
+.m-meter-fill.bad { background: var(--mc-bad); }
 
 /* Footer */
 .card-foot {

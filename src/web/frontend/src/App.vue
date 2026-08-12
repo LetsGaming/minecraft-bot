@@ -45,7 +45,7 @@
             >
               <StatusDot :state="statusDot(s)" />
               <span class="switch-name">{{ s.id }}</span>
-              <span v-if="s.online && s.tps !== null" class="switch-tps muted small">
+              <span v-if="stateIsUp(s.state) && s.tps !== null" class="switch-tps muted small">
                 {{ s.tps.toFixed(0) }} TPS
               </span>
             </button>
@@ -99,6 +99,7 @@
       </aside>
 
       <main class="content">
+        <div class="content-inner">
         <Message
           v-if="botDown && isSysadmin"
           severity="warn"
@@ -155,10 +156,16 @@
             :sysadmin="isSysadmin"
             @goto-config="activeTab = 'config'"
           />
+          <AnalyticsView
+            v-if="activeTab === 'analytics' && shows('analytics')"
+            :server-ids="servers.map((s) => s.id)"
+            :active-server="activeServer"
+          />
           <CommandsView v-if="activeTab === 'commands' && shows('commands')" />
           <ConfigView v-if="activeTab === 'config' && shows('config')" />
           <AuditView v-if="activeTab === 'audit' && shows('audit')" />
         </template>
+        </div>
       </main>
     </div>
 
@@ -180,6 +187,7 @@ import { useInvite } from "./composables/useInvite";
 import StatusDot from "./components/ui/StatusDot.vue";
 import EmptyState from "./components/ui/EmptyState.vue";
 import { statusDot } from "./utils/format";
+import { stateIsUp } from "@mcbot/schema/serverState.js";
 import OverviewView from "./views/OverviewView.vue";
 import StatusView from "./views/StatusView.vue";
 import ConsoleView from "./views/ConsoleView.vue";
@@ -189,6 +197,7 @@ import GuildsView from "./views/GuildsView.vue";
 import CommandsView from "./views/CommandsView.vue";
 import ConfigView from "./views/ConfigView.vue";
 import AuditView from "./views/AuditView.vue";
+import AnalyticsView from "./views/AnalyticsView.vue";
 
 /** A sidebar entry and the condition for showing it. */
 interface NavItem {
@@ -203,10 +212,10 @@ export default defineComponent({
   components: {
     Button, Message, Toast, ConfirmDialog, StatusDot, EmptyState,
     OverviewView, StatusView, ConsoleView, BackupsView, ModConfigView, GuildsView,
-    CommandsView, ConfigView, AuditView,
+    CommandsView, ConfigView, AuditView, AnalyticsView,
   },
   setup() {
-    return { ...useInvite(), ...useCapabilities(), statusDot };
+    return { ...useInvite(), ...useCapabilities(), statusDot, stateIsUp };
   },
   data() {
     return {
@@ -229,6 +238,7 @@ export default defineComponent({
         { id: "console", label: "Console", icon: "pi pi-desktop", gate: "server:read" },
         { id: "backups", label: "Backups", icon: "pi pi-box", gate: "server:read" },
         { id: "modconfig", label: "Mod Config", icon: "pi pi-sliders-h", gate: "config:read" },
+        { id: "analytics", label: "Analytics", icon: "pi pi-chart-bar", gate: "server:read" },
         { id: "guilds", label: "Guilds", icon: "pi pi-discord", gate: "guild" },
         { id: "commands", label: "Commands", icon: "pi pi-bolt", gate: "sysadmin" },
         { id: "config", label: "Config", icon: "pi pi-sliders-h", gate: "sysadmin" },
@@ -360,7 +370,11 @@ export default defineComponent({
 .brand-mark.sm { width: 34px; height: 34px; border-radius: 9px; font-size: 16px; margin: 0; }
 
 /* ── Shell ── */
-.shell { display: flex; min-height: 100vh; }
+/* The shell owns the viewport and the content column owns the scroll, so
+   the sidebar never scrolls away, `position: sticky` inside a view sticks
+   to the top of the content area, and a view can claim the remaining
+   height (Console, Mod Config) instead of guessing at a vh fraction. */
+.shell { display: flex; height: 100dvh; overflow: hidden; }
 
 .sidebar {
   width: var(--mc-sidebar-w);
@@ -370,9 +384,7 @@ export default defineComponent({
   display: flex;
   flex-direction: column;
   padding: 14px 10px;
-  position: sticky;
-  top: 0;
-  height: 100vh;
+  height: 100%;
   overflow-y: auto;
 }
 .sidebar-brand {
@@ -429,24 +441,33 @@ export default defineComponent({
 .who i { font-size: 13px; }
 
 /* ── Content ── */
-.content {
-  flex: 1;
-  min-width: 0;
+.content { flex: 1; min-width: 0; overflow-y: auto; }
+.content-inner {
+  min-height: 100%;
+  max-width: var(--mc-content-max);
+  margin-inline: auto;
   padding: 24px 26px 48px;
-  max-width: 1160px;
+  display: flex;
+  flex-direction: column;
 }
+/* A view that opts into filling (`.view-fill`) takes the leftover height;
+   every other view keeps its natural height. `min-height: 0` is what lets
+   an inner pane scroll instead of stretching its parent. */
+.content-inner > :deep(.view-fill) { flex: 1; min-height: 0; }
+
 .bot-down { margin-bottom: 20px; }
 .center { display: grid; place-items: center; padding: 80px 0; }
 
 @media (max-width: 760px) {
-  .shell { flex-direction: column; }
+  .shell { flex-direction: column; height: auto; overflow: visible; }
   .sidebar {
-    width: 100%; height: auto; position: static;
+    width: 100%; height: auto;
     flex-direction: row; flex-wrap: wrap; align-items: center;
     gap: 8px;
   }
   .sidebar-cta { margin: 0; padding: 0; }
   .sidebar-cta .cta-hint { display: none; }
-  .content { padding: 20px 16px 40px; }
+  .content { overflow: visible; }
+  .content-inner { padding: 20px 16px 40px; }
 }
 </style>

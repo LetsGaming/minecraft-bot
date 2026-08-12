@@ -172,6 +172,45 @@ const MIGRATIONS: Migration[] = [
       CREATE INDEX command_usage_user ON command_usage (user_id, command);
     `,
   },
+  {
+    id: 5,
+    name: "queued config edits (offline-tolerant writes)",
+    sql: `
+      -- Config edits made while the API wrapper was unreachable, held until
+      -- it answers again. Durable rather than in-memory because the window
+      -- this exists for is exactly the one in which things get restarted:
+      -- an edit lost to a bot restart during a wrapper outage would be the
+      -- failure this feature was built to prevent.
+      --
+      -- One row per (server, file, key path). The key path is the unit
+      -- because the merge policy is per-field: on flush, an edit applies
+      -- unless THAT key changed on disk since it was queued. Storing whole
+      -- files instead would force an all-or-nothing conflict and throw away
+      -- edits that never contended with anything.
+      --
+      -- base_value is the on-disk value at queue time, serialised as JSON.
+      -- It is the whole basis of conflict detection: current != base means
+      -- someone else changed this key while the edit waited.
+      CREATE TABLE queued_config_edits (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        server_id  TEXT NOT NULL,
+        file_id    TEXT NOT NULL,
+        rel_path   TEXT NOT NULL,
+        key_path   TEXT NOT NULL,   -- JSON array, e.g. ["general","spawnRate"]
+        new_value  TEXT NOT NULL,   -- JSON
+        base_value TEXT NOT NULL,   -- JSON: on-disk value when queued
+        queued_at  INTEGER NOT NULL,
+        by_id      TEXT,
+        by_tag     TEXT
+      );
+      -- A later edit to the same key supersedes the earlier one rather than
+      -- queueing twice, so the unique index is the dedupe mechanism.
+      CREATE UNIQUE INDEX queued_config_edits_key
+        ON queued_config_edits (server_id, file_id, key_path);
+      CREATE INDEX queued_config_edits_server
+        ON queued_config_edits (server_id, queued_at);
+    `,
+  },
 ];
 
 /**

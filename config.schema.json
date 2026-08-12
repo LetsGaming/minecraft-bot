@@ -141,6 +141,29 @@
           "type": "boolean",
           "description": "Turn the direct ping off entirely.\n\nThe ping is what lets the bot still report \"online, 4 players\" while the wrapper is down, so switching it off means going back to \"state unknown\" for that case. Only worth it if the game port is firewalled off from the bot, or the server runs with `enable-status=false`."
         },
+        "publicAddress": {
+          "type": "string",
+          "description": "The address players type into the Minecraft client, e.g. \"mc.example.com\" or \"play.example.com:25566\".\n\nDeliberately separate from `apiUrl` and `pingHost`: those are how the\n*bot* reaches the host, and on a normal deployment they are a LAN IP or an internal DNS name that nobody outside can connect to. Publishing either as the join address is how a member ends up trying to connect to 192.168.1.10. Unset means `/info` says the address is not published rather than guessing one."
+        },
+        "modpack": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "additionalProperties": false,
+          "description": "The modpack players need, when this server runs one.\n\n`url` should point at whatever a member can actually install from (Modrinth, CurseForge, a launcher share link). Without this, the answer to \"what do I need to join\" is a mod list a person has to assemble by hand, which is why it was being answered by a human in chat every time."
+        },
         "commands": {
           "type": "object",
           "additionalProperties": {
