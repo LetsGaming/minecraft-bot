@@ -127,12 +127,26 @@
           <div v-if="filtered(section).length === 0" class="no-match muted small">
             {{ noMatchText }}
           </div>
-          <div v-else :class="['cmd-grid', layout]">
+          <template v-else>
+            <!-- Grouped by source folder, so the dashboard's sections mirror
+                 the repo's own layout. A single group (e.g. everything
+                 uncategorised) still renders, just without a redundant
+                 subheading above one list. -->
             <div
-              v-for="cmd in filtered(section)"
-              :key="cmd.name"
-              :class="['cmd-card', effectiveState(cmd.name)]"
+              v-for="group in categoryGroups(section)"
+              :key="group.category"
+              class="cat-group"
             >
+              <h4 v-if="categoryGroups(section).length > 1" class="cat-head">
+                {{ group.label }}
+                <span class="cat-count">{{ group.commands.length }}</span>
+              </h4>
+              <div :class="['cmd-grid', layout]">
+                <div
+                  v-for="cmd in group.commands"
+                  :key="cmd.name"
+                  :class="['cmd-card', effectiveState(cmd.name)]"
+                >
               <div class="cmd-card-head">
                 <code class="cmd-name">{{ section.prefix }}{{ cmd.name }}</code>
                 <Tag
@@ -206,8 +220,10 @@
                   <span v-if="opt.help" class="cmd-opt-help muted small">{{ opt.help }}</span>
                 </div>
               </div>
+                </div>
+              </div>
             </div>
-          </div>
+          </template>
         </AccordionContent>
       </AccordionPanel>
     </Accordion>
@@ -346,6 +362,37 @@ export default defineComponent({
      * and "what is nobody using", and neither was answerable without reading
      * every card.
      */
+    /**
+     * The section's filtered commands, grouped by source-folder category.
+     *
+     * Reuses `filtered` so search and the show-facet apply before grouping —
+     * a category with no matches simply does not appear. Order is fixed
+     * (below) rather than alphabetical, so the busy categories a person edits
+     * most sit near the top instead of wherever the alphabet puts them.
+     */
+    categoryGroups(section: Section): { category: string; label: string; commands: ManifestEntry[] }[] {
+      const buckets = new Map<string, ManifestEntry[]>();
+      for (const cmd of this.filtered(section)) {
+        const key = cmd.category || "other";
+        (buckets.get(key) ?? buckets.set(key, []).get(key)!).push(cmd);
+      }
+      const ORDER = [
+        "connection", "server", "moderation", "admin",
+        "info", "stats", "communication", "general", "shared", "other",
+      ];
+      const rank = (c: string): number => {
+        const i = ORDER.indexOf(c);
+        return i === -1 ? ORDER.length : i;
+      };
+      return [...buckets.entries()]
+        .map(([category, commands]) => ({ category, label: this.categoryLabel(category), commands }))
+        .sort((a, b) => rank(a.category) - rank(b.category) || a.category.localeCompare(b.category));
+    },
+    /** "connection" → "Connection". "other" → "Other". */
+    categoryLabel(category: string): string {
+      if (category === "other") return "Other";
+      return category.charAt(0).toUpperCase() + category.slice(1);
+    },
     filtered(section: Section): ManifestEntry[] {
       const q = this.query.trim().toLowerCase();
       return section.commands.filter((c) => {
@@ -409,6 +456,21 @@ export default defineComponent({
    every quiet command look like a fault to fix. */
 .cmd-usage { margin: 0.25rem 0 0; }
 
+.cat-group { margin-bottom: 6px; }
+.cat-group + .cat-group { margin-top: 18px; }
+.cat-head {
+  display: flex; align-items: center; gap: 8px;
+  margin: 0 2px 8px; padding-bottom: 4px;
+  font-size: 12px; font-weight: 600; letter-spacing: 0.03em;
+  text-transform: uppercase; color: var(--mc-dim);
+  border-bottom: 0.5px solid var(--mc-border);
+}
+.cat-count {
+  font-weight: 400; color: var(--mc-muted);
+  background: var(--mc-surface); border-radius: 999px;
+  padding: 0 7px; font-size: 11px;
+}
+
 /* ── Sticky toolbar ── */
 .toolbar {
   position: sticky; top: 0; z-index: 5;
@@ -462,24 +524,42 @@ export default defineComponent({
 .cmd-grid.list { display: flex; flex-direction: column; gap: 6px; }
 .cmd-grid.list .cmd-card {
   display: grid;
-  grid-template-columns: minmax(150px, 1fr) minmax(0, 2fr) auto auto;
-  align-items: center; gap: 8px 16px;
+  /* Fixed tracks, not `auto`, so every row's columns line up vertically. The
+     name and usage columns have a stable min-width; the two toggle groups get
+     explicit widths (below) wide enough that "Default" never clips. */
+  grid-template-columns:
+    minmax(160px, 260px)   /* command name */
+    minmax(0, 1fr)         /* description, takes the slack */
+    140px                  /* usage */
+    var(--enabled-col)     /* Enabled toggle group */
+    var(--admin-col);      /* Who-can-use toggle group */
+  align-items: center; gap: 4px 16px;
   padding: 8px 12px;
 }
+/* Three segments (Default/On/Off) and (Default/Everyone/Admins) — sized once
+   so the same width applies to every card. */
+.cmd-grid.list { --enabled-col: 210px; --admin-col: 250px; }
 .cmd-grid.list .cmd-card-head { grid-column: 1; }
 .cmd-grid.list .cmd-desc {
   grid-column: 2; min-height: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.cmd-grid.list .cmd-usage { grid-column: 3; margin: 0; white-space: nowrap; }
-.cmd-grid.list .cmd-controls {
-  grid-column: 4; flex-direction: row; align-items: center; gap: 10px; margin: 0;
-}
+.cmd-grid.list .cmd-usage { grid-column: 3; margin: 0; white-space: nowrap; text-align: right; }
+/* Each toggle group is its own grid cell, so they align independently and
+     neither can push the other out of column. */
+.cmd-grid.list .cmd-controls { display: contents; }
+.cmd-grid.list .cmd-ctl:nth-of-type(1) { grid-column: 4; }
+.cmd-grid.list .cmd-ctl:nth-of-type(2) { grid-column: 5; }
+.cmd-grid.list .cmd-ctl { margin: 0; }
+.cmd-grid.list .cmd-ctl :deep(.p-selectbutton) { width: 100%; }
 .cmd-grid.list .cmd-ctl-label { display: none; }
 .cmd-grid.list .cmd-options { grid-column: 1 / -1; }
 @media (max-width: 1100px) {
   .cmd-grid.list .cmd-card { grid-template-columns: 1fr; }
   .cmd-grid.list .cmd-desc { white-space: normal; }
+  .cmd-grid.list .cmd-usage { text-align: left; }
+  .cmd-grid.list .cmd-controls { display: flex; flex-wrap: wrap; gap: 12px; }
+  .cmd-grid.list .cmd-ctl { grid-column: auto !important; }
   .cmd-grid.list .cmd-ctl-label { display: block; }
 }
 .cmd-card {

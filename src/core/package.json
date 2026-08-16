@@ -13,12 +13,12 @@
   "dependencies": {
     "@mcbot/schema": "*",
     "ajv": "^8.20.0",
-    "better-sqlite3": "^12.4.1",
+    "better-sqlite3": "^13.0.3",
     "jsonc-parser": "^3.3.1"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13",
-    "discord.js": "^14.26.4"
+    "@types/better-sqlite3": "^9.6.0",
+    "discord.js": "^14.27.0"
   },
   "scripts": {
     "build": "tsc -b"

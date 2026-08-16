@@ -1,6 +1,6 @@
 import path from "path";
 import { fileURLToPath } from "url";
-import { readdirSync, statSync } from "fs";
+import { getCommandFiles, categoryOf } from "../utils/commands/loadCommandFiles.js";
 import { getGlobalWatchers } from "./logWatcher.js";
 import { RemoteLogWatcher } from "./RemoteLogWatcher.js";
 import {
@@ -62,17 +62,6 @@ import { ensureApplicationPrompts } from "../interactions/whitelistApplications.
 import { errMsg } from "@mcbot/core/utils/error.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-function getCommandFiles(dir: string): string[] {
-  let files: string[] = [];
-  for (const file of readdirSync(dir)) {
-    const fullPath = path.join(dir, file);
-    if (statSync(fullPath).isDirectory())
-      files = files.concat(getCommandFiles(fullPath));
-    else if (file.endsWith(".js")) files.push(fullPath);
-  }
-  return files;
-}
 
 // ── Per-server watcher lifecycle ──────────────────────────────────────────
 // Every resource wired for a server instance is tracked here so config-reload
@@ -139,7 +128,11 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
   const commandsDir = path.join(__dirname, "commands");
   const commandFiles = getCommandFiles(commandsDir);
 
-  const manifestIngame: Array<{ name: string; description: string }> = [];
+  const manifestIngame: Array<{
+    name: string;
+    description: string;
+    category?: string;
+  }> = [];
   // A command's identity is its filename — it is what !name dispatches on and
   // what the `commands` config block keys enablement by. Two files claiming
   // the same one is always a bug, and registering both means the player gets
@@ -173,6 +166,9 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
       manifestIngame.push({
         name,
         description: mod.COMMAND_INFO?.description ?? "",
+        // Same folder-as-category rule the slash side uses, so both halves of
+        // the dashboard group by the same organisation.
+        category: categoryOf(commandsDir, file),
       });
       // Only skip when disabled in EVERY scope; per-server enablement is
       // enforced live at dispatch inside defineCommand.

@@ -50,15 +50,15 @@ beforeEach(() => {
 
 describe("resolveCommandPolicy", () => {
   it("defaults to enabled + not admin-only", () => {
-    expect(resolveCommandPolicy("say")).toEqual({
+    expect(resolveCommandPolicy("backup")).toEqual({
       enabled: true,
       adminOnly: false,
     });
   });
 
   it("applies the global block", () => {
-    mockConfig.commands = { say: { adminOnly: true }, seed: { enabled: false } };
-    expect(resolveCommandPolicy("say")).toEqual({
+    mockConfig.commands = { backup: { adminOnly: true }, seed: { enabled: false } };
+    expect(resolveCommandPolicy("backup")).toEqual({
       enabled: true,
       adminOnly: true,
     });
@@ -66,23 +66,23 @@ describe("resolveCommandPolicy", () => {
   });
 
   it("merges guild overrides field-by-field over global", () => {
-    mockConfig.commands = { say: { adminOnly: true } };
+    mockConfig.commands = { backup: { adminOnly: true } };
     mockConfig.guilds = {
-      g1: { commands: { say: { enabled: false } } },
-      g2: { commands: { say: { adminOnly: false } } },
+      g1: { commands: { backup: { enabled: false } } },
+      g2: { commands: { backup: { adminOnly: false } } },
     };
     // g1 sets only `enabled`; adminOnly inherits from global.
-    expect(resolveCommandPolicy("say", { guildId: "g1" })).toEqual({
+    expect(resolveCommandPolicy("backup", { guildId: "g1" })).toEqual({
       enabled: false,
       adminOnly: true,
     });
     // g2 relaxes adminOnly (config-level only — built-in gates still run).
-    expect(resolveCommandPolicy("say", { guildId: "g2" })).toEqual({
+    expect(resolveCommandPolicy("backup", { guildId: "g2" })).toEqual({
       enabled: true,
       adminOnly: false,
     });
     // Guild without an override → global.
-    expect(resolveCommandPolicy("say", { guildId: "g3" })).toEqual({
+    expect(resolveCommandPolicy("backup", { guildId: "g3" })).toEqual({
       enabled: true,
       adminOnly: true,
     });
@@ -104,7 +104,7 @@ describe("resolveCommandPolicy", () => {
 
 describe("commandEnabledAnywhere", () => {
   it("true by default and when globally enabled", () => {
-    expect(commandEnabledAnywhere("say")).toBe(true);
+    expect(commandEnabledAnywhere("backup")).toBe(true);
   });
 
   it("false only when disabled globally with no scope enabling it", () => {

@@ -11,12 +11,18 @@ export interface RewardPool {
   default?: DailyRewardItem[];
   // Each milestone awards an array of items (multi-item bonuses).
   streakBonuses?: Record<string, DailyRewardItem[]>;
+  /** The chance (0-100) to grant a bonus reward on any given claim. */
+  bonusChance?: number;
 }
 
 export interface DailyRewardsConfig {
   default: DailyRewardItem[];
   // Each milestone awards an array of items (multi-item bonuses).
   streakBonuses?: Record<string, DailyRewardItem[]>;
+  /**
+   * The chance (0-100) to grant a bonus reward on any given claim.
+   */
+  bonusChance?: number;
   /**
    * Optional per-server pool overrides. A server listed here uses its own
    * item list and/or streak bonuses; anything it omits falls back to the

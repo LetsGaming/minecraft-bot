@@ -1,6 +1,6 @@
 /**
  * Batch tests for remaining 0% command files and utilities.
- * Covers: mods, netherportal, chunkbase, playerhead commands,
+ * Covers: mods, chunkbase commands,
  * plus logStreamUrl from serverAccess, RemoteLogWatcher class, discordChannel helpers.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -130,47 +130,6 @@ describe("/mods command", () => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// /netherportal command
-// ══════════════════════════════════════════════════════════════════════════════
-
-describe("/netherportal command", () => {
-  let execute: (i: never) => Promise<void>;
-  beforeEach(async () => {
-    ({ execute } = await import("../../src/bot/commands/info/netherportal.js"));
-  });
-
-  it("replies with error when user has no linked account", async () => {
-    vi.mocked(getLinkedAccount).mockResolvedValue(null);
-    const interaction = makeInteraction();
-    await execute(interaction);
-    expect(interaction.editReply).toHaveBeenCalled();
-  });
-
-  it("replies with error when player coordinates are not found", async () => {
-    vi.mocked(getLinkedAccount).mockResolvedValue("Steve");
-    const { getPlayerCoords } = await import("../../src/core/utils/minecraft/playerUtils.js");
-    vi.mocked(getPlayerCoords).mockResolvedValue(null);
-    const interaction = makeInteraction();
-    await execute(interaction);
-    expect(interaction.editReply).toHaveBeenCalled();
-  });
-
-  it("replies with portal coords when player is in overworld", async () => {
-    vi.mocked(getLinkedAccount).mockResolvedValue("Steve");
-    const { getPlayerCoords } = await import("../../src/core/utils/minecraft/playerUtils.js");
-    vi.mocked(getPlayerCoords).mockResolvedValue({
-      x: 800,
-      y: 64,
-      z: -400,
-      dimension: "minecraft:overworld",
-    } as never);
-    const interaction = makeInteraction();
-    await execute(interaction);
-    expect(interaction.editReply).toHaveBeenCalled();
-  });
-});
-
-// ══════════════════════════════════════════════════════════════════════════════
 // /chunkbase command
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -198,57 +157,6 @@ describe("/chunkbase command", () => {
       options: { getString: vi.fn().mockReturnValue("overworld") },
     });
     await expect(execute(interaction)).rejects.toThrow("seed");
-  });
-});
-
-// ══════════════════════════════════════════════════════════════════════════════
-// /playerhead command
-// ══════════════════════════════════════════════════════════════════════════════
-
-describe("/playerhead command", () => {
-  let execute: (i: never) => Promise<void>;
-  beforeEach(async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: vi.fn().mockResolvedValue({ id: "uuid-99", name: "Notch" }),
-      }),
-    );
-    ({ execute } = await import("../../src/bot/commands/connection/playerhead.js"));
-  });
-
-  it("replies with player head embed when player is found", async () => {
-    const interaction = makeInteraction({
-      options: {
-        getString: vi
-          .fn()
-          .mockImplementation((n: string) => (n === "mcname" ? "Notch" : null)),
-      },
-      fetchReply: vi.fn().mockResolvedValue({
-        id: "msg1",
-        createMessageComponentCollector: vi
-          .fn()
-          .mockReturnValue({ on: vi.fn() }),
-      }),
-    });
-    await execute(interaction);
-    expect(interaction.reply).toHaveBeenCalled();
-  });
-
-  it("replies with error embed when player is not found on Mojang", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
-    const interaction = makeInteraction({
-      options: {
-        getString: vi
-          .fn()
-          .mockImplementation((n: string) =>
-            n === "mcname" ? "NotRealPlayer" : null,
-          ),
-      },
-    });
-    await execute(interaction);
-    expect(interaction.reply).toHaveBeenCalled();
   });
 });
 

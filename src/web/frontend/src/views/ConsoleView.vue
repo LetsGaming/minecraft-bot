@@ -259,6 +259,12 @@ export default defineComponent({
 .pane {
   flex: 1;
   min-height: 220px;
+  /* Fill the available height, but stop growing on a tall display. Without a
+     ceiling the pane stretched to the full viewport, so a 1440p screen showed
+     a console taller than anyone reads and pushed the composer off the fold.
+     Capped so it fills a normal window yet stays a readable block on a big
+     one. */
+  max-height: 68vh;
   overflow-y: auto;
   padding: 10px 12px;
   background: var(--mc-card);

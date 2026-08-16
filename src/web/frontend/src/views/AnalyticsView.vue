@@ -2,7 +2,7 @@
   <div>
     <ViewHeader
       title="Analytics"
-      subtitle="Uptime, activity and command usage from the bot's own history."
+      :subtitle="`Per-server history${currentServer ? ` for ${currentServer}` : ''}. Command usage is bot-wide.`"
     >
       <template #actions>
         <Button
@@ -17,15 +17,19 @@
       </template>
     </ViewHeader>
 
-    <div v-if="serverIds.length > 1" class="picker">
-      <Button
-        v-for="id in serverIds"
-        :key="id"
-        :label="id"
-        size="small"
-        :outlined="id !== currentServer"
-        @click="select(id)"
-      />
+    <div v-if="serverIds.length" class="scope-bar">
+      <span class="scope-label muted small">Server</span>
+      <div class="picker">
+        <Button
+          v-for="id in serverIds"
+          :key="id"
+          :label="id"
+          size="small"
+          :outlined="id !== currentServer"
+          :disabled="serverIds.length === 1"
+          @click="select(id)"
+        />
+      </div>
     </div>
 
     <Message v-if="error" severity="warn" :closable="false">{{ error }}</Message>
@@ -82,7 +86,7 @@
          in Discord cannot rank the same players differently. -->
     <section class="panel">
       <div class="p-head">
-        <h3>{{ boardTitle || "Leaderboard" }}</h3>
+        <h3>{{ boardTitle || "Leaderboard" }} <span v-if="currentServer" class="scope-tag">{{ currentServer }}</span></h3>
         <Select
           v-if="availableStats.length"
           v-model="stat"
@@ -113,7 +117,7 @@
     <!-- Players. "Who is still around and who stopped coming" is a sorted
          table, and it has been one row per Discord message until now. -->
     <section class="panel">
-      <h3>Players · {{ players.length }} seen</h3>
+      <h3>Players <span v-if="currentServer" class="scope-tag">{{ currentServer }}</span> · {{ players.length }} seen</h3>
       <DataTable
         v-if="players.length"
         :value="players"
@@ -303,7 +307,15 @@ export default defineComponent({
 </script>
 
 <style scoped>
-.picker { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.scope-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.scope-label { text-transform: uppercase; letter-spacing: 0.04em; }
+.picker { display: flex; flex-wrap: wrap; gap: 6px; }
+.scope-tag {
+  font-size: 11px; font-weight: 500; color: var(--mc-accent);
+  background: var(--mc-accent-bg); border: 0.5px solid var(--mc-accent-border);
+  border-radius: 999px; padding: 1px 9px; vertical-align: middle;
+  text-transform: none; letter-spacing: 0;
+}
 
 .panel {
   border: 0.5px solid var(--mc-border);

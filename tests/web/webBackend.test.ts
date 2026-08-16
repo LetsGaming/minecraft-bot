@@ -94,7 +94,7 @@ vi.mock("../../src/core/utils/stores/playerCountHistory.js", () => ({
 
 vi.mock("../../src/core/utils/commands/commandManifest.js", () => ({
   readCommandManifest: vi.fn(async () => ({
-    slash: [{ name: "say", description: "s" }],
+    slash: [{ name: "backup", description: "b" }],
     ingame: [{ name: "vote", description: "v" }],
     updatedAt: 1,
   })),
@@ -566,10 +566,10 @@ describe("web routes", () => {
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.manifest.slash[0].name).toBe("say");
+    expect(body.manifest.slash[0].name).toBe("backup");
     expect(body.scopes.serverIds).toEqual(["smp"]);
     // Effective policies exist for every scope key.
-    expect(body.effective.say.global).toEqual({
+    expect(body.effective.backup.global).toEqual({
       enabled: true,
       adminOnly: false,
     });

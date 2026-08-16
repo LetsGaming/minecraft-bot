@@ -15,8 +15,14 @@ import {
   MAX_PENDING_PER_PLAYER,
 } from "@mcbot/core/utils/stores/dailyStore.js";
 import { t } from "@mcbot/core/utils/i18n.js";
-import { getOnlinePlayers, isPlayerOnline } from "@mcbot/core/utils/minecraft/playerUtils.js";
-import { isLinked, getLinkedAccount } from "@mcbot/core/utils/stores/linkUtils.js";
+import {
+  getOnlinePlayers,
+  isPlayerOnline,
+} from "@mcbot/core/utils/minecraft/playerUtils.js";
+import {
+  isLinked,
+  getLinkedAccount,
+} from "@mcbot/core/utils/stores/linkUtils.js";
 import { createErrorEmbed } from "../../../utils/embeds/embedUtils.js";
 import type {
   DailyRewardItem,
@@ -129,6 +135,17 @@ async function _execute(
 
   const grantedRewards: DailyRewardItem[] = [];
   const mainReward = pick(pool.default);
+
+  // Have a rare chance to give a bonus reward from the pool even if the streak bonus isn't active.
+  // This is separate from the streak bonus, which is always granted if the streak is high enough.
+  // The bonusChance is a percentage chance (0-100) to grant a bonus reward on any given claim.
+  if (pool.bonusChance && Math.random() * 100 < pool.bonusChance) {
+    const bonusReward = pick(pool.default);
+    if (bonusReward) {
+      grantedRewards.push(bonusReward);
+    }
+  }
+
   grantedRewards.push(mainReward);
 
   const bonus = pool.streakBonuses?.[String(bonusStreak)] ?? null;
@@ -249,10 +266,6 @@ function cooldownMsg(ms: number): string {
   return `⏳ Next claim in ${h}h ${m}m. | Ready at ${formatTime(readyAt)}`;
 }
 
-
-
-
-
 function response(
   items: DailyRewardItem[],
   cs: number,
@@ -282,5 +295,3 @@ function fmt({ item = "???", amount = 1 }: DailyRewardItem): string {
   const cleanName = item.replace(/^minecraft:/, "").replace(/_/g, " ");
   return `${amount}x ${cleanName}`;
 }
-
-

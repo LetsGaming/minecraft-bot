@@ -21,6 +21,15 @@ const MANIFEST_PATH = path.resolve(
 export interface CommandManifestEntry {
   name: string;
   description: string;
+  /**
+   * The command's source folder under `commands/` (slash) or its declared
+   * group (in-game), e.g. "connection", "moderation". The dashboard groups by
+   * this so its sections mirror the code's own organisation — the mental model
+   * someone has from the repo is the one they get in the UI. Optional so an
+   * older manifest on disk still loads; the dashboard treats a missing value
+   * as an "Other" bucket rather than failing.
+   */
+  category?: string;
 }
 
 export interface CommandManifest {

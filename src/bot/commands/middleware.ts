@@ -75,7 +75,6 @@ export function requireServerAdmin(execute: CommandExecutor): CommandExecutor {
 }
 
 import { attachFollowUpHint } from "../utils/hints/followUps.js";
-import { recordCommandUsage } from "@mcbot/core/utils/commands/commandUsage.js";
 
 interface ErrorHandlingOptions {
   defer?: boolean;
@@ -105,15 +104,9 @@ export function withErrorHandling(
         execute(interaction),
       );
 
-      // Same reason as the hint below: this is the point at which the
-      // command is known to have succeeded, so a failed invocation does
-      // not count as usage.
-      recordCommandUsage({
-        command: interaction.commandName,
-        surface: "slash",
-        userId: interaction.user.id,
-        guildId: interaction.guild?.id ?? null,
-      });
+      // Usage recording moved to the single dispatch path in bot/index.ts, so
+      // every command is counted whether or not it uses this wrapper. Leaving
+      // it here would double-count the commands that do.
 
       // The command answered without throwing, which is the only place
       // that knows the reply is worth riding along on. Putting this here

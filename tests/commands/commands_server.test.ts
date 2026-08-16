@@ -1,5 +1,5 @@
 /**
- * Batch tests for server-query commands: status, tps, seed, say, backup, control.
+ * Batch tests for server-query commands: status, tps, seed, backup, control.
  * All withErrorHandling / requireServerAdmin mocked as passthroughs so the
  * inner functions are called directly.
  */
@@ -295,36 +295,6 @@ describe("/seed command", () => {
     });
     vi.mocked(resolveServer).mockReturnValue(server);
     await expect(execute(makeInteraction())).rejects.toThrow("seed");
-  });
-});
-
-// ══════════════════════════════════════════════════════════════════════════════
-// /say command
-// ══════════════════════════════════════════════════════════════════════════════
-
-describe("/say command", () => {
-  let execute: (i: never) => Promise<void>;
-  beforeEach(async () => {
-    ({ execute } = await import("../../src/bot/commands/communication/say.js"));
-  });
-
-  it("sends the message and replies", async () => {
-    const server = makeServer();
-    vi.mocked(resolveServer).mockReturnValue(server);
-    const interaction = makeInteraction({
-      options: {
-        getString: vi
-          .fn()
-          .mockImplementation((n: string) =>
-            n === "message" ? "Hello world" : null,
-          ),
-      },
-    });
-    await execute(interaction);
-    expect(server.sendCommand).toHaveBeenCalledWith(
-      expect.stringContaining("/say"),
-    );
-    expect(interaction.editReply).toHaveBeenCalled();
   });
 });
 

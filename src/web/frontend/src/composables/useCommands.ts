@@ -9,6 +9,8 @@ import type { ConfigResponse } from "../api";
 export interface ManifestEntry {
   name: string;
   description: string;
+  /** Source folder under commands/, used to group the dashboard by category. */
+  category?: string;
 }
 export interface Override {
   enabled?: boolean;

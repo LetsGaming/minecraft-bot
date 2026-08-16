@@ -7,7 +7,6 @@ import {
   MessageFlags,
   type InteractionReplyOptions,
 } from "discord.js";
-import { readdirSync, statSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { loadConfig, getServerIds, watchConfig } from "@mcbot/core/config.js";
@@ -18,10 +17,16 @@ import {
   commandEnabledAnywhere,
 } from "@mcbot/core/utils/commands/commandPolicy.js";
 import { t } from "@mcbot/core/utils/i18n.js";
+import { recordCommandUsage } from "@mcbot/core/utils/commands/commandUsage.js";
 import { registerManifestCommands } from "@mcbot/core/utils/commands/commandManifest.js";
+import { getCommandFiles, categoryOf } from "./utils/commands/loadCommandFiles.js";
 
 /** Slash commands discovered at load, for the dashboard manifest. */
-const manifestSlash: Array<{ name: string; description: string }> = [];
+const manifestSlash: Array<{
+  name: string;
+  description: string;
+  category?: string;
+}> = [];
 import {
   isServerAdmin,
   getMemberRoleIds,
@@ -150,24 +155,14 @@ const commands = new Collection<string, BotCommand>();
 
 // ── Load commands ──
 
-function getCommandFiles(dir: string): string[] {
-  let files: string[] = [];
-  for (const file of readdirSync(dir)) {
-    const full = path.join(dir, file);
-    if (statSync(full).isDirectory())
-      files = files.concat(getCommandFiles(full));
-    else if (file.endsWith(".js") && file !== "middleware.js") files.push(full);
-  }
-  return files;
-}
-
 async function loadCommands(): Promise<void> {
   // Skip registering suite-dependent commands when NO configured
   // server provides the capability ("/server" stays registered — see
   // capabilityCommandSkips for why).
   const capabilitySkips = capabilityCommandSkips(getAllInstances());
 
-  const files = getCommandFiles(path.join(__dirname, "commands"));
+  const commandsRoot = path.join(__dirname, "commands");
+  const files = getCommandFiles(commandsRoot);
   for (const file of files) {
     try {
       // Command modules are loaded dynamically, so their shape isn't known at
@@ -181,6 +176,10 @@ async function loadCommands(): Promise<void> {
       manifestSlash.push({
         name,
         description: cmd.data.description ?? "",
+        // The folder under commands/ is the category, so the dashboard's
+        // sections mirror the repo. A command directly in commands/ (rare,
+        // and shared/ helpers aside) has no folder and falls back to "".
+        category: categoryOf(commandsRoot, file),
       });
       // Only a command disabled in EVERY scope (global + all guild
       // overrides) is skipped entirely; anything else stays registered
@@ -372,6 +371,21 @@ void (async () => {
         return;
       }
       await command.execute(chatInteraction);
+
+      // Usage is recorded here, for EVERY command, rather than inside an
+      // optional wrapper. It used to live in withErrorHandling — but only
+      // some commands wrap their execute in that, so the fifteen that export
+      // execute raw (daily, stats, link, …) were never counted, and the
+      // dashboard reported "0 uses" for commands people ran daily. One
+      // dispatch path, one recording site: a command cannot opt out of being
+      // measured by choosing a different helper. After execute() returns
+      // without throwing, so a failed invocation still does not count.
+      recordCommandUsage({
+        command: chatInteraction.commandName,
+        surface: "slash",
+        userId: chatInteraction.user.id,
+        guildId: chatInteraction.guild?.id ?? null,
+      });
     } catch (err) {
       log.error("command", `/${chatInteraction.commandName}: ${errMsg(err)}`);
       const errorMsg: InteractionReplyOptions = {

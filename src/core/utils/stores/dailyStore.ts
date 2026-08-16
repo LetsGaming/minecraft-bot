@@ -25,6 +25,7 @@ import type {
 export interface ResolvedRewardPool {
   default: DailyRewardItem[];
   streakBonuses?: Record<string, DailyRewardItem[]>;
+  bonusChance?: number;
 }
 
 /**
@@ -43,9 +44,11 @@ export function rewardPoolForServer(
       ? override.default
       : (cfg.default ?? []);
   const streakBonuses = override?.streakBonuses ?? cfg.streakBonuses;
+  const bonusChance = override?.bonusChance ?? cfg.bonusChance;
   return {
     default: items,
     ...(streakBonuses ? { streakBonuses } : {}),
+    ...(bonusChance !== undefined ? { bonusChance } : {}),
   };
 }
 
