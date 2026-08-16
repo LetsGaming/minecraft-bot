@@ -6,712 +6,91 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [6.0.0] — 2026-08-16
+
 ### Added
 
-- **Analytics dashboard tab.** Every number the bot already collected —
-  `/uptime`, `/activity`, `/leaderboard`, `/playtime`, `/sessions` — was
-  reachable only through a Discord command, which meant a time series was being
-  rendered as block characters in an embed because that was the only surface
-  available. All of it is a table or a chart, so it belongs in the dashboard.
-
-  Nothing new is collected: the tab reads `uptime_checks`,
-  `player_count_hours`, `command_usage` and the session store, which is why it
-  is a routes file and not a subsystem. It is deliberately *not* fetched
-  through the wrapper, so it keeps working during an outage — which is exactly
-  when someone wants to know how long a server has been down.
-
-  Four panels. Uptime shows 24h/7d/30d percentages with the check counts
-  underneath, so a 100% built from nine samples cannot pass for a month of
-  evidence. Activity charts two weeks of hourly averages using `sum / samples`
-  rather than `max`, because peak alone makes one person logging in at 03:00
-  look like a busy night; bars scale to the window's own peak so a server that
-  never fills still shows its shape. The leaderboard is built by the same
-  `buildLeaderboard` the bot uses, so a board here and a board in Discord
-  cannot rank the same players differently, and it carries its own error state
-  because it is the one panel that reads the world folder through the wrapper.
-  Command usage is sortable and paginated, replacing the one-line footnote that
-  used to sit under each of 57 command cards where it could be neither sorted
-  nor compared.
-
-  Everything is per-server and says so: the subtitle names the active server,
-  the server selector always shows (disabled when there is only one, so the
-  scope is still visible), and the leaderboard and players panels tag the
-  server name in their heading. Command usage carries no tag because it is the
-  one genuinely bot-wide panel, so that now reads as deliberate rather than
-  inconsistent.
-
-- **`/info` command.** The one question new members actually ask — what do I
-  type to join, and what do I install first — had no command behind it and was
-  answered by a person in chat, per new member, forever. `/status` reports
-  health and `/mods` lists every mod including the server-only ones nobody
-  downloads; neither answers "how do I join".
-
-  Two config fields back it. `publicAddress` is deliberately separate from
-  `apiUrl` and `pingHost`: those are how the *bot* reaches the host and are
-  usually a LAN IP or internal DNS name, and publishing either as the join
-  address is how someone ends up typing `192.168.1.10` into their client.
-  `modpack` is `{ name, version?, url? }` pointing at whatever a member can
-  actually install from. Both flow through `config.schema.json`, so the
-  dashboard's schema-driven form renders them with no frontend work.
-
-  Version and loader come from the server-list ping, the only channel that
-  reports them and one that survives the wrapper being down. The parser is
-  conservative on purpose — an unrecognised string yields a null loader and the
-  raw text rather than a guess, because naming the wrong loader to someone
-  about to install mods costs them an evening. It prefers the longer match so
-  `NeoForge` never truncates to `Forge`, and requires a word boundary so
-  `Paperclip` does not read as `Paper`.
-
-- **Offline-tolerant dashboard: last-known reads.** When the API wrapper was
-  unreachable, every read that went through it answered with a hard failure, so
-  the mod config editor, the backups table and the rest simply vanished and
-  told the operator to go read the bot logs — at the exact moment they were
-  most likely trying to find out what was wrong.
-
-  Reads now fall back to the last value successfully read: mod config index and
-  files, the backups index, the log tail, the status card's TPS/host/disk
-  metrics, and leaderboard stats. Two rules keep it honest. Only successful
-  reads are cached, so nothing is ever inferred or reconstructed and a
-  first-ever read of an unreachable server still reports the problem. And a
-  stale answer always carries its age and the UI always shows it — data
-  presented as current when it is an hour old would be a worse failure than the
-  error it replaces. The log tail is the sleeper win here: the last log we
-  managed to read very often contains the reason the wrapper stopped answering.
-
-  The cache lives in `@mcbot/core` so the bot's own commands share it: `/mods`
-  now degrades the same way the dashboard does, showing the last known list
-  with a footer saying the server is not answering rather than failing.
-
-- **Offline-tolerant dashboard: queued config edits.** Building on the reads
-  above — an operator can now open the mod config editor during an outage, see
-  the last-known values, edit them, and have the change applied automatically
-  when the wrapper returns, instead of being able to look but not touch.
-
-  Edits queue per *field*, not per file, which is what makes the merge cheap:
-  on flush, an edit applies unless *that key* changed on disk while it waited.
-  Queuing whole files would force an all-or-nothing conflict and discard edits
-  that never contended with anything — someone tuning a spawn rate losing it
-  because an unrelated key three sections down was touched by a mod update. Each
-  queued edit stores the on-disk value at queue time as its baseline; comparing
-  against the *current* value would be wrong twice over, since an edit that
-  happens to match what someone else wrote is not a conflict and an edit back to
-  a value's original is not a no-op. What matters is whether the ground moved
-  underneath it.
-
-  Genuine conflicts — a key that changed on both sides — are surfaced in a
-  picker showing all three values (what it was when you queued, what you
-  wanted, what is there now), because "someone changed this" is not a decision
-  anyone can make. "Keep mine" rebases the edit onto the current value so it
-  flows through the ordinary flush rather than a second write path. The queue is
-  durable (SQLite), because the window it exists for is exactly the one in which
-  things get restarted, and an edit lost to a restart during an outage is
-  precisely the failure it was built to prevent.
-
-  Control actions do *not* queue. A config edit is declarative — "this value
-  should be 3" is still true an hour later — but a restart, rollback or restore
-  is imperative: it means do this now, in the context the operator could see.
-  A restart that fires by itself three hours later kicks players nobody warned,
-  and a rollback replayed unattended discards hours of play nobody agreed to
-  lose. Those are remembered as *deferred intents* instead and offered back as
-  a one-click retry when the wrapper returns, with a person present to decide
-  whether it is still wanted. Console commands stay a plain error — "say
-  restarting in 5 minutes" replayed at 03:00 is a lie the bot would tell on
-  your behalf.
-
-- **The dashboard absorbs the standalone server-manager panel.** Everything
-  `minecraft-server-manager` did is now in the dashboard, reached through the
-  API wrapper like every other server operation. Migration and decommissioning
-  steps: [docs/admin/retiring-server-manager.md](docs/admin/retiring-server-manager.md).
-
-  The panel was not a second dashboard so much as a second *wrapper*: it ran on
-  the Minecraft host, shelled out to the same setup-suite scripts, and carried
-  its own RCON client, `variables.txt` parser and instance registry. Two
-  privileged local agents on one host, for one capability — the same
-  duplication 5.0.0 spent a major version removing, one layer out.
-
-- **Per-capability dashboard access** (`webui.grants`). Host-side routes used
-  to share one `requireSysadmin` gate, which made "read the status page" and
-  "restore a backup over the live world" the same grant. Adding the console,
-  backups and rollback made that untenable, and it could not express the case
-  the panel's retirement created: someone who may tune a mod setting and
-  nothing else.
-
-  Capabilities are per server and grouped by blast radius rather than
-  seniority. `server:console` is deliberately separate from `server:control` —
-  one console command can op an account or ban a player, a restart cannot.
-  `bot:config` is not grantable at all, since editing `config.json` is what
-  controls who has what. See [docs/admin/capabilities.md](docs/admin/capabilities.md).
-
-  Authorization is now declared per route and enforced by one hook, with a boot
-  assertion that refuses to start if a host route carries no rule. Forgetting
-  the gate is a crash on startup rather than an open endpoint.
-
-- **Live console.** A relayed log stream plus a command line, replacing the
-  panel's WebSocket terminal. SSE rather than a WebSocket, which removed code
-  instead of adding it: a browser cannot set headers on a WebSocket handshake,
-  so the panel needed a one-time-ticket endpoint and store to keep its JWT out
-  of URLs. `EventSource` sends the session cookie, so none of that exists here.
-
-  One upstream connection per server, fanned out to every viewer. Not one per
-  browser tab: the wrapper caps concurrent log-stream clients per instance and
-  the bot's own watcher already holds one, so per-tab connections would let the
-  dashboard starve the chat bridge by being used.
-
-- **Console command deny-list** (`webui.console.blockedCommands`, defaulting to
-  `stop`, `op`, `deop`). Enforced in the backend, never only in the UI. Matching
-  is on the first word after any leading slashes, case-insensitively, so one
-  entry covers `stop`, `/stop` and `STOP` — the panel compared raw strings, so
-  a deny entry of `stop` did nothing against `/stop`.
-
-- **Backups panel**: archive listing, download and restore, plus **rollback**
-  on the Servers view. Needs wrapper 3.3.0+; the dashboard hides what an older
-  wrapper cannot serve rather than offering buttons that fail.
-
-  Downloads stream through the dashboard rather than being buffered — the API
-  key must never reach a browser, so a multi-gigabyte archive passes through
-  this process, and it does so in constant memory. `Content-Length` and `Range`
-  are forwarded, so the browser draws its own progress and can resume.
-
-- **`SseLineStream` in `@mcbot/core`.** The SSE transport extracted out of
-  `RemoteLogWatcher` so the dashboard could use it without a second copy of the
-  connect/backoff loop. The watcher keeps its ordered dispatch queue, which
-  exists because its handlers make Discord round-trips; the console writes
-  straight to open responses and needs none.
-
-- **`ServerStatus.features`** — what each server's wrapper advertises, from its
-  capability probe and manifest. The UI gates on this rather than on its own
-  version, so a suite without `rollback.sh` shows no Rollback button.
-
-- **Mod config editor** (needs wrapper 3.4.0). Browse and edit mod settings from
-  the dashboard, for the people who cannot SSH — which was the reason the
-  capability system exists at all: `config:read` and `config:write` are per
-  server, so that grant hands out this view and no console, no backups, and no
-  `config.json`.
-
-  Supports Forge/NeoForge `.toml`, Fabric `.json`/`.json5`, and `.properties`
-  including `server.properties`.
-
-  **Comments survive.** A save splices new values over the old ones and leaves
-  everything else byte-identical — comments, key order, spacing. Parsing a file
-  into an object and writing it back would throw away the `#Range:`,
-  `#Allowed Values:` and `#Default:` lines that are the only documentation a
-  mod author wrote, and turn every save into a whole-file diff. The round-trip
-  test asserts byte identity per format, which is what keeps that true as
-  adapters are added.
-
-  **The schema comes from the file.** Those same comment directives become a
-  numeric range, a select, and help text, so no one hand-writes a schema per
-  mod. Files that document nothing (Fabric, mostly) fall back to types inferred
-  from the values and labels inferred from the key names.
-
-  **Nothing the adapter did not understand is editable.** A multi-line array or
-  an `[[array of table]]` is shown read-only rather than rewritten by a parser
-  that half-followed it.
-
-  Writes are guarded twice: an ETag, so a stale editor cannot overwrite a file a
-  mod rewrote at shutdown, and a re-parse after splicing that refuses the write
-  if the structure changed. Every write snapshots the previous contents first,
-  with one-click revert. Audited with what changed.
-
-  The client sends the values it changed, never the document — the server
-  re-reads the file and splices. A client that could post arbitrary text would
-  make every one of those guards decorative.
-
-  Wrapper side: config files are addressed by an opaque id from an index, with
-  an allow-list of roots (`config/`, `defaultconfigs/`, `world/serverconfig/`,
-  `plugins/`, plus `server.properties`), a realpath containment check, symlinks
-  neither followed nor listed, and a 1 MiB cap. `ops.json` and the world are
-  deliberately unreachable: an editor that can touch those is a remote shell
-  with extra steps.
-
-- **Event tips are a registry.** `EVENT_TIPS`
-  (`src/core/utils/minecraft/eventTips.ts`) declares which command to mention
-  after which in-game event; the ledger, the give-up rule and the
-  disabled-command check are shared. Adding one is an entry plus a locale
-  string. First new entry: a death caused by another player mentions
-  `!report` instead of `!deathpos` — PvP is the one moment reporting is
-  obvious, and keeping it separate means mob deaths never show it and a
-  player kill does not spend a `!deathpos` mention.
-- **Command usage is measured.** A `command_usage` table records every
-  successful slash and in-game invocation (command, surface, user, guild,
-  server), pruned to 90 days. Raw events rather than a counter because two
-  different questions are asked of it: how often was each command used, and
-  which commands has *this* user never run. Recording never throws — a
-  failed metric must not fail the command it was measuring.
-- **The dashboard's Commands page shows usage.** Each command now carries
-  "N uses by M people in 30 days", or an explicit "Not used in 30 days".
-  Uses and distinct people are counted separately, so one enthusiast running
-  something ten times is not mistaken for adoption. It went on the existing
-  page rather than a new one: what a command does, whether it is on, and
-  whether anyone uses it are one question asked three ways, and the third
-  only becomes actionable next to the other two.
-- **`/help` leads with what you have not tried.** Commands the caller has
-  never run are sorted first and marked ✨, turning a reference list into a
-  recommendation without hiding anything.
-- **The death DM mentions `!deathpos`.** A player reading it has just proved
-  they care where they died, which is the only moment that command is
-  obviously useful. Twice, then never again.
-- **Follow-up hints: features suggest their pair, at the moment of use.**
-  Five pairs so far — `/daily` offers to switch on its reminder, `/status`
-  on a *down* server offers to `/watch` it back online (both one-tap
-  buttons), and `/stats`, `/playtime` and `/seed` each name the command
-  that answers the question they raise (`/leaderboard`, `/activity`,
-  `/chunkbase`). Attached once in `withErrorHandling`, after the command
-  returns without throwing — so an errored command can never advertise
-  anything, and a new pair is a registry entry with no other wiring.
-  Claiming a `/daily` reward now offers a one-tap button to switch on the
-  reminder for the next one — the person who just claimed is exactly the
-  person who wants it, and would never have gone looking for
-  `/daily-reminder`. A button rather than a command name because the cost of
-  saying yes should be lower than the cost of reading the offer. At most one
-  hint per reply, never offered for something already switched on, stops
-  after two offers, and "No thanks" is permanent. `HINTS` in
-  `bot/utils/hints/followUps.ts` is a registry: a new pair is one entry
-  saying when it applies, what the button says, and what it does. Shares the
-  `featureNudges.enabled` switch.
-- **In-game nudges for `/link` and `/daily`.** The chat bridge is the only
-  feature with real traffic because it needs no learning; everything else
-  starts with a Discord command players have never been shown. On join, the
-  bot now whispers a player about exactly one thing they are missing.
-  Deliberately narrow: `/daily` requires a linked account, so the funnel is
-  strictly link → daily and nobody is told about a step they cannot take or
-  a feature they already use. It gives up after 3 mentions of a feature
-  (48h apart), and the last one says so. Triggered by the join event, never
-  by message content — matching words would quietly make it English-only.
-  Configure with `featureNudges` (`enabled`, `maxPerFeature`,
-  `cooldownHours`); on by default.
-
-- **`/ban` takes a duration.** `duration: 30m | 2h | 3d | 1w | 2mo | 1.5y`
-  (max `10y`, segments may be combined as `1d12h`) turns a ban into a timed
-  one; leaving it out keeps the old permanent behaviour. Minecraft's ban list
-  has no expiry, so the ban itself stays a plain vanilla `/ban` — the server
-  enforces it even while the bot is offline — and only the release is
-  scheduled bot-side. Pending releases persist in `kv_store["tempBans"]`, are
-  re-armed on startup (anything that ran out during downtime is pardoned on
-  the next boot), and are dropped when `/pardon` beats the clock. The expiry
-  pardon is written to the admin audit log as `tempban-expired`. If the
-  player has a linked Discord account they get a DM the moment the ban
-  lifts — best-effort, so closed DMs or a deleted account never block the
-  pardon itself.
-- **`findDiscordIdByMcName` in `linkUtils`.** The name → Discord-ID reverse
-  scan existed as four hand-rolled copies (`whois`, `profile`, `deaths`,
-  `defineCommand`); they now share one case-insensitive helper, which the
-  timed-ban DM also uses.
-
-- **The bot can now ask the Minecraft server directly, with no wrapper
-  involved.** `serverPing.ts` speaks the standard server-list ping — the same
-  handshake a vanilla client uses to draw a row in the multiplayer list. It
-  needs no authentication, no plugin, and nothing from the API wrapper.
-
-  This is what makes the state model above worth having. Previously, when the
-  wrapper was down the bot's honest answer was "I cannot tell you anything
-  about this server" — a poor answer when a player can open their server list
-  and see it sitting there with four people on it. The information was always
-  available; the bot just had one route to it.
-
-  The ping is a **second opinion, consulted whenever the first is anything
-  other than "all good"**. That covers three cases:
-
-  - the wrapper is unreachable → the ping reports the server online with a
-    live player count, so the bot says *"Online — 4/20 players. API wrapper
-    unreachable, so controls, logs and stats are down"* instead of "Offline";
-  - the wrapper says `offline` but the server answers a ping → the ping wins
-    (a status response is proof; the wrapper's probes are inference) and the
-    bot logs that the wrapper's instance config is likely wrong;
-  - the wrapper says `unresponsive` → the state stands, but the ping supplies
-    the player count the wrapper could not.
-
-  Player names from a ping are a capped, best-effort **sample** — servers
-  publish at most a dozen and plugins can suppress it entirely — so they are
-  flagged as such and never rendered as a full roster. The counts are exact.
-
-  Configured automatically: the host comes from `apiUrl` (the wrapper runs on
-  the Minecraft host) and the port from the `gamePort` the wrapper reports,
-  falling back to 25565. `pingHost`, `pingPort` and `disableDirectPing`
-  override it for split deployments or a firewalled game port.
-
-- **Server state is now three-valued, and "we could not ask" is one of them.**
-
-  "Offline" used to mean three different things. `isRunning()` asked the API
-  wrapper, and anything that was not a clean `true` became offline — a wrapper
-  that was down, a wrapper that timed out, and a Minecraft server that had
-  genuinely stopped. Two of those three are wrong, and they are the common
-  ones: the wrapper is a separate process on the server host that gets
-  restarted and updated while Minecraft carries on with players on it.
-
-  `@mcbot/schema` now defines `ServerState` — `online`, `unresponsive`,
-  `offline`, `unknown` — as one axis, and `WrapperState` (`up` /
-  `unreachable`) as a second, independent one. That independence is the point:
-  the wrapper being down says nothing about whether players are on the server,
-  and `unknown` now means *every* channel failed, which is a far smaller claim
-  than the one it replaced. `ServerInstance.getHealth()` is the way to read
-  both; `isRunning()` remains as "up in some form" for callers that only branch
-  on whether it is worth querying.
-
-  Note the two predicates: `serverIsResponsive()` asks about the *server*,
-  `canQueryServer()` additionally requires a reachable wrapper. They came
-  apart the moment the bot learned to ping directly — a server can be
-  demonstrably online while every query against it fails — and a caller that
-  checks the wrong one asks for a player list it cannot get and renders the
-  zeros it gets back.
-
-  Needs wrapper 3.2.0+ for the full distinction. Against an older wrapper the
-  bot falls back to `/running` and says so in the startup contract report.
+- **Analytics dashboard tab.** Every number the bot already collected — `/uptime`, `/activity`, `/leaderboard`, `/playtime`, `/sessions` — was reachable only through a Discord command, which meant a time series was being rendered as block characters in an embed because that was the only surface available.
+- **`/info` command.** The one question new members actually ask — what do I type to join, and what do I install first — had no command behind it and was answered by a person in chat, per new member, forever.
+- **Offline-tolerant dashboard: last-known reads.** When the API wrapper was unreachable, every read that went through it answered with a hard failure, so the mod config editor, the backups table and the rest simply vanished and told the operator to go read the bot logs — at the exact moment they were most likely trying to find out what was wrong.
+- **Offline-tolerant dashboard: queued config edits.** Building on the reads above — an operator can now open the mod config editor during an outage, see the last-known values, edit them, and have the change applied automatically when the wrapper returns, instead of being able to look but not touch.
+- **The dashboard absorbs the standalone server-manager panel.** Everything `minecraft-server-manager` did is now in the dashboard, reached through the API wrapper like every other server operation.
+- **Per-capability dashboard access** (`webui.
+- **Live console.** A relayed log stream plus a command line, replacing the panel's WebSocket terminal.
+- **Console command deny-list** (`webui.
+- **Backups panel** : archive listing, download and restore, plus **rollback** on the Servers view.
+- **`SseLineStream` in `@mcbot/core`.** The SSE transport extracted out of `RemoteLogWatcher` so the dashboard could use it without a second copy of the connect/backoff loop.
+- **`ServerStatus.features`** — what each server's wrapper advertises, from its capability probe and manifest.
+- **Mod config editor** (needs wrapper 3.
+- **Event tips are a registry.** `EVENT_TIPS` (`src/core/utils/minecraft/eventTips.
+- **Command usage is measured.** A `command_usage` table records every successful slash and in-game invocation (command, surface, user, guild, server), pruned to 90 days.
+- **The dashboard's Commands page shows usage.** Each command now carries "N uses by M people in 30 days", or an explicit "Not used in 30 days".
+- **`/help` leads with what you have not tried.** Commands the caller has never run are sorted first and marked ✨, turning a reference list into a recommendation without hiding anything.
+- **The death DM mentions `!deathpos`.** A player reading it has just proved they care where they died, which is the only moment that command is obviously useful.
+- **Follow-up hints: features suggest their pair, at the moment of use.** Five pairs so far — `/daily` offers to switch on its reminder, `/status` on a *down* server offers to `/watch` it back online (both one-tap buttons), and `/stats`, `/playtime` and `/seed` each name the command that answers the question they raise (`/leaderboard`, `/activity`, `/chunkbase`).
+- **In-game nudges for `/link` and `/daily`.** The chat bridge is the only feature with real traffic because it needs no learning; everything else starts with a Discord command players have never been shown.
+- **`/ban` takes a duration.** `duration: 30m | 2h | 3d | 1w | 2mo | 1.
+- **`findDiscordIdByMcName` in `linkUtils`.** The name → Discord-ID reverse scan existed as four hand-rolled copies (`whois`, `profile`, `deaths`, `defineCommand`); they now share one case-insensitive helper, which the timed-ban DM also uses.
+- **The bot can now ask the Minecraft server directly, with no wrapper involved.** `serverPing.
+- **Server state is now three-valued, and "we could not ask" is one of them.** "Offline" used to mean three different things.
 
 ### Changed
 
-- **Shared logic consolidated into `@mcbot/core`.** Anything both the bot and
-  the dashboard consume now lives in one place, so there is one code source and
-  one behaviour rather than two implementations drifting apart.
-
-  The read-through cache, the deferred-intent store and the queue-flush service
-  moved from the web backend into `core/utils/wrapper/` — they had almost no
-  web dependencies, and the bot needs them too. The relative-time formatters
-  (`relativeAge`, `parseStamp`, `absoluteStamp`, `timestampTitle`) moved out of
-  the frontend into `core/utils/relativeTime.ts`: they lived on one side only,
-  which meant a Discord embed and a web card would have described the same
-  instant by different rules. The frontend keeps a thin re-export so no view
-  import changed.
-
-  The two command-file loaders — one for slash, one for in-game — had a copy
-  each of `getCommandFiles` and `categoryOf`, and the copies had already
-  drifted (one excluded `middleware.js`, the other did not). They are now one
-  shared module in `bot/utils/commands/`. Deliberately in the bot package, not
-  core: it reads the filesystem synchronously at startup, and pulling
-  `node:fs` into core would break its browser-importable boundary for a
-  function the dashboard never calls. Not everything shared belongs in core —
-  only what is shared *between the bot and the interface*.
-
-- **Dashboard commands are grouped by their source folder.** The manifest only
-  split slash versus in-game, so the dashboard grouped by surface and ignored
-  the repository's own structure. Both loaders now record each command's first
-  folder under `commands/` as its category, and the Commands view groups by it —
-  the mental model someone has from the repo is the one they get in the UI.
-  Ordered by a fixed list (the categories you edit most sit at the top) rather
-  than alphabetically, with an "Other" bucket for anything uncategorised.
-
-- **The Servers view no longer has a "View log" button.** It fetched a fixed
-  tail into an inline pane; the Console tab streams the same log live and can
-  send commands. Two ways to read one log, one of them worse.
-
-- `requireSysadmin` is removed rather than deprecated. A coarse gate sitting
-  next to the fine-grained one is an invitation to reintroduce the problem the
-  fine-grained one exists to solve. `isSysadmin` remains.
-
-- **Timezones are per guild and per schedule; the `TZ` env var is gone.**
-  Everything stored stays UTC epoch ms; a zone is applied only where a human
-  reads a time or a wall-clock schedule fires. `guilds.<id>.timezone` covers
-  Discord-facing wall-clock (nightly channel purge, "busiest hour" in
-  `/activity`), `schedules.<server>.timezone` covers server-facing wall-clock
-  (restarts — a 04:00 restart belongs to the machine's operator, and a server
-  watched by two guilds has no guild answer), and a global `timezone` is the
-  default for both. All default to UTC. The channel purge now runs one timer
-  per guild at that guild's midnight instead of one process-wide timer.
-  Embed timestamps need none of this: they are Discord `<t:…>` markers and
-  render in each reader's own zone.
-- **Fixed: `nextMidnightEpoch()` returned NaN on the last day of every
-  month**, so the nightly channel purge misfired every month-end. It pasted
-  `day + 1` into an ISO string ("2026-01-32T00:00:00Z" → Invalid Date); it
-  now shares the `Date.UTC` path that already normalised overflow correctly.
-- **Fixed: `/status` host metrics.** `process.cpuPercent` came from
-  `ps -o pcpu`, the average over the process's whole lifetime — a server
-  that generated terrain at startup reported ~90% forever while idle. It is
-  now sampled from `/proc/<pid>/stat`. A new whole-machine block reports the
-  CPU and RAM an operator actually means; nothing was gathering it before,
-  despite the section being headed "Host".
-- **Fixed: disk figures in `/status` were per filesystem, labelled per
-  directory.** The server dir and the backups dir usually share a filesystem,
-  so both printed identical `df` numbers, which reads as two disks that
-  coincidentally match. Each directory now reports its own size (`du`) under
-  a single filesystem line that names the mount point. Disk-space alerts are
-  deduped by mount point, so one full disk raises one alert rather than one
-  per monitored directory.
-- **Fixed: presence reporting "0 online" for populated servers.** When the
-  health check passed but `/list` threw, `buildServerField` left the counts
-  at zero while still reporting the server as up — and said nothing in the
-  log. It now falls back to the health counts, ignores an unparseable
-  response instead of overwriting with zero, and logs the failure.
-- **Waypoints can be deleted by a bot admin**, not only by their author. A
-  waypoint outlives the player who set it; author-only deletion left editing
-  the store by hand as the only option. Uses the same linked-Discord admin
-  check as `adminOnly` in-game commands.
-- **Wrapper `host-info` is v2** (`minecraft-server-api`), declared through
-  the existing feature manifest. The bot reads v1 wrappers too —
-  `normaliseDisk` lifts the old shape — it simply shows less.
-
-- **Config validation is schema-driven.** Types, requiredness, enums and
-  numeric bounds are now checked with Ajv against the generated
-  `config.schema.json` (`configSchemaCheck.ts`); `configValidation.ts` keeps
-  only what a JSON Schema cannot express — 4.x migration detection, apiUrl
-  transport rules, snowflake shapes, unknown-server references, chat-bridge
-  ambiguity, tenant-scoping nudges, `HH:MM`, port ranges. The two
-  descriptions of the same shape can no longer drift. Numeric bounds moved
-  onto `RawBotConfig` as `@minimum`/`@maximum` annotations, so the schema
-  carries them. Two deliberate softenings: an unknown top-level key and an
-  unrecognised `notifications.events` entry now warn instead of blocking
-  boot, so a config written for a newer version still starts. A missing
-  `config.schema.json` degrades to semantic-only checks with a warning
-  rather than refusing to start.
-- **One `errMsg` for unknown throws.** Replaced 107 copies of the
-  `err instanceof Error ? err.message : String(err)` ternary. The shared one
-  also unpacks `AggregateError`, appends `Error.cause` (where fetch and
-  `node:sqlite` hide the real reason), and reports a thrown object's message
-  instead of `[object Object]`.
-- **Reward rules moved out of the `/daily` command** into
-  `core/utils/minecraft/rewards.ts`. The `advancements` and `joinLeave`
-  watchers imported `give`/`deliverPendingRewards` from a Discord
-  interaction handler; they now depend on core instead.
-- **One `formatDuration` and one `formatBytes`.** `formatDuration` had three
-  implementations with three different renderings (`/sessions` showed a
-  3-day session as `72h 5m`); `formatBytes` had two that had already
-  drifted, so the same figure read `512 KB` in Discord and `0 MB` in the
-  dashboard. `formatBytes` now lives in `@mcbot/schema`, the one package
-  both the Node side and the browser bundle import.
-- **`fetchJson` for upstream calls** (`core/utils/http.ts`): one timeout,
-  one typed `FetchResult` instead of throw-or-null. Fixes a real hang — the
-  Modrinth call had no timeout, so a stalled upstream blocked `/mods`
-  indefinitely.
-- **`sanitizeReason`/`MAX_REASON_LENGTH` moved to `core/utils/sanitize.ts`**
-  from `kick.ts`, where the sibling moderation commands were importing them.
-- **`scheduleAt` (`core/utils/longTimer.ts`)** owns the setTimeout-overflow
-  handling that two schedulers had implemented differently.
-- **`loadLinkedAccountsOrEmpty`** replaces seven copies of
-  `loadLinkedAccounts().catch(() => ({}))`, and logs the failure those seven
-  copies each swallowed silently.
+- **Shared logic consolidated into `@mcbot/core`.** Anything both the bot and the dashboard consume now lives in one place, so there is one code source and one behaviour rather than two implementations drifting apart.
+- **Dashboard commands are grouped by their source folder.** The manifest only split slash versus in-game, so the dashboard grouped by surface and ignored the repository's own structure.
+- **The Servers view no longer has a "View log" button.** It fetched a fixed tail into an inline pane; the Console tab streams the same log live and can send commands.
+- `requireSysadmin` is removed rather than deprecated.
+- **Timezones are per guild and per schedule; the `TZ` env var is gone.** Everything stored stays UTC epoch ms; a zone is applied only where a human reads a time or a wall-clock schedule fires.
+- **Fixed: `nextMidnightEpoch()` returned NaN on the last day of every month** , so the nightly channel purge misfired every month-end.
+- **Fixed: `/status` host metrics.** `process.
+- **Fixed: disk figures in `/status` were per filesystem, labelled per directory.** The server dir and the backups dir usually share a filesystem, so both printed identical `df` numbers, which reads as two disks that coincidentally match.
+- **Fixed: presence reporting "0 online" for populated servers.** When the health check passed but `/list` threw, `buildServerField` left the counts at zero while still reporting the server as up — and said nothing in the log.
+- **Waypoints can be deleted by a bot admin** , not only by their author.
+- **Wrapper `host-info` is v2** (`minecraft-server-api`), declared through the existing feature manifest.
+- **Config validation is schema-driven.** Types, requiredness, enums and numeric bounds are now checked with Ajv against the generated `config.
+- **One `errMsg` for unknown throws.** Replaced 107 copies of the `err instanceof Error ?
+- **Reward rules moved out of the `/daily` command** into `core/utils/minecraft/rewards.
+- **One `formatDuration` and one `formatBytes`.** `formatDuration` had three implementations with three different renderings (`/sessions` showed a 3-day session as `72h 5m`); `formatBytes` had two that had already drifted, so the same figure read `512 KB` in Discord and `0 MB` in the dashboard.
+- **`fetchJson` for upstream calls** (`core/utils/http.
+- **`sanitizeReason`/`MAX_REASON_LENGTH` moved to `core/utils/sanitize.ts`** from `kick.
+- **`scheduleAt` (`core/utils/longTimer.ts`)** owns the setTimeout-overflow handling that two schedulers had implemented differently.
+- **`loadLinkedAccountsOrEmpty`** replaces seven copies of `loadLinkedAccounts().
 
 ### Fixed
 
-- **A stop during the SSE handshake could leave the stream running.** `stop()`
-  aborts the request, but if the response had already resolved the abort was
-  too late: the reader went on to report a connection, fire `onConnect` and
-  start reading a stream the caller had just cancelled. Found by the first
-  direct tests this code has had — it shipped inside the log watcher for a year
-  with only integration coverage.
-
-- **The Backups tab was hidden on every host, so the whole backup feature was
-  invisible.** `ServerStatus.features` was built from
-  `ServerInstance.capabilities`, which only the *bot* process ever fills — the
-  dashboard runs as its own process and shares nothing but `config.json`, so
-  that field is null there forever. The dashboard now probes the wrapper itself
-  (capabilities + manifest, cached 5 minutes, resettable via
-  `clearFeatureCache()`).
-
-- **Features were reported only for a running server.** The probe sat after
-  `collectStatus`'s early returns, so a stopped or unresponsive server reported
-  none at all — and the Backups tab disappeared at the exact moment someone
-  would want to restore one. What the wrapper can do does not depend on whether
-  Minecraft is running, so it is probed before those returns.
-
-  Related: an unreachable wrapper now reports `features: null` meaning "could
-  not ask", and the UI treats that as *available* rather than absent. Hiding
-  half the interface during an outage made the outage look like a regression.
-
-- **The console showed nothing until the server next spoke.** The SSE stream
-  only carries lines written after it connects, and the backlog was seeded only
-  from lines the hub had already seen — which solved the problem for the second
-  viewer and left it in place for the first. The hub now fetches the last 100
-  lines over HTTP and emits them *before* starting the live stream, so the order
-  stays "what already happened, then what happens next". A failed fetch logs and
-  opens the stream anyway.
-
-- **`npm run typecheck` did not typecheck the frontend.** `tsc -b src/bot
-  src/web` builds the dashboard's *backend* project; the `.vue` files and
-  everything under `frontend/src` need `vue-tsc`, which only ran inside
-  `build:all`. So the command a developer runs before pushing reported green
-  while the dashboard build was broken — which is worse than having no command,
-  because it is trusted. `typecheck` now runs both, and a new
-  `typecheck:frontend` script in `@mcbot/web` exposes the frontend half on its
-  own.
-
-- **Backup DTOs were declared in `@mcbot/core` but re-exported from
-  `@mcbot/schema`.** `BackupFileInfo` and `BackupFileIndex` are read by the
-  browser, and the frontend cannot import core (core imports Node built-ins),
-  so a shape both sides read belongs in schema by definition. Declared in
-  `schema/contract.ts` beside `ServerStatus`; core re-exports them so its own
-  callers are unaffected.
-
-- **The cross-repo contract check scaffolded an incomplete suite layout.** Its
-  fake server directory wrote five script files from a hard-coded list, so
-  adding `rollback` to the shared action set left `capabilities.scripts.rollback`
-  false and failed the check with a message pointing nowhere near the cause.
-  `restore.sh` was missing for the same reason. The fixture is now built from
-  `SERVER_SCRIPT_ACTIONS`, and an action with no filename mapping aborts the run
-  up front saying exactly what to add.
-
-- **`/api/setup/servers` was inconsistent with grants.** It was sysadmin-only,
-  which predates capabilities; a user who can see a server in `/api/status`
-  received a 403 asking for its name. Now filtered to the caller's visible
-  servers, still a 403 for anyone with no host access at all.
-
-- **The cross-repo contract check failed on the normal release order.** A
-  wrapper offering features the bot does not consume yet was treated as a
-  disagreement, so the very state that additive wrapper releases are *supposed*
-  to produce — wrapper first, bot half second — turned the wrapper's CI red
-  until both repositories caught up. Demanding lockstep releases across two
-  repos is not a thing anyone can actually do.
-
-  The four gap categories are no longer one thing. `missing`, `outdated` and
-  `ahead` still fail: in each of those the bot calls something the wrapper
-  cannot serve, or reads a shape that moved under it. `unused` is now a note,
-  because nothing calls those routes until the bot half ships. The distinction
-  is named once in `contractHasBlockingGaps()` rather than encoded in the
-  script, and both workflows' error text now describes what actually fails.
-
-- **Fifteen commands reported zero uses despite being run daily.** `/daily`
-  was the visible symptom — used constantly, shown as never used. The cause was
-  architectural: usage recording lived *inside* `withErrorHandling`, but only
-  some commands wrap their `execute` in that helper. The fifteen that export
-  `execute` raw — daily, stats, compare, playtime, link, whitelisted and more —
-  were never counted, so the dashboard's "0 uses" was accurate about data that
-  was never written.
-
-  Recording moved to the single slash-dispatch path, where every command passes
-  regardless of which helpers it uses, and the now-duplicate call was removed
-  from the wrapper so the wrapped commands are not double-counted. One dispatch,
-  one recording site: a command cannot opt out of being measured by choosing a
-  different helper. The in-game side was never affected — it already records in
-  its own single dispatch path.
-
-- **The bot and the dashboard disagreed about whether a server was up.** The
-  bot asked `serverIsUp`, which counts a server as up when it is online *or*
-  unresponsive. The dashboard only had the DTO, so it gated on the legacy
-  `online` flag — which is `state === "online"` exactly. The two disagreed on
-  precisely the state the model exists to capture: an unresponsive server (up,
-  busy, not answering RCON) showed in Discord as up with a player count, and in
-  the dashboard as down with the count hidden and itself excluded from "servers
-  online". `stateIsUp(state)` is now the one rule both sides call, with a test
-  asserting they agree across every state so they cannot drift again.
-
-- **"0/0 players online" during a wrapper blip.** The status collector
-  flattened a null roster into `{ online: 0, max: 0 }`, so the interface
-  confidently asserted nobody was playing at the exact moment it had no idea.
-  The player count is now nullable end to end, rendered as "—" with a tooltip,
-  and the Prometheus exporter omits the sample rather than exporting a zero that
-  draws a real dip on a graph.
-
-- **`/daily` never saw a player as online.** It was the only case-sensitive
-  name comparison in the codebase — `getOnlinePlayers().includes(username)`
-  against the name stored at link time — so a player who linked as
-  `letsgamingde` and appeared in the roster as `LetsGamingDE` was never seen as
-  online, and every claim took the offline path forever. Now matched
-  case-insensitively like every other name comparison.
-
-- **Console did not follow output.** Two independent causes, either alone
-  enough to break it. The follow watcher watched the line array, which is
-  reference-identical when unfiltered, so a shallow watcher never fired. And
-  `scrollToBottom` fired a scroll event that its own handler read as the user
-  scrolling away, disengaging follow on the first backlog flush. Both fixed; the
-  pane now follows on open and stays followed until the reader scrolls up
-  themselves.
-
-- **Console overflowed on large screens.** The pane filled the content column,
-  so a tall display grew a console taller than anyone reads and pushed the
-  composer off the fold. Capped so it fills a normal window yet stays a readable
-  block on a big one.
-
-- **Command list columns did not line up.** Each row was its own grid with
-  auto-width toggle columns, so the toggles never aligned vertically and the
-  "Default" label clipped to "Defaul". Fixed with shared fixed-width tracks so
-  every row's controls sit in the same columns.
-
-- **Working with raw IDs where a name was available.** Guild config editors
-  showed snowflake channel and role IDs instead of names, and the audit log
-  printed raw guild IDs in its prose. The schema editor now resolves IDs to
-  named pickers per guild — scoped so a picker inside one guild can only ever
-  offer that guild's channels, which makes cross-guild mistakes
-  unrepresentable rather than merely discouraged — and the audit log resolves
-  guild IDs to names where it knows them, leaving unknown IDs intact rather
-  than substituting a lossy placeholder.
-
-- **In-game tips are delivered in game.** The `!deathpos` tip rode along on
-  the death-coordinates DM, which only linked players receive — so a tip
-  about an in-game command was behind a Discord link and never reached the
-  players who had not linked. Event tips are now whispered to the player
-  they concern, linked or not; the DM keeps the coordinates, which is the
-  part that needs Discord.
-- **Tips no longer advertise disabled commands.** The join nudges, the
-  follow-up hints and the death DM all recommended commands without checking
-  command policy, so a server with `daily` switched off still told every new
-  player to run it — and following the tip landed them on "unknown command",
-  which is worse than never being told. All three now go through one
-  `isAdvertisable` check covering global, per-guild and per-server
-  overrides, plus admin-only commands offered to non-admins.
-
-- **A lag spike was reported as a server outage.** The downtime monitor read
-  one boolean, so a server too loaded to answer RCON crossed the three-failure
-  threshold and got a "🔴 Server Down" alert. Worse than the wrong message: it
-  also wrote a `0` into the uptime history and closed every open play session
-  as a crash. `unresponsive` now counts as up, and neither happens.
-
-- **An unreachable API wrapper was reported as a server outage.** Same three
-  consequences, from a cause that says nothing at all about the Minecraft
-  server. It now gets its own alert on a longer five-check fuse, with a
-  recovery notice — and, because of the direct ping above, that alert says
-  what the server itself is doing in the same breath, since an operator woken
-  by it needs to know whether players are affected before anything else. When
-  the ping confirms the server is up, uptime is recorded as **up**; only when
-  nothing answers at all is the sample skipped, because a missing sample is
-  honest where a fabricated `false` is not. `/status`, the status embed, and
-  the dashboard each report the two facts separately instead of rendering
-  every one of them as "Offline".
-
-- **Player-count history recorded lag spikes as players leaving.** The sampler
-  skipped only servers that were down, so an unresponsive one was sampled,
-  `getList()` returned zeros, and the activity chart drew an exodus. It now
-  samples only responsive servers and leaves a gap otherwise.
-
-- **`mcbot_server_online` conflated three incidents into one alert.** Split
-  into `mcbot_wrapper_up`, `mcbot_server_up` and `mcbot_server_online`.
-  `mcbot_server_up` is **absent**, not `0`, when the wrapper did not answer —
-  a `0` there is a claim of an outage that was never established, and an
-  absent series breaks alert rules loudly instead.
-
-- **The chat bridge lagged behind in-game chat, worst with webhooks on.**
-  Two compounding causes, both since fixed:
-
-  `RemoteLogWatcher` awaited handler dispatch inside the SSE read loop, so the
-  socket sat idle for the whole of every handler's Discord round-trip and each
-  chat line waited for the previous line's HTTP request. Handlers still run in
-  order, one at a time — the *reader* no longer waits for them.
-
-  The bridge itself awaited each send inline, which held up every other
-  watcher for that server too. Sends are now queued per channel: ordered
-  within a channel, parallel across them. Webhook execution is the slow case
-  (its own rate-limit bucket, plus Discord fetching an mc-heads avatar it has
-  not cached), which is why the lag appeared with `useWebhook` and not
-  without it. Webhooks are also resolved once at setup and reload, instead of
-  on the first chat message of a session, and concurrent resolutions are
-  deduplicated.
-
-  Note: sends are no longer globally ordered across channels. Two guilds
-  bridging the same server may receive the same line in either order.
+- **A stop during the SSE handshake could leave the stream running.** `stop()` aborts the request, but if the response had already resolved the abort was too late: the reader went on to report a connection, fire `onConnect` and start reading a stream the caller had just cancelled.
+- **The Backups tab was hidden on every host, so the whole backup feature was invisible.** `ServerStatus.
+- **Features were reported only for a running server.** The probe sat after `collectStatus`'s early returns, so a stopped or unresponsive server reported none at all — and the Backups tab disappeared at the exact moment someone would want to restore one.
+- **The console showed nothing until the server next spoke.** The SSE stream only carries lines written after it connects, and the backlog was seeded only from lines the hub had already seen — which solved the problem for the second viewer and left it in place for the first.
+- **`npm run typecheck` did not typecheck the frontend.** `tsc -b src/bot src/web` builds the dashboard's *backend* project; the `.
+- **Backup DTOs were declared in `@mcbot/core` but re-exported from `@mcbot/schema`.** `BackupFileInfo` and `BackupFileIndex` are read by the browser, and the frontend cannot import core (core imports Node built-ins), so a shape both sides read belongs in schema by definition.
+- **The cross-repo contract check scaffolded an incomplete suite layout.** Its fake server directory wrote five script files from a hard-coded list, so adding `rollback` to the shared action set left `capabilities.
+- **`/api/setup/servers` was inconsistent with grants.** It was sysadmin-only, which predates capabilities; a user who can see a server in `/api/status` received a 403 asking for its name.
+- **The cross-repo contract check failed on the normal release order.** A wrapper offering features the bot does not consume yet was treated as a disagreement, so the very state that additive wrapper releases are *supposed* to produce — wrapper first, bot half second — turned the wrapper's CI red until both repositories caught up.
+- **Fifteen commands reported zero uses despite being run daily.** `/daily` was the visible symptom — used constantly, shown as never used.
+- **The bot and the dashboard disagreed about whether a server was up.** The bot asked `serverIsUp`, which counts a server as up when it is online *or* unresponsive.
+- **"0/0 players online" during a wrapper blip.** The status collector flattened a null roster into `{ online: 0, max: 0 }`, so the interface confidently asserted nobody was playing at the exact moment it had no idea.
+- **`/daily` never saw a player as online.** It was the only case-sensitive name comparison in the codebase — `getOnlinePlayers().
+- **Console did not follow output.** Two independent causes, either alone enough to break it.
+- **Console overflowed on large screens.** The pane filled the content column, so a tall display grew a console taller than anyone reads and pushed the composer off the fold.
+- **Command list columns did not line up.** Each row was its own grid with auto-width toggle columns, so the toggles never aligned vertically and the "Default" label clipped to "Defaul".
+- **Working with raw IDs where a name was available.** Guild config editors showed snowflake channel and role IDs instead of names, and the audit log printed raw guild IDs in its prose.
+- **In-game tips are delivered in game.** The `!
+- **Tips no longer advertise disabled commands.** The join nudges, the follow-up hints and the death DM all recommended commands without checking command policy, so a server with `daily` switched off still told every new player to run it — and following the tip landed them on "unknown command", which is worse than never being told.
+- **A lag spike was reported as a server outage.** The downtime monitor read one boolean, so a server too loaded to answer RCON crossed the three-failure threshold and got a "🔴 Server Down" alert.
+- **An unreachable API wrapper was reported as a server outage.** Same three consequences, from a cause that says nothing at all about the Minecraft server.
+- **Player-count history recorded lag spikes as players leaving.** The sampler skipped only servers that were down, so an unresponsive one was sampled, `getList()` returned zeros, and the activity chart drew an exodus.
+- **`mcbot_server_online` conflated three incidents into one alert.** Split into `mcbot_wrapper_up`, `mcbot_server_up` and `mcbot_server_online`.
+- **The chat bridge lagged behind in-game chat, worst with webhooks on.** Two compounding causes, both since fixed: `RemoteLogWatcher` awaited handler dispatch inside the SSE read loop, so the socket sat idle for the whole of every handler's Discord round-trip and each chat line waited for the previous line's HTTP request.
 
 ### Removed
 
-- **Three slash commands: `/say`, `/playerhead`, `/netherportal`.** The
-  in-game equivalents `!playerhead` and `!netherportal` are unchanged — only
-  the Discord slash versions are gone, since the in-game surface is where they
-  are actually used. `/say` had no in-game equivalent and is removed outright;
-  the vanilla Minecraft `/say` server command the bot issues for chat bridging,
-  restart warnings and milestones is a different thing entirely and stays.
+- **Three slash commands: `/say`, `/playerhead`, `/netherportal`.** The in-game equivalents `!
 
 ### Not carried over from the server-manager panel
 
-Two of the panel's features were considered and deliberately left behind. Both
-are decisions rather than oversights, so they are written down here:
-
-- **The local username/password login.** The dashboard stays Discord-OAuth2
-  only. The fallback that login provided already exists in a better form — SSH
-  plus the wrapper's API key — and a second authentication surface on the game
-  host is a poor trade for the rare case where you have neither. The runbook is
-  [docs/admin/emergency-access.md](docs/admin/emergency-access.md); it asks you
-  to note the date each time you need it, which is the signal for revisiting
-  this.
-
-- **The public, login-free status page.** The dashboard has no public surface;
-  every route requires a session. Login-free status and leaderboard pages remain
-  an open roadmap idea, to be designed as such if there is ever demand, rather
-  than reconstructed from what the panel happened to expose.
+- **The local username/password login.** The dashboard stays Discord-OAuth2 only.
+- **The public, login-free status page.** The dashboard has no public surface; every route requires a session.
 
 ## [5.0.0] - 2026-07-17
 
