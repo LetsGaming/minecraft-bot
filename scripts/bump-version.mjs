@@ -42,11 +42,12 @@ const dryRun = flags.has("--dry-run");
 const doPush = flags.has("--push");
 const doTag = flags.has("--tag") || doPush;
 const assumeYes = flags.has("--yes");
+const keepUnreleasedDetails = flags.has("--keep-unreleased-details");
 
 if (!bumpArg) {
   console.error(
     "Usage: node scripts/bump-version.mjs <version|major|minor|patch> " +
-      "[--dry-run] [--tag] [--push] [--yes]",
+      "[--dry-run] [--tag] [--push] [--yes] [--keep-unreleased-details]",
   );
   process.exit(1);
 }
@@ -74,6 +75,91 @@ function resolveVersion(cur, arg) {
 const version = resolveVersion(current, bumpArg);
 const tag = `v${version}`;
 
+// ── Helper: Summarize Unreleased Section ──────────────────────────────────
+function summarizeUnreleasedBlock(rawUnreleasedText) {
+  const categories = {};
+  let currentCategory = "General";
+
+  const lines = rawUnreleasedText.split("\n");
+  let currentItemRaw = "";
+
+  const processAndFlushItem = () => {
+    if (!currentItemRaw.trim()) return;
+
+    if (!categories[currentCategory]) {
+      categories[currentCategory] = [];
+    }
+
+    // Normalisiert Leerzeichen und Umbrüche
+    const cleanedText = currentItemRaw.replace(/\s+/g, " ").trim();
+
+    // Extrahiert **Titel** und den folgenden Text
+    const match = cleanedText.match(/^(\*\*[^*]+\*\*)\s*(.*)$/);
+
+    if (match) {
+      const [, title, description] = match;
+      if (description) {
+        // Findet das Ende des ersten Satzes (. ! ?)
+        const sentenceEndMatch = description.match(/^([^.!?]*[.!?])/);
+        const firstSentence = sentenceEndMatch ? sentenceEndMatch[1].trim() : description.trim();
+        categories[currentCategory].push(`${title} ${firstSentence}`);
+      } else {
+        categories[currentCategory].push(title);
+      }
+    } else {
+      // Falls kein **Titel** vorhanden ist, nimmt er den ersten Satz des Eintrags
+      const sentenceEndMatch = cleanedText.match(/^([^.!?]*[.!?])/);
+      const firstSentence = sentenceEndMatch ? sentenceEndMatch[1].trim() : cleanedText.trim();
+      categories[currentCategory].push(firstSentence);
+    }
+
+    currentItemRaw = "";
+  };
+
+  for (const line of lines) {
+    const categoryHeader = line.match(/^###\s+(.+)$/);
+    if (categoryHeader) {
+      processAndFlushItem();
+      currentCategory = categoryHeader[1].trim();
+      continue;
+    }
+
+    // Neuer Haupt-Stichpunkt
+    const bulletMatch = line.match(/^[-*]\s+(.+)$/);
+    if (bulletMatch) {
+      processAndFlushItem();
+      currentItemRaw = bulletMatch[1].trim();
+      continue;
+    }
+
+    // Unterpunkte überspringen
+    if (/^\s+[-*]\s+/.test(line)) {
+      continue;
+    }
+
+    // Folgezeilen des aktuellen Stichpunkts anhängen
+    if (currentItemRaw && line.trim().length > 0) {
+      currentItemRaw += " " + line.trim();
+    }
+  }
+
+  processAndFlushItem();
+
+  const outputLines = [];
+  for (const [category, items] of Object.entries(categories)) {
+    if (items.length === 0) continue;
+    outputLines.push(`### ${category}\n`);
+    for (const item of items) {
+      outputLines.push(`- ${item}`);
+    }
+    outputLines.push("");
+  }
+
+  return outputLines.length > 0
+    ? outputLines.join("\n").trim()
+    : "- Internal updates and minor improvements.";
+}
+
 // ── Collect the edits (compute first, write once) ─────────────────────────
 const workspaces = rootPkg.workspaces ?? [];
 const edits = [];
@@ -94,8 +180,6 @@ if (fs.existsSync(lockPath)) {
   let changed = lock.version !== version;
   lock.version = version;
   for (const [key, entry] of Object.entries(lock.packages ?? {})) {
-    // "" is the root; the workspace dirs are the only other first-party
-    // entries — never touch node_modules/* dependency versions.
     if ((key === "" || workspaces.includes(key)) && entry.version && entry.version !== version) {
       entry.version = version;
       changed = true;
@@ -104,19 +188,44 @@ if (fs.existsSync(lockPath)) {
   if (changed) edits.push({ rel: "package-lock.json", write: () => writeJson(lockPath, lock) });
 }
 
-// CHANGELOG.md — [Unreleased] → [version] — today, fresh [Unreleased] on top
+// CHANGELOG.md — summarize [Unreleased] → [version]
 const clPath = path.join(root, "CHANGELOG.md");
 if (fs.existsSync(clPath)) {
   const cl = fs.readFileSync(clPath, "utf8");
   const today = new Date().toISOString().slice(0, 10);
+
   if (cl.includes(`## [${version}]`)) {
     // already released in the changelog — leave it
   } else if (cl.includes("## [Unreleased]")) {
-    const next = cl.replace(
-      "## [Unreleased]",
-      `## [Unreleased]\n\n## [${version}] — ${today}`,
-    );
-    edits.push({ rel: "CHANGELOG.md", write: () => fs.writeFileSync(clPath, next) });
+    const unreleasedHeader = "## [Unreleased]";
+    const unreleasedIndex = cl.indexOf(unreleasedHeader);
+    const afterUnreleased = unreleasedIndex + unreleasedHeader.length;
+
+    const nextHeaderMatch = cl.slice(afterUnreleased).match(/\n##\s+\[/);
+    const nextHeaderIndex = nextHeaderMatch
+      ? afterUnreleased + nextHeaderMatch.index
+      : -1;
+
+    let unreleasedBody = "";
+    let remainder = "";
+
+    if (nextHeaderIndex !== -1) {
+      unreleasedBody = cl.slice(afterUnreleased, nextHeaderIndex);
+      remainder = cl.slice(nextHeaderIndex);
+    } else {
+      unreleasedBody = cl.slice(afterUnreleased);
+    }
+
+    const versionContent = keepUnreleasedDetails
+      ? unreleasedBody.trim()
+      : summarizeUnreleasedBlock(unreleasedBody);
+
+    const updatedChangelog =
+      cl.slice(0, unreleasedIndex) +
+      `## [Unreleased]\n\n## [${version}] — ${today}\n\n${versionContent}\n` +
+      remainder;
+
+    edits.push({ rel: "CHANGELOG.md", write: () => fs.writeFileSync(clPath, updatedChangelog) });
   } else {
     console.warn("! CHANGELOG.md has no [Unreleased] section — skipping it.");
   }
@@ -142,9 +251,6 @@ async function confirm() {
   return /^y(es)?$/i.test(answer.trim());
 }
 
-// execFileSync hangs the captured stdio off the error object, and node prints
-// every own property of an uncaught error — rethrow a plain one with just the
-// message git actually wrote.
 const git = (...a) => {
   try {
     return execFileSync("git", a, { cwd: root, stdio: "pipe" }).toString().trim();
@@ -156,8 +262,6 @@ const git = (...a) => {
 
 if (doTag) {
   try {
-    // A tag is created once. Re-running a half-finished release should say so
-    // rather than dying inside git.
     if (git("tag", "--list", tag)) {
       console.error(
         `\n! Tag ${tag} already exists — delete it first if you are redoing the release:` +
@@ -167,8 +271,6 @@ if (doTag) {
       process.exit(1);
     }
 
-    // Guard: for a tag, the ONLY pending changes should be the version files we
-    // are about to write — otherwise the release would tag half-committed work.
     const dirty = git("status", "--porcelain")
       .split("\n")
       .map((l) => l.slice(3))
@@ -208,9 +310,6 @@ if (!doTag) {
 }
 
 // ── Commit + tag (+ push) ─────────────────────────────────────────────────
-// No edits is the normal case for the two-step flow: bump, commit the files
-// yourself, come back with --tag. Only the tag is left to do, and committing
-// nothing is an error in git.
 if (edits.length > 0) {
   git("add", ...edits.map((e) => e.rel));
   git("commit", "-m", `chore(release): ${tag}`);
