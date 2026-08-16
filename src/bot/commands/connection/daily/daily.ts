@@ -37,6 +37,7 @@ import {
 } from "@mcbot/core/utils/minecraft/rewards.js";
 import { resolveServer } from "../../../utils/guild/guildRouter.js";
 import { formatTime } from "@mcbot/core/utils/time.js";
+import { guildTimeZone } from "@mcbot/core/utils/config/timezones.js";
 
 const claimLock = new Set<string>();
 
@@ -119,7 +120,7 @@ async function _execute(
 
   if (delta < DAILY_COOLDOWN_MS) {
     await interaction.reply({
-      content: cooldownMsg(DAILY_COOLDOWN_MS - delta),
+      content: cooldownMsg(DAILY_COOLDOWN_MS - delta, interaction.guildId ?? ""),
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -259,11 +260,11 @@ function errorReply(
   };
 }
 
-function cooldownMsg(ms: number): string {
+function cooldownMsg(ms: number, guildId?: string): string {
   const h = Math.floor(ms / 3600000);
   const m = Math.floor((ms % 3600000) / 60000);
   const readyAt = new Date(Date.now() + ms);
-  return `⏳ Next claim in ${h}h ${m}m. | Ready at ${formatTime(readyAt)}`;
+  return `⏳ Next claim in ${h}h ${m}m. | Ready at ${formatTime(readyAt, guildTimeZone(guildId))}`;
 }
 
 function response(
