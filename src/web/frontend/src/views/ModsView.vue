@@ -147,6 +147,7 @@
             </tr>
           </tbody>
         </table>
+        </div>
       </section>
     </div>
   </div>
