@@ -191,3 +191,11 @@ export const ModSearchQuery = Type.Object({
   hideClientOnly: Type.Optional(Type.String()),
 });
 export type ModSearchQuery = Static<typeof ModSearchQuery>;
+
+export const ModIconQuery = Type.Object({ url: Type.String({ maxLength: 512 }) });
+export type ModIconQuery = Static<typeof ModIconQuery>;
+
+export const ModUpdatesQuery = Type.Object({
+  refresh: Type.Optional(Type.String()),
+});
+export type ModUpdatesQuery = Static<typeof ModUpdatesQuery>;

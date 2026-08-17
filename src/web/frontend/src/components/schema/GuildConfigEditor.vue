@@ -71,7 +71,8 @@ import Dialog from "primevue/dialog";
 import Button from "primevue/button";
 import Message from "primevue/message";
 import SchemaField from "./SchemaField.vue";
-import { derefNode, countNewSections } from "./schemaField";
+import { derefNode, countNewSections, topLevelSectionKeys } from "./schemaField";
+import { isFeatureNew, commitSeenFeatures } from "../../composables/useSeenFeatures";
 import { useGuildConfig } from "../../composables/useGuildConfig";
 import { useSchemaRefs, SchemaRefsKey } from "../../composables/useSchemaRefs";
 
@@ -108,15 +109,18 @@ export default defineComponent({
     },
     newFeatureCount(): number {
       if (!this.model) return 0;
-      return countNewSections(this.topLevelProps, this.model, this.definitions);
+      return countNewSections(this.topLevelProps, this.model, this.definitions, isFeatureNew);
     },
   },
   watch: {
-    visible(open: boolean): void {
+    async visible(open: boolean): Promise<void> {
       if (open && this.guildId) {
-        void this.load(this.guildId);
-        void this.loadServers();
-        void this.loadGuildRefs(this.guildId);
+        await Promise.all([
+          this.load(this.guildId),
+          this.loadServers(),
+          this.loadGuildRefs(this.guildId),
+        ]);
+        commitSeenFeatures(topLevelSectionKeys(this.topLevelProps, this.definitions));
       }
     },
   },

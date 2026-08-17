@@ -1,27 +1,24 @@
 /**
  * The Mods tab's server side.
  *
- * Two kinds of route live here, split by where the work happens:
+ * Two kinds of route, split by where the work happens:
  *
- *   - The installed list and the mutations (install, remove, update) go to the
+ *   - The installed list and the mutations (install, update, remove) go to the
  *     wrapper, because only it can read the instance's mod manifest and run the
- *     suite's scripts as the instance user. This side just proxies, audits the
- *     writes, and invalidates the cached installed list afterwards.
- *   - Search and catalogue lookups go to Modrinth directly from here, because
- *     browsing touches no host and routing it through a Minecraft box would add
- *     a hop and a failure mode for nothing. Search is defaulted to what this
- *     server can run — its loader and game version as facets, client-only mods
- *     hidden — and every hit is annotated with whether it is already installed.
+ *     suite's scripts as the instance user. This side proxies, audits the
+ *     writes, and invalidates the cached reads afterwards.
+ *   - Search and catalogue go to Modrinth directly from here; browsing touches
+ *     no host. Search is defaulted to what this server can run and each hit is
+ *     annotated with whether it is already installed.
  *
- * Capabilities: everything is server-scoped. Reads (list, updates check,
- * search, catalogue) need `mods:read`; the three mutations need `mods:write`,
- * since installing a mod runs its code on the server.
+ * Every external read is cached with a short TTL (utils/cache.ts) so a burst of
+ * dashboard requests collapses to one upstream call: the wrapper is a single
+ * process on the Minecraft host, and Modrinth rate-limits. A mutation drops the
+ * affected keys, and the update check takes ?refresh=true for the "check now"
+ * button.
  *
- * The wrapper's mutations return their script's structured result at 200,
- * including a handled `{ ok: false, error, code }`. That is passed straight
- * through: the failure is data the UI renders as a message, not an HTTP error.
- * Only the wrapper being unreachable, or a genuine Modrinth outage, becomes a
- * 5xx here.
+ * Modrinth serves icons from its own CDN, which the page's CSP does not allow,
+ * so they are proxied through /mods/icon and loaded same-origin.
  */
 import type { FastifyInstance } from "fastify";
 import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
@@ -30,6 +27,7 @@ import {
   listInstalledMods,
   addMod,
   removeMod,
+  updateMod,
   checkModUpdates,
   applyModUpdates,
   type InstalledMods,
@@ -38,17 +36,39 @@ import {
   searchProjects,
   getProjectDetail,
   ModrinthError,
+  type ModSearchResult,
+  type ModProjectDetail,
 } from "@mcbot/core/utils/modrinth.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
-import { readThrough, forget } from "@mcbot/core/utils/wrapper/lastKnown.js";
+import { readThrough } from "@mcbot/core/utils/wrapper/lastKnown.js";
+import { cached, invalidate } from "@mcbot/core/utils/cache.js";
 import { sessionFromRequest } from "../auth/auth.js";
-import { NotFound, HttpError } from "../errors.js";
-import { IdParams, ModSlugParams, ModAddBody, ModUpdatesBody, ModSearchQuery } from "./schemas.js";
+import { BadRequest, NotFound, HttpError } from "../errors.js";
+import {
+  IdParams,
+  ModSlugParams,
+  ModAddBody,
+  ModUpdatesBody,
+  ModSearchQuery,
+  ModUpdatesQuery,
+  ModIconQuery,
+} from "./schemas.js";
 
+// The dashboard is what surfaces these; its logs are the web container's, not
+// the bot's. (For docker: `docker compose logs web`.)
 const OPERATION_FAILED =
-  "The operation failed unexpectedly — see the bot logs for details.";
+  "The operation failed unexpectedly. Check the dashboard (web) logs for details.";
+
+const TTL_INSTALLED = 15_000;
+const TTL_UPDATES = 120_000;
+const TTL_SEARCH = 60_000;
+const TTL_CATALOG = 300_000;
+const TTL_ICON = 24 * 60 * 60 * 1000;
+
+const MODRINTH_ICON_HOST = "cdn.modrinth.com";
+const ICON_UA = "LetsGaming/minecraft-bot dashboard (icon proxy)";
 
 function requireServer(id: string): NonNullable<ReturnType<typeof getServerInstance>> {
   const server = getServerInstance(id);
@@ -56,14 +76,12 @@ function requireServer(id: string): NonNullable<ReturnType<typeof getServerInsta
   return server;
 }
 
-/** Parse a clamped integer from a query string. */
 function clampInt(raw: string | undefined, def: number, min: number, max: number): number {
   const n = parseInt(raw ?? "", 10);
   if (Number.isNaN(n)) return def;
   return Math.min(Math.max(n, min), max);
 }
 
-/** Modrinth failure → the status the client should see. */
 function throwModrinth(err: unknown, where: string): never {
   if (err instanceof ModrinthError) {
     if (err.kind === "not-found") throw new NotFound("No such Modrinth project.");
@@ -73,10 +91,31 @@ function throwModrinth(err: unknown, where: string): never {
   throw new HttpError(502, OPERATION_FAILED);
 }
 
+/** Rewrite a Modrinth icon URL to the same-origin proxy the CSP allows. */
+function proxyIcon(serverId: string, url: string | null): string | null {
+  if (!url) return null;
+  return `/api/servers/${encodeURIComponent(serverId)}/mods/icon?url=${encodeURIComponent(url)}`;
+}
+
 export function registerModRoutes(app: FastifyInstance): void {
   const api = app.withTypeProvider<TypeBoxTypeProvider>();
 
-  // ── Installed list (cached; survives a wrapper blip) ──────────────────────
+  /** Installed list, TTL-cached and stale-on-failure. Shared by list/search/catalog. */
+  function loadInstalled(
+    id: string,
+    cfg: Parameters<typeof listInstalledMods>[0],
+  ): Promise<{ value: InstalledMods; stale: unknown }> {
+    return readThrough(id, "modsInstalled", () =>
+      cached(`mods:installed:${id}`, TTL_INSTALLED, () => listInstalledMods(cfg)),
+    );
+  }
+
+  function invalidateServer(id: string): void {
+    invalidate(`mods:installed:${id}`);
+    invalidate(`mods:updates:${id}`);
+  }
+
+  // ── Installed list ────────────────────────────────────────────────────────
   api.get(
     "/api/servers/:id/mods/installed",
     {
@@ -86,9 +125,7 @@ export function registerModRoutes(app: FastifyInstance): void {
     async (req) => {
       const server = requireServer(req.params.id);
       try {
-        const { value, stale } = await readThrough(req.params.id, "modsInstalled", () =>
-          listInstalledMods(server.config),
-        );
+        const { value, stale } = await loadInstalled(req.params.id, server.config);
         return { ...value, stale };
       } catch (err) {
         log.error("web", `Installed mods for ${req.params.id} failed: ${errMsg(err)}`);
@@ -97,17 +134,19 @@ export function registerModRoutes(app: FastifyInstance): void {
     },
   );
 
-  // ── Check for updates ─────────────────────────────────────────────────────
+  // ── Check for updates (?refresh=true bypasses the cache) ──────────────────
   api.get(
     "/api/servers/:id/mods/updates",
     {
-      schema: { params: IdParams },
+      schema: { params: IdParams, querystring: ModUpdatesQuery },
       config: { capability: "mods:read", scope: "server", param: "id" },
     },
     async (req) => {
       const server = requireServer(req.params.id);
+      const key = `mods:updates:${req.params.id}`;
+      if (req.query.refresh === "true") invalidate(key);
       try {
-        return await checkModUpdates(server.config);
+        return await cached(key, TTL_UPDATES, () => checkModUpdates(server.config));
       } catch (err) {
         log.error("web", `Mod update check on ${req.params.id} failed: ${errMsg(err)}`);
         throw new HttpError(502, OPERATION_FAILED);
@@ -134,11 +173,38 @@ export function registerModRoutes(app: FastifyInstance): void {
       });
       try {
         const result = await addMod(server.config, req.body);
-        // Whatever the outcome, the installed list may have changed.
-        forget(req.params.id, "modsInstalled");
+        invalidateServer(req.params.id);
         return result;
       } catch (err) {
         log.error("web", `Mod install on ${req.params.id} failed: ${errMsg(err)}`);
+        throw new HttpError(502, OPERATION_FAILED);
+      }
+    },
+  );
+
+  // ── Update one mod ────────────────────────────────────────────────────────
+  api.post(
+    "/api/servers/:id/mods/:slug/update",
+    {
+      schema: { params: ModSlugParams },
+      config: { capability: "mods:write", scope: "server", param: "id" },
+    },
+    async (req) => {
+      const server = requireServer(req.params.id);
+      const session = sessionFromRequest(req)!;
+      await recordAdminAction({
+        action: "mod update (dashboard)",
+        server: req.params.id,
+        by: session.tag,
+        byId: session.uid,
+        detail: req.params.slug,
+      });
+      try {
+        const result = await updateMod(server.config, req.params.slug);
+        invalidateServer(req.params.id);
+        return result;
+      } catch (err) {
+        log.error("web", `Mod update on ${req.params.id} failed: ${errMsg(err)}`);
         throw new HttpError(502, OPERATION_FAILED);
       }
     },
@@ -163,7 +229,7 @@ export function registerModRoutes(app: FastifyInstance): void {
       });
       try {
         const result = await removeMod(server.config, req.params.slug);
-        forget(req.params.id, "modsInstalled");
+        invalidateServer(req.params.id);
         return result;
       } catch (err) {
         log.error("web", `Mod remove on ${req.params.id} failed: ${errMsg(err)}`);
@@ -191,7 +257,7 @@ export function registerModRoutes(app: FastifyInstance): void {
       });
       try {
         const result = await applyModUpdates(server.config, req.body.mcVersion);
-        forget(req.params.id, "modsInstalled");
+        invalidateServer(req.params.id);
         return result;
       } catch (err) {
         log.error("web", `Mod update-all on ${req.params.id} failed: ${errMsg(err)}`);
@@ -200,7 +266,52 @@ export function registerModRoutes(app: FastifyInstance): void {
     },
   );
 
-  // ── Browse Modrinth (dashboard-side; annotated with installed state) ──────
+  // ── Icon proxy (Modrinth CDN → same-origin, so the CSP allows it) ─────────
+  api.get(
+    "/api/servers/:id/mods/icon",
+    {
+      schema: { params: IdParams, querystring: ModIconQuery },
+      config: { capability: "mods:read", scope: "server", param: "id" },
+    },
+    async (req, reply) => {
+      requireServer(req.params.id);
+
+      let target: URL;
+      try {
+        target = new URL(req.query.url);
+      } catch {
+        throw new BadRequest("Invalid icon url.");
+      }
+      // Only Modrinth's CDN is proxied — this must never become an open relay.
+      if (target.protocol !== "https:" || target.hostname !== MODRINTH_ICON_HOST) {
+        throw new BadRequest("Only Modrinth CDN icons are proxied.");
+      }
+
+      let img: { contentType: string; body: Buffer };
+      try {
+        img = await cached(`icon:${target.href}`, TTL_ICON, async () => {
+          const res = await fetch(target.href, {
+            headers: { "User-Agent": ICON_UA },
+            signal: AbortSignal.timeout(8_000),
+          });
+          if (!res.ok) throw new HttpError(502, "Icon fetch failed.");
+          return {
+            contentType: res.headers.get("content-type") ?? "image/png",
+            body: Buffer.from(await res.arrayBuffer()),
+          };
+        });
+      } catch (err) {
+        if (err instanceof HttpError) throw err;
+        throw new HttpError(502, "Icon fetch failed.");
+      }
+
+      reply.header("content-type", img.contentType);
+      reply.header("cache-control", "public, max-age=86400, immutable");
+      return reply.send(img.body);
+    },
+  );
+
+  // ── Browse Modrinth (cached; annotated with installed state) ──────────────
   api.get(
     "/api/servers/:id/mods/search",
     {
@@ -211,14 +322,9 @@ export function registerModRoutes(app: FastifyInstance): void {
       const server = requireServer(req.params.id);
       const q = req.query;
 
-      // The installed manifest gives us the compat facets and the installed
-      // annotation. Best-effort: if the wrapper is down, search still works,
-      // just without the loader/version narrowing and the "installed" badges.
       let installed: InstalledMods | null = null;
       try {
-        installed = (await readThrough(req.params.id, "modsInstalled", () =>
-          listInstalledMods(server.config),
-        )).value;
+        installed = (await loadInstalled(req.params.id, server.config)).value;
       } catch {
         installed = null;
       }
@@ -230,22 +336,28 @@ export function registerModRoutes(app: FastifyInstance): void {
         .map((c) => c.trim())
         .filter((c) => /^[\w-]{1,40}$/.test(c));
 
+      const params = {
+        query: q.query ?? "",
+        limit: clampInt(q.limit, 20, 1, 50),
+        offset: clampInt(q.offset, 0, 0, 10_000),
+        sort: q.sort ?? "relevance",
+        categories,
+        ...(restrict && installed?.modLoader ? { loader: installed.modLoader } : {}),
+        ...(restrict && installed?.gameVersion ? { gameVersion: installed.gameVersion } : {}),
+        hideClientOnly: q.hideClientOnly !== "false",
+      };
+
       try {
-        const result = await searchProjects({
-          query: q.query ?? "",
-          limit: clampInt(q.limit, 20, 1, 50),
-          offset: clampInt(q.offset, 0, 0, 10_000),
-          sort: q.sort ?? "relevance",
-          categories,
-          ...(restrict && installed?.modLoader ? { loader: installed.modLoader } : {}),
-          ...(restrict && installed?.gameVersion ? { gameVersion: installed.gameVersion } : {}),
-          // Installing on a server, so client-only mods are hidden by default.
-          hideClientOnly: q.hideClientOnly !== "false",
-        });
+        const raw = await cached<ModSearchResult>(
+          `modrinth:search:${JSON.stringify(params)}`,
+          TTL_SEARCH,
+          () => searchProjects(params),
+        );
         return {
-          ...result,
-          hits: result.hits.map((h) => ({
+          ...raw,
+          hits: raw.hits.map((h) => ({
             ...h,
+            iconUrl: proxyIcon(req.params.id, h.iconUrl),
             installed: installedSet.has(h.slug) || installedSet.has(h.projectId),
           })),
         };
@@ -266,22 +378,24 @@ export function registerModRoutes(app: FastifyInstance): void {
 
       let installed: InstalledMods | null = null;
       try {
-        installed = (await readThrough(req.params.id, "modsInstalled", () =>
-          listInstalledMods(server.config),
-        )).value;
+        installed = (await loadInstalled(req.params.id, server.config)).value;
       } catch {
         installed = null;
       }
 
+      const loader = installed?.modLoader ?? "";
       try {
-        const detail = await getProjectDetail(req.params.slug, {
-          ...(installed?.modLoader ? { loaders: [installed.modLoader] } : {}),
-        });
+        const detail = await cached<ModProjectDetail>(
+          `modrinth:catalog:${req.params.slug}:${loader}`,
+          TTL_CATALOG,
+          () => getProjectDetail(req.params.slug, loader ? { loaders: [loader] } : {}),
+        );
         const entry = installed?.mods.find(
           (m) => m.slug === detail.slug || m.slug === detail.projectId,
         );
         return {
           ...detail,
+          iconUrl: proxyIcon(req.params.id, detail.iconUrl),
           installed: entry !== undefined,
           installedVersionId: entry?.versionId ?? null,
         };

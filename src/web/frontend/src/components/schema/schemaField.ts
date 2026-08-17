@@ -235,11 +235,22 @@ export function countNewSections(
   props: Record<string, unknown>,
   value: Record<string, unknown> | null | undefined,
   defs: Definitions,
+  isNewKey: (key: string) => boolean = () => true,
 ): number {
   let n = 0;
   for (const [key, sch] of Object.entries(props)) {
     if (classifyField(derefNode(sch, defs), defs) !== "object") continue;
-    if (sectionState(sch, value?.[key], defs).isNew) n++;
+    if (sectionState(sch, value?.[key], defs).isNew && isNewKey(key)) n++;
   }
   return n;
+}
+
+/** The top-level keys that render as object sections (feature cards). */
+export function topLevelSectionKeys(
+  props: Record<string, unknown>,
+  defs: Definitions,
+): string[] {
+  return Object.entries(props)
+    .filter(([, sch]) => classifyField(derefNode(sch, defs), defs) === "object")
+    .map(([key]) => key);
 }

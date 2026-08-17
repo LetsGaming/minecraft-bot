@@ -895,6 +895,19 @@ export async function applyModUpdates(
   );
 }
 
+/** Update one installed mod to its latest compatible build. */
+export async function updateMod(
+  cfg: ServerConfig,
+  slug: string,
+): Promise<ModApplyResult> {
+  return apiPost<ModApplyResult>(
+    cfg,
+    `/mods/${encodeURIComponent(slug)}/update`,
+    {},
+    130_000,
+  );
+}
+
 // ── Backups ───────────────────────────────────────────────────────────────
 
 /** Scan the backup directories for a server. */

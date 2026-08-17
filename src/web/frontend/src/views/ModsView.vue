@@ -20,8 +20,6 @@
       </div>
     </header>
 
-    <p v-if="message" :class="['msg', message.type]">{{ message.text }}</p>
-
     <div class="stats">
       <div class="stat"><div class="n">{{ installed?.mods.length ?? "—" }}</div><div class="l">installed mods</div></div>
       <div class="stat"><div class="n mono">{{ installed?.gameVersion ?? "—" }}</div><div class="l">minecraft version</div></div>
@@ -42,9 +40,9 @@
             <input v-model="query" placeholder="Search mods…" @input="onQueryInput" />
           </div>
           <div class="browse-controls">
-            <label class="toggle"><input type="checkbox" v-model="compatible" @change="runSearch" />
+            <label class="toggle"><input type="checkbox" v-model="compatible" @change="resetSearch" />
               <span class="sw" /> Compatible with {{ installed?.gameVersion ?? "any" }} · {{ installed?.modLoader ?? "any" }}</label>
-            <select v-model="sort" class="select" @change="runSearch">
+            <select v-model="sort" class="select" @change="resetSearch">
               <option value="relevance">Relevance</option>
               <option value="downloads">Downloads</option>
               <option value="follows">Follows</option>
@@ -53,7 +51,7 @@
             </select>
           </div>
           <div class="browse-controls">
-            <label class="toggle"><input type="checkbox" v-model="hideClientOnly" @change="runSearch" />
+            <label class="toggle"><input type="checkbox" v-model="hideClientOnly" @change="resetSearch" />
               <span class="sw" /> Hide client-only mods</label>
           </div>
         </div>
@@ -107,7 +105,14 @@
             </div>
           </div>
         </div>
-        <div class="foot"><span>Modrinth · {{ total }} results</span></div>
+        <div class="foot">
+          <span>Modrinth · {{ total }} results</span>
+          <span v-if="total > PAGE" class="pager">
+            <button class="pg" :disabled="offset === 0 || searching" @click="prevPage"><i class="pi pi-chevron-left" /></button>
+            <span class="pg-info">Page {{ page }} / {{ totalPages }}</span>
+            <button class="pg" :disabled="offset + PAGE >= total || searching" @click="nextPage"><i class="pi pi-chevron-right" /></button>
+          </span>
+        </div>
       </section>
 
       <!-- Installed -->
@@ -118,7 +123,8 @@
         </div>
         <p v-if="loadingInstalled" class="empty">Loading…</p>
         <p v-else-if="!installed || installed.mods.length === 0" class="empty">No mods installed.</p>
-        <table v-else>
+        <div v-else class="scroll-body">
+        <table>
           <thead><tr><th>MOD</th><th>VERSION</th><th>STATUS</th><th></th></tr></thead>
           <tbody>
             <tr v-for="m in installed.mods" :key="m.slug">
@@ -133,8 +139,8 @@
               </td>
               <td>
                 <div class="row-actions">
-                  <a class="extlink" :href="'https://modrinth.com/mod/' + m.slug" target="_blank" rel="noopener" title="Open on Modrinth"><i class="pi pi-external-link" /></a>
                   <button v-if="canWrite && update(m.slug)" class="mini update" :disabled="busy.has(m.slug)" @click="updateOne(m.slug)">Update</button>
+                  <a class="extlink" :href="'https://modrinth.com/mod/' + m.slug" target="_blank" rel="noopener" title="Open on Modrinth"><i class="pi pi-external-link" /></a>
                   <button v-if="canWrite" class="mini remove" :disabled="busy.has(m.slug)" title="Remove" @click="doRemove(m.slug)"><i class="pi pi-trash" /></button>
                 </div>
               </td>
@@ -150,6 +156,7 @@
 import { ref, computed, watch, onMounted } from "vue";
 import { useMods, ENVIRONMENT_META } from "../composables/useMods";
 import { useCapabilities } from "../composables/useCapabilities";
+import { useToast } from "primevue/usetoast";
 import { UnauthorizedError } from "../api";
 import type { InstalledMods, ModSearchHit, ModVersion, ModProjectDetail } from "../api";
 
@@ -158,6 +165,7 @@ const serverId = computed(() => props.activeServer);
 
 const mods = useMods(() => props.activeServer);
 const { can } = useCapabilities();
+const toast = useToast();
 const canWrite = computed(() => can("mods:write", props.activeServer));
 
 const installed = ref<InstalledMods | null>(null);
@@ -179,7 +187,12 @@ const detail = ref<ModProjectDetail | null>(null);
 const loadingDetail = ref(false);
 
 const busy = ref<Set<string>>(new Set());
-const message = ref<{ type: "ok" | "err"; text: string } | null>(null);
+
+// Pagination for the browse results.
+const PAGE = 20;
+const offset = ref(0);
+const page = computed(() => Math.floor(offset.value / PAGE) + 1);
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE)));
 
 const updateCount = computed(() => updates.value.size);
 
@@ -208,8 +221,12 @@ function iconStyle(hit: ModSearchHit) {
   return { background: hit.iconUrl ? "transparent" : c };
 }
 function flash(type: "ok" | "err", text: string) {
-  message.value = { type, text };
-  window.setTimeout(() => (message.value = null), 5000);
+  toast.add({
+    severity: type === "ok" ? "success" : "error",
+    summary: type === "ok" ? "Mods" : "Mods — error",
+    detail: text,
+    life: type === "ok" ? 3500 : 6000,
+  });
 }
 function setBusy(slug: string, on: boolean) {
   const next = new Set(busy.value);
@@ -231,7 +248,7 @@ async function loadInstalled() {
 async function checkNow() {
   checking.value = true;
   try {
-    const res = await mods.checkUpdates();
+    const res = await mods.checkUpdates(true);
     const map = new Map<string, string>();
     for (const r of res.results) {
       if (r.status === "update_available") map.set(r.slug, String(r.latestVersionId ?? ""));
@@ -247,7 +264,22 @@ async function checkNow() {
 let searchTimer: number | undefined;
 function onQueryInput() {
   window.clearTimeout(searchTimer);
-  searchTimer = window.setTimeout(runSearch, 300);
+  searchTimer = window.setTimeout(resetSearch, 300);
+}
+
+/** A new query or filter starts back at page one. */
+function resetSearch() {
+  offset.value = 0;
+  return runSearch();
+}
+function nextPage() {
+  if (offset.value + PAGE >= total.value) return;
+  offset.value += PAGE;
+  runSearch();
+}
+function prevPage() {
+  offset.value = Math.max(0, offset.value - PAGE);
+  runSearch();
 }
 
 async function runSearch() {
@@ -260,7 +292,8 @@ async function runSearch() {
       sort: sort.value,
       compatible: compatible.value,
       hideClientOnly: hideClientOnly.value,
-      limit: 20,
+      limit: PAGE,
+      offset: offset.value,
     });
     results.value = res.hits;
     total.value = res.totalHits;
@@ -315,10 +348,22 @@ function installVersion(hit: ModSearchHit, v: ModVersion) {
   // gets installed onto a 1.21.4 server.
   return runInstall(hit.slug, v.gameVersions[0]);
 }
-function updateOne(slug: string) {
-  // No per-mod update endpoint on the wrapper; re-resolving the latest
-  // compatible build is the update for one mod. "Apply all" does the batch.
-  return runInstall(slug);
+async function updateOne(slug: string) {
+  setBusy(slug, true);
+  try {
+    const r = await mods.updateOne(slug);
+    if (r.ok) {
+      const n = r.updated?.length ?? 0;
+      flash("ok", n > 0 ? `Updated ${slug}.` : `${slug} is already up to date.`);
+      await Promise.all([loadInstalled(), checkNow()]);
+    } else {
+      flash("err", r.error ?? "Update failed.");
+    }
+  } catch (err) {
+    flash("err", err instanceof Error ? err.message : "Update failed.");
+  } finally {
+    setBusy(slug, false);
+  }
 }
 
 async function doRemove(slug: string) {
@@ -409,7 +454,8 @@ watch(() => props.activeServer, reload);
 .toggle input:checked + .sw { background:var(--green); } .toggle input:checked + .sw::after { left:17px; background:#05130a; }
 .select { background:var(--card-2); border:1px solid var(--border-2); border-radius:8px; padding:7px 10px; color:var(--muted); font-size:12.5px; cursor:pointer; }
 
-.results { padding:6px 8px; }
+.results { padding:6px 8px; max-height:60vh; overflow-y:auto; }
+.scroll-body { max-height:60vh; overflow-y:auto; }
 .item.open { background:rgba(255,255,255,.02); border-radius:10px; }
 .result { display:flex; gap:12px; align-items:center; padding:12px; }
 .ricon { width:42px; height:42px; border-radius:9px; flex:0 0 42px; display:grid; place-items:center; font-weight:700; font-size:16px; color:#05130a; overflow:hidden; }
@@ -454,6 +500,11 @@ tbody tr:last-child td { border-bottom:0; }
 .mini.update { background:var(--amber); color:#160e02; border-color:transparent; font-weight:600; }
 .mini.remove { color:var(--muted); padding:6px 9px; } .mini.remove:hover { color:var(--red); border-color:rgba(229,84,75,.13); background:rgba(229,84,75,.13); }
 .mini:disabled { opacity:.5; }
-.foot { padding:12px 20px; border-top:1px solid var(--border); color:var(--muted-2); font-size:12px; }
+.foot { padding:10px 20px; border-top:1px solid var(--border); color:var(--muted-2); font-size:12px; display:flex; align-items:center; justify-content:space-between; }
+.pager { display:inline-flex; align-items:center; gap:8px; }
+.pg { display:inline-grid; place-items:center; width:26px; height:26px; border-radius:7px; border:1px solid var(--border-2); background:transparent; color:var(--muted); cursor:pointer; }
+.pg:hover:not(:disabled) { color:#ededf0; border-color:rgba(255,255,255,.2); }
+.pg:disabled { opacity:.4; cursor:default; }
+.pg-info { color:var(--muted); font-variant-numeric:tabular-nums; }
 @media (max-width:1100px) { .grid { grid-template-columns:1fr; } .stats { grid-template-columns:repeat(2,1fr); } }
 </style>

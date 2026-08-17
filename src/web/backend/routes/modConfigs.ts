@@ -45,6 +45,7 @@ import {
   QueueResolveBody,
 } from "./schemas.js";
 import { readThrough, forget, recall } from "@mcbot/core/utils/wrapper/lastKnown.js";
+import { cached, invalidate } from "@mcbot/core/utils/cache.js";
 import type { QueuedWriteResult } from "@mcbot/schema/contract.js";
 import {
   queueEdits,
@@ -146,10 +147,11 @@ export function registerModConfigRoutes(app: FastifyInstance): void {
         // The listing survives a wrapper blip: which files exist changes far
         // more slowly than the wrapper's availability, and an editor that
         // disappears mid-outage is useless exactly when it is wanted.
+        const TTL_CONFIG_INDEX = 15_000;
         const { value, stale } = await readThrough(
           req.params.id,
           "configIndex",
-          () => indexConfigFiles(server.config),
+          () => cached(`configIndex:${req.params.id}`, TTL_CONFIG_INDEX, () => indexConfigFiles(server.config)),
         );
         return { files: value, stale };
       } catch (err) {
@@ -172,10 +174,11 @@ export function registerModConfigRoutes(app: FastifyInstance): void {
       let contents;
       let stale;
       try {
+        const TTL_CONFIG_FILE = 10_000;
         const read = await readThrough(
           req.params.id,
           `configFile:${fileId}`,
-          () => readConfigFile(server.config, fileId),
+          () => cached(`configFile:${req.params.id}:${fileId}`, TTL_CONFIG_FILE, () => readConfigFile(server.config, fileId)),
         );
         contents = read.value;
         stale = read.stale;
@@ -345,6 +348,8 @@ export function registerModConfigRoutes(app: FastifyInstance): void {
         // superseded — a stale answer is acceptable, a wrong one is not.
         forget(req.params.id, `configFile:${fileId}`);
         forget(req.params.id, "configIndex");
+        invalidate(`configFile:${req.params.id}:${fileId}`);
+        invalidate(`configIndex:${req.params.id}`);
         return { etag: result.etag, snapshot: result.snapshot };
       } catch (err) {
         if (err instanceof HttpError) throw err;

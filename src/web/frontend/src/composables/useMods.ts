@@ -55,8 +55,8 @@ export function useMods(serverId: () => string) {
     return apiGet<InstalledMods>(`${base()}/installed`);
   }
 
-  function checkUpdates(): Promise<ModUpdateCheck> {
-    return apiGet<ModUpdateCheck>(`${base()}/updates`);
+  function checkUpdates(refresh = false): Promise<ModUpdateCheck> {
+    return apiGet<ModUpdateCheck>(`${base()}/updates${refresh ? "?refresh=true" : ""}`);
   }
 
   function applyUpdates(mcVersion?: string): Promise<ModApplyResult> {
@@ -73,6 +73,11 @@ export function useMods(serverId: () => string) {
 
   function remove(slug: string): Promise<ModRemoveResult> {
     return apiSend<ModRemoveResult>("DELETE", `${base()}/${enc(slug)}`);
+  }
+
+  /** Update one installed mod to its latest compatible build. */
+  function updateOne(slug: string): Promise<ModApplyResult> {
+    return apiSend<ModApplyResult>("POST", `${base()}/${enc(slug)}/update`, {});
   }
 
   function search(opts: SearchOptions): Promise<ModSearchResult> {
@@ -97,6 +102,7 @@ export function useMods(serverId: () => string) {
     applyUpdates,
     install,
     remove,
+    updateOne,
     search,
     catalog,
   };

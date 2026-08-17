@@ -422,7 +422,7 @@ export default defineComponent({
 }
 
 .files {
-  height: 100%; overflow-y: auto;
+  height: 100%; max-height: calc(100vh - 200px); overflow-y: auto;
   border: 1px solid var(--mc-border); border-radius: var(--mc-radius);
   background: var(--mc-card); padding: 6px;
 }
@@ -446,7 +446,7 @@ export default defineComponent({
 
 .fields {
   border: 1px solid var(--mc-border); border-radius: var(--mc-radius);
-  background: var(--mc-card); padding: 12px; height: 100%; overflow-y: auto;
+  background: var(--mc-card); padding: 12px; height: 100%; max-height: calc(100vh - 200px); overflow-y: auto;
 }
 .filehead {
   display: flex; justify-content: space-between; align-items: center;

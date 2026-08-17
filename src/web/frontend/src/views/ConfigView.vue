@@ -72,7 +72,8 @@ import Textarea from "primevue/textarea";
 import ToggleSwitch from "primevue/toggleswitch";
 import Message from "primevue/message";
 import SchemaField from "../components/schema/SchemaField.vue";
-import { derefNode, countNewSections } from "../components/schema/schemaField";
+import { derefNode, countNewSections, topLevelSectionKeys } from "../components/schema/schemaField";
+import { isFeatureNew, commitSeenFeatures } from "../composables/useSeenFeatures";
 import {
   useSchemaRefs,
   SchemaRefsKey,
@@ -127,11 +128,22 @@ export default defineComponent({
     // the count behind the "new features available" banner.
     newFeatureCount(): number {
       if (!this.schema || !this.model) return 0;
-      return countNewSections(this.topLevelProps, this.model, this.schema.definitions);
+      return countNewSections(
+        this.topLevelProps,
+        this.model,
+        this.schema.definitions,
+        isFeatureNew,
+      );
     },
   },
   async mounted() {
     await Promise.all([this.load(), this.loadServerRefs(), this.loadGuildNames()]);
+    // Now that the schema is loaded, mark its feature keys seen so a later
+    // visit only flags genuinely new additions (this session's badges are held
+    // by the frozen snapshot in useSeenFeatures).
+    if (this.schema) {
+      commitSeenFeatures(topLevelSectionKeys(this.topLevelProps, this.schema.definitions));
+    }
   },
 });
 </script>

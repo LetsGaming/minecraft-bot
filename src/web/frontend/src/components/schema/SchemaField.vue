@@ -97,7 +97,7 @@
                  guild or feature it belongs to (e.g. "Data Corner › notifications"). -->
             <span v-if="path.length" class="scrumb">{{ path.join(" › ") }} ›</span>
             <span class="stitle">{{ sectionTitle }}</span>
-            <span v-if="sectionInfo.isNew" class="badge-new">New</span>
+            <span v-if="showNew" class="badge-new">New</span>
           </span>
           <span v-if="description" class="section-desc">{{ description }}</span>
         </span>
@@ -240,6 +240,7 @@ import {
   type JsonSchemaNode,
   type Definitions,
 } from "./schemaField.js";
+import { isFeatureNew } from "../../composables/useSeenFeatures.js";
 import {
   SchemaRefsKey,
   type RefOption,
@@ -305,6 +306,16 @@ export default defineComponent({
     },
     sectionInfo(): SectionState {
       return computeSectionState(this.schema, this.modelValue, this.definitions);
+    },
+    // New is a top-level, first-seen concept: an unset sub-object three levels
+    // deep is not "new", and an unset feature the user has already seen is just
+    // Unset, not New (see useSeenFeatures).
+    showNew(): boolean {
+      return (
+        this.path.length === 0 &&
+        this.sectionInfo.isNew &&
+        isFeatureNew(this.name)
+      );
     },
     chipLabel(): string {
       return {
