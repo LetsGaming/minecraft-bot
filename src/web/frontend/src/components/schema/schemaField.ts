@@ -18,6 +18,7 @@ export interface JsonSchemaNode {
   anyOf?: unknown[];
   oneOf?: unknown[];
   $ref?: string;
+  title?: string;
 }
 
 export type Definitions = Record<string, unknown> | undefined;
@@ -155,4 +156,90 @@ export function referenceKind(name: string): RefKind | null {
     return "server";
   }
   return null;
+}
+
+// ── Section state (P1: collapse-by-default section headers) ─────────────────
+//
+// A nested object renders as a collapsible section whose header carries a
+// state chip and a "New" badge. Both derive purely from the schema plus the
+// current value, so the logic lives here (dependency-free, testable) and the
+// component and the "N new features" banner read the same answer.
+
+function isPlainRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+function nodeHasType(node: JsonSchemaNode, t: string): boolean {
+  return Array.isArray(node.type) ? node.type.includes(t) : node.type === t;
+}
+
+/** Does this object section carry an `enabled` boolean? (On/Off vs Configured/Unset.) */
+export function sectionHasEnabledFlag(node: unknown, defs: Definitions): boolean {
+  const n = derefNode(node, defs);
+  const en = n.properties?.enabled;
+  if (!en) return false;
+  return nodeHasType(derefNode(en, defs), "boolean");
+}
+
+export type SectionChip = "on" | "off" | "configured" | "unset";
+
+export interface SectionState {
+  chip: SectionChip;
+  /** The schema defines this section but the config has never set the key. */
+  isNew: boolean;
+  hasEnabled: boolean;
+}
+
+/**
+ * The header state for an object section.
+ *
+ *   has `enabled`:   On if enabled === true, else Off.
+ *   no `enabled`:    Configured if any field is set, else Unset.
+ *   New:             the value is absent entirely (key not in config).
+ */
+export function sectionState(
+  node: unknown,
+  value: unknown,
+  defs: Definitions,
+): SectionState {
+  const hasEnabled = sectionHasEnabledFlag(node, defs);
+  const isNew = value === undefined;
+
+  let chip: SectionChip;
+  if (value === undefined) {
+    chip = "unset";
+  } else if (hasEnabled) {
+    const enabled = isPlainRecord(value) ? value.enabled : undefined;
+    chip = enabled === true ? "on" : "off";
+  } else {
+    chip = isPlainRecord(value) && Object.keys(value).length > 0 ? "configured" : "unset";
+  }
+  return { chip, isNew, hasEnabled };
+}
+
+/** Turn a schema key into a section title: `hostAlerts` → `Host alerts`. */
+export function humanizeKey(key: string): string {
+  const words = key
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/**
+ * How many top-level object sections the schema defines that the config has
+ * never set — the count behind the "N new features available" banner.
+ */
+export function countNewSections(
+  props: Record<string, unknown>,
+  value: Record<string, unknown> | null | undefined,
+  defs: Definitions,
+): number {
+  let n = 0;
+  for (const [key, sch] of Object.entries(props)) {
+    if (classifyField(derefNode(sch, defs), defs) !== "object") continue;
+    if (sectionState(sch, value?.[key], defs).isNew) n++;
+  }
+  return n;
 }

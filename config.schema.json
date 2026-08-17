@@ -700,6 +700,8 @@
         "server:console",
         "backup:download",
         "config:write",
+        "mods:read",
+        "mods:write",
         "backup:restore",
         "server:rollback"
       ]

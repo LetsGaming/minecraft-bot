@@ -6,14 +6,13 @@
       @update:modelValue="emitValue($event)"
     />
     <div class="label-block">
-      <span class="fname">{{ name }}</span>
-      <FieldHint :text="description" />
+      <span class="fname">{{ name }} <FieldHint :text="description" /></span>
     </div>
   </div>
 
   <!-- Enum -->
   <div v-else-if="kind === 'enum'" class="field">
-    <label class="fname">{{ name }}</label>
+    <label class="fname">{{ name }} <FieldHint :text="description" /></label>
     <Select
       :modelValue="modelValue ?? null"
       :options="enumOptions"
@@ -24,12 +23,11 @@
       class="fcontrol"
       @update:modelValue="emitValue($event ?? undefined)"
     />
-    <FieldHint :text="description" />
   </div>
 
   <!-- ID reference (single) → dropdown of entity names (channel/role/server) -->
   <div v-else-if="refControl && !refControl.multi" class="field">
-    <label class="fname">{{ name }}</label>
+    <label class="fname">{{ name }} <FieldHint :text="description" /></label>
     <Select
       :modelValue="modelValue ?? null"
       :options="refControl.options"
@@ -41,12 +39,11 @@
       class="fcontrol"
       @update:modelValue="emitValue($event ?? undefined)"
     />
-    <FieldHint :text="description" />
   </div>
 
   <!-- ID reference (one or many) → multi-select of entity names -->
   <div v-else-if="refControl && refControl.multi" class="field">
-    <label class="fname">{{ name }}</label>
+    <label class="fname">{{ name }} <FieldHint :text="description" /></label>
     <MultiSelect
       :modelValue="arrayModel"
       :options="refControl.options"
@@ -58,50 +55,94 @@
       class="fcontrol"
       @update:modelValue="emitArray($event)"
     />
-    <FieldHint :text="description" />
   </div>
 
   <!-- String -->
   <div v-else-if="kind === 'string'" class="field">
-    <label class="fname">{{ name }}</label>
+    <label class="fname">{{ name }} <FieldHint :text="description" /></label>
     <InputText
       :modelValue="(modelValue as string) ?? ''"
       class="fcontrol"
       @update:modelValue="onScalarInput($event ?? '')"
     />
-    <FieldHint :text="description" />
   </div>
 
   <!-- Number -->
   <div v-else-if="kind === 'number'" class="field">
-    <label class="fname">{{ name }}</label>
+    <label class="fname">{{ name }} <FieldHint :text="description" /></label>
     <InputNumber
       :modelValue="(modelValue as number) ?? null"
       class="fcontrol"
       :useGrouping="false"
       @update:modelValue="emitValue($event ?? undefined)"
     />
-    <FieldHint :text="description" />
   </div>
 
-  <!-- Object with declared properties: recurse -->
-  <fieldset v-else-if="kind === 'object'" class="group">
-    <legend>{{ name }}</legend>
-    <FieldHint v-if="description" :text="description" class="group-hint" />
-    <SchemaField
-      v-for="(childSchema, key) in objectProps"
-      :key="key"
-      :name="String(key)"
-      :schema="childSchema"
-      :definitions="definitions"
-      :model-value="objectValue[key]"
-      @update:model-value="setChild(String(key), $event)"
-    />
-  </fieldset>
+  <!-- Object with declared properties: collapsible section (P1).
+       Collapsed by default; the header's chip states On/Off/Configured/Unset
+       so the section is readable without expanding, and a New badge flags a
+       feature the config has never set. -->
+  <section v-else-if="kind === 'object'" :class="['section', 'depth-' + depthClass, { open: expanded }]">
+    <div class="section-head-wrap">
+      <button
+        type="button"
+        class="section-head"
+        :aria-expanded="expanded"
+        @click="expanded = !expanded"
+      >
+        <i class="pi section-caret" :class="expanded ? 'pi-chevron-down' : 'pi-chevron-right'" />
+        <span class="section-meta">
+          <span class="stitle-row">
+            <!-- P2: the scope path, so a field is never ambiguous about which
+                 guild or feature it belongs to (e.g. "Data Corner › notifications"). -->
+            <span v-if="path.length" class="scrumb">{{ path.join(" › ") }} ›</span>
+            <span class="stitle">{{ sectionTitle }}</span>
+            <span v-if="sectionInfo.isNew" class="badge-new">New</span>
+          </span>
+          <span v-if="description" class="section-desc">{{ description }}</span>
+        </span>
+        <span :class="['chip', 'chip-' + sectionInfo.chip]">{{ chipLabel }}</span>
+      </button>
+      <!-- P4: drop just this subtree to raw JSON and back, without the whole
+           form becoming a blob. -->
+      <button
+        type="button"
+        :class="['json-toggle', { on: jsonMode }]"
+        :title="jsonMode ? 'Back to form' : 'Edit as JSON'"
+        @click.stop="toggleJson"
+      >
+        <i class="pi" :class="jsonMode ? 'pi-list' : 'pi-code'" />
+      </button>
+    </div>
+
+    <div v-if="expanded" class="section-body">
+      <template v-if="jsonMode">
+        <Textarea
+          :modelValue="jsonText"
+          spellcheck="false"
+          autoResize
+          class="fcontrol json-area"
+          @update:modelValue="onJsonInput($event)"
+        />
+        <span v-if="jsonError" class="err">{{ jsonError }}</span>
+      </template>
+      <SchemaField
+        v-for="(childSchema, key) in objectProps"
+        v-else
+        :key="key"
+        :name="String(key)"
+        :schema="childSchema"
+        :definitions="definitions"
+        :path="[...path, sectionTitle]"
+        :model-value="objectValue[key]"
+        @update:model-value="setChild(String(key), $event)"
+      />
+    </div>
+  </section>
 
   <!-- Array of a fixed enum → multiselect (e.g. notification events) -->
   <div v-else-if="kind === 'multiselect'" class="field">
-    <label class="fname">{{ name }}</label>
+    <label class="fname">{{ name }} <FieldHint :text="description" /></label>
     <MultiSelect
       :modelValue="arrayModel"
       :options="arrayEnumOptions"
@@ -113,31 +154,28 @@
       class="fcontrol"
       @update:modelValue="emitArray($event)"
     />
-    <FieldHint :text="description" />
   </div>
 
   <!-- Array of free-form strings → chips (e.g. adminUsers, a ServerScope list) -->
   <div v-else-if="kind === 'chips'" class="field">
-    <label class="fname">{{ name }}</label>
+    <label class="fname">{{ name }} <FieldHint :text="description" /></label>
     <InputChips
       :modelValue="(arrayModel as string[])"
       separator=","
       class="fcontrol"
       @update:modelValue="emitArray($event)"
     />
-    <FieldHint :text="description" />
   </div>
 
   <!-- Array of numbers → chips with numeric coercion (e.g. warnMinutes) -->
   <div v-else-if="kind === 'numberList'" class="field">
-    <label class="fname">{{ name }}</label>
+    <label class="fname">{{ name }} <FieldHint :text="description" /></label>
     <InputChips
       :modelValue="arrayModel.map(String)"
       separator=","
       class="fcontrol"
       @update:modelValue="emitNumberArray($event)"
     />
-    <FieldHint :text="`Numbers, comma-separated.${description ? ' ' + description : ''}`" />
   </div>
 
   <!-- Record<string, X> → key/value editor (reused MapField) -->
@@ -146,6 +184,7 @@
     :name="name"
     :schema="node"
     :definitions="definitions"
+    :path="path"
     :model-value="modelValue"
     @update:model-value="emitValue($event)"
   />
@@ -156,6 +195,7 @@
     :name="name"
     :schema="node"
     :definitions="definitions"
+    :path="[...path, sectionTitle]"
     :model-value="modelValue"
     @update:model-value="emitValue($event)"
   />
@@ -194,6 +234,9 @@ import {
   classifyField,
   referenceKind,
   arrayEnumOptions as arrayEnumOptionsFor,
+  sectionState as computeSectionState,
+  humanizeKey,
+  type SectionState,
   type JsonSchemaNode,
   type Definitions,
 } from "./schemaField.js";
@@ -219,6 +262,12 @@ export default defineComponent({
       required: false,
       default: undefined,
     },
+    /** Ancestor section titles, for the header breadcrumb (P2). */
+    path: {
+      type: Array as PropType<string[]>,
+      required: false,
+      default: () => [],
+    },
   },
   emits: ["update:model-value"],
   setup() {
@@ -227,7 +276,9 @@ export default defineComponent({
     return { schemaRefs: inject(SchemaRefsKey, undefined) };
   },
   data() {
-    return { jsonError: "" };
+    // Sections collapse by default: the header chip states On/Off/Configured/
+    // Unset, so the form reads as a scannable index and expands one at a time.
+    return { jsonError: "", expanded: false, jsonMode: false };
   },
   computed: {
     node(): JsonSchemaNode {
@@ -247,6 +298,26 @@ export default defineComponent({
     },
     objectProps(): Record<string, unknown> {
       return this.node.properties ?? {};
+    },
+    // Section header (P1): title prefers a schema `title`, else a humanised key.
+    sectionTitle(): string {
+      return this.node.title ?? humanizeKey(this.name);
+    },
+    sectionInfo(): SectionState {
+      return computeSectionState(this.schema, this.modelValue, this.definitions);
+    },
+    chipLabel(): string {
+      return {
+        on: "On",
+        off: "Off",
+        configured: "Configured",
+        unset: "Unset",
+      }[this.sectionInfo.chip];
+    },
+    // Depth drives the header's weight/size rhythm (capped so it never
+    // vanishes): top-level features read louder than a sub-object three in.
+    depthClass(): number {
+      return Math.min(this.path.length, 2);
     },
     objectValue(): Record<string, unknown> {
       return isRecord(this.modelValue) ? this.modelValue : {};
@@ -327,6 +398,11 @@ export default defineComponent({
       else next[key] = value;
       this.emitValue(Object.keys(next).length > 0 ? next : undefined);
     },
+    toggleJson() {
+      this.jsonMode = !this.jsonMode;
+      // Editing JSON on a collapsed section would hide the editor.
+      if (this.jsonMode) this.expanded = true;
+    },
     onJsonInput(raw: string) {
       this.jsonError = "";
       if (raw.trim() === "") return this.emitValue(undefined);
@@ -351,16 +427,87 @@ export default defineComponent({
 .group-hint { margin: 0 0 8px; }
 .err { color: var(--mc-bad); font-size: 12.5px; }
 
-.group {
+/* Collapsible object section (P1) */
+.section {
   border: 1px solid var(--mc-border);
   border-radius: 10px;
-  margin: 14px 0;
-  padding: 6px 16px 14px;
-  background: rgba(255, 255, 255, 0.012);
+  margin: 8px 0;
+  background: var(--mc-surface);
+  overflow: hidden;
 }
-.group legend {
-  font-weight: 700;
-  padding: 0 8px;
+.section.open {
+  border-color: color-mix(in srgb, var(--mc-accent) 22%, var(--mc-border));
+}
+.section-head-wrap { display: flex; align-items: stretch; }
+.section-head {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
   color: var(--mc-text);
+}
+.json-toggle {
+  flex: none;
+  width: 40px;
+  background: none;
+  border: none;
+  border-left: 1px solid var(--mc-border);
+  color: var(--mc-muted);
+  cursor: pointer;
+}
+.json-toggle:hover { color: var(--mc-text); background: rgba(255, 255, 255, 0.02); }
+.json-toggle.on { color: var(--mc-accent); }
+.json-toggle i { font-size: 13px; }
+.scrumb { color: var(--mc-muted); font-weight: 500; font-size: 12px; }
+.section-head:hover { background: rgba(255, 255, 255, 0.02); }
+.section-caret { font-size: 12px; color: var(--mc-muted); flex: none; }
+.section-meta { flex: 1; min-width: 0; }
+.stitle-row { display: flex; align-items: center; gap: 8px; }
+.stitle { font-weight: 600; font-size: 14px; }
+.depth-1 .stitle { font-size: 13.5px; }
+.depth-2 .stitle { font-size: 13px; font-weight: 550; }
+.depth-1 > .section-head-wrap .section-head { padding: 9px 14px; }
+.depth-2 > .section-head-wrap .section-head { padding: 8px 14px; }
+.section-desc {
+  display: block;
+  color: var(--mc-muted);
+  font-size: 12px;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60ch;
+}
+.badge-new {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--mc-accent) 18%, transparent);
+  color: var(--mc-accent);
+  border: 1px solid color-mix(in srgb, var(--mc-accent) 35%, transparent);
+}
+.chip {
+  flex: none;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: var(--mc-card);
+  color: var(--mc-muted);
+}
+.chip-on { background: color-mix(in srgb, var(--mc-good) 16%, transparent); color: var(--mc-good); }
+.chip-off { background: var(--mc-card); color: var(--mc-muted); }
+.chip-configured { background: color-mix(in srgb, var(--mc-accent) 15%, transparent); color: var(--mc-accent); }
+.chip-unset { background: var(--mc-card); color: var(--mc-muted); }
+.section-body {
+  padding: 4px 16px 14px 34px;
+  border-top: 1px solid var(--mc-border);
 }
 </style>

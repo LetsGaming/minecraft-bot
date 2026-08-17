@@ -35,6 +35,11 @@
       </ul>
     </Message>
 
+    <div v-if="!rawMode && newFeatureCount > 0" class="new-banner">
+      <i class="pi pi-sparkles" />
+      {{ newFeatureCount }} new feature{{ newFeatureCount === 1 ? "" : "s" }} available to enable
+    </div>
+
     <Textarea
       v-if="rawMode"
       v-model="rawText"
@@ -67,7 +72,7 @@ import Textarea from "primevue/textarea";
 import ToggleSwitch from "primevue/toggleswitch";
 import Message from "primevue/message";
 import SchemaField from "../components/schema/SchemaField.vue";
-import { derefNode } from "../components/schema/schemaField";
+import { derefNode, countNewSections } from "../components/schema/schemaField";
 import {
   useSchemaRefs,
   SchemaRefsKey,
@@ -118,6 +123,12 @@ export default defineComponent({
       // resolve it before reading properties — otherwise the form is empty.
       return derefNode(this.schema, this.schema?.definitions).properties ?? {};
     },
+    // Feature sections the schema defines that this config has never set —
+    // the count behind the "new features available" banner.
+    newFeatureCount(): number {
+      if (!this.schema || !this.model) return 0;
+      return countNewSections(this.topLevelProps, this.model, this.schema.definitions);
+    },
   },
   async mounted() {
     await Promise.all([this.load(), this.loadServerRefs(), this.loadGuildNames()]);
@@ -137,4 +148,11 @@ export default defineComponent({
   font: 13px/1.55 ui-monospace, monospace;
 }
 .fields { display: flex; flex-direction: column; }
+.new-banner {
+  display: flex; align-items: center; gap: 8px;
+  background: color-mix(in srgb, var(--mc-accent) 12%, transparent);
+  color: var(--mc-accent);
+  border: 1px solid color-mix(in srgb, var(--mc-accent) 28%, transparent);
+  border-radius: 8px; padding: 8px 12px; font-size: 13px; margin-bottom: 14px;
+}
 </style>

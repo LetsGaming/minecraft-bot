@@ -21,6 +21,7 @@
         :name="`Item ${i + 1}`"
         :schema="itemSchema"
         :definitions="definitions"
+        :path="path"
         :model-value="item"
         @update:model-value="setItem(i, $event)"
       />
@@ -62,6 +63,7 @@ export default defineComponent({
       default: undefined,
     },
     modelValue: { type: null as unknown as PropType<unknown>, required: false },
+    path: { type: Array as PropType<string[]>, required: false, default: () => [] },
   },
   emits: ["update:model-value"],
   computed: {

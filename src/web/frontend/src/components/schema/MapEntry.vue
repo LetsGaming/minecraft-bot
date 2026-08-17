@@ -7,7 +7,9 @@
            visible, small, because it is still the thing you paste into a
            support thread. -->
       <span class="map-key">
-        <strong>{{ label }}</strong>
+        <!-- An object entry (a guild) titles its own collapsible section, so
+             the label is not repeated here; a scalar entry keeps it. -->
+        <strong v-if="!valueIsObject">{{ label }}</strong>
         <code v-if="label !== entryKey" class="map-key-id mono small muted">{{ entryKey }}</code>
       </span>
       <Button
@@ -20,9 +22,10 @@
       />
     </div>
     <SchemaField
-      :name="entryKey"
+      :name="valueIsObject ? label : entryKey"
       :schema="valueSchema"
       :definitions="definitions"
+      :path="valueIsObject ? path : [...path, label]"
       :model-value="modelValue"
       @update:model-value="$emit('update:model-value', $event)"
     />
@@ -37,7 +40,7 @@ import {
   SchemaScopeKey,
   SchemaRefsKey,
 } from "../../composables/useSchemaRefs.js";
-import type { JsonSchemaNode, Definitions } from "./schemaField.js";
+import { classifyField, type JsonSchemaNode, type Definitions } from "./schemaField.js";
 
 /**
  * One entry of a `Record<string, X>` map, as its own component.
@@ -77,6 +80,7 @@ export default defineComponent({
       default: undefined,
     },
     modelValue: { type: null as unknown as PropType<unknown>, required: false },
+    path: { type: Array as PropType<string[]>, required: false, default: () => [] },
   },
   emits: ["update:model-value", "remove"],
   setup(props) {
@@ -92,6 +96,13 @@ export default defineComponent({
     return {
       label: keyLabel?.(props.mapName, props.entryKey) ?? props.entryKey,
     };
+  },
+  computed: {
+    // An object value renders as a collapsible section that carries its own
+    // header; the entry row then shows only the id and the remove control.
+    valueIsObject(): boolean {
+      return classifyField(this.valueSchema, this.definitions) === "object";
+    },
   },
 });
 </script>

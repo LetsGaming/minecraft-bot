@@ -12,6 +12,7 @@
       :entry-key="key"
       :value-schema="valueSchema"
       :definitions="definitions"
+      :path="path"
       :model-value="model[key]"
       @update:model-value="setValue(key, $event)"
       @remove="removeKey"
@@ -69,6 +70,7 @@ export default defineComponent({
       default: undefined,
     },
     modelValue: { type: null as unknown as PropType<unknown>, required: false },
+    path: { type: Array as PropType<string[]>, required: false, default: () => [] },
   },
   emits: ["update:model-value"],
   data() {

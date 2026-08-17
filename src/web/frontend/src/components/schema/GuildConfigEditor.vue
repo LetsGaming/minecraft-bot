@@ -32,6 +32,11 @@
         >{{ w }}</Message
       >
 
+      <div v-if="!loading && newFeatureCount > 0" class="gce-new-banner">
+        <i class="pi pi-sparkles" />
+        {{ newFeatureCount }} new feature{{ newFeatureCount === 1 ? "" : "s" }} available to enable
+      </div>
+
       <div v-if="model && Object.keys(topLevelProps).length" class="gce-fields">
         <SchemaField
           v-for="(propSchema, key) in topLevelProps"
@@ -66,7 +71,7 @@ import Dialog from "primevue/dialog";
 import Button from "primevue/button";
 import Message from "primevue/message";
 import SchemaField from "./SchemaField.vue";
-import { derefNode } from "./schemaField";
+import { derefNode, countNewSections } from "./schemaField";
 import { useGuildConfig } from "../../composables/useGuildConfig";
 import { useSchemaRefs, SchemaRefsKey } from "../../composables/useSchemaRefs";
 
@@ -100,6 +105,10 @@ export default defineComponent({
       // The GuildConfig node's properties (notifications, tpsAlerts, …). The
       // node may be a $ref, so resolve it first (same as ConfigView's root).
       return derefNode(this.schema, this.definitions).properties ?? {};
+    },
+    newFeatureCount(): number {
+      if (!this.model) return 0;
+      return countNewSections(this.topLevelProps, this.model, this.definitions);
     },
   },
   watch: {
@@ -138,5 +147,12 @@ export default defineComponent({
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+}
+.gce-new-banner {
+  display: flex; align-items: center; gap: 8px;
+  background: color-mix(in srgb, var(--mc-accent) 12%, transparent);
+  color: var(--mc-accent);
+  border: 1px solid color-mix(in srgb, var(--mc-accent) 28%, transparent);
+  border-radius: 8px; padding: 8px 12px; font-size: 0.85rem; margin-bottom: 1rem;
 }
 </style>

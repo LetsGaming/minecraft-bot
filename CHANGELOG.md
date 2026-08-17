@@ -6,6 +6,43 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Mods dashboard tab: install, update, remove and browse mods for a server.
+  Search and catalogue run against Modrinth from the dashboard; install, update
+  and remove call the wrapper.
+  - Capabilities `mods:read` and `mods:write`.
+  - `core/utils/server/serverAccess.ts`: wrapper client methods
+    (`listInstalledMods`, `addMod`, `removeMod`, `checkModUpdates`,
+    `applyModUpdates`) and per-call request timeouts (install 130s,
+    update-all 610s).
+  - `core/utils/modrinth.ts`: Modrinth search and project detail, environment
+    derivation (server, client, both, optional), client-only filtering.
+  - `core/utils/server/wrapperContract.ts`: the `mod-management` expected feature.
+  - `web/backend/routes/mods.ts`: server-scoped routes. Wrapper proxy for the
+    installed list and mutations; Modrinth for search and catalogue. Reads require
+    `mods:read`, mutations require `mods:write`. Mutations are audited and
+    invalidate the cached installed list.
+  - Frontend: mod types in `api.ts`, the `useMods` composable, `ModsView.vue`,
+    and the Mods navigation entry.
+- Config editor: collapse-by-default sections. Each object renders as a
+  collapsible card with a state chip (On, Off, Configured, Unset) and a New
+  badge, plus an "N new features available to enable" banner. State derives from
+  schema and value via `sectionState`, `humanizeKey` and `countNewSections`.
+- Config editor: a scope breadcrumb in section headers (for example
+  "Data Corner > notifications"), threaded through nesting, map entries and array
+  items, with depth-based header weight.
+- Config editor: per-section "Edit as JSON" toggle that flips a single subtree to
+  raw JSON and back.
+
+### Changed
+
+- Config editor help text is now an info icon per field (`FieldHint`), shown on
+  hover and pinned on click, instead of inline text. It no longer repeats the
+  same paragraph across fields or truncates mid-sentence.
+- Config editor: object-valued map entries (guilds) fold their name into the
+  section header instead of printing it twice.
+  
 ## [6.0.0] — 2026-08-16
 
 ### Added
