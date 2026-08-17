@@ -161,3 +161,33 @@ export const MutationResult = Type.Object({
   warnings: Type.Array(Type.String()),
 });
 export type MutationResult = Static<typeof MutationResult>;
+
+// ── Mods tab (install / update / remove + Modrinth browse) ──────────────────
+export const ModSlugParams = Type.Object({
+  id: Type.String(),
+  slug: Type.String({ minLength: 1, maxLength: 96 }),
+});
+export type ModSlugParams = Static<typeof ModSlugParams>;
+
+export const ModAddBody = Type.Object({
+  slug: Type.String({ minLength: 1, maxLength: 96 }),
+  mcVersion: Type.Optional(Type.String({ maxLength: 20 })),
+  modLoader: Type.Optional(Type.String({ maxLength: 20 })),
+});
+export type ModAddBody = Static<typeof ModAddBody>;
+
+export const ModUpdatesBody = Type.Object({
+  mcVersion: Type.Optional(Type.String({ maxLength: 20 })),
+});
+export type ModUpdatesBody = Static<typeof ModUpdatesBody>;
+
+export const ModSearchQuery = Type.Object({
+  query: Type.Optional(Type.String({ maxLength: 120 })),
+  limit: Type.Optional(Type.String()),
+  offset: Type.Optional(Type.String()),
+  sort: Type.Optional(Type.String({ maxLength: 20 })),
+  categories: Type.Optional(Type.String({ maxLength: 200 })),
+  compatible: Type.Optional(Type.String()),
+  hideClientOnly: Type.Optional(Type.String()),
+});
+export type ModSearchQuery = Static<typeof ModSearchQuery>;

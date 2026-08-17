@@ -146,6 +146,10 @@
             :server-ids="servers.map((s) => s.id)"
             :active-server="activeServer"
           />
+          <ModsView
+            v-if="activeTab === 'mods' && shows('mods')"
+            :active-server="activeServer"
+          />
           <ModConfigView
             v-if="activeTab === 'modconfig' && shows('modconfig')"
             :server-ids="servers.map((s) => s.id)"
@@ -193,6 +197,7 @@ import StatusView from "./views/StatusView.vue";
 import ConsoleView from "./views/ConsoleView.vue";
 import BackupsView from "./views/BackupsView.vue";
 import ModConfigView from "./views/ModConfigView.vue";
+import ModsView from "./views/ModsView.vue";
 import GuildsView from "./views/GuildsView.vue";
 import CommandsView from "./views/CommandsView.vue";
 import ConfigView from "./views/ConfigView.vue";
@@ -211,7 +216,7 @@ export default defineComponent({
   name: "App",
   components: {
     Button, Message, Toast, ConfirmDialog, StatusDot, EmptyState,
-    OverviewView, StatusView, ConsoleView, BackupsView, ModConfigView, GuildsView,
+    OverviewView, StatusView, ConsoleView, BackupsView, ModsView, ModConfigView, GuildsView,
     CommandsView, ConfigView, AuditView, AnalyticsView,
   },
   setup() {
@@ -235,12 +240,13 @@ export default defineComponent({
       nav: [
         { id: "overview", label: "Overview", icon: "pi pi-th-large", gate: "server:read" },
         { id: "status", label: "Servers", icon: "pi pi-server", gate: "server:read" },
-        { id: "console", label: "Console", icon: "pi pi-desktop", gate: "server:read" },
-        { id: "backups", label: "Backups", icon: "pi pi-box", gate: "server:read" },
-        { id: "modconfig", label: "Mod Config", icon: "pi pi-sliders-h", gate: "config:read" },
-        { id: "analytics", label: "Analytics", icon: "pi pi-chart-bar", gate: "server:read" },
         { id: "guilds", label: "Guilds", icon: "pi pi-discord", gate: "guild" },
+        { id: "console", label: "Console", icon: "pi pi-desktop", gate: "server:read" },
+        { id: "analytics", label: "Analytics", icon: "pi pi-chart-bar", gate: "server:read" },
         { id: "commands", label: "Commands", icon: "pi pi-bolt", gate: "sysadmin" },
+        { id: "backups", label: "Backups", icon: "pi pi-box", gate: "server:read" },
+        { id: "mods", label: "Mods", icon: "pi pi-download", gate: "mods:read" },
+        { id: "modconfig", label: "Mod Config", icon: "pi pi-sliders-h", gate: "config:read" },
         { id: "config", label: "Config", icon: "pi pi-sliders-h", gate: "sysadmin" },
         { id: "audit", label: "Audit Log", icon: "pi pi-history", gate: "audit:read" },
       ] as NavItem[],

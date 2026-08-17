@@ -124,27 +124,32 @@ async function readApiJson<T>(res: Response, route: string): Promise<T> {
   return res.json() as Promise<T>; // pinned first-party contract (see note above)
 }
 
-async function apiGet<T>(cfg: ServerConfig, route: string): Promise<T> {
-  return readApiJson<T>(await apiGetRaw(cfg, route), route);
+async function apiGet<T>(
+  cfg: ServerConfig,
+  route: string,
+  timeoutMs = DEFAULT_GET_TIMEOUT_MS,
+): Promise<T> {
+  return readApiJson<T>(await apiGetRaw(cfg, route, timeoutMs), route);
 }
 
 async function apiPost<T>(
   cfg: ServerConfig,
   route: string,
   body: unknown,
+  timeoutMs = 30_000,
 ): Promise<T> {
   const url = instanceUrl(cfg, route);
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
   if (cfg.apiKey) headers["x-api-key"] = cfg.apiKey;
-  // Bug 3 fix: explicit timeout (script endpoints have longer operations,
-  // but 30 s is still a sane ceiling for any single HTTP call).
+  // Explicit timeout. Most POSTs finish well inside 30 s; the mod install and
+  // update-all endpoints download files and pass a much larger ceiling.
   const res = await fetch(url, {
     method: "POST",
     headers,
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) {
     const text = await res.text();
@@ -490,14 +495,18 @@ export async function getTps(cfg: ServerConfig): Promise<TpsResult | null> {
   return tps;
 }
 
-async function apiDelete<T>(cfg: ServerConfig, route: string): Promise<T> {
+async function apiDelete<T>(
+  cfg: ServerConfig,
+  route: string,
+  timeoutMs = 8_000,
+): Promise<T> {
   const url = instanceUrl(cfg, route);
   const headers: Record<string, string> = {};
   if (cfg.apiKey) headers["x-api-key"] = cfg.apiKey;
   const res = await fetch(url, {
     method: "DELETE",
     headers,
-    signal: AbortSignal.timeout(8_000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) {
     const text = await res.text();
@@ -781,6 +790,109 @@ export async function readModSlugs(
   cfg: ServerConfig,
 ): Promise<{ slugs: string[]; mtimeMs: number }> {
   return apiGet<{ slugs: string[]; mtimeMs: number }>(cfg, "/mods");
+}
+
+// ── Mod management (the wrapper's `mod-management` feature) ────────────────
+//
+// These mirror the wrapper's wire types (api-server src/contracts/wire.ts).
+// They are a pinned first-party contract, gated at connect time by the
+// feature handshake, so casting the JSON asserts that contract — the same
+// basis as every apiGet above.
+
+export interface InstalledMod {
+  slug: string;
+  versionId: string | null;
+  filename: string | null;
+}
+
+export interface InstalledMods {
+  gameVersion: string | null;
+  modLoader: string | null;
+  mtimeMs: number;
+  mods: InstalledMod[];
+}
+
+export interface ModAddResult {
+  ok: boolean;
+  slug?: string;
+  action?: string;
+  versionId?: string;
+  filename?: string;
+  dependencies?: Array<{ slug: string; action: string }>;
+  error?: string;
+  code?: string;
+}
+
+export interface ModRemoveResult {
+  ok: boolean;
+  slug?: string;
+  removedFile?: string | null;
+  orphanedDependencies?: string[];
+  error?: string;
+  code?: string;
+}
+
+export interface ModUpdateCheck {
+  mcVersion: string;
+  modLoader: string;
+  results: Array<{ slug: string; status: string; [key: string]: unknown }>;
+}
+
+export interface ModApplyResult {
+  ok: boolean;
+  updated?: Array<{
+    slug: string;
+    toVersionId: string;
+    filename: string;
+    fromVersionId?: string | null;
+  }>;
+  upToDate?: string[];
+  failed?: Array<{ slug: string; error: string }>;
+  error?: string;
+  code?: string;
+}
+
+/** The richer installed list (versions, loader, filenames) the Mods tab reads. */
+export async function listInstalledMods(cfg: ServerConfig): Promise<InstalledMods> {
+  return apiGet<InstalledMods>(cfg, "/mods/installed");
+}
+
+/** Install a mod. Long timeout: the wrapper downloads the jar and its deps. */
+export async function addMod(
+  cfg: ServerConfig,
+  body: { slug: string; mcVersion?: string; modLoader?: string },
+): Promise<ModAddResult> {
+  return apiPost<ModAddResult>(cfg, "/mods", body, 130_000);
+}
+
+/** Remove an installed mod by slug. */
+export async function removeMod(
+  cfg: ServerConfig,
+  slug: string,
+): Promise<ModRemoveResult> {
+  return apiDelete<ModRemoveResult>(cfg, `/mods/${encodeURIComponent(slug)}`);
+}
+
+/** Check installed mods for updates. Longer timeout: one Modrinth call per mod. */
+export async function checkModUpdates(
+  cfg: ServerConfig,
+  mcVersion?: string,
+): Promise<ModUpdateCheck> {
+  const q = mcVersion ? `?mcVersion=${encodeURIComponent(mcVersion)}` : "";
+  return apiGet<ModUpdateCheck>(cfg, `/mods/updates${q}`, 130_000);
+}
+
+/** Apply all available updates. Long timeout: downloads every updated jar. */
+export async function applyModUpdates(
+  cfg: ServerConfig,
+  mcVersion?: string,
+): Promise<ModApplyResult> {
+  return apiPost<ModApplyResult>(
+    cfg,
+    "/mods/updates",
+    mcVersion ? { mcVersion } : {},
+    610_000,
+  );
 }
 
 // ── Backups ───────────────────────────────────────────────────────────────

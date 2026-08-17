@@ -101,6 +101,12 @@ export const EXPECTED_WRAPPER_FEATURES: Record<string, ExpectedFeature> = {
     degrades: "/whitelist, /unwhitelist, and player-name autocomplete",
   },
   mods: { version: 1, degrades: "/mods" },
+  "mod-management": {
+    version: 1,
+    degrades:
+      "the dashboard Mods tab (install, update, remove); the read-only " +
+      "/mods list still works",
+  },
   backups: { version: 1, degrades: "/backup" },
   "backup-files": {
     version: 1,

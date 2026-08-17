@@ -121,3 +121,99 @@ export interface SetupRole {
   position: number;
   assignable: boolean;
 }
+
+// ── Mods tab (install / update / remove + Modrinth browse) ──
+export type ModEnvironment = "server" | "client" | "both" | "optional" | "unknown";
+
+export interface InstalledMod {
+  slug: string;
+  versionId: string | null;
+  filename: string | null;
+}
+export interface InstalledMods {
+  gameVersion: string | null;
+  modLoader: string | null;
+  mtimeMs: number;
+  mods: InstalledMod[];
+  stale?: boolean;
+}
+export interface ModSearchHit {
+  projectId: string;
+  slug: string;
+  title: string;
+  description: string;
+  author: string;
+  downloads: number;
+  follows: number;
+  iconUrl: string | null;
+  categories: string[];
+  gameVersions: string[];
+  environment: ModEnvironment;
+  pageUrl: string;
+  installed: boolean;
+}
+export interface ModSearchResult {
+  hits: ModSearchHit[];
+  offset: number;
+  limit: number;
+  totalHits: number;
+}
+export interface ModVersion {
+  id: string;
+  name: string;
+  versionNumber: string;
+  versionType: string;
+  gameVersions: string[];
+  loaders: string[];
+  datePublished: string;
+  downloads: number;
+  primaryFilename: string | null;
+}
+export interface ModProjectDetail {
+  projectId: string;
+  slug: string;
+  title: string;
+  description: string;
+  categories: string[];
+  environment: ModEnvironment;
+  iconUrl: string | null;
+  downloads: number;
+  followers: number;
+  gameVersions: string[];
+  loaders: string[];
+  pageUrl: string;
+  versions: ModVersion[];
+  installed: boolean;
+  installedVersionId: string | null;
+}
+export interface ModUpdateCheck {
+  mcVersion: string;
+  modLoader: string;
+  results: Array<{ slug: string; status: string; [k: string]: unknown }>;
+}
+export interface ModAddResult {
+  ok: boolean;
+  slug?: string;
+  action?: string;
+  versionId?: string;
+  filename?: string;
+  dependencies?: Array<{ slug: string; action: string }>;
+  error?: string;
+  code?: string;
+}
+export interface ModRemoveResult {
+  ok: boolean;
+  slug?: string;
+  removedFile?: string | null;
+  orphanedDependencies?: string[];
+  error?: string;
+  code?: string;
+}
+export interface ModApplyResult {
+  ok: boolean;
+  updated?: Array<{ slug: string; toVersionId: string; filename: string }>;
+  upToDate?: string[];
+  failed?: Array<{ slug: string; error: string }>;
+  error?: string;
+  code?: string;
+}

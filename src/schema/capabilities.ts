@@ -37,6 +37,8 @@ export const GRANTABLE_CAPABILITIES = [
   "server:console",
   "backup:download",
   "config:write",
+  "mods:read",
+  "mods:write",
   "backup:restore",
   "server:rollback",
 ] as const;
