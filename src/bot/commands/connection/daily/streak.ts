@@ -5,6 +5,7 @@ import {
 } from "discord.js";
 import {
   loadDailyRewardsConfig,
+  loadServerRewardsOverride,
   loadClaimedStore,
   getServerClaims,
   rewardPoolForServer,
@@ -80,8 +81,11 @@ async function getNextBonusStreak(
   bonusStreak: number,
   serverId: string,
 ): Promise<NextBonusStreak | null> {
-  const dailyRewards = await loadDailyRewardsConfig();
-  const pool = rewardPoolForServer(dailyRewards, serverId);
+  const [dailyRewards, rewardsOverride] = await Promise.all([
+    loadDailyRewardsConfig(),
+    loadServerRewardsOverride(serverId),
+  ]);
+  const pool = rewardPoolForServer(dailyRewards, serverId, rewardsOverride);
   if (!pool.streakBonuses || !Object.keys(pool.streakBonuses).length) {
     return null;
   }

@@ -92,6 +92,7 @@ export type {
 export type {
   DailyRewardItem,
   DailyRewardsConfig,
+  RewardPool,
   UserClaimData,
   StreakData,
   NextBonusStreak,

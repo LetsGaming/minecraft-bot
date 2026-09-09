@@ -5,6 +5,7 @@ import {
 } from "discord.js";
 import {
   loadDailyRewardsConfig,
+  loadServerRewardsOverride,
   rewardPoolForServer,
   loadClaimedStore,
   getServerClaims,
@@ -94,12 +95,13 @@ async function _execute(
   const server = resolveServer(interaction);
 
   // Cooldown, streak, and history are all per server.
-  const [rewardsCfg, store] = await Promise.all([
+  const [rewardsCfg, rewardsOverride, store] = await Promise.all([
     loadDailyRewardsConfig(),
+    loadServerRewardsOverride(server.id),
     loadClaimedStore(),
   ]);
   const claimed = getServerClaims(store, server.id);
-  const pool = rewardPoolForServer(rewardsCfg, server.id);
+  const pool = rewardPoolForServer(rewardsCfg, server.id, rewardsOverride);
 
   if (!pool.default.length) {
     await interaction.reply(

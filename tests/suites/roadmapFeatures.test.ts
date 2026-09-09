@@ -159,6 +159,21 @@ describe("rewardPoolForServer", () => {
     expect(hardcore.streakBonuses?.["3"]).toBeDefined();
     expect(hardcore.streakBonuses?.["7"]).toBeUndefined();
   });
+
+  it("a dedicated file override wins field-by-field over the inline servers.<id> entry", () => {
+    const fileOverride = { default: [{ item: "netherite_ingot", amount: 1 }] };
+    const creative = rewardPoolForServer(cfg, "creative", fileOverride);
+    expect(creative.default[0]!.item).toBe("netherite_ingot");
+    // streakBonuses still inherited from the top-level pool
+    expect(creative.streakBonuses?.["7"]).toBeDefined();
+  });
+
+  it("a file override applies even without any inline servers.<id> entry", () => {
+    const fileOverride = { bonusChance: 42 };
+    const pool = rewardPoolForServer(cfg, "smp", fileOverride);
+    expect(pool.bonusChance).toBe(42);
+    expect(pool.default[0]!.item).toBe("stone");
+  });
 });
 
 // ── span polls ──────────────────────────────────────────────────────────────

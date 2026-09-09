@@ -56,7 +56,23 @@ The highest key defines the bonus cycle length. After reaching it, the player's 
 
 **Claims are per server.** Cooldown, streaks, and claim history are tracked independently for every server instance: claiming on `survival` does not consume the daily on `creative`, and each server builds its own streak. On multi-server setups players pick the target with `/daily server:<id>` (their guild's default server is used otherwise), and `/streak` shows the streak for the resolved server.
 
-The reward *configuration* (`data/dailyRewards.json`) stays global — every server hands out the same pool and milestones.
+The reward *configuration* (`data/dailyRewards.json`) is global by default — every server hands out the same pool and milestones — but a server can override it (see below).
+
+### Per-server overrides
+
+To give one server a different pool without touching the shared `dailyRewards.json`, create `data/dailyRewards_<serverId>.json`, where `<serverId>` matches the server's id in `config.json`. It uses the same shape as `dailyRewards.json`, but every field is optional and applies only to that server:
+
+```json
+{
+  "default": [
+    { "item": "totem_of_undying", "amount": 1, "weight": 1 }
+  ]
+}
+```
+
+Any field this file omits (`default`, `streakBonuses`, `bonusChance`) falls back to the top-level pool in `dailyRewards.json`, so a server can override just the items and keep the shared streak bonuses (or vice versa).
+
+This file is untracked and lives parallel to the default `dailyRewards.json`, so per-server tuning never merge-conflicts with the git-tracked default when that file is updated. It's the preferred way to customize a server's economy; the older `servers.<id>` block inside `dailyRewards.json` still works too, but a dedicated override file always wins over it field-by-field when both are present.
 
 Claim state is stored in `data/claimedDaily.json`, keyed by server and Discord user. Deleting a user's entry under a server resets them there. Files from older bot versions (one flat user map, no server dimension) are migrated automatically on first start: all existing streaks move under the **first configured server** — exact for single-server setups; on multi-server setups the log names the target so you can move entries manually if needed.
 
