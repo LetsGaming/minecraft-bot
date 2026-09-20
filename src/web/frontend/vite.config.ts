@@ -16,11 +16,16 @@ export default defineConfig({
   },
   server: {
     // `npm run dev:frontend -w web-ui` proxies API + auth to a locally
-    // running backend (npm run start:web at the repo root).
-    proxy: {
-      "/api": "http://localhost:8130",
-      "/auth": "http://localhost:8130",
-      "/healthz": "http://localhost:8130",
-    },
+    // running backend (npm run start:web at the repo root). Target port
+    // follows WEBUI_PORT so isolated dev sessions (scripts/dev-up.mjs) can
+    // point each frontend at its own backend instance.
+    proxy: (() => {
+      const target = `http://localhost:${process.env.WEBUI_PORT ?? 8130}`;
+      return {
+        "/api": target,
+        "/auth": target,
+        "/healthz": target,
+      };
+    })(),
   },
 });

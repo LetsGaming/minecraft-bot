@@ -57,6 +57,14 @@ const DENY_PREFIX = "wlapp:deny:";
 /** Pending applications per user per guild (spam guard). */
 const MAX_PENDING_PER_USER = 1;
 
+/**
+ * Decided-application history kept per store (pending applications are
+ * never trimmed — they still need a working Approve/Deny button).
+ * Storage audit: this array only ever grew via push(), so it was the
+ * kv_store's one truly unbounded blob.
+ */
+const MAX_DECIDED_APPLICATIONS = 200;
+
 export type ApplicationStatus = "pending" | "approved" | "denied";
 
 export interface WhitelistApplication {
@@ -90,6 +98,15 @@ async function loadStore(): Promise<ApplicationStore> {
 }
 
 async function saveStore(store: ApplicationStore): Promise<void> {
+  // Trim decided history; pending applications always survive.
+  const pending = store.applications.filter((a) => a.status === "pending");
+  const decided = store.applications
+    .filter((a) => a.status !== "pending")
+    .sort((a, b) => (a.decidedAt ?? 0) - (b.decidedAt ?? 0))
+    .slice(-MAX_DECIDED_APPLICATIONS);
+  store.applications = [...decided, ...pending].sort(
+    (a, b) => a.createdAt - b.createdAt,
+  );
   kvSet("whitelistApplications", store);
 }
 

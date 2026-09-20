@@ -33,9 +33,21 @@ const CONFIG_PATH = process.env.MCBOT_CONFIG_PATH
 let _config: BotConfig | null = null;
 
 
+// Storage audit (2026-09): config.json lives in the shared data/ volume the
+// dashboard writes to, so watchConfig() reloads (and re-validates) on every
+// save — including edits that touch a field unrelated to a standing warning.
+// Without this, a single stale warning (e.g. an http apiUrl) got re-logged in
+// full on every dashboard save forever; one deployment had ~2,800 identical
+// lines from this alone. Each distinct message is logged once per process —
+// a fresh warning still surfaces immediately, a repeat doesn't need saying
+// twice, and a restart naturally re-announces whatever is still wrong.
+const warnedConfigMessages = new Set<string>();
+
 function validateRawConfig(raw: RawBotConfig, configPath: string): void {
   const { valid, errors, warnings } = validateCandidateConfig(raw);
   for (const warning of warnings) {
+    if (warnedConfigMessages.has(warning)) continue;
+    warnedConfigMessages.add(warning);
     log.warn("config", warning);
   }
   if (!valid) {

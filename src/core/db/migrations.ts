@@ -211,6 +211,24 @@ const MIGRATIONS: Migration[] = [
         ON queued_config_edits (server_id, queued_at);
     `,
   },
+  {
+    id: 6,
+    name: "gzip snapshot payloads",
+    sql: `
+      -- Snapshots were the largest table by bytes (storage audit, 2026-09):
+      -- one uncompressed JSON dump of every player's stats per server per
+      -- hour. New snapshots are written gzip-compressed into payload_gz
+      -- (~80% smaller); payload stays NOT NULL for old rows and legacy
+      -- imports, written as '' for new ones. Read path checks payload_gz
+      -- first, falls back to payload.
+      --
+      -- (command_usage_ts was considered for removal as apparently covered
+      -- by command_usage_command(command, ts) — it is not: usageByCommand
+      -- and pruneCommandUsage both filter by ts alone, which a composite
+      -- index with command as the leading column can't serve. Kept.)
+      ALTER TABLE snapshots ADD COLUMN payload_gz BLOB;
+    `,
+  },
 ];
 
 /**

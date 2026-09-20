@@ -48,6 +48,27 @@ export interface SuggestionLedger {
 
 const KEY = "featureSuggestions";
 
+/**
+ * Drop non-dismissed records nobody has touched in this long — they exist
+ * only to enforce the 48h nudge cooldown, so past this age they serve no
+ * purpose and simply reset next time the subject is offered. `dismissed`
+ * records are kept forever: a refusal must never be re-asked.
+ * Storage audit: this ledger was previously never pruned at all.
+ */
+const STALE_AFTER_MS = 90 * 24 * 60 * 60 * 1000;
+
+function pruneLedger(ledger: SuggestionLedger, now: number): SuggestionLedger {
+  for (const subject of Object.keys(ledger.subjects)) {
+    const records = ledger.subjects[subject]!;
+    for (const id of Object.keys(records)) {
+      const rec = records[id]!;
+      if (!rec.dismissed && now - rec.lastAt > STALE_AFTER_MS) delete records[id];
+    }
+    if (Object.keys(records).length === 0) delete ledger.subjects[subject];
+  }
+  return ledger;
+}
+
 /** Subject key for an in-game player. */
 export const mcSubject = (player: string): string =>
   `mc:${player.toLowerCase()}`;
@@ -98,7 +119,7 @@ export async function recordSuggestion(
       lastAt: at,
     };
     ledger.subjects[subject] = forSubject;
-    return ledger;
+    return pruneLedger(ledger, at);
   });
 }
 

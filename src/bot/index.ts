@@ -52,6 +52,16 @@ import { errMsg } from "@mcbot/core/utils/error.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const config = loadConfig();
 
+// ponytail: dev-only bypass. MCBOT_DEV_NO_DISCORD=1 skips the Discord
+// gateway login and global command registration (both need a real bot
+// token/application) so the rest of the bot — config/DB loading, server
+// capability probing, log watchers, RCON — can still be exercised in an
+// isolated dev session with no real Discord app. Discord-facing features
+// (slash commands, interactions, posting to channels) do not work in this
+// mode since there is no live gateway connection. Never set this in
+// production; only scripts/dev-up.mjs sets it.
+const DEV_NO_DISCORD = process.env.MCBOT_DEV_NO_DISCORD === "1";
+
 // Initialize all server instances
 initServers(config.servers);
 // Open the SQLite store early: schema migrations and the one-time legacy
@@ -225,7 +235,7 @@ async function registerGlobalCommands(): Promise<void> {
 
 void (async () => {
   await loadCommands();
-  await registerGlobalCommands();
+  if (!DEV_NO_DISCORD) await registerGlobalCommands();
 
   // Attach commands to client for help command access
   client.commands = commands;
@@ -402,7 +412,22 @@ void (async () => {
     }
   });
 
-  await client.login(config.token);
+  if (DEV_NO_DISCORD) {
+    log.warn(
+      "bot",
+      "MCBOT_DEV_NO_DISCORD=1 — skipping Discord gateway login (dev only). " +
+        "Slash commands, interactions, and Discord messages are unavailable " +
+        "this run; running the clientReady init anyway so log watchers / " +
+        "RCON / server monitoring can still be exercised.",
+    );
+    try {
+      await initMinecraftCommands(client);
+    } catch (err) {
+      log.error("init", `Failed to initialize MC commands: ${errMsg(err)}`);
+    }
+  } else {
+    await client.login(config.token);
+  }
 })();
 
 // ── Graceful shutdown ──────────────────────────────────────────────────────

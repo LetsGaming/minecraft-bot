@@ -1,4 +1,5 @@
 import path from "path";
+import zlib from "zlib";
 import { promises as fsPromises } from "fs";
 import { getRootDir } from "../paths.js";
 import { formatDate } from "../time.js";
@@ -77,21 +78,32 @@ function tsList(serverId: string): number[] {
   );
 }
 
+/** Storage audit: new rows compress payload into payload_gz (~80% smaller); old
+ * rows (and legacy imports) keep the plain JSON in payload. */
+function decodeSnapshotRow(row: {
+  payload: string;
+  payload_gz: Buffer | Uint8Array | null;
+}): SnapshotData {
+  const json = row.payload_gz
+    ? zlib.gunzipSync(Buffer.from(row.payload_gz)).toString("utf-8")
+    : row.payload;
+  return JSON.parse(json) as SnapshotData;
+}
+
 function loadPayload(serverId: string, ts: number): SnapshotData | null {
-  return mapRow(
-    getDb().prepare(
-      "SELECT payload FROM snapshots WHERE server_id = ? AND ts = ?",
-    ),
-    (r) => {
-      try {
-        return col.json<SnapshotData>(r, "payload");
-      } catch {
-        return null; // unreadable snapshot — treat like an unreadable file
-      }
-    },
-    serverId,
-    ts,
-  );
+  const row = getDb()
+    .prepare(
+      "SELECT payload, payload_gz FROM snapshots WHERE server_id = ? AND ts = ?",
+    )
+    .get(serverId, ts) as
+    | { payload: string; payload_gz: Buffer | Uint8Array | null }
+    | undefined;
+  if (!row) return null;
+  try {
+    return decodeSnapshotRow(row);
+  } catch {
+    return null; // unreadable snapshot — treat like an unreadable file
+  }
 }
 
 /**
@@ -140,14 +152,19 @@ export async function takeSnapshot(
         `directory is unreadable (check the API wrapper's serverPath, the ` +
         `world's level-name, and read permissions on <world>/stats).`,
     );
+    // Storage audit: pruning must not depend on a snapshot succeeding —
+    // a wrapper outage that never resolves would otherwise stop retention
+    // entirely and let old rows accumulate forever.
+    await cleanupSnapshots(server.id);
     return payload;
   }
 
+  const gz = zlib.gzipSync(Buffer.from(JSON.stringify(payload), "utf-8"));
   getDb()
     .prepare(
-      "INSERT OR REPLACE INTO snapshots (server_id, ts, payload) VALUES (?, ?, ?)",
+      "INSERT OR REPLACE INTO snapshots (server_id, ts, payload, payload_gz) VALUES (?, ?, '', ?)",
     )
-    .run(server.id, timestamp, JSON.stringify(payload));
+    .run(server.id, timestamp, gz);
 
   // Snapshot captures the current state — force fresh load on next leaderboard query
   invalidateAllStatsCache();

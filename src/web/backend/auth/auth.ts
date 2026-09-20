@@ -31,6 +31,20 @@ import {
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { isSnowflake } from "@mcbot/schema/discord.js";
 
+// ponytail: dev-only auth bypass. MCBOT_DEV_NO_AUTH=1 skips Discord OAuth
+// entirely and treats every request as this fixed sysadmin — for local/agent
+// dev sessions that have no real Discord OAuth app to log in against. Never
+// set this in production; nothing here checks NODE_ENV, so it is on the
+// operator (dev tooling only sets it in scripts/dev-up.mjs).
+const DEV_NO_AUTH = process.env.MCBOT_DEV_NO_AUTH === "1";
+const DEV_SESSION: Session = {
+  uid: "100000000000000001",
+  tag: "dev#0000",
+  guilds: [],
+  exp: Number.POSITIVE_INFINITY,
+  gexp: Number.POSITIVE_INFINITY,
+};
+
 export const SESSION_COOKIE = "mcbot_session";
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const STATE_TTL_MS = 10 * 60 * 1000;
@@ -140,6 +154,7 @@ export function globalAdminIds(): Set<string> {
 
 /** Re-derived from config every call, so removing a sysadmin is immediate. */
 export function isSysadmin(session: Session): boolean {
+  if (DEV_NO_AUTH) return true;
   return globalAdminIds().has(session.uid);
 }
 
@@ -330,6 +345,7 @@ function parseCookies(header: string | undefined): Record<string, string> {
 }
 
 export function sessionFromRequest(req: FastifyRequest): Session | null {
+  if (DEV_NO_AUTH) return DEV_SESSION;
   const cookies = parseCookies(req.headers.cookie);
   const session = decodeSigned<Session>(cookies[SESSION_COOKIE]);
   if (!session || session.exp <= Date.now()) return null;

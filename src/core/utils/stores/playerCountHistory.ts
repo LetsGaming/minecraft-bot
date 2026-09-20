@@ -92,7 +92,12 @@ export function _resetSamplerStateForTesting(): void {
 }
 
 /**
- * Record one online-count sample into the server's current hour bucket.
+ * Record one online-count sample into the server's current hour bucket —
+ * one UPSERT plus a retention trim, atomically. (Storage audit: this used
+ * to load the whole table, mutate it in memory, then DELETE-ALL and
+ * re-INSERT every row on every 60s sample — ~1440x write amplification a
+ * day for a table that never exceeds a couple hundred rows. The migration
+ * comment for this table already called for "one atomic UPSERT".)
  * Called from the status pass (free ride) and the standalone sampler.
  */
 export async function recordPlayerCountSample(
@@ -101,23 +106,22 @@ export async function recordPlayerCountSample(
 ): Promise<void> {
   const now = Date.now();
   lastSampleAt.set(serverId, now);
-
-  const store = await loadPlayerCountStore();
-  const series = (store.servers[serverId] ??= []);
   const bucketStart = Math.floor(now / HOUR_MS) * HOUR_MS;
 
-  const last = series[series.length - 1];
-  if (last && last.h === bucketStart) {
-    last.sum += online;
-    last.max = Math.max(last.max, online);
-    last.samples += 1;
-  } else {
-    series.push({ h: bucketStart, sum: online, max: online, samples: 1 });
-    if (series.length > RETENTION_HOURS) {
-      store.servers[serverId] = series.slice(-RETENTION_HOURS);
-    }
-  }
-  await savePlayerCountStore(store);
+  withTransaction(() => {
+    const db = getDb();
+    db.prepare(
+      `INSERT INTO player_count_hours (server_id, h, sum, max, samples)
+       VALUES (?, ?, ?, ?, 1)
+       ON CONFLICT(server_id, h) DO UPDATE SET
+         sum = sum + excluded.sum,
+         max = MAX(max, excluded.max),
+         samples = samples + 1`,
+    ).run(serverId, bucketStart, online, online);
+    db.prepare(
+      "DELETE FROM player_count_hours WHERE server_id = ? AND h < ?",
+    ).run(serverId, bucketStart - RETENTION_HOURS * HOUR_MS);
+  });
 }
 
 /**

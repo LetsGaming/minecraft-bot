@@ -21,6 +21,10 @@ export interface MissingSetting {
 
 /** The env the dashboard cannot function without. Both are env-only secrets. */
 export function missingWebEnv(): MissingSetting[] {
+  // ponytail: dev-only auth bypass (see auth.ts) never touches these secrets,
+  // so don't demand them either.
+  if (process.env.MCBOT_DEV_NO_AUTH === "1") return [];
+
   const missing: MissingSetting[] = [];
 
   const session = process.env.WEBUI_SESSION_SECRET;

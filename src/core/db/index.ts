@@ -60,6 +60,19 @@ export function getDb(): SqlDatabase {
   db.exec("PRAGMA foreign_keys = ON");
 
   runMigrations(db);
+
+  // VACUUM reclaims pages the retention prunes above freed to SQLite's
+  // internal freelist but never returned to the filesystem — bot.db is
+  // otherwise monotonically non-shrinking (storage audit, 2026-09). It
+  // takes an exclusive lock and rewrites the whole file, so it is opt-in
+  // rather than automatic: an operator runs it during a maintenance
+  // window, e.g. `MCBOT_VACUUM_ON_START=1 docker compose restart bot`.
+  if (dbPath !== ":memory:" && process.env.MCBOT_VACUUM_ON_START) {
+    log.info("db", "MCBOT_VACUUM_ON_START set — running VACUUM…");
+    db.exec("VACUUM");
+    log.info("db", "VACUUM complete");
+  }
+
   // Never import (and retire!) legacy JSON into an in-memory database:
   // the store is ephemeral, the renamed source files would not be — a
   // throwaway DB must not destroy real data. Tests run on ":memory:";
