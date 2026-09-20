@@ -400,4 +400,8 @@ export const en: Record<string, string> = {
     "Tip: type !deathpos in chat to get these coordinates again at any time.",
   "report.hint":
     "Tip: if that was unfair, type !report <what happened> in chat and the admins will see it.",
+
+  // ── /clear-dm ──
+  "clearDm.none": "No bot messages found to delete.",
+  "clearDm.deleted": "Deleted **{count}** bot message(s) from this DM.",
 };

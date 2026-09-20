@@ -173,6 +173,7 @@ export const ModAddBody = Type.Object({
   slug: Type.String({ minLength: 1, maxLength: 96 }),
   mcVersion: Type.Optional(Type.String({ maxLength: 20 })),
   modLoader: Type.Optional(Type.String({ maxLength: 20 })),
+  versionId: Type.Optional(Type.String({ maxLength: 32 })),
 });
 export type ModAddBody = Static<typeof ModAddBody>;
 

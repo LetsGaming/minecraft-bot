@@ -105,13 +105,24 @@ export class ServerInstance {
     return serverIsUp(await this.getHealth());
   }
 
+  /**
+   * A single timeout/network blip here used to be indistinguishable from
+   * "server empty" — callers like /daily's online check would silently
+   * treat a flaky wrapper response as the player being offline. Retry once,
+   * same pattern as getHealth() above, before giving up.
+   */
   async getList(): Promise<ServerListResult> {
-    try {
-      const { getList } = await import("./serverAccess.js");
-      return await getList(this.config);
-    } catch {
-      return { playerCount: "0", maxPlayers: "?", players: [] };
+    const { getList } = await import("./serverAccess.js");
+    const RETRY_DELAY_MS = 500;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        return await getList(this.config);
+      } catch {
+        if (attempt === 0)
+          await new Promise<void>((r) => setTimeout(r, RETRY_DELAY_MS));
+      }
     }
+    return { playerCount: "0", maxPlayers: "?", players: [] };
   }
 
   async getSeed(): Promise<string | null> {

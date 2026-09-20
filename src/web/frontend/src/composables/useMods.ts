@@ -67,6 +67,7 @@ export function useMods(serverId: () => string) {
     slug: string;
     mcVersion?: string;
     modLoader?: string;
+    versionId?: string;
   }): Promise<ModAddResult> {
     return apiSend<ModAddResult>("POST", base(), body);
   }

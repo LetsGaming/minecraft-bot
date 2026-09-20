@@ -394,4 +394,8 @@ export const de: Record<string, string> = {
     "Tipp: Tippe !deathpos in den Chat, um diese Koordinaten jederzeit erneut zu bekommen.",
   "report.hint":
     "Tipp: Wenn das unfair war, tippe !report <was passiert ist> in den Chat — die Admins sehen es dann.",
+
+  // ── /clear-dm ──
+  "clearDm.none": "Keine Bot-Nachrichten zum Löschen gefunden.",
+  "clearDm.deleted": "**{count}** Bot-Nachricht(en) aus dieser DM gelöscht.",
 };

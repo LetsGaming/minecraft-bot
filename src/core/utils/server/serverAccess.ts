@@ -860,7 +860,13 @@ export async function listInstalledMods(cfg: ServerConfig): Promise<InstalledMod
 /** Install a mod. Long timeout: the wrapper downloads the jar and its deps. */
 export async function addMod(
   cfg: ServerConfig,
-  body: { slug: string; mcVersion?: string; modLoader?: string },
+  body: {
+    slug: string;
+    mcVersion?: string;
+    modLoader?: string;
+    /** Pin to this exact Modrinth build instead of the newest compatible one. */
+    versionId?: string;
+  },
 ): Promise<ModAddResult> {
   return apiPost<ModAddResult>(cfg, "/mods", body, 130_000);
 }

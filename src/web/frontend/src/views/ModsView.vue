@@ -323,10 +323,14 @@ async function toggleVersions(hit: ModSearchHit) {
   }
 }
 
-async function runInstall(slug: string, mcVersion?: string) {
+async function runInstall(slug: string, mcVersion?: string, versionId?: string) {
   setBusy(slug, true);
   try {
-    const r = await mods.install(mcVersion ? { slug, mcVersion } : { slug });
+    const r = await mods.install({
+      slug,
+      ...(mcVersion ? { mcVersion } : {}),
+      ...(versionId ? { versionId } : {}),
+    });
     if (r.ok) {
       flash("ok", `Installed ${r.slug ?? slug}${r.dependencies?.length ? ` (+${r.dependencies.length} deps)` : ""}.`);
       openSlug.value = null;
@@ -344,10 +348,7 @@ function installLatest(hit: ModSearchHit) {
   return runInstall(hit.slug);
 }
 function installVersion(hit: ModSearchHit, v: ModVersion) {
-  // add-mod resolves the newest build for a game version, so the picked
-  // build's game version is what we pass — this is how an older 1.21.3 build
-  // gets installed onto a 1.21.4 server.
-  return runInstall(hit.slug, v.gameVersions[0]);
+  return runInstall(hit.slug, v.gameVersions[0], v.id);
 }
 async function updateOne(slug: string) {
   setBusy(slug, true);

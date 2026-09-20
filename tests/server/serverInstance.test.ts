@@ -169,6 +169,22 @@ describe("ServerInstance.getList()", () => {
       players: [],
     });
   });
+
+  it("retries once after a transient failure instead of reporting empty", async () => {
+    getListFn
+      .mockRejectedValueOnce(new Error("timeout"))
+      .mockResolvedValueOnce({
+        playerCount: "1",
+        maxPlayers: "20",
+        players: ["Steve"],
+      });
+    expect(await inst.getList()).toEqual({
+      playerCount: "1",
+      maxPlayers: "20",
+      players: ["Steve"],
+    });
+    expect(getListFn).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("ServerInstance.getTps()", () => {

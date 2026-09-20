@@ -8,6 +8,11 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `/clear-dm` command: deletes the bot's own messages from the invoking
+  user's DM with it, with an optional `amount` cap and an optional
+  `.txt` backup of the deleted messages before they go. Self-service — no
+  admin permission required, since it only ever touches the caller's own DM.
+  `src/bot/commands/general/clearDm.ts`.
 - Mods dashboard tab: install, update, remove and browse mods for a server.
   Search and catalogue run against Modrinth from the dashboard; install, update
   and remove call the wrapper.
