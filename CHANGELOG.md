@@ -6,91 +6,30 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [6.1.0] — 2026-09-21
+
 ### Added
 
-- `/clear-dm` command: deletes the bot's own messages from the invoking
-  user's DM with it, with an optional `amount` cap and an optional
-  `.txt` backup of the deleted messages before they go. Self-service — no
-  admin permission required, since it only ever touches the caller's own DM.
-  `src/bot/commands/general/clearDm.ts`.
+- `/clear-dm` command: deletes the bot's own messages from the invoking user's DM with it, with an optional `amount` cap and an optional `.
 - Mods dashboard tab: install, update, remove and browse mods for a server.
-  Search and catalogue run against Modrinth from the dashboard; install, update
-  and remove call the wrapper.
-  - Capabilities `mods:read` and `mods:write`.
-  - `core/utils/server/serverAccess.ts`: wrapper client methods
-    (`listInstalledMods`, `addMod`, `removeMod`, `checkModUpdates`,
-    `applyModUpdates`) and per-call request timeouts (install 130s,
-    update-all 610s).
-  - `core/utils/modrinth.ts`: Modrinth search and project detail, environment
-    derivation (server, client, both, optional), client-only filtering.
-  - `core/utils/server/wrapperContract.ts`: the `mod-management` expected feature.
-  - `web/backend/routes/mods.ts`: server-scoped routes. Wrapper proxy for the
-    installed list and mutations; Modrinth for search and catalogue. Reads require
-    `mods:read`, mutations require `mods:write`. Mutations are audited and
-    invalidate the cached installed list.
-  - Frontend: mod types in `api.ts`, the `useMods` composable, `ModsView.vue`,
-    and the Mods navigation entry.
-- Config editor: collapse-by-default sections. Each object renders as a
-  collapsible card with a state chip (On, Off, Configured, Unset) and a New
-  badge, plus an "N new features available to enable" banner. State derives from
-  schema and value via `sectionState`, `humanizeKey` and `countNewSections`.
-- Config editor: a scope breadcrumb in section headers (for example
-  "Data Corner > notifications"), threaded through nesting, map entries and array
-  items, with depth-based header weight.
-- Config editor: per-section "Edit as JSON" toggle that flips a single subtree to
-  raw JSON and back.
-- Mods tab: disable/enable a mod without uninstalling it. Moves the jar between
-  `mods/` and `mods/disabled/` on the server (loader-respected — a disabled mod
-  simply isn't scanned) while leaving its manifest entry intact, so it stays
-  update-checkable while off. Requires wrapper `mod-management` v2.
-  - Wrapper: `scripts/update/toggle-mod.js` (`--enable`/`--disable`), shared
-    logic in the new `scripts/update/lib/` (`args.js`, `toggle-mod-common.js`).
-    `remove-mod.js` and `update-mods.js` now also check `mods/disabled/`, so
-    removing or updating a disabled mod works correctly instead of silently
-    re-enabling it or leaving an orphaned jar.
-  - Dashboard: Enable/Disable button per installed mod, with a "restart
-    required to apply" note; the Discord `/mods` list excludes disabled mods
-    (they aren't active on the running server).
-- Backups tab: permanently delete an archive from the dashboard. New
-  `backup:delete` capability (irreversible tier — same typed-server-name
-  confirmation as restore). Requires wrapper `backup-files` v2.
-- Leaderboard posting can now be anchored to a specific weekday and time
-  (`postTime` "HH:MM" + `postDay` "SU".."SA", per-guild `leaderboard.*` or
-  global `leaderboardPostTime`/`leaderboardPostDay` defaults) instead of
-  drifting by up to an hour per cycle from whenever it first posted. Existing
-  configs with neither field set keep the previous behavior exactly.
-- Analytics tab: a 24h/3d/7d/14d time-range picker for the activity chart and
-  command-usage table (capped at 14 days — `player_count_hours`' retention
-  ceiling). Uptime keeps its fixed 24h/7d/30d windows regardless of the picker.
-- Downtime monitoring now detects a systemd crash loop (the server restarting
-  repeatedly and failing to stay up) and alerts immediately, instead of
-  potentially never crossing the normal 3-consecutive-failures threshold
-  because the server can be briefly "up" between restarts. The underlying
-  systemd unit also gained `StartLimitBurst`/`StartLimitIntervalSec` so it
-  stops retrying after 5 failures in 2 minutes rather than looping forever,
-  and `/server restart` now clears that failed state automatically. Requires
-  wrapper `server-health` v2.
-- Player avatars in embeds and chat-bridge webhooks now resolve by UUID
-  (cached from the whitelist/usercache lookups the bot already does) instead
-  of by raw username, fixing the common case where a renamed account or a
-  Bedrock/Geyser name silently fell back to the default Steve/Alex skin.
+- Config editor: collapse-by-default sections.
+- Config editor: a scope breadcrumb in section headers (for example "Data Corner > notifications"), threaded through nesting, map entries and array items, with depth-based header weight.
+- Config editor: per-section "Edit as JSON" toggle that flips a single subtree to raw JSON and back.
+- Mods tab: disable/enable a mod without uninstalling it.
+- Backups tab: permanently delete an archive from the dashboard.
+- Leaderboard posting can now be anchored to a specific weekday and time (`postTime` "HH:MM" + `postDay` "SU".
+- Analytics tab: a 24h/3d/7d/14d time-range picker for the activity chart and command-usage table (capped at 14 days — `player_count_hours`' retention ceiling).
+- Downtime monitoring now detects a systemd crash loop (the server restarting repeatedly and failing to stay up) and alerts immediately, instead of potentially never crossing the normal 3-consecutive-failures threshold because the server can be briefly "up" between restarts.
+- Player avatars in embeds and chat-bridge webhooks now resolve by UUID (cached from the whitelist/usercache lookups the bot already does) instead of by raw username, fixing the common case where a renamed account or a Bedrock/Geyser name silently fell back to the default Steve/Alex skin.
 
 ### Changed
 
-- Config editor help text is now an info icon per field (`FieldHint`), shown on
-  hover and pinned on click, instead of inline text. It no longer repeats the
-  same paragraph across fields or truncates mid-sentence.
-- Config editor: object-valued map entries (guilds) fold their name into the
-  section header instead of printing it twice.
-- Mods tab: the installed-mods card now matches the height of the
-  "Add from Modrinth" card instead of shrinking to fit its own content.
-- Dashboard: adding a new tab/view is now a two-edit change in `App.vue`
-  (one `nav` array entry) instead of four separate edits across the file.
-- Overview and Servers tabs share one alert-detection module
-  (`utils/serverAlerts.ts`) instead of Overview having the only copy of the
-  wrapper-down/offline/low-TPS/disk-full logic — low TPS and disk-full alerts
-  now also show on each server's own card, not just the fleet summary.
-  
+- Config editor help text is now an info icon per field (`FieldHint`), shown on hover and pinned on click, instead of inline text.
+- Config editor: object-valued map entries (guilds) fold their name into the section header instead of printing it twice.
+- Mods tab: the installed-mods card now matches the height of the "Add from Modrinth" card instead of shrinking to fit its own content.
+- Dashboard: adding a new tab/view is now a two-edit change in `App.
+- Overview and Servers tabs share one alert-detection module (`utils/serverAlerts.
+
 ## [6.0.0] — 2026-08-16
 
 ### Added
