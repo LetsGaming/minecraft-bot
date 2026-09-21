@@ -158,6 +158,25 @@ export function referenceKind(name: string): RefKind | null {
   return null;
 }
 
+/**
+ * Whether a field should actually render as a reference dropdown, combining
+ * the name-based signal above with the field's real schema kind.
+ *
+ * `referenceKind` matches by name alone, but a `Record<string, X>` map entry
+ * (MapEntry.vue) passes its own key down as `name` — so a server literally
+ * named "server" has an entry whose name is "server", identical to the
+ * `ServerScope` field the heuristic exists for. Without this guard, that
+ * entry's object value (apiUrl/apiKey/…) would be hijacked into a scalar
+ * Select, and picking an option there would overwrite the whole `servers` map
+ * with `{ [id]: id }`. A genuine reference field is always scalar-shaped
+ * (`string` or `chips`, from the `ServerScope = string | string[]` union or a
+ * plain `*ChannelId`/`*Role` string) — never `object`/`map`/`array`.
+ */
+export function isReferenceField(name: string, kind: FieldKind): RefKind | null {
+  if (kind !== "string" && kind !== "chips") return null;
+  return referenceKind(name);
+}
+
 // ── Section state (P1: collapse-by-default section headers) ─────────────────
 //
 // A nested object renders as a collapsible section whose header carries a

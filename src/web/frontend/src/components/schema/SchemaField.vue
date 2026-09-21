@@ -233,12 +233,14 @@ import {
   derefNode,
   classifyField,
   referenceKind,
+  isReferenceField,
   arrayEnumOptions as arrayEnumOptionsFor,
   sectionState as computeSectionState,
   humanizeKey,
   type SectionState,
   type JsonSchemaNode,
   type Definitions,
+  type FieldKind,
 } from "./schemaField.js";
 import { isFeatureNew } from "../../composables/useSeenFeatures.js";
 import {
@@ -348,7 +350,7 @@ export default defineComponent({
     // shape: a string is a single Select; a list (ServerScope, allowedServers,
     // classified "chips") is a MultiSelect. No options → null → text fallback.
     refControl(): { multi: boolean; options: RefOption[] } | null {
-      const rk = referenceKind(this.name);
+      const rk = isReferenceField(this.name, this.kind as FieldKind);
       if (!rk || !this.schemaRefs) return null;
       const refs = this.schemaRefs;
       const options =

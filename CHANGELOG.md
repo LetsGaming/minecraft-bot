@@ -6,6 +6,10 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Config editor: a Minecraft server configured with the id `server` (or any guild-scope field literally matching a reference-dropdown name) had its dropdown hijacked into a plain Select, and picking an option there overwrote the entire `servers` map with `{"server": "server"}`. The reference-dropdown heuristic matched by field name alone, and a `servers` map entry's own key is passed down as that name; it's now also gated on the field actually being scalar-shaped (`src/web/frontend/src/components/schema/SchemaField.vue`, `schemaField.ts`'s new `isReferenceField`).
+
 ## [6.1.0] — 2026-09-21
 
 ### Added

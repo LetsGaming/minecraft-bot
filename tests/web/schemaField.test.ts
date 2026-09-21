@@ -11,6 +11,7 @@ import {
   mapValueSchema,
   arrayItemSchema,
   referenceKind,
+  isReferenceField,
 } from "../../src/web/frontend/src/components/schema/schemaField.js";
 
 // A slice of the generated schema's definitions.
@@ -154,5 +155,23 @@ describe("referenceKind", () => {
     expect(referenceKind("adminUsers")).toBeNull(); // users AND roles
     expect(referenceKind("serverDir")).toBeNull(); // a path, not a ref
     expect(referenceKind("enabled")).toBeNull();
+  });
+});
+
+describe("isReferenceField", () => {
+  it("matches a genuine ServerScope-shaped field", () => {
+    expect(isReferenceField("server", "string")).toBe("server");
+    expect(isReferenceField("defaultServer", "string")).toBe("server");
+    expect(isReferenceField("allowedServers", "chips")).toBe("server");
+  });
+
+  it("rejects a name match whose schema is an object — the servers map entry bug", () => {
+    // A `servers` map entry named "server" (MapEntry.vue passes the entry's
+    // own key as `name`) must render as its object editor, not get hijacked
+    // into a reference Select that overwrites the whole map with {server:
+    // "server"} on selection.
+    expect(isReferenceField("server", "object")).toBeNull();
+    expect(isReferenceField("server", "map")).toBeNull();
+    expect(isReferenceField("server", "array")).toBeNull();
   });
 });
