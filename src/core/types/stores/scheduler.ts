@@ -40,6 +40,14 @@ export interface DowntimeState {
   consecutiveUnreachable: number;
   /** An "API wrapper unreachable" alert is currently outstanding. */
   wrapperAlerted: boolean;
+  /**
+   * A "crash loop detected" alert is currently outstanding — mirrors
+   * `health.unitFailed` (systemd gave up restarting the unit), checked every
+   * tick regardless of `consecutiveFailures`. A crash loop can be briefly up
+   * between restarts and never accumulate enough consecutive offline samples
+   * to reach FAILURES_BEFORE_ALERT, so it needs its own, unthrottled signal.
+   */
+  crashLoopAlerted: boolean;
   suppressUntil: number;
   lastKnownState: ServerState | null;
 }

@@ -35,6 +35,7 @@ editor lists them in.
 | `backup:download` | downloading an archive |
 | `config:write` | editing mod config files |
 | `backup:restore` | restoring the world from an archive |
+| `backup:delete` | permanently deleting an archive |
 | `server:rollback` | rolling the world back |
 
 Two are easy to get wrong:

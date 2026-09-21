@@ -53,7 +53,10 @@ vi.mock("../../src/core/utils/minecraft/snapshotUtils.js", () => ({
 
 const TICK = 60 * 60_000 + 1; // just past 1-hour CHECK_INTERVAL_MS
 
-import { startLeaderboardScheduler } from "../../src/bot/logWatcher/watchers/schedulers/leaderboardScheduler.js";
+import {
+  startLeaderboardScheduler,
+  nextLeaderboardRun,
+} from "../../src/bot/logWatcher/watchers/schedulers/leaderboardScheduler.js";
 import { kvGet, kvSet } from "../../src/core/db/kv.js";
 import { closeDbForTesting } from "../../src/core/db/index.js";
 import * as jsonStore from "../../src/core/utils/jsonStore.js";
@@ -228,6 +231,96 @@ it("saves the schedule timestamp even when buildLeaderboard throws", async () =>
     g1: expect.any(Number),
   });
   cleanup(r);
+});
+
+// ── nextLeaderboardRun — pure function, weekday/time anchoring ─────────────
+
+describe("nextLeaderboardRun", () => {
+  const TZ = "Europe/Berlin";
+
+  it("returns null for a malformed postTime", () => {
+    expect(nextLeaderboardRun("daily", "9am", undefined, TZ, Date.now())).toBeNull();
+  });
+
+  it("daily: the next occurrence of HH:MM, ignoring postDay", () => {
+    // Monday 2026-01-05 10:00 Berlin time.
+    const from = Date.UTC(2026, 0, 5, 9, 0, 0); // 10:00 CET (UTC+1)
+    const due = nextLeaderboardRun("daily", "12:00", undefined, TZ, from);
+    expect(due).not.toBeNull();
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: TZ, hour: "2-digit", minute: "2-digit", hour12: false, weekday: "short",
+    }).formatToParts(new Date(due!));
+    const get = (t: string) => parts.find((p) => p.type === t)?.value;
+    expect(get("hour")).toBe("12");
+    expect(get("minute")).toBe("00");
+  });
+
+  it("weekly: lands on the configured weekday, not just the next HH:MM", () => {
+    // Monday 2026-01-05, asking for Friday ("FR") at 09:00.
+    const from = Date.UTC(2026, 0, 5, 8, 0, 0); // 09:00 CET
+    const due = nextLeaderboardRun("weekly", "09:00", "FR", TZ, from);
+    expect(due).not.toBeNull();
+    const weekday = new Intl.DateTimeFormat("en-US", { timeZone: TZ, weekday: "short" })
+      .format(new Date(due!));
+    expect(weekday).toBe("Fri");
+  });
+
+  it("weekly: defaults to Monday when postDay is unset", () => {
+    const from = Date.UTC(2026, 0, 5, 8, 0, 0); // Monday 09:00 CET
+    const due = nextLeaderboardRun("weekly", "09:00", undefined, TZ, from);
+    const weekday = new Intl.DateTimeFormat("en-US", { timeZone: TZ, weekday: "short" })
+      .format(new Date(due!));
+    expect(weekday).toBe("Mon");
+  });
+
+  it("monthly: lands on the 1st of a month", () => {
+    const from = Date.UTC(2026, 0, 15, 8, 0, 0); // mid-January
+    const due = nextLeaderboardRun("monthly", "09:00", undefined, TZ, from);
+    expect(due).not.toBeNull();
+    const day = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, day: "2-digit" })
+      .format(new Date(due!));
+    expect(day).toBe("01");
+  });
+
+  it("holds across a DST transition (Europe/Berlin, spring forward)", () => {
+    // 2026-03-29 is Berlin's DST transition (CET→CEST). Ask for 09:00 daily
+    // from just before it and confirm the result still reads 09:00 local.
+    const from = Date.UTC(2026, 2, 28, 8, 0, 0);
+    const due = nextLeaderboardRun("daily", "09:00", undefined, TZ, from);
+    const hour = new Intl.DateTimeFormat("en-US", { timeZone: TZ, hour: "2-digit", hour12: false })
+      .format(new Date(due!));
+    expect(hour).toBe("09");
+  });
+});
+
+// ── postTime/postDay integration through checkAndPost ──────────────────────
+
+describe("checkAndPost — anchored scheduling", () => {
+  it("does not post before the anchored time arrives", async () => {
+    const send = vi.fn();
+    // Anchor far in the future so no tick within this test reaches it.
+    const future = new Date(Date.now() + 365 * 24 * 60 * 60_000);
+    const hh = String(future.getUTCHours()).padStart(2, "0");
+    const mm = String(future.getUTCMinutes()).padStart(2, "0");
+    const r = startLeaderboardScheduler(fakeClient(send), {
+      g1: { leaderboard: { channelId: "ch1", postTime: `${hh}:${mm}` } },
+    } as never);
+    await vi.advanceTimersByTimeAsync(TICK);
+    expect(send).not.toHaveBeenCalled();
+    cleanup(r);
+  });
+
+  it("falls back to interval scheduling and warns on an invalid postTime", async () => {
+    const r = startLeaderboardScheduler(fakeClient(), {
+      g1: { leaderboard: { channelId: "ch1", postTime: "not-a-time" } },
+    } as never);
+    await vi.advanceTimersByTimeAsync(TICK);
+    expect(vi.mocked(log.warn)).toHaveBeenCalledWith(
+      "leaderboard",
+      expect.stringContaining("invalid postTime"),
+    );
+    cleanup(r);
+  });
 });
 
 // ── no guilds configured ──────────────────────────────────────────────────

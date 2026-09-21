@@ -71,6 +71,14 @@
               <i class="pi pi-link" /> {{ wrapperNote(server) }}
             </div>
 
+            <!-- Low TPS / disk-full alerts — the same checks Overview's fleet
+                 list uses, now visible on the server's own card too. Wrapper-
+                 down and offline/unknown/unresponsive are excluded here
+                 (cardAlerts) since wrapperNote/stateExplanation above already
+                 cover them for this view; showing both would duplicate the
+                 same fact in two different wordings. -->
+            <AlertList :alerts="cardAlerts(server)" compact />
+
             <div v-if="server.players?.names.length" class="names">
               <span v-if="server.players.sampled" class="muted small names-note">
                 Sample of players online (the server publishes a partial list):
@@ -194,6 +202,7 @@ import {
 import { ServerState, stateIsUp } from "@mcbot/schema/serverState.js";
 import { relativeAge, timestampTitle } from "../utils/time";
 import { apiGet, apiSend } from "../api";
+import { serverAlerts, type Alert } from "../utils/serverAlerts";
 
 interface PendingIntent {
   action: ServerOperatorAction;
@@ -209,12 +218,13 @@ import { useCapabilities } from "../composables/useCapabilities";
 import ViewHeader from "../components/ui/ViewHeader.vue";
 import StatusDot from "../components/ui/StatusDot.vue";
 import EmptyState from "../components/ui/EmptyState.vue";
+import AlertList from "../components/ui/AlertList.vue";
 
 const REFRESH_MS = 15_000;
 
 export default defineComponent({
   name: "StatusView",
-  components: { Card, Button, Tag, ViewHeader, StatusDot, EmptyState },
+  components: { Card, Button, Tag, ViewHeader, StatusDot, EmptyState, AlertList },
   props: {
     activeServer: { type: String, default: "" },
   },
@@ -286,6 +296,17 @@ export default defineComponent({
   methods: {
     intentsFor(serverId: string): PendingIntent[] {
       return this.pendingIntents[serverId] ?? [];
+    },
+    /**
+     * `serverAlerts` minus the wrapper-down / offline / unknown / unresponsive
+     * cases — those are already this view's own `wrapperNote` +
+     * `stateExplanation` lines, in wording tailored to this card. Only the
+     * checks this view didn't already have (low TPS, disk-full) are new here.
+     */
+    cardAlerts(server: ServerStatus): Alert[] {
+      return serverAlerts(server).filter(
+        (a) => a.icon === "pi pi-gauge" || a.icon === "pi pi-database",
+      );
     },
     /**
      * Poll alongside status. Intents expire server-side, so a stale list here

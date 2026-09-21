@@ -125,49 +125,24 @@
           </template>
         </EmptyState>
 
-        <!-- Each view is gated by the same predicate as its tab, so the two
-             can never disagree. -->
+        <!-- Each view is gated by the same predicate as its tab (visibleNav
+             drives both), so the two can never disagree. `keepMounted` views
+             (just Status) stay mounted so their poll never restarts — every
+             other view still mounts on demand, exactly as before this was a
+             loop rather than eleven hand-written branches. -->
         <template v-else>
-          <OverviewView v-if="activeTab === 'overview' && shows('overview')" @navigate="activeTab = $event" />
-          <StatusView
-            v-if="shows('status')"
-            v-show="activeTab === 'status'"
-            :active-server="activeServer"
-            @bot-state="botDown = !$event"
-            @servers="onServers"
-          />
-          <ConsoleView
-            v-if="activeTab === 'console' && shows('console')"
-            :server-ids="servers.map((s) => s.id)"
-            :active-server="activeServer"
-          />
-          <BackupsView
-            v-if="activeTab === 'backups' && shows('backups')"
-            :server-ids="servers.map((s) => s.id)"
-            :active-server="activeServer"
-          />
-          <ModsView
-            v-if="activeTab === 'mods' && shows('mods')"
-            :active-server="activeServer"
-          />
-          <ModConfigView
-            v-if="activeTab === 'modconfig' && shows('modconfig')"
-            :server-ids="servers.map((s) => s.id)"
-            :active-server="activeServer"
-          />
-          <GuildsView
-            v-if="activeTab === 'guilds' && shows('guilds')"
-            :sysadmin="isSysadmin"
-            @goto-config="activeTab = 'config'"
-          />
-          <AnalyticsView
-            v-if="activeTab === 'analytics' && shows('analytics')"
-            :server-ids="servers.map((s) => s.id)"
-            :active-server="activeServer"
-          />
-          <CommandsView v-if="activeTab === 'commands' && shows('commands')" />
-          <ConfigView v-if="activeTab === 'config' && shows('config')" />
-          <AuditView v-if="activeTab === 'audit' && shows('audit')" />
+          <template v-for="item in visibleNav" :key="item.id">
+            <component
+              v-if="item.keepMounted || activeTab === item.id"
+              :is="item.component"
+              v-show="activeTab === item.id"
+              v-bind="viewProps(item)"
+              @navigate="activeTab = $event"
+              @goto-config="activeTab = 'config'"
+              @bot-state="botDown = !$event"
+              @servers="onServers"
+            />
+          </template>
         </template>
         </div>
       </main>
@@ -179,7 +154,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent } from "vue";
+import { defineComponent, markRaw, type Component } from "vue";
 import Button from "primevue/button";
 import Message from "primevue/message";
 import Toast from "primevue/toast";
@@ -204,21 +179,30 @@ import ConfigView from "./views/ConfigView.vue";
 import AuditView from "./views/AuditView.vue";
 import AnalyticsView from "./views/AnalyticsView.vue";
 
-/** A sidebar entry and the condition for showing it. */
+/** Props a view can receive, picked off one shared context per tab. */
+interface AppViewContext {
+  serverIds: string[];
+  activeServer: string;
+  sysadmin: boolean;
+}
+
+/** A sidebar entry, the condition for showing it, and the view it renders. */
 interface NavItem {
   id: string;
   label: string;
   icon: string;
   gate: GrantableCapability | "sysadmin" | "guild";
+  component: Component;
+  /** Which keys of AppViewContext this view takes as props. */
+  props?: Array<keyof AppViewContext>;
+  /** Stays mounted while another tab is active — only Status needs this: it
+   *  owns the poll that feeds the server switcher and the bot-down banner. */
+  keepMounted?: boolean;
 }
 
 export default defineComponent({
   name: "App",
-  components: {
-    Button, Message, Toast, ConfirmDialog, StatusDot, EmptyState,
-    OverviewView, StatusView, ConsoleView, BackupsView, ModsView, ModConfigView, GuildsView,
-    CommandsView, ConfigView, AuditView, AnalyticsView,
-  },
+  components: { Button, Message, Toast, ConfirmDialog, StatusDot, EmptyState },
   setup() {
     return { ...useInvite(), ...useCapabilities(), statusDot, stateIsUp };
   },
@@ -238,17 +222,28 @@ export default defineComponent({
       // granted, by design) and "guild" for the Discord-side tab, which has
       // nothing to do with host access.
       nav: [
-        { id: "overview", label: "Overview", icon: "pi pi-th-large", gate: "server:read" },
-        { id: "status", label: "Servers", icon: "pi pi-server", gate: "server:read" },
-        { id: "guilds", label: "Guilds", icon: "pi pi-discord", gate: "guild" },
-        { id: "console", label: "Console", icon: "pi pi-desktop", gate: "server:read" },
-        { id: "analytics", label: "Analytics", icon: "pi pi-chart-bar", gate: "server:read" },
-        { id: "commands", label: "Commands", icon: "pi pi-bolt", gate: "sysadmin" },
-        { id: "backups", label: "Backups", icon: "pi pi-box", gate: "server:read" },
-        { id: "mods", label: "Mods", icon: "pi pi-download", gate: "mods:read" },
-        { id: "modconfig", label: "Mod Config", icon: "pi pi-sliders-h", gate: "config:read" },
-        { id: "config", label: "Config", icon: "pi pi-sliders-h", gate: "sysadmin" },
-        { id: "audit", label: "Audit Log", icon: "pi pi-history", gate: "audit:read" },
+        { id: "overview", label: "Overview", icon: "pi pi-th-large", gate: "server:read",
+          component: markRaw(OverviewView) },
+        { id: "status", label: "Servers", icon: "pi pi-server", gate: "server:read",
+          component: markRaw(StatusView), props: ["activeServer"], keepMounted: true },
+        { id: "guilds", label: "Guilds", icon: "pi pi-discord", gate: "guild",
+          component: markRaw(GuildsView), props: ["sysadmin"] },
+        { id: "console", label: "Console", icon: "pi pi-desktop", gate: "server:read",
+          component: markRaw(ConsoleView), props: ["serverIds", "activeServer"] },
+        { id: "analytics", label: "Analytics", icon: "pi pi-chart-bar", gate: "server:read",
+          component: markRaw(AnalyticsView), props: ["serverIds", "activeServer"] },
+        { id: "commands", label: "Commands", icon: "pi pi-bolt", gate: "sysadmin",
+          component: markRaw(CommandsView) },
+        { id: "backups", label: "Backups", icon: "pi pi-box", gate: "server:read",
+          component: markRaw(BackupsView), props: ["serverIds", "activeServer"] },
+        { id: "mods", label: "Mods", icon: "pi pi-download", gate: "mods:read",
+          component: markRaw(ModsView), props: ["activeServer"] },
+        { id: "modconfig", label: "Mod Config", icon: "pi pi-sliders-h", gate: "config:read",
+          component: markRaw(ModConfigView), props: ["serverIds", "activeServer"] },
+        { id: "config", label: "Config", icon: "pi pi-sliders-h", gate: "sysadmin",
+          component: markRaw(ConfigView) },
+        { id: "audit", label: "Audit Log", icon: "pi pi-history", gate: "audit:read",
+          component: markRaw(AuditView) },
       ] as NavItem[],
     };
   },
@@ -263,6 +258,14 @@ export default defineComponent({
      *  tabs that all 403. */
     hasNothing(): boolean {
       return this.visibleNav.length === 0;
+    },
+    /** The one source every view's props are picked from — see viewProps. */
+    viewContext(): AppViewContext {
+      return {
+        serverIds: this.servers.map((s) => s.id),
+        activeServer: this.activeServer,
+        sysadmin: this.isSysadmin,
+      };
     },
   },
   async mounted() {
@@ -325,6 +328,13 @@ export default defineComponent({
       if (!this.activeServer && servers.length) {
         this.activeServer = servers[0].id;
       }
+    },
+    /** This view's declared props, picked off the shared viewContext. */
+    viewProps(item: NavItem): Partial<AppViewContext> {
+      const ctx = this.viewContext;
+      const out: Partial<AppViewContext> = {};
+      for (const key of item.props ?? []) out[key] = ctx[key] as never;
+      return out;
     },
   },
 });

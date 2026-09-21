@@ -174,6 +174,11 @@ export function localDayOfWeek(epochMs: number, tz: string = UTC): number {
   return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(name);
 }
 
+/** Day of the month (1-31) in `tz` for an epoch. */
+export function localDayOfMonth(epochMs: number, tz: string = UTC): number {
+  return localDateParts(epochMs, tz)[2];
+}
+
 /** Hour of day (0–23) in `tz` for an epoch. */
 export function localHourOfDay(epochMs: number, tz: string = UTC): number {
   return Number(

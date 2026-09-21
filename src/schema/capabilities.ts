@@ -22,7 +22,7 @@
  *   read        server:read, audit:read
  *   reversible  server:control, backup:create, config:read
  *   sensitive   server:console, backup:download, config:write
- *   irreversible backup:restore, server:rollback
+ *   irreversible backup:restore, backup:delete, server:rollback
  *
  * `server:console` sits above `server:control` on purpose. One console command
  * can op an account, ban a player or run a worldedit operation; a restart
@@ -40,6 +40,7 @@ export const GRANTABLE_CAPABILITIES = [
   "mods:read",
   "mods:write",
   "backup:restore",
+  "backup:delete",
   "server:rollback",
 ] as const;
 
@@ -68,6 +69,7 @@ export type GrantableCapability = (typeof GRANTABLE_CAPABILITIES)[number];
  */
 export const IRREVERSIBLE_CAPABILITIES = [
   "backup:restore",
+  "backup:delete",
   "server:rollback",
 ] as const satisfies readonly Capability[];
 

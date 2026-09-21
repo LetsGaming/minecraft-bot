@@ -22,6 +22,7 @@ export function useBackups() {
   const cursor = ref<string | null>(null);
   const loading = ref(false);
   const restoring = ref("");
+  const deleting = ref("");
   const error = ref("");
   let serverId = "";
 
@@ -95,17 +96,47 @@ export function useBackups() {
     }
   }
 
+  /**
+   * Permanently delete an archive.
+   *
+   * Drops the row locally so it's gone immediately, then re-loads: the
+   * backend's own readThrough cache is invalidated on delete, but the
+   * cursor/total this composable holds still need a fresh first page.
+   */
+  async function remove(file: BackupFileInfo): Promise<boolean> {
+    deleting.value = file.id;
+    error.value = "";
+    try {
+      await apiSend<{ ok: boolean }>(
+        "DELETE",
+        `/api/servers/${encodeURIComponent(serverId)}` +
+          `/backups/files/${encodeURIComponent(file.id)}`,
+      );
+      files.value = files.value.filter((f) => f.id !== file.id);
+      total.value = Math.max(0, total.value - 1);
+      void load(serverId);
+      return true;
+    } catch (err) {
+      error.value = errorMessage(err);
+      return false;
+    } finally {
+      deleting.value = "";
+    }
+  }
+
   return {
     files,
     total,
     stale,
     loading,
     restoring,
+    deleting,
     error,
     hasMore,
     load,
     loadMore,
     download,
     restore,
+    remove,
   };
 }

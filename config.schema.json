@@ -62,6 +62,14 @@
         "leaderboardInterval": {
           "$ref": "#/definitions/LeaderboardInterval"
         },
+        "leaderboardPostTime": {
+          "type": "string",
+          "description": "Global default for GuildLeaderboardConfig.postTime — a guild-level postTime wins when set. Unset on both keeps the legacy drift-based scheduling (no anchor)."
+        },
+        "leaderboardPostDay": {
+          "type": "string",
+          "description": "Global default for GuildLeaderboardConfig.postDay."
+        },
         "presence": {
           "$ref": "#/definitions/PresenceConfig"
         },
@@ -370,6 +378,14 @@
             "type": "string"
           },
           "description": "Which categories the scheduled post includes (one embed per entry). Any LEADERBOARD_STATS key plus \"streak\" / \"longest_streak\"; default [\"playtime\", \"mined\"] — the pre-configurable behaviour."
+        },
+        "postTime": {
+          "type": "string",
+          "description": "Wall-clock anchor, \"HH:MM\" in the guild's timezone (see core/utils/config/timezones.ts's guildTimeZone). Unset here AND on the global default keeps the legacy behaviour: post whenever a full interval has elapsed since the last post, with no fixed time or day."
+        },
+        "postDay": {
+          "type": "string",
+          "description": "Which weekday a *weekly* board posts on — \"SU\"..\"SA\". Ignored for \"daily\" (every day) and \"monthly\" (always the 1st of the month). Defaults to \"MO\" when postTime is set but this isn't."
         }
       },
       "additionalProperties": false
@@ -703,6 +719,7 @@
         "mods:read",
         "mods:write",
         "backup:restore",
+        "backup:delete",
         "server:rollback"
       ]
     },

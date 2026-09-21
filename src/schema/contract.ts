@@ -137,6 +137,8 @@ export interface ServerStatus {
     restore: boolean;
     /** The wrapper serves the archive index and download (>= 3.3.0). */
     backupFiles: boolean;
+    /** The wrapper can delete an archive (backup-files feature v2). */
+    backupDelete: boolean;
   } | null;
   host: {
     /** The Minecraft process. cpuPercent is sampled and can exceed 100. */

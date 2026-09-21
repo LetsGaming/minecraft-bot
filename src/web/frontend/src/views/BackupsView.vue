@@ -92,8 +92,19 @@
                 severity="danger"
                 text
                 :loading="restoring === file.id"
-                :disabled="restoring !== ''"
+                :disabled="restoring !== '' || deleting !== ''"
                 @click="confirmRestore(file)"
+              />
+              <Button
+                v-if="can('backup:delete', current)"
+                icon="pi pi-trash"
+                label="Delete"
+                size="small"
+                severity="danger"
+                text
+                :loading="deleting === file.id"
+                :disabled="restoring !== '' || deleting !== ''"
+                @click="confirmDelete(file)"
               />
             </td>
           </tr>
@@ -213,6 +224,34 @@ export default defineComponent({
       this.toast.add({
         severity: ok ? "success" : "error",
         summary: ok ? `Restored · ${this.current}` : "Restore failed",
+        detail: ok ? file.name : this.error,
+        life: ok ? 4000 : 6000,
+      });
+    },
+    /**
+     * Delete asks for the server's name, typed — same rule and same reason
+     * as restore: permanent, and an OK button is a reflex worth interrupting.
+     */
+    async confirmDelete(file: BackupFileInfo): Promise<void> {
+      const typed = window.prompt(
+        `This will permanently delete ${file.name} from "${this.current}".\n` +
+          `This cannot be undone.\n\n` +
+          `Type the server name to confirm:`,
+      );
+      if (typed === null) return;
+      if (typed.trim() !== this.current) {
+        this.toast.add({
+          severity: "warn",
+          summary: "Delete cancelled",
+          detail: "The name did not match.",
+          life: 3000,
+        });
+        return;
+      }
+      const ok = await this.remove(file);
+      this.toast.add({
+        severity: ok ? "success" : "error",
+        summary: ok ? `Deleted · ${this.current}` : "Delete failed",
         detail: ok ? file.name : this.error,
         life: ok ? 4000 : 6000,
       });

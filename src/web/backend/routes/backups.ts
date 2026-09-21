@@ -1,5 +1,5 @@
 /**
- * DSH-03/DSH-04 — the backup panel's server side: list, download, restore.
+ * DSH-03/DSH-04 — the backup panel's server side: list, download, restore, delete.
  *
  * Every one of these proxies the wrapper. That is not indirection for its own
  * sake: the wrapper's API key authenticates the request and must never reach a
@@ -8,9 +8,9 @@
  * whole design of the download route below is about paying that cost in
  * constant memory rather than in a heap the size of the world.
  *
- * Three capabilities, not one, because these differ by more than degree:
- * listing is metadata, downloading takes the entire world off the host, and
- * restoring destroys the current one.
+ * Four capabilities, not one, because these differ by more than degree:
+ * listing is metadata, downloading takes the entire world off the host,
+ * restoring destroys the current one, and deleting is permanent.
  */
 import { Readable } from "stream";
 import type { FastifyInstance, FastifyReply } from "fastify";
@@ -20,10 +20,11 @@ import {
   indexBackupFiles,
   openBackupDownload,
   restoreBackupFile,
+  deleteBackupFile,
 } from "@mcbot/core/utils/server/serverAccess.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { log } from "@mcbot/core/utils/logger.js";
-import { readThrough } from "@mcbot/core/utils/wrapper/lastKnown.js";
+import { readThrough, forget } from "@mcbot/core/utils/wrapper/lastKnown.js";
 import { recordIntent } from "@mcbot/core/utils/wrapper/deferredIntents.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 import { sessionFromRequest } from "../auth/auth.js";
@@ -190,6 +191,45 @@ export function registerBackupRoutes(app: FastifyInstance): void {
           reason: errMsg(err),
         });
         log.error("web", `Restore on ${req.params.id} failed: ${errMsg(err)}`);
+        throw new HttpError(502, OPERATION_FAILED);
+      }
+    },
+  );
+
+  api.delete(
+    "/api/servers/:id/backups/files/:fileId",
+    {
+      schema: { params: BackupFileParams },
+      config: { capability: "backup:delete", scope: "server", param: "id" },
+    },
+    async (req) => {
+      const server = requireServer(req.params.id);
+      const fileId = requireFileId(req.params.fileId);
+
+      const session = sessionFromRequest(req)!;
+      // Recorded before it runs, same as restore — what was attempted is
+      // the fact someone will come looking for.
+      await recordAdminAction({
+        action: "backup delete (dashboard)",
+        server: req.params.id,
+        by: session.tag,
+        byId: session.uid,
+        detail: fileId,
+      });
+
+      try {
+        const result = await deleteBackupFile(server.config, fileId);
+        if (!result.ok) throw new NotFound("Backup not found.");
+        forget(req.params.id, "backupIndex");
+        return { ok: true, name: result.name ?? null };
+      } catch (err) {
+        if (err instanceof NotFound) throw err;
+        // Deliberately NOT recordIntent(), unlike restore above. A replayed
+        // restore just re-applies an old backup; a replayed delete could
+        // destroy an archive after rotation has already removed the ones
+        // around it — the deferred version is strictly worse than the
+        // failure it would be standing in for.
+        log.error("web", `Backup delete on ${req.params.id} failed: ${errMsg(err)}`);
         throw new HttpError(502, OPERATION_FAILED);
       }
     },

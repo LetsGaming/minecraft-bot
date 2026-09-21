@@ -54,7 +54,11 @@ const uid = () => `srv-${++_idSeq}`;
  * A health value. `wrapper` is a second, independent axis — that separation is
  * the thing under test, so it has to be settable on its own.
  */
-function health(state: string, wrapper = "up") {
+function health(
+  state: string,
+  wrapper = "up",
+  crashLoop?: { restartCount: number; unitFailed: boolean },
+) {
   return {
     state,
     source: wrapper === "up" ? "wrapper" : state === "unknown" ? "none" : "ping",
@@ -68,6 +72,8 @@ function health(state: string, wrapper = "up") {
         : null,
     reason: wrapper === "unreachable" ? "ECONNREFUSED" : null,
     checkedAt: Date.now(),
+    restartCount: crashLoop?.restartCount ?? 0,
+    unitFailed: crashLoop?.unitFailed ?? false,
   };
 }
 
@@ -374,6 +380,88 @@ describe("startDowntimeMonitor — the server is loaded but running", () => {
     );
     await vi.advanceTimersByTimeAsync(TICK);
     expect(vi.mocked(recordCheck)).toHaveBeenCalledWith(id, true);
+    clearInterval(timer);
+  });
+});
+
+// ── crash loop — the blind spot: briefly-up-between-restarts must not hide it ──
+
+describe("startDowntimeMonitor — systemd crash loop", () => {
+  it("alerts immediately on unitFailed, without waiting for 3 consecutive failures", async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    const timer = startDowntimeMonitor(
+      [fakeServer(uid(), health("offline", "up", { restartCount: 7, unitFailed: true }))],
+      fakeClient(send),
+      guildsFor(),
+    );
+    await vi.advanceTimersByTimeAsync(TICK); // just 1 tick — not 3
+    expect(send).toHaveBeenCalledTimes(1);
+    clearInterval(timer);
+  });
+
+  it("does not repeat the crash-loop alert while still failed (only the independent 3-strikes downtime alert joins it once)", async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    const timer = startDowntimeMonitor(
+      [fakeServer(uid(), health("offline", "up", { restartCount: 5, unitFailed: true }))],
+      fakeClient(send),
+      guildsFor(),
+    );
+    // Tick 1: crash-loop alert. Tick 3: the ordinary offline-3-strikes alert
+    // joins it (state genuinely is offline for all 5 ticks) — two distinct,
+    // both-correct alerts, neither repeating after that.
+    for (let i = 0; i < 5; i++) await vi.advanceTimersByTimeAsync(TICK);
+    expect(send).toHaveBeenCalledTimes(2);
+    clearInterval(timer);
+  });
+
+  it("catches a loop that looks briefly online on the exact poll instant", async () => {
+    // The scenario this feature exists for: consecutiveFailures never reaches
+    // 3 because the server is "online" whenever this tick happens to land,
+    // but systemd already knows it has given up.
+    const send = vi.fn().mockResolvedValue(undefined);
+    const id = uid();
+    const srv = {
+      id,
+      getHealth: vi
+        .fn()
+        .mockResolvedValue(health("online", "up", { restartCount: 12, unitFailed: true })),
+    } as never;
+    const timer = startDowntimeMonitor([srv], fakeClient(send), guildsFor());
+    await vi.advanceTimersByTimeAsync(TICK);
+    expect(send).toHaveBeenCalledTimes(1);
+    clearInterval(timer);
+  });
+
+  it("sends a recovery notice once unitFailed clears", async () => {
+    const id = uid();
+    const send = vi.fn().mockResolvedValue(undefined);
+    const srv = {
+      id,
+      getHealth: vi
+        .fn()
+        .mockResolvedValue(health("offline", "up", { restartCount: 5, unitFailed: true })),
+    } as unknown as { getHealth: ReturnType<typeof vi.fn> };
+    const timer = startDowntimeMonitor([srv as never], fakeClient(send), guildsFor());
+    await vi.advanceTimersByTimeAsync(TICK);
+    expect(send).toHaveBeenCalledTimes(1); // crash-loop alert
+
+    srv.getHealth.mockResolvedValue(health("online", "up"));
+    await vi.advanceTimersByTimeAsync(TICK);
+    expect(send).toHaveBeenCalledTimes(2); // crash-loop recovery notice
+    clearInterval(timer);
+  });
+
+  it("suppressAlerts() also silences a crash-loop alert during the grace period", async () => {
+    const id = uid();
+    const send = vi.fn();
+    const timer = startDowntimeMonitor(
+      [fakeServer(id, health("offline", "up", { restartCount: 3, unitFailed: true }))],
+      fakeClient(send),
+      guildsFor(),
+    );
+    suppressAlerts(id);
+    for (let i = 0; i < 3; i++) await vi.advanceTimersByTimeAsync(TICK);
+    expect(send).not.toHaveBeenCalled();
     clearInterval(timer);
   });
 });

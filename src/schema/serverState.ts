@@ -113,6 +113,17 @@ export interface ServerHealth {
   reason: string | null;
   /** When the probe ran, or when we gave up. */
   checkedAt: number;
+  /**
+   * systemd's restart count for this instance's unit, and whether it has
+   * given up (StartLimitBurst tripped — see create_service.sh in
+   * minecraft-server-setup). The only signal that tells a crash loop apart
+   * from a clean outage: both look identical to every other field here,
+   * since a looping server can be briefly up between restarts. Always 0 /
+   * false when the wrapper is pre-`server-health` v2, unreachable, or the
+   * server answered RCON (nothing to report).
+   */
+  restartCount: number;
+  unitFailed: boolean;
 }
 
 /**
@@ -206,5 +217,7 @@ export function unknownHealth(
     players: null,
     reason,
     checkedAt,
+    restartCount: 0,
+    unitFailed: false,
   };
 }

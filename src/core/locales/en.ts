@@ -205,6 +205,11 @@ export const en: Record<string, string> = {
     "The Minecraft server itself answered a direct ping and is **{state}** — players are unaffected, but server controls, the chat bridge and stats are down until the wrapper is back.",
   "downtime.apiDownServerUnknown":
     "The Minecraft server did not answer a direct ping either, so its state is **unknown** — it may or may not still be running.",
+  "downtime.crashLoopTitle": "🔁 Server Crash Loop",
+  "downtime.crashLoop":
+    "**{server}** has restarted {restarts} times and systemd has given up retrying — it will stay down until someone intervenes.\nCheck the logs for what's causing the crash (a broken mod is the usual suspect — try `/mods` disable on anything recently changed), then use **/server restart** to bring it back; that also clears systemd's failure state.",
+  "downtime.crashLoopRecoveredTitle": "✅ Crash Loop Cleared",
+  "downtime.crashLoopRecovered": "**{server}** is no longer in a crash loop.",
   "state.online": "Online",
   "state.unresponsive": "Not responding",
   "state.offline": "Offline",

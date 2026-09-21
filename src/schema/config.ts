@@ -200,6 +200,19 @@ export interface GuildLeaderboardConfig {
    * ["playtime", "mined"] — the pre-configurable behaviour.
    */
   categories?: string[];
+  /**
+   * Wall-clock anchor, "HH:MM" in the guild's timezone (see
+   * core/utils/config/timezones.ts's guildTimeZone). Unset here AND on the
+   * global default keeps the legacy behaviour: post whenever a full
+   * interval has elapsed since the last post, with no fixed time or day.
+   */
+  postTime?: string;
+  /**
+   * Which weekday a *weekly* board posts on — "SU".."SA". Ignored for
+   * "daily" (every day) and "monthly" (always the 1st of the month).
+   * Defaults to "MO" when postTime is set but this isn't.
+   */
+  postDay?: string;
 }
 
 /**
@@ -607,6 +620,14 @@ export interface RawBotConfig {
   /** @minimum 1000 */
   tpsPollIntervalMs?: number;
   leaderboardInterval?: LeaderboardInterval;
+  /**
+   * Global default for GuildLeaderboardConfig.postTime — a guild-level
+   * postTime wins when set. Unset on both keeps the legacy drift-based
+   * scheduling (no anchor).
+   */
+  leaderboardPostTime?: string;
+  /** Global default for GuildLeaderboardConfig.postDay. */
+  leaderboardPostDay?: string;
   presence?: PresenceConfig;
   deathCoords?: DeathCoordsConfig;
   hostAlerts?: HostAlertsConfig;
@@ -641,6 +662,10 @@ export interface BotConfig {
   tpsWarningThreshold: number;
   tpsPollIntervalMs: number;
   leaderboardInterval: LeaderboardInterval;
+  /** Optional on the RESOLVED config too — "absent everywhere" must
+   *  reproduce the pre-existing drift-based behaviour exactly. */
+  leaderboardPostTime?: string;
+  leaderboardPostDay?: string;
   presence?: PresenceConfig;
   deathCoords?: DeathCoordsConfig;
   hostAlerts?: HostAlertsConfig;

@@ -7,6 +7,7 @@ import type {
   ModAddResult,
   ModRemoveResult,
   ModApplyResult,
+  ModToggleResult,
   ModEnvironment,
 } from "../api";
 
@@ -81,6 +82,16 @@ export function useMods(serverId: () => string) {
     return apiSend<ModApplyResult>("POST", `${base()}/${enc(slug)}/update`, {});
   }
 
+  /** Disable a mod without uninstalling it. Takes effect on the server's next start. */
+  function disable(slug: string): Promise<ModToggleResult> {
+    return apiSend<ModToggleResult>("POST", `${base()}/${enc(slug)}/disable`, {});
+  }
+
+  /** Re-enable a previously disabled mod. Takes effect on the server's next start. */
+  function enable(slug: string): Promise<ModToggleResult> {
+    return apiSend<ModToggleResult>("POST", `${base()}/${enc(slug)}/enable`, {});
+  }
+
   function search(opts: SearchOptions): Promise<ModSearchResult> {
     const qs = new URLSearchParams();
     if (opts.query) qs.set("query", opts.query);
@@ -104,6 +115,8 @@ export function useMods(serverId: () => string) {
     install,
     remove,
     updateOne,
+    disable,
+    enable,
     search,
     catalog,
   };

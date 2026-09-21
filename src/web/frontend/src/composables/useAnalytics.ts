@@ -90,15 +90,17 @@ export function useAnalytics() {
    * must not blank the other: a server that has never been polled still has
    * meaningful command numbers, and vice versa.
    */
-  async function load(serverId: string): Promise<void> {
+  async function load(serverId: string, hours = 24 * 14): Promise<void> {
     loading.value = true;
     error.value = "";
     const [server, usage, playerList] = await Promise.allSettled([
       apiGet<{
         uptime: UptimeStats;
-        activity: { hours: ActivityHour[]; busiest: BusyHour[] };
-      }>(`/api/servers/${encodeURIComponent(serverId)}/analytics`),
-      apiGet<{ commands: CommandUsageRow[] }>("/api/analytics/commands"),
+        activity: { rangeHours: number; hours: ActivityHour[]; busiest: BusyHour[] };
+      }>(`/api/servers/${encodeURIComponent(serverId)}/analytics?hours=${hours}`),
+      apiGet<{ commands: CommandUsageRow[] }>(
+        `/api/analytics/commands?hours=${hours}`,
+      ),
       apiGet<{ players: PlayerRow[] }>(
         `/api/servers/${encodeURIComponent(serverId)}/analytics/players`,
       ),

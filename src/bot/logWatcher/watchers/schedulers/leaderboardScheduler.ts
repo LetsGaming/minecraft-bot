@@ -27,16 +27,75 @@ import type {
 } from "@mcbot/core/types/index.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
+import { parseScheduleTime } from "./restartScheduler.js";
+import {
+  nextTimeOfDayEpoch,
+  localDayOfWeek,
+  localDayOfMonth,
+} from "@mcbot/core/utils/time.js";
+import { guildTimeZone } from "@mcbot/core/utils/config/timezones.js";
 
 const HOUR_MS = 60 * 60 * 1000;
-const CHECK_INTERVAL_MS = HOUR_MS;
 const SNAPSHOT_INTERVAL_MS = HOUR_MS;
+/**
+ * How often the post check runs. An anchored postTime needs finer than
+ * hourly granularity, or a 13:00 board can land anywhere in 13:00–14:00 —
+ * 5 minutes costs one config read + one KV read for guilds not yet due,
+ * which is negligible against the alternative of re-arming a timer per
+ * guild (see nextLeaderboardRun's doc comment for why that wasn't taken).
+ */
+const POST_CHECK_INTERVAL_MS = 5 * 60_000;
 
 const INTERVAL_LABELS: Record<LeaderboardInterval, string> = {
   daily: "Daily",
   weekly: "Weekly",
   monthly: "Monthly",
 };
+
+/** "SU".."SA", Sunday first — matches localDayOfWeek's index. Duplicated
+ *  from restartScheduler.ts rather than exported from there: not worth
+ *  coupling two scheduler modules together for seven string literals. */
+const DAY_CODES = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"] as const;
+const DEFAULT_POST_DAY = "MO";
+
+/**
+ * The first anchored post moment strictly after `afterMs`, or null when
+ * `postTime` is malformed (caller falls back to the legacy interval model).
+ *
+ * Architecture note: this keeps the existing hourly-tick-checks-a-persisted-
+ * timestamp design rather than adopting restartScheduler's re-armed-timeout
+ * model. The leaderboard scheduler already gets config-reload liveness for
+ * free by re-reading resolveGuildConfigs() every tick (see the comment in
+ * startLeaderboardScheduler), and there's no warning chain here to justify
+ * minute-precision timers — POST_CHECK_INTERVAL_MS's 5-minute granularity is
+ * enough.
+ */
+export function nextLeaderboardRun(
+  interval: LeaderboardInterval,
+  postTime: string,
+  postDay: string | undefined,
+  tz: string,
+  afterMs: number,
+): number | null {
+  const parsed = parseScheduleTime(postTime);
+  if (!parsed) return null;
+
+  let candidate = nextTimeOfDayEpoch(parsed.hour, parsed.minute, tz, afterMs);
+  if (interval === "daily") return candidate;
+
+  const wantDay = (postDay ?? DEFAULT_POST_DAY).toUpperCase();
+  // A handful of iterations covers the worst case (a monthly target up to
+  // ~31 days out); bounded so a pathological zone/DST edge can't loop forever.
+  for (let i = 0; i < 40; i++) {
+    if (interval === "weekly") {
+      if (DAY_CODES[localDayOfWeek(candidate, tz)] === wantDay) return candidate;
+    } else if (localDayOfMonth(candidate, tz) === 1) {
+      return candidate;
+    }
+    candidate = nextTimeOfDayEpoch(parsed.hour, parsed.minute, tz, candidate);
+  }
+  return null;
+}
 
 async function loadSchedule(): Promise<LeaderboardScheduleState> {
   return kvGet<LeaderboardScheduleState>("leaderboardSchedule") ?? {};
@@ -60,6 +119,8 @@ export function startLeaderboardScheduler(
 ): ReturnType<typeof setInterval> | SchedulerTimers {
   const cfg = loadConfig();
   const globalInterval = cfg.leaderboardInterval;
+  const globalPostTime = cfg.leaderboardPostTime;
+  const globalPostDay = cfg.leaderboardPostDay;
 
   // ── Snapshots: one per server instance ──
   const snapshotTimer = setInterval(async () => {
@@ -93,20 +154,24 @@ export function startLeaderboardScheduler(
 
   const postTimer = setInterval(async () => {
     try {
-      await checkAndPost(client, guildConfigs, globalInterval);
+      await checkAndPost(client, guildConfigs, globalInterval, globalPostTime, globalPostDay);
     } catch (err) {
       log.error("leaderboard", `Scheduler error: ${errMsg(err)}`);
     }
-  }, CHECK_INTERVAL_MS);
+  }, POST_CHECK_INTERVAL_MS);
 
   setTimeout(
-    () => checkAndPost(client, guildConfigs, globalInterval).catch(() => {}),
+    () =>
+      checkAndPost(client, guildConfigs, globalInterval, globalPostTime, globalPostDay).catch(
+        () => {},
+      ),
     30000,
   );
 
   log.info(
     "leaderboard",
-    `Scheduler active (snapshots + posting every ${CHECK_INTERVAL_MS / 60_000}min)`,
+    `Scheduler active (snapshots every ${SNAPSHOT_INTERVAL_MS / 60_000}min, ` +
+      `post checks every ${POST_CHECK_INTERVAL_MS / 60_000}min)`,
   );
   return { snapshotTimer, postTimer };
 }
@@ -115,6 +180,8 @@ async function checkAndPost(
   client: Client,
   guildConfigs: GuildConfigSource,
   globalInterval: LeaderboardInterval,
+  globalPostTime: string | undefined,
+  globalPostDay: string | undefined,
 ): Promise<void> {
   const schedule = await loadSchedule();
   const now = Date.now();
@@ -136,7 +203,33 @@ async function checkAndPost(
     }
 
     const lastPost = schedule[guildId] ?? 0;
-    if (now - lastPost < intervalMs) continue;
+    const postTime = lb.postTime ?? globalPostTime;
+    if (postTime) {
+      // Anchored: due is the first configured moment strictly after the
+      // last post, so a 13:00 board doesn't fire again just because a
+      // 13:07 tick also happens to be past the raw interval. `lastPost ||
+      // now - intervalMs` gives a never-posted guild an anchor in the past
+      // rather than one in the future, so it doesn't wait a full period on
+      // its very first run.
+      const due = nextLeaderboardRun(
+        interval,
+        postTime,
+        lb.postDay ?? globalPostDay,
+        guildTimeZone(guildId),
+        lastPost || now - intervalMs,
+      );
+      if (due === null) {
+        log.warn(
+          "leaderboard",
+          `guild ${guildId}: invalid postTime "${postTime}" — falling back to interval scheduling`,
+        );
+        if (now - lastPost < intervalMs) continue;
+      } else if (now < due) {
+        continue;
+      }
+    } else if (now - lastPost < intervalMs) {
+      continue; // legacy path, unchanged
+    }
 
     try {
       const channel = await client.channels.fetch(lb.channelId);

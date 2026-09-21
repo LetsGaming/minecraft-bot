@@ -17,6 +17,7 @@ const SYSADMIN = "111111111111111111";
 const READER = "777777777777777777"; // server:read — sees the list, nothing else
 const ARCHIVIST = "888888888888888888"; // + backup:download
 const RESTORER = "999999999999999999"; // + backup:restore
+const DELETER = "222222222222222222"; // + backup:delete
 
 const mockConfig = {
   token: "t",
@@ -30,6 +31,7 @@ const mockConfig = {
       [READER]: { smp: ["server:read"] },
       [ARCHIVIST]: { smp: ["server:read", "backup:download"] },
       [RESTORER]: { smp: ["server:read", "backup:restore"] },
+      [DELETER]: { smp: ["server:read", "backup:delete"] },
     },
   },
 };
@@ -40,6 +42,7 @@ const {
   getRemoteManifestMock,
   openBackupDownloadMock,
   restoreBackupFileMock,
+  deleteBackupFileMock,
   recordAdminActionMock,
 } = vi.hoisted(() => ({
   indexBackupFilesMock: vi.fn(),
@@ -47,6 +50,7 @@ const {
   getRemoteManifestMock: vi.fn(),
   openBackupDownloadMock: vi.fn(),
   restoreBackupFileMock: vi.fn(),
+  deleteBackupFileMock: vi.fn(),
   recordAdminActionMock: vi.fn(async () => {}),
 }));
 
@@ -61,6 +65,7 @@ vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
   indexBackupFiles: indexBackupFilesMock,
   openBackupDownload: openBackupDownloadMock,
   restoreBackupFile: restoreBackupFileMock,
+  deleteBackupFile: deleteBackupFileMock,
   sendCommand: vi.fn(),
   openLogStream: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
   runScript: vi.fn(),
@@ -177,6 +182,12 @@ beforeEach(() => {
     total: 1,
   });
   restoreBackupFileMock.mockResolvedValue({ output: "done", stderr: "", exitCode: 0 });
+  deleteBackupFileMock.mockResolvedValue({
+    ok: true,
+    name: "world-01.tar.zst",
+    tier: "hourly",
+    sizeBytes: 2048,
+  });
   detectCapabilitiesMock.mockResolvedValue({
     scripts: { start: true, stop: true, restart: true, rollback: true, backup: true, status: true },
     backups: true,
@@ -251,6 +262,34 @@ describe("/api/status features", () => {
     const server = res.json().servers[0];
     expect(server.state).toBe("offline");
     expect(server.features?.backupFiles).toBe(true);
+  });
+
+  it("reports backupDelete false for a v1 wrapper (has the feature, not the DELETE route)", async () => {
+    // The default fixture manifest is backup-files v1 — this pins that a
+    // plain `!== undefined` probe would get wrong (it can't tell v1 from v2).
+    const app = buildServer();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/status",
+      headers: { cookie: cookieFor(SYSADMIN) },
+    });
+    const server = res.json().servers[0];
+    expect(server.features.backupFiles).toBe(true);
+    expect(server.features.backupDelete).toBe(false);
+  });
+
+  it("reports backupDelete true for a v2 wrapper", async () => {
+    getRemoteManifestMock.mockResolvedValue({
+      wrapper: "3.5.0",
+      features: { "backup-files": { version: 2 }, "backup-restore": { version: 1 } },
+    });
+    const app = buildServer();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/status",
+      headers: { cookie: cookieFor(SYSADMIN) },
+    });
+    expect(res.json().servers[0].features.backupDelete).toBe(true);
   });
 
   it("reports null, not false, when the wrapper cannot be reached", async () => {
@@ -522,5 +561,78 @@ describe("POST .../backups/files/:fileId/restore", () => {
       headers: { cookie: cookieFor(RESTORER) },
     });
     expect(res.body).not.toContain("/home/mc");
+  });
+});
+
+// ── Delete ──────────────────────────────────────────────────────────────────
+
+describe("DELETE .../backups/files/:fileId", () => {
+  it("requires backup:delete, not merely backup:restore", async () => {
+    const app = buildServer();
+    for (const uid of [READER, ARCHIVIST, RESTORER]) {
+      const res = await app.inject({
+        method: "DELETE",
+        url: `/api/servers/smp/backups/files/${FILE_ID}`,
+        headers: { cookie: cookieFor(uid) },
+      });
+      expect(res.statusCode).toBe(403);
+    }
+    expect(deleteBackupFileMock).not.toHaveBeenCalled();
+  });
+
+  it("deletes and reports the archive's info", async () => {
+    const app = buildServer();
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/api/servers/smp/backups/files/${FILE_ID}`,
+      headers: { cookie: cookieFor(DELETER) },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, name: "world-01.tar.zst" });
+  });
+
+  it("404s when the wrapper does not know the archive", async () => {
+    deleteBackupFileMock.mockResolvedValue({ ok: false });
+    const app = buildServer();
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/api/servers/smp/backups/files/${FILE_ID}`,
+      headers: { cookie: cookieFor(DELETER) },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("400s a malformed id before contacting the wrapper", async () => {
+    const app = buildServer();
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/api/servers/smp/backups/files/short",
+      headers: { cookie: cookieFor(DELETER) },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(deleteBackupFileMock).not.toHaveBeenCalled();
+  });
+
+  it("audits the attempt, not just the success", async () => {
+    deleteBackupFileMock.mockRejectedValue(new Error("wrapper unreachable"));
+    const app = buildServer();
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/api/servers/smp/backups/files/${FILE_ID}`,
+      headers: { cookie: cookieFor(DELETER) },
+    });
+    expect(res.statusCode).toBe(502);
+    expect(recordAdminActionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "backup delete (dashboard)", byId: DELETER }),
+    );
+  });
+
+  it("401s without a session", async () => {
+    const app = buildServer();
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/api/servers/smp/backups/files/${FILE_ID}`,
+    });
+    expect(res.statusCode).toBe(401);
   });
 });

@@ -46,6 +46,7 @@ function getState(serverId: string): DowntimeState {
       alerted: false,
       consecutiveUnreachable: 0,
       wrapperAlerted: false,
+      crashLoopAlerted: false,
       suppressUntil: 0,
       lastKnownState: null,
     });
@@ -67,6 +68,7 @@ export function suppressAlerts(
   state.alerted = false;
   state.consecutiveUnreachable = 0;
   state.wrapperAlerted = false;
+  state.crashLoopAlerted = false;
   log.info(
     "downtime",
     `Alerts suppressed for ${serverId} (${graceMs / 1000}s grace)`,
@@ -180,6 +182,39 @@ async function checkServer(
     log.info("downtime", `${server.id}: API wrapper reachable again`);
   } else {
     state.consecutiveUnreachable = 0;
+  }
+
+  // ── Crash loop ───────────────────────────────────────────────────────────
+  // Checked unconditionally, not gated by consecutiveFailures below: systemd's
+  // StartLimitBurst (see create_service.sh) is unambiguous the moment it
+  // trips, and waiting for FAILURES_BEFORE_ALERT consecutive offline polls is
+  // exactly the threshold a loop can dodge by being briefly up whenever a
+  // 60s tick happens to land.
+  if (health.unitFailed) {
+    if (!state.crashLoopAlerted && now >= state.suppressUntil) {
+      state.crashLoopAlerted = true;
+      await alertGuilds(client, guildsWithAlerts, server.id, {
+        title: t("downtime.crashLoopTitle"),
+        description: t("downtime.crashLoop", {
+          server: server.id,
+          restarts: health.restartCount,
+        }),
+        color: EmbedColor.Error,
+      });
+      log.warn(
+        "downtime",
+        `${server.id}: crash loop detected — systemd restarted it ` +
+          `${health.restartCount}× and gave up`,
+      );
+    }
+  } else if (state.crashLoopAlerted) {
+    state.crashLoopAlerted = false;
+    await alertGuilds(client, guildsWithAlerts, server.id, {
+      title: t("downtime.crashLoopRecoveredTitle"),
+      description: t("downtime.crashLoopRecovered", { server: server.id }),
+      color: EmbedColor.Success,
+    });
+    log.info("downtime", `${server.id}: crash loop cleared`);
   }
 
   // ── The server ──────────────────────────────────────────────────────────

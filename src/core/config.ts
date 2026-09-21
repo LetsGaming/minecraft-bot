@@ -178,6 +178,8 @@ export function loadConfig(): BotConfig {
     tpsWarningThreshold:  raw.tpsWarningThreshold ?? 15,
     tpsPollIntervalMs:    raw.tpsPollIntervalMs   ?? 60_000,
     leaderboardInterval:  raw.leaderboardInterval ?? "weekly",
+    ...(raw.leaderboardPostTime ? { leaderboardPostTime: raw.leaderboardPostTime } : {}),
+    ...(raw.leaderboardPostDay  ? { leaderboardPostDay:  raw.leaderboardPostDay }  : {}),
     ...(raw.presence    ? { presence:    raw.presence }    : {}),
     ...(raw.deathCoords ? { deathCoords: raw.deathCoords } : {}),
     ...(raw.hostAlerts  ? { hostAlerts:  raw.hostAlerts }  : {}),

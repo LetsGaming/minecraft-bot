@@ -86,6 +86,12 @@ export const LeaderboardQuery = Type.Object({
 });
 export type LeaderboardQuery = Static<typeof LeaderboardQuery>;
 
+/** How far back an analytics panel looks, in hours. Clamped in the route handler. */
+export const AnalyticsRangeQuery = Type.Object({
+  hours: Type.Optional(Type.String()),
+});
+export type AnalyticsRangeQuery = Static<typeof AnalyticsRangeQuery>;
+
 /** A server plus one of its backup archives, addressed by opaque id. */
 export const BackupFileParams = Type.Object({
   id: Type.String(),

@@ -174,7 +174,7 @@ export async function tailLog(cfg: ServerConfig, lines = 10): Promise<string> {
 
 // ── Server status ────────────────────────────────────────────────────────
 
-/** The wrapper's `/health` body (`server-health` feature v1). */
+/** The wrapper's `/health` body (`server-health` feature, v2 fields optional). */
 interface WrapperHealth {
   state: string;
   processUp: boolean;
@@ -186,6 +186,9 @@ interface WrapperHealth {
   };
   /** The server's `server-port`, so a direct ping works without configuration. */
   gamePort: number | null;
+  /** v2 — absent on a v1 wrapper. */
+  restartCount?: number;
+  unitFailed?: boolean;
   checkedAt: number;
   ageMs: number;
 }
@@ -202,7 +205,7 @@ interface WrapperHealth {
  */
 function parseWrapperHealth(body: unknown): ServerHealth | null {
   if (!isRecord(body)) return null;
-  const { state, processUp, probe, rcon, checkedAt } = body;
+  const { state, processUp, probe, rcon, checkedAt, restartCount, unitFailed } = body;
   if (
     state !== ServerState.Online &&
     state !== ServerState.Unresponsive &&
@@ -227,6 +230,8 @@ function parseWrapperHealth(body: unknown): ServerHealth | null {
     players: null,
     reason: null,
     checkedAt: typeof checkedAt === "number" ? checkedAt : Date.now(),
+    restartCount: typeof restartCount === "number" ? restartCount : 0,
+    unitFailed: unitFailed === true,
   };
 }
 
@@ -292,6 +297,9 @@ function healthFromPing(
     rcon,
     probe: "ping",
     checkedAt: Date.now(),
+    // A ping can't see systemd — always nothing-to-report on this channel.
+    restartCount: 0,
+    unitFailed: false,
   };
 
   switch (outcome.kind) {
@@ -443,6 +451,8 @@ async function wrapperHealth(cfg: ServerConfig): Promise<ServerHealth | null> {
         players: null,
         reason: null,
         checkedAt: Date.now(),
+        restartCount: 0,
+        unitFailed: false,
       };
     }
 
@@ -803,6 +813,23 @@ export interface InstalledMod {
   slug: string;
   versionId: string | null;
   filename: string | null;
+  /**
+   * Whether the mod is active (jar in mods/) vs disabled (jar in
+   * mods/disabled/) — see disableMod/enableMod below. Absent on a v1
+   * wrapper (mod-management feature version 1); treated as enabled, the
+   * behavior before disable/enable existed.
+   */
+  enabled?: boolean;
+}
+
+export interface ModToggleResult {
+  ok: boolean;
+  slug?: string;
+  filename?: string | null;
+  alreadyEnabled?: boolean;
+  alreadyDisabled?: boolean;
+  error?: string;
+  code?: string;
 }
 
 export interface InstalledMods {
@@ -914,6 +941,34 @@ export async function updateMod(
   );
 }
 
+/**
+ * Disable an installed mod without uninstalling it — moves its jar out of
+ * mods/ so the loader stops loading it, but keeps it update-checkable.
+ * Takes effect on the server's next start.
+ */
+export async function disableMod(
+  cfg: ServerConfig,
+  slug: string,
+): Promise<ModToggleResult> {
+  return apiPost<ModToggleResult>(
+    cfg,
+    `/mods/${encodeURIComponent(slug)}/disable`,
+    {},
+  );
+}
+
+/** Re-enable a previously disabled mod. Takes effect on the server's next start. */
+export async function enableMod(
+  cfg: ServerConfig,
+  slug: string,
+): Promise<ModToggleResult> {
+  return apiPost<ModToggleResult>(
+    cfg,
+    `/mods/${encodeURIComponent(slug)}/enable`,
+    {},
+  );
+}
+
 // ── Backups ───────────────────────────────────────────────────────────────
 
 /** Scan the backup directories for a server. */
@@ -1013,6 +1068,36 @@ export async function restoreBackupFile(
     throw new Error(`API POST /backups/restore → ${res.status}: ${text}`);
   }
   return res.json() as Promise<ScriptResult>;
+}
+
+export interface BackupDeleteResult {
+  ok: boolean;
+  name?: string;
+  tier?: string;
+  sizeBytes?: number;
+}
+
+/**
+ * Permanently delete one archive (wrapper's backup-files feature v2).
+ *
+ * Same reasoning as restore: its own route, not a script action, because
+ * the wrapper resolves the id to a path itself — no caller here or in the
+ * browser is ever in a position to name one.
+ */
+export async function deleteBackupFile(
+  cfg: ServerConfig,
+  fileId: string,
+): Promise<BackupDeleteResult> {
+  const url = instanceUrl(cfg, `/backups/files/${encodeURIComponent(fileId)}`);
+  const headers: Record<string, string> = {};
+  if (cfg.apiKey) headers["x-api-key"] = cfg.apiKey;
+  const res = await fetch(url, { method: "DELETE", headers });
+  if (res.status === 404) return { ok: false };
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`API DELETE /backups/files → ${res.status}: ${text}`);
+  }
+  return res.json() as Promise<BackupDeleteResult>;
 }
 
 // ── Mod config files (wrapper >= 3.4.0) ────────────────────────────

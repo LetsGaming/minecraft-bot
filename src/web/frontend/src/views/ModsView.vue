@@ -127,19 +127,31 @@
         <table>
           <thead><tr><th>MOD</th><th>VERSION</th><th>STATUS</th><th></th></tr></thead>
           <tbody>
-            <tr v-for="m in installed.mods" :key="m.slug">
+            <tr v-for="m in installed.mods" :key="m.slug" :class="{ 'row-disabled': isDisabled(m) }">
               <td>
                 <div class="mod-name">{{ m.slug }}</div>
                 <div class="mod-file">{{ m.filename ?? "—" }}</div>
               </td>
               <td><span class="ver">{{ shortVersion(m.versionId) }}</span></td>
               <td>
-                <span v-if="update(m.slug)" class="pill up">↑ update</span>
+                <span
+                  v-if="isDisabled(m)"
+                  class="pill off"
+                  title="Disabled mods only take effect on the next server start"
+                >⏸ disabled</span>
+                <span v-else-if="update(m.slug)" class="pill up">↑ update</span>
                 <span v-else class="pill ok">✓ up to date</span>
               </td>
               <td>
                 <div class="row-actions">
                   <button v-if="canWrite && update(m.slug)" class="mini update" :disabled="busy.has(m.slug)" @click="updateOne(m.slug)">Update</button>
+                  <button
+                    v-if="canWrite"
+                    class="mini toggle"
+                    :disabled="busy.has(m.slug)"
+                    :title="isDisabled(m) ? 'Enable (takes effect on next restart)' : 'Disable without uninstalling (takes effect on next restart)'"
+                    @click="doToggle(m)"
+                  >{{ isDisabled(m) ? "Enable" : "Disable" }}</button>
                   <a class="extlink" :href="'https://modrinth.com/mod/' + m.slug" target="_blank" rel="noopener" title="Open on Modrinth"><i class="pi pi-external-link" /></a>
                   <button v-if="canWrite" class="mini remove" :disabled="busy.has(m.slug)" title="Remove" @click="doRemove(m.slug)"><i class="pi pi-trash" /></button>
                 </div>
@@ -159,7 +171,7 @@ import { useMods, ENVIRONMENT_META } from "../composables/useMods";
 import { useCapabilities } from "../composables/useCapabilities";
 import { useToast } from "primevue/usetoast";
 import { UnauthorizedError } from "../api";
-import type { InstalledMods, ModSearchHit, ModVersion, ModProjectDetail } from "../api";
+import type { InstalledMods, InstalledMod, ModSearchHit, ModVersion, ModProjectDetail } from "../api";
 
 const props = defineProps<{ activeServer: string }>();
 const serverId = computed(() => props.activeServer);
@@ -216,6 +228,10 @@ function shortVersion(v: string | null): string {
 }
 function update(slug: string): boolean {
   return updates.value.has(slug);
+}
+/** Absent `enabled` means an old wrapper — treat as enabled, same default as before this existed. */
+function isDisabled(m: InstalledMod): boolean {
+  return m.enabled === false;
 }
 function iconStyle(hit: ModSearchHit) {
   const c = env(hit.environment).color;
@@ -368,6 +384,24 @@ async function updateOne(slug: string) {
   }
 }
 
+async function doToggle(m: InstalledMod) {
+  const disabling = !isDisabled(m);
+  setBusy(m.slug, true);
+  try {
+    const r = disabling ? await mods.disable(m.slug) : await mods.enable(m.slug);
+    if (r.ok) {
+      flash("ok", `${disabling ? "Disabled" : "Enabled"} ${m.slug}. Restart the server to apply.`);
+      await loadInstalled();
+    } else {
+      flash("err", r.error ?? `${disabling ? "Disable" : "Enable"} failed.`);
+    }
+  } catch (err) {
+    flash("err", err instanceof Error ? err.message : `${disabling ? "Disable" : "Enable"} failed.`);
+  } finally {
+    setBusy(m.slug, false);
+  }
+}
+
 async function doRemove(slug: string) {
   if (!window.confirm(`Remove "${slug}" from ${props.activeServer}?`)) return;
   setBusy(slug, true);
@@ -438,8 +472,9 @@ watch(() => props.activeServer, reload);
 .stat .n.cap { text-transform:capitalize; } .stat.warn .n { color:var(--amber); }
 .stat .l { color:var(--muted); font-size:12.5px; margin-top:4px; }
 
-.grid { display:grid; grid-template-columns:1.35fr 1fr; gap:16px; align-items:start; }
-.card { background:var(--card); border:1px solid var(--border); border-radius:12px; }
+.grid { display:grid; grid-template-columns:1.35fr 1fr; gap:16px; align-items:stretch; }
+.card { background:var(--card); border:1px solid var(--border); border-radius:12px;
+  display:flex; flex-direction:column; min-width:0; }
 .card-h { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--border); }
 .card-h .t { display:flex; align-items:center; gap:9px; font-weight:600; font-size:14.5px; } .card-h .t i { color:var(--green); }
 .card-h .a.muted { color:var(--muted); font-size:13px; }
@@ -456,8 +491,8 @@ watch(() => props.activeServer, reload);
 .toggle input:checked + .sw { background:var(--green); } .toggle input:checked + .sw::after { left:17px; background:#05130a; }
 .select { background:var(--card-2); border:1px solid var(--border-2); border-radius:8px; padding:7px 10px; color:var(--muted); font-size:12.5px; cursor:pointer; }
 
-.results { padding:6px 8px; max-height:60vh; overflow-y:auto; }
-.scroll-body { max-height:60vh; overflow-y:auto; }
+.results { padding:6px 8px; flex:1 1 auto; min-height:0; max-height:60vh; overflow-y:auto; }
+.scroll-body { flex:1 1 auto; min-height:0; max-height:60vh; overflow-y:auto; }
 .item.open { background:rgba(255,255,255,.02); border-radius:10px; }
 .result { display:flex; gap:12px; align-items:center; padding:12px; }
 .ricon { width:42px; height:42px; border-radius:9px; flex:0 0 42px; display:grid; place-items:center; font-weight:700; font-size:16px; color:#05130a; overflow:hidden; }
@@ -497,9 +532,12 @@ tbody tr:last-child td { border-bottom:0; }
 .ver { font-family:ui-monospace,monospace; font-size:12.5px; color:#cfcfd4; }
 .pill { display:inline-flex; align-items:center; padding:3px 9px; border-radius:20px; font-size:11.5px; font-weight:500; }
 .pill.ok { background:rgba(62,207,110,.14); color:var(--green); } .pill.up { background:rgba(229,161,58,.14); color:var(--amber); }
+.pill.off { background:rgba(255,255,255,.06); color:var(--muted); cursor:help; }
+.row-disabled { opacity:.6; }
 .row-actions { display:flex; gap:7px; justify-content:flex-end; align-items:center; }
 .mini { display:inline-flex; align-items:center; gap:6px; padding:6px 11px; border-radius:7px; font-size:12.5px; font-weight:500; cursor:pointer; border:1px solid var(--border-2); background:transparent; color:#ededf0; }
 .mini.update { background:var(--amber); color:#160e02; border-color:transparent; font-weight:600; }
+.mini.toggle { color:var(--muted); }
 .mini.remove { color:var(--muted); padding:6px 9px; } .mini.remove:hover { color:var(--red); border-color:rgba(229,84,75,.13); background:rgba(229,84,75,.13); }
 .mini:disabled { opacity:.5; }
 .foot { padding:10px 20px; border-top:1px solid var(--border); color:var(--muted-2); font-size:12px; display:flex; align-items:center; justify-content:space-between; }

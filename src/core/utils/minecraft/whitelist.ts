@@ -23,6 +23,24 @@ const whitelistCache = new Map<
   { data: WhitelistEntry[] | null; at: number }
 >();
 
+/**
+ * Lowercased name → undashed UUID, for every player `loadKnownPlayers` has
+ * ever returned (whitelist + usercache, across every server). A UUID
+ * outlives a rename and is what avatar-rendering services (mc-heads.net)
+ * resolve most reliably — see mcHeads.ts on the bot side, the only reader.
+ * Populated here rather than fed by callers so every existing
+ * loadKnownPlayers() call site (playerUtils, statUtils, milestoneWatcher)
+ * warms it for free, with no new wiring anywhere.
+ * ponytail: unbounded, keyed by every name ever seen; add an LRU only if a
+ * deployment's cumulative player count ever makes this matter in practice.
+ */
+const uuidByName = new Map<string, string>();
+
+/** Best-known UUID (undashed) for a player name, or null if never seen. */
+export function knownPlayerUuid(name: string): string | null {
+  return uuidByName.get(name.toLowerCase()) ?? null;
+}
+
 // usercache.json covers every player the server has ever seen, so name
 // resolution keeps working on servers that run without a whitelist.
 const userCacheCache = new Map<string, { data: WhitelistEntry[]; at: number }>();
@@ -98,5 +116,10 @@ export async function loadKnownPlayers(
     seen.add(entry.uuid);
     known.push(entry);
   }
+
+  for (const p of known) {
+    uuidByName.set(p.name.toLowerCase(), p.uuid.replace(/-/g, ""));
+  }
+
   return known;
 }

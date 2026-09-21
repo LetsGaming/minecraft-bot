@@ -30,6 +30,16 @@
           @click="select(id)"
         />
       </div>
+      <label class="ctl-label muted small">Range</label>
+      <SelectButton
+        v-model="rangeHours"
+        :options="rangeOptions"
+        optionLabel="label"
+        optionValue="value"
+        :allowEmpty="false"
+        size="small"
+        aria-label="Time range"
+      />
     </div>
 
     <Message v-if="error" severity="warn" :closable="false">{{ error }}</Message>
@@ -54,12 +64,13 @@
         </div>
       </div>
       <p v-else class="muted small">No uptime history recorded for this server yet.</p>
+      <p class="muted small uptime-note">Uptime is always shown over fixed 24h / 7d / 30d windows.</p>
     </section>
 
     <!-- Activity. A real chart rather than eight block characters: the shape
          over two weeks is the whole point, and an embed could never show it. -->
     <section class="panel">
-      <h3>Players over the last two weeks</h3>
+      <h3>Players over the last {{ rangeLabel }}</h3>
       <div v-if="activity.length" class="chart" role="img" :aria-label="chartLabel">
         <div
           v-for="hour in activity"
@@ -165,7 +176,7 @@
     <!-- Command usage: the data that used to be a one-line footnote under 57
          cards on the Commands page, where it could not be sorted or compared. -->
     <section class="panel">
-      <h3>Command usage, last 30 days</h3>
+      <h3>Command usage, last {{ rangeLabel }}</h3>
       <DataTable
         v-if="commands.length"
         :value="commands"
@@ -191,7 +202,7 @@
           </template>
         </Column>
       </DataTable>
-      <p v-else class="muted small">Nothing recorded in the last 30 days.</p>
+      <p v-else class="muted small">Nothing recorded in the last {{ rangeLabel }}.</p>
     </section>
   </div>
 </template>
@@ -204,6 +215,7 @@ import Tag from "primevue/tag";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
 import Select from "primevue/select";
+import SelectButton from "primevue/selectbutton";
 import ViewHeader from "../components/ui/ViewHeader.vue";
 import StatusDot from "../components/ui/StatusDot.vue";
 import { useAnalytics } from "../composables/useAnalytics";
@@ -211,7 +223,9 @@ import { relativeAge, timestampTitle, absoluteStamp } from "../utils/time";
 
 export default defineComponent({
   name: "AnalyticsView",
-  components: { Button, Message, Tag, DataTable, Column, Select, ViewHeader, StatusDot },
+  components: {
+    Button, Message, Tag, DataTable, Column, Select, SelectButton, ViewHeader, StatusDot,
+  },
   props: {
     serverIds: { type: Array as () => string[], default: () => [] },
     activeServer: { type: String, default: "" },
@@ -224,7 +238,20 @@ export default defineComponent({
     };
   },
   data() {
-    return { currentServer: "", stat: "playtime" };
+    return {
+      currentServer: "",
+      stat: "playtime",
+      // Capped at 14d — player_count_hours only retains that long (see
+      // analytics.ts's ACTIVITY_HOURS_MAX); command usage retains far more
+      // but shares this one control rather than adding a second picker.
+      rangeHours: 24 * 14,
+      rangeOptions: [
+        { label: "24h", value: 24 },
+        { label: "3d", value: 24 * 3 },
+        { label: "7d", value: 24 * 7 },
+        { label: "14d", value: 24 * 14 },
+      ],
+    };
   },
   computed: {
     uptimeWindows(): { label: string; pct: number | null; checks: { total: number; online: number } }[] {
@@ -251,6 +278,9 @@ export default defineComponent({
     chartLabel(): string {
       return `Average concurrent players per hour over ${this.activity.length} hours, peaking at ${this.peakAvg.toFixed(1)}.`;
     },
+    rangeLabel(): string {
+      return this.rangeOptions.find((o) => o.value === this.rangeHours)?.label ?? "14d";
+    },
   },
   watch: {
     serverIds: {
@@ -262,13 +292,19 @@ export default defineComponent({
         void this.select(next);
       },
     },
+    rangeHours() {
+      if (this.currentServer) void this.load(this.currentServer, this.rangeHours);
+    },
   },
   methods: {
     async select(id: string): Promise<void> {
       this.currentServer = id;
       // The board is fetched alongside rather than inside `load`, because
       // changing the stat picker re-runs only this half.
-      await Promise.all([this.load(id), this.loadBoard(id, this.stat)]);
+      await Promise.all([
+        this.load(id, this.rangeHours),
+        this.loadBoard(id, this.stat),
+      ]);
     },
     async reload(): Promise<void> {
       if (this.currentServer) await this.select(this.currentServer);
@@ -307,9 +343,10 @@ export default defineComponent({
 </script>
 
 <style scoped>
-.scope-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.scope-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
 .scope-label { text-transform: uppercase; letter-spacing: 0.04em; }
 .picker { display: flex; flex-wrap: wrap; gap: 6px; }
+.ctl-label { letter-spacing: 0.02em; margin-left: 8px; }
 .scope-tag {
   font-size: 11px; font-weight: 500; color: var(--mc-accent);
   background: var(--mc-accent-bg); border: 0.5px solid var(--mc-accent-border);
@@ -332,6 +369,7 @@ export default defineComponent({
 .u-pct.online { color: var(--mc-accent); }
 .u-pct.offline { color: var(--mc-bad); }
 .u-pct.unknown { color: var(--mc-dim); }
+.uptime-note { margin: 10px 0 0; }
 
 .chart {
   display: flex; align-items: flex-end; gap: 1px;

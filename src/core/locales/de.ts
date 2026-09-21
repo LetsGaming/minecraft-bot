@@ -199,6 +199,11 @@ export const de: Record<string, string> = {
     "Der Minecraft-Server selbst hat auf einen direkten Ping geantwortet und ist **{state}** — Spieler sind nicht betroffen, aber Server-Steuerung, Chat-Bridge und Statistiken fehlen, bis die Wrapper wieder läuft.",
   "downtime.apiDownServerUnknown":
     "Der Minecraft-Server hat ebenfalls nicht auf einen direkten Ping geantwortet, sein Zustand ist daher **unbekannt** — er läuft möglicherweise noch.",
+  "downtime.crashLoopTitle": "🔁 Server-Absturzschleife",
+  "downtime.crashLoop":
+    "**{server}** wurde {restarts}-mal neu gestartet, systemd hat weitere Versuche aufgegeben — der Server bleibt offline, bis jemand eingreift.\nPrüfe die Logs auf die Ursache (meist ein defektes Mod — versuche `/mods` disable für zuletzt geänderte), und starte ihn dann mit **/server restart** neu; das setzt auch systemds Fehlerstatus zurück.",
+  "downtime.crashLoopRecoveredTitle": "✅ Absturzschleife beendet",
+  "downtime.crashLoopRecovered": "**{server}** befindet sich nicht mehr in einer Absturzschleife.",
   "state.online": "Online",
   "state.unresponsive": "Antwortet nicht",
   "state.offline": "Offline",

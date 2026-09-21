@@ -62,10 +62,18 @@ export const EXPECTED_WRAPPER_FEATURES: Record<string, ExpectedFeature> = {
     degrades: "status, /players, /tps — the server appears permanently offline",
   },
   "server-health": {
-    version: 1,
+    // v2: restartCount + unitFailed — a systemd crash loop (see
+    // create_service.sh in minecraft-server-setup) is otherwise invisible:
+    // a 60s poll can catch the server briefly up between restarts and never
+    // trip the downtime alert at all. A v1 wrapper's health just lacks
+    // these fields; the bot treats that as "nothing to report", same as
+    // before this existed.
+    version: 2,
     degrades:
       "telling a stopped server from a merely loaded one — a lag spike is " +
-      "reported as downtime, and the wrapper being unreachable looks the same",
+      "reported as downtime, and the wrapper being unreachable looks the " +
+      "same; on a v1 wrapper a crash loop looks like ordinary downtime " +
+      "instead of being called out as one",
   },
   "log-stream": {
     version: 1,
@@ -102,10 +110,15 @@ export const EXPECTED_WRAPPER_FEATURES: Record<string, ExpectedFeature> = {
   },
   mods: { version: 1, degrades: "/mods" },
   "mod-management": {
-    version: 1,
+    // v2: disable/enable a mod without uninstalling it. A v1 wrapper has no
+    // `enabled` field or disable/enable routes — the bot treats every mod as
+    // enabled and hides the toggle's effect, same "reads the old shape, just
+    // shows less" pattern as host-info v1→v2.
+    version: 2,
     degrades:
       "the dashboard Mods tab (install, update, remove); the read-only " +
-      "/mods list still works",
+      "/mods list still works; on a v1 wrapper the enable/disable toggle " +
+      "has no effect since every mod reports enabled",
   },
   backups: { version: 1, degrades: "/backup" },
   "backup-files": {

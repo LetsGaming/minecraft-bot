@@ -235,6 +235,10 @@ async function wrapperFeatures(server: {
       scripts: { ...caps.scripts },
       restore: caps.restore ?? false,
       backupFiles: manifest?.features?.["backup-files"] !== undefined,
+      // A v1 wrapper has the feature but not the DELETE route — the plain
+      // `!== undefined` check above can't tell v1 from v2, so this needs
+      // the version specifically (same reasoning host-info v2 gating uses).
+      backupDelete: (manifest?.features?.["backup-files"]?.version ?? 0) >= 2,
     };
   } catch {
     // Null means "could not ask", NOT "does not have it". An unreachable

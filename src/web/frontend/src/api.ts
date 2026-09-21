@@ -129,6 +129,8 @@ export interface InstalledMod {
   slug: string;
   versionId: string | null;
   filename: string | null;
+  /** Active (mods/) vs disabled (mods/disabled/). Absent on an old wrapper — treat as true. */
+  enabled?: boolean;
 }
 export interface InstalledMods {
   gameVersion: string | null;
@@ -214,6 +216,15 @@ export interface ModApplyResult {
   updated?: Array<{ slug: string; toVersionId: string; filename: string }>;
   upToDate?: string[];
   failed?: Array<{ slug: string; error: string }>;
+  error?: string;
+  code?: string;
+}
+export interface ModToggleResult {
+  ok: boolean;
+  slug?: string;
+  filename?: string | null;
+  alreadyEnabled?: boolean;
+  alreadyDisabled?: boolean;
   error?: string;
   code?: string;
 }

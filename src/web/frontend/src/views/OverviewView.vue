@@ -48,13 +48,8 @@
             rounded
           />
         </header>
-        <ul v-if="alerts.length" class="alert-list">
-          <li v-for="(a, i) in alerts" :key="i" :class="['alert', a.level]">
-            <i :class="a.icon" />
-            <span>{{ a.text }}</span>
-          </li>
-        </ul>
-        <div v-else class="all-clear muted small">
+        <AlertList :alerts="alerts" />
+        <div v-if="!alerts.length" class="all-clear muted small">
           <i class="pi pi-check-circle" /> No servers down, TPS healthy, disks and backups fine.
         </div>
       </section>
@@ -130,25 +125,20 @@ import { useServerStatus } from "../composables/useServerStatus";
 import { useGuilds } from "../composables/useGuilds";
 import { useMyGuilds } from "../composables/useMyGuilds";
 import { useAudit } from "../composables/useAudit";
-import { diskLabel, statusDot, stateLabel, playersLabel } from "../utils/format";
+import { statusDot, stateLabel, playersLabel } from "../utils/format";
+import { fleetAlerts } from "../utils/serverAlerts";
 import { stateIsUp } from "@mcbot/schema/serverState.js";
 import { relativeAge, timestampTitle } from "../utils/time";
-import { ServerState, WrapperState } from "../api";
 import ViewHeader from "../components/ui/ViewHeader.vue";
 import StatusDot from "../components/ui/StatusDot.vue";
 import GuildAvatar from "../components/ui/GuildAvatar.vue";
-
-interface Alert {
-  level: "warn" | "danger";
-  icon: string;
-  text: string;
-}
+import AlertList from "../components/ui/AlertList.vue";
 
 const REFRESH_MS = 20_000;
 
 export default defineComponent({
   name: "OverviewView",
-  components: { Button, Tag, ViewHeader, StatusDot, GuildAvatar },
+  components: { Button, Tag, ViewHeader, StatusDot, GuildAvatar, AlertList },
   emits: ["navigate"],
   setup() {
     const { servers, botAlive, loading, refresh } = useServerStatus();
@@ -179,56 +169,8 @@ export default defineComponent({
       // visibly incomplete.
       return this.servers.reduce((sum, s) => sum + (s.players?.online ?? 0), 0);
     },
-    alerts(): Alert[] {
-      const out: Alert[] = [];
-      if (!this.botAlive) {
-        out.push({ level: "danger", icon: "pi pi-times-circle", text: "Bot process heartbeat is stale — status may be outdated." });
-      }
-      for (const s of this.servers) {
-        // The wrapper is its own axis: it can be down while the server is
-        // demonstrably fine, and that is worth saying on its own rather than
-        // being folded into the server's state. Not `continue` — a server can
-        // be both unresponsive and missing its wrapper.
-        if (s.wrapper === WrapperState.Unreachable && s.state !== ServerState.Unknown) {
-          out.push({
-            level: "warn",
-            icon: "pi pi-link",
-            text: `${s.id}: API wrapper unreachable — controls, logs and stats are down. The server itself is ${stateLabel(s.state).toLowerCase()}.`,
-          });
-        }
-        // Three different incidents, three different alerts. Collapsed into
-        // one "is offline" line, a wrapper restart and a lag spike both read
-        // as an outage — and the actual outage looked no worse than either.
-        if (s.state === ServerState.Offline) {
-          out.push({ level: "danger", icon: "pi pi-times-circle", text: `${s.id} is offline.` });
-          continue;
-        }
-        if (s.state === ServerState.Unknown) {
-          out.push({
-            level: "warn",
-            icon: "pi pi-question-circle",
-            text: `${s.id}: neither its API wrapper nor the server answered — state unknown.`,
-          });
-          continue;
-        }
-        if (s.state === ServerState.Unresponsive) {
-          out.push({
-            level: "warn",
-            icon: "pi pi-clock",
-            text: `${s.id} is running but not answering commands — starting up, or under heavy load.`,
-          });
-          continue;
-        }
-        if (s.tps !== null && s.tps < 15) {
-          out.push({ level: "warn", icon: "pi pi-gauge", text: `${s.id} has low TPS (${s.tps.toFixed(1)}).` });
-        }
-        for (const disk of s.host?.disks ?? []) {
-          if (disk.usedPercent >= 90) {
-            out.push({ level: "warn", icon: "pi pi-database", text: `${s.id} ${diskLabel(disk.path).toLowerCase()} is ${disk.usedPercent}% full.` });
-          }
-        }
-      }
-      return out;
+    alerts(): ReturnType<typeof fleetAlerts> {
+      return fleetAlerts(this.servers, this.botAlive);
     },
   },
   async mounted() {
@@ -271,11 +213,8 @@ export default defineComponent({
 .panel-title i { color: var(--mc-accent); font-size: 14px; }
 .pad { padding: 12px 0; }
 
-/* Alerts */
-.alert-list, .server-list, .guild-list, .audit-list { list-style: none; margin: 0; padding: 6px 0; display: flex; flex-direction: column; gap: 2px; }
-.alert { display: flex; align-items: center; gap: 9px; padding: 7px 0; font-size: 13.5px; }
-.alert.warn i { color: var(--mc-mid); }
-.alert.danger i { color: var(--mc-bad); }
+/* Alerts (list styling lives in AlertList.vue now) */
+.server-list, .guild-list, .audit-list { list-style: none; margin: 0; padding: 6px 0; display: flex; flex-direction: column; gap: 2px; }
 .all-clear { display: flex; align-items: center; gap: 8px; padding: 12px 0; }
 .all-clear i { color: var(--mc-good); }
 

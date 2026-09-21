@@ -28,6 +28,8 @@ import {
   addMod,
   removeMod,
   updateMod,
+  disableMod,
+  enableMod,
   checkModUpdates,
   applyModUpdates,
   type InstalledMods,
@@ -205,6 +207,62 @@ export function registerModRoutes(app: FastifyInstance): void {
         return result;
       } catch (err) {
         log.error("web", `Mod update on ${req.params.id} failed: ${errMsg(err)}`);
+        throw new HttpError(502, OPERATION_FAILED);
+      }
+    },
+  );
+
+  // ── Disable (without uninstalling) ────────────────────────────────────────
+  api.post(
+    "/api/servers/:id/mods/:slug/disable",
+    {
+      schema: { params: ModSlugParams },
+      config: { capability: "mods:write", scope: "server", param: "id" },
+    },
+    async (req) => {
+      const server = requireServer(req.params.id);
+      const session = sessionFromRequest(req)!;
+      await recordAdminAction({
+        action: "mod disable (dashboard)",
+        server: req.params.id,
+        by: session.tag,
+        byId: session.uid,
+        detail: req.params.slug,
+      });
+      try {
+        const result = await disableMod(server.config, req.params.slug);
+        invalidateServer(req.params.id);
+        return result;
+      } catch (err) {
+        log.error("web", `Mod disable on ${req.params.id} failed: ${errMsg(err)}`);
+        throw new HttpError(502, OPERATION_FAILED);
+      }
+    },
+  );
+
+  // ── Enable ─────────────────────────────────────────────────────────────────
+  api.post(
+    "/api/servers/:id/mods/:slug/enable",
+    {
+      schema: { params: ModSlugParams },
+      config: { capability: "mods:write", scope: "server", param: "id" },
+    },
+    async (req) => {
+      const server = requireServer(req.params.id);
+      const session = sessionFromRequest(req)!;
+      await recordAdminAction({
+        action: "mod enable (dashboard)",
+        server: req.params.id,
+        by: session.tag,
+        byId: session.uid,
+        detail: req.params.slug,
+      });
+      try {
+        const result = await enableMod(server.config, req.params.slug);
+        invalidateServer(req.params.id);
+        return result;
+      } catch (err) {
+        log.error("web", `Mod enable on ${req.params.id} failed: ${errMsg(err)}`);
         throw new HttpError(502, OPERATION_FAILED);
       }
     },

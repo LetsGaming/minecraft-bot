@@ -33,24 +33,33 @@ import {
   LEADERBOARD_STATS,
   buildLeaderboard,
 } from "@mcbot/core/utils/minecraft/statUtils.js";
-import { getDb } from "@mcbot/core/db/index.js";
-import { mapRows, col } from "@mcbot/core/db/rows.js";
+import { usageByCommand } from "@mcbot/core/utils/commands/commandUsage.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { readThrough } from "@mcbot/core/utils/wrapper/lastKnown.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 import { NotFound, BadRequest, HttpError } from "../errors.js";
-import { IdParams, LeaderboardQuery } from "./schemas.js";
+import { IdParams, LeaderboardQuery, AnalyticsRangeQuery } from "./schemas.js";
 
 const HOUR_MS = 3_600_000;
 
 /**
- * How far back the activity series runs.
- *
- * Two weeks: long enough to show a weekday/weekend shape, short enough that
- * the payload stays a few hundred points rather than something the browser
- * has to thin before charting.
+ * How far back the activity series can run — a hard ceiling, not just a
+ * default: `player_count_hours` only retains this many hours
+ * (RETENTION_HOURS in playerCountHistory.ts), so a range past it would
+ * silently return truncated data rather than what was actually asked for.
  */
-const ACTIVITY_HOURS = 24 * 14;
+const ACTIVITY_HOURS_MAX = 24 * 14;
+const ACTIVITY_HOURS_DEFAULT = 24 * 14;
+
+/** command_usage retains 90 days (USAGE_RETENTION_DAYS in commandUsage.ts). */
+const COMMAND_HOURS_MAX = 24 * 90;
+const COMMAND_HOURS_DEFAULT = 24 * 30;
+
+function clampHours(raw: string | undefined, def: number, max: number): number {
+  const n = parseInt(raw ?? "", 10);
+  if (!Number.isFinite(n)) return def;
+  return Math.min(Math.max(n, 1), max);
+}
 
 export function registerAnalyticsRoutes(app: FastifyInstance): void {
   const api = app.withTypeProvider<TypeBoxTypeProvider>();
@@ -58,7 +67,7 @@ export function registerAnalyticsRoutes(app: FastifyInstance): void {
   api.get(
     "/api/servers/:id/analytics",
     {
-      schema: { params: IdParams },
+      schema: { params: IdParams, querystring: AnalyticsRangeQuery },
       config: { capability: "server:read", scope: "server", param: "id" },
     },
     async (req) => {
@@ -73,8 +82,13 @@ export function registerAnalyticsRoutes(app: FastifyInstance): void {
           loadPlayerCountStore(),
         ]);
 
+        const hours = clampHours(
+          req.query.hours,
+          ACTIVITY_HOURS_DEFAULT,
+          ACTIVITY_HOURS_MAX,
+        );
         const now = Date.now();
-        const since = now - ACTIVITY_HOURS * HOUR_MS;
+        const since = now - hours * HOUR_MS;
         // The store keeps every server's buckets in one series; filter here
         // rather than widening the store's API for one caller.
         const series: HourBucket[] = (store.servers[serverId] ?? []).filter(
@@ -84,6 +98,9 @@ export function registerAnalyticsRoutes(app: FastifyInstance): void {
         return {
           uptime,
           activity: {
+            // The resolved (clamped) range, so the client can label what it
+            // actually got rather than what it asked for.
+            rangeHours: hours,
             // `sum / samples` is the mean concurrent players for that hour,
             // which is the honest reading: `max` alone makes one person
             // logging in at 03:00 look like a busy night.
@@ -204,35 +221,30 @@ export function registerAnalyticsRoutes(app: FastifyInstance): void {
     "/api/analytics/commands",
     // Command usage is fleet-wide, not per server, so the scope is global —
     // the gate refuses an unscoped declaration rather than guessing.
-    { config: { capability: "audit:read", scope: "global" } },
-    async () => {
-      const since = Date.now() - 30 * 24 * HOUR_MS;
+    {
+      schema: { querystring: AnalyticsRangeQuery },
+      config: { capability: "audit:read", scope: "global" },
+    },
+    async (req) => {
+      const hours = clampHours(
+        req.query.hours,
+        COMMAND_HOURS_DEFAULT,
+        COMMAND_HOURS_MAX,
+      );
+      const days = Math.max(1, Math.round(hours / 24));
+      const since = Date.now() - days * 24 * HOUR_MS;
       try {
-        // Grouped in SQL rather than in JS: the raw table is one row per
-        // invocation and can run to hundreds of thousands, none of which the
-        // dashboard needs individually.
-        const rows = mapRows(
-          getDb().prepare(
-            `SELECT command,
-                    surface,
-                    COUNT(*)                AS uses,
-                    COUNT(DISTINCT user_id) AS users,
-                    MAX(ts)                 AS last_used
-             FROM command_usage
-             WHERE ts >= ?
-             GROUP BY command, surface
-             ORDER BY uses DESC`,
-          ),
-          (row) => ({
-            command: col.text(row, "command"),
-            surface: col.text(row, "surface"),
-            uses: col.int(row, "uses"),
-            users: col.int(row, "users"),
-            lastUsed: col.int(row, "last_used"),
-          }),
-          since,
-        );
-        return { since, commands: rows };
+        // Delegate to the same query commandUsage.ts already exposes for
+        // this — it was simply never called from here; this route used to
+        // carry its own (near-identical) inline copy of the same SQL.
+        const commands = usageByCommand(days).map((r) => ({
+          command: r.command,
+          surface: r.surface,
+          uses: r.count,
+          users: r.users,
+          lastUsed: r.lastUsedAt,
+        }));
+        return { since, commands };
       } catch (err) {
         log.error("web", `Command analytics failed: ${errMsg(err)}`);
         throw new HttpError(500, "Could not read command usage.");
