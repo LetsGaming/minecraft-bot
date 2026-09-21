@@ -3,11 +3,15 @@
     <header class="mods-head">
       <div>
         <h1>Mods</h1>
-        <p>Install, update and remove mods on <b>{{ serverId || "—" }}</b>.</p>
+        <p>
+          Install, update and remove mods on <b>{{ serverId || "—" }}</b
+          >.
+        </p>
       </div>
       <div class="head-actions">
         <button class="btn" :disabled="checking || !serverId" @click="checkNow">
-          <i class="pi pi-refresh" :class="{ spin: checking }" /> Check for updates
+          <i class="pi pi-refresh" :class="{ spin: checking }" /> Check for
+          updates
         </button>
         <button
           v-if="canWrite && updateCount > 0"
@@ -15,16 +19,29 @@
           :disabled="applyingAll"
           @click="applyAll"
         >
-          <i class="pi pi-arrow-circle-up" /> Apply all <span class="badge">{{ updateCount }}</span>
+          <i class="pi pi-arrow-circle-up" /> Apply all
+          <span class="badge">{{ updateCount }}</span>
         </button>
       </div>
     </header>
 
     <div class="stats">
-      <div class="stat"><div class="n">{{ installed?.mods.length ?? "—" }}</div><div class="l">installed mods</div></div>
-      <div class="stat"><div class="n mono">{{ installed?.gameVersion ?? "—" }}</div><div class="l">minecraft version</div></div>
-      <div class="stat"><div class="n cap">{{ installed?.modLoader ?? "—" }}</div><div class="l">mod loader</div></div>
-      <div class="stat" :class="{ warn: updateCount > 0 }"><div class="n">{{ updateCount }}</div><div class="l">updates available</div></div>
+      <div class="stat">
+        <div class="n">{{ installed?.mods.length ?? "—" }}</div>
+        <div class="l">installed mods</div>
+      </div>
+      <div class="stat">
+        <div class="n mono">{{ installed?.gameVersion ?? "—" }}</div>
+        <div class="l">minecraft version</div>
+      </div>
+      <div class="stat">
+        <div class="n cap">{{ installed?.modLoader ?? "—" }}</div>
+        <div class="l">mod loader</div>
+      </div>
+      <div class="stat" :class="{ warn: updateCount > 0 }">
+        <div class="n">{{ updateCount }}</div>
+        <div class="l">updates available</div>
+      </div>
     </div>
 
     <div class="grid">
@@ -37,11 +54,23 @@
         <div class="browse-top">
           <div class="search">
             <i class="pi pi-search" />
-            <input v-model="query" placeholder="Search mods…" @input="onQueryInput" />
+            <input
+              v-model="query"
+              placeholder="Search mods…"
+              @input="onQueryInput"
+            />
           </div>
           <div class="browse-controls">
-            <label class="toggle"><input type="checkbox" v-model="compatible" @change="resetSearch" />
-              <span class="sw" /> Compatible with {{ installed?.gameVersion ?? "any" }} · {{ installed?.modLoader ?? "any" }}</label>
+            <label class="toggle"
+              ><input
+                type="checkbox"
+                v-model="compatible"
+                @change="resetSearch"
+              />
+              <span class="sw" /> Compatible with
+              {{ installed?.gameVersion ?? "any" }} ·
+              {{ installed?.modLoader ?? "any" }}</label
+            >
             <select v-model="sort" class="select" @change="resetSearch">
               <option value="relevance">Relevance</option>
               <option value="downloads">Downloads</option>
@@ -51,8 +80,14 @@
             </select>
           </div>
           <div class="browse-controls">
-            <label class="toggle"><input type="checkbox" v-model="hideClientOnly" @change="resetSearch" />
-              <span class="sw" /> Hide client-only mods</label>
+            <label class="toggle"
+              ><input
+                type="checkbox"
+                v-model="hideClientOnly"
+                @change="resetSearch"
+              />
+              <span class="sw" /> Hide client-only mods</label
+            >
           </div>
         </div>
 
@@ -60,7 +95,12 @@
           <p v-if="searching" class="empty">Searching…</p>
           <p v-else-if="results.length === 0" class="empty">No results.</p>
 
-          <div v-for="hit in results" :key="hit.projectId" class="item" :class="{ open: openSlug === hit.slug }">
+          <div
+            v-for="hit in results"
+            :key="hit.projectId"
+            class="item"
+            :class="{ open: openSlug === hit.slug }"
+          >
             <div class="result">
               <div class="ricon" :style="iconStyle(hit)">
                 <img v-if="hit.iconUrl" :src="hit.iconUrl" alt="" />
@@ -68,20 +108,49 @@
               </div>
               <div class="info">
                 <div class="rt">
-                  <a :href="hit.pageUrl" target="_blank" rel="noopener"><b>{{ hit.title }}</b></a>
+                  <a :href="hit.pageUrl" target="_blank" rel="noopener"
+                    ><b>{{ hit.title }}</b></a
+                  >
                   <span class="by">by {{ hit.author }}</span>
                 </div>
                 <div class="rd">{{ hit.description }}</div>
                 <div class="meta">
-                  <span class="env"><span class="d" :style="{ background: env(hit.environment).color }" /> {{ env(hit.environment).label }}</span>
-                  <span class="dl"><i class="pi pi-download" /> {{ fmt(hit.downloads) }}</span>
+                  <span class="env"
+                    ><span
+                      class="d"
+                      :style="{ background: env(hit.environment).color }"
+                    />
+                    {{ env(hit.environment).label }}</span
+                  >
+                  <span class="dl"
+                    ><i class="pi pi-download" /> {{ fmt(hit.downloads) }}</span
+                  >
                 </div>
               </div>
-              <a class="extlink" :href="hit.pageUrl" target="_blank" rel="noopener" title="Open on Modrinth"><i class="pi pi-external-link" /></a>
-              <button v-if="hit.installed" class="add installed" disabled>Installed</button>
-              <button v-else-if="canWrite" class="add" :disabled="busy.has(hit.slug)" @click="toggleVersions(hit)">
+              <a
+                class="extlink"
+                :href="hit.pageUrl"
+                target="_blank"
+                rel="noopener"
+                title="Open on Modrinth"
+                ><i class="pi pi-external-link"
+              /></a>
+              <button v-if="hit.installed" class="add installed" disabled>
+                Installed
+              </button>
+              <button
+                v-else-if="canWrite"
+                class="add"
+                :disabled="busy.has(hit.slug)"
+                @click="toggleVersions(hit)"
+              >
                 {{ busy.has(hit.slug) ? "…" : "Add" }}
-                <i class="pi" :class="openSlug === hit.slug ? 'pi-chevron-up' : 'pi-chevron-down'" />
+                <i
+                  class="pi"
+                  :class="
+                    openSlug === hit.slug ? 'pi-chevron-up' : 'pi-chevron-down'
+                  "
+                />
               </button>
             </div>
 
@@ -89,17 +158,39 @@
             <div v-if="openSlug === hit.slug" class="picker">
               <div class="picker-h">
                 <span class="lbl">CHOOSE VERSION</span>
-                <button class="install ghost sm" :disabled="busy.has(hit.slug)" @click="installLatest(hit)">Install latest compatible</button>
+                <button
+                  class="install ghost sm"
+                  :disabled="busy.has(hit.slug)"
+                  @click="installLatest(hit)"
+                >
+                  Install latest compatible
+                </button>
               </div>
               <p v-if="loadingDetail" class="empty sm">Loading versions…</p>
               <template v-else-if="detail">
-                <p v-if="detail.versions.length === 0" class="empty sm">No versions for this loader.</p>
-                <div v-for="v in detail.versions.slice(0, 12)" :key="v.id" class="vrow">
+                <p v-if="detail.versions.length === 0" class="empty sm">
+                  No versions for this loader.
+                </p>
+                <div
+                  v-for="v in detail.versions.slice(0, 12)"
+                  :key="v.id"
+                  class="vrow"
+                >
                   <span class="vv">{{ v.versionNumber }}</span>
                   <span class="gt">{{ v.gameVersions[0] }}</span>
-                  <span class="ty" :class="{ beta: v.versionType !== 'release' }">{{ label(v.versionType) }}</span>
+                  <span
+                    class="ty"
+                    :class="{ beta: v.versionType !== 'release' }"
+                    >{{ label(v.versionType) }}</span
+                  >
                   <span class="dt">{{ date(v.datePublished) }}</span>
-                  <button class="install" :disabled="busy.has(hit.slug)" @click="installVersion(hit, v)">Install</button>
+                  <button
+                    class="install"
+                    :disabled="busy.has(hit.slug)"
+                    @click="installVersion(hit, v)"
+                  >
+                    Install
+                  </button>
                 </div>
               </template>
             </div>
@@ -108,9 +199,21 @@
         <div class="foot">
           <span>Modrinth · {{ total }} results</span>
           <span v-if="total > PAGE" class="pager">
-            <button class="pg" :disabled="offset === 0 || searching" @click="prevPage"><i class="pi pi-chevron-left" /></button>
+            <button
+              class="pg"
+              :disabled="offset === 0 || searching"
+              @click="prevPage"
+            >
+              <i class="pi pi-chevron-left" />
+            </button>
             <span class="pg-info">Page {{ page }} / {{ totalPages }}</span>
-            <button class="pg" :disabled="offset + PAGE >= total || searching" @click="nextPage"><i class="pi pi-chevron-right" /></button>
+            <button
+              class="pg"
+              :disabled="offset + PAGE >= total || searching"
+              @click="nextPage"
+            >
+              <i class="pi pi-chevron-right" />
+            </button>
           </span>
         </div>
       </section>
@@ -122,43 +225,89 @@
           <div class="a muted">{{ installed?.mods.length ?? 0 }} mods</div>
         </div>
         <p v-if="loadingInstalled" class="empty">Loading…</p>
-        <p v-else-if="!installed || installed.mods.length === 0" class="empty">No mods installed.</p>
+        <p v-else-if="!installed || installed.mods.length === 0" class="empty">
+          No mods installed.
+        </p>
         <div v-else class="scroll-body">
-        <table>
-          <thead><tr><th>MOD</th><th>VERSION</th><th>STATUS</th><th></th></tr></thead>
-          <tbody>
-            <tr v-for="m in installed.mods" :key="m.slug" :class="{ 'row-disabled': isDisabled(m) }">
-              <td>
-                <div class="mod-name">{{ m.slug }}</div>
-                <div class="mod-file">{{ m.filename ?? "—" }}</div>
-              </td>
-              <td><span class="ver">{{ shortVersion(m.versionId) }}</span></td>
-              <td>
-                <span
-                  v-if="isDisabled(m)"
-                  class="pill off"
-                  title="Disabled mods only take effect on the next server start"
-                >⏸ disabled</span>
-                <span v-else-if="update(m.slug)" class="pill up">↑ update</span>
-                <span v-else class="pill ok">✓ up to date</span>
-              </td>
-              <td>
-                <div class="row-actions">
-                  <button v-if="canWrite && update(m.slug)" class="mini update" :disabled="busy.has(m.slug)" @click="updateOne(m.slug)">Update</button>
-                  <button
-                    v-if="canWrite"
-                    class="mini toggle"
-                    :disabled="busy.has(m.slug)"
-                    :title="isDisabled(m) ? 'Enable (takes effect on next restart)' : 'Disable without uninstalling (takes effect on next restart)'"
-                    @click="doToggle(m)"
-                  >{{ isDisabled(m) ? "Enable" : "Disable" }}</button>
-                  <a class="extlink" :href="'https://modrinth.com/mod/' + m.slug" target="_blank" rel="noopener" title="Open on Modrinth"><i class="pi pi-external-link" /></a>
-                  <button v-if="canWrite" class="mini remove" :disabled="busy.has(m.slug)" title="Remove" @click="doRemove(m.slug)"><i class="pi pi-trash" /></button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+          <table>
+            <thead>
+              <tr>
+                <th>MOD</th>
+                <th>VERSION</th>
+                <th>STATUS</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="m in installed.mods"
+                :key="m.slug"
+                :class="{ 'row-disabled': isDisabled(m) }"
+              >
+                <td>
+                  <div class="mod-name">{{ m.slug }}</div>
+                  <div class="mod-file">{{ m.filename ?? "—" }}</div>
+                </td>
+                <td>
+                  <span class="ver">{{ shortVersion(m.versionId) }}</span>
+                </td>
+                <td>
+                  <span
+                    v-if="isDisabled(m)"
+                    class="pill off"
+                    title="Disabled mods only take effect on the next server start"
+                    >⏸ disabled</span
+                  >
+                  <span v-else-if="update(m.slug)" class="pill up"
+                    >↑ update</span
+                  >
+                  <span v-else class="pill ok">✓ up to date</span>
+                </td>
+                <td>
+                  <div class="row-actions">
+                    <button
+                      v-if="canWrite && update(m.slug)"
+                      class="mini update"
+                      :disabled="busy.has(m.slug)"
+                      @click="updateOne(m.slug)"
+                    >
+                      Update
+                    </button>
+                    <button
+                      v-if="canWrite"
+                      class="mini toggle"
+                      :disabled="busy.has(m.slug)"
+                      :title="
+                        isDisabled(m)
+                          ? 'Enable (takes effect on next restart)'
+                          : 'Disable without uninstalling (takes effect on next restart)'
+                      "
+                      @click="doToggle(m)"
+                    >
+                      {{ isDisabled(m) ? "Enable" : "Disable" }}
+                    </button>
+                    <a
+                      class="extlink"
+                      :href="'https://modrinth.com/mod/' + m.slug"
+                      target="_blank"
+                      rel="noopener"
+                      title="Open on Modrinth"
+                      ><i class="pi pi-external-link"
+                    /></a>
+                    <button
+                      v-if="canWrite"
+                      class="mini remove"
+                      :disabled="busy.has(m.slug)"
+                      title="Remove"
+                      @click="doRemove(m.slug)"
+                    >
+                      <i class="pi pi-trash" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
     </div>
@@ -171,7 +320,13 @@ import { useMods, ENVIRONMENT_META } from "../composables/useMods";
 import { useCapabilities } from "../composables/useCapabilities";
 import { useToast } from "primevue/usetoast";
 import { UnauthorizedError } from "../api";
-import type { InstalledMods, InstalledMod, ModSearchHit, ModVersion, ModProjectDetail } from "../api";
+import type {
+  InstalledMods,
+  InstalledMod,
+  ModSearchHit,
+  ModVersion,
+  ModProjectDetail,
+} from "../api";
 
 const props = defineProps<{ activeServer: string }>();
 const serverId = computed(() => props.activeServer);
@@ -221,7 +376,13 @@ function label(t: string): string {
   return t ? t.charAt(0).toUpperCase() + t.slice(1) : "Release";
 }
 function date(iso: string): string {
-  return iso ? new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "";
+  return iso
+    ? new Date(iso).toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      })
+    : "";
 }
 function shortVersion(v: string | null): string {
   return v ? v.slice(0, 12) : "—";
@@ -268,7 +429,8 @@ async function checkNow() {
     const res = await mods.checkUpdates(true);
     const map = new Map<string, string>();
     for (const r of res.results) {
-      if (r.status === "update_available") map.set(r.slug, String(r.latestVersionId ?? ""));
+      if (r.status === "update_available")
+        map.set(r.slug, String(r.latestVersionId ?? ""));
     }
     updates.value = map;
   } catch {
@@ -332,14 +494,21 @@ async function toggleVersions(hit: ModSearchHit) {
   try {
     detail.value = await mods.catalog(hit.slug);
   } catch (err) {
-    flash("err", err instanceof Error ? err.message : "Could not load versions.");
+    flash(
+      "err",
+      err instanceof Error ? err.message : "Could not load versions.",
+    );
     openSlug.value = null;
   } finally {
     loadingDetail.value = false;
   }
 }
 
-async function runInstall(slug: string, mcVersion?: string, versionId?: string) {
+async function runInstall(
+  slug: string,
+  mcVersion?: string,
+  versionId?: string,
+) {
   setBusy(slug, true);
   try {
     const r = await mods.install({
@@ -348,7 +517,10 @@ async function runInstall(slug: string, mcVersion?: string, versionId?: string) 
       ...(versionId ? { versionId } : {}),
     });
     if (r.ok) {
-      flash("ok", `Installed ${r.slug ?? slug}${r.dependencies?.length ? ` (+${r.dependencies.length} deps)` : ""}.`);
+      flash(
+        "ok",
+        `Installed ${r.slug ?? slug}${r.dependencies?.length ? ` (+${r.dependencies.length} deps)` : ""}.`,
+      );
       openSlug.value = null;
       await Promise.all([loadInstalled(), checkNow(), runSearch()]);
     } else {
@@ -372,7 +544,10 @@ async function updateOne(slug: string) {
     const r = await mods.updateOne(slug);
     if (r.ok) {
       const n = r.updated?.length ?? 0;
-      flash("ok", n > 0 ? `Updated ${slug}.` : `${slug} is already up to date.`);
+      flash(
+        "ok",
+        n > 0 ? `Updated ${slug}.` : `${slug} is already up to date.`,
+      );
       await Promise.all([loadInstalled(), checkNow()]);
     } else {
       flash("err", r.error ?? "Update failed.");
@@ -388,15 +563,25 @@ async function doToggle(m: InstalledMod) {
   const disabling = !isDisabled(m);
   setBusy(m.slug, true);
   try {
-    const r = disabling ? await mods.disable(m.slug) : await mods.enable(m.slug);
+    const r = disabling
+      ? await mods.disable(m.slug)
+      : await mods.enable(m.slug);
     if (r.ok) {
-      flash("ok", `${disabling ? "Disabled" : "Enabled"} ${m.slug}. Restart the server to apply.`);
+      flash(
+        "ok",
+        `${disabling ? "Disabled" : "Enabled"} ${m.slug}. Restart the server to apply.`,
+      );
       await loadInstalled();
     } else {
       flash("err", r.error ?? `${disabling ? "Disable" : "Enable"} failed.`);
     }
   } catch (err) {
-    flash("err", err instanceof Error ? err.message : `${disabling ? "Disable" : "Enable"} failed.`);
+    flash(
+      "err",
+      err instanceof Error
+        ? err.message
+        : `${disabling ? "Disable" : "Enable"} failed.`,
+    );
   } finally {
     setBusy(m.slug, false);
   }
@@ -426,7 +611,12 @@ async function applyAll() {
     const r = await mods.applyUpdates();
     if (r.ok) {
       const n = r.updated?.length ?? 0;
-      flash("ok", n > 0 ? `Updated ${n} mod${n === 1 ? "" : "s"}.` : "Everything already up to date.");
+      flash(
+        "ok",
+        n > 0
+          ? `Updated ${n} mod${n === 1 ? "" : "s"}.`
+          : "Everything already up to date.",
+      );
       await Promise.all([loadInstalled(), checkNow()]);
     } else {
       flash("err", r.error ?? "Update failed.");
@@ -449,102 +639,612 @@ watch(() => props.activeServer, reload);
 </script>
 
 <style scoped>
-.mods { --green:#3ecf6e; --amber:#e5a13a; --red:#e5544b; --muted:#8a8a90; --muted-2:#6a6a70;
-  --card:#141416; --card-2:#161618; --border:rgba(255,255,255,.07); --border-2:rgba(255,255,255,.11); color:#ededf0; }
-.mods-head { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; }
-.mods-head h1 { margin:0; font-size:22px; font-weight:650; letter-spacing:-.01em; }
-.mods-head p { margin:4px 0 0; color:var(--muted); font-size:13.5px; }
-.mods-head b { color:#ededf0; }
-.head-actions { display:flex; gap:10px; }
-.btn { display:inline-flex; align-items:center; gap:7px; padding:8px 13px; border-radius:8px; font-size:13px; font-weight:500;
-  border:1px solid var(--border-2); background:var(--card-2); color:#ededf0; cursor:pointer; }
-.btn:disabled { opacity:.5; cursor:default; }
-.btn.green { background:var(--green); color:#05130a; border-color:transparent; font-weight:600; }
-.btn .badge { background:rgba(5,19,10,.22); border-radius:20px; padding:0 7px; }
-.spin { animation:spin 1s linear infinite; } @keyframes spin { to { transform:rotate(360deg); } }
-.msg { padding:9px 13px; border-radius:8px; font-size:13px; margin-bottom:14px; }
-.msg.ok { background:rgba(62,207,110,.14); color:var(--green); }
-.msg.err { background:rgba(229,84,75,.13); color:var(--red); }
+.mods {
+  --green: #3ecf6e;
+  --amber: #e5a13a;
+  --red: #e5544b;
+  --muted: #8a8a90;
+  --muted-2: #6a6a70;
+  --card: #141416;
+  --card-2: #161618;
+  --border: rgba(255, 255, 255, 0.07);
+  --border-2: rgba(255, 255, 255, 0.11);
+  color: #ededf0;
+}
+.mods-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+.mods-head h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.mods-head p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13.5px;
+}
+.mods-head b {
+  color: #ededf0;
+}
+.head-actions {
+  display: flex;
+  gap: 10px;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 13px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid var(--border-2);
+  background: var(--card-2);
+  color: #ededf0;
+  cursor: pointer;
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.btn.green {
+  background: var(--green);
+  color: #05130a;
+  border-color: transparent;
+  font-weight: 600;
+}
+.btn .badge {
+  background: rgba(5, 19, 10, 0.22);
+  border-radius: 20px;
+  padding: 0 7px;
+}
+.spin {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.msg {
+  padding: 9px 13px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+.msg.ok {
+  background: rgba(62, 207, 110, 0.14);
+  color: var(--green);
+}
+.msg.err {
+  background: rgba(229, 84, 75, 0.13);
+  color: var(--red);
+}
 
-.stats { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:16px; }
-.stat { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px 20px; }
-.stat .n { font-size:26px; font-weight:650; letter-spacing:-.02em; } .stat .n.mono { font-family:ui-monospace,monospace; font-size:22px; }
-.stat .n.cap { text-transform:capitalize; } .stat.warn .n { color:var(--amber); }
-.stat .l { color:var(--muted); font-size:12.5px; margin-top:4px; }
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.stat {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 20px;
+}
+.stat .n {
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.stat .n.mono {
+  font-family: ui-monospace, monospace;
+  font-size: 22px;
+}
+.stat .n.cap {
+  text-transform: capitalize;
+}
+.stat.warn .n {
+  color: var(--amber);
+}
+.stat .l {
+  color: var(--muted);
+  font-size: 12.5px;
+  margin-top: 4px;
+}
 
-.grid { display:grid; grid-template-columns:1.35fr 1fr; gap:16px; align-items:stretch; }
-.card { background:var(--card); border:1px solid var(--border); border-radius:12px;
-  display:flex; flex-direction:column; min-width:0; }
-.card-h { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--border); }
-.card-h .t { display:flex; align-items:center; gap:9px; font-weight:600; font-size:14.5px; } .card-h .t i { color:var(--green); }
-.card-h .a.muted { color:var(--muted); font-size:13px; }
-.empty { padding:22px 20px; color:var(--muted-2); font-size:13px; } .empty.sm { padding:12px; }
+.grid {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 16px;
+  align-items: stretch;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.card-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.card-h .t {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 600;
+  font-size: 14.5px;
+}
+.card-h .t i {
+  color: var(--green);
+}
+.card-h .a.muted {
+  color: var(--muted);
+  font-size: 13px;
+}
+.empty {
+  padding: 22px 20px;
+  color: var(--muted-2);
+  font-size: 13px;
+}
+.empty.sm {
+  padding: 12px;
+}
 
-.browse-top { padding:16px 20px; border-bottom:1px solid var(--border); display:flex; flex-direction:column; gap:11px; }
-.search { position:relative; } .search i { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--muted); font-size:14px; }
-.search input { width:100%; background:var(--card-2); border:1px solid var(--border-2); border-radius:9px; padding:10px 12px 10px 36px; color:#ededf0; font-size:13.5px; outline:none; }
-.search input:focus { border-color:rgba(62,207,110,.5); }
-.browse-controls { display:flex; align-items:center; justify-content:space-between; }
-.toggle { display:inline-flex; align-items:center; gap:8px; color:var(--muted); font-size:12.5px; cursor:pointer; }
-.toggle input { display:none; } .sw { width:34px; height:19px; border-radius:20px; background:rgba(255,255,255,.14); position:relative; transition:.15s; }
-.sw::after { content:""; position:absolute; top:2px; left:2px; width:15px; height:15px; border-radius:50%; background:#c7c7cc; transition:.15s; }
-.toggle input:checked + .sw { background:var(--green); } .toggle input:checked + .sw::after { left:17px; background:#05130a; }
-.select { background:var(--card-2); border:1px solid var(--border-2); border-radius:8px; padding:7px 10px; color:var(--muted); font-size:12.5px; cursor:pointer; }
+.browse-top {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+.search {
+  position: relative;
+}
+.search i {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: 14px;
+}
+.search input {
+  width: 100%;
+  background: var(--card-2);
+  border: 1px solid var(--border-2);
+  border-radius: 9px;
+  padding: 10px 12px 10px 36px;
+  color: #ededf0;
+  font-size: 13.5px;
+  outline: none;
+}
+.search input:focus {
+  border-color: rgba(62, 207, 110, 0.5);
+}
+.browse-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.toggle input {
+  display: none;
+}
+.sw {
+  width: 34px;
+  height: 19px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.14);
+  position: relative;
+  transition: 0.15s;
+}
+.sw::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #c7c7cc;
+  transition: 0.15s;
+}
+.toggle input:checked + .sw {
+  background: var(--green);
+}
+.toggle input:checked + .sw::after {
+  left: 17px;
+  background: #05130a;
+}
+.select {
+  background: var(--card-2);
+  border: 1px solid var(--border-2);
+  border-radius: 8px;
+  padding: 7px 10px;
+  color: var(--muted);
+  font-size: 12.5px;
+  cursor: pointer;
+}
 
-.results { padding:6px 8px; flex:1 1 auto; min-height:0; max-height:60vh; overflow-y:auto; }
-.scroll-body { flex:1 1 auto; min-height:0; max-height:60vh; overflow-y:auto; }
-.item.open { background:rgba(255,255,255,.02); border-radius:10px; }
-.result { display:flex; gap:12px; align-items:center; padding:12px; }
-.ricon { width:42px; height:42px; border-radius:9px; flex:0 0 42px; display:grid; place-items:center; font-weight:700; font-size:16px; color:#05130a; overflow:hidden; }
-.ricon img { width:100%; height:100%; object-fit:cover; }
-.info { min-width:0; flex:1; }
-.rt { display:flex; align-items:center; gap:8px; } .rt a { color:#ededf0; } .rt b { font-size:13.5px; } .rt .by { color:var(--muted-2); font-size:11.5px; }
-.rd { color:var(--muted); font-size:12.5px; margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:340px; }
-.meta { display:flex; gap:10px; margin-top:7px; color:var(--muted-2); font-size:11.5px; align-items:center; }
-.meta .dl { display:inline-flex; align-items:center; gap:5px; }
-.env { display:inline-flex; align-items:center; gap:6px; padding:2px 8px; border-radius:20px; background:rgba(255,255,255,.05); border:1px solid var(--border); color:var(--muted); }
-.env .d { width:6px; height:6px; border-radius:50%; }
-.extlink { color:var(--muted-2); display:inline-grid; place-items:center; width:26px; height:26px; border-radius:7px; flex:0 0 26px; }
-.extlink:hover { color:#ededf0; background:rgba(255,255,255,.05); }
-.add { display:inline-flex; align-items:center; gap:6px; padding:7px 13px; border-radius:8px; font-size:12.5px; font-weight:600; cursor:pointer; background:var(--green); color:#05130a; border:none; white-space:nowrap; }
-.add:disabled { opacity:.6; } .add.installed { background:transparent; color:var(--muted); border:1px solid var(--border-2); cursor:default; font-weight:500; }
+.results {
+  padding: 6px 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.scroll-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 75vh;
+  overflow-y: auto;
+}
+.item.open {
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 10px;
+}
+.result {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+}
+.ricon {
+  width: 42px;
+  height: 42px;
+  border-radius: 9px;
+  flex: 0 0 42px;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 16px;
+  color: #05130a;
+  overflow: hidden;
+}
+.ricon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.info {
+  min-width: 0;
+  flex: 1;
+}
+.rt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rt a {
+  color: #ededf0;
+}
+.rt b {
+  font-size: 13.5px;
+}
+.rt .by {
+  color: var(--muted-2);
+  font-size: 11.5px;
+}
+.rd {
+  color: var(--muted);
+  font-size: 12.5px;
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 340px;
+}
+.meta {
+  display: flex;
+  gap: 10px;
+  margin-top: 7px;
+  color: var(--muted-2);
+  font-size: 11.5px;
+  align-items: center;
+}
+.meta .dl {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.env {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.env .d {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.extlink {
+  color: var(--muted-2);
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  flex: 0 0 26px;
+}
+.extlink:hover {
+  color: #ededf0;
+  background: rgba(255, 255, 255, 0.05);
+}
+.add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--green);
+  color: #05130a;
+  border: none;
+  white-space: nowrap;
+}
+.add:disabled {
+  opacity: 0.6;
+}
+.add.installed {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border-2);
+  cursor: default;
+  font-weight: 500;
+}
 
-.picker { margin:0 12px 12px 66px; background:var(--card-2); border:1px solid var(--border-2); border-radius:10px; overflow:hidden; }
-.picker-h { display:flex; align-items:center; justify-content:space-between; padding:9px 12px; border-bottom:1px solid var(--border); }
-.picker-h .lbl { font-size:11px; letter-spacing:.08em; color:var(--muted-2); font-weight:600; }
-.vrow { display:flex; align-items:center; gap:10px; padding:9px 12px; border-bottom:1px solid rgba(255,255,255,.04); }
-.vrow:last-child { border-bottom:0; }
-.vv { font-family:ui-monospace,monospace; font-size:12.5px; min-width:64px; }
-.gt { font-family:ui-monospace,monospace; font-size:10.5px; color:var(--muted); background:rgba(255,255,255,.06); padding:1px 7px; border-radius:20px; }
-.ty { font-size:11px; color:var(--muted); } .ty.beta { color:var(--amber); }
-.dt { margin-left:auto; color:var(--muted-2); font-size:11.5px; }
-.install { padding:5px 12px; border-radius:7px; font-size:12px; font-weight:600; background:var(--green); color:#05130a; border:none; cursor:pointer; }
-.install.ghost { background:transparent; color:var(--muted); border:1px solid var(--border-2); }
-.install.sm { padding:4px 10px; font-size:11.5px; }
-.install:disabled { opacity:.6; }
+.picker {
+  margin: 0 12px 12px 66px;
+  background: var(--card-2);
+  border: 1px solid var(--border-2);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.picker-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.picker-h .lbl {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--muted-2);
+  font-weight: 600;
+}
+.vrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.vrow:last-child {
+  border-bottom: 0;
+}
+.vv {
+  font-family: ui-monospace, monospace;
+  font-size: 12.5px;
+  min-width: 64px;
+}
+.gt {
+  font-family: ui-monospace, monospace;
+  font-size: 10.5px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1px 7px;
+  border-radius: 20px;
+}
+.ty {
+  font-size: 11px;
+  color: var(--muted);
+}
+.ty.beta {
+  color: var(--amber);
+}
+.dt {
+  margin-left: auto;
+  color: var(--muted-2);
+  font-size: 11.5px;
+}
+.install {
+  padding: 5px 12px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--green);
+  color: #05130a;
+  border: none;
+  cursor: pointer;
+}
+.install.ghost {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border-2);
+}
+.install.sm {
+  padding: 4px 10px;
+  font-size: 11.5px;
+}
+.install:disabled {
+  opacity: 0.6;
+}
 
-table { width:100%; border-collapse:collapse; }
-thead th { text-align:left; color:var(--muted-2); font-size:10.5px; letter-spacing:.1em; font-weight:600; padding:11px 20px; border-bottom:1px solid var(--border); }
-tbody td { padding:12px 20px; border-bottom:1px solid rgba(255,255,255,.04); vertical-align:middle; }
-tbody tr:last-child td { border-bottom:0; }
-.mod-name { font-weight:550; font-size:13.5px; }
-.mod-file { color:var(--muted-2); font-family:ui-monospace,monospace; font-size:11px; margin-top:2px; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.ver { font-family:ui-monospace,monospace; font-size:12.5px; color:#cfcfd4; }
-.pill { display:inline-flex; align-items:center; padding:3px 9px; border-radius:20px; font-size:11.5px; font-weight:500; }
-.pill.ok { background:rgba(62,207,110,.14); color:var(--green); } .pill.up { background:rgba(229,161,58,.14); color:var(--amber); }
-.pill.off { background:rgba(255,255,255,.06); color:var(--muted); cursor:help; }
-.row-disabled { opacity:.6; }
-.row-actions { display:flex; gap:7px; justify-content:flex-end; align-items:center; }
-.mini { display:inline-flex; align-items:center; gap:6px; padding:6px 11px; border-radius:7px; font-size:12.5px; font-weight:500; cursor:pointer; border:1px solid var(--border-2); background:transparent; color:#ededf0; }
-.mini.update { background:var(--amber); color:#160e02; border-color:transparent; font-weight:600; }
-.mini.toggle { color:var(--muted); }
-.mini.remove { color:var(--muted); padding:6px 9px; } .mini.remove:hover { color:var(--red); border-color:rgba(229,84,75,.13); background:rgba(229,84,75,.13); }
-.mini:disabled { opacity:.5; }
-.foot { padding:10px 20px; border-top:1px solid var(--border); color:var(--muted-2); font-size:12px; display:flex; align-items:center; justify-content:space-between; }
-.pager { display:inline-flex; align-items:center; gap:8px; }
-.pg { display:inline-grid; place-items:center; width:26px; height:26px; border-radius:7px; border:1px solid var(--border-2); background:transparent; color:var(--muted); cursor:pointer; }
-.pg:hover:not(:disabled) { color:#ededf0; border-color:rgba(255,255,255,.2); }
-.pg:disabled { opacity:.4; cursor:default; }
-.pg-info { color:var(--muted); font-variant-numeric:tabular-nums; }
-@media (max-width:1100px) { .grid { grid-template-columns:1fr; } .stats { grid-template-columns:repeat(2,1fr); } }
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+thead th {
+  text-align: left;
+  color: var(--muted-2);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+  padding: 11px 20px;
+  border-bottom: 1px solid var(--border);
+}
+tbody td {
+  padding: 12px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  vertical-align: middle;
+}
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+.mod-name {
+  font-weight: 550;
+  font-size: 13.5px;
+}
+.mod-file {
+  color: var(--muted-2);
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  margin-top: 2px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ver {
+  font-family: ui-monospace, monospace;
+  font-size: 12.5px;
+  color: #cfcfd4;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 11.5px;
+  font-weight: 500;
+}
+.pill.ok {
+  background: rgba(62, 207, 110, 0.14);
+  color: var(--green);
+}
+.pill.up {
+  background: rgba(229, 161, 58, 0.14);
+  color: var(--amber);
+}
+.pill.off {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+  cursor: help;
+}
+.row-disabled {
+  opacity: 0.6;
+}
+.row-actions {
+  display: flex;
+  gap: 7px;
+  justify-content: flex-end;
+  align-items: center;
+}
+.mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--border-2);
+  background: transparent;
+  color: #ededf0;
+}
+.mini.update {
+  background: var(--amber);
+  color: #160e02;
+  border-color: transparent;
+  font-weight: 600;
+}
+.mini.toggle {
+  color: var(--muted);
+}
+.mini.remove {
+  color: var(--muted);
+  padding: 6px 9px;
+}
+.mini.remove:hover {
+  color: var(--red);
+  border-color: rgba(229, 84, 75, 0.13);
+  background: rgba(229, 84, 75, 0.13);
+}
+.mini:disabled {
+  opacity: 0.5;
+}
+.foot {
+  padding: 10px 20px;
+  border-top: 1px solid var(--border);
+  color: var(--muted-2);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.pager {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.pg {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  border: 1px solid var(--border-2);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.pg:hover:not(:disabled) {
+  color: #ededf0;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.pg:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.pg-info {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 1100px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  .stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
 </style>
