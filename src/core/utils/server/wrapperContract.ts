@@ -122,10 +122,13 @@ export const EXPECTED_WRAPPER_FEATURES: Record<string, ExpectedFeature> = {
   },
   backups: { version: 1, degrades: "/backup" },
   "backup-files": {
-    version: 1,
+    // v2: delete an archive from the dashboard (see status.ts's backupDelete
+    // gate and serverAccess.deleteBackupFile). A v1 wrapper still serves
+    // list/download fine — only the delete button degrades.
+    version: 2,
     degrades:
-      "the dashboard's backup panel — archives cannot be listed or downloaded, " +
-      "only the per-tier summary is available",
+      "the dashboard backup panel's delete button — archives can still be " +
+      "listed and downloaded, they just cannot be removed from the dashboard",
   },
   "backup-restore": {
     version: 1,

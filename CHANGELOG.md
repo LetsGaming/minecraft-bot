@@ -8,6 +8,10 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Player avatars in embeds and chat-bridge webhooks fell back to the default Steve/Alex skin for the first chat message/join after a bot restart on any player whose stats/milestones hadn't triggered a whitelist/usercache load yet — the name→UUID cache `mcHeads.ts` reads was never warmed at startup. Each server instance now warms it as soon as its watchers are wired (`initMinecraftCommands.ts`).
+- The wrapper-version-mismatch warning at startup ("wrapper X provides `backup-files` v2, newer than the v1 bot implements") fired even on the latest bot release: the bot's contract table (`wrapperContract.ts`) still declared `backup-files` as v1 even though 6.1.0 added the v2 dashboard delete flow. Bumped to v2.
+- Downtime monitoring polled the server's health every 60s but only ever logged a transition that crossed the 3-strike (server) or 5-strike (wrapper) alert threshold, so a state flip that self-healed within one or two ticks — the common case behind "sometimes reports players as offline" — left no trace to diagnose. Every poll now logs at debug level (`DEBUG=1`) with state, source, wrapper/RCON status, player count and reason.
+
 - Config editor: a Minecraft server configured with the id `server` (or any guild-scope field literally matching a reference-dropdown name) had its dropdown hijacked into a plain Select, and picking an option there overwrote the entire `servers` map with `{"server": "server"}`. The reference-dropdown heuristic matched by field name alone, and a `servers` map entry's own key is passed down as that name; it's now also gated on the field actually being scalar-shaped (`src/web/frontend/src/components/schema/SchemaField.vue`, `schemaField.ts`'s new `isReferenceField`).
 
 ## [6.1.0] — 2026-09-21

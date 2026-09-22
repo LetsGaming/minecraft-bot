@@ -135,6 +135,17 @@ async function checkServer(
     health = unknownHealth(errMsg(err), now);
   }
 
+  // Below FAILURES_BEFORE_ALERT/UNREACHABLE_BEFORE_ALERT a state flip never
+  // reaches an alert or a warn log, so a blip that self-heals in one or two
+  // ticks otherwise leaves no trace at all. Set DEBUG=1 to see every poll.
+  log.debug(
+    "downtime",
+    `${server.id}: state=${health.state} source=${health.source} ` +
+      `wrapper=${health.wrapper} rcon=${health.rcon} players=${
+        health.players?.online ?? "?"
+      } reason=${health.reason ?? "-"}`,
+  );
+
   // ── The API wrapper ─────────────────────────────────────────────────────
   // Tracked on its own axis, because it fails independently of the server and
   // needs a different fix. Note this runs even when the server's own state is
