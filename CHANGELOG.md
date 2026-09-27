@@ -6,6 +6,12 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Leaderboard builds and the hourly stat snapshot now use a bulk stats route (`GET /instances/:id/stats/bulk`, on a wrapper new enough to serve it) instead of one HTTP request per player who has ever joined — on an older wrapper, `loadAllStats()` still works, falling back to the old per-uuid reads with a concurrency cap of 6 instead of firing them all at once (`statUtils.ts`, `serverAccess.readAllStats`).
+- A per-server circuit breaker in front of wrapper reads: after 5 consecutive failures it fails fast for 15s instead of every caller paying its own connect-and-timeout during a sustained outage, then probes once (half-open) before fully recovering (`core/utils/server/circuitBreaker.ts`). A 429 (the wrapper rate-limiting, not failing) never counts toward it, and now surfaces as its own distinct error instead of reading identically to "unreachable" (`serverAccess.RateLimitedError`).
+- The dashboard's `/api/status` collection (and the Prometheus `/metrics` scrape, which runs the same collection) now caches each server's health/player-list (10s), TPS (15s) and host info (60s) instead of re-asking the wrapper on every poll — an open Status tab, an open Overview tab, and a scrape interval used to each hit the wrapper independently for the same data (`web/backend/status/status.ts`).
+
 ### Fixed
 
 - Player avatars in embeds and chat-bridge webhooks fell back to the default Steve/Alex skin for the first chat message/join after a bot restart on any player whose stats/milestones hadn't triggered a whitelist/usercache load yet — the name→UUID cache `mcHeads.ts` reads was never warmed at startup. Each server instance now warms it as soon as its watchers are wired (`initMinecraftCommands.ts`).

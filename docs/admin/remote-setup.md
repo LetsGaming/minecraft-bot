@@ -141,6 +141,12 @@ report. What follows is what each feature costs you if the wrapper is older.
 - **Rollback** (`rollback` in the script actions): the Rollback button is hidden
   when the wrapper does not advertise `rollback.sh`.
 
+- **Bulk player stats** (`GET /instances/:id/stats/bulk`): lets a leaderboard
+  build or the hourly snapshot fetch every player's stats in one request.
+  Without it the bot falls back to one request per player who has ever
+  joined, capped at 6 concurrent — functionally identical, just heavier on
+  the wrapper on a server with a large lifetime player count.
+
 Older features, kept here for anyone upgrading from further back. Two need
 wrapper routes added in v2.1:
 

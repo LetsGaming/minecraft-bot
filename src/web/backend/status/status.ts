@@ -6,6 +6,7 @@
  * Split out of server.ts in the QUAL-01 refactor (2026-07 audit).
  */
 import { getServerInstance } from "@mcbot/core/utils/server/server.js";
+import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 import { getHostResources } from "@mcbot/core/utils/server/hostResources.js";
 import {
   getRemoteManifest,
@@ -21,12 +22,43 @@ import {
 import type { ServerStatus } from "@mcbot/schema/contract.js";
 import { noteWrapperState } from "@mcbot/core/utils/wrapper/queueFlush.js";
 import { remember, recall } from "@mcbot/core/utils/wrapper/lastKnown.js";
+import { cached, invalidatePrefix } from "@mcbot/core/utils/cache.js";
+
+// The dashboard polls /api/status on its own timer (StatusView, OverviewView
+// — each an independent poller, see useServerStatus.ts) and the Prometheus
+// scrape runs the same collection again; none of that coordinates with the
+// others. These four wrapper calls used to run fresh on every single one of
+// those, so an open dashboard tab and a scrape interval could together ask
+// the wrapper for the same server's health several times a second. Short
+// TTLs — well under any poll interval that matters, well above the noise of
+// two requests arriving milliseconds apart — collapse that into one call.
+const HEALTH_LIST_TTL_MS = 10_000;
+const TPS_TTL_MS = 15_000;
+const HOST_INFO_TTL_MS = 60_000;
+
+function cachedHealth(server: ServerInstance): ReturnType<ServerInstance["getHealth"]> {
+  return cached(`status:health:${server.id}`, HEALTH_LIST_TTL_MS, () => server.getHealth());
+}
+
+function cachedList(server: ServerInstance): ReturnType<ServerInstance["getList"]> {
+  return cached(`status:list:${server.id}`, HEALTH_LIST_TTL_MS, () => server.getList());
+}
+
+function cachedTps(server: ServerInstance): ReturnType<ServerInstance["getTps"]> {
+  return cached(`status:tps:${server.id}`, TPS_TTL_MS, () => server.getTps());
+}
+
+function cachedHostResources(
+  server: ServerInstance,
+): ReturnType<typeof getHostResources> {
+  return cached(`status:info:${server.id}`, HOST_INFO_TTL_MS, () => getHostResources(server));
+}
 
 export async function collectStatus(serverId: string): Promise<ServerStatus> {
   const server = getServerInstance(serverId);
   if (!server) throw new Error(`unknown server ${serverId}`);
 
-  const health = await server.getHealth();
+  const health = await cachedHealth(server);
   const base: ServerStatus = {
     id: serverId,
     state: health.state,
@@ -76,7 +108,7 @@ export async function collectStatus(serverId: string): Promise<ServerStatus> {
   if (!canQueryServer(health)) return withLastKnownEnrichment(serverId, base);
 
   try {
-    const list = await server.getList();
+    const list = await cachedList(server);
     const online = parseInt(String(list.playerCount), 10);
     const max = parseInt(String(list.maxPlayers), 10);
     // `getList()` answers `{ playerCount: "0", maxPlayers: "?" }` when its own
@@ -97,13 +129,13 @@ export async function collectStatus(serverId: string): Promise<ServerStatus> {
   }
 
   try {
-    const tps = await server.getTps();
+    const tps = await cachedTps(server);
     base.tps = tps?.tps1m ?? null;
   } catch {
     /* tps unavailable (vanilla) */
   }
   try {
-    const host = await getHostResources(server);
+    const host = await cachedHostResources(server);
     if (host) {
       base.host = {
         process: host.process
@@ -216,6 +248,7 @@ const FEATURE_TTL_MS = 5 * 60_000;
  */
 export function clearFeatureCache(): void {
   featureCache.clear();
+  invalidatePrefix("status:");
 }
 
 async function wrapperFeatures(server: {

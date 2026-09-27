@@ -3,6 +3,8 @@ import type { ServerInstance } from "../server/server.js";
 import { loadKnownPlayers } from "./whitelist.js";
 import { log } from "../logger.js";
 import { isRecord } from "../objects.js";
+import { cached, invalidate, invalidatePrefix } from "../cache.js";
+import { mapLimit } from "../concurrency.js";
 import * as serverAccess from "../server/serverAccess.js";
 import type {
   FlattenedStat,
@@ -272,14 +274,37 @@ export async function loadStats(
  * Cached per-server for 30 s. Call invalidateAllStatsCache() after writes.
  */
 const ALL_STATS_TTL_MS = 30_000;
-const allStatsCaches = new Map<
-  string,
-  { data: Record<string, MinecraftStatsFile>; at: number }
->();
+const ALL_STATS_CACHE_PREFIX = "stats:all:";
+
+// Above the wrapper's own per-request concurrency (8), this is only the
+// fallback path taken against a wrapper too old to serve /stats/bulk — the
+// bound that matters lives server-side once bulk is available.
+const STATS_FALLBACK_CONCURRENCY = 6;
 
 export function invalidateAllStatsCache(serverId?: string): void {
-  if (serverId) allStatsCaches.delete(serverId);
-  else allStatsCaches.clear();
+  if (serverId) invalidate(`${ALL_STATS_CACHE_PREFIX}${serverId}`);
+  else invalidatePrefix(ALL_STATS_CACHE_PREFIX);
+}
+
+async function loadAllStatsUncached(
+  cfg: ServerInstance["config"],
+): Promise<Record<string, MinecraftStatsFile>> {
+  // A wrapper new enough to serve every player's stats in one request makes
+  // the per-uuid fan-out below unnecessary; try it first and only fall back
+  // when it 404s (older wrapper) so a lifetime player count of a few hundred
+  // does not become a few hundred simultaneous requests.
+  const bulk = await serverAccess.readAllStats(cfg).catch(() => null);
+  if (bulk) return bulk;
+
+  const uuids = await serverAccess.listStatsUuids(cfg);
+  const results = await mapLimit(uuids, STATS_FALLBACK_CONCURRENCY, async (uuid) => {
+    const statsData = await serverAccess.readStats(cfg, uuid);
+    return [uuid, statsData] as const;
+  });
+
+  return Object.fromEntries(
+    results.filter((r): r is [string, MinecraftStatsFile] => r[1] !== null),
+  );
 }
 
 export async function loadAllStats(
@@ -288,25 +313,12 @@ export async function loadAllStats(
   const srv = server ?? getFirstInstance();
   const cfg = srv?.config;
   if (!cfg) return {};
-  const cacheKey = cfg.id;
 
-  const cached = allStatsCaches.get(cacheKey);
-  if (cached && Date.now() - cached.at < ALL_STATS_TTL_MS) return cached.data;
-
-  const uuids = await serverAccess.listStatsUuids(cfg);
-
-  const results = await Promise.all(
-    uuids.map(async (uuid) => {
-      const statsData = await serverAccess.readStats(cfg, uuid);
-      return [uuid, statsData] as const;
-    }),
+  return cached(
+    `${ALL_STATS_CACHE_PREFIX}${cfg.id}`,
+    ALL_STATS_TTL_MS,
+    () => loadAllStatsUncached(cfg),
   );
-
-  const data = Object.fromEntries(
-    results.filter((r): r is [string, MinecraftStatsFile] => r[1] !== null),
-  );
-  allStatsCaches.set(cacheKey, { data, at: Date.now() });
-  return data;
 }
 
 /**

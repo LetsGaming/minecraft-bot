@@ -52,11 +52,24 @@ The rule from the guidelines follows from this: never `fs.writeFile` a state fil
 | Cache | Where | Lifetime | Invalidation |
 |---|---|---|---|
 | Whitelist + usercache per server | `minecraft/whitelist.ts` | 60 s TTL | `invalidateWhitelistCache(serverId)` — called by `/whitelist`, `/verify`, and `/unwhitelist`; the TTL covers edits made outside the bot |
-| All player stats per server | `minecraft/statUtils.ts` | 30 s TTL | TTL, plus explicit invalidation after snapshots and stat deletion |
+| All player stats per server | `minecraft/statUtils.ts`, via `cache.ts` | 30 s TTL | TTL, plus explicit invalidation after snapshots and stat deletion |
 | `/list` output per server | `minecraft/playerUtils.ts` | 500 ms | TTL |
 | Seed, TPS-command support | `ServerInstance` | process lifetime | none |
 | Mod list per server | `minecraft/modUtils.ts` | keyed by file mtime | automatic when `downloaded_versions.json` changes |
 | Config | `config.ts` | until file change | `fs.watch` hot reload (debounced), `/config reload` |
+| Dashboard status: health/list (10 s), TPS (15 s), host info (60 s) | `web/backend/status/status.ts`, via `cache.ts` | see column 3 | `clearFeatureCache()` (also drops the `status:` prefix) |
+| Mods installed/updates/search/catalog/icons, mod config index/contents | `web/backend/routes/{mods,modConfigs}.ts`, via `cache.ts` | 15 s–24 h, per key | invalidated on the matching mutation |
+
+`cache.ts` (`src/core/utils/cache.ts`) is the shared TTL cache underneath most
+of the rows above: single-flight (concurrent misses on one key share one
+read), and an optional `staleMs` for stale-while-revalidate. It is a
+freshness cache only — a failed read is never cached and never swallowed;
+compose with `wrapper/lastKnown.ts`'s `readThrough`/`recall` for a stale
+value served specifically *on error*. See
+[decisions.md](../decisions.md#coreutilscachets-gained-single-flight-and-stale-while-revalidate-it-stays-a-freshness-cache-not-a-fallback-cache)
+for why the two stay separate. A per-server circuit breaker
+(`server/circuitBreaker.ts`) sits in front of wrapper reads specifically,
+independent of both caches — see decisions.md for that split too.
 
 ## Where player stats live on disk
 

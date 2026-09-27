@@ -14,6 +14,9 @@ vi.mock("../../src/core/utils/logger.js", () => ({
 vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
   sendCommand: vi.fn().mockResolvedValue(null),
   readWhitelist: vi.fn().mockResolvedValue([{ name: "Alice", uuid: "u1" }]),
+  // null: simulates a wrapper too old to serve /stats/bulk, so these tests
+  // keep exercising the per-uuid fallback (listStatsUuids + readStats).
+  readAllStats: vi.fn().mockResolvedValue(null),
   readStats: vi.fn().mockResolvedValue({ stats: {} }),
   readUserCache: vi.fn().mockResolvedValue([]),
   listStatsUuids: vi.fn().mockResolvedValue(["u1", "u-orphan"]),

@@ -512,3 +512,63 @@ wrong thing.
 never the subject. A test that mocks — or re-implements — what it is testing
 will pass forever and prove nothing. This repo has now produced that bug three
 times: the leaderboard command tests mocking `buildLeaderboard`, and these two.
+
+## A per-server circuit breaker in front of wrapper reads, kept separate from lastKnown
+
+**Problem:** during a sustained wrapper outage, every caller — the status
+poll, the downtime monitor, a Discord command, an open dashboard tab — paid
+its own full connect-and-timeout on every single attempt for as long as the
+outage lasted. `lastKnown`/`readThrough` already solved *what to show* during
+that window (the last good value, clearly marked stale); nothing solved *how
+often to keep trying*.
+
+**Decision:** `core/utils/server/circuitBreaker.ts`, wired into
+`serverAccess.ts`'s `apiGetRaw` — the one function every instance-scoped GET
+already goes through. After 5 consecutive failures it opens and fails fast
+for 15s, then lets one probe through (half-open) before fully closing again.
+Deliberately per-server (a breaker keyed globally would let one broken
+instance mute every other configured server) and deliberately reads-only:
+writes (scripts, mod mutations, restore, console commands) are rare and
+operator-initiated, and an admin retrying "start the server" during a flaky
+window should reach the wrapper, not be told no by a breaker tuned for read
+traffic.
+
+A 429 is excluded from the breaker on purpose: the wrapper answered and
+declined the request on its own terms, which is proof it is reachable and
+healthy, not evidence of an outage. It surfaces as `RateLimitedError`,
+carrying the parsed `Retry-After`, so a caller can tell "the wrapper said no"
+from "the wrapper isn't there" — two problems that used to read identically
+as "unreachable".
+
+**Why not extend `lastKnown.ts` instead:** the two solve different problems
+and compose rather than merge — `lastKnown` decides what to serve on a
+*single* failure; the breaker decides whether to *attempt* the next call at
+all after several. Folding fail-fast logic into the stale-value cache would
+make one module answer two unrelated questions, exactly the shape
+`cache.ts`'s own docstring already warns against for the freshness/fallback
+split.
+
+## `core/utils/cache.ts` gained single-flight and stale-while-revalidate; it stays a freshness cache, not a fallback cache
+
+**Problem:** the dashboard's `/api/status` poll (two independent pollers —
+`StatusView` and `OverviewView` — plus a Prometheus scrape hitting the same
+collection) asked the wrapper for the same server's health/list/TPS/host
+info on every single poll, uncoordinated with each other. Separately, five
+call sites in `src/core` had each grown their own bespoke
+`Map<key, {value, at}>` TTL cache (`statUtils.ts`, `whitelist.ts`,
+`playerUtils.ts`, `modUtils.ts`) alongside the one shared helper
+(`cache.ts`), which only the web backend used.
+
+**Decision:** extend the existing `cached()` rather than write a second
+cache: it gained single-flight (concurrent misses on one key now share one
+`read()`) and an optional `staleMs` for stale-while-revalidate, with the
+3-argument call stays byte-for-byte backward compatible for its two existing
+callers. `statUtils.ts`'s `loadAllStats` cache and `status.ts`'s new
+health/list/TPS/host-info caches both use it.
+
+**Deliberately not touched:** serve-stale-on-error. `cached()`'s own
+docstring already states the split and why: "wrap with `readThrough` /
+`lastKnown` when a stale fallback on error is also wanted; the two compose."
+Baking error-fallback into the freshness cache would duplicate what
+`lastKnown.ts` already does correctly, for the same reason the circuit
+breaker above stays a separate module rather than a `lastKnown.ts` addition.
