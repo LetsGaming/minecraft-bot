@@ -11,6 +11,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
   readUserCache: vi.fn().mockResolvedValue([]),
+  // null: simulates a wrapper too old to serve the bulk route, so the
+  // existing per-uuid tests below keep exercising that fallback path.
+  readAllStats: vi.fn().mockResolvedValue(null),
   listStatsUuids: vi.fn().mockResolvedValue(["abc123", "def456"]),
   readStats: vi.fn().mockResolvedValue({ stats: {} }),
 }));
@@ -72,5 +75,26 @@ describe("loadAllStats TTL cache", () => {
     expect(vi.mocked(serverAccess.readStats).mock.calls.length).toBeGreaterThan(
       readsAfterFirst,
     );
+  });
+
+  it("uses the bulk route and skips the per-uuid fan-out when the wrapper supports it", async () => {
+    vi.mocked(serverAccess.readAllStats).mockResolvedValueOnce({
+      abc123: { stats: {} } as never,
+    });
+
+    const data = await loadAllStats();
+
+    expect(data).toEqual({ abc123: { stats: {} } });
+    expect(vi.mocked(serverAccess.listStatsUuids)).not.toHaveBeenCalled();
+    expect(vi.mocked(serverAccess.readStats)).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the per-uuid path when the bulk route rejects (older wrapper)", async () => {
+    vi.mocked(serverAccess.readAllStats).mockRejectedValueOnce(new Error("404"));
+
+    await loadAllStats();
+
+    expect(vi.mocked(serverAccess.listStatsUuids)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(serverAccess.readStats)).toHaveBeenCalledTimes(2);
   });
 });

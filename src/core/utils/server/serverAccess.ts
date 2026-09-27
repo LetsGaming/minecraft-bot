@@ -22,6 +22,7 @@ import {
   type WrapperManifest,
 } from "./wrapperContract.js";
 import { log } from "../logger.js";
+import * as breaker from "./circuitBreaker.js";
 import { SseLineStream } from "../sseLineStream.js";
 import { isRecord } from "../objects.js";
 import {
@@ -89,19 +90,72 @@ function instanceUrl(cfg: ServerConfig, route: string): string {
  * GET an instance route without asserting the status, for the few callers
  * that treat a specific one as data rather than as a failure.
  */
+/**
+ * Thrown by apiGetRaw when the circuit breaker for this server is open —
+ * kept distinguishable from a real fetch failure only in that it never
+ * touched the network, which is the whole point.
+ */
+class BreakerOpenError extends Error {
+  constructor(serverId: string) {
+    super(`circuit breaker open for ${serverId} — wrapper reads paused`);
+    this.name = "BreakerOpenError";
+  }
+}
+
+/**
+ * A 429 means the wrapper answered and declined the request — it is
+ * reachable and healthy, just rate-limiting. Treated as its own outcome
+ * throughout so it never gets logged or counted as "unreachable", and never
+ * trips the circuit breaker (below): the breaker exists for a wrapper that
+ * cannot be reached at all, not for one enforcing its own budget correctly.
+ */
+export class RateLimitedError extends Error {
+  readonly retryAfterMs: number | null;
+  constructor(route: string, retryAfterMs: number | null) {
+    super(`API ${route} → 429: rate limited${retryAfterMs !== null ? ` (retry after ${retryAfterMs}ms)` : ""}`);
+    this.name = "RateLimitedError";
+    this.retryAfterMs = retryAfterMs;
+  }
+}
+
+function parseRetryAfterMs(res: Response): number | null {
+  const header = res.headers.get("retry-after");
+  if (!header) return null;
+  const seconds = Number(header);
+  return Number.isFinite(seconds) ? seconds * 1000 : null;
+}
+
 async function apiGetRaw(
   cfg: ServerConfig,
   route: string,
   timeoutMs = DEFAULT_GET_TIMEOUT_MS,
 ): Promise<Response> {
+  if (!breaker.shouldAttempt(cfg.id)) {
+    throw new BreakerOpenError(cfg.id);
+  }
   const headers: Record<string, string> = {};
   if (cfg.apiKey) headers["x-api-key"] = cfg.apiKey;
-  // Bug 3 fix: explicit timeout so a hung API server can't stall the poll
-  // loop indefinitely. Node 18+ AbortSignal.timeout() is zero-dependency.
-  return fetch(instanceUrl(cfg, route), {
-    headers,
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  let res: Response;
+  try {
+    // Bug 3 fix: explicit timeout so a hung API server can't stall the poll
+    // loop indefinitely. Node 18+ AbortSignal.timeout() is zero-dependency.
+    res = await fetch(instanceUrl(cfg, route), {
+      headers,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (err) {
+    breaker.recordFailure(cfg.id);
+    throw err;
+  }
+  if (res.status === 429) {
+    // Reachable and healthy — do not feed this into the breaker.
+    throw new RateLimitedError(route, parseRetryAfterMs(res));
+  }
+  // 5xx is the wrapper itself failing, not this route's data being absent
+  // (a 404 is a perfectly healthy answer and must not open the breaker).
+  if (res.status >= 500) breaker.recordFailure(cfg.id);
+  else breaker.recordSuccess(cfg.id);
+  return res;
 }
 
 const DEFAULT_GET_TIMEOUT_MS = 8_000;
@@ -765,6 +819,24 @@ export async function readStats(
 export async function listStatsUuids(cfg: ServerConfig): Promise<string[]> {
   const { uuids } = await apiGet<{ uuids: string[] }>(cfg, "/stats");
   return uuids;
+}
+
+/**
+ * Every player's stats in one wrapper request, from a wrapper new enough to
+ * serve it. Null (not thrown) on a 404 so the caller can fall back to the
+ * per-uuid path without treating an older wrapper as an error — the same
+ * "degrade per route" pattern every other optional feature here follows.
+ */
+export async function readAllStats(
+  cfg: ServerConfig,
+): Promise<Record<string, MinecraftStatsFile> | null> {
+  const res = await apiGetRaw(cfg, "/stats/bulk");
+  if (res.status === 404) return null;
+  const { stats } = await readApiJson<{ stats: Record<string, MinecraftStatsFile> }>(
+    res,
+    "/stats/bulk",
+  );
+  return stats;
 }
 
 /** Delete a player's stats file via the wrapper. */

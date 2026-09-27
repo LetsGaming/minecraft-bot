@@ -100,6 +100,14 @@ export const EXPECTED_WRAPPER_FEATURES: Record<string, ExpectedFeature> = {
     version: 1,
     degrades: "/stats, /leaderboard, /top, and the hourly snapshots behind period boards",
   },
+  // Deliberately not listed here: "stats-bulk" is a pure performance
+  // optimization with a fully-equivalent fallback (readAllStats() in
+  // serverAccess.ts tries it and falls back to the per-uuid stats-read path
+  // on any older wrapper). Every entry in this table reports as a blocking
+  // "update the wrapper" gap when absent, which is wrong for something that
+  // degrades to identical behavior at a slightly higher wrapper request
+  // count — so it is intentionally invisible to the startup contract report
+  // and only ever detected at the one call site that uses it.
   "stats-delete": {
     version: 1,
     degrades: "/server prune-stats — it reports 0 deletions",

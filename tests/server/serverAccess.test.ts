@@ -39,7 +39,9 @@ import {
   readBackups,
   runScript,
   logStreamUrl,
+  RateLimitedError,
 } from "../../src/core/utils/server/serverAccess.js";
+import { resetBreakersForTesting } from "../../src/core/utils/server/circuitBreaker.js";
 
 function jsonResponse(data: unknown, ok = true) {
   return {
@@ -58,6 +60,7 @@ const remoteCfg = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetBreakersForTesting();
 });
 
 // ── tailLog ───────────────────────────────────────────────────────────────
@@ -385,5 +388,71 @@ describe("readStats — a missing stats file is an answer, not a failure", () =>
     await expect(
       readStats(remoteCfg, "069a79f4-44e9-4726-a5be-fca90e38aaf5"),
     ).resolves.toEqual(doc);
+  });
+});
+
+// ── 429 handling ─────────────────────────────────────────────────────────
+
+function rateLimitedResponse(retryAfterSeconds: string | null) {
+  return {
+    ok: false,
+    status: 429,
+    headers: { get: (name: string) => (name === "retry-after" ? retryAfterSeconds : null) },
+    json: vi.fn(),
+    text: vi.fn().mockResolvedValue('{"error":"Too many requests"}'),
+  };
+}
+
+describe("429 rate limiting", () => {
+  it("throws RateLimitedError with the parsed Retry-After, distinct from a generic failure", async () => {
+    mockFetch.mockResolvedValueOnce(rateLimitedResponse("3"));
+    const err = await isRunning(remoteCfg).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(RateLimitedError);
+    expect((err as InstanceType<typeof RateLimitedError>).retryAfterMs).toBe(3_000);
+  });
+
+  it("null Retry-After still yields a RateLimitedError", async () => {
+    mockFetch.mockResolvedValueOnce(rateLimitedResponse(null));
+    const err = await isRunning(remoteCfg).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(RateLimitedError);
+    expect((err as InstanceType<typeof RateLimitedError>).retryAfterMs).toBeNull();
+  });
+
+  it("a 429 does not count toward the circuit breaker", async () => {
+    for (let i = 0; i < 10; i++) {
+      mockFetch.mockResolvedValueOnce(rateLimitedResponse("1"));
+      await isRunning(remoteCfg).catch(() => undefined);
+    }
+    // A real (non-rate-limited) call still goes to the network rather than
+    // failing fast — proof the breaker never opened from the 429s above.
+    mockFetch.mockResolvedValueOnce(jsonResponse({ running: true }));
+    expect(await isRunning(remoteCfg)).toBe(true);
+  });
+});
+
+// ── circuit breaker ──────────────────────────────────────────────────────
+
+describe("circuit breaker integration", () => {
+  it("fails fast without a network call once open", async () => {
+    for (let i = 0; i < 5; i++) {
+      mockFetch.mockRejectedValueOnce(new Error("ECONNREFUSED"));
+      await isRunning(remoteCfg).catch(() => undefined);
+    }
+    mockFetch.mockClear();
+    await expect(isRunning(remoteCfg)).rejects.toThrow(/circuit breaker open/);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("a 404 (a healthy answer) closes the breaker rather than opening it", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      json: vi.fn(),
+      text: vi.fn().mockResolvedValue('{"error":"Instance not found"}'),
+    });
+    await readStats(remoteCfg, "069a79f4-44e9-4726-a5be-fca90e38aaf5").catch(() => undefined);
+    // Still closed — a 404 is data, not a wrapper failure.
+    mockFetch.mockResolvedValueOnce(jsonResponse({ running: true }));
+    expect(await isRunning(remoteCfg)).toBe(true);
   });
 });
