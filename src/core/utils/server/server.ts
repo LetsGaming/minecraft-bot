@@ -24,6 +24,12 @@ import type {
   TpsResult,
 } from "../../types/index.js";
 import { errMsg } from "../error.js";
+import {
+  SEED_BODY,
+  entityDataPattern,
+  isSignedInt64,
+  newestServerMatch,
+} from "../minecraft/consoleResponse.js";
 
 // ── ServerInstance ──
 
@@ -145,15 +151,16 @@ export class ServerInstance {
     const r = await this.sendCommand("seed");
     if (r !== null) {
       // An RCON reply is authoritative; the log would add nothing.
-      return r.match(SEED_PATTERN)?.[1] ?? null;
+      const seed = r.match(SEED_PATTERN)?.[1];
+      return seed && isSignedInt64(seed) ? seed : null;
     }
     // No response channel: the reply only reaches the server log.
     const { tailLog } = await import("./serverAccess.js");
     for (let i = 0; i < 3; i++) {
       await new Promise<void>((resolve) => setTimeout(resolve, 300));
       const out = await tailLog(this.config, 10);
-      const m = out.match(SEED_PATTERN);
-      if (m?.[1]) return m[1];
+      const seed = newestServerMatch(out, SEED_BODY)?.[1];
+      if (seed && isSignedInt64(seed)) return seed;
     }
     return null;
   }
@@ -195,7 +202,8 @@ export class ServerInstance {
     for (let i = 0; i < 3; i++) {
       await new Promise<void>((r) => setTimeout(r, 300));
       const out = await tailLog(this.config, 10);
-      const m = out.match(/\[([\d.+-]+)d,\s*([\d.+-]+)d,\s*([\d.+-]+)d\]/);
+      const payload = newestServerMatch(out, entityDataPattern(player))?.[1];
+      const m = payload?.match(/\[([\d.+-]+)d,\s*([\d.+-]+)d,\s*([\d.+-]+)d\]/);
       if (m) return { x: Number(m[1]), y: Number(m[2]), z: Number(m[3]) };
     }
     return null;
@@ -213,7 +221,8 @@ export class ServerInstance {
     for (let i = 0; i < 3; i++) {
       await new Promise<void>((r) => setTimeout(r, 300));
       const out = await tailLog(this.config, 10);
-      const m = out.match(/"minecraft:([^"]+)"/);
+      const payload = newestServerMatch(out, entityDataPattern(player))?.[1];
+      const m = payload?.match(/"minecraft:([^"]+)"/);
       if (m?.[1]) return m[1];
     }
     return "overworld";
@@ -255,7 +264,8 @@ export class ServerInstance {
     for (let i = 0; i < 3; i++) {
       await new Promise<void>((res) => setTimeout(res, 300));
       const out = await tailLog(this.config, 10);
-      const parsed = parse(out);
+      const payload = newestServerMatch(out, entityDataPattern(player))?.[1];
+      const parsed = payload ? parse(payload) : null;
       if (parsed) return parsed;
     }
     return null;
