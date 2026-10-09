@@ -3,37 +3,48 @@
  * dashboard.
  *
  * Every number here has existed for a long time and was only ever available
- * through a Discord command — `/uptime`, `/activity`, and the usage counters
+ * through a Discord command: `/uptime`, `/activity`, and the usage counters
  * behind `/help`. All of it is a table or a time series, which is to say it
  * was being rendered as a sparkline made of block characters in an embed
  * because that was the only surface available.
  *
  * Nothing new is collected. These are read paths over `uptime_checks`,
- * `player_count_hours` and `command_usage`, which is why this is a routes file
- * and not a subsystem.
+ * `player_count_hours`, `command_usage`, the session store and the stat
+ * snapshots, which is why this is a routes file and not a subsystem.
  *
- * Deliberately not through the wrapper: this is the bot's own history, so it
- * keeps working when a wrapper is unreachable — which is exactly when someone
- * wants to know how long the server has been down.
+ * Every route takes `hours` and clamps it to what its own store retains
+ * (`ANALYTICS_CAP_HOURS`), reporting the range it actually answered.
+ *
+ * Deliberately not through the wrapper except for the leaderboard: this is the
+ * bot's own history, so it keeps working when a wrapper is unreachable, which
+ * is exactly when someone wants to know how long the server has been down.
  */
 import type { FastifyInstance } from "fastify";
 import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
+import {
+  ANALYTICS_CAP_HOURS,
+  type AnalyticsCaps,
+  type CommandUsageResponse,
+  type LeaderboardResponse,
+  type PlayersResponse,
+  type ServerAnalyticsResponse,
+} from "@mcbot/schema/analytics.js";
 import { getServerInstance } from "@mcbot/core/utils/server/server.js";
 import { getUptimeStats } from "@mcbot/core/utils/stores/uptimeTracker.js";
 import {
-  loadPlayerCountStore,
+  loadPlayerCountSeries,
   busiestHours,
-  type HourBucket,
 } from "@mcbot/core/utils/stores/playerCountHistory.js";
 import {
   loadSessionStore,
-  totalPlaytimeMs,
+  MAX_SESSIONS_PER_PLAYER,
 } from "@mcbot/core/utils/stores/sessionStore.js";
 import {
   LEADERBOARD_STATS,
   buildLeaderboard,
 } from "@mcbot/core/utils/minecraft/statUtils.js";
-import { usageByCommand } from "@mcbot/core/utils/commands/commandUsage.js";
+import { getSnapshotClosestTo } from "@mcbot/core/utils/minecraft/snapshotUtils.js";
+import { usageByCommandSince } from "@mcbot/core/utils/commands/commandUsage.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { readThrough } from "@mcbot/core/utils/wrapper/lastKnown.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
@@ -42,23 +53,26 @@ import { IdParams, LeaderboardQuery, AnalyticsRangeQuery } from "./schemas.js";
 
 const HOUR_MS = 3_600_000;
 
-/**
- * How far back the activity series can run — a hard ceiling, not just a
- * default: `player_count_hours` only retains this many hours
- * (RETENTION_HOURS in playerCountHistory.ts), so a range past it would
- * silently return truncated data rather than what was actually asked for.
- */
-const ACTIVITY_HOURS_MAX = 24 * 14;
-const ACTIVITY_HOURS_DEFAULT = 24 * 14;
-
-/** command_usage retains 90 days (USAGE_RETENTION_DAYS in commandUsage.ts). */
-const COMMAND_HOURS_MAX = 24 * 90;
+const ACTIVITY_HOURS_DEFAULT = ANALYTICS_CAP_HOURS.activity;
 const COMMAND_HOURS_DEFAULT = 24 * 30;
+/** Sessions are not retained by age, so the players range only needs an upper bound. */
+const PLAYERS_HOURS_MAX = ANALYTICS_CAP_HOURS.commands;
+
+const CAPS: AnalyticsCaps = { ...ANALYTICS_CAP_HOURS };
+
+function parseHours(raw: string | undefined): number | null {
+  const n = parseInt(raw ?? "", 10);
+  return Number.isFinite(n) ? n : null;
+}
 
 function clampHours(raw: string | undefined, def: number, max: number): number {
-  const n = parseInt(raw ?? "", 10);
-  if (!Number.isFinite(n)) return def;
+  const n = parseHours(raw);
+  if (n === null) return def;
   return Math.min(Math.max(n, 1), max);
+}
+
+function formatRange(hours: number): string {
+  return hours % 24 === 0 ? `${hours / 24}d` : `${hours}h`;
 }
 
 export function registerAnalyticsRoutes(app: FastifyInstance): void {
@@ -70,30 +84,25 @@ export function registerAnalyticsRoutes(app: FastifyInstance): void {
       schema: { params: IdParams, querystring: AnalyticsRangeQuery },
       config: { capability: "server:read", scope: "server", param: "id" },
     },
-    async (req) => {
+    async (req): Promise<ServerAnalyticsResponse> => {
       const serverId = req.params.id;
       if (!getServerInstance(serverId)) {
         throw new NotFound(`No server named "${serverId}" is configured.`);
       }
 
       try {
-        const [uptime, store] = await Promise.all([
-          getUptimeStats(serverId),
-          loadPlayerCountStore(),
-        ]);
-
-        const hours = clampHours(
+        const requested = clampHours(
           req.query.hours,
           ACTIVITY_HOURS_DEFAULT,
-          ACTIVITY_HOURS_MAX,
+          Number.MAX_SAFE_INTEGER,
         );
-        const now = Date.now();
-        const since = now - hours * HOUR_MS;
-        // The store keeps every server's buckets in one series; filter here
-        // rather than widening the store's API for one caller.
-        const series: HourBucket[] = (store.servers[serverId] ?? []).filter(
-          (bucket) => bucket.h >= since,
-        );
+        const hours = Math.min(requested, CAPS.activity);
+        const uptime = await getUptimeStats(serverId, {
+          rangeHours: Math.min(requested, CAPS.uptime),
+        });
+
+        const since = Date.now() - hours * HOUR_MS;
+        const series = loadPlayerCountSeries(serverId, since);
 
         return {
           uptime,
@@ -112,6 +121,7 @@ export function registerAnalyticsRoutes(app: FastifyInstance): void {
             })),
             busiest: busiestHours(series),
           },
+          caps: CAPS,
         };
       } catch (err) {
         log.error("web", `Analytics for ${serverId} failed: ${errMsg(err)}`);
@@ -121,45 +131,64 @@ export function registerAnalyticsRoutes(app: FastifyInstance): void {
   );
 
   /**
-   * Who plays, and how much.
+   * Who plays, and how much, inside the range.
    *
-   * `/playtime` and `/sessions` answer this one player at a time, in an embed,
-   * which is the wrong shape for the question people actually have — "who is
-   * still around, and who stopped coming". That is a sorted table, and it has
-   * been one row per Discord message until now.
+   * Sessions are a ring buffer of the last MAX_SESSIONS_PER_PLAYER per player,
+   * so a very active player's early sessions inside a long range may already
+   * be gone: playtime and session counts cover the retained sessions only.
    */
   api.get(
     "/api/servers/:id/analytics/players",
     {
-      schema: { params: IdParams },
+      schema: { params: IdParams, querystring: AnalyticsRangeQuery },
       config: { capability: "server:read", scope: "server", param: "id" },
     },
-    async (req) => {
+    async (req): Promise<PlayersResponse> => {
       const serverId = req.params.id;
       if (!getServerInstance(serverId)) {
         throw new NotFound(`No server named "${serverId}" is configured.`);
       }
       try {
+        const hours = clampHours(
+          req.query.hours,
+          PLAYERS_HOURS_MAX,
+          PLAYERS_HOURS_MAX,
+        );
         const store = await loadSessionStore();
         const entries = Object.values(store.servers[serverId] ?? {});
         const now = Date.now();
+        const since = now - hours * HOUR_MS;
 
-        const players = entries.map((entry) => {
-          const open = entry.sessions.some((session) => session.leftAt === null);
-          return {
-            name: entry.name,
-            // Counts an open session up to now, so someone mid-session is not
+        const players: PlayersResponse["players"] = [];
+        for (const entry of entries) {
+          let playtimeMs = 0;
+          let sessions = 0;
+          for (const session of entry.sessions) {
+            // An open session counts up to now, so someone mid-session is not
             // reported as having played less than they have.
-            playtimeMs: totalPlaytimeMs(entry, now),
-            sessions: entry.sessions.length,
+            const end = session.leftAt ?? now;
+            if (end <= since || session.joinedAt >= now) continue;
+            sessions++;
+            playtimeMs += end - Math.max(session.joinedAt, since);
+          }
+          if (sessions === 0) continue;
+          players.push({
+            name: entry.name,
+            playtimeMs,
+            sessions,
             lastSeen: entry.lastSeen,
-            online: open,
+            online: entry.sessions.some((session) => session.leftAt === null),
             firstSeen: entry.sessions[0]?.joinedAt ?? null,
-          };
-        });
+          });
+        }
         players.sort((a, b) => b.playtimeMs - a.playtimeMs);
 
-        return { players, totalPlayers: players.length };
+        return {
+          players,
+          totalPlayers: players.length,
+          rangeHours: hours,
+          sessionsKeptPerPlayer: MAX_SESSIONS_PER_PLAYER,
+        };
       } catch (err) {
         log.error("web", `Player analytics for ${serverId} failed: ${errMsg(err)}`);
         throw new HttpError(500, "Could not read session history.");
@@ -169,8 +198,9 @@ export function registerAnalyticsRoutes(app: FastifyInstance): void {
 
   /**
    * A stat leaderboard, built by the same function `/leaderboard` and `/top`
-   * use — so a board in the dashboard and a board in Discord cannot rank the
-   * same players differently.
+   * use, so a board in the dashboard and a board in Discord cannot rank the
+   * same players differently. With `hours` it is a delta against the snapshot
+   * closest to the start of the range, like the scheduled boards.
    */
   api.get(
     "/api/servers/:id/analytics/leaderboard",
@@ -178,7 +208,7 @@ export function registerAnalyticsRoutes(app: FastifyInstance): void {
       schema: { params: IdParams, querystring: LeaderboardQuery },
       config: { capability: "server:read", scope: "server", param: "id" },
     },
-    async (req) => {
+    async (req): Promise<LeaderboardResponse> => {
       const server = getServerInstance(req.params.id);
       if (!server) {
         throw new NotFound(`No server named "${req.params.id}" is configured.`);
@@ -187,19 +217,44 @@ export function registerAnalyticsRoutes(app: FastifyInstance): void {
       if (!LEADERBOARD_STATS[statKey]) {
         throw new BadRequest(`Unknown stat "${statKey}".`);
       }
+      const requested = parseHours(req.query.hours);
+      const rangeHours =
+        requested === null
+          ? null
+          : Math.min(Math.max(requested, 1), CAPS.leaderboard);
       try {
         // Stats live in the world folder, so this is the one analytics panel
         // an outage can take out. Player stats move slowly enough that an
         // hour-old board is still a useful board.
-        const { value: board, stale } = await readThrough(
+        const { value, stale } = await readThrough(
           req.params.id,
-          `leaderboard:${statKey}`,
-          () => buildLeaderboard(statKey, { limit: 25, server }),
+          `leaderboard:${statKey}:${rangeHours ?? "all"}`,
+          async () => {
+            if (rangeHours === null) {
+              const board = await buildLeaderboard(statKey, { limit: 25, server });
+              return { board, baselineAt: null, historyShorterThanRange: false };
+            }
+            const target = Date.now() - rangeHours * HOUR_MS;
+            const snapshot = await getSnapshotClosestTo(server.id, target);
+            const board = await buildLeaderboard(statKey, {
+              limit: 25,
+              server,
+              baseline: snapshot?.players ?? null,
+              periodLabel: formatRange(rangeHours),
+            });
+            return {
+              board,
+              baselineAt: snapshot?.timestamp ?? null,
+              // getSnapshotClosestTo falls back to the oldest snapshot when
+              // none is old enough, and that one starts after the range does.
+              historyShorterThanRange: !snapshot || snapshot.timestamp > target,
+            };
+          },
         );
         return {
           stat: statKey,
-          title: board.title,
-          entries: board.entries,
+          title: value.board.title,
+          entries: value.board.entries,
           stale,
           // The catalogue ships with the board so the picker cannot offer a
           // stat this build does not know how to extract.
@@ -207,6 +262,10 @@ export function registerAnalyticsRoutes(app: FastifyInstance): void {
             key,
             label: def.label,
           })),
+          rangeHours,
+          baselineAt: value.baselineAt,
+          historyShorterThanRange: value.historyShorterThanRange,
+          caps: CAPS,
         };
       } catch (err) {
         // Stats come off the server's world folder through the wrapper, so
@@ -219,32 +278,28 @@ export function registerAnalyticsRoutes(app: FastifyInstance): void {
 
   api.get(
     "/api/analytics/commands",
-    // Command usage is fleet-wide, not per server, so the scope is global —
+    // Command usage is fleet-wide, not per server, so the scope is global;
     // the gate refuses an unscoped declaration rather than guessing.
     {
       schema: { querystring: AnalyticsRangeQuery },
       config: { capability: "audit:read", scope: "global" },
     },
-    async (req) => {
+    async (req): Promise<CommandUsageResponse> => {
       const hours = clampHours(
         req.query.hours,
         COMMAND_HOURS_DEFAULT,
-        COMMAND_HOURS_MAX,
+        CAPS.commands,
       );
-      const days = Math.max(1, Math.round(hours / 24));
-      const since = Date.now() - days * 24 * HOUR_MS;
+      const since = Date.now() - hours * HOUR_MS;
       try {
-        // Delegate to the same query commandUsage.ts already exposes for
-        // this — it was simply never called from here; this route used to
-        // carry its own (near-identical) inline copy of the same SQL.
-        const commands = usageByCommand(days).map((r) => ({
+        const commands = usageByCommandSince(since).map((r) => ({
           command: r.command,
           surface: r.surface,
           uses: r.count,
           users: r.users,
           lastUsed: r.lastUsedAt,
         }));
-        return { since, commands };
+        return { since, rangeHours: hours, commands, caps: CAPS };
       } catch (err) {
         log.error("web", `Command analytics failed: ${errMsg(err)}`);
         throw new HttpError(500, "Could not read command usage.");

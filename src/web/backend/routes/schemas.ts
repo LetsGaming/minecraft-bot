@@ -83,6 +83,8 @@ export type QueueResolveBody = Static<typeof QueueResolveBody>;
 /** Which stat a leaderboard ranks by. Validated against the catalogue. */
 export const LeaderboardQuery = Type.Object({
   stat: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
+  /** Omitted means all-time; otherwise the board covers this many hours. */
+  hours: Type.Optional(Type.String()),
 });
 export type LeaderboardQuery = Static<typeof LeaderboardQuery>;
 
