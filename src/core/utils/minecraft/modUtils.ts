@@ -159,10 +159,3 @@ function buildModList(projects: ModrinthProject[]): ModList {
     fetchedAt: Date.now(),
   };
 }
-
-/** Evict the cached mod list for a server, e.g. after a mod update. */
-export function evictModCache(serverId: string): void {
-  for (const k of cache.keys()) {
-    if (k.startsWith(`${serverId}:`)) cache.delete(k);
-  }
-}

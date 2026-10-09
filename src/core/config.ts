@@ -189,6 +189,8 @@ export function loadConfig(): BotConfig {
     ...(raw.schedules   ? { schedules:   raw.schedules }   : {}),
     ...(raw.milestones  ? { milestones:  raw.milestones }  : {}),
     ...(raw.webui       ? { webui:       raw.webui }       : {}),
+    ...(raw.timezone       ? { timezone:       raw.timezone }       : {}),
+    ...(raw.featureNudges  ? { featureNudges:  raw.featureNudges }  : {}),
   });
 
   return _config;
@@ -242,39 +244,7 @@ export function watchConfig(onChange?: (newConfig: BotConfig) => void): void {
 
 let _reloadTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** Get server config by ID */
-export function getServer(serverId: string): ServerConfig | null {
-  const cfg = loadConfig();
-  return cfg.servers[serverId] ?? null;
-}
-
-/**
- * Returns the default server ID for a guild, or the first configured server ID.
- * Commands should pass this to getServerInstance() to get the actual instance.
- */
-export function getGuildServerId(guildId: string | undefined): string | null {
-  if (!guildId) return null;
-  const cfg   = loadConfig();
-  const guild = cfg.guilds[guildId];
-  if (guild?.defaultServer && cfg.servers[guild.defaultServer]) {
-    return guild.defaultServer;
-  }
-  const keys = Object.keys(cfg.servers);
-  return keys.length > 0 ? keys[0]! : null;
-}
-
-/** Get guild notification config */
-export function getGuildConfig(guildId: string): GuildConfig | null {
-  const cfg = loadConfig();
-  return cfg.guilds[guildId] ?? null;
-}
-
 /** Get all server IDs */
 export function getServerIds(): string[] {
   return Object.keys(loadConfig().servers);
-}
-
-/** Get all server IDs as Discord choices */
-export function getServerChoices(): Array<{ name: string; value: string }> {
-  return getServerIds().map((id) => ({ name: id, value: id }));
 }
