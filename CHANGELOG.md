@@ -8,17 +8,36 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Optional `server` option (with autocomplete) on `/whitelisted`, `/stats player`, `/stats daily`, `/top`, `/leaderboard`, `/playtime` and `/compare`, so a multi-server guild can pick the server instead of always getting its default (`commands/info/whitelisted.ts`, `commands/stats/*`).
+- `/uptime server:all` shows the overview of every server the guild may target; the autocomplete offers `all` (`commands/info/uptime.ts`, `utils/guild/serverOptions.ts`).
+
 - Leaderboard builds and the hourly stat snapshot now use a bulk stats route (`GET /instances/:id/stats/bulk`, on a wrapper new enough to serve it) instead of one HTTP request per player who has ever joined — on an older wrapper, `loadAllStats()` still works, falling back to the old per-uuid reads with a concurrency cap of 6 instead of firing them all at once (`statUtils.ts`, `serverAccess.readAllStats`).
 - A per-server circuit breaker in front of wrapper reads: after 5 consecutive failures it fails fast for 15s instead of every caller paying its own connect-and-timeout during a sustained outage, then probes once (half-open) before fully recovering (`core/utils/server/circuitBreaker.ts`). A 429 (the wrapper rate-limiting, not failing) never counts toward it, and now surfaces as its own distinct error instead of reading identically to "unreachable" (`serverAccess.RateLimitedError`).
 - The dashboard's `/api/status` collection (and the Prometheus `/metrics` scrape, which runs the same collection) now caches each server's health/player-list (10s), TPS (15s) and host info (60s) instead of re-asking the wrapper on every poll — an open Status tab, an open Overview tab, and a scrape interval used to each hit the wrapper independently for the same data (`web/backend/status/status.ts`).
 
+### Changed
+
+- Server resolution is now one shared rule (`core/utils/server/guildTargets.ts`): explicit `server:`, then the guild's `defaultServer`, then the guild's only allowed server, and in a DM the only configured server. With several candidates the command fails and lists the server IDs instead of picking the first server of the whole deployment. The same rule drives whitelist applications and follow-up hints.
+- `/uptime` without `server:` shows the resolved default server's detail; the all-servers overview moved to `server:all`.
+- `/daily-admin reset` takes an optional `server` (guild default otherwise).
+
 ### Fixed
+
+- `timezone` and `featureNudges` set in `config.json` or the dashboard were dropped by `loadConfig()`, so the global timezone and the in-game nudge settings never took effect (`core/config.ts`).
+- Commands run in a DM with a single configured server failed with "No server configured for this guild".
+- A stale `defaultServer` was silently replaced by another server; it now fails with a message naming the bad value and the available servers.
+- A guild with exactly one allowed server but no `defaultServer` could be sent to a server outside its allowed set and fail the tenant check.
+- `/daily-admin` `reset` and `move` now apply the tenant check, and `show` only lists servers the guild may target, so a guild-scoped admin can no longer touch another tenant's claim records.
 
 - Player avatars in embeds and chat-bridge webhooks fell back to the default Steve/Alex skin for the first chat message/join after a bot restart on any player whose stats/milestones hadn't triggered a whitelist/usercache load yet — the name→UUID cache `mcHeads.ts` reads was never warmed at startup. Each server instance now warms it as soon as its watchers are wired (`initMinecraftCommands.ts`).
 - The wrapper-version-mismatch warning at startup ("wrapper X provides `backup-files` v2, newer than the v1 bot implements") fired even on the latest bot release: the bot's contract table (`wrapperContract.ts`) still declared `backup-files` as v1 even though 6.1.0 added the v2 dashboard delete flow. Bumped to v2.
 - Downtime monitoring polled the server's health every 60s but only ever logged a transition that crossed the 3-strike (server) or 5-strike (wrapper) alert threshold, so a state flip that self-healed within one or two ticks — the common case behind "sometimes reports players as offline" — left no trace to diagnose. Every poll now logs at debug level (`DEBUG=1`) with state, source, wrapper/RCON status, player count and reason.
 
 - Config editor: a Minecraft server configured with the id `server` (or any guild-scope field literally matching a reference-dropdown name) had its dropdown hijacked into a plain Select, and picking an option there overwrote the entire `servers` map with `{"server": "server"}`. The reference-dropdown heuristic matched by field name alone, and a `servers` map entry's own key is passed down as that name; it's now also gated on the field actually being scalar-shaped (`src/web/frontend/src/components/schema/SchemaField.vue`, `schemaField.ts`'s new `isReferenceField`).
+
+### Removed
+
+- Unused exports `getGuildServerId` (which bypassed tenant isolation), `getServer`, `getGuildConfig`, `getServerChoices`, `kvDelete`, `evictModCache`, `savePlayerCountStore`, `saveTempBanStore` and `getTempBan`, and the unreachable `if (!server)` checks after `resolveServer()`.
 
 ## [6.1.0] — 2026-09-21
 
