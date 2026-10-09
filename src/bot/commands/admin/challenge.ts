@@ -12,6 +12,7 @@
  * every start/cancel writes an admin-audit entry.
  */
 import { SlashCommandBuilder } from "discord.js";
+import { formatLastSeen } from "../../utils/discordTime.js";
 import { createEmbed } from "../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../utils/embeds/embedColors.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
@@ -121,13 +122,13 @@ function statusEmbed(challenge: Challenge, serverId: string) {
   lines.push(
     t("challenge.fieldStartedBy", {
       by: challenge.startedBy,
-      when: `<t:${Math.floor(challenge.startedAt / 1000)}:R>`,
+      when: formatLastSeen(challenge.startedAt),
     }),
   );
   if (challenge.endsAt) {
     lines.push(
       t("challenge.fieldEnds", {
-        when: `<t:${Math.floor(challenge.endsAt / 1000)}:R>`,
+        when: formatLastSeen(challenge.endsAt),
       }),
     );
   }

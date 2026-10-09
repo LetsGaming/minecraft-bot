@@ -7,6 +7,7 @@
  */
 import { formatDuration } from "@mcbot/core/utils/duration.js";
 import { SlashCommandBuilder } from "discord.js";
+import { formatLastSeen } from "../../utils/discordTime.js";
 import { createEmbed } from "../../utils/embeds/embedUtils.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { withErrorHandling } from "../middleware.js";
@@ -56,7 +57,7 @@ export const execute = withErrorHandling(async (interaction) => {
     ? t("sessions.onlineNow")
     : entry.lastSeen
       ? t("sessions.lastSeen", {
-          when: `<t:${Math.floor(entry.lastSeen / 1000)}:R>`,
+          when: formatLastSeen(entry.lastSeen),
         })
       : t("sessions.lastSeenUnknown");
 

@@ -104,6 +104,12 @@ export const de: Record<string, string> = {
   "sessions.playtimeValue": "{duration} über die letzten {count} Session(s)",
   "sessions.recent": "Letzte {count} Session(s)",
   "sessions.stillOnline": "noch online",
+  "players.title": "Spieler auf {server}",
+  "players.footer": "Seite {page}/{pages} • {count} Spieler",
+  "players.online": "gerade online",
+  "players.beforeTracking": "vor der Aufzeichnung",
+  "players.none": "Auf diesem Server wurden noch keine Spieler gefunden.",
+  "players.noneInactive": "Seit mehr als {days} Tag(en) war kein Spieler inaktiv.",
 
   // ── whois additions ──
   "whois.lastSeen": "Zuletzt gesehen",

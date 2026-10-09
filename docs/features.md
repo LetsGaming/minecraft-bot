@@ -34,7 +34,9 @@ weekly board.
 sparkline and the busiest hours, drawn from hourly snapshots.
 
 **Sessions and last-seen.** Per-player session history is available through
-`/sessions` and summarized in `/whois`.
+`/sessions` and summarized in `/whois`. `/players` lists everyone who has ever
+played on a server with their last activity (sessions are only tracked since
+the bot started, so older players show "before tracking").
 
 ## Account linking and rewards
 
