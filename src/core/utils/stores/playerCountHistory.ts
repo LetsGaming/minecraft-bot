@@ -68,6 +68,26 @@ export async function loadPlayerCountStore(): Promise<PlayerCountStore> {
   return { version: 1, servers };
 }
 
+/** One server's buckets from `sinceMs` on, oldest first, filtered in SQL. */
+export function loadPlayerCountSeries(
+  serverId: string,
+  sinceMs: number,
+): HourBucket[] {
+  return mapRows(
+    getDb().prepare(
+      "SELECT h, sum, max, samples FROM player_count_hours WHERE server_id = ? AND h >= ? ORDER BY h ASC",
+    ),
+    (r): HourBucket => ({
+      h: col.int(r, "h"),
+      sum: col.int(r, "sum"),
+      max: col.int(r, "max"),
+      samples: col.int(r, "samples"),
+    }),
+    serverId,
+    sinceMs,
+  );
+}
+
 export async function savePlayerCountStore(
   store: PlayerCountStore,
 ): Promise<void> {

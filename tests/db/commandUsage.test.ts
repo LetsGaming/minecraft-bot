@@ -20,6 +20,7 @@ import { getDb, closeDbForTesting } from "../../src/core/db/index.js";
 import {
   recordCommandUsage,
   usageByCommand,
+  usageByCommandSince,
   commandsUsedBy,
   pruneCommandUsage,
   USAGE_RETENTION_DAYS,
@@ -131,5 +132,19 @@ describe("pruneCommandUsage", () => {
 
     expect(pruneCommandUsage(NOW)).toBe(1);
     expect(commandsUsedBy("u1")).toEqual(new Set(["recent"]));
+  });
+});
+
+describe("usageByCommandSince", () => {
+  it("honours an hour-precise start", () => {
+    recordCommandUsage({ command: "daily", surface: "slash", userId: "u1" }, NOW - 5 * 3_600_000);
+    recordCommandUsage({ command: "daily", surface: "slash", userId: "u2" }, NOW - 40 * 3_600_000);
+    expect(usageByCommandSince(NOW - 6 * 3_600_000)[0]).toMatchObject({ command: "daily", count: 1 });
+    expect(usageByCommandSince(NOW - 48 * 3_600_000)[0]).toMatchObject({ command: "daily", count: 2 });
+  });
+
+  it("matches the day-based API for the same start", () => {
+    recordCommandUsage({ command: "daily", surface: "slash", userId: "u1" }, NOW - 2 * DAY);
+    expect(usageByCommandSince(NOW - 3 * DAY)).toEqual(usageByCommand(3, NOW));
   });
 });

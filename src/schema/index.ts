@@ -41,3 +41,6 @@ export * from "./consoleCommands.js";
 // status paths, the web backend, and the Vue frontend — a value re-export so
 // all three switch on one definition rather than three sets of literals.
 export * from "./serverState.js";
+// Analytics DTOs plus the per-section retention ceilings (ANALYTICS_CAP_HOURS),
+// shared by the route that clamps and the view that labels.
+export * from "./analytics.js";

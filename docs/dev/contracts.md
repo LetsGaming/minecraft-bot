@@ -29,6 +29,7 @@ pure functions — `@mcbot/schema` used to be types-only, and no longer is
 | `discord.ts` | Discord origins/endpoints, and the snowflake ID format |
 | `serverActions.ts` | The management-script action names, which are operator-triggerable, which are disruptive, and which are irreversible |
 | `capabilities.ts` | Dashboard capabilities, the grant shape, and the resolution rules the gate and the UI both use |
+| `analytics.ts` | The dashboard analytics response DTOs and `ANALYTICS_CAP_HOURS`, the per-section retention ceilings the routes clamp to and the view labels with |
 | `consoleCommands.ts` | The console deny-list: normalisation and matching, shared by the route that enforces it and the editor that greys a command out |
 
 ## When something becomes a contract
