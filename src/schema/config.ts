@@ -591,6 +591,15 @@ export interface HostAlertsConfig {
 }
 
 export interface RawBotConfig {
+  /**
+   * Format version of this file. Written by the bot when it migrates an older
+   * file (a copy of the original is kept next to it) and by the dashboard on
+   * every save. A missing value means the file predates versioning. A value
+   * newer than the running bot supports is refused rather than loaded.
+   * @TJS-type integer
+   * @minimum 0
+   */
+  configVersion?: number;
   token: string;
   clientId: string;
   servers?: Record<string, RawServerConfig>;
@@ -649,6 +658,8 @@ export interface RawBotConfig {
 }
 
 export interface BotConfig {
+  /** Format version of the file this was loaded from, after migration. */
+  configVersion?: number;
   token: string;
   clientId: string;
   servers: Record<string, ServerConfig>;

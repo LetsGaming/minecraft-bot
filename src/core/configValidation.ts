@@ -15,6 +15,7 @@ import {
   REMOVED_LOCAL_SERVER_FIELDS,
 } from "@mcbot/schema";
 import { checkAgainstSchema } from "./configSchemaCheck.js";
+import { CURRENT_CONFIG_VERSION } from "./configMigrations.js";
 import type { RawBotConfig } from "./types/index.js";
 import { isSnowflake, SNOWFLAKE_DESCRIPTION } from "@mcbot/schema/discord.js";
 
@@ -215,6 +216,16 @@ export function validateCandidateConfig(
   // The schema verified the shape, so the fields below can be read by
   // name. The guards that remain are for the schema-unavailable path.
   const raw = candidate as RawBotConfig;
+
+  if (
+    typeof raw.configVersion === "number" &&
+    raw.configVersion > CURRENT_CONFIG_VERSION
+  ) {
+    errors.push(
+      `  - configVersion: ${raw.configVersion} is newer than this bot supports ` +
+        `(${CURRENT_CONFIG_VERSION}); update the bot instead of downgrading the file`,
+    );
+  }
 
   // ── servers ───────────────────────────────────────────────────────────
   // Required since 5.0.0, and its absence usually means a 4.x config, so

@@ -7,6 +7,11 @@
     "RawBotConfig": {
       "type": "object",
       "properties": {
+        "configVersion": {
+          "type": "number",
+          "description": "Format version of this file. Written by the bot when it migrates an older file (a copy of the original is kept next to it) and by the dashboard on every save. A missing value means the file predates versioning. A value newer than the running bot supports is refused rather than loaded.",
+          "minimum": 0
+        },
         "token": {
           "type": "string"
         },

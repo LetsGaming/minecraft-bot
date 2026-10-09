@@ -19,6 +19,12 @@ export type {
   ConfigValidationResult,
 } from "./configValidation.js";
 import { errMsg } from "./utils/error.js";
+import { writeFileAtomicSync } from "./utils/config/atomicWrite.js";
+import {
+  ConfigMigrationError,
+  runConfigMigrations,
+  type MigrationResult,
+} from "./configMigrations.js";
 
 const PROJECT_ROOT = getRootDir();
 // The active config.json. Overridable via MCBOT_CONFIG_PATH so a deployment
@@ -54,7 +60,7 @@ function validateRawConfig(raw: RawBotConfig, configPath: string): void {
     throw new Error(
       `config.json validation failed at ${configPath}:\n` +
       errors.join("\n") + "\n" +
-      "See config_structure.json for the expected format.",
+      "See config.template.json for the expected format and config.schema.json for every option.",
     );
   }
 }
@@ -126,16 +132,71 @@ function applyEnvOverrides(raw: RawBotConfig): void {
   }
 }
 
+/** `config.json.bak-v<from>-<UTC timestamp>`, next to the config. */
+function backupPath(fromVersion: number): string {
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
+  return `${CONFIG_PATH}.bak-v${fromVersion}-${stamp}`;
+}
+
+function logMigration(result: MigrationResult): void {
+  for (const step of result.applied) {
+    const detail = step.changes.length > 0 ? step.changes.join("; ") : "no field changes";
+    log.info(
+      "config",
+      `Migrated config v${step.from} -> v${step.to} (${step.describe}): ${detail}`,
+    );
+  }
+}
+
+/**
+ * Bring the parsed file up to the current format. When something changed the
+ * original bytes are copied to a backup first, then the migrated file
+ * replaces config.json atomically. If either step fails (a read-only mount),
+ * the in-memory migrated config is still used and the file is left alone.
+ */
+function migrateConfigFile(raw: RawBotConfig, originalText: string): RawBotConfig {
+  let result: MigrationResult;
+  try {
+    result = runConfigMigrations(raw);
+  } catch (err) {
+    if (err instanceof ConfigMigrationError) {
+      throw new Error(`Cannot start with ${CONFIG_PATH}: ${err.message}`);
+    }
+    throw err;
+  }
+  if (result.applied.length === 0) return raw;
+
+  const backup = backupPath(result.fromVersion);
+  try {
+    fs.writeFileSync(backup, originalText);
+    writeFileAtomicSync(
+      CONFIG_PATH,
+      JSON.stringify(result.config, null, 2) + "\n",
+    );
+    log.info("config", `Original config saved as ${backup}`);
+  } catch (err) {
+    log.warn(
+      "config",
+      `Could not rewrite ${CONFIG_PATH} after migrating it (${errMsg(err)}); running with the migrated config in memory. ` +
+        "Make the file writable to persist it.",
+    );
+  }
+  logMigration(result);
+  return result.config as unknown as RawBotConfig;
+}
+
 export function loadConfig(): BotConfig {
   if (_config) return _config;
 
   // An actionable message beats a raw JSON parse stack trace
   let raw: RawBotConfig;
+  let rawText: string;
   try {
     // Optimistically typed on parse; validateRawConfig() below is the actual
     // runtime gate — it throws an actionable error if the shape doesn't match,
     // so a wrong config.json never reaches the resolution logic mis-typed.
-    raw = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8")) as RawBotConfig;
+    rawText = fs.readFileSync(CONFIG_PATH, "utf-8");
+    raw = JSON.parse(rawText) as RawBotConfig;
   } catch (err) {
     const reason = errMsg(err);
     throw new Error(
@@ -143,6 +204,8 @@ export function loadConfig(): BotConfig {
       "Make sure the file exists and contains valid JSON.",
     );
   }
+
+  raw = migrateConfigFile(raw, rawText);
 
   // Env overrides run BEFORE validation so an env-only required secret (the
   // documented Docker/K8s secrets path) satisfies the required-field check
@@ -166,6 +229,7 @@ export function loadConfig(): BotConfig {
   const guilds: Record<string, GuildConfig> = raw.guilds ?? {};
 
   _config = Object.freeze({
+    configVersion:        raw.configVersion,
     token:                raw.token,
     clientId:             raw.clientId,
     servers,

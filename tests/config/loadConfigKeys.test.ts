@@ -21,6 +21,7 @@ import { loadConfig, reloadConfig } from "../../src/core/config.js";
 const schemaPath = fileURLToPath(new URL("../../config.schema.json", import.meta.url));
 
 const SAMPLES: Record<string, unknown> = {
+  configVersion: 1,
   token: "test.bot.token.12345",
   clientId: "123456789012345678",
   servers: { s: { apiUrl: "http://127.0.0.1:3030", apiKey: "k" } },

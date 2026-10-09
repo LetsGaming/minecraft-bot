@@ -1,0 +1,22 @@
+{
+  "token": "DISCORD_APP_TOKEN",
+  "clientId": "DISCORD_CLIENT_ID",
+  "linuxUser": "username",
+  "screenSession": "session_name",
+  "serverDir": "/path/to/minecraft/server",
+
+  "useRcon": false,
+  "rconHost": "localhost",
+  "rconPort": 25575,
+  "rconPassword": "",
+
+  "commands": {
+    "map": {
+      "enabled": false,
+      "url": "http://example.com/map"
+    },
+    "seed": {
+      "enabled": true
+    }
+  }
+}
