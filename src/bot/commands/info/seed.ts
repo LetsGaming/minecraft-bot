@@ -13,8 +13,6 @@ export const data = new SlashCommandBuilder()
 
 export const execute = withErrorHandling(async (interaction) => {
   const server = resolveServer(interaction);
-  if (!server) throw new Error("Server not found.");
-
   const seed = await server.getSeed();
   if (!seed) throw new Error("Could not retrieve the world seed.");
 

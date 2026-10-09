@@ -98,8 +98,17 @@ describe("server.ts — initServers / getServerInstance / getAllInstances", () =
     expect(all.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("getGuildServer returns null when guildId is undefined", () => {
-    expect(getGuildServer(undefined)).toBeNull();
+  it("getGuildServer resolves the only configured server in a DM", () => {
+    initServers({ survival: minimalCfg });
+    expect((getGuildServer(undefined) as { id: string }).id).toBe("survival");
+  });
+
+  it("getGuildServer asks for server: when a DM has several servers", () => {
+    initServers({
+      survival: minimalCfg,
+      creative: { ...minimalCfg, id: "creative" } as never,
+    });
+    expect(() => getGuildServer(undefined)).toThrow(/Pass `server:`/);
   });
 });
 

@@ -2,18 +2,18 @@
 
 Every Discord slash command, grouped by what it does. In-game `!commands` are covered in [in-game-commands.md](in-game-commands.md).
 
-Options in `(parentheses)` are optional. Most commands accept an optional `server` option when the bot manages multiple servers; it autocompletes with the available names and defaults to your guild's default server.
+Options in `(parentheses)` are optional. Commands that act on a server accept an optional `server` option; it autocompletes with the servers your guild may use. Without it, the command uses your guild's default server. If the guild has no default but can use exactly one server, that one is used. Otherwise the bot lists the available server IDs and asks you to pass `server:`. In a DM the bot can only pick for you when a single server is configured.
 
 ## Server info
 
 | Command | Options | Description |
 |---|---|---|
 | `/status` | (`server`) | Online/offline, player count, who is online, and bot latency. On locally managed servers also a **Host** section: RAM/CPU of the server process and disk usage of the world and backup paths. |
-| `/uptime` | (`server`) | Uptime history with 24h/7d/30d percentage bars and an hourly 24h sparkline. Without a server, shows all servers. |
+| `/uptime` | (`server`) | Uptime history with 24h/7d/30d percentage bars and an hourly 24h sparkline for one server. Use `server:all` for an overview of every server your guild may use. |
 | `/seed` | (`server`) | The world seed. |
 | `/tps` | (`server`) | Current TPS. Paper-style servers show 1/5/15-minute averages, vanilla shows TPS plus MSPT and tick timing percentiles. |
 | `/backup` | (`server`) | Backup overview: count, age, and size of the latest backup per backup tier. |
-| `/whitelisted` | | All whitelisted players, paginated. |
+| `/whitelisted` | (`server`) | All whitelisted players, paginated. |
 | `/mods` | (`server`) | All installed server mods as clickable Modrinth links, grouped by whether you need to install them on your client. |
 | `/map` | | Link to the live web map (Dynmap/Bluemap), if the admin configured one. |
 
@@ -21,12 +21,12 @@ Options in `(parentheses)` are optional. Most commands accept an optional `serve
 
 | Command | Options | Description |
 |---|---|---|
-| `/playtime` | `player` | Total playtime of a player. |
-| `/stats player` | `player`, (`stat`) | All-time stats, grouped by category, paginated. The `stat` option filters, e.g. `stat:killed` for mob kills. |
-| `/stats daily` | `player`, (`stat`) | Only the stats gained in roughly the last 24 hours. |
-| `/compare` | `player1`, `player2`, (`stat`) | Side-by-side comparison of every stat both players share. |
-| `/leaderboard` | (`stat`) | Top 10 by a chosen stat: playtime, mob kills, deaths, blocks mined, distance walked, items crafted, player kills, jumps, animals bred, fish caught, diamond ore — plus the daily-streak boards (current and longest streak). Defaults to playtime. |
-| `/top` | (`stat`) | Same as `/leaderboard`. |
+| `/playtime` | `player`, (`server`) | Total playtime of a player. |
+| `/stats player` | `player`, (`stat`), (`server`) | All-time stats, grouped by category, paginated. The `stat` option filters, e.g. `stat:killed` for mob kills. |
+| `/stats daily` | `player`, (`stat`), (`server`) | Only the stats gained in roughly the last 24 hours. |
+| `/compare` | `player1`, `player2`, (`stat`), (`server`) | Side-by-side comparison of every stat both players share. |
+| `/leaderboard` | (`stat`), (`server`) | Top 10 by a chosen stat: playtime, mob kills, deaths, blocks mined, distance walked, items crafted, player kills, jumps, animals bred, fish caught, diamond ore — plus the daily-streak boards (current and longest streak). Defaults to playtime. |
+| `/top` | (`stat`), (`server`) | Same as `/leaderboard`. |
 | `/sessions` | `player`, (`server`) | A player's recent sessions: online-now / last-seen, playtime across the recorded sessions, and the last 10 individual sessions. |
 | `/players` | (`server`), (`sort`), (`inactive`), (`include_unknown`) | Every player who has played on the server, 20 per page, with online state or last-seen and lifetime playtime. `sort` is `last-seen` (default; online first), `playtime` or `name`. `inactive:<days>` keeps only players last active more than that many days ago; players with no tracked activity are added with `include_unknown:true`. Last-seen only covers time since the bot started tracking sessions, so earlier players show "before tracking". The name list comes from the whitelist and the server's usercache, which vanilla caps at about 1000 entries, so very old players without a stats file may be missing. |
 | `/activity` | (`server`) | When is the server busy? 24-hour sparkline of average player counts plus the busiest hours of day (14-day average). |

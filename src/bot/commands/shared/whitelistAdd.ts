@@ -77,8 +77,6 @@ export const executeWhitelistAdd = withErrorHandling(
   requireServerAdmin(async (interaction) => {
     const username = interaction.options.getString("username", true);
     const server = resolveServer(interaction);
-    if (!server) throw new Error("Server not found.");
-
     const canonicalName = await performWhitelistAdd(server, username, {
       tag: interaction.user.tag,
       id: interaction.user.id,

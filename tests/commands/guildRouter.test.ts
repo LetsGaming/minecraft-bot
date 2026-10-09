@@ -85,11 +85,13 @@ describe("resolveServer", () => {
     );
   });
 
-  it("throws when guild has no configured server", () => {
-    vi.mocked(getGuildServer).mockReturnValue(null);
+  it("propagates the guild default resolution error", () => {
+    vi.mocked(getGuildServer).mockImplementation(() => {
+      throw new Error("No server is available for this guild.");
+    });
     const interaction = makeInteraction({ serverId: null, guildId: "guild1" });
     expect(() => resolveServer(interaction)).toThrow(
-      "No server configured for this guild.",
+      "No server is available for this guild.",
     );
   });
 
@@ -113,7 +115,9 @@ describe("tryResolveServer", () => {
   });
 
   it("returns null instead of throwing when not found", () => {
-    vi.mocked(getGuildServer).mockReturnValue(null);
+    vi.mocked(getGuildServer).mockImplementation(() => {
+      throw new Error("ambiguous");
+    });
     const interaction = makeInteraction({ serverId: null, guildId: "guild1" });
     expect(tryResolveServer(interaction)).toBeNull();
   });

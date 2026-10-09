@@ -28,6 +28,9 @@ export const data = new SlashCommandBuilder()
       .setName("stat")
       .setDescription("Stat to rank by (default: playtime)")
       .addChoices(...choices),
+  )
+  .addStringOption((o) =>
+    o.setName("server").setDescription("Server instance").setAutocomplete(true),
   );
 
 export const execute = withErrorHandling(async (interaction) => {

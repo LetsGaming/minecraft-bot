@@ -42,7 +42,3 @@ export function kvUpdate<T>(key: string, fn: (current: T | null) => T): T {
     return next;
   });
 }
-
-export function kvDelete(key: string): void {
-  getDb().prepare("DELETE FROM kv_store WHERE key = ?").run(key);
-}

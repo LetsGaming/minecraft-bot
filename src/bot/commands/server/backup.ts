@@ -14,8 +14,6 @@ export const data = new SlashCommandBuilder()
 
 export const execute = withErrorHandling(async (interaction) => {
   const server = resolveServer(interaction);
-  if (!server) throw new Error("Server not found.");
-
   // Friendly gate instead of an empty/raw error on plain servers.
   requireCapability(server, (c) => c.backups, "the suite backup layout");
 

@@ -88,21 +88,6 @@ export function loadPlayerCountSeries(
   );
 }
 
-export async function savePlayerCountStore(
-  store: PlayerCountStore,
-): Promise<void> {
-  withTransaction(() => {
-    const db = getDb();
-    db.exec("DELETE FROM player_count_hours");
-    const ins = db.prepare(
-      "INSERT INTO player_count_hours (server_id, h, sum, max, samples) VALUES (?, ?, ?, ?, ?)",
-    );
-    for (const [serverId, buckets] of Object.entries(store.servers)) {
-      for (const b of buckets) ins.run(serverId, b.h, b.sum, b.max, b.samples);
-    }
-  });
-}
-
 /** serverId → epoch ms of the last recorded sample (any source). */
 const lastSampleAt = new Map<string, number>();
 

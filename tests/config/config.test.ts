@@ -22,11 +22,7 @@ vi.mock("../../src/core/utils/paths.js", () => ({
 import {
   loadConfig,
   reloadConfig,
-  getServer,
-  getGuildServerId,
-  getGuildConfig,
   getServerIds,
-  getServerChoices,
 } from "../../src/core/config.js";
 
 const minimalServers = {
@@ -252,52 +248,6 @@ describe("reloadConfig", () => {
   });
 });
 
-// ── getServer ──────────────────────────────────────────────────────────────
-
-describe("getServer", () => {
-  it("returns the server config for an existing ID", () => {
-    const srv = getServer("survival");
-    expect(srv).not.toBeNull();
-    expect(srv!.id).toBe("survival");
-  });
-
-  it("returns null for an unknown server ID", () => {
-    expect(getServer("unknown-server")).toBeNull();
-  });
-});
-
-// ── getGuildServerId ───────────────────────────────────────────────────────
-
-describe("getGuildServerId", () => {
-  it("returns the defaultServer for a configured guild", () => {
-    expect(getGuildServerId("guild1")).toBe("survival");
-  });
-
-  it("returns the first configured server for an unknown guild (fallback)", () => {
-    // getGuildServerId falls back to the first server when guild is not found
-    const result = getGuildServerId("unknown-guild");
-    expect(result).toBe("survival"); // first server in validConfig
-  });
-
-  it("returns null when guildId is undefined", () => {
-    expect(getGuildServerId(undefined)).toBeNull();
-  });
-});
-
-// ── getGuildConfig ─────────────────────────────────────────────────────────
-
-describe("getGuildConfig", () => {
-  it("returns the guild config for a known guild", () => {
-    const gcfg = getGuildConfig("guild1");
-    expect(gcfg).not.toBeNull();
-    expect(gcfg!.defaultServer).toBe("survival");
-  });
-
-  it("returns null for an unknown guild", () => {
-    expect(getGuildConfig("nope")).toBeNull();
-  });
-});
-
 // ── getServerIds ───────────────────────────────────────────────────────────
 
 describe("getServerIds", () => {
@@ -305,16 +255,5 @@ describe("getServerIds", () => {
     const ids = getServerIds();
     expect(ids).toContain("survival");
     expect(ids).toContain("creative");
-  });
-});
-
-// ── getServerChoices ───────────────────────────────────────────────────────
-
-describe("getServerChoices", () => {
-  it("returns name/value pairs for Discord autocomplete", () => {
-    const choices = getServerChoices();
-    expect(choices.length).toBeGreaterThan(0);
-    expect(choices[0]).toHaveProperty("name");
-    expect(choices[0]).toHaveProperty("value");
   });
 });

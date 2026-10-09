@@ -98,7 +98,7 @@ The wrapper reads `{scriptsDir}/common/variables.txt` from a [minecraft-server-s
 
 ### Multiple servers
 
-Add more entries under `servers`. Commands that take a `server` option autocomplete with the IDs. When no server is given, the guild's `defaultServer` is used.
+Add more entries under `servers`. Commands that take a `server` option autocomplete with the IDs. When no server is given, the guild's `defaultServer` is used. Without a `defaultServer`, a guild that may target exactly one server gets that one, and a DM gets the only configured server. With several candidates the command fails and lists the server IDs so the user can pass `server:`.
 
 ## Guilds
 
@@ -126,7 +126,7 @@ Each Discord server is configured independently. The key is the guild ID. Every 
 
 | Block | Fields | What it does |
 |---|---|---|
-| `defaultServer` | server ID | Used when a command is run without an explicit `server` option. |
+| `defaultServer` | server ID | Used when a command is run without an explicit `server` option. It must name a configured server: a stale value is reported as a configuration error instead of silently falling back to another server. |
 | `adminUsers` | user/role IDs | Admins **scoped to this guild** — same semantics as the global list, but only valid for commands issued here, and only against servers this guild may target. The global `adminUsers` list remains operator-level. |
 | `allowedServers` | server IDs | Which servers commands from this guild may target, including via the explicit `server:` option. **Only enforced when more than one guild is configured.** When omitted, the allowed set is derived from the servers referenced in this guild's config (`defaultServer` plus any feature `server` fields). The guild's `defaultServer` is always allowed. |
 | `language` | `"en"` / `"de"` | Per-guild language for embeds and replies; overrides the global `language`. |
@@ -202,7 +202,7 @@ A chat bridge binds a Discord channel to **exactly one** server, in both directi
 
 ### Multi-guild isolation
 
-When the bot serves **more than one guild**, tenant isolation kicks in automatically: commands from a guild can only target that guild's allowed servers (explicit `allowedServers`, or derived from the guild's config). A guild-B admin cannot `/server stop server:guild-a-survival` — the command fails with a clear error naming `allowedServers` as the fix. Unconfigured guilds and DMs cannot target servers at all in multi-guild mode; only global (operator-level) admins bypass these checks. The server-ID autocomplete and the `/uptime` overview are filtered the same way, so guilds do not see each other's server IDs.
+When the bot serves **more than one guild**, tenant isolation kicks in automatically: commands from a guild can only target that guild's allowed servers (explicit `allowedServers`, or derived from the guild's config). A guild-B admin cannot `/server stop server:guild-a-survival` — the command fails with a clear error naming `allowedServers` as the fix. Unconfigured guilds and DMs cannot target servers at all in multi-guild mode; only global (operator-level) admins bypass these checks. The server-ID autocomplete, the `/uptime server:all` overview and `/daily-admin` (move, reset, show) are filtered the same way, so guilds do not see each other's server IDs.
 
 With a single configured guild nothing changes — every server stays reachable, exactly as before.
 
