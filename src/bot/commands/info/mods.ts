@@ -81,8 +81,6 @@ export const data = new SlashCommandBuilder()
 export const execute = withErrorHandling(async (interaction) => {
   const server = resolveServer(interaction);
 
-  if (!server) throw new Error("Server not found.");
-
   // Friendly gate — /mods needs the suite's mod manifest.
   requireCapability(
     server,

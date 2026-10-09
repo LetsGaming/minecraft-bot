@@ -24,8 +24,6 @@ export const data = new SlashCommandBuilder()
 export const execute = withErrorHandling(async (interaction) => {
   const sent = Date.now();
   const server = resolveServer(interaction);
-  if (!server) throw new Error("Server not found.");
-
   const health = await server.getHealth();
   const display = describeHealth(health);
   const botPing = interaction.client.ws.ping;

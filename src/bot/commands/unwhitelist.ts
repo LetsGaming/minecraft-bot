@@ -24,8 +24,6 @@ export const execute = withErrorHandling(
   requireServerAdmin(async (interaction) => {
     const username = interaction.options.getString("username", true);
     const server = resolveServer(interaction);
-    if (!server) throw new Error("Server not found.");
-
     // Never interpolate a raw username into a console command.
     if (!isValidMcName(username)) {
       throw new Error(`**${username}** is not a valid Minecraft username.`);

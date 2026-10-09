@@ -14,8 +14,6 @@ export const data = new SlashCommandBuilder()
 
 export const execute = withErrorHandling(async (interaction) => {
   const server = resolveServer(interaction);
-  if (!server) throw new Error("Server not found.");
-
   if (!server.supportsTps)
     throw new Error("TPS monitoring requires RCON or an API wrapper.");
 

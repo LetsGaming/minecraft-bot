@@ -122,8 +122,6 @@ export const execute = withErrorHandling(
     const sub = interaction.options.getSubcommand();
     const server = resolveServer(interaction);
 
-    if (!server) throw new Error("Server not found.");
-
     log.info("control", `${interaction.user.tag} → /${sub} on ${server.id}`);
 
     // Persistent audit trail of admin server actions.
