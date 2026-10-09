@@ -25,6 +25,7 @@ import {
   SlashCommandBuilder,
 } from "discord.js";
 import { randomBytes } from "crypto";
+import { formatLastSeen } from "../../utils/discordTime.js";
 import { createEmbed } from "../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../utils/embeds/embedColors.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
@@ -140,7 +141,7 @@ function pollEmbed(poll: Poll) {
     title: `🗳️ ${poll.question}`,
     description: `${optionLines.join("\n")}\n\n${t("poll.howToVote")}\n⏳ ${t(
       "poll.ends",
-    )} <t:${Math.floor(poll.endsAt / 1000)}:R>`,
+    )} ${formatLastSeen(poll.endsAt)}`,
     color: EmbedColor.Info,
     footer: { text: pollServerIds(poll).join(", ") },
   });
@@ -195,7 +196,7 @@ export const execute = withErrorHandling(
             title: `🗳️ ${open.question}`,
             description: `${lines.join("\n")}\n\n${t("poll.resultTotal", {
               total,
-            })}\n⏳ ${t("poll.ends")} <t:${Math.floor(open.endsAt / 1000)}:R>`,
+            })}\n⏳ ${t("poll.ends")} ${formatLastSeen(open.endsAt)}`,
             footer: { text: server.id },
           }),
         ],
