@@ -50,7 +50,7 @@
     <section class="panel">
       <h3>Uptime</h3>
       <div v-if="uptime" class="uptime-row">
-        <div v-for="w in uptimeWindows" :key="w.label" class="u-cell">
+        <div v-for="w in uptimeWindows" :key="w.label" class="u-cell" :class="{ 'u-selected': w.selected }">
           <span class="u-pct">{{ w.pct === null ? "—" : `${w.pct.toFixed(1)}%` }}</span>
           <span class="u-label muted small">{{ w.label }}</span>
           <span class="u-checks muted small">
@@ -64,7 +64,7 @@
         </div>
       </div>
       <p v-else class="muted small">No uptime history recorded for this server yet.</p>
-      <p class="muted small uptime-note">Uptime is always shown over fixed 24h / 7d / 30d windows.</p>
+      <p v-if="uptimeNote" class="muted small section-note">{{ uptimeNote }}</p>
     </section>
 
     <!-- Activity. A real chart rather than eight block characters: the shape
@@ -81,6 +81,7 @@
         />
       </div>
       <p v-else class="muted small">No activity samples recorded yet.</p>
+      <p v-if="activityNote" class="muted small section-note">{{ activityNote }}</p>
 
       <div v-if="busiest.length" class="busiest">
         <span class="muted small">Busiest hours</span>
@@ -109,7 +110,8 @@
           @change="reloadBoard"
         />
       </div>
-      <Message v-if="boardError" severity="warn" :closable="false" class="panel-msg">
+      <p v-if="boardLoading" class="muted small">Loading board…</p>
+      <Message v-else-if="boardError" severity="warn" :closable="false" class="panel-msg">
         {{ boardError }}
       </Message>
       <ol v-else-if="board.length" class="board">
@@ -123,12 +125,13 @@
         </li>
       </ol>
       <p v-else class="muted small">No stats recorded for this board yet.</p>
+      <p v-if="boardNote" class="muted small section-note">{{ boardNote }}</p>
     </section>
 
     <!-- Players. "Who is still around and who stopped coming" is a sorted
          table, and it has been one row per Discord message until now. -->
     <section class="panel">
-      <h3>Players <span v-if="currentServer" class="scope-tag">{{ currentServer }}</span> · {{ players.length }} seen</h3>
+      <h3>Players <span v-if="currentServer" class="scope-tag">{{ currentServer }}</span> · {{ players.length }} active in the last {{ rangeLabel }}</h3>
       <DataTable
         v-if="players.length"
         :value="players"
@@ -170,7 +173,8 @@
           </template>
         </Column>
       </DataTable>
-      <p v-else class="muted small">No sessions recorded for this server yet.</p>
+      <p v-else class="muted small">No sessions recorded for this server in the last {{ rangeLabel }}.</p>
+      <p v-if="playersNote" class="muted small section-note">{{ playersNote }}</p>
     </section>
 
     <!-- Command usage: the data that used to be a one-line footnote under 57
@@ -203,6 +207,7 @@
         </Column>
       </DataTable>
       <p v-else class="muted small">Nothing recorded in the last {{ rangeLabel }}.</p>
+      <p v-if="commandsNote" class="muted small section-note">{{ commandsNote }}</p>
     </section>
   </div>
 </template>
@@ -218,7 +223,7 @@ import Select from "primevue/select";
 import SelectButton from "primevue/selectbutton";
 import ViewHeader from "../components/ui/ViewHeader.vue";
 import StatusDot from "../components/ui/StatusDot.vue";
-import { useAnalytics } from "../composables/useAnalytics";
+import { useAnalytics, clampNote, formatHours } from "../composables/useAnalytics";
 import { relativeAge, timestampTitle, absoluteStamp } from "../utils/time";
 
 export default defineComponent({
@@ -241,27 +246,71 @@ export default defineComponent({
     return {
       currentServer: "",
       stat: "playtime",
-      // Capped at 14d — player_count_hours only retains that long (see
-      // analytics.ts's ACTIVITY_HOURS_MAX); command usage retains far more
-      // but shares this one control rather than adding a second picker.
+      // One control for every section. Each section keeps a different amount
+      // of history, so a range past a section's cap is clamped and noted there.
       rangeHours: 24 * 14,
       rangeOptions: [
         { label: "24h", value: 24 },
         { label: "3d", value: 24 * 3 },
         { label: "7d", value: 24 * 7 },
         { label: "14d", value: 24 * 14 },
+        { label: "30d", value: 24 * 30 },
+        { label: "90d", value: 24 * 90 },
       ],
     };
   },
   computed: {
-    uptimeWindows(): { label: string; pct: number | null; checks: { total: number; online: number } }[] {
+    uptimeWindows(): { label: string; pct: number | null; checks: { total: number; online: number }; selected: boolean }[] {
       const u = this.uptime;
       if (!u) return [];
-      return [
-        { label: "24 hours", pct: u.pct24h, checks: u.checks24h },
-        { label: "7 days", pct: u.pct7d, checks: u.checks7d },
-        { label: "30 days", pct: u.pct30d, checks: u.checks30d },
+      const fixed = [
+        { hours: 24, label: "24 hours", pct: u.pct24h, checks: u.checks24h },
+        { hours: 24 * 7, label: "7 days", pct: u.pct7d, checks: u.checks7d },
+        { hours: 24 * 30, label: "30 days", pct: u.pct30d, checks: u.checks30d },
       ];
+      const range = u.range;
+      const rows = fixed.map((w) => ({
+        label: w.label,
+        pct: w.pct,
+        checks: w.checks,
+        selected: range?.rangeHours === w.hours,
+      }));
+      if (range && !fixed.some((w) => w.hours === range.rangeHours)) {
+        rows.push({
+          label: `selected range (${formatHours(range.rangeHours)})`,
+          pct: range.pct,
+          checks: range.checks,
+          selected: true,
+        });
+      }
+      return rows;
+    },
+    uptimeNote(): string {
+      return clampNote(this.rangeHours, this.uptime?.range?.rangeHours ?? null);
+    },
+    activityNote(): string {
+      return clampNote(this.rangeHours, this.activityRangeHours);
+    },
+    commandsNote(): string {
+      return clampNote(this.rangeHours, this.commandsRangeHours);
+    },
+    playersNote(): string {
+      const kept = this.sessionsKeptPerPlayer;
+      if (kept === null || this.players.length === 0) return "";
+      return `Playtime and session counts cover each player's last ${kept} sessions inside the range.`;
+    },
+    boardNote(): string {
+      const parts: string[] = [];
+      const clamp = clampNote(this.rangeHours, this.boardRangeHours);
+      if (clamp) parts.push(clamp);
+      if (this.boardHistoryShort) {
+        parts.push(
+          this.boardBaselineAt
+            ? `Snapshot history only goes back to ${absoluteStamp(this.boardBaselineAt)}, so this board covers less than the range.`
+            : "No snapshot history exists yet, so this board shows all-time totals.",
+        );
+      }
+      return parts.join(" ");
     },
     stateWord(): string {
       const state = this.uptime?.currentState ?? "unknown";
@@ -293,7 +342,7 @@ export default defineComponent({
       },
     },
     rangeHours() {
-      if (this.currentServer) void this.load(this.currentServer, this.rangeHours);
+      void this.reload();
     },
   },
   methods: {
@@ -303,14 +352,14 @@ export default defineComponent({
       // changing the stat picker re-runs only this half.
       await Promise.all([
         this.load(id, this.rangeHours),
-        this.loadBoard(id, this.stat),
+        this.loadBoard(id, this.stat, this.rangeHours),
       ]);
     },
     async reload(): Promise<void> {
       if (this.currentServer) await this.select(this.currentServer);
     },
     async reloadBoard(): Promise<void> {
-      if (this.currentServer) await this.loadBoard(this.currentServer, this.stat);
+      if (this.currentServer) await this.loadBoard(this.currentServer, this.stat, this.rangeHours);
     },
     /** Bar width relative to first place, which is what a rank reads against. */
     boardWidth(value: number): number {
@@ -369,7 +418,8 @@ export default defineComponent({
 .u-pct.online { color: var(--mc-accent); }
 .u-pct.offline { color: var(--mc-bad); }
 .u-pct.unknown { color: var(--mc-dim); }
-.uptime-note { margin: 10px 0 0; }
+.section-note { margin: 10px 0 0; }
+.u-selected .u-label { color: var(--mc-accent); }
 
 .chart {
   display: flex; align-items: flex-end; gap: 1px;
