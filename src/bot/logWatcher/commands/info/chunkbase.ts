@@ -1,5 +1,9 @@
 import { defineCommand } from "../../defineCommand.js";
 import { buildChunkbaseUrl } from "@mcbot/core/utils/minecraft/chunkbaseUrl.js";
+import {
+  clickFormatForVersion,
+  openUrlClick,
+} from "@mcbot/core/utils/minecraft/tellrawLink.js";
 
 const cmd = defineCommand({
   name: "chunkbase",
@@ -14,34 +18,19 @@ const cmd = defineCommand({
       return;
     }
 
-    let dimension = "overworld";
-    try {
-      const r = await server.getPlayerData(username, "Dimension");
-      if (r) {
-        const m = r.match(/"minecraft:([^"]+)"/);
-        if (m?.[1]) dimension = m[1];
-      }
-    } catch {
-      /* default */
-    }
+    const dimension = await server.getPlayerDimension(username);
 
     let coords: { x: number; z: number } | undefined;
     try {
       coords = (await server.getPlayerCoords(username)) ?? undefined;
     } catch {
-      /* proceed without */
+      /* the link still works without a position */
     }
 
     const url = buildChunkbaseUrl(seed, dimension, coords?.x, coords?.z);
+    const format = clickFormatForVersion(await server.getMinecraftVersion());
 
-    interface TellRawText {
-      text: string;
-      color?: string;
-      underlined?: boolean;
-      click_event?: { action: string; url: string };
-    }
-
-    const tellRaw: { text: string; extra: TellRawText[] } = {
+    const tellRaw = {
       text: "",
       extra: [
         { text: "See your location on Chunkbase: ", color: "white" },
@@ -49,8 +38,9 @@ const cmd = defineCommand({
           text: "[Click here]",
           color: "gold",
           underlined: true,
-          click_event: { action: "open_url", url },
+          ...openUrlClick(url, format),
         },
+        { text: ` ${url}`, color: "gray" },
       ],
     };
     await server.sendCommand(`/tellraw ${username} ${JSON.stringify(tellRaw)}`);
