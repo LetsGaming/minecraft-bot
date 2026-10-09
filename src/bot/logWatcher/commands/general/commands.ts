@@ -1,25 +1,37 @@
-import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { defineCommand } from "../../defineCommand.js";
+import { getCommandFiles } from "../../../utils/commands/loadCommandFiles.js";
+import { resolveCommandPolicy } from "@mcbot/core/utils/commands/commandPolicy.js";
 import type { InGameCommandInfo } from "@mcbot/core/types/index.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const commandsDir = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
 
-async function loadAllCommandInfo(): Promise<InGameCommandInfo[]> {
-  const commands: InGameCommandInfo[] = [];
-  for (const file of fs.readdirSync(__dirname)) {
-    if (!file.endsWith(".js") || file === "commands.js") continue;
+interface ListedCommand {
+  name: string;
+  info: InGameCommandInfo;
+}
+
+let listed: Promise<ListedCommand[]> | null = null;
+
+async function loadAllCommandInfo(): Promise<ListedCommand[]> {
+  const commands: ListedCommand[] = [];
+  for (const file of getCommandFiles(commandsDir)) {
+    const name = path.basename(file).replace(/\.[cm]?[jt]s$/, "");
+    if (name === "commands") continue;
     try {
-      const mod = (await import(`./${file}`)) as {
+      const mod = (await import(path.resolve(file))) as {
         COMMAND_INFO?: InGameCommandInfo;
       };
-      if (mod.COMMAND_INFO) commands.push(mod.COMMAND_INFO);
+      if (mod.COMMAND_INFO) commands.push({ name, info: mod.COMMAND_INFO });
     } catch {
-      /* skip */
+      /* a command that fails to load is skipped, as at startup */
     }
   }
-  return commands;
+  return commands.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 const cmd = defineCommand({
@@ -28,11 +40,14 @@ const cmd = defineCommand({
   description: "List all available in-game commands",
   cooldown: 5,
   handler: async (username, _args, _client, server) => {
-    const commands = await loadAllCommandInfo();
+    listed ??= loadAllCommandInfo();
+    const commands = (await listed).filter(
+      (c) => resolveCommandPolicy(c.name, { serverId: server.id }).enabled,
+    );
     await server.sendCommand(`/msg ${username} Available commands:`);
     for (const c of commands) {
       await server.sendCommand(
-        `/msg ${username}  ${c.command} - ${c.description}`,
+        `/msg ${username}  ${c.info.command} - ${c.info.description}`,
       );
     }
   },

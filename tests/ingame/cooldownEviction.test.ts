@@ -79,3 +79,57 @@ describe("defineCommand — cooldown map eviction (BUG-01)", () => {
     expect(cooldownStoreSize()).toBe(0);
   });
 });
+
+describe("defineCommand - cooldown after failure", () => {
+  async function setup(name: string, handler: () => Promise<void>) {
+    const { init } = defineCommand({
+      name,
+      description: "failure test",
+      cooldown: 60,
+      handler,
+    });
+    init();
+    const [regex, registered] = vi
+      .mocked(registerLogCommand)
+      .mock.calls.at(-1)!;
+    const server = { id: "srv", sendCommand: vi.fn().mockResolvedValue("") };
+    const fire = async () => {
+      const line = `[12:00:00] [Server thread/INFO]: <Retry> !${name}`;
+      await registered(
+        (regex as RegExp).exec(line)!,
+        {} as never,
+        server as never,
+      );
+    };
+    return { fire, server };
+  }
+
+  it("does not lock the player out after a handler throws", async () => {
+    sweepCooldowns(Number.MAX_SAFE_INTEGER);
+    const handler = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValueOnce(new Error("boom"))
+      .mockResolvedValue(undefined);
+    const { fire, server } = await setup("flaky", handler);
+
+    await fire();
+    await fire();
+
+    expect(handler).toHaveBeenCalledTimes(2);
+    expect(server.sendCommand).not.toHaveBeenCalled();
+  });
+
+  it("still enforces the cooldown after a successful run", async () => {
+    sweepCooldowns(Number.MAX_SAFE_INTEGER);
+    const handler = vi.fn().mockResolvedValue(undefined);
+    const { fire, server } = await setup("solid", handler);
+
+    await fire();
+    await fire();
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(server.sendCommand).toHaveBeenCalledWith(
+      expect.stringContaining("Please wait"),
+    );
+  });
+});

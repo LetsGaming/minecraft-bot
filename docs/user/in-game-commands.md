@@ -6,9 +6,9 @@ Some things work directly in the Minecraft chat, no Discord needed. Type the com
 
 | Command | Cooldown | What it does |
 |---|---|---|
-| `!commands` | 5 s | Lists all in-game commands. Also works as `!help`, `!cmds`, or `!commandlist`. |
+| `!commands` | 5 s | Lists every in-game command enabled on your server. Also works as `!help`, `!cmds`, or `!commandlist`. |
 | `!link CODE` | | Completes [account linking](linking.md). Get the code from `/link` in Discord first. |
-| `!chunkbase` | 10 s | Sends you a clickable Chunkbase seed map link, centered on your position and matching your current dimension. |
+| `!chunkbase` | 10 s | Sends you a Chunkbase seed map link, centered on your position and matching your current dimension. The link is clickable, and the full URL is also printed in chat so you can copy it if your client does not open links. |
 | `!netherportal` | 5 s | In the Overworld: the matching Nether coordinates. In the Nether: the matching Overworld coordinates. |
 | `!playerhead Name` | 15 s | Gives you that player's head as an item (any valid Minecraft name works, not just players on this server). |
 | `!seed` | 30 s | The world seed. |
