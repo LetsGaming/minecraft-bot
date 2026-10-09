@@ -23,6 +23,9 @@ export const data = new SlashCommandBuilder()
       .setDescription("Minecraft player name")
       .setRequired(true)
       .setAutocomplete(true),
+  )
+  .addStringOption((o) =>
+    o.setName("server").setDescription("Server instance").setAutocomplete(true),
   );
 
 export async function execute(

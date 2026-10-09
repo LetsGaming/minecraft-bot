@@ -46,6 +46,9 @@ export const data = new SlashCommandBuilder()
       .setName("stat")
       .setDescription("Optional stat category or specific stat ID")
       .setRequired(false),
+  )
+  .addStringOption((o) =>
+    o.setName("server").setDescription("Server instance").setAutocomplete(true),
   );
 
 export async function execute(

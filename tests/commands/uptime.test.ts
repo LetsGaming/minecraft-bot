@@ -47,8 +47,14 @@ vi.mock("../../src/bot/commands/middleware.js", () => ({
   withErrorHandling: vi.fn((fn) => fn),
 }));
 
-import { getAllInstances } from "../../src/core/utils/server/server.js";
-import { resolveServer } from "../../src/bot/utils/guild/guildRouter.js";
+import {
+  getAllInstances,
+  getServerInstance,
+} from "../../src/core/utils/server/server.js";
+import {
+  resolveServer,
+  getAllowedServerIds,
+} from "../../src/bot/utils/guild/guildRouter.js";
 import { getUptimeStats } from "../../src/core/utils/stores/uptimeTracker.js";
 import { execute } from "../../src/bot/commands/info/uptime.js";
 import type { ChatInputCommandInteraction } from "discord.js";
@@ -151,18 +157,47 @@ describe("uptime execute — explicit server option", () => {
   });
 });
 
-describe("uptime execute — multi-server overview", () => {
-  it("shows all server stats when multiple instances exist", async () => {
+describe("uptime execute — default server", () => {
+  it("shows the resolved default server's detail even when several exist", async () => {
     const server2 = { id: "creative" } as never;
     vi.mocked(getAllInstances).mockReturnValue([fakeServer, server2]);
-    vi.mocked(getUptimeStats).mockResolvedValue(onlineStats);
-
-    // No explicit server option → multi-server path
     const interaction = makeInteraction(null);
     await execute(interaction);
+    expect(resolveServer).toHaveBeenCalledWith(interaction);
+    expect(getUptimeStats).toHaveBeenCalledTimes(1);
+    expect(getUptimeStats).toHaveBeenCalledWith("survival");
+  });
+});
 
-    // getUptimeStats should be called for both servers
+describe("uptime execute — server:all overview", () => {
+  const server2 = { id: "creative" } as never;
+
+  beforeEach(() => {
+    vi.mocked(getServerInstance).mockReturnValue(null);
+  });
+
+  it("shows every server's stats", async () => {
+    vi.mocked(getAllInstances).mockReturnValue([fakeServer, server2]);
+    const interaction = makeInteraction("all");
+    await execute(interaction);
+    expect(resolveServer).not.toHaveBeenCalled();
     expect(getUptimeStats).toHaveBeenCalledTimes(2);
     expect(interaction.editReply).toHaveBeenCalled();
+  });
+
+  it("only includes servers the guild may target", async () => {
+    vi.mocked(getAllInstances).mockReturnValue([fakeServer, server2]);
+    vi.mocked(getAllowedServerIds).mockReturnValueOnce(new Set(["creative"]));
+    await execute(makeInteraction("all"));
+    expect(getUptimeStats).toHaveBeenCalledTimes(1);
+    expect(getUptimeStats).toHaveBeenCalledWith("creative");
+  });
+
+  it("treats a real server named all as that server", async () => {
+    vi.mocked(getServerInstance).mockReturnValue({ id: "all" } as never);
+    vi.mocked(resolveServer).mockReturnValue({ id: "all" } as never);
+    await execute(makeInteraction("all"));
+    expect(resolveServer).toHaveBeenCalled();
+    expect(getUptimeStats).toHaveBeenCalledWith("all");
   });
 });

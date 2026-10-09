@@ -2,11 +2,15 @@ import { formatDuration } from "@mcbot/core/utils/duration.js";
 import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../utils/embeds/embedColors.js";
-import { getAllInstances } from "@mcbot/core/utils/server/server.js";
+import {
+  getAllInstances,
+  getServerInstance,
+} from "@mcbot/core/utils/server/server.js";
 import {
   resolveServer,
   getAllowedServerIds,
 } from "../../utils/guild/guildRouter.js";
+import { ALL_SERVERS } from "../../utils/guild/serverOptions.js";
 import { getUptimeStats } from "@mcbot/core/utils/stores/uptimeTracker.js";
 import { withErrorHandling } from "../middleware.js";
 
@@ -25,36 +29,32 @@ export const data = new SlashCommandBuilder()
   .setName("uptime")
   .setDescription("Show server uptime history")
   .addStringOption((o) =>
-    o.setName("server").setDescription("Server instance").setAutocomplete(true),
+    o
+      .setName("server")
+      .setDescription(
+        `Server instance, or "${ALL_SERVERS}" for an overview of every server`,
+      )
+      .setAutocomplete(true),
   );
 
 export const execute = withErrorHandling(async (interaction) => {
-  // If a specific server is requested, show just that one
-  const serverId = interaction.options.getString("server");
-  if (serverId) {
-    const server = resolveServer(interaction);
+  const requested = interaction.options.getString("server");
+  const wantsOverview =
+    requested === ALL_SERVERS && !getServerInstance(ALL_SERVERS);
 
+  if (!wantsOverview) {
+    const server = resolveServer(interaction);
     const stats = await getUptimeStats(server.id);
-    const embed = buildSingleEmbed(server.id, stats);
-    await interaction.editReply({ embeds: [embed] });
+    await interaction.editReply({ embeds: [buildSingleEmbed(server.id, stats)] });
     return;
   }
 
-  // Otherwise show all servers, or the guild default if only one.
-  // In multi-guild deployments, the overview only includes servers
-  // this guild may target — no cross-tenant uptime disclosure.
+  // In multi-guild deployments the overview only includes servers this
+  // guild may target, so no cross-tenant uptime is disclosed.
   const allowed = getAllowedServerIds(interaction.guild?.id);
   const instances = getAllInstances().filter(
     (inst) => !allowed || allowed.has(inst.id),
   );
-
-  if (instances.length === 1) {
-    const server = instances[0]!;
-    const stats = await getUptimeStats(server.id);
-    const embed = buildSingleEmbed(server.id, stats);
-    await interaction.editReply({ embeds: [embed] });
-    return;
-  }
 
   // Multi-server overview
   const embed = createEmbed({

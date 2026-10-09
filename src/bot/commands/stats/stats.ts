@@ -36,6 +36,12 @@ export const data = new SlashCommandBuilder()
         option
           .setName("stat")
           .setDescription("Optional stat category or specific stat ID"),
+      )
+      .addStringOption((o) =>
+        o
+          .setName("server")
+          .setDescription("Server instance")
+          .setAutocomplete(true),
       ),
   )
   .addSubcommand((sub) =>
@@ -53,6 +59,12 @@ export const data = new SlashCommandBuilder()
         option
           .setName("stat")
           .setDescription("Optional stat category or specific stat ID"),
+      )
+      .addStringOption((o) =>
+        o
+          .setName("server")
+          .setDescription("Server instance")
+          .setAutocomplete(true),
       ),
   );
 

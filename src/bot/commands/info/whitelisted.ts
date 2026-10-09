@@ -17,6 +17,9 @@ export const data = new SlashCommandBuilder()
   .setName("whitelisted")
   .setDescription(
     "List all players who have been whitelisted on the Minecraft server",
+  )
+  .addStringOption((o) =>
+    o.setName("server").setDescription("Server instance").setAutocomplete(true),
   );
 
 export async function execute(

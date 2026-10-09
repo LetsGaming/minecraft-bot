@@ -94,6 +94,19 @@ export function assertMayTargetServerId(
 }
 
 /**
+ * The subset of `serverIds` the issuing context may target, for commands
+ * that list data across servers. Operators (config.adminUsers) see all.
+ */
+export function filterTargetableServerIds(
+  interaction: ServerContextInteraction,
+  serverIds: readonly string[],
+): string[] {
+  const allowed = getAllowedServerIds(interaction.guild?.id);
+  if (!allowed || isServerAdmin(interaction.user.id)) return [...serverIds];
+  return serverIds.filter((id) => allowed.has(id));
+}
+
+/**
  * Resolve the ServerInstance for an interaction.
  *
  * Resolution order:
