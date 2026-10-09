@@ -161,9 +161,10 @@ export function defineCommand({
         }
 
         // ── Cooldown check ──
+        const cooldownKey = `${name}:${username.toLowerCase()}`;
+        const previousStamp = cooldowns.get(cooldownKey);
         if (cooldown > 0) {
-          const key = `${name}:${username.toLowerCase()}`;
-          const lastUsed = cooldowns.get(key) ?? 0;
+          const lastUsed = cooldowns.get(cooldownKey) ?? 0;
           const elapsed = (Date.now() - lastUsed) / 1000;
           if (elapsed < cooldown) {
             const remaining = Math.ceil(cooldown - elapsed);
@@ -172,7 +173,9 @@ export function defineCommand({
             );
             return;
           }
-          cooldowns.set(key, Date.now());
+          // Held while the handler runs so a double-typed command cannot
+          // run twice; released again below if the handler fails.
+          cooldowns.set(cooldownKey, Date.now());
         }
 
         const parsedArgs: Record<string, string | undefined> = {};
@@ -184,7 +187,15 @@ export function defineCommand({
         }
 
         try {
-          await handler(username, parsedArgs, client, server);
+          try {
+            await handler(username, parsedArgs, client, server);
+          } catch (err) {
+            if (cooldown > 0) {
+              if (previousStamp === undefined) cooldowns.delete(cooldownKey);
+              else cooldowns.set(cooldownKey, previousStamp);
+            }
+            throw err;
+          }
           // After the handler, so a command that threw is not counted.
           // The Discord id may be absent — plenty of players use !commands
           // without ever linking, and those uses still count for the

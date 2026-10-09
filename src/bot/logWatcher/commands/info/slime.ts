@@ -6,9 +6,10 @@
  * formula locally (utils/slimeChunk.ts), answer via tellraw. Slime chunks
  * only exist in the Overworld, so other dimensions get a friendly hint.
  *
- * Screen-fallback servers degrade the same way the other seed tools do:
- * getSeed/getPlayerCoords poll the log, and when nothing comes back the
- * player gets a clear "could not …" message instead of silence.
+ * getSeed and getPlayerCoords read the RCON reply and fall back to polling
+ * the server log when the wrapper has no response channel. When neither
+ * yields a value the player gets a clear "could not ..." message instead of
+ * silence.
  */
 import { defineCommand } from "../../defineCommand.js";
 import { isSlimeChunk, blockToChunk } from "@mcbot/core/utils/minecraft/slimeChunk.js";
