@@ -27,11 +27,18 @@ import { errMsg } from "../error.js";
 
 // ── ServerInstance ──
 
+const SEED_PATTERN = /Seed:\s*\[(-?\d+)\]/;
+const SEED_MISS_TTL_MS = 60_000;
+const VERSION_TTL_MS = 10 * 60_000;
+const VERSION_MISS_TTL_MS = 60_000;
+
 export class ServerInstance {
   readonly config: ServerConfig;
   readonly id: string;
 
   private _seedCache: string | null = null;
+  private _seedMissUntil = 0;
+  private _versionCache: { value: string | null; until: number } | null = null;
 
   /**
    * Setup-suite capabilities, probed at startup and re-probed on config
@@ -127,13 +134,47 @@ export class ServerInstance {
 
   async getSeed(): Promise<string | null> {
     if (this._seedCache) return this._seedCache;
+    if (Date.now() < this._seedMissUntil) return null;
+    const seed = await this.fetchSeed();
+    if (seed) this._seedCache = seed;
+    else this._seedMissUntil = Date.now() + SEED_MISS_TTL_MS;
+    return seed;
+  }
+
+  private async fetchSeed(): Promise<string | null> {
     const r = await this.sendCommand("seed");
-    const m = r?.match(/Seed:\s*\[(-?\d+)\]/);
-    if (m?.[1]) {
-      this._seedCache = m[1];
-      return this._seedCache;
+    if (r !== null) {
+      // An RCON reply is authoritative; the log would add nothing.
+      return r.match(SEED_PATTERN)?.[1] ?? null;
+    }
+    // No response channel: the reply only reaches the server log.
+    const { tailLog } = await import("./serverAccess.js");
+    for (let i = 0; i < 3; i++) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 300));
+      const out = await tailLog(this.config, 10);
+      const m = out.match(SEED_PATTERN);
+      if (m?.[1]) return m[1];
     }
     return null;
+  }
+
+  /** The Minecraft version from a status ping, or null when it cannot be read. */
+  async getMinecraftVersion(): Promise<string | null> {
+    if (this._versionCache && Date.now() < this._versionCache.until) {
+      return this._versionCache.value;
+    }
+    const { pingServer } = await import("./serverAccess.js");
+    const { parseVersionName } = await import("../minecraft/versionName.js");
+    const ping = await pingServer(this.config);
+    const value =
+      ping?.kind === "status"
+        ? parseVersionName(ping.result.version).minecraftVersion
+        : null;
+    this._versionCache = {
+      value,
+      until: Date.now() + (value ? VERSION_TTL_MS : VERSION_MISS_TTL_MS),
+    };
+    return value;
   }
 
   async getPlayerData(player: string, nbtPath: string): Promise<string | null> {

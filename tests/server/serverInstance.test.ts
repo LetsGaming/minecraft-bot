@@ -11,7 +11,7 @@
  * to live here moved with the connection: see tests/tps.test.ts in the
  * api-wrapper, including the Bug 1/2/4 regression guards.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("../../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -22,12 +22,14 @@ const getHealthFn = vi.fn();
 const getListFn = vi.fn();
 const getTpsFn = vi.fn();
 const tailLog = vi.fn();
+const pingServer = vi.fn();
 vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
   sendCommand: (...a: unknown[]) => sendCommand(...a),
   getHealth: (...a: unknown[]) => getHealthFn(...a),
   getList: (...a: unknown[]) => getListFn(...a),
   getTps: (...a: unknown[]) => getTpsFn(...a),
   tailLog: (...a: unknown[]) => tailLog(...a),
+  pingServer: (...a: unknown[]) => pingServer(...a),
 }));
 
 import { ServerInstance } from "../../src/core/utils/server/server.js";
@@ -42,7 +44,14 @@ const cfg: ServerConfig = {
 let inst: ServerInstance;
 
 beforeEach(() => {
-  for (const m of [sendCommand, getHealthFn, getListFn, getTpsFn, tailLog]) {
+  for (const m of [
+    sendCommand,
+    getHealthFn,
+    getListFn,
+    getTpsFn,
+    tailLog,
+    pingServer,
+  ]) {
     m.mockReset();
   }
   tailLog.mockResolvedValue("");
@@ -196,5 +205,89 @@ describe("ServerInstance.getTps()", () => {
   it("returns null rather than throwing when the wrapper is unreachable", async () => {
     getTpsFn.mockRejectedValue(new Error("ECONNREFUSED"));
     expect(await inst.getTps()).toBeNull();
+  });
+});
+
+describe("ServerInstance.getSeed()", () => {
+  const SEED_LINE = "Seed: [-8123456789012345678]";
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("returns the seed from the RCON reply and caches it", async () => {
+    sendCommand.mockResolvedValue(SEED_LINE);
+    expect(await inst.getSeed()).toBe("-8123456789012345678");
+    expect(await inst.getSeed()).toBe("-8123456789012345678");
+    expect(sendCommand).toHaveBeenCalledTimes(1);
+    expect(tailLog).not.toHaveBeenCalled();
+  });
+
+  it("polls the log when the command produced no output channel", async () => {
+    sendCommand.mockResolvedValue(null);
+    tailLog
+      .mockResolvedValueOnce("")
+      .mockResolvedValueOnce(`[12:00:00] [Server thread/INFO]: ${SEED_LINE}`);
+    const p = inst.getSeed();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(await p).toBe("-8123456789012345678");
+    expect(tailLog).toHaveBeenCalledTimes(2);
+    expect(await inst.getSeed()).toBe("-8123456789012345678");
+    expect(sendCommand).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns null when neither RCON nor the log yields a seed", async () => {
+    sendCommand.mockResolvedValue(null);
+    const p = inst.getSeed();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(await p).toBeNull();
+    expect(tailLog).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not poll the log when RCON answered without a seed", async () => {
+    sendCommand.mockResolvedValue("Unknown or incomplete command");
+    expect(await inst.getSeed()).toBeNull();
+    expect(tailLog).not.toHaveBeenCalled();
+  });
+
+  it("does not resend the command while a miss is cached, then retries", async () => {
+    sendCommand.mockResolvedValue(null);
+    const first = inst.getSeed();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(await first).toBeNull();
+    expect(sendCommand).toHaveBeenCalledTimes(1);
+
+    expect(await inst.getSeed()).toBeNull();
+    expect(sendCommand).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(61_000);
+    sendCommand.mockResolvedValue(SEED_LINE);
+    expect(await inst.getSeed()).toBe("-8123456789012345678");
+    expect(sendCommand).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("ServerInstance.getMinecraftVersion()", () => {
+  it("returns the version parsed from the status ping and caches it", async () => {
+    pingServer.mockResolvedValue({
+      kind: "status",
+      result: { version: "Paper 1.21.4" },
+    });
+    expect(await inst.getMinecraftVersion()).toBe("1.21.4");
+    expect(await inst.getMinecraftVersion()).toBe("1.21.4");
+    expect(pingServer).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns null when the ping gives no status", async () => {
+    pingServer.mockResolvedValue({ kind: "refused", reason: "no" });
+    expect(await inst.getMinecraftVersion()).toBeNull();
+  });
+
+  it("returns null when pinging is switched off", async () => {
+    pingServer.mockResolvedValue(null);
+    expect(await inst.getMinecraftVersion()).toBeNull();
   });
 });
