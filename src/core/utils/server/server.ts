@@ -16,7 +16,7 @@ import {
   type ServerHealth,
 } from "@mcbot/schema/serverState.js";
 import type { ServerCapabilities } from "../../types/index.js";
-import { loadConfig } from "../../config.js";
+import { resolveDefaultServerId } from "./guildTargets.js";
 import type {
   ServerConfig,
   PlayerCoords,
@@ -302,15 +302,12 @@ export function getAllInstances(): ServerInstance[] {
   return [...instances.values()];
 }
 
-export function getGuildServer(
-  guildId: string | undefined,
-): ServerInstance | null {
-  if (!guildId) return null;
-  const cfg = loadConfig();
-  const guild = cfg.guilds[guildId];
-  if (guild?.defaultServer) {
-    const inst = instances.get(guild.defaultServer);
-    if (inst) return inst;
-  }
-  return getFirstInstance();
+/**
+ * The server a guild's commands target when they name none. Throws when
+ * the guild's `defaultServer` is stale or the choice is ambiguous; see
+ * resolveDefaultServerId.
+ */
+export function getGuildServer(guildId: string | undefined): ServerInstance {
+  const id = resolveDefaultServerId(guildId, [...instances.keys()]);
+  return instances.get(id)!;
 }

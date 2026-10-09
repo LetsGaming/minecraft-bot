@@ -11,14 +11,15 @@
  * so every resolved server is checked against the issuing guild's allowed set.
  */
 import { getServerInstance, getGuildServer } from "@mcbot/core/utils/server/server.js";
-import { loadConfig } from "@mcbot/core/config.js";
+import { getAllowedServerIds } from "@mcbot/core/utils/server/guildTargets.js";
 import { isServerAdmin } from "../../commands/middleware.js";
 import type {
   ChatInputCommandInteraction,
   AutocompleteInteraction,
 } from "discord.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
-import type { GuildConfig } from "@mcbot/core/types/index.js";
+
+export { getAllowedServerIds };
 
 /**
  * The interaction shape server-resolution needs: it only reads the `server`
@@ -30,40 +31,6 @@ import type { GuildConfig } from "@mcbot/core/types/index.js";
 type ServerContextInteraction =
   | ChatInputCommandInteraction
   | AutocompleteInteraction;
-
-/** Normalize a ServerScope (string | string[] | undefined) to a list. */
-function scopeToList(scope: string | string[] | undefined): string[] {
-  if (typeof scope === "string") return [scope];
-  if (Array.isArray(scope)) return scope;
-  return [];
-}
-
-/**
- * Derive the set of server IDs a guild's config references.
- * Used as the default allowed set when `allowedServers` is not explicit.
- */
-function referencedServerIds(guild: GuildConfig): Set<string> {
-  const ids = new Set<string>();
-  if (guild.defaultServer) ids.add(guild.defaultServer);
-  for (const scope of [
-    guild.notifications?.server,
-    guild.leaderboard?.server,
-    guild.tpsAlerts?.server,
-    guild.downtimeAlerts?.server,
-    guild.reports?.server,
-  ]) {
-    for (const id of scopeToList(scope)) ids.add(id);
-  }
-  const bridges = Array.isArray(guild.chatBridge)
-    ? guild.chatBridge
-    : guild.chatBridge
-      ? [guild.chatBridge]
-      : [];
-  for (const bridge of bridges) {
-    if (bridge.server) ids.add(bridge.server);
-  }
-  return ids;
-}
 
 /**
  * Does `serverId` fall inside a feature's server scope for this guild?
@@ -80,37 +47,6 @@ export function serverInScope(
   if (Array.isArray(scope)) return scope.includes(serverId);
   const allowed = getAllowedServerIds(guildId);
   return !allowed || allowed.has(serverId);
-}
-
-/**
- * Which server IDs may commands from this guild target?
- *
- * `null` means unrestricted: single-tenant setups, or a guild that
- * references no servers and sets no allowedServers (a startup warning
- * nudges the operator). An empty set means deny — DMs and unconfigured
- * guilds in multi-guild deployments; resolveServer layers the
- * global-admin exception on top.
- */
-export function getAllowedServerIds(
-  guildId: string | undefined,
-): Set<string> | null {
-  const cfg = loadConfig();
-  const guilds = cfg.guilds ?? {};
-  if (Object.keys(guilds).length <= 1) return null; // single-tenant
-
-  if (!guildId) return new Set(); // DM in a multi-guild deployment
-  const guild = guilds[guildId];
-  if (!guild) return new Set(); // unconfigured guild in a multi-guild deployment
-
-  const allowed = guild.allowedServers
-    ? new Set(guild.allowedServers)
-    : referencedServerIds(guild);
-  // The guild's own default must always be reachable, even if the operator
-  // set an explicit allowedServers list that forgot to repeat it.
-  if (guild.defaultServer) allowed.add(guild.defaultServer);
-
-  if (allowed.size === 0) return null; // guild references nothing — legacy
-  return allowed;
 }
 
 /**
@@ -161,30 +97,27 @@ export function assertMayTargetServerId(
  * Resolve the ServerInstance for an interaction.
  *
  * Resolution order:
- * 1. If the interaction has an explicit `server` string option, use that ID.
- * 2. Otherwise, fall back to the guild's configured `defaultServer`.
- * 3. If neither is set, use the first registered server instance.
+ * 1. An explicit `server` string option.
+ * 2. The guild's `defaultServer`; a stale one is a config error.
+ * 3. The only server the guild may target (in a DM, the only configured one).
+ * 4. Otherwise an error listing the available IDs.
  *
  * Whichever way the server was resolved, the issuing guild must be
  * allowed to target it (multi-guild deployments only).
  *
- * @throws {Error} if no server can be resolved (misconfiguration or unknown
- *                 ID), or if this guild may not target the resolved server.
+ * @throws {Error} if no server can be resolved, or if this guild may not
+ *                 target the resolved server.
  */
 export function resolveServer(
   interaction: ServerContextInteraction,
 ): ServerInstance {
   const explicit = interaction.options.getString("server");
-  const server = explicit
-    ? getServerInstance(explicit)
-    : getGuildServer(interaction.guild?.id);
-
-  if (!server) {
-    throw new Error(
-      explicit
-        ? `Server "${explicit}" not found.`
-        : "No server configured for this guild.",
-    );
+  let server: ServerInstance | null;
+  if (explicit) {
+    server = getServerInstance(explicit);
+    if (!server) throw new Error(`Server "${explicit}" not found.`);
+  } else {
+    server = getGuildServer(interaction.guild?.id);
   }
 
   assertGuildMayTarget(interaction, server);

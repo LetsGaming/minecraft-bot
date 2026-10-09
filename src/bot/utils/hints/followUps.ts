@@ -33,6 +33,7 @@ import {
   MessageFlags,
   type ChatInputCommandInteraction,
 } from "discord.js";
+import { visibleServerIdsForGuild } from "@mcbot/core/utils/server/guildTargets.js";
 import {
   loadSuggestionLedger,
   getSuggestionRecord,
@@ -323,7 +324,10 @@ export async function attachFollowUpHint(
     try {
       serverId = resolveServer(interaction).id;
     } catch {
-      serverId = getAllInstances()[0]?.id ?? "";
+      serverId = visibleServerIdsForGuild(
+        interaction.guild?.id,
+        getAllInstances().map((i) => i.id),
+      )[0] ?? "";
     }
     if (!serverId) return;
 

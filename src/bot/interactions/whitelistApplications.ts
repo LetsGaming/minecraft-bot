@@ -36,7 +36,10 @@ import {
 import { kvGet, kvSet } from "@mcbot/core/db/kv.js";
 import { loadConfig, getServerIds } from "@mcbot/core/config.js";
 import { getServerInstance } from "@mcbot/core/utils/server/server.js";
-import { getAllowedServerIds } from "../utils/guild/guildRouter.js";
+import {
+  resolveDefaultServerId,
+  visibleServerIdsForGuild,
+} from "@mcbot/core/utils/server/guildTargets.js";
 import { isServerAdmin, getMemberRoleIds } from "../commands/middleware.js";
 import { performWhitelistAdd } from "../commands/shared/whitelistAdd.js";
 import { createEmbed } from "../utils/embeds/embedUtils.js";
@@ -112,18 +115,16 @@ async function saveStore(store: ApplicationStore): Promise<void> {
 
 /** The server IDs this guild's applications may target. */
 function visibleServerIds(guildId: string): string[] {
-  const allowed = getAllowedServerIds(guildId);
-  return getServerIds().filter((id) => !allowed || allowed.has(id));
+  return visibleServerIdsForGuild(guildId, getServerIds());
 }
 
 /** The server an application in this guild targets, or null if ambiguous. */
-function defaultApplicationServer(
-  guildId: string,
-  gcfg: GuildConfig,
-): string | null {
-  if (gcfg.defaultServer) return gcfg.defaultServer;
-  const ids = visibleServerIds(guildId);
-  return ids.length === 1 ? ids[0]! : null;
+function defaultApplicationServer(guildId: string): string | null {
+  try {
+    return resolveDefaultServerId(guildId, getServerIds());
+  } catch {
+    return null;
+  }
 }
 
 // ── Persistent prompt maintenance ─────────────────────────────────────────
@@ -252,7 +253,7 @@ async function handleApplyButton(
 
     // Multi-server guild without a default: the applicant picks the
     // target — better than bouncing them with a config error.
-    if (gcfg && !defaultApplicationServer(guildId, gcfg)) {
+    if (gcfg && !defaultApplicationServer(guildId)) {
       const ids = visibleServerIds(guildId).slice(0, 25);
       modal.addLabelComponents(
         new LabelBuilder()
@@ -308,7 +309,7 @@ async function handleModalSubmit(
     // Server: the guild default when unambiguous, otherwise the modal's
     // select. Re-validate against the visible set — customIds and modal
     // payloads are client-controlled.
-    let serverId = defaultApplicationServer(guildId, gcfg);
+    let serverId = defaultApplicationServer(guildId);
     if (!serverId) {
       const picked = (() => {
         try {

@@ -71,9 +71,23 @@ describe("resolveServer through the real chain", () => {
     expect(resolveServer(interaction({ guildId: "g1" })).id).toBe("b");
   });
 
-  it("handles a stale defaultServer", () => {
+  it("surfaces a stale defaultServer as a config error", () => {
     setup(["a", "b"], { g1: { defaultServer: "gone" } } as never);
-    expect(resolveServer(interaction({ guildId: "g1" })).id).toBe("a");
+    expect(() => resolveServer(interaction({ guildId: "g1" }))).toThrow(
+      /defaultServer "gone".*Available: a, b/,
+    );
+  });
+
+  it("still honours an explicit server when the defaultServer is stale", () => {
+    setup(["a", "b"], { g1: { defaultServer: "gone" } } as never);
+    expect(resolveServer(interaction({ server: "b", guildId: "g1" })).id).toBe("b");
+  });
+
+  it("asks for server: when a single-tenant guild has several servers and no default", () => {
+    setup(["a", "b"], { g1: {} } as never);
+    expect(() => resolveServer(interaction({ guildId: "g1" }))).toThrow(
+      /Several servers are available \(a, b\).*Pass `server:`/,
+    );
   });
 
   it("handles a single-tenant guild without a default", () => {
@@ -86,22 +100,26 @@ describe("resolveServer through the real chain", () => {
       g1: { allowedServers: ["b"] },
       g2: { allowedServers: ["a"] },
     } as never);
-    expect(() => resolveServer(interaction({ guildId: "g1" }))).toThrow(
-      /not available/,
-    );
+    expect(resolveServer(interaction({ guildId: "g1" })).id).toBe("b");
+    expect(resolveServer(interaction({ guildId: "g2" })).id).toBe("a");
   });
 
-  it("handles a DM with one configured server", () => {
+  it("resolves the only configured server in a DM", () => {
     setup(["a"], { g1: { defaultServer: "a" } } as never);
+    expect(resolveServer(interaction({ guildId: null })).id).toBe("a");
+  });
+
+  it("denies a multi-guild DM for non-operators even with one server", () => {
+    setup(["a"], { g1: { defaultServer: "a" }, g2: {} } as never);
     expect(() => resolveServer(interaction({ guildId: null }))).toThrow(
-      /No server configured/,
+      /inside a Discord server/,
     );
   });
 
-  it("handles a DM with several servers", () => {
+  it("asks for server: in a DM with several servers", () => {
     setup(["a", "b"], { g1: { defaultServer: "a" } } as never);
     expect(() => resolveServer(interaction({ guildId: null }))).toThrow(
-      /No server configured/,
+      /Several servers are available \(a, b\).*Pass `server:`/,
     );
   });
 
@@ -119,7 +137,7 @@ describe("resolveServer through the real chain", () => {
   it("throws when no servers are registered", () => {
     setup([], { g1: {} } as never);
     expect(() => resolveServer(interaction({ guildId: "g1" }))).toThrow(
-      /No server configured/,
+      /No server is available/,
     );
   });
 });
