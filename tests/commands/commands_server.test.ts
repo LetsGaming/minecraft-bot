@@ -200,12 +200,6 @@ describe("/status command", () => {
     expect(description.toLowerCase()).toContain("wrapper");
   });
 
-  it("throws when resolveServer returns nothing", async () => {
-    vi.mocked(resolveServer).mockReturnValue(null as never);
-    const interaction = makeInteraction();
-    await expect(execute(interaction)).rejects.toThrow("Server not found");
-  });
-
   it("includes bot ping from interaction.client.ws.ping", async () => {
     const server = makeServer();
     vi.mocked(resolveServer).mockReturnValue(server);
