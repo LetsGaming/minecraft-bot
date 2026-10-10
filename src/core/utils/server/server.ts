@@ -15,6 +15,10 @@ import {
   unknownHealth,
   type ServerHealth,
 } from "@mcbot/schema/serverState.js";
+import {
+  UnreachableReason,
+  type CommandOutcome,
+} from "@mcbot/schema/commandOutcome.js";
 import type { ServerCapabilities } from "../../types/index.js";
 import { resolveDefaultServerId } from "./guildTargets.js";
 import type {
@@ -67,15 +71,35 @@ export class ServerInstance {
 
   // ── Unified interface ──
 
-  async sendCommand(command: string): Promise<string | null> {
+  /**
+   * Send a console command and say what became of it. Never throws; a
+   * command that did not reach the server is logged once, here.
+   */
+  async send(command: string): Promise<CommandOutcome> {
+    let outcome: CommandOutcome;
     try {
-      const { sendCommand } = await import("./serverAccess.js");
-      return await sendCommand(this.config, command);
+      const { sendCommandOutcome } = await import("./serverAccess.js");
+      outcome = await sendCommandOutcome(this.config, command);
     } catch (err) {
-      const message = errMsg(err);
-      log.warn(this.id, `sendCommand failed: ${message}`);
-      return null;
+      outcome = {
+        kind: "unreachable",
+        reason: UnreachableReason.WrapperDown,
+        detail: errMsg(err),
+      };
     }
+    if (outcome.kind === "unreachable") {
+      log.warn(
+        this.id,
+        `command not delivered (${outcome.reason}): ${outcome.detail}`,
+      );
+    }
+    return outcome;
+  }
+
+  /** Temporary shim for callers not yet migrated to `send`. */
+  async sendCommand(command: string): Promise<string | null> {
+    const outcome = await this.send(command);
+    return outcome.kind === "delivered" ? outcome.output : null;
   }
 
   /**

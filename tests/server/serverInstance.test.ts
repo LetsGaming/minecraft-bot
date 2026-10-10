@@ -24,7 +24,12 @@ const getTpsFn = vi.fn();
 const tailLog = vi.fn();
 const pingServer = vi.fn();
 vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
-  sendCommand: (...a: unknown[]) => sendCommand(...a),
+  sendCommandOutcome: async (...a: unknown[]) => {
+    const r = await sendCommand(...a);
+    return r === null || r === undefined
+      ? { kind: "sent", via: "screen" }
+      : { kind: "delivered", output: r };
+  },
   getHealth: (...a: unknown[]) => getHealthFn(...a),
   getList: (...a: unknown[]) => getListFn(...a),
   getTps: (...a: unknown[]) => getTpsFn(...a),

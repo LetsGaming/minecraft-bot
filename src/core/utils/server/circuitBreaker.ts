@@ -9,10 +9,11 @@
  * this opens and fails fast for a cooldown, then lets one probe through
  * (half-open) to test recovery before fully closing again.
  *
- * Deliberately not applied to write operations (scripts, mod mutations,
- * restore, console commands) — those are rare, operator-initiated, and an
- * admin retrying "start the server" during a flaky window should reach the
- * wrapper, not be told no by a breaker tuned for read traffic.
+ * Console commands go through it too, so a down wrapper fails an in-game
+ * command immediately. Deliberately not applied to scripts, mod mutations and
+ * restore: those are rare, operator-initiated, and an admin retrying "start
+ * the server" during a flaky window should reach the wrapper, not be told no
+ * by a breaker tuned for read traffic.
  */
 
 const FAILURE_THRESHOLD = 5;
