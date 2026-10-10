@@ -8,10 +8,15 @@
  * modules when dist/ exists, otherwise extracts keys from the source
  * files with a string-literal scan (good enough for the flat
  * `"key": "value"` shape these files are constrained to).
+ *
+ * Also fails on user-facing English literals that bypass t() in the
+ * Discord reply/embed layer (see scripts/lib/i18nLiteralLint.mjs).
+ * Justified exceptions live in scripts/i18n-literal-allowlist.json.
  */
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { lintRepo } from "./lib/i18nLiteralLint.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LOCALES = ["en", "de"];
@@ -56,7 +61,26 @@ for (const a of LOCALES) {
   }
 }
 
+const allowlist = JSON.parse(
+  fs.readFileSync(path.join(root, "scripts", "i18n-literal-allowlist.json"), "utf-8"),
+);
+const staleAllow = allowlist.filter(
+  (e) => !e.reason || !fs.existsSync(path.join(root, e.path)),
+);
+for (const e of staleAllow) {
+  failed = true;
+  console.error(`✖ allowlist entry needs an existing path and a reason: ${e.path}`);
+}
+const literals = lintRepo(root, allowlist);
+if (literals.length > 0) {
+  failed = true;
+  console.error(
+    `✖ ${literals.length} user-facing literal(s) bypass t(); move them to src/core/locales/{en,de}.ts:`,
+  );
+  for (const f of literals) console.error(`  - ${f.file}:${f.line}  "${f.text}"`);
+}
+
 if (failed) process.exit(1);
 console.log(
-  `✓ Locales in sync (${LOCALES.join(", ")}; ${sets.en.size} keys each)`,
+  `✓ Locales in sync (${LOCALES.join(", ")}; ${sets.en.size} keys each); no user-facing literals outside t()`,
 );

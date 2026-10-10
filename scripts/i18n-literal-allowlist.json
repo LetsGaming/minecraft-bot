@@ -1,0 +1,7 @@
+[
+  {
+    "path": "src/bot/interactions/whitelistApplications.ts",
+    "text": "wlapp:",
+    "reason": "Machine-readable application id in the embed footer; it is parsed back from the message and is never display text."
+  }
+]
