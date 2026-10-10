@@ -317,6 +317,8 @@ import Tag from "primevue/tag";
 import { useToast } from "primevue/usetoast";
 import type { EditConflict } from "../composables/useModConfigs";
 import { useModConfigs, type ConfigField } from "../composables/useModConfigs";
+import { discardPrompt } from "../composables/useDiscardPrompt";
+import { useConfirm } from "primevue/useconfirm";
 import { useCapabilities } from "../composables/useCapabilities";
 import { displayPath, pathKey } from "../utils/configTree";
 import ViewHeader from "../components/ui/ViewHeader.vue";
@@ -336,7 +338,14 @@ export default defineComponent({
     activeServer: { type: String, default: "" },
   },
   setup() {
-    return { ...useModConfigs(), ...useCapabilities(), toast: useToast() };
+    const confirm = useConfirm();
+    return {
+      ...useModConfigs(
+        discardPrompt(confirm, "This file has edits that are not saved. Leaving it discards them."),
+      ),
+      ...useCapabilities(),
+      toast: useToast(),
+    };
   },
   data() {
     return {
@@ -367,7 +376,7 @@ export default defineComponent({
   },
   watch: {
     activeServer(id: string) {
-      if (id && id !== this.currentServer) void this.select(id);
+      if (id && id !== this.currentServer) void this.select(id, false);
     },
     serverIds: {
       immediate: true,
@@ -377,6 +386,7 @@ export default defineComponent({
             this.activeServer && ids.includes(this.activeServer)
               ? this.activeServer
               : ids[0]!,
+            false,
           );
         }
       },
@@ -440,7 +450,12 @@ export default defineComponent({
         this.flushing = false;
       }
     },
-    async select(id: string): Promise<void> {
+    /**
+     * `guarded` is false when the switch already passed the app-level guard
+     * (the sidebar picker), so the same edits are not asked about twice.
+     */
+    async select(id: string, guarded = true): Promise<void> {
+      if (guarded && !(await this.confirmDiscard())) return;
       this.currentServer = id;
       this.showHistory = false;
       this.showSource = false;
