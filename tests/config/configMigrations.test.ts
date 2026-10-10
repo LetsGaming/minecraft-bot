@@ -310,7 +310,7 @@ describe("loadConfig migration", () => {
     const cfg = loadConfig();
 
     expect(cfg.configVersion).toBe(CURRENT_CONFIG_VERSION);
-    expect(writes[0]).toMatch(/config\.json\.bak-v0-\d{8}T\d{6}Z$/);
+    expect(writes[0]).toMatch(/config\.json\.bak-v0-\d{8}T\d{9}Z$/);
     expect(writes[1]).toMatch(/config\.json\.\d+\.[0-9a-f]+\.tmp$/);
     const [backup] = backups();
     expect(backup).toMatch(/^config\.json\.bak-v0-/);
@@ -318,6 +318,24 @@ describe("loadConfig migration", () => {
     const written = JSON.parse(fs.readFileSync(configPath, "utf-8"));
     expect(written.configVersion).toBe(CURRENT_CONFIG_VERSION);
     expect(fs.readdirSync(dir).filter((f) => f.endsWith(".tmp"))).toEqual([]);
+  });
+
+  it("picks a distinct backup name when the timestamp name is already taken", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-01-02T03:04:05.678Z"));
+    try {
+      const taken = path.join(dir, "config.json.bak-v0-20260102T030405678Z");
+      fs.writeFileSync(taken, "earlier backup");
+      fs.writeFileSync(configPath, fill(readFixtureText("f11-v5.0.0")));
+      (await load()).loadConfig();
+      expect(fs.readFileSync(taken, "utf-8")).toBe("earlier backup");
+      expect(backups().sort()).toEqual([
+        "config.json.bak-v0-20260102T030405678Z",
+        "config.json.bak-v0-20260102T030405678Z-1",
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("logs one line per applied migrator", async () => {
