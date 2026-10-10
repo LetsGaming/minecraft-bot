@@ -46,11 +46,10 @@ export const execute = withErrorHandling(
 
       // Apply server additions/removals to the running bot —
       // create instances + watchers for added IDs, stop watchers and drop
-      // instances for removed ones. Changed settings on an existing ID
-      // can't be applied live (the instance keeps its original RCON/watcher
-      // wiring), so those are reported as restart-required.
+      // instances for removed ones, rebuild those whose settings changed.
+      // Only a failed rebuild is reported as restart-required.
       const reportApplied = beginConfigApply();
-      const { added, removed, changed } = await reconcileServers(
+      const { added, removed, replaced, changed } = await reconcileServers(
         interaction.client,
         cfg,
       );
@@ -68,6 +67,7 @@ export const execute = withErrorHandling(
           [
             added.length > 0 ? `added: ${added.join(",")}` : "",
             removed.length > 0 ? `removed: ${removed.join(",")}` : "",
+            replaced.length > 0 ? `rebuilt: ${replaced.join(",")}` : "",
             changed.length > 0 ? `changed: ${changed.join(",")}` : "",
           ]
             .filter(Boolean)
@@ -84,6 +84,8 @@ export const execute = withErrorHandling(
         lines.push(`+ Added (live): ${added.join(", ")}`);
       if (removed.length > 0)
         lines.push(`- Removed (live): ${removed.join(", ")}`);
+      if (replaced.length > 0)
+        lines.push(`~ Rebuilt (live): ${replaced.join(", ")}`);
       if (changed.length > 0) {
         lines.push(
           `⚠ Changed settings on existing server(s) require a restart: ${changed.join(", ")}`,
@@ -99,6 +101,7 @@ export const execute = withErrorHandling(
         settingChanges.length === 0 &&
         added.length === 0 &&
         removed.length === 0 &&
+        replaced.length === 0 &&
         changed.length === 0
       ) {
         lines.push("No changes detected.");

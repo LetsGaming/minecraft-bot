@@ -78,6 +78,22 @@ interface ServerHandles {
 
 const serverHandles = new Map<string, ServerHandles>();
 
+/** In-game command modules found on disk but not initialized because they were disabled everywhere. */
+const deferredIngame = new Map<string, { init: () => void | Promise<void> }>();
+
+async function initDeferredIngameCommands(): Promise<void> {
+  for (const [name, mod] of [...deferredIngame]) {
+    if (!commandEnabledAnywhere(name)) continue;
+    deferredIngame.delete(name);
+    try {
+      await mod.init();
+      log.info("commands", `Loaded !${name} after config reload`);
+    } catch (err) {
+      log.error("commands", `Failed to load !${name}: ${errMsg(err)}`);
+    }
+  }
+}
+
 async function wireServer(
   server: ReturnType<typeof getAllInstances>[number],
   client: Client,
@@ -129,14 +145,9 @@ function unwireServer(serverId: string): void {
 
 export async function initMinecraftCommands(client: Client): Promise<void> {
   const cfg = loadConfig();
-  // Long-lived watchers, monitors and schedulers get the PROVIDER, not a
-  // snapshot: they are wired once and run for the process lifetime, and
-  // reconcileServers only reconciles the `servers` block — so a snapshot
-  // here meant a guild added by a later config reload never reached them
-  // (its chatBridge, notifications, alerts and purge stayed dead until a
-  // full restart). Callers that are themselves re-run on reload
-  // (statusEmbed, application prompts) keep taking the current record.
-  const guildConfigs = cfg.guilds;
+  // Long-lived watchers, monitors and schedulers get the PROVIDER
+  // (liveGuildConfigs), never a snapshot: they are wired once and run for the
+  // process lifetime, so a snapshot would miss guilds added by a later reload.
 
   // ── 1. Load in-game !command definitions (registers them globally) ──
   const commandsDir = path.join(__dirname, "commands");
@@ -188,6 +199,7 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
       // enforced live at dispatch inside defineCommand.
       if (!commandEnabledAnywhere(name)) {
         log.info("commands", `Skipping disabled: !${name}`);
+        deferredIngame.set(name, { init: mod.init });
         continue;
       }
       await mod.init();
@@ -220,7 +232,7 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
   startLeaderboardScheduler(client, liveGuildConfigs);
 
   // ── 5. Persistent status embed ──
-  startStatusEmbed(client, guildConfigs);
+  startStatusEmbed(client, liveGuildConfigs);
 
   // ── 5b. Daily claim reminders ──
   startDailyReminderScheduler(client);
@@ -266,7 +278,7 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
   startMilestoneWatcher(client);
 
   // ── 13. Whitelist application prompts ──
-  await ensureApplicationPrompts(client, guildConfigs).catch((err) => {
+  await ensureApplicationPrompts(client, liveGuildConfigs).catch((err) => {
     log.warn("wlapp", `Prompt setup failed: ${errMsg(err)}`);
   });
 
@@ -283,11 +295,9 @@ export interface ReconcileResult {
   added: string[];
   /** Server IDs whose watchers were stopped and instances dropped. */
   removed: string[];
-  /**
-   * Server IDs that exist in both old and new config but whose settings
-   * differ. Live instances keep their original config object (RCON client,
-   * watcher, etc. were built from it), so these still need a restart.
-   */
+  /** Server IDs whose settings changed and whose instance and watchers were rebuilt from the new config. */
+  replaced: string[];
+  /** Server IDs whose settings changed but could not be rebuilt live; these still need a restart. */
   changed: string[];
 }
 
@@ -302,7 +312,9 @@ let reconcileChain: Promise<unknown> = Promise.resolve();
  *  - removed IDs: stop the log watcher, clear the TPS timer, disconnect
  *    RCON, and drop the instance from the registry,
  *  - added IDs: create the instance and wire the full watcher set, exactly
- *    as at startup.
+ *    as at startup,
+ *  - IDs whose settings changed: rebuild the instance from the new config and
+ *    rewire its watchers.
  *
  * Everything that resolves instances per tick (snapshot timer, downtime
  * monitor, status embed, command routing) picks the change up automatically
@@ -329,7 +341,7 @@ async function doReconcile(
   const added = Object.keys(configured).filter(
     (id) => !registeredIds.has(id),
   );
-  const changed = registered
+  const differing = registered
     .filter(
       (inst) =>
         inst.id in configured &&
@@ -343,6 +355,22 @@ async function doReconcile(
     log.info("reconcile", `Server removed and watchers stopped: ${id}`);
   }
 
+  const replaced: string[] = [];
+  const changed: string[] = [];
+  for (const id of differing) {
+    unwireServer(id);
+    removeServerInstance(id);
+    const inst = addServerInstance(configured[id]!);
+    try {
+      await wireServer(inst, client, liveGuildConfigs);
+      replaced.push(id);
+      log.info("reconcile", `Server settings changed, instance rebuilt: ${id}`);
+    } catch (err) {
+      changed.push(id);
+      log.error("reconcile", `Failed to rewire changed server ${id}: ${errMsg(err)}`);
+    }
+  }
+
   for (const id of added) {
     const inst = addServerInstance(configured[id]!);
     try {
@@ -352,6 +380,8 @@ async function doReconcile(
       log.error("reconcile", `Failed to wire added server ${id}: ${errMsg(err)}`);
     }
   }
+
+  await initDeferredIngameCommands();
 
   // Re-probe capabilities on every reload — the admin may have just
   // installed (or removed) the setup suite, and newly added servers
@@ -395,16 +425,16 @@ async function doReconcile(
   invalidateWebhookCache();
 
   // New/changed whitelistApplications blocks get their prompt posted.
-  await ensureApplicationPrompts(client, freshConfig.guilds).catch((err) => {
+  await ensureApplicationPrompts(client, liveGuildConfigs).catch((err) => {
     log.warn("reconcile", `Application-prompt reconcile failed: ${errMsg(err)}`);
   });
 
   if (changed.length > 0) {
     log.warn(
       "reconcile",
-      `Settings changed on existing server(s) [${changed.join(", ")}] — a restart is required to apply those (live instances keep their original connection settings).`,
+      `Settings changed on server(s) [${changed.join(", ")}] but could not be applied live; a restart is required.`,
     );
   }
 
-  return { added, removed, changed };
+  return { added, removed, replaced, changed };
 }

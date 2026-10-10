@@ -1,7 +1,7 @@
 /**
  * statusEmbed.test.ts — invalidateStatusChannelCache (exported)
  */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 
 vi.mock("../../src/core/utils/jsonStore.js", () => ({
   loadJson: vi.fn().mockResolvedValue({}),
@@ -38,7 +38,16 @@ vi.mock("../../src/bot/utils/guild/discordChannel.js", () => ({
   renameVoiceChannelIfChanged: vi.fn(),
 }));
 
-import { invalidateStatusChannelCache } from "../../src/bot/logWatcher/watchers/schedulers/statusEmbed.js";
+vi.mock("../../src/core/config.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/core/config.js")>()),
+  loadConfig: vi.fn().mockReturnValue({ presence: { enabled: false }, guilds: {} }),
+}));
+
+import {
+  invalidateStatusChannelCache,
+  startStatusEmbed,
+  reconcileStatusEmbed,
+} from "../../src/bot/logWatcher/watchers/schedulers/statusEmbed.js";
 
 describe("invalidateStatusChannelCache", () => {
   it("runs without throwing", () => {
@@ -50,5 +59,22 @@ describe("invalidateStatusChannelCache", () => {
     invalidateStatusChannelCache();
     invalidateStatusChannelCache();
     expect(true).toBe(true);
+  });
+});
+
+describe("startStatusEmbed guild source", () => {
+  afterEach(() => {
+    reconcileStatusEmbed({} as never, { guilds: {}, presence: { enabled: false } });
+  });
+
+  it("does not arm while a provider reports no enabled guild", () => {
+    expect(startStatusEmbed({} as never, () => ({}))).toBeNull();
+  });
+
+  it("arms from a provider that reports an enabled guild", () => {
+    const timer = startStatusEmbed({ user: null, guilds: { cache: new Map() } } as never, () => ({
+      g1: { statusEmbed: { enabled: true } },
+    }) as never);
+    expect(timer).toBeTruthy();
   });
 });

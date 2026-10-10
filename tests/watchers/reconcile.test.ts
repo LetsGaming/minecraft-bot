@@ -211,9 +211,10 @@ describe("reconcileServers", () => {
     expect(ws!.stop).not.toHaveBeenCalled();
   });
 
-  it("reports changed settings on an existing ID without touching the instance", async () => {
-    initServers({ survival: srvCfg("survival") });
+  it("rebuilds the instance and its watcher when settings change on an existing ID", async () => {
+    await reconcileServers(fakeClient, botCfg({ survival: srvCfg("survival") }));
     const before = getServerInstance("survival");
+    const oldWatcher = createdWatchers[0]!;
 
     const result = await reconcileServers(
       fakeClient,
@@ -222,14 +223,17 @@ describe("reconcileServers", () => {
       }),
     );
 
-    expect(result.changed).toEqual(["survival"]);
+    expect(result.replaced).toEqual(["survival"]);
+    expect(result.changed).toEqual([]);
     expect(result.added).toEqual([]);
     expect(result.removed).toEqual([]);
-    // Instance untouched — same object, original config
-    expect(getServerInstance("survival")).toBe(before);
+    expect(getServerInstance("survival")).not.toBe(before);
     expect(getServerInstance("survival")!.config.apiUrl).toBe(
-      "http://survival.wrapper.local:3030",
+      "http://moved.local:3030",
     );
+    expect(oldWatcher.stop).toHaveBeenCalledOnce();
+    expect(createdWatchers).toHaveLength(2);
+    expect(createdWatchers[1]!.start).toHaveBeenCalledOnce();
   });
 
   it("is a no-op when the server list is unchanged", async () => {
@@ -240,7 +244,7 @@ describe("reconcileServers", () => {
       botCfg({ survival: srvCfg("survival") }),
     );
 
-    expect(result).toEqual({ added: [], removed: [], changed: [] });
+    expect(result).toEqual({ added: [], removed: [], replaced: [], changed: [] });
     expect(createdWatchers).toHaveLength(0);
   });
 

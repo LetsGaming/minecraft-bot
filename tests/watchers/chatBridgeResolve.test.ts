@@ -116,3 +116,38 @@ describe("resolveGuildBridges", () => {
     expect(resolveGuildBridges(gc({}), ["survival"]).bridges).toHaveLength(0);
   });
 });
+
+describe("server id provider", () => {
+  it("re-infers the sole server on every line after the server list changes", async () => {
+    const { registerChatBridge } = await import(
+      "../../src/bot/logWatcher/watchers/log/chatBridge.js"
+    );
+    let handler: ((m: RegExpMatchArray) => void) | undefined;
+    const watcher = {
+      server: { id: "survival" },
+      register: vi.fn((_re: RegExp, h: (m: RegExpMatchArray) => void) => {
+        handler = h;
+      }),
+    };
+    const send = vi.fn().mockResolvedValue(undefined);
+    const client = {
+      channels: { fetch: vi.fn().mockResolvedValue({ send }) },
+    };
+    let ids = ["survival"];
+    registerChatBridge(
+      watcher as never,
+      client as never,
+      { g1: { chatBridge: { channelId: "ch1" } } },
+      () => ids,
+    );
+
+    const line = ["", "Steve", "hello"] as unknown as RegExpMatchArray;
+    handler!(line);
+    await vi.waitFor(() => expect(client.channels.fetch).toHaveBeenCalledTimes(1));
+
+    ids = ["survival", "creative"];
+    handler!(line);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(client.channels.fetch).toHaveBeenCalledTimes(1);
+  });
+});

@@ -132,11 +132,12 @@ const client = new Client({
 // Re-cache automatically when config.json is edited on disk.
 // Server additions/removals are reconciled live — instances and
 // watchers are created for added IDs and torn down for removed ones.
-// Before the client is ready, watchers can't be wired yet; startup reads
-// the fresh config anyway, so skipping is correct rather than lossy.
+// A reload that lands before the client is ready cannot be applied yet
+// (watchers are not wired); it is remembered and reconciled once at ready.
 let lastSeenConfig = config;
-watchConfig((fresh) => {
-  if (!client.isReady()) return;
+let reloadMissedBeforeReady = false;
+
+function applyConfigReload(fresh: typeof config): void {
   const reportApplied = beginConfigApply();
   const settingChanges = summarizeConfigChanges(lastSeenConfig, fresh);
   lastSeenConfig = fresh;
@@ -144,12 +145,17 @@ watchConfig((fresh) => {
     log.info("config", `Reload: ${change}`);
   }
   reconcileServers(client, fresh)
-    .then(({ added, removed, changed }) => {
+    .then(({ added, removed, replaced, changed }) => {
       reportApplied(changed);
-      if (added.length > 0 || removed.length > 0 || changed.length > 0) {
+      if (
+        added.length > 0 ||
+        removed.length > 0 ||
+        replaced.length > 0 ||
+        changed.length > 0
+      ) {
         log.info(
           "config",
-          `Reload applied — added: [${added.join(", ")}], removed: [${removed.join(", ")}]` +
+          `Reload applied, added: [${added.join(", ")}], removed: [${removed.join(", ")}], rebuilt: [${replaced.join(", ")}]` +
             (changed.length > 0
               ? `; changed (restart required): [${changed.join(", ")}]`
               : ""),
@@ -159,6 +165,15 @@ watchConfig((fresh) => {
     .catch((err) => {
       log.error("config", `Reconciliation after reload failed: ${errMsg(err)}`);
     });
+  void refreshSlashCommands();
+}
+
+watchConfig((fresh) => {
+  if (!client.isReady()) {
+    reloadMissedBeforeReady = true;
+    return;
+  }
+  applyConfigReload(fresh);
 });
 
 /**
@@ -167,6 +182,38 @@ watchConfig((fresh) => {
  * so we extend via a Collection on the prototype-less object.
  */
 const commands = new Collection<string, BotCommand>();
+
+/** Every slash command module found on disk, whether currently registered or not. */
+const knownCommands = new Map<
+  string,
+  { cmd: BotCommand; capabilitySkip: string | undefined }
+>();
+
+/**
+ * Make `commands` match the live config: a command enabled somewhere is
+ * registered, one disabled everywhere is dropped. Returns whether the set
+ * changed.
+ */
+function syncCommands(): boolean {
+  let changed = false;
+  for (const [name, { cmd, capabilitySkip }] of knownCommands) {
+    const wanted = !capabilitySkip && commandEnabledAnywhere(name);
+    if (wanted && !commands.has(name)) {
+      commands.set(name, cmd);
+      changed = true;
+    } else if (!wanted && commands.has(name)) {
+      commands.delete(name);
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+async function refreshSlashCommands(): Promise<void> {
+  if (!syncCommands() || DEV_NO_DISCORD) return;
+  log.info("commands", "Command enablement changed, re-registering slash commands");
+  await registerGlobalCommands();
+}
 
 // ── Load commands ──
 
@@ -199,24 +246,28 @@ async function loadCommands(): Promise<void> {
       // Only a command disabled in EVERY scope (global + all guild
       // overrides) is skipped entirely; anything else stays registered
       // and is gated per guild at dispatch time.
+      const skipReason = capabilitySkips.get(name);
+      // data + execute were verified present above, so it's a complete command.
+      knownCommands.set(name, {
+        cmd: cmd as BotCommand,
+        capabilitySkip: skipReason,
+      });
       if (!commandEnabledAnywhere(name)) {
         log.info("commands", `Skipping disabled: /${name}`);
         continue;
       }
-      const skipReason = capabilitySkips.get(name);
       if (skipReason) {
         log.info(
           "commands",
           `Skipping /${name}: ${skipReason} (see docs/admin/setup.md)`,
         );
-        continue;
       }
-      // data + execute were verified present above, so it's a complete command.
-      commands.set(name, cmd as BotCommand);
     } catch (err) {
       log.error("commands", `Failed to load ${file}: ${errMsg(err)}`);
     }
   }
+
+  syncCommands();
 
   // Dashboard manifest: the web process cannot discover commands itself.
   registerManifestCommands("slash", manifestSlash);
@@ -254,6 +305,11 @@ void (async () => {
       await initMinecraftCommands(client);
     } catch (err) {
       log.error("init", `Failed to initialize MC commands: ${errMsg(err)}`);
+    }
+
+    if (reloadMissedBeforeReady) {
+      reloadMissedBeforeReady = false;
+      applyConfigReload(loadConfig());
     }
   });
 
