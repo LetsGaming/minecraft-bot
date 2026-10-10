@@ -3,7 +3,6 @@
  * from the vendored openapi.json next to this file. Do not edit by hand:
  * change the wrapper's route schemas and run `npm run wire:sync`.
  */
-/* eslint-disable */
 // prettier-ignore
 export interface paths {
     "/health": {
