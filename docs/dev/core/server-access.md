@@ -13,7 +13,9 @@ does all three, because it is the process that is actually on that machine.
 
 One route per function, raw data back, no business logic. Nothing in the bot
 imports `fs` or `child_process` for server state; there is nothing to import it
-for.
+for. `serverAccess.ts` is a barrel over the per-feature modules in
+`src/core/utils/server/access/`; the module map is in
+[architecture.md](../architecture.md#1-transport-serveraccessts).
 
 Until 5.0.0 this module was a *routing* seam with one rule — HTTP if
 `config.apiUrl` was set, local filesystem and `sudo -u` otherwise — and under
