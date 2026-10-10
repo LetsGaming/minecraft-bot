@@ -94,6 +94,9 @@ export function registerConfigRoutes(app: FastifyInstance): void {
         "Command manifest not written yet — start the bot once so it can discover its commands.",
       );
     }
+    // Hashed before the read: a write landing in between leaves the token
+    // older than the content, which only ever makes a later save conflict.
+    const hash = configFileHash();
     const raw = readRawConfig();
     const guildIds = Object.keys(raw.guilds ?? {});
     const serverIds = Object.keys(raw.servers ?? {});
@@ -134,6 +137,7 @@ export function registerConfigRoutes(app: FastifyInstance): void {
     }
 
     return {
+      hash,
       manifest,
       usage: { windowDays: USAGE_WINDOW_DAYS, byCommand: usageByName },
       scopes: { guildIds, serverIds },
