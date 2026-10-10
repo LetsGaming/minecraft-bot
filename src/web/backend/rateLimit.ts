@@ -20,7 +20,7 @@ import {
   createRateLimiter,
   type RateLimiter,
 } from "@mcbot/core/utils/rateLimiter.js";
-import { sessionFromRequest } from "./auth/auth.js";
+import { oauthStateCookie, sessionFromRequest } from "./auth/auth.js";
 
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
@@ -42,6 +42,16 @@ export function registerRateLimiting(app: FastifyInstance): void {
   ): { limiter: RateLimiter; key: string } | null => {
     const path = req.url.split("?")[0] ?? "";
     if (path.startsWith("/auth/")) {
+      // Behind a proxy that is not trusted every client shares one address, so
+      // prefer a per-browser identity: the session user, or the OAuth state
+      // cookie that belongs to one login attempt. The address is the last
+      // resort for callers that have neither.
+      const uid = sessionFromRequest(req)?.uid;
+      if (uid) return { limiter: authLimiter, key: `uid:${uid}` };
+      const nonce = oauthStateCookie(req);
+      if (nonce && path === "/auth/callback") {
+        return { limiter: authLimiter, key: `state:${nonce}` };
+      }
       return { limiter: authLimiter, key: `ip:${req.ip}` };
     }
     if (path.startsWith("/api/") && MUTATING_METHODS.has(req.method)) {

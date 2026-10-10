@@ -31,7 +31,7 @@ const schema = JSON.parse(
 const defs = schema.definitions as Definitions;
 
 /** Paths (map values and array items shown as `*`) that may stay raw JSON. */
-const RAW_JSON_ALLOWLIST = new Set(["leaderboard.*"]);
+const RAW_JSON_ALLOWLIST = new Set(["leaderboard.*", "webui.trustProxy"]);
 
 function rawJsonPaths(): string[] {
   const found: string[] = [];

@@ -543,13 +543,27 @@ export interface WebUiConfig {
    * (`X-Forwarded-For`). `false` (default): none, the socket address is
    * used, which is right when the dashboard is reached directly. A list of IPs
    * or CIDR ranges (or `loopback`, `linklocal`, `uniquelocal`) trusts
-   * exactly those proxies, e.g. `["127.0.0.1"]` for a proxy on the same host.
-   * `true` trusts every hop and lets any client spoof its address past the
-   * rate limiter, so avoid it.
+   * exactly those proxies, e.g. `["loopback"]` for a proxy on the same host
+   * or `["172.16.0.0/12"]` for a proxy container on Docker's network. A
+   * number n trusts the first n hops and is only safe when every request must
+   * pass through that many proxies. `true` trusts every hop and lets any
+   * client spoof its address, so avoid it. Re-read on every request, so a
+   * change applies without a restart.
    *
    * @default false
    */
-  trustProxy?: boolean | string[];
+  trustProxy?: boolean | number | string[];
+  /**
+   * Dashboard session version. Sessions issued under a different value are
+   * rejected, so raising this number signs everyone out at once (the
+   * dashboard re-reads config.json, no restart needed). Use it after a leaked
+   * cookie or a removed admin.
+   *
+   * @asType integer
+   * @minimum 0
+   * @default 0
+   */
+  sessionEpoch?: number;
   /**
    * Host-side capability grants: Discord user ID → server id (or "*") →
    * capabilities. Lets an operator delegate part of the host API without

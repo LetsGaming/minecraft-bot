@@ -20,6 +20,7 @@
  *   WEBUI_SESSION_SECRET  cookie-signing key (any long random string)
  */
 import { createHmac, timingSafeEqual, randomBytes } from "crypto";
+import net from "node:net";
 import { loadConfig } from "@mcbot/core/config.js";
 import { isRecord } from "@mcbot/core/utils/objects.js";
 import {
@@ -31,11 +32,11 @@ import {
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { isSnowflake } from "@mcbot/schema/discord.js";
 
-// ponytail: dev-only auth bypass. MCBOT_DEV_NO_AUTH=1 skips Discord OAuth
-// entirely and treats every request as this fixed sysadmin — for local/agent
-// dev sessions that have no real Discord OAuth app to log in against. Never
-// set this in production; nothing here checks NODE_ENV, so it is on the
-// operator (dev tooling only sets it in scripts/dev-up.mjs).
+// Dev-only auth bypass. MCBOT_DEV_NO_AUTH=1 skips Discord OAuth entirely and
+// treats every request as this fixed sysadmin, for local/agent dev sessions
+// that have no real Discord OAuth app to log in against. assertDevAuthBypassSafe
+// refuses to start the server with it on a non-loopback address or under
+// NODE_ENV=production; only scripts/dev-up.mjs is meant to set it.
 const DEV_NO_AUTH = process.env.MCBOT_DEV_NO_AUTH === "1";
 const DEV_SESSION: Session = {
   uid: "100000000000000001",
@@ -46,6 +47,7 @@ const DEV_SESSION: Session = {
 };
 
 export const SESSION_COOKIE = "mcbot_session";
+export const OAUTH_STATE_COOKIE = "mcbot_oauth_state";
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const STATE_TTL_MS = 10 * 60 * 1000;
 // Guild-manager permissions are captured at login and can't be re-derived
@@ -64,6 +66,41 @@ export interface Session {
   /** When the captured guild scope stops being trusted for writes (SEC-03).
    *  Optional: cookies issued before this field existed lack it. */
   gexp?: number;
+  /** The `webui.sessionEpoch` in force when this session was issued. Absent counts as 0. */
+  ep?: number;
+}
+
+/** Bumping `webui.sessionEpoch` in config.json signs everyone out. */
+export function currentSessionEpoch(): number {
+  const epoch = loadConfig().webui?.sessionEpoch;
+  return typeof epoch === "number" && Number.isInteger(epoch) && epoch >= 0
+    ? epoch
+    : 0;
+}
+
+const LOOPBACK_HOSTS = new Set(["localhost", "::1", "[::1]"]);
+
+function isLoopbackHost(host: string): boolean {
+  return LOOPBACK_HOSTS.has(host.toLowerCase()) || net.isIP(host) === 4 && host.startsWith("127.");
+}
+
+/**
+ * The dev bypass makes every request a sysadmin, so it must never be reachable
+ * from outside the machine. Throws when it is on together with a non-loopback
+ * bind address or a production environment.
+ */
+export function assertDevAuthBypassSafe(host: string): void {
+  if (!DEV_NO_AUTH) return;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "MCBOT_DEV_NO_AUTH=1 is not allowed when NODE_ENV=production: it disables dashboard login.",
+    );
+  }
+  if (!isLoopbackHost(host)) {
+    throw new Error(
+      `MCBOT_DEV_NO_AUTH=1 is not allowed on non-loopback address "${host}": it disables dashboard login. Bind to 127.0.0.1 or unset it.`,
+    );
+  }
 }
 
 // Read from the environment on each call rather than cached at load: the setup
@@ -249,9 +286,15 @@ export function redirectUri(): string {
   return `${publicBaseUrl()}/auth/callback`;
 }
 
-export function buildAuthorizeUrl(): { url: string; state: string } {
+/**
+ * The state is signed and timed, and its nonce is also handed to the browser
+ * in a short-lived cookie so the callback can prove the same browser started
+ * the login. A state captured from someone else's flow fails that check.
+ */
+export function buildAuthorizeUrl(): { url: string; state: string; nonce: string } {
+  const nonce = randomBytes(16).toString("hex");
   const state = encodeSigned({
-    n: randomBytes(8).toString("hex"),
+    n: nonce,
     exp: Date.now() + STATE_TTL_MS,
   });
   const params = new URLSearchParams({
@@ -262,12 +305,38 @@ export function buildAuthorizeUrl(): { url: string; state: string } {
     state,
     prompt: "none",
   });
-  return { url: `${DISCORD_OAUTH_AUTHORIZE_URL}?${params}`, state };
+  return { url: `${DISCORD_OAUTH_AUTHORIZE_URL}?${params}`, state, nonce };
 }
 
-export function verifyState(state: string | undefined): boolean {
-  const parsed = decodeSigned<{ exp: number }>(state);
-  return !!parsed && parsed.exp > Date.now();
+/** Valid only when the state is ours, unexpired, and bound to this browser's cookie nonce. */
+export function verifyState(
+  state: string | undefined,
+  cookieNonce: string | undefined,
+): boolean {
+  const parsed = decodeSigned<{ exp: number; n?: unknown }>(state);
+  if (!parsed || parsed.exp <= Date.now()) return false;
+  if (typeof parsed.n !== "string" || !cookieNonce) return false;
+  return secretEquals(cookieNonce, parsed.n);
+}
+
+function cookieAttributes(maxAgeSeconds: number): string {
+  const secure = publicBaseUrl().startsWith("https://") ? "; Secure" : "";
+  return `Path=/auth; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}${secure}`;
+}
+
+export function setOAuthStateCookie(reply: FastifyReply, nonce: string): void {
+  reply.header(
+    "set-cookie",
+    `${OAUTH_STATE_COOKIE}=${nonce}; ${cookieAttributes(Math.floor(STATE_TTL_MS / 1000))}`,
+  );
+}
+
+export function clearOAuthStateCookie(reply: FastifyReply): void {
+  reply.header("set-cookie", `${OAUTH_STATE_COOKIE}=; ${cookieAttributes(0)}`);
+}
+
+export function oauthStateCookie(req: FastifyRequest): string | undefined {
+  return parseCookies(req.headers.cookie)[OAUTH_STATE_COOKIE];
 }
 
 /** Exchange the OAuth code for the Discord user (id + tag + manageable guilds). */
@@ -349,6 +418,7 @@ export function sessionFromRequest(req: FastifyRequest): Session | null {
   const cookies = parseCookies(req.headers.cookie);
   const session = decodeSigned<Session>(cookies[SESSION_COOKIE]);
   if (!session || session.exp <= Date.now()) return null;
+  if ((session.ep ?? 0) !== currentSessionEpoch()) return null;
   // Any validly-signed, unexpired cookie is a logged-in user. What they
   // may DO is decided per route (isSysadmin / canManageGuild), so there
   // is no global admin gate here anymore.
@@ -367,6 +437,7 @@ export function setSessionCookie(reply: FastifyReply, user: {
     guilds: user.guildIds,
     exp: Date.now() + SESSION_TTL_MS,
     gexp: Date.now() + GUILD_SCOPE_TTL_MS,
+    ep: currentSessionEpoch(),
   };
   const secure = publicBaseUrl().startsWith("https://") ? "; Secure" : "";
   reply.header(
