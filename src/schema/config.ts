@@ -24,6 +24,28 @@ export const REMOVED_LOCAL_SERVER_FIELDS = [
   "rconPassword",
 ] as const;
 
+/**
+ * The GuildConfig blocks that count as a feature a guild can turn on. The
+ * dashboard's guild list, setup wizard and the backend's "enabled features"
+ * summary all read this one list; the `satisfies` clause keeps every entry a
+ * real GuildConfig key.
+ */
+export const GUILD_FEATURE_KEYS = [
+  "notifications",
+  "chatBridge",
+  "leaderboard",
+  "statusEmbed",
+  "downtimeAlerts",
+  "tpsAlerts",
+  "channelPurge",
+  "reports",
+  "console",
+  "whitelistApplications",
+  "linkedRole",
+] as const satisfies readonly (keyof GuildConfig)[];
+
+export type GuildFeatureKey = (typeof GUILD_FEATURE_KEYS)[number];
+
 export interface RawServerConfig {
   id?: string;
   /**
