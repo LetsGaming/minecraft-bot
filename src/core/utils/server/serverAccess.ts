@@ -14,9 +14,8 @@
  * routing and returning the raw data the caller needs.
  */
 
-import { scriptTimeoutMs } from "./wrapperContract.js";
 import { SseLineStream } from "../sseLineStream.js";
-import type { ServerConfig, ScriptResult } from "../../types/index.js";
+import type { ServerConfig } from "../../types/index.js";
 import type {
   BackupDeleteResult,
   InstalledMod,
@@ -31,8 +30,7 @@ import type {
   ModUpdateCheck,
   RemoteHostInfo,
 } from "@mcbot/schema/wire/index.js";
-import { apiGet, apiPost } from "./access/apiClient.js";
-import { advertisedScriptTimeouts, wrapperKey } from "./access/manifest.js";
+import { apiGet } from "./access/apiClient.js";
 
 export { RateLimitedError } from "./access/apiClient.js";
 export { forgetGamePort, rememberGamePort, pingTarget, pingServer, getHealth, isRunning, getList, getTps } from "./access/health.js";
@@ -48,6 +46,7 @@ export { readBackups, indexBackupFiles, openBackupDownload, restoreBackupFile, d
 export { indexConfigFiles, readConfigFile, writeConfigFile, revertConfigFile } from "./access/configFiles.js";
 export type { ConfigFileContents, ConfigIndexResult, ConfigFileInfo } from "./access/configFiles.js";
 export { detectCapabilities } from "./access/capabilityProbe.js";
+export { runScript, ScriptStillRunningError } from "./access/scripts.js";
 
 export type {
   BackupDeleteResult,
@@ -94,55 +93,6 @@ export {
   type WrapperManifest,
   type ContractReport,
 } from "./wrapperContract.js";
-
-/** Margin added to a script's ceiling so the wrapper's own timeout reply arrives first. */
-const SCRIPT_TIMEOUT_MARGIN_MS = 15_000;
-
-// ── Script execution ──────────────────────────────────────────────────────
-
-/**
- * Run a named server management script (start / stop / restart / backup / status).
- * On remote instances this POSTs to the API wrapper; locally it spawns the script
- * exactly as before.
- */
-export async function runScript(
-  cfg: ServerConfig,
-  action: string,
-  args: string[] = [],
-): Promise<ScriptResult> {
-  const waitMs =
-    scriptTimeoutMs(action, advertisedScriptTimeouts.get(wrapperKey(cfg))) +
-    SCRIPT_TIMEOUT_MARGIN_MS;
-  try {
-    return await apiPost<ScriptResult>(
-      cfg,
-      "/scripts/run",
-      { action, args },
-      waitMs,
-    );
-  } catch (err) {
-    if (err instanceof DOMException && err.name === "TimeoutError") {
-      throw new ScriptStillRunningError(action, waitMs);
-    }
-    throw err;
-  }
-}
-
-/**
- * The bot stopped waiting for a script that the wrapper may still be running.
- * The outcome is unknown, so callers report "still running", not "failed".
- */
-export class ScriptStillRunningError extends Error {
-  constructor(
-    readonly action: string,
-    readonly waitedMs: number,
-  ) {
-    super(
-      `Script '${action}' did not finish within ${Math.round(waitedMs / 1000)}s; it may still be running`,
-    );
-    this.name = "ScriptStillRunningError";
-  }
-}
 
 // ── Log streaming (SSE, used by the bot's watcher and the dashboard) ──────
 
