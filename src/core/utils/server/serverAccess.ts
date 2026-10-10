@@ -15,11 +15,9 @@
  */
 
 import { scriptTimeoutMs } from "./wrapperContract.js";
-import { log } from "../logger.js";
 import { SseLineStream } from "../sseLineStream.js";
 import type {
   ServerConfig,
-  WhitelistEntry,
   MinecraftStatsFile,
   BackupSummary,
   BackupFileIndex,
@@ -44,7 +42,6 @@ import type {
   RemoteHostInfo,
   WireSchemas,
 } from "@mcbot/schema/wire/index.js";
-import { errMsg } from "../error.js";
 import {
   instanceUrl,
   apiGetRaw,
@@ -61,6 +58,7 @@ export { sendCommandOutcome } from "./access/commands.js";
 export { getRemoteInfo, versionAtLeast } from "./access/host.js";
 export type { RemoteInfo } from "./access/host.js";
 export { getRemoteManifest, verifyWrapperContract } from "./access/manifest.js";
+export { readWhitelist, readUserCache } from "./access/players.js";
 
 export type {
   BackupDeleteResult,
@@ -125,40 +123,6 @@ export {
   type WrapperManifest,
   type ContractReport,
 } from "./wrapperContract.js";
-
-// ── Whitelist ─────────────────────────────────────────────────────────────
-
-/** Read the server's whitelist. */
-export async function readWhitelist(
-  cfg: ServerConfig,
-): Promise<WhitelistEntry[]> {
-  const { whitelist } = await apiGet<{ whitelist: WhitelistEntry[] }>(
-    cfg,
-    "/whitelist",
-  );
-  return whitelist;
-}
-
-/**
- * Read usercache.json (every player the server has ever seen, whitelist or
- * not). Returns [] on any error, including remote wrappers that predate the
- * /usercache endpoint — callers treat the cache as a best-effort name
- * source on top of the whitelist.
- */
-export async function readUserCache(
-  cfg: ServerConfig,
-): Promise<WhitelistEntry[]> {
-  try {
-    const { usercache } = await apiGet<{ usercache: WhitelistEntry[] }>(
-      cfg,
-      "/usercache",
-    );
-    return Array.isArray(usercache) ? usercache : [];
-  } catch (err) {
-    log.debug("serverAccess", `usercache unavailable for ${cfg.id}: ${errMsg(err)}`);
-    return [];
-  }
-}
 
 // ── Level name ────────────────────────────────────────────────────────────
 
