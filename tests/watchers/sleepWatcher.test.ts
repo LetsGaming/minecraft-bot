@@ -354,10 +354,10 @@ describe("handler — cooldown", () => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Handler — outcome handling
+// Handler: outcome handling
 // ══════════════════════════════════════════════════════════════════════════════
 
-describe("handler — command outcomes", () => {
+describe("handler: command outcomes", () => {
   async function trigger(server: ServerInstance, id: string) {
     const watcher = makeLogWatcher(id);
     registerSleepWatcher(watcher);

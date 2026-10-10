@@ -527,11 +527,13 @@ often to keep trying*.
 already goes through. After 5 consecutive failures it opens and fails fast
 for 15s, then lets one probe through (half-open) before fully closing again.
 Deliberately per-server (a breaker keyed globally would let one broken
-instance mute every other configured server) and deliberately reads-only:
-writes (scripts, mod mutations, restore, console commands) are rare and
+instance mute every other configured server) and, originally, reads-only:
+writes (scripts, mod mutations, restore) are rare and
 operator-initiated, and an admin retrying "start the server" during a flaky
 window should reach the wrapper, not be told no by a breaker tuned for read
-traffic.
+traffic. Console commands joined the breaker later (see "Console commands
+return a CommandOutcome"), because a down wrapper otherwise cost every in-game
+command its full timeout.
 
 A 429 is excluded from the breaker on purpose: the wrapper answered and
 declined the request on its own terms, which is proof it is reachable and
@@ -627,3 +629,46 @@ commit, the suite repo builds its pinned wrapper and runs this check, and
 `release.yml` runs the full gate before publishing. Docs name manifest
 capabilities, not wrapper versions, so they cannot go stale when a version
 number moves.
+
+## Console commands return a CommandOutcome instead of `string | null`
+
+**Problem:** `ServerInstance.sendCommand` returned `null` for four different
+situations: the command went over a channel with no reply, RCON failed and the
+screen fallback carried it, the screen send failed outright, and the wrapper
+was never reached. Ban, kick, pardon and whitelist edits ignored the result and
+recorded success, the temp-ban scheduler deleted its record after a `/pardon`
+that may never have arrived, event tips and feature nudges were marked as sent
+before anyone knew, and `give()` imported `serverAccess` to get around the
+swallowing.
+
+**Decision:** `CommandOutcome` (`schema/commandOutcome.ts`) is `delivered`
+(RCON answered, output may be empty), `sent` (written to the console with no
+reply channel, unverifiable) or `unreachable` (with a reason). The wrapper
+reports the channel it used (`POST /command` returns `{ result, via, sent,
+rconError? }`, `rcon-command` v2) and answers 502 when neither RCON nor screen
+delivered, so a failed screen send is no longer a `200 { result: null }`.
+`serverAccess.sendCommandOutcome` never throws and `ServerInstance.send`
+returns the union. Callers that record state act on the kind: moderation and
+whitelist commands abort before writing anything, the temp-ban scheduler keeps
+its record and retries every minute, tips and nudges record only when the
+message reached the server, a reward is requeued on `unreachable` and counted
+as given on `sent`.
+
+**Compatibility:** a v1 wrapper answers `{ result }` only; the bot reads a
+string as `delivered` and `null` as `sent`, which is the old behaviour without
+the swallowing. It cannot tell a failed screen send from a successful one, and
+the startup report says so (`EXPECTED_WRAPPER_FEATURES["rcon-command"]`).
+
+**Live queries** (`getSeed`, `getPlayerCoords`, `getPlayerDimension`,
+`getLastDeathLocation`) return a `QueryResult` and fail at once on
+`unreachable`: an RCON reply is parsed directly, the log is polled only after
+a send with no reply channel, and the anchored parsers that stop chat spoofing
+are unchanged. There is no `"overworld"` default; a waypoint is not saved when
+the dimension is unknown.
+
+**Rejected:** throwing on failure. Every caller already treats an unreachable
+server as a normal condition, and a union forces the caller to decide what
+that means for its own state, which a thrown error lets it skip.
+
+**Circuit breaker:** console commands now go through it (an open breaker is
+`unreachable`/`breaker-open`). Scripts, mod mutations and restore still do not.

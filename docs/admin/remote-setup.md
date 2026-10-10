@@ -140,6 +140,12 @@ list it:
   archives, downloading one, and restoring from one. Without it the dashboard
   hides its Backups tab entirely rather than showing a panel that errors on
   open, and you keep the per-tier summary that `/backup` has always shown.
+- **Console command reporting** (`rcon-command` version 2): the wrapper says
+  whether a command went over RCON or the screen fallback, and answers an error
+  when neither delivered it. Without it the bot cannot tell a command that never
+  reached the server from one that was sent over screen, so a ban, kick or
+  whitelist change made while the server's console is unreachable is reported as
+  sent instead of failing. Update the wrapper to get the accurate behaviour.
 - **Rollback** (`rollback` in the script actions): the Rollback button is hidden
   when the wrapper does not advertise `rollback.sh`.
 

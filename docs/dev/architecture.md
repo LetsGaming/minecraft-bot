@@ -80,18 +80,20 @@ gone as of 5.0.0. The wrapper has them.
 ### 2. Game operations: `ServerInstance`
 
 One instance per configured server, created at startup and held in a
-module-level registry. It holds no connection: it owns `sendCommand()`, the
+module-level registry. It holds no connection: it owns `send()`, the
 state readers (`isRunning`, `getList`, `getTps`, `getSeed`, `getPlayerCoords`,
 `getPlayerDimension`), and a few small caches, each delegating to
 `serverAccess`. The canonical regexes for parsing console/NBT output live here
 and only here — except TPS, which the wrapper parses because it is the side
 that sees the response. Details in [core/server-access.md](core/server-access.md).
 
-Note `sendCommand()` catches transport errors and returns null, which makes
-"the wrapper is unreachable" look like "the wrapper answered over screen, with
-no output to give". Callers that care about the difference — `give()` in
-`daily.ts` is the one — read `serverAccess` directly, where a failed request
-still throws.
+`send()` never throws and returns a `CommandOutcome`: `delivered` (RCON
+answered, output may be empty), `sent` (written to the console with no reply
+channel, so unverifiable) or `unreachable` (it did not get there, with a
+reason). Callers that record state afterwards (bans, whitelist edits, reward
+queues, "tip sent" markers) act on the kind; the helpers in
+`core/utils/minecraft/serverMessages.ts` (`whisper`, `announce`, `tellraw`)
+wrap it for plain messages. See [core/server-access.md](core/server-access.md).
 
 ### 3. Feature logic: commands and watchers
 
@@ -129,8 +131,8 @@ A player types `!chunkbase` in-game:
 ```
 server writes log line → LogWatcher reads delta → regex match
   → defineCommand cooldown check → handler
-  → server.getSeed() + getPlayerCoords() (RCON or log-poll fallback)
-  → server.sendCommand("/tellraw ...") back to the player
+  → server.getSeed() + getPlayerCoords() (RCON reply, or a log poll after a send with no reply channel)
+  → tellraw(server, player, ...) back to the player
 ```
 
 ## State and persistence

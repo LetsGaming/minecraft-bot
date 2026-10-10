@@ -817,9 +817,6 @@ eq("getList", list, { playerCount: "2", maxPlayers: "20", players: ["Steve", "Al
 const tps = await serverAccess.getTps(cfg);
 check("getTps returns a parsed TpsResult", tps !== null && typeof tps === "object", JSON.stringify(tps));
 
-const said = await serverAccess.sendCommand(cfg, "say hello");
-check("sendCommand returns the console result", typeof said === "string", JSON.stringify(said));
-
 console.log("\n── command outcomes (delivered, sent, unreachable)");
 {
   const delivered = await serverAccess.sendCommandOutcome(cfg, "list");

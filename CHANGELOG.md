@@ -10,8 +10,21 @@ project follows [Semantic Versioning](https://semver.org/).
 
 - `config.json` rewrites (dashboard saves and the one-time config migration) kept the default file mode, so on Linux a `0600` config could become world-readable and the migration backup `config.json.bak-v*` was created with the default umask. Rewrites now keep the existing file mode, new config files and backups are owner-only (`0600`), and temp files are created exclusively under a random name and swept if a crash leaves one behind; the "other" permission bits of an existing config are never kept (`core/utils/config/atomicWrite.ts`, `core/utils/config/configService.ts`, `core/config.ts`).
 
+### Fixed
+
+- Moderation and whitelist commands no longer report success when the command never reached the server. `/ban` (including timed bans), `/kick`, `/pardon`, `/whitelist`, `/verify` and `/unwhitelist` check the result first: an unreachable server tells the admin and records nothing (no audit entry, no timed ban, no whitelist history, no cache invalidation); a console that visibly refuses the command (no such player, unknown command) is reported; a server with no reply channel gets an "unverified" note. Approving a whitelist application leaves it pending when the add did not reach the server (`commands/moderation/*`, `commands/shared/whitelistAdd.ts`, `commands/unwhitelist.ts`, `interactions/whitelistApplications.ts`).
+- A timed ban is no longer forgotten when the release `/pardon` fails: the record stays and the release is retried every minute until the server receives it (`schedulers/tempBanScheduler.ts`).
+- Event tips and feature nudges are marked as sent only after the whisper reached the server, so a failed send no longer spends one of the player's mentions (`eventTips.ts`, `featureNudges.ts`).
+- `!waypoint set` refuses to save when it cannot read the player's dimension, instead of storing an overworld waypoint; `!chunkbase`, `!slime` and `!netherportal` say when the dimension or position is unknown or the server cannot be reached, and `!seed`, `!slime` and `!chunkbase` no longer blame the seed for an unreachable server. In-game queries against an unreachable server answer at once instead of waiting 900 ms for a log that will not come (`server.ts`, `logWatcher/commands/**`).
+- A player whose in-game command could not reach the server no longer loses the cooldown for it (`logWatcher/defineCommand.ts`).
+- A Discord message that could not be relayed to the game gets a warning reaction (`chatBridge.ts`).
+- The dashboard console says when a command was sent to a server with no reply channel instead of showing nothing, and answers 502 when the command did not reach the server (`routes/console.ts`, `useConsole.ts`).
+- Daily and challenge reward delivery reads the command result from `ServerInstance` instead of reaching around it into `serverAccess`; a reward is requeued only when the server was unreachable (`rewards.ts`).
+
 ### Added
 
+- `CommandOutcome` (`delivered`, `sent`, `unreachable`) and `ServerInstance.send`, which never throws. Console commands now go through the per-server circuit breaker, so a down wrapper fails an in-game command at once instead of after the request timeout. The wrapper's `POST /command` reply names the channel it used (`rcon-command` v2); an older wrapper is read as before (`schema/commandOutcome.ts`, `serverAccess.sendCommandOutcome`, `server.ts`, `wrapperContract.ts`, `scripts/e2e-wrapper-contract.mjs`).
+- `whisper`, `announce` and `tellraw` helpers for messages to players (`core/utils/minecraft/serverMessages.ts`).
 - Wrapper wire types are generated from the wrapper's `openapi.json` instead of hand-copied: `npm run wire:sync -- <wrapper dir>` vendors it to `src/schema/wire/` and `npm run wire:check` (CI, release) fails on drift. `serverAccess.ts`, the schema contract, core backup types and the dashboard's mod and config types alias the generated schemas. Touched: `scripts/sync-wire.mjs`, `src/schema/wire/**`, `src/core/utils/server/serverAccess.ts`, `src/schema/contract.ts`, `src/web/frontend/src/api.ts`.
 - `scripts/e2e-wrapper-contract.mjs` covers the whole wrapper surface and takes the route list from the wrapper's manifest, failing on any route without a case: health v2, bulk stats, stats deletion, all mod-management routes, backup file list, download, range and delete, restore, mod configs, `scripts/run` and the command result shapes.
 - The wrapper contract CI job also runs against the commit the minecraft-server-setup submodule pins.
@@ -30,6 +43,8 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `ServerInstance.sendCommand` and `serverAccess.sendCommand` are removed in favour of `send` / `sendCommandOutcome`. `getSeed`, `getPlayerCoords`, `getPlayerDimension`, `getLastDeathLocation` and `getPlayerData` return a `QueryResult` with the reason for a miss, and `getSeed` caches a failure for a minute. `playerUtils.getListOutput`, which always returned null, is removed.
+- `rcon-command` is expected at version 2; the startup report lists a wrapper that still serves version 1 and notes that failed console sends cannot be detected there.
 - `stats-bulk` is now an expected wrapper feature (version 1), so the startup report lists a wrapper without it instead of staying silent; the bot still falls back to one request per player.
 - `scripts/e2e-wrapper-contract.mjs` requires `WRAPPER_DIR`; the old `../api-wrapper` default matched no real directory.
 - `release.yml` runs typecheck, lint, layout, schema and locale checks, tests, `wire:check` and the wrapper contract on Node 24 before it builds or publishes. Docs and comments no longer name wrapper versions or claim Node 22.13 is needed for the default SQLite driver.

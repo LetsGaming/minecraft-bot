@@ -57,7 +57,7 @@ const interaction = {
 
 Assert on what was sent: `expect(interaction.editReply).toHaveBeenCalledWith(expect.objectContaining({...}))`.
 
-**ServerInstance** is mocked per test via `vi.mock("../src/core/utils/server/server.js", ...)` or by passing a stub object with `sendCommand`, `getList`, `isRunning` as `vi.fn()`. The layering exists precisely so this works without touching sockets.
+**ServerInstance** is mocked per test via `vi.mock("../src/core/utils/server/server.js", ...)` or by passing a stub object with `send` (resolving to a `CommandOutcome`, see `tests/fixtures/outcomes.ts`), `getList`, `isRunning` as `vi.fn()`. The layering exists precisely so this works without touching sockets.
 
 **RconClient** is tested against an in-process mock socket; see `tests/server/rconClient.test.ts` for the packet encode/decode round trips.
 

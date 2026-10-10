@@ -1,7 +1,7 @@
 /**
  * Offline daily-claim delivery queue.
  *
- * deliverPendingRewards is tested THROUGH the real give() — ServerInstance.send
+ * deliverPendingRewards is tested THROUGH the real give(): ServerInstance.send
  * answers /give with the "Gave …" confirmation (or not), so the
  * retry-on-unconfirmed-delivery contract is exercised end to end: entries
  * vanish only after every item is confirmed, partial failures keep exactly

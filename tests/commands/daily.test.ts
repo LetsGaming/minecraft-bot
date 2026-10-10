@@ -244,7 +244,7 @@ describe("claimLock — concurrent claim prevention", () => {
     const i1 = makeInteraction();
     const i2 = makeInteraction();
 
-    // Start first execution — hangs inside give() at send.
+    // Start first execution; it hangs inside give() at send.
     const p1 = execute(i1 as never);
     // Yield so i1 enters the lock before i2 starts.
     await new Promise((r) => setTimeout(r, 0));
