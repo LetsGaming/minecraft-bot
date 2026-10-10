@@ -37,3 +37,14 @@ Rendered in Microsoft Edge at 1440, 390 and 360 (Evolve was checked at 430 for o
 ## Independent of the choice
 
 The audit's hotfix list does not depend on any visual direction and does not need to wait: German whitelist modal label too long (DISC-01), public `/config show` output (DISC-05), the shared relative-time helper that treats UTC stamps as local time (DASH-08), unsaved edits discarded silently (DASH-03, DASH-04), `/daily` replying after saving (DISC-02), the dispatcher's hard-coded English error (DISC-03), and the contrast and focus token fix (DASH-05, DASH-06).
+
+## Assumptions that did not survive checking against the code
+
+Found while building the Hybrid direction (details and file references in `hybrid/direction.md`, section "Backend assumptions, checked"). They affect the other directions' mockups:
+
+- **Restore has no steps and no safety copy.** The wrapper's restore is one blocking call (10 minute timeout) that refuses to run while the server is online and does not stop it; it takes no snapshot first. A step-by-step restore job block and an "Undo: pre-restore snapshot" line, as the Evolve and New identity mockups imply and the Polish `direction.md` lists as a proposal, need new wrapper behaviour or must be dropped.
+- **Update-check progress is per mod, not per step.** The existing `ModCompatJob` reports `state`, `progress {done,total}`, partial results, a summary and an error text. Per-mod step detail, a log, an ETA or Cancel are not available.
+- **Evolve's `backup:write` capability does not exist.** The real ones are `backup:create`, `backup:restore` and `backup:delete`.
+- **Still unverified proposals** in several directions: a free-space figure for restore, a bot restart control in the dashboard, per-field `effect` and `reload` metadata in the schema.
+
+Every direction's cost estimate should be read with this in mind: if a direction's headline feature depends on a wrapper change, that change is extra work in the wrapper repo.
