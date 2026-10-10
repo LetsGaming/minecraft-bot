@@ -26,13 +26,6 @@ export function stripLogPrefix(line: string): string {
   return line.trim();
 }
 
-export async function getPlayerNamesChoices(
-  server: ServerInstance,
-): Promise<Array<{ name: string; value: string }>> {
-  const names = await getPlayerNames(server);
-  return names.map((n) => ({ name: n, value: n }));
-}
-
 /**
  * Find a player by name (case insensitive) among everyone the server
  * knows: whitelist first, then usercache — so lookups work on servers

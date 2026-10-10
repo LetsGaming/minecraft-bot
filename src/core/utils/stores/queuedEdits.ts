@@ -162,20 +162,6 @@ export function pendingForServer(serverId: string): QueuedEdit[] {
   );
 }
 
-/** Everything still waiting for one file. */
-export function pendingForFile(serverId: string, fileId: string): QueuedEdit[] {
-  return mapRows(
-    getDb().prepare(
-      `SELECT id, server_id, file_id, rel_path, key_path, new_value,
-              base_value, queued_at, by_id, by_tag
-       FROM queued_config_edits
-       WHERE server_id = ? AND file_id = ? ORDER BY queued_at ASC, id ASC`,
-    ),
-    rowToEdit,
-    serverId,
-    fileId,
-  );
-}
 
 /** Drop specific queued edits, by row id. */
 export function dropEdits(ids: readonly number[]): void {

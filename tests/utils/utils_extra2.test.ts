@@ -191,9 +191,6 @@ describe("playerUtils", () => {
   let getPlayerNames: (server: never) => Promise<string[]>;
   let getPlayerCount: (server?: never) => Promise<unknown>;
   let getOnlinePlayers: (server?: never) => Promise<string[]>;
-  let getPlayerNamesChoices: (
-    server: never,
-  ) => Promise<Array<{ name: string; value: string }>>;
 
   beforeEach(async () => {
     const mod = await import("../../src/core/utils/minecraft/playerUtils.js");
@@ -201,7 +198,6 @@ describe("playerUtils", () => {
     getPlayerNames = mod.getPlayerNames;
     getPlayerCount = mod.getPlayerCount;
     getOnlinePlayers = mod.getOnlinePlayers;
-    getPlayerNamesChoices = mod.getPlayerNamesChoices;
     vi.clearAllMocks();
   });
 
@@ -221,12 +217,6 @@ describe("playerUtils", () => {
     const names = await getPlayerNames(fakeServer);
     expect(names).toContain("Steve");
     expect(names).toContain("Alex");
-  });
-
-  it("getPlayerNamesChoices returns name/value pairs", async () => {
-    const choices = await getPlayerNamesChoices(fakeServer);
-    expect(choices[0]).toHaveProperty("name");
-    expect(choices[0]).toHaveProperty("value");
   });
 
   it("getPlayerCount uses server.getList when server is provided", async () => {

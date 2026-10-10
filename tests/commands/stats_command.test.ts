@@ -25,7 +25,6 @@ vi.mock("../../src/bot/utils/embeds/statEmbeds.js", () => ({
 vi.mock("../../src/core/utils/minecraft/playerUtils.js", () => ({
   findPlayer: vi.fn(),
   getPlayerNames: vi.fn().mockResolvedValue([]),
-  getPlayerNamesChoices: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("../../src/bot/utils/guild/guildRouter.js", () => ({

@@ -102,7 +102,6 @@ vi.mock("../../src/bot/logWatcher/watchers/schedulers/channelPurge.js", () => ({
   startChannelPurge: vi.fn(),
 }));
 vi.mock("../../src/core/utils/stores/uptimeTracker.js", () => ({
-  startUptimeFlushScheduler: vi.fn(),
 }));
 
 import { reconcileServers } from "../../src/bot/logWatcher/initMinecraftCommands.js";

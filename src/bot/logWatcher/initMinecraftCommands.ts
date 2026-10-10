@@ -51,7 +51,6 @@ import { startTempBanScheduler } from "./watchers/schedulers/tempBanScheduler.js
 import { pruneCommandUsage } from "@mcbot/core/utils/commands/commandUsage.js";
 import { registerSleepWatcher } from "./watchers/log/sleepWatcher.js";
 import { registerConsoleRelay } from "./watchers/log/consoleRelay.js";
-import { startUptimeFlushScheduler } from "@mcbot/core/utils/stores/uptimeTracker.js";
 import { startUpdateNotifier } from "./watchers/monitors/updateNotifier.js";
 import { startPlayerCountSampler } from "@mcbot/core/utils/stores/playerCountHistory.js";
 import { commandEnabledAnywhere } from "@mcbot/core/utils/commands/commandPolicy.js";
@@ -256,9 +255,6 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
   // housekeeping rather than anything time-critical.
   pruneCommandUsage();
   setInterval(() => pruneCommandUsage(), 24 * 60 * 60 * 1000).unref();
-
-  // ── 7. Uptime flush scheduler ──
-  startUptimeFlushScheduler();
 
   // ── 8. Daily channel purge ──
   startChannelPurge(client, liveGuildConfigs);
