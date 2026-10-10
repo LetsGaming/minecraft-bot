@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   SECRET_FILE_MODE,
   existingFileMode,
+  sweepStaleTemps,
   tempSiblingPath,
   writeFileAtomicSync,
 } from "../../src/core/utils/config/atomicWrite.js";
@@ -61,5 +62,46 @@ describe("writeFileAtomicSync", () => {
     fs.chmodSync(target, 0o640);
     writeFileAtomicSync(target, "new");
     expect(modeOf(target)).toBe(0o640);
+  });
+
+  it.skipIf(!posix)("never carries world permissions over", () => {
+    const target = path.join(dir, "config.json");
+    fs.writeFileSync(target, "old");
+    fs.chmodSync(target, 0o644);
+    writeFileAtomicSync(target, "new");
+    expect(modeOf(target) & 0o007).toBe(0);
+  });
+
+  describe("sweepStaleTemps", () => {
+    const stale = "config.json.4242.0123456789ab.tmp";
+
+    it("removes old temp files of this config and nothing else", () => {
+      const target = path.join(dir, "config.json");
+      fs.writeFileSync(target, "{}");
+      fs.writeFileSync(path.join(dir, stale), "secret");
+      fs.writeFileSync(path.join(dir, "config.json.bak-v0-20260101T000000Z"), "x");
+      fs.writeFileSync(path.join(dir, "other.json.4242.0123456789ab.tmp"), "x");
+
+      sweepStaleTemps(target, Date.now() + 60 * 60_000);
+
+      expect(fs.readdirSync(dir).sort()).toEqual([
+        "config.json",
+        "config.json.bak-v0-20260101T000000Z",
+        "other.json.4242.0123456789ab.tmp",
+      ]);
+    });
+
+    it("leaves a recent temp file that another writer may still use", () => {
+      const target = path.join(dir, "config.json");
+      fs.writeFileSync(path.join(dir, stale), "in flight");
+      sweepStaleTemps(target);
+      expect(fs.existsSync(path.join(dir, stale))).toBe(true);
+    });
+
+    it("does not fail when the directory is missing", () => {
+      expect(() =>
+        sweepStaleTemps(path.join(dir, "nope", "config.json")),
+      ).not.toThrow();
+    });
   });
 });

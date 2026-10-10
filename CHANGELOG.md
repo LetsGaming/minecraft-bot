@@ -8,7 +8,7 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Security
 
-- `config.json` rewrites (dashboard saves and the one-time config migration) kept the default file mode, so on Linux a `0600` config could become world-readable and the migration backup `config.json.bak-v*` was created with the default umask. Rewrites now keep the existing file mode, new config files and backups are owner-only (`0600`), and temp files are created exclusively under a random name (`core/utils/config/atomicWrite.ts`, `core/utils/config/configService.ts`, `core/config.ts`).
+- `config.json` rewrites (dashboard saves and the one-time config migration) kept the default file mode, so on Linux a `0600` config could become world-readable and the migration backup `config.json.bak-v*` was created with the default umask. Rewrites now keep the existing file mode, new config files and backups are owner-only (`0600`), and temp files are created exclusively under a random name and swept if a crash leaves one behind; the "other" permission bits of an existing config are never kept (`core/utils/config/atomicWrite.ts`, `core/utils/config/configService.ts`, `core/config.ts`).
 
 ### Added
 
