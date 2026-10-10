@@ -804,6 +804,9 @@ export interface components {
             manifest: number;
             routes: string[];
             scriptActions: string[];
+            scriptTimeoutsMs: {
+                [key: string]: number;
+            };
             wrapper: string;
         };
         Metrics: {
@@ -895,7 +898,6 @@ export interface components {
             code?: string;
             error?: string;
             ok: boolean;
-            orphanedDependencies?: string[];
             removedFile?: string | null;
             slug?: string;
         } & {

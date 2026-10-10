@@ -99,7 +99,7 @@ if (unmappedActions.length > 0) {
 }
 
 const WRAPPER_DIR = path.resolve(process.env.WRAPPER_DIR);
-const API_KEY = "e2e-contract-key-0123456789";
+const API_KEY = "e2e-contract-key-0123456789-abcdefghijklmnop";
 const API_PORT = Number(process.env.E2E_API_PORT ?? 8137);
 const RCON_PORT = Number(process.env.E2E_FAKE_RCON_PORT ?? 25599);
 const RCON_PASSWORD = "e2e-rcon-password";
