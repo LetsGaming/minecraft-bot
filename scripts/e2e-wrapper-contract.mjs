@@ -18,18 +18,42 @@
  * is wrapper → bot, so what sits behind the wrapper is irrelevant as long as
  * it makes the wrapper produce a real response.
  *
+ * The route list comes from the wrapper's own manifest. Every route in it
+ * must be requested by this run (the bot's serverAccess, or a raw request for
+ * routes the bot does not call), and a route that is not fails the run unless
+ * it is listed in SKIPPED_ROUTES with a reason. A new wrapper route therefore
+ * cannot ship without a case here.
+ *
+ * Script-running routes (scripts/run, the mod mutations, restore) spawn
+ * `sudo -n -u <user>`. Where sudo cannot run as the current user (a developer
+ * machine without passwordless sudo, Windows), those routes are only checked
+ * for their failure shape and reported as unverified; set E2E_REQUIRE_SUDO=1
+ * (CI does) to make that a failure instead.
+ *
  * Usage:
- *   npm run build                         # both repos build first
- *   WRAPPER_DIR=../api-wrapper node scripts/e2e-wrapper-contract.mjs
+ *   npm run build                                   # the bot builds first
+ *   (cd <wrapper checkout> && npm ci && npm run build)
+ *   WRAPPER_DIR=<wrapper checkout> npm run e2e:contract
  */
 import fs from "fs";
 import net from "net";
 import os from "os";
 import path from "path";
-import { spawn } from "child_process";
+import { spawn, spawnSync } from "child_process";
 import { fileURLToPath } from "url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+if (!process.env.WRAPPER_DIR) {
+  console.error(
+    "✖ WRAPPER_DIR is not set.\n" +
+      "  Point it at a built checkout of the wrapper (mc-api-server):\n" +
+      "    WRAPPER_DIR=<path to wrapper> npm run e2e:contract\n" +
+      "  Build it first with 'npm ci && npm run build' in that directory.",
+  );
+  process.exit(1);
+}
+
 const dist = (p) => `file://${path.join(root, "src", ...p)}`;
 
 // Hoisted above the scaffold on purpose: the fake suite layout is built FROM
@@ -74,12 +98,22 @@ if (unmappedActions.length > 0) {
   process.exit(1);
 }
 
-const WRAPPER_DIR = path.resolve(process.env.WRAPPER_DIR ?? "../api-wrapper");
+const WRAPPER_DIR = path.resolve(process.env.WRAPPER_DIR);
 const API_KEY = "e2e-contract-key-0123456789";
 const API_PORT = Number(process.env.E2E_API_PORT ?? 8137);
 const RCON_PORT = Number(process.env.E2E_FAKE_RCON_PORT ?? 25599);
 const RCON_PASSWORD = "e2e-rcon-password";
 const UUID = "069a79f4-44e9-4726-a5be-fca90e38aaf5";
+const UUID_PRUNE = "22222222-3333-4444-8555-666666666666";
+
+/**
+ * Manifest routes that deliberately have no case, each with the reason. Empty
+ * today: every route is exercised. An entry that names a route the wrapper no
+ * longer serves fails the run, so this list cannot rot.
+ */
+const SKIPPED_ROUTES = new Map([]);
+
+const REQUIRE_SUDO = process.env.E2E_REQUIRE_SUDO === "1";
 
 let failures = 0;
 const cleanups = [];
@@ -152,7 +186,10 @@ function startFakeRcon() {
     return `Unknown command: ${cmd}`;
   };
 
+  const sockets = new Set();
   const server = net.createServer((socket) => {
+    sockets.add(socket);
+    socket.on("close", () => sockets.delete(socket));
     socket.on("data", (data) => {
       let off = 0;
       while (off + 4 <= data.length) {
@@ -172,13 +209,169 @@ function startFakeRcon() {
     });
     socket.on("error", () => {});
   });
+  const close = () => {
+    for (const socket of sockets) socket.destroy();
+    server.close();
+  };
   return new Promise((resolve) => {
     server.listen(RCON_PORT, "127.0.0.1", () => {
-      cleanups.push(() => server.close());
-      resolve();
+      cleanups.push(close);
+      resolve({ close });
     });
   });
 }
+
+// ── Fixtures ───────────────────────────────────────────────────────────────
+const BACKUP_ARCHIVES = {
+  "2026-07-05.tar.zst": "archive-to-delete",
+  "2026-07-06.tar.zst": "xxxx",
+  "2026-07-07.tar.zst": "0123456789abcdef".repeat(8),
+};
+const CONFIG_TEXT = "# example\nenabled = true\nlimit = 10\n";
+const INSTALLED_MODS = {
+  "fabric-api": { versionId: "v-fabric-api-1", filename: "fabric-api-0.100.0.jar" },
+  lithium: { versionId: "v-lithium-1", filename: "lithium-0.12.1.jar" },
+};
+
+/**
+ * Stand-ins for the suite's update/*.js scripts. The wrapper contracts on the
+ * single JSON object each prints with --json (an `ok` boolean, and a `results`
+ * array for check-updates) and on the arguments it passes; the stubs print that
+ * shape and move jars inside the scaffold the way the real ones do.
+ */
+const MOD_SCRIPT_STUBS = {
+  "_stub.js": String.raw`
+const fs = require("fs");
+const path = require("path");
+const serverDir = path.resolve(__dirname, "..", "..", "server");
+const manifestPath = path.resolve(__dirname, "..", "common", "downloaded_versions.json");
+const args = process.argv.slice(2).filter((a) => a !== "--json" && a !== "--");
+const pos = args.filter((a) => !a.startsWith("--"));
+const load = () => JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+const save = (d) => fs.writeFileSync(manifestPath, JSON.stringify(d, null, 2));
+const out = (o) => process.stdout.write(JSON.stringify(o) + "\n");
+const opt = (k) => {
+  const a = args.find((x) => x.startsWith("--" + k + "="));
+  return a ? a.slice(k.length + 3) : undefined;
+};
+function upgrade(d, slug) {
+  const m = d.mods[slug];
+  if (!(slug === "lithium" && m.versionId === "v-lithium-1")) return null;
+  const next = { versionId: "v-lithium-2", filename: "lithium-0.12.2.jar" };
+  const dir = path.join(serverDir, "mods");
+  fs.rmSync(path.join(dir, m.filename), { force: true });
+  fs.writeFileSync(path.join(dir, next.filename), "jar:" + slug);
+  d.mods[slug] = next;
+  return { slug, fromVersionId: m.versionId, toVersionId: next.versionId, filename: next.filename };
+}
+module.exports = { fs, path, serverDir, args, pos, load, save, out, opt, upgrade };
+`,
+  "add-mod.js": String.raw`
+const { fs, path, serverDir, pos, load, save, out, opt } = require("./_stub.js");
+const slug = pos[0];
+if (slug === "no-such-mod") {
+  out({ ok: false, error: "Mod not found on Modrinth", code: "not_found" });
+  process.exit(1);
+}
+const versionId = opt("versionId") || "v-" + slug + "-1";
+const filename = slug + "-" + versionId + ".jar";
+const d = load();
+const existed = Boolean(d.mods[slug]);
+d.mods[slug] = { versionId, filename };
+save(d);
+fs.writeFileSync(path.join(serverDir, "mods", filename), "jar:" + slug);
+out({
+  ok: true,
+  slug,
+  projectId: "P-" + slug,
+  action: existed ? "filename-updated" : "added",
+  versionId,
+  filename,
+  dependencies: [{ slug: "fabric-api", action: "already-present" }],
+});
+`,
+  "remove-mod.js": String.raw`
+const { fs, path, serverDir, pos, load, save, out } = require("./_stub.js");
+const slug = pos[0];
+const d = load();
+const m = d.mods[slug];
+if (!m) {
+  out({ ok: false, error: "Mod not installed", code: "not_installed" });
+  process.exit(1);
+}
+fs.rmSync(path.join(serverDir, "mods", m.filename), { force: true });
+fs.rmSync(path.join(serverDir, "mods", "disabled", m.filename), { force: true });
+delete d.mods[slug];
+save(d);
+out({ ok: true, slug, removedFile: m.filename, orphanedDependencies: [] });
+`,
+  "check-updates.js": String.raw`
+const { load, out, opt } = require("./_stub.js");
+const d = load();
+out({
+  mcVersion: opt("mcVersion") || d.gameVersion,
+  modLoader: d.modLoader,
+  results: Object.entries(d.mods).map(([slug, m]) => ({
+    slug,
+    status: slug === "lithium" && m.versionId === "v-lithium-1" ? "update-available" : "up-to-date",
+    installedVersionId: m.versionId,
+  })),
+});
+`,
+  "update-mods.js": String.raw`
+const { load, save, out, upgrade } = require("./_stub.js");
+const d = load();
+const updated = [];
+const upToDate = [];
+for (const slug of Object.keys(d.mods)) {
+  const done = upgrade(d, slug);
+  if (done) updated.push(done);
+  else upToDate.push(slug);
+}
+save(d);
+out({ ok: true, updated, upToDate, failed: [] });
+`,
+  "update-mod.js": String.raw`
+const { pos, load, save, out, upgrade } = require("./_stub.js");
+const slug = pos[0];
+const d = load();
+if (!d.mods[slug]) {
+  out({ ok: false, error: "Mod not installed", code: "not_installed" });
+  process.exit(1);
+}
+const done = upgrade(d, slug);
+save(d);
+out({ ok: true, updated: done ? [done] : [], upToDate: done ? [] : [slug], failed: [] });
+`,
+  "toggle-mod.js": String.raw`
+const { fs, path, serverDir, args, pos, load, out } = require("./_stub.js");
+const slug = pos[0];
+const m = load().mods[slug];
+if (!m) {
+  out({ ok: false, error: "Mod not installed", code: "not_installed" });
+  process.exit(1);
+}
+const active = path.join(serverDir, "mods", m.filename);
+const parked = path.join(serverDir, "mods", "disabled", m.filename);
+if (args.includes("--disable")) {
+  if (!fs.existsSync(active)) {
+    out({ ok: true, slug, filename: m.filename, alreadyDisabled: true });
+  } else {
+    fs.mkdirSync(path.dirname(parked), { recursive: true });
+    fs.renameSync(active, parked);
+    out({ ok: true, slug, filename: m.filename });
+  }
+} else if (!fs.existsSync(parked)) {
+  out({ ok: true, slug, filename: m.filename, alreadyEnabled: true });
+} else {
+  fs.renameSync(parked, active);
+  out({ ok: true, slug, filename: m.filename });
+}
+`,
+};
+
+/** Where the shell stubs append one line per run; forward slashes so bash accepts it on any host. */
+const ranLogPath = (scriptsDir) => path.join(scriptsDir, "ran.log").replace(/\\/g, "/");
 
 // ── A scaffolded instance the wrapper can read ─────────────────────────────
 function scaffold() {
@@ -218,26 +411,45 @@ function scaffold() {
     JSON.stringify({ stats: { "minecraft:custom": { "minecraft:play_time": 12345 } } }),
   );
   fs.writeFileSync(path.join(serverPath, "logs", "latest.log"), "line one\nline two\n");
-  fs.writeFileSync(path.join(backupsPath, "hourly", "2026-07-06.tar.zst"), "xxxx");
+  fs.writeFileSync(
+    path.join(serverPath, "world", "players", "stats", `${UUID_PRUNE}.json`),
+    JSON.stringify({ stats: {} }),
+  );
+  for (const [name, body] of Object.entries(BACKUP_ARCHIVES)) {
+    fs.writeFileSync(path.join(backupsPath, "hourly", name), body);
+  }
+  fs.mkdirSync(path.join(serverPath, "config"), { recursive: true });
+  fs.writeFileSync(path.join(serverPath, "config", "example-mod.toml"), CONFIG_TEXT);
   // The suite keys mods BY SLUG; the wrapper reads Object.keys(raw.mods).
   // An array here yields slugs ["0","1"] — which is how this fixture was
   // wrong the first time, and why the fixture mirrors the real file.
+  fs.mkdirSync(path.join(serverPath, "mods"), { recursive: true });
+  const installed = {};
+  for (const [slug, { versionId, filename }] of Object.entries(INSTALLED_MODS)) {
+    installed[slug] = { versionId, filename };
+    fs.writeFileSync(path.join(serverPath, "mods", filename), `jar:${slug}`);
+  }
   fs.writeFileSync(
     path.join(scriptsDir, "common", "downloaded_versions.json"),
-    JSON.stringify({
-      mods: {
-        "fabric-api": { version: "0.100.0" },
-        lithium: { version: "0.12.1" },
-      },
-    }),
+    JSON.stringify({ gameVersion: "1.21.4", modLoader: "fabric", mods: installed }, null, 2),
   );
-  // Capability probes only check for existence, so an empty stub is enough.
+  // Stub suite scripts. The wrapper only contracts on their names and on the
+  // JSON the mod scripts print; each stub prints its own name and arguments so
+  // a case can see what the wrapper actually passed.
   for (const rel of [
     ...SERVER_SCRIPT_ACTIONS.map((a) => SCRIPT_FILES[a]),
     ...EXTRA_SUITE_SCRIPTS,
   ]) {
     fs.mkdirSync(path.dirname(path.join(scriptsDir, rel)), { recursive: true });
-    fs.writeFileSync(path.join(scriptsDir, rel), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    fs.writeFileSync(
+      path.join(scriptsDir, rel),
+      `#!/bin/sh\necho "${rel} $*" >> "${ranLogPath(scriptsDir)}"\necho "stub:${rel} $*"\nexit 0\n`,
+      { mode: 0o755 },
+    );
+  }
+  fs.mkdirSync(path.join(scriptsDir, "update"), { recursive: true });
+  for (const [rel, source] of Object.entries(MOD_SCRIPT_STUBS)) {
+    fs.writeFileSync(path.join(scriptsDir, "update", rel), source);
   }
   cleanups.push(() => fs.rmSync(dir, { recursive: true, force: true }));
   return { dir, serverPath, scriptsDir, backupsPath };
@@ -267,7 +479,7 @@ async function startWrapper(paths) {
   if (!fs.existsSync(entry)) {
     console.error(
       `✖ no built wrapper at ${entry}\n` +
-        `  Set WRAPPER_DIR to an api-wrapper checkout and run 'npm ci && npm run build' in it.`,
+        `  WRAPPER_DIR must be a wrapper checkout; run 'npm ci && npm run build' in it.`,
     );
     process.exit(1);
   }
@@ -301,6 +513,9 @@ async function startWrapper(paths) {
       MC_API_KEY: API_KEY,
       MC_PORT: String(API_PORT),
       MC_BIND_HOST: "127.0.0.1",
+      // Lets the fetch wrapper below give every request its own client
+      // address; see there.
+      MC_TRUST_PROXY: "true",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -326,8 +541,34 @@ async function startWrapper(paths) {
 // ── Main ───────────────────────────────────────────────────────────────────
 await assertPortFree();
 const paths = scaffold();
-await startFakeRcon();
+const fakeRcon = await startFakeRcon();
 const { logs } = await startWrapper(paths);
+
+// Every request this run makes, so coverage is measured from traffic rather
+// than from what a case claims to cover.
+//
+// Each request also claims its own client address (the wrapper runs with
+// MC_TRUST_PROXY). The wrapper budgets mutating requests per client at a few
+// per minute, and one run makes dozens; the limiter has its own tests in the
+// wrapper, so here it is kept out of the way rather than paced around.
+const requested = [];
+const realFetch = globalThis.fetch;
+let nextClient = 1;
+globalThis.fetch = async (input, init) => {
+  const url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+  const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
+  const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
+  headers.set("x-forwarded-for", `10.77.${(nextClient >> 8) & 255}.${nextClient++ & 255}`);
+  const res = await realFetch(input, { ...init, headers });
+  requested.push({ method, pathname: url.pathname, status: res.status });
+  return res;
+};
+
+/** The user the wrapper will `sudo -u` to; whether that works decides what script routes can prove. */
+const sudoUser = os.userInfo().username;
+const sudoWorks = spawnSync("sudo", ["-n", "-u", sudoUser, "true"], { timeout: 5000 }).status === 0;
+/** Routes that were reached but whose script-running path could not execute here. */
+const unverified = [];
 
 const serverAccess = await import(dist(["core", "dist", "utils", "server", "serverAccess.js"]));
 const { EXPECTED_WRAPPER_FEATURES, compareContract, describeContract } = await import(
@@ -434,17 +675,22 @@ check(
 // host-info v2. The bot still reads v1 (hostResources.normaliseDisk lifts it),
 // but this repo pair is built together, so the wrapper under test must be
 // current — accepting v1 here would let a stale wrapper pass as fresh.
-check(
-  "the whole-machine block is present and plausible",
-  typeof info?.host?.host?.cpuPercent === "number" &&
-    info.host.host.cpuPercent >= 0 &&
-    info.host.host.cpuPercent <= 100 &&
-    typeof info.host.host.memTotalBytes === "number" &&
-    info.host.host.memUsedBytes > 0 &&
-    info.host.host.memUsedBytes <= info.host.host.memTotalBytes &&
-    info.host.host.cpuCount >= 1,
-  JSON.stringify(info?.host?.host),
-);
+// The wrapper reads /proc for this block and reports null elsewhere.
+if (process.platform === "linux") {
+  check(
+    "the whole-machine block is present and plausible",
+    typeof info?.host?.host?.cpuPercent === "number" &&
+      info.host.host.cpuPercent >= 0 &&
+      info.host.host.cpuPercent <= 100 &&
+      typeof info.host.host.memTotalBytes === "number" &&
+      info.host.host.memUsedBytes > 0 &&
+      info.host.host.memUsedBytes <= info.host.host.memTotalBytes &&
+      info.host.host.cpuCount >= 1,
+    JSON.stringify(info?.host?.host),
+  );
+} else {
+  eq("the whole-machine block is null off Linux, where /proc does not exist", info?.host?.host, null);
+}
 check(
   "disk entries carry the directory size and the filesystem it sits on",
   (info?.host?.disks ?? []).length > 0 &&
@@ -488,7 +734,7 @@ check(
 // The scaffold puts these at <level>/players/stats — reverting either
 // repo's resolver to the hardcoded <level>/stats fails right here.
 eq("listStatsUuids (modded <level>/players/stats layout)",
-   await serverAccess.listStatsUuids(cfg), [UUID]);
+   [...(await serverAccess.listStatsUuids(cfg))].sort(), [UUID, UUID_PRUNE].sort());
 
 const stats = await serverAccess.readStats(cfg, UUID);
 check(
@@ -573,6 +819,489 @@ console.log("\n── the SSE stream the log watchers depend on");
     res.headers.get("content-type") ?? "(none)",
   );
   await res.body?.cancel();
+}
+
+// ── Everything below exercises routes the first half does not reach ─────────
+// Raw requests are used where the bot has no caller (the route is served for
+// the dashboard or for operators) or where the case is about the wrapper's own
+// error shape rather than what the bot makes of it.
+
+const base = `http://127.0.0.1:${API_PORT}`;
+const inst = (rest) => `/instances/smp${rest}`;
+
+async function raw(method, urlPath, { body, headers, key = true } = {}) {
+  const res = await fetch(base + urlPath, {
+    method,
+    headers: {
+      ...(key ? { "x-api-key": API_KEY } : {}),
+      ...(body !== undefined ? { "content-type": "application/json" } : {}),
+      ...headers,
+    },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  const text = await res.text();
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    json = undefined;
+  }
+  return { status: res.status, json, text, headers: res.headers };
+}
+
+const isErrorBody = (r) => typeof r.json?.error === "string" && Object.keys(r.json).length === 1;
+
+/** The failure answer for a script route on a host where the script cannot run. */
+function expectUnrunnable(what, routeKey, r) {
+  unverified.push(routeKey);
+  // A script that could not run is either a refused spawn (500 { error }) or a
+  // sudo that ran and failed, which the wrapper reports as data: 200 with the
+  // non-zero exit code and sudo's stderr.
+  const failedScript =
+    r.status === 200 &&
+    typeof r.json?.output === "string" &&
+    typeof r.json.stderr === "string" &&
+    r.json.exitCode !== 0;
+  check(
+    `${what}: with no usable sudo the wrapper answers 500 { error } or a failed script result, not a hang or a raw trace`,
+    (r.status === 500 && isErrorBody(r)) || failedScript,
+    `${r.status} ${r.text}`,
+  );
+}
+
+if (!sudoWorks) {
+  const detail =
+    `'sudo -n -u ${sudoUser} true' does not succeed here, so routes that run a suite script ` +
+    `can only be checked for their failure shape.`;
+  if (REQUIRE_SUDO) fail("sudo can run suite scripts as the instance user (E2E_REQUIRE_SUDO=1)", detail);
+  else note("sudo unavailable: script-running routes are reported as unverified", detail);
+}
+
+console.log("\n── public and meta routes");
+{
+  const health = await raw("GET", "/health", { key: false });
+  check(
+    "GET /health is public and reports the wrapper version",
+    health.status === 200 && health.json?.ok === true && health.json.version === manifest.wrapper,
+    health.text,
+  );
+  const unauth = await raw("GET", inst("/running"), { key: false });
+  check("an instance route without the key is 401 { error }", unauth.status === 401 && isErrorBody(unauth), unauth.text);
+  const list = await raw("GET", "/instances");
+  eq("GET /instances lists the configured instance", list.json, { instances: [{ id: "smp" }] });
+  const unknown = await raw("GET", "/instances/nope/running");
+  check("an unknown instance is 404 { error }", unknown.status === 404 && isErrorBody(unknown), unknown.text);
+  const metrics = await raw("GET", "/metrics");
+  check(
+    "GET /metrics carries counters, timings and cache statistics",
+    metrics.status === 200 &&
+      typeof metrics.json?.uptimeSeconds === "number" &&
+      typeof metrics.json.inFlight === "number" &&
+      typeof metrics.json.rateLimitRejections === "number" &&
+      typeof metrics.json.eventLoopDelayMs?.p95 === "number" &&
+      typeof metrics.json.memory?.rss === "number" &&
+      typeof metrics.json.routes === "object" &&
+      typeof metrics.json.cache === "object",
+    metrics.text.slice(0, 300),
+  );
+}
+
+console.log("\n── health v2");
+{
+  const h = await raw("GET", inst("/health"));
+  check(
+    "health reports liveness and RCON as separate facts",
+    h.status === 200 &&
+      h.json?.state === "online" &&
+      h.json.processUp === true &&
+      h.json.rcon?.configured === true &&
+      h.json.rcon.responsive === true &&
+      typeof h.json.probe === "string",
+    h.text,
+  );
+  check(
+    "health v2 carries restartCount and unitFailed (0 and false while RCON answers)",
+    h.json?.restartCount === 0 && h.json.unitFailed === false,
+    h.text,
+  );
+  check(
+    "health carries gamePort, checkedAt and ageMs",
+    (h.json?.gamePort === null || typeof h.json?.gamePort === "number") &&
+      typeof h.json?.checkedAt === "number" &&
+      typeof h.json?.ageMs === "number",
+    h.text,
+  );
+  const parsed = await serverAccess.getHealth(cfg);
+  check(
+    "the bot's getHealth maps the body, including the v2 fields",
+    parsed.state === "online" && parsed.restartCount === 0 && parsed.unitFailed === false,
+    JSON.stringify(parsed),
+  );
+}
+
+console.log("\n── stats: bulk and delete");
+{
+  const bulk = await serverAccess.readAllStats(cfg);
+  check(
+    "readAllStats returns every player's stats keyed by uuid",
+    bulk?.[UUID]?.stats?.["minecraft:custom"]?.["minecraft:play_time"] === 12345 && UUID_PRUNE in bulk,
+    JSON.stringify(bulk),
+  );
+  eq("deleteStatsFile removes a stats file", await serverAccess.deleteStatsFile(cfg, UUID_PRUNE), true);
+  eq("deleteStatsFile reports false for a file that is already gone", await serverAccess.deleteStatsFile(cfg, UUID_PRUNE), false);
+  const after = await serverAccess.readAllStats(cfg);
+  check("the bulk answer no longer lists the deleted file", after !== null && !(UUID_PRUNE in after), JSON.stringify(after));
+  const bad = await raw("GET", inst("/stats/not-a-uuid"));
+  check("a malformed uuid is 400 { error }", bad.status === 400 && isErrorBody(bad), bad.text);
+}
+
+console.log("\n── scripts/run and /command shapes");
+{
+  const unknownAction = await raw("POST", inst("/scripts/run"), { body: { action: "format-disk" } });
+  check("an unknown script action is 400 { error }", unknownAction.status === 400 && isErrorBody(unknownAction), unknownAction.text);
+  const badArgs = await raw("POST", inst("/scripts/run"), { body: { action: "status", args: ["../etc/passwd"] } });
+  check("a path in script args is 400 { error }", badArgs.status === 400 && isErrorBody(badArgs), badArgs.text);
+  const noAction = await raw("POST", inst("/scripts/run"), { body: {} });
+  check("a missing action is 400 { error }", noAction.status === 400 && isErrorBody(noAction), noAction.text);
+
+  if (sudoWorks) {
+    const ran = await serverAccess.runScript(cfg, "status", ["a-b"]);
+    check(
+      "runScript returns { output, stderr, exitCode } from the script",
+      typeof ran.stderr === "string" && ran.exitCode === 0 && ran.output === "stub:misc/status.sh a-b",
+      JSON.stringify(ran),
+    );
+  } else {
+    expectUnrunnable("POST scripts/run", "POST /instances/:id/scripts/run", await raw("POST", inst("/scripts/run"), { body: { action: "status" } }));
+  }
+
+  const empty = await raw("POST", inst("/command"), { body: { command: "  " } });
+  check("a blank command is 400 { error }", empty.status === 400 && isErrorBody(empty), empty.text);
+  const said = await raw("POST", inst("/command"), { body: { command: "list" } });
+  check(
+    "a command answered over RCON is { result: <string> }",
+    said.status === 200 && typeof said.json?.result === "string" && Object.keys(said.json).length === 1,
+    said.text,
+  );
+}
+
+console.log("\n── backup files: list, download, delete");
+const archives = await serverAccess.indexBackupFiles(cfg);
+{
+  check(
+    "the index lists every archive with an opaque id, tier, name and size",
+    archives.total === 3 &&
+      archives.files.length === 3 &&
+      archives.nextCursor === null &&
+      archives.files.every(
+        (f) => /^[A-Za-z0-9_-]{22}$/.test(f.id) && f.tier === "hourly" && typeof f.name === "string" && typeof f.sizeBytes === "number" && typeof f.mtimeMs === "number",
+      ),
+    JSON.stringify(archives),
+  );
+  const first = await serverAccess.indexBackupFiles(cfg, { limit: 2 });
+  const second = first.nextCursor
+    ? await serverAccess.indexBackupFiles(cfg, { cursor: first.nextCursor, limit: 2 })
+    : null;
+  check(
+    "paging with limit and cursor walks the whole listing once",
+    first.files.length === 2 &&
+      typeof first.nextCursor === "string" &&
+      second?.files.length === 1 &&
+      second.nextCursor === null &&
+      new Set([...first.files, ...second.files].map((f) => f.id)).size === 3,
+    JSON.stringify({ first, second }),
+  );
+
+  const big = archives.files.find((f) => f.name === "2026-07-07.tar.zst");
+  const whole = await serverAccess.openBackupDownload(cfg, big.id);
+  const wholeBody = await whole.text();
+  check(
+    "download streams the archive with Content-Length and range support",
+    whole.status === 200 &&
+      wholeBody === BACKUP_ARCHIVES["2026-07-07.tar.zst"] &&
+      whole.headers.get("content-length") === String(wholeBody.length) &&
+      whole.headers.get("accept-ranges") === "bytes" &&
+      (whole.headers.get("content-disposition") ?? "").includes("2026-07-07.tar.zst"),
+    `${whole.status} ${JSON.stringify([...whole.headers])}`,
+  );
+  const part = await serverAccess.openBackupDownload(cfg, big.id, "bytes=0-3");
+  check(
+    "a Range request is answered 206 with the matching Content-Range",
+    part.status === 206 &&
+      (await part.text()) === "0123" &&
+      part.headers.get("content-range") === `bytes 0-3/${wholeBody.length}`,
+    `${part.status} ${part.headers.get("content-range")}`,
+  );
+  const past = await serverAccess.openBackupDownload(cfg, big.id, "bytes=9999-");
+  await past.arrayBuffer();
+  check("an unsatisfiable Range is 416", past.status === 416, String(past.status));
+  const badId = await raw("GET", inst("/backups/files/short/download"));
+  check("a malformed backup id is 400 { error }", badId.status === 400 && isErrorBody(badId), badId.text);
+  const noSuch = await raw("GET", inst(`/backups/files/${"A".repeat(22)}/download`));
+  check("a well-formed id that names nothing is 404 { error }", noSuch.status === 404 && isErrorBody(noSuch), noSuch.text);
+
+  const victim = archives.files.find((f) => f.name === "2026-07-05.tar.zst");
+  const deleted = await serverAccess.deleteBackupFile(cfg, victim.id);
+  check(
+    "deleteBackupFile reports what it removed",
+    deleted.ok === true && deleted.name === victim.name && deleted.tier === "hourly" && deleted.sizeBytes === victim.sizeBytes,
+    JSON.stringify(deleted),
+  );
+  check("the deleted archive is gone from disk and from the index", !fs.existsSync(path.join(paths.backupsPath, "hourly", victim.name)) && (await serverAccess.indexBackupFiles(cfg)).total === 2);
+  eq("deleting it again reports ok:false", (await serverAccess.deleteBackupFile(cfg, victim.id)).ok, false);
+  const badDelete = await raw("DELETE", inst("/backups/files/short"));
+  check("deleting with a malformed id is 400 { error }", badDelete.status === 400 && isErrorBody(badDelete), badDelete.text);
+}
+
+console.log("\n── restore: refused while the server is online");
+const restoreTarget = archives.files.find((f) => f.name === "2026-07-06.tar.zst");
+{
+  const refused = await raw("POST", inst(`/backups/files/${restoreTarget.id}/restore`));
+  check(
+    "restore answers 409 { error, state } while RCON answers",
+    refused.status === 409 &&
+      typeof refused.json?.error === "string" &&
+      refused.json.state === "online" &&
+      Object.keys(refused.json).length === 2,
+    refused.text,
+  );
+  let threw = "";
+  try {
+    await serverAccess.restoreBackupFile(cfg, restoreTarget.id);
+  } catch (err) {
+    threw = err instanceof Error ? err.message : String(err);
+  }
+  check("the bot's restoreBackupFile surfaces the refusal instead of reporting success", threw.includes("409"), threw || "it did not throw");
+  const noRestore = await raw("POST", inst(`/backups/files/${"A".repeat(22)}/restore`));
+  check("restoring an unknown archive is 404 { error }", noRestore.status === 404 && isErrorBody(noRestore), noRestore.text);
+  const badRestore = await raw("POST", inst("/backups/files/short/restore"));
+  check("restoring with a malformed id is 400 { error }", badRestore.status === 400 && isErrorBody(badRestore), badRestore.text);
+  const ranLog = path.join(paths.scriptsDir, "ran.log");
+  check(
+    "the restore script did not run",
+    !fs.existsSync(ranLog) || !fs.readFileSync(ranLog, "utf-8").includes("backup/restore.sh"),
+    fs.existsSync(ranLog) ? fs.readFileSync(ranLog, "utf-8") : "",
+  );
+}
+
+console.log("\n── mod config files: index, read, write, revert");
+{
+  const files = await serverAccess.indexConfigFiles(cfg);
+  const file = files.find((f) => f.relPath === "config/example-mod.toml");
+  check(
+    "the index lists the config with an opaque id, owning mod and format",
+    file !== undefined && /^[A-Za-z0-9_-]{22}$/.test(file.id) && file.modId === "example" && file.format === "toml" && file.sizeBytes === CONFIG_TEXT.length,
+    JSON.stringify(files),
+  );
+  const read = await serverAccess.readConfigFile(cfg, file.id);
+  check(
+    "reading returns text, etag, file info and snapshots",
+    read.text === CONFIG_TEXT && typeof read.etag === "string" && read.file.id === file.id && Array.isArray(read.snapshots) && read.snapshots.length === 0,
+    JSON.stringify(read),
+  );
+  const edited = CONFIG_TEXT.replace("limit = 10", "limit = 20");
+  const written = await serverAccess.writeConfigFile(cfg, file.id, edited, read.etag);
+  check(
+    "writing with the current etag returns a new etag and a snapshot name",
+    written.ok === true && written.etag !== read.etag && typeof written.snapshot === "string",
+    JSON.stringify(written),
+  );
+  eq("writing with a stale etag is a conflict, not an overwrite", await serverAccess.writeConfigFile(cfg, file.id, "x = 1\n", read.etag), { ok: false, conflict: true });
+  const reread = await serverAccess.readConfigFile(cfg, file.id);
+  check(
+    "the edit is on disk and the previous content was snapshotted",
+    reread.text === edited && reread.etag === written.etag && reread.snapshots.includes(written.snapshot),
+    JSON.stringify(reread),
+  );
+  const reverted = await serverAccess.revertConfigFile(cfg, file.id, written.snapshot);
+  check("revert returns the etag of the restored content", typeof reverted.etag === "string", JSON.stringify(reverted));
+  eq("revert restores the snapshotted text", (await serverAccess.readConfigFile(cfg, file.id)).text, CONFIG_TEXT);
+
+  const noMatch = await raw("PUT", inst(`/configs/${file.id}`), { body: { text: "a = 1\n" } });
+  check("a write without If-Match is 428 { error }", noMatch.status === 428 && isErrorBody(noMatch), noMatch.text);
+  const badBody = await raw("PUT", inst(`/configs/${file.id}`), { body: { nope: 1 }, headers: { "if-match": "x" } });
+  check("a write without text is 400 { error }", badBody.status === 400 && isErrorBody(badBody), badBody.text);
+  const unknownConfig = await raw("GET", inst(`/configs/${"A".repeat(22)}`));
+  check("an unknown config id is 404 { error }", unknownConfig.status === 404 && isErrorBody(unknownConfig), unknownConfig.text);
+  const badConfig = await raw("GET", inst("/configs/short"));
+  check("a malformed config id is 400 { error }", badConfig.status === 400 && isErrorBody(badConfig), badConfig.text);
+  const badSnapshot = await raw("POST", inst(`/configs/${file.id}/revert`), { body: { snapshot: "nope" } });
+  check("reverting to an unknown snapshot is 404 { error }", badSnapshot.status === 404 && isErrorBody(badSnapshot), badSnapshot.text);
+  const noSnapshot = await raw("POST", inst(`/configs/${file.id}/revert`), { body: {} });
+  check("reverting without a snapshot name is 400 { error }", noSnapshot.status === 400 && isErrorBody(noSnapshot), noSnapshot.text);
+}
+
+console.log("\n── mod management");
+{
+  const installed = await serverAccess.listInstalledMods(cfg);
+  check(
+    "listInstalledMods returns the game version, loader, and every mod with its jar and enabled state",
+    installed.gameVersion === "1.21.4" &&
+      installed.modLoader === "fabric" &&
+      typeof installed.mtimeMs === "number" &&
+      installed.mods.length === 2 &&
+      installed.mods.every((m) => typeof m.versionId === "string" && typeof m.filename === "string" && m.enabled === true),
+    JSON.stringify(installed),
+  );
+
+  const badSlug = await raw("POST", inst("/mods"), { body: { slug: "bad slug!" } });
+  check("installing with an invalid slug is 400 { error }", badSlug.status === 400 && isErrorBody(badSlug), badSlug.text);
+  const badRemove = await raw("DELETE", inst("/mods/bad!slug"));
+  check("removing an invalid slug is 400 { error }", badRemove.status === 400 && isErrorBody(badRemove), badRemove.text);
+  const badCheck = await raw("GET", inst("/mods/updates?mcVersion=%20bad"));
+  check("checking updates with an invalid mcVersion is 400 { error }", badCheck.status === 400 && isErrorBody(badCheck), badCheck.text);
+  const badApply = await raw("POST", inst("/mods/updates"), { body: { mcVersion: "no good" } });
+  check("applying updates with an invalid mcVersion is 400 { error }", badApply.status === 400 && isErrorBody(badApply), badApply.text);
+  const badUpdate = await raw("POST", inst("/mods/bad!slug/update"));
+  check("updating an invalid slug is 400 { error }", badUpdate.status === 400 && isErrorBody(badUpdate), badUpdate.text);
+  const badToggle = await raw("POST", inst("/mods/bad!slug/disable"));
+  check("disabling an invalid slug is 400 { error }", badToggle.status === 400 && isErrorBody(badToggle), badToggle.text);
+
+  if (sudoWorks) {
+    const added = await serverAccess.addMod(cfg, { slug: "sodium", mcVersion: "1.21.4", modLoader: "fabric" });
+    check(
+      "addMod returns the script's structured result",
+      added.ok === true && added.slug === "sodium" && added.action === "added" && added.versionId === "v-sodium-1" && added.filename === "sodium-v-sodium-1.jar" && Array.isArray(added.dependencies),
+      JSON.stringify(added),
+    );
+    const pinned = await serverAccess.addMod(cfg, { slug: "sodium", versionId: "v-sodium-9" });
+    check("addMod passes versionId through to the script", pinned.ok === true && pinned.versionId === "v-sodium-9", JSON.stringify(pinned));
+    const missing = await serverAccess.addMod(cfg, { slug: "no-such-mod" });
+    check("a script's handled failure arrives as { ok: false, error, code } at 200", missing.ok === false && typeof missing.error === "string" && missing.code === "not_found", JSON.stringify(missing));
+    check("the installed list reflects the install", (await serverAccess.listInstalledMods(cfg)).mods.some((m) => m.slug === "sodium"));
+
+    const check1 = await serverAccess.checkModUpdates(cfg, "1.21.4");
+    check(
+      "checkModUpdates returns the version, loader and a status per mod",
+      check1.mcVersion === "1.21.4" && check1.modLoader === "fabric" && check1.results.find((r) => r.slug === "lithium")?.status === "update-available",
+      JSON.stringify(check1),
+    );
+    const applied = await serverAccess.applyModUpdates(cfg);
+    check(
+      "applyModUpdates reports what it updated and what was already current",
+      applied.ok === true && applied.updated?.length === 1 && applied.updated[0].slug === "lithium" && applied.updated[0].fromVersionId === "v-lithium-1" && applied.updated[0].toVersionId === "v-lithium-2" && Array.isArray(applied.upToDate) && Array.isArray(applied.failed),
+      JSON.stringify(applied),
+    );
+    await serverAccess.addMod(cfg, { slug: "lithium", versionId: "v-lithium-1" });
+    const one = await serverAccess.updateMod(cfg, "lithium");
+    check("updateMod updates one mod and reports it in the same shape", one.ok === true && one.updated?.length === 1 && one.updated[0].toVersionId === "v-lithium-2", JSON.stringify(one));
+    const unknownMod = await serverAccess.updateMod(cfg, "no-such-mod");
+    check("updating a mod that is not installed is { ok: false } at 200", unknownMod.ok === false && unknownMod.code === "not_installed", JSON.stringify(unknownMod));
+
+    const off = await serverAccess.disableMod(cfg, "lithium");
+    check("disableMod moves the jar aside", off.ok === true && off.slug === "lithium" && typeof off.filename === "string", JSON.stringify(off));
+    const afterOff = await serverAccess.listInstalledMods(cfg);
+    eq("the installed list marks it disabled", afterOff.mods.find((m) => m.slug === "lithium")?.enabled, false);
+    check("the slug-only list leaves the disabled mod out", !(await serverAccess.readModSlugs(cfg)).slugs.includes("lithium"));
+    check("disabling twice says so", (await serverAccess.disableMod(cfg, "lithium")).alreadyDisabled === true);
+    const on = await serverAccess.enableMod(cfg, "lithium");
+    check("enableMod puts the jar back", on.ok === true, JSON.stringify(on));
+    eq("the installed list marks it enabled again", (await serverAccess.listInstalledMods(cfg)).mods.find((m) => m.slug === "lithium")?.enabled, true);
+    check("enabling twice says so", (await serverAccess.enableMod(cfg, "lithium")).alreadyEnabled === true);
+
+    const removed = await serverAccess.removeMod(cfg, "sodium");
+    check("removeMod reports the removed file and orphaned dependencies", removed.ok === true && typeof removed.removedFile === "string" && Array.isArray(removed.orphanedDependencies), JSON.stringify(removed));
+    const gone = await serverAccess.removeMod(cfg, "sodium");
+    check("removing a mod that is gone is { ok: false } at 200", gone.ok === false && gone.code === "not_installed", JSON.stringify(gone));
+  } else {
+    const fixed = [
+      ["POST", "/mods", { slug: "sodium" }],
+      ["DELETE", "/mods/sodium", undefined],
+      ["GET", "/mods/updates", undefined],
+      ["POST", "/mods/updates", {}],
+      ["POST", "/mods/lithium/update", undefined],
+      ["POST", "/mods/lithium/disable", undefined],
+      ["POST", "/mods/lithium/enable", undefined],
+    ];
+    for (const [method, rest, body] of fixed) {
+      const routeKey = `${method} /instances/:id${rest.replace(/lithium|sodium/, ":slug").replace(/\?.*/, "")}`;
+      expectUnrunnable(`${method} ${rest}`, routeKey, await raw(method, inst(rest), { body }));
+    }
+  }
+}
+
+console.log("\n── restore: runs against the scaffold once the server is offline");
+{
+  fakeRcon.close();
+  let state = "";
+  for (let i = 0; i < 40 && state !== "offline"; i++) {
+    state = (await raw("GET", inst("/health"))).json?.state ?? "";
+    if (state !== "offline") await new Promise((r) => setTimeout(r, 500));
+  }
+  const restoreKey = "POST /instances/:id/backups/files/:fileId/restore";
+  if (state !== "offline") {
+    unverified.push(restoreKey);
+    const detail = `the wrapper still reports '${state}' with the fake RCON closed, so the refusal path is the only one reachable here`;
+    if (REQUIRE_SUDO) fail("restore runs once the server reports offline (E2E_REQUIRE_SUDO=1)", detail);
+    else note("restore after shutdown is unverified", detail);
+  } else if (!sudoWorks) {
+    expectUnrunnable("restore", restoreKey, await raw("POST", inst(`/backups/files/${restoreTarget.id}/restore`)));
+  } else {
+    const result = await serverAccess.restoreBackupFile(cfg, restoreTarget.id);
+    check(
+      "restore returns the script result once the server is offline",
+      result.exitCode === 0 && result.output.startsWith("stub:backup/restore.sh --file ") && result.output.endsWith(" --y"),
+      JSON.stringify(result),
+    );
+    const resolved = result.output.slice("stub:backup/restore.sh --file ".length, -" --y".length);
+    check(
+      "the path handed to the script is one the wrapper resolved inside the backups directory",
+      path.resolve(resolved) === path.join(paths.backupsPath, "hourly", restoreTarget.name),
+      resolved,
+    );
+  }
+
+  const fallback = await raw("POST", inst("/command"), { body: { command: "say bye" } });
+  check(
+    "a command with RCON down is answered { result: null } (screen fallback has no reply channel)",
+    fallback.status === 200 && fallback.json && "result" in fallback.json && fallback.json.result === null,
+    fallback.text,
+  );
+}
+
+console.log("\n── every manifest route was exercised");
+{
+  const matchers = manifest.routes.map((route) => {
+    const [method, pattern] = route.split(" ");
+    const parts = pattern.split("/");
+    return { route, method, parts, statics: parts.filter((p) => !p.startsWith(":")).length };
+  });
+  const answered = new Set();
+  const succeeded = new Set();
+  for (const { method, pathname, status } of requested) {
+    const segments = pathname.split("/");
+    const best = matchers
+      .filter((m) => m.method === method && m.parts.length === segments.length && m.parts.every((p, i) => p.startsWith(":") || p === segments[i]))
+      .sort((a, b) => b.statics - a.statics)[0];
+    if (!best) continue;
+    answered.add(best.route);
+    if (status >= 200 && status < 300) succeeded.add(best.route);
+  }
+  const unverifiedSet = new Set(unverified);
+
+  const stale = [...SKIPPED_ROUTES.keys()].filter((r) => !manifest.routes.includes(r));
+  check("SKIPPED_ROUTES names only routes the wrapper still serves", stale.length === 0, stale.join(", "));
+
+  const never = manifest.routes.filter((r) => !answered.has(r) && !SKIPPED_ROUTES.has(r));
+  check(
+    "every route in the wrapper's manifest is requested (add a case for a new route, or list it in SKIPPED_ROUTES with a reason)",
+    never.length === 0,
+    never.join("\n      "),
+  );
+  const noSuccess = manifest.routes.filter(
+    (r) => answered.has(r) && !succeeded.has(r) && !unverifiedSet.has(r) && !SKIPPED_ROUTES.has(r),
+  );
+  check(
+    "every requested route also produced a successful answer",
+    noSuccess.length === 0,
+    noSuccess.join("\n      "),
+  );
+  if (unverified.length > 0) {
+    note(
+      `${unverified.length} route(s) were reached but their success path could not run on this host`,
+      [...unverifiedSet].join("\n      "),
+    );
+  }
 }
 
 cleanup();
