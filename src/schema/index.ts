@@ -69,3 +69,8 @@ export * from "./analytics.js";
 export * from "./apiErrors.js";
 
 export * from "./configStatus.js";
+
+// Runtime values (the status roles with their shapes and colours, and the
+// shared glossary), read by the dashboard's chips and the bot's embed colours.
+export * from "./status.js";
+export * from "./glossary.js";
