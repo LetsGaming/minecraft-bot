@@ -15,8 +15,8 @@ import {
   savePendingRewards,
   getServerPending,
 } from "../stores/dailyStore.js";
-import * as serverAccess from "../server/serverAccess.js";
 import type { ServerInstance } from "../server/server.js";
+import { tellraw } from "./serverMessages.js";
 import type {
   DailyRewardsConfig,
   DailyRewardItem,
@@ -24,7 +24,6 @@ import type {
 } from "../../types/index.js";
 import { t } from "../i18n.js";
 import { log } from "../logger.js";
-import { errMsg } from "../error.js";
 
 /** One claim per 24h; a gap of more than two cooldowns breaks the streak. */
 export const DAILY_COOLDOWN_MS = 24 * 60 * 60 * 1000;
@@ -91,10 +90,10 @@ export function pick(pool: DailyRewardItem[]): DailyRewardItem {
  * they have no namespace, so modded IDs like "create:brass_ingot" pass
  * through unchanged.
  *
- * Returns false when delivery could not be confirmed: RCON responses must
- * contain the "Gave ..." confirmation (anything else is logged raw so bad
- * item IDs surface); screen-fallback servers give no signal and are
- * assumed successful.
+ * Returns false when delivery could not be confirmed: the command did not
+ * reach the server, or the RCON reply lacks the "Gave ..." confirmation
+ * (logged raw so bad item IDs surface). Servers with no reply channel give
+ * no signal and are assumed successful.
  */
 export async function give(
   server: ServerInstance,
@@ -110,42 +109,27 @@ export async function give(
   }
   const name = item.includes(":") ? item : `minecraft:${item}`;
 
-  // Deliberately not server.sendCommand(): it catches transport errors and
-  // returns null, which would make "the wrapper is down" indistinguishable
-  // from "the wrapper answered, but over screen, so there is no output". A
-  // reward hinges on that difference — one must be retried, the other must
-  // not be — so this path talks to the seam that still reports it.
-  //
-  // Before 5.0.0 this checked `useRcon` and returned true for every remote
-  // instance without looking at the reply at all. The wrapper was already
-  // relaying the console output, so a failed `give` was reported to the
-  // player as a successful claim.
-  let response: string | null;
-  try {
-    response = await serverAccess.sendCommand(
-      server.config,
-      `give ${player} ${name} ${amount}`,
-    );
-  } catch (err) {
-    // The command may never have reached the server. Report failure so the
-    // reward stays queued and is retried, rather than being marked delivered.
+  const outcome = await server.send(`give ${player} ${name} ${amount}`);
+
+  // The command may never have reached the server. Report failure so the
+  // reward stays queued and is retried, rather than being marked delivered.
+  if (outcome.kind === "unreachable") {
     log.error(
       "daily",
-      `Give failed for ${player} (item=${name}): ${errMsg(err)}`,
+      `Give failed for ${player} (item=${name}): ${outcome.reason}: ${outcome.detail}`,
     );
     return false;
   }
 
-  // 200 with a null result: the wrapper reached the server over screen, which
-  // has no response channel. The command was sent; we simply cannot read the
-  // outcome. Reporting failure here would re-queue a reward the player
-  // already holds and re-give it on every join.
-  if (response === null) return true;
+  // Sent over a channel with no reply: the command reached the server but its
+  // outcome cannot be read. Reporting failure here would re-queue a reward
+  // the player already holds and re-give it on every join.
+  if (outcome.kind === "sent") return true;
 
-  if (!/\bGave\b/i.test(response)) {
+  if (!/\bGave\b/i.test(outcome.output)) {
     log.error(
       "daily",
-      `Give not confirmed for ${player} (item=${name}): ${response}`,
+      `Give not confirmed for ${player} (item=${name}): ${outcome.output}`,
     );
     return false;
   }
@@ -190,12 +174,10 @@ export async function deliverPendingRewards(
   await savePendingRewards(store);
 
   if (delivered > 0) {
-    await server.sendCommand(
-      `/tellraw ${player} ${JSON.stringify({
-        text: t("daily.delivered", { count: delivered }),
-        color: "green",
-      })}`,
-    );
+    await tellraw(server, player, {
+      text: t("daily.delivered", { count: delivered }),
+      color: "green",
+    });
   }
   return delivered;
 }

@@ -32,6 +32,9 @@ import {
   enableMod,
   checkModUpdates,
   applyModUpdates,
+  supportsModCompat,
+  startModCompat,
+  getModCompat,
   type InstalledMods,
 } from "@mcbot/core/utils/server/serverAccess.js";
 import {
@@ -44,15 +47,21 @@ import {
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
+import { logFields } from "@mcbot/core/utils/logSafe.js";
+import { fetchReleaseVersions } from "@mcbot/core/utils/minecraft/mojang.js";
 import { readThrough } from "@mcbot/core/utils/wrapper/lastKnown.js";
 import { cached, invalidate } from "@mcbot/core/utils/cache.js";
-import { sessionFromRequest } from "../auth/auth.js";
+import { fetchIcon, type IconImage } from "../iconProxy.js";
+import { CompatLimitError, createCompatGuard } from "./compatGuard.js";
+import { isSysadmin, sessionFromRequest, type Session } from "../auth/auth.js";
 import { BadRequest, NotFound, HttpError } from "../errors.js";
 import {
   IdParams,
   ModSlugParams,
   ModAddBody,
   ModUpdatesBody,
+  ModCompatBody,
+  ModCompatJobParams,
   ModSearchQuery,
   ModUpdatesQuery,
   ModIconQuery,
@@ -65,9 +74,10 @@ const OPERATION_FAILED =
 
 const TTL_INSTALLED = 15_000;
 const TTL_UPDATES = 120_000;
+const TTL_COMPAT_SUPPORT = 60_000;
+const TTL_RELEASE_VERSIONS = 6 * 60 * 60 * 1000;
 const TTL_SEARCH = 60_000;
 const TTL_CATALOG = 300_000;
-const TTL_ICON = 24 * 60 * 60 * 1000;
 
 const MODRINTH_ICON_HOST = "cdn.modrinth.com";
 const ICON_UA = "LetsGaming/minecraft-bot dashboard (icon proxy)";
@@ -76,6 +86,17 @@ function requireServer(id: string): NonNullable<ReturnType<typeof getServerInsta
   const server = getServerInstance(id);
   if (!server) throw new NotFound(`No server named "${id}" is configured.`);
   return server;
+}
+
+/**
+ * The tenant a start request is counted against: a sysadmin is their own
+ * scope; everyone else shares the scope of the guilds they manage, and a user
+ * with only per-server grants is their own scope.
+ */
+function compatTenant(session: Session): string {
+  if (isSysadmin(session)) return `sys:${session.uid}`;
+  if (session.guilds.length > 0) return `guild:${[...session.guilds].sort().join(",")}`;
+  return `user:${session.uid}`;
 }
 
 function clampInt(raw: string | undefined, def: number, min: number, max: number): number {
@@ -117,6 +138,111 @@ export function registerModRoutes(app: FastifyInstance): void {
     invalidate(`mods:updates:${id}`);
   }
 
+  const compatGuard = createCompatGuard();
+
+  /** Whether the wrapper can run the compatibility check; false when it cannot be asked. */
+  function compatSupported(
+    id: string,
+    cfg: Parameters<typeof supportsModCompat>[0],
+  ): Promise<boolean> {
+    return cached(`mods:compat-support:${id}`, TTL_COMPAT_SUPPORT, () =>
+      supportsModCompat(cfg),
+    );
+  }
+
+  // ── Compatibility with another Minecraft version (background job) ─────────
+  api.post(
+    "/api/servers/:id/mods/compat",
+    {
+      schema: { params: IdParams, body: ModCompatBody },
+      config: { capability: "mods:read", scope: "server", param: "id" },
+    },
+    async (req) => {
+      const server = requireServer(req.params.id);
+      if (!(await compatSupported(req.params.id, server.config))) {
+        throw new HttpError(
+          501,
+          "This server's API wrapper cannot check another Minecraft version. Update the wrapper.",
+        );
+      }
+      const refresh = req.body.refresh === true;
+      const session = sessionFromRequest(req)!;
+      let reservation;
+      try {
+        reservation = compatGuard.reserve(
+          req.params.id,
+          session.uid,
+          compatTenant(session),
+          req.body.mcVersion,
+          refresh,
+        );
+      } catch (err) {
+        if (err instanceof CompatLimitError) throw new HttpError(err.statusCode, err.message);
+        throw err;
+      }
+      try {
+        if (reservation.kind === "existing") return await reservation.settled;
+        const started = await startModCompat(server.config, req.body.mcVersion, refresh);
+        reservation.commit(started.jobId);
+        return started;
+      } catch (err) {
+        if (reservation.kind === "new") reservation.rollback(err);
+        log.error(
+          "web",
+          `Mod compat start failed ${logFields({ server: req.params.id, mcVersion: req.body.mcVersion, detail: errMsg(err) })}`,
+        );
+        throw new HttpError(502, OPERATION_FAILED);
+      }
+    },
+  );
+
+  /** Released Minecraft versions for the target picker. `versions` is empty when Mojang cannot be reached. */
+  api.get(
+    "/api/servers/:id/mods/compat/versions",
+    {
+      schema: { params: IdParams },
+      config: { capability: "mods:read", scope: "server", param: "id" },
+    },
+    async (req) => {
+      requireServer(req.params.id);
+      const versions = await cached("mojang:release-versions", TTL_RELEASE_VERSIONS, async () => {
+        const list = await fetchReleaseVersions();
+        if (!list) throw new Error("Mojang version manifest unavailable");
+        return list;
+      }).catch(() => [] as string[]);
+      return { versions };
+    },
+  );
+
+  api.get(
+    "/api/servers/:id/mods/compat/:jobId",
+    {
+      schema: { params: ModCompatJobParams },
+      config: { capability: "mods:read", scope: "server", param: "id" },
+    },
+    async (req) => {
+      const server = requireServer(req.params.id);
+      const remembered = compatGuard.recall(req.params.id, req.params.jobId);
+      if (remembered) return remembered;
+      let job;
+      try {
+        job = await getModCompat(server.config, req.params.jobId);
+      } catch (err) {
+        log.error(
+          "web",
+          `Mod compat poll failed ${logFields({ server: req.params.id, job: req.params.jobId, detail: errMsg(err) })}`,
+        );
+        throw new HttpError(502, OPERATION_FAILED);
+      }
+      if (!job) {
+        compatGuard.forget(req.params.id, req.params.jobId);
+        throw new NotFound("This check expired. Start it again.");
+      }
+      compatGuard.observe(req.params.id, job);
+      return job;
+    },
+  );
+
   // ── Installed list ────────────────────────────────────────────────────────
   api.get(
     "/api/servers/:id/mods/installed",
@@ -128,7 +254,7 @@ export function registerModRoutes(app: FastifyInstance): void {
       const server = requireServer(req.params.id);
       try {
         const { value, stale } = await loadInstalled(req.params.id, server.config);
-        return { ...value, stale };
+        return { ...value, stale, compat: await compatSupported(req.params.id, server.config) };
       } catch (err) {
         log.error("web", `Installed mods for ${req.params.id} failed: ${errMsg(err)}`);
         throw new HttpError(502, OPERATION_FAILED);
@@ -345,19 +471,9 @@ export function registerModRoutes(app: FastifyInstance): void {
         throw new BadRequest("Only Modrinth CDN icons are proxied.");
       }
 
-      let img: { contentType: string; body: Buffer };
+      let img: IconImage;
       try {
-        img = await cached(`icon:${target.href}`, TTL_ICON, async () => {
-          const res = await fetch(target.href, {
-            headers: { "User-Agent": ICON_UA },
-            signal: AbortSignal.timeout(8_000),
-          });
-          if (!res.ok) throw new HttpError(502, "Icon fetch failed.");
-          return {
-            contentType: res.headers.get("content-type") ?? "image/png",
-            body: Buffer.from(await res.arrayBuffer()),
-          };
-        });
+        img = await fetchIcon(target.href, ICON_UA);
       } catch (err) {
         if (err instanceof HttpError) throw err;
         throw new HttpError(502, "Icon fetch failed.");
@@ -365,6 +481,7 @@ export function registerModRoutes(app: FastifyInstance): void {
 
       reply.header("content-type", img.contentType);
       reply.header("cache-control", "public, max-age=86400, immutable");
+      reply.header("content-security-policy", "default-src 'none'; sandbox");
       return reply.send(img.body);
     },
   );

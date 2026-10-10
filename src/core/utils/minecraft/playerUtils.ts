@@ -1,6 +1,6 @@
 import { loadKnownPlayers } from "./whitelist.js";
-import * as serverAccess from "../server/serverAccess.js";
 import type { ServerInstance } from "../server/server.js";
+import type { QueryResult } from "../server/queryResult.js";
 import type {
   PlayerCoords,
   PlayerCount,
@@ -8,42 +8,6 @@ import type {
 } from "../../types/index.js";
 
 const LOOKAHEAD_LINES = 5;
-
-// `/list` output only reaches the log a moment after the command is sent,
-// so the read is a short poll. Cached per server ID — module-level state
-// used to hand server A's output back when server B asked inside the window.
-const LIST_OUTPUT_CACHE_MS = 500;
-const LIST_POLL_ATTEMPTS = 3;
-const LIST_POLL_DELAY_MS = 300;
-const LIST_TAIL_LINES = 10;
-
-const listOutputCache = new Map<string, { output: string; time: number }>();
-
-/**
- * Send `/list` and return the log tail containing its answer, or null if
- * the server never printed one. The screen-mode fallback for servers
- * without RCON — `ServerInstance.getList()` is the fast path.
- */
-export async function getListOutput(
-  server?: ServerInstance,
-): Promise<string | null> {
-  if (!server) return null;
-  const key = server.id;
-  const now = Date.now();
-  const cached = listOutputCache.get(key);
-  if (cached && now - cached.time < LIST_OUTPUT_CACHE_MS) return cached.output;
-
-  await server.sendCommand("/list");
-  for (let i = 0; i < LIST_POLL_ATTEMPTS; i++) {
-    await new Promise<void>((r) => setTimeout(r, LIST_POLL_DELAY_MS));
-    const output = await serverAccess.tailLog(server.config, LIST_TAIL_LINES);
-    if (output.includes("players online")) {
-      listOutputCache.set(key, { output, time: now });
-      return output;
-    }
-  }
-  return null;
-}
 
 /** Strip the `[HH:MM:SS] [Server thread/INFO]: ` prefix from a log line. */
 export function stripLogPrefix(line: string): string {
@@ -60,13 +24,6 @@ export function stripLogPrefix(line: string): string {
   idx = line.lastIndexOf(": ");
   if (idx !== -1) return line.slice(idx + 2).trim();
   return line.trim();
-}
-
-export async function getPlayerNamesChoices(
-  server: ServerInstance,
-): Promise<Array<{ name: string; value: string }>> {
-  const names = await getPlayerNames(server);
-  return names.map((n) => ({ name: n, value: n }));
 }
 
 /**
@@ -96,31 +53,20 @@ export async function getPlayerNames(
  * Get player count — uses RCON/API when available, falls back to log parsing.
  */
 export async function getPlayerCount(
-  server?: ServerInstance,
+  server: ServerInstance,
 ): Promise<PlayerCount> {
-  if (server) {
-    const list = await server.getList();
-    return { playerCount: list.playerCount, maxPlayers: list.maxPlayers };
-  }
-  const logContent = await getListOutput();
-  if (!logContent) return { playerCount: "unknown", maxPlayers: "unknown" };
-  const parsed = parseListOutput(logContent);
-  return { playerCount: parsed.playerCount, maxPlayers: parsed.maxPlayers };
+  const list = await server.getList();
+  return { playerCount: list.playerCount, maxPlayers: list.maxPlayers };
 }
 
 /**
  * Get online players — uses RCON/API when available, falls back to log parsing.
  */
 export async function getOnlinePlayers(
-  server?: ServerInstance,
+  server: ServerInstance,
 ): Promise<string[]> {
-  if (server) {
-    const list = await server.getList();
-    return list.players;
-  }
-  const logContent = await getListOutput();
-  if (!logContent) return [];
-  return parseListOutput(logContent).players;
+  const list = await server.getList();
+  return list.players;
 }
 
 /**
@@ -148,7 +94,7 @@ export function isPlayerOnline(
 export async function getPlayerCoords(
   server: ServerInstance,
   playerName: string,
-): Promise<PlayerCoords | null> {
+): Promise<QueryResult<PlayerCoords>> {
   return server.getPlayerCoords(playerName);
 }
 
@@ -159,7 +105,7 @@ export async function getPlayerCoords(
 export async function getPlayerDimension(
   server: ServerInstance,
   playerName: string,
-): Promise<string> {
+): Promise<QueryResult<string>> {
   return server.getPlayerDimension(playerName);
 }
 

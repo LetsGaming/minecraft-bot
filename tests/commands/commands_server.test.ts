@@ -4,6 +4,7 @@
  * inner functions are called directly.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createErrorEmbed } from "../../src/bot/utils/embeds/embedUtils.js";
 
 // ── Shared mocks ───────────────────────────────────────────────────────────
 vi.mock("../../src/bot/commands/middleware.js", () => ({
@@ -90,8 +91,8 @@ function makeServer(id = "survival", overrides: Record<string, unknown> = {}) {
       }),
     getTps: vi.fn().mockResolvedValue({ tps1m: 20, tps5m: 20, tps15m: 20 }),
     supportsTps: true,
-    getSeed: vi.fn().mockResolvedValue("123456789"),
-    sendCommand: vi.fn().mockResolvedValue(undefined),
+    getSeed: vi.fn().mockResolvedValue({ ok: true, value: "123456789" }),
+    send: vi.fn().mockResolvedValue({ kind: "delivered", output: "" }),
     ...overrides,
   };
 }
@@ -200,12 +201,6 @@ describe("/status command", () => {
     expect(description.toLowerCase()).toContain("wrapper");
   });
 
-  it("throws when resolveServer returns nothing", async () => {
-    vi.mocked(resolveServer).mockReturnValue(null as never);
-    const interaction = makeInteraction();
-    await expect(execute(interaction)).rejects.toThrow("Server not found");
-  });
-
   it("includes bot ping from interaction.client.ws.ping", async () => {
     const server = makeServer();
     vi.mocked(resolveServer).mockReturnValue(server);
@@ -291,10 +286,18 @@ describe("/seed command", () => {
 
   it("throws when seed is null", async () => {
     const server = makeServer("srv", {
-      getSeed: vi.fn().mockResolvedValue(null),
+      getSeed: vi.fn().mockResolvedValue({ ok: false, reason: "unreadable" }),
     });
     vi.mocked(resolveServer).mockReturnValue(server);
     await expect(execute(makeInteraction())).rejects.toThrow("seed");
+  });
+
+  it("says the server is unreachable when the seed query is", async () => {
+    const server = makeServer("srv", {
+      getSeed: vi.fn().mockResolvedValue({ ok: false, reason: "unreachable" }),
+    });
+    vi.mocked(resolveServer).mockReturnValue(server);
+    await expect(execute(makeInteraction())).rejects.toThrow("reach the server");
   });
 });
 
@@ -396,6 +399,26 @@ describe("/server control command", () => {
       /setup-suite layout.*docs\/admin\/setup\.md/s,
     );
     expect(serverAccess.runScript).not.toHaveBeenCalled();
+  });
+
+  it("reports a script that outlived the wait as still running, not failed", async () => {
+    const server = makeServer();
+    vi.mocked(resolveServer).mockReturnValue(server);
+    const err = new Error("did not finish");
+    err.name = "ScriptStillRunningError";
+    vi.mocked(serverAccess.runScript).mockRejectedValue(err);
+    const interaction = makeInteraction({
+      options: {
+        getString: vi.fn().mockReturnValue(null),
+        getBoolean: vi.fn().mockReturnValue(null),
+        getSubcommand: vi.fn().mockReturnValue("restart"),
+      },
+    });
+    await execute(interaction);
+    expect(interaction.editReply).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(createErrorEmbed)).not.toHaveBeenCalledWith(
+      expect.stringContaining("failed"),
+    );
   });
 
   it("runs start subcommand and replies with success", async () => {

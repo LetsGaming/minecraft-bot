@@ -15,8 +15,13 @@ import { createSuccessEmbed } from "../../utils/embeds/embedUtils.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { recordAdd } from "@mcbot/core/utils/stores/whitelistAudit.js";
 import { fetchMojangProfile } from "@mcbot/core/utils/minecraft/mojang.js";
+import {
+  requireAccepted,
+  withUnverifiedNote,
+} from "@mcbot/core/utils/server/commandOutcome.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 export function buildWhitelistAddData(
   commandName: string,
 ): SlashCommandOptionsOnlyBuilder {
@@ -37,6 +42,12 @@ export function buildWhitelistAddData(
     );
 }
 
+export interface WhitelistAddResult {
+  name: string;
+  /** True when the server has no reply channel, so the add is unconfirmed. */
+  unverified: boolean;
+}
+
 /**
  * The whitelist-add core, shared by the slash path below and the
  * whitelist-application approval flow: format check, Mojang lookup for
@@ -47,22 +58,26 @@ export async function performWhitelistAdd(
   server: ServerInstance,
   username: string,
   by: { tag: string; id: string },
-): Promise<string> {
+): Promise<WhitelistAddResult> {
   // Validate the username format before it reaches a console
   // command or a Mojang API URL. Rejecting here also gives a clearer
   // error than a failed Mojang lookup for garbage input.
   if (!isValidMcName(username)) {
-    throw new Error(`**${username}** is not a valid Minecraft username.`);
+    throw new Error(t("common.invalidUsername", { username }));
   }
 
   const profile = await fetchMojangProfile(username);
-  if (!profile) throw new Error(`Username **${username}** not found.`);
+  if (!profile) throw new Error(t("whitelist.notFound", { username }));
 
   // Use the canonical capitalization Mojang returns so the
   // whitelist entry matches the in-game name exactly.
   const canonicalName = profile.name ?? username;
 
-  await server.sendCommand(`/whitelist add ${canonicalName}`);
+  const verdict = requireAccepted(
+    await server.send(`/whitelist add ${canonicalName}`),
+    server.id,
+    { refusal: /^That player does not exist/i },
+  );
   await recordAdd(canonicalName, by.tag, by.id, server.id, profile.id);
 
   // The whitelist cache would otherwise serve the stale (pre-add)
@@ -70,16 +85,14 @@ export async function performWhitelistAdd(
   // autocomplete, findPlayer, and leaderboards.
   invalidateWhitelistCache(server.id);
 
-  return canonicalName;
+  return { name: canonicalName, ...verdict };
 }
 
 export const executeWhitelistAdd = withErrorHandling(
   requireServerAdmin(async (interaction) => {
     const username = interaction.options.getString("username", true);
     const server = resolveServer(interaction);
-    if (!server) throw new Error("Server not found.");
-
-    const canonicalName = await performWhitelistAdd(server, username, {
+    const added = await performWhitelistAdd(server, username, {
       tag: interaction.user.tag,
       id: interaction.user.id,
     });
@@ -87,7 +100,10 @@ export const executeWhitelistAdd = withErrorHandling(
     await interaction.editReply({
       embeds: [
         createSuccessEmbed(
-          `**${canonicalName}** has been whitelisted on **${server.id}**.`,
+          withUnverifiedNote(
+            t("whitelist.added", { name: added.name, server: server.id }),
+            added,
+          ),
         ),
       ],
     });

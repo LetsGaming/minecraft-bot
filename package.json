@@ -1,6 +1,6 @@
 {
   "name": "minecraft-bot",
-  "version": "6.1.0",
+  "version": "7.0.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/LetsGaming/minecraft-bot.git"
@@ -37,6 +37,8 @@
     "schema:check": "node scripts/generate-schema.mjs --check",
     "i18n:check": "node scripts/check-locales.mjs",
     "layout:check": "node scripts/check-layout.mjs",
+    "wire:sync": "node scripts/sync-wire.mjs",
+    "wire:check": "node scripts/sync-wire.mjs --check",
     "bump-version": "node scripts/bump-version.mjs",
     "clean": "rm -rf src/*/dist",
     "e2e:contract": "node scripts/e2e-wrapper-contract.mjs",
@@ -48,11 +50,15 @@
     "@typescript-eslint/parser": "^8.67.0",
     "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^10.8.1",
+    "openapi-typescript": "^7.13.0",
     "ts-json-schema-generator": "^2.9.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
   },
   "overrides": {
-    "undici": "^6.27.0"
+    "undici": "^6.27.0",
+    "openapi-typescript": {
+      "typescript": "$typescript"
+    }
   }
 }

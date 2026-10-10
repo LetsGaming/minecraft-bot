@@ -16,7 +16,7 @@
  * re-ban of the same name on the same server should replace the pending
  * release rather than stack a second one.
  */
-import { kvGet, kvSet, kvUpdate } from "../../db/kv.js";
+import { kvGet, kvUpdate } from "../../db/kv.js";
 
 export interface TempBan {
   /** Name as typed, for display and the /pardon we will issue. */
@@ -62,10 +62,6 @@ export async function loadTempBanStore(): Promise<TempBanStore> {
   return isV1Store(raw) ? raw : emptyStore();
 }
 
-export async function saveTempBanStore(store: TempBanStore): Promise<void> {
-  kvSet(KEY, store);
-}
-
 /**
  * Record a pending release, replacing any earlier one for the same
  * player+server. Atomic, so a re-ban racing the expiry sweep can't lose.
@@ -92,14 +88,6 @@ export async function removeTempBan(
     return store;
   });
   return existed;
-}
-
-export function getTempBan(
-  store: TempBanStore,
-  serverId: string,
-  player: string,
-): TempBan | null {
-  return store.bans[tempBanKey(serverId, player)] ?? null;
 }
 
 export function listTempBans(store: TempBanStore): TempBan[] {

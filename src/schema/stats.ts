@@ -52,15 +52,6 @@ export const LONGEST_LEADERBOARD_INTERVAL_MS: number = Math.max(
   ...Object.values(LEADERBOARD_INTERVAL_MS),
 );
 
-/** Type guard: is an arbitrary string a known leaderboard interval? */
-export function isLeaderboardInterval(
-  value: string,
-): value is LeaderboardInterval {
-  // Widen the const tuple to readonly string[] so .includes accepts an
-  // arbitrary string (TS otherwise restricts the arg to the literal union).
-  return (LEADERBOARD_INTERVALS as readonly string[]).includes(value);
-}
-
 export interface SnapshotData {
   /** Snapshot format version. Absent or 1 = legacy (no flatStats). */
   version?: number;

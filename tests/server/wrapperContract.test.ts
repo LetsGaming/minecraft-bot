@@ -20,6 +20,9 @@ import {
   SUPPORTED_MANIFEST_VERSION,
   EXPECTED_WRAPPER_FEATURES,
   parseManifest,
+  scriptTimeoutMs,
+  FALLBACK_SCRIPT_TIMEOUTS_MS,
+  DEFAULT_SCRIPT_TIMEOUT_MS,
   compareContract,
   contractHasBlockingGaps,
   contractIsClean,
@@ -82,6 +85,67 @@ describe("parseManifest", () => {
   });
 });
 
+describe("scriptTimeoutsMs", () => {
+  it("parses the advertised ceilings and drops invalid entries", () => {
+    const parsed = parseManifest({
+      ...goodManifest(),
+      scriptTimeoutsMs: { stop: 240_000, bad: "x", zero: 0, neg: -5 },
+    });
+    expect(parsed?.scriptTimeoutsMs).toEqual({ stop: 240_000 });
+  });
+
+  const advertise = (scriptTimeoutsMs: unknown) =>
+    parseManifest({ ...goodManifest(), scriptTimeoutsMs })?.scriptTimeoutsMs;
+
+  it("clamps huge and tiny values into the sane window", () => {
+    expect(advertise({ stop: 1e12, start: 1 })).toEqual({
+      stop: 15 * 60_000,
+      start: 5_000,
+    });
+  });
+
+  it.each([
+    ["zero", 0],
+    ["negative", -1],
+    ["NaN", NaN],
+    ["Infinity", Infinity],
+    ["fraction", 1.5],
+    ["string", "240000"],
+    ["array", [240000]],
+    ["null", null],
+  ])("ignores a %s value", (_l, v) => {
+    expect(advertise({ stop: v })).toBeUndefined();
+    expect(parseManifest({ ...goodManifest(), scriptTimeoutsMs: { stop: v } })).not.toBeNull();
+  });
+
+  it("ignores unknown actions, prototype keys and non-object tables", () => {
+    const polluted = JSON.parse('{"__proto__": 99999, "constructor": 99999, "evil": 99999, "stop": 60000}');
+    expect(advertise(polluted)).toEqual({ stop: 60_000 });
+    expect(({} as Record<string, unknown>).evil).toBeUndefined();
+    expect(advertise([1, 2])).toBeUndefined();
+    expect(advertise("x")).toBeUndefined();
+  });
+
+  it("caps the number of keys it inspects", () => {
+    const many: Record<string, number> = {};
+    for (let i = 0; i < 1000; i++) many[`k${i}`] = 10_000;
+    many.stop = 60_000;
+    expect(advertise(many)).toBeUndefined();
+  });
+
+  it("leaves the field absent on wrappers that predate it", () => {
+    expect(parseManifest(goodManifest())?.scriptTimeoutsMs).toBeUndefined();
+  });
+
+  it("prefers the advertised ceiling, then the fallback table, then the default", () => {
+    expect(scriptTimeoutMs("stop", { stop: 500_000 })).toBe(500_000);
+    expect(scriptTimeoutMs("restart", {})).toBe(FALLBACK_SCRIPT_TIMEOUTS_MS.restart);
+    expect(scriptTimeoutMs("restart")).toBe(420_000);
+    expect(scriptTimeoutMs("mystery")).toBe(DEFAULT_SCRIPT_TIMEOUT_MS);
+    expect(scriptTimeoutMs("constructor")).toBe(DEFAULT_SCRIPT_TIMEOUT_MS);
+  });
+});
+
 describe("compareContract", () => {
   it("reports nothing when the wrapper matches", () => {
     const report = compareContract(goodManifest());
@@ -100,6 +164,16 @@ describe("compareContract", () => {
     ]);
     // The report has to say what breaks — "wrapper is old" is not actionable.
     expect(report.missing.every((f) => f.degrades.length > 0)).toBe(true);
+  });
+
+  it("expects stats-bulk, which the leaderboard build calls", () => {
+    expect(EXPECTED_WRAPPER_FEATURES["stats-bulk"]).toMatchObject({ version: 1 });
+
+    const m = goodManifest();
+    delete m.features["stats-bulk"];
+    const report = compareContract(m);
+    expect(report.missing.map((f) => f.name)).toEqual(["stats-bulk"]);
+    expect(report.unused).toEqual([]);
   });
 
   it("flags a wrapper feature older than the bot expects", () => {

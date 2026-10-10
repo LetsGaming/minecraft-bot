@@ -15,6 +15,7 @@ import {
 import { loadLinkedAccountsOrEmpty } from "../stores/linkUtils.js";
 import type { LeaderboardData } from "../../types/index.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 export const STREAK_STAT_KEYS = ["streak", "longest_streak"] as const;
 export type StreakStatKey = (typeof STREAK_STAT_KEYS)[number];
 
@@ -64,9 +65,12 @@ export async function buildStreakLeaderboard(
       value: e.value,
       formatted: `${e.value}`,
     })),
-    title: `🏆 ${STREAK_STAT_LABELS[statKey]} — ${serverId}`,
+    title: t("leaderboard.streakTitle", {
+      stat: STREAK_STAT_LABELS[statKey],
+      server: serverId,
+    }),
     description:
-      lines.length > 0 ? lines.join("\n") : "No claims on this server yet.",
-    footerText: `Top ${limit} · /daily streaks are per server`,
+      lines.length > 0 ? lines.join("\n") : t("leaderboard.noClaims"),
+    footerText: t("leaderboard.streakNote", { limit }),
   };
 }

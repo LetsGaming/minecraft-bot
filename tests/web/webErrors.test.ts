@@ -32,7 +32,7 @@ describe("registerErrorHandler (QUAL-10)", () => {
       new Conflict("stale", { currentHash: "h1" }),
     ).inject({ url: "/boom" });
     expect(res.statusCode).toBe(409);
-    expect(res.json()).toEqual({ error: "stale", currentHash: "h1" });
+    expect(res.json()).toEqual({ error: "stale", code: "CONFLICT", currentHash: "h1" });
   });
 
   it("keeps the extra fields of a validation failure", async () => {
@@ -40,7 +40,11 @@ describe("registerErrorHandler (QUAL-10)", () => {
       url: "/boom",
     });
     expect(res.statusCode).toBe(422);
-    expect(res.json()).toEqual({ error: "Validation failed", errors: ["a", "b"] });
+    expect(res.json()).toEqual({
+      error: "Validation failed",
+      code: "VALIDATION_FAILED",
+      errors: ["a", "b"],
+    });
   });
 
   it("surfaces a client-safe message for a bare HttpError", async () => {
@@ -66,6 +70,12 @@ describe("registerErrorHandler (QUAL-10)", () => {
     ).inject({ url: "/boom" });
     expect(res.statusCode).toBe(400);
     expect(res.json()).toEqual({ error: "Bad body" });
+  });
+
+  it("gives every typed failure a stable code", async () => {
+    const res = await appThatThrows(new Forbidden()).inject({ url: "/boom" });
+    expect(res.json().code).toBe("FORBIDDEN");
+    expect(new Conflict("x").code).toBe("CONFLICT");
   });
 
   it("HttpError.body merges extra over the error field", () => {

@@ -15,6 +15,10 @@ import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
 import { removeTempBan } from "@mcbot/core/utils/stores/tempBanStore.js";
 import { cancelTempBanTimer } from "../../logWatcher/watchers/schedulers/tempBanScheduler.js";
 import { t } from "@mcbot/core/utils/i18n.js";
+import {
+  requireAccepted,
+  withUnverifiedNote,
+} from "@mcbot/core/utils/server/commandOutcome.js";
 
 export const data = new SlashCommandBuilder()
   .setName("pardon")
@@ -37,7 +41,10 @@ export const execute = withErrorHandling(
     }
     const server = resolveServer(interaction);
 
-    await server.sendCommand(`/pardon ${player}`);
+    const verdict = requireAccepted(
+      await server.send(`/pardon ${player}`),
+      server.id,
+    );
 
     cancelTempBanTimer(server.id, player);
     await removeTempBan(server.id, player);
@@ -54,7 +61,10 @@ export const execute = withErrorHandling(
     await interaction.editReply({
       embeds: [
         createSuccessEmbed(
-          t("moderation.pardoned", { player, server: server.id }),
+          withUnverifiedNote(
+            t("moderation.pardoned", { player, server: server.id }),
+            verdict,
+          ),
         ),
       ],
     });

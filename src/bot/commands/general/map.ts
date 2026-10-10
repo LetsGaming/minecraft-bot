@@ -5,6 +5,7 @@ import {
 import { createEmbed, createErrorEmbed } from "../../utils/embeds/embedUtils.js";
 import { loadConfig } from "@mcbot/core/config.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 export const data = new SlashCommandBuilder()
   .setName("map")
   .setDescription("Shows the link to the live Minecraft map (Dynmap)");
@@ -14,19 +15,18 @@ export async function execute(
 ): Promise<void> {
   await interaction.deferReply();
 
+  const guildId = interaction.guildId ?? undefined;
   const url = getUrl();
   if (!url) {
-    const errorEmbed = createErrorEmbed(
-      "The map URL is not configured. Please contact the server administrator.",
-    );
+    const errorEmbed = createErrorEmbed(t("map.notConfigured", {}, guildId));
     await interaction.editReply({ embeds: [errorEmbed] });
     return;
   }
 
   const embed = createEmbed({
-    title: "Live Minecraft Map",
-    description: `You can view the live Minecraft map [here](${url}).`,
-    footer: { text: `Requested by ${interaction.user.tag}` },
+    title: t("map.title", {}, guildId),
+    description: t("map.description", { url }, guildId),
+    footer: { text: t("common.requestedBy", { user: interaction.user.tag }, guildId) },
   });
 
   await interaction.editReply({ embeds: [embed] });

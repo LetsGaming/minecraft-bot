@@ -1,0 +1,173 @@
+{
+  "token": "DISCORD_APP_TOKEN",
+  "clientId": "DISCORD_CLIENT_ID",
+  "adminUsers": [
+    "DISCORD_USER_ID_1",
+    "DISCORD_USER_ID_2"
+  ],
+  "servers": {
+    "survival": {
+      "serverDir": "/home/minecraft/minecraft-server/survival",
+      "scriptDir": "/home/minecraft/minecraft-server/scripts/survival",
+      "linuxUser": "minecraft",
+      "screenSession": "survival",
+      "useRcon": true,
+      "rconHost": "localhost",
+      "rconPort": 25575,
+      "rconPassword": "your-rcon-password"
+    },
+    "creative": {
+      "serverDir": "/home/minecraft/minecraft-server/creative",
+      "scriptDir": "/home/minecraft/minecraft-server/scripts/creative",
+      "linuxUser": "minecraft",
+      "screenSession": "creative",
+      "useRcon": true,
+      "rconHost": "localhost",
+      "rconPort": 25576,
+      "rconPassword": "your-rcon-password"
+    },
+    "remote-example": {
+      "apiUrl": "http://192.168.1.10:3000",
+      "apiKey": "same-secret-as-in-api-server-config",
+      "id": "remote-example"
+    }
+  },
+  "guilds": {
+    "GUILD_ID_HERE": {
+      "defaultServer": "survival",
+      "adminUsers": [
+        "GUILD_SCOPED_ADMIN_USER_OR_ROLE_ID"
+      ],
+      "allowedServers": [
+        "survival"
+      ],
+      "chatBridge": [
+        {
+          "channelId": "CHANNEL_ID",
+          "server": "survival",
+          "useWebhook": false
+        },
+        {
+          "channelId": "OTHER_CHANNEL_ID",
+          "server": "creative"
+        }
+      ],
+      "notifications": {
+        "channelId": "CHANNEL_ID",
+        "server": [
+          "survival",
+          "creative"
+        ],
+        "events": [
+          "join",
+          "leave",
+          "death",
+          "advancement",
+          "start",
+          "stop"
+        ]
+      },
+      "leaderboard": {
+        "channelId": "CHANNEL_ID",
+        "interval": "weekly",
+        "server": "survival",
+        "categories": [
+          "playtime",
+          "mined"
+        ]
+      },
+      "tpsAlerts": {
+        "channelId": "CHANNEL_ID",
+        "server": "survival",
+        "mentionRole": ""
+      },
+      "statusEmbed": {
+        "enabled": true
+      },
+      "downtimeAlerts": {
+        "channelId": "CHANNEL_ID",
+        "server": "survival",
+        "mentionRole": ""
+      },
+      "channelPurge": {
+        "channelId": "CHANNEL_ID"
+      },
+      "language": "en",
+      "console": {
+        "channelId": ""
+      },
+      "whitelistApplications": {
+        "channelId": "",
+        "adminChannelId": "",
+        "mentionRole": ""
+      }
+    }
+  },
+  "tpsWarningThreshold": 15,
+  "tpsPollIntervalMs": 60000,
+  "commands": {
+    "map": {
+      "enabled": false,
+      "url": "http://example.com/map"
+    },
+    "seed": {
+      "enabled": true
+    },
+    "say": {
+      "adminOnly": false
+    }
+  },
+  "presence": {
+    "enabled": false,
+    "server": "",
+    "format": "{online} online @ {server}",
+    "downFormat": "⛔ {server} offline"
+  },
+  "hostAlerts": {
+    "diskWarnPercent": 90,
+    "backupMaxAgeHours": 0
+  },
+  "waypoints": {
+    "maxPerServer": 100
+  },
+  "limits": {
+    "slashCapacity": 5,
+    "slashWindowMs": 30000,
+    "bridgeCapacity": 8,
+    "bridgeWindowMs": 10000
+  },
+  "updateNotifier": {
+    "enabled": true,
+    "dmAdmins": false
+  },
+  "schedules": {
+    "your-server-id": {
+      "restart": {
+        "time": "04:00",
+        "days": [
+          "MO",
+          "TH"
+        ],
+        "warnMinutes": [
+          15,
+          5,
+          1
+        ]
+      }
+    }
+  },
+  "milestones": {
+    "playtime": [
+      7200000
+    ],
+    "diamonds": [
+      1000
+    ]
+  },
+  "webui": {
+    "enabled": false,
+    "port": 8130,
+    "host": "127.0.0.1",
+    "publicUrl": ""
+  }
+}

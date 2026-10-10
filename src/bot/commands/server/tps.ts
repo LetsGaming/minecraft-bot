@@ -5,6 +5,7 @@ import { resolveServer } from "../../utils/guild/guildRouter.js";
 
 import { withErrorHandling } from "../middleware.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 export const data = new SlashCommandBuilder()
   .setName("tps")
   .setDescription("Check server TPS (ticks per second)")
@@ -14,20 +15,18 @@ export const data = new SlashCommandBuilder()
 
 export const execute = withErrorHandling(async (interaction) => {
   const server = resolveServer(interaction);
-  if (!server) throw new Error("Server not found.");
-
   if (!server.supportsTps)
-    throw new Error("TPS monitoring requires RCON or an API wrapper.");
+    throw new Error(t("tps.unsupported"));
 
   const tps = await server.getTps();
-  if (!tps) throw new Error("Could not retrieve TPS. Server may be offline.");
+  if (!tps) throw new Error(t("tps.unavailable"));
 
   const tpsColor =
     tps.tps1m >= 18 ? EmbedColor.Success : tps.tps1m >= 15 ? EmbedColor.Warning : EmbedColor.Error;
   const emoji = tps.tps1m >= 18 ? "🟢" : tps.tps1m >= 15 ? "🟡" : "🔴";
 
   const embed = createEmbed({
-    title: `${emoji} TPS — ${server.id}`,
+    title: t("tps.title", { emoji, server: server.id }),
     color: tpsColor,
   });
 
@@ -54,13 +53,13 @@ export const execute = withErrorHandling(async (interaction) => {
       tps.p99 !== undefined
     ) {
       embed.addFields({
-        name: "Tick Timing",
+        name: t("tps.tickTiming"),
         value: `P50: ${tps.p50.toFixed(1)}ms · P95: ${tps.p95.toFixed(1)}ms · P99: ${tps.p99.toFixed(1)}ms`,
         inline: false,
       });
     }
   } else {
-    embed.setDescription(`Current TPS: **${tps.tps1m.toFixed(1)}**`);
+    embed.setDescription(t("tps.current", { value: tps.tps1m.toFixed(1) }));
   }
 
   if (tps.raw) embed.setFooter({ text: tps.raw.slice(0, 100) });

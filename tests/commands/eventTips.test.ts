@@ -121,36 +121,38 @@ describe("deliverEventTip", () => {
     // The point of the whole change: this used to ride along on the death
     // DM, which only linked players receive — so a tip about an in-game
     // command never reached the players who had not linked.
-    const sendCommand = vi.fn().mockResolvedValue(undefined);
+    const send = vi.fn().mockResolvedValue({ kind: "delivered", output: "" });
     const tip = await deliverEventTip(
-      { id: "survival", sendCommand },
+      { id: "survival", send },
       "death",
       "Steve",
     );
 
     expect(tip?.id).toBe("deathpos");
-    expect(sendCommand).toHaveBeenCalledWith(
+    expect(send).toHaveBeenCalledWith(
       expect.stringContaining("/msg Steve"),
     );
   });
 
   it("sends nothing when no tip applies", async () => {
     mockConfig.commands = { deathpos: { enabled: false } };
-    const sendCommand = vi.fn().mockResolvedValue(undefined);
+    const send = vi.fn().mockResolvedValue({ kind: "delivered", output: "" });
     expect(
-      await deliverEventTip({ id: "survival", sendCommand }, "death", "Steve"),
+      await deliverEventTip({ id: "survival", send }, "death", "Steve"),
     ).toBeNull();
-    expect(sendCommand).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
   });
 
   it("does not spend a mention when the whisper fails", async () => {
-    const sendCommand = vi.fn().mockRejectedValue(new Error("server down"));
+    const send = vi
+      .fn()
+      .mockResolvedValue({ kind: "unreachable", reason: "wrapper-down", detail: "x" });
     const { recordSuggestion } = await import(
       "../../src/core/utils/stores/suggestionLedger.js"
     );
 
     expect(
-      await deliverEventTip({ id: "survival", sendCommand }, "death", "Steve"),
+      await deliverEventTip({ id: "survival", send }, "death", "Steve"),
     ).toBeNull();
     expect(vi.mocked(recordSuggestion)).not.toHaveBeenCalled();
   });

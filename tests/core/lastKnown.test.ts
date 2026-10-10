@@ -100,3 +100,14 @@ describe("recall", () => {
     expect(recall("smp", "configIndex", "x", oneHourOn)?.value).toEqual(["a"]);
   });
 });
+
+describe("forget against an in-flight read", () => {
+  it("does not remember a value read before forget()", async () => {
+    let finish!: (v: string[]) => void;
+    const pending = readThrough("smp", "res", () => new Promise<string[]>((r) => { finish = r; }));
+    forget("smp");
+    finish(["old"]);
+    await pending;
+    expect(recall("smp", "res", "down")).toBeUndefined();
+  });
+});

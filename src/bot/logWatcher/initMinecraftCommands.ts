@@ -33,7 +33,10 @@ import { registerJoinLeaveWatcher } from "./watchers/log/joinLeave.js";
 import { registerDeathWatcher } from "./watchers/log/deaths.js";
 import { registerAdvancementWatcher } from "./watchers/log/advancements.js";
 import { registerServerEventWatcher } from "./watchers/log/serverEvents.js";
-import { startTpsMonitor } from "./watchers/monitors/tpsMonitor.js";
+import {
+  startTpsMonitor,
+  type TpsMonitorHandle,
+} from "./watchers/monitors/tpsMonitor.js";
 import { startLeaderboardScheduler } from "./watchers/schedulers/leaderboardScheduler.js";
 import {
   startStatusEmbed,
@@ -48,7 +51,6 @@ import { startTempBanScheduler } from "./watchers/schedulers/tempBanScheduler.js
 import { pruneCommandUsage } from "@mcbot/core/utils/commands/commandUsage.js";
 import { registerSleepWatcher } from "./watchers/log/sleepWatcher.js";
 import { registerConsoleRelay } from "./watchers/log/consoleRelay.js";
-import { startUptimeFlushScheduler } from "@mcbot/core/utils/stores/uptimeTracker.js";
 import { startUpdateNotifier } from "./watchers/monitors/updateNotifier.js";
 import { startPlayerCountSampler } from "@mcbot/core/utils/stores/playerCountHistory.js";
 import { commandEnabledAnywhere } from "@mcbot/core/utils/commands/commandPolicy.js";
@@ -70,10 +72,26 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 interface ServerHandles {
   watcher: RemoteLogWatcher;
-  tpsTimer: ReturnType<typeof setInterval> | null;
+  tpsMonitor: TpsMonitorHandle | null;
 }
 
 const serverHandles = new Map<string, ServerHandles>();
+
+/** In-game command modules found on disk but not initialized because they were disabled everywhere. */
+const deferredIngame = new Map<string, { init: () => void | Promise<void> }>();
+
+async function initDeferredIngameCommands(): Promise<void> {
+  for (const [name, mod] of [...deferredIngame]) {
+    if (!commandEnabledAnywhere(name)) continue;
+    deferredIngame.delete(name);
+    try {
+      await mod.init();
+      log.info("commands", `Loaded !${name} after config reload`);
+    } catch (err) {
+      log.error("commands", `Failed to load !${name}: ${errMsg(err)}`);
+    }
+  }
+}
 
 async function wireServer(
   server: ReturnType<typeof getAllInstances>[number],
@@ -97,7 +115,7 @@ async function wireServer(
     watcher.register(regex, handler);
   }
 
-  registerChatBridge(watcher, client, guildConfigs, getServerIds());
+  registerChatBridge(watcher, client, guildConfigs, getServerIds);
   registerJoinLeaveWatcher(watcher, client, guildConfigs);
   registerDeathWatcher(watcher, client, guildConfigs);
   registerAdvancementWatcher(watcher, client, guildConfigs);
@@ -107,9 +125,9 @@ async function wireServer(
 
   await watcher.start(client);
 
-  const tpsTimer = startTpsMonitor(server, client, guildConfigs);
+  const tpsMonitor = startTpsMonitor(server, client, guildConfigs);
 
-  serverHandles.set(server.id, { watcher, tpsTimer });
+  serverHandles.set(server.id, { watcher, tpsMonitor });
 }
 
 function unwireServer(serverId: string): void {
@@ -120,20 +138,15 @@ function unwireServer(serverId: string): void {
   } catch {
     // best-effort — a watcher that failed to start has nothing to stop
   }
-  if (handles.tpsTimer) clearInterval(handles.tpsTimer);
+  handles.tpsMonitor?.stop();
   serverHandles.delete(serverId);
 }
 
 export async function initMinecraftCommands(client: Client): Promise<void> {
   const cfg = loadConfig();
-  // Long-lived watchers, monitors and schedulers get the PROVIDER, not a
-  // snapshot: they are wired once and run for the process lifetime, and
-  // reconcileServers only reconciles the `servers` block — so a snapshot
-  // here meant a guild added by a later config reload never reached them
-  // (its chatBridge, notifications, alerts and purge stayed dead until a
-  // full restart). Callers that are themselves re-run on reload
-  // (statusEmbed, application prompts) keep taking the current record.
-  const guildConfigs = cfg.guilds;
+  // Long-lived watchers, monitors and schedulers get the PROVIDER
+  // (liveGuildConfigs), never a snapshot: they are wired once and run for the
+  // process lifetime, so a snapshot would miss guilds added by a later reload.
 
   // ── 1. Load in-game !command definitions (registers them globally) ──
   const commandsDir = path.join(__dirname, "commands");
@@ -185,6 +198,7 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
       // enforced live at dispatch inside defineCommand.
       if (!commandEnabledAnywhere(name)) {
         log.info("commands", `Skipping disabled: !${name}`);
+        deferredIngame.set(name, { init: mod.init });
         continue;
       }
       await mod.init();
@@ -210,14 +224,14 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
     client,
     liveGuildConfigs,
     (id) => (id ? getServerInstance(id) : getFirstInstance()),
-    getServerIds(),
+    getServerIds,
   );
 
   // ── 4. Scheduled leaderboard auto-poster ──
   startLeaderboardScheduler(client, liveGuildConfigs);
 
   // ── 5. Persistent status embed ──
-  startStatusEmbed(client, guildConfigs);
+  startStatusEmbed(client, liveGuildConfigs);
 
   // ── 5b. Daily claim reminders ──
   startDailyReminderScheduler(client);
@@ -242,9 +256,6 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
   pruneCommandUsage();
   setInterval(() => pruneCommandUsage(), 24 * 60 * 60 * 1000).unref();
 
-  // ── 7. Uptime flush scheduler ──
-  startUptimeFlushScheduler();
-
   // ── 8. Daily channel purge ──
   startChannelPurge(client, liveGuildConfigs);
 
@@ -263,7 +274,7 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
   startMilestoneWatcher(client);
 
   // ── 13. Whitelist application prompts ──
-  await ensureApplicationPrompts(client, guildConfigs).catch((err) => {
+  await ensureApplicationPrompts(client, liveGuildConfigs).catch((err) => {
     log.warn("wlapp", `Prompt setup failed: ${errMsg(err)}`);
   });
 
@@ -280,11 +291,9 @@ export interface ReconcileResult {
   added: string[];
   /** Server IDs whose watchers were stopped and instances dropped. */
   removed: string[];
-  /**
-   * Server IDs that exist in both old and new config but whose settings
-   * differ. Live instances keep their original config object (RCON client,
-   * watcher, etc. were built from it), so these still need a restart.
-   */
+  /** Server IDs whose settings changed and whose instance and watchers were rebuilt from the new config. */
+  replaced: string[];
+  /** Server IDs whose settings changed but could not be rebuilt live; these still need a restart. */
   changed: string[];
 }
 
@@ -299,7 +308,9 @@ let reconcileChain: Promise<unknown> = Promise.resolve();
  *  - removed IDs: stop the log watcher, clear the TPS timer, disconnect
  *    RCON, and drop the instance from the registry,
  *  - added IDs: create the instance and wire the full watcher set, exactly
- *    as at startup.
+ *    as at startup,
+ *  - IDs whose settings changed: rebuild the instance from the new config and
+ *    rewire its watchers.
  *
  * Everything that resolves instances per tick (snapshot timer, downtime
  * monitor, status embed, command routing) picks the change up automatically
@@ -326,7 +337,7 @@ async function doReconcile(
   const added = Object.keys(configured).filter(
     (id) => !registeredIds.has(id),
   );
-  const changed = registered
+  const differing = registered
     .filter(
       (inst) =>
         inst.id in configured &&
@@ -340,6 +351,22 @@ async function doReconcile(
     log.info("reconcile", `Server removed and watchers stopped: ${id}`);
   }
 
+  const replaced: string[] = [];
+  const changed: string[] = [];
+  for (const id of differing) {
+    unwireServer(id);
+    removeServerInstance(id);
+    const inst = addServerInstance(configured[id]!);
+    try {
+      await wireServer(inst, client, liveGuildConfigs);
+      replaced.push(id);
+      log.info("reconcile", `Server settings changed, instance rebuilt: ${id}`);
+    } catch (err) {
+      changed.push(id);
+      log.error("reconcile", `Failed to rewire changed server ${id}: ${errMsg(err)}`);
+    }
+  }
+
   for (const id of added) {
     const inst = addServerInstance(configured[id]!);
     try {
@@ -349,6 +376,8 @@ async function doReconcile(
       log.error("reconcile", `Failed to wire added server ${id}: ${errMsg(err)}`);
     }
   }
+
+  await initDeferredIngameCommands();
 
   // Re-probe capabilities on every reload — the admin may have just
   // installed (or removed) the setup suite, and newly added servers
@@ -392,16 +421,16 @@ async function doReconcile(
   invalidateWebhookCache();
 
   // New/changed whitelistApplications blocks get their prompt posted.
-  await ensureApplicationPrompts(client, freshConfig.guilds).catch((err) => {
+  await ensureApplicationPrompts(client, liveGuildConfigs).catch((err) => {
     log.warn("reconcile", `Application-prompt reconcile failed: ${errMsg(err)}`);
   });
 
   if (changed.length > 0) {
     log.warn(
       "reconcile",
-      `Settings changed on existing server(s) [${changed.join(", ")}] — a restart is required to apply those (live instances keep their original connection settings).`,
+      `Settings changed on server(s) [${changed.join(", ")}] but could not be applied live; a restart is required.`,
     );
   }
 
-  return { added, removed, changed };
+  return { added, removed, replaced, changed };
 }

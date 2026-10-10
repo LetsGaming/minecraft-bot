@@ -10,6 +10,7 @@ import {
   getServerWaypoints,
 } from "@mcbot/core/utils/stores/waypointStore.js";
 import { t } from "@mcbot/core/utils/i18n.js";
+import { whisper } from "@mcbot/core/utils/minecraft/serverMessages.js";
 
 const MAX_CHAT_LINES = 15;
 
@@ -28,30 +29,22 @@ const cmd = defineCommand({
       .sort((a, b) => a.name.localeCompare(b.name));
 
     if (waypoints.length === 0) {
-      await server.sendCommand(
-        `/msg ${username} ${
+      await whisper(server, username, 
           category
             ? t("waypoint.noneInCategory", { category })
             : t("waypoint.noneInGame")
-        }`,
-      );
+        );
       return;
     }
 
-    await server.sendCommand(
-      `/msg ${username} ${t("waypoint.listHeader", { count: waypoints.length })}`,
-    );
+    await whisper(server, username, t("waypoint.listHeader", { count: waypoints.length }));
     for (const wp of waypoints.slice(0, MAX_CHAT_LINES)) {
-      await server.sendCommand(
-        `/msg ${username}  ${wp.name}: ${wp.x} / ${wp.y} / ${wp.z} (${wp.dimension})`,
-      );
+      await whisper(server, username, ` ${wp.name}: ${wp.x} / ${wp.y} / ${wp.z} (${wp.dimension})`);
     }
     if (waypoints.length > MAX_CHAT_LINES) {
-      await server.sendCommand(
-        `/msg ${username} ${t("waypoint.listMore", {
+      await whisper(server, username, t("waypoint.listMore", {
           more: waypoints.length - MAX_CHAT_LINES,
-        })}`,
-      );
+        }));
     }
   },
 });

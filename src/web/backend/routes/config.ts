@@ -24,6 +24,11 @@ import {
   RETENTION_DAYS as CONFIG_HISTORY_RETENTION_DAYS,
 } from "@mcbot/core/utils/config/configHistory.js";
 import { log } from "@mcbot/core/utils/logger.js";
+import { readRuntimeHeartbeat } from "@mcbot/core/utils/server/runtimeHeartbeat.js";
+import {
+  computeConfigStatus,
+  readConfigRevision,
+} from "@mcbot/core/utils/config/configApplyStatus.js";
 import { readCommandManifest } from "@mcbot/core/utils/commands/commandManifest.js";
 import { resolveCommandPolicy } from "@mcbot/core/utils/commands/commandPolicy.js";
 import {
@@ -66,6 +71,17 @@ export function registerConfigRoutes(app: FastifyInstance): void {
   }));
 
   /**
+   * Whether the running bot has applied the config.json on disk: the file's
+   * revision next to what the bot's heartbeat last reported applying.
+   */
+  api.get("/api/config/status", { config: BOT_CONFIG }, async () =>
+    computeConfigStatus(
+      readConfigRevision(configFileHash()),
+      await readRuntimeHeartbeat(),
+    ),
+  );
+
+  /**
    * Everything the Commands view needs in one call: the manifest the
    * bot wrote at startup (ALL commands, incl. disabled), the raw
    * override blocks at each scope, and the effective policy per
@@ -78,6 +94,9 @@ export function registerConfigRoutes(app: FastifyInstance): void {
         "Command manifest not written yet — start the bot once so it can discover its commands.",
       );
     }
+    // Hashed before the read: a write landing in between leaves the token
+    // older than the content, which only ever makes a later save conflict.
+    const hash = configFileHash();
     const raw = readRawConfig();
     const guildIds = Object.keys(raw.guilds ?? {});
     const serverIds = Object.keys(raw.servers ?? {});
@@ -118,6 +137,7 @@ export function registerConfigRoutes(app: FastifyInstance): void {
     }
 
     return {
+      hash,
       manifest,
       usage: { windowDays: USAGE_WINDOW_DAYS, byCommand: usageByName },
       scopes: { guildIds, serverIds },

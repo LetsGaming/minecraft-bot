@@ -13,7 +13,9 @@ does all three, because it is the process that is actually on that machine.
 
 One route per function, raw data back, no business logic. Nothing in the bot
 imports `fs` or `child_process` for server state; there is nothing to import it
-for.
+for. `serverAccess.ts` is a barrel over the per-feature modules in
+`src/core/utils/server/access/`; the module map is in
+[architecture.md](../architecture.md#1-transport-serveraccessts).
 
 Until 5.0.0 this module was a *routing* seam with one rule — HTTP if
 `config.apiUrl` was set, local filesystem and `sudo -u` otherwise — and under
@@ -27,8 +29,16 @@ Two functions do not simply assert-and-decode:
 
 - `readStats` treats a 404 as `null` — a player who has never played is an
   answer, not a failure — while a 500 still throws.
-- `sendCommand` returns `null` when the wrapper reached the server over screen
-  and has no output to relay, which is distinct from the request failing.
+- `sendCommandOutcome` never throws. It maps the wrapper's `POST /command`
+  reply (`{ result, via, sent, rconError? }`, `rcon-command` v2) to a
+  `CommandOutcome`: `via: "rcon"` is `delivered`, `via: "screen"` is `sent`
+  (`rcon-fallback` when `rconError` is set), and a `502` (neither channel
+  could deliver) is `unreachable` with reason `screen-failed`. A v1 wrapper
+  answers `{ result }` only; a string is read as `delivered` and `null` as
+  `sent`. Transport failures, timeouts, 429 and an open circuit breaker are
+  `unreachable` too. It is the only write that goes through the circuit breaker:
+  a down wrapper fails an in-game command at once, while scripts, mod mutations
+  and restore still reach the wrapper on every attempt.
 
 Three functions deliberately bypass the `apiGet` decode path, because JSON in
 memory is the wrong shape for what they carry:
@@ -53,11 +63,18 @@ memory is the wrong shape for what they carry:
 One instance per configured server, built at startup, held in a module-level
 registry (`getServerInstance`, `getAllInstances`, `getGuildServer`). It owns:
 
-- `sendCommand()`, which catches transport errors and returns `null` — so
-  callers that must tell "unreachable" from "no output channel" (`give()` in
-  `daily.ts`) read `serverAccess` directly instead
-- `isRunning()`, `getList()`, `getTps()`, `getSeed()`, `getPlayerCoords()`,
-  `getPlayerDimension()`
+- `send()`, which returns a `CommandOutcome` and never throws. A command that
+  did not reach the server is logged once there; callers decide what to skip
+  (record nothing, release a cooldown, retry later).
+- `isRunning()`, `getList()`, `getTps()`
+- The live player queries `getSeed()`, `getPlayerCoords()`,
+  `getPlayerDimension()`, `getLastDeathLocation()` and `getPlayerData()`. Each
+  returns a `QueryResult` (`{ ok: true, value }` or `{ ok: false, reason }`
+  with `unreachable`, `player-offline`, `no-data` or `unreadable`). An RCON
+  reply is parsed as is; only a send with no reply channel makes it poll the
+  log, and only server-emitted lines count (`minecraft/consoleResponse.ts`), so
+  chat cannot forge an answer. An unreachable server fails at once. There is no
+  default dimension: a caller that cannot learn it says so.
 - A seed cache. The "does this server have a `/tps` command" cache went with
   the RCON client.
 
@@ -65,11 +82,29 @@ registry (`getServerInstance`, `getAllInstances`, `getGuildServer`). It owns:
 here.** Every time one of them has been copied out, the copy drifted. TPS is
 the exception and for the same reason: the wrapper holds the connection, so it
 is the only side that sees a `tps` response, and it parses it. Those regexes
-and their regression guards live in the wrapper's `tests/tps.test.ts`.
+and their regression guards live in the wrapper's `tests/instances/tps.test.ts`.
 
 Commands do not reach the registry directly — they go through
 `resolveServer(interaction)`. See
 [architecture.md](../architecture.md#server-resolution).
+
+## Timeouts and failure handling
+
+- Reads wait 8 s (`DEFAULT_GET_TIMEOUT_MS` in `access/apiClient.ts`). Mod
+  install and update, backup download (header wait only, the body is streamed
+  without a limit), restore, delete and config writes each have their own
+  ceiling next to the function that makes the request.
+- A management script waits as long as the wrapper does. `access/manifest.ts`
+  keeps the `scriptTimeoutsMs` table from `/manifest`; `wrapperContract.ts`
+  clamps each value to 5 s to 15 min and falls back to a built-in table
+  (`FALLBACK_SCRIPT_TIMEOUTS_MS`) for a wrapper that does not advertise one. A
+  script that outlives the wait throws `ScriptStillRunningError`, which callers
+  report as "still running", not as a failure.
+- The per-server circuit breaker (`circuitBreaker.ts`) opens after 5
+  consecutive failures, fails fast for 15 s, then lets one probe through. A 429
+  is the wrapper rate limiting, not failing: it never counts toward the breaker
+  and surfaces as `RateLimitedError`. Reads and `sendCommandOutcome` use the
+  breaker; scripts, mod mutations and restore do not.
 
 ## Capabilities
 
@@ -120,10 +155,8 @@ the call site.
 ## Host and liveness
 
 - `hostResources.ts` — RAM/CPU of the server process and disk usage of the world
-  and backup paths. Local instances go through `execCommand` (`execSafe`, no
-  shell interpolation); remote ones get the same numbers from the wrapper's
-  `/info`. An older wrapper yields null and the caller skips the instance rather
-  than erroring.
+  and backup paths, read from the wrapper's `/info`. An older wrapper yields
+  null and the caller skips the instance rather than erroring.
 - `runtimeHeartbeat.ts` — the bot overwrites `data/runtime.json` roughly once a
   minute; the dashboard reads it and treats a stale timestamp as "bot down". A
   file rather than a socket, because both processes already share the data

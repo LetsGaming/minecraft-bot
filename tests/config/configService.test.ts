@@ -26,6 +26,7 @@ vi.mock("../../src/core/config.js", () => ({
   getConfigPath: mocks.getConfigPath,
   validateCandidateConfig: mocks.validateCandidateConfig,
   reloadConfig: mocks.reloadConfig,
+  getLoadedConfigRevision: () => ({ hash: "h", loadedAt: 0 }),
 }));
 
 vi.mock("../../src/bot/logWatcher/initMinecraftCommands.js", () => ({
@@ -100,9 +101,10 @@ describe("writeConfig", () => {
     const candidate = { token: "new", clientId: "c" };
     const { warnings } = await writeConfig(candidate as never);
 
-    expect(JSON.parse(fs.readFileSync(configPath, "utf-8"))).toEqual(
-      candidate,
-    );
+    expect(JSON.parse(fs.readFileSync(configPath, "utf-8"))).toEqual({
+      configVersion: 1,
+      ...candidate,
+    });
     expect(fs.readFileSync(`${configPath}.bak`, "utf-8")).toBe(
       '{"token":"old"}',
     );

@@ -1,13 +1,22 @@
 /**
  * config.ts tests
  *
- * Uses a real temp config.json at /tmp/config-test/config.json.
+ * Uses a real temp config.json under the OS temp directory.
  * getRootDir is mocked to point there so CONFIG_PATH resolves correctly.
  * Because config.ts has module-level constants (CONFIG_PATH = getRootDir() + /config.json),
- * we must mock BEFORE importing config.ts, and use a plain string literal.
+ * the mock is installed BEFORE importing config.ts, with the directory
+ * computed in vi.hoisted so the factory can reference it.
  */
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import { writeFileSync, mkdirSync, copyFileSync } from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const TEST_ROOT = await vi.hoisted(async () => {
+  const os = await import("node:os");
+  const nodePath = await import("node:path");
+  return nodePath.join(os.tmpdir(), `config-test-${process.pid}`);
+});
 
 // Must use a plain string literal in the factory (no variable closures)
 vi.mock("../../src/core/utils/jsonStore.js", () => ({
@@ -16,17 +25,13 @@ vi.mock("../../src/core/utils/jsonStore.js", () => ({
 }));
 
 vi.mock("../../src/core/utils/paths.js", () => ({
-  getRootDir: () => "/tmp/config-test",
+  getRootDir: () => TEST_ROOT,
 }));
 
 import {
   loadConfig,
   reloadConfig,
-  getServer,
-  getGuildServerId,
-  getGuildConfig,
   getServerIds,
-  getServerChoices,
 } from "../../src/core/config.js";
 
 const minimalServers = {
@@ -51,16 +56,16 @@ const validConfig = {
 };
 
 function writeConfig(cfg: object): void {
-  writeFileSync("/tmp/config-test/config.json", JSON.stringify(cfg, null, 2));
+  writeFileSync(path.join(TEST_ROOT, "config.json"), JSON.stringify(cfg, null, 2));
 }
 
 beforeAll(() => {
-  mkdirSync("/tmp/config-test", { recursive: true });
+  mkdirSync(TEST_ROOT, { recursive: true });
   // getRootDir is mocked to this directory, and the validator reads
   // config.schema.json from the root — so the fake root needs it too.
   copyFileSync(
-    new URL("../../config.schema.json", import.meta.url).pathname,
-    "/tmp/config-test/config.schema.json",
+    fileURLToPath(new URL("../../config.schema.json", import.meta.url)),
+    path.join(TEST_ROOT, "config.schema.json"),
   );
 });
 
@@ -111,7 +116,7 @@ describe("loadConfig", () => {
   });
 
   it("throws when config.json contains invalid JSON", () => {
-    writeFileSync("/tmp/config-test/config.json", "INVALID JSON !!!{{{");
+    writeFileSync(path.join(TEST_ROOT, "config.json"), "INVALID JSON !!!{{{");
     expect(() => reloadConfig()).toThrow("Failed to load config.json");
   });
 
@@ -252,52 +257,6 @@ describe("reloadConfig", () => {
   });
 });
 
-// ── getServer ──────────────────────────────────────────────────────────────
-
-describe("getServer", () => {
-  it("returns the server config for an existing ID", () => {
-    const srv = getServer("survival");
-    expect(srv).not.toBeNull();
-    expect(srv!.id).toBe("survival");
-  });
-
-  it("returns null for an unknown server ID", () => {
-    expect(getServer("unknown-server")).toBeNull();
-  });
-});
-
-// ── getGuildServerId ───────────────────────────────────────────────────────
-
-describe("getGuildServerId", () => {
-  it("returns the defaultServer for a configured guild", () => {
-    expect(getGuildServerId("guild1")).toBe("survival");
-  });
-
-  it("returns the first configured server for an unknown guild (fallback)", () => {
-    // getGuildServerId falls back to the first server when guild is not found
-    const result = getGuildServerId("unknown-guild");
-    expect(result).toBe("survival"); // first server in validConfig
-  });
-
-  it("returns null when guildId is undefined", () => {
-    expect(getGuildServerId(undefined)).toBeNull();
-  });
-});
-
-// ── getGuildConfig ─────────────────────────────────────────────────────────
-
-describe("getGuildConfig", () => {
-  it("returns the guild config for a known guild", () => {
-    const gcfg = getGuildConfig("guild1");
-    expect(gcfg).not.toBeNull();
-    expect(gcfg!.defaultServer).toBe("survival");
-  });
-
-  it("returns null for an unknown guild", () => {
-    expect(getGuildConfig("nope")).toBeNull();
-  });
-});
-
 // ── getServerIds ───────────────────────────────────────────────────────────
 
 describe("getServerIds", () => {
@@ -305,16 +264,5 @@ describe("getServerIds", () => {
     const ids = getServerIds();
     expect(ids).toContain("survival");
     expect(ids).toContain("creative");
-  });
-});
-
-// ── getServerChoices ───────────────────────────────────────────────────────
-
-describe("getServerChoices", () => {
-  it("returns name/value pairs for Discord autocomplete", () => {
-    const choices = getServerChoices();
-    expect(choices.length).toBeGreaterThan(0);
-    expect(choices[0]).toHaveProperty("name");
-    expect(choices[0]).toHaveProperty("value");
   });
 });

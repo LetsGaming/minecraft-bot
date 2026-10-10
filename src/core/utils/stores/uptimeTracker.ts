@@ -1,5 +1,6 @@
 import { getDb, withTransaction } from "../../db/index.js";
 import { mapRows, col } from "../../db/rows.js";
+import { ANALYTICS_CAP_HOURS } from "@mcbot/schema/analytics.js";
 import type { UptimeStats } from "../../types/index.js";
 
 export type { UptimeStats };
@@ -92,7 +93,31 @@ export function buildSparkline(
   return out;
 }
 
-export async function getUptimeStats(serverId: string): Promise<UptimeStats> {
+export interface UptimeStatsOptions {
+  /** Also compute uptime over this many hours, clamped to the retained history. */
+  rangeHours?: number;
+}
+
+/** Uptime over the last `hours` hours, aggregated in SQL. */
+function uptimeSince(
+  serverId: string,
+  now: number,
+  hours: number,
+): { total: number; online: number } {
+  const row = getDb()
+    .prepare(
+      "SELECT COUNT(*) AS total, COALESCE(SUM(up), 0) AS online FROM uptime_checks WHERE server_id = ? AND t >= ?",
+    )
+    .get(serverId, now - hours * 3_600_000) as
+    | { total: number | bigint; online: number | bigint }
+    | undefined;
+  return { total: Number(row?.total ?? 0), online: Number(row?.online ?? 0) };
+}
+
+export async function getUptimeStats(
+  serverId: string,
+  options: UptimeStatsOptions = {},
+): Promise<UptimeStats> {
   const entries = mapRows(
     getDb().prepare(
       "SELECT t, up FROM uptime_checks WHERE server_id = ? ORDER BY t ASC",
@@ -145,6 +170,16 @@ export async function getUptimeStats(serverId: string): Promise<UptimeStats> {
     }
   }
 
+  let range: UptimeStats["range"];
+  if (options.rangeHours !== undefined) {
+    const rangeHours = Math.min(
+      Math.max(1, Math.floor(options.rangeHours)),
+      ANALYTICS_CAP_HOURS.uptime,
+    );
+    const checks = uptimeSince(serverId, now, rangeHours);
+    range = { rangeHours, pct: pct(checks), checks };
+  }
+
   return {
     pct24h: pct(checks24h),
     pct7d: pct(checks7d),
@@ -155,16 +190,7 @@ export async function getUptimeStats(serverId: string): Promise<UptimeStats> {
     currentState,
     currentStateDuration,
     sparkline24h: buildSparkline(entries, now),
+    ...(range ? { range } : {}),
   };
 }
 
-/**
- * Historical entry point from the flush-based design; see the note inside.
- */
-export function startUptimeFlushScheduler(): ReturnType<typeof setInterval> {
-  // Kept for API compatibility (bot startup wires it): persistence is
-  // immediate now, so the timer has nothing to do.
-  const timer = setInterval(() => {}, 5 * 60 * 1000);
-  timer.unref();
-  return timer;
-}

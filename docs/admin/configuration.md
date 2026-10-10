@@ -1,9 +1,9 @@
 # Configuration
 
-All configuration lives in a single `config.json` in the project root. `config_structure.json` is the canonical template with every available field. Copy it as a starting point:
+All configuration lives in a single `config.json` in the project root. `config.template.json` is the starting point (replace its `${...}` placeholders with real values), and `config.schema.json` lists every available field with its type, bounds and description. Copy the template:
 
 ```bash
-cp config_structure.json config.json
+cp config.template.json config.json
 ```
 
 Or generate it interactively:
@@ -13,6 +13,10 @@ npm run setup
 ```
 
 The bot validates `config.json` at startup. Wrong types or missing required fields produce a clear error message naming the exact field, instead of a cryptic crash later.
+
+## Config version and automatic migration
+
+`configVersion` is the format version of the file. You normally never write it: the bot adds it, and the dashboard stamps it on every save. When the bot starts with an older file it first copies it to `config.json.bak-v<old version>-<timestamp>`, then rewrites `config.json` in the current format and logs what changed. A file with a `configVersion` newer than the bot is refused. The one case that needs your input (pre-5.0.0 local-mode servers, which name no wrapper) is described in [migrating-to-7.md](migrating-to-7.md).
 
 ## Top-level structure
 
@@ -79,7 +83,7 @@ Note: the `/backup` overview and `/mods` assume a server installed with [minecra
 | `allowInsecureHttp` | No | `false` | Suppress the warning for a plaintext `apiUrl`. Only meaningful on a private network; for a public host the bot refuses to start regardless. |
 | `commands` | No | | Per-server command overrides. Same shape as the top-level `commands` block. |
 
-Since 5.0.0 that is the whole server block. Everything else that used to live here — `serverDir`, `scriptDir`, `linuxUser`, `screenSession`, `useRcon`, `rconHost`, `rconPort`, `rconPassword` — described the Minecraft host, and now lives in the wrapper's config on that host. The bot refuses to start if any of them are still present and names them. See [migrating-to-5.md](migrating-to-5.md).
+Since 5.0.0 that is the whole server block. Everything else that used to live here (`serverDir`, `scriptDir`, `linuxUser`, `screenSession`, `useRcon`, `rconHost`, `rconPort`, `rconPassword`) described the Minecraft host, and now lives in the wrapper's config on that host. Starting a pre-5.0.0 config removes them automatically once `apiUrl` and `apiKey` are set, and the bot tells you what is missing. See [migrating-to-7.md](migrating-to-7.md) and [migrating-to-5.md](migrating-to-5.md).
 
 ### API keys from the environment
 
@@ -90,7 +94,7 @@ Since 5.0.0 that is the whole server block. Everything else that used to live he
 | `API_KEY_<SERVER_ID>` | that server (e.g. `API_KEY_SURVIVAL` for `"survival"`) |
 | `API_KEY` | every server without a more specific key |
 
-The override is applied before validation, so a deployment that supplies keys only through the environment is not rejected for the value it is about to provide. It replaces `RCON_PASSWORD_<ID>`, which configured the bot's own RCON connection and no longer exists.
+The override is applied before validation, so a deployment that supplies keys only through the environment is not rejected for the value it is about to provide. The wrapper requires keys of at least 32 characters (`openssl rand -hex 32`) and refuses to start with a shorter one.
 
 ### variables.txt
 
@@ -98,7 +102,7 @@ The wrapper reads `{scriptsDir}/common/variables.txt` from a [minecraft-server-s
 
 ### Multiple servers
 
-Add more entries under `servers`. Commands that take a `server` option autocomplete with the IDs. When no server is given, the guild's `defaultServer` is used.
+Add more entries under `servers`. Commands that take a `server` option autocomplete with the IDs. When no server is given, the guild's `defaultServer` is used. Without a `defaultServer`, a guild that may target exactly one server gets that one, and a DM gets the only configured server. With several candidates the command fails and lists the server IDs so the user can pass `server:`.
 
 ## Guilds
 
@@ -126,7 +130,7 @@ Each Discord server is configured independently. The key is the guild ID. Every 
 
 | Block | Fields | What it does |
 |---|---|---|
-| `defaultServer` | server ID | Used when a command is run without an explicit `server` option. |
+| `defaultServer` | server ID | Used when a command is run without an explicit `server` option. It must name a configured server: a stale value is reported as a configuration error instead of silently falling back to another server. |
 | `adminUsers` | user/role IDs | Admins **scoped to this guild** — same semantics as the global list, but only valid for commands issued here, and only against servers this guild may target. The global `adminUsers` list remains operator-level. |
 | `allowedServers` | server IDs | Which servers commands from this guild may target, including via the explicit `server:` option. **Only enforced when more than one guild is configured.** When omitted, the allowed set is derived from the servers referenced in this guild's config (`defaultServer` plus any feature `server` fields). The guild's `defaultServer` is always allowed. |
 | `language` | `"en"` / `"de"` | Per-guild language for embeds and replies; overrides the global `language`. |
@@ -202,7 +206,7 @@ A chat bridge binds a Discord channel to **exactly one** server, in both directi
 
 ### Multi-guild isolation
 
-When the bot serves **more than one guild**, tenant isolation kicks in automatically: commands from a guild can only target that guild's allowed servers (explicit `allowedServers`, or derived from the guild's config). A guild-B admin cannot `/server stop server:guild-a-survival` — the command fails with a clear error naming `allowedServers` as the fix. Unconfigured guilds and DMs cannot target servers at all in multi-guild mode; only global (operator-level) admins bypass these checks. The server-ID autocomplete and the `/uptime` overview are filtered the same way, so guilds do not see each other's server IDs.
+When the bot serves **more than one guild**, tenant isolation kicks in automatically: commands from a guild can only target that guild's allowed servers (explicit `allowedServers`, or derived from the guild's config). A guild-B admin cannot `/server stop server:guild-a-survival` — the command fails with a clear error naming `allowedServers` as the fix. Unconfigured guilds and DMs cannot target servers at all in multi-guild mode; only global (operator-level) admins bypass these checks. The server-ID autocomplete, the `/uptime server:all` overview and `/daily-admin` (move, reset, show) are filtered the same way, so guilds do not see each other's server IDs.
 
 With a single configured guild nothing changes — every server stays reachable, exactly as before.
 
@@ -234,6 +238,8 @@ The bot needs the Manage Channels permission for this feature.
 | `schedules` | off | Scheduled restarts per server: `"schedules": { "smp": { "restart": { "time": "04:00", "days": ["MO","TH"], "warnMinutes": [15, 5, 1] } } }`. Countdown warnings go in-game (`/say`) and to notification channels (event `scheduledRestart`); the restart uses the suite's restart script with downtime alerts suppressed, and is admin-audited. `days` omitted = daily. Applies live on config reload. |
 | `milestones` | off | Milestone announcements per leaderboard stat key, thresholds in the stat's native unit (playtime is ticks: 100 h = `7200000`): `"milestones": { "playtime": [7200000], "diamonds": [100, 1000] }`. Announced in-game and via the `milestone` notification event. First activation seeds silently so veterans' whole histories are not blasted at once. |
 | `webui` | off | Web dashboard (separate process, `npm run start:web`): `{ "enabled": true, "port": 8130, "host": "127.0.0.1", "publicUrl": "https://panel.example.com" }`. Secrets come from the environment (`WEBUI_CLIENT_SECRET`, `WEBUI_SESSION_SECRET`). Two sub-blocks below: `webui.grants` and `webui.console`. See [../dev/web/readme.md](../dev/web/readme.md). |
+| `webui.trustProxy` | `false` | Which proxies the dashboard trusts to report the real client address (`X-Forwarded-For`). `false`: none, the connecting address is used (right when you reach the dashboard directly). Behind a reverse proxy list its address, e.g. `["loopback"]` for a proxy on the same host, `["uniquelocal"]` or `["172.16.0.0/12"]` for a proxy container on a Docker network. Accepts IPs, CIDR ranges and the aliases `loopback`, `linklocal`, `uniquelocal`. A number n trusts the first n hops (only safe when every request must pass through exactly those proxies). `true` trusts every hop and lets any client spoof its address, so avoid it. Read on every request, so a change applies without restarting the dashboard. If requests from a private address carry `X-Forwarded-For` while this is unset, the dashboard logs one warning telling you what to set; it never trusts the header on its own. Details: [docker.md](docker.md#reverse-proxy-and-client-addresses). |
+| `webui.sessionEpoch` | `0` | Dashboard session version. Raise it (`1`, `2`, ...) to sign everyone out at once, for example after a leaked cookie. Sessions issued under another value are rejected on the next request, no restart needed. Removing someone from `adminUsers` or `webui.grants` already takes effect immediately without it. |
 | `webui.grants` | none | Host-side access for people who are not in `adminUsers`: Discord user ID → server id (or `"*"`) → capabilities, e.g. `{ "1234…": { "survival": ["config:read", "config:write"] } }`. Lets you hand out part of the dashboard without handing over the console, backups, and `config.json`. Re-read on every request, so revoking applies on the next click. Full list of capabilities and what each one allows: [capabilities.md](capabilities.md). |
 | `webui.console` | `{ }` | Live console settings. `blockedCommands` is the deny-list, defaulting to `["stop", "op", "deop"]` when the key is omitted; an explicit `[]` means block nothing. Matching is on the first word after any leading slashes, case-insensitively, so one entry covers `stop`, `/stop` and `STOP`. Enforced in the backend, not just hidden in the UI. |
 
@@ -289,14 +295,38 @@ Environment variables take precedence over `config.json`. This is how Docker and
 |---|---|
 | `DISCORD_TOKEN` | `token` |
 | `DISCORD_CLIENT_ID` | `clientId` |
-| `RCON_PASSWORD` | `rconPassword` for all servers |
-| `RCON_PASSWORD_<SERVER_ID>` | `rconPassword` for one server. The ID is uppercased and non-alphanumerics become `_`, so server `my-smp` reads `RCON_PASSWORD_MY_SMP`. |
+| `API_KEY` | `apiKey` for every server without a more specific key |
+| `API_KEY_<SERVER_ID>` | `apiKey` for one server. The ID is uppercased and non-alphanumerics become `_`, so server `my-smp` reads `API_KEY_MY_SMP`. |
 | `WEBUI_CLIENT_SECRET` | Discord OAuth2 client secret for the dashboard login (no config.json equivalent — env only). |
 | `WEBUI_SESSION_SECRET` | Dashboard cookie-signing key (env only; any long random string). |
 
+## Editing config in the dashboard
+
+The **Config**, **Commands** and guild editors share one behaviour:
+
+- Each section you change is marked **modified**, the Save button counts the changes (`Save 3 changes`) and stays disabled until something changed, and **Discard** puts the form back to what is on disk.
+- A save sends the hash of the file as you loaded it. If the file changed in between (another admin, a hand edit, the bot's `/config` command), nothing is overwritten: your edits are kept, changes you did not touch are merged in, and any field both of you changed is shown with three values (what it was, yours, what is on disk now) so you can keep yours or the disk value for each.
+- The per-guild editor and the setup wizard use a hash of that guild's own block, so editing one guild never conflicts with a save to another guild or a server entry.
+- Validation errors from the server are listed on the section they belong to and in the banner. The page asks before you leave it, close the tab or switch dashboard tabs while edits are unsaved.
+- The setup wizard reads the guild's current block before you start and merges its choices into it: settings it does not ask about (`server`, `mentionRole`, `postTime`, `events`, several chat bridges) are kept.
+
+### Applied status
+
+Next to each editor a chip shows whether the running bot has loaded the saved file. The bot reports the hash of the config it last applied in its heartbeat (`data/runtime.json`).
+
+| Chip | Meaning |
+|---|---|
+| Applied | The bot reports the file that is on disk. |
+| Pending | You saved; the bot has not reported it yet (normally a second or two). |
+| Bot not running | The heartbeat is stale. The change applies when the bot starts. |
+| Restart required | Applied, but connection settings of an existing server (`apiUrl`, `apiKey`) only take effect after a bot restart. The server ids are in the tooltip. |
+| Status unavailable | The bot is running but too old to report what it applied. |
+
+Guild managers do not see the chip: the file-level status is sysadmin-only.
+
 ## Hot reload
 
-The bot watches `config.json` for changes and reloads it automatically (debounced, a malformed save keeps the old config active). Admins can also run `/config reload` in Discord, and `/config show` displays the running configuration with secrets redacted.
+The bot watches `config.json` for changes and reloads it automatically (debounced, a malformed save keeps the old config active). It watches the directory the file lives in, so a save that replaces the file (as the dashboard does) is seen on every platform. The dashboard process runs the same watcher: `webui.grants`, `adminUsers`, `webui.console.blockedCommands` and the server list take effect without restarting it, and a console stream held by someone whose access you removed is closed within seconds. `webui.port` and `webui.host` are read once at start and need a dashboard restart. Admins can also run `/config reload` in Discord, and `/config show` displays the running configuration with secrets redacted.
 
 What applies live:
 

@@ -4,7 +4,11 @@
  * and the boundaries are deterministic. A separate file gives it its own
  * module context, isolated from the route tests that also hit /auth/*.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+vi.mock("../../src/core/config.js", () => ({
+  loadConfig: vi.fn(() => ({ webui: {}, adminUsers: [], servers: {}, guilds: {} })),
+}));
 
 process.env.WEBUI_SESSION_SECRET = "unit-test-session-secret";
 
@@ -58,5 +62,162 @@ describe("dashboard rate limiting (SEC-02)", () => {
     const app = appWithRoutes();
     const all = await statuses(app, "GET", "/api/test", 40);
     expect(all.every((s) => s === 200)).toBe(true);
+  });
+});
+
+describe("buckets behind one shared proxy address", () => {
+  async function signedIn(uid: string): Promise<string> {
+    const { encodeSigned, SESSION_COOKIE } = await import("../../src/web/backend/auth/auth.js");
+    return `${SESSION_COOKIE}=${encodeSigned({ uid, tag: uid, guilds: [], exp: Date.now() + 60_000 })}`;
+  }
+
+  async function flood(app: FastifyInstance, method: "GET" | "POST", url: string, headers: Record<string, string>, n: number) {
+    for (let i = 0; i < n; i++) await app.inject({ method, url, headers, remoteAddress: "172.18.0.2" });
+  }
+
+  function untrustedApp(): FastifyInstance {
+    const app = Fastify({ logger: false, trustProxy: false });
+    registerRateLimiting(app);
+    app.post("/api/test", async () => ({ ok: true }));
+    app.get("/auth/callback", async () => ({ ok: true }));
+    app.get("/auth/test", async () => ({ ok: true }));
+    return app;
+  }
+
+  it("a flooding user does not lock out another user on writes", async () => {
+    const app = untrustedApp();
+    const noisy = await signedIn("111111111111111111");
+    const quiet = await signedIn("222222222222222222");
+    await flood(app, "POST", "/api/test", { cookie: noisy }, 40);
+    const blocked = await app.inject({ method: "POST", url: "/api/test", headers: { cookie: noisy }, remoteAddress: "172.18.0.2" });
+    const other = await app.inject({ method: "POST", url: "/api/test", headers: { cookie: quiet }, remoteAddress: "172.18.0.2" });
+    expect(blocked.statusCode).toBe(429);
+    expect(other.statusCode).toBe(200);
+  });
+
+  it("pre-auth routes stay keyed by address: rotating state cookies buys nothing", async () => {
+    const app = untrustedApp();
+    for (let i = 0; i < 10; i++) {
+      await app.inject({ method: "GET", url: "/auth/callback", headers: { cookie: `mcbot_oauth_state=n${i}` }, remoteAddress: "172.18.0.2" });
+    }
+    const res = await app.inject({ method: "GET", url: "/auth/callback", headers: { cookie: "mcbot_oauth_state=fresh" }, remoteAddress: "172.18.0.2" });
+    expect(res.statusCode).toBe(429);
+  });
+
+  it("forged, malformed and rotated session cookies all share the address bucket", async () => {
+    const app = untrustedApp();
+    const { encodeSigned, SESSION_COOKIE } = await import("../../src/web/backend/auth/auth.js");
+    const expired = encodeSigned({ uid: "999999999999999999", tag: "x", guilds: [], exp: Date.now() - 1 });
+    const cookies = [
+      `${SESSION_COOKIE}=garbage`,
+      `${SESSION_COOKIE}=aaaa.bbbb`,
+      `${SESSION_COOKIE}=${expired}`,
+      "",
+    ];
+    const codes: number[] = [];
+    for (let i = 0; i < 40; i++) {
+      const cookie = i % 2 ? `${cookies[i % cookies.length]}${i}` : cookies[i % cookies.length]!;
+      codes.push((await app.inject({ method: "POST", url: "/api/test", headers: cookie ? { cookie } : {}, remoteAddress: "172.18.0.2" })).statusCode);
+    }
+    expect(codes.slice(0, 30).every((c) => c === 200)).toBe(true);
+    expect(codes.slice(30).every((c) => c === 429)).toBe(true);
+  });
+
+  it("1000 bogus session values do not need 1000 buckets", async () => {
+    const app = untrustedApp();
+    let limited = 0;
+    for (let i = 0; i < 1000; i++) {
+      const res = await app.inject({ method: "POST", url: "/api/test", headers: { cookie: `mcbot_session=bogus${i}.sig${i}` }, remoteAddress: "172.18.0.2" });
+      if (res.statusCode === 429) limited++;
+    }
+    expect(limited).toBe(970);
+  });
+
+  it("the address ceiling trips for many real identities behind one address", async () => {
+    const app = untrustedApp();
+    let blocked = 0;
+    for (let i = 0; i < 200; i++) {
+      const cookie = await signedIn(`${100000000000000000n + BigInt(i)}`);
+      const res = await app.inject({ method: "POST", url: "/api/test", headers: { cookie }, remoteAddress: "172.18.0.2" });
+      if (res.statusCode === 429) blocked++;
+    }
+    expect(blocked).toBeGreaterThan(0);
+    const other = await app.inject({ method: "POST", url: "/api/test", headers: { cookie: await signedIn("333333333333333333") }, remoteAddress: "198.51.100.8" });
+    expect(other.statusCode).toBe(200);
+  });
+
+  it("a spoofed X-Forwarded-For does not buy a fresh bucket when no proxy is trusted", async () => {
+    const app = untrustedApp();
+    for (let i = 0; i < 10; i++) {
+      await app.inject({ method: "GET", url: "/auth/test", remoteAddress: "198.51.100.4", headers: { "x-forwarded-for": `203.0.113.${i}` } });
+    }
+    const res = await app.inject({ method: "GET", url: "/auth/test", remoteAddress: "198.51.100.4", headers: { "x-forwarded-for": "203.0.113.200" } });
+    expect(res.statusCode).toBe(429);
+  });
+});
+
+describe("bucket map bound", () => {
+  it("routes new keys to a per-source overflow bucket when full of live buckets", async () => {
+    const { createRateLimiter } = await import("../../src/core/utils/rateLimiter.js");
+    const limiter = createRateLimiter({ capacity: 1, windowMs: 60_000, maxBuckets: 3, overflowCapacity: 2 });
+    for (const k of ["A", "B", "C"]) {
+      limiter.consumeToken(k);
+      expect(limiter.consumeToken(k)).toBe(false);
+    }
+    // (a) a new legitimate key is still admitted, up to the overflow limit
+    expect(limiter.consumeToken("new1", "10.0.0.1")).toBe(true);
+    expect(limiter.consumeToken("new2", "10.0.0.1")).toBe(true);
+    expect(limiter.consumeToken("new3", "10.0.0.1")).toBe(false);
+    // (b) the original exhausted keys remain limited
+    for (const k of ["A", "B", "C"]) expect(limiter.consumeToken(k, "10.0.0.1")).toBe(false);
+    // (c) one source exhausting overflow does not block another source
+    expect(limiter.consumeToken("other", "10.0.0.2")).toBe(true);
+    expect(limiter.cooldownSeconds("new4", "10.0.0.1")).toBeGreaterThan(0);
+  });
+
+  it("uses one global overflow bucket when no source is given", async () => {
+    const { createRateLimiter } = await import("../../src/core/utils/rateLimiter.js");
+    const limiter = createRateLimiter({ capacity: 1, windowMs: 60_000, maxBuckets: 1 });
+    limiter.consumeToken("A");
+    expect(limiter.consumeToken("x")).toBe(true);
+    expect(limiter.consumeToken("y")).toBe(false);
+  });
+
+  it("sweeps buckets idle for a full window to admit new keys", async () => {
+    vi.useFakeTimers();
+    try {
+      const { createRateLimiter } = await import("../../src/core/utils/rateLimiter.js");
+      const limiter = createRateLimiter({ capacity: 1, windowMs: 60_000, maxBuckets: 2 });
+      limiter.consumeToken("a");
+      limiter.consumeToken("b");
+      expect(limiter.consumeToken("c")).toBe(true); // overflow bucket
+      expect(limiter.consumeToken("d")).toBe(false); // overflow spent
+      vi.advanceTimersByTime(60_001);
+      expect(limiter.consumeToken("d")).toBe(true); // swept, own bucket
+      expect(limiter.consumeToken("d")).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("shared address ceiling", () => {
+  it("is not drained by a user's rejected requests", async () => {
+    const app = (() => {
+      const a = Fastify({ logger: false, trustProxy: false });
+      registerRateLimiting(a);
+      a.post("/api/test", async () => ({ ok: true }));
+      return a;
+    })();
+    const { encodeSigned, SESSION_COOKIE } = await import("../../src/web/backend/auth/auth.js");
+    const cookieFor = (uid: string) =>
+      `${SESSION_COOKIE}=${encodeSigned({ uid, tag: uid, guilds: [], exp: Date.now() + 60_000 })}`;
+    const post = async (uid: string) =>
+      (await app.inject({ method: "POST", url: "/api/test", headers: { cookie: cookieFor(uid) }, remoteAddress: "172.18.0.2" })).statusCode;
+
+    const results: number[] = [];
+    for (let i = 0; i < 300; i++) results.push(await post("111111111111111111"));
+    expect(results.filter((c) => c === 200)).toHaveLength(30);
+    expect(await post("222222222222222222")).toBe(200);
   });
 });

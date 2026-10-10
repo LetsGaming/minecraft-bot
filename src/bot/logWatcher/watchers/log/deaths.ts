@@ -82,8 +82,9 @@ async function dmDeathCoords(
   const discordId = findDiscordIdByMcName(linked, player);
   if (!discordId) return;
 
-  const loc = await server.getLastDeathLocation(player);
-  if (!loc) return;
+  const result = await server.getLastDeathLocation(player);
+  if (!result.ok) return;
+  const loc = result.value;
 
   const lines = [
     t("deathpos.dm", {
@@ -95,8 +96,8 @@ async function dmDeathCoords(
     }),
   ];
   const seed = await server.getSeed();
-  if (seed) {
-    lines.push(buildChunkbaseUrl(seed, loc.dimension, loc.x, loc.z));
+  if (seed.ok) {
+    lines.push(buildChunkbaseUrl(seed.value, loc.dimension, loc.x, loc.z));
   }
 
   const user = await client.users.fetch(discordId);
@@ -151,7 +152,7 @@ export function registerDeathWatcher(
       logTag: "deaths",
       buildEmbed: (withServerFooter) =>
         createPlayerEmbed(player, {
-          title: "☠️ Death",
+          title: t("death.title"),
           description: deathMessage,
           color: EmbedColor.Error,
           ...(withServerFooter ? { footer: { text: serverId } } : {}),

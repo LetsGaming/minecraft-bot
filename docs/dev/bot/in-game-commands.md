@@ -27,13 +27,16 @@ const cmd = defineCommand({
   args: [],            // e.g. ["player"] adds a required <player> argument
   cooldown: 5,         // seconds, per player
   handler: async (username, _args, _client, server) => {
-    const coords = await server.getPlayerCoords(username);
-    if (!coords) {
-      await server.sendCommand(`/msg ${username} Could not get your position.`);
+    const pos = await server.getPlayerCoords(username);
+    if (!pos.ok) {
+      await whisper(server, username, queryFailureText(pos.reason, "coords.unavailable"));
       return;
     }
-    await server.sendCommand(
-      `/msg ${username} X: ${Math.floor(coords.x)} Y: ${Math.floor(coords.y)} Z: ${Math.floor(coords.z)}`,
+    const { x, y, z } = pos.value;
+    await whisper(
+      server,
+      username,
+      `X: ${Math.floor(x)} Y: ${Math.floor(y)} Z: ${Math.floor(z)}`,
     );
   },
 });
@@ -46,7 +49,12 @@ with an automatic "please wait" reply, parses `args` into named strings, catches
 handler errors, and exports `COMMAND_INFO` so `!commands` lists your command
 automatically. A command file ends up being ~30 lines of handler logic.
 
-Reply via `/msg ${username} ...` so only the caller sees the response.
+Reply with `whisper(server, username, text)` (or `tellraw` for a JSON
+component) from `core/utils/minecraft/serverMessages.ts` so only the caller
+sees the response. The helpers return whether the message reached the server;
+record state ("tip sent", "suggestion made") only when it did. A handler whose
+every command failed to reach the server releases the player's cooldown, so a
+wrapper outage does not lock them out of retrying.
 
 If your command needs startup work (loading state, registering a listener), wrap
 `init` — `logWatcher/commands/link.ts` is the example.

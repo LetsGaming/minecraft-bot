@@ -1,9 +1,9 @@
-import { ref, toValue } from "vue";
-import { errorMessage, parseErrorList } from "../utils/errorMessage";
+import { computed, ref, toValue } from "vue";
+import { errorMessage } from "../utils/errorMessage";
 import { isRecord } from "../utils/isRecord";
 import { useToast } from "primevue/usetoast";
-import { DEFAULT_NOTIFICATION_EVENTS } from "@mcbot/schema";
-import { apiGet, apiSend } from "../api";
+import { DEFAULT_NOTIFICATION_EVENTS, type GuildFeatureKey } from "@mcbot/schema";
+import { apiGet, apiSend, isConflict, validationErrors } from "../api";
 import type { SetupGuild, SetupChannel, SetupRole } from "../api";
 
 export type FeatureInput =
@@ -15,7 +15,7 @@ export type FeatureInput =
   | "role";
 
 export interface FeatureDesc {
-  key: string;
+  key: GuildFeatureKey;
   label: string;
   icon: string;
   input: FeatureInput;
@@ -47,6 +47,14 @@ export interface FeatureModel {
   roleId: string | null;
   useWebhook: boolean;
   interval: string;
+  /**
+   * The existing value has a shape the wizard cannot express (several chat
+   * bridges, for example). It is written back untouched while the feature
+   * stays on, and edited in the Config view instead.
+   */
+  preserved: boolean;
+  /** Was the feature on in the block the wizard started from? */
+  wasEnabled: boolean;
 }
 
 function blankModel(): Record<string, FeatureModel> {
@@ -59,9 +67,96 @@ function blankModel(): Record<string, FeatureModel> {
       roleId: null,
       useWebhook: true,
       interval: "weekly",
+      preserved: false,
+      wasEnabled: false,
     };
   }
   return m;
+}
+
+/** Fill a feature model from an existing guild block so re-running edits rather than blanks. */
+export function seedModel(block: Record<string, unknown>): Record<string, FeatureModel> {
+  const model = blankModel();
+  for (const f of FEATURES) {
+    const val = block[f.key];
+    if (val === undefined || val === null) continue;
+    const m = model[f.key]!;
+    if (f.key === "linkedRole") {
+      m.enabled = true;
+      m.roleId = typeof val === "string" ? val : "";
+    } else if (f.key === "statusEmbed") {
+      m.enabled = isRecord(val) && val.enabled === true;
+    } else if (Array.isArray(val)) {
+      m.enabled = true;
+      m.preserved = true;
+    } else if (isRecord(val)) {
+      m.enabled = true;
+      m.channelId = typeof val.channelId === "string" ? val.channelId : null;
+      if (typeof val.adminChannelId === "string") m.adminChannelId = val.adminChannelId;
+      if (typeof val.useWebhook === "boolean") m.useWebhook = val.useWebhook;
+      if (typeof val.interval === "string") m.interval = val.interval;
+    }
+    m.wasEnabled = m.enabled;
+  }
+  return model;
+}
+
+/**
+ * The guild block to write: the existing block with the wizard's decisions
+ * merged in. Every sub-key the wizard does not ask about (`server`,
+ * `mentionRole`, `postTime`, `events`, ...) survives, and a feature the user
+ * did not touch is left exactly as it was.
+ */
+export function buildGuildBlock(
+  existing: Record<string, unknown>,
+  model: Record<string, FeatureModel>,
+  defaultServer: string | null,
+): Record<string, unknown> {
+  const block: Record<string, unknown> = { ...existing };
+
+  if (defaultServer) block.defaultServer = defaultServer;
+  else delete block.defaultServer;
+
+  for (const f of FEATURES) {
+    const m = model[f.key]!;
+    const prior = existing[f.key];
+    const priorRecord = isRecord(prior) ? prior : {};
+
+    if (!m.enabled) {
+      if (!m.wasEnabled) continue;
+      if (f.key === "statusEmbed" && isRecord(prior)) {
+        block.statusEmbed = { ...prior, enabled: false };
+      } else {
+        delete block[f.key];
+      }
+      continue;
+    }
+    if (m.preserved) continue;
+
+    if (f.key === "linkedRole") {
+      block.linkedRole = m.roleId;
+    } else if (f.key === "statusEmbed") {
+      block.statusEmbed = { ...priorRecord, enabled: true };
+    } else if (f.input === "channel+webhook") {
+      block[f.key] = { ...priorRecord, channelId: m.channelId, useWebhook: m.useWebhook };
+    } else if (f.input === "channel+interval") {
+      block[f.key] = { ...priorRecord, channelId: m.channelId, interval: m.interval };
+    } else if (f.input === "channel+admin") {
+      block[f.key] = { ...priorRecord, channelId: m.channelId, adminChannelId: m.adminChannelId };
+    } else if (f.key === "notifications") {
+      // Without `events` the dispatcher delivers nothing, so a new block gets
+      // the default set (the same six the template and docs document) and an
+      // existing selection is kept.
+      block.notifications = {
+        ...priorRecord,
+        channelId: m.channelId,
+        events: priorRecord.events ?? [...DEFAULT_NOTIFICATION_EVENTS],
+      };
+    } else {
+      block[f.key] = { ...priorRecord, channelId: m.channelId };
+    }
+  }
+  return block;
 }
 
 /**
@@ -69,8 +164,9 @@ function blankModel(): Record<string, FeatureModel> {
  * (scoped) and, for sysadmins, the server list; seeding the feature model
  * from an existing guild block so re-running edits rather than blanks;
  * loading a guild's channels + assignable roles; and writing just this
- * guild's block back through the scoped endpoint with optimistic
- * concurrency. The component keeps step navigation and presentation.
+ * guild's block back through the scoped endpoint, guarded by the hash that
+ * came with the seed read. The component keeps step navigation and
+ * presentation.
  *
  * `getSysadmin` / `getInitialGuildId` are passed as getters so the
  * composable stays reactive to the component's props.
@@ -90,6 +186,13 @@ export function useGuildSetup(
   const loadingGuilds = ref(false);
   const guildError = ref("");
 
+  // The guild's current block and the token read with it. Writing is only
+  // possible once both are in hand.
+  const seeding = ref(false);
+  const seedError = ref("");
+  const seeded = ref(false);
+  let seedHash = "";
+
   // step 1 — feature model + the target guild's channels/roles
   const channels = ref<SetupChannel[]>([]);
   const roles = ref<SetupRole[]>([]);
@@ -102,12 +205,23 @@ export function useGuildSetup(
   // step 2 — write
   const writing = ref(false);
   const writeError = ref("");
+  const conflicted = ref(false);
 
-  function reset(): void {
-    guildId.value = "";
+  const canWrite = computed(() => seeded.value && !seeding.value && !writing.value);
+
+  function clearSeed(): void {
     defaultServer.value = null;
     model.value = blankModel();
     existingGuildBlock.value = {};
+    seeded.value = false;
+    seedError.value = "";
+    seedHash = "";
+    conflicted.value = false;
+  }
+
+  function reset(): void {
+    guildId.value = "";
+    clearSeed();
     writeError.value = "";
     channelsForGuild.value = "";
     void loadGuilds();
@@ -150,47 +264,43 @@ export function useGuildSetup(
     }
   }
 
-  function onGuildPicked(): void {
-    // Seed defaultServer + feature model from any existing guild block,
-    // so re-running the wizard edits rather than blanks the config.
-    defaultServer.value = null;
-    model.value = blankModel();
-    existingGuildBlock.value = {};
+  /** The guild picker changed: drop the old guild's state and read the new one. */
+  async function onGuildPicked(): Promise<void> {
+    clearSeed();
     if (!guildId.value) return;
-    void seedFromExisting();
+    await seedFromExisting();
   }
 
-  async function seedFromExisting(): Promise<void> {
+  /**
+   * Read the guild's current block and its concurrency token. Failure is
+   * surfaced (`seedError`) and leaves writing blocked: carrying on from an
+   * empty base would overwrite whatever the guild already has configured.
+   */
+  async function seedFromExisting(): Promise<boolean> {
+    const id = guildId.value;
+    seeding.value = true;
+    seedError.value = "";
+    seeded.value = false;
     try {
       const res = await apiGet<{ hash: string; guildConfig: Record<string, unknown> }>(
-        `/api/guilds/${encodeURIComponent(guildId.value)}/config`,
+        `/api/guilds/${encodeURIComponent(id)}/config`,
       );
-      const block = res.guildConfig;
-      if (!block || Object.keys(block).length === 0) return;
+      if (guildId.value !== id) return false;
+      const block = res.guildConfig ?? {};
+      seedHash = res.hash;
       existingGuildBlock.value = block;
       defaultServer.value =
         typeof block.defaultServer === "string" ? block.defaultServer : null;
-      for (const f of FEATURES) {
-        const val = block[f.key];
-        if (val === undefined || val === null) continue;
-        const m = model.value[f.key];
-        if (f.key === "linkedRole") {
-          m.enabled = true;
-          m.roleId = typeof val === "string" ? val : "";
-        } else if (f.key === "statusEmbed") {
-          m.enabled = isRecord(val) && val.enabled === true;
-        } else if (isRecord(val)) {
-          m.enabled = true;
-          m.channelId =
-            typeof val.channelId === "string" ? val.channelId : null;
-          if (typeof val.adminChannelId === "string")
-            m.adminChannelId = val.adminChannelId;
-          if (typeof val.useWebhook === "boolean") m.useWebhook = val.useWebhook;
-          if (typeof val.interval === "string") m.interval = val.interval;
-        }
+      model.value = seedModel(block);
+      seeded.value = true;
+      return true;
+    } catch (err) {
+      if (guildId.value === id) {
+        seedError.value = `Could not read this guild's current config: ${errorMessage(err)}`;
       }
-    } catch {
-      /* seeding is best-effort; a fresh block is a fine fallback */
+      return false;
+    } finally {
+      seeding.value = false;
     }
   }
 
@@ -217,82 +327,42 @@ export function useGuildSetup(
     }
   }
 
-  function buildGuildBlock(): Record<string, unknown> {
-    // Start from the existing block so we preserve fields the wizard
-    // doesn't manage (adminUsers, allowedServers, language, command
-    // overrides, …), then overlay the wizard's decisions.
-    const block: Record<string, unknown> = { ...existingGuildBlock.value };
-
-    if (defaultServer.value) block.defaultServer = defaultServer.value;
-    else delete block.defaultServer;
-
-    for (const f of FEATURES) {
-      const m = model.value[f.key];
-      if (!m.enabled) {
-        delete block[f.key];
-        continue;
-      }
-      if (f.key === "linkedRole") {
-        block.linkedRole = m.roleId;
-      } else if (f.key === "statusEmbed") {
-        block.statusEmbed = { enabled: true };
-      } else if (f.input === "channel+webhook") {
-        block[f.key] = { channelId: m.channelId, useWebhook: m.useWebhook };
-      } else if (f.input === "channel+interval") {
-        block[f.key] = { channelId: m.channelId, interval: m.interval };
-      } else if (f.input === "channel+admin") {
-        block[f.key] = { channelId: m.channelId, adminChannelId: m.adminChannelId };
-      } else if (f.key === "notifications") {
-        // Notifications is the one channel feature that needs a second field:
-        // without `events` the dispatcher delivers nothing. Preserve a
-        // hand-authored selection when re-editing this guild; otherwise seed
-        // the default set (the same six the template and docs document).
-        const existing = existingGuildBlock.value.notifications as
-          | { events?: string[] }
-          | undefined;
-        block.notifications = {
-          channelId: m.channelId,
-          events: existing?.events ?? [...DEFAULT_NOTIFICATION_EVENTS],
-        };
-      } else {
-        block[f.key] = { channelId: m.channelId };
-      }
-    }
-    return block;
+  /** Re-read the guild after a conflict, discarding the wizard's choices. */
+  async function reloadLatest(): Promise<boolean> {
+    writeError.value = "";
+    conflicted.value = false;
+    return seedFromExisting();
   }
 
   /** Write this guild's block. Returns true on success (caller emits). */
   async function write(): Promise<boolean> {
+    if (!canWrite.value) {
+      writeError.value = seedError.value || "The guild's current config has not been read yet.";
+      return false;
+    }
     writing.value = true;
     writeError.value = "";
     try {
-      // Scoped read for a current baseHash, then a scoped write of just
-      // this guild's block. The server merges it into the full config;
-      // the wizard never sees or sends anyone else's settings.
-      const cur = await apiGet<{ hash: string; guildConfig: Record<string, unknown> }>(
-        `/api/guilds/${encodeURIComponent(guildId.value)}/config`,
-      );
       await apiSend("PUT", `/api/guilds/${encodeURIComponent(guildId.value)}/config`, {
-        baseHash: cur.hash,
-        guildConfig: buildGuildBlock(),
+        baseHash: seedHash,
+        guildConfig: buildGuildBlock(existingGuildBlock.value, model.value, defaultServer.value),
       });
       const name = guilds.value.find((g) => g.id === guildId.value)?.name ?? guildId.value;
       toast.add({
         severity: "success",
         summary: "Guild configured",
-        detail: `${name} is set up. The bot reloads config automatically.`,
+        detail: `${name} is set up. Written to config.json.`,
         life: 4000,
       });
       return true;
     } catch (err) {
-      const message = errorMessage(err);
-      if (message.includes("409") || message.toLowerCase().includes("conflict")) {
+      if (isConflict(err)) {
+        conflicted.value = true;
         writeError.value =
-          "Config changed underneath the wizard (someone else saved). Reopen the wizard to start from the current config.";
-      } else if (message.startsWith("[")) {
-        writeError.value = parseErrorList(message).join("\n");
+          "This guild's config changed while the wizard was open (someone else saved). Reload the latest config to start from it; nothing was written.";
       } else {
-        writeError.value = message;
+        const list = validationErrors(err);
+        writeError.value = list.length > 0 ? list.join("\n") : errorMessage(err);
       }
       return false;
     } finally {
@@ -304,6 +374,7 @@ export function useGuildSetup(
     guilds, configuredGuildIds, configuredServers, guildId, defaultServer,
     channels, roles, channelsForGuild, model, existingGuildBlock,
     loadingGuilds, guildError, loadingChannels, channelError, writing, writeError,
-    reset, loadGuilds, onGuildPicked, loadChannelsRoles, write,
+    seeding, seedError, seeded, canWrite, conflicted,
+    reset, loadGuilds, onGuildPicked, seedFromExisting, loadChannelsRoles, reloadLatest, write,
   };
 }

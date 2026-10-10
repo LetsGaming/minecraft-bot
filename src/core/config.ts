@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { createHash } from "crypto";
 import { getRootDir } from "./utils/paths.js";
 import { log } from "./utils/logger.js";
 import { validateCandidateConfig, validateApiUrl } from "./configValidation.js";
@@ -19,6 +20,15 @@ export type {
   ConfigValidationResult,
 } from "./configValidation.js";
 import { errMsg } from "./utils/error.js";
+import {
+  SECRET_FILE_MODE,
+  writeFileAtomicSync,
+} from "./utils/config/atomicWrite.js";
+import {
+  ConfigMigrationError,
+  runConfigMigrations,
+  type MigrationResult,
+} from "./configMigrations.js";
 
 const PROJECT_ROOT = getRootDir();
 // The active config.json. Overridable via MCBOT_CONFIG_PATH so a deployment
@@ -31,6 +41,18 @@ const CONFIG_PATH = process.env.MCBOT_CONFIG_PATH
   : path.resolve(PROJECT_ROOT, "config.json");
 
 let _config: BotConfig | null = null;
+
+export interface LoadedConfigRevision {
+  /** sha256 of the config.json bytes this process parsed (same digest as configFileHash). */
+  hash: string;
+  loadedAt: number;
+}
+let _loadedRevision: LoadedConfigRevision | null = null;
+
+/** The file revision the cached config was parsed from, or null before the first load. */
+export function getLoadedConfigRevision(): LoadedConfigRevision | null {
+  return _loadedRevision;
+}
 
 
 // Storage audit (2026-09): config.json lives in the shared data/ volume the
@@ -54,7 +76,7 @@ function validateRawConfig(raw: RawBotConfig, configPath: string): void {
     throw new Error(
       `config.json validation failed at ${configPath}:\n` +
       errors.join("\n") + "\n" +
-      "See config_structure.json for the expected format.",
+      "See config.template.json for the expected format and config.schema.json for every option.",
     );
   }
 }
@@ -126,16 +148,86 @@ function applyEnvOverrides(raw: RawBotConfig): void {
   }
 }
 
+/**
+ * `config.json.bak-v<from>-<UTC timestamp with milliseconds>`, next to the
+ * config. A numeric suffix is appended when that exact name is already taken,
+ * so two migrations in the same millisecond never collide.
+ */
+function backupPath(fromVersion: number): string {
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.(\d+)Z$/, "$1Z");
+  const base = `${CONFIG_PATH}.bak-v${fromVersion}-${stamp}`;
+  if (!fs.existsSync(base)) return base;
+  for (let n = 1; ; n++) {
+    const candidate = `${base}-${n}`;
+    if (!fs.existsSync(candidate)) return candidate;
+  }
+}
+
+function logMigration(result: MigrationResult): void {
+  for (const step of result.applied) {
+    const detail = step.changes.length > 0 ? step.changes.join("; ") : "no field changes";
+    log.info(
+      "config",
+      `Migrated config v${step.from} -> v${step.to} (${step.describe}): ${detail}`,
+    );
+  }
+}
+
+/**
+ * Bring the parsed file up to the current format. When something changed the
+ * original bytes are copied to a backup first, then the migrated file
+ * replaces config.json atomically. If either step fails (a read-only mount),
+ * the in-memory migrated config is still used and the file is left alone.
+ */
+function migrateConfigFile(
+  raw: RawBotConfig,
+  originalText: string,
+): { config: RawBotConfig; fileText: string } {
+  let result: MigrationResult;
+  try {
+    result = runConfigMigrations(raw);
+  } catch (err) {
+    if (err instanceof ConfigMigrationError) {
+      throw new Error(`Cannot start with ${CONFIG_PATH}: ${err.message}`);
+    }
+    throw err;
+  }
+  if (result.applied.length === 0) return { config: raw, fileText: originalText };
+
+  const backup = backupPath(result.fromVersion);
+  const migratedText = JSON.stringify(result.config, null, 2) + "\n";
+  let fileText = originalText;
+  try {
+    fs.writeFileSync(backup, originalText, {
+      mode: SECRET_FILE_MODE,
+      flag: "wx",
+    });
+    writeFileAtomicSync(CONFIG_PATH, migratedText);
+    fileText = migratedText;
+    log.info("config", `Original config saved as ${backup}`);
+  } catch (err) {
+    log.warn(
+      "config",
+      `Could not rewrite ${CONFIG_PATH} after migrating it (${errMsg(err)}); running with the migrated config in memory. ` +
+        "Make the file writable to persist it.",
+    );
+  }
+  logMigration(result);
+  return { config: result.config as unknown as RawBotConfig, fileText };
+}
+
 export function loadConfig(): BotConfig {
   if (_config) return _config;
 
   // An actionable message beats a raw JSON parse stack trace
   let raw: RawBotConfig;
+  let rawText: string;
   try {
     // Optimistically typed on parse; validateRawConfig() below is the actual
     // runtime gate — it throws an actionable error if the shape doesn't match,
     // so a wrong config.json never reaches the resolution logic mis-typed.
-    raw = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8")) as RawBotConfig;
+    rawText = fs.readFileSync(CONFIG_PATH, "utf-8");
+    raw = JSON.parse(rawText) as RawBotConfig;
   } catch (err) {
     const reason = errMsg(err);
     throw new Error(
@@ -143,6 +235,9 @@ export function loadConfig(): BotConfig {
       "Make sure the file exists and contains valid JSON.",
     );
   }
+
+  const migrated = migrateConfigFile(raw, rawText);
+  raw = migrated.config;
 
   // Env overrides run BEFORE validation so an env-only required secret (the
   // documented Docker/K8s secrets path) satisfies the required-field check
@@ -165,7 +260,13 @@ export function loadConfig(): BotConfig {
   // ── Guild configs ──
   const guilds: Record<string, GuildConfig> = raw.guilds ?? {};
 
+  _loadedRevision = {
+    hash: createHash("sha256").update(migrated.fileText).digest("hex"),
+    loadedAt: Date.now(),
+  };
+
   _config = Object.freeze({
+    configVersion:        raw.configVersion,
     token:                raw.token,
     clientId:             raw.clientId,
     servers,
@@ -189,6 +290,8 @@ export function loadConfig(): BotConfig {
     ...(raw.schedules   ? { schedules:   raw.schedules }   : {}),
     ...(raw.milestones  ? { milestones:  raw.milestones }  : {}),
     ...(raw.webui       ? { webui:       raw.webui }       : {}),
+    ...(raw.timezone       ? { timezone:       raw.timezone }       : {}),
+    ...(raw.featureNudges  ? { featureNudges:  raw.featureNudges }  : {}),
   });
 
   return _config;
@@ -204,77 +307,95 @@ export function reloadConfig(): BotConfig {
 }
 
 // ── Config file watcher ───────────────────────────────────────────────────
-let _watcher: ReturnType<typeof fs.watch> | null = null;
+let _watcher: fs.FSWatcher | null = null;
+let _reloadTimer: ReturnType<typeof setTimeout> | null = null;
+let _rearmTimer: ReturnType<typeof setTimeout> | null = null;
+
+const WATCH_DEBOUNCE_MS = 300;
+const WATCH_REARM_MS = 1_000;
+
+export interface WatchConfigOptions {
+  debounceMs?: number;
+  rearmMs?: number;
+}
 
 /**
  * Watch config.json for changes and automatically invalidate the cache so
  * the next loadConfig() call picks up rotated credentials or updated settings
  * without requiring a process restart.
  *
+ * The containing directory is watched, not the file: writeConfig replaces the
+ * file by renaming a temp file over it, which on Linux (inotify) leaves a
+ * file-level watch attached to the replaced inode so every save after the
+ * first would go unseen. A watcher that errors is re-armed after a pause.
+ *
  * @param onChange Optional callback invoked after the cache is cleared.
  *                 Useful for re-applying settings (e.g. re-registering commands).
  */
-export function watchConfig(onChange?: (newConfig: BotConfig) => void): void {
-  if (_watcher) return; // idempotent — only one watcher per process
+export function watchConfig(
+  onChange?: (newConfig: BotConfig) => void,
+  options: WatchConfigOptions = {},
+): void {
+  if (_watcher || _rearmTimer) return; // idempotent: only one watcher per process
 
-  try {
-    _watcher = fs.watch(CONFIG_PATH, () => {
-      // fs.watch can fire multiple events for a single save; debounce via
-      // a short timeout so we only reload once per edit.
-      if (_reloadTimer) clearTimeout(_reloadTimer);
-      _reloadTimer = setTimeout(() => {
-        _reloadTimer = null;
-        try {
-          const fresh = reloadConfig();
-          onChange?.(fresh);
-        } catch (err) {
-          // Don't crash the bot on a malformed config save — the old config
-          // stays active until a valid file is written.
-          log.error("config", `Reload failed after file change: ${errMsg(err)}`);
-        }
-      }, 300);
-    });
-    _watcher.on("error", () => { _watcher = null; });
-  } catch {
-    // fs.watch unavailable in this environment — skip silently
-  }
+  const debounceMs = options.debounceMs ?? WATCH_DEBOUNCE_MS;
+  const rearmMs = options.rearmMs ?? WATCH_REARM_MS;
+  const dir = path.dirname(CONFIG_PATH);
+  const base = path.basename(CONFIG_PATH);
+
+  const scheduleReload = (): void => {
+    // A single save raises several events; reload once per burst.
+    if (_reloadTimer) clearTimeout(_reloadTimer);
+    _reloadTimer = setTimeout(() => {
+      _reloadTimer = null;
+      try {
+        const fresh = reloadConfig();
+        onChange?.(fresh);
+      } catch (err) {
+        // Don't crash the bot on a malformed config save: the old config
+        // stays active until a valid file is written.
+        log.error("config", `Reload failed after file change: ${errMsg(err)}`);
+      }
+    }, debounceMs);
+  };
+
+  const arm = (afterFailure: boolean): void => {
+    _rearmTimer = null;
+    try {
+      const watcher = fs.watch(dir, (_event, filename) => {
+        if (filename && String(filename) !== base) return;
+        scheduleReload();
+      });
+      watcher.on("error", (err) => {
+        log.warn("config", `Config watcher failed (${errMsg(err)}); re-arming.`);
+        watcher.close();
+        if (_watcher === watcher) _watcher = null;
+        _rearmTimer = setTimeout(() => arm(true), rearmMs);
+        _rearmTimer.unref();
+      });
+      _watcher = watcher;
+      // The file may have changed while no watcher was attached.
+      if (afterFailure) scheduleReload();
+    } catch (err) {
+      log.warn("config", `Cannot watch ${dir} (${errMsg(err)}); retrying.`);
+      _rearmTimer = setTimeout(() => arm(true), rearmMs);
+      _rearmTimer.unref();
+    }
+  };
+  arm(false);
 }
 
-let _reloadTimer: ReturnType<typeof setTimeout> | null = null;
-
-/** Get server config by ID */
-export function getServer(serverId: string): ServerConfig | null {
-  const cfg = loadConfig();
-  return cfg.servers[serverId] ?? null;
-}
-
-/**
- * Returns the default server ID for a guild, or the first configured server ID.
- * Commands should pass this to getServerInstance() to get the actual instance.
- */
-export function getGuildServerId(guildId: string | undefined): string | null {
-  if (!guildId) return null;
-  const cfg   = loadConfig();
-  const guild = cfg.guilds[guildId];
-  if (guild?.defaultServer && cfg.servers[guild.defaultServer]) {
-    return guild.defaultServer;
-  }
-  const keys = Object.keys(cfg.servers);
-  return keys.length > 0 ? keys[0]! : null;
-}
-
-/** Get guild notification config */
-export function getGuildConfig(guildId: string): GuildConfig | null {
-  const cfg = loadConfig();
-  return cfg.guilds[guildId] ?? null;
+/** Stop watching and drop any pending reload (shutdown and tests). */
+export function stopWatchingConfig(): void {
+  _watcher?.close();
+  _watcher = null;
+  if (_reloadTimer) clearTimeout(_reloadTimer);
+  if (_rearmTimer) clearTimeout(_rearmTimer);
+  _reloadTimer = null;
+  _rearmTimer = null;
 }
 
 /** Get all server IDs */
 export function getServerIds(): string[] {
   return Object.keys(loadConfig().servers);
-}
-
-/** Get all server IDs as Discord choices */
-export function getServerChoices(): Array<{ name: string; value: string }> {
-  return getServerIds().map((id) => ({ name: id, value: id }));
 }

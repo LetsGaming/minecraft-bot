@@ -45,6 +45,20 @@ No stat picked means playtime.
 
 If your server has a leaderboard channel, the bot posts playtime and blocks-mined leaderboards there automatically (daily, weekly, or monthly, depending on configuration). These count only the stats gained during that period, not all-time totals, so newer players have a fair shot every period. The footer states the exact data window.
 
+## The dashboard Analytics tab
+
+The Analytics tab has one range control (24h to 90d) that applies to every panel. Each panel can only look as far back as the history behind it, so a longer range is clamped and the panel says how far it actually reached:
+
+| Panel | History kept |
+|---|---|
+| Uptime | about 30 days (next to the fixed 24h, 7d and 30d figures, the selected range is shown) |
+| Players over time and busiest hours | 14 days |
+| Leaderboard | 32 days |
+| Command usage | 90 days |
+| Players table | the last 20 sessions of each player |
+
+The leaderboard for a range is the stat gained in that range, measured against the nearest hourly or daily snapshot, like the scheduled boards. On a young bot the snapshots may not reach back far enough; the panel then says from when the numbers start (or that they are all-time totals when there is no snapshot yet). The players table only lists players with a session inside the range and counts only the time played inside it.
+
 ## Where the numbers come from
 
 These are vanilla Minecraft statistics, the same ones you see on the in-game pause menu under Statistics. Stats start existing the first time you do the thing (your first death creates the deaths counter), and only whitelisted players appear in bot results.

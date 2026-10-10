@@ -35,6 +35,7 @@ import { getServerInstance } from "@mcbot/core/utils/server/server.js";
 import { createEmbed } from "../../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../../utils/embeds/embedColors.js";
 import { t } from "@mcbot/core/utils/i18n.js";
+import { tellraw } from "@mcbot/core/utils/minecraft/serverMessages.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
@@ -198,26 +199,16 @@ export async function closePoll(client: Client, pollId: string): Promise<void> {
   for (const serverId of pollServerIds(poll)) {
     const server = getServerInstance(serverId);
     if (!server) continue;
-    try {
-      await server.sendCommand(
-        `/tellraw @a ${JSON.stringify({
-          text: t("poll.resultInGame", { question: poll.question }),
-          color: "gold",
-        })}`,
-      );
-      for (let i = 0; i < poll.options.length; i++) {
-        await server.sendCommand(
-          `/tellraw @a ${JSON.stringify({
-            text: `  ${poll.options[i]}: ${counts[i]}`,
-            color: "yellow",
-          })}`,
-        );
-      }
-    } catch (err) {
-      log.warn(
-        "polls",
-        `Failed to announce results in-game on ${serverId}: ${errMsg(err)}`,
-      );
+    const reached = await tellraw(server, "@a", {
+      text: t("poll.resultInGame", { question: poll.question }),
+      color: "gold",
+    });
+    if (!reached) continue;
+    for (let i = 0; i < poll.options.length; i++) {
+      await tellraw(server, "@a", {
+        text: `  ${poll.options[i]}: ${counts[i]}`,
+        color: "yellow",
+      });
     }
   }
 

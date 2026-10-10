@@ -4,7 +4,7 @@
  * Every instance is reached through its API wrapper — this class holds no
  * connection of its own. Before 5.0.0 it also owned an RconClient and a
  * sudo/screen fallback, and each method chose between them and the wrapper
- * at call time; `sendCommand` even preferred RCON over the wrapper when
+ * at call time; the command path even preferred RCON over the wrapper when
  * both were configured, so the two paths could disagree about what a
  * server had just been told.
  */
@@ -15,8 +15,12 @@ import {
   unknownHealth,
   type ServerHealth,
 } from "@mcbot/schema/serverState.js";
+import {
+  UnreachableReason,
+  type CommandOutcome,
+} from "@mcbot/schema/commandOutcome.js";
 import type { ServerCapabilities } from "../../types/index.js";
-import { loadConfig } from "../../config.js";
+import { resolveDefaultServerId } from "./guildTargets.js";
 import type {
   ServerConfig,
   PlayerCoords,
@@ -24,14 +28,72 @@ import type {
   TpsResult,
 } from "../../types/index.js";
 import { errMsg } from "../error.js";
+import {
+  queryFail,
+  queryOk,
+  type QueryFailure,
+  type QueryResult,
+} from "./queryResult.js";
+import {
+  SEED_BODY,
+  entityDataPattern,
+  isSignedInt64,
+  newestServerMatch,
+} from "../minecraft/consoleResponse.js";
 
 // ── ServerInstance ──
+
+const SEED_PATTERN = /Seed:\s*\[(-?\d+)\]/;
+const SEED_MISS_TTL_MS = 60_000;
+const VERSION_TTL_MS = 10 * 60_000;
+const VERSION_MISS_TTL_MS = 60_000;
+const LOG_POLL_ATTEMPTS = 3;
+const LOG_POLL_INTERVAL_MS = 300;
+const LOG_TAIL_LINES = 10;
+const COORDS_PATTERN = /\[([\d.+-]+)d,\s*([\d.+-]+)d,\s*([\d.+-]+)d\]/;
+
+function parseSeed(text: string): string | null {
+  const seed = text.match(SEED_PATTERN)?.[1];
+  return seed && isSignedInt64(seed) ? seed : null;
+}
+
+function parseCoords(text: string): PlayerCoords | null {
+  const m = text.match(COORDS_PATTERN);
+  return m ? { x: Number(m[1]), y: Number(m[2]), z: Number(m[3]) } : null;
+}
+
+function parseDimension(text: string): string | null {
+  return text.match(/"minecraft:([^"]+)"/)?.[1] ?? null;
+}
+
+function parseDeathLocation(
+  text: string,
+): (PlayerCoords & { dimension: string }) | null {
+  const pos = text.match(/\[I;\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)\]/);
+  if (!pos) return null;
+  const dim = text.match(/dimension:\s*"([^"]+)"/);
+  return {
+    x: Number(pos[1]),
+    y: Number(pos[2]),
+    z: Number(pos[3]),
+    dimension: (dim?.[1] ?? "minecraft:overworld").replace(/^minecraft:/, ""),
+  };
+}
+
+/** Why a console reply held no usable value. */
+function classifyReply(output: string): QueryFailure {
+  if (/No entity was found/i.test(output)) return "player-offline";
+  if (/Found no elements matching/i.test(output)) return "no-data";
+  return "unreadable";
+}
 
 export class ServerInstance {
   readonly config: ServerConfig;
   readonly id: string;
 
   private _seedCache: string | null = null;
+  private _seedMiss: { reason: QueryFailure; until: number } | null = null;
+  private _versionCache: { value: string | null; until: number } | null = null;
 
   /**
    * Setup-suite capabilities, probed at startup and re-probed on config
@@ -54,15 +116,29 @@ export class ServerInstance {
 
   // ── Unified interface ──
 
-  async sendCommand(command: string): Promise<string | null> {
+  /**
+   * Send a console command and say what became of it. Never throws; a
+   * command that did not reach the server is logged once, here.
+   */
+  async send(command: string): Promise<CommandOutcome> {
+    let outcome: CommandOutcome;
     try {
-      const { sendCommand } = await import("./serverAccess.js");
-      return await sendCommand(this.config, command);
+      const { sendCommandOutcome } = await import("./serverAccess.js");
+      outcome = await sendCommandOutcome(this.config, command);
     } catch (err) {
-      const message = errMsg(err);
-      log.warn(this.id, `sendCommand failed: ${message}`);
-      return null;
+      outcome = {
+        kind: "unreachable",
+        reason: UnreachableReason.WrapperDown,
+        detail: errMsg(err),
+      };
     }
+    if (outcome.kind === "unreachable") {
+      log.warn(
+        this.id,
+        `command not delivered (${outcome.reason}): ${outcome.detail}`,
+      );
+    }
+    return outcome;
   }
 
   /**
@@ -125,99 +201,134 @@ export class ServerInstance {
     return { playerCount: "0", maxPlayers: "?", players: [] };
   }
 
-  async getSeed(): Promise<string | null> {
-    if (this._seedCache) return this._seedCache;
-    const r = await this.sendCommand("seed");
-    const m = r?.match(/Seed:\s*\[(-?\d+)\]/);
-    if (m?.[1]) {
-      this._seedCache = m[1];
-      return this._seedCache;
+  /**
+   * The world seed. A found seed is cached for good; a failure is cached for
+   * a minute so a server that cannot answer is not asked on every command.
+   */
+  async getSeed(): Promise<QueryResult<string>> {
+    if (this._seedCache) return queryOk(this._seedCache);
+    if (this._seedMiss && Date.now() < this._seedMiss.until) {
+      return queryFail(this._seedMiss.reason);
     }
-    return null;
+    const result = await this.queryConsole(
+      "seed",
+      parseSeed,
+      SEED_BODY,
+      (m) => m[0],
+    );
+    if (result.ok) {
+      this._seedCache = result.value;
+      this._seedMiss = null;
+    } else {
+      this._seedMiss = {
+        reason: result.reason,
+        until: Date.now() + SEED_MISS_TTL_MS,
+      };
+    }
+    return result;
   }
 
-  async getPlayerData(player: string, nbtPath: string): Promise<string | null> {
-    return await this.sendCommand(`/data get entity ${player} ${nbtPath}`);
-  }
-
-  async getPlayerCoords(player: string): Promise<PlayerCoords | null> {
-    const r = await this.getPlayerData(player, "Pos");
-    if (r !== null) {
-      // RCON returned a response — it is authoritative. Parse and return immediately.
-      // Falling through to log polling when RCON responded would add up to 900 ms
-      // of unnecessary latency without giving us any additional information.
-      const m = r.match(/\[([\d.+-]+)d,\s*([\d.+-]+)d,\s*([\d.+-]+)d\]/);
-      return m ? { x: Number(m[1]), y: Number(m[2]), z: Number(m[3]) } : null;
+  /**
+   * Run a console command and parse its answer.
+   *
+   * An RCON reply is authoritative and parsed as is. A command sent with no
+   * reply channel only leaves its answer in the server log, so the log is
+   * polled, accepting only lines the server itself emitted (see
+   * consoleResponse.ts). A command that did not reach the server fails at
+   * once: there is nothing to wait for.
+   */
+  private async queryConsole<T>(
+    command: string,
+    parse: (text: string) => T | null,
+    logBody: RegExp,
+    extract: (match: RegExpExecArray) => string,
+  ): Promise<QueryResult<T>> {
+    const outcome = await this.send(command);
+    if (outcome.kind === "unreachable") return queryFail("unreachable");
+    if (outcome.kind === "delivered") {
+      const value = parse(outcome.output);
+      return value !== null
+        ? queryOk(value)
+        : queryFail(classifyReply(outcome.output));
     }
-    // r is null → screen-based server (no RCON response channel); poll the log.
+
     const { tailLog } = await import("./serverAccess.js");
-    for (let i = 0; i < 3; i++) {
-      await new Promise<void>((r) => setTimeout(r, 300));
-      const out = await tailLog(this.config, 10);
-      const m = out.match(/\[([\d.+-]+)d,\s*([\d.+-]+)d,\s*([\d.+-]+)d\]/);
-      if (m) return { x: Number(m[1]), y: Number(m[2]), z: Number(m[3]) };
+    for (let i = 0; i < LOG_POLL_ATTEMPTS; i++) {
+      await new Promise<void>((resolve) =>
+        setTimeout(resolve, LOG_POLL_INTERVAL_MS),
+      );
+      let tail: string;
+      try {
+        tail = await tailLog(this.config, LOG_TAIL_LINES);
+      } catch (err) {
+        log.debug(this.id, `log read failed: ${errMsg(err)}`);
+        return queryFail("unreachable");
+      }
+      const match = newestServerMatch(tail, logBody);
+      const value = match ? parse(extract(match)) : null;
+      if (value !== null) return queryOk(value);
     }
-    return null;
+    return queryFail("unreadable");
   }
 
-  async getPlayerDimension(player: string): Promise<string> {
-    const r = await this.getPlayerData(player, "Dimension");
-    if (r !== null) {
-      // RCON response is authoritative — return immediately without log polling.
-      const m = r.match(/"minecraft:([^"]+)"/);
-      return m?.[1] ?? "overworld";
+  /** The Minecraft version from a status ping, or null when it cannot be read. */
+  async getMinecraftVersion(): Promise<string | null> {
+    if (this._versionCache && Date.now() < this._versionCache.until) {
+      return this._versionCache.value;
     }
-    // Screen-based server: poll the log for the dimension output.
-    const { tailLog } = await import("./serverAccess.js");
-    for (let i = 0; i < 3; i++) {
-      await new Promise<void>((r) => setTimeout(r, 300));
-      const out = await tailLog(this.config, 10);
-      const m = out.match(/"minecraft:([^"]+)"/);
-      if (m?.[1]) return m[1];
-    }
-    return "overworld";
+    const { pingServer } = await import("./serverAccess.js");
+    const { parseVersionName } = await import("../minecraft/versionName.js");
+    const ping = await pingServer(this.config);
+    const value =
+      ping?.kind === "status"
+        ? parseVersionName(ping.result.version).minecraftVersion
+        : null;
+    this._versionCache = {
+      value,
+      until: Date.now() + (value ? VERSION_TTL_MS : VERSION_MISS_TTL_MS),
+    };
+    return value;
+  }
+
+  /** The raw entity data for one NBT path of an online player. */
+  async getPlayerData(
+    player: string,
+    nbtPath: string,
+  ): Promise<QueryResult<string>> {
+    return this.queryEntity(player, nbtPath, (text) => text);
+  }
+
+  private queryEntity<T>(
+    player: string,
+    nbtPath: string,
+    parse: (text: string) => T | null,
+  ): Promise<QueryResult<T>> {
+    return this.queryConsole(
+      `/data get entity ${player} ${nbtPath}`,
+      parse,
+      entityDataPattern(player),
+      (m) => m[1] ?? "",
+    );
+  }
+
+  async getPlayerCoords(player: string): Promise<QueryResult<PlayerCoords>> {
+    return this.queryEntity(player, "Pos", parseCoords);
+  }
+
+  /** The dimension the player is in, e.g. `overworld`, `the_nether`. */
+  async getPlayerDimension(player: string): Promise<QueryResult<string>> {
+    return this.queryEntity(player, "Dimension", parseDimension);
   }
 
   /**
    * Where the player last died. Since 1.19 the server stores a
    * LastDeathLocation NBT tag: `{pos: [I; x, y, z], dimension:
-   * "minecraft:overworld"}`. Returns null when the player has no recorded
-   * death yet or the data cannot be read (screen fallback with no log
-   * match) — same RCON-authoritative / log-polling split as
-   * getPlayerCoords above.
+   * "minecraft:overworld"}`. `no-data` means the player has not died yet.
    */
   async getLastDeathLocation(
     player: string,
-  ): Promise<(PlayerCoords & { dimension: string }) | null> {
-    const parse = (
-      text: string,
-    ): (PlayerCoords & { dimension: string }) | null => {
-      const pos = text.match(/\[I;\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)\]/);
-      if (!pos) return null;
-      const dim = text.match(/dimension:\s*"([^"]+)"/);
-      return {
-        x: Number(pos[1]),
-        y: Number(pos[2]),
-        z: Number(pos[3]),
-        dimension: (dim?.[1] ?? "minecraft:overworld").replace(
-          /^minecraft:/,
-          "",
-        ),
-      };
-    };
-
-    const r = await this.getPlayerData(player, "LastDeathLocation");
-    if (r !== null) return parse(r);
-
-    // Screen-based server: poll the log for the data output.
-    const { tailLog } = await import("./serverAccess.js");
-    for (let i = 0; i < 3; i++) {
-      await new Promise<void>((res) => setTimeout(res, 300));
-      const out = await tailLog(this.config, 10);
-      const parsed = parse(out);
-      if (parsed) return parsed;
-    }
-    return null;
+  ): Promise<QueryResult<PlayerCoords & { dimension: string }>> {
+    return this.queryEntity(player, "LastDeathLocation", parseDeathLocation);
   }
 
   /**
@@ -302,15 +413,12 @@ export function getAllInstances(): ServerInstance[] {
   return [...instances.values()];
 }
 
-export function getGuildServer(
-  guildId: string | undefined,
-): ServerInstance | null {
-  if (!guildId) return null;
-  const cfg = loadConfig();
-  const guild = cfg.guilds[guildId];
-  if (guild?.defaultServer) {
-    const inst = instances.get(guild.defaultServer);
-    if (inst) return inst;
-  }
-  return getFirstInstance();
+/**
+ * The server a guild's commands target when they name none. Throws when
+ * the guild's `defaultServer` is stale or the choice is ambiguous; see
+ * resolveDefaultServerId.
+ */
+export function getGuildServer(guildId: string | undefined): ServerInstance {
+  const id = resolveDefaultServerId(guildId, [...instances.keys()]);
+  return instances.get(id)!;
 }

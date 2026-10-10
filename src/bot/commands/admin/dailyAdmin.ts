@@ -7,10 +7,11 @@
  * claimedDaily.json:
  *
  *   /daily-admin move user:@x from:<server> to:<server> [overwrite]
- *   /daily-admin reset user:@x server:<server>
+ *   /daily-admin reset user:@x [server:<server>]
  *   /daily-admin show user:@x
  *
- * Every mutation lands in the admin audit log.
+ * Servers outside the issuing guild's allowed set are refused. Every
+ * mutation lands in the admin audit log.
  */
 import { SlashCommandBuilder } from "discord.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
@@ -25,6 +26,11 @@ import {
   getServerClaims,
 } from "@mcbot/core/utils/stores/dailyStore.js";
 import { getServerIds } from "@mcbot/core/config.js";
+import {
+  assertMayTargetServerId,
+  filterTargetableServerIds,
+  resolveServer,
+} from "../../utils/guild/guildRouter.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { formatDatetime } from "@mcbot/core/utils/time.js";
@@ -68,8 +74,7 @@ export const data = new SlashCommandBuilder()
         o
           .setName("server")
           .setDescription("Server to reset the record on")
-          .setAutocomplete(true)
-          .setRequired(true),
+          .setAutocomplete(true),
       ),
   )
   .addSubcommand((sub) =>
@@ -104,6 +109,8 @@ export const execute = withErrorHandling(
       const overwrite = interaction.options.getBoolean("overwrite") ?? false;
       assertKnownServer(from);
       assertKnownServer(to);
+      assertMayTargetServerId(interaction, from);
+      assertMayTargetServerId(interaction, to);
       if (from === to) throw new Error(t("dailyAdmin.samServer"));
 
       const fromClaims = getServerClaims(store, from);
@@ -145,8 +152,9 @@ export const execute = withErrorHandling(
     }
 
     if (sub === "reset") {
-      const server = interaction.options.getString("server", true);
-      assertKnownServer(server);
+      const explicit = interaction.options.getString("server");
+      if (explicit) assertKnownServer(explicit);
+      const server = resolveServer(interaction).id;
 
       const claims = getServerClaims(store, server);
       if (!claims[user.id]) {
@@ -176,7 +184,11 @@ export const execute = withErrorHandling(
 
     // show
     const lines: string[] = [];
-    for (const serverId of Object.keys(store.servers)) {
+    const visible = filterTargetableServerIds(
+      interaction,
+      Object.keys(store.servers),
+    );
+    for (const serverId of visible) {
       const record = store.servers[serverId]?.[user.id];
       if (!record) continue;
       lines.push(

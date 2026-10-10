@@ -7,7 +7,7 @@
  * (Role admins are covered in middleware.test.ts, prune-stats in
  *  commands_server.test.ts.)
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 
 vi.mock("../../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -310,6 +310,10 @@ describe("processDailyReminders", () => {
 // ── Toggle command ────────────────────────────────────────────────────
 
 describe("/daily-reminder command", () => {
+  beforeAll(async () => {
+    await import("../../src/bot/commands/connection/daily/reminder.js");
+  }, 120_000);
+
   function makeInteraction(enabled: boolean) {
     return {
       user: { id: "u1", tag: "User#1", displayName: "User" },

@@ -10,7 +10,7 @@
  * on disk is the whole point — statsDir below — and without filesystem
  * side-effects otherwise (isRunning → false, getList → empty).
  */
-import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -28,7 +28,7 @@ import {
   tailLog,
   isRunning,
   getList,
-  sendCommand,
+  sendCommandOutcome,
   getTps,
   readWhitelist,
   readUserCache,
@@ -38,6 +38,11 @@ import {
   deleteStatsFile,
   readBackups,
   runScript,
+  ScriptStillRunningError,
+  getRemoteManifest,
+  openBackupDownload,
+  restoreBackupFile,
+  deleteBackupFile,
   logStreamUrl,
   RateLimitedError,
 } from "../../src/core/utils/server/serverAccess.js";
@@ -113,13 +118,13 @@ describe("getList", () => {
 
 });
 
-// ── sendCommand ───────────────────────────────────────────────────────────
+// ── sendCommandOutcome ────────────────────────────────────────────────────
 
-describe("sendCommand", () => {
-  it("posts command to API and returns result", async () => {
+describe("sendCommandOutcome", () => {
+  it("posts command to API and returns the console output as delivered", async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse({ result: "Command output" }));
-    const out = await sendCommand(remoteCfg, "/say hello");
-    expect(out).toBe("Command output");
+    const out = await sendCommandOutcome(remoteCfg, "/say hello");
+    expect(out).toEqual({ kind: "delivered", output: "Command output" });
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining("/command"),
       expect.objectContaining({ method: "POST" }),
@@ -322,6 +327,97 @@ describe("runScript", () => {
         body: expect.stringContaining("archive"),
       }),
     );
+  });
+});
+
+describe("runScript timeouts", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  async function timeoutFor(action: string, cfg = remoteCfg): Promise<number> {
+    const spy = vi.spyOn(AbortSignal, "timeout");
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({ exitCode: 0, output: "", stderr: "" }),
+    );
+    await runScript(cfg, action);
+    const ms = spy.mock.calls[0]![0];
+    spy.mockRestore();
+    return ms;
+  }
+
+  it("waits at least as long as the wrapper's fallback ceilings", async () => {
+    expect(await timeoutFor("restart")).toBeGreaterThanOrEqual(420_000);
+    expect(await timeoutFor("backup")).toBeGreaterThanOrEqual(600_000);
+    expect(await timeoutFor("stop")).toBeGreaterThanOrEqual(240_000);
+    expect(await timeoutFor("rollback")).toBeGreaterThanOrEqual(300_000);
+  });
+
+  it("uses the ceilings the wrapper advertises in its manifest", async () => {
+    const cfg = { id: "adv", apiUrl: "https://adv.example.com", apiKey: "k" } as never;
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({
+        wrapper: "3.0.0",
+        manifest: 1,
+        routes: [],
+        features: {},
+        scriptActions: ["stop"],
+        scriptTimeoutsMs: { stop: 900_000 },
+      }),
+    );
+    await getRemoteManifest(cfg);
+    expect(await timeoutFor("stop", cfg)).toBeGreaterThanOrEqual(900_000);
+  });
+
+  it("raises ScriptStillRunningError when the wait expires", async () => {
+    mockFetch.mockRejectedValueOnce(
+      new DOMException("The operation timed out.", "TimeoutError"),
+    );
+    await expect(runScript(remoteCfg, "restart")).rejects.toBeInstanceOf(
+      ScriptStillRunningError,
+    );
+  });
+
+  it("passes other failures through untouched", async () => {
+    mockFetch.mockRejectedValueOnce(new Error("ECONNREFUSED"));
+    await expect(runScript(remoteCfg, "restart")).rejects.toThrow("ECONNREFUSED");
+  });
+});
+
+describe("long-running wrapper requests carry a timeout signal", () => {
+  it("restore and delete are bounded", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({ exitCode: 0, output: "", stderr: "" }));
+    await restoreBackupFile(remoteCfg, "id1");
+    expect(mockFetch.mock.calls.at(-1)![1].signal).toBeInstanceOf(AbortSignal);
+    mockFetch.mockResolvedValueOnce(jsonResponse({ ok: true }));
+    await deleteBackupFile(remoteCfg, "id1");
+    expect(mockFetch.mock.calls.at(-1)![1].signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("the download bounds the wait for headers, not the body", async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 200 });
+    await openBackupDownload(remoteCfg, "id1");
+    const signal = mockFetch.mock.calls.at(-1)![1].signal as AbortSignal;
+    expect(signal).toBeInstanceOf(AbortSignal);
+    expect(signal.aborted).toBe(false);
+  });
+
+  it("the download aborts when no headers arrive in time", async () => {
+    vi.useFakeTimers();
+    try {
+      mockFetch.mockImplementationOnce(
+        (_url: string, init: RequestInit) =>
+          new Promise((_res, rej) => {
+            init.signal!.addEventListener("abort", () => rej(init.signal!.reason));
+          }),
+      );
+      const pending = openBackupDownload(remoteCfg, "id1");
+      const assertion = expect(pending).rejects.toMatchObject({ name: "TimeoutError" });
+      await vi.advanceTimersByTimeAsync(31_000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

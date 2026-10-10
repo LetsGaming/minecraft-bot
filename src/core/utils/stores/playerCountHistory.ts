@@ -68,19 +68,24 @@ export async function loadPlayerCountStore(): Promise<PlayerCountStore> {
   return { version: 1, servers };
 }
 
-export async function savePlayerCountStore(
-  store: PlayerCountStore,
-): Promise<void> {
-  withTransaction(() => {
-    const db = getDb();
-    db.exec("DELETE FROM player_count_hours");
-    const ins = db.prepare(
-      "INSERT INTO player_count_hours (server_id, h, sum, max, samples) VALUES (?, ?, ?, ?, ?)",
-    );
-    for (const [serverId, buckets] of Object.entries(store.servers)) {
-      for (const b of buckets) ins.run(serverId, b.h, b.sum, b.max, b.samples);
-    }
-  });
+/** One server's buckets from `sinceMs` on, oldest first, filtered in SQL. */
+export function loadPlayerCountSeries(
+  serverId: string,
+  sinceMs: number,
+): HourBucket[] {
+  return mapRows(
+    getDb().prepare(
+      "SELECT h, sum, max, samples FROM player_count_hours WHERE server_id = ? AND h >= ? ORDER BY h ASC",
+    ),
+    (r): HourBucket => ({
+      h: col.int(r, "h"),
+      sum: col.int(r, "sum"),
+      max: col.int(r, "max"),
+      samples: col.int(r, "samples"),
+    }),
+    serverId,
+    sinceMs,
+  );
 }
 
 /** serverId → epoch ms of the last recorded sample (any source). */

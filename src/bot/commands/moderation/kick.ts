@@ -16,6 +16,10 @@ import {
   MAX_REASON_LENGTH,
 } from "@mcbot/core/utils/sanitize.js";
 import { t } from "@mcbot/core/utils/i18n.js";
+import {
+  requireAccepted,
+  withUnverifiedNote,
+} from "@mcbot/core/utils/server/commandOutcome.js";
 
 export const data = new SlashCommandBuilder()
   .setName("kick")
@@ -46,8 +50,12 @@ export const execute = withErrorHandling(
     const reason = sanitizeReason(interaction.options.getString("reason"));
     const server = resolveServer(interaction);
 
-    await server.sendCommand(
-      reason ? `/kick ${player} ${reason}` : `/kick ${player}`,
+    const verdict = requireAccepted(
+      await server.send(
+        reason ? `/kick ${player} ${reason}` : `/kick ${player}`,
+      ),
+      server.id,
+      { refusal: /^No player was found/i },
     );
 
     await recordAdminAction({
@@ -62,7 +70,10 @@ export const execute = withErrorHandling(
     await interaction.editReply({
       embeds: [
         createSuccessEmbed(
-          t("moderation.kicked", { player, server: server.id }),
+          withUnverifiedNote(
+            t("moderation.kicked", { player, server: server.id }),
+            verdict,
+          ),
         ),
       ],
     });

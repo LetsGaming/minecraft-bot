@@ -14,6 +14,7 @@ import { createEmbed, createErrorEmbed } from "../../utils/embeds/embedUtils.js"
 import { log } from "@mcbot/core/utils/logger.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 export const data = new SlashCommandBuilder()
   .setName("playtime")
   .setDescription("Show total playtime for a player")
@@ -23,6 +24,9 @@ export const data = new SlashCommandBuilder()
       .setDescription("Minecraft player name")
       .setRequired(true)
       .setAutocomplete(true),
+  )
+  .addStringOption((o) =>
+    o.setName("server").setDescription("Server instance").setAutocomplete(true),
   );
 
 export async function execute(
@@ -38,8 +42,8 @@ export async function execute(
     if (!player) {
       await interaction.editReply({
         embeds: [
-          createErrorEmbed(`Player \`${playerName}\` not found.`, {
-            footer: { text: "Player Not Found" },
+          createErrorEmbed(t("common.playerNotFound", { player: playerName }), {
+            footer: { text: t("common.playerNotFoundFooter") },
             timestamp: new Date(),
           }),
         ],
@@ -51,8 +55,8 @@ export async function execute(
     if (!statsFile) {
       await interaction.editReply({
         embeds: [
-          createErrorEmbed(`Stats file not found for \`${playerName}\`.`, {
-            footer: { text: "Stats File Not Found" },
+          createErrorEmbed(t("stats.fileNotFound", { player: playerName }), {
+            footer: { text: t("stats.fileNotFoundFooter") },
             timestamp: new Date(),
           }),
         ],
@@ -66,8 +70,8 @@ export async function execute(
     if (!totalPlaytime) {
       await interaction.editReply({
         embeds: [
-          createErrorEmbed(`Playtime stat not found for \`${playerName}\`.`, {
-            footer: { text: "Playtime Stat Not Found" },
+          createErrorEmbed(t("playtime.statNotFound", { player: playerName }), {
+            footer: { text: t("playtime.statNotFoundFooter") },
             timestamp: new Date(),
           }),
         ],
@@ -78,8 +82,8 @@ export async function execute(
     const totalPlaytimeFormatted = formatPlaytime(totalPlaytime);
 
     const embed = createEmbed({
-      title: `⏳ Playtime for ${playerName}`,
-      description: `Total playtime: **${totalPlaytimeFormatted}**`,
+      title: t("playtime.title", { player: playerName }),
+      description: t("playtime.total", { time: totalPlaytimeFormatted }),
     });
 
     await interaction.editReply({ embeds: [embed] });
@@ -87,8 +91,8 @@ export async function execute(
     log.error("playtime", errMsg(err));
     await interaction.editReply({
       embeds: [
-        createErrorEmbed("An unexpected error occurred.", {
-          footer: { text: "Playtime Error" },
+        createErrorEmbed(t("common.unexpectedError"), {
+          footer: { text: t("playtime.errorFooter") },
           timestamp: new Date(),
         }),
       ],

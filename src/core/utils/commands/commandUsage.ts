@@ -90,8 +90,12 @@ export function usageByCommand(
   windowDays: number = USAGE_WINDOW_DAYS,
   now: number = Date.now(),
 ): CommandUsageCount[] {
+  return usageByCommandSince(now - windowDays * DAY_MS);
+}
+
+/** Same aggregate as `usageByCommand`, from an exact timestamp (hour-precise windows). */
+export function usageByCommandSince(since: number): CommandUsageCount[] {
   try {
-    const since = now - windowDays * DAY_MS;
     return mapRows(
       getDb().prepare(
         `SELECT command, surface,

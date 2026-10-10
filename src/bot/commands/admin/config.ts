@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, codeBlock } from "discord.js";
 import { loadConfig, reloadConfig } from "@mcbot/core/config.js";
+import { beginConfigApply } from "@mcbot/core/utils/server/runtimeHeartbeat.js";
 import { summarizeConfigChanges } from "@mcbot/core/utils/config/configDiff.js";
 import { reconcileServers } from "../../logWatcher/initMinecraftCommands.js";
 import { createEmbed, createSuccessEmbed } from "../../utils/embeds/embedUtils.js";
@@ -8,6 +9,7 @@ import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 export const data = new SlashCommandBuilder()
   .setName("config")
   .setDescription("View or reload the bot configuration")
@@ -45,13 +47,14 @@ export const execute = withErrorHandling(
 
       // Apply server additions/removals to the running bot —
       // create instances + watchers for added IDs, stop watchers and drop
-      // instances for removed ones. Changed settings on an existing ID
-      // can't be applied live (the instance keeps its original RCON/watcher
-      // wiring), so those are reported as restart-required.
-      const { added, removed, changed } = await reconcileServers(
+      // instances for removed ones, rebuild those whose settings changed.
+      // Only a failed rebuild is reported as restart-required.
+      const reportApplied = beginConfigApply();
+      const { added, removed, replaced, changed } = await reconcileServers(
         interaction.client,
         cfg,
       );
+      reportApplied(changed);
 
       log.info("config", `Config reloaded by ${interaction.user.tag}`);
 
@@ -65,6 +68,7 @@ export const execute = withErrorHandling(
           [
             added.length > 0 ? `added: ${added.join(",")}` : "",
             removed.length > 0 ? `removed: ${removed.join(",")}` : "",
+            replaced.length > 0 ? `rebuilt: ${replaced.join(",")}` : "",
             changed.length > 0 ? `changed: ${changed.join(",")}` : "",
           ]
             .filter(Boolean)
@@ -72,39 +76,42 @@ export const execute = withErrorHandling(
       });
 
       const lines = [
-        `Servers: ${after.join(", ")}`,
-        `Guilds: ${Object.keys(cfg.guilds).length}`,
-        `Admins: ${cfg.adminUsers.length}`,
+        t("config.sumServers", { servers: after.join(", ") }),
+        t("config.sumGuilds", { count: Object.keys(cfg.guilds).length }),
+        t("config.sumAdmins", { count: cfg.adminUsers.length }),
       ];
 
       if (added.length > 0)
-        lines.push(`+ Added (live): ${added.join(", ")}`);
+        lines.push(t("config.added", { list: added.join(", ") }));
       if (removed.length > 0)
-        lines.push(`- Removed (live): ${removed.join(", ")}`);
+        lines.push(t("config.removed", { list: removed.join(", ") }));
+      if (replaced.length > 0)
+        lines.push(t("config.rebuilt", { list: replaced.join(", ") }));
       if (changed.length > 0) {
         lines.push(
-          `⚠ Changed settings on existing server(s) require a restart: ${changed.join(", ")}`,
+          t("config.needsRestart", { list: changed.join(", ") }),
         );
       }
       for (const change of settingChanges.slice(0, 12)) {
         lines.push(`~ ${change}`);
       }
       if (settingChanges.length > 12) {
-        lines.push(`~ …and ${settingChanges.length - 12} more change(s)`);
+        lines.push(t("config.moreChanges", { count: settingChanges.length - 12 }));
       }
       if (
         settingChanges.length === 0 &&
         added.length === 0 &&
         removed.length === 0 &&
+        replaced.length === 0 &&
         changed.length === 0
       ) {
-        lines.push("No changes detected.");
+        lines.push(t("config.noChanges"));
       }
 
       await interaction.editReply({
         embeds: [
           createSuccessEmbed(
-            `Config reloaded from disk.\n${codeBlock(lines.join("\n"))}`,
+            t("config.reloaded", { details: codeBlock(lines.join("\n")) }),
           ),
         ],
       });
@@ -122,8 +129,8 @@ export const execute = withErrorHandling(
     // Guild overview
     const guildLines = Object.entries(cfg.guilds).map(([guildId, gcfg]) => {
       const features: string[] = [];
-      if (gcfg.statusEmbed?.enabled === true) features.push("status");
-      if (gcfg.notifications?.channelId) features.push("notifications");
+      if (gcfg.statusEmbed?.enabled === true) features.push(t("config.featStatus"));
+      if (gcfg.notifications?.channelId) features.push(t("config.featNotifications"));
       const bridgeList = Array.isArray(gcfg.chatBridge)
         ? gcfg.chatBridge
         : gcfg.chatBridge
@@ -137,7 +144,7 @@ export const execute = withErrorHandling(
       if (gcfg.tpsAlerts?.channelId) features.push("tpsAlerts");
       if (gcfg.channelPurge?.channelId) features.push("purge");
       const defaultSrv = gcfg.defaultServer ? ` → ${gcfg.defaultServer}` : "";
-      return `${guildId}${defaultSrv}\n  ${features.length > 0 ? features.join(", ") : "no features configured"}`;
+      return `${guildId}${defaultSrv}\n  ${features.length > 0 ? features.join(", ") : t("config.noFeatures")}`;
     });
 
     // Commands overview
@@ -146,41 +153,41 @@ export const execute = withErrorHandling(
       .map(([k]) => k);
 
     const embed = createEmbed({
-      title: "⚙️ Bot Configuration",
+      title: t("config.title"),
       color: EmbedColor.Blurple,
     });
 
     embed.addFields(
       {
-        name: "Token",
+        name: t("config.fieldToken"),
         value: codeBlock(redact(cfg.token)),
         inline: true,
       },
       {
-        name: "Client ID",
+        name: t("config.fieldClientId"),
         value: codeBlock(cfg.clientId),
         inline: true,
       },
       {
-        name: `Servers (${Object.keys(cfg.servers).length})`,
-        value: codeBlock(serverLines.join("\n") || "none"),
+        name: t("config.fieldServers", { count: Object.keys(cfg.servers).length }),
+        value: codeBlock(serverLines.join("\n") || t("config.none")),
         inline: false,
       },
       {
-        name: `Guilds (${Object.keys(cfg.guilds).length})`,
-        value: codeBlock(guildLines.join("\n") || "none"),
+        name: t("config.fieldGuilds", { count: Object.keys(cfg.guilds).length }),
+        value: codeBlock(guildLines.join("\n") || t("config.none")),
         inline: false,
       },
       {
-        name: `Admins (${cfg.adminUsers.length})`,
-        value: codeBlock(cfg.adminUsers.map(redact).join(", ") || "none"),
+        name: t("config.fieldAdmins", { count: cfg.adminUsers.length }),
+        value: codeBlock(cfg.adminUsers.map(redact).join(", ") || t("config.none")),
         inline: true,
       },
     );
 
     if (disabledCmds.length > 0) {
       embed.addFields({
-        name: "Disabled Commands",
+        name: t("config.fieldDisabled"),
         value: codeBlock(disabledCmds.join(", ")),
         inline: true,
       });
@@ -188,24 +195,24 @@ export const execute = withErrorHandling(
 
     embed.addFields(
       {
-        name: "TPS Threshold",
+        name: t("config.fieldTpsThreshold"),
         value: `${cfg.tpsWarningThreshold}`,
         inline: true,
       },
       {
-        name: "TPS Poll Interval",
+        name: t("config.fieldTpsInterval"),
         value: `${cfg.tpsPollIntervalMs / 1000}s`,
         inline: true,
       },
       {
-        name: "Leaderboard Interval",
+        name: t("config.fieldLeaderboardInterval"),
         value: cfg.leaderboardInterval,
         inline: true,
       },
     );
 
     embed.setFooter({
-      text: "Use /config reload to apply config.json changes",
+      text: t("config.footer"),
     });
 
     await interaction.editReply({ embeds: [embed] });

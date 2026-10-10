@@ -10,13 +10,14 @@ import {
 import path from "path";
 import { fileURLToPath } from "url";
 import { loadConfig, getServerIds, watchConfig } from "@mcbot/core/config.js";
+import { beginConfigApply } from "@mcbot/core/utils/server/runtimeHeartbeat.js";
 import { summarizeConfigChanges } from "@mcbot/core/utils/config/configDiff.js";
 import { consumeToken, cooldownSeconds } from "@mcbot/core/utils/rateLimiter.js";
 import {
   resolveCommandPolicy,
   commandEnabledAnywhere,
 } from "@mcbot/core/utils/commands/commandPolicy.js";
-import { t } from "@mcbot/core/utils/i18n.js";
+import { t, runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
 import { recordCommandUsage } from "@mcbot/core/utils/commands/commandUsage.js";
 import { registerManifestCommands } from "@mcbot/core/utils/commands/commandManifest.js";
 import { getCommandFiles, categoryOf } from "./utils/commands/loadCommandFiles.js";
@@ -39,6 +40,7 @@ import {
 } from "@mcbot/core/utils/server/capabilities.js";
 import { migrateLegacySnapshots } from "@mcbot/core/utils/minecraft/snapshotUtils.js";
 import { tryResolveServer } from "./utils/guild/guildRouter.js";
+import { ALL_SERVERS } from "./utils/guild/serverOptions.js";
 import {
   initMinecraftCommands,
   reconcileServers,
@@ -48,6 +50,7 @@ import { flushUptimeHistory } from "@mcbot/core/utils/stores/uptimeTracker.js";
 import { invalidateStatusChannelCache } from "./logWatcher/watchers/schedulers/statusEmbed.js";
 import type { BotCommand, BotClient } from "@mcbot/core/types/index.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
+import { installProcessGuards } from "./processGuards.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const config = loadConfig();
@@ -102,6 +105,7 @@ for (const inst of getAllInstances()) {
   const { currentVersion } = await import(
     "./logWatcher/watchers/monitors/updateNotifier.js"
   );
+  beginConfigApply()([]);
   startRuntimeHeartbeat(currentVersion());
 }
 
@@ -129,22 +133,30 @@ const client = new Client({
 // Re-cache automatically when config.json is edited on disk.
 // Server additions/removals are reconciled live — instances and
 // watchers are created for added IDs and torn down for removed ones.
-// Before the client is ready, watchers can't be wired yet; startup reads
-// the fresh config anyway, so skipping is correct rather than lossy.
+// A reload that lands before the client is ready cannot be applied yet
+// (watchers are not wired); it is remembered and reconciled once at ready.
 let lastSeenConfig = config;
-watchConfig((fresh) => {
-  if (!client.isReady()) return;
+let reloadMissedBeforeReady = false;
+
+function applyConfigReload(fresh: typeof config): void {
+  const reportApplied = beginConfigApply();
   const settingChanges = summarizeConfigChanges(lastSeenConfig, fresh);
   lastSeenConfig = fresh;
   for (const change of settingChanges) {
     log.info("config", `Reload: ${change}`);
   }
   reconcileServers(client, fresh)
-    .then(({ added, removed, changed }) => {
-      if (added.length > 0 || removed.length > 0 || changed.length > 0) {
+    .then(({ added, removed, replaced, changed }) => {
+      reportApplied(changed);
+      if (
+        added.length > 0 ||
+        removed.length > 0 ||
+        replaced.length > 0 ||
+        changed.length > 0
+      ) {
         log.info(
           "config",
-          `Reload applied — added: [${added.join(", ")}], removed: [${removed.join(", ")}]` +
+          `Reload applied, added: [${added.join(", ")}], removed: [${removed.join(", ")}], rebuilt: [${replaced.join(", ")}]` +
             (changed.length > 0
               ? `; changed (restart required): [${changed.join(", ")}]`
               : ""),
@@ -154,6 +166,15 @@ watchConfig((fresh) => {
     .catch((err) => {
       log.error("config", `Reconciliation after reload failed: ${errMsg(err)}`);
     });
+  void refreshSlashCommands();
+}
+
+watchConfig((fresh) => {
+  if (!client.isReady()) {
+    reloadMissedBeforeReady = true;
+    return;
+  }
+  applyConfigReload(fresh);
 });
 
 /**
@@ -162,6 +183,38 @@ watchConfig((fresh) => {
  * so we extend via a Collection on the prototype-less object.
  */
 const commands = new Collection<string, BotCommand>();
+
+/** Every slash command module found on disk, whether currently registered or not. */
+const knownCommands = new Map<
+  string,
+  { cmd: BotCommand; capabilitySkip: string | undefined }
+>();
+
+/**
+ * Make `commands` match the live config: a command enabled somewhere is
+ * registered, one disabled everywhere is dropped. Returns whether the set
+ * changed.
+ */
+function syncCommands(): boolean {
+  let changed = false;
+  for (const [name, { cmd, capabilitySkip }] of knownCommands) {
+    const wanted = !capabilitySkip && commandEnabledAnywhere(name);
+    if (wanted && !commands.has(name)) {
+      commands.set(name, cmd);
+      changed = true;
+    } else if (!wanted && commands.has(name)) {
+      commands.delete(name);
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+async function refreshSlashCommands(): Promise<void> {
+  if (!syncCommands() || DEV_NO_DISCORD) return;
+  log.info("commands", "Command enablement changed, re-registering slash commands");
+  await registerGlobalCommands();
+}
 
 // ── Load commands ──
 
@@ -194,24 +247,28 @@ async function loadCommands(): Promise<void> {
       // Only a command disabled in EVERY scope (global + all guild
       // overrides) is skipped entirely; anything else stays registered
       // and is gated per guild at dispatch time.
+      const skipReason = capabilitySkips.get(name);
+      // data + execute were verified present above, so it's a complete command.
+      knownCommands.set(name, {
+        cmd: cmd as BotCommand,
+        capabilitySkip: skipReason,
+      });
       if (!commandEnabledAnywhere(name)) {
         log.info("commands", `Skipping disabled: /${name}`);
         continue;
       }
-      const skipReason = capabilitySkips.get(name);
       if (skipReason) {
         log.info(
           "commands",
           `Skipping /${name}: ${skipReason} (see docs/admin/setup.md)`,
         );
-        continue;
       }
-      // data + execute were verified present above, so it's a complete command.
-      commands.set(name, cmd as BotCommand);
     } catch (err) {
       log.error("commands", `Failed to load ${file}: ${errMsg(err)}`);
     }
   }
+
+  syncCommands();
 
   // Dashboard manifest: the web process cannot discover commands itself.
   registerManifestCommands("slash", manifestSlash);
@@ -250,6 +307,11 @@ void (async () => {
     } catch (err) {
       log.error("init", `Failed to initialize MC commands: ${errMsg(err)}`);
     }
+
+    if (reloadMissedBeforeReady) {
+      reloadMissedBeforeReady = false;
+      applyConfigReload(loadConfig());
+    }
   });
 
   // Invalidate the statusEmbed channel ref cache after every Discord
@@ -275,9 +337,14 @@ void (async () => {
             (!allowed || allowed.has(id)) &&
             id.startsWith(String(focused.value).toLowerCase()),
         );
-        await autocomplete.respond(
-          ids.slice(0, 25).map((id) => ({ name: id, value: id })),
-        );
+        const choices = ids.slice(0, 25).map((id) => ({ name: id, value: id }));
+        if (
+          autocomplete.commandName === "uptime" &&
+          ALL_SERVERS.startsWith(String(focused.value).toLowerCase())
+        ) {
+          choices.unshift({ name: "all (overview)", value: ALL_SERVERS });
+        }
+        await autocomplete.respond(choices.slice(0, 25));
         return;
       }
 
@@ -363,7 +430,7 @@ void (async () => {
       );
       if (!allowed) {
         await chatInteraction.reply({
-          content: "You do not have permission to use this command.",
+          content: t("common.noPermission"),
           flags: MessageFlags.Ephemeral,
         });
         return;
@@ -375,12 +442,14 @@ void (async () => {
       if (!consumeToken(chatInteraction.user.id)) {
         const secs = cooldownSeconds(chatInteraction.user.id);
         await chatInteraction.reply({
-          content: `Too many commands. Please wait ${secs}s.`,
+          content: t("common.rateLimited", { seconds: secs }),
           flags: MessageFlags.Ephemeral,
         });
         return;
       }
-      await command.execute(chatInteraction);
+      await runWithGuildLocale(chatInteraction.guild?.id, () =>
+        command.execute(chatInteraction),
+      );
 
       // Usage is recorded here, for EVERY command, rather than inside an
       // optional wrapper. It used to live in withErrorHandling — but only
@@ -445,6 +514,8 @@ async function shutdown(signal: string): Promise<void> {
   }
   process.exit(0);
 }
+
+installProcessGuards(flushUptimeHistory);
 
 process.on("SIGTERM", () => {
   shutdown("SIGTERM").catch(() => process.exit(1));

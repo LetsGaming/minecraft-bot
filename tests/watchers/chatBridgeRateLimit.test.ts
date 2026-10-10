@@ -5,6 +5,7 @@
  * feedback (⏳ reaction), and other users are unaffected.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { DELIVERED, UNREACHABLE } from "../fixtures/outcomes.js";
 
 vi.mock("../../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -58,7 +59,7 @@ describe("Discord→MC bridge rate limiting", () => {
 
   it("lets a normal burst through and cuts off a flood with feedback", async () => {
     const client = makeClient();
-    const server = { sendCommand: vi.fn().mockResolvedValue(undefined) };
+    const server = { send: vi.fn().mockResolvedValue(DELIVERED) };
     setupDiscordToMc(client as never, guildConfigs, () => server as never);
 
     const messages = Array.from({ length: 12 }, (_, i) =>
@@ -69,7 +70,7 @@ describe("Discord→MC bridge rate limiting", () => {
     }
 
     // Bucket capacity is 8: the first 8 reach the game, the rest do not.
-    expect(server.sendCommand).toHaveBeenCalledTimes(8);
+    expect(server.send).toHaveBeenCalledTimes(8);
     // Blocked messages get a ⏳ reaction instead of silently vanishing.
     const reacted = messages.filter(
       (m) => m.react.mock.calls.length > 0,
@@ -78,9 +79,20 @@ describe("Discord→MC bridge rate limiting", () => {
     expect(messages[11]!.react).toHaveBeenCalledWith("⏳");
   });
 
+  it("reacts with a warning when the message did not reach the game", async () => {
+    const client = makeClient();
+    const server = { send: vi.fn().mockResolvedValue(UNREACHABLE) };
+    setupDiscordToMc(client as never, guildConfigs, () => server as never);
+
+    const msg = makeMsg("someone", "hello");
+    await client._trigger("messageCreate", msg as never);
+
+    expect(msg.react).toHaveBeenCalledWith("⚠️");
+  });
+
   it("rate limits per user — one user's flood does not block others", async () => {
     const client = makeClient();
-    const server = { sendCommand: vi.fn().mockResolvedValue(undefined) };
+    const server = { send: vi.fn().mockResolvedValue(DELIVERED) };
     setupDiscordToMc(client as never, guildConfigs, () => server as never);
 
     for (let i = 0; i < 12; i++) {
@@ -90,7 +102,7 @@ describe("Discord→MC bridge rate limiting", () => {
     await client._trigger("messageCreate", calm as never);
 
     // 8 from the flooder + 1 from the bystander.
-    expect(server.sendCommand).toHaveBeenCalledTimes(9);
+    expect(server.send).toHaveBeenCalledTimes(9);
     expect(calm.react).not.toHaveBeenCalled();
   });
 
@@ -98,13 +110,13 @@ describe("Discord→MC bridge rate limiting", () => {
     vi.useFakeTimers();
     try {
       const client = makeClient();
-      const server = { sendCommand: vi.fn().mockResolvedValue(undefined) };
+      const server = { send: vi.fn().mockResolvedValue(DELIVERED) };
       setupDiscordToMc(client as never, guildConfigs, () => server as never);
 
       for (let i = 0; i < 9; i++) {
         await client._trigger("messageCreate", makeMsg("chatty") as never);
       }
-      expect(server.sendCommand).toHaveBeenCalledTimes(8);
+      expect(server.send).toHaveBeenCalledTimes(8);
 
       // Full window elapses → bucket refills.
       vi.advanceTimersByTime(10_000);
@@ -112,7 +124,7 @@ describe("Discord→MC bridge rate limiting", () => {
         "messageCreate",
         makeMsg("chatty", "back again") as never,
       );
-      expect(server.sendCommand).toHaveBeenCalledTimes(9);
+      expect(server.send).toHaveBeenCalledTimes(9);
     } finally {
       vi.useRealTimers();
     }

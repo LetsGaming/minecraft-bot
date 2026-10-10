@@ -5,6 +5,7 @@
  * getAuditEntry().
  */
 import { SlashCommandBuilder } from "discord.js";
+import { formatLastSeen } from "../../utils/discordTime.js";
 import { createEmbed } from "../../utils/embeds/embedUtils.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { getAuditEntry } from "@mcbot/core/utils/stores/whitelistAudit.js";
@@ -49,7 +50,7 @@ function crossServerLastSeen(
   if (!latest) return null;
   return {
     text: t("whois.lastSeenValue", {
-      when: `<t:${Math.floor(latest.at / 1000)}:R>`,
+      when: formatLastSeen(latest.at),
       server: latest.server,
     }),
   };

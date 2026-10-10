@@ -25,6 +25,7 @@ import {
   SlashCommandBuilder,
 } from "discord.js";
 import { randomBytes } from "crypto";
+import { formatLastSeen } from "../../utils/discordTime.js";
 import { createEmbed } from "../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../utils/embeds/embedColors.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
@@ -52,8 +53,7 @@ import {
   closePoll,
 } from "../../logWatcher/watchers/schedulers/pollScheduler.js";
 import { t } from "@mcbot/core/utils/i18n.js";
-import { log } from "@mcbot/core/utils/logger.js";
-import { errMsg } from "@mcbot/core/utils/error.js";
+import { tellraw } from "@mcbot/core/utils/minecraft/serverMessages.js";
 
 const DEFAULT_DURATION_HOURS = 24;
 const MAX_DURATION_HOURS = 24 * 7;
@@ -140,7 +140,7 @@ function pollEmbed(poll: Poll) {
     title: `🗳️ ${poll.question}`,
     description: `${optionLines.join("\n")}\n\n${t("poll.howToVote")}\n⏳ ${t(
       "poll.ends",
-    )} <t:${Math.floor(poll.endsAt / 1000)}:R>`,
+    )} ${formatLastSeen(poll.endsAt)}`,
     color: EmbedColor.Info,
     footer: { text: pollServerIds(poll).join(", ") },
   });
@@ -195,7 +195,7 @@ export const execute = withErrorHandling(
             title: `🗳️ ${open.question}`,
             description: `${lines.join("\n")}\n\n${t("poll.resultTotal", {
               total,
-            })}\n⏳ ${t("poll.ends")} <t:${Math.floor(open.endsAt / 1000)}:R>`,
+            })}\n⏳ ${t("poll.ends")} ${formatLastSeen(open.endsAt)}`,
             footer: { text: server.id },
           }),
         ],
@@ -312,33 +312,18 @@ export const execute = withErrorHandling(
     // In-game announcement on every participating instance — a span
     // poll that only tells one server about itself defeats the point.
     for (const inst of participants) {
-      try {
-        await inst.sendCommand(
-          `/tellraw @a ${JSON.stringify({
-            text: t("poll.announceInGame", { question }),
-            color: "gold",
-          })}`,
-        );
-        for (let i = 0; i < options.length; i++) {
-          await inst.sendCommand(
-            `/tellraw @a ${JSON.stringify({
-              text: `  ${i + 1}. ${options[i]}`,
-              color: "yellow",
-            })}`,
-          );
-        }
-        await inst.sendCommand(
-          `/tellraw @a ${JSON.stringify({
-            text: t("poll.voteHint"),
-            color: "gray",
-          })}`,
-        );
-      } catch (err) {
-        log.warn(
-          "polls",
-          `In-game poll announcement failed on ${inst.id}: ${errMsg(err)}`,
-        );
+      const reached = await tellraw(inst, "@a", {
+        text: t("poll.announceInGame", { question }),
+        color: "gold",
+      });
+      if (!reached) continue;
+      for (let i = 0; i < options.length; i++) {
+        await tellraw(inst, "@a", {
+          text: `  ${i + 1}. ${options[i]}`,
+          color: "yellow",
+        });
       }
+      await tellraw(inst, "@a", { text: t("poll.voteHint"), color: "gray" });
     }
   }),
 );

@@ -56,7 +56,7 @@ On startup the entrypoint reads `config.template.json`, substitutes the `.env` v
 The template covers one server and one guild. For multi-server or multi-guild setups, use a full static config:
 
 ```bash
-cp config_structure.json config.json
+cp config.template.json config.json
 # Fill it in; see admin/configuration.md for the full reference
 ```
 
@@ -137,6 +137,20 @@ docker compose --profile web up -d web    # dashboard only
 ```
 
 Requires `"webui": { "enabled": true }` in the config plus `WEBUI_CLIENT_SECRET` / `WEBUI_SESSION_SECRET` in `.env`. Compose already sets `WEBUI_HOST=0.0.0.0` inside the container and publishes the port on the **host's loopback only** (`127.0.0.1:8130`) — put a TLS-terminating reverse proxy in front before exposing it further. Optionally set `WEBUI_METRICS_TOKEN` to require `Authorization: Bearer <token>` on `/metrics`.
+
+#### Reverse proxy and client addresses
+
+The dashboard does not trust `X-Forwarded-For` by default, so a client cannot claim another address to slip past the login and write rate limits. That is correct when you reach it directly (the compose default, port published on the host loopback). Behind a reverse proxy, tell it which proxy to believe in `config.json`:
+
+```json
+"webui": { "enabled": true, "trustProxy": ["uniquelocal"] }
+```
+
+Use `["loopback"]` when the proxy runs on the host and connects over 127.0.0.1, `["uniquelocal"]` (private ranges) for a proxy container on the same Docker network, or the proxy's exact address. Without it every visitor looks like the proxy: signed-in users still get their own rate-limit budget, but the pre-login limit is shared, and the dashboard logs one warning naming this setting. Also set `WEBUI_PUBLIC_URL` to the public URL.
+
+To sign every dashboard session out, raise `webui.sessionEpoch` in `config.json`.
+
+`MCBOT_DEV_NO_AUTH=1` (set only by `scripts/dev-up.mjs`) disables dashboard login entirely, so the dashboard refuses to start with it on a non-loopback `WEBUI_HOST` or under `NODE_ENV=production`. Never set it on a real deployment.
 
 There is deliberately no `depends_on`: the dashboard and the bot have independent lifecycles — either runs and works without the other. They share the config file and the `bot_data` volume (JSON stores + the SQLite database in WAL mode), which also means both containers must run on the same host.
 

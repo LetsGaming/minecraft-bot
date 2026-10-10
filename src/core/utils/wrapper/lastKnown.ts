@@ -33,6 +33,7 @@
  */
 
 import type { StaleInfo } from "@mcbot/schema/contract.js";
+import { ConfigAccessError } from "../server/configAccessError.js";
 
 /**
  * How long a value stays servable after its last successful read.
@@ -57,6 +58,8 @@ interface Entry {
  * process has never successfully read anything and should not pretend it has.
  */
 const entries = new Map<string, Entry>();
+/** Per-server counter bumped by forget(), so a read that began before it cannot remember afterwards. */
+const generations = new Map<string, number>();
 
 function keyOf(serverId: string, resource: string): string {
   return `${serverId}::${resource}`;
@@ -111,11 +114,15 @@ export async function readThrough<T>(
   resource: string,
   read: () => Promise<T>,
 ): Promise<{ value: T; stale: StaleInfo | null }> {
+  const startedAt = generations.get(serverId) ?? 0;
   try {
     const value = await read();
-    remember(serverId, resource, value);
+    if ((generations.get(serverId) ?? 0) === startedAt) remember(serverId, resource, value);
     return { value, stale: null };
   } catch (err) {
+    // The wrapper answered and said no (file gone, too large): the cached copy
+    // would only hide that.
+    if (err instanceof ConfigAccessError) throw err;
     const fallback = recall<T>(
       serverId,
       resource,
@@ -128,6 +135,7 @@ export async function readThrough<T>(
 
 /** Drop everything for a server. Used after a write, so the next read is live. */
 export function forget(serverId: string, resource?: string): void {
+  generations.set(serverId, (generations.get(serverId) ?? 0) + 1);
   if (resource) {
     entries.delete(keyOf(serverId, resource));
     return;

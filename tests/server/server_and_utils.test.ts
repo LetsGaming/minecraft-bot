@@ -2,7 +2,7 @@
  * Tests for:
  * - server.ts: initServers, getServerInstance, getAllInstances, getGuildServer
  * - RconClient: pure packet encode/decode helpers (tested via constructor)
- * - utils.ts: ensureDir, getListOutput (with mock server)
+ * - utils.ts: ensureDir
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm } from "fs/promises";
@@ -98,8 +98,17 @@ describe("server.ts — initServers / getServerInstance / getAllInstances", () =
     expect(all.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("getGuildServer returns null when guildId is undefined", () => {
-    expect(getGuildServer(undefined)).toBeNull();
+  it("getGuildServer resolves the only configured server in a DM", () => {
+    initServers({ survival: minimalCfg });
+    expect((getGuildServer(undefined) as { id: string }).id).toBe("survival");
+  });
+
+  it("getGuildServer asks for server: when a DM has several servers", () => {
+    initServers({
+      survival: minimalCfg,
+      creative: { ...minimalCfg, id: "creative" } as never,
+    });
+    expect(() => getGuildServer(undefined)).toThrow(/Pass `server:`/);
   });
 });
 
@@ -170,31 +179,3 @@ describe("utils.ensureDir", () => {
   });
 });
 
-// ══════════════════════════════════════════════════════════════════════════════
-// utils.ts — getListOutput
-// ══════════════════════════════════════════════════════════════════════════════
-
-describe("utils.getListOutput", () => {
-  let getListOutput: (server?: never) => Promise<string | null>;
-  beforeEach(async () => {
-    ({ getListOutput } = await import("../../src/core/utils/minecraft/playerUtils.js"));
-    vi.clearAllMocks();
-  });
-
-  it("returns null when no server is provided", async () => {
-    expect(await getListOutput(undefined as never)).toBeNull();
-  });
-
-  it("returns null when server never produces 'players online' in logs", async () => {
-    const { tailLog } = await import("../../src/core/utils/server/serverAccess.js");
-    vi.mocked(tailLog).mockResolvedValue("Server is starting...");
-    const server = {
-      id: "test-list",
-      config: { id: "test-list" },
-      sendCommand: vi.fn().mockResolvedValue(null),
-    } as never;
-    // With very short retry, getListOutput should return null
-    const result = await getListOutput(server);
-    expect(result).toBeNull();
-  });
-});

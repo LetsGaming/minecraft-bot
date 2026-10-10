@@ -527,11 +527,13 @@ often to keep trying*.
 already goes through. After 5 consecutive failures it opens and fails fast
 for 15s, then lets one probe through (half-open) before fully closing again.
 Deliberately per-server (a breaker keyed globally would let one broken
-instance mute every other configured server) and deliberately reads-only:
-writes (scripts, mod mutations, restore, console commands) are rare and
+instance mute every other configured server) and, originally, reads-only:
+writes (scripts, mod mutations, restore) are rare and
 operator-initiated, and an admin retrying "start the server" during a flaky
 window should reach the wrapper, not be told no by a breaker tuned for read
-traffic.
+traffic. Console commands joined the breaker later (see "Console commands
+return a CommandOutcome"), because a down wrapper otherwise cost every in-game
+command its full timeout.
 
 A 429 is excluded from the breaker on purpose: the wrapper answered and
 declined the request on its own terms, which is proof it is reachable and
@@ -572,3 +574,101 @@ docstring already states the split and why: "wrap with `readThrough` /
 Baking error-fallback into the freshness cache would duplicate what
 `lastKnown.ts` already does correctly, for the same reason the circuit
 breaker above stays a separate module rather than a `lastKnown.ts` addition.
+
+---
+
+## `config.json` is versioned and migrated on load; the Docker image generates the schema
+
+**Problem:** config.json had no version and no migration code. The only handling of an old format was a validation error that told the operator to edit the file by hand, and `config_structure.json`, which the docs called canonical, still showed the removed pre-5.0 fields. Separately the Docker image copied a committed `config.schema.json`, so a stale committed schema shipped silently unless CI caught it.
+
+**Decision:**
+
+- `configVersion` (missing = 0) plus an ordered list of pure migrators in `core/configMigrations.ts`. `loadConfig()` runs the pending ones before env overrides and validation. When anything changed it writes `config.json.bak-v<from>-<timestamp>` first, then replaces the file atomically (`writeFileAtomicSync`), and logs one line per migrator. A migrator that cannot finish throws; nothing is written and startup stops with its message. A newer `configVersion` is rejected. `writeConfig` (the dashboard write path) stamps the current version.
+- The 5.0 local-mode gate is a migrator. It strips the removed fields, and where it would have to invent `apiUrl` or `apiKey` it stops and lists exactly which keys to add (a wrapper address is never guessed). The validator keeps rejecting those fields in a candidate, so the dashboard cannot write them back.
+- `loadConfig` has its own small synchronous write instead of calling `writeConfig`: `writeConfig` is async, validates (the file may not be valid yet) and lives in a module that imports `config.ts`, so reusing it would be an import cycle.
+- Rules JSON Schema can express (guild `language` enum, `waypoints.maxPerServer`, `webui.port`, restart `time`, positive `warnMinutes` and milestone thresholds) are JSDoc tags on the types in `schema/config.ts`, enforced by Ajv. An unknown guild language stays a warning (the enum error is filtered the way unknown notification events are) because it has always fallen back to the global language. Day codes stay hand-checked because lowercase has always been accepted.
+- The Dockerfile builder stage runs `npm run schema:generate` and the runtime stages copy the result from the builder. CI `schema:check` stays as a second guard.
+- The guild feature list (`GUILD_FEATURE_KEYS` in `schema/config.ts`, constrained to `keyof GuildConfig`) is the single source for the backend summary, the guilds view and the setup wizard; a test ties it to the generated schema.
+
+**Deliberately not done:** the migrator does not try to turn local-mode settings into wrapper settings, and the bot does not delete old backups.
+
+---
+
+## Wire types come from the wrapper's generated OpenAPI document (D1)
+
+**Problem:** the shapes of the wrapper's replies existed in at least six
+hand-copied places: the wrapper's `wire.ts`, `serverAccess.ts`, the schema
+contract, core's backup types, and two sets in the dashboard frontend. The
+wrapper's `openapi.yaml` was a seventh, hand-written, and had drifted
+(`info.version` read 3.0.0 against a 3.5.0 package). The contract check covered
+roughly a third of the surface, so a renamed field on an uncovered route
+compiled everywhere and failed in the field.
+
+**Decision:** the wrapper owns the contract. Every route there declares a
+response schema, Fastify serializes replies through it, and `openapi.json` is
+generated from the router. The bot vendors that file, generates its types with
+`openapi-typescript` (a devDependency; no runtime dependency, no shared
+package, no registry), and re-exports them under the existing names with
+fields that only newer wrappers send kept optional. Both repos drift-check
+their committed copies in CI.
+
+**Rejected:** a shared `@mcbot/wire` package (publishing, coupled release
+cadence, a new dependency) and a hand-written spec as the source (it is what
+drifted).
+
+**The contract check is derived, not listed.** `e2e:contract` reads the route
+list from the wrapper's manifest and fails when a route is never requested, so
+a new route cannot ship without a case. Script-running routes need
+`sudo -n -u <user>`; where that is unavailable the run reports them as
+unverified, and CI requires it.
+
+**Compatibility policy (D2):** a one-minor window using manifest feature
+versions; the wrapper ships first; the order is wrapper, suite submodule
+pointer, bot. `contract.yml` tests the wrapper default branch and the pinned
+commit, the suite repo builds its pinned wrapper and runs this check, and
+`release.yml` runs the full gate before publishing. Docs name manifest
+capabilities, not wrapper versions, so they cannot go stale when a version
+number moves.
+
+## Console commands return a CommandOutcome instead of `string | null`
+
+**Problem:** `ServerInstance.sendCommand` returned `null` for four different
+situations: the command went over a channel with no reply, RCON failed and the
+screen fallback carried it, the screen send failed outright, and the wrapper
+was never reached. Ban, kick, pardon and whitelist edits ignored the result and
+recorded success, the temp-ban scheduler deleted its record after a `/pardon`
+that may never have arrived, event tips and feature nudges were marked as sent
+before anyone knew, and `give()` imported `serverAccess` to get around the
+swallowing.
+
+**Decision:** `CommandOutcome` (`schema/commandOutcome.ts`) is `delivered`
+(RCON answered, output may be empty), `sent` (written to the console with no
+reply channel, unverifiable) or `unreachable` (with a reason). The wrapper
+reports the channel it used (`POST /command` returns `{ result, via, sent,
+rconError? }`, `rcon-command` v2) and answers 502 when neither RCON nor screen
+delivered, so a failed screen send is no longer a `200 { result: null }`.
+`serverAccess.sendCommandOutcome` never throws and `ServerInstance.send`
+returns the union. Callers that record state act on the kind: moderation and
+whitelist commands abort before writing anything, the temp-ban scheduler keeps
+its record and retries every minute, tips and nudges record only when the
+message reached the server, a reward is requeued on `unreachable` and counted
+as given on `sent`.
+
+**Compatibility:** a v1 wrapper answers `{ result }` only; the bot reads a
+string as `delivered` and `null` as `sent`, which is the old behaviour without
+the swallowing. It cannot tell a failed screen send from a successful one, and
+the startup report says so (`EXPECTED_WRAPPER_FEATURES["rcon-command"]`).
+
+**Live queries** (`getSeed`, `getPlayerCoords`, `getPlayerDimension`,
+`getLastDeathLocation`) return a `QueryResult` and fail at once on
+`unreachable`: an RCON reply is parsed directly, the log is polled only after
+a send with no reply channel, and the anchored parsers that stop chat spoofing
+are unchanged. There is no `"overworld"` default; a waypoint is not saved when
+the dimension is unknown.
+
+**Rejected:** throwing on failure. Every caller already treats an unreachable
+server as a normal condition, and a union forces the caller to decide what
+that means for its own state, which a thrown error lets it skip.
+
+**Circuit breaker:** console commands now go through it (an open breaker is
+`unreachable`/`breaker-open`). Scripts, mod mutations and restore still do not.

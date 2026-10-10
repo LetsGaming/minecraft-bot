@@ -36,7 +36,10 @@ import {
 import { kvGet, kvSet } from "@mcbot/core/db/kv.js";
 import { loadConfig, getServerIds } from "@mcbot/core/config.js";
 import { getServerInstance } from "@mcbot/core/utils/server/server.js";
-import { getAllowedServerIds } from "../utils/guild/guildRouter.js";
+import {
+  resolveDefaultServerId,
+  visibleServerIdsForGuild,
+} from "@mcbot/core/utils/server/guildTargets.js";
 import { isServerAdmin, getMemberRoleIds } from "../commands/middleware.js";
 import { performWhitelistAdd } from "../commands/shared/whitelistAdd.js";
 import { createEmbed } from "../utils/embeds/embedUtils.js";
@@ -46,7 +49,10 @@ import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
 import { t, runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
 import { log } from "@mcbot/core/utils/logger.js";
-import type { GuildConfig } from "@mcbot/core/types/index.js";
+import {
+  resolveGuildConfigs,
+  type GuildConfigSource,
+} from "../utils/guild/guildConfigs.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
 const APPLY_ID = "wlapp:apply";
@@ -112,18 +118,16 @@ async function saveStore(store: ApplicationStore): Promise<void> {
 
 /** The server IDs this guild's applications may target. */
 function visibleServerIds(guildId: string): string[] {
-  const allowed = getAllowedServerIds(guildId);
-  return getServerIds().filter((id) => !allowed || allowed.has(id));
+  return visibleServerIdsForGuild(guildId, getServerIds());
 }
 
 /** The server an application in this guild targets, or null if ambiguous. */
-function defaultApplicationServer(
-  guildId: string,
-  gcfg: GuildConfig,
-): string | null {
-  if (gcfg.defaultServer) return gcfg.defaultServer;
-  const ids = visibleServerIds(guildId);
-  return ids.length === 1 ? ids[0]! : null;
+function defaultApplicationServer(guildId: string): string | null {
+  try {
+    return resolveDefaultServerId(guildId, getServerIds());
+  } catch {
+    return null;
+  }
 }
 
 // ── Persistent prompt maintenance ─────────────────────────────────────────
@@ -135,12 +139,14 @@ function defaultApplicationServer(
  */
 export async function ensureApplicationPrompts(
   client: Client,
-  guildConfigs: Record<string, GuildConfig>,
+  guildConfigs: GuildConfigSource,
 ): Promise<void> {
   const store = await loadStore();
   let dirty = false;
 
-  for (const [guildId, gcfg] of Object.entries(guildConfigs)) {
+  for (const [guildId, gcfg] of Object.entries(
+    resolveGuildConfigs(guildConfigs),
+  )) {
     const cfg = gcfg.whitelistApplications;
     if (!cfg?.channelId || !cfg.adminChannelId) continue;
 
@@ -252,7 +258,7 @@ async function handleApplyButton(
 
     // Multi-server guild without a default: the applicant picks the
     // target — better than bouncing them with a config error.
-    if (gcfg && !defaultApplicationServer(guildId, gcfg)) {
+    if (gcfg && !defaultApplicationServer(guildId)) {
       const ids = visibleServerIds(guildId).slice(0, 25);
       modal.addLabelComponents(
         new LabelBuilder()
@@ -308,7 +314,7 @@ async function handleModalSubmit(
     // Server: the guild default when unambiguous, otherwise the modal's
     // select. Re-validate against the visible set — customIds and modal
     // payloads are client-controlled.
-    let serverId = defaultApplicationServer(guildId, gcfg);
+    let serverId = defaultApplicationServer(guildId);
     if (!serverId) {
       const picked = (() => {
         try {
@@ -459,11 +465,11 @@ async function handleDecisionButton(
         return;
       }
       try {
-        const canonical = await performWhitelistAdd(server, app.mcName, {
+        const added = await performWhitelistAdd(server, app.mcName, {
           tag: interaction.user.tag,
           id: interaction.user.id,
         });
-        app.mcName = canonical;
+        app.mcName = added.name;
       } catch (err) {
         const msg = errMsg(err);
         await interaction.followUp({

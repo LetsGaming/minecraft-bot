@@ -18,7 +18,6 @@ import {
   recordCheck,
   getUptimeStats,
   flushUptimeHistory,
-  startUptimeFlushScheduler,
 } from "../../src/core/utils/stores/uptimeTracker.js";
 import { getDb } from "../../src/core/db/index.js";
 
@@ -168,12 +167,60 @@ describe("flushUptimeHistory", () => {
   });
 });
 
-// ── startUptimeFlushScheduler ─────────────────────────────────────────────
+// ── getUptimeStats — custom range ──────────────────────────────────────────
 
-describe("startUptimeFlushScheduler", () => {
-  it("returns a timer that can be cleared", () => {
-    const timer = startUptimeFlushScheduler();
-    expect(timer).toBeTruthy();
-    clearInterval(timer);
+describe("getUptimeStats — rangeHours", () => {
+  const HOUR = 3_600_000;
+
+  function insert(sid: string, ageHours: number, up: number): void {
+    getDb()
+      .prepare("INSERT INTO uptime_checks (server_id, t, up) VALUES (?, ?, ?)")
+      .run(sid, Date.now() - ageHours * HOUR, up);
+  }
+
+  it("omits the range block when none is requested", async () => {
+    const stats = await getUptimeStats(nextServerId());
+    expect(stats.range).toBeUndefined();
+  });
+
+  it("counts only checks inside the requested window", async () => {
+    const sid = nextServerId();
+    insert(sid, 100, 0);
+    insert(sid, 30, 0);
+    insert(sid, 10, 1);
+    insert(sid, 2, 1);
+    const stats = await getUptimeStats(sid, { rangeHours: 12 });
+    expect(stats.range).toEqual({
+      rangeHours: 12,
+      pct: 100,
+      checks: { total: 2, online: 2 },
+    });
+    expect((await getUptimeStats(sid, { rangeHours: 48 })).range?.pct).toBe(
+      66.67,
+    );
+  });
+
+  it("returns null pct when the window holds no checks", async () => {
+    const sid = nextServerId();
+    insert(sid, 100, 1);
+    const stats = await getUptimeStats(sid, { rangeHours: 6 });
+    expect(stats.range).toEqual({
+      rangeHours: 6,
+      pct: null,
+      checks: { total: 0, online: 0 },
+    });
+  });
+
+  it("clamps the window to the 30 day retention", async () => {
+    const stats = await getUptimeStats(nextServerId(), { rangeHours: 24 * 400 });
+    expect(stats.range?.rangeHours).toBe(24 * 30);
+  });
+
+  it("keeps the fixed windows unchanged alongside the range", async () => {
+    const sid = nextServerId();
+    insert(sid, 2, 1);
+    const stats = await getUptimeStats(sid, { rangeHours: 3 });
+    expect(stats.pct24h).toBe(100);
+    expect(stats.checks30d.total).toBe(1);
   });
 });

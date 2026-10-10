@@ -16,6 +16,7 @@ import {
   type GuildConfigSource,
 } from "../../../utils/guild/guildConfigs.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
+import { announce } from "@mcbot/core/utils/minecraft/serverMessages.js";
 
 const CHAT_REGEX = /\[.+?\]: <(?:\[AFK\]\s*)?([^>]+)>\s+(.+)/;
 
@@ -27,6 +28,13 @@ const CHAT_REGEX = /\[.+?\]: <(?:\[AFK\]\s*)?([^>]+)>\s+(.+)/;
 // the limiter shape is fixed at module load — changing limits needs a
 // restart, same as the slash limiter.
 const bridgeLimiter = createRateLimiter(bridgeLimiterSettings());
+
+/** The configured server ids, fixed or resolved per event. */
+export type ServerIdSource = string[] | (() => string[]);
+
+function resolveServerIds(source: ServerIdSource): string[] {
+  return typeof source === "function" ? source() : source;
+}
 
 /** A bridge after normalization: one channel ↔ exactly one server. */
 export interface ResolvedBridge {
@@ -265,10 +273,11 @@ function enqueueSend(
 export function prewarmBridgeWebhooks(
   client: Client,
   guildConfigs: GuildConfigSource,
-  allServerIds: string[],
+  allServerIds: ServerIdSource,
 ): void {
+  const serverIds = resolveServerIds(allServerIds);
   for (const gcfg of Object.values(resolveGuildConfigs(guildConfigs))) {
-    for (const bridge of resolveGuildBridges(gcfg, allServerIds).bridges) {
+    for (const bridge of resolveGuildBridges(gcfg, serverIds).bridges) {
       if (!bridge.useWebhook) continue;
       void bridgeWebhook(client, bridge.channelId);
     }
@@ -279,11 +288,11 @@ export function registerChatBridge(
   logWatcher: ILogWatcher,
   client: Client,
   guildConfigs: GuildConfigSource,
-  allServerIds: string[] = [],
+  allServerIds: ServerIdSource = [],
 ): void {
   reportBridgeProblems(
     resolveGuildConfigs(guildConfigs),
-    allServerIds,
+    resolveServerIds(allServerIds),
     "chatBridge",
   );
 
@@ -306,7 +315,10 @@ export function registerChatBridge(
     for (const [guildId, gcfg] of Object.entries(
       resolveGuildConfigs(guildConfigs),
     )) {
-      const { bridges } = resolveGuildBridges(gcfg, allServerIds);
+      const { bridges } = resolveGuildBridges(
+        gcfg,
+        resolveServerIds(allServerIds),
+      );
 
       // Only channels bound to THIS server receive its chat.
       for (const bridge of bridges) {
@@ -370,7 +382,7 @@ export function setupDiscordToMc(
   client: Client,
   guildConfigs: GuildConfigSource,
   getServerInstance: (id: string | undefined) => ServerInstance | null,
-  allServerIds: string[] = [],
+  allServerIds: ServerIdSource = [],
 ): void {
   client.on("messageCreate", async (msg) => {
     if (msg.author.bot) return;
@@ -380,7 +392,10 @@ export function setupDiscordToMc(
     const gcfg = resolveGuildConfigs(guildConfigs)[guildId];
     if (!gcfg?.chatBridge) return;
 
-    const { bridges } = resolveGuildBridges(gcfg, allServerIds);
+    const { bridges } = resolveGuildBridges(
+      gcfg,
+      resolveServerIds(allServerIds),
+    );
     const bridge = bridges.find((b) => b.channelId === msg.channel.id);
     if (!bridge) return;
 
@@ -401,6 +416,8 @@ export function setupDiscordToMc(
       msg.author.displayName,
       msg.content,
     );
-    await server.sendCommand(`/say [${safeName}] ${safeContent}`);
+    if (!(await announce(server, `[${safeName}] ${safeContent}`))) {
+      msg.react("⚠️").catch(() => {});
+    }
   });
 }

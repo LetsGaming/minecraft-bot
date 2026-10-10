@@ -8,6 +8,7 @@
  */
 import path from "path";
 import { loadJson, saveJson } from "../jsonStore.js";
+import { getLoadedConfigRevision } from "../../config.js";
 import { getRootDir } from "../paths.js";
 import { log } from "../logger.js";
 import { errMsg } from "../error.js";
@@ -25,6 +26,42 @@ export interface RuntimeHeartbeat {
   startedAt: number;
   pid: number;
   version: string;
+  /** The config revision the bot last applied; absent on bots that predate it. */
+  config?: AppliedConfigReport;
+}
+
+export interface AppliedConfigReport {
+  /** sha256 of the config.json bytes the bot reloaded and reconciled. */
+  hash: string;
+  appliedAt: number;
+  /** Servers whose connection settings changed and need a restart to take effect. */
+  restartRequired: string[];
+}
+
+let applied: AppliedConfigReport | null = null;
+let beatNow: (() => void) | null = null;
+
+/**
+ * Record the config revision the bot is now running with and publish it at
+ * once, so the dashboard learns about an applied edit within a moment rather
+ * than at the next scheduled beat.
+ */
+export function noteConfigApplied(hash: string, restartRequired: string[] = []): void {
+  applied = { hash, appliedAt: Date.now(), restartRequired };
+  beatNow?.();
+}
+
+/**
+ * Capture the revision the bot has just loaded, before reconciling against it,
+ * and return the function that reports it once the reconcile finished. Taking
+ * the hash up front keeps a second reload that lands mid-reconcile from being
+ * reported as applied before it was.
+ */
+export function beginConfigApply(): (restartRequired: string[]) => void {
+  const hash = getLoadedConfigRevision()?.hash;
+  return (restartRequired) => {
+    if (hash) noteConfigApplied(hash, restartRequired);
+  };
 }
 
 /** Start beating. Called once by the bot process. */
@@ -36,12 +73,25 @@ export function startRuntimeHeartbeat(version: string): void {
       startedAt,
       pid: process.pid,
       version,
+      ...(applied ? { config: applied } : {}),
     } satisfies RuntimeHeartbeat).catch((err: unknown) => {
       log.warn("heartbeat", `Write failed: ${errMsg(err)}`);
     });
   };
+  beatNow = beat;
   beat();
   setInterval(beat, HEARTBEAT_INTERVAL_MS).unref();
+}
+
+function isAppliedReport(value: unknown): value is AppliedConfigReport {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Partial<AppliedConfigReport>;
+  return (
+    typeof v.hash === "string" &&
+    typeof v.appliedAt === "number" &&
+    Array.isArray(v.restartRequired) &&
+    v.restartRequired.every((id) => typeof id === "string")
+  );
 }
 
 /** Read the last heartbeat, or null when none was ever written. */
@@ -55,6 +105,7 @@ export async function readRuntimeHeartbeat(): Promise<RuntimeHeartbeat | null> {
     startedAt: typeof raw.startedAt === "number" ? raw.startedAt : raw.at,
     pid: typeof raw.pid === "number" ? raw.pid : 0,
     version: typeof raw.version === "string" ? raw.version : "unknown",
+    ...(isAppliedReport(raw.config) ? { config: raw.config } : {}),
   };
 }
 

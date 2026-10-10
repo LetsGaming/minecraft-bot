@@ -100,14 +100,11 @@ export const EXPECTED_WRAPPER_FEATURES: Record<string, ExpectedFeature> = {
     version: 1,
     degrades: "/stats, /leaderboard, /top, and the hourly snapshots behind period boards",
   },
-  // Deliberately not listed here: "stats-bulk" is a pure performance
-  // optimization with a fully-equivalent fallback (readAllStats() in
-  // serverAccess.ts tries it and falls back to the per-uuid stats-read path
-  // on any older wrapper). Every entry in this table reports as a blocking
-  // "update the wrapper" gap when absent, which is wrong for something that
-  // degrades to identical behavior at a slightly higher wrapper request
-  // count — so it is intentionally invisible to the startup contract report
-  // and only ever detected at the one call site that uses it.
+  "stats-bulk": {
+    version: 1,
+    degrades:
+      "leaderboard and snapshot builds fall back to one stats request per player",
+  },
   "stats-delete": {
     version: 1,
     degrades: "/server prune-stats — it reports 0 deletions",
@@ -127,6 +124,12 @@ export const EXPECTED_WRAPPER_FEATURES: Record<string, ExpectedFeature> = {
       "the dashboard Mods tab (install, update, remove); the read-only " +
       "/mods list still works; on a v1 wrapper the enable/disable toggle " +
       "has no effect since every mod reports enabled",
+  },
+  "mod-compat": {
+    version: 1,
+    degrades:
+      "the dashboard Mods tab's check against another Minecraft version; " +
+      "the per-installed-version update check keeps working",
   },
   backups: { version: 1, degrades: "/backup" },
   "backup-files": {
@@ -149,8 +152,15 @@ export const EXPECTED_WRAPPER_FEATURES: Record<string, ExpectedFeature> = {
       "by editing files on the host",
   },
   "rcon-command": {
-    version: 1,
-    degrades: "every command that talks to the server console",
+    // v2: the reply names the channel (`via`, `sent`) and an undeliverable
+    // command is a 502. A v1 wrapper answers 200 { result: null } either way,
+    // so the bot treats a null result as "sent" and cannot tell a failed
+    // screen send from a successful one.
+    version: 2,
+    degrades:
+      "every command that talks to the server console; on a v1 wrapper a " +
+      "command that never reached the server is reported as sent, so " +
+      "bans, kicks and whitelist changes cannot be confirmed",
   },
   scripts: {
     version: 1,
@@ -165,6 +175,56 @@ export interface WrapperManifest {
   routes: string[];
   features: Record<string, { version: number; summary: string }>;
   scriptActions: string[];
+  /** Per-action ceilings in ms; absent on wrappers that predate the field. */
+  scriptTimeoutsMs?: Record<string, number>;
+}
+
+/**
+ * Ceilings used when a wrapper does not advertise `scriptTimeoutsMs`. They
+ * mirror the wrapper's own table so the bot never gives up before it does.
+ */
+export const FALLBACK_SCRIPT_TIMEOUTS_MS: Readonly<Record<string, number>> = {
+  start: 30_000,
+  stop: 240_000,
+  restart: 420_000,
+  rollback: 300_000,
+  backup: 600_000,
+  status: 15_000,
+};
+
+/** Ceiling for an action neither the wrapper nor the fallback table names. */
+export const DEFAULT_SCRIPT_TIMEOUT_MS = 120_000;
+
+/** How long the bot waits for a script action: the wrapper's ceiling, else the fallback. */
+export function scriptTimeoutMs(
+  action: string,
+  advertised?: Readonly<Record<string, number>>,
+): number {
+  const own = (table: Readonly<Record<string, number>> | undefined): number | undefined =>
+    table && Object.hasOwn(table, action) ? table[action] : undefined;
+  return own(advertised) ?? own(FALLBACK_SCRIPT_TIMEOUTS_MS) ?? DEFAULT_SCRIPT_TIMEOUT_MS;
+}
+
+/** Bounds applied to every advertised script ceiling; the manifest is remote input. */
+export const MIN_ADVERTISED_SCRIPT_TIMEOUT_MS = 5_000;
+export const MAX_ADVERTISED_SCRIPT_TIMEOUT_MS = 15 * 60_000;
+const MAX_SCRIPT_TIMEOUT_KEYS = 64;
+
+function parseScriptTimeouts(raw: unknown): Record<string, number> | null {
+  if (!isRecord(raw) || Array.isArray(raw)) return null;
+  const out: Record<string, number> = Object.create(null) as Record<string, number>;
+  let seen = 0;
+  for (const action of Object.keys(raw)) {
+    if (++seen > MAX_SCRIPT_TIMEOUT_KEYS) break;
+    if (!Object.hasOwn(FALLBACK_SCRIPT_TIMEOUTS_MS, action)) continue;
+    const ms = raw[action];
+    if (typeof ms !== "number" || !Number.isInteger(ms) || ms <= 0) continue;
+    out[action] = Math.min(
+      MAX_ADVERTISED_SCRIPT_TIMEOUT_MS,
+      Math.max(MIN_ADVERTISED_SCRIPT_TIMEOUT_MS, ms),
+    );
+  }
+  return Object.keys(out).length > 0 ? { ...out } : null;
 }
 
 /**
@@ -199,7 +259,16 @@ export function parseManifest(body: unknown): WrapperManifest | null {
       summary: typeof spec.summary === "string" ? spec.summary : "",
     };
   }
-  return { wrapper, manifest, routes, features: parsed, scriptActions };
+  const result: WrapperManifest = {
+    wrapper,
+    manifest,
+    routes,
+    features: parsed,
+    scriptActions,
+  };
+  const timeouts = parseScriptTimeouts(body.scriptTimeoutsMs);
+  if (timeouts) result.scriptTimeoutsMs = timeouts;
+  return result;
 }
 
 export interface ContractReport {

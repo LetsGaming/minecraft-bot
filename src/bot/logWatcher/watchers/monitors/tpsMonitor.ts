@@ -15,21 +15,38 @@ import { errMsg } from "@mcbot/core/utils/error.js";
 
 const warned = new Map<string, number>();
 
+export interface TpsMonitorHandle {
+  stop(): void;
+}
+
+/**
+ * Poll a server's TPS and alert when it drops below the warning threshold.
+ * The threshold and the poll interval are read from the live config on every
+ * tick, so edits apply without a restart.
+ */
 export function startTpsMonitor(
   serverInstance: ServerInstance,
   client: Client,
   guildConfigs: GuildConfigSource,
-): ReturnType<typeof setInterval> | null {
-  const cfg = loadConfig();
-  const interval = cfg.tpsPollIntervalMs;
-  const threshold = cfg.tpsWarningThreshold;
-
+): TpsMonitorHandle | null {
   if (!serverInstance.supportsTps) {
     log.info(serverInstance.id, "TPS monitoring skipped (requires RCON)");
     return null;
   }
 
-  const timer = setInterval(async () => {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let stopped = false;
+
+  const schedule = (): void => {
+    timer = setTimeout(() => {
+      void checkTps().finally(() => {
+        if (!stopped) schedule();
+      });
+    }, loadConfig().tpsPollIntervalMs);
+  };
+
+  const checkTps = async (): Promise<void> => {
+    const threshold = loadConfig().tpsWarningThreshold;
     try {
       const tps = await serverInstance.getTps();
       if (!tps || tps.tps1m === null) return;
@@ -107,11 +124,19 @@ export function startTpsMonitor(
     } catch {
       /* server might be down */
     }
-  }, interval);
+  };
 
+  schedule();
+
+  const { tpsWarningThreshold, tpsPollIntervalMs } = loadConfig();
   log.info(
     serverInstance.id,
-    `TPS monitoring active (threshold: ${threshold}, interval: ${interval / 1000}s)`,
+    `TPS monitoring active (threshold: ${tpsWarningThreshold}, interval: ${tpsPollIntervalMs / 1000}s)`,
   );
-  return timer;
+  return {
+    stop(): void {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+    },
+  };
 }

@@ -12,62 +12,71 @@
 import type { FastifyInstance } from "fastify";
 import { log } from "@mcbot/core/utils/logger.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
+import { ApiErrorCode } from "@mcbot/schema";
 
 export class HttpError extends Error {
   readonly statusCode: number;
   /** Extra fields merged into the response body (e.g. a validation list). */
   readonly extra: Record<string, unknown> | undefined;
+  /** Stable machine-readable reason (e.g. ApiErrorCode.Conflict); clients branch on this, never on the message. */
+  readonly code: string | undefined;
 
   constructor(
     statusCode: number,
     message: string,
     extra?: Record<string, unknown>,
+    code?: string,
   ) {
     super(message);
     this.name = new.target.name;
     this.statusCode = statusCode;
     this.extra = extra;
+    this.code = code;
   }
 
-  /** The response body: a consistent `{ error }` plus any extra fields. */
+  /** The response body: a consistent `{ error, code? }` plus any extra fields. */
   body(): Record<string, unknown> {
-    return { error: this.message, ...(this.extra ?? {}) };
+    return {
+      error: this.message,
+      ...(this.code === undefined ? {} : { code: this.code }),
+      ...(this.extra ?? {}),
+    };
   }
 }
 
 export class BadRequest extends HttpError {
   constructor(message: string, extra?: Record<string, unknown>) {
-    super(400, message, extra);
+    super(400, message, extra, ApiErrorCode.BadRequest);
   }
 }
 
 export class Unauthorized extends HttpError {
   constructor(message = "Unauthorized") {
-    super(401, message);
+    super(401, message, undefined, ApiErrorCode.Unauthorized);
   }
 }
 
 export class Forbidden extends HttpError {
   constructor(message = "Forbidden") {
-    super(403, message);
+    super(403, message, undefined, ApiErrorCode.Forbidden);
   }
 }
 
 export class NotFound extends HttpError {
   constructor(message = "Not found") {
-    super(404, message);
+    super(404, message, undefined, ApiErrorCode.NotFound);
   }
 }
 
 export class Conflict extends HttpError {
   constructor(message: string, extra?: Record<string, unknown>) {
-    super(409, message, extra);
+    super(409, message, extra, ApiErrorCode.Conflict);
   }
 }
 
 export class ValidationFailed extends HttpError {
   constructor(errors: string[]) {
-    super(422, "Validation failed", { errors });
+    super(422, "Validation failed", { errors }, ApiErrorCode.ValidationFailed);
   }
 }
 
@@ -77,19 +86,20 @@ export class TooManyRequests extends HttpError {
       429,
       message,
       retryAfterSeconds === undefined ? undefined : { retryAfterSeconds },
+      ApiErrorCode.RateLimited,
     );
   }
 }
 
 export class ServiceUnavailable extends HttpError {
   constructor(message: string) {
-    super(503, message);
+    super(503, message, undefined, ApiErrorCode.Unavailable);
   }
 }
 
 export class BadGateway extends HttpError {
   constructor(message = "Upstream error") {
-    super(502, message);
+    super(502, message, undefined, ApiErrorCode.BadGateway);
   }
 }
 

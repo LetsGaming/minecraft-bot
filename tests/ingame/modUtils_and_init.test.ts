@@ -15,7 +15,6 @@ vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
   getList: vi
     .fn()
     .mockResolvedValue({ playerCount: "0", maxPlayers: "20", players: [] }),
-  sendCommand: vi.fn().mockResolvedValue(null),
   getTps: vi.fn().mockResolvedValue(null),
   readWhitelist: vi.fn().mockResolvedValue([]),
   readLevelName: vi.fn().mockResolvedValue("world"),
@@ -124,7 +123,6 @@ vi.mock("../../src/bot/logWatcher/watchers/schedulers/channelPurge.js", () => ({
 }));
 
 vi.mock("../../src/core/utils/stores/uptimeTracker.js", () => ({
-  startUptimeFlushScheduler: vi.fn().mockReturnValue({ unref: vi.fn() }),
   recordCheck: vi.fn().mockResolvedValue(undefined),
 }));
 

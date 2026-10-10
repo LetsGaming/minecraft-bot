@@ -17,6 +17,9 @@ import {
   buildAuthorizeUrl,
   verifyState,
   exchangeCode,
+  oauthStateCookie,
+  setOAuthStateCookie,
+  clearOAuthStateCookie,
   isSysadmin,
   sessionFromRequest,
   setSessionCookie,
@@ -46,7 +49,8 @@ export function registerAuthRoutes(app: FastifyInstance): void {
   const api = app.withTypeProvider<TypeBoxTypeProvider>();
 
   api.get("/auth/login", async (_req, reply) => {
-    const { url } = buildAuthorizeUrl();
+    const { url, nonce } = buildAuthorizeUrl();
+    setOAuthStateCookie(reply, nonce);
     return reply.redirect(url);
   });
 
@@ -56,7 +60,9 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     async (req, reply) => {
       const { code, state } = req.query;
       // Browser surface: plain-text, not the JSON error contract.
-      if (!code || !verifyState(state)) {
+      const stateOk = verifyState(state, oauthStateCookie(req));
+      clearOAuthStateCookie(reply);
+      if (!code || !stateOk) {
         return reply.code(400).send("Invalid OAuth state — try logging in again.");
       }
       const user = await exchangeCode(code);

@@ -33,9 +33,13 @@ COPY src/web/package.json ./src/web/
 RUN npm ci
 
 # Sources + build configuration.
-COPY tsconfig.json tsconfig.base.json config.schema.json ./
+COPY tsconfig.json tsconfig.base.json ./
 COPY scripts/ ./scripts/
 COPY src/ ./src/
+
+# config.schema.json is generated from RawBotConfig here, never copied from the
+# repo, so the image cannot ship a schema that has drifted from the types.
+RUN npm run schema:generate
 
 # Backend TypeScript (schema → core → bot + web, via project references),
 # then the dashboard SPA into src/web/dist/frontend.
@@ -100,7 +104,7 @@ RUN apt-get update \
 # /app/data on first run when the volume is empty.
 COPY data/ ./data/
 COPY data/ ./image-data/
-COPY config.schema.json ./
+COPY --from=builder /app/config.schema.json ./
 
 # Ensure runtime directories exist in the image layer.
 # Ownership is fixed at container start (bind mounts arrive as root).

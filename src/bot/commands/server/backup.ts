@@ -5,6 +5,7 @@ import { withErrorHandling } from "../middleware.js";
 import * as serverAccess from "@mcbot/core/utils/server/serverAccess.js";
 import { requireCapability } from "@mcbot/core/utils/server/capabilities.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 export const data = new SlashCommandBuilder()
   .setName("backup")
   .setDescription("Show backup status for a server")
@@ -14,14 +15,12 @@ export const data = new SlashCommandBuilder()
 
 export const execute = withErrorHandling(async (interaction) => {
   const server = resolveServer(interaction);
-  if (!server) throw new Error("Server not found.");
-
   // Friendly gate instead of an empty/raw error on plain servers.
   requireCapability(server, (c) => c.backups, "the suite backup layout");
 
   const { dirs, totalBytes } = await serverAccess.readBackups(server.config);
 
-  if (dirs.length === 0) throw new Error("No backups found.");
+  if (dirs.length === 0) throw new Error(t("backup.none"));
 
   // The one number that matters when things go wrong: how old is the
   // newest backup across ALL tiers (hourly wins normally; if it stops,
@@ -32,10 +31,13 @@ export const execute = withErrorHandling(async (interaction) => {
   const newestMb = (newest.latestSizeBytes / 1048576).toFixed(1);
 
   const embed = createEmbed({
-    title: `💾 Backup Status — ${server.id}`,
-    description:
-      `Newest: ${getAge(newest.latestMtime)} ago (${newestMb} MB, ${newest.dir})\n` +
-      `Total: ${(totalBytes / 1073741824).toFixed(2)} GB`,
+    title: t("backup.title", { server: server.id }),
+    description: t("backup.summary", {
+      age: getAge(newest.latestMtime),
+      size: newestMb,
+      dir: newest.dir,
+      total: (totalBytes / 1073741824).toFixed(2),
+    }),
   });
 
   for (const b of dirs) {
@@ -43,7 +45,7 @@ export const execute = withErrorHandling(async (interaction) => {
     const age = getAge(b.latestMtime);
     embed.addFields({
       name: b.dir.replace("archives/", "📁 "),
-      value: `${b.count} backup(s)\nLatest: ${age} ago (${sizeMb} MB)`,
+      value: t("backup.entry", { count: b.count, age, size: sizeMb }),
       inline: true,
     });
   }

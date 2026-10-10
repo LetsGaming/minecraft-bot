@@ -37,6 +37,57 @@ Every request goes through `api.ts` (`apiGet` / `apiSend`, with `handle<T>` and
 `fetch`. New calls route through it — that is what makes 401-handling and error
 shape uniform without each caller remembering.
 
+Failures arrive as `ApiError { status, code, body }` (`isConflict(err)` and
+`validationErrors(err)` are the two helpers). Branch on `status` or `code`
+(`ApiErrorCode` in `@mcbot/schema`), never on the message text; the backend sets
+`code` on every typed failure.
+
+## Editing a server-held document
+
+`composables/useEditableDocument.ts` is the one implementation of "edit a JSON
+document without losing anyone's work". The config, guild and commands flows use
+it; the setup wizard follows the same rules with its own merge (below).
+
+```ts
+const editor = useEditableDocument<Doc>({
+  load: async () => ({ doc, token }),            // token = hash or ETag of THIS read
+  save: async ({ token, draft, changes }) => {}, // changes = { set, remove } of dirty units
+});
+```
+
+- `draft` is edited freely; `dirty`, `dirtyKeys` and `isDirty(key)` compare it
+  with the baseline from the last read. A document is split into **units**
+  (default: top-level keys; pass `units` for a finer grain, as `useCommands`
+  does with one unit per scope and command).
+- The token from the load is what `save` sends. It is never refetched at save
+  time: re-reading it first would make the conflict check always pass.
+- After a successful save the document is re-read (new baseline and token). If
+  that read fails the editor is `stale` and refuses further saves until reload.
+- On a 409 the latest server version is merged field by field: units only the
+  server changed are adopted, units only you changed stay, and units both
+  changed become `conflicts` (rendered by `ConflictPicker`, resolved with
+  `resolveConflict`). Saving is blocked until none are left. Your edits are
+  never overwritten; `reloadDiscardingMine()` is the explicit way to drop them.
+- Validation failures (`fieldErrors`) keep the edits; `utils/fieldErrors.ts`
+  maps the backend's `  - path: message` lines onto the section that owns the
+  path.
+- Each instance registers with `useUnsavedGuard`: `beforeunload` for the
+  browser, and `confirmLeave` for the dashboard's tab switch. There is no URL
+  router, so App.vue's `goToTab` plays the role of a router leave guard.
+- `reset()` forgets the document when switching to a different one (the guild
+  editor does this per guild).
+
+The setup wizard (`useGuildSetup`) reads the guild block and its hash once,
+awaited, and blocks writing if that fails; `buildGuildBlock` merges decisions
+into the existing block and `seedModel` marks shapes it cannot express (several
+chat bridges) as preserved.
+
+Irreversible actions confirm through `useTypedConfirm` (the operator types the
+server name in a PrimeVue `ConfirmDialog`), not `window.prompt`.
+
+`ConfigStatusChip` shows whether the bot applied the saved file
+(`GET /api/config/status`, see the backend notes).
+
 ## Shared contracts, not re-typed ones
 
 The frontend bundles `@mcbot/schema` directly. Anything the backend and the

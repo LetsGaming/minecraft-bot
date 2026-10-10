@@ -1,4 +1,6 @@
 import { defineCommand } from "../../defineCommand.js";
+import { whisper } from "@mcbot/core/utils/minecraft/serverMessages.js";
+import { queryFailureText } from "../../queryMessages.js";
 
 const cmd = defineCommand({
   name: "seed",
@@ -7,13 +9,15 @@ const cmd = defineCommand({
   cooldown: 30,
   handler: async (username, _args, _client, server) => {
     const seed = await server.getSeed();
-    if (!seed) {
-      await server.sendCommand(
-        `/msg ${username} Could not retrieve the world seed.`,
+    if (!seed.ok) {
+      await whisper(
+        server,
+        username,
+        queryFailureText(seed.reason, "seed.unavailable"),
       );
       return;
     }
-    await server.sendCommand(`/msg ${username} World seed: ${seed}`);
+    await whisper(server, username, `World seed: ${seed.value}`);
   },
 });
 

@@ -74,24 +74,49 @@ Functions are deliberately thin: one route each, raw data back, no business
 logic. Nothing in the bot imports `fs` or `child_process` for server state,
 because there is nothing to import it for — the files are on another machine.
 
+`serverAccess.ts` is a barrel: it re-exports the public names, and the code
+lives by feature under `src/core/utils/server/access/`. Callers keep importing
+`serverAccess`; `tests/server/serverAccessExports.test.ts` pins the export list.
+
+| Module | Responsibility |
+|---|---|
+| `apiClient` | `apiGet`/`apiGetRaw`/`apiPost`/`apiDelete`, URL building, timeouts, circuit breaker wiring, `RateLimitedError` |
+| `health` | `getHealth` (wrapper first, direct ping as second opinion), `isRunning`, `getList`, `getTps`, game-port memory |
+| `commands` | `sendCommandOutcome` and its reply parsing |
+| `host` | wrapper `/info` (`getRemoteInfo`), `versionAtLeast` |
+| `manifest` | `/manifest`, advertised script timeouts, `verifyWrapperContract` |
+| `players` | whitelist and usercache |
+| `stats` | level name, per-player stats files, UUID sink guard |
+| `mods`, `modCompat` | installed mod list and management; background compatibility job |
+| `backups` | backup summary, archive index, streamed download, restore, delete |
+| `configFiles` | mod config file index, read, write (etag), revert |
+| `capabilityProbe` | `detectCapabilities` |
+| `scripts` | `runScript`, `ScriptStillRunningError` |
+| `logs` | `tailLog`, log stream URL and `openLogStream` |
+
+Dependencies point one way: every module may use `apiClient`; `manifest` uses
+`host`; `modCompat` and `scripts` use `manifest`. Nothing imports the barrel.
+
 `RconClient` and the `execCommand`/sudo layer used to sit under this and are
 gone as of 5.0.0. The wrapper has them.
 
 ### 2. Game operations: `ServerInstance`
 
 One instance per configured server, created at startup and held in a
-module-level registry. It holds no connection: it owns `sendCommand()`, the
+module-level registry. It holds no connection: it owns `send()`, the
 state readers (`isRunning`, `getList`, `getTps`, `getSeed`, `getPlayerCoords`,
 `getPlayerDimension`), and a few small caches, each delegating to
 `serverAccess`. The canonical regexes for parsing console/NBT output live here
 and only here — except TPS, which the wrapper parses because it is the side
 that sees the response. Details in [core/server-access.md](core/server-access.md).
 
-Note `sendCommand()` catches transport errors and returns null, which makes
-"the wrapper is unreachable" look like "the wrapper answered over screen, with
-no output to give". Callers that care about the difference — `give()` in
-`daily.ts` is the one — read `serverAccess` directly, where a failed request
-still throws.
+`send()` never throws and returns a `CommandOutcome`: `delivered` (RCON
+answered, output may be empty), `sent` (written to the console with no reply
+channel, so unverifiable) or `unreachable` (it did not get there, with a
+reason). Callers that record state afterwards (bans, whitelist edits, reward
+queues, "tip sent" markers) act on the kind; the helpers in
+`core/utils/minecraft/serverMessages.ts` (`whisper`, `announce`, `tellraw`)
+wrap it for plain messages. See [core/server-access.md](core/server-access.md).
 
 ### 3. Feature logic: commands and watchers
 
@@ -129,8 +154,8 @@ A player types `!chunkbase` in-game:
 ```
 server writes log line → LogWatcher reads delta → regex match
   → defineCommand cooldown check → handler
-  → server.getSeed() + getPlayerCoords() (RCON or log-poll fallback)
-  → server.sendCommand("/tellraw ...") back to the player
+  → server.getSeed() + getPlayerCoords() (RCON reply, or a log poll after a send with no reply channel)
+  → tellraw(server, player, ...) back to the player
 ```
 
 ## State and persistence
@@ -186,10 +211,38 @@ User-visible strings resolve through `t(key, vars)` in `core/utils/i18n.ts`.
 Locales are plain TS maps in `core/locales/` (`en.ts` is the default and
 fallback, `de.ts` overrides per key); `config.language` selects the active one,
 and missing keys fall back en → key. The layer is deliberately minimal — no
-plural rules, no nested keys, no runtime file loading. **All new user-visible
-strings must go through `t()`**; existing literal strings migrate key-by-key
-whenever a command is touched, so the map grows with the code instead of in one
-risky bulk rewrite. `npm run i18n:check` fails CI if the two files drift.
+plural rules, no nested keys, no runtime file loading. **All user-visible
+strings must go through `t()`**, with the key in both `en.ts` and `de.ts`.
+`npm run i18n:check` fails CI if the two files drift or if a Discord reply or
+embed gets a hard-coded English literal.
+
+### Adding a string
+
+1. Add a flat `<area>.<name>` key to `core/locales/en.ts` and the German text to
+   `core/locales/de.ts`. Variables are `{placeholder}`; both locales must use
+   the same ones. Write natural German, and reuse the terms already in `de.ts`.
+2. Call `t("area.name", { var })`. Slash commands run inside the guild's locale
+   (`bot/index.ts` enters it for every command), so no guild id is needed there.
+   Code that runs outside a command (button collectors, DMs, schedulers) passes
+   the guild id as the third argument or runs inside `runWithGuildLocale`.
+3. Build text lazily when it is created before the per-guild loop (pass a
+   function, not a string).
+
+### The literal lint
+
+`scripts/lib/i18nLiteralLint.mjs` parses `src/bot/commands`, `interactions`,
+`logWatcher/watchers`, `utils/embeds`, `utils/guild/guildRouter.ts` and
+`index.ts`, and reports a string or template literal (also inside `+`, `?:`,
+`??`) handed straight to a user-facing sink: `reply`, `editReply`, `followUp`,
+`update`, `send` with text, `setTitle`, `setDescription`, `setLabel`,
+`setPlaceholder`, `setFooter`, `setAuthor`, `addFields`, `createEmbed` and the
+`create*Embed` helpers, and `throw new Error(...)` inside commands. Strings
+without letters (emoji, digits, punctuation), bare URLs, unit words such as
+`ms`, console commands starting with `/` and slash command metadata
+(`setName`/`setDescription` on a `SlashCommandBuilder` or option) are ignored.
+A literal assigned to a variable first is not seen, so keep text out of
+variables too. A justified exception goes in `scripts/i18n-literal-allowlist.json`
+as `{ path, text?, reason }`; leave it empty if you can.
 
 ## The setup-suite contract
 
@@ -227,7 +280,7 @@ review.
 | `bot/logWatcher/watchers/**` | `ServerInstance`, embeds, logger | `bot/commands/*` |
 | `core/utils/minecraft/*` | core utils, server, serverAccess, logger | embeds, discord.js |
 | `bot/utils/embeds/statEmbeds` | statUtils, embedUtils, discord.js | server.ts, config.ts |
-| `core/utils/server/serverAccess` | `fetch`, types, `sseLineStream` | discord.js, `bot/commands`, `fs`, `child_process` |
+| `core/utils/server/serverAccess` (+ `access/*`) | `fetch`, types, `sseLineStream` | discord.js, `bot/commands`, `fs`, `child_process` |
 | `core/utils/sseLineStream` | `fetch`, logger | discord.js, Minecraft or wrapper payload shapes |
 | `web/backend/console/consoleHub` | `serverAccess`, logger | discord.js, `bot/*`, Fastify types |
 

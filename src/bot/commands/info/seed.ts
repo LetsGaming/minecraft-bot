@@ -3,7 +3,9 @@ import { createEmbed } from "../../utils/embeds/embedUtils.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
 
 import { withErrorHandling } from "../middleware.js";
+import { queryFailureText } from "../../logWatcher/queryMessages.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 export const data = new SlashCommandBuilder()
   .setName("seed")
   .setDescription("Get the server's world seed")
@@ -13,17 +15,15 @@ export const data = new SlashCommandBuilder()
 
 export const execute = withErrorHandling(async (interaction) => {
   const server = resolveServer(interaction);
-  if (!server) throw new Error("Server not found.");
-
   const seed = await server.getSeed();
-  if (!seed) throw new Error("Could not retrieve the world seed.");
+  if (!seed.ok) throw new Error(queryFailureText(seed.reason, "seed.unavailable"));
 
   await interaction.editReply({
     embeds: [
       createEmbed({
-        title: `World Seed — ${server.id}`,
-        description: `\`${seed}\``,
-        footer: { text: `Requested by ${interaction.user.tag}` },
+        title: t("seed.title", { server: server.id }),
+        description: `\`${seed.value}\``,
+        footer: { text: t("common.requestedBy", { user: interaction.user.tag }) },
       }),
     ],
   });

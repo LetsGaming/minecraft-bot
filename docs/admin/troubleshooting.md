@@ -10,7 +10,7 @@ Problems sorted by symptom. The bot's own log (`logs/bot.log`, or `docker compos
 
 ## "config.json validation failed at ..."
 
-The bot tells you exactly which field is wrong, e.g. `servers.survival.rconPort: must be an integer between 1 and 65535`. Fix the named field; `config_structure.json` shows the expected shape for everything.
+The bot tells you exactly which field is wrong, e.g. `servers.survival.rconPort: must be an integer between 1 and 65535`. Fix the named field; `config.template.json` shows the expected shape and `config.schema.json` lists every field.
 
 If the message is `Failed to load config.json`, the file is missing or not valid JSON. A trailing comma is the usual culprit; run it through a JSON validator.
 
@@ -25,6 +25,18 @@ If the server *was* set up with the suite, the error means the wrapper's `script
 ## "Sudo is not configured correctly"
 
 Passwordless sudo is the **wrapper's** requirement, on the Minecraft host: it is what runs the management scripts and reaches the `screen` session. The bot only relays the error. See the wrapper's own documentation for the two hops it needs.
+
+## Mod install, update, remove or toggle fails with a sudo error
+
+Mod management runs the suite's `update/*.js` scripts with `node` as the Minecraft user, which is a second sudoers grant besides the `bash` one for the management scripts. If the Mods tab lists mods but changing them fails, the `node` grant is missing. The sudoers example is in the wrapper's `docs/sudoers-setup.md`.
+
+## The wrapper refuses to start, "API key too short"
+
+Keys must be at least 32 characters. Generate one with `openssl rand -hex 32` and use the same value in the wrapper config and in the bot's `apiKey` (or `API_KEY` / `API_KEY_<SERVER_ID>`).
+
+## "The server could not be reached" after /ban, /kick, /whitelist and similar
+
+The command never got to the Minecraft server (the wrapper is down, its circuit breaker is open for 15 s after five failures, or neither RCON nor `screen` accepted it), so the bot recorded nothing: no audit entry, no timed ban, no whitelist history. Fix the connection and run the command again. If the reply instead says the result is unverified, the wrapper used the `screen` fallback, which cannot confirm delivery; enable RCON as described below.
 
 ## RCON keeps failing / "RCON failed, screen fallback"
 
@@ -83,8 +95,9 @@ That is by design: the feature self-heals. To remove the channels permanently, d
 
 ## Dashboard: the Backups tab is missing
 
-The wrapper on that host is older than 3.3.0, so it cannot serve the archive
-index. The tab is hidden rather than shown-and-broken. Check with:
+The wrapper on that host does not offer the `backup-files` feature, so it
+cannot serve the archive index. The tab is hidden rather than shown-and-broken.
+Check with:
 
 ```bash
 curl -s -H "x-api-key: $MC_API_KEY" http://127.0.0.1:3000/manifest | jq '.wrapper, (.features | keys)'

@@ -18,7 +18,8 @@ import {
 /** What the backend writes on the stream. Mirrors ConsoleEvent. */
 type ConsoleEvent =
   | { type: "line"; line: string }
-  | { type: "state"; connected: boolean; detail?: string };
+  | { type: "state"; connected: boolean; detail?: string }
+  | { type: "closed"; reason: "revoked" | "removed" | "reconfigured"; detail: string };
 
 /**
  * How many lines the pane keeps.
@@ -29,6 +30,8 @@ type ConsoleEvent =
  * place to go for history.
  */
 const MAX_LINES = 2000;
+const SENT_NO_OUTPUT =
+  "(sent; this server has no console output channel, so there is no reply)";
 
 export interface ConsoleLine {
   /** Monotonic, so v-for has a stable key even for two identical lines. */
@@ -110,6 +113,15 @@ export function useConsole() {
       }
       if (event.type === "line") {
         push(event.line);
+      } else if (event.type === "closed") {
+        connected.value = false;
+        statusDetail.value = event.detail;
+        // A revoked or removed console must not auto-reconnect; a changed
+        // connection setting should, and EventSource does that by itself.
+        if (event.reason !== "reconfigured") {
+          source?.close();
+          source = null;
+        }
       } else {
         connected.value = event.connected;
         statusDetail.value = event.detail ?? "";
@@ -136,7 +148,7 @@ export function useConsole() {
     sending.value = true;
     error.value = "";
     try {
-      const res = await apiSend<{ output: string }>(
+      const res = await apiSend<{ kind: "delivered" | "sent"; output: string }>(
         "POST",
         `/api/servers/${encodeURIComponent(serverId)}/command`,
         { command: text },
@@ -145,7 +157,8 @@ export function useConsole() {
       // carry the server's own record of it a moment later; a command with no
       // RCON output would otherwise vanish without a trace.
       push(`> ${text}`);
-      if (res.output) push(res.output);
+      if (res.kind === "sent") push(SENT_NO_OUTPUT);
+      else if (res.output) push(res.output);
       command.value = "";
     } catch (err) {
       error.value = errorMessage(err);

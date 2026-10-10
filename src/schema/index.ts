@@ -14,8 +14,27 @@ export type * from "./config.js";
 // One runtime value lives in config.ts: the list of fields that configured
 // local mode before 5.0.0, so the validator can recognise a 4.x config and
 // point at the migration instead of reporting a bare "apiUrl is required".
-export { REMOVED_LOCAL_SERVER_FIELDS } from "./config.js";
+export { REMOVED_LOCAL_SERVER_FIELDS, GUILD_FEATURE_KEYS } from "./config.js";
 export type * from "./contract.js";
+// The wrapper's wire contract: types generated from its OpenAPI document,
+// plus the names the bot and dashboard use for them.
+export type {
+  WireSchemas,
+  ScriptResult,
+  ConfigFileInfo,
+  InstalledMod,
+  InstalledMods,
+  ModToggleResult,
+  ModAddResult,
+  ModRemoveResult,
+  ModUpdateCheck,
+  ModApplyResult,
+  ModCompatJob,
+  ModCompatMod,
+  ModCompatStarted,
+  BackupDeleteResult,
+  RemoteHostInfo,
+} from "./wire/index.js";
 // Runtime values (the leaderboard-interval contract) alongside the stat
 // shapes, so the scheduler and the snapshot retention policy size periods
 // from one definition — hence a value re-export rather than `export type *`.
@@ -41,3 +60,12 @@ export * from "./consoleCommands.js";
 // status paths, the web backend, and the Vue frontend — a value re-export so
 // all three switch on one definition rather than three sets of literals.
 export * from "./serverState.js";
+export * from "./commandOutcome.js";
+// Analytics DTOs plus the per-section retention ceilings (ANALYTICS_CAP_HOURS),
+// shared by the route that clamps and the view that labels.
+export * from "./analytics.js";
+
+// Stable error codes shared by the backend error handler and the frontend ApiError.
+export * from "./apiErrors.js";
+
+export * from "./configStatus.js";

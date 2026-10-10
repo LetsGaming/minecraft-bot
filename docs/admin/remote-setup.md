@@ -87,7 +87,9 @@ pm2 start ecosystem.config.cjs --env production
 pm2 save && pm2 startup
 ```
 
-The script routes use `sudo -n` to run management scripts as the Minecraft user; configure sudoers as described in the wrapper's own [docs/sudoers-setup.md](https://github.com/LetsGaming/minecraft-server-api/blob/main/docs/sudoers-setup.md). This is the wrapper's requirement, on the Minecraft host — the bot needs no sudo anywhere.
+The script routes use `sudo -n` to run management scripts as the Minecraft user; configure sudoers as described in the wrapper's own [docs/sudoers-setup.md](https://github.com/LetsGaming/minecraft-server-api/blob/main/docs/sudoers-setup.md). This is the wrapper's requirement, on the Minecraft host, and the bot needs no sudo anywhere. The grant must cover `bash` for the management scripts **and `node`** for the mod scripts under `update/`; without the `node` line, mod install, update, remove and toggle fail with a sudo error while the rest of the dashboard works.
+
+**API key length.** The wrapper refuses to start with an `apiKey` shorter than 32 characters. Generate one with `openssl rand -hex 32` and put the same value in the bot's `apiKey` (or `API_KEY` / `API_KEY_<SERVER_ID>`, see [configuration.md](configuration.md#api-keys-from-the-environment)).
 
 Firewall: only allow the bot machine to reach the wrapper port.
 
@@ -126,35 +128,53 @@ The `x-api-key` grants full server control, so the bot enforces transport rules 
 
 Prefer fixing the transport over setting the flag — anyone on the network path of a plaintext connection can read the key and issue wrapper commands.
 
-## Wrapper version notes
+## Wrapper feature notes
 
 The bot reads the wrapper's `GET /manifest` at startup and prints what is
-missing, so you generally do not need this table — run the bot and read the
-report. What follows is what each feature costs you if the wrapper is older.
+missing or older than expected, so you do not need to track wrapper version
+numbers: run the bot and read the report. The list of features the bot knows,
+with the version it wants and what is lost without it, is
+`EXPECTED_WRAPPER_FEATURES` in
+[`src/core/utils/server/wrapperContract.ts`](../../src/core/utils/server/wrapperContract.ts).
+What follows is what the main features cost you if the wrapper lacks them.
 
-**Wrapper 3.3.0** is what the current dashboard wants:
+These are the wrapper features the current dashboard wants. Each is a feature
+name in the wrapper's `GET /manifest`, so a host that lacks one simply does not
+list it:
 
 - **Backup archives** (`backup-files`, `backup-restore`): listing individual
   archives, downloading one, and restoring from one. Without it the dashboard
   hides its Backups tab entirely rather than showing a panel that errors on
   open, and you keep the per-tier summary that `/backup` has always shown.
+- **Console command reporting** (`rcon-command` version 2): the wrapper says
+  whether a command went over RCON or the screen fallback, and answers an error
+  when neither delivered it. Without it the bot cannot tell a command that never
+  reached the server from one that was sent over screen, so a ban, kick or
+  whitelist change made while the server's console is unreachable is reported as
+  sent instead of failing. Update the wrapper to get the accurate behaviour.
 - **Rollback** (`rollback` in the script actions): the Rollback button is hidden
   when the wrapper does not advertise `rollback.sh`.
 
-- **Bulk player stats** (`GET /instances/:id/stats/bulk`): lets a leaderboard
+- **Mod version check** (`mod-compat`): the Mods tab's "Check another Minecraft
+  version" panel, which starts a background job on the wrapper
+  (`POST /instances/:id/mods/compat`, polled at `GET .../mods/compat/:jobId`).
+  It needs a wrapper that serves the feature and a setup suite whose
+  `check-updates.js` accepts `--only`. Without either the panel is hidden and the
+  per-installed-version "Check for updates" keeps working. Checking needs
+  `mods:read`; results are cached on the wrapper for six hours.
+- **Bulk player stats** (`stats-bulk`; `GET /instances/:id/stats/bulk`): lets a leaderboard
   build or the hourly snapshot fetch every player's stats in one request.
   Without it the bot falls back to one request per player who has ever
   joined, capped at 6 concurrent — functionally identical, just heavier on
   the wrapper on a server with a large lifetime player count.
 
-Older features, kept here for anyone upgrading from further back. Two need
-wrapper routes added in v2.1:
+Older features, kept here for anyone upgrading from further back. Each is a manifest feature (named in parentheses); a wrapper that lacks one degrades as described:
 
-- **Capability detection** (`GET /instances/:id/capabilities`): lets the bot know which setup-suite artifacts the remote instance provides. Older wrappers without the route are fine — the bot then assumes everything is available and errors surface at invocation time, exactly as before.
-- **`/server prune-stats`** (`DELETE /instances/:id/stats/:uuid`): explicit, admin-gated deletion of orphaned stats files. On older wrappers the deletion silently degrades — prune-stats reports 0 deleted files instead of failing.
-- **Servers without a whitelist** (`GET /instances/:id/usercache`, wrapper v2.2): returns the server's `usercache.json` so the bot can resolve player names when the whitelist is disabled. Older wrappers without the route are fine — name resolution then uses only the whitelist, which on whitelist-less servers means empty leaderboards and "player not found" in `/stats` until the wrapper is updated.
+- **Capability detection** (`capabilities`; `GET /instances/:id/capabilities`): lets the bot know which setup-suite artifacts the remote instance provides. Older wrappers without the route are fine. The bot then assumes everything is available and errors surface at invocation time, exactly as before.
+- **`/server prune-stats`** (`stats-delete`; `DELETE /instances/:id/stats/:uuid`): explicit, admin-gated deletion of orphaned stats files. On older wrappers the deletion silently degrades, so prune-stats reports 0 deleted files instead of failing.
+- **Servers without a whitelist** (`usercache`; `GET /instances/:id/usercache`): returns the server's `usercache.json` so the bot can resolve player names when the whitelist is disabled. Older wrappers without the route are fine, and name resolution then uses only the whitelist, which on whitelist-less servers means empty leaderboards and "player not found" in `/stats` until the wrapper is updated.
 
-- **Host metrics + version handshake** (`GET /instances/:id/info`, wrapper ≥ 1.2.0 of the info contract): a JSON object with a `version` field (the wrapper's semver) and a `host` block carrying the numbers the bot reads locally for local servers:
+- **Host metrics + version handshake** (`host-info`; `GET /instances/:id/info`): a JSON object with a `version` field (the wrapper's semver) and a `host` block carrying the numbers the bot reads locally for local servers:
 
   ```json
   {
@@ -187,6 +207,7 @@ Then start the bot and run `/status` in Discord.
 
 ## Notes
 
-- All wrapper HTTP calls from the bot have timeouts (8 s for reads, 30 s for script POSTs), so a hung wrapper cannot stall the bot.
+- All wrapper HTTP calls from the bot have timeouts, so a hung wrapper cannot stall the bot: reads wait 8 s, and a management script (`/server stop|restart|backup`, rollback, scheduled restarts) waits as long as the wrapper allows that action. The wrapper advertises its ceilings as `scriptTimeoutsMs` in `/manifest` (the bot clamps them to 5 s to 15 min and falls back to a built-in table on an older wrapper). A script that outlives the wait is reported as "still running, check status", not as failed.
+- Console commands go through a per-server circuit breaker: after five consecutive failures the bot fails fast for 15 s instead of making every caller wait for the timeout, then probes once. Every command result is `delivered` (sent over RCON), `sent` (screen fallback, cannot be verified) or `unreachable`; moderation and whitelist commands record nothing when the result is `unreachable`.
 - Log events stream over SSE (`GET /instances/:id/logs/stream`). The bot reconnects automatically with exponential backoff (5 s up to 60 s). The dashboard's console uses the same feed, but the whole dashboard is **one** client from the wrapper's side no matter how many browsers are open — the wrapper caps concurrent stream clients per instance, and per-tab connections would let the panel starve the chat bridge.
 - Use a long random `apiKey`. The wrapper can run scripts, read files, download whole worlds and restore them; treat the key like a password — and pair it with the transport rules above (HTTPS or trusted LAN only). Anyone holding it bypasses every dashboard permission, which is why it never reaches a browser: the dashboard proxies every wrapper call, including downloads.

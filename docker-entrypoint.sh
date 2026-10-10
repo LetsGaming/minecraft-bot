@@ -52,7 +52,7 @@ else
   echo "  2. docker compose up -d   # the template is seeded + env-substituted"
   echo ""
   echo "Prefer a hand-written config? Set MCBOT_CONFIG_FILE in .env to a"
-  echo "filled-in file (from config_structure.json); it's copied in as-is."
+  echo "filled-in file (start from config.template.json); it's copied in as-is."
   echo ""
   echo "The dashboard then edits the copy in data/; re-seed by clearing"
   echo "$CONFIG_PATH. See docs/admin/docker.md for full instructions."

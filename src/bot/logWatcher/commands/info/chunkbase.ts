@@ -1,5 +1,11 @@
 import { defineCommand } from "../../defineCommand.js";
 import { buildChunkbaseUrl } from "@mcbot/core/utils/minecraft/chunkbaseUrl.js";
+import {
+  clickFormatForVersion,
+  openUrlClick,
+} from "@mcbot/core/utils/minecraft/tellrawLink.js";
+import { tellraw, whisper } from "@mcbot/core/utils/minecraft/serverMessages.js";
+import { queryFailureText } from "../../queryMessages.js";
 
 const cmd = defineCommand({
   name: "chunkbase",
@@ -7,41 +13,38 @@ const cmd = defineCommand({
   cooldown: 10,
   handler: async (username, _args, _client, server) => {
     const seed = await server.getSeed();
-    if (!seed) {
-      await server.sendCommand(
-        `/msg ${username} Could not retrieve the world seed.`,
+    if (!seed.ok) {
+      await whisper(
+        server,
+        username,
+        queryFailureText(seed.reason, "seed.unavailable"),
       );
       return;
     }
 
-    let dimension = "overworld";
-    try {
-      const r = await server.getPlayerData(username, "Dimension");
-      if (r) {
-        const m = r.match(/"minecraft:([^"]+)"/);
-        if (m?.[1]) dimension = m[1];
-      }
-    } catch {
-      /* default */
+    const dimension = await server.getPlayerDimension(username);
+    if (!dimension.ok) {
+      await whisper(
+        server,
+        username,
+        queryFailureText(dimension.reason, "query.noDimension"),
+      );
+      return;
     }
 
-    let coords: { x: number; z: number } | undefined;
-    try {
-      coords = (await server.getPlayerCoords(username)) ?? undefined;
-    } catch {
-      /* proceed without */
-    }
+    // The link still works without a position.
+    const position = await server.getPlayerCoords(username);
+    const coords = position.ok ? position.value : undefined;
 
-    const url = buildChunkbaseUrl(seed, dimension, coords?.x, coords?.z);
+    const url = buildChunkbaseUrl(
+      seed.value,
+      dimension.value,
+      coords?.x,
+      coords?.z,
+    );
+    const format = clickFormatForVersion(await server.getMinecraftVersion());
 
-    interface TellRawText {
-      text: string;
-      color?: string;
-      underlined?: boolean;
-      click_event?: { action: string; url: string };
-    }
-
-    const tellRaw: { text: string; extra: TellRawText[] } = {
+    const tellRaw = {
       text: "",
       extra: [
         { text: "See your location on Chunkbase: ", color: "white" },
@@ -49,11 +52,12 @@ const cmd = defineCommand({
           text: "[Click here]",
           color: "gold",
           underlined: true,
-          click_event: { action: "open_url", url },
+          ...openUrlClick(url, format),
         },
+        { text: ` ${url}`, color: "gray" },
       ],
     };
-    await server.sendCommand(`/tellraw ${username} ${JSON.stringify(tellRaw)}`);
+    await tellraw(server, username, tellRaw);
   },
 });
 

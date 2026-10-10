@@ -39,9 +39,12 @@ vi.mock("../../src/core/config.js", () => ({
 
 // vi.mock factories are hoisted above every const in the file, so the spies
 // they close over have to be created inside vi.hoisted().
-const { sendCommandMock, openLogStreamMock, tailLogMock, recordAdminActionMock } = vi.hoisted(
+const { sendMock, openLogStreamMock, tailLogMock, recordAdminActionMock } = vi.hoisted(
   () => ({
-    sendCommandMock: vi.fn(async () => "There are 2 players online"),
+    sendMock: vi.fn(async (_command: string) => ({
+      kind: "delivered",
+      output: "There are 2 players online",
+    })),
     openLogStreamMock: vi.fn(),
     tailLogMock: vi.fn(async () => ""),
     recordAdminActionMock: vi.fn(async () => {}),
@@ -49,7 +52,6 @@ const { sendCommandMock, openLogStreamMock, tailLogMock, recordAdminActionMock }
 );
 
 vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
-  sendCommand: sendCommandMock,
   openLogStream: openLogStreamMock,
   runScript: vi.fn(),
   tailLog: tailLogMock,
@@ -61,7 +63,9 @@ vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
 
 vi.mock("../../src/core/utils/server/server.js", () => ({
   getServerInstance: vi.fn((id: string) =>
-    id === "smp" ? { config: { id: "smp", apiKey: "k-1" }, capabilities: null } : null,
+    id === "smp"
+      ? { config: { id: "smp", apiKey: "k-1" }, capabilities: null, send: sendMock }
+      : null,
   ),
   getAllInstances: vi.fn(() => []),
 }));
@@ -366,6 +370,7 @@ describe("console routes", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().output).toContain("2 players");
+    expect(res.json().kind).toBe("delivered");
     expect(recordAdminActionMock).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "console (dashboard)",
@@ -374,6 +379,35 @@ describe("console routes", () => {
         detail: "list",
       }),
     );
+  });
+
+  it("reports a send with no console output as sent, not as an empty reply", async () => {
+    sendMock.mockResolvedValueOnce({ kind: "sent", via: "screen" } as never);
+    const app = buildServer();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/servers/smp/command",
+      headers: { cookie: cookieFor(OPERATOR), "content-type": "application/json" },
+      payload: { command: "list" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, kind: "sent", output: "" });
+  });
+
+  it("answers 502 when the command did not reach the server", async () => {
+    sendMock.mockResolvedValueOnce({
+      kind: "unreachable",
+      reason: "wrapper-down",
+      detail: "x",
+    } as never);
+    const app = buildServer();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/servers/smp/command",
+      headers: { cookie: cookieFor(OPERATOR), "content-type": "application/json" },
+      payload: { command: "list" },
+    });
+    expect(res.statusCode).toBe(502);
   });
 
   it("refuses a blocked command with 403 and never calls the wrapper", async () => {
@@ -385,7 +419,7 @@ describe("console routes", () => {
       payload: { command: "/stop" },
     });
     expect(res.statusCode).toBe(403);
-    expect(sendCommandMock).not.toHaveBeenCalled();
+    expect(sendMock).not.toHaveBeenCalled();
   });
 
   it("strips control characters so one input cannot become two commands", async () => {
@@ -396,10 +430,7 @@ describe("console routes", () => {
       headers: { cookie: cookieFor(OPERATOR), "content-type": "application/json" },
       payload: { command: "say hi\nop Notch" },
     });
-    expect(sendCommandMock).toHaveBeenCalledWith(
-      expect.anything(),
-      "say hiop Notch",
-    );
+    expect(sendMock).toHaveBeenCalledWith("say hiop Notch");
   });
 
   it("rejects an over-long command at the schema boundary", async () => {

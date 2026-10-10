@@ -49,6 +49,7 @@ import { t } from "../i18n.js";
 import { log } from "../logger.js";
 import { errMsg } from "../error.js";
 import type { ServerInstance } from "../server/server.js";
+import { whisper } from "./serverMessages.js";
 
 /** Stop after this many mentions of one feature, ever. */
 export const MAX_NUDGES_PER_FEATURE = 3;
@@ -188,10 +189,12 @@ export async function maybeNudge(
       settings.maxPerFeature -
       ((getSuggestionRecord(ledger, mcSubject(player), kind)?.count ?? 0) + 1);
 
-    await server.sendCommand(
-      `/msg ${player} ${t(`nudge.${kind}`)}` +
-        (remaining <= 0 ? ` ${t("nudge.lastTime")}` : ""),
+    const reached = await whisper(
+      server,
+      player,
+      t(`nudge.${kind}`) + (remaining <= 0 ? ` ${t("nudge.lastTime")}` : ""),
     );
+    if (!reached) return null;
     await recordSuggestion(mcSubject(player), kind, now);
     log.debug("nudge", `${server.id}: told ${player} about ${kind}`);
     return kind;

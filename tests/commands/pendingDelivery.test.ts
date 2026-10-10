@@ -1,18 +1,16 @@
 /**
  * Offline daily-claim delivery queue.
  *
- * deliverPendingRewards is tested THROUGH the real give() — the wrapper seam
+ * deliverPendingRewards is tested THROUGH the real give(): ServerInstance.send
  * answers /give with the "Gave …" confirmation (or not), so the
  * retry-on-unconfirmed-delivery contract is exercised end to end: entries
  * vanish only after every item is confirmed, partial failures keep exactly
  * the undelivered items, and the store survives restarts by construction
  * (kv_store["pendingRewards"] in SQLite).
  *
- * give() reads serverAccess directly rather than ServerInstance.sendCommand,
- * because the latter turns a transport error into the same null a screen-only
- * wrapper returns, and a reward turns on that difference. The mock keeps them
- * apart the way the wrapper does: a throw is a failure, a null result is a
- * 200 with no output channel.
+ * A reward turns on the difference between a send with no reply channel
+ * (delivered, unverifiable) and a command that never reached the server
+ * (retry), which is exactly what the CommandOutcome union keeps apart.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -31,10 +29,6 @@ vi.mock("../../src/bot/utils/embeds/embedUtils.js", () => ({
 }));
 vi.mock("../../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
-}));
-const accessSend = vi.fn();
-vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
-  sendCommand: (...a: unknown[]) => accessSend(...a),
 }));
 vi.mock("../../src/core/config.js", () => ({
   loadConfig: vi.fn().mockReturnValue({ language: "en", guilds: {} }),
@@ -72,23 +66,32 @@ const pendingStore = (
 /**
  * A server whose wrapper answers `give` per item.
  *
- * A string is the console's reply. `null` is a 200 with no output (screen).
- * An Error value is thrown, standing in for a wrapper that could not be
- * reached at all.
+ * A string is the console's reply. `null` is a send with no output channel
+ * (screen). An Error value stands in for a command that never reached the
+ * server.
  */
 function fakeServer(giveResults: Record<string, string | null | Error>) {
-  accessSend.mockImplementation((_cfg: unknown, cmd: string) => {
+  const send = vi.fn((cmd: string) => {
     if (cmd.startsWith("give ")) {
       const name = Object.keys(giveResults).find((n) => cmd.includes(n));
       const r = name !== undefined ? giveResults[name] : null;
-      if (r instanceof Error) return Promise.reject(r);
-      return Promise.resolve(r);
+      if (r instanceof Error) {
+        return Promise.resolve({
+          kind: "unreachable",
+          reason: "wrapper-down",
+          detail: r.message,
+        });
+      }
+      return Promise.resolve(
+        r === null || r === undefined
+          ? { kind: "sent", via: "screen" }
+          : { kind: "delivered", output: r },
+      );
     }
-    return Promise.resolve("ok");
+    return Promise.resolve({ kind: "delivered", output: "" });
   });
-  const sendCommand = vi.fn(() => Promise.resolve("ok")); // tellraw path
-  return { id: "smp", config: { apiUrl: "http://w:3030", apiKey: "k" }, sendCommand } as unknown as
-    ServerInstance & { sendCommand: ReturnType<typeof vi.fn> };
+  return { id: "smp", config: { apiUrl: "http://w:3030", apiKey: "k" }, send } as unknown as
+    ServerInstance & { send: ReturnType<typeof vi.fn> };
 }
 
 beforeEach(() => {
@@ -136,7 +139,7 @@ describe("deliverPendingRewards", () => {
     const after = await loadPendingRewards();
     expect(getServerPending(after, "smp")["alice"]).toBeUndefined();
     // Confirmation tellraw went out.
-    const tellraw = server.sendCommand.mock.calls.find(([c]: [string]) =>
+    const tellraw = server.send.mock.calls.find(([c]: [string]) =>
       c.startsWith("/tellraw Alice"),
     );
     expect(tellraw).toBeTruthy();
@@ -207,7 +210,7 @@ describe("deliverPendingRewards", () => {
     const after = await loadPendingRewards();
     expect(getServerPending(after, "smp")["alice"]).toHaveLength(1);
     // No "delivered" tellraw when nothing was confirmed.
-    const tellraw = server.sendCommand.mock.calls.find(([c]: [string]) =>
+    const tellraw = server.send.mock.calls.find(([c]: [string]) =>
       c.startsWith("/tellraw"),
     );
     expect(tellraw).toBeUndefined();

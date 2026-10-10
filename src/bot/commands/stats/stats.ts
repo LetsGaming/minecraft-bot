@@ -16,6 +16,7 @@ import {
 import type { FlattenedStat } from "@mcbot/core/types/index.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export const data = new SlashCommandBuilder()
@@ -36,6 +37,12 @@ export const data = new SlashCommandBuilder()
         option
           .setName("stat")
           .setDescription("Optional stat category or specific stat ID"),
+      )
+      .addStringOption((o) =>
+        o
+          .setName("server")
+          .setDescription("Server instance")
+          .setAutocomplete(true),
       ),
   )
   .addSubcommand((sub) =>
@@ -53,6 +60,12 @@ export const data = new SlashCommandBuilder()
         option
           .setName("stat")
           .setDescription("Optional stat category or specific stat ID"),
+      )
+      .addStringOption((o) =>
+        o
+          .setName("server")
+          .setDescription("Server instance")
+          .setAutocomplete(true),
       ),
   );
 
@@ -84,8 +97,8 @@ async function runPlayer(
     if (!player) {
       await interaction.editReply({
         embeds: [
-          createErrorEmbed(`Player \`${playerName}\` not found.`, {
-            footer: { text: "Player Not Found" },
+          createErrorEmbed(t("common.playerNotFound", { player: playerName }), {
+            footer: { text: t("common.playerNotFoundFooter") },
             timestamp: new Date(),
           }),
         ],
@@ -97,8 +110,8 @@ async function runPlayer(
     if (!statsFile) {
       await interaction.editReply({
         embeds: [
-          createErrorEmbed(`Stats file not found for \`${playerName}\`.`, {
-            footer: { text: "Stats File Not Found" },
+          createErrorEmbed(t("stats.fileNotFound", { player: playerName }), {
+            footer: { text: t("stats.fileNotFoundFooter") },
             timestamp: new Date(),
           }),
         ],
@@ -112,8 +125,8 @@ async function runPlayer(
     if (flattened.length === 0) {
       await interaction.editReply({
         embeds: [
-          createErrorEmbed(`No stats found matching \`${filterStat}\`.`, {
-            footer: { text: "Stats Not Found" },
+          createErrorEmbed(t("stats.noMatch", { filter: filterStat }), {
+            footer: { text: t("stats.noMatchFooter") },
             timestamp: new Date(),
           }),
         ],
@@ -136,7 +149,7 @@ async function runPlayer(
   } catch (err) {
     log.error("stats", errMsg(err));
     await interaction.editReply({
-      embeds: [createErrorEmbed("Failed to retrieve stats.")],
+      embeds: [createErrorEmbed(t("stats.failed"))],
     });
   }
 }
@@ -161,8 +174,8 @@ async function runDaily(
     if (!player) {
       await interaction.editReply({
         embeds: [
-          createErrorEmbed(`Player \`${playerName}\` not found.`, {
-            footer: { text: "Player Not Found" },
+          createErrorEmbed(t("common.playerNotFound", { player: playerName }), {
+            footer: { text: t("common.playerNotFoundFooter") },
             timestamp: new Date(),
           }),
         ],
@@ -174,8 +187,8 @@ async function runDaily(
     if (!statsFile) {
       await interaction.editReply({
         embeds: [
-          createErrorEmbed(`Stats file not found for \`${playerName}\`.`, {
-            footer: { text: "Stats File Not Found" },
+          createErrorEmbed(t("stats.fileNotFound", { player: playerName }), {
+            footer: { text: t("stats.fileNotFoundFooter") },
             timestamp: new Date(),
           }),
         ],
@@ -191,9 +204,9 @@ async function runDaily(
       await interaction.editReply({
         embeds: [
           createErrorEmbed(
-            "No baseline snapshot available yet — try again later once stats have been recorded for at least 24h.",
+            t("stats.noSnapshot"),
             {
-              footer: { text: "No Snapshot" },
+              footer: { text: t("stats.noSnapshotFooter") },
               timestamp: new Date(),
             },
           ),
@@ -220,12 +233,12 @@ async function runDaily(
 
     if (filtered.length === 0) {
       const reason = filterStat
-        ? `No stats matching \`${filterStat}\` changed in the last 24h.`
-        : `No stat changes in the last 24h for \`${playerName}\`.`;
+        ? t("stats.noChangeFiltered", { filter: filterStat })
+        : t("stats.noChange", { player: playerName });
       await interaction.editReply({
         embeds: [
           createErrorEmbed(reason, {
-            footer: { text: "No Activity" },
+            footer: { text: t("stats.noActivityFooter") },
             timestamp: new Date(),
           }),
         ],
@@ -236,8 +249,10 @@ async function runDaily(
     // Show how old the baseline actually is — if the bot just started,
     // it might be much less than 24h, and the user should know.
     const ageHours = (Date.now() - snapshot.timestamp) / (60 * 60 * 1000);
-    const periodLabel = `last ${ageHours.toFixed(1)}h`;
-    const embeds = buildStatsEmbeds(filtered, `${playerName} — ${periodLabel}`);
+    const embeds = buildStatsEmbeds(
+      filtered,
+      t("stats.dailyLabel", { player: playerName, hours: ageHours.toFixed(1) }),
+    );
 
     if (embeds.length === 1) {
       await interaction.editReply({ embeds });
@@ -252,7 +267,7 @@ async function runDaily(
   } catch (err) {
     log.error("stats", errMsg(err));
     await interaction.editReply({
-      embeds: [createErrorEmbed("Failed to retrieve daily stats.")],
+      embeds: [createErrorEmbed(t("stats.dailyFailed"))],
     });
   }
 }

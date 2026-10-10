@@ -21,6 +21,7 @@ import { fireWatches } from "../watchFirer.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 // PLAYER_NAME captures Bedrock names prefixed with "." by
 // Geyser/Floodgate in addition to vanilla [a-zA-Z0-9_] names.
 // SEC-01: anchored on the server thread tag — chat must not forge
@@ -111,8 +112,8 @@ async function notify(
     logTag: "joinLeave",
     buildEmbed: (withServerFooter) =>
       createPlayerEmbed(player, {
-        title: isJoin ? "Player Joined" : "Player Left",
-        description: `${player} ${isJoin ? "joined" : "left"} the server`,
+        title: isJoin ? t("joinLeave.joinedTitle") : t("joinLeave.leftTitle"),
+        description: t(isJoin ? "joinLeave.joined" : "joinLeave.left", { player }),
         color: isJoin ? EmbedColor.Success : EmbedColor.Error,
         ...(withServerFooter ? { footer: { text: serverId } } : {}),
       }),

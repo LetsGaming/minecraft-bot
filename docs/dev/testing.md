@@ -1,6 +1,6 @@
 # Testing
 
-The project uses [vitest](https://vitest.dev). 84 test files with ~1060 tests cover the core utilities, the RCON client, the data layer, watchers, schedulers, the dashboard backend, and most commands. CI (GitHub Actions) runs typecheck, lint, the full suite, `npm audit --audit-level=high`, locale parity, and the schema drift check on every push and PR.
+The project uses [vitest](https://vitest.dev). The suite covers the core utilities, the wrapper transport, the data layer, watchers, schedulers, the dashboard backend, and most commands. CI (GitHub Actions) runs typecheck, lint, the layout check, locale parity (`npm run i18n:check`, which also runs the literal lint described below), the schema drift check, the wire contract drift check (`npm run wire:check`), the full suite and `npm audit --audit-level=high` on every push and PR. `contract.yml` runs the wrapper contract end to end.
 
 ## Running tests
 
@@ -27,7 +27,7 @@ npx vitest run -t "streak"
   | `config/` | Loading, validation, env overrides, history |
   | `db/` | The store modules and the migration runner |
   | `minecraft/` | Stats, snapshots, players, world math |
-  | `server/` | ServerInstance, serverAccess, RCON, the wrapper contract |
+  | `server/` | ServerInstance, serverAccess, the circuit breaker, command outcomes, the wrapper contract |
   | `commands/` | Slash commands, middleware, the resolver |
   | `ingame/` | `!commands` and their loader |
   | `watchers/` | Log watchers, monitors, schedulers |
@@ -57,9 +57,13 @@ const interaction = {
 
 Assert on what was sent: `expect(interaction.editReply).toHaveBeenCalledWith(expect.objectContaining({...}))`.
 
-**ServerInstance** is mocked per test via `vi.mock("../src/core/utils/server/server.js", ...)` or by passing a stub object with `sendCommand`, `getList`, `isRunning` as `vi.fn()`. The layering exists precisely so this works without touching sockets.
+**ServerInstance** is mocked per test via `vi.mock("../src/core/utils/server/server.js", ...)` or by passing a stub object with `send` (resolving to a `CommandOutcome`, see `tests/fixtures/outcomes.ts`), `getList`, `isRunning` as `vi.fn()`. The layering exists precisely so this works without touching sockets.
 
-**RconClient** is tested against an in-process mock socket; see `tests/server/rconClient.test.ts` for the packet encode/decode round trips.
+**Command delivery** is asserted through `CommandOutcome` (`delivered`, `sent`, `unreachable`). Use the builders in `tests/fixtures/outcomes.ts` instead of resolving `null` or `undefined`. A test for a command that records state (ban, whitelist, cooldown, tips) needs an `unreachable` case that proves nothing was recorded. The bot has no RCON client any more, so the wrapper's own suite covers the socket.
+
+**Config formats**: `tests/fixtures/config/` holds a `config.json` of every historical format, and the migration tests run each one through `core/configMigrations.ts`. A new migration needs a fixture of the format it reads.
+
+**Hard-coded English** in Discord replies is caught by `scripts/lib/i18nLiteralLint.mjs` (run by `npm run i18n:check`): a string literal handed to a reply, embed or button sink fails the check unless it goes through `t()` or is listed in `scripts/i18n-literal-allowlist.json` with a reason. Fix the string; extend the allowlist only for text that is not prose (an ID, a machine-readable marker).
 
 **Database state**: `tests/setup.ts` points `MCBOT_DB_PATH` at `:memory:` globally, so no test can write `data/bot.db` into the working tree. Suites that exercise the stores call `closeDbForTesting()` between tests — closing an in-memory database drops it, which is the cheapest possible reset. The setup file also falls back to the `node:sqlite` driver where better-sqlite3's native binding cannot load.
 
@@ -100,22 +104,29 @@ find afterwards** rather than on the row count. Retention and its readers are on
 contract; asserting either alone is how a 24-hour hole went unnoticed through a
 green suite. `tests/minecraft/snapshotUtils.test.ts` is the pattern.
 
+## Keeping tests stable on a cold run
+
+A full run right after a checkout or a cleared Vite cache transforms every module on first import. That is slow enough to push a test whose first `await import(...)` loads a command graph past the 5 second default. Rules that keep the suite deterministic:
+
+- Import the module under test (and its heavy graph) in a `beforeAll` with an explicit generous timeout, so the cold transform cost lands in the hook. After `vi.resetModules()` the transformed code is cached and re-imports are cheap. See `tests/commands/daily.test.ts` and `tests/commands/serverOption.test.ts`.
+- Reset module state in `beforeEach`/`afterEach` instead of relying on test order: `vi.resetModules()`, `closeDbForTesting()`, and re-arming mock return values. `vi.clearAllMocks()` keeps implementations, so a `mockRejectedValue` in one test leaks into the next unless `beforeEach` restores the default.
+- Use fake timers and `vi.setSystemTime()` instead of the wall clock. Never derive an expectation from `Date.now()` plus a time of day without pinning the clock.
+- A file name that embeds a timestamp must be collision-proof (milliseconds plus a counter): tests in separate files can share a temp directory within one second.
+- `npx vitest run --sequence.shuffle` randomizes order inside files and is a useful probe for hidden order dependence.
+
 ## End-to-end
 
 Two scripts, neither in the vitest suite, because both need something real
 outside the process.
 
 ```bash
-docker compose -f docker-compose.e2e.yml up -d --wait
-npm run e2e:smoke        # a real Paper server, through the bot's own RCON layer
-docker compose -f docker-compose.e2e.yml down -v
-
-WRAPPER_DIR=../api-wrapper npm run e2e:contract   # a real api-wrapper
+WRAPPER_DIR=<built wrapper checkout> npm run e2e:contract   # a real api-wrapper
+WRAPPER_DIR=<built wrapper checkout> npm run e2e:dashboard  # the dashboard reports against a real wrapper
 ```
 
-`e2e:smoke` runs nightly against a pinned Paper image: connect, `list`,
-whitelist add, `say` round-trip. It exists so a protocol or framing
-regression in `RconClient` fails before production does.
+The RCON socket and the Minecraft process live in the wrapper, so the wrapper's
+repository owns the tests for them. `e2e:dashboard` boots a dashboard against a
+real wrapper and instance directory and calls the report routes a browser would.
 
 ### The wrapper contract check
 
@@ -140,6 +151,22 @@ is fine here: the contract under test is wrapper → bot, so what sits behind th
 wrapper only has to make it produce a genuine response. That keeps the check at
 about ten seconds and free of Minecraft, which is why it can run on every PR
 rather than nightly.
+
+`WRAPPER_DIR` is required: there is no default location. The list of routes to
+cover comes from the wrapper's own manifest, and any manifest route the run
+never requests fails it unless `SKIPPED_ROUTES` in the script lists it with a
+reason, so a new wrapper route cannot ship without a case. Cases cover the
+whole surface: health v2, bulk stats, stats deletion, every mod-management
+route against stub suite scripts, backup file list, download, range and delete,
+restore (refused while the scaffold's server is online, run against the
+scaffold once it is offline, never against real data), mod config read, write,
+conflict and revert, `scripts/run`, and the `/command` result shapes.
+
+The routes that run a suite script spawn `sudo -n -u <user>`. Where that cannot
+work (a developer machine without passwordless sudo, Windows), those routes are
+checked for their failure shape only and the run prints which routes are
+unverified. CI sets `E2E_REQUIRE_SUDO=1`, which turns that into a failure, so
+the success paths are always proven there.
 
 It runs from **both** repos' CI — the check lives here (it asserts this bot's
 expectations), and the wrapper's `contract` workflow checks the bot out and

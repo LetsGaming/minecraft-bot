@@ -56,8 +56,45 @@ bodies had drifted into four different shapes (`{error}`, `{error,detail}`,
 `{errors:[]}`, and a bare string). If you add a new failure mode, add a class —
 do not reach for `reply.code()`.
 
+Every typed failure also carries a stable `code` (`ApiErrorCode` in
+`@mcbot/schema`, e.g. `CONFLICT`, `VALIDATION_FAILED`). Clients branch on the
+status or the code; the message is for people and may change.
+
 Do not reconstruct a status from an error message either. Upstream failures
 carry a typed `.status`; switch on the value, not on `msg.includes("(403)")`.
+
+## Live config
+
+`loadConfig()` caches for the process lifetime, so the dashboard process starts
+the same watcher as the bot (`config/liveConfig.ts`, called from `index.ts`).
+On every reload it reconciles the server registry (added, removed and
+reconnected servers) and re-checks open console streams.
+
+Anything keyed by a server id must be dropped when that server is removed or
+re-pointed: `dropServerCaches` clears the TTL caches (`cache.ts`, matched on the
+id as a `:`-separated segment), the last-known values, the feature probe, the
+circuit breaker and the learned game port. A refresh that was already running
+when the key was invalidated does not store its result (`cache.ts` generations,
+`lastKnown.forget`). New per-server state needs a line in `dropServerCaches`.
+
+Open SSE streams are authorized once on connect, so `console/streamRegistry.ts`
+tracks them: a reload that revokes access, removes the server or changes its
+connection settings closes the affected streams with a final `closed` event,
+and every stream also re-checks its viewer every 30 s (cookie expiry, grants,
+`adminUsers`).
+
+Concurrency tokens: `GET/PUT /api/config` use the sha256 of the file; the
+guild routes use `guildConfigHash` of the guild's own block, so unrelated saves
+do not conflict. `GET /api/commands` returns the file hash it was built from.
+
+### Applied status
+
+The bot reports the hash of the `config.json` it last reconciled, plus the
+servers that need a restart, in `data/runtime.json` (`noteConfigApplied`,
+`beginConfigApply`; `core/utils/server/runtimeHeartbeat.ts`).
+`GET /api/config/status` compares it with the file on disk
+(`core/utils/config/configApplyStatus.ts`) and answers `applied`, `pending`,
+`bot-down`, `restart-required` or `unknown`.
 
 ## Auth
 

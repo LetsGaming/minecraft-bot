@@ -80,13 +80,12 @@ vi.mock("../../src/bot/logWatcher/watchers/log/sleepWatcher.js", () => ({
   registerSleepWatcher: vi.fn(),
 }));
 
-const tpsTimers: Array<ReturnType<typeof setInterval>> = [];
+const tpsHandles: Array<{ stop: ReturnType<typeof vi.fn> }> = [];
 vi.mock("../../src/bot/logWatcher/watchers/monitors/tpsMonitor.js", () => ({
   startTpsMonitor: vi.fn().mockImplementation(() => {
-    const t = setInterval(() => {}, 1_000_000);
-    t.unref();
-    tpsTimers.push(t);
-    return t;
+    const handle = { stop: vi.fn() };
+    tpsHandles.push(handle);
+    return handle;
   }),
 }));
 
@@ -103,7 +102,6 @@ vi.mock("../../src/bot/logWatcher/watchers/schedulers/channelPurge.js", () => ({
   startChannelPurge: vi.fn(),
 }));
 vi.mock("../../src/core/utils/stores/uptimeTracker.js", () => ({
-  startUptimeFlushScheduler: vi.fn(),
 }));
 
 import { reconcileServers } from "../../src/bot/logWatcher/initMinecraftCommands.js";
@@ -146,8 +144,7 @@ function botCfg(servers: Record<string, ServerConfig>): BotConfig {
 beforeEach(() => {
   vi.clearAllMocks();
   createdWatchers.length = 0;
-  for (const t of tpsTimers) clearInterval(t);
-  tpsTimers.length = 0;
+  tpsHandles.length = 0;
   // Empty the real registry between tests
   for (const inst of getAllInstances()) removeServerInstance(inst.id);
 });
@@ -213,9 +210,10 @@ describe("reconcileServers", () => {
     expect(ws!.stop).not.toHaveBeenCalled();
   });
 
-  it("reports changed settings on an existing ID without touching the instance", async () => {
-    initServers({ survival: srvCfg("survival") });
+  it("rebuilds the instance and its watcher when settings change on an existing ID", async () => {
+    await reconcileServers(fakeClient, botCfg({ survival: srvCfg("survival") }));
     const before = getServerInstance("survival");
+    const oldWatcher = createdWatchers[0]!;
 
     const result = await reconcileServers(
       fakeClient,
@@ -224,14 +222,17 @@ describe("reconcileServers", () => {
       }),
     );
 
-    expect(result.changed).toEqual(["survival"]);
+    expect(result.replaced).toEqual(["survival"]);
+    expect(result.changed).toEqual([]);
     expect(result.added).toEqual([]);
     expect(result.removed).toEqual([]);
-    // Instance untouched — same object, original config
-    expect(getServerInstance("survival")).toBe(before);
+    expect(getServerInstance("survival")).not.toBe(before);
     expect(getServerInstance("survival")!.config.apiUrl).toBe(
-      "http://survival.wrapper.local:3030",
+      "http://moved.local:3030",
     );
+    expect(oldWatcher.stop).toHaveBeenCalledOnce();
+    expect(createdWatchers).toHaveLength(2);
+    expect(createdWatchers[1]!.start).toHaveBeenCalledOnce();
   });
 
   it("is a no-op when the server list is unchanged", async () => {
@@ -242,7 +243,7 @@ describe("reconcileServers", () => {
       botCfg({ survival: srvCfg("survival") }),
     );
 
-    expect(result).toEqual({ added: [], removed: [], changed: [] });
+    expect(result).toEqual({ added: [], removed: [], replaced: [], changed: [] });
     expect(createdWatchers).toHaveLength(0);
   });
 

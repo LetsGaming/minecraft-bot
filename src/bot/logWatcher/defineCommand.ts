@@ -7,6 +7,8 @@ import {
 } from "@mcbot/core/utils/stores/linkUtils.js";
 import { isServerAdmin } from "../commands/middleware.js";
 import { t } from "@mcbot/core/utils/i18n.js";
+import { whisper } from "@mcbot/core/utils/minecraft/serverMessages.js";
+import { wasAccepted } from "@mcbot/schema/commandOutcome.js";
 import type { Client } from "discord.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 import type {
@@ -19,6 +21,34 @@ import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
 const cooldowns = new Map<string, number>();
+
+interface DeliveryTally {
+  attempts: number;
+  reached: number;
+}
+
+/**
+ * The server a handler talks to, with every console command it sends
+ * counted. Reads go through the same `send`, so a query that could not
+ * reach the server counts too.
+ */
+function trackDelivery(
+  server: ServerInstance,
+  tally: DeliveryTally,
+): ServerInstance {
+  if (!server || typeof server.send !== "function") return server;
+  return new Proxy(server, {
+    get(target, prop, receiver) {
+      if (prop !== "send") return Reflect.get(target, prop, receiver);
+      return async (command: string) => {
+        tally.attempts++;
+        const outcome = await target.send(command);
+        if (wasAccepted(outcome)) tally.reached++;
+        return outcome;
+      };
+    },
+  });
+}
 
 // BUG-01: the map keys on `command:player` and used to grow without
 // bound (a slow leak on busy servers with churny player bases). An
@@ -153,26 +183,33 @@ export function defineCommand({
           const linked = await loadLinkedAccountsOrEmpty();
           const discordId = findDiscordIdByMcName(linked, username);
           if (!discordId || !isServerAdmin(discordId)) {
-            await server.sendCommand(
-              `/msg ${username} ${t("command.adminOnlyInGame", { command: name })}`,
+            await whisper(
+              server,
+              username,
+              t("command.adminOnlyInGame", { command: name }),
             );
             return;
           }
         }
 
         // ── Cooldown check ──
+        const cooldownKey = `${name}:${username.toLowerCase()}`;
+        const previousStamp = cooldowns.get(cooldownKey);
         if (cooldown > 0) {
-          const key = `${name}:${username.toLowerCase()}`;
-          const lastUsed = cooldowns.get(key) ?? 0;
+          const lastUsed = cooldowns.get(cooldownKey) ?? 0;
           const elapsed = (Date.now() - lastUsed) / 1000;
           if (elapsed < cooldown) {
             const remaining = Math.ceil(cooldown - elapsed);
-            await server.sendCommand(
-              `/msg ${username} Please wait ${remaining}s before using !${name} again.`,
+            await whisper(
+              server,
+              username,
+              `Please wait ${remaining}s before using !${name} again.`,
             );
             return;
           }
-          cooldowns.set(key, Date.now());
+          // Held while the handler runs so a double-typed command cannot
+          // run twice; released again below if the handler fails.
+          cooldowns.set(cooldownKey, Date.now());
         }
 
         const parsedArgs: Record<string, string | undefined> = {};
@@ -183,8 +220,32 @@ export function defineCommand({
           parsedArgs[args[i]!.replace(/(\.\.\.|\?)$/, "")] = match[i + 3];
         }
 
+        const releaseCooldown = (): void => {
+          if (cooldown <= 0) return;
+          if (previousStamp === undefined) cooldowns.delete(cooldownKey);
+          else cooldowns.set(cooldownKey, previousStamp);
+        };
+        const tally: DeliveryTally = { attempts: 0, reached: 0 };
+
         try {
-          await handler(username, parsedArgs, client, server);
+          try {
+            await handler(
+              username,
+              parsedArgs,
+              client,
+              trackDelivery(server, tally),
+            );
+          } catch (err) {
+            releaseCooldown();
+            throw err;
+          }
+          // Every command the handler sent failed to reach the server: the
+          // player got nothing, so the attempt neither uses up the cooldown
+          // nor counts as a use.
+          if (tally.attempts > 0 && tally.reached === 0) {
+            releaseCooldown();
+            return;
+          }
           // After the handler, so a command that threw is not counted.
           // The Discord id may be absent — plenty of players use !commands
           // without ever linking, and those uses still count for the

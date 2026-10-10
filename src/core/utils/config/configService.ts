@@ -25,8 +25,14 @@ import {
 } from "../../config.js";
 import { log } from "../logger.js";
 import { snapshotConfig, type SnapshotMeta } from "./configHistory.js";
+import {
+  existingFileMode,
+  sweepStaleTemps,
+  tempSiblingPath,
+} from "./atomicWrite.js";
 import type { RawBotConfig } from "../../types/index.js";
 import { errMsg } from "../error.js";
+import { stampConfigVersion } from "../../configMigrations.js";
 
 /** Raw on-disk config (no env overrides, no variables.txt resolution). */
 export function readRawConfig(): RawBotConfig {
@@ -61,14 +67,17 @@ export function validateCandidate(
 /**
  * Validate and atomically write a new config.json.
  *
+ * The file is always written with the current configVersion.
+ *
  * @throws {Error} listing every validation error when the candidate is
  *                 invalid — nothing is written in that case.
  * @returns validation warnings (non-fatal issues worth surfacing in a UI).
  */
 export async function writeConfig(
-  candidate: RawBotConfig,
+  unstamped: RawBotConfig,
   meta?: SnapshotMeta,
 ): Promise<{ warnings: string[]; changed: boolean }> {
+  const candidate = stampConfigVersion(unstamped);
   const result = validateCandidateConfig(candidate);
   if (!result.valid) {
     throw new Error(
@@ -111,9 +120,13 @@ export async function writeConfig(
   // single-file bind mount) would otherwise surface to the dashboard as an
   // opaque 500, so map it to an actionable message and don't leave a stray
   // temp file behind.
-  const tmp = `${configPath}.tmp`;
+  sweepStaleTemps(configPath);
+  const tmp = tempSiblingPath(configPath);
   try {
-    await fsPromises.writeFile(tmp, json);
+    await fsPromises.writeFile(tmp, json, {
+      mode: existingFileMode(configPath),
+      flag: "wx",
+    });
     try {
       await fsPromises.copyFile(configPath, `${configPath}.bak`);
     } catch {

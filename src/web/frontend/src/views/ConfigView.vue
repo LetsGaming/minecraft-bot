@@ -4,64 +4,121 @@
       <template #subtitle>
         Full <code class="mono">config.json</code>, schema-driven. Secrets show as
         <code class="mono">{{ placeholder }}</code> — leave them to keep the current
-        value. Changes are validated server-side and picked up automatically.
+        value. Changes are validated server-side before they are written.
       </template>
       <template #actions>
         <div class="head-actions">
+          <ConfigStatusChip :refresh-key="refreshKey" />
           <div class="raw-toggle">
-            <ToggleSwitch v-model="rawMode" inputId="rawmode" />
+            <ToggleSwitch
+              :model-value="rawMode"
+              :disabled="schemaFailed || !ready"
+              inputId="rawmode"
+              @update:model-value="setRawMode"
+            />
             <label for="rawmode" class="small">Raw JSON</label>
           </div>
           <Button
-            label="Save config"
+            label="Discard"
+            icon="pi pi-undo"
+            severity="secondary"
+            outlined
+            :disabled="!dirty || saving"
+            @click="discard"
+          />
+          <Button
+            :label="pendingCount > 0 ? `Save ${pendingCount} change${pendingCount === 1 ? '' : 's'}` : 'Save config'"
             icon="pi pi-save"
             :loading="saving"
-            :disabled="saving"
-            @click="save"
+            :disabled="!canSave"
+            @click="onSave"
           />
         </div>
       </template>
     </ViewHeader>
 
-    <Message v-if="errors.length" severity="error" :closable="false" class="cfg-msg">
-      <p style="margin: 0 0 6px">Validation failed:</p>
-      <ul class="msg-list">
-        <li v-for="(err, i) in errors" :key="i">{{ err }}</li>
-      </ul>
-    </Message>
-    <Message v-if="warnings.length" severity="warn" :closable="false" class="cfg-msg">
-      <ul class="msg-list">
-        <li v-for="(w, i) in warnings" :key="i">{{ w }}</li>
-      </ul>
-    </Message>
-
-    <div v-if="!rawMode && newFeatureCount > 0" class="new-banner">
-      <i class="pi pi-sparkles" />
-      {{ newFeatureCount }} new feature{{ newFeatureCount === 1 ? "" : "s" }} available to enable
+    <div v-if="loading && !ready" class="center-note muted">
+      <i class="pi pi-spin pi-spinner" /> Loading config…
     </div>
 
-    <Textarea
-      v-if="rawMode"
-      v-model="rawText"
-      class="raw"
-      spellcheck="false"
-      autoResize
-    />
+    <Message v-else-if="loadError && !ready" severity="error" :closable="false" class="cfg-msg">
+      <div class="retry-row">
+        <span>Could not load the config: {{ loadError }}</span>
+        <Button label="Retry" icon="pi pi-refresh" size="small" severity="secondary" outlined @click="reload" />
+      </div>
+    </Message>
 
-    <div v-else-if="schema && model" class="fields">
-      <SchemaField
-        v-for="(propSchema, key) in topLevelProps"
-        :key="key"
-        :name="String(key)"
-        :schema="propSchema"
-        :definitions="schema?.definitions"
-        :model-value="model[key]"
-        @update:model-value="setTop(String(key), $event)"
+    <template v-else-if="ready">
+      <Message v-if="stale" severity="warn" :closable="false" class="cfg-msg">
+        <div class="retry-row">
+          <span>Your last save went through, but the page could not re-read it. Reload before editing further.</span>
+          <Button label="Reload" icon="pi pi-refresh" size="small" severity="secondary" outlined @click="reload" />
+        </div>
+      </Message>
+
+      <Message v-if="errors.length" severity="error" :closable="false" class="cfg-msg">
+        <ul class="msg-list">
+          <li v-for="(err, i) in errors" :key="i">{{ err }}</li>
+        </ul>
+      </Message>
+      <Message v-if="warnings.length" severity="warn" :closable="false" class="cfg-msg">
+        <ul class="msg-list">
+          <li v-for="(w, i) in warnings" :key="i">{{ w }}</li>
+        </ul>
+      </Message>
+
+      <ConflictPicker :conflicts="conflicts" @resolve="resolveConflict($event.conflict, $event.choice)" />
+      <div v-if="conflicts.length" class="conflict-actions">
+        <Button
+          label="Discard my edits and reload"
+          icon="pi pi-refresh"
+          size="small"
+          severity="secondary"
+          outlined
+          @click="reloadDiscardingMine"
+        />
+      </div>
+
+      <div v-if="!rawMode && newFeatureCount > 0" class="new-banner">
+        <i class="pi pi-sparkles" />
+        {{ newFeatureCount }} new feature{{ newFeatureCount === 1 ? "" : "s" }} available to enable
+      </div>
+
+      <Message v-if="schemaFailed" severity="secondary" :closable="false" class="cfg-msg">
+        The schema could not be loaded, so the config is shown as raw JSON.
+      </Message>
+
+      <Textarea
+        v-if="rawMode"
+        :model-value="rawText"
+        class="raw"
+        spellcheck="false"
+        autoResize
+        @update:model-value="setRawText"
       />
-    </div>
-    <Message v-else severity="secondary" :closable="false">
-      Schema unavailable — falling back to raw JSON mode.
-    </Message>
+
+      <div v-else-if="schema && model" class="fields">
+        <div
+          v-for="(propSchema, key) in topLevelProps"
+          :key="key"
+          :class="['section', { 'is-dirty': isDirty(String(key)), 'is-invalid': sectionErrors[String(key)] }]"
+        >
+          <span v-if="isDirty(String(key))" class="dirty-mark" title="Changed, not saved yet">
+            <i class="pi pi-circle-fill" /> modified
+          </span>
+          <SchemaField
+            :name="String(key)"
+            :schema="propSchema"
+            :definitions="schema?.definitions"
+            :model-value="model[key]"
+            @update:model-value="setTop(String(key), $event)"
+          />
+          <ul v-if="sectionErrors[String(key)]" class="field-errors">
+            <li v-for="(msg, i) in sectionErrors[String(key)]" :key="i">{{ msg }}</li>
+          </ul>
+        </div>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -82,11 +139,15 @@ import {
 } from "../composables/useSchemaRefs";
 import { useGuilds } from "../composables/useGuilds";
 import ViewHeader from "../components/ui/ViewHeader.vue";
+import ConfigStatusChip from "../components/ui/ConfigStatusChip.vue";
+import ConflictPicker from "../components/schema/ConflictPicker.vue";
 import { useConfig } from "../composables/useConfig";
 
 export default defineComponent({
   name: "ConfigView",
-  components: { SchemaField, Button, Textarea, ToggleSwitch, Message, ViewHeader },
+  components: {
+    SchemaField, Button, Textarea, ToggleSwitch, Message, ViewHeader, ConfigStatusChip, ConflictPicker,
+  },
   setup() {
     // Provide server options so ID fields (defaultServer, allowedServers, the
     // per-feature `server` scope) render as name dropdowns. Channels/roles are
@@ -118,6 +179,9 @@ export default defineComponent({
       loadGuildNames,
     };
   },
+  data() {
+    return { refreshKey: 0 };
+  },
   computed: {
     topLevelProps(): Record<string, unknown> {
       // The generated schema is a root `$ref` (topRef) to RawBotConfig, so
@@ -136,6 +200,14 @@ export default defineComponent({
       );
     },
   },
+  methods: {
+    async onSave(): Promise<void> {
+      if (await this.save()) this.refreshKey += 1;
+    },
+    async reload(): Promise<void> {
+      await this.load();
+    },
+  },
   async mounted() {
     await Promise.all([this.load(), this.loadServerRefs(), this.loadGuildNames()]);
     // Now that the schema is loaded, mark its feature keys seen so a later
@@ -152,6 +224,14 @@ export default defineComponent({
 .head-actions { display: flex; align-items: center; gap: 16px; flex: none; }
 .raw-toggle { display: flex; align-items: center; gap: 8px; }
 .cfg-msg { margin-bottom: 16px; }
+.center-note { display: flex; align-items: center; gap: 8px; padding: 24px 0; }
+.retry-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.conflict-actions { margin: -6px 0 14px; }
+.section { position: relative; }
+.section.is-dirty { box-shadow: -3px 0 0 0 var(--mc-accent); padding-left: 10px; margin-left: -13px; }
+.dirty-mark { position: absolute; right: 0; top: 0; font-size: 11px; color: var(--mc-accent); }
+.dirty-mark .pi { font-size: 6px; vertical-align: middle; }
+.field-errors { margin: 4px 0 10px; padding-left: 18px; color: var(--p-red-400, #f87171); font-size: 12.5px; }
 .msg-list { margin: 0; padding-left: 18px; }
 .raw {
   width: 100%; min-height: 520px;

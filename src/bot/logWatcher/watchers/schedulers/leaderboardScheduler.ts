@@ -35,6 +35,7 @@ import {
 } from "@mcbot/core/utils/time.js";
 import { guildTimeZone } from "@mcbot/core/utils/config/timezones.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 const HOUR_MS = 60 * 60 * 1000;
 const SNAPSHOT_INTERVAL_MS = HOUR_MS;
 /**
@@ -46,10 +47,10 @@ const SNAPSHOT_INTERVAL_MS = HOUR_MS;
  */
 const POST_CHECK_INTERVAL_MS = 5 * 60_000;
 
-const INTERVAL_LABELS: Record<LeaderboardInterval, string> = {
-  daily: "Daily",
-  weekly: "Weekly",
-  monthly: "Monthly",
+const INTERVAL_LABEL_KEYS: Record<LeaderboardInterval, string> = {
+  daily: "leaderboard.periodDaily",
+  weekly: "leaderboard.periodWeekly",
+  monthly: "leaderboard.periodMonthly",
 };
 
 /** "SU".."SA", Sunday first — matches localDayOfWeek's index. Duplicated
@@ -117,11 +118,6 @@ export function startLeaderboardScheduler(
   client: Client,
   guildConfigs: GuildConfigSource,
 ): ReturnType<typeof setInterval> | SchedulerTimers {
-  const cfg = loadConfig();
-  const globalInterval = cfg.leaderboardInterval;
-  const globalPostTime = cfg.leaderboardPostTime;
-  const globalPostDay = cfg.leaderboardPostDay;
-
   // ── Snapshots: one per server instance ──
   const snapshotTimer = setInterval(async () => {
     for (const server of getAllInstances()) {
@@ -154,7 +150,7 @@ export function startLeaderboardScheduler(
 
   const postTimer = setInterval(async () => {
     try {
-      await checkAndPost(client, guildConfigs, globalInterval, globalPostTime, globalPostDay);
+      await checkAndPost(client, guildConfigs);
     } catch (err) {
       log.error("leaderboard", `Scheduler error: ${errMsg(err)}`);
     }
@@ -162,7 +158,7 @@ export function startLeaderboardScheduler(
 
   setTimeout(
     () =>
-      checkAndPost(client, guildConfigs, globalInterval, globalPostTime, globalPostDay).catch(
+      checkAndPost(client, guildConfigs).catch(
         () => {},
       ),
     30000,
@@ -179,10 +175,14 @@ export function startLeaderboardScheduler(
 async function checkAndPost(
   client: Client,
   guildConfigs: GuildConfigSource,
-  globalInterval: LeaderboardInterval,
-  globalPostTime: string | undefined,
-  globalPostDay: string | undefined,
 ): Promise<void> {
+  // The global schedule defaults are read per check so config edits apply
+  // on the next hourly pass.
+  const {
+    leaderboardInterval: globalInterval,
+    leaderboardPostTime: globalPostTime,
+    leaderboardPostDay: globalPostDay,
+  } = loadConfig();
   const schedule = await loadSchedule();
   const now = Date.now();
 
@@ -261,7 +261,11 @@ async function checkAndPost(
         continue;
       }
 
-      const periodLabel = INTERVAL_LABELS[interval] ?? interval;
+      const periodLabel = t(
+        INTERVAL_LABEL_KEYS[interval] ?? "leaderboard.periodDaily",
+        {},
+        guildId,
+      );
       const showServerName = servers.length > 1;
 
       for (const server of servers) {
@@ -281,10 +285,10 @@ async function checkAndPost(
           // So users know it's a partial period when the bot is young:
           footer =
             snapshotAge > intervalMs / HOUR_MS
-              ? `${periodLabel} leaderboard · based on last ${snapshotAge}h of data`
-              : `${periodLabel} leaderboard · bot tracking since ${snapshotAge}h ago (partial period)`;
+              ? t("leaderboard.footerBased", { period: periodLabel, hours: snapshotAge }, guildId)
+              : t("leaderboard.footerPartial", { period: periodLabel, hours: snapshotAge }, guildId);
         } else {
-          footer = `${periodLabel} leaderboard · no snapshot available, showing all-time`;
+          footer = t("leaderboard.footerNoSnapshot", { period: periodLabel }, guildId);
         }
         if (showServerName) footer = `${server.id} · ${footer}`;
 
@@ -306,7 +310,7 @@ async function checkAndPost(
             );
             const embed = buildLeaderboardEmbed(streakData);
             // Streaks are running totals — period baselines don't apply.
-            embed.setFooter({ text: `${server.id} · all-time streaks` });
+            embed.setFooter({ text: t("leaderboard.streakFooter", { server: server.id }, guildId) });
             embeds.push(embed);
             continue;
           }

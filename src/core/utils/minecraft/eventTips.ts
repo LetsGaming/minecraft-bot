@@ -34,6 +34,7 @@ import { t } from "../i18n.js";
 import { log } from "../logger.js";
 import { errMsg } from "../error.js";
 import type { ServerInstance } from "../server/server.js";
+import { whisper } from "./serverMessages.js";
 
 /** Things that happen in game which a command has an answer for. */
 export type GameEvent = "death" | "death-by-player";
@@ -158,11 +159,11 @@ export async function markEventTipSent(
  *
  * Best-effort. A tip is the least important thing happening at the moment
  * somebody dies, and it must never interfere with the death handling around
- * it. Recorded only after the whisper is actually sent, so a failed send
+ * it. Recorded only once the whisper reached the server, so a failed send
  * does not spend one of the player's mentions.
  */
 export async function deliverEventTip(
-  server: Pick<ServerInstance, "id" | "sendCommand">,
+  server: Pick<ServerInstance, "id" | "send">,
   event: GameEvent,
   player: string,
 ): Promise<EventTip | null> {
@@ -171,7 +172,7 @@ export async function deliverEventTip(
     const selected = await tipForEvent(event, ctx);
     if (!selected) return null;
 
-    await server.sendCommand(`/msg ${player} ${selected.text}`);
+    if (!(await whisper(server, player, selected.text))) return null;
     await markEventTipSent(selected.tip, ctx);
     return selected.tip;
   } catch (err) {
