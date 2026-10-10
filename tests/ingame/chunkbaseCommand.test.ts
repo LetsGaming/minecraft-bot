@@ -41,10 +41,14 @@ beforeEach(() => {
 
 interface FakeOpts {
   seed?: string | null;
-  dimension?: string;
+  dimension?: string | null;
   coords?: { x: number; y: number; z: number } | null;
   version?: string | null;
+  unreachable?: boolean;
 }
+
+const ok = (value: unknown) => ({ ok: true, value });
+const fail = (reason = "unreadable") => ({ ok: false, reason });
 
 function fakeServer(opts: FakeOpts = {}) {
   const sent: string[] = [];
@@ -52,18 +56,30 @@ function fakeServer(opts: FakeOpts = {}) {
     sent,
     server: {
       id: "srv",
-      sendCommand: vi.fn(async (c: string) => {
+      send: vi.fn(async (c: string) => {
         sent.push(c);
-        return "";
+        return { kind: "delivered", output: "" };
       }),
-      getSeed: vi.fn().mockResolvedValue("seed" in opts ? opts.seed : "4242"),
+      getSeed: vi.fn().mockResolvedValue(
+        opts.unreachable
+          ? fail("unreachable")
+          : ("seed" in opts ? opts.seed : "4242") === null
+            ? fail()
+            : ok("seed" in opts ? opts.seed : "4242"),
+      ),
       getPlayerDimension: vi
         .fn()
-        .mockResolvedValue(opts.dimension ?? "overworld"),
+        .mockResolvedValue(
+          opts.dimension === null ? fail() : ok(opts.dimension ?? "overworld"),
+        ),
       getPlayerCoords: vi
         .fn()
         .mockResolvedValue(
-          "coords" in opts ? opts.coords : { x: 10.7, y: 64, z: -3.2 },
+          "coords" in opts
+            ? opts.coords === null
+              ? fail()
+              : ok(opts.coords)
+            : ok({ x: 10.7, y: 64, z: -3.2 }),
         ),
       getMinecraftVersion: vi
         .fn()
@@ -92,6 +108,22 @@ describe("!chunkbase handler", () => {
     const user = await run(server);
     expect(sent).toEqual([`/msg ${user} Could not retrieve the world seed.`]);
     expect(server.getPlayerCoords).not.toHaveBeenCalled();
+  });
+
+  it("says the server is unreachable instead of blaming the seed", async () => {
+    const { server, sent } = fakeServer({ unreachable: true });
+    const user = await run(server);
+    expect(sent).toEqual([
+      `/msg ${user} Could not reach the server right now. Try again in a moment.`,
+    ]);
+  });
+
+  it("does not build a link with a guessed dimension", async () => {
+    const { server, sent } = fakeServer({ dimension: null });
+    const user = await run(server);
+    expect(sent).toEqual([
+      `/msg ${user} Could not tell which dimension you are in. Try again in a moment.`,
+    ]);
   });
 
   it("emits valid tellraw JSON with the URL as plain text", async () => {
@@ -148,9 +180,9 @@ describe("!chunkbase handler", () => {
     expect(url).not.toContain("&x=");
   });
 
-  it("proceeds without coordinates when the lookup throws", async () => {
+  it("proceeds without coordinates when the position cannot be read", async () => {
     const { server, sent } = fakeServer();
-    server.getPlayerCoords.mockRejectedValue(new Error("boom"));
+    server.getPlayerCoords.mockResolvedValue(fail("player-offline"));
     const user = await run(server);
     const texts = tellraw(sent, user).extra.map((e) => String(e.text).trim());
     expect(texts.find((t) => t.startsWith("https://"))).not.toContain("&x=");

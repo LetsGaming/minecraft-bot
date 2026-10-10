@@ -14,6 +14,7 @@ import {
 } from "@mcbot/core/utils/stores/pollStore.js";
 import { loadLinkedAccountsOrEmpty } from "@mcbot/core/utils/stores/linkUtils.js";
 import { t } from "@mcbot/core/utils/i18n.js";
+import { tellraw, whisper } from "@mcbot/core/utils/minecraft/serverMessages.js";
 
 const cmd = defineCommand({
   name: "vote",
@@ -25,15 +26,13 @@ const cmd = defineCommand({
     const poll = getOpenPollForServer(store, server.id);
 
     if (!poll || Date.now() >= poll.endsAt) {
-      await server.sendCommand(`/msg ${username} ${t("poll.noneInGame")}`);
+      await whisper(server, username, t("poll.noneInGame"));
       return;
     }
 
     const idx = Number.parseInt(option ?? "", 10) - 1;
     if (!Number.isInteger(idx) || idx < 0 || idx >= poll.options.length) {
-      await server.sendCommand(
-        `/msg ${username} ${t("poll.badVote", { max: poll.options.length })}`,
-      );
+      await whisper(server, username, t("poll.badVote", { max: poll.options.length }));
       return;
     }
 
@@ -41,12 +40,10 @@ const cmd = defineCommand({
     poll.votes[voterKeyForMc(username, linked)] = idx;
     await savePollStore(store);
 
-    await server.sendCommand(
-      `/tellraw ${username} ${JSON.stringify({
+    await tellraw(server, username, {
         text: t("poll.voted", { option: poll.options[idx]! }),
         color: "green",
-      })}`,
-    );
+      });
   },
 });
 

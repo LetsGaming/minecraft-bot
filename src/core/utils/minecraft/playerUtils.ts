@@ -1,6 +1,7 @@
 import { loadKnownPlayers } from "./whitelist.js";
 import * as serverAccess from "../server/serverAccess.js";
 import type { ServerInstance } from "../server/server.js";
+import type { QueryResult } from "../server/queryResult.js";
 import type {
   PlayerCoords,
   PlayerCount,
@@ -148,7 +149,7 @@ export function isPlayerOnline(
 export async function getPlayerCoords(
   server: ServerInstance,
   playerName: string,
-): Promise<PlayerCoords | null> {
+): Promise<QueryResult<PlayerCoords>> {
   return server.getPlayerCoords(playerName);
 }
 
@@ -159,7 +160,7 @@ export async function getPlayerCoords(
 export async function getPlayerDimension(
   server: ServerInstance,
   playerName: string,
-): Promise<string> {
+): Promise<QueryResult<string>> {
   return server.getPlayerDimension(playerName);
 }
 

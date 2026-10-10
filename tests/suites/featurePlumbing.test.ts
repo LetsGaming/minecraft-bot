@@ -102,19 +102,19 @@ describe("ServerInstance.getLastDeathLocation", () => {
       logFile: "l",
       useRcon: true,
     } as never);
-    vi.spyOn(server, "getPlayerData").mockResolvedValue(
-      'Alice has the following entity data: {pos: [I; -180, 63, 254], dimension: "minecraft:the_nether"}',
-    );
+    vi.spyOn(server, "send").mockResolvedValue({
+      kind: "delivered",
+      output:
+        'Alice has the following entity data: {pos: [I; -180, 63, 254], dimension: "minecraft:the_nether"}',
+    });
 
     expect(await server.getLastDeathLocation("Alice")).toEqual({
-      x: -180,
-      y: 63,
-      z: 254,
-      dimension: "the_nether",
+      ok: true,
+      value: { x: -180, y: 63, z: 254, dimension: "the_nether" },
     });
   });
 
-  it("returns null when the tag is missing (never died)", async () => {
+  it("reports no data when the tag is missing (never died)", async () => {
     const { ServerInstance } = await import("../../src/core/utils/server/server.js");
     const server = new ServerInstance("smp", {
       screenSession: "smp",
@@ -123,10 +123,14 @@ describe("ServerInstance.getLastDeathLocation", () => {
       logFile: "l",
       useRcon: true,
     } as never);
-    vi.spyOn(server, "getPlayerData").mockResolvedValue(
-      "Found no elements matching LastDeathLocation",
-    );
-    expect(await server.getLastDeathLocation("Alice")).toBeNull();
+    vi.spyOn(server, "send").mockResolvedValue({
+      kind: "delivered",
+      output: "Found no elements matching LastDeathLocation",
+    });
+    expect(await server.getLastDeathLocation("Alice")).toEqual({
+      ok: false,
+      reason: "no-data",
+    });
   });
 });
 

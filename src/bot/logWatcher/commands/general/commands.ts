@@ -4,6 +4,7 @@ import { defineCommand } from "../../defineCommand.js";
 import { getCommandFiles } from "../../../utils/commands/loadCommandFiles.js";
 import { resolveCommandPolicy } from "@mcbot/core/utils/commands/commandPolicy.js";
 import type { InGameCommandInfo } from "@mcbot/core/types/index.js";
+import { whisper } from "@mcbot/core/utils/minecraft/serverMessages.js";
 
 const commandsDir = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -44,11 +45,9 @@ const cmd = defineCommand({
     const commands = (await listed).filter(
       (c) => resolveCommandPolicy(c.name, { serverId: server.id }).enabled,
     );
-    await server.sendCommand(`/msg ${username} Available commands:`);
+    await whisper(server, username, `Available commands:`);
     for (const c of commands) {
-      await server.sendCommand(
-        `/msg ${username}  ${c.info.command} - ${c.info.description}`,
-      );
+      await whisper(server, username, ` ${c.info.command} - ${c.info.description}`);
     }
   },
 });

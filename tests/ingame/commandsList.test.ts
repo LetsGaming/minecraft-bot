@@ -33,6 +33,7 @@ vi.mock("../../src/bot/utils/commands/loadCommandFiles.js", () => ({
 import { registerLogCommand } from "../../src/bot/logWatcher/logWatcher.js";
 import { resolveCommandPolicy } from "../../src/core/utils/commands/commandPolicy.js";
 import { init } from "../../src/bot/logWatcher/commands/general/commands.js";
+import { DELIVERED } from "../fixtures/outcomes.js";
 
 type Handler = (m: RegExpExecArray, c: unknown, s: unknown) => Promise<void>;
 
@@ -57,9 +58,9 @@ describe("!commands", () => {
     const sent: string[] = [];
     const server = {
       id: "srv",
-      sendCommand: vi.fn(async (c: string) => {
+      send: vi.fn(async (c: string) => {
         sent.push(c);
-        return "";
+        return DELIVERED;
       }),
     };
     const line = `[12:00:00] [Server thread/INFO]: <Lister${++n}> !commands`;

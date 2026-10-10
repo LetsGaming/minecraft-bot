@@ -50,6 +50,14 @@ export const en: Record<string, string> = {
   "dailyReminder.dmServer":
     "🎁 Your daily reward on **{server}** is ready! Claim it with /daily server:{server}.",
 
+  // ── live server queries ──
+  "query.unreachable":
+    "Could not reach the server right now. Try again in a moment.",
+  "query.noDimension":
+    "Could not tell which dimension you are in. Try again in a moment.",
+  "seed.unavailable": "Could not retrieve the world seed.",
+  "netherportal.noPosition": "Could not get your position.",
+
   // ── slime (!slime) ──
   "slime.noSeed": "Could not retrieve the world seed.",
   "slime.noPosition": "Could not get your position. Try again in a moment.",

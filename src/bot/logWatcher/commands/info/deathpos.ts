@@ -1,5 +1,5 @@
 /**
- * !deathpos — whisper the coordinates of the player's last death.
+ * !deathpos: whisper the coordinates of the player's last death.
  *
  * Reads the LastDeathLocation NBT (1.19+) via
  * ServerInstance.getLastDeathLocation, which handles both RCON responses
@@ -8,11 +8,13 @@
  * death" message instead of an error.
  *
  * The optional Discord DM on death lives in the deaths watcher and is
- * controlled by config `deathCoords.dmLinked` — this command is always
+ * controlled by config `deathCoords.dmLinked`; this command is always
  * available.
  */
 import { defineCommand } from "../../defineCommand.js";
 import { t } from "@mcbot/core/utils/i18n.js";
+import { tellraw, whisper } from "@mcbot/core/utils/minecraft/serverMessages.js";
+import { queryFailureText } from "../../queryMessages.js";
 
 const cmd = defineCommand({
   name: "deathpos",
@@ -21,20 +23,22 @@ const cmd = defineCommand({
   cooldown: 10,
   handler: async (username, _args, _client, server) => {
     const loc = await server.getLastDeathLocation(username);
-    if (!loc) {
-      await server.sendCommand(`/msg ${username} ${t("deathpos.none")}`);
+    if (!loc.ok) {
+      await whisper(
+        server,
+        username,
+        queryFailureText(loc.reason, "deathpos.none"),
+      );
       return;
     }
 
     const msg = t("deathpos.result", {
-      x: loc.x,
-      y: loc.y,
-      z: loc.z,
-      dimension: loc.dimension,
+      x: loc.value.x,
+      y: loc.value.y,
+      z: loc.value.z,
+      dimension: loc.value.dimension,
     });
-    await server.sendCommand(
-      `/tellraw ${username} ${JSON.stringify({ text: msg, color: "gold" })}`,
-    );
+    await tellraw(server, username, { text: msg, color: "gold" });
   },
 });
 

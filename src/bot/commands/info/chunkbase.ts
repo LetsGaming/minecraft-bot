@@ -5,6 +5,7 @@ import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { getLinkedAccount } from "@mcbot/core/utils/stores/linkUtils.js";
 import { buildChunkbaseUrl } from "@mcbot/core/utils/minecraft/chunkbaseUrl.js";
 import { withErrorHandling } from "../middleware.js";
+import { queryFailureText } from "../../logWatcher/queryMessages.js";
 
 export const data = new SlashCommandBuilder()
   .setName("chunkbase")
@@ -26,21 +27,19 @@ export const data = new SlashCommandBuilder()
 export const execute = withErrorHandling(async (interaction) => {
   const server = resolveServer(interaction);
   const seed = await server.getSeed();
-  if (!seed) throw new Error("Could not retrieve the world seed.");
+  if (!seed.ok) throw new Error(queryFailureText(seed.reason, "seed.unavailable"));
 
   const dimension = interaction.options.getString("dimension") ?? "overworld";
   const linked = await getLinkedAccount(interaction.user.id);
 
   let coords: { x: number; z: number } | undefined;
   if (linked) {
-    try {
-      coords = (await server.getPlayerCoords(linked)) ?? undefined;
-    } catch {
-      /* proceed without */
-    }
+    // The link still works without a position.
+    const position = await server.getPlayerCoords(linked);
+    if (position.ok) coords = position.value;
   }
 
-  const url = buildChunkbaseUrl(seed, dimension, coords?.x, coords?.z);
+  const url = buildChunkbaseUrl(seed.value, dimension, coords?.x, coords?.z);
   await interaction.editReply({
     embeds: [
       createEmbed({

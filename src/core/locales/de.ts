@@ -44,6 +44,14 @@ export const de: Record<string, string> = {
   "dailyReminder.dm":
     "🎁 Deine tägliche Belohnung ist bereit! Hol sie dir mit /daily auf dem Server ab.",
 
+  // ── live server queries ──
+  "query.unreachable":
+    "Der Server ist gerade nicht erreichbar. Versuch es gleich nochmal.",
+  "query.noDimension":
+    "Konnte deine Dimension nicht ermitteln. Versuch es gleich nochmal.",
+  "seed.unavailable": "Konnte den Welt-Seed nicht abrufen.",
+  "netherportal.noPosition": "Konnte deine Position nicht ermitteln.",
+
   // ── slime (!slime) ──
   "slime.noSeed": "Konnte den Welt-Seed nicht abrufen.",
   "slime.noPosition": "Konnte deine Position nicht ermitteln. Versuch es gleich nochmal.",

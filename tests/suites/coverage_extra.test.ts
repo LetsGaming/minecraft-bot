@@ -55,6 +55,9 @@ vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
       players: ["A", "B"],
     }),
   sendCommand: vi.fn().mockResolvedValue("result"),
+  sendCommandOutcome: vi
+    .fn()
+    .mockResolvedValue({ kind: "delivered", output: "result" }),
   getTps: vi.fn().mockResolvedValue({ tps1m: 20 }),
 }));
 
@@ -107,7 +110,7 @@ describe("defineCommand — cooldown enforcement", () => {
     const match = regex.exec(line)!;
     const server = {
       id: "srv",
-      sendCommand: vi.fn().mockResolvedValue(""),
+      send: vi.fn().mockResolvedValue({ kind: "delivered", output: "" }),
     } as never;
     const client = {} as never;
 
@@ -117,7 +120,7 @@ describe("defineCommand — cooldown enforcement", () => {
 
     // Second call — should be blocked by cooldown
     await registeredHandler(match, client, server);
-    expect(server.sendCommand).toHaveBeenCalledWith(
+    expect(server.send).toHaveBeenCalledWith(
       expect.stringContaining("Please wait"),
     );
     expect(handler).toHaveBeenCalledTimes(1); // still only 1 call
@@ -132,7 +135,7 @@ describe("ServerInstance methods", () => {
   let ServerInstance: new (cfg: never) => {
     isRunning: () => Promise<boolean>;
     sendCommand: (cmd: string) => Promise<string | null>;
-    getSeed: () => Promise<string | null>;
+    getSeed: () => Promise<{ ok: boolean }>;
     getList: () => Promise<{
       playerCount: string;
       maxPlayers: string;
@@ -168,10 +171,10 @@ describe("ServerInstance methods", () => {
     expect(result).toBe(true);
   });
 
-  it("sendCommand() delegates to serverAccess.sendCommand", async () => {
+  it("sendCommand() keeps returning the output of a delivered command", async () => {
     const inst = new ServerInstance(remoteCfg);
     const result = await inst.sendCommand("/say hello");
-    expect(typeof result === "string" || result === null).toBe(true);
+    expect(result).toBe("result");
   });
 
   it("getList() delegates to serverAccess.getList", async () => {
@@ -197,8 +200,8 @@ describe("ServerInstance methods", () => {
     const { tailLog } = await import("../../src/core/utils/server/serverAccess.js");
     vi.mocked(tailLog).mockResolvedValue("no seed here");
     const seed = await inst.getSeed();
-    // Without RCON and with no seed in log, returns null
-    expect(seed === null || typeof seed === "string").toBe(true);
+    // The reply held no seed, so the query fails rather than guessing.
+    expect(seed.ok).toBe(false);
   });
 });
 
