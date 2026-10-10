@@ -19,7 +19,10 @@ export type {
   ConfigValidationResult,
 } from "./configValidation.js";
 import { errMsg } from "./utils/error.js";
-import { writeFileAtomicSync } from "./utils/config/atomicWrite.js";
+import {
+  SECRET_FILE_MODE,
+  writeFileAtomicSync,
+} from "./utils/config/atomicWrite.js";
 import {
   ConfigMigrationError,
   runConfigMigrations,
@@ -168,7 +171,10 @@ function migrateConfigFile(raw: RawBotConfig, originalText: string): RawBotConfi
 
   const backup = backupPath(result.fromVersion);
   try {
-    fs.writeFileSync(backup, originalText);
+    fs.writeFileSync(backup, originalText, {
+      mode: SECRET_FILE_MODE,
+      flag: "wx",
+    });
     writeFileAtomicSync(
       CONFIG_PATH,
       JSON.stringify(result.config, null, 2) + "\n",

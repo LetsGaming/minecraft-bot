@@ -311,13 +311,13 @@ describe("loadConfig migration", () => {
 
     expect(cfg.configVersion).toBe(CURRENT_CONFIG_VERSION);
     expect(writes[0]).toMatch(/config\.json\.bak-v0-\d{8}T\d{6}Z$/);
-    expect(writes[1]).toBe(`${configPath}.tmp`);
+    expect(writes[1]).toMatch(/config\.json\.\d+\.[0-9a-f]+\.tmp$/);
     const [backup] = backups();
     expect(backup).toMatch(/^config\.json\.bak-v0-/);
     expect(fs.readFileSync(path.join(dir, backup!), "utf-8")).toBe(original);
     const written = JSON.parse(fs.readFileSync(configPath, "utf-8"));
     expect(written.configVersion).toBe(CURRENT_CONFIG_VERSION);
-    expect(fs.existsSync(`${configPath}.tmp`)).toBe(false);
+    expect(fs.readdirSync(dir).filter((f) => f.endsWith(".tmp"))).toEqual([]);
   });
 
   it("logs one line per applied migrator", async () => {

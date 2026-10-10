@@ -25,6 +25,7 @@ import {
 } from "../../config.js";
 import { log } from "../logger.js";
 import { snapshotConfig, type SnapshotMeta } from "./configHistory.js";
+import { existingFileMode, tempSiblingPath } from "./atomicWrite.js";
 import type { RawBotConfig } from "../../types/index.js";
 import { errMsg } from "../error.js";
 import { stampConfigVersion } from "../../configMigrations.js";
@@ -115,9 +116,12 @@ export async function writeConfig(
   // single-file bind mount) would otherwise surface to the dashboard as an
   // opaque 500, so map it to an actionable message and don't leave a stray
   // temp file behind.
-  const tmp = `${configPath}.tmp`;
+  const tmp = tempSiblingPath(configPath);
   try {
-    await fsPromises.writeFile(tmp, json);
+    await fsPromises.writeFile(tmp, json, {
+      mode: existingFileMode(configPath),
+      flag: "wx",
+    });
     try {
       await fsPromises.copyFile(configPath, `${configPath}.bak`);
     } catch {

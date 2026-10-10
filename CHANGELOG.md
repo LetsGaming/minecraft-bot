@@ -6,6 +6,10 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+
+- `config.json` rewrites (dashboard saves and the one-time config migration) kept the default file mode, so on Linux a `0600` config could become world-readable and the migration backup `config.json.bak-v*` was created with the default umask. Rewrites now keep the existing file mode, new config files and backups are owner-only (`0600`), and temp files are created exclusively under a random name (`core/utils/config/atomicWrite.ts`, `core/utils/config/configService.ts`, `core/config.ts`).
+
 ### Added
 
 - `/players` command: lists every player who ever played on a server (stats files plus whitelist and usercache names) with online state or last-seen and lifetime playtime, paginated 20 per page, with `sort` (`last-seen`, `playtime`, `name`), `inactive:<days>` and `include_unknown` options. Last-seen only exists for time since the bot began tracking sessions, and the usercache is capped around 1000 entries by vanilla (`commands/stats/players.ts`, `core/utils/minecraft/playerRoster.ts`, `bot/utils/discordTime.ts`).
