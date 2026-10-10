@@ -16,8 +16,7 @@
 
 import { scriptTimeoutMs } from "./wrapperContract.js";
 import { SseLineStream } from "../sseLineStream.js";
-import type { ServerConfig, ScriptResult, ServerCapabilities } from "../../types/index.js";
-import { allCapabilities } from "../../types/index.js";
+import type { ServerConfig, ScriptResult } from "../../types/index.js";
 import type {
   BackupDeleteResult,
   InstalledMod,
@@ -48,6 +47,7 @@ export { supportsModCompat, startModCompat, getModCompat } from "./access/modCom
 export { readBackups, indexBackupFiles, openBackupDownload, restoreBackupFile, deleteBackupFile } from "./access/backups.js";
 export { indexConfigFiles, readConfigFile, writeConfigFile, revertConfigFile } from "./access/configFiles.js";
 export type { ConfigFileContents, ConfigIndexResult, ConfigFileInfo } from "./access/configFiles.js";
+export { detectCapabilities } from "./access/capabilityProbe.js";
 
 export type {
   BackupDeleteResult,
@@ -97,30 +97,6 @@ export {
 
 /** Margin added to a script's ceiling so the wrapper's own timeout reply arrives first. */
 const SCRIPT_TIMEOUT_MARGIN_MS = 15_000;
-
-// ── Capability detection ───────────────────────────────────────────
-
-/**
- * Probe which setup-suite artifacts exist for a server.
- *
- * Local instances: cheap fs.existsSync probes against the documented suite
- * layout (management scripts, backup directories, mod manifest,
- * variables.txt).
- *
- * Remote instances: GET /instances/:id/capabilities on the API wrapper.
- * Older wrappers don't have that route, so any failure falls back to the
- * conservative all-true default — behaviour is then exactly as before
- * capability detection existed (errors surface at invocation time).
- */
-export async function detectCapabilities(
-  cfg: ServerConfig,
-): Promise<ServerCapabilities> {
-  try {
-    return await apiGet<ServerCapabilities>(cfg, "/capabilities");
-  } catch {
-    return allCapabilities();
-  }
-}
 
 // ── Script execution ──────────────────────────────────────────────────────
 
