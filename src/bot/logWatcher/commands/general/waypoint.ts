@@ -34,6 +34,8 @@ import {
 } from "@mcbot/core/utils/stores/linkUtils.js";
 import { isServerAdmin } from "../../../commands/middleware.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
+import { queryFailureText } from "../../queryMessages.js";
+import { tellraw, whisper } from "@mcbot/core/utils/minecraft/serverMessages.js";
 
 /** Is this in-game player a bot admin? Requires a linked Discord account. */
 async function isAdminPlayer(username: string): Promise<boolean> {
@@ -47,7 +49,7 @@ async function msg(
   username: string,
   text: string,
 ): Promise<void> {
-  await server.sendCommand(`/msg ${username} ${text}`);
+  await whisper(server, username, text);
 }
 
 async function setWaypoint(
@@ -65,12 +67,22 @@ async function setWaypoint(
     return;
   }
 
-  const coords = await server.getPlayerCoords(username);
-  if (!coords) {
-    await msg(server, username, t("waypoint.noPosition"));
+  const position = await server.getPlayerCoords(username);
+  if (!position.ok) {
+    await msg(server, username, queryFailureText(position.reason, "waypoint.noPosition"));
     return;
   }
-  const dimension = await server.getPlayerDimension(username);
+  const coords = position.value;
+  const dimensionResult = await server.getPlayerDimension(username);
+  if (!dimensionResult.ok) {
+    await msg(
+      server,
+      username,
+      queryFailureText(dimensionResult.reason, "query.noDimension"),
+    );
+    return;
+  }
+  const dimension = dimensionResult.value;
 
   const store = await loadWaypointStore();
   const waypoints = getServerWaypoints(store, server.id);
@@ -104,12 +116,10 @@ async function setWaypoint(
   await saveWaypointStore(store);
 
   const wp = waypoints[key];
-  await server.sendCommand(
-    `/tellraw ${username} ${JSON.stringify({
-      text: t("waypoint.saved", { name, x: wp.x, y: wp.y, z: wp.z }),
-      color: "green",
-    })}`,
-  );
+  await tellraw(server, username, {
+    text: t("waypoint.saved", { name, x: wp.x, y: wp.y, z: wp.z }),
+    color: "green",
+  });
 }
 
 async function deleteWaypoint(
@@ -163,20 +173,18 @@ async function lookupWaypoint(
     return;
   }
 
-  await server.sendCommand(
-    `/tellraw ${username} ${JSON.stringify({
-      text:
-        t("waypoint.result", {
-          name: wp.name,
-          x: wp.x,
-          y: wp.y,
-          z: wp.z,
-          dimension: wp.dimension,
-          author: wp.author,
-        }) + (wp.category ? ` [${wp.category}]` : ""),
-      color: "gold",
-    })}`,
-  );
+  await tellraw(server, username, {
+    text:
+      t("waypoint.result", {
+        name: wp.name,
+        x: wp.x,
+        y: wp.y,
+        z: wp.z,
+        dimension: wp.dimension,
+        author: wp.author,
+      }) + (wp.category ? ` [${wp.category}]` : ""),
+    color: "gold",
+  });
 }
 
 const cmd = defineCommand({

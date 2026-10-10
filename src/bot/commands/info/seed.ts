@@ -3,6 +3,7 @@ import { createEmbed } from "../../utils/embeds/embedUtils.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
 
 import { withErrorHandling } from "../middleware.js";
+import { queryFailureText } from "../../logWatcher/queryMessages.js";
 
 export const data = new SlashCommandBuilder()
   .setName("seed")
@@ -14,13 +15,13 @@ export const data = new SlashCommandBuilder()
 export const execute = withErrorHandling(async (interaction) => {
   const server = resolveServer(interaction);
   const seed = await server.getSeed();
-  if (!seed) throw new Error("Could not retrieve the world seed.");
+  if (!seed.ok) throw new Error(queryFailureText(seed.reason, "seed.unavailable"));
 
   await interaction.editReply({
     embeds: [
       createEmbed({
         title: `World Seed — ${server.id}`,
-        description: `\`${seed}\``,
+        description: `\`${seed.value}\``,
         footer: { text: `Requested by ${interaction.user.tag}` },
       }),
     ],

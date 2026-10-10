@@ -31,6 +31,9 @@ import { scheduleAt, type LongTimer } from "@mcbot/core/utils/longTimer.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
+/** How long to wait before retrying a pardon the server did not receive. */
+const PARDON_RETRY_MS = 60_000;
+
 const timers = new Map<string, LongTimer>();
 
 /** Exposed for tests. */
@@ -70,11 +73,15 @@ async function notifyPlayer(client: Client, ban: TempBan): Promise<void> {
 }
 
 /** Arm (or re-arm) the release timer for one ban. */
-export function armTempBan(client: Client, ban: TempBan): void {
+export function armTempBan(
+  client: Client,
+  ban: TempBan,
+  fireAt: number = ban.expiresAt,
+): void {
   const key = tempBanKey(ban.serverId, ban.player);
   cancelTempBanTimer(ban.serverId, ban.player);
 
-  const timer = scheduleAt(ban.expiresAt, () => {
+  const timer = scheduleAt(fireAt, () => {
     timers.delete(key);
     void expireTempBan(client, ban).catch((err: unknown) => {
       log.error("tempban", `Failed to release ${ban.player}: ${errMsg(err)}`);
@@ -83,7 +90,10 @@ export function armTempBan(client: Client, ban: TempBan): void {
   timers.set(key, timer);
 }
 
-/** Issue the pardon and drop the entry. Idempotent. */
+/**
+ * Issue the pardon and drop the entry. Idempotent. The entry survives a
+ * pardon the server did not receive, and the release is retried shortly.
+ */
 export async function expireTempBan(
   client: Client,
   ban: TempBan,
@@ -100,7 +110,15 @@ export async function expireTempBan(
     return;
   }
 
-  await server.sendCommand(`/pardon ${ban.player}`);
+  const outcome = await server.send(`/pardon ${ban.player}`);
+  if (outcome.kind === "unreachable") {
+    log.warn(
+      "tempban",
+      `Pardon for ${ban.player} on ${ban.serverId} not delivered (${outcome.reason}); retrying in ${PARDON_RETRY_MS / 1000}s`,
+    );
+    armTempBan(client, ban, Date.now() + PARDON_RETRY_MS);
+    return;
+  }
   await removeTempBan(ban.serverId, ban.player);
 
   await recordAdminAction({

@@ -44,6 +44,14 @@ export const de: Record<string, string> = {
   "dailyReminder.dm":
     "🎁 Deine tägliche Belohnung ist bereit! Hol sie dir mit /daily auf dem Server ab.",
 
+  // ── live server queries ──
+  "query.unreachable":
+    "Der Server ist gerade nicht erreichbar. Versuch es gleich nochmal.",
+  "query.noDimension":
+    "Konnte deine Dimension nicht ermitteln. Versuch es gleich nochmal.",
+  "seed.unavailable": "Konnte den Welt-Seed nicht abrufen.",
+  "netherportal.noPosition": "Konnte deine Position nicht ermitteln.",
+
   // ── slime (!slime) ──
   "slime.noSeed": "Konnte den Welt-Seed nicht abrufen.",
   "slime.noPosition": "Konnte deine Position nicht ermitteln. Versuch es gleich nochmal.",
@@ -284,6 +292,21 @@ export const de: Record<string, string> = {
   "console.liveEnabled":
     "Live-Konsole für **{server}** läuft jetzt in {channel} (gebündelt alle paar Sekunden).",
   "console.liveDisabled": "Live-Konsole für **{server}** deaktiviert.",
+
+  // ── console command delivery ──
+  "console.notDelivered":
+    "Der Befehl hat **{server}** nicht erreicht ({reason}). Es wurde nichts geändert.",
+  "console.refused": "**{server}** hat den Befehl abgelehnt: {output}",
+  "console.unverified":
+    "Der Befehl wurde gesendet, aber dieser Server hat keinen Rückkanal, daher ist das Ergebnis nicht überprüft.",
+  "console.reason.wrapper-down": "der API-Wrapper ist nicht erreichbar",
+  "console.reason.timeout": "der API-Wrapper hat nicht rechtzeitig geantwortet",
+  "console.reason.breaker-open":
+    "der API-Wrapper ist zuletzt ausgefallen, daher pausieren Anfragen kurz",
+  "console.reason.rate-limited": "der API-Wrapper begrenzt die Anfragen",
+  "console.reason.http-error": "der API-Wrapper hat mit einem Fehler geantwortet",
+  "console.reason.screen-failed": "die Server-Konsole konnte nicht beschrieben werden",
+  "console.reason.rejected": "der API-Wrapper hat den Befehl abgelehnt",
 
   // ── scheduled restarts ──
   "schedule.warnInGame": "Server-Neustart in {minutes} Minute(n)!",

@@ -39,6 +39,7 @@ import { EmbedColor } from "../../../utils/embeds/embedColors.js";
 import { suppressAlerts } from "../monitors/downtimeMonitor.js";
 import { broadcastNotification } from "../notifyGuilds.js";
 import { t } from "@mcbot/core/utils/i18n.js";
+import { announce } from "@mcbot/core/utils/minecraft/serverMessages.js";
 import type {
   BotConfig,
   ServerRestartSchedule,
@@ -108,13 +109,7 @@ async function announceWarning(
 ): Promise<void> {
   const server = getServerInstance(serverId);
   if (server) {
-    try {
-      await server.sendCommand(
-        `/say ${t("schedule.warnInGame", { minutes })}`,
-      );
-    } catch {
-      /* server may be down — the restart will bring it back anyway */
-    }
+    await announce(server, t("schedule.warnInGame", { minutes }));
   }
   await broadcastNotification(client, loadConfig().guilds, {
     serverId,

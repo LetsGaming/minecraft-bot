@@ -1,4 +1,6 @@
 import { defineCommand } from "../../defineCommand.js";
+import { whisper } from "@mcbot/core/utils/minecraft/serverMessages.js";
+import { queryFailureText } from "../../queryMessages.js";
 
 const cmd = defineCommand({
   name: "netherportal",
@@ -6,34 +8,35 @@ const cmd = defineCommand({
     "Get coordinates to link a Nether portal from your current location",
   cooldown: 5,
   handler: async (username, _args, _client, server) => {
-    let coords;
-    let dimension = "overworld";
-    try {
-      coords = await server.getPlayerCoords(username);
-      const r = await server.getPlayerData(username, "Dimension");
-      if (r) {
-        const m = r.match(/"minecraft:([^"]+)"/);
-        if (m?.[1]) dimension = m[1];
-      }
-    } catch {
-      await server.sendCommand(`/msg ${username} Could not get your position.`);
+    const coords = await server.getPlayerCoords(username);
+    if (!coords.ok) {
+      await whisper(
+        server,
+        username,
+        queryFailureText(coords.reason, "netherportal.noPosition"),
+      );
       return;
     }
-    if (!coords) {
-      await server.sendCommand(`/msg ${username} Could not get your position.`);
+    const dimension = await server.getPlayerDimension(username);
+    if (!dimension.ok) {
+      await whisper(
+        server,
+        username,
+        queryFailureText(dimension.reason, "query.noDimension"),
+      );
       return;
     }
 
-    const { x, z } = coords;
+    const { x, z } = coords.value;
     let msg: string;
-    if (dimension.includes("overworld")) {
+    if (dimension.value.includes("overworld")) {
       msg = `Nether coords: X: ${Math.floor(x / 8)}, Z: ${Math.floor(z / 8)}`;
-    } else if (dimension.includes("nether")) {
+    } else if (dimension.value.includes("nether")) {
       msg = `Overworld coords: X: ${Math.floor(x * 8)}, Z: ${Math.floor(z * 8)}`;
     } else {
       msg = "You must be in the Overworld or Nether.";
     }
-    await server.sendCommand(`/msg ${username} ${msg}`);
+    await whisper(server, username, msg);
   },
 });
 

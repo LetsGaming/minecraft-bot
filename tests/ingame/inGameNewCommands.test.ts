@@ -42,6 +42,7 @@ import { loadWaypointStore } from "../../src/core/utils/stores/waypointStore.js"
 import { loadPollStore } from "../../src/core/utils/stores/pollStore.js";
 import { loadLinkedAccountsOrEmpty } from "../../src/core/utils/stores/linkUtils.js";
 import { defineCommand } from "../../src/bot/logWatcher/defineCommand.js";
+import { DELIVERED } from "../fixtures/outcomes.js";
 
 type Handler = (
   m: RegExpExecArray,
@@ -149,7 +150,7 @@ describe("!report handler", () => {
   const makeServer = () =>
     ({
       id: "smp",
-      sendCommand: vi.fn().mockResolvedValue(undefined),
+      send: vi.fn().mockResolvedValue(DELIVERED),
     }) as never;
 
   const makeClient = (send = vi.fn().mockResolvedValue(undefined)) =>
@@ -182,9 +183,9 @@ describe("!report handler", () => {
     );
     expect(payload.embeds[0]!.data.footer?.text).toBe("smp");
     // Reporter got the green confirmation.
-    const srv = server as { sendCommand: ReturnType<typeof vi.fn> };
+    const srv = server as { send: ReturnType<typeof vi.fn> };
     expect(
-      srv.sendCommand.mock.calls.some(([c]: [string]) =>
+      srv.send.mock.calls.some(([c]: [string]) =>
         c.startsWith("/tellraw"),
       ),
     ).toBe(true);
@@ -200,8 +201,8 @@ describe("!report handler", () => {
     const m = regex.exec(chatLine(nextUser(), "!report anything"))!;
     await handler(m, makeClient(), server);
 
-    const srv = server as { sendCommand: ReturnType<typeof vi.fn> };
-    expect(srv.sendCommand).toHaveBeenCalledWith(
+    const srv = server as { send: ReturnType<typeof vi.fn> };
+    expect(srv.send).toHaveBeenCalledWith(
       expect.stringContaining("not set up"),
     );
   });
@@ -238,9 +239,13 @@ describe("!waypoint handler routing", () => {
     kvSet("waypoints", store);
     return {
       id: "smp",
-      sendCommand: vi.fn().mockResolvedValue(undefined),
-      getPlayerCoords: vi.fn().mockResolvedValue({ x: 10.7, y: 64, z: -3.2 }),
-      getPlayerDimension: vi.fn().mockResolvedValue("overworld"),
+      send: vi.fn().mockResolvedValue(DELIVERED),
+      getPlayerCoords: vi
+        .fn()
+        .mockResolvedValue({ ok: true, value: { x: 10.7, y: 64, z: -3.2 } }),
+      getPlayerDimension: vi
+        .fn()
+        .mockResolvedValue({ ok: true, value: "overworld" }),
     } as never;
   };
 
@@ -255,6 +260,43 @@ describe("!waypoint handler routing", () => {
     const after = await loadWaypointStore();
     const wp = after.servers["smp"]!["guardianfarm"]!;
     expect(wp).toMatchObject({ x: 10, z: -4, author: user });
+  });
+
+  it("refuses to save a waypoint when the dimension is unknown", async () => {
+    const store = { version: 1, servers: {} };
+    const server = makeServer(store) as unknown as {
+      getPlayerDimension: ReturnType<typeof vi.fn>;
+      send: ReturnType<typeof vi.fn>;
+    };
+    server.getPlayerDimension.mockResolvedValue({
+      ok: false,
+      reason: "unreadable",
+    });
+
+    const m = regex.exec(chatLine(nextUser(), "!waypoint set Nowhere"))!;
+    await handler(m, null, server as never);
+
+    expect((await loadWaypointStore()).servers["smp"]?.["nowhere"]).toBeUndefined();
+    expect(server.send).toHaveBeenCalledWith(
+      expect.stringContaining("which dimension"),
+    );
+  });
+
+  it("refuses to save a waypoint when the server cannot be reached", async () => {
+    const store = { version: 1, servers: {} };
+    const server = makeServer(store) as unknown as {
+      getPlayerCoords: ReturnType<typeof vi.fn>;
+      send: ReturnType<typeof vi.fn>;
+    };
+    server.getPlayerCoords.mockResolvedValue({ ok: false, reason: "unreachable" });
+
+    const m = regex.exec(chatLine(nextUser(), "!waypoint set Nowhere"))!;
+    await handler(m, null, server as never);
+
+    expect((await loadWaypointStore()).servers["smp"]?.["nowhere"]).toBeUndefined();
+    expect(server.send).toHaveBeenCalledWith(
+      expect.stringContaining("Could not reach the server"),
+    );
   });
 
   it("rejects overwriting someone else's waypoint", async () => {
@@ -282,8 +324,8 @@ describe("!waypoint handler routing", () => {
     expect((await loadWaypointStore()).servers["smp"]!["base"]!.author).toBe(
       "SomeoneElse",
     );
-    const srv = server as { sendCommand: ReturnType<typeof vi.fn> };
-    expect(srv.sendCommand).toHaveBeenCalledWith(
+    const srv = server as { send: ReturnType<typeof vi.fn> };
+    expect(srv.send).toHaveBeenCalledWith(
       expect.stringContaining("SomeoneElse"),
     );
   });
@@ -309,8 +351,8 @@ describe("!waypoint handler routing", () => {
     const m = regex.exec(chatLine(nextUser(), "!waypoint SPAWN"))!;
     await handler(m, null, server);
 
-    const srv = server as { sendCommand: ReturnType<typeof vi.fn> };
-    const sent = srv.sendCommand.mock.calls.map(([c]: [string]) => c).join("\n");
+    const srv = server as { send: ReturnType<typeof vi.fn> };
+    const sent = srv.send.mock.calls.map(([c]: [string]) => c).join("\n");
     expect(sent).toContain("1 / 2 / 3");
   });
 
@@ -319,11 +361,11 @@ describe("!waypoint handler routing", () => {
     const m = regex.exec(chatLine(nextUser(), '!waypoint set bad"name'))!;
     await handler(m, null, server);
     const srv = server as {
-      sendCommand: ReturnType<typeof vi.fn>;
+      send: ReturnType<typeof vi.fn>;
       getPlayerCoords: ReturnType<typeof vi.fn>;
     };
     expect(srv.getPlayerCoords).not.toHaveBeenCalled();
-    expect(srv.sendCommand).toHaveBeenCalledWith(
+    expect(srv.send).toHaveBeenCalledWith(
       expect.stringContaining("only contain"),
     );
   });
@@ -362,7 +404,7 @@ describe("!vote handler", () => {
   });
 
   const makeServer = () =>
-    ({ id: "smp", sendCommand: vi.fn().mockResolvedValue(undefined) }) as never;
+    ({ id: "smp", send: vi.fn().mockResolvedValue(DELIVERED) }) as never;
 
   it("records an in-game vote under the mc key for unlinked players", async () => {
     const store = pollStore();
@@ -399,8 +441,8 @@ describe("!vote handler", () => {
     await handler(m, null, server);
 
     expect((await loadPollStore()).polls[0]!.votes).toEqual({});
-    const srv = server as { sendCommand: ReturnType<typeof vi.fn> };
-    expect(srv.sendCommand).toHaveBeenCalledWith(
+    const srv = server as { send: ReturnType<typeof vi.fn> };
+    expect(srv.send).toHaveBeenCalledWith(
       expect.stringContaining("between 1 and 2"),
     );
   });
@@ -410,8 +452,8 @@ describe("!vote handler", () => {
     const server = makeServer();
     const m = regex.exec(chatLine(nextUser(), "!vote 1"))!;
     await handler(m, null, server);
-    const srv = server as { sendCommand: ReturnType<typeof vi.fn> };
-    expect(srv.sendCommand).toHaveBeenCalledWith(
+    const srv = server as { send: ReturnType<typeof vi.fn> };
+    expect(srv.send).toHaveBeenCalledWith(
       expect.stringContaining("no open poll"),
     );
   });
@@ -430,45 +472,82 @@ describe("!slime handler", () => {
 
   it("answers with the chunk verdict in the overworld", async () => {
     const server = {
-      getSeed: vi.fn().mockResolvedValue("12345"),
-      getPlayerDimension: vi.fn().mockResolvedValue("overworld"),
-      getPlayerCoords: vi.fn().mockResolvedValue({ x: 100, y: 64, z: -40 }),
-      sendCommand: vi.fn().mockResolvedValue(undefined),
+      getSeed: vi.fn().mockResolvedValue({ ok: true, value: "12345" }),
+      getPlayerDimension: vi
+        .fn()
+        .mockResolvedValue({ ok: true, value: "overworld" }),
+      getPlayerCoords: vi
+        .fn()
+        .mockResolvedValue({ ok: true, value: { x: 100, y: 64, z: -40 } }),
+      send: vi.fn().mockResolvedValue(DELIVERED),
     };
     const m = regex.exec(chatLine(nextUser(), "!slime"))!;
     await handler(m, null, server as never);
     // Chunk 6 / -3, verdict either way — the message names the chunk.
-    expect(server.sendCommand).toHaveBeenCalledWith(
+    expect(server.send).toHaveBeenCalledWith(
       expect.stringContaining("[6, -3]"),
     );
   });
 
   it("refuses outside the overworld without fetching coords", async () => {
     const server = {
-      getSeed: vi.fn().mockResolvedValue("12345"),
-      getPlayerDimension: vi.fn().mockResolvedValue("the_nether"),
+      getSeed: vi.fn().mockResolvedValue({ ok: true, value: "12345" }),
+      getPlayerDimension: vi
+        .fn()
+        .mockResolvedValue({ ok: true, value: "the_nether" }),
       getPlayerCoords: vi.fn(),
-      sendCommand: vi.fn().mockResolvedValue(undefined),
+      send: vi.fn().mockResolvedValue(DELIVERED),
     };
     const m = regex.exec(chatLine(nextUser(), "!slime"))!;
     await handler(m, null, server as never);
     expect(server.getPlayerCoords).not.toHaveBeenCalled();
-    expect(server.sendCommand).toHaveBeenCalledWith(
+    expect(server.send).toHaveBeenCalledWith(
       expect.stringContaining("Overworld"),
     );
   });
 
   it("degrades gracefully when the seed is unavailable (screen server)", async () => {
     const server = {
-      getSeed: vi.fn().mockResolvedValue(null),
+      getSeed: vi.fn().mockResolvedValue({ ok: false, reason: "unreadable" }),
       getPlayerDimension: vi.fn(),
       getPlayerCoords: vi.fn(),
-      sendCommand: vi.fn().mockResolvedValue(undefined),
+      send: vi.fn().mockResolvedValue(DELIVERED),
     };
     const m = regex.exec(chatLine(nextUser(), "!slime"))!;
     await handler(m, null, server as never);
-    expect(server.sendCommand).toHaveBeenCalledWith(
+    expect(server.send).toHaveBeenCalledWith(
       expect.stringContaining("Could not retrieve the world seed"),
+    );
+  });
+
+  it("says the server is unreachable instead of blaming the seed", async () => {
+    const server = {
+      getSeed: vi.fn().mockResolvedValue({ ok: false, reason: "unreachable" }),
+      getPlayerDimension: vi.fn(),
+      getPlayerCoords: vi.fn(),
+      send: vi.fn().mockResolvedValue(DELIVERED),
+    };
+    const m = regex.exec(chatLine(nextUser(), "!slime"))!;
+    await handler(m, null, server as never);
+    expect(server.send).toHaveBeenCalledWith(
+      expect.stringContaining("Could not reach the server"),
+    );
+  });
+
+  it("does not guess the dimension when it cannot be read", async () => {
+    const server = {
+      getSeed: vi.fn().mockResolvedValue({ ok: true, value: "12345" }),
+      getPlayerDimension: vi
+        .fn()
+        .mockResolvedValue({ ok: false, reason: "unreadable" }),
+      getPlayerCoords: vi.fn(),
+      send: vi.fn().mockResolvedValue(DELIVERED),
+    };
+    const m = regex.exec(chatLine(nextUser(), "!slime"))!;
+    await handler(m, null, server as never);
+    expect(server.getPlayerCoords).not.toHaveBeenCalled();
+    expect(server.send).toHaveBeenCalledWith(
+      expect.stringContaining("which dimension"),
     );
   });
 });
@@ -484,27 +563,44 @@ describe("!deathpos handler", () => {
 
   it("whispers the last death location", async () => {
     const server = {
-      getLastDeathLocation: vi
-        .fn()
-        .mockResolvedValue({ x: -180, y: 63, z: 254, dimension: "overworld" }),
-      sendCommand: vi.fn().mockResolvedValue(undefined),
+      getLastDeathLocation: vi.fn().mockResolvedValue({
+        ok: true,
+        value: { x: -180, y: 63, z: 254, dimension: "overworld" },
+      }),
+      send: vi.fn().mockResolvedValue(DELIVERED),
     };
     const m = regex.exec(chatLine(nextUser(), "!deathpos"))!;
     await handler(m, null, server as never);
-    expect(server.sendCommand).toHaveBeenCalledWith(
+    expect(server.send).toHaveBeenCalledWith(
       expect.stringContaining("-180 / 63 / 254"),
     );
   });
 
   it("handles players who never died", async () => {
     const server = {
-      getLastDeathLocation: vi.fn().mockResolvedValue(null),
-      sendCommand: vi.fn().mockResolvedValue(undefined),
+      getLastDeathLocation: vi
+        .fn()
+        .mockResolvedValue({ ok: false, reason: "no-data" }),
+      send: vi.fn().mockResolvedValue(DELIVERED),
     };
     const m = regex.exec(chatLine(nextUser(), "!deathpos"))!;
     await handler(m, null, server as never);
-    expect(server.sendCommand).toHaveBeenCalledWith(
+    expect(server.send).toHaveBeenCalledWith(
       expect.stringContaining("No recorded death"),
+    );
+  });
+
+  it("says the server is unreachable when the query is", async () => {
+    const server = {
+      getLastDeathLocation: vi
+        .fn()
+        .mockResolvedValue({ ok: false, reason: "unreachable" }),
+      send: vi.fn().mockResolvedValue(DELIVERED),
+    };
+    const m = regex.exec(chatLine(nextUser(), "!deathpos"))!;
+    await handler(m, null, server as never);
+    expect(server.send).toHaveBeenCalledWith(
+      expect.stringContaining("Could not reach the server"),
     );
   });
 });

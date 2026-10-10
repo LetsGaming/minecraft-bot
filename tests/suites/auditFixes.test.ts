@@ -125,43 +125,48 @@ describe("daily give() item prefixing (M-12)", () => {
     const { give } = await import(
       "../../src/core/utils/minecraft/rewards.js"
     );
-    const sendCommand = vi.mocked(serverAccess.sendCommand);
-    sendCommand.mockResolvedValue(null);
+    const send = vi.fn().mockResolvedValue({ kind: "sent", via: "screen" });
     const srv = {
       id: "s",
       config: { id: "s", apiUrl: "http://w:3030", apiKey: "k" },
+      send,
     } as unknown as ServerInstance;
 
     await give(srv, "Steve", { item: "diamond", amount: 2 });
-    expect(sendCommand).toHaveBeenLastCalledWith(
-      srv.config,
-      "give Steve minecraft:diamond 2",
-    );
+    expect(send).toHaveBeenLastCalledWith("give Steve minecraft:diamond 2");
 
     await give(srv, "Steve", { item: "create:brass_ingot", amount: 1 });
-    expect(sendCommand).toHaveBeenLastCalledWith(
-      srv.config,
-      "give Steve create:brass_ingot 1",
-    );
+    expect(send).toHaveBeenLastCalledWith("give Steve create:brass_ingot 1");
   });
 
   it("fails the claim when the console does not confirm the give (M-11)", async () => {
     const { give } = await import(
       "../../src/core/utils/minecraft/rewards.js"
     );
+    const send = vi.fn();
     const srv = {
       id: "s",
       config: { id: "s", apiUrl: "http://w:3030", apiKey: "k" },
+      send,
     } as unknown as ServerInstance;
 
-    vi.mocked(serverAccess.sendCommand).mockResolvedValue(
-      "Unknown item 'minecraft:not_an_item'",
-    );
+    send.mockResolvedValue({
+      kind: "delivered",
+      output: "Unknown item 'minecraft:not_an_item'",
+    });
     expect(await give(srv, "Steve", { item: "not_an_item" })).toBe(false);
 
-    vi.mocked(serverAccess.sendCommand).mockResolvedValue(
-      "Gave 1 [Diamond] to Steve",
-    );
+    send.mockResolvedValue({
+      kind: "delivered",
+      output: "Gave 1 [Diamond] to Steve",
+    });
     expect(await give(srv, "Steve", { item: "diamond" })).toBe(true);
+
+    send.mockResolvedValue({
+      kind: "unreachable",
+      reason: "wrapper-down",
+      detail: "x",
+    });
+    expect(await give(srv, "Steve", { item: "diamond" })).toBe(false);
   });
 });

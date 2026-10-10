@@ -48,17 +48,29 @@ function makeServer(
     sleepTimerOutput?: string;
     timeOutput?: string;
     sendCommandError?: boolean;
+    timeUnreachable?: boolean;
   } = {},
 ) {
-  const sendCommand = vi.fn().mockImplementation(async (cmd: string) => {
-    if (opts.sendCommandError) throw new Error("RCON unavailable");
-    if (cmd.includes("SleepTimer")) return opts.sleepTimerOutput ?? null;
-    if (cmd.includes("/time query")) return opts.timeOutput ?? null;
-    return undefined; // title commands
+  const reply = (output: string | null | undefined) =>
+    typeof output === "string"
+      ? { kind: "delivered", output }
+      : { kind: "sent", via: "screen" };
+  const send = vi.fn().mockImplementation(async (cmd: string) => {
+    if (opts.sendCommandError) {
+      return { kind: "unreachable", reason: "wrapper-down", detail: "x" };
+    }
+    if (cmd.includes("SleepTimer")) return reply(opts.sleepTimerOutput);
+    if (cmd.includes("/time query")) {
+      if (opts.timeUnreachable) {
+        return { kind: "unreachable", reason: "timeout", detail: "x" };
+      }
+      return reply(opts.timeOutput);
+    }
+    return { kind: "delivered", output: "" }; // title commands
   });
   return {
     id: opts.id ?? "survival",
-    sendCommand,
+    send,
   } as unknown as ServerInstance;
 }
 
@@ -124,7 +136,7 @@ describe("handler — non-sleep trigger messages", () => {
     const match = regex.exec("[12:00:00] [INFO]: <Steve> hello world")!;
     await handler(match, null as unknown as Client, server);
 
-    expect(server.sendCommand).not.toHaveBeenCalled();
+    expect(server.send).not.toHaveBeenCalled();
   });
 
   it("does not trigger for a message that contains but is not exactly 'liege wie'", async () => {
@@ -140,7 +152,7 @@ describe("handler — non-sleep trigger messages", () => {
     if (!match) return; // regex might not match, test still passes
     await handler(match, null as unknown as Client, server);
     // SleepTimer was never queried — the message wasn't "liege wie" exactly
-    expect(server.sendCommand).not.toHaveBeenCalled();
+    expect(server.send).not.toHaveBeenCalled();
   });
 });
 
@@ -162,7 +174,7 @@ describe("handler — player not in bed", () => {
     await handler(match, null as unknown as Client, server);
 
     // sendCommand called once for SleepTimer check, but no /title commands
-    const titleCalls = server.sendCommand.mock.calls.filter(([c]) =>
+    const titleCalls = server.send.mock.calls.filter(([c]) =>
       (c as string).includes("/title"),
     );
     expect(titleCalls).toHaveLength(0);
@@ -180,13 +192,13 @@ describe("handler — player not in bed", () => {
     const match = regex.exec("[12:00:00] [INFO]: <Steve> liege wie")!;
     await handler(match, null as unknown as Client, server);
 
-    const titleCalls = server.sendCommand.mock.calls.filter(([c]) =>
+    const titleCalls = server.send.mock.calls.filter(([c]) =>
       (c as string).includes("/title"),
     );
     expect(titleCalls).toHaveLength(0);
   });
 
-  it("does not send title when RCON throws (network error)", async () => {
+  it("does not send title when the server is unreachable", async () => {
     const watcher = makeLogWatcher("rcon-error");
     registerSleepWatcher(watcher);
     const { regex, handler } = watcher._handlers[0]!;
@@ -218,7 +230,7 @@ describe("handler — isNight fallback", () => {
     const match = regex.exec("[12:00:00] [INFO]: <Steve> liege wie")!;
     await handler(match, null as unknown as Client, server);
 
-    const titleCalls = server.sendCommand.mock.calls.filter(([c]) =>
+    const titleCalls = server.send.mock.calls.filter(([c]) =>
       (c as string).startsWith("/title"),
     );
     expect(titleCalls.length).toBe(2);
@@ -238,7 +250,7 @@ describe("handler — isNight fallback", () => {
     const match = regex.exec("[12:00:00] [INFO]: <Steve> liege wie")!;
     await handler(match, null as unknown as Client, server);
 
-    const titleCalls = server.sendCommand.mock.calls.filter(([c]) =>
+    const titleCalls = server.send.mock.calls.filter(([c]) =>
       (c as string).startsWith("/title"),
     );
     expect(titleCalls.length).toBe(2);
@@ -271,7 +283,7 @@ describe("handler — in bed + nighttime → sends /title commands", () => {
 
   it("sends two /title commands (title + subtitle) for 'liege wie' (lowercase)", async () => {
     const server = await triggerSleep("lower-test", "liege wie");
-    const titleCalls = server.sendCommand.mock.calls.filter(([c]) =>
+    const titleCalls = server.send.mock.calls.filter(([c]) =>
       (c as string).startsWith("/title"),
     );
     expect(titleCalls.length).toBe(2);
@@ -279,7 +291,7 @@ describe("handler — in bed + nighttime → sends /title commands", () => {
 
   it("sends /title commands for 'LIEGE WIE' (allcaps)", async () => {
     const server = await triggerSleep("allcaps-test", "LIEGE WIE");
-    const titleCalls = server.sendCommand.mock.calls.filter(([c]) =>
+    const titleCalls = server.send.mock.calls.filter(([c]) =>
       (c as string).startsWith("/title"),
     );
     expect(titleCalls.length).toBe(2);
@@ -287,7 +299,7 @@ describe("handler — in bed + nighttime → sends /title commands", () => {
 
   it("sends /title commands for 'Liege Wie' (normal case)", async () => {
     const server = await triggerSleep("normal-test", "Liege Wie");
-    const titleCalls = server.sendCommand.mock.calls.filter(([c]) =>
+    const titleCalls = server.send.mock.calls.filter(([c]) =>
       (c as string).startsWith("/title"),
     );
     expect(titleCalls.length).toBe(2);
@@ -295,7 +307,7 @@ describe("handler — in bed + nighttime → sends /title commands", () => {
 
   it("title command targets the correct selector excluding the trigger player", async () => {
     const server = await triggerSleep("selector-test", "liege wie");
-    const titleCalls = server.sendCommand.mock.calls
+    const titleCalls = server.send.mock.calls
       .filter(([c]) => (c as string).startsWith("/title"))
       .map(([c]) => c as string);
     // Selector should exclude trigger player
@@ -326,7 +338,7 @@ describe("handler — cooldown", () => {
     // First trigger — should fire
     const server1 = makeNightServer();
     await handler(match, null as unknown as Client, server1);
-    const firstTitleCalls = server1.sendCommand.mock.calls.filter(([c]) =>
+    const firstTitleCalls = server1.send.mock.calls.filter(([c]) =>
       (c as string).startsWith("/title"),
     ).length;
     expect(firstTitleCalls).toBe(2);
@@ -334,9 +346,70 @@ describe("handler — cooldown", () => {
     // Second trigger within cooldown — should be skipped
     const server2 = makeNightServer();
     await handler(match, null as unknown as Client, server2);
-    const secondTitleCalls = server2.sendCommand.mock.calls.filter(([c]) =>
+    const secondTitleCalls = server2.send.mock.calls.filter(([c]) =>
       (c as string).startsWith("/title"),
     ).length;
     expect(secondTitleCalls).toBe(0);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Handler: outcome handling
+// ══════════════════════════════════════════════════════════════════════════════
+
+describe("handler: command outcomes", () => {
+  async function trigger(server: ServerInstance, id: string) {
+    const watcher = makeLogWatcher(id);
+    registerSleepWatcher(watcher);
+    const { regex, handler } = watcher._handlers[0]!;
+    const match = regex.exec("[12:00:00] [INFO]: <Steve> liege wie")!;
+    await handler(match, null as unknown as Client, server);
+  }
+  const titles = (server: ServerInstance) =>
+    (server.send as unknown as ReturnType<typeof vi.fn>).mock.calls.filter(
+      ([c]) => (c as string).startsWith("/title"),
+    );
+
+  it("treats an empty RCON reply as not sleeping", async () => {
+    const server = makeServer({ id: "empty-sleep", sleepTimerOutput: "" });
+    await trigger(server, "empty-sleep");
+    expect(titles(server)).toHaveLength(0);
+  });
+
+  it("treats an empty /time reply as unreadable and still prompts", async () => {
+    const server = makeServer({
+      id: "empty-time",
+      sleepTimerOutput: "Steve has the following entity data: 87s",
+      timeOutput: "",
+    });
+    await trigger(server, "empty-time");
+    expect(titles(server)).toHaveLength(2);
+  });
+
+  it("sends no title when the server cannot be reached for the time check", async () => {
+    const server = makeServer({
+      id: "time-unreachable",
+      sleepTimerOutput: "Steve has the following entity data: 87s",
+      timeUnreachable: true,
+    });
+    await trigger(server, "time-unreachable");
+    expect(titles(server)).toHaveLength(0);
+  });
+
+  it("skips the subtitle when the title did not reach the server", async () => {
+    const server = makeServer({
+      id: "title-lost",
+      sleepTimerOutput: "Steve has the following entity data: 87s",
+      timeOutput: "The time is 13000",
+    });
+    const send = server.send as unknown as ReturnType<typeof vi.fn>;
+    const original = send.getMockImplementation()!;
+    send.mockImplementation(async (cmd: string) =>
+      cmd.startsWith("/title")
+        ? { kind: "unreachable", reason: "timeout", detail: "x" }
+        : original(cmd),
+    );
+    await trigger(server, "title-lost");
+    expect(titles(server)).toHaveLength(1);
   });
 });

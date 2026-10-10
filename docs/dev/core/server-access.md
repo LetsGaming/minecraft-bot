@@ -27,8 +27,16 @@ Two functions do not simply assert-and-decode:
 
 - `readStats` treats a 404 as `null` — a player who has never played is an
   answer, not a failure — while a 500 still throws.
-- `sendCommand` returns `null` when the wrapper reached the server over screen
-  and has no output to relay, which is distinct from the request failing.
+- `sendCommandOutcome` never throws. It maps the wrapper's `POST /command`
+  reply (`{ result, via, sent, rconError? }`, `rcon-command` v2) to a
+  `CommandOutcome`: `via: "rcon"` is `delivered`, `via: "screen"` is `sent`
+  (`rcon-fallback` when `rconError` is set), and a `502` (neither channel
+  could deliver) is `unreachable` with reason `screen-failed`. A v1 wrapper
+  answers `{ result }` only; a string is read as `delivered` and `null` as
+  `sent`. Transport failures, timeouts, 429 and an open circuit breaker are
+  `unreachable` too. It is the only write that goes through the circuit breaker:
+  a down wrapper fails an in-game command at once, while scripts, mod mutations
+  and restore still reach the wrapper on every attempt.
 
 Three functions deliberately bypass the `apiGet` decode path, because JSON in
 memory is the wrong shape for what they carry:
@@ -53,11 +61,18 @@ memory is the wrong shape for what they carry:
 One instance per configured server, built at startup, held in a module-level
 registry (`getServerInstance`, `getAllInstances`, `getGuildServer`). It owns:
 
-- `sendCommand()`, which catches transport errors and returns `null` — so
-  callers that must tell "unreachable" from "no output channel" (`give()` in
-  `daily.ts`) read `serverAccess` directly instead
-- `isRunning()`, `getList()`, `getTps()`, `getSeed()`, `getPlayerCoords()`,
-  `getPlayerDimension()`
+- `send()`, which returns a `CommandOutcome` and never throws. A command that
+  did not reach the server is logged once there; callers decide what to skip
+  (record nothing, release a cooldown, retry later).
+- `isRunning()`, `getList()`, `getTps()`
+- The live player queries `getSeed()`, `getPlayerCoords()`,
+  `getPlayerDimension()`, `getLastDeathLocation()` and `getPlayerData()`. Each
+  returns a `QueryResult` (`{ ok: true, value }` or `{ ok: false, reason }`
+  with `unreachable`, `player-offline`, `no-data` or `unreadable`). An RCON
+  reply is parsed as is; only a send with no reply channel makes it poll the
+  log, and only server-emitted lines count (`minecraft/consoleResponse.ts`), so
+  chat cannot forge an answer. An unreachable server fails at once. There is no
+  default dimension: a caller that cannot learn it says so.
 - A seed cache. The "does this server have a `/tps` command" cache went with
   the RCON client.
 

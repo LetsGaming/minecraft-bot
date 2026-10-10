@@ -22,7 +22,7 @@ const TEST_ROOT = await vi.hoisted(async () => {
 
 const { openLogStreamMock, sendCommandMock } = vi.hoisted(() => ({
   openLogStreamMock: vi.fn(),
-  sendCommandMock: vi.fn(async () => "ok"),
+  sendCommandMock: vi.fn(async () => ({ kind: "delivered", output: "ok" })),
 }));
 
 vi.mock("../../src/core/utils/logger.js", () => ({
@@ -30,7 +30,7 @@ vi.mock("../../src/core/utils/logger.js", () => ({
 }));
 vi.mock("../../src/core/utils/paths.js", () => ({ getRootDir: () => TEST_ROOT }));
 vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
-  sendCommand: sendCommandMock,
+  sendCommandOutcome: sendCommandMock,
   openLogStream: openLogStreamMock,
   tailLog: vi.fn(async () => ""),
   forgetGamePort: vi.fn(),

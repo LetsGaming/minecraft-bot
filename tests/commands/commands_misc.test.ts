@@ -62,7 +62,10 @@ import { getModList } from "../../src/core/utils/minecraft/modUtils.js";
 const fakeServer = {
   id: "survival",
   config: { id: "survival" },
-  getSeed: vi.fn().mockResolvedValue("12345"),
+  getSeed: vi.fn().mockResolvedValue({ ok: true, value: "12345" }),
+  getPlayerCoords: vi
+    .fn()
+    .mockResolvedValue({ ok: false, reason: "player-offline" }),
 } as never;
 
 function makeInteraction(overrides: Record<string, unknown> = {}) {
@@ -151,12 +154,23 @@ describe("/chunkbase command", () => {
   it("throws when seed is null", async () => {
     vi.mocked(resolveServer).mockReturnValue({
       ...fakeServer,
-      getSeed: vi.fn().mockResolvedValue(null),
+      getSeed: vi.fn().mockResolvedValue({ ok: false, reason: "unreadable" }),
     } as never);
     const interaction = makeInteraction({
       options: { getString: vi.fn().mockReturnValue("overworld") },
     });
     await expect(execute(interaction)).rejects.toThrow("seed");
+  });
+
+  it("says the server is unreachable when the seed query is", async () => {
+    vi.mocked(resolveServer).mockReturnValue({
+      ...fakeServer,
+      getSeed: vi.fn().mockResolvedValue({ ok: false, reason: "unreachable" }),
+    } as never);
+    const interaction = makeInteraction({
+      options: { getString: vi.fn().mockReturnValue("overworld") },
+    });
+    await expect(execute(interaction)).rejects.toThrow("reach the server");
   });
 });
 

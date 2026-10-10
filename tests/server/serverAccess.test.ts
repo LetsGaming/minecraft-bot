@@ -28,7 +28,7 @@ import {
   tailLog,
   isRunning,
   getList,
-  sendCommand,
+  sendCommandOutcome,
   getTps,
   readWhitelist,
   readUserCache,
@@ -113,13 +113,13 @@ describe("getList", () => {
 
 });
 
-// ── sendCommand ───────────────────────────────────────────────────────────
+// ── sendCommandOutcome ────────────────────────────────────────────────────
 
-describe("sendCommand", () => {
-  it("posts command to API and returns result", async () => {
+describe("sendCommandOutcome", () => {
+  it("posts command to API and returns the console output as delivered", async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse({ result: "Command output" }));
-    const out = await sendCommand(remoteCfg, "/say hello");
-    expect(out).toBe("Command output");
+    const out = await sendCommandOutcome(remoteCfg, "/say hello");
+    expect(out).toEqual({ kind: "delivered", output: "Command output" });
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining("/command"),
       expect.objectContaining({ method: "POST" }),

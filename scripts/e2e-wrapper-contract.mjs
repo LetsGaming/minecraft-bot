@@ -523,6 +523,18 @@ async function startWrapper(paths) {
           rconPort: RCON_PORT,
           rconPassword: RCON_PASSWORD,
         },
+        // No RCON channel and a user sudo cannot resolve: a command can only
+        // go through the screen fallback, which cannot succeed here.
+        mute: {
+          serverPath: paths.serverPath,
+          scriptsDir: paths.scriptsDir,
+          backupsPath: paths.backupsPath,
+          linuxUser: "mcbot-e2e-no-such-user",
+          useRcon: false,
+          rconHost: "127.0.0.1",
+          rconPort: RCON_PORT,
+          rconPassword: "",
+        },
       },
     }),
   );
@@ -827,8 +839,32 @@ eq("getList", list, { playerCount: "2", maxPlayers: "20", players: ["Steve", "Al
 const tps = await serverAccess.getTps(cfg);
 check("getTps returns a parsed TpsResult", tps !== null && typeof tps === "object", JSON.stringify(tps));
 
-const said = await serverAccess.sendCommand(cfg, "say hello");
-check("sendCommand returns the console result", typeof said === "string", JSON.stringify(said));
+console.log("\n── command outcomes (delivered, sent, unreachable)");
+{
+  const delivered = await serverAccess.sendCommandOutcome(cfg, "list");
+  check(
+    "an RCON-answered command is { kind: delivered, output }",
+    delivered.kind === "delivered" && typeof delivered.output === "string" && delivered.output.includes("players online"),
+    JSON.stringify(delivered),
+  );
+  const muteCfg = { ...cfg, id: "mute", useRcon: false };
+  const mute = await serverAccess.sendCommandOutcome(muteCfg, "say hello");
+  check(
+    "a command neither channel can deliver is { kind: unreachable, reason: screen-failed }",
+    mute.kind === "unreachable" && mute.reason === "screen-failed",
+    JSON.stringify(mute),
+  );
+  const down = await serverAccess.sendCommandOutcome({ ...cfg, id: "down", apiUrl: "http://127.0.0.1:9" }, "say hello");
+  check(
+    "a wrapper that cannot be contacted is { kind: unreachable, reason: wrapper-down }",
+    down.kind === "unreachable" && down.reason === "wrapper-down",
+    JSON.stringify(down),
+  );
+  note(
+    "the sent outcome needs a live screen session",
+    "unit-tested against the wire shape in tests/server/commandOutcome.test.ts and in the wrapper's own route test; not reproducible without screen",
+  );
+}
 
 console.log("\n── the SSE stream the log watchers depend on");
 {
@@ -910,7 +946,7 @@ console.log("\n── public and meta routes");
   const unauth = await raw("GET", inst("/running"), { key: false });
   check("an instance route without the key is 401 { error }", unauth.status === 401 && isErrorBody(unauth), unauth.text);
   const list = await raw("GET", "/instances");
-  eq("GET /instances lists the configured instance", list.json, { instances: [{ id: "smp" }] });
+  eq("GET /instances lists the configured instances", list.json, { instances: [{ id: "smp" }, { id: "mute" }] });
   const unknown = await raw("GET", "/instances/nope/running");
   check("an unknown instance is 404 { error }", unknown.status === 404 && isErrorBody(unknown), unknown.text);
   const metrics = await raw("GET", "/metrics");
@@ -1001,10 +1037,12 @@ console.log("\n── scripts/run and /command shapes");
   check("a blank command is 400 { error }", empty.status === 400 && isErrorBody(empty), empty.text);
   const said = await raw("POST", inst("/command"), { body: { command: "list" } });
   check(
-    "a command answered over RCON is { result: <string> }",
-    said.status === 200 && typeof said.json?.result === "string" && Object.keys(said.json).length === 1,
+    "a command answered over RCON is { result, via: rcon, sent: true }",
+    said.status === 200 && typeof said.json?.result === "string" && said.json.via === "rcon" && said.json.sent === true && !("rconError" in said.json),
     said.text,
   );
+  const muted = await raw("POST", "/instances/mute/command", { body: { command: "list" } });
+  check("a command that no channel can deliver is 502 { error }, not 200 { result: null }", muted.status === 502 && isErrorBody(muted), muted.text);
 }
 
 console.log("\n── backup files: list, download, delete");
@@ -1354,11 +1392,25 @@ console.log("\n── restore: runs against the scaffold once the server is offl
   }
 
   const fallback = await raw("POST", inst("/command"), { body: { command: "say bye" } });
+  const viaScreen =
+    fallback.status === 200 &&
+    fallback.json?.result === null &&
+    fallback.json.via === "screen" &&
+    fallback.json.sent === true &&
+    typeof fallback.json.rconError === "string";
+  const refused = fallback.status === 502 && isErrorBody(fallback);
   check(
-    "a command with RCON down is answered { result: null } (screen fallback has no reply channel)",
-    fallback.status === 200 && fallback.json && "result" in fallback.json && fallback.json.result === null,
+    "a command with RCON down is a screen send naming the RCON error, or 502 { error } when screen cannot deliver it",
+    viaScreen || refused,
     fallback.text,
   );
+  if (viaScreen) {
+    const sent = await serverAccess.sendCommandOutcome(cfg, "say bye");
+    check("the bot reads that reply as { kind: sent, via: rcon-fallback }", sent.kind === "sent" && sent.via === "rcon-fallback", JSON.stringify(sent));
+  } else {
+    const out = await serverAccess.sendCommandOutcome(cfg, "say bye");
+    check("the bot reads the refusal as { kind: unreachable, reason: screen-failed }", out.kind === "unreachable" && out.reason === "screen-failed", JSON.stringify(out));
+  }
 }
 
 console.log("\n── every manifest route was exercised");

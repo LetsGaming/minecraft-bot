@@ -1,6 +1,7 @@
 import { defineCommand } from "../../defineCommand.js";
 import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
 import { fetchMojangProfile } from "@mcbot/core/utils/minecraft/mojang.js";
+import { whisper } from "@mcbot/core/utils/minecraft/serverMessages.js";
 
 const cmd = defineCommand({
   name: "playerhead",
@@ -11,20 +12,16 @@ const cmd = defineCommand({
     if (!player) return;
     // Validate before the name reaches a console command or URL.
     if (!isValidMcName(player)) {
-      await server.sendCommand(
-        `/msg ${username} "${player}" is not a valid username.`,
-      );
+      await whisper(server, username, `"${player}" is not a valid username.`);
       return;
     }
     const profile = await fetchMojangProfile(player);
     if (!profile) {
-      await server.sendCommand(
-        `/msg ${username} Player "${player}" not found.`,
-      );
+      await whisper(server, username, `Player "${player}" not found.`);
       return;
     }
     // Use the canonical capitalization Mojang returns.
-    await server.sendCommand(
+    await server.send(
       `/give ${username} player_head[profile={name:"${profile.name}"}]`,
     );
   },

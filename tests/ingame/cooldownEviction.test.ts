@@ -30,6 +30,7 @@ import {
   cooldownStoreSize,
 } from "../../src/bot/logWatcher/defineCommand.js";
 import { registerLogCommand } from "../../src/bot/logWatcher/logWatcher.js";
+import { DELIVERED, UNREACHABLE } from "../fixtures/outcomes.js";
 
 describe("defineCommand — cooldown map eviction (BUG-01)", () => {
   beforeEach(() => {
@@ -49,7 +50,7 @@ describe("defineCommand — cooldown map eviction (BUG-01)", () => {
     init();
     const calls = vi.mocked(registerLogCommand).mock.calls;
     const [regex, registered] = calls[calls.length - 1]!;
-    const server = { id: "srv", sendCommand: vi.fn().mockResolvedValue("") };
+    const server = { id: "srv", send: vi.fn().mockResolvedValue(DELIVERED) };
     for (const player of players) {
       const line = `[12:00:00] [Server thread/INFO]: <${player}> !${name}`;
       const match = (regex as RegExp).exec(line)!;
@@ -92,7 +93,7 @@ describe("defineCommand - cooldown after failure", () => {
     const [regex, registered] = vi
       .mocked(registerLogCommand)
       .mock.calls.at(-1)!;
-    const server = { id: "srv", sendCommand: vi.fn().mockResolvedValue("") };
+    const server = { id: "srv", send: vi.fn().mockResolvedValue(DELIVERED) };
     const fire = async () => {
       const line = `[12:00:00] [Server thread/INFO]: <Retry> !${name}`;
       await registered(
@@ -116,7 +117,44 @@ describe("defineCommand - cooldown after failure", () => {
     await fire();
 
     expect(handler).toHaveBeenCalledTimes(2);
-    expect(server.sendCommand).not.toHaveBeenCalled();
+    expect(server.send).not.toHaveBeenCalled();
+  });
+
+  it("releases the cooldown when every command failed to reach the server", async () => {
+    sweepCooldowns(Number.MAX_SAFE_INTEGER);
+    const handler = vi.fn(
+      async (_u: string, _a: unknown, _c: unknown, srv: { send: (c: string) => Promise<unknown> }) => {
+        await srv.send("/msg Retry hi");
+      },
+    );
+    const { fire, server } = await setup("lost", handler as never);
+    server.send.mockResolvedValue(UNREACHABLE);
+
+    await fire();
+    await fire();
+
+    expect(handler).toHaveBeenCalledTimes(2);
+    expect(server.send).not.toHaveBeenCalledWith(
+      expect.stringContaining("Please wait"),
+    );
+  });
+
+  it("keeps the cooldown when at least one command reached the server", async () => {
+    sweepCooldowns(Number.MAX_SAFE_INTEGER);
+    const handler = vi.fn(
+      async (_u: string, _a: unknown, _c: unknown, srv: { send: (c: string) => Promise<unknown> }) => {
+        await srv.send("/msg Retry hi");
+      },
+    );
+    const { fire, server } = await setup("reached", handler as never);
+
+    await fire();
+    await fire();
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(server.send).toHaveBeenCalledWith(
+      expect.stringContaining("Please wait"),
+    );
   });
 
   it("still enforces the cooldown after a successful run", async () => {
@@ -128,7 +166,7 @@ describe("defineCommand - cooldown after failure", () => {
     await fire();
 
     expect(handler).toHaveBeenCalledTimes(1);
-    expect(server.sendCommand).toHaveBeenCalledWith(
+    expect(server.send).toHaveBeenCalledWith(
       expect.stringContaining("Please wait"),
     );
   });

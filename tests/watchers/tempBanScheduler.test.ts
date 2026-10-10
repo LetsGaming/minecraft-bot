@@ -4,7 +4,7 @@ vi.mock("../../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-const sendCommand = vi.fn().mockResolvedValue(undefined);
+const send = vi.fn().mockResolvedValue(DELIVERED);
 const getServerInstance = vi.fn();
 
 vi.mock("../../src/core/utils/server/server.js", () => ({
@@ -51,6 +51,7 @@ import {
 } from "../../src/bot/logWatcher/watchers/schedulers/tempBanScheduler.js";
 import type { TempBan } from "../../src/core/utils/stores/tempBanStore.js";
 import type { Client } from "discord.js";
+import { DELIVERED, SENT, UNREACHABLE } from "../fixtures/outcomes.js";
 
 const dmSend = vi.fn().mockResolvedValue(undefined);
 const usersFetch = vi.fn().mockResolvedValue({ send: dmSend });
@@ -72,7 +73,7 @@ describe("tempBanScheduler", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
-    getServerInstance.mockReturnValue({ id: "survival", sendCommand });
+    getServerInstance.mockReturnValue({ id: "survival", send });
     loadTempBanStore.mockResolvedValue({ version: 1, bans: {} });
     loadLinkedAccounts.mockResolvedValue({ "111": "Steve" });
     usersFetch.mockResolvedValue({ send: dmSend });
@@ -87,10 +88,10 @@ describe("tempBanScheduler", () => {
     armTempBan(client, ban({ expiresAt: Date.now() + 60_000 }));
 
     await vi.advanceTimersByTimeAsync(59_000);
-    expect(sendCommand).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(2_000);
-    expect(sendCommand).toHaveBeenCalledWith("/pardon Steve");
+    expect(send).toHaveBeenCalledWith("/pardon Steve");
     expect(removeTempBan).toHaveBeenCalledWith("survival", "Steve");
   });
 
@@ -99,10 +100,10 @@ describe("tempBanScheduler", () => {
     armTempBan(client, ban({ expiresAt: Date.now() + MAX_TIMEOUT_MS * 2 }));
 
     await vi.advanceTimersByTimeAsync(MAX_TIMEOUT_MS + 1);
-    expect(sendCommand).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(MAX_TIMEOUT_MS + 1);
-    expect(sendCommand).toHaveBeenCalledWith("/pardon Steve");
+    expect(send).toHaveBeenCalledWith("/pardon Steve");
   });
 
   it("cancelTempBanTimer stops a pending release (manual /pardon)", async () => {
@@ -110,7 +111,7 @@ describe("tempBanScheduler", () => {
     cancelTempBanTimer("survival", "steve"); // case-insensitive key
 
     await vi.advanceTimersByTimeAsync(20_000);
-    expect(sendCommand).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
   });
 
   it("re-banning the same player replaces the pending release", async () => {
@@ -118,10 +119,10 @@ describe("tempBanScheduler", () => {
     armTempBan(client, ban({ expiresAt: Date.now() + 60_000 }));
 
     await vi.advanceTimersByTimeAsync(20_000);
-    expect(sendCommand).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(45_000);
-    expect(sendCommand).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledTimes(1);
   });
 
   it("DMs the linked Discord account when the ban lifts", async () => {
@@ -137,7 +138,7 @@ describe("tempBanScheduler", () => {
     await expireTempBan(client, ban());
 
     expect(usersFetch).not.toHaveBeenCalled();
-    expect(sendCommand).toHaveBeenCalledWith("/pardon Steve");
+    expect(send).toHaveBeenCalledWith("/pardon Steve");
   });
 
   it("matches the link case-insensitively", async () => {
@@ -151,7 +152,7 @@ describe("tempBanScheduler", () => {
     dmSend.mockRejectedValueOnce(new Error("Cannot send messages to this user"));
     await expect(expireTempBan(client, ban())).resolves.toBeUndefined();
 
-    expect(sendCommand).toHaveBeenCalledWith("/pardon Steve");
+    expect(send).toHaveBeenCalledWith("/pardon Steve");
     expect(removeTempBan).toHaveBeenCalledWith("survival", "Steve");
   });
 
@@ -159,8 +160,47 @@ describe("tempBanScheduler", () => {
     getServerInstance.mockReturnValue(undefined);
     await expireTempBan(client, ban());
 
-    expect(sendCommand).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
     expect(dmSend).not.toHaveBeenCalled();
+    expect(removeTempBan).toHaveBeenCalledWith("survival", "Steve");
+  });
+
+  it("keeps the ban record and retries when the pardon did not reach the server", async () => {
+    send.mockResolvedValueOnce(UNREACHABLE);
+    await expireTempBan(client, ban());
+
+    expect(removeTempBan).not.toHaveBeenCalled();
+    expect(recordAdminAction).not.toHaveBeenCalled();
+    expect(dmSend).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(61_000);
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(removeTempBan).toHaveBeenCalledWith("survival", "Steve");
+    expect(dmSend).toHaveBeenCalledOnce();
+  });
+
+  it("keeps retrying while the server stays unreachable", async () => {
+    send.mockResolvedValue(UNREACHABLE);
+    await expireTempBan(client, ban());
+    await vi.advanceTimersByTimeAsync(3 * 60_000 + 1_000);
+
+    expect(send.mock.calls.length).toBeGreaterThanOrEqual(3);
+    expect(removeTempBan).not.toHaveBeenCalled();
+  });
+
+  it("a manual pardon cancels the pending retry", async () => {
+    send.mockResolvedValue(UNREACHABLE);
+    await expireTempBan(client, ban());
+    cancelTempBanTimer("survival", "Steve");
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it("releases the ban when the pardon was sent without a reply channel", async () => {
+    send.mockResolvedValueOnce(SENT);
+    await expireTempBan(client, ban());
+
     expect(removeTempBan).toHaveBeenCalledWith("survival", "Steve");
   });
 
@@ -179,10 +219,10 @@ describe("tempBanScheduler", () => {
     startTempBanScheduler(client);
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(sendCommand).toHaveBeenCalledWith("/pardon Steve");
-    expect(sendCommand).not.toHaveBeenCalledWith("/pardon Alex");
+    expect(send).toHaveBeenCalledWith("/pardon Steve");
+    expect(send).not.toHaveBeenCalledWith("/pardon Alex");
 
     await vi.advanceTimersByTimeAsync(31_000);
-    expect(sendCommand).toHaveBeenCalledWith("/pardon Alex");
+    expect(send).toHaveBeenCalledWith("/pardon Alex");
   });
 });

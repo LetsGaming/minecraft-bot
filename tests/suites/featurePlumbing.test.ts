@@ -3,17 +3,14 @@
  * LastDeathLocation NBT parser on ServerInstance, and the advancement →
  * challenge win path (state transition + announcements + bonus queueing).
  */
-import * as serverAccess from "../../src/core/utils/server/serverAccess.js";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
-  sendCommand: vi.fn(),
-}));
 vi.mock("../../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
 import { validateCandidateConfig } from "../../src/core/config.js";
+import { DELIVERED } from "../fixtures/outcomes.js";
 
 const base = {
   token: "t",
@@ -101,19 +98,19 @@ describe("ServerInstance.getLastDeathLocation", () => {
       logFile: "l",
       useRcon: true,
     } as never);
-    vi.spyOn(server, "getPlayerData").mockResolvedValue(
-      'Alice has the following entity data: {pos: [I; -180, 63, 254], dimension: "minecraft:the_nether"}',
-    );
+    vi.spyOn(server, "send").mockResolvedValue({
+      kind: "delivered",
+      output:
+        'Alice has the following entity data: {pos: [I; -180, 63, 254], dimension: "minecraft:the_nether"}',
+    });
 
     expect(await server.getLastDeathLocation("Alice")).toEqual({
-      x: -180,
-      y: 63,
-      z: 254,
-      dimension: "the_nether",
+      ok: true,
+      value: { x: -180, y: 63, z: 254, dimension: "the_nether" },
     });
   });
 
-  it("returns null when the tag is missing (never died)", async () => {
+  it("reports no data when the tag is missing (never died)", async () => {
     const { ServerInstance } = await import("../../src/core/utils/server/server.js");
     const server = new ServerInstance("smp", {
       screenSession: "smp",
@@ -122,10 +119,14 @@ describe("ServerInstance.getLastDeathLocation", () => {
       logFile: "l",
       useRcon: true,
     } as never);
-    vi.spyOn(server, "getPlayerData").mockResolvedValue(
-      "Found no elements matching LastDeathLocation",
-    );
-    expect(await server.getLastDeathLocation("Alice")).toBeNull();
+    vi.spyOn(server, "send").mockResolvedValue({
+      kind: "delivered",
+      output: "Found no elements matching LastDeathLocation",
+    });
+    expect(await server.getLastDeathLocation("Alice")).toEqual({
+      ok: false,
+      reason: "no-data",
+    });
   });
 });
 
@@ -174,7 +175,11 @@ describe("advancement watcher — challenge win", () => {
       server: {
         id: "smp",
         config: { apiUrl: "http://w:3030", apiKey: "k" },
-        sendCommand: vi.fn().mockResolvedValue("ok"),
+        send: vi.fn(async (c: string) =>
+          c.startsWith("give ")
+            ? { kind: "delivered", output: "Gave 1 [Diamond] to Alice" }
+            : DELIVERED,
+        ),
       },
       register: (re: RegExp, fn: never) => {
         regex = re;
@@ -196,9 +201,6 @@ describe("advancement watcher — challenge win", () => {
     `[12:00:00] [Server thread/INFO]: ${player} has made the advancement [${adv}]`;
 
   it("first matching advancement wins the active challenge", async () => {
-    vi.mocked(serverAccess.sendCommand).mockResolvedValue(
-      "Gave 1 [Diamond] to Alice",
-    );
     const store = {
       version: 1,
       servers: {
@@ -228,15 +230,10 @@ describe("advancement watcher — challenge win", () => {
     expect(ctx.recordAdminAction).toHaveBeenCalledWith(
       expect.objectContaining({ action: "challenge won", by: "Alice" }),
     );
-    // Winner announcement + confirmed item give happened. The announcement
-    // goes through the instance; the give reads the wrapper seam directly so
-    // it can tell a failed request from a server with no output channel.
-    const cmds = ctx.server.sendCommand.mock.calls.map(([c]: [string]) => c);
+    // Winner announcement + confirmed item give happened.
+    const cmds = ctx.server.send.mock.calls.map(([c]: [string]) => c);
     expect(cmds.some((c) => c.startsWith("/tellraw @a"))).toBe(true);
-    const gives = vi
-      .mocked(serverAccess.sendCommand)
-      .mock.calls.map(([, c]) => c);
-    expect(gives.some((c) => c.startsWith("give Alice"))).toBe(true);
+    expect(cmds.some((c) => c.startsWith("give Alice"))).toBe(true);
   });
 
   it("ignores non-matching advancements and expires stale challenges lazily", async () => {
@@ -269,7 +266,6 @@ describe("advancement watcher — challenge win", () => {
   });
 
   it("queues the bonus item when the give is not confirmed", async () => {
-    vi.mocked(serverAccess.sendCommand).mockResolvedValue("Unknown item");
     const stores: Record<string, unknown> = {
       challenges: {
         version: 1,
@@ -323,7 +319,11 @@ describe("advancement watcher — challenge win", () => {
         id: "smp",
         config: { useRcon: true },
         // give NOT confirmed:
-        sendCommand: vi.fn().mockResolvedValue("ok"),
+        send: vi.fn(async (c: string) =>
+          c.startsWith("give ")
+            ? { kind: "delivered", output: "Unknown item" }
+            : DELIVERED,
+        ),
       },
       register: (re: RegExp, fn: never) => {
         regex = re;

@@ -6,6 +6,10 @@ import { withErrorHandling, requireServerAdmin } from "./middleware.js";
 import { recordRemove } from "@mcbot/core/utils/stores/whitelistAudit.js";
 import { invalidateWhitelistCache } from "@mcbot/core/utils/minecraft/whitelist.js";
 import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
+import {
+  requireAccepted,
+  withUnverifiedNote,
+} from "@mcbot/core/utils/server/commandOutcome.js";
 
 export const data = new SlashCommandBuilder()
   .setName("unwhitelist")
@@ -29,7 +33,10 @@ export const execute = withErrorHandling(
       throw new Error(`**${username}** is not a valid Minecraft username.`);
     }
 
-    await server.sendCommand(`/whitelist remove ${username}`);
+    const verdict = requireAccepted(
+      await server.send(`/whitelist remove ${username}`),
+      server.id,
+    );
     await recordRemove(
       username,
       interaction.user.tag,
@@ -44,7 +51,10 @@ export const execute = withErrorHandling(
     await interaction.editReply({
       embeds: [
         createSuccessEmbed(
-          `**${username}** has been removed from the whitelist on **${server.id}**.`,
+          withUnverifiedNote(
+            `**${username}** has been removed from the whitelist on **${server.id}**.`,
+            verdict,
+          ),
         ),
       ],
     });

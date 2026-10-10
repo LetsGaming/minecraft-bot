@@ -152,8 +152,15 @@ export const EXPECTED_WRAPPER_FEATURES: Record<string, ExpectedFeature> = {
       "by editing files on the host",
   },
   "rcon-command": {
-    version: 1,
-    degrades: "every command that talks to the server console",
+    // v2: the reply names the channel (`via`, `sent`) and an undeliverable
+    // command is a 502. A v1 wrapper answers 200 { result: null } either way,
+    // so the bot treats a null result as "sent" and cannot tell a failed
+    // screen send from a successful one.
+    version: 2,
+    degrades:
+      "every command that talks to the server console; on a v1 wrapper a " +
+      "command that never reached the server is reported as sent, so " +
+      "bans, kicks and whitelist changes cannot be confirmed",
   },
   scripts: {
     version: 1,

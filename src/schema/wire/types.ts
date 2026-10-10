@@ -737,9 +737,13 @@ export interface components {
             /** @description At most 1400 bytes, no control characters. */
             command: string;
         };
-        /** @description The console's reply. `null` when the command went through the screen fallback, which has no reply channel. */
+        /** @description `via` names the channel that carried the command. `result` is the console's reply, or `null` over the screen fallback, which has no reply channel. `rconError` is set when RCON failed and the screen fallback was used instead. A command neither channel could deliver is a 502, never a 200. */
         CommandResult: {
+            rconError?: string;
             result: string | null;
+            sent: boolean;
+            /** @enum {string} */
+            via: "rcon" | "screen";
         };
         ConfigFileInfo: {
             /** @description False when the file is listed but cannot be read or written. */
@@ -1631,6 +1635,15 @@ export interface operations {
             };
             /** @description Internal server error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Command could not be delivered */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };

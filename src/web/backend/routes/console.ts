@@ -17,11 +17,8 @@ import type { FastifyInstance } from "fastify";
 import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
 import { loadConfig } from "@mcbot/core/config.js";
 import { getServerInstance } from "@mcbot/core/utils/server/server.js";
-import { sendCommand } from "@mcbot/core/utils/server/serverAccess.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { stripControlChars } from "@mcbot/core/utils/sanitize.js";
-import { log } from "@mcbot/core/utils/logger.js";
-import { errMsg } from "@mcbot/core/utils/error.js";
 import {
   DEFAULT_BLOCKED_COMMANDS,
   MAX_CONSOLE_COMMAND_LENGTH,
@@ -157,16 +154,14 @@ export function registerConsoleRoutes(app: FastifyInstance): void {
         detail: command.slice(0, 200),
       });
 
-      try {
-        const result = await sendCommand(server.config, command);
-        return { ok: true, output: result ?? "", sanitized };
-      } catch (err) {
-        log.error(
-          "web",
-          `Console command on ${req.params.id} failed: ${errMsg(err)}`,
-        );
-        throw new HttpError(502, COMMAND_FAILED);
-      }
+      const outcome = await server.send(command);
+      if (outcome.kind === "unreachable") throw new HttpError(502, COMMAND_FAILED);
+      return {
+        ok: true,
+        kind: outcome.kind,
+        output: outcome.kind === "delivered" ? outcome.output : "",
+        sanitized,
+      };
     },
   );
 

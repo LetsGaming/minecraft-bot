@@ -34,6 +34,7 @@ import { createEmbed } from "../../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../../utils/embeds/embedColors.js";
 import { broadcastNotification } from "../notifyGuilds.js";
 import { t } from "@mcbot/core/utils/i18n.js";
+import { announce as sayInGame } from "@mcbot/core/utils/minecraft/serverMessages.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
@@ -141,13 +142,10 @@ async function announce(
 ): Promise<void> {
   const server = getAllInstances().find((s) => s.id === serverId);
   if (server) {
-    try {
-      await server.sendCommand(
-        `/say ${t("milestone.inGame", { player, value: formatted, stat: statLabel })}`,
-      );
-    } catch {
-      /* offline server — the Discord post still lands */
-    }
+    await sayInGame(
+      server,
+      t("milestone.inGame", { player, value: formatted, stat: statLabel }),
+    );
   }
 
   await broadcastNotification(client, loadConfig().guilds, {

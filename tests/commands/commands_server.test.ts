@@ -90,8 +90,8 @@ function makeServer(id = "survival", overrides: Record<string, unknown> = {}) {
       }),
     getTps: vi.fn().mockResolvedValue({ tps1m: 20, tps5m: 20, tps15m: 20 }),
     supportsTps: true,
-    getSeed: vi.fn().mockResolvedValue("123456789"),
-    sendCommand: vi.fn().mockResolvedValue(undefined),
+    getSeed: vi.fn().mockResolvedValue({ ok: true, value: "123456789" }),
+    send: vi.fn().mockResolvedValue({ kind: "delivered", output: "" }),
     ...overrides,
   };
 }
@@ -285,10 +285,18 @@ describe("/seed command", () => {
 
   it("throws when seed is null", async () => {
     const server = makeServer("srv", {
-      getSeed: vi.fn().mockResolvedValue(null),
+      getSeed: vi.fn().mockResolvedValue({ ok: false, reason: "unreadable" }),
     });
     vi.mocked(resolveServer).mockReturnValue(server);
     await expect(execute(makeInteraction())).rejects.toThrow("seed");
+  });
+
+  it("says the server is unreachable when the seed query is", async () => {
+    const server = makeServer("srv", {
+      getSeed: vi.fn().mockResolvedValue({ ok: false, reason: "unreachable" }),
+    });
+    vi.mocked(resolveServer).mockReturnValue(server);
+    await expect(execute(makeInteraction())).rejects.toThrow("reach the server");
   });
 });
 

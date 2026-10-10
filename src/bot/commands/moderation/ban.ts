@@ -32,6 +32,10 @@ import {
 } from "@mcbot/core/utils/stores/tempBanStore.js";
 import { armTempBan } from "../../logWatcher/watchers/schedulers/tempBanScheduler.js";
 import { t } from "@mcbot/core/utils/i18n.js";
+import {
+  requireAccepted,
+  withUnverifiedNote,
+} from "@mcbot/core/utils/server/commandOutcome.js";
 
 export const data = new SlashCommandBuilder()
   .setName("ban")
@@ -86,8 +90,11 @@ export const execute = withErrorHandling(
         : `Temporarily banned (${period})`
       : reason;
 
-    await server.sendCommand(
-      consoleReason ? `/ban ${player} ${consoleReason}` : `/ban ${player}`,
+    const verdict = requireAccepted(
+      await server.send(
+        consoleReason ? `/ban ${player} ${consoleReason}` : `/ban ${player}`,
+      ),
+      server.id,
     );
 
     if (expiresAt !== null) {
@@ -122,6 +129,8 @@ export const execute = withErrorHandling(
             until: `<t:${Math.floor(expiresAt / 1000)}:f>`,
           });
 
-    await interaction.editReply({ embeds: [createSuccessEmbed(message)] });
+    await interaction.editReply({
+      embeds: [createSuccessEmbed(withUnverifiedNote(message, verdict))],
+    });
   }),
 );

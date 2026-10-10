@@ -20,6 +20,7 @@ import { stripControlChars } from "@mcbot/core/utils/sanitize.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
+import { tellraw, whisper } from "@mcbot/core/utils/minecraft/serverMessages.js";
 
 const MAX_REPORT_LENGTH = 500;
 
@@ -33,7 +34,7 @@ const cmd = defineCommand({
       .trim()
       .slice(0, MAX_REPORT_LENGTH);
     if (!text) {
-      await server.sendCommand(`/msg ${username} ${t("report.usage")}`);
+      await whisper(server, username, t("report.usage"));
       return;
     }
 
@@ -69,14 +70,12 @@ const cmd = defineCommand({
     }
 
     if (delivered > 0) {
-      await server.sendCommand(
-        `/tellraw ${username} ${JSON.stringify({
+      await tellraw(server, username, {
           text: t("report.sent"),
           color: "green",
-        })}`,
-      );
+        });
     } else {
-      await server.sendCommand(`/msg ${username} ${t("report.noChannel")}`);
+      await whisper(server, username, t("report.noChannel"));
     }
   },
 });

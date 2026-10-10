@@ -24,7 +24,13 @@ const getTpsFn = vi.fn();
 const tailLog = vi.fn();
 const pingServer = vi.fn();
 vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
-  sendCommand: (...a: unknown[]) => sendCommand(...a),
+  sendCommandOutcome: async (...a: unknown[]) => {
+    const r = await sendCommand(...a);
+    if (r !== null && typeof r === "object") return r;
+    return r === null || r === undefined
+      ? { kind: "sent", via: "screen" }
+      : { kind: "delivered", output: r };
+  },
   getHealth: (...a: unknown[]) => getHealthFn(...a),
   getList: (...a: unknown[]) => getListFn(...a),
   getTps: (...a: unknown[]) => getTpsFn(...a),
@@ -42,6 +48,9 @@ const cfg: ServerConfig = {
 };
 
 const P = "[12:00:00] [Server thread/INFO]: ";
+const val = <T>(r: { ok: boolean; value?: T }): T | null =>
+  r.ok ? (r.value as T) : null;
+const UNREACHABLE = { kind: "unreachable", reason: "wrapper-down", detail: "x" };
 let inst: ServerInstance;
 
 beforeEach(() => {
@@ -64,7 +73,7 @@ describe("ServerInstance.getPlayerCoords()", () => {
     sendCommand.mockResolvedValue(
       "Steve has the following entity data: [123.5d, 64.0d, -456.7d]",
     );
-    const c = await inst.getPlayerCoords("Steve");
+    const c = val(await inst.getPlayerCoords("Steve"));
     expect(c?.x).toBeCloseTo(123.5);
     expect(c?.y).toBeCloseTo(64.0);
     expect(c?.z).toBeCloseTo(-456.7);
@@ -72,14 +81,14 @@ describe("ServerInstance.getPlayerCoords()", () => {
 
   it("handles negative coordinates", async () => {
     sendCommand.mockResolvedValue("data: [-1000.0d, 100.0d, -2000.5d]");
-    const c = await inst.getPlayerCoords("Alex");
+    const c = val(await inst.getPlayerCoords("Alex"));
     expect(c?.x).toBeCloseTo(-1000.0);
     expect(c?.z).toBeCloseTo(-2000.5);
   });
 
   it("returns null when the player is not found", async () => {
     sendCommand.mockResolvedValue("No entity was found");
-    expect(await inst.getPlayerCoords("Ghost")).toBeNull();
+    expect(val(await inst.getPlayerCoords("Ghost"))).toBeNull();
   });
 
   it("falls back to the log when the wrapper has no reply channel", async () => {
@@ -89,7 +98,7 @@ describe("ServerInstance.getPlayerCoords()", () => {
     tailLog.mockResolvedValue(
       `${P}Steve has the following entity data: [1.0d, 2.0d, 3.0d]`,
     );
-    const c = await inst.getPlayerCoords("Steve");
+    const c = val(await inst.getPlayerCoords("Steve"));
     expect(c).toEqual({ x: 1, y: 2, z: 3 });
   });
 });
@@ -97,17 +106,17 @@ describe("ServerInstance.getPlayerCoords()", () => {
 describe("ServerInstance.getSeed()", () => {
   it("parses and caches the seed", async () => {
     sendCommand.mockResolvedValue("Seed: [-4172144997902289642]");
-    expect(await inst.getSeed()).toBe("-4172144997902289642");
+    expect(val(await inst.getSeed())).toBe("-4172144997902289642");
 
     // Cached: a second call must not ask the server again.
     sendCommand.mockReset();
-    expect(await inst.getSeed()).toBe("-4172144997902289642");
+    expect(val(await inst.getSeed())).toBe("-4172144997902289642");
     expect(sendCommand).not.toHaveBeenCalled();
   });
 
   it("returns null when the response has no seed", async () => {
     sendCommand.mockResolvedValue("Unknown command");
-    expect(await inst.getSeed()).toBeNull();
+    expect(val(await inst.getSeed())).toBeNull();
   });
 });
 
@@ -223,8 +232,8 @@ describe("ServerInstance.getSeed()", () => {
 
   it("returns the seed from the RCON reply and caches it", async () => {
     sendCommand.mockResolvedValue(SEED_LINE);
-    expect(await inst.getSeed()).toBe("-8123456789012345678");
-    expect(await inst.getSeed()).toBe("-8123456789012345678");
+    expect(val(await inst.getSeed())).toBe("-8123456789012345678");
+    expect(val(await inst.getSeed())).toBe("-8123456789012345678");
     expect(sendCommand).toHaveBeenCalledTimes(1);
     expect(tailLog).not.toHaveBeenCalled();
   });
@@ -236,9 +245,9 @@ describe("ServerInstance.getSeed()", () => {
       .mockResolvedValueOnce(`[12:00:00] [Server thread/INFO]: ${SEED_LINE}`);
     const p = inst.getSeed();
     await vi.advanceTimersByTimeAsync(1000);
-    expect(await p).toBe("-8123456789012345678");
+    expect(val(await p)).toBe("-8123456789012345678");
     expect(tailLog).toHaveBeenCalledTimes(2);
-    expect(await inst.getSeed()).toBe("-8123456789012345678");
+    expect(val(await inst.getSeed())).toBe("-8123456789012345678");
     expect(sendCommand).toHaveBeenCalledTimes(1);
   });
 
@@ -246,13 +255,13 @@ describe("ServerInstance.getSeed()", () => {
     sendCommand.mockResolvedValue(null);
     const p = inst.getSeed();
     await vi.advanceTimersByTimeAsync(1000);
-    expect(await p).toBeNull();
+    expect(val(await p)).toBeNull();
     expect(tailLog).toHaveBeenCalledTimes(3);
   });
 
   it("does not poll the log when RCON answered without a seed", async () => {
     sendCommand.mockResolvedValue("Unknown or incomplete command");
-    expect(await inst.getSeed()).toBeNull();
+    expect(val(await inst.getSeed())).toBeNull();
     expect(tailLog).not.toHaveBeenCalled();
   });
 
@@ -260,15 +269,15 @@ describe("ServerInstance.getSeed()", () => {
     sendCommand.mockResolvedValue(null);
     const first = inst.getSeed();
     await vi.advanceTimersByTimeAsync(1000);
-    expect(await first).toBeNull();
+    expect(val(await first)).toBeNull();
     expect(sendCommand).toHaveBeenCalledTimes(1);
 
-    expect(await inst.getSeed()).toBeNull();
+    expect(val(await inst.getSeed())).toBeNull();
     expect(sendCommand).toHaveBeenCalledTimes(1);
 
     await vi.advanceTimersByTimeAsync(61_000);
     sendCommand.mockResolvedValue(SEED_LINE);
-    expect(await inst.getSeed()).toBe("-8123456789012345678");
+    expect(val(await inst.getSeed())).toBe("-8123456789012345678");
     expect(sendCommand).toHaveBeenCalledTimes(2);
   });
 });
@@ -320,14 +329,14 @@ ${P}Seed: [999] and more`,
 
   it.each(seedSpoofs)("getSeed ignores %s", async (line) => {
     tailLog.mockResolvedValue(line);
-    expect(await settle(inst.getSeed())).toBeNull();
+    expect(val(await settle(inst.getSeed()))).toBeNull();
   });
 
   it("getSeed accepts the genuine line, including a Forge extra tag", async () => {
     tailLog.mockResolvedValue(
       "[12:00:00] [Server thread/INFO] [minecraft/MinecraftServer]: Seed: [42]",
     );
-    expect(await settle(inst.getSeed())).toBe("42");
+    expect(val(await settle(inst.getSeed()))).toBe("42");
   });
 
   it("getSeed prefers the genuine line when a spoof is newer", async () => {
@@ -336,29 +345,29 @@ ${P}Seed: [999] and more`,
 ${P}<Mallory> Seed: [999]
 ${P}[Server] Seed: [999]`,
     );
-    expect(await settle(inst.getSeed())).toBe("42");
+    expect(val(await settle(inst.getSeed()))).toBe("42");
   });
 
   it("getSeed takes the newest genuine line", async () => {
     tailLog.mockResolvedValue(`${P}Seed: [1]
 ${P}Seed: [2]`);
-    expect(await settle(inst.getSeed())).toBe("2");
+    expect(val(await settle(inst.getSeed()))).toBe("2");
   });
 
   it("getSeed rejects values outside signed 64-bit", async () => {
     tailLog.mockResolvedValue(`${P}Seed: [9223372036854775808]`);
-    expect(await settle(inst.getSeed())).toBeNull();
+    expect(val(await settle(inst.getSeed()))).toBeNull();
     const rcon = new ServerInstance(cfg);
     sendCommand.mockResolvedValue("Seed: [99999999999999999999]");
-    expect(await rcon.getSeed()).toBeNull();
+    expect(val(await rcon.getSeed())).toBeNull();
   });
 
   it("a spoofed seed is never cached", async () => {
     tailLog.mockResolvedValue(`${P}<Mallory> Seed: [999]`);
-    expect(await settle(inst.getSeed())).toBeNull();
+    expect(val(await settle(inst.getSeed()))).toBeNull();
     inst = new ServerInstance(cfg);
     tailLog.mockResolvedValue(`${P}Seed: [42]`);
-    expect(await settle(inst.getSeed())).toBe("42");
+    expect(val(await settle(inst.getSeed()))).toBe("42");
   });
 
   const spoofData = (rest: string) => [
@@ -369,14 +378,14 @@ ${P}Seed: [2]`);
 
   it.each(spoofData("[9.0d, 9.0d, 9.0d]"))("coords ignore %s", async (l) => {
     tailLog.mockResolvedValue(l);
-    expect(await settle(inst.getPlayerCoords("Steve"))).toBeNull();
+    expect(val(await settle(inst.getPlayerCoords("Steve")))).toBeNull();
   });
 
   it("coords ignore another player's genuine answer", async () => {
     tailLog.mockResolvedValue(
       `${P}Alex has the following entity data: [9.0d, 9.0d, 9.0d]`,
     );
-    expect(await settle(inst.getPlayerCoords("Steve"))).toBeNull();
+    expect(val(await settle(inst.getPlayerCoords("Steve")))).toBeNull();
   });
 
   it("coords prefer the genuine line over a newer spoof", async () => {
@@ -384,7 +393,7 @@ ${P}Seed: [2]`);
       `${P}Steve has the following entity data: [1.0d, 2.0d, 3.0d]
 ${P}<Mallory> Steve has the following entity data: [9.0d, 9.0d, 9.0d]`,
     );
-    expect(await settle(inst.getPlayerCoords("Steve"))).toEqual({
+    expect(val(await settle(inst.getPlayerCoords("Steve")))).toEqual({
       x: 1,
       y: 2,
       z: 3,
@@ -395,7 +404,7 @@ ${P}<Mallory> Steve has the following entity data: [9.0d, 9.0d, 9.0d]`,
     "dimension ignores %s",
     async (l) => {
       tailLog.mockResolvedValue(l);
-      expect(await settle(inst.getPlayerDimension("Steve"))).toBe("overworld");
+      expect(val(await settle(inst.getPlayerDimension("Steve")))).toBeNull();
     },
   );
 
@@ -404,7 +413,7 @@ ${P}<Mallory> Steve has the following entity data: [9.0d, 9.0d, 9.0d]`,
       `${P}Steve has the following entity data: "minecraft:the_nether"
 ${P}<Mallory> Steve has the following entity data: "minecraft:the_end"`,
     );
-    expect(await settle(inst.getPlayerDimension("Steve"))).toBe("the_nether");
+    expect(val(await settle(inst.getPlayerDimension("Steve")))).toBe("the_nether");
   });
 
   const death =
@@ -412,7 +421,7 @@ ${P}<Mallory> Steve has the following entity data: "minecraft:the_end"`,
 
   it.each(spoofData(death))("death location ignores %s", async (l) => {
     tailLog.mockResolvedValue(l);
-    expect(await settle(inst.getLastDeathLocation("Steve"))).toBeNull();
+    expect(val(await settle(inst.getLastDeathLocation("Steve")))).toBeNull();
   });
 
   it("death location accepts the genuine line over a newer spoof", async () => {
@@ -420,11 +429,89 @@ ${P}<Mallory> Steve has the following entity data: "minecraft:the_end"`,
       `${P}Steve has the following entity data: ${death}
 ${P}<Mallory> Steve has the following entity data: {pos: [I; 1, 1, 1], dimension: "minecraft:the_end"}`,
     );
-    expect(await settle(inst.getLastDeathLocation("Steve"))).toEqual({
+    expect(val(await settle(inst.getLastDeathLocation("Steve")))).toEqual({
       x: 10,
       y: 64,
       z: -20,
       dimension: "the_nether",
+    });
+  });
+});
+
+describe("live queries when the server cannot be reached", () => {
+  it("fail at once without polling the log", async () => {
+    sendCommand.mockResolvedValue(UNREACHABLE);
+    expect(await inst.getSeed()).toEqual({ ok: false, reason: "unreachable" });
+    expect(await inst.getPlayerCoords("Steve")).toEqual({
+      ok: false,
+      reason: "unreachable",
+    });
+    expect(await inst.getPlayerDimension("Steve")).toEqual({
+      ok: false,
+      reason: "unreachable",
+    });
+    expect(await inst.getLastDeathLocation("Steve")).toEqual({
+      ok: false,
+      reason: "unreachable",
+    });
+    expect(tailLog).not.toHaveBeenCalled();
+  });
+
+  it("does not ask the seed again while the failure is cached", async () => {
+    sendCommand.mockResolvedValue(UNREACHABLE);
+    await inst.getSeed();
+    expect(await inst.getSeed()).toEqual({ ok: false, reason: "unreachable" });
+    expect(sendCommand).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("live queries when the log read fails", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    sendCommand.mockResolvedValue(null);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("report unreachable instead of throwing", async () => {
+    tailLog.mockRejectedValue(new Error("circuit breaker open"));
+    const p = inst.getPlayerCoords("Steve");
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(await p).toEqual({ ok: false, reason: "unreachable" });
+  });
+});
+
+describe("live query failure reasons", () => {
+  it("name an offline player", async () => {
+    sendCommand.mockResolvedValue("No entity was found");
+    expect(await inst.getPlayerCoords("Ghost")).toEqual({
+      ok: false,
+      reason: "player-offline",
+    });
+  });
+
+  it("name a player with no recorded death", async () => {
+    sendCommand.mockResolvedValue("Found no elements matching LastDeathLocation");
+    expect(await inst.getLastDeathLocation("Steve")).toEqual({
+      ok: false,
+      reason: "no-data",
+    });
+  });
+
+  it("never invent an overworld dimension for an unreadable reply", async () => {
+    sendCommand.mockResolvedValue("something unexpected");
+    expect(await inst.getPlayerDimension("Steve")).toEqual({
+      ok: false,
+      reason: "unreadable",
+    });
+  });
+
+  it("read the dimension from an RCON reply", async () => {
+    sendCommand.mockResolvedValue('Steve has the following entity data: "minecraft:the_nether"');
+    expect(await inst.getPlayerDimension("Steve")).toEqual({
+      ok: true,
+      value: "the_nether",
     });
   });
 });
