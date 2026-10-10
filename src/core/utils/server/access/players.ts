@@ -19,7 +19,7 @@ export async function readWhitelist(
 /**
  * Read usercache.json (every player the server has ever seen, whitelist or
  * not). Returns [] on any error, including remote wrappers that predate the
- * /usercache endpoint — callers treat the cache as a best-effort name
+ * /usercache endpoint; callers treat the cache as a best-effort name
  * source on top of the whitelist.
  */
 export async function readUserCache(

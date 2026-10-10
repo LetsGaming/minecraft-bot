@@ -12,6 +12,12 @@ import type { ServerConfig } from "../../../types/index.js";
 import { wrapperUrl } from "./apiClient.js";
 import { getRemoteInfo, versionAtLeast } from "./host.js";
 
+export const advertisedScriptTimeouts = new Map<string, Record<string, number>>();
+
+export function wrapperKey(cfg: ServerConfig): string {
+  return `${cfg.apiUrl}#${cfg.id}`;
+}
+
 /**
  * Fetch the wrapper's feature manifest, or null when it predates the
  * endpoint (404), is unreachable, or answers something unparseable.
@@ -21,12 +27,6 @@ import { getRemoteInfo, versionAtLeast } from "./host.js";
  * contract, but this endpoint *is* the gate. Trusting its shape would
  * assume what it exists to establish, so it goes through parseManifest.
  */
-export const advertisedScriptTimeouts = new Map<string, Record<string, number>>();
-
-export function wrapperKey(cfg: ServerConfig): string {
-  return `${cfg.apiUrl}#${cfg.id}`;
-}
-
 export async function getRemoteManifest(
   cfg: ServerConfig,
 ): Promise<WrapperManifest | null> {
@@ -54,7 +54,7 @@ export async function getRemoteManifest(
 
 /**
  * Report, at startup, where a remote instance's wrapper and this bot
- * disagree about what exists. Never throws — a mismatched wrapper
+ * disagree about what exists. Never throws; a mismatched wrapper
  * degrades features, it must not stop the bot.
  *
  * Preferred path is the manifest, which names the individual features.
@@ -79,7 +79,7 @@ export async function verifyWrapperContract(
     log.warn(
       cfg.id,
       `API wrapper reports neither a manifest nor a version (both /manifest ` +
-        `and /info missing — wrapper predates ${MIN_WRAPPER_VERSION}). Remote ` +
+        `and /info missing; wrapper predates ${MIN_WRAPPER_VERSION}). Remote ` +
         `host metrics, usercache names, and capability gating are ` +
         `unavailable until the wrapper is updated.`,
     );
@@ -89,7 +89,7 @@ export async function verifyWrapperContract(
     log.warn(
       cfg.id,
       `API wrapper ${info.version} is older than the expected ` +
-        `${MIN_WRAPPER_VERSION} — some remote features may silently degrade. ` +
+        `${MIN_WRAPPER_VERSION}; some remote features may silently degrade. ` +
         `Update the wrapper on the server host.`,
     );
     return;
@@ -97,7 +97,7 @@ export async function verifyWrapperContract(
   log.warn(
     cfg.id,
     `API wrapper ${info.version} does not publish /manifest, so this bot ` +
-      `cannot check which remote features are available — a missing one will ` +
+      `cannot check which remote features are available; a missing one will ` +
       `only show up as a feature quietly doing nothing. Update the wrapper.`,
   );
 }

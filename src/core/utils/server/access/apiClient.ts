@@ -5,38 +5,35 @@ import type { ServerConfig } from "../../../types/index.js";
 
 // apiGet/apiPost/apiDelete talk to *our own* server wrapper, whose response
 // shapes are a versioned contract enforced at connect time by
-// verifyWrapperVersion() (see MIN_WRAPPER_VERSION). Casting the JSON to the
+// verifyWrapperContract() (see MIN_WRAPPER_VERSION). Casting the JSON to the
 // caller-specified T is therefore asserting a pinned first-party contract, not
-// blindly trusting arbitrary third-party JSON — a wrapper that changed a field
+// blindly trusting arbitrary third-party JSON; a wrapper that changed a field
 // would fail the version gate, not silently mis-shape a response here.
+
 /** A wrapper-level route: /health, /manifest, /instances. */
 export function wrapperUrl(cfg: ServerConfig, route: string): string {
   return `${cfg.apiUrl!.replace(/\/$/, "")}${route}`;
 }
 
-/** A route scoped to this instance — everything under /instances/:id. */
+/** A route scoped to this instance; everything under /instances/:id. */
 export function instanceUrl(cfg: ServerConfig, route: string): string {
   return wrapperUrl(cfg, `/instances/${cfg.id}${route}`);
 }
 
 /**
- * GET an instance route without asserting the status, for the few callers
- * that treat a specific one as data rather than as a failure.
- */
-/**
- * Thrown by apiGetRaw when the circuit breaker for this server is open —
+ * Thrown by apiGetRaw when the circuit breaker for this server is open;
  * kept distinguishable from a real fetch failure only in that it never
  * touched the network, which is the whole point.
  */
 class BreakerOpenError extends Error {
   constructor(serverId: string) {
-    super(`circuit breaker open for ${serverId} — wrapper reads paused`);
+    super(`circuit breaker open for ${serverId}; wrapper reads paused`);
     this.name = "BreakerOpenError";
   }
 }
 
 /**
- * A 429 means the wrapper answered and declined the request — it is
+ * A 429 means the wrapper answered and declined the request; it is
  * reachable and healthy, just rate-limiting. Treated as its own outcome
  * throughout so it never gets logged or counted as "unreachable", and never
  * trips the circuit breaker (below): the breaker exists for a wrapper that
@@ -58,6 +55,10 @@ function parseRetryAfterMs(res: Response): number | null {
   return Number.isFinite(seconds) ? seconds * 1000 : null;
 }
 
+/**
+ * GET an instance route without asserting the status, for the few callers
+ * that treat a specific one as data rather than as a failure.
+ */
 export async function apiGetRaw(
   cfg: ServerConfig,
   route: string,
@@ -70,8 +71,7 @@ export async function apiGetRaw(
   if (cfg.apiKey) headers["x-api-key"] = cfg.apiKey;
   let res: Response;
   try {
-    // Bug 3 fix: explicit timeout so a hung API server can't stall the poll
-    // loop indefinitely. Node 18+ AbortSignal.timeout() is zero-dependency.
+    // Bounded so a hung API server cannot stall a poll loop indefinitely.
     res = await fetch(instanceUrl(cfg, route), {
       headers,
       signal: AbortSignal.timeout(timeoutMs),
@@ -81,7 +81,7 @@ export async function apiGetRaw(
     throw err;
   }
   if (res.status === 429) {
-    // Reachable and healthy — do not feed this into the breaker.
+    // Reachable and healthy; do not feed this into the breaker.
     throw new RateLimitedError(route, parseRetryAfterMs(res));
   }
   // 5xx is the wrapper itself failing, not this route's data being absent

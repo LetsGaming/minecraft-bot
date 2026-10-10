@@ -36,7 +36,7 @@ export interface LogStreamHandlers {
  *
  * This is the only place that knows the wrapper sends `{"line": "..."}` in
  * each `data:` frame, and the only place that attaches the API key to a
- * stream. `SseLineStream` underneath is pure transport and knows neither —
+ * stream. `SseLineStream` underneath is pure transport and knows neither;
  * the split is what lets the transport be tested without a wrapper and keeps
  * the wrapper's payload contract in the module that owns every other route.
  *
@@ -61,7 +61,7 @@ export function openLogStream(
         // an empty log line: drop it rather than emitting "undefined".
         if (typeof line === "string") handlers.onLine(line);
       } catch {
-        /* malformed frame — skip, the next one is independent */
+        /* malformed frame; skip, the next one is independent */
       }
     },
     ...(handlers.onConnect ? { onConnect: handlers.onConnect } : {}),

@@ -13,7 +13,7 @@ import { apiGet, apiPost, apiDelete } from "./apiClient.js";
 
 /**
  * Return the raw mod slugs and the mtime of downloaded_versions.json.
- * The caller (modUtils.ts) handles the Modrinth lookup and caching —
+ * The caller (modUtils.ts) handles the Modrinth lookup and caching;
  * that logic is the same regardless of local/remote.
  */
 export async function readModSlugs(
@@ -90,7 +90,7 @@ export async function updateMod(
 }
 
 /**
- * Disable an installed mod without uninstalling it — moves its jar out of
+ * Disable an installed mod without uninstalling it; moves its jar out of
  * mods/ so the loader stops loading it, but keeps it update-checkable.
  * Takes effect on the server's next start.
  */

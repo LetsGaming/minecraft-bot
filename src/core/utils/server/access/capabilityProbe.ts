@@ -13,7 +13,7 @@ import { apiGet } from "./apiClient.js";
  *
  * Remote instances: GET /instances/:id/capabilities on the API wrapper.
  * Older wrappers don't have that route, so any failure falls back to the
- * conservative all-true default — behaviour is then exactly as before
+ * conservative all-true default; behaviour is then exactly as before
  * capability detection existed (errors surface at invocation time).
  */
 export async function detectCapabilities(

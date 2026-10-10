@@ -35,7 +35,7 @@ export async function readStats(
   // simply never played here, and the wrapper says 404. Letting that throw
   // surfaced as "Failed to retrieve stats" (and an ERROR log) instead of the
   // "Stats File Not Found" reply the caller already handles. A 500 still
-  // throws — "the read broke" must not look like "this player has none".
+  // throws; "the read broke" must not look like "this player has none".
   const res = await apiGetRaw(cfg, `/stats/${uuid}`);
   if (res.status === 404) return null;
   const { stats } = await readApiJson<{ stats: MinecraftStatsFile | null }>(
@@ -54,7 +54,7 @@ export async function listStatsUuids(cfg: ServerConfig): Promise<string[]> {
 /**
  * Every player's stats in one wrapper request, from a wrapper new enough to
  * serve it. Null (not thrown) on a 404 so the caller can fall back to the
- * per-uuid path without treating an older wrapper as an error — the same
+ * per-uuid path without treating an older wrapper as an error; the same
  * "degrade per route" pattern every other optional feature here follows.
  */
 export async function readAllStats(
@@ -78,7 +78,7 @@ export async function deleteStatsFile(
   // The wrapper exposes DELETE /stats/:uuid so the
   // admin-gated /server prune-stats works on remote instances too.
   // Older wrappers without the route (or any transport error) degrade
-  // to "not deleted" — prune-stats then reports 0 deletions instead of
+  // to "not deleted"; prune-stats then reports 0 deletions instead of
   // failing the whole command.
   try {
     const { deleted } = await apiDelete<{ deleted: boolean }>(

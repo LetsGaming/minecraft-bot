@@ -17,7 +17,7 @@ import { apiGetRaw, readApiJson, apiGet } from "./apiClient.js";
 
 /**
  * Health gets a tighter budget than everything else. It is polled on a loop
- * and its whole purpose is to answer quickly enough to be worth asking — and
+ * and its whole purpose is to answer quickly enough to be worth asking; and
  * the wrapper's own probes are bounded well below this, so anything slower is
  * the network or a wedged wrapper, which is precisely the `unreachable` case
  * we want to report rather than wait out.
@@ -73,9 +73,9 @@ function parseWrapperHealth(body: unknown): ServerHealth | null {
 /**
  * Where to ping this server, when the wrapper cannot be asked.
  *
- * Explicit config wins. Otherwise the host comes from `apiUrl` — the wrapper
+ * Explicit config wins. Otherwise the host comes from `apiUrl`; the wrapper
  * runs *on* the Minecraft host, which is the whole reason that URL points at
- * the right machine — and the port from whatever the wrapper last reported,
+ * the right machine; and the port from whatever the wrapper last reported,
  * falling back to the vanilla default.
  */
 const learnedGamePorts = new Map<string, number>();
@@ -122,7 +122,7 @@ export async function pingServer(
  * Turn a ping outcome into a health value.
  *
  * `wrapper` is supplied by the caller because a ping says nothing about the
- * wrapper — that is exactly the separation this whole model exists to keep.
+ * wrapper; that is exactly the separation this whole model exists to keep.
  */
 function healthFromPing(
   outcome: PingOutcome,
@@ -135,7 +135,7 @@ function healthFromPing(
     rcon,
     probe: "ping",
     checkedAt: Date.now(),
-    // A ping can't see systemd — always nothing-to-report on this channel.
+    // A ping can't see systemd; always nothing-to-report on this channel.
     restartCount: 0,
     unitFailed: false,
   };
@@ -153,7 +153,7 @@ function healthFromPing(
           max: outcome.result.players.max,
           names: outcome.result.players.sample,
           // Servers publish at most a handful of names, so this is never the
-          // roster — anything rendering it has to say so.
+          // roster; anything rendering it has to say so.
           sampled: true,
         },
         reason: null,
@@ -194,7 +194,7 @@ function healthFromPing(
 /**
  * What a server is doing, from whichever channel can say.
  *
- * The wrapper is asked first — it has the richest answer, including RCON
+ * The wrapper is asked first; it has the richest answer, including RCON
  * responsiveness, which a ping cannot see. But the wrapper is a separate
  * process, and when it is down the old code gave up entirely: "the server's
  * state is unknown", for a server a player could see in their multiplayer
@@ -204,7 +204,7 @@ function healthFromPing(
  * anything other than "all good"**. That covers the case above and two more:
  *
  *   - the wrapper reports `offline` while the server answers a ping. The
- *     server wins — a status response is proof, and the wrapper's probes are
+ *     server wins; a status response is proof, and the wrapper's probes are
  *     inference. It also means the wrapper is misconfigured, which is worth
  *     saying out loud.
  *   - the wrapper reports `unresponsive` (RCON is not answering). The ping
@@ -217,7 +217,7 @@ function healthFromPing(
 export async function getHealth(cfg: ServerConfig): Promise<ServerHealth> {
   const fromWrapper = await wrapperHealth(cfg);
 
-  // The wrapper answered and everything is fine — nothing to second-guess.
+  // The wrapper answered and everything is fine; nothing to second-guess.
   if (
     fromWrapper &&
     fromWrapper.state === ServerState.Online &&
@@ -253,7 +253,7 @@ export async function getHealth(cfg: ServerConfig): Promise<ServerHealth> {
       cfg.id,
       `API wrapper reports this server stopped, but it answered a direct ` +
         `server-list ping with ${fromPing.players?.online ?? "?"} player(s) ` +
-        `online. Trusting the ping. Check the wrapper's instance config — ` +
+        `online. Trusting the ping. Check the wrapper's instance config: ` +
         `linuxUser, rconPort and the screen session name are what its ` +
         `liveness probes rely on.`,
     );
@@ -274,7 +274,7 @@ async function wrapperHealth(cfg: ServerConfig): Promise<ServerHealth | null> {
 
     if (res.status === 404) {
       // Pre-`server-health` wrapper. /running is all it has, and on those
-      // versions it answers the RCON question rather than the process one —
+      // versions it answers the RCON question rather than the process one;
       // so this path keeps the old (coarser) behaviour rather than inventing
       // a distinction the wrapper cannot make. The startup contract report
       // already tells the operator to update.
@@ -296,7 +296,7 @@ async function wrapperHealth(cfg: ServerConfig): Promise<ServerHealth | null> {
 
     const body = await readApiJson<WrapperHealth>(res, "/health");
     // Learn the game port while we can, so a ping still works after the
-    // wrapper goes away — which is precisely when it is needed.
+    // wrapper goes away; which is precisely when it is needed.
     rememberGamePort(cfg.id, body.gamePort ?? null);
     return parseWrapperHealth(body);
   } catch {
@@ -309,7 +309,7 @@ async function wrapperHealth(cfg: ServerConfig): Promise<ServerHealth | null> {
  *
  * Kept for the wrapper-contract e2e check and for callers that genuinely only
  * need up/not-up. Anything that reports state to a human should use
- * getHealth() — this cannot distinguish a stopped server from an unreachable
+ * getHealth(); this cannot distinguish a stopped server from an unreachable
  * wrapper, which is exactly the confusion users see.
  */
 export async function isRunning(cfg: ServerConfig): Promise<boolean> {

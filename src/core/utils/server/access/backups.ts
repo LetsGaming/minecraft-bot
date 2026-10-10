@@ -35,7 +35,7 @@ export async function readBackups(cfg: ServerConfig): Promise<BackupSummary> {
  *
  * The `id` on each entry is an opaque handle. It is the only file reference
  * this client ever sends back, and the wrapper resolves it against a listing
- * it builds itself — so no caller, here or in the browser, is ever in a
+ * it builds itself; so no caller, here or in the browser, is ever in a
  * position to name a path.
  */
 export async function indexBackupFiles(
@@ -142,7 +142,7 @@ export async function restoreBackupFile(
  * Permanently delete one archive (wrapper's backup-files feature v2).
  *
  * Same reasoning as restore: its own route, not a script action, because
- * the wrapper resolves the id to a path itself — no caller here or in the
+ * the wrapper resolves the id to a path itself; no caller here or in the
  * browser is ever in a position to name one.
  */
 export async function deleteBackupFile(

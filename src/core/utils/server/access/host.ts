@@ -13,7 +13,7 @@ export interface RemoteInfo {
 
 /**
  * Fetch the wrapper's `/info` for a remote instance. Returns null when
- * the wrapper predates the endpoint (404) or is unreachable — callers
+ * the wrapper predates the endpoint (404) or is unreachable; callers
  * treat null as "older wrapper, feature unavailable", never as an error.
  */
 export async function getRemoteInfo(
