@@ -87,3 +87,9 @@ export function invalidatePrefix(prefix: string): void {
     if (key.startsWith(prefix)) store.delete(key);
   }
 }
+
+/** Drop every cached key (and any shared in-flight load) the predicate selects. */
+export function invalidateWhere(predicate: (key: string) => boolean): void {
+  for (const key of [...store.keys()]) if (predicate(key)) store.delete(key);
+  for (const key of [...inFlight.keys()]) if (predicate(key)) inFlight.delete(key);
+}

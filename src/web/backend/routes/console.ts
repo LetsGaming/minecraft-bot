@@ -29,6 +29,7 @@ import {
 } from "@mcbot/schema/consoleCommands.js";
 import { sessionFromRequest } from "../auth/auth.js";
 import { subscribe, type ConsoleEvent } from "../console/consoleHub.js";
+import { registerStream } from "../console/streamRegistry.js";
 import { BadRequest, Forbidden, NotFound, HttpError } from "../errors.js";
 import { IdParams, ConsoleCommandBody } from "./schemas.js";
 
@@ -89,10 +90,24 @@ export function registerConsoleRoutes(app: FastifyInstance): void {
         if (!reply.raw.writableEnded) reply.raw.write(": keep-alive\n\n");
       }, 25_000);
 
-      const cleanup = (): void => {
+      let cleaned = false;
+      const session = sessionFromRequest(req)!;
+      const deregister = registerStream({
+        serverId: server.config.id,
+        session,
+        close: (event) => {
+          write(event);
+          reply.raw.end();
+          cleanup();
+        },
+      });
+      function cleanup(): void {
+        if (cleaned) return;
+        cleaned = true;
         clearInterval(heartbeat);
+        deregister();
         unsubscribe();
-      };
+      }
       req.raw.on("close", cleanup);
       reply.raw.on("error", cleanup);
 

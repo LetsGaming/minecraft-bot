@@ -5,12 +5,33 @@ import {
   removeServerInstance,
 } from "@mcbot/core/utils/server/server.js";
 import { log } from "@mcbot/core/utils/logger.js";
+import { invalidateWhere } from "@mcbot/core/utils/cache.js";
+import { forget } from "@mcbot/core/utils/wrapper/lastKnown.js";
+import { sessionHolds } from "../auth/capabilities.js";
+import { closeRevokedStreams, closeStreamsForServer } from "../console/streamRegistry.js";
 import type { BotConfig } from "@mcbot/core/types/index.js";
 
 export interface WebReconcileResult {
   added: string[];
   removed: string[];
   replaced: string[];
+}
+
+/**
+ * Forget everything the web backend cached for a server id, so a server later
+ * re-added under the same id cannot be answered from the old one's data.
+ * Cache keys embed the id as a colon-separated segment.
+ */
+function dropServerCaches(serverId: string): void {
+  forget(serverId);
+  invalidateWhere((key) => key.split(":").includes(serverId));
+}
+
+/** Close open console streams whose session no longer holds server:read. */
+export function revalidateOpenStreams(): number {
+  return closeRevokedStreams((session, serverId) =>
+    sessionHolds(session, "server:read", serverId),
+  );
 }
 
 /**
@@ -35,7 +56,15 @@ export function reconcileWebServers(fresh: BotConfig): WebReconcileResult {
     )
     .map((inst) => inst.id);
 
-  for (const id of removed) removeServerInstance(id);
+  for (const id of removed) {
+    closeStreamsForServer(id, "removed");
+    removeServerInstance(id);
+    dropServerCaches(id);
+  }
+  for (const id of replaced) {
+    closeStreamsForServer(id, "reconfigured");
+    dropServerCaches(id);
+  }
   for (const id of [...added, ...replaced]) addServerInstance(configured[id]!);
   return { added, removed, replaced };
 }
@@ -54,6 +83,8 @@ export function startLiveConfig(options?: WatchConfigOptions): void {
   let previous = loadConfig();
   watchConfig((fresh) => {
     const result = reconcileWebServers(fresh);
+    const revoked = revalidateOpenStreams();
+    if (revoked > 0) log.info("web", `Closed ${revoked} console stream(s) after access changed.`);
     if (result.added.length + result.removed.length + result.replaced.length > 0) {
       log.info(
         "web",
