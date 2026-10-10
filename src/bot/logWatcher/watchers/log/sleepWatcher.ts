@@ -1,8 +1,8 @@
 import { type Client } from "discord.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import type { ILogWatcher } from "../../logWatcher.js";
+import { wasAccepted } from "@mcbot/schema/commandOutcome.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
-import { errMsg } from "@mcbot/core/utils/error.js";
 
 // Matches in-game chat: [timestamp] [server thread/INFO]: <PlayerName> Liege wie
 // Captures (1) the player name, (2) the raw message text
@@ -32,26 +32,21 @@ function markTriggered(serverId: string): void {
 // ── Sleeping check ────────────────────────────────────────────────────────────
 
 /**
- * Returns true if the player is currently in bed (SleepTimer > 0).
- * Falls back to false on any error so we don't suppress prompts
- * because of a broken RCON connection.
+ * Whether the player is in bed (SleepTimer > 0). `null` means the server
+ * could not be reached; a server with no reply channel, or a reply with no
+ * timer in it, reads as not sleeping.
  */
 async function isPlayerSleeping(
   server: ServerInstance,
   player: string,
-): Promise<boolean> {
-  try {
-    const output = await server.sendCommand(
-      `/data get entity ${player} SleepTimer`,
-    );
-    if (!output) return false;
-    // Output looks like: "… has the following entity data: 87s"
-    const match = output.match(/(\d+)s/);
-    if (!match) return false;
-    return parseInt(match[1]!, 10) > 0;
-  } catch {
-    return false;
-  }
+): Promise<boolean | null> {
+  const outcome = await server.send(`/data get entity ${player} SleepTimer`);
+  if (outcome.kind === "unreachable") return null;
+  if (outcome.kind === "sent") return false;
+  // Output looks like: "… has the following entity data: 87s"
+  const match = outcome.output.match(/(\d+)s/);
+  if (!match) return false;
+  return parseInt(match[1]!, 10) > 0;
 }
 
 // ── Caps detection ────────────────────────────────────────────────────────────
@@ -391,23 +386,21 @@ const NIGHT_START = 12542;
 const NIGHT_END = 23459;
 
 /**
- * Returns true if the server is currently night time.
- * `/time query daytime` returns e.g. "The time is 13000"
- * Falls back to true (allow) when the output is unreadable (screen fallback,
- * broken RCON) so a bad connection doesn't silently suppress all prompts.
+ * Whether the server is currently night time. `/time query daytime` returns
+ * e.g. "The time is 13000". An unreadable answer (no reply channel, an empty
+ * reply) reads as night so a server that cannot report the time does not
+ * silently suppress every prompt; `null` means the server could not be
+ * reached.
  */
-async function isNight(server: ServerInstance): Promise<boolean> {
-  try {
-    const output = await server.sendCommand("/time query daytime");
-    if (!output) return true; // screen fallback – can't read output, allow
-    const match = output.match(/\d+/);
-    if (!match) return true;
-    const tick = parseInt(match[0], 10);
-    // Night wraps around midnight: ticks >= NIGHT_START OR <= NIGHT_END
-    return tick >= NIGHT_START || tick <= NIGHT_END;
-  } catch {
-    return true;
-  }
+async function isNight(server: ServerInstance): Promise<boolean | null> {
+  const outcome = await server.send("/time query daytime");
+  if (outcome.kind === "unreachable") return null;
+  if (outcome.kind === "sent") return true;
+  const match = outcome.output.match(/\d+/);
+  if (!match) return true;
+  const tick = parseInt(match[0], 10);
+  // Night wraps around midnight: ticks >= NIGHT_START OR <= NIGHT_END
+  return tick >= NIGHT_START || tick <= NIGHT_END;
 }
 
 // ── Title sender ──────────────────────────────────────────────────────────────
@@ -438,8 +431,9 @@ async function sendTitleToAwake(
     color: pair.subtitleColor ?? "gray",
   });
 
-  await server.sendCommand(`/title ${selector} title ${titleJson}`);
-  await server.sendCommand(`/title ${selector} subtitle ${subtitleJson}`);
+  const title = await server.send(`/title ${selector} title ${titleJson}`);
+  if (!wasAccepted(title)) return;
+  await server.send(`/title ${selector} subtitle ${subtitleJson}`);
 }
 
 // ── Watcher registration ──────────────────────────────────────────────────────
@@ -467,7 +461,7 @@ export function registerSleepWatcher(logWatcher: ILogWatcher): void {
       // ── Sleeping check ──────────────────────────────────────────────────────
       // Only fire the prompt if the triggering player is actually in bed.
       const triggerIsInBed = await isPlayerSleeping(server, triggerPlayer);
-      if (!triggerIsInBed) {
+      if (triggerIsInBed !== true) {
         return;
       }
 
@@ -476,18 +470,14 @@ export function registerSleepWatcher(logWatcher: ILogWatcher): void {
         `${triggerPlayer} triggered sleep prompt (${capsMode})`,
       );
 
-      if (!(await isNight(server))) {
+      if ((await isNight(server)) !== true) {
         return;
       }
 
       markTriggered(serverId);
       const pair = buildTitlePair(capsMode, triggerPlayer);
 
-      try {
-        await sendTitleToAwake(server, triggerPlayer, pair);
-      } catch (err) {
-        log.error("sleepWatcher", `Failed to send title: ${errMsg(err)}`);
-      }
+      await sendTitleToAwake(server, triggerPlayer, pair);
     },
   );
 }
