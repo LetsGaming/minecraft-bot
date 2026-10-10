@@ -1,7 +1,7 @@
 /**
  * The contract every config format adapter satisfies.
  *
- * One editor across TOML, JSON and .properties only works if every adapter
+ * One editor across every format only works if every adapter
  * answers the same two questions: what values are in this file, and where
  * exactly does each value sit. That second half is the whole design.
  *
@@ -62,6 +62,16 @@ export interface ConfigNode {
   valueSpan: [number, number];
   /** True when the adapter cannot safely rewrite this node (see below). */
   readOnly?: boolean;
+  /**
+   * Adapter-private note about how the value was written (a float that must
+   * stay a float, a quote style), handed back to `literal` on edit.
+   */
+  hint?: string;
+}
+
+/** Stable identity of a path. Joining with a separator would collide. */
+export function pathId(path: string[]): string {
+  return JSON.stringify(path);
 }
 
 export interface ParsedConfig {
@@ -83,11 +93,15 @@ export interface ConfigFormat {
   id: string;
   /** Extensions this adapter claims, lower-case, with the dot. */
   extensions: string[];
-  /** Second-chance detection for ambiguous names like `.txt` and `.conf`. */
-  detect?: (sample: string) => boolean;
+  /**
+   * Extensions this adapter may claim, but only when `detect` accepts the
+   * text. For names like `.txt` and `.conf` that many unrelated formats share.
+   */
+  detectExtensions?: string[];
+  detect?: (sample: string, fileName: string) => boolean;
   parse: (text: string) => ParsedConfig;
-  /** Render one value as this format's literal syntax. */
-  literal: (value: unknown, kind: ConfigValueKind) => string;
+  /** Render one value as this format's literal syntax. May throw ConfigEditError. */
+  literal: (value: unknown, kind: ConfigValueKind, node?: ConfigNode) => string;
 }
 
 /** Thrown when an edit cannot be applied safely. Never partially written. */

@@ -4,8 +4,13 @@
  */
 import { propertiesFormat, jsonFormat } from "./formats.js";
 import { tomlFormat } from "./toml.js";
+import { forgeCfgFormat } from "./forgeCfg.js";
+import { iniFormat } from "./ini.js";
+import { yamlFormat } from "./yaml.js";
+import { colonTextFormat } from "./colonText.js";
 import {
   ConfigEditError,
+  pathId,
   type ConfigEdit,
   type ConfigFormat,
   type ConfigNode,
@@ -14,11 +19,26 @@ import {
 } from "./types.js";
 
 export * from "./types.js";
-export { propertiesFormat, jsonFormat, tomlFormat };
+export { propertiesFormat, jsonFormat, tomlFormat, forgeCfgFormat, iniFormat, yamlFormat, colonTextFormat };
 
-const FORMATS: ConfigFormat[] = [tomlFormat, jsonFormat, propertiesFormat];
+/** Order matters: where several adapters may claim an extension, the first detector to accept wins. */
+const FORMATS: ConfigFormat[] = [
+  tomlFormat,
+  jsonFormat,
+  propertiesFormat,
+  yamlFormat,
+  forgeCfgFormat,
+  iniFormat,
+  colonTextFormat,
+];
 
-/** The adapter for a filename, or null when nothing claims it. */
+/**
+ * The adapter for a filename, or null when nothing claims it.
+ *
+ * Extensions that many unrelated formats share (`.txt`, `.cfg`, `.conf`) are
+ * claimed only when an adapter's detector accepts the text, so without a
+ * `sample` they resolve to null.
+ */
 export function formatFor(fileName: string, sample?: string): ConfigFormat | null {
   const lower = fileName.toLowerCase();
   for (const fmt of FORMATS) {
@@ -26,7 +46,13 @@ export function formatFor(fileName: string, sample?: string): ConfigFormat | nul
   }
   if (sample !== undefined) {
     for (const fmt of FORMATS) {
-      if (fmt.detect?.(sample)) return fmt;
+      if (
+        fmt.detect &&
+        fmt.detectExtensions?.some((ext) => lower.endsWith(ext)) &&
+        fmt.detect(sample, fileName)
+      ) {
+        return fmt;
+      }
     }
   }
   return null;
@@ -38,8 +64,9 @@ export function parseConfig(fileName: string, text: string): ParsedConfig {
   return fmt.parse(text);
 }
 
-const samePath = (a: string[], b: string[]): boolean =>
-  a.length === b.length && a.every((s, i) => s === b[i]);
+const samePath = (a: string[], b: string[]): boolean => pathId(a) === pathId(b);
+
+const dotted = (path: string[]): string => (path.length === 0 ? "(root)" : path.join("."));
 
 /** Structural equality, enough for the scalars and flat lists configs hold. */
 function sameValue(a: unknown, b: unknown): boolean {
@@ -89,11 +116,11 @@ export function applyConfigEdits(
   const resolved = changed.map((edit) => {
     const node = before.nodes.find((n) => samePath(n.path, edit.path));
     if (!node) {
-      throw new ConfigEditError(`No such setting: ${edit.path.join(".")}`);
+      throw new ConfigEditError(`No such setting: ${dotted(edit.path)}`);
     }
     if (node.readOnly) {
       throw new ConfigEditError(
-        `${edit.path.join(".")} uses a layout this editor cannot rewrite safely.`,
+        `${dotted(edit.path)} uses a layout this editor cannot rewrite safely.`,
       );
     }
     return { node, value: edit.value };
@@ -103,7 +130,7 @@ export function applyConfigEdits(
   for (const { node, value } of [...resolved].sort(
     (a, b) => b.node.valueSpan[0] - a.node.valueSpan[0],
   )) {
-    const literal = fmt.literal(value, node.kind);
+    const literal = fmt.literal(value, node.kind, node);
     out = out.slice(0, node.valueSpan[0]) + literal + out.slice(node.valueSpan[1]);
   }
 
