@@ -328,7 +328,7 @@ describe("startTpsMonitor", () => {
     server: never,
     client: never,
     guilds: Record<string, never>,
-  ) => ReturnType<typeof setInterval> | null;
+  ) => { stop(): void } | null;
   beforeEach(async () => {
     ({ startTpsMonitor } =
       await import("../../src/bot/logWatcher/watchers/monitors/tpsMonitor.js"));
@@ -344,6 +344,6 @@ describe("startTpsMonitor", () => {
     const server = { id: "main", supportsTps: true, getTps: vi.fn() } as never;
     const timer = startTpsMonitor(server, null as never, {});
     expect(timer).toBeTruthy();
-    clearInterval(timer!);
+    timer!.stop();
   });
 });

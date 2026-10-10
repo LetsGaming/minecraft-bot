@@ -80,13 +80,12 @@ vi.mock("../../src/bot/logWatcher/watchers/log/sleepWatcher.js", () => ({
   registerSleepWatcher: vi.fn(),
 }));
 
-const tpsTimers: Array<ReturnType<typeof setInterval>> = [];
+const tpsHandles: Array<{ stop: ReturnType<typeof vi.fn> }> = [];
 vi.mock("../../src/bot/logWatcher/watchers/monitors/tpsMonitor.js", () => ({
   startTpsMonitor: vi.fn().mockImplementation(() => {
-    const t = setInterval(() => {}, 1_000_000);
-    t.unref();
-    tpsTimers.push(t);
-    return t;
+    const handle = { stop: vi.fn() };
+    tpsHandles.push(handle);
+    return handle;
   }),
 }));
 
@@ -146,8 +145,7 @@ function botCfg(servers: Record<string, ServerConfig>): BotConfig {
 beforeEach(() => {
   vi.clearAllMocks();
   createdWatchers.length = 0;
-  for (const t of tpsTimers) clearInterval(t);
-  tpsTimers.length = 0;
+  tpsHandles.length = 0;
   // Empty the real registry between tests
   for (const inst of getAllInstances()) removeServerInstance(inst.id);
 });

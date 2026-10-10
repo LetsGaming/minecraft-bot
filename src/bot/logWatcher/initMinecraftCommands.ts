@@ -33,7 +33,10 @@ import { registerJoinLeaveWatcher } from "./watchers/log/joinLeave.js";
 import { registerDeathWatcher } from "./watchers/log/deaths.js";
 import { registerAdvancementWatcher } from "./watchers/log/advancements.js";
 import { registerServerEventWatcher } from "./watchers/log/serverEvents.js";
-import { startTpsMonitor } from "./watchers/monitors/tpsMonitor.js";
+import {
+  startTpsMonitor,
+  type TpsMonitorHandle,
+} from "./watchers/monitors/tpsMonitor.js";
 import { startLeaderboardScheduler } from "./watchers/schedulers/leaderboardScheduler.js";
 import {
   startStatusEmbed,
@@ -70,7 +73,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 interface ServerHandles {
   watcher: RemoteLogWatcher;
-  tpsTimer: ReturnType<typeof setInterval> | null;
+  tpsMonitor: TpsMonitorHandle | null;
 }
 
 const serverHandles = new Map<string, ServerHandles>();
@@ -97,7 +100,7 @@ async function wireServer(
     watcher.register(regex, handler);
   }
 
-  registerChatBridge(watcher, client, guildConfigs, getServerIds());
+  registerChatBridge(watcher, client, guildConfigs, getServerIds);
   registerJoinLeaveWatcher(watcher, client, guildConfigs);
   registerDeathWatcher(watcher, client, guildConfigs);
   registerAdvancementWatcher(watcher, client, guildConfigs);
@@ -107,9 +110,9 @@ async function wireServer(
 
   await watcher.start(client);
 
-  const tpsTimer = startTpsMonitor(server, client, guildConfigs);
+  const tpsMonitor = startTpsMonitor(server, client, guildConfigs);
 
-  serverHandles.set(server.id, { watcher, tpsTimer });
+  serverHandles.set(server.id, { watcher, tpsMonitor });
 }
 
 function unwireServer(serverId: string): void {
@@ -120,7 +123,7 @@ function unwireServer(serverId: string): void {
   } catch {
     // best-effort — a watcher that failed to start has nothing to stop
   }
-  if (handles.tpsTimer) clearInterval(handles.tpsTimer);
+  handles.tpsMonitor?.stop();
   serverHandles.delete(serverId);
 }
 
@@ -210,7 +213,7 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
     client,
     liveGuildConfigs,
     (id) => (id ? getServerInstance(id) : getFirstInstance()),
-    getServerIds(),
+    getServerIds,
   );
 
   // ── 4. Scheduled leaderboard auto-poster ──
