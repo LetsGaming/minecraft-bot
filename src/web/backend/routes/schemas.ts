@@ -42,6 +42,22 @@ export const ConfigFileParams = Type.Object({
 export type ConfigFileParams = Static<typeof ConfigFileParams>;
 
 /**
+ * The route to one value inside a config file. An empty path addresses a
+ * document that is itself the value (a JSON file holding a bare array), and a
+ * segment may be empty because JSON allows an empty key.
+ */
+export const ConfigKeyPath = Type.Array(Type.String({ maxLength: 512 }), {
+  minItems: 0,
+  maxItems: 32,
+});
+
+/** Whether the response should carry the raw file text. */
+export const ConfigReadQuery = Type.Object({
+  text: Type.Optional(Type.String()),
+});
+export type ConfigReadQuery = Static<typeof ConfigReadQuery>;
+
+/**
  * The values that changed, not the document.
  *
  * The client never posts a whole file: the server re-reads the current text
@@ -51,7 +67,7 @@ export const ModConfigWriteBody = Type.Object({
   etag: Type.String({ minLength: 1 }),
   edits: Type.Array(
     Type.Object({
-      path: Type.Array(Type.String({ minLength: 1 }), { minItems: 1, maxItems: 8 }),
+      path: ConfigKeyPath,
       value: Type.Unknown(),
     }),
     { minItems: 1, maxItems: 500 },
@@ -74,7 +90,7 @@ export type ModConfigRevertBody = Static<typeof ModConfigRevertBody>;
  */
 export const QueueResolveBody = Type.Object({
   fileId: Type.String({ minLength: 1, maxLength: 64 }),
-  keyPath: Type.Array(Type.String({ minLength: 1 }), { minItems: 1, maxItems: 8 }),
+  keyPath: ConfigKeyPath,
   choice: Type.Union([Type.Literal("queued"), Type.Literal("current")]),
   currentValue: Type.Optional(Type.Unknown()),
 });

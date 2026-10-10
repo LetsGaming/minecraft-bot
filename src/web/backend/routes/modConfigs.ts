@@ -27,11 +27,16 @@ import {
 } from "@mcbot/core/utils/server/serverAccess.js";
 import {
   applyConfigEdits,
+  formatFor,
   parseConfig,
   schemaFromConfig,
   ConfigEditError,
   type ConfigEdit,
 } from "@mcbot/core/utils/configfmt/index.js";
+import {
+  ConfigAccessError,
+  type ConfigAccessErrorKind,
+} from "@mcbot/core/utils/server/configAccessError.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
@@ -40,6 +45,7 @@ import { BadRequest, NotFound, HttpError } from "../errors.js";
 import {
   IdParams,
   ConfigFileParams,
+  ConfigReadQuery,
   ModConfigWriteBody,
   ModConfigRevertBody,
   QueueResolveBody,
@@ -60,6 +66,22 @@ const OPERATION_FAILED =
   "The operation failed unexpectedly — see the bot logs for details.";
 
 const FILE_ID_RE = /^[A-Za-z0-9_-]{22}$/;
+
+const ACCESS_STATUS: Record<ConfigAccessErrorKind, number> = {
+  "too-large": 413,
+  "not-found": 404,
+  stale: 409,
+  "precondition-required": 409,
+  "rate-limited": 429,
+  rejected: 400,
+};
+
+/** Turn a wrapper refusal into an HTTP error carrying its explanation; other errors pass through. */
+function accessFailure(err: unknown): unknown {
+  return err instanceof ConfigAccessError
+    ? new HttpError(ACCESS_STATUS[err.kind], err.message)
+    : err;
+}
 
 function requireServer(id: string): NonNullable<ReturnType<typeof getServerInstance>> {
   const server = getServerInstance(id);
@@ -153,8 +175,9 @@ export function registerModConfigRoutes(app: FastifyInstance): void {
           "configIndex",
           () => cached(`configIndex:${req.params.id}`, TTL_CONFIG_INDEX, () => indexConfigFiles(server.config)),
         );
-        return { files: value, stale };
+        return { files: value.files, truncated: value.truncated, stale };
       } catch (err) {
+        if (err instanceof ConfigAccessError) throw accessFailure(err);
         log.error("web", `Config index for ${req.params.id} failed: ${errMsg(err)}`);
         throw new HttpError(502, OPERATION_FAILED);
       }
@@ -164,7 +187,7 @@ export function registerModConfigRoutes(app: FastifyInstance): void {
   api.get(
     "/api/servers/:id/configs/:fileId",
     {
-      schema: { params: ConfigFileParams },
+      schema: { params: ConfigFileParams, querystring: ConfigReadQuery },
       config: { capability: "config:read", scope: "server", param: "id" },
     },
     async (req) => {
@@ -183,6 +206,7 @@ export function registerModConfigRoutes(app: FastifyInstance): void {
         contents = read.value;
         stale = read.stale;
       } catch (err) {
+        if (err instanceof ConfigAccessError) throw accessFailure(err);
         log.error("web", `Config read on ${req.params.id} failed: ${errMsg(err)}`);
         throw new HttpError(502, OPERATION_FAILED);
       }
@@ -191,15 +215,20 @@ export function registerModConfigRoutes(app: FastifyInstance): void {
       // comments where the format has them (Forge, NeoForge) and is inferred
       // from key names and value types where it does not (Fabric).
       const parsed = parseConfig(contents.file.relPath, contents.text);
+      const fields = schemaFromConfig(parsed);
+      const supported = formatFor(contents.file.relPath, contents.text) !== null;
+      // The raw text is sent when asked for, and always for a file the form
+      // cannot represent, where the source is all there is to show.
+      const withText = req.query.text === "1" || !supported || fields.length === 0;
       return {
         file: contents.file,
         etag: contents.etag,
         snapshots: contents.snapshots,
-        fields: schemaFromConfig(parsed),
+        fields,
+        supported,
+        readOnly: !supported || Boolean(parsed.warning) || contents.file.editable === false,
         ...(parsed.warning ? { warning: parsed.warning } : {}),
-        // The raw text ships too, so the UI can offer a read-only source view
-        // for anything the form cannot represent.
-        text: contents.text,
+        ...(withText ? { text: contents.text } : {}),
         stale,
       };
     },
@@ -290,6 +319,7 @@ export function registerModConfigRoutes(app: FastifyInstance): void {
         // it instead of discarding it: the operator could see this file (the
         // read fell back to cache), so refusing their edit outright would
         // mean showing someone data they are then forbidden to act on.
+        if (err instanceof ConfigAccessError) throw accessFailure(err);
         const queued = queueFromCache(req.params.id, fileId, edits, sessionFromRequest(req));
         if (queued) {
           log.warn(
@@ -310,6 +340,13 @@ export function registerModConfigRoutes(app: FastifyInstance): void {
         throw new HttpError(
           409,
           "This file changed since you opened it. Reload and re-apply your changes.",
+        );
+      }
+
+      const parsedNow = parseConfig(current.file.relPath, current.text);
+      if (parsedNow.warning || current.file.editable === false) {
+        throw new BadRequest(
+          parsedNow.warning ?? "This file is read-only in the editor.",
         );
       }
 
@@ -353,6 +390,7 @@ export function registerModConfigRoutes(app: FastifyInstance): void {
         return { etag: result.etag, snapshot: result.snapshot };
       } catch (err) {
         if (err instanceof HttpError) throw err;
+        if (err instanceof ConfigAccessError) throw accessFailure(err);
         log.error("web", `Config write on ${req.params.id} failed: ${errMsg(err)}`);
         throw new HttpError(502, OPERATION_FAILED);
       }
@@ -382,6 +420,7 @@ export function registerModConfigRoutes(app: FastifyInstance): void {
         forget(req.params.id, `configFile:${fileId}`);
         return await revertConfigFile(server.config, fileId, req.body.snapshot);
       } catch (err) {
+        if (err instanceof ConfigAccessError) throw accessFailure(err);
         log.error("web", `Config revert on ${req.params.id} failed: ${errMsg(err)}`);
         throw new HttpError(502, OPERATION_FAILED);
       }
