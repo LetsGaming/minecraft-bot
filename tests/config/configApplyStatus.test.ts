@@ -87,9 +87,13 @@ describe("applied revision in the heartbeat", () => {
   });
 
   it("captures the loaded hash before the reconcile runs", () => {
+    vi.useFakeTimers();
+    startRuntimeHeartbeat("7");
+    saved.last = null;
     const done = beginConfigApply();
     done([]);
     expect((saved.last as RuntimeHeartbeat).config?.hash).toBe("loaded-hash");
+    vi.useRealTimers();
   });
 
   it("round-trips the report and ignores a malformed one", async () => {

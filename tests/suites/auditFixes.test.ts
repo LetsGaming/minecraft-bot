@@ -41,6 +41,9 @@ function makeServer(id = "survival"): ServerInstance {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(serverAccess.readWhitelist).mockReset().mockResolvedValue([
+    { name: "Alice", uuid: "u1" },
+  ] as never);
   invalidateWhitelistCache();
   invalidateAllStatsCache();
 });
@@ -113,6 +116,9 @@ describe("strict server instance lookup (H-01)", () => {
   });
 
   it("getFirstInstance provides the explicit fallback", () => {
+    initServers({
+      survival: { id: "survival", useRcon: false } as never,
+    });
     expect(getFirstInstance()).not.toBeNull();
     expect(getFirstInstance()!.id).toBe("survival");
   });
