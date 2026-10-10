@@ -8,6 +8,9 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Wrapper wire types are generated from the wrapper's `openapi.json` instead of hand-copied: `npm run wire:sync -- <wrapper dir>` vendors it to `src/schema/wire/` and `npm run wire:check` (CI, release) fails on drift. `serverAccess.ts`, the schema contract, core backup types and the dashboard's mod and config types alias the generated schemas. Touched: `scripts/sync-wire.mjs`, `src/schema/wire/**`, `src/core/utils/server/serverAccess.ts`, `src/schema/contract.ts`, `src/web/frontend/src/api.ts`.
+- `scripts/e2e-wrapper-contract.mjs` covers the whole wrapper surface and takes the route list from the wrapper's manifest, failing on any route without a case: health v2, bulk stats, stats deletion, all mod-management routes, backup file list, download, range and delete, restore, mod configs, `scripts/run` and the command result shapes.
+- The wrapper contract CI job also runs against the commit the minecraft-server-setup submodule pins.
 - `/players` command: lists every player who ever played on a server (stats files plus whitelist and usercache names) with online state or last-seen and lifetime playtime, paginated 20 per page, with `sort` (`last-seen`, `playtime`, `name`), `inactive:<days>` and `include_unknown` options. Last-seen only exists for time since the bot began tracking sessions, and the usercache is capped around 1000 entries by vanilla (`commands/stats/players.ts`, `core/utils/minecraft/playerRoster.ts`, `bot/utils/discordTime.ts`).
 - Optional `server` option (with autocomplete) on `/whitelisted`, `/stats player`, `/stats daily`, `/top`, `/leaderboard`, `/playtime` and `/compare`, so a multi-server guild can pick the server instead of always getting its default (`commands/info/whitelisted.ts`, `commands/stats/*`).
 - `/uptime server:all` shows the overview of every server the guild may target; the autocomplete offers `all` (`commands/info/uptime.ts`, `utils/guild/serverOptions.ts`).
@@ -18,6 +21,9 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `stats-bulk` is now an expected wrapper feature (version 1), so the startup report lists a wrapper without it instead of staying silent; the bot still falls back to one request per player.
+- `scripts/e2e-wrapper-contract.mjs` requires `WRAPPER_DIR`; the old `../api-wrapper` default matched no real directory.
+- `release.yml` runs typecheck, lint, layout, schema and locale checks, tests, `wire:check` and the wrapper contract on Node 24 before it builds or publishes. Docs and comments no longer name wrapper versions or claim Node 22.13 is needed for the default SQLite driver.
 - Server resolution is now one shared rule (`core/utils/server/guildTargets.ts`): explicit `server:`, then the guild's `defaultServer`, then the guild's only allowed server, and in a DM the only configured server. With several candidates the command fails and lists the server IDs instead of picking the first server of the whole deployment. The same rule drives whitelist applications and follow-up hints.
 - `/uptime` without `server:` shows the resolved default server's detail; the all-servers overview moved to `server:all`.
 - `/daily-admin reset` takes an optional `server` (guild default otherwise).

@@ -47,9 +47,10 @@ behind a single endpoint. The dashboard does not know or care which it used.
 
 ## Before you start
 
-You need **wrapper 3.3.0 or newer on every host**, for the backup index,
-download, restore and rollback. Older wrappers still work; the dashboard hides
-the Backups tab and the Rollback button on a host that cannot serve them, so a
+Every host needs a wrapper that offers the `backup-files` and `backup-restore`
+features and the `rollback` script action, for the backup index, download,
+restore and rollback. Older wrappers still work; the dashboard hides the
+Backups tab and the Rollback button on a host that cannot serve them, so a
 staggered rollout is safe and shows nothing broken in the meantime.
 
 Check what a host is running:
@@ -148,7 +149,7 @@ one capability, which is the argument the whole migration rests on.
 
 ## Checklist
 
-- [ ] Wrapper 3.3.0+ on every host, `backup-files` in the manifest
+- [ ] `backup-files` and `backup-restore` in every host's manifest
 - [ ] Console reachable, and a test command runs
 - [ ] Backups list, and a download completes
 - [ ] Rollback button visible on a host that has `rollback.sh`

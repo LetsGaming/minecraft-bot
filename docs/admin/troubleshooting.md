@@ -83,8 +83,9 @@ That is by design: the feature self-heals. To remove the channels permanently, d
 
 ## Dashboard: the Backups tab is missing
 
-The wrapper on that host is older than 3.3.0, so it cannot serve the archive
-index. The tab is hidden rather than shown-and-broken. Check with:
+The wrapper on that host does not offer the `backup-files` feature, so it
+cannot serve the archive index. The tab is hidden rather than shown-and-broken.
+Check with:
 
 ```bash
 curl -s -H "x-api-key: $MC_API_KEY" http://127.0.0.1:3000/manifest | jq '.wrapper, (.features | keys)'

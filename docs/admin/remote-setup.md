@@ -132,7 +132,9 @@ The bot reads the wrapper's `GET /manifest` at startup and prints what is
 missing, so you generally do not need this table — run the bot and read the
 report. What follows is what each feature costs you if the wrapper is older.
 
-**Wrapper 3.3.0** is what the current dashboard wants:
+These are the wrapper features the current dashboard wants. Each is a feature
+name in the wrapper's `GET /manifest`, so a host that lacks one simply does not
+list it:
 
 - **Backup archives** (`backup-files`, `backup-restore`): listing individual
   archives, downloading one, and restoring from one. Without it the dashboard
