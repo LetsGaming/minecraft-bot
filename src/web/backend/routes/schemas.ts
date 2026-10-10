@@ -208,7 +208,7 @@ export type ModIconQuery = Static<typeof ModIconQuery>;
 export const MC_VERSION_PATTERN = "^[A-Za-z0-9_.-]{1,20}$";
 
 export const ModCompatBody = Type.Object({
-  mcVersion: Type.String({ pattern: MC_VERSION_PATTERN }),
+  mcVersion: Type.String({ pattern: MC_VERSION_PATTERN, maxLength: 20 }),
   refresh: Type.Optional(Type.Boolean()),
 });
 export type ModCompatBody = Static<typeof ModCompatBody>;

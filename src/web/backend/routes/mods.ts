@@ -51,6 +51,7 @@ import { logFields } from "@mcbot/core/utils/logSafe.js";
 import { fetchReleaseVersions } from "@mcbot/core/utils/minecraft/mojang.js";
 import { readThrough } from "@mcbot/core/utils/wrapper/lastKnown.js";
 import { cached, invalidate } from "@mcbot/core/utils/cache.js";
+import { CompatLimitError, createCompatGuard } from "./compatGuard.js";
 import { sessionFromRequest } from "../auth/auth.js";
 import { BadRequest, NotFound, HttpError } from "../errors.js";
 import {
@@ -74,8 +75,6 @@ const TTL_INSTALLED = 15_000;
 const TTL_UPDATES = 120_000;
 const TTL_COMPAT_SUPPORT = 60_000;
 const TTL_RELEASE_VERSIONS = 6 * 60 * 60 * 1000;
-/** Collapses simultaneous pollers of one job into one wrapper read. */
-const TTL_COMPAT_JOB = 800;
 const TTL_SEARCH = 60_000;
 const TTL_CATALOG = 300_000;
 const TTL_ICON = 24 * 60 * 60 * 1000;
@@ -128,6 +127,8 @@ export function registerModRoutes(app: FastifyInstance): void {
     invalidate(`mods:updates:${id}`);
   }
 
+  const compatGuard = createCompatGuard();
+
   /** Whether the wrapper can run the compatibility check; false when it cannot be asked. */
   function compatSupported(
     id: string,
@@ -153,8 +154,20 @@ export function registerModRoutes(app: FastifyInstance): void {
           "This server's API wrapper cannot check another Minecraft version. Update the wrapper.",
         );
       }
+      const refresh = req.body.refresh === true;
+      const user = sessionFromRequest(req)!.uid;
+      let admitted;
       try {
-        return await startModCompat(server.config, req.body.mcVersion, req.body.refresh === true);
+        admitted = compatGuard.admit(req.params.id, user, req.body.mcVersion, refresh);
+      } catch (err) {
+        if (err instanceof CompatLimitError) throw new HttpError(err.statusCode, err.message);
+        throw err;
+      }
+      if (admitted.existingJobId) return { jobId: admitted.existingJobId };
+      try {
+        const started = await startModCompat(server.config, req.body.mcVersion, refresh);
+        compatGuard.started(req.params.id, user, req.body.mcVersion, started.jobId, refresh);
+        return started;
       } catch (err) {
         log.error(
           "web",
@@ -191,13 +204,11 @@ export function registerModRoutes(app: FastifyInstance): void {
     },
     async (req) => {
       const server = requireServer(req.params.id);
+      const remembered = compatGuard.recall(req.params.id, req.params.jobId);
+      if (remembered) return remembered;
       let job;
       try {
-        job = await cached(
-          `mods:compat-job:${req.params.id}:${req.params.jobId}`,
-          TTL_COMPAT_JOB,
-          () => getModCompat(server.config, req.params.jobId),
-        );
+        job = await getModCompat(server.config, req.params.jobId);
       } catch (err) {
         log.error(
           "web",
@@ -205,7 +216,11 @@ export function registerModRoutes(app: FastifyInstance): void {
         );
         throw new HttpError(502, OPERATION_FAILED);
       }
-      if (!job) throw new NotFound("This check expired. Start it again.");
+      if (!job) {
+        compatGuard.forget(req.params.id, req.params.jobId);
+        throw new NotFound("This check expired. Start it again.");
+      }
+      compatGuard.observe(req.params.id, job);
       return job;
     },
   );

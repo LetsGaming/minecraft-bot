@@ -319,3 +319,82 @@ describe("GET .../compat/versions", () => {
     expect(res.json()).toEqual({ versions: [] });
   });
 });
+
+const DONE_JOB = {
+  jobId: JOB,
+  state: "done",
+  mcVersion: "1.21.5",
+  modLoader: "fabric",
+  progress: { done: 1, total: 1 },
+  partial: [],
+  checkedAt: 1,
+  complete: true,
+  summary: { available: 1, unavailable: 0, unknown: 0, total: 1 },
+  mods: [],
+};
+
+describe("resource caps through the routes", () => {
+  it("returns the same job for a repeated start and refuses a second version with 409", async () => {
+    const app = buildServer();
+    const a = await app.inject(post(MODS_READER, { mcVersion: "1.21.5" }));
+    const b = await app.inject(post(MODS_READER, { mcVersion: "1.21.5" }));
+    expect(b.json()).toEqual(a.json());
+    expect(startModCompatMock).toHaveBeenCalledTimes(1);
+    const c = await app.inject(post(MODS_READER, { mcVersion: "1.20.1" }));
+    expect(c.statusCode).toBe(409);
+    expect(startModCompatMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses refresh spam while the own job runs, without reaching the wrapper", async () => {
+    const app = buildServer();
+    await app.inject(post(MODS_READER, { mcVersion: "1.21.5" }));
+    for (let i = 0; i < 5; i++) {
+      const r = await app.inject(post(MODS_READER, { mcVersion: "1.21.5", refresh: true }));
+      expect(r.statusCode).toBe(409);
+    }
+    expect(startModCompatMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("rate limits refresh per server once the first job finished", async () => {
+    getModCompatMock.mockResolvedValue(DONE_JOB);
+    const app = buildServer();
+    await app.inject(post(MODS_READER, { mcVersion: "1.21.5", refresh: true }));
+    await app.inject(get(MODS_READER, `/${JOB}`));
+    const again = await app.inject(post(MODS_READER, { mcVersion: "1.21.5", refresh: true }));
+    expect(again.statusCode).toBe(429);
+    expect(startModCompatMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not call the wrapper again for a job it already saw finish", async () => {
+    getModCompatMock.mockResolvedValue(DONE_JOB);
+    const app = buildServer();
+    for (let i = 0; i < 10; i++) {
+      expect((await app.inject(get(MODS_READER, `/${JOB}`))).statusCode).toBe(200);
+    }
+    expect(getModCompatMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("many distinct job ids cost one wrapper call each", async () => {
+    getModCompatMock.mockImplementation(async (_cfg: unknown, id: string) => ({
+      ...DONE_JOB,
+      jobId: id,
+    }));
+    const app = buildServer();
+    for (let i = 0; i < 150; i++) {
+      const id = "00000000-0000-4000-8000-" + String(i).padStart(12, "0");
+      expect((await app.inject(get(MODS_READER, `/${id}`))).statusCode).toBe(200);
+    }
+    expect(getModCompatMock).toHaveBeenCalledTimes(150);
+  });
+
+  it("rejects an over-long or malformed version before any wrapper call or log line", async () => {
+    const app = buildServer();
+    const bad = ["1.21.5" + "x".repeat(40), "1.21\n[INFO] forged", "a b"];
+    for (const v of bad) {
+      const res = await app.inject(post(MODS_READER, { mcVersion: v }));
+      expect(res.statusCode).toBe(400);
+    }
+    expect(startModCompatMock).not.toHaveBeenCalled();
+    expect(logErrorMock).not.toHaveBeenCalled();
+  });
+});
