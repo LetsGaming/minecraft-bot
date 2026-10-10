@@ -6,16 +6,7 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### BREAKING
-
-- **`config.json` is rewritten on the first start.** The file gets standard indented JSON and a `configVersion`, and the original is kept as `config.json.bak-v<old version>-<timestamp>` next to it. Pre-5.0.0 local-mode configs migrate once `apiUrl` and `apiKey` are present; otherwise the bot stops without touching the file and lists the keys to add. A `configVersion` newer than the bot is refused. See `docs/admin/migrating-to-7.md` (`core/configMigrations.ts`, `core/config.ts`, `core/utils/config/configService.ts`).
-- **Behind a reverse proxy you must set `webui.trustProxy`.** The dashboard no longer trusts `X-Forwarded-For` by default (see Security and `docs/admin/docker.md`).
-- **Wrapper API keys must be at least 32 characters.** The wrapper refuses to start with a shorter key; use `openssl rand -hex 32` for `apiKey`, `API_KEY` or `API_KEY_<SERVER_ID>`.
-- **A current wrapper and setup suite are needed for full behaviour.** `rcon-command` v2 (delivery results), `stats-bulk`, `mod-compat` and the mod config index are expected features; the startup report lists any a wrapper lacks and the bot falls back as described below. The wrapper's sudoers grant must include `node` for mod management (`docs/admin/remote-setup.md`).
-- **`config_structure.json` is removed.** Use `config.template.json` for the shape and `config.schema.json` for every field.
-- **Server resolution changed.** A command resolves its server from `server:`, then the guild's `defaultServer`, then the guild's only allowed server (in a DM, the only configured server). With several candidates it fails and lists the IDs instead of using the first server of the deployment; a stale `defaultServer` is an error instead of being replaced silently. `getGuildServerId`, which bypassed tenant isolation, is removed (`core/utils/server/guildTargets.ts`).
-- **`/uptime` without `server:`** shows the resolved default server's detail. The all-servers overview moved to `/uptime server:all`.
-- Internal API: `ServerInstance.sendCommand` and `serverAccess.sendCommand` are removed in favour of `send` and `sendCommandOutcome`.
+## [7.0.0] - 2026-10-10
 
 ### Security
 
@@ -46,6 +37,15 @@ project follows [Semantic Versioning](https://semver.org/).
 - Fixtures of every historical `config.json` format (`tests/fixtures/config/`), and a test that fails when a config field would fall back to the raw-JSON editor.
 
 ### Changed
+
+- BREAKING: **`config.json` is rewritten on the first start.** The file gets standard indented JSON and a `configVersion`, and the original is kept as `config.json.bak-v<old version>-<timestamp>` next to it. Pre-5.0.0 local-mode configs migrate once `apiUrl` and `apiKey` are present; otherwise the bot stops without touching the file and lists the keys to add. A `configVersion` newer than the bot is refused. See `docs/admin/migrating-to-7.md` (`core/configMigrations.ts`, `core/config.ts`, `core/utils/config/configService.ts`).
+- BREAKING: **Behind a reverse proxy you must set `webui.trustProxy`.** The dashboard no longer trusts `X-Forwarded-For` by default (see Security and `docs/admin/docker.md`).
+- BREAKING: **Wrapper API keys must be at least 32 characters.** The wrapper refuses to start with a shorter key; use `openssl rand -hex 32` for `apiKey`, `API_KEY` or `API_KEY_<SERVER_ID>`.
+- BREAKING: **A current wrapper and setup suite are needed for full behaviour.** `rcon-command` v2 (delivery results), `stats-bulk`, `mod-compat` and the mod config index are expected features; the startup report lists any a wrapper lacks and the bot falls back as described below. The wrapper's sudoers grant must include `node` for mod management (`docs/admin/remote-setup.md`).
+- BREAKING: **`config_structure.json` is removed.** Use `config.template.json` for the shape and `config.schema.json` for every field.
+- BREAKING: **Server resolution changed.** A command resolves its server from `server:`, then the guild's `defaultServer`, then the guild's only allowed server (in a DM, the only configured server). With several candidates it fails and lists the IDs instead of using the first server of the deployment; a stale `defaultServer` is an error instead of being replaced silently. `getGuildServerId`, which bypassed tenant isolation, is removed (`core/utils/server/guildTargets.ts`).
+- BREAKING: **`/uptime` without `server:`** shows the resolved default server's detail. The all-servers overview moved to `/uptime server:all`.
+- BREAKING: Internal API: `ServerInstance.sendCommand` and `serverAccess.sendCommand` are removed in favour of `send` and `sendCommandOutcome`.
 
 - **Config changes apply to the running bot without a restart.** The chat bridge, TPS monitor, leaderboard schedule, milestone and update-notifier timers, status embed and application prompts follow the live config; newly enabled commands are registered; a change that lands before the bot is ready is applied once it is; a server whose `apiUrl`, `apiKey`, ping or modpack settings changed gets a fresh instance and watchers. The dashboard process reloads `config.json` too: `webui.grants`, `adminUsers`, `webui.console.blockedCommands` and the server list apply immediately, a console stream held by someone whose access was removed is closed, and a removed server's cached data is dropped (`web/backend/config/liveConfig.ts`, `initMinecraftCommands.ts`, `tpsMonitor.ts`, `leaderboardScheduler.ts`, `milestoneWatcher.ts`, `updateNotifier.ts`, `statusEmbed.ts`).
 - `/server stop|restart|backup` and scheduled restarts wait as long as the wrapper does. The wrapper advertises `scriptTimeoutsMs` in `/manifest` (clamped to 5 s to 15 min, with a built-in table as fallback); a script that outlives the wait is reported as "still running, check status", not as failed. Backup download (header wait), restore and delete requests have timeouts (`access/scripts.ts`, `wrapperContract.ts`, `commands/server/control.ts`).
