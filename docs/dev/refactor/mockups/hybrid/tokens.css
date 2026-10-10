@@ -34,6 +34,7 @@
   --row-pad-y: 10px;
   --field-gap: var(--space-4);
   --touch-min: 44px;
+  --page-max: 2400px;   /* content fills the viewport beside the sidebar; the ceiling sits above 2560 minus the sidebar */
 
   /* z scale */
   --z-sticky: 10; --z-nav: 30; --z-dialog: 50; --z-toast: 60;
