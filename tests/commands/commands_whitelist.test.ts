@@ -67,12 +67,13 @@ vi.mock("../../src/core/config.js", () => ({
 import { resolveServer } from "../../src/bot/utils/guild/guildRouter.js";
 import { loadWhitelist, invalidateWhitelistCache } from "../../src/core/utils/minecraft/whitelist.js";
 import { loadConfig } from "../../src/core/config.js";
+import { recordAdd, recordRemove } from "../../src/core/utils/stores/whitelistAudit.js";
 
 function makeServer(id = "survival") {
   return {
     id,
     config: { id },
-    sendCommand: vi.fn().mockResolvedValue(undefined),
+    send: vi.fn().mockResolvedValue({ kind: "delivered", output: "" }),
   } as never;
 }
 
@@ -142,6 +143,27 @@ describe("/whitelist command", () => {
     expect(invalidateWhitelistCache).toHaveBeenCalledWith("survival");
   });
 
+  it("records nothing when the server is unreachable", async () => {
+    const server = resolveServer({} as never) as unknown as {
+      send: ReturnType<typeof vi.fn>;
+    };
+    server.send.mockResolvedValue({
+      kind: "unreachable",
+      reason: "wrapper-down",
+      detail: "x",
+    });
+    const interaction = makeInteraction({
+      options: {
+        getString: vi
+          .fn()
+          .mockImplementation((n: string) => (n === "username" ? "Steve" : null)),
+      },
+    });
+    await expect(execute(interaction)).rejects.toThrow("did not reach");
+    expect(recordAdd).not.toHaveBeenCalled();
+    expect(invalidateWhitelistCache).not.toHaveBeenCalled();
+  });
+
   it("rejects an invalid username before any console command", async () => {
     const interaction = makeInteraction({
       options: {
@@ -154,7 +176,7 @@ describe("/whitelist command", () => {
     });
     await expect(execute(interaction)).rejects.toThrow("not a valid");
     const server = vi.mocked(resolveServer).mock.results[0]!.value;
-    expect(server.sendCommand).not.toHaveBeenCalled();
+    expect(server.send).not.toHaveBeenCalled();
   });
 
   it("throws when Mojang API returns not-ok", async () => {
@@ -188,10 +210,27 @@ describe("/unwhitelist command", () => {
     });
     await execute(interaction);
     const server = vi.mocked(resolveServer).mock.results[0]!.value;
-    expect(server.sendCommand).toHaveBeenCalledWith(
+    expect(server.send).toHaveBeenCalledWith(
       expect.stringContaining("/whitelist remove"),
     );
     expect(interaction.editReply).toHaveBeenCalled();
+  });
+
+  it("leaves the audit log and cache alone when the server is unreachable", async () => {
+    const server = resolveServer({} as never) as unknown as {
+      send: ReturnType<typeof vi.fn>;
+    };
+    server.send.mockResolvedValue({
+      kind: "unreachable",
+      reason: "timeout",
+      detail: "x",
+    });
+    const interaction = makeInteraction({
+      options: { getString: vi.fn().mockReturnValue("Steve") },
+    });
+    await expect(execute(interaction)).rejects.toThrow("did not reach");
+    expect(recordRemove).not.toHaveBeenCalled();
+    expect(invalidateWhitelistCache).not.toHaveBeenCalled();
   });
 });
 

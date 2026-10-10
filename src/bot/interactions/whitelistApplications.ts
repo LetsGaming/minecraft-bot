@@ -460,11 +460,11 @@ async function handleDecisionButton(
         return;
       }
       try {
-        const canonical = await performWhitelistAdd(server, app.mcName, {
+        const added = await performWhitelistAdd(server, app.mcName, {
           tag: interaction.user.tag,
           id: interaction.user.id,
         });
-        app.mcName = canonical;
+        app.mcName = added.name;
       } catch (err) {
         const msg = errMsg(err);
         await interaction.followUp({

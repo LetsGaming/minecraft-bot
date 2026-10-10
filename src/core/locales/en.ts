@@ -291,6 +291,21 @@ export const en: Record<string, string> = {
     "Live console for **{server}** now relays into {channel} (batched every few seconds).",
   "console.liveDisabled": "Live console for **{server}** disabled.",
 
+  // ── console command delivery ──
+  "console.notDelivered":
+    "The command did not reach **{server}** ({reason}). Nothing was changed.",
+  "console.refused": "**{server}** refused the command: {output}",
+  "console.unverified":
+    "The command was sent, but this server has no reply channel, so the result is unverified.",
+  "console.reason.wrapper-down": "the API wrapper is unreachable",
+  "console.reason.timeout": "the API wrapper did not answer in time",
+  "console.reason.breaker-open":
+    "the API wrapper has been failing, so requests are paused briefly",
+  "console.reason.rate-limited": "the API wrapper is rate limiting requests",
+  "console.reason.http-error": "the API wrapper answered with an error",
+  "console.reason.screen-failed": "the server console could not be written to",
+  "console.reason.rejected": "the API wrapper rejected the command",
+
   // ── scheduled restarts ──
   "schedule.warnInGame": "Server restart in {minutes} minute(s)!",
   "schedule.warnTitle": "🔄 Scheduled restart ahead",

@@ -46,8 +46,16 @@ function interaction(options: Record<string, string | null>) {
   } as never;
 }
 
+const DELIVERED = { kind: "delivered", output: "" } as const;
+const SENT = { kind: "sent", via: "screen" } as const;
+const UNREACHABLE = {
+  kind: "unreachable",
+  reason: "wrapper-down",
+  detail: "fetch failed",
+} as const;
+
 function useServer(send: ReturnType<typeof vi.fn>) {
-  const server = { id: "survival", send, sendCommand: send };
+  const server = { id: "survival", send };
   vi.mocked(resolveServer).mockReturnValue(server as never);
   return server;
 }
@@ -58,35 +66,35 @@ beforeEach(() => {
 
 describe("moderation commands", () => {
   it("/ban sends the console command, records the audit entry and replies", async () => {
-    const server = useServer(vi.fn().mockResolvedValue(""));
+    const server = useServer(vi.fn().mockResolvedValue(DELIVERED));
     const i = interaction({ player: "Steve", reason: "griefing" });
     await ban(i);
-    expect(server.sendCommand.mock.calls[0]![0]).toBe("/ban Steve griefing");
+    expect(server.send.mock.calls[0]![0]).toBe("/ban Steve griefing");
     expect(recordAdminAction).toHaveBeenCalledOnce();
     expect(vi.mocked(i.editReply)).toHaveBeenCalledOnce();
     expect(putTempBan).not.toHaveBeenCalled();
   });
 
   it("/ban with a duration stores and arms a timed ban", async () => {
-    useServer(vi.fn().mockResolvedValue(""));
+    useServer(vi.fn().mockResolvedValue(DELIVERED));
     await ban(interaction({ player: "Steve", duration: "1h" }));
     expect(putTempBan).toHaveBeenCalledOnce();
     expect(armTempBan).toHaveBeenCalledOnce();
   });
 
   it("/kick sends the console command, records the audit entry and replies", async () => {
-    const server = useServer(vi.fn().mockResolvedValue(""));
+    const server = useServer(vi.fn().mockResolvedValue(DELIVERED));
     const i = interaction({ player: "Steve" });
     await kick(i);
-    expect(server.sendCommand.mock.calls[0]![0]).toBe("/kick Steve");
+    expect(server.send.mock.calls[0]![0]).toBe("/kick Steve");
     expect(recordAdminAction).toHaveBeenCalledOnce();
     expect(vi.mocked(i.editReply)).toHaveBeenCalledOnce();
   });
 
   it("/pardon sends the console command and drops the timed-ban record", async () => {
-    const server = useServer(vi.fn().mockResolvedValue(""));
+    const server = useServer(vi.fn().mockResolvedValue(DELIVERED));
     await pardon(interaction({ player: "Steve" }));
-    expect(server.sendCommand.mock.calls[0]![0]).toBe("/pardon Steve");
+    expect(server.send.mock.calls[0]![0]).toBe("/pardon Steve");
     expect(removeTempBan).toHaveBeenCalledWith("survival", "Steve");
   });
 
@@ -95,6 +103,61 @@ describe("moderation commands", () => {
     await expect(ban(interaction({ player: "bad name" }))).rejects.toThrow();
     await expect(kick(interaction({ player: "bad name" }))).rejects.toThrow();
     await expect(pardon(interaction({ player: "bad name" }))).rejects.toThrow();
-    expect(server.sendCommand).not.toHaveBeenCalled();
+    expect(server.send).not.toHaveBeenCalled();
+  });
+
+  it("reports an unverified result when the server has no reply channel", async () => {
+    useServer(vi.fn().mockResolvedValue(SENT));
+    const i = interaction({ player: "Steve" });
+    await kick(i);
+    expect(JSON.stringify(vi.mocked(i.editReply).mock.calls[0])).toContain("unverified");
+    expect(recordAdminAction).toHaveBeenCalledOnce();
+  });
+});
+
+describe("an unreachable server aborts before any state is recorded", () => {
+  beforeEach(() => {
+    useServer(vi.fn().mockResolvedValue(UNREACHABLE));
+  });
+
+  it("/ban records nothing, stores no timed ban and tells the admin", async () => {
+    await expect(
+      ban(interaction({ player: "Steve", duration: "1h" })),
+    ).rejects.toThrow(/did not reach/);
+    expect(putTempBan).not.toHaveBeenCalled();
+    expect(armTempBan).not.toHaveBeenCalled();
+    expect(recordAdminAction).not.toHaveBeenCalled();
+  });
+
+  it("/kick records nothing", async () => {
+    await expect(kick(interaction({ player: "Steve" }))).rejects.toThrow(/did not reach/);
+    expect(recordAdminAction).not.toHaveBeenCalled();
+  });
+
+  it("/pardon keeps the timed-ban record", async () => {
+    await expect(pardon(interaction({ player: "Steve" }))).rejects.toThrow(/did not reach/);
+    expect(removeTempBan).not.toHaveBeenCalled();
+    expect(recordAdminAction).not.toHaveBeenCalled();
+  });
+});
+
+describe("a visibly refused command is not recorded", () => {
+  it("/kick on a player who is not online", async () => {
+    useServer(
+      vi.fn().mockResolvedValue({ kind: "delivered", output: "No player was found" }),
+    );
+    await expect(kick(interaction({ player: "Steve" }))).rejects.toThrow(/refused/);
+    expect(recordAdminAction).not.toHaveBeenCalled();
+  });
+
+  it("/ban when the console does not know the command", async () => {
+    useServer(
+      vi.fn().mockResolvedValue({
+        kind: "delivered",
+        output: "Unknown or incomplete command, see below for error",
+      }),
+    );
+    await expect(ban(interaction({ player: "Steve" }))).rejects.toThrow(/refused/);
+    expect(recordAdminAction).not.toHaveBeenCalled();
   });
 });
