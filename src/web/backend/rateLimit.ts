@@ -76,12 +76,14 @@ export function registerRateLimiting(app: FastifyInstance): void {
   app.addHook("onRequest", async (req: FastifyRequest, reply: FastifyReply) => {
     const target = targetFor(req);
     if (!target) return;
-    const denied =
-      target.ceiling && !target.ceiling.limiter.consumeToken(target.ceiling.key)
+    // The narrower limiter decides first; the shared address ceiling only
+    // counts requests it admitted, so one user's rejected flood cannot drain
+    // the budget of everyone else behind the same address.
+    const denied = !target.limiter.consumeToken(target.key)
+      ? target
+      : target.ceiling && !target.ceiling.limiter.consumeToken(target.ceiling.key)
         ? target.ceiling
-        : !target.limiter.consumeToken(target.key)
-          ? target
-          : null;
+        : null;
     if (!denied) return;
 
     reply

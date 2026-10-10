@@ -157,12 +157,49 @@ describe("buckets behind one shared proxy address", () => {
 });
 
 describe("bucket map bound", () => {
-  it("evicts the oldest buckets beyond maxBuckets", async () => {
+  it("never drops a live exhausted bucket to make room, and refuses new keys instead", async () => {
     const { createRateLimiter } = await import("../../src/core/utils/rateLimiter.js");
     const limiter = createRateLimiter({ capacity: 1, windowMs: 60_000, maxBuckets: 3 });
-    expect(limiter.consumeToken("k0")).toBe(true);
-    expect(limiter.consumeToken("k0")).toBe(false);
-    for (const k of ["k1", "k2", "k3"]) limiter.consumeToken(k);
-    expect(limiter.consumeToken("k0")).toBe(true);
+    expect(limiter.consumeToken("A")).toBe(true);
+    expect(limiter.consumeToken("A")).toBe(false);
+    const flood = Array.from({ length: 50 }, (_, i) => limiter.consumeToken(`k${i}`));
+    expect(flood.filter(Boolean)).toHaveLength(2);
+    expect(limiter.consumeToken("A")).toBe(false);
+  });
+
+  it("sweeps buckets idle for a full window to admit new keys", async () => {
+    vi.useFakeTimers();
+    try {
+      const { createRateLimiter } = await import("../../src/core/utils/rateLimiter.js");
+      const limiter = createRateLimiter({ capacity: 1, windowMs: 60_000, maxBuckets: 2 });
+      limiter.consumeToken("a");
+      limiter.consumeToken("b");
+      expect(limiter.consumeToken("c")).toBe(false);
+      vi.advanceTimersByTime(60_001);
+      expect(limiter.consumeToken("c")).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("shared address ceiling", () => {
+  it("is not drained by a user's rejected requests", async () => {
+    const app = (() => {
+      const a = Fastify({ logger: false, trustProxy: false });
+      registerRateLimiting(a);
+      a.post("/api/test", async () => ({ ok: true }));
+      return a;
+    })();
+    const { encodeSigned, SESSION_COOKIE } = await import("../../src/web/backend/auth/auth.js");
+    const cookieFor = (uid: string) =>
+      `${SESSION_COOKIE}=${encodeSigned({ uid, tag: uid, guilds: [], exp: Date.now() + 60_000 })}`;
+    const post = async (uid: string) =>
+      (await app.inject({ method: "POST", url: "/api/test", headers: { cookie: cookieFor(uid) }, remoteAddress: "172.18.0.2" })).statusCode;
+
+    const results: number[] = [];
+    for (let i = 0; i < 300; i++) results.push(await post("111111111111111111"));
+    expect(results.filter((c) => c === 200)).toHaveLength(30);
+    expect(await post("222222222222222222")).toBe(200);
   });
 });

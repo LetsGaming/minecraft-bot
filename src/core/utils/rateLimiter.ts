@@ -35,7 +35,11 @@ export const DEFAULT_MAX_BUCKETS = 10_000;
 export function createRateLimiter(options: {
   capacity: number;
   windowMs: number;
-  /** Most buckets kept at once; the oldest are evicted beyond it. */
+  /**
+   * Most buckets kept at once. At the cap, buckets idle for a full window
+   * (already refilled) are swept; if the map is still full of live buckets a
+   * new key is refused rather than evicting one that may be exhausted.
+   */
   maxBuckets?: number;
 }): RateLimiter {
   const { capacity, windowMs } = options;
@@ -60,10 +64,12 @@ export function createRateLimiter(options: {
       const bucket = buckets.get(userId);
 
       if (!bucket) {
-        while (buckets.size >= maxBuckets) {
-          const oldest = buckets.keys().next().value;
-          if (oldest === undefined) break;
-          buckets.delete(oldest);
+        if (buckets.size >= maxBuckets) {
+          const cutoff = now - windowMs;
+          for (const [id, b] of buckets) {
+            if (b.lastSeen <= cutoff) buckets.delete(id);
+          }
+          if (buckets.size >= maxBuckets) return false;
         }
         buckets.set(userId, { tokens: capacity - 1, lastSeen: now });
         return true;
@@ -82,7 +88,8 @@ export function createRateLimiter(options: {
 
     cooldownSeconds(userId: string): number {
       const bucket = buckets.get(userId);
-      if (!bucket || bucket.tokens >= 1) return 0;
+      if (!bucket) return buckets.size >= maxBuckets ? Math.ceil(windowMs / 1000) : 0;
+      if (bucket.tokens >= 1) return 0;
       const needed = 1 - bucket.tokens;
       return Math.ceil((needed / capacity) * (windowMs / 1000));
     },
