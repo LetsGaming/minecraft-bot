@@ -14,6 +14,10 @@ npm run setup
 
 The bot validates `config.json` at startup. Wrong types or missing required fields produce a clear error message naming the exact field, instead of a cryptic crash later.
 
+## Config version and automatic migration
+
+`configVersion` is the format version of the file. You normally never write it: the bot adds it, and the dashboard stamps it on every save. When the bot starts with an older file it first copies it to `config.json.bak-v<old version>-<timestamp>`, then rewrites `config.json` in the current format and logs what changed. A file with a `configVersion` newer than the bot is refused. The one case that needs your input (pre-5.0.0 local-mode servers, which name no wrapper) is described in [migrating-to-7.md](migrating-to-7.md).
+
 ## Top-level structure
 
 ```json
@@ -79,7 +83,7 @@ Note: the `/backup` overview and `/mods` assume a server installed with [minecra
 | `allowInsecureHttp` | No | `false` | Suppress the warning for a plaintext `apiUrl`. Only meaningful on a private network; for a public host the bot refuses to start regardless. |
 | `commands` | No | | Per-server command overrides. Same shape as the top-level `commands` block. |
 
-Since 5.0.0 that is the whole server block. Everything else that used to live here — `serverDir`, `scriptDir`, `linuxUser`, `screenSession`, `useRcon`, `rconHost`, `rconPort`, `rconPassword` — described the Minecraft host, and now lives in the wrapper's config on that host. The bot refuses to start if any of them are still present and names them. See [migrating-to-5.md](migrating-to-5.md).
+Since 5.0.0 that is the whole server block. Everything else that used to live here (`serverDir`, `scriptDir`, `linuxUser`, `screenSession`, `useRcon`, `rconHost`, `rconPort`, `rconPassword`) described the Minecraft host, and now lives in the wrapper's config on that host. Starting a pre-5.0.0 config removes them automatically once `apiUrl` and `apiKey` are set, and the bot tells you what is missing. See [migrating-to-7.md](migrating-to-7.md) and [migrating-to-5.md](migrating-to-5.md).
 
 ### API keys from the environment
 

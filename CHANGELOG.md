@@ -15,12 +15,17 @@ project follows [Semantic Versioning](https://semver.org/).
 - Leaderboard builds and the hourly stat snapshot now use a bulk stats route (`GET /instances/:id/stats/bulk`, on a wrapper new enough to serve it) instead of one HTTP request per player who has ever joined — on an older wrapper, `loadAllStats()` still works, falling back to the old per-uuid reads with a concurrency cap of 6 instead of firing them all at once (`statUtils.ts`, `serverAccess.readAllStats`).
 - A per-server circuit breaker in front of wrapper reads: after 5 consecutive failures it fails fast for 15s instead of every caller paying its own connect-and-timeout during a sustained outage, then probes once (half-open) before fully recovering (`core/utils/server/circuitBreaker.ts`). A 429 (the wrapper rate-limiting, not failing) never counts toward it, and now surfaces as its own distinct error instead of reading identically to "unreachable" (`serverAccess.RateLimitedError`).
 - The dashboard's `/api/status` collection (and the Prometheus `/metrics` scrape, which runs the same collection) now caches each server's health/player-list (10s), TPS (15s) and host info (60s) instead of re-asking the wrapper on every poll — an open Status tab, an open Overview tab, and a scrape interval used to each hit the wrapper independently for the same data (`web/backend/status/status.ts`).
+- `configVersion` in `config.json` and automatic config migration: on start the bot backs the file up as `config.json.bak-v<old version>-<timestamp>` next to it, rewrites it in the current format and logs what changed. A `configVersion` newer than the bot is refused. See `docs/admin/migrating-to-7.md` (`core/configMigrations.ts`, `core/config.ts`, `core/utils/config/configService.ts`).
+- Fixtures of every historical `config.json` format (`tests/fixtures/config/`), and a test that fails when a config field would fall back to the raw-JSON editor in the dashboard.
 
 ### Changed
 
 - Server resolution is now one shared rule (`core/utils/server/guildTargets.ts`): explicit `server:`, then the guild's `defaultServer`, then the guild's only allowed server, and in a DM the only configured server. With several candidates the command fails and lists the server IDs instead of picking the first server of the whole deployment. The same rule drives whitelist applications and follow-up hints.
 - `/uptime` without `server:` shows the resolved default server's detail; the all-servers overview moved to `server:all`.
 - `/daily-admin reset` takes an optional `server` (guild default otherwise).
+- **Breaking (7.0.0):** the first start after upgrading rewrites `config.json` (standard indented JSON, `configVersion` added, original kept as a `.bak-v0-...` copy). Pre-5.0.0 local-mode configs are migrated automatically once `apiUrl` and `apiKey` are present; otherwise the bot stops without touching the file and lists the exact keys to add.
+- The Docker image generates `config.schema.json` in its build stage instead of copying the committed file (`Dockerfile`).
+- The schema now enforces the guild `language` values, `waypoints.maxPerServer` (integer, at least 1), `webui.port` (1 to 65535), restart `time` (`HH:MM`) and positive `warnMinutes` and milestone thresholds, so the dashboard form and the CLI wizard see the bounds the bot checks (`schema/config.ts`, `core/configValidation.ts`). An unknown guild `language` is still only a warning.
 
 ### Fixed
 
@@ -39,10 +44,12 @@ project follows [Semantic Versioning](https://semver.org/).
 - Downtime monitoring polled the server's health every 60s but only ever logged a transition that crossed the 3-strike (server) or 5-strike (wrapper) alert threshold, so a state flip that self-healed within one or two ticks — the common case behind "sometimes reports players as offline" — left no trace to diagnose. Every poll now logs at debug level (`DEBUG=1`) with state, source, wrapper/RCON status, player count and reason.
 
 - Config editor: a Minecraft server configured with the id `server` (or any guild-scope field literally matching a reference-dropdown name) had its dropdown hijacked into a plain Select, and picking an option there overwrote the entire `servers` map with `{"server": "server"}`. The reference-dropdown heuristic matched by field name alone, and a `servers` map entry's own key is passed down as that name; it's now also gated on the field actually being scalar-shaped (`src/web/frontend/src/components/schema/SchemaField.vue`, `schemaField.ts`'s new `isReferenceField`).
+- `npm ci` failed because `package-lock.json` pinned vite 6.4.3 while `package.json` required 6.4.4.
 
 ### Removed
 
 - Unused exports `getGuildServerId` (which bypassed tenant isolation), `getServer`, `getGuildConfig`, `getServerChoices`, `kvDelete`, `evictModCache`, `savePlayerCountStore`, `saveTempBanStore` and `getTempBan`, and the unreachable `if (!server)` checks after `resolveServer()`.
+- `config_structure.json`. It still showed the pre-5.0.0 per-server fields. Use `config.template.json` for the shape and `config.schema.json` for every field.
 
 ## [6.1.0] — 2026-09-21
 

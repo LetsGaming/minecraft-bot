@@ -572,3 +572,20 @@ docstring already states the split and why: "wrap with `readThrough` /
 Baking error-fallback into the freshness cache would duplicate what
 `lastKnown.ts` already does correctly, for the same reason the circuit
 breaker above stays a separate module rather than a `lastKnown.ts` addition.
+
+---
+
+## `config.json` is versioned and migrated on load; the Docker image generates the schema
+
+**Problem:** config.json had no version and no migration code. The only handling of an old format was a validation error that told the operator to edit the file by hand, and `config_structure.json`, which the docs called canonical, still showed the removed pre-5.0 fields. Separately the Docker image copied a committed `config.schema.json`, so a stale committed schema shipped silently unless CI caught it.
+
+**Decision:**
+
+- `configVersion` (missing = 0) plus an ordered list of pure migrators in `core/configMigrations.ts`. `loadConfig()` runs the pending ones before env overrides and validation. When anything changed it writes `config.json.bak-v<from>-<timestamp>` first, then replaces the file atomically (`writeFileAtomicSync`), and logs one line per migrator. A migrator that cannot finish throws; nothing is written and startup stops with its message. A newer `configVersion` is rejected. `writeConfig` (the dashboard write path) stamps the current version.
+- The 5.0 local-mode gate is a migrator. It strips the removed fields, and where it would have to invent `apiUrl` or `apiKey` it stops and lists exactly which keys to add (a wrapper address is never guessed). The validator keeps rejecting those fields in a candidate, so the dashboard cannot write them back.
+- `loadConfig` has its own small synchronous write instead of calling `writeConfig`: `writeConfig` is async, validates (the file may not be valid yet) and lives in a module that imports `config.ts`, so reusing it would be an import cycle.
+- Rules JSON Schema can express (guild `language` enum, `waypoints.maxPerServer`, `webui.port`, restart `time`, positive `warnMinutes` and milestone thresholds) are JSDoc tags on the types in `schema/config.ts`, enforced by Ajv. An unknown guild language stays a warning (the enum error is filtered the way unknown notification events are) because it has always fallen back to the global language. Day codes stay hand-checked because lowercase has always been accepted.
+- The Dockerfile builder stage runs `npm run schema:generate` and the runtime stages copy the result from the builder. CI `schema:check` stays as a second guard.
+- The guild feature list (`GUILD_FEATURE_KEYS` in `schema/config.ts`, constrained to `keyof GuildConfig`) is the single source for the backend summary, the guilds view and the setup wizard; a test ties it to the generated schema.
+
+**Deliberately not done:** the migrator does not try to turn local-mode settings into wrapper settings, and the bot does not delete old backups.
