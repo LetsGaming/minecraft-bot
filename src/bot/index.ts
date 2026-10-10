@@ -50,6 +50,7 @@ import { flushUptimeHistory } from "@mcbot/core/utils/stores/uptimeTracker.js";
 import { invalidateStatusChannelCache } from "./logWatcher/watchers/schedulers/statusEmbed.js";
 import type { BotCommand, BotClient } from "@mcbot/core/types/index.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
+import { installProcessGuards } from "./processGuards.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const config = loadConfig();
@@ -511,6 +512,8 @@ async function shutdown(signal: string): Promise<void> {
   }
   process.exit(0);
 }
+
+installProcessGuards(flushUptimeHistory);
 
 process.on("SIGTERM", () => {
   shutdown("SIGTERM").catch(() => process.exit(1));
