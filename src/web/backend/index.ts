@@ -8,6 +8,7 @@ import { loadConfig } from "@mcbot/core/config.js";
 import { initServers } from "@mcbot/core/utils/server/server.js";
 import { getDb } from "@mcbot/core/db/index.js";
 import { startWebServer } from "./server.js";
+import { startLiveConfig } from "./config/liveConfig.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
@@ -70,6 +71,8 @@ try {
   );
   process.exit(1);
 }
+
+startLiveConfig();
 
 startWebServer().catch((err: unknown) => {
   log.error("web", `Failed to start: ${errMsg(err)}`);
