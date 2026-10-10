@@ -92,7 +92,20 @@ async function _execute(
     return;
   }
 
-  const server = resolveServer(interaction);
+  let server: ReturnType<typeof resolveServer>;
+  try {
+    server = resolveServer(interaction);
+  } catch (err) {
+    await interaction.reply({
+      embeds: [
+        createErrorEmbed(
+          err instanceof Error ? err.message : t("common.unexpectedError"),
+        ),
+      ],
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
 
   // Cooldown, streak, and history are all per server.
   const [rewardsCfg, rewardsOverride, store] = await Promise.all([
@@ -128,6 +141,9 @@ async function _execute(
     return;
   }
 
+  // The online lookup and RCON delivery can outlast Discord's 3 s window.
+  await interaction.deferReply();
+
   const online = isPlayerOnline(await getOnlinePlayers(server), username);
 
   const { currentStreak, bonusStreak, longestStreak } = calcStreak(
@@ -138,6 +154,7 @@ async function _execute(
 
   const grantedRewards: DailyRewardItem[] = [];
   const mainReward = pick(pool.default);
+  grantedRewards.push(mainReward);
 
   // Have a rare chance to give a bonus reward from the pool even if the streak bonus isn't active.
   // This is separate from the streak bonus, which is always granted if the streak is high enough.
@@ -149,12 +166,9 @@ async function _execute(
     }
   }
 
-  grantedRewards.push(mainReward);
-
   const bonus = pool.streakBonuses?.[String(bonusStreak)] ?? null;
-  if (bonus && bonus.length > 0) {
-    grantedRewards.push(...bonus);
-  }
+  const streakBonus = bonus && bonus.length > 0 ? bonus : [];
+  grantedRewards.push(...streakBonus);
 
   // Persisting the claim is shared between the online and offline paths;
   // it must only run once delivery is confirmed (online) or queued
@@ -194,7 +208,8 @@ async function _execute(
     const list = (queue[key] ??= []);
 
     if (list.length >= MAX_PENDING_PER_PLAYER) {
-      await interaction.reply(
+      await failEphemeral(
+        interaction,
         errorReply(
           t("daily.queueFull", { max: MAX_PENDING_PER_PLAYER }),
           t("daily.queueFullFooter"),
@@ -207,12 +222,12 @@ async function _execute(
     await savePendingRewards(pendingStore);
     await persistClaim();
 
-    await interaction.reply(
+    await interaction.editReply(
       response(
-        grantedRewards,
+        mainReward,
+        streakBonus,
         currentStreak,
         bonusStreak,
-        !!bonus && bonus.length > 0,
         t("daily.queued", { server: server.id }),
       ),
     );
@@ -226,7 +241,8 @@ async function _execute(
   for (const reward of grantedRewards) {
     const ok = await give(server, username, reward);
     if (!ok) {
-      await interaction.reply(
+      await failEphemeral(
+        interaction,
         errorReply(
           t("daily.deliveryFailed"),
           t("daily.deliveryFailedFooter"),
@@ -237,14 +253,21 @@ async function _execute(
   }
 
   await persistClaim();
-  await interaction.reply(
-    response(
-      grantedRewards,
-      currentStreak,
-      bonusStreak,
-      !!bonus && bonus.length > 0,
-    ),
+  await interaction.editReply(
+    response(mainReward, streakBonus, currentStreak, bonusStreak),
   );
+}
+
+/**
+ * The deferred reply is public, so a failure replaces the placeholder with an
+ * ephemeral follow-up instead of exposing the error to the channel.
+ */
+async function failEphemeral(
+  interaction: ChatInputCommandInteraction,
+  payload: ReturnType<typeof errorReply>,
+): Promise<void> {
+  await interaction.deleteReply();
+  await interaction.followUp(payload);
 }
 
 function errorReply(
@@ -274,23 +297,18 @@ function cooldownMsg(ms: number, guildId?: string): string {
 }
 
 function response(
-  items: DailyRewardItem[],
+  main: DailyRewardItem,
+  streakBonus: DailyRewardItem[],
   cs: number,
   bs: number,
-  hasBonus: boolean,
   note?: string,
 ): { content: string } {
-  const lines: string[] = [];
-  const main = items[0];
+  const lines: string[] = [t("daily.reward", { reward: fmt(main) })];
 
-  if (main) {
-    lines.push(t("daily.reward", { reward: fmt(main) }));
-  }
-
-  if (hasBonus && items.length > 1) {
-    const bonusItems = items.slice(1);
-    const bonusList = bonusItems.map(fmt).join(", ");
-    lines.push(t("daily.bonus", { days: bs, rewards: bonusList }));
+  if (streakBonus.length > 0) {
+    lines.push(
+      t("daily.bonus", { days: bs, rewards: streakBonus.map(fmt).join(", ") }),
+    );
   }
 
   lines.push(t("daily.streak", { days: cs }));
