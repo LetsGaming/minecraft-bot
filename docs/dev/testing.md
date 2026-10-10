@@ -1,6 +1,6 @@
 # Testing
 
-The project uses [vitest](https://vitest.dev). 84 test files with ~1060 tests cover the core utilities, the RCON client, the data layer, watchers, schedulers, the dashboard backend, and most commands. CI (GitHub Actions) runs typecheck, lint, the full suite, `npm audit --audit-level=high`, locale parity, and the schema drift check on every push and PR.
+The project uses [vitest](https://vitest.dev). The suite covers the core utilities, the wrapper transport, the data layer, watchers, schedulers, the dashboard backend, and most commands. CI (GitHub Actions) runs typecheck, lint, the layout check, locale parity (`npm run i18n:check`, which also runs the literal lint described below), the schema drift check, the wire contract drift check (`npm run wire:check`), the full suite and `npm audit --audit-level=high` on every push and PR. `contract.yml` runs the wrapper contract end to end.
 
 ## Running tests
 
@@ -27,7 +27,7 @@ npx vitest run -t "streak"
   | `config/` | Loading, validation, env overrides, history |
   | `db/` | The store modules and the migration runner |
   | `minecraft/` | Stats, snapshots, players, world math |
-  | `server/` | ServerInstance, serverAccess, RCON, the wrapper contract |
+  | `server/` | ServerInstance, serverAccess, the circuit breaker, command outcomes, the wrapper contract |
   | `commands/` | Slash commands, middleware, the resolver |
   | `ingame/` | `!commands` and their loader |
   | `watchers/` | Log watchers, monitors, schedulers |
@@ -59,7 +59,11 @@ Assert on what was sent: `expect(interaction.editReply).toHaveBeenCalledWith(exp
 
 **ServerInstance** is mocked per test via `vi.mock("../src/core/utils/server/server.js", ...)` or by passing a stub object with `send` (resolving to a `CommandOutcome`, see `tests/fixtures/outcomes.ts`), `getList`, `isRunning` as `vi.fn()`. The layering exists precisely so this works without touching sockets.
 
-**RconClient** is tested against an in-process mock socket; see `tests/server/rconClient.test.ts` for the packet encode/decode round trips.
+**Command delivery** is asserted through `CommandOutcome` (`delivered`, `sent`, `unreachable`). Use the builders in `tests/fixtures/outcomes.ts` instead of resolving `null` or `undefined`. A test for a command that records state (ban, whitelist, cooldown, tips) needs an `unreachable` case that proves nothing was recorded. The bot has no RCON client any more, so the wrapper's own suite covers the socket.
+
+**Config formats**: `tests/fixtures/config/` holds a `config.json` of every historical format, and the migration tests run each one through `core/configMigrations.ts`. A new migration needs a fixture of the format it reads.
+
+**Hard-coded English** in Discord replies is caught by `scripts/lib/i18nLiteralLint.mjs` (run by `npm run i18n:check`): a string literal handed to a reply, embed or button sink fails the check unless it goes through `t()` or is listed in `scripts/i18n-literal-allowlist.json` with a reason. Fix the string; extend the allowlist only for text that is not prose (an ID, a machine-readable marker).
 
 **Database state**: `tests/setup.ts` points `MCBOT_DB_PATH` at `:memory:` globally, so no test can write `data/bot.db` into the working tree. Suites that exercise the stores call `closeDbForTesting()` between tests — closing an in-memory database drops it, which is the cheapest possible reset. The setup file also falls back to the `node:sqlite` driver where better-sqlite3's native binding cannot load.
 
@@ -116,16 +120,13 @@ Two scripts, neither in the vitest suite, because both need something real
 outside the process.
 
 ```bash
-docker compose -f docker-compose.e2e.yml up -d --wait
-npm run e2e:smoke        # a real Paper server, through the bot's own RCON layer
-docker compose -f docker-compose.e2e.yml down -v
-
 WRAPPER_DIR=<built wrapper checkout> npm run e2e:contract   # a real api-wrapper
+WRAPPER_DIR=<built wrapper checkout> npm run e2e:dashboard  # the dashboard reports against a real wrapper
 ```
 
-`e2e:smoke` runs nightly against a pinned Paper image: connect, `list`,
-whitelist add, `say` round-trip. It exists so a protocol or framing
-regression in `RconClient` fails before production does.
+The RCON socket and the Minecraft process live in the wrapper, so the wrapper's
+repository owns the tests for them. `e2e:dashboard` boots a dashboard against a
+real wrapper and instance directory and calls the report routes a browser would.
 
 ### The wrapper contract check
 

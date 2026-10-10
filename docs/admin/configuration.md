@@ -94,7 +94,7 @@ Since 5.0.0 that is the whole server block. Everything else that used to live he
 | `API_KEY_<SERVER_ID>` | that server (e.g. `API_KEY_SURVIVAL` for `"survival"`) |
 | `API_KEY` | every server without a more specific key |
 
-The override is applied before validation, so a deployment that supplies keys only through the environment is not rejected for the value it is about to provide. It replaces `RCON_PASSWORD_<ID>`, which configured the bot's own RCON connection and no longer exists.
+The override is applied before validation, so a deployment that supplies keys only through the environment is not rejected for the value it is about to provide. The wrapper requires keys of at least 32 characters (`openssl rand -hex 32`) and refuses to start with a shorter one.
 
 ### variables.txt
 
@@ -295,8 +295,8 @@ Environment variables take precedence over `config.json`. This is how Docker and
 |---|---|
 | `DISCORD_TOKEN` | `token` |
 | `DISCORD_CLIENT_ID` | `clientId` |
-| `RCON_PASSWORD` | `rconPassword` for all servers |
-| `RCON_PASSWORD_<SERVER_ID>` | `rconPassword` for one server. The ID is uppercased and non-alphanumerics become `_`, so server `my-smp` reads `RCON_PASSWORD_MY_SMP`. |
+| `API_KEY` | `apiKey` for every server without a more specific key |
+| `API_KEY_<SERVER_ID>` | `apiKey` for one server. The ID is uppercased and non-alphanumerics become `_`, so server `my-smp` reads `API_KEY_MY_SMP`. |
 | `WEBUI_CLIENT_SECRET` | Discord OAuth2 client secret for the dashboard login (no config.json equivalent — env only). |
 | `WEBUI_SESSION_SECRET` | Dashboard cookie-signing key (env only; any long random string). |
 

@@ -26,6 +26,18 @@ If the server *was* set up with the suite, the error means the wrapper's `script
 
 Passwordless sudo is the **wrapper's** requirement, on the Minecraft host: it is what runs the management scripts and reaches the `screen` session. The bot only relays the error. See the wrapper's own documentation for the two hops it needs.
 
+## Mod install, update, remove or toggle fails with a sudo error
+
+Mod management runs the suite's `update/*.js` scripts with `node` as the Minecraft user, which is a second sudoers grant besides the `bash` one for the management scripts. If the Mods tab lists mods but changing them fails, the `node` grant is missing. The sudoers example is in the wrapper's `docs/sudoers-setup.md`.
+
+## The wrapper refuses to start, "API key too short"
+
+Keys must be at least 32 characters. Generate one with `openssl rand -hex 32` and use the same value in the wrapper config and in the bot's `apiKey` (or `API_KEY` / `API_KEY_<SERVER_ID>`).
+
+## "The server could not be reached" after /ban, /kick, /whitelist and similar
+
+The command never got to the Minecraft server (the wrapper is down, its circuit breaker is open for 15 s after five failures, or neither RCON nor `screen` accepted it), so the bot recorded nothing: no audit entry, no timed ban, no whitelist history. Fix the connection and run the command again. If the reply instead says the result is unverified, the wrapper used the `screen` fallback, which cannot confirm delivery; enable RCON as described below.
+
 ## RCON keeps failing / "RCON failed, screen fallback"
 
 RCON is the wrapper's connection, so this is diagnosed on the Minecraft host:

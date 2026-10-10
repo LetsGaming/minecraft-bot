@@ -65,6 +65,7 @@ has its own directory.
 | Shared contracts (`@mcbot/schema`) | [dev/contracts.md](dev/contracts.md) |
 | Running and writing tests | [dev/testing.md](dev/testing.md) |
 | Architectural decision log | [dev/decisions.md](dev/decisions.md) |
+| Wave 1 refactor: audit and summary | [dev/refactor/wave1-summary.md](dev/refactor/wave1-summary.md) |
 | The Discord process | [dev/bot/](dev/bot/readme.md) |
 | Config, data layer, server access, Minecraft domain | [dev/core/](dev/core/readme.md) |
 | The dashboard (backend + frontend) | [dev/web/](dev/web/readme.md) |

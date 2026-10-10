@@ -1,5 +1,7 @@
 # Wave 1 audit
 
+> **Status:** this audit was written before Wave 1 and is kept unchanged. What was done, what was deferred and how it was verified is in [wave1-summary.md](wave1-summary.md). Line references below describe the code at audit time.
+
 Audit of the three repos that form the minecraft-bot system, written before any Wave 1 code changes.
 
 | Alias | Repo | Path | Version |

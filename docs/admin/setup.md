@@ -7,7 +7,7 @@ This guide takes you from nothing to a running bot. No prior Discord bot experie
 The fastest path, if you just want it running:
 
 1. Create the Discord application ([Step 1](#step-1-create-the-discord-application) below) — you need the **bot token**, the **application ID**, and the bot invited to your server.
-2. On the Minecraft host: install the [API wrapper](remote-setup.md) (3.1.1+). The bot reaches every server through it — it owns the RCON connection, the server's files, and the management scripts. Note its URL and API key.
+2. On the Minecraft host: install the [API wrapper](remote-setup.md). It needs an API key of at least 32 characters. The bot reaches every server through it; it owns the RCON connection, the server's files, and the management scripts. Note its URL and API key.
 3. On the machine that will run the bot (anywhere that can reach the wrapper over HTTP):
 
    ```bash

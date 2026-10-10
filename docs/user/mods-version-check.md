@@ -44,5 +44,6 @@ result as out of date and clears the saved answer on the wrapper.
 
 - An error toast appears when a check cannot start, fails, or expires (finished
   checks are kept for about 15 minutes on the wrapper).
+- A toast saying you already have a check running (409) or that the server, your guild or the dashboard is at its limit (429) comes from the limits in [`compatGuard.ts`](../../src/web/backend/routes/compatGuard.ts) apply: one check per person and server at a time, a few at once per guild and per server, and a refresh for a server at most every 30 seconds. Wait for the running check to finish, or until the 30 seconds have passed. These limits are held in the dashboard process, so a dashboard restart clears them.
 - "unknown" for many mods at once usually means Modrinth is rate limiting or
   unreachable from the Minecraft host. Wait a minute and check again.
