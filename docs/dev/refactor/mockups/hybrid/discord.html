@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Discord messages - Evolve</title>
+<title>Discord messages - Hybrid</title>
 <!--
-DIRECTION CONTRACT (Evolve)
-THESIS: Same product, one visual language. The Mods tab's qualities (honest states, consequence copy, per-row busy) become tokens and components everywhere. Status is the system: the colour a status has on the dashboard is the colour its embed has in Discord, one to one.
-WORLD: Embeds use the same six status colours plus one accent. One leading emoji for state only, sentence-case titles that name the action or object, errors as problem plus recovery, ephemeral by default for anything personal or failed.
-STORY: A player or admin reads one message and knows what happened, how bad it is, and what to do next, in English or German du-form.
-FIRST VIEWPORT: The colour map and the eight rules, then real messages in a Discord-like pane, EN and DE switchable.
-RISK: Rendered here as an approximation of Discord. Real width, wrapping and mobile layout are unverified until a test guild run.
+DIRECTION CONTRACT (Hybrid)
+THESIS: The same app, on a system. Keep today's charcoal and green so existing admins see the same product, and give every screen the Evolve token roles, shaped status chips and shared components so it finally speaks one language. Early phases fix the audit's must-haves on that foundation; later phases extend it, nothing is thrown away. Distinctive axes (operate mode): the shaped status system shared with Discord, and density. Everything else is conventional on purpose.
+WORLD: Charcoal surfaces (#15171a to #2a2e34), one green accent with dark on-accent text, system fonts, 7px and 10px radii, hairline borders, status chips with distinct shapes, no animation beyond spinners and one 180 ms entrance. Dark only.
+STORY: A player or admin reads one message and knows what happened, how bad it is and what to do next, in English or German du-form.
+FIRST VIEWPORT: The colour map and the rules, then real messages in a Discord-like pane with an EN and DE switch.
+RISK: Hybrids can inherit both parents' weaknesses: generic admin look (Polish) and a wide migration (Evolve). The mitigation is the phase plan: every phase ships alone and stops cleanly.
 -->
 <link rel="stylesheet" href="tokens.css">
 <link rel="stylesheet" href="style.css">
@@ -32,27 +32,25 @@ RISK: Rendered here as an approximation of Discord. Real width, wrapping and mob
 <a class="skip" href="#main">Skip to content</a>
 <aside class="mock-bar" aria-label="Mockup controls">
   <span class="seg" role="group" aria-label="Language"><button type="button" data-lang-set="en" aria-pressed="true">English</button><button type="button" data-lang-set="de" aria-pressed="false">Deutsch</button></span>
-  <span class="demo">Messages marked DE exist in both languages. Others show English in both and use the same layout.</span>
+  <span class="demo">Every message exists in English and German. Player chat text stays as typed.</span>
   <a href="index.html">All screens</a>
 </aside>
 <main id="main" class="dc-wrap">
   <header class="page-head">
-    <nav class="crumbs" aria-label="Breadcrumb"><a href="index.html">Evolve</a><span aria-hidden="true">/</span><span aria-current="page">Discord</span></nav>
     <h1>Discord embed language</h1>
-    <p class="lede">The panes below are an approximation of Discord's dark theme, not a capture. Widths, wrapping and the phone layout are unverified until a run in a test guild.</p>
+    <p class="lede">The panes below are an approximation of Discord's dark theme, not a capture. Widths, wrapping and the phone layout are unverified until a run in a test guild. The colours are the dashboard's status colours, one to one.</p>
   </header>
 
   <section class="card" aria-labelledby="h-col">
-    <div class="card__head"><h2 id="h-col">Colour is status, one to one with the dashboard</h2><span class="card__meta">Dark-theme token values, used as the embed side bar</span></div>
+    <div class="card__head"><h2 id="h-col">Colour is status, one to one with the dashboard</h2><span class="card__meta">Token values from tokens.css, used as the embed side bar</span></div>
     <div class="card__body stack">
       <div class="swatches">
-        <div class="sw" style="--c:#4cd47a"><i></i><div><b>Online, success, applied</b><span class="small dim">#4CD47A, chip "Online" and "Applied"</span></div></div>
-        <div class="sw" style="--c:#f0b440"><i></i><div><b>Not responding, degraded, warning</b><span class="small dim">#F0B440, chip "Degraded"</span></div></div>
-        <div class="sw" style="--c:#ff6b66"><i></i><div><b>Offline, failure, denial</b><span class="small dim">#FF6B66, chip "Offline"</span></div></div>
-        <div class="sw" style="--c:#a3afb6"><i></i><div><b>Unknown, plain events</b><span class="small dim">#A3AFB6, join, leave, death</span></div></div>
+        <div class="sw" style="--c:#4ade80"><i></i><div><b>Online, success, applied</b><span class="small dim">#4ADE80. Also the only celebration colour (daily reward, challenge)</span></div></div>
+        <div class="sw" style="--c:#fbbf24"><i></i><div><b>Not responding, degraded, warning</b><span class="small dim">#FBBF24, chip "Degraded"</span></div></div>
+        <div class="sw" style="--c:#f87171"><i></i><div><b>Offline, failure, denial</b><span class="small dim">#F87171, chip "Offline"</span></div></div>
+        <div class="sw" style="--c:#9aa1ac"><i></i><div><b>Unknown, plain events</b><span class="small dim">#9AA1AC, join, leave, death</span></div></div>
         <div class="sw" style="--c:#b7a1ff"><i></i><div><b>Pending, waiting for you</b><span class="small dim">#B7A1FF, confirmations, applications</span></div></div>
-        <div class="sw" style="--c:#6bb8ff"><i></i><div><b>Info, running</b><span class="small dim">#6BB8FF, answers and progress</span></div></div>
-        <div class="sw" style="--c:#3cc8b4"><i></i><div><b>Accent, celebration only</b><span class="small dim">#3CC8B4, milestones, rewards, challenges</span></div></div>
+        <div class="sw" style="--c:#7cb4ff"><i></i><div><b>Info, running</b><span class="small dim">#7CB4FF, answers and progress</span></div></div>
       </div>
     </div>
   </section>
@@ -63,14 +61,17 @@ RISK: Rendered here as an approximation of Discord. Real width, wrapping and mob
       <table class="dc-rule-table">
         <thead><tr><th scope="col">Topic</th><th scope="col">Rule</th></tr></thead>
         <tbody>
-          <tr><th scope="row">Title</th><td>Names the object or the action, sentence case, 256 characters at most. "Server stopped", "Could not reach smp". "Success" and "Error" only as a last fallback. Server name goes in the title, not the footer.</td></tr>
+          <tr><th scope="row">Colour</th><td>Status only, the same seven values as the dashboard chips. Green success and online, amber warning and not responding, red failure and denial, grey unknown and plain events, violet pending (confirmations, applications), blue info and running. No separate celebration colour.</td></tr>
+          <tr><th scope="row">Title</th><td>Names the object or the action, sentence case, 256 characters at most. "Server stopped", "Could not reach smp". "Success" and "Error" only as a last fallback. The server name goes in the title, not the footer.</td></tr>
           <tr><th scope="row">Emoji</th><td>One leading emoji, only for server state: green, yellow, red, white circle. None in other titles, none instead of a button label.</td></tr>
-          <tr><th scope="row">Fields</th><td>Answer first, then facts. Inline fields for numbers (players, TPS, uptime), full width for text. At most 25 fields, each 1024 characters, whole embed under 6000. Builders split long lists into pages.</td></tr>
-          <tr><th scope="row">Footer</th><td>Empty by default. "Page n/m" lives on the pager row, not the footer. Server id only when the guild has more than one server and the title does not already say it. No "Requested by".</td></tr>
-          <tr><th scope="row">Timestamp</th><td>Only on live data: status, alerts. Times inside text use Discord timestamps so every viewer sees their own zone.</td></tr>
+          <tr><th scope="row">Fields</th><td>Identity first, then measures, then free text last. At most three inline per row. 25 fields, 1024 characters each, 6000 for the whole embed. Builders split long lists into pages.</td></tr>
+          <tr><th scope="row">Footer</th><td>Empty by default. "Page n/m" lives on the pager row as a disabled button. Server id only when the guild has more than one server and the title does not already say it. No "Requested by".</td></tr>
+          <tr><th scope="row">Timestamp</th><td>Only on live data: status and alerts. Times inside text use Discord timestamps so every viewer sees their own zone.</td></tr>
           <tr><th scope="row">Errors</th><td>Problem, then recovery, one or two sentences. No config paths, ids or stack text for non-admins. Always ephemeral.</td></tr>
           <tr><th scope="row">Ephemeral or public</th><td>Ephemeral: errors, denials, confirmations, personal data, config. Public: status, stats, leaderboards, moderation outcomes. The admin check runs before the reply is deferred, so a denial is never public.</td></tr>
-          <tr><th scope="row">Mentions</th><td>A role is pinged on the first failure and when severity rises. Recoveries and repeats never ping. Every bridge and alert message sets <code>allowedMentions</code> explicitly.</td></tr>
+          <tr><th scope="row">Confirm</th><td>One button row, a danger action and Cancel, with a 60 second expiry noted in the footer.</td></tr>
+          <tr><th scope="row">Pagination</th><td>Previous, a disabled "Page n/m", Next. After 3 minutes the buttons switch off instead of disappearing.</td></tr>
+          <tr><th scope="row">Mentions</th><td>A role is pinged on the first failure and when severity rises. Recoveries and repeats never ping. Every alert and bridge message sets <code>allowedMentions</code> explicitly.</td></tr>
           <tr><th scope="row">Language</th><td>German uses du. One word per concept: "Server" for Minecraft, "Discord-Server" for the guild, "Bot-Admin", "Kanal".</td></tr>
         </tbody>
       </table>
@@ -85,15 +86,15 @@ RISK: Rendered here as an approximation of Discord. Real width, wrapping and mob
       <div class="dc-msg"><div class="dc-av dc-av--bot" aria-hidden="true">MB</div><div>
         <div class="dc-slash"><span>ikarus_77</span> used <span>/status</span></div>
         <div class="dc-name">Minecraft Bot <span class="dc-tag">App</span> <span class="dc-time">Today at 14:36</span></div>
-        <div data-lang-only="en"><div class="dc-embed" style="--ec:#4cd47a"><div class="dc-embed__title">&#128994; smp: Online</div><div class="dc-embed__desc">Online now: Marlene_B, TheRedstoneKid, ikarus_77</div><div class="dc-fields"><div class="dc-field dc-field--i"><div class="dc-field__n">Players</div><div class="dc-field__v">3/20</div></div><div class="dc-field dc-field--i"><div class="dc-field__n">TPS</div><div class="dc-field__v">19.8</div></div><div class="dc-field dc-field--i"><div class="dc-field__n">Uptime</div><div class="dc-field__v">2 d 7 h</div></div><div class="dc-field"><div class="dc-field__n">Version</div><div class="dc-field__v">Fabric 1.21.1, 62 mods</div></div></div><div class="dc-foot">Today at 14:36</div></div></div>
-        <div data-lang-only="de"><div class="dc-embed" style="--ec:#4cd47a"><div class="dc-embed__title">&#128994; smp: Online</div><div class="dc-embed__desc">Gerade online: Marlene_B, TheRedstoneKid, ikarus_77</div><div class="dc-fields"><div class="dc-field dc-field--i"><div class="dc-field__n">Spieler</div><div class="dc-field__v">3/20</div></div><div class="dc-field dc-field--i"><div class="dc-field__n">TPS</div><div class="dc-field__v">19,8</div></div><div class="dc-field dc-field--i"><div class="dc-field__n">Laufzeit</div><div class="dc-field__v">2 d 7 h</div></div><div class="dc-field"><div class="dc-field__n">Version</div><div class="dc-field__v">Fabric 1.21.1, 62 Mods</div></div></div><div class="dc-foot">Heute um 14:36</div></div></div>
+        <div data-lang-only="en"><div class="dc-embed" style="--ec:#4ade80"><div class="dc-embed__title">&#128994; smp: Online</div><div class="dc-embed__desc">Online now: Marlene_B, TheRedstoneKid, ikarus_77</div><div class="dc-fields"><div class="dc-field dc-field--i"><div class="dc-field__n">Players</div><div class="dc-field__v">3/20</div></div><div class="dc-field dc-field--i"><div class="dc-field__n">TPS</div><div class="dc-field__v">19.8</div></div><div class="dc-field dc-field--i"><div class="dc-field__n">Uptime</div><div class="dc-field__v">2 d 7 h</div></div><div class="dc-field"><div class="dc-field__n">Version</div><div class="dc-field__v">Fabric 1.21.1, 62 mods</div></div></div><div class="dc-foot">Today at 14:36</div></div></div>
+        <div data-lang-only="de"><div class="dc-embed" style="--ec:#4ade80"><div class="dc-embed__title">&#128994; smp: Online</div><div class="dc-embed__desc">Gerade online: Marlene_B, TheRedstoneKid, ikarus_77</div><div class="dc-fields"><div class="dc-field dc-field--i"><div class="dc-field__n">Spieler</div><div class="dc-field__v">3/20</div></div><div class="dc-field dc-field--i"><div class="dc-field__n">TPS</div><div class="dc-field__v">19,8</div></div><div class="dc-field dc-field--i"><div class="dc-field__n">Laufzeit</div><div class="dc-field__v">2 d 7 h</div></div><div class="dc-field"><div class="dc-field__n">Version</div><div class="dc-field__v">Fabric 1.21.1, 62 Mods</div></div></div><div class="dc-foot">Heute um 14:36</div></div></div>
       </div></div>
       <hr class="dc-sep">
       <div class="dc-msg"><div class="dc-av dc-av--bot" aria-hidden="true">MB</div><div>
         <div class="dc-slash"><span>ikarus_77</span> used <span>/status server:creative</span></div>
         <div class="dc-name">Minecraft Bot <span class="dc-tag">App</span> <span class="dc-time">Today at 14:36</span></div>
-        <div data-lang-only="en"><div class="dc-embed" style="--ec:#ff6b66"><div class="dc-embed__title">&#128308; creative: Offline</div><div class="dc-embed__desc">The server was stopped by marlene at 12:58. Start it from the dashboard or with /server start.</div><div class="dc-foot">Today at 14:36</div></div></div>
-        <div data-lang-only="de"><div class="dc-embed" style="--ec:#ff6b66"><div class="dc-embed__title">&#128308; creative: Offline</div><div class="dc-embed__desc">Marlene hat den Server um 12:58 gestoppt. Starte ihn im Dashboard oder mit /server start.</div><div class="dc-foot">Heute um 14:36</div></div></div>
+        <div data-lang-only="en"><div class="dc-embed" style="--ec:#f87171"><div class="dc-embed__title">&#128308; creative: Offline</div><div class="dc-embed__desc">The server was stopped by marlene at 12:58. Start it from the dashboard or with /server start.</div><div class="dc-foot">Today at 14:36</div></div></div>
+        <div data-lang-only="de"><div class="dc-embed" style="--ec:#f87171"><div class="dc-embed__title">&#128308; creative: Offline</div><div class="dc-embed__desc">Marlene hat den Server um 12:58 gestoppt. Starte ihn im Dashboard oder mit /server start.</div><div class="dc-foot">Heute um 14:36</div></div></div>
       </div></div>
     </div>
   </section>
@@ -112,8 +113,8 @@ RISK: Rendered here as an approximation of Discord. Real width, wrapping and mob
       <hr class="dc-sep">
       <div class="dc-msg"><div class="dc-av dc-av--bot" aria-hidden="true">MB</div><div>
         <div class="dc-name">Minecraft Bot <span class="dc-tag">App</span> <span class="dc-time">Today at 14:40</span></div>
-        <div data-lang-only="en"><div class="dc-embed" style="--ec:#6bb8ff"><div class="dc-embed__title">Stopping smp</div><div class="dc-embed__desc">domenic stopped the server. Warning sent to 3 players. Saving the world, then shutting down.</div><div class="dc-foot">Public so the channel knows why smp goes offline.</div></div></div>
-        <div data-lang-only="de"><div class="dc-embed" style="--ec:#6bb8ff"><div class="dc-embed__title">smp wird gestoppt</div><div class="dc-embed__desc">domenic hat den Server gestoppt. 3 Spieler wurden gewarnt. Die Welt wird gespeichert, danach fährt der Server herunter.</div><div class="dc-foot">Öffentlich, damit der Kanal weiß, warum smp offline geht.</div></div></div>
+        <div data-lang-only="en"><div class="dc-embed" style="--ec:#7cb4ff"><div class="dc-embed__title">Stopping smp</div><div class="dc-embed__desc">domenic stopped the server. Warning sent to 3 players. Saving the world, then shutting down.</div><div class="dc-foot">Public so the channel knows why smp goes offline.</div></div></div>
+        <div data-lang-only="de"><div class="dc-embed" style="--ec:#7cb4ff"><div class="dc-embed__title">smp wird gestoppt</div><div class="dc-embed__desc">domenic hat den Server gestoppt. 3 Spieler wurden gewarnt. Die Welt wird gespeichert, danach fährt der Server herunter.</div><div class="dc-foot">Öffentlich, damit der Kanal weiß, warum smp offline geht.</div></div></div>
       </div></div>
     </div>
   </section>
@@ -124,15 +125,15 @@ RISK: Rendered here as an approximation of Discord. Real width, wrapping and mob
       <div class="dc-msg"><div class="dc-av dc-av--bot" aria-hidden="true">MB</div><div>
         <div class="dc-slash"><span>nils_builds</span> used <span>/players</span></div>
         <div class="dc-name">Minecraft Bot <span class="dc-tag">App</span> <span class="dc-time">Today at 14:41</span></div>
-        <div data-lang-only="en"><div class="dc-embed" style="--ec:#ff6b66"><div class="dc-embed__title">Could not reach smp</div><div class="dc-embed__desc">The player list is not available because smp did not answer. Try again in a minute. If it keeps failing, tell a bot admin.</div></div><div class="dc-eph"><b>Only you can see this</b></div></div>
-        <div data-lang-only="de"><div class="dc-embed" style="--ec:#ff6b66"><div class="dc-embed__title">smp ist nicht erreichbar</div><div class="dc-embed__desc">Die Spielerliste ist gerade nicht verfügbar, weil smp nicht geantwortet hat. Versuch es in einer Minute noch einmal. Wenn es so bleibt, sag einem Bot-Admin Bescheid.</div></div><div class="dc-eph"><b>Nur du kannst das sehen</b></div></div>
+        <div data-lang-only="en"><div class="dc-embed" style="--ec:#f87171"><div class="dc-embed__title">Could not reach smp</div><div class="dc-embed__desc">The player list is not available because smp did not answer. Try again in a minute. If it keeps failing, tell a bot admin.</div></div><div class="dc-eph"><b>Only you can see this</b></div></div>
+        <div data-lang-only="de"><div class="dc-embed" style="--ec:#f87171"><div class="dc-embed__title">smp ist nicht erreichbar</div><div class="dc-embed__desc">Die Spielerliste ist gerade nicht verfügbar, weil smp nicht geantwortet hat. Versuch es in einer Minute noch einmal. Wenn es so bleibt, sag einem Bot-Admin Bescheid.</div></div><div class="dc-eph"><b>Nur du kannst das sehen</b></div></div>
       </div></div>
       <hr class="dc-sep">
       <div class="dc-msg"><div class="dc-av dc-av--bot" aria-hidden="true">MB</div><div>
         <div class="dc-slash"><span>nils_builds</span> used <span>/server stop</span></div>
         <div class="dc-name">Minecraft Bot <span class="dc-tag">App</span> <span class="dc-time">Today at 14:42</span></div>
-        <div data-lang-only="en"><div class="dc-embed" style="--ec:#ff6b66"><div class="dc-embed__title">Bot admins only</div><div class="dc-embed__desc">/server stop is for bot admins. Ask one of them if the server needs to stop.</div></div><div class="dc-eph"><b>Only you can see this</b></div></div>
-        <div data-lang-only="de"><div class="dc-embed" style="--ec:#ff6b66"><div class="dc-embed__title">Nur für Bot-Admins</div><div class="dc-embed__desc">/server stop ist Bot-Admins vorbehalten. Frag einen von ihnen, wenn der Server gestoppt werden muss.</div></div><div class="dc-eph"><b>Nur du kannst das sehen</b></div></div>
+        <div data-lang-only="en"><div class="dc-embed" style="--ec:#f87171"><div class="dc-embed__title">Bot admins only</div><div class="dc-embed__desc">/server stop is for bot admins. Ask one of them if the server needs to stop.</div></div><div class="dc-eph"><b>Only you can see this</b></div></div>
+        <div data-lang-only="de"><div class="dc-embed" style="--ec:#f87171"><div class="dc-embed__title">Nur für Bot-Admins</div><div class="dc-embed__desc">/server stop ist Bot-Admins vorbehalten. Frag einen von ihnen, wenn der Server gestoppt werden muss.</div></div><div class="dc-eph"><b>Nur du kannst das sehen</b></div></div>
       </div></div>
     </div>
   </section>
@@ -142,9 +143,13 @@ RISK: Rendered here as an approximation of Discord. Real width, wrapping and mob
     <div class="dc"><div class="dc-msg"><div class="dc-av dc-av--bot" aria-hidden="true">MB</div><div>
       <div class="dc-slash"><span>marlene_b</span> used <span>/players</span></div>
       <div class="dc-name">Minecraft Bot <span class="dc-tag">App</span> <span class="dc-time">Today at 14:44</span></div>
-      <div class="dc-embed" style="--ec:#6bb8ff"><div class="dc-embed__title">Players on smp</div><div class="dc-embed__desc">3 online, 41 known. Sorted by playtime.</div>
+      <div data-lang-only="en"><div class="dc-embed" style="--ec:#7cb4ff"><div class="dc-embed__title">Players on smp</div><div class="dc-embed__desc">3 online, 41 known. Sorted by playtime.</div>
         <div class="dc-field"><div class="dc-field__v">1. <b>Marlene_B</b>, 212 h, online<br>2. <b>TheRedstoneKid</b>, 188 h, online<br>3. <b>ikarus_77</b>, 164 h, online<br>4. <b>creeperchen</b>, 131 h, last seen 2 d ago<br>5. <b>Tobi2k</b>, 97 h, last seen 4 d ago<br>6. <b>Nils_Builds</b>, 54 h, last seen 1 h ago<br>7. <b>Lena_Fox</b>, 49 h, last seen 6 d ago<br>8. <b>kartoffel_pro</b>, 33 h, last seen 11 d ago</div></div></div>
       <div class="dc-btns"><span class="dc-btn dc-btn--off">Previous</span><span class="dc-btn dc-btn--off">Page 1/6</span><span class="dc-btn dc-btn--pri">Next</span></div>
+      <div data-lang-only="de"><div class="dc-embed" style="--ec:#7cb4ff"><div class="dc-embed__title">Spieler auf smp</div><div class="dc-embed__desc">3 online, 41 bekannt. Sortiert nach Spielzeit.</div>
+        <div class="dc-field"><div class="dc-field__v">1. <b>Marlene_B</b>, 212 Std., online<br>2. <b>TheRedstoneKid</b>, 188 Std., online<br>3. <b>ikarus_77</b>, 164 Std., online<br>4. <b>creeperchen</b>, 131 Std., zuletzt vor 2 Tagen<br>5. <b>Tobi2k</b>, 97 Std., zuletzt vor 4 Tagen<br>6. <b>Nils_Builds</b>, 54 Std., zuletzt vor 1 Std.<br>7. <b>Lena_Fox</b>, 49 Std., zuletzt vor 6 Tagen<br>8. <b>kartoffel_pro</b>, 33 Std., zuletzt vor 11 Tagen</div></div></div>
+      <div class="dc-btns"><span class="dc-btn dc-btn--off">Zurück</span><span class="dc-btn dc-btn--off">Seite 1/6</span><span class="dc-btn dc-btn--pri">Weiter</span></div></div>
+      </div>
       <div class="dc-note">The buttons switch off after 3 minutes instead of disappearing, so the message keeps its shape.</div>
     </div></div></div>
   </section>
@@ -154,10 +159,14 @@ RISK: Rendered here as an approximation of Discord. Real width, wrapping and mob
     <div class="dc"><div class="dc-msg"><div class="dc-av dc-av--bot" aria-hidden="true">MB</div><div>
       <div class="dc-slash"><span>nils_builds</span> used <span>/mods</span></div>
       <div class="dc-name">Minecraft Bot <span class="dc-tag">App</span> <span class="dc-time">Today at 14:45</span></div>
-      <div class="dc-embed" style="--ec:#6bb8ff"><div class="dc-embed__title">Mods on smp</div><div class="dc-embed__desc">62 mods on Fabric 1.21.1. Install them all to join.</div>
+      <div data-lang-only="en"><div class="dc-embed" style="--ec:#7cb4ff"><div class="dc-embed__title">Mods on smp</div><div class="dc-embed__desc">62 mods on Fabric 1.21.1. Install them all to join.</div>
         <div class="dc-field"><div class="dc-field__n">Client and server (41)</div><div class="dc-field__v">Create, Create Deco, Fabric API, Farmer's Delight Refabricated, Supplementaries, Terralith, Waystones, ...</div></div>
         <div class="dc-field"><div class="dc-field__n">Client only, optional (11)</div><div class="dc-field__v">Iris Shaders, Sodium, Xaero's Minimap, Xaero's World Map, ...</div></div></div>
-      <div class="dc-btns"><span class="dc-btn dc-btn--off">Previous</span><span class="dc-btn dc-btn--off">Page 1/3</span><span class="dc-btn dc-btn--pri">Next</span></div>
+      <div class="dc-btns"><span class="dc-btn dc-btn--off">Previous</span><span class="dc-btn dc-btn--off">Page 1/3</span><span class="dc-btn dc-btn--pri">Next</span></div></div>
+      <div data-lang-only="de"><div class="dc-embed" style="--ec:#7cb4ff"><div class="dc-embed__title">Mods auf smp</div><div class="dc-embed__desc">62 Mods auf Fabric 1.21.1. Installiere alle, um beizutreten.</div>
+        <div class="dc-field"><div class="dc-field__n">Client und Server (41)</div><div class="dc-field__v">Create, Create Deco, Fabric API, Farmer's Delight Refabricated, Supplementaries, Terralith, Waystones, ...</div></div>
+        <div class="dc-field"><div class="dc-field__n">Nur Client, optional (11)</div><div class="dc-field__v">Iris Shaders, Sodium, Xaero's Minimap, Xaero's World Map, ...</div></div></div>
+      <div class="dc-btns"><span class="dc-btn dc-btn--off">Zurück</span><span class="dc-btn dc-btn--off">Seite 1/3</span><span class="dc-btn dc-btn--pri">Weiter</span></div></div>
       <div class="dc-note">Pages are built to stay under the 1024 character field limit and the 6000 character embed total, so a 200 mod pack still pages cleanly.</div>
     </div></div></div>
   </section>
@@ -167,15 +176,15 @@ RISK: Rendered here as an approximation of Discord. Real width, wrapping and mob
     <div class="dc">
       <div class="dc-msg"><div class="dc-av dc-av--bot" aria-hidden="true">MB</div><div>
         <div class="dc-name">Minecraft Bot <span class="dc-tag">App</span> <span class="dc-time">Today at 14:12</span></div>
-        <div data-lang-only="en"><div class="dc-text"><span class="dc-mention">@Server Admins</span></div><div class="dc-embed" style="--ec:#ff6b66"><div class="dc-embed__title">&#128308; smp is offline</div><div class="dc-embed__desc">The process ended without a stop command at 14:12. The bot checks every 30 s and tells you when it is back.</div><div class="dc-fields"><div class="dc-field dc-field--i"><div class="dc-field__n">Last seen</div><div class="dc-field__v">5 minutes ago</div></div><div class="dc-field dc-field--i"><div class="dc-field__n">Players hit</div><div class="dc-field__v">3</div></div><div class="dc-field"><div class="dc-field__n">Hint</div><div class="dc-field__v">Crash report found: crash-2026-10-10_14.12.01-server.txt</div></div></div><div class="dc-foot">Today at 14:12</div></div></div>
-        <div data-lang-only="de"><div class="dc-text"><span class="dc-mention">@Server Admins</span></div><div class="dc-embed" style="--ec:#ff6b66"><div class="dc-embed__title">&#128308; smp ist offline</div><div class="dc-embed__desc">Der Server wurde um 14:12 ohne Stop-Befehl beendet. Der Bot prüft alle 30 Sekunden und meldet sich, sobald er wieder läuft.</div><div class="dc-fields"><div class="dc-field dc-field--i"><div class="dc-field__n">Zuletzt gesehen</div><div class="dc-field__v">vor 5 Minuten</div></div><div class="dc-field dc-field--i"><div class="dc-field__n">Betroffene Spieler</div><div class="dc-field__v">3</div></div><div class="dc-field"><div class="dc-field__n">Hinweis</div><div class="dc-field__v">Absturzbericht gefunden: crash-2026-10-10_14.12.01-server.txt</div></div></div><div class="dc-foot">Heute um 14:12</div></div></div>
+        <div data-lang-only="en"><div class="dc-text"><span class="dc-mention">@Server Admins</span></div><div class="dc-embed" style="--ec:#f87171"><div class="dc-embed__title">&#128308; smp is offline</div><div class="dc-embed__desc">The process ended without a stop command at 14:12. The bot checks every 30 s and tells you when it is back.</div><div class="dc-fields"><div class="dc-field dc-field--i"><div class="dc-field__n">Last seen</div><div class="dc-field__v">5 minutes ago</div></div><div class="dc-field dc-field--i"><div class="dc-field__n">Players hit</div><div class="dc-field__v">3</div></div><div class="dc-field"><div class="dc-field__n">Hint</div><div class="dc-field__v">Crash report found: crash-2026-10-10_14.12.01-server.txt</div></div></div><div class="dc-foot">Today at 14:12</div></div></div>
+        <div data-lang-only="de"><div class="dc-text"><span class="dc-mention">@Server Admins</span></div><div class="dc-embed" style="--ec:#f87171"><div class="dc-embed__title">&#128308; smp ist offline</div><div class="dc-embed__desc">Der Server wurde um 14:12 ohne Stop-Befehl beendet. Der Bot prüft alle 30 Sekunden und meldet sich, sobald er wieder läuft.</div><div class="dc-fields"><div class="dc-field dc-field--i"><div class="dc-field__n">Zuletzt gesehen</div><div class="dc-field__v">vor 5 Minuten</div></div><div class="dc-field dc-field--i"><div class="dc-field__n">Betroffene Spieler</div><div class="dc-field__v">3</div></div><div class="dc-field"><div class="dc-field__n">Hinweis</div><div class="dc-field__v">Absturzbericht gefunden: crash-2026-10-10_14.12.01-server.txt</div></div></div><div class="dc-foot">Heute um 14:12</div></div></div>
         <div class="dc-note">Pings the role once, on the first failure. If it is still down at 15:12 and severity rises (for example a crash loop), it pings again.</div>
       </div></div>
       <hr class="dc-sep">
       <div class="dc-msg"><div class="dc-av dc-av--bot" aria-hidden="true">MB</div><div>
         <div class="dc-name">Minecraft Bot <span class="dc-tag">App</span> <span class="dc-time">Today at 14:16</span></div>
-        <div data-lang-only="en"><div class="dc-embed" style="--ec:#4cd47a"><div class="dc-embed__title">&#128994; smp is back online</div><div class="dc-embed__desc">Down for 4 min 18 s. It started cleanly, no crash loop.</div><div class="dc-foot">Today at 14:16</div></div></div>
-        <div data-lang-only="de"><div class="dc-embed" style="--ec:#4cd47a"><div class="dc-embed__title">&#128994; smp ist wieder online</div><div class="dc-embed__desc">Ausfall: 4 Min. 18 Sek. Der Server ist sauber gestartet, kein Absturz-Loop.</div><div class="dc-foot">Heute um 14:16</div></div></div>
+        <div data-lang-only="en"><div class="dc-embed" style="--ec:#4ade80"><div class="dc-embed__title">&#128994; smp is back online</div><div class="dc-embed__desc">Down for 4 min 18 s. It started cleanly, no crash loop.</div><div class="dc-foot">Today at 14:16</div></div></div>
+        <div data-lang-only="de"><div class="dc-embed" style="--ec:#4ade80"><div class="dc-embed__title">&#128994; smp ist wieder online</div><div class="dc-embed__desc">Ausfall: 4 Min. 18 Sek. Der Server ist sauber gestartet, kein Absturz-Loop.</div><div class="dc-foot">Heute um 14:16</div></div></div>
         <div class="dc-note">No mention. <code>allowedMentions: { parse: [] }</code> is set on this message.</div>
       </div></div>
     </div>
@@ -196,11 +205,17 @@ RISK: Rendered here as an approximation of Discord. Real width, wrapping and mob
       </div></div>
       <div class="dc-msg"><div class="dc-av dc-av--bot" aria-hidden="true">MB</div><div>
         <div class="dc-name">Minecraft Bot <span class="dc-tag">App</span> <span class="dc-time">Today at 14:50</span></div>
-        <div class="dc-embed" style="--ec:#a3afb6;padding-bottom:8px"><div class="dc-embed__desc"><b>Nils_Builds</b> joined smp</div></div>
-        <div class="dc-embed" style="--ec:#a3afb6;padding-bottom:8px"><div class="dc-embed__desc"><b>creeperchen</b> was blown up by Creeper</div></div>
-        <div class="dc-embed" style="--ec:#a3afb6;padding-bottom:8px"><div class="dc-embed__desc"><b>ikarus_77</b> made the advancement <b>Diamonds!</b></div></div>
-        <div class="dc-embed" style="--ec:#3cc8b4;padding-bottom:8px"><div class="dc-embed__desc"><b>Marlene_B</b> completed the challenge <b>How Did We Get Here?</b></div></div>
-        <div class="dc-note">Joins, leaves and deaths are plain events, grey and one line, never red. Only a challenge gets the accent.</div>
+        <div data-lang-only="en"><div class="dc-embed" style="--ec:#9aa1ac;padding-bottom:8px"><div class="dc-embed__desc"><b>Nils_Builds</b> joined smp</div></div>
+        <div class="dc-embed" style="--ec:#9aa1ac;padding-bottom:8px"><div class="dc-embed__desc"><b>creeperchen</b> was blown up by Creeper</div></div>
+        <div class="dc-embed" style="--ec:#9aa1ac;padding-bottom:8px"><div class="dc-embed__desc"><b>ikarus_77</b> made the advancement <b>Diamonds!</b></div></div>
+        <div class="dc-embed" style="--ec:#4ade80;padding-bottom:8px"><div class="dc-embed__desc"><b>Marlene_B</b> completed the challenge <b>How Did We Get Here?</b></div></div>
+        </div>
+        <div data-lang-only="de"><div class="dc-embed" style="--ec:#9aa1ac;padding-bottom:8px"><div class="dc-embed__desc"><b>Nils_Builds</b> ist smp beigetreten</div></div>
+        <div class="dc-embed" style="--ec:#9aa1ac;padding-bottom:8px"><div class="dc-embed__desc"><b>creeperchen</b> wurde von einem Creeper in die Luft gesprengt</div></div>
+        <div class="dc-embed" style="--ec:#9aa1ac;padding-bottom:8px"><div class="dc-embed__desc"><b>ikarus_77</b> hat den Fortschritt <b>Diamonds!</b> erreicht</div></div>
+        <div class="dc-embed" style="--ec:#4ade80;padding-bottom:8px"><div class="dc-embed__desc"><b>Marlene_B</b> hat die Herausforderung <b>How Did We Get Here?</b> abgeschlossen</div></div>
+        </div>
+        <div class="dc-note">Joins, leaves and deaths are plain events, grey and one line, never red. A challenge gets the success green, there is no separate celebration colour.</div>
       </div></div>
     </div>
   </section>
@@ -210,8 +225,8 @@ RISK: Rendered here as an approximation of Discord. Real width, wrapping and mob
     <div class="dc"><div class="dc-msg"><div class="dc-av dc-av--bot" aria-hidden="true">MB</div><div>
       <div class="dc-slash"><span>ikarus_77</span> used <span>/daily</span></div>
       <div class="dc-name">Minecraft Bot <span class="dc-tag">App</span> <span class="dc-time">Today at 09:02</span></div>
-      <div data-lang-only="en"><div class="dc-embed" style="--ec:#3cc8b4"><div class="dc-embed__title">Daily reward claimed</div><div class="dc-embed__desc">Day 6 of your streak. 3 x Diamond and 16 x Cooked Beef were sent to ikarus_77 on smp.</div><div class="dc-fields"><div class="dc-field dc-field--i"><div class="dc-field__n">Streak</div><div class="dc-field__v">6 days</div></div><div class="dc-field dc-field--i"><div class="dc-field__n">Next reward</div><div class="dc-field__v">in 15 hours</div></div></div></div><div class="dc-eph"><b>Only you can see this</b></div></div>
-      <div data-lang-only="de"><div class="dc-embed" style="--ec:#3cc8b4"><div class="dc-embed__title">Tägliche Belohnung abgeholt</div><div class="dc-embed__desc">Tag 6 deiner Serie. 3 x Diamant und 16 x Gebratenes Rindfleisch wurden an ikarus_77 auf smp geschickt.</div><div class="dc-fields"><div class="dc-field dc-field--i"><div class="dc-field__n">Serie</div><div class="dc-field__v">6 Tage</div></div><div class="dc-field dc-field--i"><div class="dc-field__n">Nächste Belohnung</div><div class="dc-field__v">in 15 Stunden</div></div></div></div><div class="dc-eph"><b>Nur du kannst das sehen</b></div></div>
+      <div data-lang-only="en"><div class="dc-embed" style="--ec:#4ade80"><div class="dc-embed__title">Daily reward claimed</div><div class="dc-embed__desc">Day 6 of your streak. 3 x Diamond and 16 x Cooked Beef were sent to ikarus_77 on smp.</div><div class="dc-fields"><div class="dc-field dc-field--i"><div class="dc-field__n">Streak</div><div class="dc-field__v">6 days</div></div><div class="dc-field dc-field--i"><div class="dc-field__n">Next reward</div><div class="dc-field__v">in 15 hours</div></div></div></div><div class="dc-eph"><b>Only you can see this</b></div></div>
+      <div data-lang-only="de"><div class="dc-embed" style="--ec:#4ade80"><div class="dc-embed__title">Tägliche Belohnung abgeholt</div><div class="dc-embed__desc">Tag 6 deiner Serie. 3 x Diamant und 16 x Gebratenes Rindfleisch wurden an ikarus_77 auf smp geschickt.</div><div class="dc-fields"><div class="dc-field dc-field--i"><div class="dc-field__n">Serie</div><div class="dc-field__v">6 Tage</div></div><div class="dc-field dc-field--i"><div class="dc-field__n">Nächste Belohnung</div><div class="dc-field__v">in 15 Stunden</div></div></div></div><div class="dc-eph"><b>Nur du kannst das sehen</b></div></div>
     </div></div></div>
   </section>
 
