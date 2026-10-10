@@ -17,8 +17,4 @@ export interface BackupSummary {
 // here so core's own callers keep importing backup shapes from one place.
 export type { BackupFileInfo, BackupFileIndex } from "@mcbot/schema/contract.js";
 
-export interface ScriptResult {
-  output: string;
-  stderr: string;
-  exitCode: number | null;
-}
+export type { ScriptResult } from "@mcbot/schema/wire/index.js";

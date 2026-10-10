@@ -16,6 +16,22 @@ export type * from "./config.js";
 // point at the migration instead of reporting a bare "apiUrl is required".
 export { REMOVED_LOCAL_SERVER_FIELDS } from "./config.js";
 export type * from "./contract.js";
+// The wrapper's wire contract: types generated from its OpenAPI document,
+// plus the names the bot and dashboard use for them.
+export type {
+  WireSchemas,
+  ScriptResult,
+  ConfigFileInfo,
+  InstalledMod,
+  InstalledMods,
+  ModToggleResult,
+  ModAddResult,
+  ModRemoveResult,
+  ModUpdateCheck,
+  ModApplyResult,
+  BackupDeleteResult,
+  RemoteHostInfo,
+} from "./wire/index.js";
 // Runtime values (the leaderboard-interval contract) alongside the stat
 // shapes, so the scheduler and the snapshot retention policy size periods
 // from one definition — hence a value re-export rather than `export type *`.

@@ -7,6 +7,7 @@
  * This module must stay isomorphic: types only, no Node imports.
  */
 
+import type { BackupFileIndexBody } from "./wire/index.js";
 import type {
   ServerState,
   RconState,
@@ -14,17 +15,6 @@ import type {
   HealthSource,
 } from "./serverState.js";
 
-/**
- * One archive in a server's backups directory (wrapper >= 3.3.0).
- *
- * `id` is an opaque handle produced by the wrapper's index and is the ONLY
- * file reference any client sends back — no layer here, in the dashboard, or
- * in the browser ever names a path.
- *
- * Lives here rather than in @mcbot/core because the browser reads it: the
- * frontend bundles @mcbot/schema, and core is off-limits to it (core imports
- * Node built-ins). core re-exports these for its own callers.
- */
 /**
  * Attached to any response served from the last-known cache instead of a live
  * wrapper read.
@@ -55,19 +45,16 @@ export interface QueuedWriteResult {
   keys: string[][];
 }
 
-export interface BackupFileInfo {
-  id: string;
-  tier: string;
-  name: string;
-  sizeBytes: number;
-  mtimeMs: number;
-}
+/**
+ * One archive in a server's backups directory. `id` is an opaque handle
+ * produced by the wrapper's index and is the ONLY file reference any client
+ * sends back; no layer here, in the dashboard, or in the browser ever names a
+ * path. Declared by the wrapper's contract (src/schema/wire) and re-exported
+ * because the browser reads it too.
+ */
+export type { BackupFileInfo } from "./wire/index.js";
 
-export interface BackupFileIndex {
-  files: BackupFileInfo[];
-  /** Pass back as `cursor`. Null when the listing is complete. */
-  nextCursor: string | null;
-  total: number;
+export interface BackupFileIndex extends BackupFileIndexBody {
   /** Set when served from cache because the wrapper did not answer. */
   stale?: StaleInfo | null;
 }
