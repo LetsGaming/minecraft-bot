@@ -5,6 +5,7 @@
  * browser closed the tab.
  */
 import type { Session } from "../auth/auth.js";
+import { sessionHolds } from "../auth/capabilities.js";
 import type { ConsoleEvent } from "./consoleHub.js";
 
 export interface OpenStream {
@@ -16,9 +17,43 @@ export interface OpenStream {
 
 const open = new Set<OpenStream>();
 
+/** How often each open stream re-checks its viewer, reload event or not. */
+export const REVALIDATE_INTERVAL_MS = 30_000;
+
+/**
+ * Does this viewer still pass the checks the route made on connect, against
+ * the current config? Identity goes stale in two ways: the cookie expires, and
+ * the grants/adminUsers that admitted it change.
+ */
+export function streamStillAllowed(
+  session: Session,
+  serverId: string,
+  now: number = Date.now(),
+): boolean {
+  return session.exp > now && sessionHolds(session, "server:read", serverId);
+}
+
+const REVOKED = {
+  type: "closed",
+  reason: "revoked",
+  detail: "Your access to this console was revoked.",
+} as const;
+
+/**
+ * Track an open stream and re-check its viewer on a bounded interval, so a
+ * revoked user cannot keep reading for the rest of the session even when no
+ * config reload event fires. The returned function stops the timer.
+ */
 export function registerStream(stream: OpenStream): () => void {
   open.add(stream);
-  return () => open.delete(stream);
+  const timer = setInterval(() => {
+    if (!streamStillAllowed(stream.session, stream.serverId)) stream.close(REVOKED);
+  }, REVALIDATE_INTERVAL_MS);
+  timer.unref();
+  return () => {
+    clearInterval(timer);
+    open.delete(stream);
+  };
 }
 
 export function openStreamCount(serverId?: string): number {
@@ -47,11 +82,7 @@ export function closeRevokedStreams(
   for (const stream of [...open]) {
     if (stillAllowed(stream.session, stream.serverId)) continue;
     closed += 1;
-    stream.close({
-      type: "closed",
-      reason: "revoked",
-      detail: "Your access to this console was revoked.",
-    });
+    stream.close(REVOKED);
   }
   return closed;
 }

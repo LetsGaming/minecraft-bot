@@ -10,8 +10,11 @@ import { forget } from "@mcbot/core/utils/wrapper/lastKnown.js";
 import { forgetServerFeatures } from "../status/status.js";
 import { forgetBreaker } from "@mcbot/core/utils/server/circuitBreaker.js";
 import { forgetGamePort } from "@mcbot/core/utils/server/serverAccess.js";
-import { sessionHolds } from "../auth/capabilities.js";
-import { closeRevokedStreams, closeStreamsForServer } from "../console/streamRegistry.js";
+import {
+  closeRevokedStreams,
+  closeStreamsForServer,
+  streamStillAllowed,
+} from "../console/streamRegistry.js";
 import type { BotConfig } from "@mcbot/core/types/index.js";
 
 export interface WebReconcileResult {
@@ -35,9 +38,7 @@ function dropServerCaches(serverId: string): void {
 
 /** Close open console streams whose session no longer holds server:read. */
 export function revalidateOpenStreams(): number {
-  return closeRevokedStreams((session, serverId) =>
-    sessionHolds(session, "server:read", serverId),
-  );
+  return closeRevokedStreams(streamStillAllowed);
 }
 
 /**
