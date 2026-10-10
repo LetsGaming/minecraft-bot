@@ -74,6 +74,29 @@ Functions are deliberately thin: one route each, raw data back, no business
 logic. Nothing in the bot imports `fs` or `child_process` for server state,
 because there is nothing to import it for — the files are on another machine.
 
+`serverAccess.ts` is a barrel: it re-exports the public names, and the code
+lives by feature under `src/core/utils/server/access/`. Callers keep importing
+`serverAccess`; `tests/server/serverAccessExports.test.ts` pins the export list.
+
+| Module | Responsibility |
+|---|---|
+| `apiClient` | `apiGet`/`apiGetRaw`/`apiPost`/`apiDelete`, URL building, timeouts, circuit breaker wiring, `RateLimitedError` |
+| `health` | `getHealth` (wrapper first, direct ping as second opinion), `isRunning`, `getList`, `getTps`, game-port memory |
+| `commands` | `sendCommandOutcome` and its reply parsing |
+| `host` | wrapper `/info` (`getRemoteInfo`), `versionAtLeast` |
+| `manifest` | `/manifest`, advertised script timeouts, `verifyWrapperContract` |
+| `players` | whitelist and usercache |
+| `stats` | level name, per-player stats files, UUID sink guard |
+| `mods`, `modCompat` | installed mod list and management; background compatibility job |
+| `backups` | backup summary, archive index, streamed download, restore, delete |
+| `configFiles` | mod config file index, read, write (etag), revert |
+| `capabilityProbe` | `detectCapabilities` |
+| `scripts` | `runScript`, `ScriptStillRunningError` |
+| `logs` | `tailLog`, log stream URL and `openLogStream` |
+
+Dependencies point one way: every module may use `apiClient`; `manifest` uses
+`host`; `modCompat` and `scripts` use `manifest`. Nothing imports the barrel.
+
 `RconClient` and the `execCommand`/sudo layer used to sit under this and are
 gone as of 5.0.0. The wrapper has them.
 
@@ -229,7 +252,7 @@ review.
 | `bot/logWatcher/watchers/**` | `ServerInstance`, embeds, logger | `bot/commands/*` |
 | `core/utils/minecraft/*` | core utils, server, serverAccess, logger | embeds, discord.js |
 | `bot/utils/embeds/statEmbeds` | statUtils, embedUtils, discord.js | server.ts, config.ts |
-| `core/utils/server/serverAccess` | `fetch`, types, `sseLineStream` | discord.js, `bot/commands`, `fs`, `child_process` |
+| `core/utils/server/serverAccess` (+ `access/*`) | `fetch`, types, `sseLineStream` | discord.js, `bot/commands`, `fs`, `child_process` |
 | `core/utils/sseLineStream` | `fetch`, logger | discord.js, Minecraft or wrapper payload shapes |
 | `web/backend/console/consoleHub` | `serverAccess`, logger | discord.js, `bot/*`, Fastify types |
 
