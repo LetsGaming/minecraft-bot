@@ -298,9 +298,33 @@ Environment variables take precedence over `config.json`. This is how Docker and
 | `WEBUI_CLIENT_SECRET` | Discord OAuth2 client secret for the dashboard login (no config.json equivalent — env only). |
 | `WEBUI_SESSION_SECRET` | Dashboard cookie-signing key (env only; any long random string). |
 
+## Editing config in the dashboard
+
+The **Config**, **Commands** and guild editors share one behaviour:
+
+- Each section you change is marked **modified**, the Save button counts the changes (`Save 3 changes`) and stays disabled until something changed, and **Discard** puts the form back to what is on disk.
+- A save sends the hash of the file as you loaded it. If the file changed in between (another admin, a hand edit, the bot's `/config` command), nothing is overwritten: your edits are kept, changes you did not touch are merged in, and any field both of you changed is shown with three values (what it was, yours, what is on disk now) so you can keep yours or the disk value for each.
+- The per-guild editor and the setup wizard use a hash of that guild's own block, so editing one guild never conflicts with a save to another guild or a server entry.
+- Validation errors from the server are listed on the section they belong to and in the banner. The page asks before you leave it, close the tab or switch dashboard tabs while edits are unsaved.
+- The setup wizard reads the guild's current block before you start and merges its choices into it: settings it does not ask about (`server`, `mentionRole`, `postTime`, `events`, several chat bridges) are kept.
+
+### Applied status
+
+Next to each editor a chip shows whether the running bot has loaded the saved file. The bot reports the hash of the config it last applied in its heartbeat (`data/runtime.json`).
+
+| Chip | Meaning |
+|---|---|
+| Applied | The bot reports the file that is on disk. |
+| Pending | You saved; the bot has not reported it yet (normally a second or two). |
+| Bot not running | The heartbeat is stale. The change applies when the bot starts. |
+| Restart required | Applied, but connection settings of an existing server (`apiUrl`, `apiKey`) only take effect after a bot restart. The server ids are in the tooltip. |
+| Status unavailable | The bot is running but too old to report what it applied. |
+
+Guild managers do not see the chip: the file-level status is sysadmin-only.
+
 ## Hot reload
 
-The bot watches `config.json` for changes and reloads it automatically (debounced, a malformed save keeps the old config active). Admins can also run `/config reload` in Discord, and `/config show` displays the running configuration with secrets redacted.
+The bot watches `config.json` for changes and reloads it automatically (debounced, a malformed save keeps the old config active). It watches the directory the file lives in, so a save that replaces the file (as the dashboard does) is seen on every platform. The dashboard process runs the same watcher: `webui.grants`, `adminUsers`, `webui.console.blockedCommands` and the server list take effect without restarting it, and a console stream held by someone whose access you removed is closed within seconds. `webui.port` and `webui.host` are read once at start and need a dashboard restart. Admins can also run `/config reload` in Discord, and `/config show` displays the running configuration with secrets redacted.
 
 What applies live:
 
