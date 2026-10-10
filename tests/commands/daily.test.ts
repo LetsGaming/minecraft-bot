@@ -6,7 +6,6 @@
  *  - pick: weighted random item selection
  *  - claimLock: concurrent executions are blocked for the same user
  */
-import * as serverAccess from "../../src/core/utils/server/serverAccess.js";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ── Top-level mocks — must be at file scope for Vitest hoisting ───────────
@@ -226,14 +225,13 @@ describe("claimLock — concurrent claim prevention", () => {
     // (claims persist synchronously to kv now, so the held awaitable has to
     // be the round-trip to the server, not the save).
     let releaseSend!: () => void;
-    const sendPending = new Promise<string | null>((res) => {
-      releaseSend = () => res(null);
+    const sendPending = new Promise<unknown>((res) => {
+      releaseSend = () => res({ kind: "sent", via: "screen" });
     });
-    vi.mocked(serverAccess.sendCommand).mockReturnValue(sendPending);
     vi.mocked(guildRouter.resolveServer).mockReturnValue({
       id: "main",
       config: { apiUrl: "http://w:3030", apiKey: "k" },
-      sendCommand: vi.fn().mockResolvedValue("ok"),
+      send: vi.fn().mockReturnValue(sendPending),
     } as never);
     vi.mocked(paths.getRootDir).mockReturnValue("/tmp");
     vi.mocked(utils.loadJson).mockResolvedValue({
@@ -247,7 +245,7 @@ describe("claimLock — concurrent claim prevention", () => {
     const i1 = makeInteraction();
     const i2 = makeInteraction();
 
-    // Start first execution — hangs inside give() at sendCommand.
+    // Start first execution — hangs inside give() at send.
     const p1 = execute(i1 as never);
     // Yield so i1 enters the lock before i2 starts.
     await new Promise((r) => setTimeout(r, 0));
@@ -318,7 +316,9 @@ describe("claim persistence", () => {
     vi.mocked(guildRouter.resolveServer).mockReturnValue({
       id: "main",
       config: { apiUrl: "http://w:3030", apiKey: "k" },
-      sendCommand: vi.fn().mockResolvedValue("ok"),
+      send: vi
+        .fn()
+        .mockResolvedValue({ kind: "delivered", output: "Gave 1 [Diamond] to Steve" }),
     } as never);
     vi.mocked(paths.getRootDir).mockReturnValue("/tmp");
     // vi.resetModules() gives daily.js a fresh db module instance — seed
@@ -421,7 +421,9 @@ describe("per-server claim independence", () => {
     vi.mocked(guildRouter.resolveServer).mockReturnValue({
       id: "main",
       config: { apiUrl: "http://w:3030", apiKey: "k" },
-      sendCommand: vi.fn().mockResolvedValue("ok"),
+      send: vi
+        .fn()
+        .mockResolvedValue({ kind: "delivered", output: "Gave 1 [Diamond] to Steve" }),
     } as never);
     vi.mocked(paths.getRootDir).mockReturnValue("/tmp");
     const { kvGet, kvSet } = await import("../../src/core/db/kv.js");
