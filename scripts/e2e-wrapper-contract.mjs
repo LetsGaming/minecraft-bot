@@ -308,14 +308,34 @@ out({ ok: true, slug, removedFile: m.filename, orphanedDependencies: [] });
   "check-updates.js": String.raw`
 const { load, out, opt } = require("./_stub.js");
 const d = load();
+const mcVersion = opt("mcVersion") || d.gameVersion;
+const only = opt("only");
+const result = (slug, m) => {
+  if (mcVersion === "1.99" && slug === "lithium") {
+    return { slug, status: "no_matching_version", message: "No version matching MC 1.99 in /home/mc/secret-dir" };
+  }
+  if (mcVersion === "1.99") {
+    return { slug, status: "error", error: "connect ETIMEDOUT /var/secret-socket" };
+  }
+  if (slug === "lithium" && m.versionId === "v-lithium-1") {
+    return {
+      slug,
+      status: "update_available",
+      currentVersionId: m.versionId,
+      latestVersionId: "v-lithium-2",
+      latestVersionName: "Lithium 2",
+      datePublished: "2026-01-01T00:00:00Z",
+      downloadUrl: "https://cdn.modrinth.com/data/lithium/versions/v-lithium-2/lithium.jar",
+    };
+  }
+  return { slug, status: "up_to_date", currentVersionId: m.versionId };
+};
 out({
-  mcVersion: opt("mcVersion") || d.gameVersion,
+  mcVersion,
   modLoader: d.modLoader,
-  results: Object.entries(d.mods).map(([slug, m]) => ({
-    slug,
-    status: slug === "lithium" && m.versionId === "v-lithium-1" ? "update-available" : "up-to-date",
-    installedVersionId: m.versionId,
-  })),
+  results: Object.entries(d.mods)
+    .filter(([slug]) => only === undefined || slug === only)
+    .map(([slug, m]) => result(slug, m)),
 });
 `,
   "update-mods.js": String.raw`
@@ -1173,7 +1193,7 @@ console.log("\n── mod management");
     const check1 = await serverAccess.checkModUpdates(cfg, "1.21.4");
     check(
       "checkModUpdates returns the version, loader and a status per mod",
-      check1.mcVersion === "1.21.4" && check1.modLoader === "fabric" && check1.results.find((r) => r.slug === "lithium")?.status === "update-available",
+      check1.mcVersion === "1.21.4" && check1.modLoader === "fabric" && check1.results.find((r) => r.slug === "lithium")?.status === "update_available",
       JSON.stringify(check1),
     );
     const applied = await serverAccess.applyModUpdates(cfg);
@@ -1217,6 +1237,73 @@ console.log("\n── mod management");
       const routeKey = `${method} /instances/:id${rest.replace(/lithium|sodium/, ":slug").replace(/\?.*/, "")}`;
       expectUnrunnable(`${method} ${rest}`, routeKey, await raw(method, inst(rest), { body }));
     }
+  }
+}
+
+console.log("\n── mod compatibility check");
+{
+  const JOB_ABSENT = "00000000-0000-4000-8000-000000000000";
+  const settle = async (jobId) => {
+    for (let i = 0; i < 100; i++) {
+      const j = await serverAccess.getModCompat(cfg, jobId);
+      if (j === null || j.state !== "running") return j;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    return null;
+  };
+
+  const noVersion = await raw("POST", inst("/mods/compat"), { body: {} });
+  check("starting without mcVersion is 400 { error }", noVersion.status === 400 && isErrorBody(noVersion), noVersion.text);
+  const badVersion = await raw("POST", inst("/mods/compat"), { body: { mcVersion: "no good" } });
+  check("starting with an invalid mcVersion is 400 { error }", badVersion.status === 400 && isErrorBody(badVersion), badVersion.text);
+  const badJob = await raw("GET", inst("/mods/compat/not-a-job"));
+  check("polling a malformed job id is 400 { error }", badJob.status === 400 && isErrorBody(badJob), badJob.text);
+  eq("polling a job the wrapper never had is null (404)", await serverAccess.getModCompat(cfg, JOB_ABSENT), null);
+
+  const started = await serverAccess.startModCompat(cfg, "1.99");
+  check("starting returns a uuid job id", /^[0-9a-f-]{36}$/.test(started.jobId), JSON.stringify(started));
+  const finished = await settle(started.jobId);
+  const text = JSON.stringify(finished);
+  if (sudoWorks) {
+    check(
+      "the job ends done with a per-mod availability and summary counts",
+      finished?.state === "done" &&
+        finished.mcVersion === "1.99" &&
+        finished.modLoader === "fabric" &&
+        finished.complete === false &&
+        finished.summary?.total === 2 &&
+        finished.summary.unavailable === 1 &&
+        finished.summary.unknown === 1 &&
+        finished.mods.find((m) => m.slug === "lithium")?.availability === "unavailable" &&
+        finished.mods.find((m) => m.slug === "fabric-api")?.availability === "unknown",
+      text,
+    );
+    check(
+      "script text and paths never reach the client (fixed reasons only)",
+      !/secret|[/]home|[/]var/.test(text) &&
+        finished.mods.find((m) => m.slug === "fabric-api")?.reason === "timeout" &&
+        finished.mods.find((m) => m.slug === "lithium")?.reason === "no compatible release",
+      text,
+    );
+
+    const ready = await settle((await serverAccess.startModCompat(cfg, "1.21.5")).jobId);
+    check(
+      "a version every mod supports reports them available, with the target release of an update",
+      ready?.state === "done" &&
+        ready.complete === true &&
+        ready.summary?.available === 2 &&
+        ready.mods.find((m) => m.slug === "lithium")?.target?.versionName === "Lithium 2" &&
+        ready.mods.find((m) => m.slug === "lithium")?.target?.downloadUrl?.startsWith("https://cdn.modrinth.com/") === true,
+      JSON.stringify(ready),
+    );
+    const again = await serverAccess.getModCompat(cfg, (await serverAccess.startModCompat(cfg, "1.21.5")).jobId);
+    check("an unchanged repeat is answered from the cache as an already finished job", again?.state === "done" && again.summary?.available === 2, JSON.stringify(again));
+  } else {
+    check(
+      "without sudo every mod fails to check, the job fails, and the reason is a fixed phrase",
+      finished?.state === "failed" && finished.error === "script failed" && !/sudo|[/]home|secret/.test(text),
+      text,
+    );
   }
 }
 
