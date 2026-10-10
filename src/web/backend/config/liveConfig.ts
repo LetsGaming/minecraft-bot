@@ -7,6 +7,9 @@ import {
 import { log } from "@mcbot/core/utils/logger.js";
 import { invalidateWhere } from "@mcbot/core/utils/cache.js";
 import { forget } from "@mcbot/core/utils/wrapper/lastKnown.js";
+import { forgetServerFeatures } from "../status/status.js";
+import { forgetBreaker } from "@mcbot/core/utils/server/circuitBreaker.js";
+import { forgetGamePort } from "@mcbot/core/utils/server/serverAccess.js";
 import { sessionHolds } from "../auth/capabilities.js";
 import { closeRevokedStreams, closeStreamsForServer } from "../console/streamRegistry.js";
 import type { BotConfig } from "@mcbot/core/types/index.js";
@@ -24,6 +27,9 @@ export interface WebReconcileResult {
  */
 function dropServerCaches(serverId: string): void {
   forget(serverId);
+  forgetServerFeatures(serverId);
+  forgetBreaker(serverId);
+  forgetGamePort(serverId);
   invalidateWhere((key) => key.split(":").includes(serverId));
 }
 

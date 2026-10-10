@@ -82,6 +82,11 @@ export function getBreakerState(serverId: string): State {
 }
 
 /** Test seam: drop every breaker. */
+/** Drop a server's breaker state, e.g. when the server is removed or re-pointed. */
+export function forgetBreaker(serverId: string): void {
+  breakers.delete(serverId);
+}
+
 export function resetBreakersForTesting(): void {
   breakers.clear();
 }

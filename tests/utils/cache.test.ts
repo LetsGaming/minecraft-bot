@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { cached, invalidate, invalidatePrefix } from "../../src/core/utils/cache.js";
+import { cached, invalidate, invalidatePrefix, invalidateWhere } from "../../src/core/utils/cache.js";
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -88,5 +88,53 @@ describe("cached()", () => {
     const read = vi.fn().mockRejectedValueOnce(new Error("boom")).mockResolvedValueOnce("v1");
     await expect(cached("k7", 1_000, read)).rejects.toThrow("boom");
     expect(await cached("k7", 1_000, read)).toBe("v1");
+  });
+});
+
+describe("invalidation against an in-flight refresh", () => {
+  function slow() {
+    let resolve!: (v: string) => void;
+    const read = vi.fn(() => new Promise<string>((r) => { resolve = r; }));
+    return { read, resolve: (v: string) => resolve(v) };
+  }
+
+  it("does not store a stale value from a refresh that began before invalidate()", async () => {
+    const first = slow();
+    const pending = cached("race:a", 60_000, first.read);
+    invalidate("race:a");
+    first.resolve("stale");
+    expect(await pending).toBe("stale");
+
+    const next = vi.fn().mockResolvedValue("fresh");
+    expect(await cached("race:a", 60_000, next)).toBe("fresh");
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it("starts a fresh refresh after invalidate() instead of joining the old one", async () => {
+    const first = slow();
+    void cached("race:b", 60_000, first.read);
+    invalidate("race:b");
+    const second = vi.fn().mockResolvedValue("fresh");
+    expect(await cached("race:b", 60_000, second)).toBe("fresh");
+    first.resolve("stale");
+    await Promise.resolve();
+    expect(await cached("race:b", 60_000, vi.fn().mockResolvedValue("x"))).toBe("fresh");
+  });
+
+  it("covers prefix and predicate invalidation too", async () => {
+    const a = slow();
+    const b = slow();
+    const pa = cached("srv:smp:x", 60_000, a.read);
+    const pb = cached("other:smp:y", 60_000, b.read);
+    invalidatePrefix("srv:");
+    invalidateWhere((k) => k.split(":").includes("smp"));
+    a.resolve("stale-a");
+    b.resolve("stale-b");
+    await Promise.all([pa, pb]);
+
+    const reread = vi.fn().mockResolvedValue("fresh");
+    expect(await cached("srv:smp:x", 60_000, reread)).toBe("fresh");
+    expect(await cached("other:smp:y", 60_000, reread)).toBe("fresh");
+    expect(reread).toHaveBeenCalledTimes(2);
   });
 });

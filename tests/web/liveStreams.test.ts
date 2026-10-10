@@ -33,6 +33,7 @@ vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
   sendCommand: sendCommandMock,
   openLogStream: openLogStreamMock,
   tailLog: vi.fn(async () => ""),
+  forgetGamePort: vi.fn(),
 }));
 vi.mock("../../src/core/utils/stores/adminAudit.js", () => ({
   recordAdminAction: vi.fn(async () => {}),

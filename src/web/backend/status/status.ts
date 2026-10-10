@@ -246,6 +246,10 @@ const FEATURE_TTL_MS = 5 * 60_000;
  * redeployed wrapper would otherwise keep answering from a five-minute-old
  * probe. Tests use it for isolation; `/config reload` should call it too.
  */
+export function forgetServerFeatures(serverId: string): void {
+  featureCache.delete(serverId);
+}
+
 export function clearFeatureCache(): void {
   featureCache.clear();
   invalidatePrefix("status:");
