@@ -38,16 +38,16 @@ export const execute = withErrorHandling(async (interaction) => {
     // them — "online, 4 players, controls unavailable" is the whole point.
     const players = describePlayers(health);
     const embed = createEmbed({
-      title: `Server Status — ${server.id}`,
+      title: t("status.title", { server: server.id }),
       description:
         `${display.emoji} **${display.label}**` +
-        (players ? ` — ${players}` : "") +
+        (players ? t("status.playersSuffix", { players }) : "") +
         (display.hint ? `\n${display.hint}` : ""),
       color: display.color,
     });
     embed.addFields(
-      { name: "Bot Ping", value: `${botPing}ms`, inline: true },
-      { name: "Round Trip", value: `${roundTrip}ms`, inline: true },
+      { name: t("status.botPing"), value: `${botPing}ms`, inline: true },
+      { name: t("status.roundTrip"), value: `${roundTrip}ms`, inline: true },
     );
     await interaction.editReply({ embeds: [embed] });
     return;
@@ -55,19 +55,24 @@ export const execute = withErrorHandling(async (interaction) => {
 
   const { playerCount, maxPlayers, players } = await server.getList();
   const embed = createEmbed({
-    title: `Server Status — ${server.id}`,
-    description: `${display.emoji} **${display.label}** — ${playerCount}/${maxPlayers} players`,
+    title: t("status.title", { server: server.id }),
+    description: t("status.summary", {
+      emoji: display.emoji,
+      label: display.label,
+      online: playerCount,
+      max: maxPlayers,
+    }),
     color: display.color,
   });
   if (players.length > 0)
     embed.addFields({
-      name: "Online",
+      name: t("status.online"),
       value: players.join(", "),
       inline: false,
     });
   embed.addFields(
-    { name: "Bot Ping", value: `${botPing}ms`, inline: true },
-    { name: "Round Trip", value: `${roundTrip}ms`, inline: true },
+    { name: t("status.botPing"), value: `${botPing}ms`, inline: true },
+    { name: t("status.roundTrip"), value: `${roundTrip}ms`, inline: true },
   );
 
   // Host section: process RAM/CPU + disk usage for local instances.

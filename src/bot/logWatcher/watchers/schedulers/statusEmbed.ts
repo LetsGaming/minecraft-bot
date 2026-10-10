@@ -41,6 +41,7 @@ import {
 } from "../../../utils/guild/guildConfigs.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const UPDATE_INTERVAL_MS = 60 * 1_000;
@@ -368,15 +369,15 @@ function buildStatusEmbed(
   }
 
   const embed = createEmbed({
-    title: "📊 Server Status",
+    title: t("statusEmbed.title", {}, guildId),
     color: EmbedColor.Info,
-    footer: { text: "Updates every 60s" },
+    footer: { text: t("statusEmbed.footer", {}, guildId) },
   });
 
   if (fields.length > 0) {
     embed.addFields(fields);
   } else {
-    embed.setDescription("No servers configured.");
+    embed.setDescription(t("statusEmbed.none", {}, guildId));
   }
 
   return { embed, counts: total };

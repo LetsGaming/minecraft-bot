@@ -17,7 +17,7 @@ import {
   resolveCommandPolicy,
   commandEnabledAnywhere,
 } from "@mcbot/core/utils/commands/commandPolicy.js";
-import { t } from "@mcbot/core/utils/i18n.js";
+import { t, runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
 import { recordCommandUsage } from "@mcbot/core/utils/commands/commandUsage.js";
 import { registerManifestCommands } from "@mcbot/core/utils/commands/commandManifest.js";
 import { getCommandFiles, categoryOf } from "./utils/commands/loadCommandFiles.js";
@@ -430,7 +430,7 @@ void (async () => {
       );
       if (!allowed) {
         await chatInteraction.reply({
-          content: "You do not have permission to use this command.",
+          content: t("common.noPermission"),
           flags: MessageFlags.Ephemeral,
         });
         return;
@@ -442,12 +442,14 @@ void (async () => {
       if (!consumeToken(chatInteraction.user.id)) {
         const secs = cooldownSeconds(chatInteraction.user.id);
         await chatInteraction.reply({
-          content: `Too many commands. Please wait ${secs}s.`,
+          content: t("common.rateLimited", { seconds: secs }),
           flags: MessageFlags.Ephemeral,
         });
         return;
       }
-      await command.execute(chatInteraction);
+      await runWithGuildLocale(chatInteraction.guild?.id, () =>
+        command.execute(chatInteraction),
+      );
 
       // Usage is recorded here, for EVERY command, rather than inside an
       // optional wrapper. It used to live in withErrorHandling — but only

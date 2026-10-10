@@ -11,6 +11,7 @@ import {
   withUnverifiedNote,
 } from "@mcbot/core/utils/server/commandOutcome.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 export const data = new SlashCommandBuilder()
   .setName("unwhitelist")
   .setDescription("Remove a player from the whitelist")
@@ -30,7 +31,7 @@ export const execute = withErrorHandling(
     const server = resolveServer(interaction);
     // Never interpolate a raw username into a console command.
     if (!isValidMcName(username)) {
-      throw new Error(`**${username}** is not a valid Minecraft username.`);
+      throw new Error(t("common.invalidUsername", { username }));
     }
 
     const verdict = requireAccepted(
@@ -52,7 +53,7 @@ export const execute = withErrorHandling(
       embeds: [
         createSuccessEmbed(
           withUnverifiedNote(
-            `**${username}** has been removed from the whitelist on **${server.id}**.`,
+            t("whitelist.removed", { username, server: server.id }),
             verdict,
           ),
         ),

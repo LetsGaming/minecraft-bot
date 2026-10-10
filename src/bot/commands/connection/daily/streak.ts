@@ -14,6 +14,7 @@ import { resolveServer } from "../../../utils/guild/guildRouter.js";
 import { createErrorEmbed } from "../../../utils/embeds/embedUtils.js";
 import type { StreakData, NextBonusStreak } from "@mcbot/core/types/index.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 export const data = new SlashCommandBuilder()
   .setName("streak")
   .setDescription("Get information about your daily streak")
@@ -32,12 +33,13 @@ export async function execute(
   const userId = interaction.user.id;
   const server = resolveServer(interaction);
   const streakData = await getStreakData(userId, server.id);
+  const guildId = interaction.guildId ?? undefined;
 
   if (!streakData) {
     const errorEmbed = createErrorEmbed(
-      "No streak data found for your account.",
+      t("streak.noData", {}, guildId),
       {
-        footer: { text: "Streak Data Not Found" },
+        footer: { text: t("streak.noDataFooter", {}, guildId) },
         timestamp: new Date(),
       },
     );
@@ -48,13 +50,19 @@ export async function execute(
   const { currentStreak, longestStreak, bonusStreak } = streakData;
   const nextBonus = await getNextBonusStreak(bonusStreak, server.id);
 
-  const nextBonusText = nextBonus ? `${nextBonus.streak} days` : "N/A";
+  const nextBonusText = nextBonus ? t("streak.days", { count: nextBonus.streak }, guildId)
+    : t("streak.na", {}, guildId);
 
   await interaction.editReply(
-    `📅 **Daily Streak Information**\n` +
-      `**Current Streak:** ${currentStreak} days\n` +
-      `**Longest Streak:** ${longestStreak} days\n` +
-      `**Next Bonus Streak:** ${nextBonusText} `,
+    t(
+      "streak.info",
+      {
+        current: t("streak.days", { count: currentStreak }, guildId),
+        longest: t("streak.days", { count: longestStreak }, guildId),
+        next: nextBonusText,
+      },
+      guildId,
+    ),
   );
 }
 

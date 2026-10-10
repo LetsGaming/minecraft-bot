@@ -7,6 +7,7 @@ import { buildChunkbaseUrl } from "@mcbot/core/utils/minecraft/chunkbaseUrl.js";
 import { withErrorHandling } from "../middleware.js";
 import { queryFailureText } from "../../logWatcher/queryMessages.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 export const data = new SlashCommandBuilder()
   .setName("chunkbase")
   .setDescription("Get a Chunkbase link for the server's world seed")
@@ -43,8 +44,8 @@ export const execute = withErrorHandling(async (interaction) => {
   await interaction.editReply({
     embeds: [
       createEmbed({
-        title: "Chunkbase Map",
-        description: `[Open Seed Map](${url})`,
+        title: t("chunkbase.title"),
+        description: t("chunkbase.open", { url }),
         footer: { text: `${server.id} | ${interaction.user.tag}` },
       }),
     ],

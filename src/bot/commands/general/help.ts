@@ -41,6 +41,7 @@ export async function execute(
   // the unfamiliar turns it into a recommendation without hiding anything
   // — the full list is still here, just ordered by what is new to *this*
   // reader. Ties keep their original order, so the listing stays stable.
+  const guildId = interaction.guildId ?? undefined;
   const used = commandsUsedBy(interaction.user.id);
   const unseen = commands.filter((cmd) => !used.has(cmd.data.name));
   const seen = commands.filter((cmd) => used.has(cmd.data.name));
@@ -53,9 +54,9 @@ export async function execute(
 
   for (let i = 0; i < totalPages; i++) {
     const embed = createEmbed({
-      title: `📖 Command Help (Page ${i + 1}/${totalPages})`,
+      title: t("help.title", { page: i + 1, pages: totalPages }, guildId),
       ...(i === 0 && unseen.length > 0
-        ? { description: t("help.newToYou", { count: unseen.length }) }
+        ? { description: t("help.newToYou", { count: unseen.length }, guildId) }
         : {}),
     });
 
@@ -84,20 +85,22 @@ export async function execute(
 
       embed.addFields({
         name: used.has(name) ? `/${name}` : `/${name} ✨`,
-        value: `**Description:**\n${description}`,
+        value: t("help.description", { description }, guildId),
         inline: false,
       });
 
       if (options.length > 0) {
         const optionList = options
           .map((opt) => {
-            const required = opt.required ? "**(required)**" : "(optional)";
+            const required = opt.required
+              ? t("help.required", {}, guildId)
+              : t("help.optional", {}, guildId);
             return `• \`${opt.name}\`: ${opt.description} ${required}`;
           })
           .join("\n");
 
         embed.addFields({
-          name: "Options",
+          name: t("help.options", {}, guildId),
           value: optionList,
           inline: false,
         });

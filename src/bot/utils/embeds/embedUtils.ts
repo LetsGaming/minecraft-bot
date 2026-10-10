@@ -19,6 +19,7 @@ import { playerAvatarUrl } from "../mcHeads.js";
 import { EmbedColor } from "./embedColors.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 /**
  * Creates a customizable embed.
  */
@@ -70,7 +71,7 @@ export function createErrorEmbed(
   { footer, timestamp = true }: EmbedStyleOptions = {},
 ): EmbedBuilder {
   return createEmbed({
-    title: "❌ Error",
+    title: t("embed.errorTitle"),
     description: message,
     color: EmbedColor.Error,
     footer,
@@ -86,7 +87,7 @@ export function createSuccessEmbed(
   { footer, timestamp = true }: EmbedStyleOptions = {},
 ): EmbedBuilder {
   return createEmbed({
-    title: "✅ Success",
+    title: t("embed.successTitle"),
     description: message,
     color: EmbedColor.Success,
     footer,
@@ -102,7 +103,7 @@ export function createInfoEmbed(
   { footer, timestamp = true }: EmbedStyleOptions = {},
 ): EmbedBuilder {
   return createEmbed({
-    title: "ℹ️ Info",
+    title: t("embed.infoTitle"),
     description: message,
     color: EmbedColor.Info,
     footer,
@@ -200,7 +201,7 @@ export async function handlePagination(
   collector.on("collect", async (i: ButtonInteraction) => {
     if (i.user.id !== interaction.user.id) {
       await i.reply({
-        content: "These buttons aren't for you.",
+        content: t("pagination.notForYou", {}, i.guildId ?? undefined),
         ephemeral: true,
       });
       return;

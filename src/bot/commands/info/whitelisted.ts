@@ -13,6 +13,7 @@ import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 export const data = new SlashCommandBuilder()
   .setName("whitelisted")
   .setDescription(
@@ -26,6 +27,7 @@ export async function execute(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
   await interaction.deferReply();
+  const guildId = interaction.guildId ?? undefined;
 
   try {
     const server = resolveServer(interaction);
@@ -33,8 +35,7 @@ export async function execute(
 
     if (!Array.isArray(players) || players.length === 0) {
       await interaction.editReply({
-        content:
-          "The whitelist is empty — it may be disabled on this server.",
+        content: t("whitelisted.empty", {}, guildId),
       });
       return;
     }
@@ -50,13 +51,13 @@ export async function execute(
     for (let i = 0; i < totalPages; i++) {
       const page = usernames.slice(i * chunkSize, (i + 1) * chunkSize);
       const embed = createEmbed({
-        title: "📃 Whitelisted Minecraft Players",
+        title: t("whitelisted.title", {}, guildId),
       })
         .addFields({
-          name: `Page ${i + 1}`,
+          name: t("whitelisted.page", { page: i + 1 }, guildId),
           value: page.join(", "),
         })
-        .setFooter({ text: `Total: ${usernames.length}` });
+        .setFooter({ text: t("whitelisted.total", { count: usernames.length }, guildId) });
 
       embeds.push(embed);
     }
@@ -73,7 +74,7 @@ export async function execute(
   } catch (err) {
     log.error("whitelisted", errMsg(err));
     await interaction.editReply({
-      embeds: [createErrorEmbed("Failed to read the Whitelist.")],
+      embeds: [createErrorEmbed(t("whitelisted.readFailed", {}, guildId))],
     });
   }
 }

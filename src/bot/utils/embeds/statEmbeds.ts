@@ -8,6 +8,7 @@ import {
 } from "@mcbot/core/utils/minecraft/statUtils.js";
 import type { FlattenedStat } from "@mcbot/core/types/index.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 /**
  * Converts plain leaderboard data (from buildLeaderboard) into a Discord EmbedBuilder.
  */
@@ -32,7 +33,7 @@ export function buildStatsEmbeds(
   username: string,
 ): EmbedBuilder[] {
   const embeds: EmbedBuilder[] = [];
-  let currentEmbed = createEmbed({ title: "PLACEHOLDER" });
+  let currentEmbed = createEmbed({});
   let fieldCount = 0;
 
   const grouped = groupByCategory(stats);
@@ -81,7 +82,7 @@ export function buildStatsEmbeds(
 
       if (fieldCount >= 2) {
         embeds.push(currentEmbed);
-        currentEmbed = createEmbed({ title: "PLACEHOLDER" });
+        currentEmbed = createEmbed({});
         fieldCount = 0;
       }
 
@@ -103,9 +104,15 @@ export function buildStatsEmbeds(
   const totalPages = embeds.length;
   for (let i = 0; i < totalPages; i++) {
     const embed = embeds[i]!;
-    embed.setTitle(`Stats for ${username} (Page ${i + 1}/${totalPages})`);
+    embed.setTitle(
+      t("stats.pageTitle", { name: username, page: i + 1, pages: totalPages }),
+    );
     embed.setFooter({
-      text: `Total stats: ${stats.length} | Page ${i + 1}/${totalPages}`,
+      text: t("stats.pageFooter", {
+        total: stats.length,
+        page: i + 1,
+        pages: totalPages,
+      }),
     });
   }
 

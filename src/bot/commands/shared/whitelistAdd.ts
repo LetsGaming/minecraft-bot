@@ -21,6 +21,7 @@ import {
 } from "@mcbot/core/utils/server/commandOutcome.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 export function buildWhitelistAddData(
   commandName: string,
 ): SlashCommandOptionsOnlyBuilder {
@@ -62,11 +63,11 @@ export async function performWhitelistAdd(
   // command or a Mojang API URL. Rejecting here also gives a clearer
   // error than a failed Mojang lookup for garbage input.
   if (!isValidMcName(username)) {
-    throw new Error(`**${username}** is not a valid Minecraft username.`);
+    throw new Error(t("common.invalidUsername", { username }));
   }
 
   const profile = await fetchMojangProfile(username);
-  if (!profile) throw new Error(`Username **${username}** not found.`);
+  if (!profile) throw new Error(t("whitelist.notFound", { username }));
 
   // Use the canonical capitalization Mojang returns so the
   // whitelist entry matches the in-game name exactly.
@@ -100,7 +101,7 @@ export const executeWhitelistAdd = withErrorHandling(
       embeds: [
         createSuccessEmbed(
           withUnverifiedNote(
-            `**${added.name}** has been whitelisted on **${server.id}**.`,
+            t("whitelist.added", { name: added.name, server: server.id }),
             added,
           ),
         ),

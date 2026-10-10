@@ -8,6 +8,7 @@
 import type { ServerInstance } from "./server.js";
 import type { ServerCapabilities } from "../../types/index.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 /** Pointer used in every capability-related message. */
 export const CAPABILITY_DOCS_HINT =
   "See docs/admin/setup.md (feature matrix) for what works on a plain server.";
@@ -78,6 +79,10 @@ export function requireCapability(
   if (cap == null) return;
   if (check(cap)) return;
   throw new Error(
-    `**${server.id}** doesn't provide ${featureDescription} — this feature needs the setup-suite layout. ${CAPABILITY_DOCS_HINT}`,
+    t("capability.missing", {
+      server: server.id,
+      feature: featureDescription,
+      hint: CAPABILITY_DOCS_HINT,
+    }),
   );
 }

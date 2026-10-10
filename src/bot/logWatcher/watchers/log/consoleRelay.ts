@@ -16,6 +16,7 @@ import { log } from "@mcbot/core/utils/logger.js";
 import type { ILogWatcher } from "../../logWatcher.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 const FLUSH_INTERVAL_MS = 3_000;
 /** Discord message budget per flush (codeblock fences + margin < 2000). */
 const MAX_FLUSH_CHARS = 1_800;
@@ -125,7 +126,9 @@ async function flush(client: Client): Promise<void> {
     buf.chars = buf.lines.reduce((sum, l) => sum + l.length + 1, 0);
 
     const droppedNote =
-      buf.dropped > 0 ? `… ${buf.dropped} line(s) dropped (busy server)\n` : "";
+      buf.dropped > 0
+        ? `${t("console.dropped", { count: buf.dropped })}\n`
+        : "";
     buf.dropped = 0;
     if (!body && !droppedNote) continue;
 

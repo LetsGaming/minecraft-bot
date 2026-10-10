@@ -6,6 +6,7 @@
 import { loadConfig } from "../../config.js";
 import type { GuildConfig } from "../../types/index.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 function scopeToList(scope: string | string[] | undefined): string[] {
   if (typeof scope === "string") return [scope];
   if (Array.isArray(scope)) return scope;
@@ -99,9 +100,10 @@ export function resolveDefaultServerId(
   if (configured) {
     if (runningServerIds.includes(configured)) return configured;
     throw new Error(
-      `This guild's defaultServer "${configured}" is not a running server. ` +
-        `Fix it in config.json or pass \`server:\` explicitly. ` +
-        `Available: ${runningServerIds.join(", ") || "none"}.`,
+      t("target.defaultNotRunning", {
+        server: configured,
+        available: runningServerIds.join(", ") || t("target.none"),
+      }),
     );
   }
 
@@ -110,10 +112,9 @@ export function resolveDefaultServerId(
     : [...runningServerIds];
   if (candidates.length === 1) return candidates[0]!;
   if (candidates.length === 0) {
-    throw new Error("No server is available for this guild.");
+    throw new Error(t("target.noneAvailable"));
   }
   throw new Error(
-    `Several servers are available (${candidates.join(", ")}). ` +
-      `Pass \`server:\` to choose one.`,
+    t("target.several", { servers: candidates.join(", ") }),
   );
 }

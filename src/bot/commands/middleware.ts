@@ -2,7 +2,7 @@ import { MessageFlags, type ChatInputCommandInteraction } from "discord.js";
 import { createErrorEmbed } from "../utils/embeds/embedUtils.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { loadConfig } from "@mcbot/core/config.js";
-import { runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
+import { runWithGuildLocale, t } from "@mcbot/core/utils/i18n.js";
 
 /**
  * Checks whether a Discord user is an admin.
@@ -68,7 +68,7 @@ export function requireServerAdmin(execute: CommandExecutor): CommandExecutor {
         interaction.guild?.id,
       )
     ) {
-      throw new Error("You do not have permission to use this command.");
+      throw new Error(t("common.noPermission"));
     }
     return execute(interaction);
   };
@@ -118,7 +118,7 @@ export function withErrorHandling(
       );
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : "An unexpected error occurred.";
+        err instanceof Error ? err.message : t("common.unexpectedError");
       log.error("command", `/${interaction.commandName}: ${message}`);
       const embed = createErrorEmbed(message);
       try {

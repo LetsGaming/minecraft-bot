@@ -6,6 +6,7 @@ import { createSuccessEmbed } from "../../utils/embeds/embedUtils.js";
 import { withErrorHandling } from "../middleware.js";
 import { log } from "@mcbot/core/utils/logger.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 export const data = new SlashCommandBuilder()
   .setName("clear")
   .setDescription("Bulk-delete the last X messages from this channel")
@@ -25,7 +26,7 @@ export const execute = withErrorHandling(
     const channel = interaction.channel;
 
     if (!channel || !("bulkDelete" in channel)) {
-      throw new Error("This command can only be used in a text channel.");
+      throw new Error(t("clear.textChannelOnly"));
     }
 
     const deleted = await channel.bulkDelete(amount, true);
@@ -36,10 +37,8 @@ export const execute = withErrorHandling(
     );
 
     const embed = createSuccessEmbed(
-      `Deleted **${deleted.size}** message(s).` +
-        (deleted.size < amount
-          ? `\n_Messages older than 14 days cannot be bulk-deleted._`
-          : ""),
+      t("clear.deleted", { count: deleted.size }) +
+        (deleted.size < amount ? `\n${t("clear.tooOld")}` : ""),
     );
     await interaction.editReply({ embeds: [embed] });
   },

@@ -14,8 +14,9 @@ import { ALL_SERVERS } from "../../utils/guild/serverOptions.js";
 import { getUptimeStats } from "@mcbot/core/utils/stores/uptimeTracker.js";
 import { withErrorHandling } from "../middleware.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 function uptimeBar(pct: number | null, width = 10): string {
-  if (pct === null) return "░".repeat(width) + " no data";
+  if (pct === null) return `${"░".repeat(width)} ${t("uptime.barNoData")}`;
   const filled = Math.round((pct / 100) * width);
   const bar = "▓".repeat(filled) + "░".repeat(width - filled);
   return `${bar} ${pct.toFixed(1)}%`;
@@ -58,7 +59,7 @@ export const execute = withErrorHandling(async (interaction) => {
 
   // Multi-server overview
   const embed = createEmbed({
-    title: "📈 Server Uptime",
+    title: t("uptime.overviewTitle"),
     color: EmbedColor.Info,
   });
 
@@ -67,7 +68,7 @@ export const execute = withErrorHandling(async (interaction) => {
     const state = `${stateEmoji(stats.currentState)} ${stats.currentState}`;
     const since =
       stats.currentState !== "unknown"
-        ? ` for ${formatDuration(stats.currentStateDuration)}`
+        ? t("uptime.forDuration", { duration: formatDuration(stats.currentStateDuration) })
         : "";
 
     const lines = [
@@ -91,14 +92,17 @@ function buildSingleEmbed(
   serverId: string,
   stats: Awaited<ReturnType<typeof getUptimeStats>>,
 ) {
-  const state = `${stateEmoji(stats.currentState)} Currently **${stats.currentState}**`;
+  const state = t("uptime.currently", {
+    emoji: stateEmoji(stats.currentState),
+    state: stats.currentState,
+  });
   const since =
     stats.currentState !== "unknown"
-      ? ` for ${formatDuration(stats.currentStateDuration)}`
+      ? t("uptime.forDuration", { duration: formatDuration(stats.currentStateDuration) })
       : "";
 
   const embed = createEmbed({
-    title: `📈 Uptime — ${serverId}`,
+    title: t("uptime.title", { server: serverId }),
     description: `${state}${since}`,
     color:
       stats.currentState === "online"
@@ -110,31 +114,34 @@ function buildSingleEmbed(
 
   embed.addFields(
     {
-      name: "Last 24 hours",
+      name: t("uptime.last24h"),
       value: uptimeBar(stats.pct24h, 15),
       inline: false,
     },
-    { name: "Last 7 days", value: uptimeBar(stats.pct7d, 15), inline: false },
-    { name: "Last 30 days", value: uptimeBar(stats.pct30d, 15), inline: false },
+    { name: t("uptime.last7d"), value: uptimeBar(stats.pct7d, 15), inline: false },
+    { name: t("uptime.last30d"), value: uptimeBar(stats.pct30d, 15), inline: false },
   );
 
   // Hourly sparkline, oldest → newest. Only shown when at least one
   // hour has data; a row of 24 dots would just be noise.
   if (stats.checks24h.total > 0) {
     embed.addFields({
-      name: "24h trend (hourly)",
-      value: `\`${stats.sparkline24h}\` (oldest → now, · = no data)`,
+      name: t("uptime.trend"),
+      value: t("uptime.trendLegend", { bar: stats.sparkline24h }),
       inline: false,
     });
   }
 
   if (stats.checks24h.total > 0) {
     embed.setFooter({
-      text: `Based on ${stats.checks24h.total} checks (24h) · ${stats.checks7d.total} checks (7d)`,
+      text: t("uptime.basedOn", {
+        checks24h: stats.checks24h.total,
+        checks7d: stats.checks7d.total,
+      }),
     });
   } else {
     embed.setFooter({
-      text: "No uptime data collected yet — stats populate over time",
+      text: t("uptime.noData"),
     });
   }
 
