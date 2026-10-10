@@ -10,6 +10,7 @@ Options in `(parentheses)` are optional. Commands that act on a server accept an
 |---|---|---|
 | `/status` | (`server`) | Online/offline, player count, who is online, and bot latency. On locally managed servers also a **Host** section: RAM/CPU of the server process and disk usage of the world and backup paths. |
 | `/uptime` | (`server`) | Uptime history with 24h/7d/30d percentage bars and an hourly 24h sparkline for one server. Use `server:all` for an overview of every server your guild may use. |
+| `/info` | (`server`) | How to join: address, version, loader and required mods. |
 | `/seed` | (`server`) | The world seed. |
 | `/tps` | (`server`) | Current TPS. Paper-style servers show 1/5/15-minute averages, vanilla shows TPS plus MSPT and tick timing percentiles. |
 | `/backup` | (`server`) | Backup overview: count, age, and size of the latest backup per backup tier. |
@@ -92,6 +93,7 @@ If the guild has whitelist applications configured, non-admins apply for the whi
 | Command | Description |
 |---|---|
 | `/help` | All commands with their options, paginated, only visible to you. |
+| `/clear-dm` | Deletes the bot's own messages from your DM with it. Options: `amount` (omit for all) and `save_history` (sends a `.txt` copy of the deleted messages first). |
 
 ## Rate limit
 

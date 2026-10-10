@@ -28,8 +28,13 @@ mean the same thing in two workspaces, it is a contract and it belongs in
 `@mcbot/schema` — not a literal in each. See [contracts.md](contracts.md).
 
 **Does it touch a Minecraft server?** Then it goes behind a `serverAccess`
-function, so local and remote instances keep working from one implementation.
-Callers never import `fs` or `child_process` for server data.
+function in `src/core/utils/server/access/`; the wrapper does the work on the
+Minecraft host. Callers never import `fs` or `child_process` for server data.
+A feature that sends a console command uses `server.send()` and handles all
+three outcomes (`delivered`, `sent`, `unreachable`): record state, start a
+cooldown or tell the player it worked only when the command reached the server.
+A command that targets a server resolves it with `resolveServer(interaction)`;
+do not pick a server by hand.
 
 **Is it a decision, or is it plumbing?** Decisions (business rules) live in
 core, where the bot and the dashboard can both reach them. Handlers and views
@@ -43,7 +48,9 @@ owning store module. Human-edited state stays JSON. See
 
 - [ ] `npm run typecheck`, `npm run lint`, `npm test` all clean
 - [ ] `npm run schema:check` clean — regenerate if you touched a config type
-- [ ] `npm run i18n:check` clean — `en` and `de` stay in parity
+- [ ] `npm run i18n:check` clean: `en` and `de` stay in parity and no Discord reply carries a hard-coded English literal
+- [ ] `npm run layout:check` clean, and `npm run wire:check` if you touched wrapper-facing types
+- [ ] A line under `[Unreleased]` in `CHANGELOG.md` for anything an admin or player could notice
 - [ ] New behaviour covered by tests; a bug fix has a regression test that fails
       without the fix
 - [ ] User-visible changes documented under `docs/`

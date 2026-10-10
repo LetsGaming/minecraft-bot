@@ -62,7 +62,7 @@ appear in Discord the first time. Full instructions are in the
 ### The Minecraft side
 
 The bot reaches every server through the
-[API wrapper](https://github.com/LetsGaming/minecraft-server-api) (3.1.1+),
+[API wrapper](https://github.com/LetsGaming/minecraft-server-api),
 which runs on the Minecraft host and owns the RCON connection, the files, and
 the management scripts. Installing it is
 [remote-setup.md](docs/admin/remote-setup.md); the bot itself can run anywhere
@@ -91,7 +91,7 @@ Everything is indexed in [`docs/readme.md`](docs/readme.md).
 |---|---|
 | Players | [Getting started](docs/user/getting-started.md), [commands](docs/user/commands.md), [linking](docs/user/linking.md) |
 | Admins | [Setup](docs/admin/setup.md), [configuration](docs/admin/configuration.md), [permissions](docs/admin/permissions.md), [automated features](docs/admin/automated-features.md) |
-| Deploying | [Docker](docs/admin/docker.md), [API wrapper](docs/admin/remote-setup.md), [upgrading from 4.x](docs/admin/migrating-to-5.md) |
+| Deploying | [Docker](docs/admin/docker.md), [API wrapper](docs/admin/remote-setup.md), [upgrading to 7.0](docs/admin/migrating-to-7.md), [upgrading from 4.x](docs/admin/migrating-to-5.md) |
 | Dashboard | [Access and grants](docs/admin/capabilities.md), [emergency access](docs/admin/emergency-access.md), [retiring the old panel](docs/admin/retiring-server-manager.md) |
 | Contributors | [Developer docs](docs/dev/readme.md) — [architecture](docs/dev/architecture.md), [adding features](docs/dev/adding-features.md), [coding guidelines](docs/dev/coding-guidelines.md), [testing](docs/dev/testing.md) |
 | Reference | [Full feature list](docs/features.md), [roadmap](docs/ROADMAP.md) |

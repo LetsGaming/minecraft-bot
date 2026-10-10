@@ -31,6 +31,10 @@ need to know it.
 `@mcbot/schema` has no directory of its own: it is small, and its whole point
 is that every workspace depends on it, which makes it root material.
 
+## Refactor records
+
+[refactor/](refactor/) holds the Wave 1 audit and its [summary](refactor/wave1-summary.md): what changed per phase, what was deferred, how it was verified and the cross-repo merge order.
+
 ## History
 
 [history/](history/) keeps the design records for work that has since shipped

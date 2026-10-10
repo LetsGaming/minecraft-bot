@@ -82,11 +82,29 @@ registry (`getServerInstance`, `getAllInstances`, `getGuildServer`). It owns:
 here.** Every time one of them has been copied out, the copy drifted. TPS is
 the exception and for the same reason: the wrapper holds the connection, so it
 is the only side that sees a `tps` response, and it parses it. Those regexes
-and their regression guards live in the wrapper's `tests/tps.test.ts`.
+and their regression guards live in the wrapper's `tests/instances/tps.test.ts`.
 
 Commands do not reach the registry directly — they go through
 `resolveServer(interaction)`. See
 [architecture.md](../architecture.md#server-resolution).
+
+## Timeouts and failure handling
+
+- Reads wait 8 s (`DEFAULT_GET_TIMEOUT_MS` in `access/apiClient.ts`). Mod
+  install and update, backup download (header wait only, the body is streamed
+  without a limit), restore, delete and config writes each have their own
+  ceiling next to the function that makes the request.
+- A management script waits as long as the wrapper does. `access/manifest.ts`
+  keeps the `scriptTimeoutsMs` table from `/manifest`; `wrapperContract.ts`
+  clamps each value to 5 s to 15 min and falls back to a built-in table
+  (`FALLBACK_SCRIPT_TIMEOUTS_MS`) for a wrapper that does not advertise one. A
+  script that outlives the wait throws `ScriptStillRunningError`, which callers
+  report as "still running", not as a failure.
+- The per-server circuit breaker (`circuitBreaker.ts`) opens after 5
+  consecutive failures, fails fast for 15 s, then lets one probe through. A 429
+  is the wrapper rate limiting, not failing: it never counts toward the breaker
+  and surfaces as `RateLimitedError`. Reads and `sendCommandOutcome` use the
+  breaker; scripts, mod mutations and restore do not.
 
 ## Capabilities
 
@@ -137,10 +155,8 @@ the call site.
 ## Host and liveness
 
 - `hostResources.ts` — RAM/CPU of the server process and disk usage of the world
-  and backup paths. Local instances go through `execCommand` (`execSafe`, no
-  shell interpolation); remote ones get the same numbers from the wrapper's
-  `/info`. An older wrapper yields null and the caller skips the instance rather
-  than erroring.
+  and backup paths, read from the wrapper's `/info`. An older wrapper yields
+  null and the caller skips the instance rather than erroring.
 - `runtimeHeartbeat.ts` — the bot overwrites `data/runtime.json` roughly once a
   minute; the dashboard reads it and treats a stale timestamp as "bot down". A
   file rather than a socket, because both processes already share the data
