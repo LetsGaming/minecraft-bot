@@ -55,7 +55,14 @@
             </div>
           </template>
         </Select>
-        <p v-if="alreadyConfigured" class="hint warn-hint">
+        <p v-if="seeding" class="hint">
+          <i class="pi pi-spin pi-spinner" /> Reading this guild's current config…
+        </p>
+        <div v-else-if="seedError" class="load-error">
+          <Message severity="error" :closable="false">{{ seedError }}</Message>
+          <Button label="Retry" icon="pi pi-refresh" size="small" text @click="seedFromExisting" />
+        </div>
+        <p v-else-if="alreadyConfigured" class="hint warn-hint">
           <i class="pi pi-info-circle" /> This guild already has config — the
           wizard is pre-filled with its current settings and will update it.
         </p>
@@ -109,7 +116,11 @@
               </div>
             </div>
 
-            <div v-if="model[f.key].enabled" class="feature-inputs">
+            <p v-if="model[f.key].enabled && model[f.key].preserved" class="hint small preserved-note">
+              <i class="pi pi-lock" /> Several settings exist for this feature. They are kept as they are;
+              edit them in Config.
+            </p>
+            <div v-else-if="model[f.key].enabled" class="feature-inputs">
               <Select
                 v-if="f.input !== 'enabled' && f.input !== 'role'"
                 v-model="model[f.key].channelId"
@@ -201,6 +212,17 @@
       <Message v-if="writeError" severity="error" :closable="false" class="mt">
         {{ writeError }}
       </Message>
+      <Button
+        v-if="conflicted"
+        label="Reload the latest config"
+        icon="pi pi-refresh"
+        size="small"
+        severity="secondary"
+        outlined
+        class="mt"
+        :loading="seeding"
+        @click="onReloadLatest"
+      />
     </section>
 
     <template #footer>
@@ -234,6 +256,7 @@
           label="Write config"
           icon="pi pi-check"
           :loading="writing"
+          :disabled="!canWrite || conflicted"
           @click="submit"
         />
       </div>
@@ -300,7 +323,7 @@ export default defineComponent({
       return this.features.filter((f) => this.model[f.key].enabled);
     },
     canAdvance(): boolean {
-      if (this.step === 0) return !!this.guildId;
+      if (this.step === 0) return !!this.guildId && this.seeded && !this.seeding;
       if (this.step === 1) {
         // every enabled feature that needs a target must have one picked
         return this.enabledFeatures.every((f) => {
@@ -333,6 +356,9 @@ export default defineComponent({
       if (this.step === 1) {
         this.step = 2;
       }
+    },
+    async onReloadLatest() {
+      if (await this.reloadLatest()) this.step = 0;
     },
     async submit() {
       if (await this.write()) {
@@ -367,6 +393,7 @@ export default defineComponent({
 </script>
 
 <style scoped>
+.preserved-note { margin: 8px 0 0; }
 .steps { display: flex; gap: 6px; margin-bottom: 18px; }
 .step { display: flex; align-items: center; gap: 7px; flex: 1; color: var(--mc-muted); font-size: 12.5px; }
 .step-num {
