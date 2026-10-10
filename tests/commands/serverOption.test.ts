@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { beforeAll, describe, it, expect } from "vitest";
 
 type OptionJson = {
   name: string;
@@ -28,6 +28,10 @@ const commands = {
 };
 
 describe("server: option", () => {
+  beforeAll(async () => {
+    await Promise.all(Object.values(commands).map((load) => load()));
+  }, 120_000);
+
   it.each(Object.entries(commands))(
     "%s offers an optional autocompleted server option",
     async (_name, load) => {

@@ -7,7 +7,7 @@
  *    name-taken, rate limiting — against a mocked confirmLinkCode
  *    (the atomic store op that replaced the module-level codes cache)
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
 import { randomBytes } from "crypto";
 
 // ── Top-level mocks — must be at file scope for Vitest hoisting ───────────
@@ -52,6 +52,10 @@ describe("link code format", () => {
 // ── logWatcher !link handler ───────────────────────────────────────────────
 
 describe("logWatcher link handler", () => {
+  beforeAll(async () => {
+    await import("../../src/bot/logWatcher/commands/connection/link.js");
+  }, 120_000);
+
   beforeEach(() => {
     vi.useFakeTimers();
     vi.resetModules();
