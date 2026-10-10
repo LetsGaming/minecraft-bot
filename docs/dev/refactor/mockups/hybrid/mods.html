@@ -9,7 +9,7 @@ DIRECTION CONTRACT (Hybrid)
 THESIS: The same app, on a system. Keep today's charcoal and green so existing admins see the same product, and give every screen the Evolve token roles, shaped status chips and shared components so it finally speaks one language. Early phases fix the audit's must-haves on that foundation; later phases extend it, nothing is thrown away. Distinctive axes (operate mode): the shaped status system shared with Discord, and density. Everything else is conventional on purpose.
 WORLD: Charcoal surfaces (#15171a to #2a2e34), one green accent with dark on-accent text, system fonts, 7px and 10px radii, hairline borders, status chips with distinct shapes, no animation beyond spinners and one 180 ms entrance. Dark only.
 STORY: An admin sees which mods are current, which will block a Minecraft upgrade, and what removing or updating one will do before pressing it.
-FIRST VIEWPORT: Sidebar with one server picker. H1 "Mods on smp", the upgrade check on top (target version, one button), then one card: search, filters, a sticky-header table that becomes cards on a phone.
+FIRST VIEWPORT: Sidebar with one server picker. H1 "Mods on smp", then one Installed card that opens with the upgrade check (target version, Check button, progress and result summary) above the search, filters and a sticky-header table that becomes cards on a phone. The Modrinth catalog sits beside it from 1280 px.
 RISK: Hybrids can inherit both parents' weaknesses: generic admin look (Polish) and a wide migration (Evolve). The mitigation is the phase plan: every phase ships alone and stops cleanly.
 -->
 <link rel="stylesheet" href="tokens.css">
@@ -51,53 +51,12 @@ RISK: Hybrids can inherit both parents' weaknesses: generic admin look (Polish) 
     <h1>Mods on <span class="mono">smp</span></h1>
     <div class="page-head__actions">
       <a class="btn" href="#cat-q">Add from Modrinth</a>
-      <button class="btn btn--primary" type="button" data-show="installed busy remove" hidden>Update all (2)</button>
     </div>
   </div>
   <p class="lede">Fabric 1.21.1, 62 mods. Changes are written to the <code>mods</code> folder now and load on the next restart of the server. 3 players are online.</p>
 </div>
 
 <div class="mods-layout">
-
-<div class="mods-check">
-<section class="card" aria-labelledby="h-check" data-hide="loading empty error">
-  <div class="card__head"><h2 id="h-check">Can I upgrade Minecraft?</h2></div>
-  <div class="card__body stack">
-    <p class="small dim">Checks every installed mod for a build that matches the target version.</p>
-    <div class="stack" style="gap:var(--space-2)">
-      <label for="target" class="small dim">Target version</label>
-      <select class="select" id="target"><option>1.21.4</option><option>1.21.3</option><option>1.21.2</option></select>
-      <div><button class="linkbtn" type="button">Type a version</button></div>
-    </div>
-    <button class="btn btn--primary" type="button" data-hide="checking checkfailed">Check 62 mods</button>
-    <button class="btn btn--primary" type="button" data-show="checking" hidden disabled aria-disabled="true">Checking</button>
-    <span class="small dim" data-show="results" hidden>Checked 1.21.4 at 14:07 for the 62 mods installed then.</span>
-
-    <div class="job edge is-running" data-show="checking" hidden role="status" aria-live="polite">
-      <div class="job__top"><span class="job__title">Checking 14 of 62</span><span class="chip chip--info chip--busy">Running</span></div>
-      <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="62" aria-valuenow="14" aria-label="Mods checked" style="--p:23%"><i></i></div>
-      <div class="small dim">Asking Modrinth for a 1.21.4 build of each mod. Results appear in the list as they arrive.</div>
-    </div>
-
-    <div class="job edge is-failed" data-show="checkfailed" hidden role="alert">
-      <div class="job__top"><span class="job__title">The check for 1.21.4 failed</span><span class="chip chip--offline">Failed</span></div>
-      <div class="progress progress--fail" style="--p:50%"><i></i></div>
-      <div class="state__detail">Modrinth answered 429 Too Many Requests. Wait a minute and check again.</div>
-      <div class="cluster"><button class="btn btn--primary" type="button">Check again</button><span class="small dim">Nothing was changed on the server.</span></div>
-    </div>
-
-    <div class="minimeter" data-show="results" hidden>
-      <div class="metric metric--ready"><span class="metric__n">47</span><span class="metric__l">Ready</span></div>
-      <div class="metric metric--missing"><span class="metric__n">9</span><span class="metric__l">No build</span></div>
-      <div class="metric metric--unknown"><span class="metric__n">6</span><span class="metric__l">Unknown</span></div>
-    </div>
-    <div class="stack" style="gap:var(--space-2)" data-show="results" hidden>
-      <span class="caps" id="blk-l">Blocking the upgrade</span>
-      <div class="iconstrip" role="group" aria-labelledby="blk-l"><span class="modicon modicon--sm" style="--h:28"><img class="modicon__img" src="img/mod-create.svg" width="64" height="64" alt="Create" loading="lazy" data-initials="Cr"></span><span class="modicon modicon--sm" style="--h:214"><img class="modicon__img" src="img/mod-create-deco.svg" width="64" height="64" alt="Create Deco" loading="lazy" data-initials="CD"></span><span class="modicon modicon--sm" style="--h:77"><img class="modicon__img" src="img/mod-steam-n-rails.svg" width="64" height="64" alt="Create: Steam &#39;n&#39; Rails" loading="lazy" data-initials="CS"></span><span class="modicon modicon--sm" style="--h:76"><img class="modicon__img" src="img/mod-enchantment-industry.svg" width="64" height="64" alt="Create: Enchantment Industry" loading="lazy" data-initials="CE"></span><span class="modicon modicon--sm" style="--h:13"><img class="modicon__img" src="img/mod-supplementaries.svg" width="64" height="64" alt="Supplementaries" loading="lazy" data-initials="Su"></span><span class="modicon modicon--sm" style="--h:285"><img class="modicon__img" src="img/mod-waystones.svg" width="64" height="64" alt="Waystones" loading="lazy" data-initials="Wa"></span><span class="more">and 12 more</span></div>
-    </div>
-  </div>
-</section>
-</div>
 
 <div class="mods-main">
 
@@ -107,8 +66,51 @@ RISK: Hybrids can inherit both parents' weaknesses: generic admin look (Polish) 
   <div class="banner__actions"><button class="btn btn--sm" type="button">Copy blocker list</button></div>
 </div>
 
-<section class="card" aria-labelledby="h-list" data-show="installed remove" hidden>
-  <div class="card__head"><h2 id="h-list">Installed</h2><span class="card__meta">62 mods, 2 updates available</span></div>
+<section class="card" aria-labelledby="h-list" data-hide="loading empty error">
+  <div class="card__head"><h2 id="h-list">Installed</h2>
+    <span class="card__meta" data-show="installed remove checkfailed" hidden>62 mods, 2 updates available</span>
+    <span class="card__meta" data-show="busy" hidden>62 mods, 1 update available. 1 restart pending</span>
+    <span class="card__meta" data-show="checking results" hidden>62 mods</span>
+    <button class="btn btn--sm btn--primary" type="button" data-show="installed busy remove" hidden>Update all (2)</button>
+  </div>
+
+  <div class="check" role="group" aria-labelledby="h-check">
+    <div class="check__row">
+      <div class="check__field"><label for="target" id="h-check">Target Minecraft version</label>
+        <select class="select" id="target"><option>1.21.4</option><option>1.21.3</option><option>1.21.2</option></select></div>
+      <button class="btn btn--primary" type="button" data-hide="checking">Check 62 mods for 1.21.4</button>
+      <button class="btn btn--primary" type="button" data-show="checking" hidden disabled aria-disabled="true">Checking</button>
+      <button class="linkbtn" type="button">Type a version</button>
+    </div>
+    <span class="small dim" data-show="results" hidden>Checked 1.21.4 at 14:07 for the 62 mods installed then. It goes stale if you change a mod.</span>
+
+    <div class="job edge is-running" data-show="checking" hidden role="status" aria-live="polite">
+      <div class="job__top"><span class="job__title">Checking 14 of 62</span><span class="chip chip--info chip--busy">Running</span></div>
+      <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="62" aria-valuenow="14" aria-label="Mods checked" style="--p:23%"><i></i></div>
+      <div class="small dim">Asking Modrinth for a 1.21.4 build of each mod. Results appear below as they arrive. The check cannot be cancelled, it ends on its own.</div>
+    </div>
+
+    <div class="job edge is-failed" data-show="checkfailed" hidden role="alert">
+      <div class="job__top"><span class="job__title">The check for 1.21.4 failed</span><span class="chip chip--offline">Failed</span></div>
+      <div class="progress progress--fail" style="--p:50%"><i></i></div>
+      <div class="state__detail">Modrinth answered 429 Too Many Requests. Wait a minute and check again.</div>
+      <div class="cluster"><button class="btn btn--primary" type="button">Check again</button><span class="small dim">Nothing was changed on the server.</span></div>
+    </div>
+
+    <div class="check__results" data-show="results" hidden>
+      <div class="minimeter">
+        <div class="metric metric--ready"><span class="metric__n">47</span><span class="metric__l">Ready</span></div>
+        <div class="metric metric--missing"><span class="metric__n">9</span><span class="metric__l">No build</span></div>
+        <div class="metric metric--unknown"><span class="metric__n">6</span><span class="metric__l">Unknown</span></div>
+      </div>
+      <div class="stack" style="gap:var(--space-2)">
+        <span class="caps" id="blk-l">Blocking the upgrade</span>
+        <div class="iconstrip" role="group" aria-labelledby="blk-l"><span class="modicon modicon--sm" style="--h:28"><img class="modicon__img" src="img/mod-create.svg" width="64" height="64" alt="Create" loading="lazy" data-initials="Cr"></span><span class="modicon modicon--sm" style="--h:214"><img class="modicon__img" src="img/mod-create-deco.svg" width="64" height="64" alt="Create Deco" loading="lazy" data-initials="CD"></span><span class="modicon modicon--sm" style="--h:77"><img class="modicon__img" src="img/mod-steam-n-rails.svg" width="64" height="64" alt="Create: Steam &#39;n&#39; Rails" loading="lazy" data-initials="CS"></span><span class="modicon modicon--sm" style="--h:76"><img class="modicon__img" src="img/mod-enchantment-industry.svg" width="64" height="64" alt="Create: Enchantment Industry" loading="lazy" data-initials="CE"></span><span class="modicon modicon--sm" style="--h:13"><img class="modicon__img" src="img/mod-supplementaries.svg" width="64" height="64" alt="Supplementaries" loading="lazy" data-initials="Su"></span><span class="modicon modicon--sm" style="--h:285"><img class="modicon__img" src="img/mod-waystones.svg" width="64" height="64" alt="Waystones" loading="lazy" data-initials="Wa"></span><span class="more">and 12 more</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div data-show="installed remove checkfailed" hidden>
   <div class="toolbar">
     <div class="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4-4"/></svg><label class="sr-only" for="mq">Search installed mods</label><input class="input" id="mq" type="search" placeholder="Search 62 mods"></div>
     <button class="filter" type="button" aria-pressed="false" data-toggle-pressed="">Updates <span class="n">2</span></button>
@@ -129,10 +131,9 @@ RISK: Hybrids can inherit both parents' weaknesses: generic admin look (Polish) 
 <tr class=""><td class="primary"><div class="modcell"><span class="modicon" style="--h:118"><img class="modicon__img" src="img/mod-xaeros-world-map.svg" width="64" height="64" alt="" loading="lazy" data-initials="XW"></span><span class="modcell__text"><span class="name">Xaero&#39;s World Map</span><span class="sub mono">XaerosWorldMap_1.39.4_Fabric_1.21.jar</span></span></div></td><td data-label="Version">1.39.4</td><td class="col-env" data-label="Runs on">Client</td><td data-label="Status"><span class="chip chip--applied">Up to date</span></td><td class="actions"><div class="cluster"><button class="btn btn--sm btn--danger-quiet" type="button" aria-label="Remove Xaero&#39;s World Map">Remove</button></div></td></tr>
     </tbody></table></div>
   <div class="card__foot"><span>Showing 10 of 62 (sample)</span><div class="pager"><button class="btn btn--sm" type="button" disabled>Previous</button><span aria-live="polite">Page 1 of 7</span><button class="btn btn--sm" type="button">Next</button></div></div>
-</section>
+  </div>
 
-<section class="card" aria-labelledby="h-list2" data-show="busy" hidden>
-  <div class="card__head"><h2 id="h-list2">Installed</h2><span class="card__meta">62 mods, 1 update available. 1 restart pending</span></div>
+  <div data-show="busy" hidden>
   <div class="banner banner--pending" style="margin:12px 16px 0" role="status"><span class="banner__icon" aria-hidden="true">&#8635;</span><div class="banner__text"><strong>1 change waits for a restart.</strong> Sodium 0.6.14 is on disk. The server still runs 0.6.13 and 3 players are online.</div><div class="banner__actions"><button class="btn btn--sm" type="button">Restart smp</button></div></div>
   <div class="table-wrap"><table class="data"><caption class="sr-only">Installed mods on smp</caption>
     <thead><tr><th scope="col">Mod</th><th scope="col">Version</th><th scope="col" class="col-env">Runs on</th><th scope="col">Status</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
@@ -149,16 +150,11 @@ RISK: Hybrids can inherit both parents' weaknesses: generic admin look (Polish) 
 <tr class=""><td class="primary"><div class="modcell"><span class="modicon" style="--h:118"><img class="modicon__img" src="img/mod-xaeros-world-map.svg" width="64" height="64" alt="" loading="lazy" data-initials="XW"></span><span class="modcell__text"><span class="name">Xaero&#39;s World Map</span><span class="sub mono">XaerosWorldMap_1.39.4_Fabric_1.21.jar</span></span></div></td><td data-label="Version">1.39.4</td><td class="col-env" data-label="Runs on">Client</td><td data-label="Status"><span class="chip chip--applied">Up to date</span></td><td class="actions"><div class="cluster"><button class="btn btn--sm btn--danger-quiet" type="button" aria-label="Remove Xaero&#39;s World Map">Remove</button></div></td></tr>
     </tbody></table></div>
   <div class="card__foot"><span>Showing 10 of 62 (sample)</span><span></span></div>
-</section>
+  </div>
 
-<section class="card" data-show="loading" hidden aria-busy="true" aria-label="Loading mods">
-  <div class="card__head"><h2>Installed</h2><span class="card__meta">Loading from smp</span></div>
-  <div class="card__body stack"><div class="skel-row"><span class="skel-tile skel"></span><span class="lines"><span class="skel" style="width:45%"></span><span class="skel" style="width:85%"></span></span></div><div class="skel-row"><span class="skel-tile skel"></span><span class="lines"><span class="skel" style="width:45%"></span><span class="skel" style="width:85%"></span></span></div><div class="skel-row"><span class="skel-tile skel"></span><span class="lines"><span class="skel" style="width:45%"></span><span class="skel" style="width:85%"></span></span></div><div class="skel-row"><span class="skel-tile skel"></span><span class="lines"><span class="skel" style="width:45%"></span><span class="skel" style="width:85%"></span></span></div><div class="skel-row"><span class="skel-tile skel"></span><span class="lines"><span class="skel" style="width:45%"></span><span class="skel" style="width:85%"></span></span></div></div>
-</section>
-
-<section class="card" aria-labelledby="h-chk" data-show="checking" hidden>
-  <div class="card__head"><h2 id="h-chk">Results so far</h2><span class="card__meta">Rows fill in as they are checked</span></div>
-  <div class="table-wrap"><table class="data"><caption class="sr-only">Check progress per mod</caption>
+  <div data-show="checking" hidden>
+  <h3 class="subhead" id="h-chk">Results so far <span class="card__meta">Rows fill in as they are checked</span></h3>
+  <div class="table-wrap" tabindex="0" role="region" aria-label="Check progress per mod"><table class="data"><caption class="sr-only">Check progress per mod</caption>
     <thead><tr><th scope="col">Mod</th><th scope="col">Installed</th><th scope="col">At 1.21.4</th><th scope="col">Detail</th></tr></thead>
     <tbody>
 <tr><td class="primary"><div class="modcell"><span class="modicon" style="--h:177"><img class="modicon__img" src="img/mod-sodium.svg" width="64" height="64" alt="" loading="lazy" data-initials="So"></span><span class="modcell__text"><span class="name">Sodium</span></span></div></td><td data-label="Installed">0.6.13</td><td data-label="At 1.21.4"><span class="chip chip--online">Ready</span></td><td data-label="Detail" class="dim small">Build found for 1.21.4</td></tr>
@@ -171,10 +167,10 @@ RISK: Hybrids can inherit both parents' weaknesses: generic admin look (Polish) 
 <tr><td class="primary"><div class="modcell"><span class="modicon" style="--h:345" aria-hidden="true">Te</span><span class="modcell__text"><span class="name">Terralith</span></span></div></td><td data-label="Installed">2.5.8</td><td data-label="At 1.21.4"><span class="chip chip--plain">Waiting</span></td><td data-label="Detail" class="dim small">Queued</td></tr>
 <tr><td class="primary"><div class="modcell"><span class="modicon" style="--h:250"><img class="modicon__img" src="img/missing/xaeros-minimap.png" width="64" height="64" alt="" loading="lazy" data-initials="XM"></span><span class="modcell__text"><span class="name">Xaero&#39;s Minimap</span></span></div></td><td data-label="Installed">25.2.10</td><td data-label="At 1.21.4"><span class="chip chip--plain">Waiting</span></td><td data-label="Detail" class="dim small">Queued</td></tr>
     </tbody></table></div>
-</section>
+  </div>
 
-<section class="card" aria-labelledby="h-res" data-show="results" hidden id="resultscard">
-  <div class="card__head"><h2 id="h-res">Results for 1.21.4</h2><span class="card__meta">No build first, then Unknown, then Ready</span></div>
+  <div data-show="results" hidden id="resultscard">
+  <h3 class="subhead" id="h-res">Results for 1.21.4 <span class="card__meta">No build first, then Unknown, then Ready</span></h3>
   <div class="toolbar" role="group" aria-label="Filter results">
     <button class="filter" type="button" aria-pressed="false" data-kind="all" data-total="62">All <span class="n">62</span></button>
     <button class="filter" type="button" aria-pressed="true" data-kind="blockers" data-total="15">Blockers <span class="n">15</span></button>
@@ -208,6 +204,12 @@ RISK: Hybrids can inherit both parents' weaknesses: generic admin look (Polish) 
 <tr data-kind="ready"><td class="primary"><div class="modcell"><span class="modicon" style="--h:54"><img class="modicon__img" src="img/mod-entity-culling.svg" width="64" height="64" alt="" loading="lazy" data-initials="EC"></span><span class="modcell__text"><span class="name">Entity Culling</span></span></div></td><td data-label="Installed">1.7.2</td><td data-label="At 1.21.4"><span class="chip chip--online">Ready</span></td><td data-label="Detail" class="dim small">entityculling-fabric-1.7.4-mc1.21.4</td><td class="actions"></td></tr>
     </tbody></table></div>
   <div class="card__foot"><span id="rescount" aria-live="polite">Showing 15 of 15 blockers</span><span class="small">Results are from 14:07 and go stale if you change a mod. <button class="linkbtn" type="button">Check again</button></span></div>
+  </div>
+</section>
+
+<section class="card" data-show="loading" hidden aria-busy="true" aria-label="Loading mods">
+  <div class="card__head"><h2>Installed</h2><span class="card__meta">Loading from smp</span></div>
+  <div class="card__body stack"><div class="skel-row"><span class="skel-tile skel"></span><span class="lines"><span class="skel" style="width:45%"></span><span class="skel" style="width:85%"></span></span></div><div class="skel-row"><span class="skel-tile skel"></span><span class="lines"><span class="skel" style="width:45%"></span><span class="skel" style="width:85%"></span></span></div><div class="skel-row"><span class="skel-tile skel"></span><span class="lines"><span class="skel" style="width:45%"></span><span class="skel" style="width:85%"></span></span></div><div class="skel-row"><span class="skel-tile skel"></span><span class="lines"><span class="skel" style="width:45%"></span><span class="skel" style="width:85%"></span></span></div><div class="skel-row"><span class="skel-tile skel"></span><span class="lines"><span class="skel" style="width:45%"></span><span class="skel" style="width:85%"></span></span></div></div>
 </section>
 
 <section class="card" data-show="empty" hidden>
