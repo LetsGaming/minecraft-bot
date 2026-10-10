@@ -100,6 +100,16 @@ find afterwards** rather than on the row count. Retention and its readers are on
 contract; asserting either alone is how a 24-hour hole went unnoticed through a
 green suite. `tests/minecraft/snapshotUtils.test.ts` is the pattern.
 
+## Keeping tests stable on a cold run
+
+A full run right after a checkout or a cleared Vite cache transforms every module on first import. That is slow enough to push a test whose first `await import(...)` loads a command graph past the 5 second default. Rules that keep the suite deterministic:
+
+- Import the module under test (and its heavy graph) in a `beforeAll` with an explicit generous timeout, so the cold transform cost lands in the hook. After `vi.resetModules()` the transformed code is cached and re-imports are cheap. See `tests/commands/daily.test.ts` and `tests/commands/serverOption.test.ts`.
+- Reset module state in `beforeEach`/`afterEach` instead of relying on test order: `vi.resetModules()`, `closeDbForTesting()`, and re-arming mock return values. `vi.clearAllMocks()` keeps implementations, so a `mockRejectedValue` in one test leaks into the next unless `beforeEach` restores the default.
+- Use fake timers and `vi.setSystemTime()` instead of the wall clock. Never derive an expectation from `Date.now()` plus a time of day without pinning the clock.
+- A file name that embeds a timestamp must be collision-proof (milliseconds plus a counter): tests in separate files can share a temp directory within one second.
+- `npx vitest run --sequence.shuffle` randomizes order inside files and is a useful probe for hidden order dependence.
+
 ## End-to-end
 
 Two scripts, neither in the vitest suite, because both need something real
