@@ -660,17 +660,6 @@ export async function sendCommandOutcome(
   return parseCommandReply(body);
 }
 
-/** Send a command to the server (via RCON or screen on the remote host). */
-export async function sendCommand(
-  cfg: ServerConfig,
-  command: string,
-): Promise<string | null> {
-  const { result } = await apiPost<{ result: string | null }>(cfg, "/command", {
-    command,
-  });
-  return result;
-}
-
 /** Get TPS data from the server. Returns null if unavailable. */
 export async function getTps(cfg: ServerConfig): Promise<TpsResult | null> {
   const { tps } = await apiGet<{

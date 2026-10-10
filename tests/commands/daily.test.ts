@@ -11,7 +11,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // ── Top-level mocks — must be at file scope for Vitest hoisting ───────────
 
 vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
-  sendCommand: vi.fn().mockResolvedValue(null),
 }));
 vi.mock("../../src/core/utils/stores/linkUtils.js", () => ({
   isLinked: vi.fn(),

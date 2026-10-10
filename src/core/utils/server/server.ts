@@ -4,7 +4,7 @@
  * Every instance is reached through its API wrapper — this class holds no
  * connection of its own. Before 5.0.0 it also owned an RconClient and a
  * sudo/screen fallback, and each method chose between them and the wrapper
- * at call time; `sendCommand` even preferred RCON over the wrapper when
+ * at call time; the command path even preferred RCON over the wrapper when
  * both were configured, so the two paths could disagree about what a
  * server had just been told.
  */
@@ -139,12 +139,6 @@ export class ServerInstance {
       );
     }
     return outcome;
-  }
-
-  /** Temporary shim for callers not yet migrated to `send`. */
-  async sendCommand(command: string): Promise<string | null> {
-    const outcome = await this.send(command);
-    return outcome.kind === "delivered" ? outcome.output : null;
   }
 
   /**

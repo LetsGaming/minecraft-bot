@@ -149,12 +149,4 @@ describe("ServerInstance.send", () => {
       kind: "unreachable",
     });
   });
-
-  it("keeps the sendCommand shim: output on delivered, null otherwise", async () => {
-    const inst = new ServerInstance(cfg);
-    mockFetch.mockResolvedValueOnce(reply(200, { result: "x", via: "rcon", sent: true }));
-    expect(await inst.sendCommand("/list")).toBe("x");
-    mockFetch.mockResolvedValueOnce(reply(200, { result: null, via: "screen", sent: true }));
-    expect(await inst.sendCommand("/list")).toBeNull();
-  });
 });

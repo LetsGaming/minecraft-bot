@@ -54,7 +54,6 @@ vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
       maxPlayers: "20",
       players: ["A", "B"],
     }),
-  sendCommand: vi.fn().mockResolvedValue("result"),
   sendCommandOutcome: vi
     .fn()
     .mockResolvedValue({ kind: "delivered", output: "result" }),
@@ -134,7 +133,7 @@ describe("defineCommand — cooldown enforcement", () => {
 describe("ServerInstance methods", () => {
   let ServerInstance: new (cfg: never) => {
     isRunning: () => Promise<boolean>;
-    sendCommand: (cmd: string) => Promise<string | null>;
+    send: (cmd: string) => Promise<{ kind: string }>;
     getSeed: () => Promise<{ ok: boolean }>;
     getList: () => Promise<{
       playerCount: string;
@@ -171,10 +170,10 @@ describe("ServerInstance methods", () => {
     expect(result).toBe(true);
   });
 
-  it("sendCommand() keeps returning the output of a delivered command", async () => {
+  it("send() delegates to serverAccess.sendCommandOutcome", async () => {
     const inst = new ServerInstance(remoteCfg);
-    const result = await inst.sendCommand("/say hello");
-    expect(result).toBe("result");
+    const result = await inst.send("/say hello");
+    expect(result).toEqual({ kind: "delivered", output: "result" });
   });
 
   it("getList() delegates to serverAccess.getList", async () => {

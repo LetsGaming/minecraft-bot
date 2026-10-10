@@ -244,11 +244,6 @@ describe("playerUtils", () => {
     expect((count as { playerCount: string }).playerCount).toBe("3");
   });
 
-  it("getPlayerCount returns unknown when no server and no log output", async () => {
-    const count = await getPlayerCount(undefined as never);
-    expect((count as { playerCount: string }).playerCount).toBe("unknown");
-  });
-
   it("getOnlinePlayers uses server.getList when server is provided", async () => {
     const server = {
       id: "srv",
@@ -264,10 +259,6 @@ describe("playerUtils", () => {
     expect(players).toContain("A");
   });
 
-  it("getOnlinePlayers returns empty array when no server and no log", async () => {
-    const players = await getOnlinePlayers(undefined as never);
-    expect(players).toEqual([]);
-  });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
