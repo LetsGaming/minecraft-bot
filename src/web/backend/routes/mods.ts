@@ -52,7 +52,7 @@ import { fetchReleaseVersions } from "@mcbot/core/utils/minecraft/mojang.js";
 import { readThrough } from "@mcbot/core/utils/wrapper/lastKnown.js";
 import { cached, invalidate } from "@mcbot/core/utils/cache.js";
 import { CompatLimitError, createCompatGuard } from "./compatGuard.js";
-import { sessionFromRequest } from "../auth/auth.js";
+import { isSysadmin, sessionFromRequest, type Session } from "../auth/auth.js";
 import { BadRequest, NotFound, HttpError } from "../errors.js";
 import {
   IdParams,
@@ -86,6 +86,17 @@ function requireServer(id: string): NonNullable<ReturnType<typeof getServerInsta
   const server = getServerInstance(id);
   if (!server) throw new NotFound(`No server named "${id}" is configured.`);
   return server;
+}
+
+/**
+ * The tenant a start request is counted against: a sysadmin is their own
+ * scope; everyone else shares the scope of the guilds they manage, and a user
+ * with only per-server grants is their own scope.
+ */
+function compatTenant(session: Session): string {
+  if (isSysadmin(session)) return `sys:${session.uid}`;
+  if (session.guilds.length > 0) return `guild:${[...session.guilds].sort().join(",")}`;
+  return `user:${session.uid}`;
 }
 
 function clampInt(raw: string | undefined, def: number, min: number, max: number): number {
@@ -155,20 +166,27 @@ export function registerModRoutes(app: FastifyInstance): void {
         );
       }
       const refresh = req.body.refresh === true;
-      const user = sessionFromRequest(req)!.uid;
-      let admitted;
+      const session = sessionFromRequest(req)!;
+      let reservation;
       try {
-        admitted = compatGuard.admit(req.params.id, user, req.body.mcVersion, refresh);
+        reservation = compatGuard.reserve(
+          req.params.id,
+          session.uid,
+          compatTenant(session),
+          req.body.mcVersion,
+          refresh,
+        );
       } catch (err) {
         if (err instanceof CompatLimitError) throw new HttpError(err.statusCode, err.message);
         throw err;
       }
-      if (admitted.existingJobId) return { jobId: admitted.existingJobId };
       try {
+        if (reservation.kind === "existing") return await reservation.settled;
         const started = await startModCompat(server.config, req.body.mcVersion, refresh);
-        compatGuard.started(req.params.id, user, req.body.mcVersion, started.jobId, refresh);
+        reservation.commit(started.jobId);
         return started;
       } catch (err) {
+        if (reservation.kind === "new") reservation.rollback(err);
         log.error(
           "web",
           `Mod compat start failed ${logFields({ server: req.params.id, mcVersion: req.body.mcVersion, detail: errMsg(err) })}`,

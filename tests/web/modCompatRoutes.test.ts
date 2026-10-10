@@ -13,6 +13,11 @@ const MODS_READER = "777777777777777777";
 const PLAIN_READER = "888888888888888888"; // server:read only
 const OTHER_SERVER_READER = "999999999999999990"; // mods:read on another server
 
+const G1A = "100000000000000001";
+const G1B = "100000000000000002";
+const G1C = "100000000000000003";
+const G2A = "200000000000000001";
+
 const mockConfig = {
   token: "t",
   clientId: "123456789012345678",
@@ -25,6 +30,10 @@ const mockConfig = {
       [MODS_READER]: { smp: ["server:read", "mods:read"] },
       [PLAIN_READER]: { smp: ["server:read"] },
       [OTHER_SERVER_READER]: { other: ["server:read", "mods:read"] },
+      [G1A]: { smp: ["server:read", "mods:read"], other: ["server:read", "mods:read"] },
+      [G1B]: { smp: ["server:read", "mods:read"], other: ["server:read", "mods:read"] },
+      [G1C]: { smp: ["server:read", "mods:read"] },
+      [G2A]: { smp: ["server:read", "mods:read"] },
     },
   },
 };
@@ -142,11 +151,11 @@ import { invalidateWhere } from "../../src/core/utils/cache.js";
 
 const JOB = "6f1c2d3e-4a5b-4c6d-8e7f-0a1b2c3d4e5f";
 
-function cookieFor(uid: string): string {
+function cookieFor(uid: string, guilds: string[] = []): string {
   return `${SESSION_COOKIE}=${encodeSigned({
     uid,
     tag: `u-${uid}`,
-    guilds: [],
+    guilds,
     exp: Date.now() + 60_000,
     gexp: Date.now() + 60_000,
   })}`;
@@ -396,5 +405,67 @@ describe("resource caps through the routes", () => {
     }
     expect(startModCompatMock).not.toHaveBeenCalled();
     expect(logErrorMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("fairness between guilds and atomic admission", () => {
+  const postAs = (uid: string, guild: string, server: string, mcVersion = "1.21.5") => ({
+    method: "POST" as const,
+    url: `/api/servers/${server}/mods/compat`,
+    headers: { cookie: cookieFor(uid, [guild]), "content-type": "application/json" },
+    payload: { mcVersion },
+  });
+
+  it("one guild filling its limit does not stop another guild", async () => {
+    startModCompatMock.mockImplementation(async () => ({ jobId: crypto.randomUUID() }));
+    const app = buildServer();
+    expect((await app.inject(postAs(G1A, "g1", "smp"))).statusCode).toBe(200);
+    expect((await app.inject(postAs(G1B, "g1", "other"))).statusCode).toBe(200);
+    const third = await app.inject(postAs(G1C, "g1", "smp"));
+    expect(third.statusCode).toBe(429);
+    expect(third.json().error).toMatch(/guild/);
+    expect((await app.inject(postAs(G2A, "g2", "smp"))).statusCode).toBe(200);
+  });
+
+  it("concurrent starts by one user reach the wrapper once and share the job", async () => {
+    let release: () => void = () => undefined;
+    startModCompatMock.mockImplementation(
+      () => new Promise((resolve) => { release = () => resolve({ jobId: JOB }); }),
+    );
+    const app = buildServer();
+    const all = Promise.all(
+      Array.from({ length: 12 }, () => app.inject(post(MODS_READER, { mcVersion: "1.21.5" }))),
+    );
+    await vi.waitFor(() => expect(startModCompatMock).toHaveBeenCalled());
+    release();
+    const responses = await all;
+    expect(startModCompatMock).toHaveBeenCalledTimes(1);
+    expect(responses.map((r) => r.statusCode)).toEqual(Array(12).fill(200));
+    expect(new Set(responses.map((r) => r.json().jobId))).toEqual(new Set([JOB]));
+  });
+
+  it("concurrent starts by many users of one guild are capped exactly", async () => {
+    startModCompatMock.mockImplementation(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+      return { jobId: crypto.randomUUID() };
+    });
+    const app = buildServer();
+    const users = [G1A, G1B, G1C];
+    const responses = await Promise.all(
+      users.flatMap((u) => ["smp", "other"].map((srv) => app.inject(postAs(u, "g1", srv)))),
+    );
+    const ok = responses.filter((r) => r.statusCode === 200).length;
+    expect(ok).toBe(2);
+    expect(startModCompatMock).toHaveBeenCalledTimes(2);
+    expect(responses.filter((r) => r.statusCode === 429)).toHaveLength(3);
+  });
+
+  it("a failed wrapper start frees the slot, so a retry works", async () => {
+    startModCompatMock.mockRejectedValueOnce(new Error("wrapper down"));
+    const app = buildServer();
+    expect((await app.inject(post(MODS_READER, { mcVersion: "1.21.5", refresh: true }))).statusCode).toBe(502);
+    const retry = await app.inject(post(MODS_READER, { mcVersion: "1.21.5", refresh: true }));
+    expect(retry.statusCode).toBe(200);
+    expect(retry.json()).toEqual({ jobId: JOB });
   });
 });

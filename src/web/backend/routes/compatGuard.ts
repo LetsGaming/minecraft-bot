@@ -9,7 +9,10 @@
  */
 import type { ModCompatJob } from "@mcbot/core/utils/server/serverAccess.js";
 
-export const MAX_ACTIVE_GLOBAL = 4;
+export const MAX_ACTIVE_PER_SERVER = 2;
+export const MAX_ACTIVE_PER_TENANT = 2;
+/** Backstop only: roughly three tenants' worth, so it trips under real overload, not under one tenant. */
+export const MAX_ACTIVE_GLOBAL = 6;
 export const REFRESH_MIN_INTERVAL_MS = 30_000;
 export const ACTIVE_MAX_AGE_MS = 20 * 60_000;
 export const JOB_MEMORY_MAX_AGE_MS = 15 * 60_000;
@@ -28,15 +31,29 @@ export class CompatLimitError extends Error {
 }
 
 interface Active {
-  jobId: string;
+  server: string;
+  tenant: string;
+  /** Null while the wrapper is still being asked. */
+  jobId: string | null;
   mcVersion: string;
   at: number;
+  settled: Promise<{ jobId: string }>;
 }
 
 interface Remembered {
   job: ModCompatJob;
   at: number;
 }
+
+export type Reservation =
+  | { kind: "existing"; settled: Promise<{ jobId: string }> }
+  | {
+      kind: "new";
+      /** The wrapper accepted the start; the reservation now names the real job. */
+      commit(jobId: string): void;
+      /** The wrapper refused or failed; free the slot and the refresh timestamp. */
+      rollback(err: unknown): void;
+    };
 
 function evictOldest<V>(map: Map<string, V>, max: number): void {
   while (map.size > max) map.delete(map.keys().next().value as string);
@@ -54,51 +71,99 @@ export function createCompatGuard(now: () => number = Date.now) {
     for (const [k, at] of refreshedAt) if (t - at > REFRESH_MIN_INTERVAL_MS) refreshedAt.delete(k);
   }
 
-  const owner = (server: string, user: string) => `${server}\n${user}`;
-  const jobKey = (server: string, jobId: string) => `${server}\n${jobId}`;
+  const owner = (server: string, user: string) => `${server}
+${user}`;
+  const jobKey = (server: string, jobId: string) => `${server}
+${jobId}`;
+
+  function countWhere(pred: (a: Active) => boolean): number {
+    let n = 0;
+    for (const a of active.values()) if (pred(a)) n++;
+    return n;
+  }
 
   return {
     /**
-     * Admission for a start request. Returns the job a user already has for
-     * the same version, or throws when the request must be refused.
+     * Admission and reservation in one synchronous step, so concurrent
+     * requests cannot all pass a check that none of them has yet counted
+     * against. A new reservation counts toward every limit immediately; the
+     * caller commits it with the real job id or rolls it back.
      */
-    admit(
+    reserve(
       server: string,
       user: string,
+      tenant: string,
       mcVersion: string,
       refresh: boolean,
-    ): { existingJobId: string | null } {
+    ): Reservation {
       sweep();
-      const mine = active.get(owner(server, user));
+      const key = owner(server, user);
+      const mine = active.get(key);
       if (mine) {
-        if (mine.mcVersion === mcVersion && !refresh) return { existingJobId: mine.jobId };
+        if (mine.mcVersion === mcVersion && !refresh) {
+          return { kind: "existing", settled: mine.settled };
+        }
         throw new CompatLimitError(
           409,
           "You already have a version check running on this server. Wait for it to finish.",
         );
       }
+      if (countWhere((a) => a.server === server) >= MAX_ACTIVE_PER_SERVER) {
+        throw new CompatLimitError(
+          429,
+          "This server already has the most version checks it allows running. Try again shortly.",
+        );
+      }
+      if (countWhere((a) => a.tenant === tenant) >= MAX_ACTIVE_PER_TENANT) {
+        throw new CompatLimitError(
+          429,
+          "Your guild already has the most version checks it allows running. Try again shortly.",
+        );
+      }
       if (active.size >= MAX_ACTIVE_GLOBAL) {
-        throw new CompatLimitError(429, "Too many version checks are running. Try again shortly.");
+        throw new CompatLimitError(
+          429,
+          "The dashboard is busy with version checks across all guilds. Try again shortly.",
+        );
       }
-      if (refresh) {
-        const last = refreshedAt.get(server);
-        if (last !== undefined && now() - last < REFRESH_MIN_INTERVAL_MS) {
-          throw new CompatLimitError(
-            429,
-            "A refresh was just requested for this server. Wait about 30 seconds.",
-          );
-        }
+      const previousRefresh = refreshedAt.get(server);
+      if (refresh && previousRefresh !== undefined && now() - previousRefresh < REFRESH_MIN_INTERVAL_MS) {
+        throw new CompatLimitError(
+          429,
+          "A refresh was just requested for this server. Wait about 30 seconds.",
+        );
       }
-      return { existingJobId: null };
-    },
 
-    started(server: string, user: string, mcVersion: string, jobId: string, refresh: boolean): void {
-      active.set(owner(server, user), { jobId, mcVersion, at: now() });
+      let resolve!: (v: { jobId: string }) => void;
+      let reject!: (e: unknown) => void;
+      const settled = new Promise<{ jobId: string }>((res, rej) => {
+        resolve = res;
+        reject = rej;
+      });
+      settled.catch(() => undefined);
+      const entry: Active = { server, tenant, jobId: null, mcVersion, at: now(), settled };
+      active.set(key, entry);
       evictOldest(active, ACTIVE_MAX_ENTRIES);
       if (refresh) {
         refreshedAt.set(server, now());
         evictOldest(refreshedAt, REFRESH_MAX_ENTRIES);
       }
+
+      return {
+        kind: "new",
+        commit(jobId) {
+          entry.jobId = jobId;
+          resolve({ jobId });
+        },
+        rollback(err) {
+          if (active.get(key) === entry) active.delete(key);
+          if (refresh) {
+            if (previousRefresh === undefined) refreshedAt.delete(server);
+            else refreshedAt.set(server, previousRefresh);
+          }
+          reject(err);
+        },
+      };
     },
 
     /** Remembered state of a job, or null when the wrapper has to be asked. */
