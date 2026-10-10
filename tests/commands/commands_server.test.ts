@@ -4,6 +4,7 @@
  * inner functions are called directly.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createErrorEmbed } from "../../src/bot/utils/embeds/embedUtils.js";
 
 // ── Shared mocks ───────────────────────────────────────────────────────────
 vi.mock("../../src/bot/commands/middleware.js", () => ({
@@ -398,6 +399,26 @@ describe("/server control command", () => {
       /setup-suite layout.*docs\/admin\/setup\.md/s,
     );
     expect(serverAccess.runScript).not.toHaveBeenCalled();
+  });
+
+  it("reports a script that outlived the wait as still running, not failed", async () => {
+    const server = makeServer();
+    vi.mocked(resolveServer).mockReturnValue(server);
+    const err = new Error("did not finish");
+    err.name = "ScriptStillRunningError";
+    vi.mocked(serverAccess.runScript).mockRejectedValue(err);
+    const interaction = makeInteraction({
+      options: {
+        getString: vi.fn().mockReturnValue(null),
+        getBoolean: vi.fn().mockReturnValue(null),
+        getSubcommand: vi.fn().mockReturnValue("restart"),
+      },
+    });
+    await execute(interaction);
+    expect(interaction.editReply).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(createErrorEmbed)).not.toHaveBeenCalledWith(
+      expect.stringContaining("failed"),
+    );
   });
 
   it("runs start subcommand and replies with success", async () => {

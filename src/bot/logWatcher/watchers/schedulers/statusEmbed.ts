@@ -34,6 +34,11 @@ import type {
   StatusMessageState,
   TpsResult,
 } from "@mcbot/core/types/index.js";
+import {
+  liveGuildConfigs,
+  resolveGuildConfigs,
+  type GuildConfigSource,
+} from "../../../utils/guild/guildConfigs.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -592,7 +597,7 @@ function enabledGuildIds(
  */
 async function runStatusPass(
   client: Client,
-  fallbackGuildConfigs: Record<string, GuildConfig>,
+  guildConfigSource: GuildConfigSource,
 ): Promise<void> {
   let fieldMap: Map<string, ServerFieldResult>;
   try {
@@ -607,12 +612,7 @@ async function runStatusPass(
 
   updateBotPresence(client, fieldMap);
 
-  let guildConfigs = fallbackGuildConfigs;
-  try {
-    guildConfigs = loadConfig().guilds;
-  } catch {
-    /* keep the configs the timer was started with */
-  }
+  const guildConfigs = resolveGuildConfigs(guildConfigSource);
   const enabledGuilds = enabledGuildIds(guildConfigs);
 
   if (enabledGuilds.length === 0) return; // presence-only pass
@@ -661,9 +661,9 @@ let statusTimer: ReturnType<typeof setInterval> | null = null;
  */
 export function startStatusEmbed(
   client: Client,
-  guildConfigs: Record<string, GuildConfig>,
+  guildConfigs: GuildConfigSource,
 ): ReturnType<typeof setInterval> | null {
-  const enabledCount = enabledGuildIds(guildConfigs).length;
+  const enabledCount = enabledGuildIds(resolveGuildConfigs(guildConfigs)).length;
 
   if (enabledCount === 0 && loadConfig().presence?.enabled !== true) {
     log.info(
@@ -703,7 +703,7 @@ export function reconcileStatusEmbed(
     freshConfig.presence?.enabled === true;
 
   if (wanted && !statusTimer) {
-    startStatusEmbed(client, freshConfig.guilds);
+    startStatusEmbed(client, liveGuildConfigs);
     log.info("status", "Status/presence timer armed after config reload");
     return;
   }

@@ -93,6 +93,12 @@ beforeEach(() => {
     { id: "survival" } as never,
   ]);
   vi.mocked(snapUtils.getSnapshotClosestTo).mockResolvedValue(null);
+  vi.mocked(statUtils.buildLeaderboard).mockResolvedValue({
+    entries: [],
+    title: "LB",
+    description: "",
+    footerText: "",
+  } as never);
 });
 
 afterEach(() => vi.useRealTimers());
@@ -298,8 +304,10 @@ describe("nextLeaderboardRun", () => {
 describe("checkAndPost — anchored scheduling", () => {
   it("does not post before the anchored time arrives", async () => {
     const send = vi.fn();
-    // Anchor far in the future so no tick within this test reaches it.
-    const future = new Date(Date.now() + 365 * 24 * 60 * 60_000);
+    // Last post is "now" and the anchor is 12 h out, so no tick inside this
+    // test (one hour) can reach it.
+    kvSet("leaderboardSchedule", { g1: Date.now() });
+    const future = new Date(Date.now() + 12 * 60 * 60_000);
     const hh = String(future.getUTCHours()).padStart(2, "0");
     const mm = String(future.getUTCMinutes()).padStart(2, "0");
     const r = startLeaderboardScheduler(fakeClient(send), {
@@ -330,4 +338,27 @@ it("returns only the snapshotTimer when no guild has a leaderboard channel", () 
   // No postTimer should be created — result is the bare snapshotTimer
   expect(r).toBeTruthy();
   clearInterval(r as ReturnType<typeof setInterval>);
+});
+
+// ── Live global schedule ───────────────────────────────────────────────────
+
+it("reads the global interval at check time, not at startup", async () => {
+  const { loadConfig } = await import("../../src/core/config.js");
+  vi.mocked(loadConfig).mockReturnValue({ leaderboardInterval: "weekly" } as never);
+  kvSet("leaderboardSchedule", { g1: Date.now() - 3 * 24 * 60 * 60 * 1000 });
+  const send = vi.fn().mockResolvedValue(undefined);
+  const r = startLeaderboardScheduler(fakeClient(send), {
+    g1: { leaderboard: { channelId: "ch1" } },
+  } as never);
+  try {
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(send).not.toHaveBeenCalled();
+
+    vi.mocked(loadConfig).mockReturnValue({ leaderboardInterval: "daily" } as never);
+    await vi.advanceTimersByTimeAsync(TICK);
+    expect(send).toHaveBeenCalled();
+  } finally {
+    vi.mocked(loadConfig).mockReturnValue({ leaderboardInterval: "daily" } as never);
+    cleanup(r);
+  }
 });

@@ -194,13 +194,3 @@ export async function getUptimeStats(
   };
 }
 
-/**
- * Historical entry point from the flush-based design; see the note inside.
- */
-export function startUptimeFlushScheduler(): ReturnType<typeof setInterval> {
-  // Kept for API compatibility (bot startup wires it): persistence is
-  // immediate now, so the timer has nothing to do.
-  const timer = setInterval(() => {}, 5 * 60 * 1000);
-  timer.unref();
-  return timer;
-}

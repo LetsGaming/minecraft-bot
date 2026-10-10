@@ -21,5 +21,3 @@ export const EmbedColor = {
   Blurple: 0x5865f2, // Discord brand
   Modrinth: 0x1bd96a, // Modrinth brand green
 } as const;
-
-export type EmbedColorValue = (typeof EmbedColor)[keyof typeof EmbedColor];

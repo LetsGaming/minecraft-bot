@@ -6,7 +6,7 @@
  *  - pick: weighted random item selection
  *  - claimLock: concurrent executions are blocked for the same user
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
 
 // ── Top-level mocks — must be at file scope for Vitest hoisting ───────────
 
@@ -41,6 +41,10 @@ vi.mock("../../src/core/utils/jsonStore.js", () => ({
 vi.mock("../../src/core/utils/paths.js", () => ({
   getRootDir: vi.fn().mockReturnValue("/tmp"),
 }));
+
+beforeAll(async () => {
+  await import("../../src/bot/commands/connection/daily/daily.js");
+}, 120_000);
 
 // ── calcStreak & pick ──────────────────────────────────────────────────────
 // Pure functions — import directly without Discord/FS side-effects.

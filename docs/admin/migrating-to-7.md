@@ -8,8 +8,8 @@ the file for the upgrade; start the bot and it does the rest.
 1. The bot reads `config.json` and sees there is no `configVersion` (an old file
    counts as version 0).
 2. It copies the untouched file next to it as
-   `config.json.bak-v<old version>-<UTC timestamp>`, for example
-   `config.json.bak-v0-20261010T201500Z`.
+   `config.json.bak-v<old version>-<UTC timestamp>` (milliseconds included), for example
+   `config.json.bak-v0-20261010T201500123Z`.
 3. It writes the migrated file over `config.json` (temporary file plus rename,
    so a crash cannot leave a half-written config) with `"configVersion": 1` at
    the top. The migration reformats the file as standard indented JSON.

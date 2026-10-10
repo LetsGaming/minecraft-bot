@@ -41,9 +41,13 @@ import helmet from "@fastify/helmet";
 import { loadConfig } from "@mcbot/core/config.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { registerErrorHandler } from "./errors.js";
+import {
+  createProxyMisconfigurationWarning,
+  createTrustProxyFn,
+} from "./trustProxy.js";
 import { registerSetupGuard } from "./requiredEnv.js";
 import { DISCORD_CDN_URL } from "@mcbot/schema";
-import { requireSession } from "./auth/auth.js";
+import { requireSession, assertDevAuthBypassSafe } from "./auth/auth.js";
 import {
   capabilityGate,
   assertCapabilitiesDeclared,
@@ -64,7 +68,12 @@ import { registerProbeRoutes } from "./status/metrics.js";
 import { registerStaticFrontend } from "./static.js";
 
 export function buildServer(): FastifyInstance {
-  const app = Fastify({ logger: false, trustProxy: true });
+  const trustProxy = createTrustProxyFn(() => loadConfig().webui?.trustProxy);
+  const app = Fastify({ logger: false, trustProxy });
+  const warnIfProxyUntrusted = createProxyMisconfigurationWarning(trustProxy);
+  app.addHook("onRequest", async (req) => {
+    warnIfProxyUntrusted(req.raw.socket.remoteAddress, req.headers);
+  });
 
   // ── Security headers (SEC-01) ── registered first so they apply to every
   // response, including the OAuth surface and the static SPA. The CSP is
@@ -166,6 +175,8 @@ export async function startWebServer(): Promise<FastifyInstance> {
   const port =
     Number(process.env.WEBUI_PORT) || cfg.webui?.port || 8130;
   const host = process.env.WEBUI_HOST ?? cfg.webui?.host ?? "127.0.0.1";
+
+  assertDevAuthBypassSafe(host);
 
   const app = buildServer();
   await app.listen({ port, host });

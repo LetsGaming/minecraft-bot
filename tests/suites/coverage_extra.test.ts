@@ -213,7 +213,7 @@ describe("startTpsMonitor — fires warning when TPS drops", () => {
     server: never,
     client: never,
     guilds: Record<string, never>,
-  ) => ReturnType<typeof setInterval> | null;
+  ) => { stop(): void } | null;
 
   beforeEach(async () => {
     ({ startTpsMonitor } =
@@ -236,7 +236,7 @@ describe("startTpsMonitor — fires warning when TPS drops", () => {
 
     const timer = startTpsMonitor(server, client, guilds);
     expect(timer).toBeTruthy();
-    clearInterval(timer!);
+    timer!.stop();
   });
 });
 

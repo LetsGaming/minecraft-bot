@@ -18,7 +18,6 @@ import {
   recordCheck,
   getUptimeStats,
   flushUptimeHistory,
-  startUptimeFlushScheduler,
 } from "../../src/core/utils/stores/uptimeTracker.js";
 import { getDb } from "../../src/core/db/index.js";
 
@@ -165,16 +164,6 @@ describe("flushUptimeHistory", () => {
 
   it("resolves without error (kept as a compatibility no-op)", async () => {
     await expect(flushUptimeHistory()).resolves.toBeUndefined();
-  });
-});
-
-// ── startUptimeFlushScheduler ─────────────────────────────────────────────
-
-describe("startUptimeFlushScheduler", () => {
-  it("returns a timer that can be cleared", () => {
-    const timer = startUptimeFlushScheduler();
-    expect(timer).toBeTruthy();
-    clearInterval(timer);
   });
 });
 

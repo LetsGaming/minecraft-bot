@@ -148,10 +148,19 @@ function applyEnvOverrides(raw: RawBotConfig): void {
   }
 }
 
-/** `config.json.bak-v<from>-<UTC timestamp>`, next to the config. */
+/**
+ * `config.json.bak-v<from>-<UTC timestamp with milliseconds>`, next to the
+ * config. A numeric suffix is appended when that exact name is already taken,
+ * so two migrations in the same millisecond never collide.
+ */
 function backupPath(fromVersion: number): string {
-  const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
-  return `${CONFIG_PATH}.bak-v${fromVersion}-${stamp}`;
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.(\d+)Z$/, "$1Z");
+  const base = `${CONFIG_PATH}.bak-v${fromVersion}-${stamp}`;
+  if (!fs.existsSync(base)) return base;
+  for (let n = 1; ; n++) {
+    const candidate = `${base}-${n}`;
+    if (!fs.existsSync(candidate)) return candidate;
+  }
 }
 
 function logMigration(result: MigrationResult): void {

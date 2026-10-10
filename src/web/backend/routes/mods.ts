@@ -51,6 +51,7 @@ import { logFields } from "@mcbot/core/utils/logSafe.js";
 import { fetchReleaseVersions } from "@mcbot/core/utils/minecraft/mojang.js";
 import { readThrough } from "@mcbot/core/utils/wrapper/lastKnown.js";
 import { cached, invalidate } from "@mcbot/core/utils/cache.js";
+import { fetchIcon, type IconImage } from "../iconProxy.js";
 import { CompatLimitError, createCompatGuard } from "./compatGuard.js";
 import { isSysadmin, sessionFromRequest, type Session } from "../auth/auth.js";
 import { BadRequest, NotFound, HttpError } from "../errors.js";
@@ -77,7 +78,6 @@ const TTL_COMPAT_SUPPORT = 60_000;
 const TTL_RELEASE_VERSIONS = 6 * 60 * 60 * 1000;
 const TTL_SEARCH = 60_000;
 const TTL_CATALOG = 300_000;
-const TTL_ICON = 24 * 60 * 60 * 1000;
 
 const MODRINTH_ICON_HOST = "cdn.modrinth.com";
 const ICON_UA = "LetsGaming/minecraft-bot dashboard (icon proxy)";
@@ -471,19 +471,9 @@ export function registerModRoutes(app: FastifyInstance): void {
         throw new BadRequest("Only Modrinth CDN icons are proxied.");
       }
 
-      let img: { contentType: string; body: Buffer };
+      let img: IconImage;
       try {
-        img = await cached(`icon:${target.href}`, TTL_ICON, async () => {
-          const res = await fetch(target.href, {
-            headers: { "User-Agent": ICON_UA },
-            signal: AbortSignal.timeout(8_000),
-          });
-          if (!res.ok) throw new HttpError(502, "Icon fetch failed.");
-          return {
-            contentType: res.headers.get("content-type") ?? "image/png",
-            body: Buffer.from(await res.arrayBuffer()),
-          };
-        });
+        img = await fetchIcon(target.href, ICON_UA);
       } catch (err) {
         if (err instanceof HttpError) throw err;
         throw new HttpError(502, "Icon fetch failed.");
@@ -491,6 +481,7 @@ export function registerModRoutes(app: FastifyInstance): void {
 
       reply.header("content-type", img.contentType);
       reply.header("cache-control", "public, max-age=86400, immutable");
+      reply.header("content-security-policy", "default-src 'none'; sandbox");
       return reply.send(img.body);
     },
   );

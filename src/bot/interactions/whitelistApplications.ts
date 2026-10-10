@@ -49,7 +49,10 @@ import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
 import { t, runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
 import { log } from "@mcbot/core/utils/logger.js";
-import type { GuildConfig } from "@mcbot/core/types/index.js";
+import {
+  resolveGuildConfigs,
+  type GuildConfigSource,
+} from "../utils/guild/guildConfigs.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
 const APPLY_ID = "wlapp:apply";
@@ -136,12 +139,14 @@ function defaultApplicationServer(guildId: string): string | null {
  */
 export async function ensureApplicationPrompts(
   client: Client,
-  guildConfigs: Record<string, GuildConfig>,
+  guildConfigs: GuildConfigSource,
 ): Promise<void> {
   const store = await loadStore();
   let dirty = false;
 
-  for (const [guildId, gcfg] of Object.entries(guildConfigs)) {
+  for (const [guildId, gcfg] of Object.entries(
+    resolveGuildConfigs(guildConfigs),
+  )) {
     const cfg = gcfg.whitelistApplications;
     if (!cfg?.channelId || !cfg.adminChannelId) continue;
 

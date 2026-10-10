@@ -252,6 +252,11 @@ export const en: Record<string, string> = {
     "**{server}**: streak {streak} (longest {longest}), last claim {last}",
   "dailyAdmin.showNone": "No claim records on any server.",
 
+  "control.progressLong":
+    "This can take several minutes (countdown, world save and, for backups, archiving)...",
+  "control.stillRunning":
+    "**{action}** on **{server}** is taking longer than the bot waits for. The script may still be running. Check with `/server status` before running it again.",
+
   // ── waypoint categories ──
   "waypoint.invalidCategory":
     "Categories may only contain letters, numbers, _ or - (max 16 characters).",

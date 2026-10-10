@@ -13,7 +13,7 @@
  * Read-only GETs are left unlimited. Buckets self-prune. This is per-process:
  * the dashboard is a single instance bound to loopback behind a reverse proxy
  * (see docker-compose.yml), so an in-process limiter is the right scope;
- * trustProxy is on, so req.ip honors X-Forwarded-For from that proxy.
+ * req.ip honors X-Forwarded-For only for the proxies named in webui.trustProxy.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
@@ -22,6 +22,7 @@ import {
 } from "@mcbot/core/utils/rateLimiter.js";
 import { sessionFromRequest } from "./auth/auth.js";
 
+const MAX_BUCKETS = 5_000;
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 export function registerRateLimiting(app: FastifyInstance): void {
@@ -33,22 +34,39 @@ export function registerRateLimiting(app: FastifyInstance): void {
   // callback (three outbound Discord calls each) can't be hammered. Config
   // edits and server actions arrive in small human bursts, so a per-user write
   // budget well above normal use still stops scripted abuse.
-  const authLimiter = createRateLimiter({ capacity: 10, windowMs: 60_000 });
-  const apiWriteLimiter = createRateLimiter({ capacity: 30, windowMs: 60_000 });
+  const authLimiter = createRateLimiter({ capacity: 10, windowMs: 60_000, maxBuckets: MAX_BUCKETS });
+  const apiWriteLimiter = createRateLimiter({ capacity: 30, windowMs: 60_000, maxBuckets: MAX_BUCKETS });
+  // Coarse per-address ceiling in front of the per-user buckets: many identities
+  // from one source, or one identity replayed from many sources, cannot multiply
+  // the budget past it. Several times the per-user limit so a shared proxy
+  // address still serves a handful of real users.
+  const ipCeilingLimiter = createRateLimiter({ capacity: 150, windowMs: 60_000, maxBuckets: MAX_BUCKETS });
 
-  /** Pick the limiter + bucket key for a request, or null to leave it unlimited. */
-  const limiterFor = (
-    req: FastifyRequest,
-  ): { limiter: RateLimiter; key: string } | null => {
+  interface Target {
+    /** Checked first; every request from one address draws from it. */
+    ceiling?: { limiter: RateLimiter; key: string };
+    limiter: RateLimiter;
+    key: string;
+  }
+
+  /**
+   * Pick the buckets for a request, or null to leave it unlimited. Only a
+   * verified session (valid signature, unexpired, current epoch) selects a
+   * per-user bucket; anything else, forged or rotated cookies included, falls
+   * back to the address. Pre-auth routes are always keyed by address.
+   */
+  const targetFor = (req: FastifyRequest): Target | null => {
     const path = req.url.split("?")[0] ?? "";
     if (path.startsWith("/auth/")) {
       return { limiter: authLimiter, key: `ip:${req.ip}` };
     }
     if (path.startsWith("/api/") && MUTATING_METHODS.has(req.method)) {
       const uid = sessionFromRequest(req)?.uid;
+      if (!uid) return { limiter: apiWriteLimiter, key: `ip:${req.ip}` };
       return {
+        ceiling: { limiter: ipCeilingLimiter, key: `ip:${req.ip}` },
         limiter: apiWriteLimiter,
-        key: uid ? `uid:${uid}` : `ip:${req.ip}`,
+        key: `uid:${uid}`,
       };
     }
     return null;
@@ -56,12 +74,20 @@ export function registerRateLimiting(app: FastifyInstance): void {
 
   // onRequest: reject before body parsing / any work is done.
   app.addHook("onRequest", async (req: FastifyRequest, reply: FastifyReply) => {
-    const target = limiterFor(req);
+    const target = targetFor(req);
     if (!target) return;
-    if (target.limiter.consumeToken(target.key)) return;
+    // The narrower limiter decides first; the shared address ceiling only
+    // counts requests it admitted, so one user's rejected flood cannot drain
+    // the budget of everyone else behind the same address.
+    const denied = !target.limiter.consumeToken(target.key, req.ip)
+      ? target
+      : target.ceiling && !target.ceiling.limiter.consumeToken(target.ceiling.key, req.ip)
+        ? target.ceiling
+        : null;
+    if (!denied) return;
 
     reply
-      .header("retry-after", String(target.limiter.cooldownSeconds(target.key)))
+      .header("retry-after", String(denied.limiter.cooldownSeconds(denied.key, req.ip)))
       .code(429)
       .send({ error: "Too many requests — slow down and try again shortly." });
     return reply;

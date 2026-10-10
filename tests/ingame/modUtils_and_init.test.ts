@@ -123,7 +123,6 @@ vi.mock("../../src/bot/logWatcher/watchers/schedulers/channelPurge.js", () => ({
 }));
 
 vi.mock("../../src/core/utils/stores/uptimeTracker.js", () => ({
-  startUptimeFlushScheduler: vi.fn().mockReturnValue({ unref: vi.fn() }),
   recordCheck: vi.fn().mockResolvedValue(undefined),
 }));
 

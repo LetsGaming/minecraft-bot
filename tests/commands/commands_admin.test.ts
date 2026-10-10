@@ -61,7 +61,7 @@ vi.mock("../../src/core/utils/stores/adminAudit.js", () => ({
 vi.mock("../../src/bot/logWatcher/initMinecraftCommands.js", () => ({
   reconcileServers: vi
     .fn()
-    .mockResolvedValue({ added: [], removed: [], changed: [] }),
+    .mockResolvedValue({ added: [], removed: [], replaced: [], changed: [] }),
 }));
 
 vi.mock("../../src/bot/logWatcher/logWatcher.js", () => ({
@@ -140,6 +140,7 @@ describe("/config admin command — reload subcommand", () => {
     vi.mocked(reconcileServers).mockResolvedValue({
       added: ["creative"],
       removed: ["old"],
+      replaced: ["moved"],
       changed: ["survival"],
     });
     const { createSuccessEmbed } = await import("../../src/bot/utils/embeds/embedUtils.js");
@@ -151,6 +152,7 @@ describe("/config admin command — reload subcommand", () => {
     const msg = vi.mocked(createSuccessEmbed).mock.calls.at(-1)![0] as string;
     expect(msg).toContain("+ Added (live): creative");
     expect(msg).toContain("- Removed (live): old");
+    expect(msg).toContain("Rebuilt (live): moved");
     expect(msg).toContain("require a restart: survival");
   });
 });

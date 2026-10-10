@@ -23,57 +23,116 @@ interface Bucket {
 }
 
 export interface RateLimiter {
-  /** Attempt to consume one token. `true` = proceed, `false` = limited. */
-  consumeToken(userId: string): boolean;
+  /**
+   * Attempt to consume one token. `true` = proceed, `false` = limited.
+   * `source` (a client address, where there is one) only matters when the
+   * limiter is full: new keys then share a per-source overflow bucket.
+   */
+  consumeToken(userId: string, source?: string): boolean;
   /** Seconds until at least one token is available again (0 if available). */
-  cooldownSeconds(userId: string): number;
+  cooldownSeconds(userId: string, source?: string): number;
+}
+
+/** Default bound on tracked buckets, so rotating keys cannot grow memory without limit. */
+export const DEFAULT_MAX_BUCKETS = 10_000;
+const MAX_OVERFLOW_BUCKETS = 1_000;
+const GLOBAL_OVERFLOW_KEY = "*";
+
+function refill(bucket: Bucket, now: number, capacity: number, windowMs: number): void {
+  bucket.tokens = Math.min(
+    capacity,
+    bucket.tokens + ((now - bucket.lastSeen) / windowMs) * capacity,
+  );
+  bucket.lastSeen = now;
+}
+
+function cooldownOf(bucket: Bucket | undefined, capacity: number, windowMs: number): number {
+  if (!bucket || bucket.tokens >= 1) return 0;
+  return Math.ceil(((1 - bucket.tokens) / capacity) * (windowMs / 1000));
 }
 
 export function createRateLimiter(options: {
   capacity: number;
   windowMs: number;
+  /**
+   * Most buckets kept at once. At the cap, buckets idle for a full window
+   * (already refilled) are swept. If the map is still full of live buckets, a
+   * live (possibly exhausted) bucket is never evicted: a new key is served
+   * from a shared overflow bucket per source, so legitimate newcomers degrade
+   * gracefully while a flood of fresh keys only competes with itself.
+   */
+  maxBuckets?: number;
+  /** Tokens per window in an overflow bucket (default: `capacity`). */
+  overflowCapacity?: number;
 }): RateLimiter {
   const { capacity, windowMs } = options;
+  const maxBuckets = options.maxBuckets ?? DEFAULT_MAX_BUCKETS;
+  const overflowCapacity = options.overflowCapacity ?? capacity;
   const buckets = new Map<string, Bucket>();
+  const overflow = new Map<string, Bucket>();
 
   // Periodically clear buckets that haven't been seen for two full windows
-  // so the map doesn't grow unboundedly in bots with many users.
+  // so the maps don't grow unboundedly in bots with many users.
   const pruneTimer = setInterval(() => {
     const cutoff = Date.now() - windowMs * 2;
-    for (const [id, b] of buckets) {
-      if (b.lastSeen < cutoff) buckets.delete(id);
+    for (const map of [buckets, overflow]) {
+      for (const [id, b] of map) {
+        if (b.lastSeen < cutoff) map.delete(id);
+      }
     }
   }, PRUNE_INTERVAL_MS);
 
   // Don't block process exit on this timer
   pruneTimer.unref();
 
+  const overflowKey = (source: string | undefined): string => {
+    const key = source ?? GLOBAL_OVERFLOW_KEY;
+    return overflow.has(key) || overflow.size < MAX_OVERFLOW_BUCKETS
+      ? key
+      : GLOBAL_OVERFLOW_KEY;
+  };
+
+  const isFull = (now: number): boolean => {
+    if (buckets.size < maxBuckets) return false;
+    const cutoff = now - windowMs;
+    for (const [id, b] of buckets) {
+      if (b.lastSeen <= cutoff) buckets.delete(id);
+    }
+    return buckets.size >= maxBuckets;
+  };
+
   return {
-    consumeToken(userId: string): boolean {
+    consumeToken(userId: string, source?: string): boolean {
       const now = Date.now();
-      const bucket = buckets.get(userId);
+      let bucket = buckets.get(userId);
+      let capacityHere = capacity;
 
       if (!bucket) {
-        buckets.set(userId, { tokens: capacity - 1, lastSeen: now });
-        return true;
+        if (isFull(now)) {
+          const key = overflowKey(source);
+          bucket = overflow.get(key);
+          capacityHere = overflowCapacity;
+          if (!bucket) {
+            overflow.set(key, { tokens: overflowCapacity - 1, lastSeen: now });
+            return true;
+          }
+        } else {
+          buckets.set(userId, { tokens: capacity - 1, lastSeen: now });
+          return true;
+        }
       }
 
-      // Refill proportionally to elapsed time
-      const elapsed = now - bucket.lastSeen;
-      const refill = (elapsed / windowMs) * capacity;
-      bucket.tokens = Math.min(capacity, bucket.tokens + refill);
-      bucket.lastSeen = now;
-
+      refill(bucket, now, capacityHere, windowMs);
       if (bucket.tokens < 1) return false;
       bucket.tokens -= 1;
       return true;
     },
 
-    cooldownSeconds(userId: string): number {
+    cooldownSeconds(userId: string, source?: string): number {
       const bucket = buckets.get(userId);
-      if (!bucket || bucket.tokens >= 1) return 0;
-      const needed = 1 - bucket.tokens;
-      return Math.ceil((needed / capacity) * (windowMs / 1000));
+      if (bucket) return cooldownOf(bucket, capacity, windowMs);
+      if (buckets.size < maxBuckets) return 0;
+      return cooldownOf(overflow.get(overflowKey(source)), overflowCapacity, windowMs);
     },
   };
 }

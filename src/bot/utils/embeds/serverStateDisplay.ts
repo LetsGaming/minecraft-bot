@@ -89,8 +89,3 @@ export function describePlayers(health: ServerHealth): string | null {
     : `${counts} — ${names.join(", ")}`;
 }
 
-/** The one-line form used in list contexts: "🟢 Online". */
-export function stateLine(state: ServerState): string {
-  const { emoji, label } = describeState(state);
-  return `${emoji} ${label}`;
-}
