@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en" data-ui-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Discord messages - mcbot</title>
+<link rel="stylesheet" href="style.css">
+<!--
+THESIS: The embed stripe is the dashboard lamp in Discord form: it carries state and nothing else, and every message answers what happened, what it means, what to do. Refuses the rainbow of per-command colours, decorative emoji titles and "Success" / "Error".
+WORLD: Four state stripes plus one slate for neutral answers, a lamp emoji only on state-bearing titles, sentence-case titles naming the action or object, a bold verdict line first, facts in fields, "Next:" or Undo last, footer = scope and page or expiry.
+STORY: A player or admin reading on a phone knows in one glance whether it is fine, broken or needs a click, and what to do next.
+FIRST VIEWPORT: Language switch, the colour/role legend, then /status as the model message.
+RISK: Discord renders this approximately as drawn; field wrapping, button widths and webhook username limits must be verified in a live test guild before the builders are rewritten.
+-->
+</head>
+<body data-page="discord" data-server="smp" data-worst="warn">
+<main id="main" class="main">
+<div class="page">
+<p class="crumb"><a href="watch.html">Watch</a> / Reference / Discord messages</p>
+<div class="page-head">
+  <div><h1>Discord messages</h1><p>The same language as the dashboard, drawn in an approximation of Discord's dark message pane. Fonts, spacing and button widths differ from the real client.</p></div>
+  <div class="chips" role="group" aria-label="Language">
+    <button class="chip" type="button" data-lang="en" aria-pressed="true">English</button>
+    <button class="chip" type="button" data-lang="de" aria-pressed="false">Deutsch</button>
+  </div>
+</div>
+
+<section class="section" aria-labelledby="leg-h">
+  <header><h2 id="leg-h">Stripe and lamp</h2><span class="sub">One colour per state, same four lamps as the dashboard</span></header>
+  <ul class="rows" style="font-size:var(--text-sm)">
+    <li class="row" style="grid-template-columns:3rem 4.5rem 1fr"><span><span class="dc-sw" style="display:inline-block;width:28px;height:12px;background:#5ccf8e;border-radius:2px"></span></span><span class="state-text ok">Green</span><span>Online, done, back to normal. Title lamp 🟢.</span></li>
+    <li class="row" style="grid-template-columns:3rem 4.5rem 1fr"><span><span style="display:inline-block;width:28px;height:12px;background:#e8a640;border-radius:2px"></span></span><span class="state-text warn">Amber</span><span>Not responding, degraded, blocked. Title lamp 🟡.</span></li>
+    <li class="row" style="grid-template-columns:3rem 4.5rem 1fr"><span><span style="display:inline-block;width:28px;height:12px;background:#f47a6e;border-radius:2px"></span></span><span class="state-text bad">Red</span><span>Offline and failures only. Title lamp 🔴. Leave, death and stop are never red.</span></li>
+    <li class="row" style="grid-template-columns:3rem 4.5rem 1fr"><span><span style="display:inline-block;width:28px;height:12px;background:#8a8880;border-radius:2px"></span></span><span class="state-text unknown">Grey</span><span>Unknown state, game events with no judgement. Title lamp ⚪ for unknown only.</span></li>
+    <li class="row" style="grid-template-columns:3rem 4.5rem 1fr"><span><span style="display:inline-block;width:28px;height:12px;background:#9fb4cc;border-radius:2px"></span></span><span class="state-text" style="color:var(--info)">Slate</span><span>Neutral answers and work in progress: lists, stats, confirmations, progress. No lamp.</span></li>
+  </ul>
+</section>
+
+<div id="msgs"></div>
+</div>
+</main>
+<script src="shell.js"></script>
+<script>
+  var C = { ok: "#5ccf8e", warn: "#e8a640", bad: "#f47a6e", grey: "#8a8880", slate: "#9fb4cc" };
+  var lang = new URLSearchParams(location.search).get("lang") || "en";
+
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
+  function md(s) { return esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`(.+?)`/g, "<code>$1</code>").replace(/@(\w[\w ]*\w)\b(?=\])/g, "@$1"); }
+  function field(f) { return '<div class="dc-field' + (f.i ? " inline" : "") + '"><div class="dc-field-n">' + md(f.n) + '</div><div class="dc-field-v">' + md(f.v) + "</div></div>"; }
+  function embed(e) {
+    return '<div class="dc-embed' + (e.compact ? " compact" : "") + '" style="--stripe:' + e.s + '">' +
+      (e.t ? '<div class="dc-title">' + esc(e.t) + "</div>" : "") +
+      (e.d ? '<div class="dc-desc">' + md(e.d) + "</div>" : "") +
+      (e.f ? '<div class="dc-fields">' + e.f.map(field).join("") + "</div>" : "") +
+      (e.ft ? '<div class="dc-footer"><span>' + esc(e.ft) + "</span>" + (e.ts ? "<span>·</span><span>" + esc(e.ts) + "</span>" : "") + "</div>" : "") + "</div>";
+  }
+  function btns(list) { return list ? '<div class="dc-btns">' + list.map(function (b) { return '<button class="dc-btn ' + (b.k || "") + '" type="button"' + (b.dis ? " disabled" : "") + ">" + esc(b.l) + "</button>"; }).join("") + "</div>" : ""; }
+  function msg(o) {
+    return '<div class="dc-msg"><div class="dc-ava ' + (o.ava || "bot") + '" aria-hidden="true">' + (o.init || "mc") + '</div><div><div class="dc-name">' + esc(o.who || "mcbot") + (o.tag === false ? "" : '<span class="dc-tag">' + (o.tag || "APP") + "</span>") + '<span class="dc-time">' + (o.time || "Today at 15:42") + "</span></div>" +
+      (o.cmd ? '<div class="dc-cmd">' + o.cmd + "</div>" : "") +
+      (o.content ? '<div class="dc-content">' + o.content + "</div>" : "") + (o.html || "") + btns(o.btns) +
+      (o.eph ? '<div class="dc-ephemeral">' + (lang === "de" ? "Nur du kannst das sehen" : "Only you can see this") + "</div>" : "") + "</div></div>";
+  }
+  function pill(t) { return '<span class="badge neutral">' + esc(t) + "</span> "; }
+
+  var M = {
+    en: {
+      status: { h: "/status", n: ["Public", "Timestamp on, live data"], x: { who: "mcbot", cmd: "<b>maya_k</b> used <b>/status</b>", e: { s: C.ok, t: "🟢 smp is online", d: "**3 of 20 players are online.** Fabric 1.21.1, up 2 days 4 hours.", f: [{ i: 1, n: "Players", v: "Alex_K, Mira, JonasB" }, { i: 1, n: "TPS", v: "19.8" }, { i: 1, n: "Memory", v: "5.1 of 8 GB" }, { n: "Last backup", v: "38 minutes ago" }], ft: "smp", ts: "Today at 15:42" } } },
+      stop: { h: "/server stop", n: ["Ephemeral", "Confirmation, expires in 60 s"], x: { cmd: "<b>maya_k</b> used <b>/server stop</b>", eph: 1, e: { s: C.slate, t: "Stop smp?", d: "**3 players are online** and will be disconnected after a 30 second warning in chat.", f: [{ n: "Affects", v: "`smp`, 3 players, the chat bridge" }, { n: "Takes effect", v: "After the countdown, about 45 seconds" }, { n: "Undo", v: "Start it again with `/server start`. The world is saved first." }], ft: "smp · Confirm within 60 s" }, btns: [{ l: "Stop smp", k: "danger" }, { l: "Cancel", k: "" }] } },
+      progress: { h: "/server stop, after confirming", n: ["Public in the channel", "One message, edited in place"], x: { cmd: "<b>maya_k</b> used <b>/server stop</b>", e: { s: C.slate, t: "Stopping smp", d: "**Step 2 of 3: saving the world.**\n✓ Warned players (30 s)\n▸ Saving the world\n○ Stopping the process", ft: "smp · Started by maya_k" } } },
+      error: { h: "Error reply", n: ["Ephemeral", "Problem, cause, recovery"], x: { cmd: "<b>maya_k</b> used <b>/server stop</b>", eph: 1, e: { s: C.bad, t: "Could not stop smp", d: "**The API wrapper for smp did not answer.** smp may still be running.\nTry: check `/status` in a minute. If it stays like this, ask a bot admin to check the wrapper.", ft: "smp" } } },
+      deny: { h: "Permission denial", n: ["Ephemeral", "Same shape for every command"], x: { cmd: "<b>jonas_b</b> used <b>/server stop</b>", eph: 1, who: "mcbot", e: { s: C.warn, t: "Only for bot admins", d: "**`/server stop` is for bot admins.** Ask one of them if smp needs to be stopped.", ft: "smp" } } },
+      players: { h: "/players, page 1", n: ["Public", "Buttons stay, page shown on the row, disabled after 3 min"], x: { cmd: "<b>maya_k</b> used <b>/players</b>", e: { s: C.slate, t: "Players on smp", d: "1. **Alex_K**  142 h played, online now\n2. **Mira**  118 h played, online now\n3. **JonasB**  96 h played, online now\n4. **Lena_B**  71 h played, seen 2 days ago\n5. **Tobi_R**  44 h played, seen 6 days ago\n6. **Sven_H**  12 h played, seen 3 weeks ago", ft: "smp · Page 1/4" }, btns: [{ l: "Previous", dis: 1 }, { l: "Page 1 of 4", dis: 1 }, { l: "Next" }] } },
+      mods: { h: "/mods, page 1", n: ["Public", "Fields, never past 1024 per field"], x: { cmd: "<b>maya_k</b> used <b>/mods</b>", e: { s: C.slate, t: "Mods on smp", d: "62 mods, Fabric 1.21.1.", f: [{ n: "Client and server (41)", v: "Fabric API 0.115.0\nSodium 0.6.0\nLithium 0.14.3\nIris Shaders 1.8.0\nFerriteCore 7.0.0\nTerralith 2.5.8" }, { n: "Client only, optional (6)", v: "Xaero's Minimap 25.2.10\nXaero's World Map 1.39.4" }], ft: "smp · Page 1/7" }, btns: [{ l: "Previous", dis: 1 }, { l: "Page 1 of 7", dis: 1 }, { l: "Next" }] } },
+      down: { h: "Downtime alert", n: ["Public in #smp-alerts", "Pings @Server ops, first failure only", "allowedMentions: roles [ops]"], x: { content: '<span class="dc-mention">@Server ops</span>', e: { s: C.bad, t: "🔴 smp is offline", d: "**smp stopped answering at 15:31.** 3 players were online and are disconnected.", f: [{ i: 1, n: "Since", v: "11 minutes ago" }, { i: 1, n: "Impact", v: "Chat bridge and `/status` for smp are paused" }, { n: "Next step", v: "Open the console or restart smp. If it keeps happening, read the crash log." }], ft: "smp · Alert 1", ts: "Today at 15:42" }, btns: [{ l: "Open smp in the dashboard", k: "link" }] } },
+      up: { h: "Recovery", n: ["Public in #smp-alerts", "No ping", "allowedMentions: parse []"], x: { e: { s: C.ok, t: "🟢 smp is back online", d: "**smp answers again.** It was offline for 14 minutes (15:31 to 15:45).", f: [{ i: 1, n: "Players", v: "0 of 20" }, { i: 1, n: "Backup", v: "38 minutes ago" }], ft: "smp", ts: "Today at 15:45" } } },
+      bridge: { h: "Chat bridge", n: ["Public in #smp-chat", "Webhook for chat, one-line embeds for events"], special: 1 },
+      daily: { h: "/daily", n: ["Ephemeral", "Deferred first, reward saved after the reply"], x: { cmd: "<b>mira_g</b> used <b>/daily</b>", eph: 1, e: { s: C.ok, t: "Daily reward claimed", d: "**Day 4 of your streak.** 3 Golden Carrots and 2 Bottles o' Enchanting are in your inventory on smp.", f: [{ i: 1, n: "Reward", v: "3 Golden Carrots, 2 Bottles o' Enchanting" }, { i: 1, n: "Streak", v: "4 days" }, { i: 1, n: "Next reward", v: "in 17 hours" }], ft: "smp" } } },
+      wl: { h: "Whitelist application", n: ["Public in #applications", "Admins decide with buttons"], x: { who: "mcbot", e: { s: C.slate, t: "Whitelist application from Lena_B", d: "**Lena_B wants to join smp.** Discord account @lena, member of this server for 2 years.", f: [{ i: 1, n: "Minecraft name", v: "Lena_B" }, { i: 1, n: "Status", v: "Waiting for a bot admin" }, { n: "Why do you want to join?", v: "I play with Mira and Alex at the weekend. Mostly building and farming." }], ft: "Application 14 · smp" }, btns: [{ l: "Approve", k: "success" }, { l: "Deny", k: "danger" }] } }
+    },
+    de: {
+      status: { h: "/status", n: ["Öffentlich", "Zeitstempel an, Live-Daten"], x: { who: "mcbot", cmd: "<b>maya_k</b> hat <b>/status</b> benutzt", e: { s: C.ok, t: "🟢 smp ist online", d: "**3 von 20 Spielern sind online.** Fabric 1.21.1, seit 2 Tagen und 4 Stunden aktiv.", f: [{ i: 1, n: "Spieler", v: "Alex_K, Mira, JonasB" }, { i: 1, n: "TPS", v: "19,8" }, { i: 1, n: "Arbeitsspeicher", v: "5,1 von 8 GB" }, { n: "Letztes Backup", v: "vor 38 Minuten" }], ft: "smp", ts: "Heute um 15:42" } } },
+      stop: { h: "/server stop", n: ["Nur für dich sichtbar", "Bestätigung, läuft nach 60 s ab"], x: { cmd: "<b>maya_k</b> hat <b>/server stop</b> benutzt", eph: 1, e: { s: C.slate, t: "smp stoppen?", d: "**3 Spieler sind online** und werden nach einer 30-Sekunden-Warnung im Chat getrennt.", f: [{ n: "Betrifft", v: "`smp`, 3 Spieler, die Chat-Brücke" }, { n: "Wirksam", v: "Nach dem Countdown, in etwa 45 Sekunden" }, { n: "Rückgängig", v: "Starte ihn wieder mit `/server start`. Die Welt wird vorher gespeichert." }], ft: "smp · Bestätigung innerhalb von 60 s" }, btns: [{ l: "smp stoppen", k: "danger" }, { l: "Abbrechen", k: "" }] } },
+      progress: { h: "/server stop, nach der Bestätigung", n: ["Öffentlich im Kanal", "Eine Nachricht, wird direkt aktualisiert"], x: { cmd: "<b>maya_k</b> hat <b>/server stop</b> benutzt", e: { s: C.slate, t: "smp wird gestoppt", d: "**Schritt 2 von 3: Welt wird gespeichert.**\n✓ Spieler gewarnt (30 s)\n▸ Welt speichern\n○ Prozess beenden", ft: "smp · Gestartet von maya_k" } } },
+      error: { h: "Fehlerantwort", n: ["Nur für dich sichtbar", "Problem, Ursache, Ausweg"], x: { cmd: "<b>maya_k</b> hat <b>/server stop</b> benutzt", eph: 1, e: { s: C.bad, t: "smp konnte nicht gestoppt werden", d: "**Der API-Wrapper von smp antwortet nicht.** smp läuft möglicherweise noch.\nVersuch: Prüfe in einer Minute `/status`. Bleibt es so, bitte einen Bot-Admin, den Wrapper zu prüfen.", ft: "smp" } } },
+      deny: { h: "Fehlende Berechtigung", n: ["Nur für dich sichtbar", "Gleiche Form für jeden Befehl"], x: { cmd: "<b>jonas_b</b> hat <b>/server stop</b> benutzt", eph: 1, e: { s: C.warn, t: "Nur für Bot-Admins", d: "**`/server stop` ist Bot-Admins vorbehalten.** Frag einen von ihnen, wenn smp gestoppt werden muss.", ft: "smp" } } },
+      players: { h: "/players, Seite 1", n: ["Öffentlich", "Knöpfe bleiben, Seite steht in der Reihe, nach 3 Min deaktiviert"], x: { cmd: "<b>maya_k</b> hat <b>/players</b> benutzt", e: { s: C.slate, t: "Spieler auf smp", d: "1. **Alex_K**  142 h gespielt, gerade online\n2. **Mira**  118 h gespielt, gerade online\n3. **JonasB**  96 h gespielt, gerade online\n4. **Lena_B**  71 h gespielt, zuletzt vor 2 Tagen\n5. **Tobi_R**  44 h gespielt, zuletzt vor 6 Tagen\n6. **Sven_H**  12 h gespielt, zuletzt vor 3 Wochen", ft: "smp · Seite 1/4" }, btns: [{ l: "Zurück", dis: 1 }, { l: "Seite 1 von 4", dis: 1 }, { l: "Weiter" }] } },
+      mods: { h: "/mods, Seite 1", n: ["Öffentlich", "Felder, nie über 1024 Zeichen pro Feld"], x: { cmd: "<b>maya_k</b> hat <b>/mods</b> benutzt", e: { s: C.slate, t: "Mods auf smp", d: "62 Mods, Fabric 1.21.1.", f: [{ n: "Client und Server (41)", v: "Fabric API 0.115.0\nSodium 0.6.0\nLithium 0.14.3\nIris Shaders 1.8.0\nFerriteCore 7.0.0\nTerralith 2.5.8" }, { n: "Nur Client, optional (6)", v: "Xaero's Minimap 25.2.10\nXaero's World Map 1.39.4" }], ft: "smp · Seite 1/7" }, btns: [{ l: "Zurück", dis: 1 }, { l: "Seite 1 von 7", dis: 1 }, { l: "Weiter" }] } },
+      down: { h: "Ausfallmeldung", n: ["Öffentlich in #smp-alerts", "Pingt @Server ops, nur beim ersten Ausfall", "allowedMentions: roles [ops]"], x: { content: '<span class="dc-mention">@Server ops</span>', e: { s: C.bad, t: "🔴 smp ist offline", d: "**smp antwortet seit 15:31 nicht mehr.** 3 Spieler waren online und wurden getrennt.", f: [{ i: 1, n: "Seit", v: "vor 11 Minuten" }, { i: 1, n: "Auswirkung", v: "Chat-Brücke und `/status` für smp pausieren" }, { n: "Nächster Schritt", v: "Öffne die Konsole oder starte smp neu. Wiederholt es sich, lies das Absturzprotokoll." }], ft: "smp · Meldung 1", ts: "Heute um 15:42" }, btns: [{ l: "smp im Dashboard öffnen", k: "link" }] } },
+      up: { h: "Wiederherstellung", n: ["Öffentlich in #smp-alerts", "Kein Ping", "allowedMentions: parse []"], x: { e: { s: C.ok, t: "🟢 smp ist wieder online", d: "**smp antwortet wieder.** Er war 14 Minuten offline (15:31 bis 15:45).", f: [{ i: 1, n: "Spieler", v: "0 von 20" }, { i: 1, n: "Backup", v: "vor 38 Minuten" }], ft: "smp", ts: "Heute um 15:45" } } },
+      bridge: { h: "Chat-Brücke", n: ["Öffentlich in #smp-chat", "Webhook für Chat, einzeilige Embeds für Ereignisse"], special: 1 },
+      daily: { h: "/daily", n: ["Nur für dich sichtbar", "Erst deferred, Belohnung wird nach der Antwort gespeichert"], x: { cmd: "<b>mira_g</b> hat <b>/daily</b> benutzt", eph: 1, e: { s: C.ok, t: "Tägliche Belohnung abgeholt", d: "**Tag 4 deiner Serie.** 3 Goldene Karotten und 2 Erfahrungsfläschchen liegen in deinem Inventar auf smp.", f: [{ i: 1, n: "Belohnung", v: "3 Goldene Karotten, 2 Erfahrungsfläschchen" }, { i: 1, n: "Serie", v: "4 Tage" }, { i: 1, n: "Nächste Belohnung", v: "in 17 Stunden" }], ft: "smp" } } },
+      wl: { h: "Whitelist-Antrag", n: ["Öffentlich in #applications", "Admins entscheiden per Knopf"], x: { who: "mcbot", e: { s: C.slate, t: "Whitelist-Antrag von Lena_B", d: "**Lena_B möchte auf smp spielen.** Discord-Konto @lena, seit 2 Jahren auf diesem Server.", f: [{ i: 1, n: "Minecraft-Name", v: "Lena_B" }, { i: 1, n: "Status", v: "Wartet auf einen Bot-Admin" }, { n: "Warum möchtest du mitspielen?", v: "Ich spiele am Wochenende mit Mira und Alex. Meistens bauen und farmen." }], ft: "Antrag 14 · smp" }, btns: [{ l: "Annehmen", k: "success" }, { l: "Ablehnen", k: "danger" }] } }
+    }
+  };
+
+  function bridge(L) {
+    var de = L === "de";
+    var ev = function (t) { return '<div class="dc-line"><span></span>' + embed({ s: C.grey, d: t, compact: 1 }) + "</div>"; };
+    return '<div class="dc-msg"><div class="dc-ava sm" aria-hidden="true">A</div><div><div class="dc-name">Alex_K (smp)<span class="dc-tag">APP</span><span class="dc-time">' + (de ? "Heute um 15:12" : "Today at 15:12") + '</span></div><div class="dc-content">' + (de ? "Hab Diamanten unter der Farm gefunden, komm mal gucken" : "found diamonds under the farm, come look") + "</div></div></div>" +
+      ev(de ? "Mira ist smp beigetreten" : "Mira joined smp") +
+      ev(de ? "Alex_K wurde von einem Creeper in die Luft gesprengt" : "Alex_K was blown up by Creeper") +
+      ev(de ? "Mira hat den Fortschritt **Diamanten!** erzielt" : "Mira made the advancement **Diamonds!**");
+  }
+
+  function build() {
+    document.documentElement.dataset.uiLang = lang; document.documentElement.lang = lang;
+    Array.prototype.forEach.call(document.querySelectorAll("[data-lang]"), function (b) { b.setAttribute("aria-pressed", String(b.dataset.lang === lang)); });
+    var out = "";
+    Object.keys(M[lang]).forEach(function (k) {
+      var m = M[lang][k], inner;
+      if (m.special) inner = bridge(lang);
+      else { var x = m.x; inner = msg({ who: x.who, cmd: x.cmd, content: x.content, eph: x.eph, html: x.e ? embed(x.e) : "", btns: x.btns }); }
+      out += '<section class="section" id="m-' + k + '"><header><h2><span class="mono">' + esc(m.h) + "</span></h2><span>" + m.n.map(pill).join("") + '</span></header><div class="dc">' + inner + "</div></section>";
+    });
+    document.getElementById("msgs").innerHTML = out;
+  }
+  Array.prototype.forEach.call(document.querySelectorAll("[data-lang]"), function (b) { b.addEventListener("click", function () { lang = b.dataset.lang; build(); }); });
+  build();
+</script>
+</body>
+</html>
