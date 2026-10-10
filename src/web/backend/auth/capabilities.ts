@@ -107,7 +107,7 @@ export function sessionCapabilities(
 }
 
 /** Does this session hold `capability`, under the rule's lookup mode? */
-function sessionHolds(
+export function sessionHolds(
   session: Session,
   capability: Capability,
   serverId?: string,

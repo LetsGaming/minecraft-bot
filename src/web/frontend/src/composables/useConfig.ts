@@ -1,9 +1,11 @@
-import { ref, watch } from "vue";
-import { errorMessage, parseErrorList } from "../utils/errorMessage";
+import { computed, ref } from "vue";
+import { errorMessage } from "../utils/errorMessage";
 import { isRecord } from "../utils/isRecord";
+import { groupErrors } from "../utils/fieldErrors";
 import { useToast } from "primevue/usetoast";
 import { apiGet, apiSend } from "../api";
 import type { ConfigResponse } from "../api";
+import { useEditableDocument } from "./useEditableDocument";
 
 export interface JsonSchema {
   $ref?: string;
@@ -11,118 +13,141 @@ export interface JsonSchema {
   definitions?: Record<string, unknown>;
 }
 
+type ConfigDoc = Record<string, unknown>;
+
 /**
- * The full-config editor's logic: load config + JSON schema, edit either
- * through the schema-driven form or a raw-JSON textarea (kept in sync),
- * and save with optimistic concurrency, server-side validation errors,
- * and warnings surfaced. Toast + error/warning state live here; the view
- * only renders.
+ * The full-config editor's logic: load config + JSON schema, edit through the
+ * schema-driven form or a raw-JSON textarea, and save changes with the hash
+ * that came with the load. Dirty tracking, conflict handling and the
+ * loading/saving states come from useEditableDocument; this adds the schema,
+ * the raw-JSON view and the mapping of validation errors onto form sections.
  */
 export function useConfig() {
   const toast = useToast();
 
   const placeholder = "•••••";
   const schema = ref<JsonSchema | null>(null);
-  const model = ref<Record<string, unknown> | null>(null);
+  const schemaFailed = ref(false);
   const rawMode = ref(false);
   const rawText = ref("");
-  const baseHash = ref("");
-  const errors = ref<string[]>([]);
-  const warnings = ref<string[]>([]);
-  const saving = ref(false);
+  const rawError = ref("");
 
-  // Keep the raw-JSON view and the form model in sync as raw mode toggles.
-  watch(rawMode, (on) => {
-    if (on && model.value) {
-      rawText.value = JSON.stringify(model.value, null, 2);
-    } else if (!on) {
-      try {
-        model.value = JSON.parse(rawText.value);
-      } catch {
-        errors.value = ["Raw JSON does not parse — staying in raw mode."];
-        rawMode.value = true;
-      }
-    }
+  const editor = useEditableDocument<ConfigDoc>({
+    async load() {
+      const res = await apiGet<ConfigResponse>("/api/config");
+      return { doc: isRecord(res.config) ? res.config : {}, token: res.hash };
+    },
+    async save({ token, draft }) {
+      return apiSend<{ warnings?: string[] }>("PUT", "/api/config", {
+        baseHash: token,
+        config: draft,
+      });
+    },
   });
 
+  const model = editor.draft;
+
+  function syncRawFromDraft(): void {
+    rawText.value = JSON.stringify(editor.draft.value ?? {}, null, 2);
+    rawError.value = "";
+  }
+
   async function load(): Promise<void> {
-    try {
-      const res = await apiGet<ConfigResponse>("/api/config");
-      model.value = isRecord(res.config) ? res.config : {};
-      baseHash.value = res.hash;
-      rawText.value = JSON.stringify(model.value, null, 2);
-    } catch (err) {
-      errors.value = [`Could not load config: ${errorMessage(err)}`];
-      return;
-    }
+    const ok = await editor.load();
+    if (!ok) return;
+    syncRawFromDraft();
     try {
       schema.value = await apiGet<JsonSchema>("/api/config/schema");
+      schemaFailed.value = false;
     } catch {
       schema.value = null;
+      schemaFailed.value = true;
       rawMode.value = true;
     }
   }
 
-  async function reload(): Promise<void> {
-    const res = await apiGet<ConfigResponse>("/api/config");
-    model.value = isRecord(res.config) ? res.config : {};
-    baseHash.value = res.hash;
-    if (rawMode.value) rawText.value = JSON.stringify(model.value, null, 2);
+  /** Apply the raw text to the draft when it parses; report why when it does not. */
+  function setRawText(text: string): void {
+    rawText.value = text;
+    try {
+      const parsed: unknown = JSON.parse(text);
+      if (!isRecord(parsed)) throw new Error("The config must be a JSON object.");
+      editor.draft.value = parsed;
+      rawError.value = "";
+    } catch (err) {
+      rawError.value = errorMessage(err);
+    }
+  }
+
+  /** Switch views. Leaving raw mode with unparsable text is refused, not guessed at. */
+  function setRawMode(on: boolean): void {
+    if (on) {
+      syncRawFromDraft();
+      rawMode.value = true;
+      return;
+    }
+    if (rawError.value) return;
+    rawMode.value = false;
   }
 
   function setTop(key: string, value: unknown): void {
-    if (!model.value) return;
-    if (value === undefined) delete model.value[key];
-    else model.value[key] = value;
+    editor.setField(key, value);
   }
 
-  async function save(): Promise<void> {
-    errors.value = [];
-    warnings.value = [];
+  function discard(): void {
+    editor.discard();
+    syncRawFromDraft();
+  }
 
-    let body: unknown = model.value;
-    if (rawMode.value) {
-      try {
-        body = JSON.parse(rawText.value);
-      } catch (err) {
-        errors.value = [`Raw JSON does not parse: ${errorMessage(err)}`];
-        return;
-      }
-    }
-
-    saving.value = true;
-    try {
-      const res = await apiSend<{ ok: boolean; warnings: string[] }>(
-        "PUT",
-        "/api/config",
-        { baseHash: baseHash.value, config: body },
-      );
-      warnings.value = res.warnings;
+  async function save(): Promise<boolean> {
+    if (rawMode.value && rawError.value) return false;
+    const ok = await editor.save();
+    syncRawFromDraft();
+    if (ok) {
       toast.add({
         severity: "success",
         summary: "Config saved",
-        detail: "The running bot will reload it automatically.",
+        detail: "Written to config.json. The status chip shows when the bot has applied it.",
         life: 3000,
       });
-      await reload();
-    } catch (err) {
-      const message = errorMessage(err);
-      if (message.includes("changed since you loaded it")) {
-        // 409: someone else wrote config.json underneath this editor.
-        // Surface it and refresh the baseline so the next save can work
-        // once the admin has re-applied their changes.
-        errors.value = [message];
-        await reload().catch(() => {});
-      } else {
-        errors.value = parseErrorList(message);
-      }
-    } finally {
-      saving.value = false;
     }
+    return ok;
   }
 
+  async function reloadDiscardingMine(): Promise<void> {
+    await editor.reloadDiscardingMine();
+    syncRawFromDraft();
+  }
+
+  const grouped = computed(() =>
+    groupErrors(editor.fieldErrors.value, (path) => path[0] ?? null),
+  );
+  /** Section key to the validation messages that belong to it. */
+  const sectionErrors = computed(() => grouped.value.bySection);
+  /** Banner lines: a raw-JSON problem, the save failure, and validation lines with no section. */
+  const errors = computed(() => [
+    ...(rawError.value ? [`Raw JSON does not parse: ${rawError.value}`] : []),
+    ...(editor.saveError.value ? [editor.saveError.value] : []),
+    ...grouped.value.general,
+  ]);
+
+  const pendingCount = computed(() => editor.dirtyKeys.value.length);
+  const canSave = computed(
+    () =>
+      editor.ready.value &&
+      editor.dirty.value &&
+      !editor.saving.value &&
+      editor.conflicts.value.length === 0 &&
+      !(rawMode.value && rawError.value),
+  );
+
   return {
-    placeholder, schema, model, rawMode, rawText, baseHash, errors, warnings, saving,
-    load, reload, setTop, save,
+    placeholder, schema, schemaFailed, model, rawMode, rawText, rawError,
+    errors, sectionErrors, pendingCount, canSave,
+    loading: editor.loading, loadError: editor.loadError, ready: editor.ready,
+    saving: editor.saving, saved: editor.saved, warnings: editor.warnings,
+    stale: editor.stale, dirty: editor.dirty, isDirty: editor.isDirty,
+    conflicts: editor.conflicts, resolveConflict: editor.resolveConflict,
+    load, setTop, setRawMode, setRawText, discard, save, reloadDiscardingMine,
   };
 }

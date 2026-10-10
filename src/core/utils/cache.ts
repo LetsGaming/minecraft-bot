@@ -27,6 +27,18 @@ interface Entry {
 const store = new Map<string, Entry>();
 /** One shared load per key, so N concurrent misses cost one `read()`. */
 const inFlight = new Map<string, Promise<unknown>>();
+/**
+ * Bumped whenever a key is invalidated. A refresh remembers the value it
+ * started under and only stores its result if it is unchanged, so a read that
+ * began before an invalidation cannot write its stale value back afterwards.
+ */
+const generations = new Map<string, number>();
+
+function bump(key: string): void {
+  generations.set(key, (generations.get(key) ?? 0) + 1);
+  store.delete(key);
+  inFlight.delete(key);
+}
 
 /**
  * Return the cached value for `key` if it is younger than `ttlMs`; if it is
@@ -51,15 +63,19 @@ export async function cached<T>(
   function refresh(): Promise<T> {
     let promise = inFlight.get(key) as Promise<T> | undefined;
     if (!promise) {
-      promise = read()
+      const startedAt = generations.get(key) ?? 0;
+      const started: Promise<T> = read()
         .then((value) => {
-          store.set(key, { value, at: Date.now() });
+          if ((generations.get(key) ?? 0) === startedAt) {
+            store.set(key, { value, at: Date.now() });
+          }
           return value;
         })
         .finally(() => {
-          inFlight.delete(key);
+          if (inFlight.get(key) === started) inFlight.delete(key);
         });
-      inFlight.set(key, promise);
+      promise = started;
+      inFlight.set(key, started);
     }
     return promise;
   }
@@ -78,12 +94,16 @@ export async function cached<T>(
 
 /** Drop one key, so the next read fetches fresh (after a mutation). */
 export function invalidate(key: string): void {
-  store.delete(key);
+  bump(key);
 }
 
 /** Drop every key under a prefix (e.g. all of one server's cached reads). */
 export function invalidatePrefix(prefix: string): void {
-  for (const key of store.keys()) {
-    if (key.startsWith(prefix)) store.delete(key);
-  }
+  invalidateWhere((key) => key.startsWith(prefix));
+}
+
+/** Drop every cached key (and any shared in-flight load) the predicate selects. */
+export function invalidateWhere(predicate: (key: string) => boolean): void {
+  const keys = new Set([...store.keys(), ...inFlight.keys()]);
+  for (const key of keys) if (predicate(key)) bump(key);
 }

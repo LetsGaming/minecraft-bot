@@ -26,7 +26,8 @@ import { log } from "@mcbot/core/utils/logger.js";
 /** What a subscriber receives. Mirrors the frames written to the browser. */
 export type ConsoleEvent =
   | { type: "line"; line: string }
-  | { type: "state"; connected: boolean; detail?: string };
+  | { type: "state"; connected: boolean; detail?: string }
+  | { type: "closed"; reason: "revoked" | "removed" | "reconfigured"; detail: string };
 
 export type ConsoleSubscriber = (event: ConsoleEvent) => void;
 

@@ -311,6 +311,11 @@ function parseWrapperHealth(body: unknown): ServerHealth | null {
  */
 const learnedGamePorts = new Map<string, number>();
 
+/** Drop what was learned about a server's game port (removed or re-pointed server). */
+export function forgetGamePort(serverId: string): void {
+  learnedGamePorts.delete(serverId);
+}
+
 /** Remember a `gamePort` so it is still known once the wrapper goes away. */
 export function rememberGamePort(serverId: string, port: number | null): void {
   if (typeof port === "number" && port > 0 && port < 65536) {

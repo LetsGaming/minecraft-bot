@@ -60,3 +60,8 @@ export * from "./serverState.js";
 // Analytics DTOs plus the per-section retention ceilings (ANALYTICS_CAP_HOURS),
 // shared by the route that clamps and the view that labels.
 export * from "./analytics.js";
+
+// Stable error codes shared by the backend error handler and the frontend ApiError.
+export * from "./apiErrors.js";
+
+export * from "./configStatus.js";

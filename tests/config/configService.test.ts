@@ -26,6 +26,7 @@ vi.mock("../../src/core/config.js", () => ({
   getConfigPath: mocks.getConfigPath,
   validateCandidateConfig: mocks.validateCandidateConfig,
   reloadConfig: mocks.reloadConfig,
+  getLoadedConfigRevision: () => ({ hash: "h", loadedAt: 0 }),
 }));
 
 vi.mock("../../src/bot/logWatcher/initMinecraftCommands.js", () => ({

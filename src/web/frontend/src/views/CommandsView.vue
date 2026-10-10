@@ -59,6 +59,7 @@
       </div>
 
       <div class="toolbar-actions">
+        <ConfigStatusChip :refresh-key="savedCount" />
         <span v-if="dirty" class="dirty-note small">
           <i class="pi pi-circle-fill" />
           {{ pendingCount() }} unsaved {{ pendingCount() === 1 ? "change" : "changes" }}
@@ -83,12 +84,12 @@
           @click="discard"
         />
         <Button
-          label="Save changes"
+          :label="pendingCount() > 0 ? `Save ${pendingCount()} change${pendingCount() === 1 ? '' : 's'}` : 'Save changes'"
           icon="pi pi-save"
           size="small"
-          :disabled="saving || !dirty"
+          :disabled="saving || !dirty || !ready || conflicts.length > 0"
           :loading="saving"
-          @click="save"
+          @click="onSave"
         />
       </div>
     </div>
@@ -106,8 +107,33 @@
       </span>
     </p>
 
-    <EmptyState v-if="loadError" icon="pi pi-exclamation-circle">
+    <Message v-if="saveFailure.length" severity="error" :closable="false" class="save-failure">
+      <ul class="failure-list">
+        <li v-for="(line, i) in saveFailure" :key="i">{{ line }}</li>
+      </ul>
+    </Message>
+
+    <ConflictPicker :conflicts="conflicts" @resolve="resolveConflict($event.conflict, $event.choice)" />
+    <div v-if="conflicts.length" class="conflict-actions">
+      <Button
+        label="Discard my edits and reload"
+        icon="pi pi-refresh"
+        size="small"
+        severity="secondary"
+        outlined
+        @click="reloadDiscardingMine"
+      />
+    </div>
+
+    <div v-if="loading && !ready" class="muted loading-note">
+      <i class="pi pi-spin pi-spinner" /> Loading commands…
+    </div>
+
+    <EmptyState v-else-if="loadError && !ready" icon="pi pi-exclamation-circle">
       {{ loadError }}
+      <template #action>
+        <Button label="Retry" icon="pi pi-refresh" size="small" severity="secondary" outlined @click="load" />
+      </template>
     </EmptyState>
 
     <Accordion v-else v-model:value="openPanels" multiple>
@@ -248,6 +274,9 @@ import { useGuilds } from "../composables/useGuilds";
 import { useCommands, type ManifestEntry } from "../composables/useCommands";
 import ViewHeader from "../components/ui/ViewHeader.vue";
 import EmptyState from "../components/ui/EmptyState.vue";
+import ConfigStatusChip from "../components/ui/ConfigStatusChip.vue";
+import ConflictPicker from "../components/schema/ConflictPicker.vue";
+import Message from "primevue/message";
 
 interface Section {
   kind: string;
@@ -261,7 +290,7 @@ export default defineComponent({
   components: {
     Select, Button, Tag, SelectButton, InputText, IconField, InputIcon,
     Accordion, AccordionPanel, AccordionHeader, AccordionContent,
-    ViewHeader, EmptyState,
+    ViewHeader, EmptyState, ConfigStatusChip, ConflictPicker, Message,
   },
   setup() {
     const commands = useCommands();
@@ -283,6 +312,7 @@ export default defineComponent({
         { value: "cards", label: "Cards" },
       ],
       openPanels: ["slash", "ingame"] as string[],
+      savedCount: 0,
     };
   },
   computed: {
@@ -340,6 +370,9 @@ export default defineComponent({
     await this.load();
   },
   methods: {
+    async onSave(): Promise<void> {
+      if (await this.save()) this.savedCount += 1;
+    },
     /**
      * Usage over the reporting window, or an explicit "unused" — the
      * distinction the whole column exists for. An unused command is
@@ -482,6 +515,10 @@ export default defineComponent({
   border-bottom: 0.5px solid var(--mc-border);
 }
 .toolbar-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+.save-failure { margin-bottom: 14px; }
+.failure-list { margin: 0; padding-left: 18px; }
+.conflict-actions { margin: -6px 0 14px; }
+.loading-note { padding: 24px 0; }
 .dirty-note { color: var(--mc-mid); display: inline-flex; align-items: center; gap: 6px; }
 .dirty-note i { font-size: 7px; }
 

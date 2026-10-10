@@ -113,6 +113,7 @@ import {
 } from "../../src/web/backend/config/safeConfig.js";
 import { buildServer } from "../../src/web/backend/server.js";
 import type { RawBotConfig } from "../../src/core/types/index.js";
+import { guildConfigHash } from "../../src/core/utils/config/guildConfigHash.js";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -607,7 +608,10 @@ describe("web routes", () => {
 
 describe("guild-scope freshness on writes (SEC-03)", () => {
   const managedGuild = "222222222222222222";
-  const putBody = { baseHash: "hash-1", guildConfig: {} };
+  const putBody = {
+    baseHash: guildConfigHash((mockConfig.guilds as Record<string, unknown>)[managedGuild]),
+    guildConfig: {},
+  };
   function mgrCookie(gexp?: number): string {
     return (
       `${SESSION_COOKIE}=` +
@@ -711,5 +715,70 @@ describe("route schema validation + fail-closed ordering", () => {
     });
     await app.close();
     expect(res.statusCode).toBe(400);
+  });
+});
+
+describe("per-guild concurrency token", () => {
+  const guildA = "222222222222222222";
+  function sysadminPut(guildId: string, body: unknown) {
+    return (async () => {
+      const app = buildServer();
+      const res = await app.inject({
+        method: "PUT",
+        url: `/api/guilds/${guildId}/config`,
+        headers: { cookie: adminCookie(), "content-type": "application/json" },
+        payload: body as object,
+      });
+      await app.close();
+      return res;
+    })();
+  }
+
+  it("hashes only the guild's own block, regardless of key order", () => {
+    expect(guildConfigHash({ a: 1, b: { c: 2, d: 3 } })).toBe(
+      guildConfigHash({ b: { d: 3, c: 2 }, a: 1 }),
+    );
+    expect(guildConfigHash({ a: 1 })).not.toBe(guildConfigHash({ a: 2 }));
+    expect(guildConfigHash(undefined)).toBe(guildConfigHash({}));
+  });
+
+  it("serves the guild hash, not the whole-file hash", async () => {
+    const app = buildServer();
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/guilds/${guildA}/config`,
+      headers: { cookie: adminCookie() },
+    });
+    await app.close();
+    const block = (mockConfig.guilds as Record<string, unknown>)[guildA];
+    expect(res.json().hash).toBe(guildConfigHash(block));
+    expect(res.json().hash).not.toBe("hash-1");
+  });
+
+  it("does not conflict when only the whole-file hash moved", async () => {
+    const block = (mockConfig.guilds as Record<string, unknown>)[guildA];
+    const res = await sysadminPut(guildA, { baseHash: guildConfigHash(block), guildConfig: {} });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("answers 409 with a CONFLICT code when the guild's own block moved", async () => {
+    const res = await sysadminPut(guildA, { baseHash: "not-the-guild-hash", guildConfig: {} });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("CONFLICT");
+    const block = (mockConfig.guilds as Record<string, unknown>)[guildA];
+    expect(res.json().currentHash).toBe(guildConfigHash(block));
+  });
+
+  it("answers 409 with a CONFLICT code on a stale whole-config write", async () => {
+    const app = buildServer();
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/config",
+      headers: { cookie: adminCookie(), "content-type": "application/json" },
+      payload: { baseHash: "stale-hash", config: {} },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("CONFLICT");
   });
 });

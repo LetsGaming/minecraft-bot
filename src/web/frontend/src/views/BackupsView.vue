@@ -126,6 +126,7 @@
 </template>
 
 <script lang="ts">
+import { useTypedConfirm } from "../composables/useTypedConfirm";
 import { defineComponent } from "vue";
 import Button from "primevue/button";
 import Tag from "primevue/tag";
@@ -154,6 +155,7 @@ export default defineComponent({
       ...useCapabilities(),
       formatBytes, tierLabel, relativeAge, timestampTitle,
       toast: useToast(),
+      confirmTyped: useTypedConfirm(),
     };
   },
   data() {
@@ -205,21 +207,15 @@ export default defineComponent({
      * is the entire purpose of the dialog.
      */
     async confirmRestore(file: BackupFileInfo): Promise<void> {
-      const typed = window.prompt(
-        `This will replace the world on "${this.current}" with ${file.name}.\n` +
-          `The current world will be gone and this cannot be undone.\n\n` +
-          `Type the server name to confirm:`,
-      );
-      if (typed === null) return;
-      if (typed.trim() !== this.current) {
-        this.toast.add({
-          severity: "warn",
-          summary: "Restore cancelled",
-          detail: "The name did not match.",
-          life: 3000,
-        });
-        return;
-      }
+      const confirmed = await this.confirmTyped({
+        header: "Restore backup",
+        message:
+          `This will replace the world on "${this.current}" with ${file.name}. ` +
+          `The current world will be gone and this cannot be undone.`,
+        expected: this.current,
+        acceptLabel: "Restore",
+      });
+      if (!confirmed) return;
       const ok = await this.restore(file);
       this.toast.add({
         severity: ok ? "success" : "error",
@@ -233,21 +229,13 @@ export default defineComponent({
      * as restore: permanent, and an OK button is a reflex worth interrupting.
      */
     async confirmDelete(file: BackupFileInfo): Promise<void> {
-      const typed = window.prompt(
-        `This will permanently delete ${file.name} from "${this.current}".\n` +
-          `This cannot be undone.\n\n` +
-          `Type the server name to confirm:`,
-      );
-      if (typed === null) return;
-      if (typed.trim() !== this.current) {
-        this.toast.add({
-          severity: "warn",
-          summary: "Delete cancelled",
-          detail: "The name did not match.",
-          life: 3000,
-        });
-        return;
-      }
+      const confirmed = await this.confirmTyped({
+        header: "Delete backup",
+        message: `This will permanently delete ${file.name} from "${this.current}". This cannot be undone.`,
+        expected: this.current,
+        acceptLabel: "Delete",
+      });
+      if (!confirmed) return;
       const ok = await this.remove(file);
       this.toast.add({
         severity: ok ? "success" : "error",

@@ -18,7 +18,8 @@ import {
 /** What the backend writes on the stream. Mirrors ConsoleEvent. */
 type ConsoleEvent =
   | { type: "line"; line: string }
-  | { type: "state"; connected: boolean; detail?: string };
+  | { type: "state"; connected: boolean; detail?: string }
+  | { type: "closed"; reason: "revoked" | "removed" | "reconfigured"; detail: string };
 
 /**
  * How many lines the pane keeps.
@@ -110,6 +111,15 @@ export function useConsole() {
       }
       if (event.type === "line") {
         push(event.line);
+      } else if (event.type === "closed") {
+        connected.value = false;
+        statusDetail.value = event.detail;
+        // A revoked or removed console must not auto-reconnect; a changed
+        // connection setting should, and EventSource does that by itself.
+        if (event.reason !== "reconfigured") {
+          source?.close();
+          source = null;
+        }
       } else {
         connected.value = event.connected;
         statusDetail.value = event.detail ?? "";

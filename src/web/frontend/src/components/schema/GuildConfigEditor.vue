@@ -5,11 +5,18 @@
     :header="`Edit config — ${guildName || guildId}`"
     :style="{ width: '680px' }"
     :dismissable-mask="false"
-    @update:visible="$emit('update:visible', $event)"
+    @update:visible="onVisible"
   >
-    <div v-if="loading" class="gce-center">
+    <div v-if="loading && !ready" class="gce-center">
       <i class="pi pi-spin pi-spinner" style="font-size: 1.4rem" />
     </div>
+
+    <Message v-else-if="loadError && !ready" severity="error" :closable="false">
+      <div class="gce-retry">
+        <span>Could not load this guild's config: {{ loadError }}</span>
+        <Button label="Retry" icon="pi pi-refresh" size="small" severity="secondary" outlined @click="retry" />
+      </div>
+    </Message>
 
     <template v-else>
       <p class="gce-hint">
@@ -17,6 +24,9 @@
         off. Changes apply to this guild only.
       </p>
 
+      <Message v-if="stale" severity="warn" :closable="false">
+        Your last save went through, but it could not be re-read. Close and reopen this editor before changing more.
+      </Message>
       <Message
         v-for="(e, i) in errors"
         :key="'e' + i"
@@ -32,33 +42,55 @@
         >{{ w }}</Message
       >
 
-      <div v-if="!loading && newFeatureCount > 0" class="gce-new-banner">
+      <ConflictPicker :conflicts="conflicts" @resolve="resolveConflict($event.conflict, $event.choice)" />
+      <div v-if="conflicts.length" class="gce-conflict-actions">
+        <Button
+          label="Discard my edits and reload"
+          icon="pi pi-refresh"
+          size="small"
+          severity="secondary"
+          outlined
+          @click="reloadDiscardingMine"
+        />
+      </div>
+
+      <div v-if="newFeatureCount > 0" class="gce-new-banner">
         <i class="pi pi-sparkles" />
         {{ newFeatureCount }} new feature{{ newFeatureCount === 1 ? "" : "s" }} available to enable
       </div>
 
       <div v-if="model && Object.keys(topLevelProps).length" class="gce-fields">
-        <SchemaField
+        <div
           v-for="(propSchema, key) in topLevelProps"
           :key="key"
-          :name="String(key)"
-          :schema="propSchema"
-          :definitions="definitions"
-          :model-value="model[key]"
-          @update:model-value="setField(String(key), $event)"
-        />
+          :class="['gce-section', { 'is-dirty': isDirty(String(key)) }]"
+        >
+          <SchemaField
+            :name="String(key)"
+            :schema="propSchema"
+            :definitions="definitions"
+            :model-value="model[key]"
+            @update:model-value="setField(String(key), $event)"
+          />
+          <ul v-if="sectionErrors[String(key)]" class="gce-field-errors">
+            <li v-for="(msg, i) in sectionErrors[String(key)]" :key="i">{{ msg }}</li>
+          </ul>
+        </div>
       </div>
       <p v-else-if="model" class="gce-hint">
-        Schema unavailable — regenerate it to edit this guild here.
+        {{ schemaError ? `Schema unavailable (${schemaError}).` : "Schema unavailable." }}
+        <a href="#" @click.prevent="retry">Retry</a>
       </p>
     </template>
 
     <template #footer>
-      <Button label="Cancel" text @click="$emit('update:visible', false)" />
+      <ConfigStatusChip :refresh-key="savedCount" />
+      <Button label="Cancel" text @click="requestClose" />
       <Button
-        label="Save"
+        :label="pendingCount > 0 ? `Save ${pendingCount} change${pendingCount === 1 ? '' : 's'}` : 'Save'"
         icon="pi pi-check"
         :loading="saving"
+        :disabled="!canSave"
         @click="onSave"
       />
     </template>
@@ -71,6 +103,9 @@ import Dialog from "primevue/dialog";
 import Button from "primevue/button";
 import Message from "primevue/message";
 import SchemaField from "./SchemaField.vue";
+import ConflictPicker from "./ConflictPicker.vue";
+import ConfigStatusChip from "../ui/ConfigStatusChip.vue";
+import { useConfirm } from "primevue/useconfirm";
 import { derefNode, countNewSections, topLevelSectionKeys } from "./schemaField";
 import { isFeatureNew, commitSeenFeatures } from "../../composables/useSeenFeatures";
 import { useGuildConfig } from "../../composables/useGuildConfig";
@@ -78,7 +113,7 @@ import { useSchemaRefs, SchemaRefsKey } from "../../composables/useSchemaRefs";
 
 export default defineComponent({
   name: "GuildConfigEditor",
-  components: { Dialog, Button, Message, SchemaField },
+  components: { Dialog, Button, Message, SchemaField, ConflictPicker, ConfigStatusChip },
   props: {
     visible: { type: Boolean, required: true },
     guildId: { type: String, default: "" },
@@ -97,9 +132,13 @@ export default defineComponent({
     provide(SchemaRefsKey, refsApi.dynamicGuildScope(() => props.guildId));
     return {
       ...useGuildConfig(),
+      confirm: useConfirm(),
       loadServers: refsApi.loadServers,
       loadGuildRefs: refsApi.loadGuildRefs,
     };
+  },
+  data() {
+    return { savedCount: 0 };
   },
   computed: {
     topLevelProps(): Record<string, unknown> {
@@ -128,9 +167,34 @@ export default defineComponent({
     async onSave(): Promise<void> {
       const ok = await this.save();
       if (ok) {
+        this.savedCount += 1;
         this.$emit("saved");
         this.$emit("update:visible", false);
       }
+    },
+    onVisible(open: boolean): void {
+      if (open) this.$emit("update:visible", true);
+      else this.requestClose();
+    },
+    requestClose(): void {
+      const close = (): void => {
+        this.discard();
+        this.$emit("update:visible", false);
+      };
+      if (!this.dirty) {
+        close();
+        return;
+      }
+      this.confirm.require({
+        header: "Discard unsaved changes?",
+        message: `You have ${this.pendingCount} unsaved change${this.pendingCount === 1 ? "" : "s"} in this guild's config.`,
+        icon: "pi pi-exclamation-triangle",
+        acceptLabel: "Discard",
+        rejectLabel: "Keep editing",
+        acceptProps: { severity: "danger" },
+        rejectProps: { severity: "secondary", outlined: true },
+        accept: close,
+      });
     },
   },
 });
@@ -152,6 +216,10 @@ export default defineComponent({
   flex-direction: column;
   gap: 0.25rem;
 }
+.gce-retry { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.gce-conflict-actions { margin: -6px 0 12px; }
+.gce-section.is-dirty { box-shadow: -3px 0 0 0 var(--mc-accent); padding-left: 10px; margin-left: -13px; }
+.gce-field-errors { margin: 2px 0 8px; padding-left: 18px; color: var(--p-red-400, #f87171); font-size: 12.5px; }
 .gce-new-banner {
   display: flex; align-items: center; gap: 8px;
   background: color-mix(in srgb, var(--mc-accent) 12%, transparent);

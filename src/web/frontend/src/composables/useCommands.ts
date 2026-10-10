@@ -1,9 +1,9 @@
-import { ref } from "vue";
-import { errorMessage, parseErrorList } from "../utils/errorMessage";
+import { computed, ref } from "vue";
 import { isRecord } from "../utils/isRecord";
 import { useToast } from "primevue/usetoast";
 import { apiGet, apiSend } from "../api";
 import type { ConfigResponse } from "../api";
+import { useEditableDocument, type DocUnits } from "./useEditableDocument";
 
 // ── Shapes for the /api/commands payload ──
 export interface ManifestEntry {
@@ -26,6 +26,8 @@ export interface CommandOptionSpec {
   help?: string;
 }
 export interface CommandsResponse {
+  /** Hash of config.json as of this read; the concurrency token for saving. */
+  hash: string;
   manifest: { slash: ManifestEntry[]; ingame: ManifestEntry[] };
   /**
    * How often each command was actually used, over `windowDays`.
@@ -49,36 +51,116 @@ export interface CommandsResponse {
   effective: Record<string, Record<string, { enabled: boolean; adminOnly: boolean }>>;
 }
 
+type OverrideMap = Record<string, Override>;
+
+export interface OverrideDoc {
+  global: OverrideMap;
+  guilds: Record<string, OverrideMap>;
+  servers: Record<string, OverrideMap>;
+}
+
+/**
+ * One tracked unit per (scope, command): `global.<cmd>`,
+ * `guilds.<id>.<cmd>`, `servers.<id>.<cmd>`. That is the grain a person edits
+ * and the grain a conflict should be decided at.
+ */
+const overrideUnits: DocUnits<OverrideDoc> = {
+  read(doc) {
+    const out: Record<string, unknown> = {};
+    for (const [name, o] of Object.entries(doc.global)) out[`global.${name}`] = o;
+    for (const kind of ["guilds", "servers"] as const) {
+      for (const [id, block] of Object.entries(doc[kind])) {
+        for (const [name, o] of Object.entries(block)) out[`${kind}.${id}.${name}`] = o;
+      }
+    }
+    return out;
+  },
+  write(doc, key, value) {
+    const parts = key.split(".");
+    let block: OverrideMap;
+    let name: string;
+    if (parts[0] === "global") {
+      block = doc.global;
+      name = parts.slice(1).join(".");
+    } else {
+      const kind = parts[0] as "guilds" | "servers";
+      block = doc[kind][parts[1]!] ??= {};
+      name = parts.slice(2).join(".");
+    }
+    if (value === undefined) delete block[name];
+    else block[name] = value as Override;
+  },
+};
+
+const emptyDoc = (): OverrideDoc => ({ global: {}, guilds: {}, servers: {} });
+
 /**
  * All the Commands-view business logic: loading the manifest + override
- * matrix, tracking edits per scope (global / a guild / a server), and
- * saving them back by merging into the full config. The view keeps only
- * presentation (labels, filtering, accordion state). Toast feedback lives
- * here so the whole save round-trip is self-contained.
+ * matrix, tracking edits per scope (global / a guild / a server), and saving
+ * them back by merging into the full config. The view keeps only presentation
+ * (labels, filtering, accordion state). Dirty tracking, the load-time hash and
+ * conflict handling come from useEditableDocument.
  */
 export function useCommands() {
   const toast = useToast();
 
-  const loadError = ref("");
-  const saving = ref(false);
-  const dirty = ref(false);
   const scope = ref("global");
-  const data = ref<CommandsResponse | null>(null);
-  const overrides = ref({
-    global: {} as Record<string, Override>,
-    guilds: {} as Record<string, Record<string, Override>>,
-    servers: {} as Record<string, Record<string, Override>>,
-  });
+
+  const editor = useEditableDocument<OverrideDoc, CommandsResponse>(
+    {
+      async load() {
+        const res = await apiGet<CommandsResponse>("/api/commands");
+        return {
+          doc: {
+            global: res.overrides.global,
+            guilds: res.overrides.guilds,
+            servers: res.overrides.servers,
+          },
+          token: res.hash,
+          meta: res,
+        };
+      },
+      async save({ token, draft }) {
+        // The body is built from the current file, but the hash sent is the
+        // one from the load: if anything changed since, the write is refused
+        // rather than applied on top of someone else's edit.
+        const res = await apiGet<ConfigResponse>("/api/config");
+        const config = isRecord(res.config) ? res.config : {};
+        config.commands = draft.global;
+        // config.guilds / config.servers are maps of per-scope config objects
+        // in the schema-driven config; assert that nested shape to edit
+        // `.commands` in place. Each entry is guard-checked before it's touched.
+        const guilds = (config.guilds ?? {}) as Record<string, Record<string, unknown>>;
+        for (const [gid, block] of Object.entries(draft.guilds)) {
+          if (!guilds[gid]) continue;
+          if (Object.keys(block).length > 0) guilds[gid].commands = block;
+          else delete guilds[gid].commands;
+        }
+        const servers = (config.servers ?? {}) as Record<string, Record<string, unknown>>;
+        for (const [sid, block] of Object.entries(draft.servers)) {
+          if (!servers[sid]) continue;
+          if (Object.keys(block).length > 0) servers[sid].commands = block;
+          else delete servers[sid].commands;
+        }
+        return apiSend<{ warnings?: string[] }>("PUT", "/api/config", {
+          baseHash: token,
+          config,
+        });
+      },
+    },
+    { units: overrideUnits },
+  );
+
+  const data = computed(() => editor.meta.value ?? null);
+  const overrides = computed(() => editor.draft.value ?? emptyDoc());
+  /** Persistent save-failure lines: the failure itself, then the backend's validation list. */
+  const saveFailure = computed(() => [
+    ...(editor.saveError.value ? [editor.saveError.value] : []),
+    ...editor.fieldErrors.value.map((e) => e.replace(/^\s*-\s*/, "")),
+  ]);
 
   async function load(): Promise<void> {
-    try {
-      const res = await apiGet<CommandsResponse>("/api/commands");
-      data.value = res;
-      overrides.value = JSON.parse(JSON.stringify(res.overrides));
-      dirty.value = false;
-    } catch (err) {
-      loadError.value = errorMessage(err);
-    }
+    await editor.load();
   }
 
   /**
@@ -89,9 +171,7 @@ export function useCommands() {
    * looks identical to the one that keeps your work.
    */
   function discard(): void {
-    if (!data.value) return;
-    overrides.value = JSON.parse(JSON.stringify(data.value.overrides));
-    dirty.value = false;
+    editor.discard();
   }
 
   /** How many commands carry an override at the current scope. */
@@ -104,29 +184,9 @@ export function useCommands() {
     return currentBlock()[name] !== undefined;
   }
 
-  /** How many commands were edited but not yet saved, across every scope. */
+  /** How many (scope, command) overrides were edited but not yet saved. */
   function pendingCount(): number {
-    if (!data.value) return 0;
-    const before = data.value.overrides;
-    const after = overrides.value;
-    let count = 0;
-    const compare = (
-      a: Record<string, Override> | undefined,
-      b: Record<string, Override> | undefined,
-    ): void => {
-      const names = new Set([...Object.keys(a ?? {}), ...Object.keys(b ?? {})]);
-      for (const name of names) {
-        if (JSON.stringify(a?.[name]) !== JSON.stringify(b?.[name])) count += 1;
-      }
-    };
-    compare(before.global, after.global);
-    for (const gid of new Set([...Object.keys(before.guilds), ...Object.keys(after.guilds)])) {
-      compare(before.guilds[gid], after.guilds[gid]);
-    }
-    for (const sid of new Set([...Object.keys(before.servers), ...Object.keys(after.servers)])) {
-      compare(before.servers[sid], after.servers[sid]);
-    }
-    return count;
+    return editor.dirtyKeys.value.length;
   }
 
   /**
@@ -138,20 +198,19 @@ export function useCommands() {
   function resetScope(): void {
     const block = currentBlock();
     for (const name of Object.keys(block)) delete block[name];
-    dirty.value = true;
   }
 
   /** The mutable override block for the currently selected scope. */
-  function currentBlock(): Record<string, Override> {
+  function currentBlock(): OverrideMap {
+    const doc = editor.draft.value;
+    if (!doc) return {};
     if (scope.value.startsWith("guild:")) {
-      const gid = scope.value.slice(6);
-      return (overrides.value.guilds[gid] ??= {});
+      return (doc.guilds[scope.value.slice(6)] ??= {});
     }
     if (scope.value.startsWith("server:")) {
-      const sid = scope.value.slice(7);
-      return (overrides.value.servers[sid] ??= {});
+      return (doc.servers[scope.value.slice(7)] ??= {});
     }
-    return overrides.value.global;
+    return doc.global;
   }
 
   function fieldValue(name: string, field: "enabled" | "adminOnly"): string {
@@ -165,7 +224,6 @@ export function useCommands() {
     if (raw === "inherit") delete entry[field];
     else entry[field] = raw === "true";
     if (Object.keys(entry).length === 0) delete block[name];
-    dirty.value = true;
   }
 
   /** The resolved policy for a command at the current scope, or null. */
@@ -207,62 +265,30 @@ export function useCommands() {
     }
     if (Object.keys(opts).length === 0) delete entry.options;
     if (Object.keys(entry).length === 0) delete block[name];
-    dirty.value = true;
   }
 
-  async function save(): Promise<void> {
-    saving.value = true;
-    try {
-      // Read the FULL config envelope (config + baseHash) so the PUT
-      // carries optimistic-concurrency info and never writes the
-      // envelope's `hash` field into config.json itself.
-      const res = await apiGet<ConfigResponse>("/api/config");
-      const config = isRecord(res.config) ? res.config : {};
-      config.commands = overrides.value.global;
-      // config.guilds / config.servers are maps of per-scope config objects in
-      // the schema-driven config; assert that nested shape to edit `.commands`
-      // in place. Each entry is guard-checked before it's touched.
-      const guilds = (config.guilds ?? {}) as Record<
-        string,
-        Record<string, unknown>
-      >;
-      for (const [gid, block] of Object.entries(overrides.value.guilds)) {
-        if (!guilds[gid]) continue;
-        if (Object.keys(block).length > 0) guilds[gid].commands = block;
-        else delete guilds[gid].commands;
-      }
-      const servers = (config.servers ?? {}) as Record<
-        string,
-        Record<string, unknown>
-      >;
-      for (const [sid, block] of Object.entries(overrides.value.servers)) {
-        if (!servers[sid]) continue;
-        if (Object.keys(block).length > 0) servers[sid].commands = block;
-        else delete servers[sid].commands;
-      }
-
-      await apiSend("PUT", "/api/config", { baseHash: res.hash, config });
-      dirty.value = false;
+  async function save(): Promise<boolean> {
+    const ok = await editor.save();
+    if (ok) {
       toast.add({
         severity: "success",
         summary: "Saved",
-        detail: "Applies on the bot's next config reload (automatic).",
+        detail: "Written to config.json. The status chip shows when the bot has applied it.",
         life: 3000,
       });
-      await load();
-    } catch (err) {
-      const message = errorMessage(err);
-      const detail = parseErrorList(message).join("\n");
-      toast.add({ severity: "error", summary: "Save failed", detail, life: 5000 });
-    } finally {
-      saving.value = false;
     }
+    return ok;
   }
 
   return {
-    loadError, saving, dirty, scope, data, overrides,
+    loadError: editor.loadError, loading: editor.loading, ready: editor.ready,
+    saving: editor.saving, dirty: editor.dirty, saved: editor.saved,
+    stale: editor.stale, conflicts: editor.conflicts,
+    saveFailure, scope, data, overrides,
     load, currentBlock, fieldValue, setField, effectiveFor, save,
     optionSpecs, optionValue, setOption,
     discard, resetScope, isOverridden, overriddenCount, pendingCount,
+    resolveConflict: editor.resolveConflict,
+    reloadDiscardingMine: editor.reloadDiscardingMine,
   };
 }

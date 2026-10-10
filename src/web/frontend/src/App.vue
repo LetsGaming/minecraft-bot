@@ -61,7 +61,7 @@
             v-for="item in visibleNav"
             :key="item.id"
             :class="['nav-item', { active: activeTab === item.id }]"
-            @click="activeTab = item.id"
+            @click="goToTab(item.id)"
           >
             <i :class="item.icon" />
             <span>{{ item.label }}</span>
@@ -137,8 +137,8 @@
               :is="item.component"
               v-show="activeTab === item.id"
               v-bind="viewProps(item)"
-              @navigate="activeTab = $event"
-              @goto-config="activeTab = 'config'"
+              @navigate="goToTab($event)"
+              @goto-config="goToTab('config')"
               @bot-state="botDown = !$event"
               @servers="onServers"
             />
@@ -150,6 +150,7 @@
 
     <Toast position="bottom-right" />
     <ConfirmDialog />
+    <TypedConfirmDialog />
   </div>
 </template>
 
@@ -159,6 +160,9 @@ import Button from "primevue/button";
 import Message from "primevue/message";
 import Toast from "primevue/toast";
 import ConfirmDialog from "primevue/confirmdialog";
+import { useConfirm } from "primevue/useconfirm";
+import { confirmLeave } from "./composables/useUnsavedGuard";
+import TypedConfirmDialog from "./components/ui/TypedConfirmDialog.vue";
 import { apiGet, apiSend, UnauthorizedError } from "./api";
 import type { MeResponse, ServerStatus, GrantableCapability } from "./api";
 import { useCapabilities, setCapabilities } from "./composables/useCapabilities";
@@ -202,9 +206,17 @@ interface NavItem {
 
 export default defineComponent({
   name: "App",
-  components: { Button, Message, Toast, ConfirmDialog, StatusDot, EmptyState },
+  components: {
+    Button, Message, Toast, ConfirmDialog, TypedConfirmDialog, StatusDot, EmptyState,
+  },
   setup() {
-    return { ...useInvite(), ...useCapabilities(), statusDot, stateIsUp };
+    return {
+      ...useInvite(),
+      ...useCapabilities(),
+      statusDot,
+      stateIsUp,
+      confirm: useConfirm(),
+    };
   },
   data() {
     return {
@@ -290,6 +302,29 @@ export default defineComponent({
     }
   },
   methods: {
+    /**
+     * Switch tab, asking first when an editor on the current tab holds
+     * unsaved changes (the view unmounts on leave, so they would be lost).
+     */
+    async goToTab(id: string): Promise<void> {
+      if (id === this.activeTab) return;
+      const proceed = await confirmLeave(
+        () =>
+          new Promise<boolean>((resolve) => {
+            this.confirm.require({
+              header: "Discard unsaved changes?",
+              message: "This tab has changes that are not saved. Leaving it discards them.",
+              icon: "pi pi-exclamation-triangle",
+              acceptLabel: "Discard and leave",
+              rejectLabel: "Stay",
+              accept: () => resolve(true),
+              reject: () => resolve(false),
+              onHide: () => resolve(false),
+            });
+          }),
+      );
+      if (proceed) this.activeTab = id;
+    },
     /** Is this tab id one the caller may see? The view switch reads the same
      *  answer the sidebar does. */
     shows(id: string): boolean {

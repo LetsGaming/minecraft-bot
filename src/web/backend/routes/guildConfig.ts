@@ -15,8 +15,8 @@ import {
   readRawConfig,
   validateCandidate,
   writeConfig,
-  configFileHash,
 } from "@mcbot/core/utils/config/configService.js";
+import { guildConfigHash } from "@mcbot/core/utils/config/guildConfigHash.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { sessionFromRequest, isSysadmin, canManageGuild, guildScopeFresh } from "../auth/auth.js";
@@ -73,7 +73,7 @@ export function registerGuildConfigRoutes(app: FastifyInstance): void {
     };
   });
 
-  /** One guild's config block (+ the full-config hash for concurrency). */
+  /** One guild's config block (+ a hash of that block for concurrency). */
   // Guild-managers (non-sysadmin) can't reach /api/config/schema, so expose
   // just the GuildConfig definition + all definitions (for $ref resolution)
   // here. Structure only — no secrets. Path resolution mirrors
@@ -100,7 +100,7 @@ export function registerGuildConfigRoutes(app: FastifyInstance): void {
       }
       const cfg = readRawConfig();
       const block = (cfg.guilds ?? {})[req.params.id] ?? {};
-      return { hash: configFileHash(), guildConfig: block };
+      return { hash: guildConfigHash(block), guildConfig: block };
     },
   );
 
@@ -126,20 +126,22 @@ export function registerGuildConfigRoutes(app: FastifyInstance): void {
 
       const { baseHash, guildConfig } = req.body;
 
-      // Same optimistic-concurrency contract as the full config PUT.
-      const currentHash = configFileHash();
+      // Build the new config from the current one on disk, replacing ONLY
+      // this guild's block. The manager can't touch other guilds, servers,
+      // or top-level settings; those are copied through untouched. Then
+      // the whole thing is validated as one.
+      const current = readRawConfig();
+
+      // Optimistic concurrency on this guild's own block: another save only
+      // conflicts when it touched the same guild.
+      const currentHash = guildConfigHash((current.guilds ?? {})[guildId]);
       if (baseHash !== currentHash) {
         throw new Conflict(
-          "Config changed since you loaded it. Reload and re-apply.",
+          "This guild's config changed since you loaded it. Reload and re-apply.",
           { currentHash },
         );
       }
 
-      // Build the new config from the current one on disk, replacing ONLY
-      // this guild's block. The manager can't touch other guilds, servers,
-      // or top-level settings — those are copied through untouched — then
-      // the whole thing is validated as one.
-      const current = readRawConfig();
       // Splice the submitted block into the current config and validate the
       // whole thing as one candidate below. `guildConfig` is the request body
       // (object-checked by the schema); the merged object is RawBotConfig-shaped

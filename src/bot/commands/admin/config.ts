@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, codeBlock } from "discord.js";
 import { loadConfig, reloadConfig } from "@mcbot/core/config.js";
+import { beginConfigApply } from "@mcbot/core/utils/server/runtimeHeartbeat.js";
 import { summarizeConfigChanges } from "@mcbot/core/utils/config/configDiff.js";
 import { reconcileServers } from "../../logWatcher/initMinecraftCommands.js";
 import { createEmbed, createSuccessEmbed } from "../../utils/embeds/embedUtils.js";
@@ -48,10 +49,12 @@ export const execute = withErrorHandling(
       // instances for removed ones. Changed settings on an existing ID
       // can't be applied live (the instance keeps its original RCON/watcher
       // wiring), so those are reported as restart-required.
+      const reportApplied = beginConfigApply();
       const { added, removed, changed } = await reconcileServers(
         interaction.client,
         cfg,
       );
+      reportApplied(changed);
 
       log.info("config", `Config reloaded by ${interaction.user.tag}`);
 
