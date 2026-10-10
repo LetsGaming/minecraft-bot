@@ -4,7 +4,7 @@
  * The load-bearing test class here is the round trip: parse a real file, write
  * every value back unchanged, assert the output is byte-identical. That is what
  * keeps comments, key order and spacing alive as adapters are added, and it is
- * the property the whole editor rests on — a save that reformats the file is a
+ * the property the whole editor rests on, a save that reformats the file is a
  * save nobody will trust twice.
  */
 import { describe, it, expect } from "vitest";
@@ -248,7 +248,7 @@ describe("json adapter", () => {
 
   it("writes a changed array as valid JSON", () => {
     // The round trip above passes because unchanged values are skipped; this
-    // is the other half — a value that DID change must still come out valid.
+    // is the other half, a value that DID change must still come out valid.
     const out = applyConfigEdits("modid.json", FABRIC_JSON, [
       { path: ["biomes"], value: ["desert", "swamp", "taiga"] },
     ]);

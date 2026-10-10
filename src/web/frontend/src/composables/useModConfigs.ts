@@ -4,6 +4,12 @@ import { errorMessage } from "../utils/errorMessage";
 import { disambiguateLabels } from "../utils/fieldLabels";
 import type { StaleInfo, QueuedWriteResult } from "@mcbot/schema/contract.js";
 import type { ConfigFileInfo } from "@mcbot/schema";
+import {
+  groupFiles,
+  limitSections,
+  pathKey,
+  sectionsOf,
+} from "../utils/configTree";
 
 /**
  * The mod config editor's client half.
@@ -12,7 +18,7 @@ import type { ConfigFileInfo } from "@mcbot/schema";
  * why the view renders typed controls from a derived schema rather than a text
  * box. Second, the write protocol: the client sends only the values it
  * changed, never the document. The server re-reads the file and splices them
- * in, so the writer's guards — comment preservation, structure check, ETag —
+ * in, so the writer's guards (comment preservation, structure check, ETag)
  * stay meaningful instead of being decorative around a blob the browser sent.
  */
 
@@ -57,11 +63,26 @@ interface FileContents {
   snapshots: string[];
   fields: ConfigField[];
   warning?: string;
-  text: string;
+  /** False for a file type with no editor; only its source is shown. */
+  supported: boolean;
+  /** The whole file is view-only: unsupported, parse warning, or too large. */
+  readOnly: boolean;
+  /** Present only when requested, or when there is nothing else to show. */
+  text?: string;
 }
+
+/** Fields drawn at once; more are revealed on request so a huge file stays responsive. */
+const FIELD_PAGE = 200;
+/** Above this many files or fields, groups and sections start collapsed. */
+const COLLAPSE_ABOVE = 40;
 
 export function useModConfigs() {
   const files = ref<ConfigFileInfo[]>([]);
+  /** The wrapper stopped listing at its file limit. */
+  const truncated = ref(false);
+  /** Explicit open/closed choices for mod groups, folders and sections. */
+  const openState = ref<Record<string, boolean>>({});
+  const fieldLimit = ref(FIELD_PAGE);
   const current = ref<FileContents | null>(null);
   /**
    * Set when the backend served a cached read because the wrapper did not
@@ -143,17 +164,11 @@ export function useModConfigs() {
   const pending = ref<Record<string, unknown>>({});
   let serverId = "";
 
-  const pathKey = (path: string[]): string => path.join("\u0000");
-
   const dirty = computed(() => Object.keys(pending.value).length > 0);
 
-  /**
-   * Search runs across every key in every file, not just filenames.
-   *
-   * Somebody looking for a spawn rate does not know which mod owns it — that
-   * is the whole reason they are in a UI rather than in `nano`. The file list
-   * is the fallback, not the way in.
-   */
+  const filtering = computed(() => search.value.trim() !== "");
+
+  /** Files matching the filter by path or mod. Field names are filtered inside the open file. */
   const visibleFiles = computed(() => {
     const q = search.value.trim().toLowerCase();
     if (!q) return files.value;
@@ -175,16 +190,32 @@ export function useModConfigs() {
     );
   });
 
-  /** Files grouped by mod, for a sidebar that is navigable at 200 mods. */
-  const byMod = computed(() => {
-    const groups = new Map<string, ConfigFileInfo[]>();
-    for (const file of visibleFiles.value) {
-      const list = groups.get(file.modId) ?? [];
-      list.push(file);
-      groups.set(file.modId, list);
-    }
-    return [...groups.entries()].map(([modId, entries]) => ({ modId, entries }));
-  });
+  /** Files grouped by mod, then by folder, for a list that stays navigable at 200 mods. */
+  const byMod = computed(() => groupFiles(visibleFiles.value));
+
+  const sections = computed(() => sectionsOf(visibleFields.value));
+  const shown = computed(() => limitSections(sections.value, fieldLimit.value));
+  const hiddenFieldCount = computed(() => shown.value.hidden);
+  const shownSections = computed(() => shown.value.sections);
+
+  /** Whether a group or section is expanded: an explicit choice wins, then the size-based default. */
+  function isOpen(key: string, defaultOpen: boolean): boolean {
+    if (filtering.value) return true;
+    const chosen = openState.value[key];
+    if (chosen !== undefined) return chosen;
+    return defaultOpen;
+  }
+
+  function toggleOpen(key: string, defaultOpen: boolean): void {
+    openState.value = { ...openState.value, [key]: !isOpen(key, defaultOpen) };
+  }
+
+  const collapseGroups = computed(() => files.value.length > COLLAPSE_ABOVE);
+  const collapseSections = computed(() => (current.value?.fields.length ?? 0) > COLLAPSE_ABOVE);
+
+  function showMoreFields(): void {
+    fieldLimit.value += FIELD_PAGE;
+  }
 
   async function loadFiles(id: string): Promise<void> {
     serverId = id;
@@ -192,28 +223,34 @@ export function useModConfigs() {
     error.value = "";
     current.value = null;
     pending.value = {};
+    openState.value = {};
     try {
-      const res = await apiGet<{ files: ConfigFileInfo[]; stale?: StaleInfo | null }>(
-        `/api/servers/${encodeURIComponent(id)}/configs`,
-      );
+      const res = await apiGet<{
+        files: ConfigFileInfo[];
+        truncated?: boolean;
+        stale?: StaleInfo | null;
+      }>(`/api/servers/${encodeURIComponent(id)}/configs`);
       files.value = res.files;
+      truncated.value = res.truncated ?? false;
       indexStale.value = res.stale ?? null;
     } catch (err) {
       error.value = errorMessage(err);
       files.value = [];
+      truncated.value = false;
       indexStale.value = null;
     } finally {
       loading.value = false;
     }
   }
 
-  async function openFile(fileId: string): Promise<void> {
+  async function openFile(fileId: string, withText = false): Promise<void> {
     loading.value = true;
     error.value = "";
     pending.value = {};
+    fieldLimit.value = FIELD_PAGE;
     try {
       const contents = await apiGet<FileContents>(
-        `/api/servers/${encodeURIComponent(serverId)}/configs/${encodeURIComponent(fileId)}`,
+        `/api/servers/${encodeURIComponent(serverId)}/configs/${encodeURIComponent(fileId)}${withText ? "?text=1" : ""}`,
       );
       current.value = {
         ...contents,
@@ -236,6 +273,18 @@ export function useModConfigs() {
     if (JSON.stringify(value) === JSON.stringify(field.value)) delete next[key];
     else next[key] = value;
     pending.value = next;
+  }
+
+  /** Whether the whole open file is view-only, whatever the user may do. */
+  const fileReadOnly = computed(() => current.value?.readOnly ?? false);
+
+  /** Fetch the raw file text for the source view. */
+  async function loadSource(): Promise<void> {
+    if (!current.value || current.value.text !== undefined) return;
+    const fileId = current.value.file.id;
+    const keep = { ...pending.value };
+    await openFile(fileId, true);
+    pending.value = keep;
   }
 
   function valueOf(field: ConfigField): unknown {
@@ -273,7 +322,7 @@ export function useModConfigs() {
    *
    * A list of numbers must go back as numbers: Chips hands over strings, and
    * storing `["1","2"]` would render `["1", "2"]` into a TOML file that
-   * previously held `[1, 2]` — valid syntax, different meaning to the mod.
+   * previously held `[1, 2]`, valid syntax, different meaning to the mod.
    */
   function setFromInput(field: ConfigField, raw: unknown): void {
     if (field.kind === "numberList") {
@@ -303,7 +352,7 @@ export function useModConfigs() {
     error.value = "";
     try {
       const edits = Object.entries(pending.value).map(([key, value]) => ({
-        path: key.split("\u0000"),
+        path: JSON.parse(key) as string[],
         value,
       }));
       const res = await apiSend<
@@ -359,7 +408,9 @@ export function useModConfigs() {
     indexStale, fileStale, queued, pendingCount, conflicts,
     refreshPending, flushQueue, resolveConflict,
     files, current, loading, saving, error, search, pending,
-    dirty, byMod, visibleFields,
+    dirty, byMod, visibleFields, truncated, filtering, fileReadOnly,
+    shownSections, hiddenFieldCount, showMoreFields, isOpen, toggleOpen,
+    collapseGroups, collapseSections, loadSource,
     loadFiles, openFile, setValue, setFromInput, valueOf, isDirty, discard, save, revert,
     stringValue, numberValue, boolValue, listValue,
   };

@@ -18,6 +18,7 @@ You host the bot and/or the Minecraft server.
 | Upgrading to 7.0 (config versioning, automatic migration) | [admin/migrating-to-7.md](admin/migrating-to-7.md) |
 | Retiring the standalone server-manager panel | [admin/retiring-server-manager.md](admin/retiring-server-manager.md) |
 | Dashboard access: capabilities and grants | [admin/capabilities.md](admin/capabilities.md) |
+| Mod config editor: formats, depth, limits | [admin/mod-configs.md](admin/mod-configs.md) |
 | Getting in when the dashboard is down | [admin/emergency-access.md](admin/emergency-access.md) |
 | Admin permissions, whitelist, audit trail | [admin/permissions.md](admin/permissions.md) |
 | Configuring daily rewards and streak bonuses | [admin/daily-rewards.md](admin/daily-rewards.md) |
@@ -31,6 +32,7 @@ You use the bot as a Discord member or Minecraft player.
 | Topic | File |
 |---|---|
 | What the bot can do for you | [user/getting-started.md](user/getting-started.md) |
+| Editing mod settings in the dashboard | [user/mod-config-editor.md](user/mod-config-editor.md) |
 | Every command, with examples | [user/commands.md](user/commands.md) |
 | Linking Discord and Minecraft | [user/linking.md](user/linking.md) |
 | Stats, comparisons, leaderboards | [user/stats-and-leaderboards.md](user/stats-and-leaderboards.md) |

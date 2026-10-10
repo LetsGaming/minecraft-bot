@@ -2,7 +2,7 @@
   <div class="view-fill modconfig-view">
     <StaleBanner
       :stale="indexStale ?? fileStale"
-      write-note="You can still read and edit here, but saving needs the wrapper — your changes stay in the form until it's back."
+      write-note="You can still read and edit here, but saving needs the wrapper. Your changes stay in the form until it's back."
     />
     <!-- Queued edits are their own state, not a variant of "saved". Saying
          "3 changes waiting" is the difference between an operator who knows
@@ -44,7 +44,7 @@
           @click="discard"
         />
         <Button
-          v-if="canWrite"
+          v-if="canWrite && !fileReadOnly"
           :label="dirty ? `Save ${Object.keys(pending).length} change(s)` : 'Saved'"
           icon="pi pi-check"
           size="small"
@@ -74,31 +74,66 @@
 
       <InputText
         v-model="search"
-        placeholder="Search settings across every mod…"
+        placeholder="Filter files and fields…"
         class="search"
+        aria-label="Filter files and fields"
       />
+      <p v-if="search" class="muted small filter-note">
+        Matches file names and mods in the list, and settings in the open file.
+      </p>
+
+      <Message v-if="truncated" severity="warn" :closable="false" class="mb">
+        This server has more config files than can be listed, so some are
+        missing. Use the filter, or open them directly on the server.
+      </Message>
 
       <Message v-if="error" severity="error" :closable="false" class="mb">{{ error }}</Message>
 
       <div class="layout">
-        <!-- Files, grouped by mod. -->
+        <!-- Files, grouped by mod and folder. -->
         <aside class="files">
           <div v-if="loading && !current" class="muted small pad">Loading…</div>
+          <EmptyState v-else-if="byMod.length === 0 && filtering" icon="pi pi-search">
+            No files match "{{ search }}".
+          </EmptyState>
           <EmptyState v-else-if="byMod.length === 0" icon="pi pi-file">
-            No editable config files.
+            No config files found.
           </EmptyState>
           <template v-else>
             <div v-for="group in byMod" :key="group.modId" class="group">
-              <div class="mod">{{ group.modId }}</div>
               <button
-                v-for="file in group.entries"
-                :key="file.id"
-                :class="['file', { active: current?.file.id === file.id }]"
-                @click="openFile(file.id)"
+                type="button"
+                class="mod"
+                :aria-expanded="isOpen(`mod:${group.modId}`, !collapseGroups)"
+                @click="toggleOpen(`mod:${group.modId}`, !collapseGroups)"
               >
-                <span class="mono file-name">{{ shortPath(file.relPath) }}</span>
-                <Tag :value="file.format" severity="secondary" class="file-format" />
+                <i :class="['pi', isOpen(`mod:${group.modId}`, !collapseGroups) ? 'pi-chevron-down' : 'pi-chevron-right']" />
+                <span class="mod-name">{{ group.modId }}</span>
+                <span class="mod-count">{{ group.count }}</span>
               </button>
+              <template v-if="isOpen(`mod:${group.modId}`, !collapseGroups)">
+                <div v-for="folder in group.folders" :key="folder.folder" class="folder">
+                  <div v-if="folder.folder" class="folder-name mono" :title="folder.folder">
+                    <bdi>{{ folder.folder }}</bdi>
+                  </div>
+                  <button
+                    v-for="file in folder.entries"
+                    :key="file.id"
+                    :class="['file', { active: current?.file.id === file.id, nested: folder.folder !== '' }]"
+                    :title="file.relPath"
+                    @click="openFile(file.id)"
+                  >
+                    <span class="mono file-name"><bdi>{{ fileName(file.relPath, group.modId) }}</bdi></span>
+                    <Tag
+                      v-if="file.tooLarge"
+                      value="too large"
+                      severity="warn"
+                      class="file-format"
+                    />
+                    <Tag v-else :value="file.format" severity="secondary" class="file-format" />
+                  </button>
+                </div>
+              </template>
             </div>
           </template>
         </aside>
@@ -110,7 +145,7 @@
           </EmptyState>
           <template v-else>
             <div class="filehead">
-              <span class="mono">{{ current.file.relPath }}</span>
+              <span class="mono path-full" :title="current.file.relPath">{{ current.file.relPath }}</span>
               <Button
                 v-if="canWrite && current.snapshots.length > 0"
                 :label="`History (${current.snapshots.length})`"
@@ -127,7 +162,13 @@
               severity="warn"
               :closable="false"
               class="mb"
-            >{{ current.warning }}</Message>
+            >{{ current.warning }} The file is shown read-only.</Message>
+            <Message
+              v-else-if="!current.supported"
+              severity="info"
+              :closable="false"
+              class="mb"
+            >No editor exists for this file type, so its text is shown read-only.</Message>
 
             <div v-if="showHistory" class="history">
               <div v-for="snap in current.snapshots" :key="snap" class="snap">
@@ -147,72 +188,114 @@
               You have read-only access to this server's configs.
             </p>
 
-            <EmptyState v-if="visibleFields.length === 0" icon="pi pi-search">
-              Nothing matches that search.
+            <pre
+              v-if="current.text !== undefined && (!current.supported || visibleFields.length === 0 || showSource)"
+              class="source mono small"
+            >{{ current.text }}</pre>
+            <Button
+              v-else-if="visibleFields.length > 0"
+              label="View source"
+              icon="pi pi-code"
+              size="small"
+              severity="secondary"
+              text
+              @click="onViewSource"
+            />
+
+            <EmptyState
+              v-if="visibleFields.length === 0 && current.supported && filtering"
+              icon="pi pi-search"
+            >
+              Nothing in this file matches "{{ search }}".
+            </EmptyState>
+            <EmptyState
+              v-else-if="visibleFields.length === 0 && current.supported"
+              icon="pi pi-sliders-h"
+            >
+              This file has no settings the editor can show.
             </EmptyState>
 
-            <div
-              v-for="field in visibleFields"
-              :key="field.path.join('.')"
-              :class="['field', { dirty: isDirty(field) }]"
-            >
-              <label class="label">
-                {{ field.displayLabel ?? field.label }}
-                <span class="path mono small">{{ field.path.join(".") }}</span>
-              </label>
-              <p v-if="field.description" class="muted small desc">{{ field.description }}</p>
+            <div v-for="(section, index) in shownSections" :key="section.id" class="section">
+              <button
+                type="button"
+                class="section-head"
+                :aria-expanded="isOpen(`section:${section.id}`, !collapseSections || index === 0)"
+                @click="toggleOpen(`section:${section.id}`, !collapseSections || index === 0)"
+              >
+                <i :class="['pi', isOpen(`section:${section.id}`, !collapseSections || index === 0) ? 'pi-chevron-down' : 'pi-chevron-right']" />
+                <span class="section-title">{{ section.title }}</span>
+                <span class="mod-count">{{ section.fields.length }}</span>
+              </button>
+              <template v-if="isOpen(`section:${section.id}`, !collapseSections || index === 0)">
+                <div
+                  v-for="field in section.fields"
+                  :key="pathKey(field.path)"
+                  :class="['field', { dirty: isDirty(field) }]"
+                >
+                  <label class="label">
+                    <span class="label-text">{{ field.displayLabel ?? field.label }}</span>
+                    <span class="path mono small">{{ pathLabel(field.path) }}</span>
+                  </label>
+                  <p v-if="field.description" class="muted small desc">{{ field.description }}</p>
 
-              <!-- Allowed Values from the mod's own comments → a real select. -->
-              <Select
-                v-if="field.options"
-                :model-value="stringValue(field)"
-                :options="field.options"
-                :disabled="!canWrite || field.readOnly"
-                class="control"
-                @update:model-value="setFromInput(field, $event)"
-              />
-              <ToggleSwitch
-                v-else-if="field.kind === 'boolean'"
-                :model-value="boolValue(field)"
-                :disabled="!canWrite || field.readOnly"
-                @update:model-value="setFromInput(field, $event)"
-              />
-              <InputNumber
-                v-else-if="field.kind === 'number'"
-                :model-value="numberValue(field)"
-                :min="field.min"
-                :max="field.max"
-                :max-fraction-digits="4"
-                :disabled="!canWrite || field.readOnly"
-                class="control"
-                @update:model-value="setFromInput(field, $event)"
-              />
-              <Chips
-                v-else-if="field.kind === 'stringList' || field.kind === 'numberList'"
-                :model-value="listValue(field)"
-                :disabled="!canWrite || field.readOnly"
-                class="control"
-                @update:model-value="setFromInput(field, $event)"
-              />
-              <InputText
-                v-else-if="field.kind === 'string'"
-                :model-value="stringValue(field)"
-                :disabled="!canWrite || field.readOnly"
-                class="control"
-                @update:model-value="setFromInput(field, $event)"
-              />
-              <!-- Anything the adapter could not type stays read-only rather
-                   than becoming a text box that can corrupt the file. -->
-              <span v-else class="mono small readonly">
-                {{ stringValue(field) }} <em class="muted">(not editable here)</em>
-              </span>
+                  <!-- Allowed Values from the mod's own comments become a real select. -->
+                  <Select
+                    v-if="field.options"
+                    :model-value="stringValue(field)"
+                    :options="field.options"
+                    :disabled="locked(field)"
+                    class="control"
+                    @update:model-value="setFromInput(field, $event)"
+                  />
+                  <ToggleSwitch
+                    v-else-if="field.kind === 'boolean'"
+                    :model-value="boolValue(field)"
+                    :disabled="locked(field)"
+                    @update:model-value="setFromInput(field, $event)"
+                  />
+                  <InputNumber
+                    v-else-if="field.kind === 'number'"
+                    :model-value="numberValue(field)"
+                    :min="field.min"
+                    :max="field.max"
+                    :max-fraction-digits="4"
+                    :disabled="locked(field)"
+                    class="control"
+                    @update:model-value="setFromInput(field, $event)"
+                  />
+                  <Chips
+                    v-else-if="field.kind === 'stringList' || field.kind === 'numberList'"
+                    :model-value="listValue(field)"
+                    :disabled="locked(field)"
+                    class="control"
+                    @update:model-value="setFromInput(field, $event)"
+                  />
+                  <InputText
+                    v-else-if="field.kind === 'string'"
+                    :model-value="stringValue(field)"
+                    :disabled="locked(field)"
+                    class="control"
+                    @update:model-value="setFromInput(field, $event)"
+                  />
+                  <!-- Anything the adapter could not type stays read-only rather
+                       than becoming a text box that can corrupt the file. -->
+                  <span v-else class="mono small readonly">
+                    {{ stringValue(field) }} <em class="muted">(not editable here)</em>
+                  </span>
 
-              <span v-if="field.min !== undefined" class="muted small hint">
-                Range {{ field.min }} – {{ field.max }}
-              </span>
-              <span v-if="field.default" class="muted small hint">
-                Default {{ field.default }}
-              </span>
+                  <span v-if="field.min !== undefined" class="muted small hint">
+                    Range {{ field.min }} to {{ field.max }}
+                  </span>
+                  <span v-if="field.default" class="muted small hint">
+                    Default {{ field.default }}
+                  </span>
+                </div>
+              </template>
+            </div>
+
+            <div v-if="hiddenFieldCount > 0" class="more">
+              <span class="muted small">{{ hiddenFieldCount }} more settings are not shown yet.</span>
+              <Button label="Show more" size="small" severity="secondary" text @click="showMoreFields" />
             </div>
           </template>
         </section>
@@ -235,6 +318,7 @@ import { useToast } from "primevue/usetoast";
 import type { EditConflict } from "../composables/useModConfigs";
 import { useModConfigs, type ConfigField } from "../composables/useModConfigs";
 import { useCapabilities } from "../composables/useCapabilities";
+import { displayPath, pathKey } from "../utils/configTree";
 import ViewHeader from "../components/ui/ViewHeader.vue";
 import StaleBanner from "../components/ui/StaleBanner.vue";
 import ConflictPicker from "../components/schema/ConflictPicker.vue";
@@ -258,6 +342,7 @@ export default defineComponent({
     return {
       currentServer: "",
       showHistory: false,
+      showSource: false,
       flushing: false,
       resolving: "",
       queueTimer: 0 as ReturnType<typeof setInterval> | 0,
@@ -271,8 +356,8 @@ export default defineComponent({
   mounted() {
     // Auto-flush can apply queued edits from the status poll while this tab is
     // open; without a poll here the banner would keep showing a count that was
-    // already written. Slower cadence than the status view — the queue changes
-    // far less often than a live server does.
+    // already written. Slower cadence than the status view, since the queue
+    // changes far less often than a live server does.
     this.queueTimer = setInterval(() => {
       if (this.currentServer) void this.refreshPending();
     }, 15_000);
@@ -298,6 +383,7 @@ export default defineComponent({
     },
   },
   methods: {
+    pathKey,
     async onResolve(payload: {
       conflict: EditConflict;
       choice: "queued" | "current";
@@ -338,8 +424,8 @@ export default defineComponent({
               : `${res.applied} queued change(s) applied`,
           detail:
             conflicts > 0
-              ? "Those keys changed on disk while the edits waited — reopen the file to see where they landed."
-              : "Most mods only read their config at startup — restart to apply.",
+              ? "Those keys changed on disk while the edits waited. Reopen the file to see where they landed."
+              : "Most mods only read their config at startup, so restart to apply.",
           life: 8000,
         });
         if (this.current) await this.openFile(this.current.file.id);
@@ -357,11 +443,23 @@ export default defineComponent({
     async select(id: string): Promise<void> {
       this.currentServer = id;
       this.showHistory = false;
+      this.showSource = false;
       await Promise.all([this.loadFiles(id), this.refreshPending()]);
     },
-    /** `config/jei-client.toml` → `jei-client.toml`, mod shown by the group. */
-    shortPath(relPath: string): string {
-      return relPath.split("/").pop() ?? relPath;
+    /** The file name, with its folder shown by the group above it. */
+    fileName(relPath: string, modId: string): string {
+      return displayPath(relPath, modId).split("/").pop() ?? relPath;
+    },
+    pathLabel(path: string[]): string {
+      return path.length === 0 ? "(whole file)" : path.join(".");
+    },
+    /** A field is read-only for viewers, for view-only files, and when the adapter says so. */
+    locked(field: ConfigField): boolean {
+      return !this.canWrite || this.fileReadOnly || Boolean(field.readOnly);
+    },
+    async onViewSource(): Promise<void> {
+      await this.loadSource();
+      this.showSource = true;
     },
     formatStamp(stamp: string): string {
       const iso = stamp.replace(
@@ -377,7 +475,7 @@ export default defineComponent({
         severity: ok ? "success" : "error",
         summary: ok ? `Saved ${changes} change(s)` : "Save failed",
         detail: ok
-          ? "Most mods only read their config at startup — restart to apply."
+          ? "Most mods only read their config at startup, so restart to apply."
           : this.error,
         life: ok ? 6000 : 8000,
       });
@@ -406,6 +504,7 @@ export default defineComponent({
 }
 .picker { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 .search { width: 100%; margin-bottom: 12px; }
+.filter-note { margin: -6px 0 10px; }
 .mb { margin-bottom: 10px; }
 .pad { padding: 10px 2px; }
 
@@ -413,58 +512,91 @@ export default defineComponent({
    the page itself never scrolls behind two panes that are already scrolling. */
 .modconfig-view { display: flex; flex-direction: column; }
 .layout {
-  display: grid; grid-template-columns: 280px 1fr; gap: 14px;
+  display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 14px;
   flex: 1; min-height: 0;
 }
 @media (max-width: 720px) {
-  .layout { grid-template-columns: 1fr; min-height: 0; }
+  .layout { grid-template-columns: minmax(0, 1fr); min-height: 0; }
   .files { max-height: 40vh; }
 }
 
 .files {
-  height: 100%; max-height: calc(100vh - 200px); overflow-y: auto;
+  height: 100%; max-height: calc(100vh - 200px); overflow-y: auto; min-width: 0;
   border: 1px solid var(--mc-border); border-radius: var(--mc-radius);
   background: var(--mc-card); padding: 6px;
 }
 .group { margin-bottom: 8px; }
 .mod {
+  display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0;
+  background: none; border: none; cursor: pointer; text-align: left;
   font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
   color: var(--mc-muted); padding: 4px 6px;
 }
+.mod-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mod-count { flex: none; font-size: 11px; color: var(--mc-muted); }
+.folder-name {
+  font-size: 11px; color: var(--mc-muted); padding: 3px 6px 1px 14px;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  direction: rtl; text-align: left;
+}
 .file {
   display: flex; justify-content: space-between; align-items: center; gap: 6px;
-  width: 100%; text-align: left; padding: 5px 6px; font-size: 12px;
+  width: 100%; min-width: 0; text-align: left; padding: 5px 6px; font-size: 12px;
   background: none; border: none; border-radius: var(--mc-radius-sm); cursor: pointer;
   color: var(--mc-text);
 }
+.file.nested { padding-left: 14px; }
 /* Without min-width the filename pushed the format badge out of the pane and
-   the list grew a horizontal scrollbar instead of eliding. */
-.file-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+   the list grew a horizontal scrollbar instead of eliding. The rtl direction
+   moves the ellipsis to the left so the end of a long name stays visible. */
+.file-name {
+  min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  direction: rtl; text-align: left;
+}
 .file-format { flex: none; }
 .file:hover { background: var(--mc-hover); }
 .file.active { background: var(--mc-hover); font-weight: 600; }
 
 .fields {
+  min-width: 0;
   border: 1px solid var(--mc-border); border-radius: var(--mc-radius);
   background: var(--mc-card); padding: 12px; height: 100%; max-height: calc(100vh - 200px); overflow-y: auto;
 }
 .filehead {
-  display: flex; justify-content: space-between; align-items: center;
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px;
   padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid var(--mc-border);
+  min-width: 0;
 }
+.path-full { min-width: 0; flex: 1 1 200px; overflow-wrap: anywhere; }
 .history { padding: 6px 0 10px; }
 .snap {
   display: flex; justify-content: space-between; align-items: center;
   padding: 3px 0;
 }
+.source {
+  margin: 0 0 8px; padding: 10px; max-height: 50vh; overflow: auto;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+  border: 1px solid var(--mc-border); border-radius: var(--mc-radius-sm);
+}
+
+.section { margin-bottom: 6px; }
+.section-head {
+  display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0;
+  background: none; border: none; border-bottom: 1px solid var(--mc-border);
+  cursor: pointer; text-align: left; padding: 6px 2px; font-size: 13px; font-weight: 600;
+  color: var(--mc-text);
+}
+.section-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.more { display: flex; align-items: center; gap: 10px; padding: 10px 0; flex-wrap: wrap; }
 
 .field { padding: 10px 0; border-bottom: 1px solid var(--mc-border); }
 .field:last-child { border-bottom: none; }
 .field.dirty { border-left: 2px solid var(--mc-accent); padding-left: 8px; }
-.label { display: flex; align-items: baseline; gap: 8px; font-size: 13px; font-weight: 500; }
-.path { color: var(--mc-muted); font-weight: 400; }
+.label { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; font-size: 13px; font-weight: 500; min-width: 0; }
+.label-text { overflow-wrap: anywhere; }
+.path { color: var(--mc-muted); font-weight: 400; overflow-wrap: anywhere; min-width: 0; }
 .desc { margin: 3px 0 6px; }
 .control { width: 100%; max-width: 380px; }
-.readonly { display: inline-block; padding: 4px 0; }
+.readonly { display: inline-block; padding: 4px 0; overflow-wrap: anywhere; }
 .hint { display: inline-block; margin-top: 4px; margin-right: 10px; }
 </style>

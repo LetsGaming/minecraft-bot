@@ -33,6 +33,7 @@
  */
 
 import type { StaleInfo } from "@mcbot/schema/contract.js";
+import { ConfigAccessError } from "../server/configAccessError.js";
 
 /**
  * How long a value stays servable after its last successful read.
@@ -119,6 +120,9 @@ export async function readThrough<T>(
     if ((generations.get(serverId) ?? 0) === startedAt) remember(serverId, resource, value);
     return { value, stale: null };
   } catch (err) {
+    // The wrapper answered and said no (file gone, too large): the cached copy
+    // would only hide that.
+    if (err instanceof ConfigAccessError) throw err;
     const fallback = recall<T>(
       serverId,
       resource,

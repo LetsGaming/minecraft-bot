@@ -1,5 +1,5 @@
 /**
- * DSH-03/DSH-04 — the backup panel's routes.
+ * DSH-03/DSH-04, the backup panel's routes.
  *
  * The test that matters most is the streaming one. Everything else here is
  * ordinary capability and proxy behaviour; "the download is not buffered" is
@@ -14,7 +14,7 @@ process.env.WEBUI_SESSION_SECRET = "unit-test-session-secret";
 process.env.WEBUI_CLIENT_SECRET = "unit-test-client-secret";
 
 const SYSADMIN = "111111111111111111";
-const READER = "777777777777777777"; // server:read — sees the list, nothing else
+const READER = "777777777777777777"; // server:read, sees the list, nothing else
 const READER_CFG = "888888888888888888"; // + config:read
 const EDITOR = "999999999999999990"; // + config:read + config:write
 
@@ -77,7 +77,7 @@ vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
 
 vi.mock("../../src/core/utils/server/server.js", () => ({
   // getHealth is required: collectStatus calls it first, and an instance
-  // without it falls through to unknownStatus — which reports features: null
+  // without it falls through to unknownStatus, which reports features: null
   // and would make these tests pass or fail for the wrong reason.
   getServerInstance: vi.fn((id: string) =>
     id === "smp"
@@ -137,6 +137,8 @@ vi.mock("../../src/core/utils/commands/commandManifest.js", () => ({
 import { encodeSigned, SESSION_COOKIE } from "../../src/web/backend/auth/auth.js";
 import { buildServer } from "../../src/web/backend/server.js";
 import { clearFeatureCache } from "../../src/web/backend/status/status.js";
+import { invalidatePrefix } from "../../src/core/utils/cache.js";
+import { clearLastKnown } from "../../src/core/utils/wrapper/lastKnown.js";
 
 const FILE_ID = "AbCdEfGhIjKlMnOpQrStUv";
 
@@ -182,10 +184,15 @@ beforeEach(() => {
   // The probe is cached for five minutes, so without this each test would be
   // answered by whatever the first one happened to ask.
   clearFeatureCache();
-  indexConfigFilesMock.mockResolvedValue([
-    { id: FILE_ID, relPath: "config/jei-client.toml", modId: "jei",
-      format: "toml", sizeBytes: 120, mtimeMs: 1 },
-  ]);
+  invalidatePrefix("config");
+  clearLastKnown();
+  indexConfigFilesMock.mockResolvedValue({
+    files: [
+      { id: FILE_ID, relPath: "config/jei-client.toml", modId: "jei",
+        format: "toml", editable: true, tooLarge: false, sizeBytes: 120, mtimeMs: 1 },
+    ],
+    truncated: false,
+  });
   readConfigFileMock.mockResolvedValue({
     text: TOML,
     etag: "etag-1",
@@ -381,5 +388,103 @@ describe("POST .../configs/:fileId/revert", () => {
     expect(recordAdminActionMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: "mod config revert (dashboard)" }),
     );
+  });
+});
+
+// ── Nested files, unsupported files, typed failures ─────────────────────────
+
+import { ConfigAccessError } from "../../src/core/utils/server/configAccessError.js";
+
+describe("nested and unsupported config files", () => {
+  const get = (uid: string, query = "") => ({
+    method: "GET" as const,
+    url: `/api/servers/smp/configs/${FILE_ID}${query}`,
+    headers: { cookie: cookieFor(uid) },
+  });
+  const putEdits = (edits: unknown, etag = "etag-1") => ({
+    method: "PUT" as const,
+    url: `/api/servers/smp/configs/${FILE_ID}`,
+    headers: { cookie: cookieFor(EDITOR), "content-type": "application/json" },
+    payload: { etag, edits },
+  });
+  const readAs = (relPath: string, text: string, editable = true) =>
+    readConfigFileMock.mockResolvedValue({
+      text,
+      etag: "etag-1",
+      file: { id: FILE_ID, relPath, modId: "x", format: "text", editable, tooLarge: false, sizeBytes: text.length, mtimeMs: 1 },
+      snapshots: [],
+    });
+
+  it("passes the truncated flag through", async () => {
+    indexConfigFilesMock.mockResolvedValue({ files: [], truncated: true });
+    const res = await buildServer().inject({
+      method: "GET", url: "/api/servers/smp/configs", headers: { cookie: cookieFor(READER_CFG) },
+    });
+    expect(res.json().truncated).toBe(true);
+  });
+
+  it("omits the raw text unless asked", async () => {
+    const app = buildServer();
+    expect(Object.keys((await app.inject(get(READER_CFG))).json())).not.toContain("text");
+    expect((await app.inject(get(READER_CFG, "?text=1"))).json().text).toBe(TOML);
+  });
+
+  it("serves an unsupported file as read-only source", async () => {
+    readAs("config/xaero/waypoints/Overworld_waypoints.txt", "waypoint:a:b\nplain words\n");
+    const body = (await buildServer().inject(get(READER_CFG))).json();
+    expect(body).toMatchObject({ supported: false, readOnly: true, fields: [] });
+    expect(body.text).toContain("waypoint:a:b");
+  });
+
+  it("serves a Xaero-style text file as editable fields", async () => {
+    readAs("config/xaero/minimap/xaerominimap.txt", "minimap:true\nzoom:2\n");
+    const body = (await buildServer().inject(get(READER_CFG))).json();
+    expect(body).toMatchObject({ supported: true, readOnly: false });
+    expect(body.fields.map((f: { path: string[] }) => f.path[0])).toEqual(["minimap", "zoom"]);
+  });
+
+  it("marks a file read-only when it parsed with a warning, and refuses to write it", async () => {
+    readAs("config/broken.json", '{"a": 1,, "b": 2}');
+    const app = buildServer();
+    const body = (await app.inject(get(READER_CFG))).json();
+    expect(body.readOnly).toBe(true);
+    expect(body.warning).toBeTruthy();
+    const res = await app.inject(putEdits([{ path: ["a"], value: 2 }]));
+    expect(res.statusCode).toBe(400);
+    expect(writeConfigFileMock).not.toHaveBeenCalled();
+  });
+
+  it("accepts a deep path and the empty path of a root array", async () => {
+    readAs("config/a.json", '["x"]');
+    const app = buildServer();
+    const res = await app.inject(putEdits([{ path: [], value: ["y"] }]));
+    expect(res.statusCode).toBe(200);
+    expect(writeConfigFileMock.mock.calls[0]![2]).toBe('["y"]');
+
+    const deep = Array.from({ length: 20 }, (_, i) => `k${i}`);
+    const json = deep.reduceRight((inner, k) => `{"${k}":${inner}}`, "1");
+    readAs("config/b.json", json);
+    const res2 = await app.inject(putEdits([{ path: deep, value: 2 }]));
+    expect(res2.statusCode).toBe(200);
+  });
+
+  it.each([
+    ["too-large", 413],
+    ["not-found", 404],
+    ["stale", 409],
+  ] as const)("shows a %s refusal on write with its real message", async (kind, status) => {
+    writeConfigFileMock.mockRejectedValueOnce(new ConfigAccessError(kind, `reason for ${kind}`, 400));
+    const res = await buildServer().inject(
+      putEdits([{ path: ["general", "maxSpawnCount"], value: 32 }]),
+    );
+    expect(res.statusCode).toBe(status);
+    expect(res.json().error).toContain(`reason for ${kind}`);
+  });
+
+  it("explains a too-large read instead of a generic failure", async () => {
+    readConfigFileMock.mockRejectedValueOnce(new ConfigAccessError("too-large", "bigger than 1 MB", 413));
+    const res = await buildServer().inject(get(READER_CFG));
+    expect(res.statusCode).toBe(413);
+    expect(res.json().error).toContain("bigger than 1 MB");
   });
 });
