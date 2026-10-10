@@ -1,10 +1,17 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { readFileSync, writeFileSync, mkdirSync, copyFileSync } from "node:fs";
+import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
+import {
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  copyFileSync,
+  rmSync,
+} from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = vi.hoisted(
-  () => `${process.env["TEMP"] ?? process.env["TMPDIR"] ?? "/tmp"}/mcbot-loadconfig-keys`,
+  () =>
+    `${process.env["TEMP"] ?? process.env["TMPDIR"] ?? "/tmp"}/mcbot-loadconfig-keys-${process.pid}-${Math.random().toString(36).slice(2)}`,
 );
 
 vi.mock("../../src/core/utils/jsonStore.js", () => ({
@@ -58,6 +65,10 @@ function rawConfigKeys(): string[] {
 beforeEach(() => {
   mkdirSync(root, { recursive: true });
   copyFileSync(schemaPath, join(root, "config.schema.json"));
+});
+
+afterAll(() => {
+  rmSync(root, { recursive: true, force: true });
 });
 
 describe("loadConfig key coverage", () => {
