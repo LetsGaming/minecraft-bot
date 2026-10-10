@@ -125,6 +125,12 @@ export const EXPECTED_WRAPPER_FEATURES: Record<string, ExpectedFeature> = {
       "/mods list still works; on a v1 wrapper the enable/disable toggle " +
       "has no effect since every mod reports enabled",
   },
+  "mod-compat": {
+    version: 1,
+    degrades:
+      "the dashboard Mods tab's check against another Minecraft version; " +
+      "the per-installed-version update check keeps working",
+  },
   backups: { version: 1, degrades: "/backup" },
   "backup-files": {
     // v2: delete an archive from the dashboard (see status.ts's backupDelete

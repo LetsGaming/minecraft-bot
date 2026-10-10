@@ -32,6 +32,9 @@ import {
   enableMod,
   checkModUpdates,
   applyModUpdates,
+  supportsModCompat,
+  startModCompat,
+  getModCompat,
   type InstalledMods,
 } from "@mcbot/core/utils/server/serverAccess.js";
 import {
@@ -44,6 +47,8 @@ import {
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
+import { logFields } from "@mcbot/core/utils/logSafe.js";
+import { fetchReleaseVersions } from "@mcbot/core/utils/minecraft/mojang.js";
 import { readThrough } from "@mcbot/core/utils/wrapper/lastKnown.js";
 import { cached, invalidate } from "@mcbot/core/utils/cache.js";
 import { sessionFromRequest } from "../auth/auth.js";
@@ -53,6 +58,8 @@ import {
   ModSlugParams,
   ModAddBody,
   ModUpdatesBody,
+  ModCompatBody,
+  ModCompatJobParams,
   ModSearchQuery,
   ModUpdatesQuery,
   ModIconQuery,
@@ -65,6 +72,10 @@ const OPERATION_FAILED =
 
 const TTL_INSTALLED = 15_000;
 const TTL_UPDATES = 120_000;
+const TTL_COMPAT_SUPPORT = 60_000;
+const TTL_RELEASE_VERSIONS = 6 * 60 * 60 * 1000;
+/** Collapses simultaneous pollers of one job into one wrapper read. */
+const TTL_COMPAT_JOB = 800;
 const TTL_SEARCH = 60_000;
 const TTL_CATALOG = 300_000;
 const TTL_ICON = 24 * 60 * 60 * 1000;
@@ -117,6 +128,88 @@ export function registerModRoutes(app: FastifyInstance): void {
     invalidate(`mods:updates:${id}`);
   }
 
+  /** Whether the wrapper can run the compatibility check; false when it cannot be asked. */
+  function compatSupported(
+    id: string,
+    cfg: Parameters<typeof supportsModCompat>[0],
+  ): Promise<boolean> {
+    return cached(`mods:compat-support:${id}`, TTL_COMPAT_SUPPORT, () =>
+      supportsModCompat(cfg),
+    );
+  }
+
+  // ── Compatibility with another Minecraft version (background job) ─────────
+  api.post(
+    "/api/servers/:id/mods/compat",
+    {
+      schema: { params: IdParams, body: ModCompatBody },
+      config: { capability: "mods:read", scope: "server", param: "id" },
+    },
+    async (req) => {
+      const server = requireServer(req.params.id);
+      if (!(await compatSupported(req.params.id, server.config))) {
+        throw new HttpError(
+          501,
+          "This server's API wrapper cannot check another Minecraft version. Update the wrapper.",
+        );
+      }
+      try {
+        return await startModCompat(server.config, req.body.mcVersion, req.body.refresh === true);
+      } catch (err) {
+        log.error(
+          "web",
+          `Mod compat start failed ${logFields({ server: req.params.id, mcVersion: req.body.mcVersion, detail: errMsg(err) })}`,
+        );
+        throw new HttpError(502, OPERATION_FAILED);
+      }
+    },
+  );
+
+  /** Released Minecraft versions for the target picker. `versions` is empty when Mojang cannot be reached. */
+  api.get(
+    "/api/servers/:id/mods/compat/versions",
+    {
+      schema: { params: IdParams },
+      config: { capability: "mods:read", scope: "server", param: "id" },
+    },
+    async (req) => {
+      requireServer(req.params.id);
+      const versions = await cached("mojang:release-versions", TTL_RELEASE_VERSIONS, async () => {
+        const list = await fetchReleaseVersions();
+        if (!list) throw new Error("Mojang version manifest unavailable");
+        return list;
+      }).catch(() => [] as string[]);
+      return { versions };
+    },
+  );
+
+  api.get(
+    "/api/servers/:id/mods/compat/:jobId",
+    {
+      schema: { params: ModCompatJobParams },
+      config: { capability: "mods:read", scope: "server", param: "id" },
+    },
+    async (req) => {
+      const server = requireServer(req.params.id);
+      let job;
+      try {
+        job = await cached(
+          `mods:compat-job:${req.params.id}:${req.params.jobId}`,
+          TTL_COMPAT_JOB,
+          () => getModCompat(server.config, req.params.jobId),
+        );
+      } catch (err) {
+        log.error(
+          "web",
+          `Mod compat poll failed ${logFields({ server: req.params.id, job: req.params.jobId, detail: errMsg(err) })}`,
+        );
+        throw new HttpError(502, OPERATION_FAILED);
+      }
+      if (!job) throw new NotFound("This check expired. Start it again.");
+      return job;
+    },
+  );
+
   // ── Installed list ────────────────────────────────────────────────────────
   api.get(
     "/api/servers/:id/mods/installed",
@@ -128,7 +221,7 @@ export function registerModRoutes(app: FastifyInstance): void {
       const server = requireServer(req.params.id);
       try {
         const { value, stale } = await loadInstalled(req.params.id, server.config);
-        return { ...value, stale };
+        return { ...value, stale, compat: await compatSupported(req.params.id, server.config) };
       } catch (err) {
         log.error("web", `Installed mods for ${req.params.id} failed: ${errMsg(err)}`);
         throw new HttpError(502, OPERATION_FAILED);

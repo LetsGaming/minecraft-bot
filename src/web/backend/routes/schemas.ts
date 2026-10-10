@@ -204,6 +204,21 @@ export type ModSearchQuery = Static<typeof ModSearchQuery>;
 export const ModIconQuery = Type.Object({ url: Type.String({ maxLength: 512 }) });
 export type ModIconQuery = Static<typeof ModIconQuery>;
 
+/** Same shape the wrapper accepts for a Minecraft version (letters, digits, `.`, `_`, `-`). */
+export const MC_VERSION_PATTERN = "^[A-Za-z0-9_.-]{1,20}$";
+
+export const ModCompatBody = Type.Object({
+  mcVersion: Type.String({ pattern: MC_VERSION_PATTERN }),
+  refresh: Type.Optional(Type.Boolean()),
+});
+export type ModCompatBody = Static<typeof ModCompatBody>;
+
+export const ModCompatJobParams = Type.Object({
+  id: Type.String(),
+  jobId: Type.String({ pattern: "^[a-f0-9-]{36}$" }),
+});
+export type ModCompatJobParams = Static<typeof ModCompatJobParams>;
+
 export const ModUpdatesQuery = Type.Object({
   refresh: Type.Optional(Type.String()),
 });

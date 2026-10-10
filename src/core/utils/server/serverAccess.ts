@@ -56,6 +56,9 @@ import type {
   InstalledMods,
   ModAddResult,
   ModApplyResult,
+  ModCompatJob,
+  ModCompatMod,
+  ModCompatStarted,
   ModRemoveResult,
   ModToggleResult,
   ModUpdateCheck,
@@ -69,6 +72,9 @@ export type {
   InstalledMods,
   ModAddResult,
   ModApplyResult,
+  ModCompatJob,
+  ModCompatMod,
+  ModCompatStarted,
   ModRemoveResult,
   ModToggleResult,
   ModUpdateCheck,
@@ -888,6 +894,43 @@ export async function checkModUpdates(
 ): Promise<ModUpdateCheck> {
   const q = mcVersion ? `?mcVersion=${encodeURIComponent(mcVersion)}` : "";
   return apiGet<ModUpdateCheck>(cfg, `/mods/updates${q}`, 130_000);
+}
+
+/**
+ * Whether this wrapper can run the background compatibility check. A
+ * wrapper that predates the manifest, or is unreachable, answers false so the
+ * dashboard hides the control and keeps the per-installed-version check.
+ */
+export async function supportsModCompat(cfg: ServerConfig): Promise<boolean> {
+  const manifest = await getRemoteManifest(cfg);
+  return (manifest?.features?.["mod-compat"]?.version ?? 0) >= 1;
+}
+
+/**
+ * Start (or join) the wrapper's job that checks every installed mod for a
+ * release on `mcVersion`. One job runs per version on the wrapper, so asking
+ * twice returns the same job id.
+ */
+export async function startModCompat(
+  cfg: ServerConfig,
+  mcVersion: string,
+  refresh = false,
+): Promise<ModCompatStarted> {
+  return apiPost<ModCompatStarted>(cfg, "/mods/compat", {
+    mcVersion,
+    ...(refresh ? { refresh: true } : {}),
+  });
+}
+
+/** Progress and result of a compatibility job; null once the wrapper forgot it (404). */
+export async function getModCompat(
+  cfg: ServerConfig,
+  jobId: string,
+): Promise<ModCompatJob | null> {
+  const route = `/mods/compat/${encodeURIComponent(jobId)}`;
+  const res = await apiGetRaw(cfg, route);
+  if (res.status === 404) return null;
+  return readApiJson<ModCompatJob>(res, route);
 }
 
 /** Apply all available updates. Long timeout: downloads every updated jar. */
