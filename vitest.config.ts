@@ -25,5 +25,9 @@ export default defineConfig({
     include: ["tests/**/*.test.ts"],
     environment: "node",
     setupFiles: ["tests/setup.ts"],
+    // Tests dynamically import large module graphs; the first run after a
+    // change transforms them cold and can exceed vitest's 5 s default.
+    testTimeout: 20_000,
+    hookTimeout: 60_000,
   },
 });
