@@ -20,8 +20,9 @@ import {
   createRateLimiter,
   type RateLimiter,
 } from "@mcbot/core/utils/rateLimiter.js";
-import { oauthStateCookie, sessionFromRequest } from "./auth/auth.js";
+import { sessionFromRequest } from "./auth/auth.js";
 
+const MAX_BUCKETS = 5_000;
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 export function registerRateLimiting(app: FastifyInstance): void {
@@ -33,32 +34,39 @@ export function registerRateLimiting(app: FastifyInstance): void {
   // callback (three outbound Discord calls each) can't be hammered. Config
   // edits and server actions arrive in small human bursts, so a per-user write
   // budget well above normal use still stops scripted abuse.
-  const authLimiter = createRateLimiter({ capacity: 10, windowMs: 60_000 });
-  const apiWriteLimiter = createRateLimiter({ capacity: 30, windowMs: 60_000 });
+  const authLimiter = createRateLimiter({ capacity: 10, windowMs: 60_000, maxBuckets: MAX_BUCKETS });
+  const apiWriteLimiter = createRateLimiter({ capacity: 30, windowMs: 60_000, maxBuckets: MAX_BUCKETS });
+  // Coarse per-address ceiling in front of the per-user buckets: many identities
+  // from one source, or one identity replayed from many sources, cannot multiply
+  // the budget past it. Several times the per-user limit so a shared proxy
+  // address still serves a handful of real users.
+  const ipCeilingLimiter = createRateLimiter({ capacity: 150, windowMs: 60_000, maxBuckets: MAX_BUCKETS });
 
-  /** Pick the limiter + bucket key for a request, or null to leave it unlimited. */
-  const limiterFor = (
-    req: FastifyRequest,
-  ): { limiter: RateLimiter; key: string } | null => {
+  interface Target {
+    /** Checked first; every request from one address draws from it. */
+    ceiling?: { limiter: RateLimiter; key: string };
+    limiter: RateLimiter;
+    key: string;
+  }
+
+  /**
+   * Pick the buckets for a request, or null to leave it unlimited. Only a
+   * verified session (valid signature, unexpired, current epoch) selects a
+   * per-user bucket; anything else, forged or rotated cookies included, falls
+   * back to the address. Pre-auth routes are always keyed by address.
+   */
+  const targetFor = (req: FastifyRequest): Target | null => {
     const path = req.url.split("?")[0] ?? "";
     if (path.startsWith("/auth/")) {
-      // Behind a proxy that is not trusted every client shares one address, so
-      // prefer a per-browser identity: the session user, or the OAuth state
-      // cookie that belongs to one login attempt. The address is the last
-      // resort for callers that have neither.
-      const uid = sessionFromRequest(req)?.uid;
-      if (uid) return { limiter: authLimiter, key: `uid:${uid}` };
-      const nonce = oauthStateCookie(req);
-      if (nonce && path === "/auth/callback") {
-        return { limiter: authLimiter, key: `state:${nonce}` };
-      }
       return { limiter: authLimiter, key: `ip:${req.ip}` };
     }
     if (path.startsWith("/api/") && MUTATING_METHODS.has(req.method)) {
       const uid = sessionFromRequest(req)?.uid;
+      if (!uid) return { limiter: apiWriteLimiter, key: `ip:${req.ip}` };
       return {
+        ceiling: { limiter: ipCeilingLimiter, key: `ip:${req.ip}` },
         limiter: apiWriteLimiter,
-        key: uid ? `uid:${uid}` : `ip:${req.ip}`,
+        key: `uid:${uid}`,
       };
     }
     return null;
@@ -66,12 +74,18 @@ export function registerRateLimiting(app: FastifyInstance): void {
 
   // onRequest: reject before body parsing / any work is done.
   app.addHook("onRequest", async (req: FastifyRequest, reply: FastifyReply) => {
-    const target = limiterFor(req);
+    const target = targetFor(req);
     if (!target) return;
-    if (target.limiter.consumeToken(target.key)) return;
+    const denied =
+      target.ceiling && !target.ceiling.limiter.consumeToken(target.ceiling.key)
+        ? target.ceiling
+        : !target.limiter.consumeToken(target.key)
+          ? target
+          : null;
+    if (!denied) return;
 
     reply
-      .header("retry-after", String(target.limiter.cooldownSeconds(target.key)))
+      .header("retry-after", String(denied.limiter.cooldownSeconds(denied.key)))
       .code(429)
       .send({ error: "Too many requests — slow down and try again shortly." });
     return reply;

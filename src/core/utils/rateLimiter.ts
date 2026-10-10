@@ -29,11 +29,17 @@ export interface RateLimiter {
   cooldownSeconds(userId: string): number;
 }
 
+/** Default bound on tracked buckets, so rotating keys cannot grow memory without limit. */
+export const DEFAULT_MAX_BUCKETS = 10_000;
+
 export function createRateLimiter(options: {
   capacity: number;
   windowMs: number;
+  /** Most buckets kept at once; the oldest are evicted beyond it. */
+  maxBuckets?: number;
 }): RateLimiter {
   const { capacity, windowMs } = options;
+  const maxBuckets = options.maxBuckets ?? DEFAULT_MAX_BUCKETS;
   const buckets = new Map<string, Bucket>();
 
   // Periodically clear buckets that haven't been seen for two full windows
@@ -54,6 +60,11 @@ export function createRateLimiter(options: {
       const bucket = buckets.get(userId);
 
       if (!bucket) {
+        while (buckets.size >= maxBuckets) {
+          const oldest = buckets.keys().next().value;
+          if (oldest === undefined) break;
+          buckets.delete(oldest);
+        }
         buckets.set(userId, { tokens: capacity - 1, lastSeen: now });
         return true;
       }

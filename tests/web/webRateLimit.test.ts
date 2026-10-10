@@ -95,12 +95,54 @@ describe("buckets behind one shared proxy address", () => {
     expect(other.statusCode).toBe(200);
   });
 
-  it("separate login attempts keep separate callback buckets", async () => {
+  it("pre-auth routes stay keyed by address: rotating state cookies buys nothing", async () => {
     const app = untrustedApp();
-    await flood(app, "GET", "/auth/callback", { cookie: "mcbot_oauth_state=aaaa" }, 15);
-    const blocked = await app.inject({ method: "GET", url: "/auth/callback", headers: { cookie: "mcbot_oauth_state=aaaa" }, remoteAddress: "172.18.0.2" });
-    const other = await app.inject({ method: "GET", url: "/auth/callback", headers: { cookie: "mcbot_oauth_state=bbbb" }, remoteAddress: "172.18.0.2" });
-    expect(blocked.statusCode).toBe(429);
+    for (let i = 0; i < 10; i++) {
+      await app.inject({ method: "GET", url: "/auth/callback", headers: { cookie: `mcbot_oauth_state=n${i}` }, remoteAddress: "172.18.0.2" });
+    }
+    const res = await app.inject({ method: "GET", url: "/auth/callback", headers: { cookie: "mcbot_oauth_state=fresh" }, remoteAddress: "172.18.0.2" });
+    expect(res.statusCode).toBe(429);
+  });
+
+  it("forged, malformed and rotated session cookies all share the address bucket", async () => {
+    const app = untrustedApp();
+    const { encodeSigned, SESSION_COOKIE } = await import("../../src/web/backend/auth/auth.js");
+    const expired = encodeSigned({ uid: "999999999999999999", tag: "x", guilds: [], exp: Date.now() - 1 });
+    const cookies = [
+      `${SESSION_COOKIE}=garbage`,
+      `${SESSION_COOKIE}=aaaa.bbbb`,
+      `${SESSION_COOKIE}=${expired}`,
+      "",
+    ];
+    const codes: number[] = [];
+    for (let i = 0; i < 40; i++) {
+      const cookie = i % 2 ? `${cookies[i % cookies.length]}${i}` : cookies[i % cookies.length]!;
+      codes.push((await app.inject({ method: "POST", url: "/api/test", headers: cookie ? { cookie } : {}, remoteAddress: "172.18.0.2" })).statusCode);
+    }
+    expect(codes.slice(0, 30).every((c) => c === 200)).toBe(true);
+    expect(codes.slice(30).every((c) => c === 429)).toBe(true);
+  });
+
+  it("1000 bogus session values do not need 1000 buckets", async () => {
+    const app = untrustedApp();
+    let limited = 0;
+    for (let i = 0; i < 1000; i++) {
+      const res = await app.inject({ method: "POST", url: "/api/test", headers: { cookie: `mcbot_session=bogus${i}.sig${i}` }, remoteAddress: "172.18.0.2" });
+      if (res.statusCode === 429) limited++;
+    }
+    expect(limited).toBe(970);
+  });
+
+  it("the address ceiling trips for many real identities behind one address", async () => {
+    const app = untrustedApp();
+    let blocked = 0;
+    for (let i = 0; i < 200; i++) {
+      const cookie = await signedIn(`${100000000000000000n + BigInt(i)}`);
+      const res = await app.inject({ method: "POST", url: "/api/test", headers: { cookie }, remoteAddress: "172.18.0.2" });
+      if (res.statusCode === 429) blocked++;
+    }
+    expect(blocked).toBeGreaterThan(0);
+    const other = await app.inject({ method: "POST", url: "/api/test", headers: { cookie: await signedIn("333333333333333333") }, remoteAddress: "198.51.100.8" });
     expect(other.statusCode).toBe(200);
   });
 
@@ -111,5 +153,16 @@ describe("buckets behind one shared proxy address", () => {
     }
     const res = await app.inject({ method: "GET", url: "/auth/test", remoteAddress: "198.51.100.4", headers: { "x-forwarded-for": "203.0.113.200" } });
     expect(res.statusCode).toBe(429);
+  });
+});
+
+describe("bucket map bound", () => {
+  it("evicts the oldest buckets beyond maxBuckets", async () => {
+    const { createRateLimiter } = await import("../../src/core/utils/rateLimiter.js");
+    const limiter = createRateLimiter({ capacity: 1, windowMs: 60_000, maxBuckets: 3 });
+    expect(limiter.consumeToken("k0")).toBe(true);
+    expect(limiter.consumeToken("k0")).toBe(false);
+    for (const k of ["k1", "k2", "k3"]) limiter.consumeToken(k);
+    expect(limiter.consumeToken("k0")).toBe(true);
   });
 });
