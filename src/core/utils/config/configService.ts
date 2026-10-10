@@ -27,6 +27,7 @@ import { log } from "../logger.js";
 import { snapshotConfig, type SnapshotMeta } from "./configHistory.js";
 import type { RawBotConfig } from "../../types/index.js";
 import { errMsg } from "../error.js";
+import { stampConfigVersion } from "../../configMigrations.js";
 
 /** Raw on-disk config (no env overrides, no variables.txt resolution). */
 export function readRawConfig(): RawBotConfig {
@@ -61,14 +62,17 @@ export function validateCandidate(
 /**
  * Validate and atomically write a new config.json.
  *
+ * The file is always written with the current configVersion.
+ *
  * @throws {Error} listing every validation error when the candidate is
  *                 invalid — nothing is written in that case.
  * @returns validation warnings (non-fatal issues worth surfacing in a UI).
  */
 export async function writeConfig(
-  candidate: RawBotConfig,
+  unstamped: RawBotConfig,
   meta?: SnapshotMeta,
 ): Promise<{ warnings: string[]; changed: boolean }> {
+  const candidate = stampConfigVersion(unstamped);
   const result = validateCandidateConfig(candidate);
   if (!result.valid) {
     throw new Error(

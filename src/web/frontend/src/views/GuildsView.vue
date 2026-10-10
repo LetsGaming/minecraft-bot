@@ -124,26 +124,30 @@ import GuildConfigEditor from "../components/schema/GuildConfigEditor.vue";
 import ViewHeader from "../components/ui/ViewHeader.vue";
 import GuildAvatar from "../components/ui/GuildAvatar.vue";
 import EmptyState from "../components/ui/EmptyState.vue";
+import { GUILD_FEATURE_KEYS, type GuildFeatureKey } from "@mcbot/schema";
 import { useGuilds } from "../composables/useGuilds";
 import { useMyGuilds } from "../composables/useMyGuilds";
 import { useInvite } from "../composables/useInvite";
 
-// Feature keys inside a guild block → chip label, icon, and a one-line
-// hint shown on hover. Kept in sync with GuildConfig and the backend's
-// FEATURE_KEYS list.
-const FEATURES: { key: string; label: string; icon: string; hint: string }[] = [
-  { key: "notifications", label: "Notifications", icon: "pi pi-bell", hint: "Join/leave and server-event messages." },
-  { key: "chatBridge", label: "Chat Bridge", icon: "pi pi-comments", hint: "Relays chat between Discord and Minecraft." },
-  { key: "leaderboard", label: "Leaderboard", icon: "pi pi-chart-bar", hint: "Scheduled stat leaderboards." },
-  { key: "statusEmbed", label: "Status Embed", icon: "pi pi-desktop", hint: "Live auto-updating status embed." },
-  { key: "downtimeAlerts", label: "Downtime Alerts", icon: "pi pi-exclamation-triangle", hint: "Alerts when a server goes down." },
-  { key: "tpsAlerts", label: "TPS Alerts", icon: "pi pi-gauge", hint: "Alerts on sustained low TPS." },
-  { key: "channelPurge", label: "Channel Purge", icon: "pi pi-trash", hint: "Auto-clears a channel on a schedule." },
-  { key: "reports", label: "Reports", icon: "pi pi-flag", hint: "Routes in-game !report to a channel." },
-  { key: "console", label: "Console", icon: "pi pi-code", hint: "Admin live console relay." },
-  { key: "whitelistApplications", label: "Whitelist Apps", icon: "pi pi-user-plus", hint: "Button-based whitelist applications." },
-  { key: "linkedRole", label: "Linked Role", icon: "pi pi-link", hint: "Assigns a role to linked members." },
-];
+// Feature keys inside a guild block: chip label, icon, and a one-line hint
+// shown on hover. The Record type makes a new GUILD_FEATURE_KEYS entry a
+// compile error until it has a label here.
+const FEATURE_META: Record<GuildFeatureKey, { label: string; icon: string; hint: string }> = {
+  notifications: { label: "Notifications", icon: "pi pi-bell", hint: "Join/leave and server-event messages." },
+  chatBridge: { label: "Chat Bridge", icon: "pi pi-comments", hint: "Relays chat between Discord and Minecraft." },
+  leaderboard: { label: "Leaderboard", icon: "pi pi-chart-bar", hint: "Scheduled stat leaderboards." },
+  statusEmbed: { label: "Status Embed", icon: "pi pi-desktop", hint: "Live auto-updating status embed." },
+  downtimeAlerts: { label: "Downtime Alerts", icon: "pi pi-exclamation-triangle", hint: "Alerts when a server goes down." },
+  tpsAlerts: { label: "TPS Alerts", icon: "pi pi-gauge", hint: "Alerts on sustained low TPS." },
+  channelPurge: { label: "Channel Purge", icon: "pi pi-trash", hint: "Auto-clears a channel on a schedule." },
+  reports: { label: "Reports", icon: "pi pi-flag", hint: "Routes in-game !report to a channel." },
+  console: { label: "Console", icon: "pi pi-code", hint: "Admin live console relay." },
+  whitelistApplications: { label: "Whitelist Apps", icon: "pi pi-user-plus", hint: "Button-based whitelist applications." },
+  linkedRole: { label: "Linked Role", icon: "pi pi-link", hint: "Assigns a role to linked members." },
+};
+
+const FEATURES: { key: GuildFeatureKey; label: string; icon: string; hint: string }[] =
+  GUILD_FEATURE_KEYS.map((key) => ({ key, ...FEATURE_META[key] }));
 
 export default defineComponent({
   name: "GuildsView",

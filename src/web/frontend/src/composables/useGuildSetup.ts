@@ -2,7 +2,7 @@ import { ref, toValue } from "vue";
 import { errorMessage, parseErrorList } from "../utils/errorMessage";
 import { isRecord } from "../utils/isRecord";
 import { useToast } from "primevue/usetoast";
-import { DEFAULT_NOTIFICATION_EVENTS } from "@mcbot/schema";
+import { DEFAULT_NOTIFICATION_EVENTS, type GuildFeatureKey } from "@mcbot/schema";
 import { apiGet, apiSend } from "../api";
 import type { SetupGuild, SetupChannel, SetupRole } from "../api";
 
@@ -15,7 +15,7 @@ export type FeatureInput =
   | "role";
 
 export interface FeatureDesc {
-  key: string;
+  key: GuildFeatureKey;
   label: string;
   icon: string;
   input: FeatureInput;

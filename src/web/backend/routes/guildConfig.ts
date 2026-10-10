@@ -24,19 +24,14 @@ import { listBotGuilds, discordHttpError } from "../auth/discordRest.js";
 import { readConfigSchema } from "../config/configSchema.js";
 import { HttpError, Forbidden, Conflict, ValidationFailed, ServiceUnavailable } from "../errors.js";
 import type { RawBotConfig } from "@mcbot/core/types/index.js";
+import { GUILD_FEATURE_KEYS } from "@mcbot/schema";
 import { IdParams, GuildConfigWriteBody, MutationResult } from "./schemas.js";
 
-// Guild-block keys that count as "a feature is on". Mirrors the wizard;
-// statusEmbed is on only when explicitly enabled, the rest when present.
-const FEATURE_KEYS = [
-  "notifications", "chatBridge", "leaderboard", "statusEmbed",
-  "downtimeAlerts", "tpsAlerts", "channelPurge", "reports",
-  "console", "whitelistApplications", "linkedRole",
-];
-
+// A feature counts as on when its key is present; statusEmbed only when
+// explicitly enabled.
 function enabledFeatures(block: Record<string, unknown> | undefined): string[] {
   if (!block) return [];
-  return FEATURE_KEYS.filter((k) => {
+  return GUILD_FEATURE_KEYS.filter((k) => {
     const v = block[k];
     if (v === undefined || v === null) return false;
     if (k === "statusEmbed") return (v as { enabled?: boolean }).enabled === true;

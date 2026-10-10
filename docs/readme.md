@@ -15,6 +15,7 @@ You host the bot and/or the Minecraft server.
 | Running the bot with Docker | [admin/docker.md](admin/docker.md) |
 | Installing the API wrapper on the Minecraft host | [admin/remote-setup.md](admin/remote-setup.md) |
 | Upgrading from 4.x | [admin/migrating-to-5.md](admin/migrating-to-5.md) |
+| Upgrading to 7.0 (config versioning, automatic migration) | [admin/migrating-to-7.md](admin/migrating-to-7.md) |
 | Retiring the standalone server-manager panel | [admin/retiring-server-manager.md](admin/retiring-server-manager.md) |
 | Dashboard access: capabilities and grants | [admin/capabilities.md](admin/capabilities.md) |
 | Getting in when the dashboard is down | [admin/emergency-access.md](admin/emergency-access.md) |

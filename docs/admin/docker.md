@@ -56,7 +56,7 @@ On startup the entrypoint reads `config.template.json`, substitutes the `.env` v
 The template covers one server and one guild. For multi-server or multi-guild setups, use a full static config:
 
 ```bash
-cp config_structure.json config.json
+cp config.template.json config.json
 # Fill it in; see admin/configuration.md for the full reference
 ```
 

@@ -125,6 +125,8 @@ function formatError(err: ErrorObject): string {
       const comparison = (err.params as { comparison: string }).comparison;
       return `  - ${where}: must be ${comparison} ${limit}`;
     }
+    case "pattern":
+      return `  - ${where}: must match ${(err.params as { pattern: string }).pattern}`;
     default:
       return `  - ${where}: ${err.message ?? "is invalid"}`;
   }

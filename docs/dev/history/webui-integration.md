@@ -88,8 +88,7 @@ optimistic concurrency apply unchanged.
 `config.schema.json` (repo root) is the formal JSON Schema — generated
 from `RawBotConfig` at build time (`npm run schema:generate`) and
 drift-checked in CI — and is what dashboard forms should render from.
-`config_structure.json` remains as the annotated, human-readable example
-of every field. The authoritative shape is `RawBotConfig` in
+`config.template.json` is the human-readable example. The authoritative shape is `RawBotConfig` in
 `src/types/config.ts`.
 
 Multi-server semantics the UI should encode:
