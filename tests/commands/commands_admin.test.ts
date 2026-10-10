@@ -29,6 +29,7 @@ vi.mock("../../src/core/config.js", () => ({
     clientId: "12345",
     commands: {},
   }),
+  getLoadedConfigRevision: vi.fn(() => ({ hash: "h", loadedAt: 0 })),
   reloadConfig: vi.fn().mockReturnValue({
     adminUsers: ["admin1"],
     servers: {},

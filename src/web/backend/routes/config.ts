@@ -24,6 +24,11 @@ import {
   RETENTION_DAYS as CONFIG_HISTORY_RETENTION_DAYS,
 } from "@mcbot/core/utils/config/configHistory.js";
 import { log } from "@mcbot/core/utils/logger.js";
+import { readRuntimeHeartbeat } from "@mcbot/core/utils/server/runtimeHeartbeat.js";
+import {
+  computeConfigStatus,
+  readConfigRevision,
+} from "@mcbot/core/utils/config/configApplyStatus.js";
 import { readCommandManifest } from "@mcbot/core/utils/commands/commandManifest.js";
 import { resolveCommandPolicy } from "@mcbot/core/utils/commands/commandPolicy.js";
 import {
@@ -64,6 +69,17 @@ export function registerConfigRoutes(app: FastifyInstance): void {
     hash: configFileHash(),
     config: toSafeConfig(readRawConfig()),
   }));
+
+  /**
+   * Whether the running bot has applied the config.json on disk: the file's
+   * revision next to what the bot's heartbeat last reported applying.
+   */
+  api.get("/api/config/status", { config: BOT_CONFIG }, async () =>
+    computeConfigStatus(
+      readConfigRevision(configFileHash()),
+      await readRuntimeHeartbeat(),
+    ),
+  );
 
   /**
    * Everything the Commands view needs in one call: the manifest the

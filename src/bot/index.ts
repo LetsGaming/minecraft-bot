@@ -10,6 +10,7 @@ import {
 import path from "path";
 import { fileURLToPath } from "url";
 import { loadConfig, getServerIds, watchConfig } from "@mcbot/core/config.js";
+import { beginConfigApply } from "@mcbot/core/utils/server/runtimeHeartbeat.js";
 import { summarizeConfigChanges } from "@mcbot/core/utils/config/configDiff.js";
 import { consumeToken, cooldownSeconds } from "@mcbot/core/utils/rateLimiter.js";
 import {
@@ -103,6 +104,7 @@ for (const inst of getAllInstances()) {
   const { currentVersion } = await import(
     "./logWatcher/watchers/monitors/updateNotifier.js"
   );
+  beginConfigApply()([]);
   startRuntimeHeartbeat(currentVersion());
 }
 
@@ -135,6 +137,7 @@ const client = new Client({
 let lastSeenConfig = config;
 watchConfig((fresh) => {
   if (!client.isReady()) return;
+  const reportApplied = beginConfigApply();
   const settingChanges = summarizeConfigChanges(lastSeenConfig, fresh);
   lastSeenConfig = fresh;
   for (const change of settingChanges) {
@@ -142,6 +145,7 @@ watchConfig((fresh) => {
   }
   reconcileServers(client, fresh)
     .then(({ added, removed, changed }) => {
+      reportApplied(changed);
       if (added.length > 0 || removed.length > 0 || changed.length > 0) {
         log.info(
           "config",

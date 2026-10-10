@@ -10,6 +10,7 @@
  */
 import type { Client } from "discord.js";
 import { reloadConfig } from "@mcbot/core/config.js";
+import { beginConfigApply } from "@mcbot/core/utils/server/runtimeHeartbeat.js";
 import { reconcileServers } from "../logWatcher/initMinecraftCommands.js";
 import type { BotConfig } from "@mcbot/core/types/index.js";
 
@@ -26,6 +27,8 @@ export async function applyConfig(client: Client): Promise<{
   changed: string[];
 }> {
   const config = reloadConfig();
+  const reportApplied = beginConfigApply();
   const { added, removed, changed } = await reconcileServers(client, config);
+  reportApplied(changed);
   return { config, added, removed, changed };
 }
