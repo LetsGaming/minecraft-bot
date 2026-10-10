@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hybrid mockups</title>
+<!--
+DIRECTION CONTRACT (Hybrid)
+THESIS: The same app, on a system. Keep today's charcoal and green so existing admins see the same product, and give every screen the Evolve token roles, shaped status chips and shared components so it finally speaks one language. Early phases fix the audit's must-haves on that foundation; later phases extend it, nothing is thrown away. Distinctive axes (operate mode): the shaped status system shared with Discord, and density. Everything else is conventional on purpose.
+WORLD: Charcoal surfaces (#15171a to #2a2e34), one green accent with dark on-accent text, system fonts, 7px and 10px radii, hairline borders, status chips with distinct shapes, no animation beyond spinners and one 180 ms entrance. Dark only.
+STORY: An admin opens any screen and sees what is wrong, unsaved, busy or applied at a glance, in one visual language.
+FIRST VIEWPORT: Links to the three screens and Discord, and the side-by-side preview.
+RISK: Hybrids can inherit both parents' weaknesses: generic admin look (Polish) and a wide migration (Evolve). The mitigation is the phase plan: every phase ships alone and stops cleanly.
+-->
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="main" class="dc-wrap" style="max-width:860px;margin:0 auto;padding:24px 16px 48px;display:grid;gap:16px">
+  <header class="page-head"><h1>Direction 4: Hybrid</h1>
+  <p class="lede">Today's charcoal and green, on Evolve's token roles, shaped status chips and shared components. Read <code>direction.md</code> for the decision table against Polish and Evolve, the phase plan and the cost. Sample data throughout. No build step and no network needed; fonts are the system stack.</p></header>
+  <ul class="index-list">
+    <li><a href="preview.html"><strong>Side-by-side preview</strong><span class="dim small">Every screen in a 1440 and a phone frame with a state picker.</span></a></li>
+    <li><a href="config.html"><strong>Config editor</strong><span class="dim small">Clean, dirty, error, conflict, saving, applied, waiting for the bot, restart needed, bot down, read-only.</span></a></li>
+    <li><a href="mods.html"><strong>Mods</strong><span class="dim small">Installed, per-row busy, update check "Checking 14 of 62", results and blockers, check failed, empty, error, remove confirm.</span></a></li>
+    <li><a href="backups.html"><strong>Backups</strong><span class="dim small">List, stale, creating, row busy, delete, restore blocked and ready, restoring, finished, failed, empty, error, read-only.</span></a></li>
+    <li><a href="discord.html"><strong>Discord messages</strong><span class="dim small">Colour map, rules and eleven message types, with an English and German switch.</span></a></li>
+    <li><a href="discord.html?lang=de"><strong>Discord messages, Deutsch</strong><span class="dim small">Same page; use the switch in the bar.</span></a></li>
+  </ul>
+</main>
+</body>
+</html>

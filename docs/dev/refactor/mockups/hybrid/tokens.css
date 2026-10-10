@@ -1,0 +1,90 @@
+/* Hybrid design tokens. Roles, not values: components read these names only.
+   Dark only. Surfaces and accent are today's charcoal and green, so the app is recognisable.
+   The role names (including the status roles) are complete, so a light value set can be added later without touching a component.
+   Contrast figures are computed from these values with the WCAG formula. */
+
+:root {
+  color-scheme: dark;
+
+  /* type: system faces, one scale. Body 15, dense table text 14, inputs 16 on touch (iOS zoom). */
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+  --text-xs: 0.75rem;     /* 12  chip labels, table headers, key lines */
+  --text-sm: 0.875rem;    /* 14  help text, table cells, secondary rows */
+  --text-md: 0.9375rem;   /* 15  body, controls */
+  --text-lg: 1rem;        /* 16  inputs on touch, dialog body */
+  --text-xl: 1.125rem;    /* 18  card titles */
+  --text-2xl: 1.5rem;     /* 24  page title (h1) */
+  --text-3xl: 1.875rem;   /* 30  readouts: counts, uptime, TPS */
+  --leading-tight: 1.2;
+  --leading-body: 1.5;
+  --tracking-caps: 0.06em;
+
+  /* spacing: 4px base */
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px;
+  --space-4: 16px; --space-5: 24px; --space-6: 32px; --space-7: 48px;
+
+  /* radius: two steps as today, plus full for dots and switches */
+  --radius-control: 7px;
+  --radius-surface: 10px;
+  --radius-full: 999px;
+
+  /* control sizes: density sets these, pointer: coarse and phones override to 44 */
+  --control-h: 36px;
+  --row-pad-y: 10px;
+  --field-gap: var(--space-4);
+  --touch-min: 44px;
+
+  /* z scale */
+  --z-sticky: 10; --z-nav: 30; --z-dialog: 50; --z-toast: 60;
+
+  /* motion: 120 ms colour changes, one 180 ms entrance for drawer, dialog and toast. Nothing else moves except spinners and progress. */
+  --ease-settle: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur-state: 180ms;
+
+  /* surfaces (today's --mc-bg, --mc-surface, --mc-card family) */
+  --bg: #15171a;
+  --surface-nav: #191b1f;      /* sidebar, top bar */
+  --surface: #22252a;          /* cards, dialogs */
+  --surface-raised: #2a2e34;   /* table header, hover, chips at rest, code */
+  --border: #2f343b;           /* decoration only */
+  --border-strong: #6f7885;    /* control outlines: 3.4:1 on surface, 4.0:1 on bg */
+  --text: #e7e9ec;             /* 12.6:1 on surface */
+  --text-dim: #9aa1ac;         /* 5.9:1 on surface, 5.2:1 on raised (today 3.2:1) */
+  --accent: #34c56a;           /* 6.8:1 on surface */
+  --accent-hover: #4ad17c;
+  --on-accent: #06210f;        /* 7.6:1 on accent (today 2.15:1) */
+  --accent-tint: #243530;
+  --focus: #8cc8ff;            /* blue on purpose: a green ring would vanish on the green button */
+  --link: var(--accent);
+  --scrim: rgba(8, 9, 11, 0.7);
+  --shadow-overlay: 0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
+
+  /* status roles: fg for text and shape, tint for the chip. Foreground on tint is 4.7:1 or better.
+     The same seven names and values drive the Discord embed colours. */
+  --st-online: #4ade80;     --st-online-bg: #263933;
+  --st-degraded: #fbbf24;   --st-degraded-bg: #3a3629;
+  --st-offline: #f87171;    --st-offline-bg: #3a2d32;
+  --st-unknown: #9aa1ac;    --st-unknown-bg: #2f3338;
+  --st-pending: #b7a1ff;    --st-pending-bg: #323341;
+  --st-applied: #4ade80;    --st-applied-bg: #263933;
+  --st-info: #7cb4ff;       --st-info-bg: #2c3541;
+  --danger: #f87171;
+  --danger-solid: #e05858;
+  --on-danger: #1d0707;     /* 5.3:1 on danger-solid */
+}
+
+/* density: comfortable is the default, compact for table-heavy admins */
+:root[data-density="compact"] {
+  --control-h: 30px;
+  --row-pad-y: 5px;
+  --field-gap: var(--space-3);
+}
+
+@media (pointer: coarse), (max-width: 760px) {
+  :root, :root[data-density="compact"] {
+    --control-h: var(--touch-min);
+    --row-pad-y: 12px;
+  }
+}
