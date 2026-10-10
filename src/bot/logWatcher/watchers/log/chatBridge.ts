@@ -16,6 +16,7 @@ import {
   type GuildConfigSource,
 } from "../../../utils/guild/guildConfigs.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
+import { announce } from "@mcbot/core/utils/minecraft/serverMessages.js";
 
 const CHAT_REGEX = /\[.+?\]: <(?:\[AFK\]\s*)?([^>]+)>\s+(.+)/;
 
@@ -401,6 +402,8 @@ export function setupDiscordToMc(
       msg.author.displayName,
       msg.content,
     );
-    await server.sendCommand(`/say [${safeName}] ${safeContent}`);
+    if (!(await announce(server, `[${safeName}] ${safeContent}`))) {
+      msg.react("⚠️").catch(() => {});
+    }
   });
 }

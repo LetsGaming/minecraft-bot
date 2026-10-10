@@ -14,6 +14,7 @@ vi.mock("../../src/core/utils/logger.js", () => ({
 }));
 
 import { validateCandidateConfig } from "../../src/core/config.js";
+import { DELIVERED } from "../fixtures/outcomes.js";
 
 const base = {
   token: "t",
@@ -174,6 +175,7 @@ describe("advancement watcher — challenge win", () => {
       server: {
         id: "smp",
         config: { apiUrl: "http://w:3030", apiKey: "k" },
+        send: vi.fn().mockResolvedValue(DELIVERED),
         sendCommand: vi.fn().mockResolvedValue("ok"),
       },
       register: (re: RegExp, fn: never) => {
@@ -231,7 +233,7 @@ describe("advancement watcher — challenge win", () => {
     // Winner announcement + confirmed item give happened. The announcement
     // goes through the instance; the give reads the wrapper seam directly so
     // it can tell a failed request from a server with no output channel.
-    const cmds = ctx.server.sendCommand.mock.calls.map(([c]: [string]) => c);
+    const cmds = ctx.server.send.mock.calls.map(([c]: [string]) => c);
     expect(cmds.some((c) => c.startsWith("/tellraw @a"))).toBe(true);
     const gives = vi
       .mocked(serverAccess.sendCommand)
@@ -323,6 +325,7 @@ describe("advancement watcher — challenge win", () => {
         id: "smp",
         config: { useRcon: true },
         // give NOT confirmed:
+        send: vi.fn().mockResolvedValue(DELIVERED),
         sendCommand: vi.fn().mockResolvedValue("ok"),
       },
       register: (re: RegExp, fn: never) => {

@@ -19,6 +19,7 @@ import {
 import { give } from "@mcbot/core/utils/minecraft/rewards.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { t } from "@mcbot/core/utils/i18n.js";
+import { tellraw } from "@mcbot/core/utils/minecraft/serverMessages.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
@@ -93,19 +94,13 @@ async function handleChallenge(
       }),
   });
 
-  try {
-    await server.sendCommand(
-      `/tellraw @a ${JSON.stringify({
-        text: t("challenge.wonInGame", {
-          player,
-          advancement: active.advancement,
-        }),
-        color: "gold",
-      })}`,
-    );
-  } catch {
-    /* announcement is best-effort */
-  }
+  await tellraw(server, "@a", {
+    text: t("challenge.wonInGame", {
+      player,
+      advancement: active.advancement,
+    }),
+    color: "gold",
+  });
 
   if (active.item) {
     const item = { item: active.item, amount: active.amount ?? 1 };

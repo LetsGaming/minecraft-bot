@@ -30,8 +30,7 @@ import {
   type Challenge,
 } from "@mcbot/core/utils/stores/challengeStore.js";
 import { t } from "@mcbot/core/utils/i18n.js";
-import { log } from "@mcbot/core/utils/logger.js";
-import { errMsg } from "@mcbot/core/utils/error.js";
+import { tellraw } from "@mcbot/core/utils/minecraft/serverMessages.js";
 
 const MAX_DURATION_HOURS = 24 * 14; // two weeks
 
@@ -251,16 +250,10 @@ export const execute = withErrorHandling(
         }),
     });
 
-    try {
-      await server.sendCommand(
-        `/tellraw @a ${JSON.stringify({
-          text: t("challenge.startedInGame", { advancement }),
-          color: "gold",
-        })}`,
-      );
-    } catch (err) {
-      log.warn("challenges", `In-game announcement failed: ${errMsg(err)}`);
-    }
+    await tellraw(server, "@a", {
+      text: t("challenge.startedInGame", { advancement }),
+      color: "gold",
+    });
 
     await interaction.editReply({
       embeds: [statusEmbed(challenge, server.id)],

@@ -6,6 +6,7 @@
  * - downtimeMonitor checkServer state machine
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { DELIVERED } from "../fixtures/outcomes.js";
 
 // ── Shared mocks ──────────────────────────────────────────────────────────
 
@@ -95,10 +96,10 @@ describe("setupDiscordToMc", () => {
     );
   });
 
-  it("forwards message to server.sendCommand when in configured channel", async () => {
+  it("forwards message to server.send when in configured channel", async () => {
     const client = makeClient();
     const server = {
-      sendCommand: vi.fn().mockResolvedValue(undefined),
+      send: vi.fn().mockResolvedValue(DELIVERED),
     } as never;
     const guildConfigs = {
       guild1: { chatBridge: { channelId: "ch1", server: "survival" } },
@@ -115,14 +116,14 @@ describe("setupDiscordToMc", () => {
     };
 
     await client._trigger("messageCreate", fakeMsg as never);
-    expect(server.sendCommand).toHaveBeenCalledWith(
+    expect(server.send).toHaveBeenCalledWith(
       expect.stringContaining("/say"),
     );
   });
 
   it("ignores bot messages", async () => {
     const client = makeClient();
-    const server = { sendCommand: vi.fn() } as never;
+    const server = { send: vi.fn() } as never;
     setupDiscordToMc(
       client as never,
       { guild1: { chatBridge: { channelId: "ch1" } } } as never,
@@ -136,12 +137,12 @@ describe("setupDiscordToMc", () => {
       content: "bot msg",
     };
     await client._trigger("messageCreate", botMsg as never);
-    expect(server.sendCommand).not.toHaveBeenCalled();
+    expect(server.send).not.toHaveBeenCalled();
   });
 
   it("ignores messages from unknown guilds", async () => {
     const client = makeClient();
-    const server = { sendCommand: vi.fn() } as never;
+    const server = { send: vi.fn() } as never;
     setupDiscordToMc(client as never, {}, () => server);
 
     const msg = {
@@ -151,13 +152,13 @@ describe("setupDiscordToMc", () => {
       content: "hi",
     };
     await client._trigger("messageCreate", msg as never);
-    expect(server.sendCommand).not.toHaveBeenCalled();
+    expect(server.send).not.toHaveBeenCalled();
   });
 
   it("strips non-ASCII characters from displayName and content", async () => {
     const client = makeClient();
     const server = {
-      sendCommand: vi.fn().mockResolvedValue(undefined),
+      send: vi.fn().mockResolvedValue(DELIVERED),
     } as never;
     const guildConfigs = {
       g1: { chatBridge: { channelId: "ch1", server: "main" } },
@@ -176,7 +177,7 @@ describe("setupDiscordToMc", () => {
       react: vi.fn().mockResolvedValue(undefined),
     };
     await client._trigger("messageCreate", msg as never);
-    const cmd = vi.mocked(server.sendCommand).mock.calls[0]![0] as string;
+    const cmd = vi.mocked(server.send).mock.calls[0]![0] as string;
     expect(cmd).not.toContain("\x00");
   });
 });
