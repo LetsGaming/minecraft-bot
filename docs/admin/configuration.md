@@ -1,9 +1,9 @@
 # Configuration
 
-All configuration lives in a single `config.json` in the project root. `config_structure.json` is the canonical template with every available field. Copy it as a starting point:
+All configuration lives in a single `config.json` in the project root. `config.template.json` is the starting point (replace its `${...}` placeholders with real values), and `config.schema.json` lists every available field with its type, bounds and description. Copy the template:
 
 ```bash
-cp config_structure.json config.json
+cp config.template.json config.json
 ```
 
 Or generate it interactively:

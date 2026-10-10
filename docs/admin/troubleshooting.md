@@ -10,7 +10,7 @@ Problems sorted by symptom. The bot's own log (`logs/bot.log`, or `docker compos
 
 ## "config.json validation failed at ..."
 
-The bot tells you exactly which field is wrong, e.g. `servers.survival.rconPort: must be an integer between 1 and 65535`. Fix the named field; `config_structure.json` shows the expected shape for everything.
+The bot tells you exactly which field is wrong, e.g. `servers.survival.rconPort: must be an integer between 1 and 65535`. Fix the named field; `config.template.json` shows the expected shape and `config.schema.json` lists every field.
 
 If the message is `Failed to load config.json`, the file is missing or not valid JSON. A trailing comma is the usual culprit; run it through a JSON validator.
 
