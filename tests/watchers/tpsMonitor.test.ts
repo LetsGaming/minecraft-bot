@@ -41,7 +41,19 @@ function guild(srvId?: string) {
   } as never;
 }
 
-beforeEach(() => vi.useFakeTimers());
+beforeEach(async () => {
+  vi.useFakeTimers();
+  const { loadConfig } = await import("../../src/core/config.js");
+  vi.mocked(loadConfig).mockReset().mockReturnValue({
+    tpsWarningThreshold: 15,
+    tpsPollIntervalMs: 100,
+  } as never);
+  const { createEmbed } = await import("../../src/bot/utils/embeds/embedUtils.js");
+  vi.mocked(createEmbed).mockReset().mockReturnValue({
+    addFields: vi.fn().mockReturnThis(),
+    setFooter: vi.fn().mockReturnThis(),
+  } as never);
+});
 afterEach(() => vi.useRealTimers());
 
 it("returns null when supportsTps is false", () => {

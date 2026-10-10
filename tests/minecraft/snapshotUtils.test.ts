@@ -106,8 +106,9 @@ afterAll(async () => {
   await rm(SNAP_ROOT, { recursive: true, force: true });
 });
 
-beforeEach(() => {
+beforeEach(async () => {
   closeDbForTesting(); // fresh in-memory DB per test
+  await mkdir(SNAPSHOTS_BASE, { recursive: true });
 });
 
 // ── getSnapshotClosestTo ───────────────────────────────────────────────────
@@ -347,6 +348,13 @@ describe("per-server snapshot isolation", () => {
 // ── Legacy migration ─────────────────────────────────────────────────
 
 describe("migrateLegacySnapshots", () => {
+  beforeEach(async () => {
+    await rm(path.join(SNAP_ROOT, "data", "snapshots.imported"), {
+      recursive: true,
+      force: true,
+    });
+  });
+
   it("imports legacy snapshot files (both layouts) and retires the directory", async () => {
     // Ancient loose file (pre per-server directories) → first server.
     const looseTs = Date.now() - 12345;
@@ -387,7 +395,7 @@ describe("migrateLegacySnapshots", () => {
   });
 
   it("is a no-op when there is nothing to migrate", async () => {
-    // The directory was renamed away by the previous test.
+    await rm(SNAPSHOTS_BASE, { recursive: true, force: true });
     await expect(migrateLegacySnapshots(SERVER_ID)).resolves.toBeUndefined();
     expect(listSnapshotTs()).toHaveLength(0);
   });

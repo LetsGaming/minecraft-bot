@@ -73,6 +73,10 @@ describe("tempBanScheduler", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
+    send.mockReset().mockResolvedValue(DELIVERED);
+    removeTempBan.mockReset().mockResolvedValue(true);
+    recordAdminAction.mockReset().mockResolvedValue(undefined);
+    dmSend.mockReset().mockResolvedValue(undefined);
     getServerInstance.mockReturnValue({ id: "survival", send });
     loadTempBanStore.mockResolvedValue({ version: 1, bans: {} });
     loadLinkedAccounts.mockResolvedValue({ "111": "Steve" });
