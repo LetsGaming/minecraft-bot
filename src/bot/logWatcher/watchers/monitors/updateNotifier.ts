@@ -116,18 +116,13 @@ async function runCheck(client: Client): Promise<void> {
   }
 }
 
+/**
+ * Always armed: each check reads the live config and returns early while the
+ * notifier is disabled, so enabling it later needs no restart.
+ */
 export function startUpdateNotifier(
   client: Client,
-): ReturnType<typeof setInterval> | null {
-  try {
-    if (loadConfig().updateNotifier?.enabled === false) {
-      log.info("update", "Update notifier disabled in config");
-      return null;
-    }
-  } catch {
-    /* config unavailable — run with defaults */
-  }
-
+): ReturnType<typeof setInterval> {
   const tick = (): void => {
     runCheck(client).catch((err: unknown) => {
       log.warn("update", `Release check failed: ${errMsg(err)}`);

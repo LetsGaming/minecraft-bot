@@ -117,11 +117,6 @@ export function startLeaderboardScheduler(
   client: Client,
   guildConfigs: GuildConfigSource,
 ): ReturnType<typeof setInterval> | SchedulerTimers {
-  const cfg = loadConfig();
-  const globalInterval = cfg.leaderboardInterval;
-  const globalPostTime = cfg.leaderboardPostTime;
-  const globalPostDay = cfg.leaderboardPostDay;
-
   // ── Snapshots: one per server instance ──
   const snapshotTimer = setInterval(async () => {
     for (const server of getAllInstances()) {
@@ -154,7 +149,7 @@ export function startLeaderboardScheduler(
 
   const postTimer = setInterval(async () => {
     try {
-      await checkAndPost(client, guildConfigs, globalInterval, globalPostTime, globalPostDay);
+      await checkAndPost(client, guildConfigs);
     } catch (err) {
       log.error("leaderboard", `Scheduler error: ${errMsg(err)}`);
     }
@@ -162,7 +157,7 @@ export function startLeaderboardScheduler(
 
   setTimeout(
     () =>
-      checkAndPost(client, guildConfigs, globalInterval, globalPostTime, globalPostDay).catch(
+      checkAndPost(client, guildConfigs).catch(
         () => {},
       ),
     30000,
@@ -179,10 +174,14 @@ export function startLeaderboardScheduler(
 async function checkAndPost(
   client: Client,
   guildConfigs: GuildConfigSource,
-  globalInterval: LeaderboardInterval,
-  globalPostTime: string | undefined,
-  globalPostDay: string | undefined,
 ): Promise<void> {
+  // The global schedule defaults are read per check so config edits apply
+  // on the next hourly pass.
+  const {
+    leaderboardInterval: globalInterval,
+    leaderboardPostTime: globalPostTime,
+    leaderboardPostDay: globalPostDay,
+  } = loadConfig();
   const schedule = await loadSchedule();
   const now = Date.now();
 

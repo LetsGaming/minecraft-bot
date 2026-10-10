@@ -168,16 +168,13 @@ async function announce(
   });
 }
 
+/**
+ * Always armed: each pass reads the live config and does nothing while no
+ * milestones are configured, so adding some later needs no restart.
+ */
 export function startMilestoneWatcher(
   client: Client,
-): ReturnType<typeof setInterval> | null {
-  try {
-    const milestones = loadConfig().milestones ?? {};
-    if (Object.keys(milestones).length === 0) return null;
-  } catch {
-    return null;
-  }
-
+): ReturnType<typeof setInterval> {
   const tick = (): void => {
     runPass(client).catch((err: unknown) => {
       log.error("milestones", `Pass failed: ${errMsg(err)}`);
