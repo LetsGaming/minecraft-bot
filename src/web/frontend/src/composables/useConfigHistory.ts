@@ -3,6 +3,7 @@ import { errorMessage } from "../utils/errorMessage";
 import { useToast } from "primevue/usetoast";
 import { useConfirm } from "primevue/useconfirm";
 import { apiGet, apiSend } from "../api";
+import { absoluteStamp } from "../utils/time";
 
 export interface ConfigHistoryEntry {
   id: number;
@@ -46,7 +47,7 @@ export function useConfigHistory() {
     confirm.require({
       message:
         `Restore the config to how it was before "${entry.note ?? "this change"}" ` +
-        `(${entry.at})? The current config is snapshotted first, so this is reversible.`,
+        `(${absoluteStamp(entry.at)})? The current config is snapshotted first, so this is reversible.`,
       header: "Roll back config",
       icon: "pi pi-history",
       acceptLabel: "Roll back",
