@@ -15,14 +15,14 @@
  *     #Default: NORMAL
  *     difficulty = "NORMAL"
  *
- * Those comments are the only documentation the mod author wrote — they are
+ * Those comments are the only documentation the mod author wrote, they are
  * what tells a non-technical person what the setting even means. Round-tripping
  * through an object throws all of them away, along with key order and spacing,
  * and turns every save into a diff that touches the whole file.
  *
  * So adapters report a *span* for each value, and writing means splicing new
- * text over that span. Everything the adapter did not understand — comments,
- * blank lines, formatting, sections it never looked at — is untouched by
+ * text over that span. Everything the adapter did not understand, comments,
+ * blank lines, formatting, sections it never looked at, is untouched by
  * construction rather than by effort.
  *
  * ── Purity ──
@@ -46,7 +46,7 @@ export type ConfigValueKind =
 export interface ConfigNode {
   /** Path from the document root, e.g. ["general", "spawnRate"]. */
   path: string[];
-  /** Display key — the last path segment. */
+  /** Display key, the last path segment. */
   key: string;
   kind: ConfigValueKind;
   value: unknown;

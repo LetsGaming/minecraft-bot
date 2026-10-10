@@ -1,10 +1,10 @@
 /**
  * Adapters for `.properties` and JSON.
  *
- * `.properties` — vanilla `server.properties` and a handful of older mods.
+ * `.properties`, vanilla `server.properties` and a handful of older mods.
  * Line based and trivially position-preserving.
  *
- * `.json` / `.json5` — Fabric. Backed by `jsonc-parser`, the scanner behind
+ * `.json` / `.json5`, Fabric. Backed by `jsonc-parser`, the scanner behind
  * VS Code's JSON support, because it reports offsets, tolerates comments and
  * trailing commas, and does not mind the JSON5 that Fabric mods emit.
  */
@@ -212,7 +212,7 @@ function walkJson(node: JsonNode, path: string[], out: ConfigNode[]): void {
     value: node.value ?? (node.type === "array"
       ? (node.children ?? []).map((c) => c.value)
       : undefined),
-    // Fabric configs rarely carry comments, so this is usually empty — which
+    // Fabric configs rarely carry comments, so this is usually empty, which
     // is exactly why those files fall back to inferred labels in the UI.
     comments: [],
     valueSpan: [node.offset, node.offset + node.length],

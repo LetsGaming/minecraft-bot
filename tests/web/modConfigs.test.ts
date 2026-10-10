@@ -1,5 +1,5 @@
 /**
- * DSH-03/DSH-04 — the backup panel's routes.
+ * DSH-03/DSH-04, the backup panel's routes.
  *
  * The test that matters most is the streaming one. Everything else here is
  * ordinary capability and proxy behaviour; "the download is not buffered" is
@@ -14,7 +14,7 @@ process.env.WEBUI_SESSION_SECRET = "unit-test-session-secret";
 process.env.WEBUI_CLIENT_SECRET = "unit-test-client-secret";
 
 const SYSADMIN = "111111111111111111";
-const READER = "777777777777777777"; // server:read — sees the list, nothing else
+const READER = "777777777777777777"; // server:read, sees the list, nothing else
 const READER_CFG = "888888888888888888"; // + config:read
 const EDITOR = "999999999999999990"; // + config:read + config:write
 
@@ -77,7 +77,7 @@ vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
 
 vi.mock("../../src/core/utils/server/server.js", () => ({
   // getHealth is required: collectStatus calls it first, and an instance
-  // without it falls through to unknownStatus — which reports features: null
+  // without it falls through to unknownStatus, which reports features: null
   // and would make these tests pass or fail for the wrong reason.
   getServerInstance: vi.fn((id: string) =>
     id === "smp"

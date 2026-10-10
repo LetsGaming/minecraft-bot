@@ -13,7 +13,7 @@
  * Writes go through the splicing writer rather than a serializer, so a save
  * changes the values that changed and leaves comments, key order and spacing
  * byte-identical. In a Forge config those comments are the only documentation
- * the mod author wrote — losing them makes the file unreadable for exactly the
+ * the mod author wrote, losing them makes the file unreadable for exactly the
  * person this editor exists to serve.
  */
 import type { FastifyInstance } from "fastify";
@@ -63,7 +63,7 @@ import {
 import { flushQueuedEdits, previewQueuedEdits } from "@mcbot/core/utils/wrapper/queueFlush.js";
 
 const OPERATION_FAILED =
-  "The operation failed unexpectedly — see the bot logs for details.";
+  "The operation failed unexpectedly, see the bot logs for details.";
 
 const FILE_ID_RE = /^[A-Za-z0-9_-]{22}$/;
 
@@ -97,7 +97,7 @@ function requireFileId(fileId: string): string {
 /**
  * Hold a write until the wrapper is back.
  *
- * The base value for each key is taken from the cached copy of the file —
+ * The base value for each key is taken from the cached copy of the file,
  * which is exactly the document the operator was editing, since the read that
  * populated their form came from the same cache. That makes the recorded base
  * an honest answer to "what did they think it was", which is the whole basis
@@ -292,7 +292,7 @@ export function registerModConfigRoutes(app: FastifyInstance): void {
       config: { capability: "config:write", scope: "server", param: "id" },
     },
     async (req) => {
-      // Abandoning queued edits is a real choice — an operator who has since
+      // Abandoning queued edits is a real choice, an operator who has since
       // fixed the value by hand should not be forced to resolve a conflict.
       dropForFile(req.params.id, requireFileId(req.params.fileId));
       return { ok: true };
@@ -382,7 +382,7 @@ export function registerModConfigRoutes(app: FastifyInstance): void {
         }
         // The file we cached is now the old one. Dropping both entries means
         // the next read goes live and cannot serve a value this write
-        // superseded — a stale answer is acceptable, a wrong one is not.
+        // superseded, a stale answer is acceptable, a wrong one is not.
         forget(req.params.id, `configFile:${fileId}`);
         forget(req.params.id, "configIndex");
         invalidate(`configFile:${req.params.id}:${fileId}`);

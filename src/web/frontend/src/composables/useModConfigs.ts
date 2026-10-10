@@ -18,7 +18,7 @@ import {
  * why the view renders typed controls from a derived schema rather than a text
  * box. Second, the write protocol: the client sends only the values it
  * changed, never the document. The server re-reads the file and splices them
- * in, so the writer's guards — comment preservation, structure check, ETag —
+ * in, so the writer's guards (comment preservation, structure check, ETag)
  * stay meaningful instead of being decorative around a blob the browser sent.
  */
 
@@ -322,7 +322,7 @@ export function useModConfigs() {
    *
    * A list of numbers must go back as numbers: Chips hands over strings, and
    * storing `["1","2"]` would render `["1", "2"]` into a TOML file that
-   * previously held `[1, 2]` — valid syntax, different meaning to the mod.
+   * previously held `[1, 2]`, valid syntax, different meaning to the mod.
    */
   function setFromInput(field: ConfigField, raw: unknown): void {
     if (field.kind === "numberList") {

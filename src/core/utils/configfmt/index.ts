@@ -86,7 +86,7 @@ function sameValue(a: unknown, b: unknown): boolean {
  *
  * The result is re-parsed before being returned. If the reparse fails, or the
  * set of keys changed, the write is refused entirely rather than handing back
- * a file that is subtly wrong — a mangled config is worse than a rejected one,
+ * a file that is subtly wrong, a mangled config is worse than a rejected one,
  * because the server will happily start with it and behave strangely.
  */
 export function applyConfigEdits(
@@ -102,8 +102,8 @@ export function applyConfigEdits(
   const before = fmt.parse(text);
 
   // Unchanged values are skipped, not rewritten. Re-emitting a value through
-  // the format's literal() is not always byte-identical to what was there —
-  // JSON.stringify normalises array spacing, for one — so writing back a value
+  // the format's literal() is not always byte-identical to what was there.
+  // JSON.stringify normalises array spacing, for one, so writing back a value
   // nobody touched would reformat lines for no reason. A save should change
   // the settings that changed and nothing else, which also keeps the file's
   // diff readable for whoever looks at it next.
@@ -137,13 +137,13 @@ export function applyConfigEdits(
   const after = fmt.parse(out);
   if (after.nodes.length !== before.nodes.length) {
     throw new ConfigEditError(
-      "The edit changed the structure of the file — refusing to write.",
+      "The edit changed the structure of the file, refusing to write.",
     );
   }
   for (const [i, node] of after.nodes.entries()) {
     if (!samePath(node.path, before.nodes[i]!.path)) {
       throw new ConfigEditError(
-        "The edit reordered or renamed settings — refusing to write.",
+        "The edit reordered or renamed settings, refusing to write.",
       );
     }
   }
@@ -159,7 +159,7 @@ export interface ConfigFieldSchema {
   kind: ConfigValueKind;
   value: unknown;
   description?: string;
-  /** From `Allowed Values:` — render a select rather than a text box. */
+  /** From `Allowed Values:`, render a select rather than a text box. */
   options?: string[];
   /** From `Range: a ~ b`. */
   min?: number;
@@ -171,7 +171,7 @@ export interface ConfigFieldSchema {
 /**
  * Turn a key name into something a person can read.
  *
- * The fallback for files that document nothing — Fabric JSON, mostly. It is
+ * The fallback for files that document nothing, Fabric JSON, mostly. It is
  * a guess and it looks like one, which is better than showing `maxSpawnCount`
  * to someone who has never seen camelCase.
  */
