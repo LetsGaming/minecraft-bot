@@ -45,3 +45,32 @@ export async function fetchMojangProfile(
   if (!result.ok) return null;
   return parseMojangProfile(result.value);
 }
+
+const VERSION_MANIFEST_ENDPOINT =
+  "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
+
+/**
+ * Narrow Mojang's version manifest to its release ids, newest first (the
+ * manifest's own order). Snapshots, betas and anything misshapen are dropped.
+ */
+export function parseReleaseVersions(raw: unknown): string[] {
+  if (!isRecord(raw) || !Array.isArray(raw["versions"])) return [];
+  const ids: string[] = [];
+  for (const entry of raw["versions"]) {
+    if (!isRecord(entry)) continue;
+    if (entry["type"] === "release" && typeof entry["id"] === "string") {
+      ids.push(entry["id"]);
+    }
+  }
+  return ids;
+}
+
+/** Released Minecraft versions, or `null` when Mojang cannot be reached or answers nonsense. */
+export async function fetchReleaseVersions(): Promise<string[] | null> {
+  const result = await fetchJson(VERSION_MANIFEST_ENDPOINT, {
+    timeoutMs: MOJANG_TIMEOUT_MS,
+  });
+  if (!result.ok) return null;
+  const ids = parseReleaseVersions(result.value);
+  return ids.length > 0 ? ids : null;
+}

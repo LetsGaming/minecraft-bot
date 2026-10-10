@@ -29,6 +29,9 @@ export type {
   ModRemoveResult,
   ModUpdateCheck,
   ModApplyResult,
+  ModCompatJob,
+  ModCompatMod,
+  ModCompatStarted,
   BackupDeleteResult,
   RemoteHostInfo,
 } from "./wire/index.js";

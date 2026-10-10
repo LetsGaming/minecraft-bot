@@ -34,6 +34,8 @@ editor lists them in.
 | `server:console` | **sending** console commands |
 | `backup:download` | downloading an archive |
 | `config:write` | editing mod config files |
+| `mods:read` | the Mods tab's lists, search and the [version check](../user/mods-version-check.md) |
+| `mods:write` | installing, updating, disabling and removing mods |
 | `backup:restore` | restoring the world from an archive |
 | `backup:delete` | permanently deleting an archive |
 | `server:rollback` | rolling the world back |

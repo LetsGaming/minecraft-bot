@@ -425,6 +425,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/instances/{id}/mods/compat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a mod compatibility check for a Minecraft version
+         * @description Checks every installed mod for a release on `mcVersion` and the installed loader, in the background. One job runs per version: a second request returns the running job. A finished answer is reused for six hours unless `refresh` is set (body or `?refresh=1`) or a mod changed.
+         */
+        post: operations["postInstancesByIdModsCompat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/instances/{id}/mods/compat/{jobId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Progress and result of a mod compatibility check
+         * @description Finished jobs are kept for about 15 minutes; after that the job id is unknown (404) and the check can be started again.
+         */
+        get: operations["getInstancesByIdModsCompatByJobId"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/instances/{id}/mods/installed": {
         parameters: {
             query?: never;
@@ -896,6 +936,56 @@ export interface components {
             upToDate?: string[];
         } & {
             [key: string]: unknown;
+        };
+        /** @description A mod compatibility check. `checkedAt`, `complete`, `summary` and `mods` are present once `state` is `done`; `error` when it is `failed`. */
+        ModCompatJob: {
+            /** @description Epoch ms. Set once done. */
+            checkedAt?: number;
+            /** @description True when every mod got a definitive answer (no `unknown`). Set once done. */
+            complete?: boolean;
+            /** @description Why a failed job failed. */
+            error?: string;
+            jobId: string;
+            mcVersion: string;
+            modLoader: string | null;
+            mods?: components["schemas"]["ModCompatMod"][];
+            /** @description Results so far while running; empty once finished. */
+            partial: components["schemas"]["ModCompatMod"][];
+            progress: {
+                done: number;
+                total: number;
+            };
+            /** @enum {string} */
+            state: "running" | "done" | "failed";
+            summary?: {
+                available: number;
+                total: number;
+                unavailable: number;
+                unknown: number;
+            };
+        };
+        ModCompatMod: {
+            /** @enum {string} */
+            availability: "available" | "unavailable" | "unknown";
+            currentVersionId?: string;
+            name?: string;
+            reason?: string;
+            slug: string;
+            target?: {
+                datePublished: string;
+                downloadUrl?: string;
+                versionId: string;
+                versionName: string;
+            };
+        };
+        ModCompatRequest: {
+            mcVersion: string;
+            /** @description Skip the cached answer. */
+            refresh?: boolean;
+        };
+        /** @description The job to poll for the result. */
+        ModCompatStarted: {
+            jobId: string;
         };
         /** @description Result of remove-mod.js. */
         ModRemoveResult: {
@@ -2633,6 +2723,142 @@ export interface operations {
             };
             /** @description Internal server error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postInstancesByIdModsCompat: {
+        parameters: {
+            query?: {
+                /** @description `1` skips the cached answer. */
+                refresh?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Instance id from `GET /instances`. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModCompatRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModCompatStarted"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getInstancesByIdModsCompatByJobId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Instance id from `GET /instances`. */
+                id: string;
+                /** @description Job id from the start request. */
+                jobId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModCompatJob"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
