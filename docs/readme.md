@@ -36,6 +36,7 @@ You use the bot as a Discord member or Minecraft player.
 | Stats, comparisons, leaderboards | [user/stats-and-leaderboards.md](user/stats-and-leaderboards.md) |
 | Daily rewards and streaks | [user/daily-rewards.md](user/daily-rewards.md) |
 | Commands you type in Minecraft chat | [user/in-game-commands.md](user/in-game-commands.md) |
+| Checking mods against another Minecraft version (dashboard) | [user/mods-version-check.md](user/mods-version-check.md) |
 | How the Discord ↔ Minecraft chat bridge works | [user/chat-bridge.md](user/chat-bridge.md) |
 
 ## Project

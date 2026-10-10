@@ -143,6 +143,13 @@ list it:
 - **Rollback** (`rollback` in the script actions): the Rollback button is hidden
   when the wrapper does not advertise `rollback.sh`.
 
+- **Mod version check** (`mod-compat`): the Mods tab's "Check another Minecraft
+  version" panel, which starts a background job on the wrapper
+  (`POST /instances/:id/mods/compat`, polled at `GET .../mods/compat/:jobId`).
+  It needs a wrapper that serves the feature and a setup suite whose
+  `check-updates.js` accepts `--only`. Without either the panel is hidden and the
+  per-installed-version "Check for updates" keeps working. Checking needs
+  `mods:read`; results are cached on the wrapper for six hours.
 - **Bulk player stats** (`GET /instances/:id/stats/bulk`): lets a leaderboard
   build or the hourly snapshot fetch every player's stats in one request.
   Without it the bot falls back to one request per player who has ever
