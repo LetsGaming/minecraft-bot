@@ -246,6 +246,11 @@ export const de: Record<string, string> = {
     "**{server}**: Streak {streak} (Rekord {longest}), letzter Claim {last}",
   "dailyAdmin.showNone": "Keine Claim-Einträge auf irgendeinem Server.",
 
+  "control.progressLong":
+    "Das kann mehrere Minuten dauern (Countdown, Weltspeicherung und bei Backups das Archivieren)...",
+  "control.stillRunning":
+    "**{action}** auf **{server}** dauert länger, als der Bot wartet. Das Skript läuft möglicherweise noch. Prüfe mit `/server status`, bevor du es erneut startest.",
+
   // ── waypoint categories ──
   "waypoint.invalidCategory":
     "Kategorien dürfen nur Buchstaben, Zahlen, _ oder - enthalten (max. 16 Zeichen).",

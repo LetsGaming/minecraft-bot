@@ -16,6 +16,7 @@ import { loadAllStats } from "@mcbot/core/utils/minecraft/statUtils.js";
 import { deleteStats } from "@mcbot/core/utils/minecraft/statUtils.js";
 import { loadWhitelist } from "@mcbot/core/utils/minecraft/whitelist.js";
 import { isDisruptiveServerAction } from "@mcbot/schema/serverActions.js";
+import { t } from "@mcbot/core/utils/i18n.js";
 
 /**
  * Script paths relative to the scripts directory.
@@ -237,7 +238,7 @@ export const execute = withErrorHandling(
           description:
             sub === "start"
               ? "Executing start script..."
-              : "This may take up to 40 seconds (countdown + save)...",
+              : t("control.progressLong"),
           color: EmbedColor.Warning,
         }),
       ],
@@ -249,7 +250,27 @@ export const execute = withErrorHandling(
       args.push("--archive");
     }
 
-    const result = await serverAccess.runScript(server.config, sub, args);
+    let result: Awaited<ReturnType<typeof serverAccess.runScript>>;
+    try {
+      result = await serverAccess.runScript(server.config, sub, args);
+    } catch (err) {
+      if (err instanceof Error && err.name === "ScriptStillRunningError") {
+        await interaction.editReply({
+          embeds: [
+            createEmbed({
+              title: `${label.emoji} ${label.verb}: ${server.id}`,
+              description: t("control.stillRunning", {
+                action: sub,
+                server: server.id,
+              }),
+              color: EmbedColor.Warning,
+            }),
+          ],
+        });
+        return;
+      }
+      throw err;
+    }
 
     if (result.exitCode !== 0) {
       const errMsg =

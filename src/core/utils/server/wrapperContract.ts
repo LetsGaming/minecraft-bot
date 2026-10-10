@@ -175,6 +175,45 @@ export interface WrapperManifest {
   routes: string[];
   features: Record<string, { version: number; summary: string }>;
   scriptActions: string[];
+  /** Per-action ceilings in ms; absent on wrappers that predate the field. */
+  scriptTimeoutsMs?: Record<string, number>;
+}
+
+/**
+ * Ceilings used when a wrapper does not advertise `scriptTimeoutsMs`. They
+ * mirror the wrapper's own table so the bot never gives up before it does.
+ */
+export const FALLBACK_SCRIPT_TIMEOUTS_MS: Readonly<Record<string, number>> = {
+  start: 30_000,
+  stop: 240_000,
+  restart: 420_000,
+  rollback: 300_000,
+  backup: 600_000,
+  status: 15_000,
+};
+
+/** Ceiling for an action neither the wrapper nor the fallback table names. */
+export const DEFAULT_SCRIPT_TIMEOUT_MS = 120_000;
+
+/** How long the bot waits for a script action: the wrapper's ceiling, else the fallback. */
+export function scriptTimeoutMs(
+  action: string,
+  advertised?: Readonly<Record<string, number>>,
+): number {
+  return (
+    advertised?.[action] ??
+    FALLBACK_SCRIPT_TIMEOUTS_MS[action] ??
+    DEFAULT_SCRIPT_TIMEOUT_MS
+  );
+}
+
+function parseScriptTimeouts(raw: unknown): Record<string, number> | null {
+  if (!isRecord(raw)) return null;
+  const out: Record<string, number> = {};
+  for (const [action, ms] of Object.entries(raw)) {
+    if (typeof ms === "number" && Number.isFinite(ms) && ms > 0) out[action] = ms;
+  }
+  return Object.keys(out).length > 0 ? out : null;
 }
 
 /**
@@ -209,7 +248,16 @@ export function parseManifest(body: unknown): WrapperManifest | null {
       summary: typeof spec.summary === "string" ? spec.summary : "",
     };
   }
-  return { wrapper, manifest, routes, features: parsed, scriptActions };
+  const result: WrapperManifest = {
+    wrapper,
+    manifest,
+    routes,
+    features: parsed,
+    scriptActions,
+  };
+  const timeouts = parseScriptTimeouts(body.scriptTimeoutsMs);
+  if (timeouts) result.scriptTimeoutsMs = timeouts;
+  return result;
 }
 
 export interface ContractReport {

@@ -19,6 +19,7 @@ import {
   compareContract,
   logContractReport,
   parseManifest,
+  scriptTimeoutMs,
   type WrapperManifest,
 } from "./wrapperContract.js";
 import { log } from "../logger.js";
@@ -758,6 +759,12 @@ export function versionAtLeast(actual: string, minimum: string): boolean {
  * contract, but this endpoint *is* the gate. Trusting its shape would
  * assume what it exists to establish, so it goes through parseManifest.
  */
+const advertisedScriptTimeouts = new Map<string, Record<string, number>>();
+
+function wrapperKey(cfg: ServerConfig): string {
+  return `${cfg.apiUrl}#${cfg.id}`;
+}
+
 export async function getRemoteManifest(
   cfg: ServerConfig,
 ): Promise<WrapperManifest | null> {
@@ -770,7 +777,14 @@ export async function getRemoteManifest(
       signal: AbortSignal.timeout(8_000),
     });
     if (!res.ok) return null; // 404 on wrappers that predate the endpoint
-    return parseManifest(await res.json());
+    const manifest = parseManifest(await res.json());
+    if (manifest?.scriptTimeoutsMs) {
+      advertisedScriptTimeouts.set(
+        wrapperKey(cfg),
+        manifest.scriptTimeoutsMs,
+      );
+    }
+    return manifest;
   } catch {
     return null;
   }
@@ -1127,6 +1141,31 @@ export async function indexBackupFiles(
   );
 }
 
+const BACKUP_DOWNLOAD_HEADERS_TIMEOUT_MS = 30_000;
+const BACKUP_DELETE_TIMEOUT_MS = 30_000;
+/** The wrapper's restore ceiling (600 s) plus a margin for its own error reply. */
+const RESTORE_TIMEOUT_MS = 630_000;
+/** Margin added to a script's ceiling so the wrapper's own timeout reply arrives first. */
+const SCRIPT_TIMEOUT_MARGIN_MS = 15_000;
+
+/** Resolve once the response headers arrive; the body is left unbounded. */
+async function fetchUntilHeaders(
+  url: string,
+  init: RequestInit,
+  headersTimeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(
+    () => controller.abort(new DOMException("The operation timed out.", "TimeoutError")),
+    headersTimeoutMs,
+  );
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * Open a backup download and hand back the live response.
  *
@@ -1136,8 +1175,10 @@ export async function indexBackupFiles(
  * take the dashboard process down on the first big world.
  *
  * `range` is forwarded verbatim so a browser's resume request reaches the
- * wrapper intact, and there is no timeout: a multi-gigabyte transfer is
+ * wrapper intact, and the body has no timeout: a multi-gigabyte transfer is
  * legitimately slower than any figure that would make sense as a ceiling.
+ * Only the wait for the response headers is bounded; once they arrive the
+ * body streams for as long as it needs.
  */
 export async function openBackupDownload(
   cfg: ServerConfig,
@@ -1147,9 +1188,10 @@ export async function openBackupDownload(
   const headers: Record<string, string> = {};
   if (cfg.apiKey) headers["x-api-key"] = cfg.apiKey;
   if (range) headers["range"] = range;
-  return fetch(
+  return fetchUntilHeaders(
     instanceUrl(cfg, `/backups/files/${encodeURIComponent(fileId)}/download`),
     { headers },
+    BACKUP_DOWNLOAD_HEADERS_TIMEOUT_MS,
   );
 }
 
@@ -1161,9 +1203,9 @@ export async function openBackupDownload(
  * so a client can never hand a path to a spawned shell). The wrapper resolves
  * the id to a path itself.
  *
- * The timeout is the wrapper's, not ours: a restore unpacks a whole world,
- * and giving up on this side while the script keeps running would report a
- * failure that is actually still in progress.
+ * The ceiling is the wrapper's restore timeout plus a margin: a restore
+ * unpacks a whole world, and giving up on this side while the script keeps
+ * running would report a failure that is actually still in progress.
  */
 export async function restoreBackupFile(
   cfg: ServerConfig,
@@ -1175,7 +1217,11 @@ export async function restoreBackupFile(
   );
   const headers: Record<string, string> = {};
   if (cfg.apiKey) headers["x-api-key"] = cfg.apiKey;
-  const res = await fetch(url, { method: "POST", headers });
+  const res = await fetch(url, {
+    method: "POST",
+    headers,
+    signal: AbortSignal.timeout(RESTORE_TIMEOUT_MS),
+  });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`API POST /backups/restore → ${res.status}: ${text}`);
@@ -1197,7 +1243,11 @@ export async function deleteBackupFile(
   const url = instanceUrl(cfg, `/backups/files/${encodeURIComponent(fileId)}`);
   const headers: Record<string, string> = {};
   if (cfg.apiKey) headers["x-api-key"] = cfg.apiKey;
-  const res = await fetch(url, { method: "DELETE", headers });
+  const res = await fetch(url, {
+    method: "DELETE",
+    headers,
+    signal: AbortSignal.timeout(BACKUP_DELETE_TIMEOUT_MS),
+  });
   if (res.status === 404) return { ok: false };
   if (!res.ok) {
     const text = await res.text();
@@ -1373,7 +1423,38 @@ export async function runScript(
   action: string,
   args: string[] = [],
 ): Promise<ScriptResult> {
-  return apiPost<ScriptResult>(cfg, "/scripts/run", { action, args });
+  const waitMs =
+    scriptTimeoutMs(action, advertisedScriptTimeouts.get(wrapperKey(cfg))) +
+    SCRIPT_TIMEOUT_MARGIN_MS;
+  try {
+    return await apiPost<ScriptResult>(
+      cfg,
+      "/scripts/run",
+      { action, args },
+      waitMs,
+    );
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "TimeoutError") {
+      throw new ScriptStillRunningError(action, waitMs);
+    }
+    throw err;
+  }
+}
+
+/**
+ * The bot stopped waiting for a script that the wrapper may still be running.
+ * The outcome is unknown, so callers report "still running", not "failed".
+ */
+export class ScriptStillRunningError extends Error {
+  constructor(
+    readonly action: string,
+    readonly waitedMs: number,
+  ) {
+    super(
+      `Script '${action}' did not finish within ${Math.round(waitedMs / 1000)}s; it may still be running`,
+    );
+    this.name = "ScriptStillRunningError";
+  }
 }
 
 // ── Log streaming (SSE, used by the bot's watcher and the dashboard) ──────

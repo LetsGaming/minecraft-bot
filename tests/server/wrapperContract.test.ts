@@ -20,6 +20,9 @@ import {
   SUPPORTED_MANIFEST_VERSION,
   EXPECTED_WRAPPER_FEATURES,
   parseManifest,
+  scriptTimeoutMs,
+  FALLBACK_SCRIPT_TIMEOUTS_MS,
+  DEFAULT_SCRIPT_TIMEOUT_MS,
   compareContract,
   contractHasBlockingGaps,
   contractIsClean,
@@ -79,6 +82,27 @@ describe("parseManifest", () => {
       scriptActions: [],
     });
     expect(parsed?.features.usercache).toEqual({ version: 1, summary: "" });
+  });
+});
+
+describe("scriptTimeoutsMs", () => {
+  it("parses the advertised ceilings and drops invalid entries", () => {
+    const parsed = parseManifest({
+      ...goodManifest(),
+      scriptTimeoutsMs: { stop: 240_000, bad: "x", zero: 0, neg: -5 },
+    });
+    expect(parsed?.scriptTimeoutsMs).toEqual({ stop: 240_000 });
+  });
+
+  it("leaves the field absent on wrappers that predate it", () => {
+    expect(parseManifest(goodManifest())?.scriptTimeoutsMs).toBeUndefined();
+  });
+
+  it("prefers the advertised ceiling, then the fallback table, then the default", () => {
+    expect(scriptTimeoutMs("stop", { stop: 500_000 })).toBe(500_000);
+    expect(scriptTimeoutMs("restart", {})).toBe(FALLBACK_SCRIPT_TIMEOUTS_MS.restart);
+    expect(scriptTimeoutMs("restart")).toBe(420_000);
+    expect(scriptTimeoutMs("mystery")).toBe(DEFAULT_SCRIPT_TIMEOUT_MS);
   });
 });
 
