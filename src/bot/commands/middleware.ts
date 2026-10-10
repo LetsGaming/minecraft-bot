@@ -76,6 +76,35 @@ export function requireServerAdmin(execute: CommandExecutor): CommandExecutor {
 
 import { attachFollowUpHint } from "../utils/hints/followUps.js";
 
+/**
+ * Shows an error embed for a failed command, always visible only to the
+ * invoker once the original reply is spent. A pending deferred reply is
+ * replaced so no "thinking..." placeholder is left unresolved.
+ */
+export async function replyError(
+  interaction: ChatInputCommandInteraction,
+  message: string,
+): Promise<void> {
+  const embed = createErrorEmbed(message);
+  try {
+    if (interaction.deferred && !interaction.replied) {
+      await interaction.editReply({ embeds: [embed] });
+    } else if (interaction.replied || interaction.deferred) {
+      await interaction.followUp({
+        embeds: [embed],
+        flags: MessageFlags.Ephemeral,
+      });
+    } else {
+      await interaction.reply({
+        embeds: [embed],
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+  } catch {
+    /* interaction expired */
+  }
+}
+
 interface ErrorHandlingOptions {
   defer?: boolean;
   ephemeral?: boolean;
@@ -120,19 +149,7 @@ export function withErrorHandling(
       const message =
         err instanceof Error ? err.message : t("common.unexpectedError");
       log.error("command", `/${interaction.commandName}: ${message}`);
-      const embed = createErrorEmbed(message);
-      try {
-        if (interaction.deferred || interaction.replied) {
-          await interaction.editReply({ embeds: [embed] });
-        } else {
-          await interaction.reply({
-            embeds: [embed],
-            flags: MessageFlags.Ephemeral,
-          });
-        }
-      } catch {
-        /* interaction expired */
-      }
+      await replyError(interaction, message);
     }
   };
 }

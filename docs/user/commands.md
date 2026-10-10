@@ -86,6 +86,8 @@ See [daily-rewards.md](daily-rewards.md).
 
 `/server` (start/stop/restart/backup/status/prune-stats), `/whitelist`, `/verify`, `/unwhitelist`, `/config`, `/note` (admin notes on players, shown in `/whois`), `/challenge` (advancement challenges: first player to earn X wins), `/daily-admin` (move/reset/inspect daily-claim records per server), `/console` (log tail + live console relay), and the moderation shortcuts above are restricted to configured admins. They are documented in [../admin/permissions.md](../admin/permissions.md).
 
+`/config show` replies only to you. It lists the servers by host, the current guild's features and counts, and never prints the bot token or admin IDs.
+
 If the guild has whitelist applications configured, non-admins apply for the whitelist with a button (no command needed) — an admin reviews the application in the queue channel.
 
 ## Misc

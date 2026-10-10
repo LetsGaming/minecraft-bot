@@ -3,7 +3,10 @@ import { loadConfig, reloadConfig } from "@mcbot/core/config.js";
 import { beginConfigApply } from "@mcbot/core/utils/server/runtimeHeartbeat.js";
 import { summarizeConfigChanges } from "@mcbot/core/utils/config/configDiff.js";
 import { reconcileServers } from "../../logWatcher/initMinecraftCommands.js";
-import { createEmbed, createSuccessEmbed } from "../../utils/embeds/embedUtils.js";
+import {
+  createEmbed,
+  createSuccessEmbed,
+} from "../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../utils/embeds/embedColors.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { log } from "@mcbot/core/utils/logger.js";
@@ -24,12 +27,13 @@ export const data = new SlashCommandBuilder()
       .setDescription("Reload config.json from disk (hot-reload)"),
   );
 
-/**
- * Redact sensitive values so they can be shown in Discord safely.
- */
-function redact(value: string): string {
-  if (!value || value.length <= 4) return "••••";
-  return value.slice(0, 2) + "•".repeat(value.length - 4) + value.slice(-2);
+/** Wrapper URLs can embed credentials or internal paths; only the host is shown. */
+function hostOnly(apiUrl: string): string {
+  try {
+    return new URL(apiUrl).host;
+  } catch {
+    return "?";
+  }
 }
 
 export const execute = withErrorHandling(
@@ -88,15 +92,15 @@ export const execute = withErrorHandling(
       if (replaced.length > 0)
         lines.push(t("config.rebuilt", { list: replaced.join(", ") }));
       if (changed.length > 0) {
-        lines.push(
-          t("config.needsRestart", { list: changed.join(", ") }),
-        );
+        lines.push(t("config.needsRestart", { list: changed.join(", ") }));
       }
       for (const change of settingChanges.slice(0, 12)) {
         lines.push(`~ ${change}`);
       }
       if (settingChanges.length > 12) {
-        lines.push(t("config.moreChanges", { count: settingChanges.length - 12 }));
+        lines.push(
+          t("config.moreChanges", { count: settingChanges.length - 12 }),
+        );
       }
       if (
         settingChanges.length === 0 &&
@@ -123,29 +127,34 @@ export const execute = withErrorHandling(
 
     // Servers overview
     const serverLines = Object.entries(cfg.servers).map(
-      ([id, srv]) => `${id}: ${srv.apiUrl}`,
+      ([id, srv]) => `${id}: ${hostOnly(srv.apiUrl)}`,
     );
 
-    // Guild overview
-    const guildLines = Object.entries(cfg.guilds).map(([guildId, gcfg]) => {
-      const features: string[] = [];
-      if (gcfg.statusEmbed?.enabled === true) features.push(t("config.featStatus"));
-      if (gcfg.notifications?.channelId) features.push(t("config.featNotifications"));
-      const bridgeList = Array.isArray(gcfg.chatBridge)
-        ? gcfg.chatBridge
-        : gcfg.chatBridge
-          ? [gcfg.chatBridge]
-          : [];
-      const bridgeCount = bridgeList.filter((b) => b?.channelId).length;
-      if (bridgeCount === 1) features.push("chatBridge");
-      if (bridgeCount > 1) features.push(`chatBridge ×${bridgeCount}`);
-      if (gcfg.leaderboard?.channelId) features.push("leaderboard");
-      if (gcfg.downtimeAlerts?.channelId) features.push("downtime");
-      if (gcfg.tpsAlerts?.channelId) features.push("tpsAlerts");
-      if (gcfg.channelPurge?.channelId) features.push("purge");
-      const defaultSrv = gcfg.defaultServer ? ` → ${gcfg.defaultServer}` : "";
-      return `${guildId}${defaultSrv}\n  ${features.length > 0 ? features.join(", ") : t("config.noFeatures")}`;
-    });
+    // Only the guild the command ran in; other guilds' setups stay private.
+    const currentGuildId = interaction.guild?.id;
+    const guildLines = Object.entries(cfg.guilds)
+      .filter(([guildId]) => guildId === currentGuildId)
+      .map(([guildId, gcfg]) => {
+        const features: string[] = [];
+        if (gcfg.statusEmbed?.enabled === true)
+          features.push(t("config.featStatus"));
+        if (gcfg.notifications?.channelId)
+          features.push(t("config.featNotifications"));
+        const bridgeList = Array.isArray(gcfg.chatBridge)
+          ? gcfg.chatBridge
+          : gcfg.chatBridge
+            ? [gcfg.chatBridge]
+            : [];
+        const bridgeCount = bridgeList.filter((b) => b?.channelId).length;
+        if (bridgeCount === 1) features.push("chatBridge");
+        if (bridgeCount > 1) features.push(`chatBridge ×${bridgeCount}`);
+        if (gcfg.leaderboard?.channelId) features.push("leaderboard");
+        if (gcfg.downtimeAlerts?.channelId) features.push("downtime");
+        if (gcfg.tpsAlerts?.channelId) features.push("tpsAlerts");
+        if (gcfg.channelPurge?.channelId) features.push("purge");
+        const defaultSrv = gcfg.defaultServer ? ` → ${gcfg.defaultServer}` : "";
+        return `${guildId}${defaultSrv}\n  ${features.length > 0 ? features.join(", ") : t("config.noFeatures")}`;
+      });
 
     // Commands overview
     const disabledCmds = Object.entries(cfg.commands)
@@ -159,28 +168,25 @@ export const execute = withErrorHandling(
 
     embed.addFields(
       {
-        name: t("config.fieldToken"),
-        value: codeBlock(redact(cfg.token)),
-        inline: true,
-      },
-      {
         name: t("config.fieldClientId"),
         value: codeBlock(cfg.clientId),
         inline: true,
       },
       {
-        name: t("config.fieldServers", { count: Object.keys(cfg.servers).length }),
+        name: t("config.fieldServers", {
+          count: Object.keys(cfg.servers).length,
+        }),
         value: codeBlock(serverLines.join("\n") || t("config.none")),
         inline: false,
       },
       {
-        name: t("config.fieldGuilds", { count: Object.keys(cfg.guilds).length }),
+        name: t("config.fieldGuild"),
         value: codeBlock(guildLines.join("\n") || t("config.none")),
         inline: false,
       },
       {
-        name: t("config.fieldAdmins", { count: cfg.adminUsers.length }),
-        value: codeBlock(cfg.adminUsers.map(redact).join(", ") || t("config.none")),
+        name: t("config.fieldAdmins"),
+        value: String(cfg.adminUsers.length),
         inline: true,
       },
     );
@@ -217,4 +223,5 @@ export const execute = withErrorHandling(
 
     await interaction.editReply({ embeds: [embed] });
   }),
+  { ephemeral: true },
 );

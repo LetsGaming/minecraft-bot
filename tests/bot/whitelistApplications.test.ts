@@ -179,6 +179,30 @@ describe("handleWhitelistApplicationInteraction routing", () => {
     expect(modal.components).toHaveLength(2);
   });
 
+  it("builds a German modal whose strings fit Discord limits", async () => {
+    mockConfig.guilds = { [GUILD]: { ...GUILD_CFG, language: "de" } };
+    guildTargets.resolveDefaultServerId.mockImplementation(() => {
+      throw new Error("ambiguous");
+    });
+    guildTargets.visibleServerIdsForGuild.mockReturnValue(["a", "b"]);
+    const i = buttonInteraction("wlapp:apply");
+    await handle(i);
+    const modal = (
+      i.showModal.mock.calls[0]![0] as {
+        toJSON(): {
+          title: string;
+          components: Array<{ label: string }>;
+        };
+      }
+    ).toJSON();
+    expect(modal.title.length).toBeLessThanOrEqual(45);
+    expect(modal.components).toHaveLength(3);
+    for (const c of modal.components) {
+      expect(c.label.length).toBeLessThanOrEqual(45);
+    }
+    expect(modal.components[2]!.label).toBe("Hinweis für die Admins (optional)");
+  });
+
   it("adds a server picker when the guild has no unambiguous default", async () => {
     guildTargets.resolveDefaultServerId.mockImplementation(() => {
       throw new Error("ambiguous");

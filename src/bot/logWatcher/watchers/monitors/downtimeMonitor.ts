@@ -162,18 +162,21 @@ async function checkServer(
       state.wrapperAlerted = true;
       // Say what the server is doing in the same breath. An operator woken by
       // this needs to know whether players are affected before anything else.
-      const serverNote = stateIsKnown(health)
-        ? t("downtime.apiDownServerKnown", {
-            state: t(`state.${health.state}`),
-          })
-        : t("downtime.apiDownServerUnknown");
-      await alertGuilds(client, guildsWithAlerts, server.id, {
-        title: t("downtime.apiDownTitle"),
-        description: `${t("downtime.apiDown", {
-          server: server.id,
-          failures: state.consecutiveUnreachable,
-        })}\n${serverNote}`,
-        color: EmbedColor.Warning,
+      const failures = state.consecutiveUnreachable;
+      await alertGuilds(client, guildsWithAlerts, server.id, () => {
+        const serverNote = stateIsKnown(health)
+          ? t("downtime.apiDownServerKnown", {
+              state: t(`state.${health.state}`),
+            })
+          : t("downtime.apiDownServerUnknown");
+        return {
+          title: t("downtime.apiDownTitle"),
+          description: `${t("downtime.apiDown", {
+            server: server.id,
+            failures,
+          })}\n${serverNote}`,
+          color: EmbedColor.Warning,
+        };
       });
       log.warn(
         "downtime",
@@ -185,11 +188,11 @@ async function checkServer(
   } else if (state.wrapperAlerted) {
     state.wrapperAlerted = false;
     state.consecutiveUnreachable = 0;
-    await alertGuilds(client, guildsWithAlerts, server.id, {
+    await alertGuilds(client, guildsWithAlerts, server.id, () => ({
       title: t("downtime.apiUpTitle"),
       description: t("downtime.apiUp", { server: server.id }),
       color: EmbedColor.Success,
-    });
+    }));
     log.info("downtime", `${server.id}: API wrapper reachable again`);
   } else {
     state.consecutiveUnreachable = 0;
@@ -204,14 +207,14 @@ async function checkServer(
   if (health.unitFailed) {
     if (!state.crashLoopAlerted && now >= state.suppressUntil) {
       state.crashLoopAlerted = true;
-      await alertGuilds(client, guildsWithAlerts, server.id, {
+      await alertGuilds(client, guildsWithAlerts, server.id, () => ({
         title: t("downtime.crashLoopTitle"),
         description: t("downtime.crashLoop", {
           server: server.id,
           restarts: health.restartCount,
         }),
         color: EmbedColor.Error,
-      });
+      }));
       log.warn(
         "downtime",
         `${server.id}: crash loop detected — systemd restarted it ` +
@@ -220,11 +223,11 @@ async function checkServer(
     }
   } else if (state.crashLoopAlerted) {
     state.crashLoopAlerted = false;
-    await alertGuilds(client, guildsWithAlerts, server.id, {
+    await alertGuilds(client, guildsWithAlerts, server.id, () => ({
       title: t("downtime.crashLoopRecoveredTitle"),
       description: t("downtime.crashLoopRecovered", { server: server.id }),
       color: EmbedColor.Success,
-    });
+    }));
     log.info("downtime", `${server.id}: crash loop cleared`);
   }
 
@@ -255,11 +258,11 @@ async function checkServer(
       // any guild alert channel config.
       fireWatches(client, { kind: "server", serverId: server.id });
 
-      await alertGuilds(client, guildsWithAlerts, server.id, {
+      await alertGuilds(client, guildsWithAlerts, server.id, () => ({
         title: t("downtime.upTitle"),
         description: t("downtime.up", { server: server.id }),
         color: EmbedColor.Success,
-      });
+      }));
 
       log.info("downtime", `${server.id} recovered`);
     }
@@ -300,14 +303,14 @@ async function checkServer(
         );
       });
 
-      await alertGuilds(client, guildsWithAlerts, server.id, {
+      await alertGuilds(client, guildsWithAlerts, server.id, () => ({
         title: t("downtime.downTitle"),
         description: t("downtime.down", {
           server: server.id,
           failures: state.consecutiveFailures,
         }),
         color: EmbedColor.Error,
-      });
+      }));
 
       log.warn(
         "downtime",
@@ -329,16 +332,17 @@ async function alertGuilds(
   client: Client,
   guildsWithAlerts: Array<[string, GuildConfig]>,
   serverId: string,
-  alert: { title: string; description: string; color: number },
+  buildAlert: () => { title: string; description: string; color: number },
 ): Promise<void> {
   for (const [guildId, gcfg] of guildsWithAlerts) {
     const alertCfg = gcfg.downtimeAlerts;
     if (!alertCfg?.channelId) continue;
     if (!serverInScope(alertCfg.server, serverId, guildId)) continue;
 
+    // Text is built inside the guild's locale context so t() resolves its language.
     await runWithGuildLocale(guildId, () =>
       sendAlert(client, alertCfg.channelId!, {
-        ...alert,
+        ...buildAlert(),
         serverId,
         mentionRole: alertCfg.mentionRole,
       }),

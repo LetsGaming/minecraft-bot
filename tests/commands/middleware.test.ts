@@ -39,6 +39,7 @@ function makeInteraction(
     deferReply: vi.fn().mockResolvedValue(undefined),
     editReply: vi.fn().mockResolvedValue(undefined),
     reply: vi.fn().mockResolvedValue(undefined),
+    followUp: vi.fn().mockResolvedValue(undefined),
   } as unknown as ChatInputCommandInteraction;
 }
 
@@ -220,14 +221,15 @@ describe("withErrorHandling", () => {
     });
   });
 
-  it("calls editReply when already replied", async () => {
+  it("follows up ephemerally when already replied", async () => {
     const execute = vi.fn().mockRejectedValue(new Error("boom"));
     const wrapped = withErrorHandling(execute);
     const interaction = makeInteraction({ deferred: false, replied: true });
 
     await wrapped(interaction);
 
-    expect(interaction.editReply).toHaveBeenCalled();
+    expect(interaction.followUp).toHaveBeenCalled();
+    expect(interaction.editReply).not.toHaveBeenCalled();
   });
 
   it("calls reply with ephemeral embed when execute throws (not deferred, not replied)", async () => {

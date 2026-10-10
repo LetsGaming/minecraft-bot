@@ -5,7 +5,6 @@ import {
   REST,
   Routes,
   MessageFlags,
-  type InteractionReplyOptions,
 } from "discord.js";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -31,6 +30,7 @@ const manifestSlash: Array<{
 import {
   isServerAdmin,
   getMemberRoleIds,
+  replyError,
 } from "./commands/middleware.js";
 import { initServers, getAllInstances } from "@mcbot/core/utils/server/server.js";
 import { getDb } from "@mcbot/core/db/index.js";
@@ -430,7 +430,7 @@ void (async () => {
       );
       if (!allowed) {
         await chatInteraction.reply({
-          content: t("common.noPermission"),
+          content: t("common.noPermission", {}, chatInteraction.guild?.id),
           flags: MessageFlags.Ephemeral,
         });
         return;
@@ -442,7 +442,11 @@ void (async () => {
       if (!consumeToken(chatInteraction.user.id)) {
         const secs = cooldownSeconds(chatInteraction.user.id);
         await chatInteraction.reply({
-          content: t("common.rateLimited", { seconds: secs }),
+          content: t(
+            "common.rateLimited",
+            { seconds: secs },
+            chatInteraction.guild?.id,
+          ),
           flags: MessageFlags.Ephemeral,
         });
         return;
@@ -467,17 +471,11 @@ void (async () => {
       });
     } catch (err) {
       log.error("command", `/${chatInteraction.commandName}: ${errMsg(err)}`);
-      const errorMsg: InteractionReplyOptions = {
-        content: "❌ An error occurred.",
-        flags: MessageFlags.Ephemeral,
-      };
-      try {
-        if (chatInteraction.replied || chatInteraction.deferred)
-          await chatInteraction.followUp(errorMsg);
-        else await chatInteraction.reply(errorMsg);
-      } catch {
-        /* expired */
-      }
+      const guildId = chatInteraction.guild?.id;
+      await replyError(
+        chatInteraction,
+        `${t("common.unexpectedError", {}, guildId)} ${t("common.unexpectedErrorRecovery", {}, guildId)}`,
+      );
     }
   });
 

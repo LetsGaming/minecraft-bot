@@ -6,6 +6,18 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+
+- **`/config show` no longer exposes secrets.** The reply is now ephemeral, drops the (partially masked) bot token and the admin IDs, shows only the guild the command was run in, and lists each Minecraft server by wrapper host instead of its full URL. Admins are shown as a count. `/config reload` replies are ephemeral too (`commands/admin/config.ts`).
+
+### Fixed
+
+- **German whitelist application form works again.** The German label of the optional note field was 53 characters, over Discord's 45 character limit, so Discord rejected the form and the Apply button did nothing. The label is shorter, and a test now checks every locale string used for a modal title or label, button label, placeholder, select option or embed title against Discord's limits in both languages (`locales/de.ts`, `tests/core/localeLimits.test.ts`).
+- **`/daily` no longer fails on slow servers.** It acknowledges the command before the online lookup and the reward delivery, so a slow wrapper no longer produces "The application did not respond". Errors after that point (full offline queue, failed delivery) are shown only to you. An unresolvable server is reported instead of throwing (`commands/connection/daily/daily.ts`).
+- **`/daily` showed the wrong reward** when the random bonus triggered: the bonus item was listed as the daily reward and the real reward was hidden. The main reward is now always the one shown, and streak bonuses are listed separately.
+- **Unexpected command errors are localised and never leave "thinking..." hanging.** The fallback reply was a fixed English string; it now uses the guild's language, says what to do next, and replaces a pending deferred reply. Permission-denied and rate-limit replies also use the guild's language (`index.ts`, `commands/middleware.ts`).
+- **Downtime alerts use each guild's language.** The alert text was built once in the global language and sent to every guild; it is now built per guild (`watchers/monitors/downtimeMonitor.ts`).
+
 ## [7.0.0] - 2026-10-10
 
 ### Security
