@@ -1,5 +1,6 @@
 <template>
   <span
+    v-if="!forbidden"
     :class="['cfg-chip', view.severity]"
     v-tooltip.bottom="view.hint"
     role="status"
@@ -18,7 +19,7 @@ const props = defineProps<{
   refreshKey?: number;
 }>();
 
-const { view, start, refresh } = useConfigStatus();
+const { view, forbidden, start, refresh } = useConfigStatus();
 onMounted(start);
 watch(() => props.refreshKey, () => void refresh());
 </script>

@@ -1,6 +1,6 @@
 import { computed, onBeforeUnmount, ref } from "vue";
 import { ConfigApplyState, type ConfigStatusResponse } from "@mcbot/schema";
-import { apiGet } from "../api";
+import { ApiError, apiGet } from "../api";
 
 const POLL_MS = 5_000;
 
@@ -37,13 +37,19 @@ export function describeStatus(status: ConfigStatusResponse | null): ChipView {
 /** Polls whether the bot has applied the config on disk while a view is open. */
 export function useConfigStatus() {
   const status = ref<ConfigStatusResponse | null>(null);
+  /** Guild managers cannot read the file-level status; the chip then stays hidden. */
+  const forbidden = ref(false);
   let timer: ReturnType<typeof setInterval> | null = null;
 
   async function refresh(): Promise<void> {
     try {
       status.value = await apiGet<ConfigStatusResponse>("/api/config/status");
-    } catch {
+    } catch (err) {
       status.value = null;
+      if (err instanceof ApiError && err.status === 403) {
+        forbidden.value = true;
+        stop();
+      }
     }
   }
 
@@ -60,5 +66,5 @@ export function useConfigStatus() {
 
   onBeforeUnmount(stop);
 
-  return { status, view: computed(() => describeStatus(status.value)), refresh, start, stop };
+  return { status, forbidden, view: computed(() => describeStatus(status.value)), refresh, start, stop };
 }

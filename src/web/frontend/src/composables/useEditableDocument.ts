@@ -179,6 +179,21 @@ export function useEditableDocument<T extends object, M = unknown>(
     }
   }
 
+  /** Forget the document entirely (switching to a different one). */
+  function reset(): void {
+    baseline.value = null;
+    draft.value = null;
+    token.value = "";
+    meta.value = undefined;
+    conflicts.value = [];
+    stale.value = false;
+    savedFlag.value = false;
+    loadError.value = "";
+    saveError.value = "";
+    fieldErrors.value = [];
+    warnings.value = [];
+  }
+
   function setField(key: string, value: unknown): void {
     if (!draft.value) return;
     units.write(draft.value, key, value);
@@ -312,6 +327,6 @@ export function useEditableDocument<T extends object, M = unknown>(
     draft, baseline, token, meta,
     ready, loading, loadError, saving, saved, saveError, fieldErrors, warnings, stale,
     dirty, dirtyKeys, changes, isDirty, conflicts,
-    load, setField, discard, save, resolveConflict, reloadDiscardingMine,
+    load, reset, setField, discard, save, resolveConflict, reloadDiscardingMine,
   };
 }
