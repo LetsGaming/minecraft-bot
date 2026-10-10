@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polish mockups</title>
+<!--
+DIRECTION CONTRACT (Polish)
+THESIS: The same app, but correct. Keep the dark theme, green accent, sidebar and PrimeVue vocabulary; fix tokens, states, labels, touch targets and navigation. Distinctive axes: precision of states, and density. Everything else is deliberately conventional.
+WORLD: Charcoal surfaces (#15171a to #22252a), one green accent with dark on-accent text, status colours that mean one thing each, system fonts, 10px radius, hairline borders, no gradients.
+STORY: An admin opens the screen, sees what is wrong or unsaved at a glance, acts on one row without losing the others, and always knows if the bot has applied the change.
+FIRST VIEWPORT: Sidebar (drawer under 760), view title with one-line purpose and primary action top right, state banner or chip under the title, then the work area. Search and filters sit above the list.
+RISK: Keeps current weaknesses: generic admin look, no brand voice, dark only, dense text. If the owner wants a new identity this reads as a lateral move.
+-->
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="wrap" id="main">
+  <header>
+    <h1 style="font-size:var(--text-xl)">Direction 1: Polish</h1>
+    <p style="color:var(--text-dim);max-width:70ch;margin-top:6px">The same app, corrected. Same dark theme, green accent and sidebar, with the audit's token, state, navigation and accessibility fixes applied. Each page has a state selector at the top, marked as mockup-only. Read <code>direction.md</code> in this folder for the design system, the findings it fixes and the cost.</p>
+  </header>
+  <div class="linkgrid">
+    <a class="linkcard" href="preview.html"><b>Side-by-side preview</b><span>Every screen in a 1440 and a phone frame, with a state switch.</span></a>
+    <a class="linkcard" href="config.html"><b>Config editor</b><span>Clean, dirty, errors, conflict, saving, pending, bot down, read only, raw JSON, leave guard.</span></a>
+    <a class="linkcard" href="mods.html"><b>Mods</b><span>Installed, per-row busy, update check with progress, results and blockers, empty, error, remove confirm.</span></a>
+    <a class="linkcard" href="backups.html"><b>Backups</b><span>List, restore running, creating, loading, empty, error, typed confirms, read only.</span></a>
+    <a class="linkcard" href="discord.html"><b>Discord messages</b><span>Eleven message types, English and German (toggle on the page).</span></a>
+    <a class="linkcard" href="discord.html?lang=de"><b>Discord messages, Deutsch</b><span>The same page opened in German.</span></a>
+  </div>
+  <p style="color:var(--text-dim);font-size:var(--text-sm)">No build step and no network needed. Fonts are the system stack. All data on these pages is sample data.</p>
+</main>
+</body>
+</html>

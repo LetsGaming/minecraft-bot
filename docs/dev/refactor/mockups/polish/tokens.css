@@ -1,0 +1,88 @@
+/* Polish direction: design tokens. Role-based; no view may use a raw hex.
+   Contrast figures are computed against the surface named in the comment. */
+:root {
+  color-scheme: dark;
+
+  /* Surfaces (same family as today's --mc-bg / --mc-surface / --mc-card) */
+  --bg: #15171a;
+  --surface: #191b1f;
+  --card: #22252a;
+  --raised: #2a2e34;
+  --overlay-scrim: rgb(8 9 11 / 0.7);
+
+  /* Lines. --border is decoration. --border-control is the edge of an input or
+     toggle and must reach 3:1 (3.2:1 on --card, 3.8:1 on --bg). */
+  --border: #2f343b;
+  --border-strong: #3a404a;
+  --border-control: #6f7885;
+
+  /* Text */
+  --text: #e7e9ec;          /* 13.6:1 on --card */
+  --text-dim: #9aa1ac;      /* 5.9:1 on --card, 6.9:1 on --bg (was 3.2:1) */
+
+  /* Accent */
+  --accent: #34c56a;        /* 7.0:1 on --card as text or icon */
+  --accent-hover: #4ad17c;
+  --accent-pressed: #2f9d57;
+  --on-accent: #06210f;     /* 7.6:1 on --accent (was #eafff0 at 2.15:1) */
+  --accent-tint: #1e2b22;
+  --accent-border: #2c4433;
+  --focus: #8cc8ff;         /* 3:1 or more against --bg, --card, --accent and --danger */
+  --link: var(--accent);
+
+  /* Status. Each foreground passes 4.5:1 on its own tint. Meaning is fixed:
+     online=ok, not responding=wait, offline=bad, unknown=unknown. */
+  --ok: #4ade80;       --ok-tint: #16301f;
+  --wait: #fbbf24;     --wait-tint: #33290f;
+  --bad: #f87171;      --bad-tint: #351a1a;
+  --unknown: #9aa1ac;  --unknown-tint: #2a2e34;
+  --info: #7cb4ff;     --info-tint: #172335;
+  --danger: #e05858;   --on-danger: #1d0707;  /* 4.9:1 */
+  --danger-hover: #ea6f6f;
+
+  /* Type. Body 15px, dense table text 14px, inputs 16px under 760 (iOS zoom). */
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+  --text-xs: 0.75rem;   /* 12px, labels and badges only */
+  --text-sm: 0.875rem;  /* 14px, dense tables, hints */
+  --text-md: 0.9375rem; /* 15px, body */
+  --text-lg: 1.125rem;  /* 18px, card titles */
+  --text-xl: 1.5rem;    /* 24px, view title (h1) */
+  --text-2xl: 1.875rem; /* 30px, stat figures */
+
+  /* Spacing, 4px base */
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px;
+  --space-4: 16px; --space-5: 24px; --space-6: 32px;
+
+  /* Radius: two values, as today */
+  --radius: 10px;
+  --radius-sm: 7px;
+
+  /* Elevation: flat on the page, one lift for menus and toasts, one for dialogs */
+  --elev-1: none;
+  --elev-2: 0 4px 12px rgb(0 0 0 / 0.35);
+  --elev-3: 0 12px 32px rgb(0 0 0 / 0.5);
+
+  /* Layers */
+  --z-sticky: 10;
+  --z-drawer: 40;
+  --z-dialog: 50;
+  --z-toast: 60;
+
+  /* Sizes */
+  --control-h: 36px;
+  --target: 44px;
+  --sidebar-w: 232px;
+  --topbar-h: 56px;
+  --bp-nav: 760px;   /* mirrored in the @media rules, CSS cannot read it */
+  --bp-wide: 1180px;
+
+  /* Motion: 120 ms ease-out on colour and transform, one signature (the
+     drawer slide). Everything is removed under prefers-reduced-motion. */
+  --dur: 120ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (pointer: coarse), (max-width: 760px) {
+  :root { --control-h: var(--target); }
+}

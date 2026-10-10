@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Config · Polish mockup</title>
+<!--
+DIRECTION CONTRACT (Polish)
+THESIS: The same app, but correct. Keep the dark theme, green accent, sidebar and PrimeVue vocabulary; fix tokens, states, labels, touch targets and navigation. Distinctive axes: precision of states, and density. Everything else is deliberately conventional.
+WORLD: Charcoal surfaces (#15171a to #22252a), one green accent with dark on-accent text, status colours that mean one thing each, system fonts, 10px radius, hairline borders, no gradients.
+STORY: An admin opens the screen, sees what is wrong or unsaved at a glance, acts on one row without losing the others, and always knows if the bot has applied the change.
+FIRST VIEWPORT: Sidebar (drawer under 760), view title with one-line purpose and primary action top right, state banner or chip directly under the title, then the work area. Search and filters sit above the list.
+RISK: Keeps today's weaknesses: generic admin look, no brand voice, dark only, dense text. If the owner wants a new identity this reads as a lateral move.
+-->
+<link rel="stylesheet" href="style.css">
+
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="i-overview" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol><symbol id="i-analytics" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></symbol><symbol id="i-console" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></symbol><symbol id="i-audit" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></symbol><symbol id="i-servers" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><path d="M7 7h.01M7 17h.01"/></symbol><symbol id="i-backups" viewBox="0 0 24 24"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></symbol><symbol id="i-mods" viewBox="0 0 24 24"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v3h16v-3"/></symbol><symbol id="i-modconfig" viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></symbol><symbol id="i-config" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 0 0-2-1.2L14.2 3h-4l-.4 2.7a7 7 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 2 1.2l.4 2.7h4l.4-2.7a7 7 0 0 0 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2z"/></symbol><symbol id="i-commands" viewBox="0 0 24 24"><path d="m13 2-9 12h7l-1 8 9-12h-7z"/></symbol><symbol id="i-guilds" viewBox="0 0 24 24"><path d="M4 6a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3h-4l-4 3v-3H7a3 3 0 0 1-3-3z"/><path d="M9 10h.01M15 10h.01"/></symbol><symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol><symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol><symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol><symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></symbol><symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/></symbol><symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol><symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14-4L4 9M4 4v5h5M4 13a8 8 0 0 0 14 4l2-2M20 20v-5h-5"/></symbol><symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol><symbol id="i-restore" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/></symbol><symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol><symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol><symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5H5V6h5"/></symbol><symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol><symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol><symbol id="i-logout" viewBox="0 0 24 24"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></symbol><symbol id="i-x" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/></symbol><symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 1-1 1.7M12 17h.01"/></symbol><symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol><symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11m0 0-4-4m4 4 4-4M4 20h16"/></symbol><symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol></svg>
+<a class="skip" href="#main">Skip to content</a>
+<div class="shell">
+  <header class="topbar">
+    <button class="btn btn-ghost btn-icon" id="menu-btn" type="button" aria-expanded="false" aria-controls="sidebar" aria-label="Open navigation"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-menu"/></svg></button>
+    <span class="t-title">Config</span>
+    <button class="server-chip" type="button" aria-label="Server: smp, online. Change server"><span class="dot ok"></span><span>smp</span></button>
+  </header>
+  <div class="scrim" id="scrim"></div>
+  <aside class="sidebar" id="sidebar" aria-label="Primary">
+    <div class="brand"><span class="brand-mark"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-overview"/></svg></span><div><b>Minecraft Bot</b><small>Dashboard</small></div></div>
+    <div class="server-pick">
+      <label for="server-btn">Server</label>
+      <button class="server-chip" id="server-btn" type="button" aria-label="Server: smp, online, 20 TPS. Change server"><span class="dot ok"></span><span>smp</span><span class="tps">20.0 TPS</span></button>
+    </div>
+    <nav class="nav" aria-label="Sections">
+      <div class="nav-group"><h2>Monitor</h2><ul><li><span class="off" title="Not part of this mockup" aria-disabled="true"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-overview"/></svg>Overview</span></li><li><span class="off" title="Not part of this mockup" aria-disabled="true"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-analytics"/></svg>Analytics</span></li><li><span class="off" title="Not part of this mockup" aria-disabled="true"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-console"/></svg>Console</span></li><li><span class="off" title="Not part of this mockup" aria-disabled="true"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-audit"/></svg>Audit log</span></li></ul></div>
+      <div class="nav-group"><h2>Manage</h2><ul><li><span class="off" title="Not part of this mockup" aria-disabled="true"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-servers"/></svg>Servers</span></li><li><a href="backups.html"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-backups"/></svg>Backups</a></li><li><a href="mods.html"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-mods"/></svg>Mods</a></li><li><span class="off" title="Not part of this mockup" aria-disabled="true"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-modconfig"/></svg>Mod config</span></li></ul></div>
+      <div class="nav-group"><h2>Admin</h2><ul><li><a href="config.html" aria-current="page"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-config"/></svg>Config</a></li><li><span class="off" title="Not part of this mockup" aria-disabled="true"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-commands"/></svg>Commands</span></li><li><span class="off" title="Not part of this mockup" aria-disabled="true"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-guilds"/></svg>Guilds</span></li></ul></div></nav>
+    <div class="sidebar-foot">
+      <button type="button" class="btn btn-primary"   data-toast="Not part of this mockup" data-toast-sub="This control has no target here."><svg class="i " aria-hidden="true" focusable="false"><use href="#i-plus"/></svg>Add bot to a server</button>
+      <div class="user"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-user"/></svg><span>domenic</span><button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Sign out"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-logout"/></svg></button></div>
+    </div>
+  </aside>
+  <div class="main">
+    <div class="statusbar" data-states="botdown" role="status"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-alert"/></svg><span><strong>Bot not running.</strong> Status data is stale and saved changes apply when it starts.</span><button type="button"   data-toast="Not part of this mockup" data-toast-sub="This control has no target here.">Open Overview</button></div>
+    
+    <div class="mock-bar" role="region" aria-label="Mockup controls">
+      <label for="state-select"><strong>State</strong></label>
+      <select id="state-select" class="select" style="width:auto;min-height:32px"><option value="clean">Clean, applied</option><option value="dirty">Dirty, 5 changes</option><option value="error">Validation errors</option><option value="conflict">Conflict</option><option value="saving">Saving</option><option value="pending">Saved, pending reload</option><option value="botdown">Bot down</option><option value="readonly">Read only</option><option value="raw">Raw JSON invalid</option><option value="guard">Leave guard dialog</option></select>
+      <span>Key set shown is a subset of config.json, values are samples.</span>
+      <span class="demo">Mockup controls, not part of the product</span>
+    </div>
+    <main class="content" id="main" tabindex="-1">
+      <div class="view-head">
+        <div><h1>Config</h1><p>Edit <code>config.json</code> for this bot. Changes are validated on the server before they are written.</p></div>
+        <div class="view-actions"><button type="button" class="btn"   title="Not part of this mockup" data-toast="Not part of this mockup" data-toast-sub="This control has no target here."><svg class="i " aria-hidden="true" focusable="false"><use href="#i-audit"/></svg>History</button></div>
+      </div>
+
+
+      <div class="banner banner-info" data-states="pending"><span><svg class="i " aria-hidden="true" focusable="false"><use href="#i-clock"/></svg></span><div class="b-body"><div class="b-title">Saved to config.json. The bot has not reloaded it yet.</div>The bot checks for changes every 30 seconds. Most settings apply then; changes to <code>token</code> and <code>servers.*.apiUrl</code> apply after a restart.</div></div>
+      <div class="banner banner-warn" data-states="botdown"><span><svg class="i " aria-hidden="true" focusable="false"><use href="#i-alert"/></svg></span><div class="b-body"><div class="b-title">The bot is not running, so nothing here is live.</div>You can still edit and save. Saved changes apply the next time the bot starts.<div class="b-actions"><button type="button" class="btn btn-sm"   data-toast="Not part of this mockup" data-toast-sub="This control has no target here.">Open Overview</button></div></div></div>
+      <div class="banner banner-info" data-states="readonly"><span><svg class="i " aria-hidden="true" focusable="false"><use href="#i-lock"/></svg></span><div class="b-body"><div class="b-title">You can view this file but not change it.</div>Editing needs the <code>config:write</code> capability. Ask a bot admin if you need it.</div></div>
+      <div class="banner banner-warn" data-states="conflict"><span><svg class="i " aria-hidden="true" focusable="false"><use href="#i-alert"/></svg></span><div class="b-body"><div class="b-title">config.json changed on disk while you were editing.</div>1 of your 2 edits touches a setting that kaito also changed at 10:42 UTC. Your other edit is untouched. Resolve the conflict, then save.</div></div>
+      <div class="card" data-states="*">
+        <div class="toolbar" style="border-bottom:0">
+          <div class="grow field" style="position:relative">
+            <label class="sr" for="cfg-search">Search settings by name, key or hint, for example apiUrl</label>
+            <input class="input" id="cfg-search" type="search" placeholder="Search settings" autocomplete="off" style="padding-left:12px">
+          </div>
+          <button class="btn" id="search-clear" type="button">Clear</button>
+          <div class="seg" role="group" aria-label="Editor mode">
+            <button type="button" aria-pressed="true" data-set-state="clean" id="mode-form">Form</button>
+            <button type="button" aria-pressed="false" data-set-state="raw" id="mode-raw">Raw JSON</button>
+          </div>
+          <div data-states="*" style="margin-left:auto">      <div data-states="clean"><span class="badge badge-ok"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-check"/></svg>Applied</span></div>      <div data-states="dirty guard"><span class="badge badge-info"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-info"/></svg>Not saved yet</span></div>      <div data-states="error"><span class="badge badge-bad"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-alert"/></svg>2 problems to fix</span></div>      <div data-states="conflict"><span class="badge badge-wait"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-alert"/></svg>Conflict to resolve</span></div>      <div data-states="saving"><span class="badge badge-info"><span class="spinner"></span>Saving</span></div>      <div data-states="pending"><span class="badge badge-wait"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-clock"/></svg>Saved, waiting for the bot</span></div>      <div data-states="botdown"><span class="badge badge-bad"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-x"/></svg>Bot not running</span></div>      <div data-states="readonly"><span class="badge"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-lock"/></svg>Read only</span></div>      <div data-states="raw"><span class="badge badge-bad"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-alert"/></svg>Invalid JSON</span></div></div>
+        </div>
+      </div>
+      <div class="editor">
+        <nav class="toc" aria-label="Setting groups" data-not-states="raw">
+          <a href="#g-connection" aria-current="true">Connection</a>
+          <a href="#g-servers">Servers <span class="n" data-states="dirty guard saving">2</span><span class="n bad" data-states="error">1</span></a>
+          <a href="#g-monitoring">Monitoring <span class="n" data-states="dirty guard saving">2</span><span class="n bad" data-states="error">1</span><span class="n" style="background:var(--wait-tint);color:var(--wait)" data-states="conflict">1</span></a>
+          <a href="#g-guilds">Guilds</a>
+          <a href="#g-web">Dashboard <span class="n" data-states="dirty guard saving">1</span></a>
+        </nav>
+        <div style="display:grid;gap:16px;min-width:0">
+
+    <div class="groups" id="groups" data-not-states="raw">
+      <details class="group" id="g-connection" open>
+        <summary><h2>Connection</h2><span class="hint sum-hint">Discord application and who administers the bot</span><svg class="i chev" aria-hidden="true" focusable="false"><use href="#i-chev"/></svg></summary>
+        <div class="fields">
+
+        <div class="cfg " data-key="token Bot token" data-states="clean dirty error conflict saving pending botdown readonly guard">
+          <div class="meta"><span class="name" id="n-token">Bot token</span><span class="key">token</span><span class="hint" id="f-token-h">Secret. Stored, never shown again. Leave empty to keep the stored value.</span></div>
+          <div class="ctl"><label class="sr" for="f-token">Bot token</label><div class="input-row"><input class="input mono" id="f-token" type="password" value="" placeholder="Stored. Type a new token to replace it." autocomplete="off" aria-describedby="f-token-h" ><button class="btn" type="button" data-reveal="f-token">Show</button></div><span class="orig" id="f-token-h"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-lock"/></svg> Stored since 2026-08-02 14:10 UTC</span></div>
+        </div>
+
+        <div class="cfg " data-key="clientId Application ID" data-states="clean dirty error conflict saving pending botdown readonly guard">
+          <div class="meta"><span class="name" id="n-clientId">Application ID</span><span class="key">clientId</span><span class="hint" id="f-clientId-h">Numeric id of the Discord application, from the developer portal.</span></div>
+          <div class="ctl"><label class="sr" for="f-clientId">Application ID</label><input class="input mono" id="f-clientId" name="clientId" value="1004518837201641472"   aria-describedby="f-clientId-h" inputmode="numeric"></div>
+        </div>
+
+        <div class="cfg " data-key="adminUsers Bot admins" data-states="clean dirty error conflict saving pending botdown readonly guard">
+          <div class="meta"><span class="name" id="n-adminUsers">Bot admins</span><span class="key">adminUsers</span><span class="hint" id="f-adminUsers-h">Discord user ids with full access to every server and guild.</span></div>
+          <div class="ctl"><div class="chips" role="list" aria-label="Bot admins"><span class="badge badge-info" role="listitem" style="padding:8px 12px"><code>312044718865039360</code> <button class="btn btn-ghost btn-icon btn-sm" aria-label="Remove 312044718865039360" type="button"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-close"/></svg></button></span><span class="badge badge-info" role="listitem" style="padding:8px 12px"><code>228117390421893120</code> <button class="btn btn-ghost btn-icon btn-sm" aria-label="Remove 228117390421893120" type="button"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-close"/></svg></button></span></div></div>
+        </div>
+        </div>
+      </details>
+
+      <details class="group" id="g-servers" open>
+        <summary><h2>Servers</h2><span class="hint sum-hint">smp, creative</span><svg class="i chev" aria-hidden="true" focusable="false"><use href="#i-chev"/></svg></summary>
+        <div class="fields">
+
+        <div class="cfg " data-key="servers.smp.apiUrl smp, API URL" data-states="clean pending botdown readonly conflict">
+          <div class="meta"><span class="name" id="n-servers-smp-apiUrl">smp, API URL</span><span class="key">servers.smp.apiUrl</span><span class="hint" id="f-servers-smp-apiUrl-h">Address of the API wrapper that runs next to this Minecraft server.</span></div>
+          <div class="ctl"><label class="sr" for="f-servers-smp-apiUrl">smp, API URL</label><input class="input mono" id="f-servers-smp-apiUrl" name="servers.smp.apiUrl" value="http://mc-host.internal:3000"   aria-describedby="f-servers-smp-apiUrl-h" ></div>
+        </div>
+        <div class="cfg is-dirty" data-key="servers.smp.apiUrl smp, API URL" data-states="dirty guard">
+          <div class="meta"><span class="name" id="n-servers-smp-apiUrl">smp, API URL</span><span class="key">servers.smp.apiUrl</span><span class="hint" id="f-servers-smp-apiUrl-h-v1">Address of the API wrapper that runs next to this Minecraft server.</span></div>
+          <div class="ctl"><label class="sr" for="f-servers-smp-apiUrl-v1">smp, API URL</label><input class="input mono" id="f-servers-smp-apiUrl-v1" name="servers.smp.apiUrl" value="http://mc-host.internal:3100"   aria-describedby="f-servers-smp-apiUrl-h-v1" ><span class="orig"><span class="tag-dirty">Edited</span> was <code>http://mc-host.internal:3000</code> <button class="linklike" type="button" aria-label="Revert servers.smp.apiUrl to http://mc-host.internal:3000">Revert</button></span></div>
+        </div>
+        <div class="cfg is-error" data-key="servers.smp.apiUrl smp, API URL" data-states="error">
+          <div class="meta"><span class="name" id="n-servers-smp-apiUrl">smp, API URL</span><span class="key">servers.smp.apiUrl</span><span class="hint" id="f-servers-smp-apiUrl-h-v2">Address of the API wrapper that runs next to this Minecraft server.</span></div>
+          <div class="ctl"><label class="sr" for="f-servers-smp-apiUrl-v2">smp, API URL</label><input class="input mono" id="f-servers-smp-apiUrl-v2" name="servers.smp.apiUrl" value="mc-host.internal:3000"   aria-invalid="true" aria-describedby="f-servers-smp-apiUrl-e-v2" ><div class="field-err" id="f-servers-smp-apiUrl-e-v2" role="alert"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-alert"/></svg><span>Enter a full address that starts with http:// or https://, for example http://mc-host.internal:3000.</span></div></div>
+        </div>
+        <div class="cfg is-dirty" data-key="servers.smp.apiUrl smp, API URL" data-states="saving">
+          <div class="meta"><span class="name" id="n-servers-smp-apiUrl">smp, API URL</span><span class="key">servers.smp.apiUrl</span><span class="hint" id="f-servers-smp-apiUrl-h-v3">Address of the API wrapper that runs next to this Minecraft server.</span></div>
+          <div class="ctl"><label class="sr" for="f-servers-smp-apiUrl-v3">smp, API URL</label><input class="input mono" id="f-servers-smp-apiUrl-v3" name="servers.smp.apiUrl" value="http://mc-host.internal:3100"  disabled aria-describedby="f-servers-smp-apiUrl-h-v3" ><span class="busy-note"><span class="spinner"></span>Saving</span></div>
+        </div>
+
+        <div class="cfg " data-key="servers.smp.apiKey smp, API key" data-states="clean pending botdown readonly conflict error saving guard">
+          <div class="meta"><span class="name" id="n-servers-smp-apiKey">smp, API key</span><span class="key">servers.smp.apiKey</span><span class="hint" id="f-servers-smp-apiKey-h">Secret shared with the wrapper. Leave empty to keep the stored key.</span></div>
+          <div class="ctl"><label class="sr" for="f-smp-key">smp, API key</label><div class="input-row"><input class="input mono" id="f-smp-key" type="password" placeholder="Stored. Type a new key to replace it." autocomplete="off"><button class="btn" type="button" data-reveal="f-smp-key">Show</button></div></div>
+        </div>
+        <div class="cfg is-dirty" data-key="servers.smp.apiKey smp, API key" data-states="dirty">
+          <div class="meta"><span class="name" id="n-servers-smp-apiKey">smp, API key</span><span class="key">servers.smp.apiKey</span><span class="hint" id="f-servers-smp-apiKey-h-v1">Secret shared with the wrapper. Leave empty to keep the stored key.</span></div>
+          <div class="ctl"><label class="sr" for="f-smp-key-v1">smp, API key</label><div class="input-row"><input class="input mono" id="f-smp-key-v1" type="password" value="b7e1d2c9a4f08e53" autocomplete="off"><button class="btn" type="button" data-reveal="f-smp-key">Show</button></div><span class="orig"><span class="tag-dirty">Edited</span> will replace the stored key on save <button class="linklike" type="button" aria-label="Revert smp API key">Revert</button></span></div>
+        </div>
+
+        <div class="cfg " data-key="servers.creative.apiUrl creative, API URL" data-states="clean dirty error conflict saving pending botdown readonly guard">
+          <div class="meta"><span class="name" id="n-servers-creative-apiUrl">creative, API URL</span><span class="key">servers.creative.apiUrl</span><span class="hint" id="f-servers-creative-apiUrl-h">Address of the API wrapper for the creative server.</span></div>
+          <div class="ctl"><label class="sr" for="f-servers-creative-apiUrl">creative, API URL</label><input class="input mono" id="f-servers-creative-apiUrl" name="servers.creative.apiUrl" value="http://mc-host.internal:3001"   aria-describedby="f-servers-creative-apiUrl-h" ></div>
+        </div>
+        </div>
+      </details>
+
+      <details class="group" id="g-monitoring" open>
+        <summary><h2>Monitoring</h2><span class="hint sum-hint">Alerts and leaderboard timing</span><svg class="i chev" aria-hidden="true" focusable="false"><use href="#i-chev"/></svg></summary>
+        <div class="fields">
+
+        <div class="cfg " data-key="tpsWarningThreshold TPS warning threshold" data-states="clean pending botdown readonly">
+          <div class="meta"><span class="name" id="n-tpsWarningThreshold">TPS warning threshold</span><span class="key">tpsWarningThreshold</span><span class="hint" id="f-tpsWarningThreshold-h">Post a warning when ticks per second stay below this value. 1 to 20.</span></div>
+          <div class="ctl"><label class="sr" for="f-tpsWarningThreshold">TPS warning threshold</label><input class="input" id="f-tpsWarningThreshold" name="tpsWarningThreshold" value="18"   aria-describedby="f-tpsWarningThreshold-h" inputmode="decimal"></div>
+        </div>
+        <div class="cfg is-dirty" data-key="tpsWarningThreshold TPS warning threshold" data-states="dirty guard">
+          <div class="meta"><span class="name" id="n-tpsWarningThreshold">TPS warning threshold</span><span class="key">tpsWarningThreshold</span><span class="hint" id="f-tpsWarningThreshold-h-v1">Post a warning when ticks per second stay below this value. 1 to 20.</span></div>
+          <div class="ctl"><label class="sr" for="f-tpsWarningThreshold-v1">TPS warning threshold</label><input class="input" id="f-tpsWarningThreshold-v1" name="tpsWarningThreshold" value="17"   aria-describedby="f-tpsWarningThreshold-h-v1" inputmode="decimal"><span class="orig"><span class="tag-dirty">Edited</span> was <code>18</code> <button class="linklike" type="button" aria-label="Revert tpsWarningThreshold to 18">Revert</button></span></div>
+        </div>
+        <div class="cfg is-error" data-key="tpsWarningThreshold TPS warning threshold" data-states="error">
+          <div class="meta"><span class="name" id="n-tpsWarningThreshold">TPS warning threshold</span><span class="key">tpsWarningThreshold</span><span class="hint" id="f-tpsWarningThreshold-h-v2">Post a warning when ticks per second stay below this value. 1 to 20.</span></div>
+          <div class="ctl"><label class="sr" for="f-tpsWarningThreshold-v2">TPS warning threshold</label><input class="input" id="f-tpsWarningThreshold-v2" name="tpsWarningThreshold" value="25"   aria-invalid="true" aria-describedby="f-tpsWarningThreshold-e-v2" inputmode="decimal"><div class="field-err" id="f-tpsWarningThreshold-e-v2" role="alert"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-alert"/></svg><span>Must be between 1 and 20. A server never runs above 20 TPS, so 25 would never warn.</span></div></div>
+        </div>
+        <div class="cfg is-dirty" data-key="tpsWarningThreshold TPS warning threshold" data-states="saving">
+          <div class="meta"><span class="name" id="n-tpsWarningThreshold">TPS warning threshold</span><span class="key">tpsWarningThreshold</span><span class="hint" id="f-tpsWarningThreshold-h-v3">Post a warning when ticks per second stay below this value. 1 to 20.</span></div>
+          <div class="ctl"><label class="sr" for="f-tpsWarningThreshold-v3">TPS warning threshold</label><input class="input" id="f-tpsWarningThreshold-v3" name="tpsWarningThreshold" value="17"  disabled aria-describedby="f-tpsWarningThreshold-h-v3" ></div>
+        </div>
+        <div class="cfg is-conflict" data-key="tpsWarningThreshold TPS warning threshold" data-states="conflict">
+          <div class="meta"><span class="name" id="n-tpsWarningThreshold">TPS warning threshold</span><span class="key">tpsWarningThreshold</span><span class="hint" id="f-tpsWarningThreshold-h-v4">Post a warning when ticks per second stay below this value. 1 to 20.</span></div>
+          <div class="ctl"><div class="banner banner-warn" style="padding:10px 12px"><div class="b-body"><div class="b-title">Changed by someone else while you were editing</div><span style="color:var(--text-dim);font-size:var(--text-sm)">kaito changed this at 10:42 UTC. Pick the value to keep.</span></div></div>
+          <fieldset class="picker" style="border:0;padding:0;margin:0"><legend class="sr">Value to keep for TPS warning threshold</legend>
+            <label><span><input type="radio" name="c-tps" checked>Yours: <code>17</code></span><small>Edited here, not saved</small></label>
+            <label><span><input type="radio" name="c-tps">Theirs: <code>16</code></span><small>Saved by kaito at 10:42 UTC</small></label></fieldset></div>
+        </div>
+
+        <div class="cfg " data-key="leaderboardInterval Leaderboard interval" data-states="clean pending botdown readonly conflict">
+          <div class="meta"><span class="name" id="n-leaderboardInterval">Leaderboard interval</span><span class="key">leaderboardInterval</span><span class="hint" id="f-leaderboardInterval-h">Minutes between automatic leaderboard posts.</span></div>
+          <div class="ctl"><label class="sr" for="f-leaderboardInterval">Leaderboard interval</label><input class="input" id="f-leaderboardInterval" name="leaderboardInterval" value="60"   aria-describedby="f-leaderboardInterval-h" inputmode="numeric"></div>
+        </div>
+        <div class="cfg is-dirty" data-key="leaderboardInterval Leaderboard interval" data-states="dirty error guard">
+          <div class="meta"><span class="name" id="n-leaderboardInterval">Leaderboard interval</span><span class="key">leaderboardInterval</span><span class="hint" id="f-leaderboardInterval-h-v1">Minutes between automatic leaderboard posts.</span></div>
+          <div class="ctl"><label class="sr" for="f-leaderboardInterval-v1">Leaderboard interval</label><input class="input" id="f-leaderboardInterval-v1" name="leaderboardInterval" value="30"   aria-describedby="f-leaderboardInterval-h-v1" inputmode="numeric"><span class="orig"><span class="tag-dirty">Edited</span> was <code>60</code> <button class="linklike" type="button" aria-label="Revert leaderboardInterval to 60">Revert</button></span></div>
+        </div>
+        <div class="cfg is-dirty" data-key="leaderboardInterval Leaderboard interval" data-states="saving">
+          <div class="meta"><span class="name" id="n-leaderboardInterval">Leaderboard interval</span><span class="key">leaderboardInterval</span><span class="hint" id="f-leaderboardInterval-h-v2">Minutes between automatic leaderboard posts.</span></div>
+          <div class="ctl"><label class="sr" for="f-leaderboardInterval-v2">Leaderboard interval</label><input class="input" id="f-leaderboardInterval-v2" name="leaderboardInterval" value="30"  disabled aria-describedby="f-leaderboardInterval-h-v2" ></div>
+        </div>
+        </div>
+      </details>
+
+      <details class="group" id="g-guilds" open>
+        <summary><h2>Guilds</h2><span class="hint sum-hint">Per Discord server settings</span><svg class="i chev" aria-hidden="true" focusable="false"><use href="#i-chev"/></svg></summary>
+        <div class="fields">
+
+        <div class="cfg " data-key="guilds.1204518837201641473.chatBridge Block Party SMP, chat bridge" data-states="clean dirty error conflict saving pending botdown readonly guard">
+          <div class="meta"><span class="name" id="n-guilds-1204518837201641473-chatBridge">Block Party SMP, chat bridge</span><span class="key">guilds.1204518837201641473.chatBridge</span><span class="hint" id="f-guilds-1204518837201641473-chatBridge-h">Relay chat between the smp console and the linked Discord channel.</span></div>
+          <div class="ctl"><label class="switch"><input type="checkbox" id="f-guilds-1204518837201641473-chatBridge" role="switch" checked ><span>On</span></label></div>
+        </div>
+        </div>
+      </details>
+
+      <details class="group" id="g-web" open>
+        <summary><h2>Dashboard</h2><span class="hint sum-hint">Web interface behind your reverse proxy</span><svg class="i chev" aria-hidden="true" focusable="false"><use href="#i-chev"/></svg></summary>
+        <div class="fields">
+
+        <div class="cfg " data-key="webui.trustProxy Trust proxy headers" data-states="clean pending botdown readonly conflict error">
+          <div class="meta"><span class="name" id="n-webui-trustProxy">Trust proxy headers</span><span class="key">webui.trustProxy</span><span class="hint" id="f-webui-trustProxy-h">Turn on only when the dashboard sits behind a reverse proxy that sets X-Forwarded-For.</span></div>
+          <div class="ctl"><label class="switch"><input type="checkbox" id="f-webui-trustProxy" role="switch"  ><span>Off</span></label></div>
+        </div>
+        <div class="cfg is-dirty" data-key="webui.trustProxy Trust proxy headers" data-states="dirty guard">
+          <div class="meta"><span class="name" id="n-webui-trustProxy">Trust proxy headers</span><span class="key">webui.trustProxy</span><span class="hint" id="f-webui-trustProxy-h-v1">Turn on only when the dashboard sits behind a reverse proxy that sets X-Forwarded-For.</span></div>
+          <div class="ctl"><label class="switch"><input type="checkbox" id="f-webui-trustProxy-v1" role="switch" checked ><span>On</span></label><span class="orig"><span class="tag-dirty">Edited</span> was <code>off</code> <button class="linklike" type="button" aria-label="Revert webui.trustProxy to off">Revert</button></span></div>
+        </div>
+        <div class="cfg is-dirty" data-key="webui.trustProxy Trust proxy headers" data-states="saving">
+          <div class="meta"><span class="name" id="n-webui-trustProxy">Trust proxy headers</span><span class="key">webui.trustProxy</span><span class="hint" id="f-webui-trustProxy-h-v2">Turn on only when the dashboard sits behind a reverse proxy that sets X-Forwarded-For.</span></div>
+          <div class="ctl"><label class="switch"><input type="checkbox" id="f-webui-trustProxy-v2" role="switch" checked disabled><span>On</span></label></div>
+        </div>
+        </div>
+      </details>
+      <div id="search-none" class="card" hidden><div class="empty"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-search"/></svg><h3>No settings match "<span data-term></span>"</h3><p>Search covers names, keys and hints. Try the key, for example <code>apiUrl</code>.</p></div></div>
+    </div>
+
+    <div class="card" data-states="raw">
+      <div class="card-head"><h2>config.json</h2><span class="spacer"></span><span class="badge badge-bad"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-alert"/></svg>Not saved, invalid</span></div>
+      <div class="card-body" style="display:grid;gap:12px">
+        <div class="field"><label for="raw-text">Raw JSON <span class="key">Edits here replace the form values on save</span></label>
+<textarea class="textarea" id="raw-text" spellcheck="false" aria-invalid="true" aria-describedby="raw-err" style="min-height:300px">{
+  "configVersion": 1,
+  "clientId": "1004518837201641472",
+  "adminUsers": ["312044718865039360", "228117390421893120"],
+  "servers": {
+    "smp": { "apiUrl": "http://mc-host.internal:3000" },
+    "creative": { "apiUrl": "http://mc-host.internal:3001" }
+  }
+  "tpsWarningThreshold": 18,
+  "leaderboardInterval": 60,
+  "webui": { "trustProxy": false }
+}</textarea>
+        </div>
+        <div class="field-err" id="raw-err" role="alert"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-alert"/></svg><span>Line 8: expected a comma or a closing brace after <code>"servers"</code>. The file on disk is unchanged. Secrets stay hidden in this view.</span></div>
+      </div>
+    </div>
+    <div class="actionbar" data-states="raw"><span class="sum" style="color:var(--bad)">Invalid JSON blocks saving.</span><div class="btns"><button class="btn" type="button">Discard edits</button><button class="btn btn-primary" type="button" disabled aria-disabled="true">Save</button></div></div>
+
+    <div class="actionbar" data-states="dirty error conflict saving guard" role="region" aria-label="Unsaved changes">
+      <span class="sum" data-states="dirty guard">5 unsaved changes <small>in 4 groups</small></span>
+      <span class="sum" data-states="error"><span style="color:var(--bad)">2 problems block saving.</span> <small>1 more unsaved change</small> <a href="#g-servers">Go to first problem</a></span>
+      <span class="sum" data-states="conflict">1 conflict to resolve <small>1 other edit is ready to save</small></span>
+      <span class="sum" data-states="saving"><span class="spinner" style="display:inline-block;vertical-align:-3px;margin-right:8px"></span>Saving 4 changes... <small>Validated on the server before writing</small></span>
+      <div class="btns">
+        <button class="btn" type="button" data-states="dirty error conflict guard">Discard all</button>
+        <button class="btn" type="button" data-states="dirty guard" data-open-dialog="dlg-review">Review changes</button>
+        <button class="btn btn-primary" type="button" data-states="dirty guard" data-toast="Saved 5 changes" data-toast-sub="Applies within 30 seconds. The token change needs a restart."><svg class="i " aria-hidden="true" focusable="false"><use href="#i-check"/></svg>Save 5 changes</button>
+        <button class="btn btn-primary" type="button" disabled aria-disabled="true" data-states="error" title="Fix the 2 problems first">Save 3 changes</button>
+        <button class="btn btn-primary" type="button" disabled aria-disabled="true" data-states="conflict" title="Resolve the conflict first">Save 1 change</button>
+        <button class="btn btn-primary" type="button" disabled aria-busy="true" data-states="saving">Saving...</button>
+      </div>
+    </div>
+        </div>
+      </div>
+
+      <dialog id="dlg-review" aria-labelledby="dlg-review-t">
+        <div class="dlg-head"><h2 id="dlg-review-t">Review 5 changes</h2></div>
+        <div class="dlg-body">
+          <dl>
+            <dt><code>servers.smp.apiUrl</code></dt><dd><code>http://mc-host.internal:3000</code> to <code>http://mc-host.internal:3100</code></dd>
+            <dt><code>servers.smp.apiKey</code></dt><dd>replaced (value hidden)</dd>
+            <dt><code>tpsWarningThreshold</code></dt><dd><code>18</code> to <code>17</code></dd>
+            <dt><code>leaderboardInterval</code></dt><dd><code>60</code> to <code>30</code></dd>
+            <dt><code>webui.trustProxy</code></dt><dd><code>false</code> to <code>true</code></dd>
+          </dl>
+          <p style="color:var(--text-dim);font-size:var(--text-sm)">Each change is validated on the server and written to config.json. The previous file is kept in the audit log, where you can roll it back.</p>
+        </div>
+        <div class="dlg-foot"><button class="btn" type="button" data-close>Back to editing</button><button class="btn btn-primary" type="button" data-close data-toast="Saved 5 changes" data-toast-sub="Applies within 30 seconds.">Save 5 changes</button></div>
+      </dialog>
+
+      <dialog id="dlg-guard" data-auto aria-labelledby="dlg-guard-t" aria-describedby="dlg-guard-d">
+        <div class="dlg-head"><span class="lvl disruptive"><svg class="i " aria-hidden="true" focusable="false"><use href="#i-alert"/></svg>Unsaved changes</span><h2 id="dlg-guard-t">Leave Config without saving?</h2></div>
+        <div class="dlg-body"><p id="dlg-guard-d">You edited 5 settings in 4 groups. If you leave now they are lost. This cannot be undone.</p></div>
+        <div class="dlg-foot"><button class="btn" type="button" data-close>Stay and keep editing</button><button class="btn btn-danger" type="button" data-close>Leave and discard 5 changes</button></div>
+      </dialog>
+
+    </main>
+  </div>
+</div>
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+<script src="app.js"></script>
+</body>
+</html>

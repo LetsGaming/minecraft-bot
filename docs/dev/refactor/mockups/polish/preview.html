@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preview · Polish mockup</title>
+<!--
+DIRECTION CONTRACT (Polish)
+THESIS: The same app, but correct. Distinctive axes: precision of states, and density.
+WORLD: Charcoal surfaces, one green accent, status colours with fixed meaning, system fonts.
+STORY: Review every screen at desktop and phone width, in every state, without opening ten tabs.
+FIRST VIEWPORT: Screen and state pickers on top, a 1440 frame and a phone frame side by side below.
+RISK: Frames are scaled down for overview; judge small text on the real page.
+-->
+<link rel="stylesheet" href="style.css">
+<style>
+  .frames { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+  .frame-box { overflow: hidden; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--bg); }
+  .frame-box iframe { border: 0; transform-origin: 0 0; display: block; background: var(--bg); }
+  .pv-bar { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: end; }
+</style>
+</head>
+<body>
+<main class="wrap" style="max-width:none" id="main">
+  <header><h1 style="font-size:var(--text-xl)">Preview</h1><p style="color:var(--text-dim)"><a href="index.html">Back to the index</a>. Frames are scaled for overview.</p></header>
+  <div class="pv-bar">
+    <div class="field"><label for="screen">Screen</label><select class="select" id="screen"><option value="config">Config</option><option value="mods">Mods</option><option value="backups">Backups</option><option value="discord">Discord</option></select></div>
+    <div class="field"><label for="state">State</label><select class="select" id="state"></select></div>
+    <div class="field"><label for="mw">Phone width</label><select class="select" id="mw"><option>390</option><option>360</option><option>430</option></select></div>
+    <div class="field"><label for="lang">Discord language</label><select class="select" id="lang"><option value="en">English</option><option value="de">Deutsch</option></select></div>
+  </div>
+  <div class="frames">
+    <div><p style="margin-bottom:6px;color:var(--text-dim)">Desktop, 1440 wide</p><div class="frame-box" id="dbox"><iframe id="d" title="Desktop preview" width="1440" height="900"></iframe></div></div>
+    <div><p style="margin-bottom:6px;color:var(--text-dim)" id="mlabel">Mobile</p><div class="frame-box" id="mbox"><iframe id="m" title="Mobile preview" height="844"></iframe></div></div>
+  </div>
+</main>
+<script>
+var S = {
+  config: [["clean","Clean, applied"],["dirty","Dirty, 5 changes"],["error","Validation errors"],["conflict","Conflict"],["saving","Saving"],["pending","Saved, pending reload"],["botdown","Bot down"],["readonly","Read only"],["raw","Raw JSON invalid"],["guard","Leave guard dialog"]],
+  mods: [["installed","Installed list"],["busy","Per-row busy"],["checking","Update check running"],["results","Check results and blockers"],["loading","Loading"],["empty","Empty"],["error","Load error with retry"],["confirm","Remove confirmation"],["readonly","Read only"]],
+  backups: [["list","List"],["restoring","Restore running"],["creating","Creating a backup"],["loading","Loading"],["empty","Empty"],["error","Load error with retry"],["restore","Restore, typed confirm"],["delete","Delete, typed confirm"],["readonly","Read only"]],
+  discord: [["all","All messages"]]
+};
+var screen = document.getElementById('screen'), state = document.getElementById('state'), mw = document.getElementById('mw'), lang = document.getElementById('lang');
+function fit(box, fr, w, h, scale) { fr.width = w; fr.height = h; fr.style.transform = 'scale(' + scale + ')'; box.style.width = (w * scale) + 'px'; box.style.height = (h * scale) + 'px'; }
+function render() {
+  var s = screen.value, st = state.value;
+  var q = s === 'discord' ? '?lang=' + lang.value : '?state=' + st;
+  var url = s + '.html' + q;
+  var m = +mw.value;
+  fit(document.getElementById('dbox'), document.getElementById('d'), 1440, 900, 0.6);
+  fit(document.getElementById('mbox'), document.getElementById('m'), m, 844, 0.72);
+  document.getElementById('mlabel').textContent = 'Mobile, ' + m + ' wide';
+  document.getElementById('d').src = url; document.getElementById('m').src = url;
+}
+function fill() { state.innerHTML = ''; S[screen.value].forEach(function (o) { var e = document.createElement('option'); e.value = o[0]; e.textContent = o[1]; state.appendChild(e); }); state.disabled = screen.value === 'discord'; lang.disabled = screen.value !== 'discord'; }
+screen.addEventListener('change', function () { fill(); render(); });
+[state, mw, lang].forEach(function (e) { e.addEventListener('change', render); });
+var qs = new URLSearchParams(location.search); if (qs.get('screen')) screen.value = qs.get('screen');
+fill(); if (qs.get('state')) state.value = qs.get('state'); render();
+</script>
+</body>
+</html>
