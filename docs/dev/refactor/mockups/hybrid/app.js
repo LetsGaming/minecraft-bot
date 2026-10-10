@@ -33,6 +33,17 @@
     document.addEventListener("click", function (e) { if (document.body.classList.contains("nav-open") && !e.target.closest(".side") && !e.target.closest("[data-menu]")) { document.body.classList.remove("nav-open"); menu.setAttribute("aria-expanded", "false"); } });
   }
 
+
+  function iconFallback(img) {
+    var fb = document.createElement("span");
+    fb.textContent = img.getAttribute("data-initials") || "";
+    var alt = img.getAttribute("alt");
+    if (alt) { fb.setAttribute("role", "img"); fb.setAttribute("aria-label", alt); } else { fb.setAttribute("aria-hidden", "true"); }
+    img.replaceWith(fb);
+  }
+  document.addEventListener("error", function (e) { var t = e.target; if (t && t.tagName === "IMG" && t.classList.contains("modicon__img")) iconFallback(t); }, true);
+  document.querySelectorAll("img.modicon__img").forEach(function (im) { if (im.complete && im.naturalWidth === 0) iconFallback(im); });
+
   var sel = document.getElementById("state");
   function applyState(v) {
     document.body.setAttribute("data-state", v);
@@ -81,6 +92,23 @@
     if (dismiss) { var tt = dismiss.closest(".toast"); if (tt) tt.remove(); }
     var gl = e.target.closest("[data-lang-set]");
     if (gl) { document.body.setAttribute("data-lang", gl.getAttribute("data-lang-set")); document.querySelectorAll("[data-lang-set]").forEach(function (x) { x.setAttribute("aria-pressed", String(x === gl)); }); document.documentElement.lang = gl.getAttribute("data-lang-set"); }
+  });
+
+
+  document.addEventListener("click", function (e) {
+    var g = e.target.closest("[data-goto]");
+    if (g && sel) { sel.value = g.getAttribute("data-goto"); applyState(sel.value); }
+  });
+
+
+  document.addEventListener("click", function (e) {
+    var f = e.target.closest(".js-tierfilter .filter"); if (!f) return;
+    var bar = f.closest(".js-tierfilter"), card = bar.closest(".card"), tier = f.getAttribute("data-tier");
+    bar.querySelectorAll(".filter").forEach(function (x) { x.setAttribute("aria-pressed", String(x === f)); });
+    var n = 0, all = tier === "All";
+    card.querySelectorAll("tbody tr[data-tier]").forEach(function (r) { var show = all || r.getAttribute("data-tier") === tier; r.classList.toggle("is-filtered", !show); if (show) n++; });
+    var total = +f.getAttribute("data-total"), cnt = card.querySelector(".js-count");
+    if (cnt) cnt.textContent = n === total ? "Showing " + n + " of " + total : "Showing " + n + " of " + total + (all ? "" : " " + tier.toLowerCase()) + " (sample lists " + n + ")";
   });
 
   document.addEventListener("input", function (e) {
