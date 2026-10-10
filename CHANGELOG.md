@@ -17,6 +17,11 @@ project follows [Semantic Versioning](https://semver.org/).
 - **`/daily` showed the wrong reward** when the random bonus triggered: the bonus item was listed as the daily reward and the real reward was hidden. The main reward is now always the one shown, and streak bonuses are listed separately.
 - **Unexpected command errors are localised and never leave "thinking..." hanging.** The fallback reply was a fixed English string; it now uses the guild's language, says what to do next, and replaces a pending deferred reply. Permission-denied and rate-limit replies also use the guild's language (`index.ts`, `commands/middleware.ts`).
 - **Downtime alerts use each guild's language.** The alert text was built once in the global language and sent to every guild; it is now built per guild (`watchers/monitors/downtimeMonitor.ts`).
+- **Audit log and config history showed the wrong time outside UTC.** SQLite timestamps (`YYYY-MM-DD HH:MM:SS`, UTC) were read as local time, so an entry from two minutes ago read "2 h ago" on UTC+2 and the rollback dialog printed the UTC clock time. They are now read as UTC, and the rollback dialog shows the same local time as the table. Shared with Discord embeds (`core/utils/relativeTime.ts`, `useConfigHistory.ts`).
+- **Mod Config no longer drops edits silently.** Opening another file or switching server with unsaved changes now asks first, and closing the tab warns (`useModConfigs.ts`, `ModConfigView.vue`, `App.vue`). The sidebar server switch asks too, whichever tab has unsaved changes.
+- **Raw JSON edits count as unsaved work.** Text that does not parse, or differs from the loaded config, enables Discard and triggers the leave prompt (`useConfig.ts`).
+- **Dashboard contrast and keyboard focus.** Primary buttons now read at 7.6:1 (was 2.1:1), dim text at 6.9:1 (was 3.4:1), and every control shows a visible focus ring (`main.ts`, `style.css`).
+- **Dashboard on phones.** Below 760px the navigation and server switcher are horizontal scroll rows instead of a 530px block, the "Add to Server" button and brand text are hidden, and switching tab scrolls back to the top (`App.vue`). A proper drawer follows later.
 
 ## [7.0.0] - 2026-10-10
 

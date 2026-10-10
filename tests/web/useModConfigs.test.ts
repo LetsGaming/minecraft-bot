@@ -6,6 +6,7 @@ vi.mock("../../src/web/frontend/src/api", async (importOriginal) => {
   return { ...actual, apiGet: net.apiGet, apiSend: net.apiSend };
 });
 
+import { hasUnsavedChanges, clearDirtySources } from "../../src/web/frontend/src/composables/useUnsavedGuard.js";
 import { useModConfigs } from "../../src/web/frontend/src/composables/useModConfigs.js";
 
 const file = (relPath: string, modId: string, id = relPath) => ({
@@ -26,6 +27,7 @@ function contents(fields: { path: string[]; label: string; kind: string; value: 
 
 beforeEach(() => {
   vi.clearAllMocks();
+  clearDirtySources();
   net.apiSend.mockResolvedValue({ etag: "e2", snapshot: "s" });
 });
 
@@ -118,5 +120,78 @@ describe("useModConfigs", () => {
     await m.loadSource();
     expect(net.apiGet.mock.calls.at(-1)![0]).toContain("?text=1");
     expect(m.current.value!.text).toBe("src");
+  });
+});
+
+describe("useModConfigs unsaved-edit guard", () => {
+  async function dirtyEditor(ask?: () => Promise<boolean>) {
+    const m = useModConfigs(ask);
+    net.apiGet.mockResolvedValueOnce({ files: [] });
+    await m.loadFiles("smp");
+    net.apiGet.mockResolvedValueOnce(
+      contents([{ path: ["a"], label: "A", kind: "number", value: 1 }]),
+    );
+    await m.openFile("A".repeat(22));
+    m.setFromInput(m.current.value!.fields[0]!, 5);
+    return m;
+  }
+
+  it("registers its dirty state with the unsaved-changes guard", async () => {
+    const m = await dirtyEditor();
+    expect(m.dirty.value).toBe(true);
+    expect(hasUnsavedChanges()).toBe(true);
+    m.discard();
+    expect(hasUnsavedChanges()).toBe(false);
+  });
+
+  it("keeps the edits and does not fetch when the user chooses to stay", async () => {
+    const ask = vi.fn().mockResolvedValue(false);
+    const m = await dirtyEditor(ask);
+    net.apiGet.mockClear();
+    await m.openFile("B".repeat(22));
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(net.apiGet).not.toHaveBeenCalled();
+    expect(m.dirty.value).toBe(true);
+  });
+
+  it("refuses to leave a dirty file when no question can be asked", async () => {
+    const m = await dirtyEditor();
+    net.apiGet.mockClear();
+    await m.openFile("B".repeat(22));
+    expect(net.apiGet).not.toHaveBeenCalled();
+    expect(m.dirty.value).toBe(true);
+  });
+
+  it("discards the edits and opens the file when the user agrees", async () => {
+    const ask = vi.fn().mockResolvedValue(true);
+    const m = await dirtyEditor(ask);
+    net.apiGet.mockResolvedValueOnce(
+      contents([{ path: ["a"], label: "A", kind: "number", value: 9 }]),
+    );
+    await m.openFile("B".repeat(22));
+    expect(m.dirty.value).toBe(false);
+    expect(m.current.value!.fields[0]!.value).toBe(9);
+  });
+
+  it("does not ask when nothing is dirty", async () => {
+    const ask = vi.fn().mockResolvedValue(false);
+    const m = useModConfigs(ask);
+    net.apiGet.mockResolvedValueOnce({ files: [] });
+    await m.loadFiles("smp");
+    net.apiGet.mockResolvedValueOnce(contents([]));
+    await m.openFile("A".repeat(22));
+    expect(ask).not.toHaveBeenCalled();
+    expect(m.current.value).not.toBeNull();
+  });
+
+  it("re-reads after a save without asking about the edits it just wrote", async () => {
+    const ask = vi.fn().mockResolvedValue(false);
+    const m = await dirtyEditor(ask);
+    net.apiGet.mockResolvedValueOnce(
+      contents([{ path: ["a"], label: "A", kind: "number", value: 5 }]),
+    );
+    expect(await m.save()).toBe(true);
+    expect(ask).not.toHaveBeenCalled();
+    expect(m.dirty.value).toBe(false);
   });
 });

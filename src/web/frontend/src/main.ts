@@ -30,6 +30,12 @@ const MinecraftPreset = definePreset(Aura, {
       900: "#17472a",
       950: "#0c2617",
     },
+    focusRing: {
+      width: "2px",
+      style: "solid",
+      color: "#8cc8ff",
+      offset: "2px",
+    },
     colorScheme: {
       dark: {
         surface: {
@@ -48,7 +54,7 @@ const MinecraftPreset = definePreset(Aura, {
         },
         primary: {
           color: "#34c56a",
-          contrastColor: "#eafff0",
+          contrastColor: "#06210f",
           hoverColor: "#5cc985",
           activeColor: "#2f9d57",
         },
@@ -62,7 +68,7 @@ const MinecraftPreset = definePreset(Aura, {
         text: {
           color: "#e7e9ec",
           hoverColor: "#ffffff",
-          mutedColor: "#8a9099",
+          mutedColor: "#9aa1ac",
           hoverMutedColor: "#c4c8cd",
         },
       },

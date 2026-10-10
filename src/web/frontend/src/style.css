@@ -10,7 +10,8 @@
   --mc-border-strong: #333842;
   --mc-text: #e7e9ec;
   --mc-muted: #8a9099;
-  --mc-dim: #6b7280;
+  --mc-dim: #9aa1ac;
+  --mc-focus: #8cc8ff;
   --mc-accent: #34c56a;
   --mc-accent-strong: #2f9d57;
   --mc-accent-border: #2c4433;
@@ -56,6 +57,13 @@ body {
 }
 
 a { color: var(--mc-accent); }
+
+/* Keyboard focus. Unlayered on purpose: it must win over the layered
+   PrimeVue theme and over the plain buttons the shell renders itself. */
+:focus-visible {
+  outline: 2px solid var(--mc-focus);
+  outline-offset: 2px;
+}
 
 /* Utility helpers */
 .muted { color: var(--mc-muted); }

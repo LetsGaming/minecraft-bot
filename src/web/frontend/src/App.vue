@@ -41,7 +41,7 @@
               v-for="s in servers"
               :key="s.id"
               :class="['switch-item', { active: s.id === activeServer }]"
-              @click="activeServer = s.id"
+              @click="switchServer(s.id)"
             >
               <StatusDot :state="statusDot(s)" />
               <span class="switch-name">{{ s.id }}</span>
@@ -98,7 +98,7 @@
         </div>
       </aside>
 
-      <main class="content">
+      <main ref="content" class="content">
         <div class="content-inner">
         <Message
           v-if="botDown && isSysadmin"
@@ -162,6 +162,7 @@ import Toast from "primevue/toast";
 import ConfirmDialog from "primevue/confirmdialog";
 import { useConfirm } from "primevue/useconfirm";
 import { confirmLeave } from "./composables/useUnsavedGuard";
+import { discardPrompt } from "./composables/useDiscardPrompt";
 import TypedConfirmDialog from "./components/ui/TypedConfirmDialog.vue";
 import { apiGet, apiSend, UnauthorizedError } from "./api";
 import type { MeResponse, ServerStatus, GrantableCapability } from "./api";
@@ -308,22 +309,25 @@ export default defineComponent({
      */
     async goToTab(id: string): Promise<void> {
       if (id === this.activeTab) return;
+      const proceed = await confirmLeave(discardPrompt(this.confirm));
+      if (proceed) {
+        this.activeTab = id;
+        // Below 760px the page itself scrolls, so a tab change from deep in
+        // the previous view would otherwise appear to do nothing.
+        window.scrollTo(0, 0);
+        (this.$refs.content as HTMLElement | undefined)?.scrollTo?.(0, 0);
+      }
+    },
+    /** Switch server, asking first when an editor holds unsaved changes. */
+    async switchServer(id: string): Promise<void> {
+      if (id === this.activeServer) return;
       const proceed = await confirmLeave(
-        () =>
-          new Promise<boolean>((resolve) => {
-            this.confirm.require({
-              header: "Discard unsaved changes?",
-              message: "This tab has changes that are not saved. Leaving it discards them.",
-              icon: "pi pi-exclamation-triangle",
-              acceptLabel: "Discard and leave",
-              rejectLabel: "Stay",
-              accept: () => resolve(true),
-              reject: () => resolve(false),
-              onHide: () => resolve(false),
-            });
-          }),
+        discardPrompt(
+          this.confirm,
+          "This tab has changes that are not saved. Switching server discards them.",
+        ),
       );
-      if (proceed) this.activeTab = id;
+      if (proceed) this.activeServer = id;
     },
     /** Is this tab id one the caller may see? The view switch reads the same
      *  answer the sidebar does. */
@@ -514,10 +518,26 @@ export default defineComponent({
   .sidebar {
     width: 100%; height: auto;
     flex-direction: row; flex-wrap: wrap; align-items: center;
-    gap: 8px;
+    gap: 6px 8px; padding: 8px 12px;
+    border-right: none;
+    border-bottom: 0.5px solid var(--mc-border);
+    overflow: visible;
   }
-  .sidebar-cta { margin: 0; padding: 0; }
-  .sidebar-cta .cta-hint { display: none; }
+  .sidebar-brand { order: 1; padding: 0; margin: 0; border: none; }
+  .brand-text, .switcher-label, .sidebar-cta { display: none; }
+  .switcher {
+    order: 2; flex: 1; min-width: 0; margin: 0;
+    flex-direction: row; gap: 4px;
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .sidebar-foot { order: 3; margin: 0; padding: 0; border: none; gap: 6px; }
+  .who { display: none; }
+  .nav {
+    order: 4; flex: 0 0 100%; min-width: 0; margin: 0; padding: 0; border: none;
+    flex-direction: row; gap: 4px;
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .nav-item, .switch-item { width: auto; flex: none; white-space: nowrap; min-height: 40px; }
   .content { overflow: visible; }
   .content-inner { padding: 20px 16px 40px; }
 }

@@ -1,6 +1,7 @@
-import { ref, computed } from "vue";
+import { ref, computed, getCurrentInstance, onBeforeUnmount } from "vue";
 import { apiGet, apiSend } from "../api";
 import { errorMessage } from "../utils/errorMessage";
+import { confirmLeave, registerDirtySource } from "./useUnsavedGuard";
 import { disambiguateLabels } from "../utils/fieldLabels";
 import type { StaleInfo, QueuedWriteResult } from "@mcbot/schema/contract.js";
 import type { ConfigFileInfo } from "@mcbot/schema";
@@ -76,7 +77,11 @@ const FIELD_PAGE = 200;
 /** Above this many files or fields, groups and sections start collapsed. */
 const COLLAPSE_ABOVE = 40;
 
-export function useModConfigs() {
+/**
+ * `ask` renders the "discard unsaved changes?" question. Without one, leaving a
+ * file with edits is refused rather than silently dropping them.
+ */
+export function useModConfigs(ask: () => Promise<boolean> = () => Promise.resolve(false)) {
   const files = ref<ConfigFileInfo[]>([]);
   /** The wrapper stopped listing at its file limit. */
   const truncated = ref(false);
@@ -166,6 +171,9 @@ export function useModConfigs() {
 
   const dirty = computed(() => Object.keys(pending.value).length > 0);
 
+  const unregisterDirty = registerDirtySource(() => dirty.value);
+  if (getCurrentInstance()) onBeforeUnmount(unregisterDirty);
+
   const filtering = computed(() => search.value.trim() !== "");
 
   /** Files matching the filter by path or mod. Field names are filtered inside the open file. */
@@ -243,7 +251,13 @@ export function useModConfigs() {
     }
   }
 
+  /** Open a file, asking first when the current one holds unsaved edits. */
   async function openFile(fileId: string, withText = false): Promise<void> {
+    if (!(await confirmLeave(ask))) return;
+    await loadFile(fileId, withText);
+  }
+
+  async function loadFile(fileId: string, withText = false): Promise<void> {
     loading.value = true;
     error.value = "";
     pending.value = {};
@@ -283,7 +297,7 @@ export function useModConfigs() {
     if (!current.value || current.value.text !== undefined) return;
     const fileId = current.value.file.id;
     const keep = { ...pending.value };
-    await openFile(fileId, true);
+    await loadFile(fileId, true);
     pending.value = keep;
   }
 
@@ -373,7 +387,7 @@ export function useModConfigs() {
       queued.value = null;
       // Re-read rather than patching locally: the file on disk is the truth,
       // and the snapshot list has just grown.
-      await openFile(current.value.file.id);
+      await loadFile(current.value.file.id);
       return Boolean(res.etag);
     } catch (err) {
       error.value = errorMessage(err);
@@ -394,7 +408,7 @@ export function useModConfigs() {
         `/api/servers/${encodeURIComponent(serverId)}/configs/${encodeURIComponent(fileId)}/revert`,
         { snapshot },
       );
-      await openFile(fileId);
+      await loadFile(fileId);
       return true;
     } catch (err) {
       error.value = errorMessage(err);
@@ -411,7 +425,7 @@ export function useModConfigs() {
     dirty, byMod, visibleFields, truncated, filtering, fileReadOnly,
     shownSections, hiddenFieldCount, showMoreFields, isOpen, toggleOpen,
     collapseGroups, collapseSections, loadSource,
-    loadFiles, openFile, setValue, setFromInput, valueOf, isDirty, discard, save, revert,
+    loadFiles, openFile, confirmDiscard: () => confirmLeave(ask), setValue, setFromInput, valueOf, isDirty, discard, save, revert,
     stringValue, numberValue, boolValue, listValue,
   };
 }

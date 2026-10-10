@@ -12,7 +12,7 @@ vi.mock("../../src/web/frontend/src/api", async (importOriginal) => {
 
 import { ApiError } from "../../src/web/frontend/src/api.js";
 import { useConfig } from "../../src/web/frontend/src/composables/useConfig.js";
-import { clearDirtySources } from "../../src/web/frontend/src/composables/useUnsavedGuard.js";
+import { clearDirtySources, hasUnsavedChanges } from "../../src/web/frontend/src/composables/useUnsavedGuard.js";
 import { groupErrors, parseFieldError } from "../../src/web/frontend/src/utils/fieldErrors.js";
 
 let serverConfig: Record<string, unknown>;
@@ -104,6 +104,38 @@ describe("useConfig", () => {
     expect(c.dirty.value).toBe(true);
     c.setRawMode(false);
     expect(c.rawMode.value).toBe(false);
+  });
+
+  it("counts unparsable raw text as unsaved work and lets Discard restore it", async () => {
+    const c = useConfig();
+    await c.load();
+    c.setRawMode(true);
+    expect(c.dirty.value).toBe(false);
+    expect(hasUnsavedChanges()).toBe(false);
+
+    c.setRawText("{ nope");
+    expect(c.rawDirty.value).toBe(true);
+    expect(c.dirty.value).toBe(true);
+    expect(c.canSave.value).toBe(false);
+    expect(hasUnsavedChanges()).toBe(true);
+
+    c.discard();
+    expect(c.rawError.value).toBe("");
+    expect(c.dirty.value).toBe(false);
+    expect(hasUnsavedChanges()).toBe(false);
+  });
+
+  it("counts raw text that differs from the baseline, and clears when it matches again", async () => {
+    const c = useConfig();
+    await c.load();
+    c.setRawMode(true);
+    const original = c.rawText.value;
+    c.setRawText(`${original}
+`);
+    expect(c.rawDirty.value).toBe(true);
+    c.setRawText(original);
+    expect(c.rawDirty.value).toBe(false);
+    expect(c.dirty.value).toBe(false);
   });
 
   it("falls back to raw mode only when the schema is missing", async () => {
