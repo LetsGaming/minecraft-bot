@@ -5,6 +5,7 @@ import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { withErrorHandling } from "../middleware.js";
 import { queryFailureText } from "../../logWatcher/queryMessages.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 export const data = new SlashCommandBuilder()
   .setName("seed")
   .setDescription("Get the server's world seed")
@@ -20,9 +21,9 @@ export const execute = withErrorHandling(async (interaction) => {
   await interaction.editReply({
     embeds: [
       createEmbed({
-        title: `World Seed — ${server.id}`,
+        title: t("seed.title", { server: server.id }),
         description: `\`${seed.value}\``,
-        footer: { text: `Requested by ${interaction.user.tag}` },
+        footer: { text: t("common.requestedBy", { user: interaction.user.tag }) },
       }),
     ],
   });

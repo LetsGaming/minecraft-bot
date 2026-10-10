@@ -19,6 +19,7 @@ import type {
 } from "discord.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 export { getAllowedServerIds };
 
 /**
@@ -66,15 +67,9 @@ function assertGuildMayTarget(
   if (isServerAdmin(interaction.user.id)) return;
 
   if (!interaction.guild) {
-    throw new Error(
-      "In a multi-server setup, commands must be used inside a Discord server.",
-    );
+    throw new Error(t("router.guildOnly"));
   }
-  throw new Error(
-    `Server "${server.id}" is not available from this Discord server. ` +
-      `An operator can allow it by adding it to this guild's ` +
-      `"allowedServers" in config.json.`,
-  );
+  throw new Error(t("router.notAllowed", { server: server.id }));
 }
 
 /**
@@ -88,7 +83,7 @@ export function assertMayTargetServerId(
   serverId: string,
 ): ServerInstance {
   const server = getServerInstance(serverId);
-  if (!server) throw new Error(`Server "${serverId}" not found.`);
+  if (!server) throw new Error(t("router.serverNotFound", { server: serverId }));
   assertGuildMayTarget(interaction, server);
   return server;
 }
@@ -128,7 +123,7 @@ export function resolveServer(
   let server: ServerInstance | null;
   if (explicit) {
     server = getServerInstance(explicit);
-    if (!server) throw new Error(`Server "${explicit}" not found.`);
+    if (!server) throw new Error(t("router.serverNotFound", { server: explicit }));
   } else {
     server = getGuildServer(interaction.guild?.id);
   }

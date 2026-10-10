@@ -188,10 +188,38 @@ User-visible strings resolve through `t(key, vars)` in `core/utils/i18n.ts`.
 Locales are plain TS maps in `core/locales/` (`en.ts` is the default and
 fallback, `de.ts` overrides per key); `config.language` selects the active one,
 and missing keys fall back en → key. The layer is deliberately minimal — no
-plural rules, no nested keys, no runtime file loading. **All new user-visible
-strings must go through `t()`**; existing literal strings migrate key-by-key
-whenever a command is touched, so the map grows with the code instead of in one
-risky bulk rewrite. `npm run i18n:check` fails CI if the two files drift.
+plural rules, no nested keys, no runtime file loading. **All user-visible
+strings must go through `t()`**, with the key in both `en.ts` and `de.ts`.
+`npm run i18n:check` fails CI if the two files drift or if a Discord reply or
+embed gets a hard-coded English literal.
+
+### Adding a string
+
+1. Add a flat `<area>.<name>` key to `core/locales/en.ts` and the German text to
+   `core/locales/de.ts`. Variables are `{placeholder}`; both locales must use
+   the same ones. Write natural German, and reuse the terms already in `de.ts`.
+2. Call `t("area.name", { var })`. Slash commands run inside the guild's locale
+   (`bot/index.ts` enters it for every command), so no guild id is needed there.
+   Code that runs outside a command (button collectors, DMs, schedulers) passes
+   the guild id as the third argument or runs inside `runWithGuildLocale`.
+3. Build text lazily when it is created before the per-guild loop (pass a
+   function, not a string).
+
+### The literal lint
+
+`scripts/lib/i18nLiteralLint.mjs` parses `src/bot/commands`, `interactions`,
+`logWatcher/watchers`, `utils/embeds`, `utils/guild/guildRouter.ts` and
+`index.ts`, and reports a string or template literal (also inside `+`, `?:`,
+`??`) handed straight to a user-facing sink: `reply`, `editReply`, `followUp`,
+`update`, `send` with text, `setTitle`, `setDescription`, `setLabel`,
+`setPlaceholder`, `setFooter`, `setAuthor`, `addFields`, `createEmbed` and the
+`create*Embed` helpers, and `throw new Error(...)` inside commands. Strings
+without letters (emoji, digits, punctuation), bare URLs, unit words such as
+`ms`, console commands starting with `/` and slash command metadata
+(`setName`/`setDescription` on a `SlashCommandBuilder` or option) are ignored.
+A literal assigned to a variable first is not seen, so keep text out of
+variables too. A justified exception goes in `scripts/i18n-literal-allowlist.json`
+as `{ path, text?, reason }`; leave it empty if you can.
 
 ## The setup-suite contract
 

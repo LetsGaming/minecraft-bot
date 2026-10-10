@@ -21,6 +21,7 @@ import { isRecord } from "@mcbot/core/utils/objects.js";
 import { isSnowflake } from "@mcbot/schema/discord.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const INITIAL_DELAY_MS = 60_000;
 
@@ -78,8 +79,11 @@ async function notifyAdmins(client: Client, latest: string): Promise<void> {
     try {
       const user = await client.users.fetch(id);
       await user.send(
-        `📦 minecraft-bot ${latest} is available (you run ${currentVersion()}). ` +
-          `Release notes: ${GITHUB_RELEASES_URL}`,
+        t("updateNotifier.message", {
+          latest,
+          current: currentVersion(),
+          url: GITHUB_RELEASES_URL,
+        }),
       );
     } catch {
       // closed DMs or unknown user — a missed nudge is not an error

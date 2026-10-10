@@ -24,6 +24,7 @@ import type { FlattenedStat } from "@mcbot/core/types/index.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 export const data = new SlashCommandBuilder()
   .setName("compare")
   .setDescription("Compare stats of two players")
@@ -69,7 +70,7 @@ export async function execute(
       await interaction.editReply({
         embeds: [
           createErrorEmbed(
-            `Could not find one or both players: \`${player1}\`, \`${player2}\`.`,
+            t("compare.notFound", { player1, player2 }),
           ),
         ],
       });
@@ -83,7 +84,7 @@ export async function execute(
       await interaction.editReply({
         embeds: [
           createErrorEmbed(
-            `Stats file not found for one or both players: \`${player1}\`, \`${player2}\`.`,
+            t("compare.noStatsFile", { player1, player2 }),
           ),
         ],
       });
@@ -109,7 +110,7 @@ export async function execute(
       await interaction.editReply({
         embeds: [
           createInfoEmbed(
-            `No stats found for \`${player1}\` and \`${player2}\`.`,
+            t("compare.noStats", { player1, player2 }),
           ),
         ],
       });
@@ -133,7 +134,7 @@ export async function execute(
     );
     await interaction.editReply({
       embeds: [
-        createErrorEmbed("❌ An error occurred while comparing players."),
+        createErrorEmbed(t("compare.error")),
       ],
     });
   }
@@ -154,7 +155,7 @@ export function buildComparisonEmbeds(
   name2: string,
 ): EmbedBuilder[] {
   const embeds: EmbedBuilder[] = [];
-  let currentEmbed = createEmbed({ title: "PLACEHOLDER" });
+  let currentEmbed = createEmbed({});
   let fieldCount = 0;
 
   const statMap2 = new Map(flat2.map((stat) => [stat.fullKey, stat]));
@@ -237,7 +238,7 @@ export function buildComparisonEmbeds(
 
       if (fieldCount >= 2) {
         embeds.push(currentEmbed);
-        currentEmbed = createEmbed({ title: "PLACEHOLDER" });
+        currentEmbed = createEmbed({});
         fieldCount = 0;
       }
 
@@ -259,9 +260,18 @@ export function buildComparisonEmbeds(
   const totalPages = embeds.length;
   for (let i = 0; i < totalPages; i++) {
     const embed = embeds[i]!;
-    embed.data.title = `Stat Comparison: ${name1} vs ${name2} (Page ${i + 1}/${totalPages})`;
+    embed.data.title = t("compare.title", {
+      player1: name1,
+      player2: name2,
+      page: i + 1,
+      pages: totalPages,
+    });
     embed.setFooter({
-      text: `Shared stats: ${combined.length} | Page ${i + 1}/${totalPages}`,
+      text: t("compare.footer", {
+        count: combined.length,
+        page: i + 1,
+        pages: totalPages,
+      }),
     });
   }
 

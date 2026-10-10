@@ -2,6 +2,7 @@ import { SlashCommandBuilder, MessageFlags, type ChatInputCommandInteraction} fr
 import { randomBytes } from "crypto";
 import { issueLinkCode } from "@mcbot/core/utils/stores/linkUtils.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 export const data = new SlashCommandBuilder()
   .setName("link")
   .setDescription("Link your Discord account to your Minecraft account");
@@ -10,6 +11,7 @@ export async function execute(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
   const userId = interaction.user.id;
+  const guildId = interaction.guildId ?? undefined;
 
   // issueLinkCode is atomic: prune-expired + pending/linked checks + insert
   // happen in one transaction, so two concurrent /link invocations can't
@@ -18,7 +20,7 @@ export async function execute(
 
   if (result.status === "pending") {
     await interaction.reply({
-      content: `⚠️ You already have a pending link code: \`${result.code}\`. Please use that code or wait for it to expire before generating a new one.`,
+      content: t("link.pending", { code: result.code }, guildId),
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -26,14 +28,14 @@ export async function execute(
 
   if (result.status === "already-linked") {
     await interaction.reply({
-      content: `⚠️ You have already linked your account. If you want to link a different Minecraft account, please unlink first.`,
+      content: t("link.alreadyLinked", {}, guildId),
       flags: MessageFlags.Ephemeral,
     });
     return;
   }
 
   await interaction.reply({
-    content: `🧩 To link your Minecraft account, join the server and type:\n\`!link ${result.code}\`\n(This code expires in 5 minutes)`,
+    content: t("link.instructions", { code: result.code }, guildId),
     flags: MessageFlags.Ephemeral,
   });
 }

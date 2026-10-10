@@ -22,6 +22,7 @@ import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { requireCapability } from "@mcbot/core/utils/server/capabilities.js";
 import { formatTime } from "@mcbot/core/utils/time.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 /** Discord limits a single embed field value to 1024 characters. */
@@ -105,14 +106,14 @@ export const execute = withErrorHandling(async (interaction) => {
     modList.clientAndServer.length;
 
   const embed = createEmbed({
-    title: `🧩 Installed Mods — ${server.id}`,
-    description: `**${total}** mods installed`,
+    title: t("mods.title", { server: server.id }),
+    description: t("mods.count", { count: total }),
     color: EmbedColor.Modrinth, // Modrinth green
   });
 
-  addModFields(embed, "📦 Client + Server", modList.clientAndServer);
-  addModFields(embed, "🔧 Optional (client)", modList.clientOptional);
-  addModFields(embed, "🔒 Server-only", modList.serverOnly);
+  addModFields(embed, t("mods.groupBoth"), modList.clientAndServer);
+  addModFields(embed, t("mods.groupOptional"), modList.clientOptional);
+  addModFields(embed, t("mods.groupServer"), modList.serverOnly);
 
   // When this came from the cache during an outage, say so — the same honesty
   // the dashboard's stale banner gives: an old list shown as current is worse
@@ -120,8 +121,8 @@ export const execute = withErrorHandling(async (interaction) => {
   const fetchedAt = formatTime(modList.fetchedAt);
   embed.setFooter({
     text: stale
-      ? `Last known list from ${relativeAge(stale.asOf)} — the server isn't answering right now`
-      : `Data from Modrinth · last fetched ${fetchedAt}`,
+      ? t("mods.footerStale", { age: relativeAge(stale.asOf) })
+      : t("mods.footerFresh", { time: fetchedAt }),
   });
 
   await interaction.editReply({ embeds: [embed] });

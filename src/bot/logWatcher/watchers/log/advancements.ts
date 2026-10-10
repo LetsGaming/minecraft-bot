@@ -141,7 +141,7 @@ export function registerAdvancementWatcher(
       logTag: "advancements",
       buildEmbed: (withServerFooter) =>
         createPlayerEmbed(player, {
-          title: isChallenge ? `✨ Completed challenge` : `⭐ Made advancement`,
+          title: isChallenge ? t("advancement.challenge") : t("advancement.made"),
           description: `**${advancement}**`,
           color: isChallenge ? EmbedColor.Challenge : EmbedColor.Success,
           ...(withServerFooter ? { footer: { text: serverId } } : {}),

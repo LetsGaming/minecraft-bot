@@ -16,6 +16,7 @@ import type {
   LeaderboardData,
 } from "../../types/index.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 export type { BuildLeaderboardOptions, LeaderboardData };
 
 /**
@@ -192,9 +193,9 @@ export async function buildLeaderboard(
 
   return {
     entries,
-    title: `🏆 Leaderboard — ${def.label}${titlePeriod}`,
-    description: lines.join("\n") || "No data available.",
-    footerText: `${entries.length} players tracked`,
+    title: t("leaderboard.title", { stat: def.label, period: titlePeriod }),
+    description: lines.join("\n") || t("leaderboard.noData"),
+    footerText: t("leaderboard.tracked", { count: entries.length }),
   };
 }
 

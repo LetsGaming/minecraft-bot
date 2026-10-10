@@ -14,6 +14,7 @@ import {
 import { log } from "@mcbot/core/utils/logger.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
+import { t } from "@mcbot/core/utils/i18n.js";
 // SEC-01: anchored on the server thread tag — a chat message must not
 // forge start/stop (a forged stop closes every open play session).
 const START_REGEX = serverEventRegex(String.raw`Done \([\d.]+s\)!`);
@@ -58,21 +59,22 @@ export function registerServerEventWatcher(
       guildConfigs,
       serverId,
       "start",
-      "🟢 Server Started",
+      () => t("serverEvent.startedTitle"),
       EmbedColor.Success,
-      "Server is now online and ready for players.",
+      () => t("serverEvent.startedBody"),
     );
   });
 
   registerServerEvent(logWatcher, STOP_REGEX, async () => {
     await closeSessions(serverId);
-    let uptimeMsg = "";
+    let uptime: { h: number; m: number } | null = null;
     const started = startTimes.get(serverId);
     if (started) {
-      const uptime = Math.floor((Date.now() - started.getTime()) / 1000);
-      const h = Math.floor(uptime / 3600);
-      const m = Math.floor((uptime % 3600) / 60);
-      uptimeMsg = `\nUptime: ${h}h ${m}m`;
+      const seconds = Math.floor((Date.now() - started.getTime()) / 1000);
+      uptime = {
+        h: Math.floor(seconds / 3600),
+        m: Math.floor((seconds % 3600) / 60),
+      };
       startTimes.delete(serverId);
     }
     await notifyEvent(
@@ -80,9 +82,11 @@ export function registerServerEventWatcher(
       guildConfigs,
       serverId,
       "stop",
-      "🔴 Server Stopped",
+      () => t("serverEvent.stoppedTitle"),
       EmbedColor.Error,
-      `Server is shutting down.${uptimeMsg}`,
+      () =>
+        t("serverEvent.stoppedBody") +
+        (uptime ? `\n${t("serverEvent.uptime", uptime)}` : ""),
     );
   });
 }
@@ -92,9 +96,9 @@ async function notifyEvent(
   guildConfigs: GuildConfigSource,
   serverId: string,
   event: NotificationEvent,
-  title: string,
+  title: () => string,
   color: number,
-  description: string,
+  description: () => string,
 ): Promise<void> {
   await broadcastNotification(client, guildConfigs, {
     serverId,
@@ -102,8 +106,8 @@ async function notifyEvent(
     logTag: "serverEvents",
     buildEmbed: (withServerFooter) =>
       createEmbed({
-        title,
-        description,
+        title: title(),
+        description: description(),
         color,
         ...(withServerFooter ? { footer: { text: serverId } } : {}),
       }),

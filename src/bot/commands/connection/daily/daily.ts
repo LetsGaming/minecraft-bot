@@ -59,7 +59,7 @@ export async function execute(
 
   if (claimLock.has(userId)) {
     await interaction.reply({
-      content: "⏳ Already processing your claim — please wait.",
+      content: t("daily.processing", {}, interaction.guildId ?? undefined),
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -79,7 +79,7 @@ async function _execute(
 ): Promise<void> {
   if (!(await isLinked(userId))) {
     await interaction.reply(
-      errorReply("You must link your Discord account first.", "Link Required"),
+      errorReply(t("daily.linkRequired"), t("daily.linkRequiredFooter")),
     );
     return;
   }
@@ -87,7 +87,7 @@ async function _execute(
   const username = await getLinkedAccount(userId);
   if (!username) {
     await interaction.reply(
-      errorReply("Could not resolve linked account.", "Link Error"),
+      errorReply(t("daily.linkError"), t("daily.linkErrorFooter")),
     );
     return;
   }
@@ -105,7 +105,7 @@ async function _execute(
 
   if (!pool.default.length) {
     await interaction.reply(
-      errorReply("Daily rewards data unavailable.", "Data Error"),
+      errorReply(t("daily.dataError"), t("daily.dataErrorFooter")),
     );
     return;
   }
@@ -197,7 +197,7 @@ async function _execute(
       await interaction.reply(
         errorReply(
           t("daily.queueFull", { max: MAX_PENDING_PER_PLAYER }),
-          "Delivery Queue Full",
+          t("daily.queueFullFooter"),
         ),
       );
       return;
@@ -228,8 +228,8 @@ async function _execute(
     if (!ok) {
       await interaction.reply(
         errorReply(
-          "Reward delivery failed — your claim was not consumed. Please try again in a moment.",
-          "Delivery Failed",
+          t("daily.deliveryFailed"),
+          t("daily.deliveryFailedFooter"),
         ),
       );
       return;
@@ -266,7 +266,11 @@ function cooldownMsg(ms: number, guildId?: string): string {
   const h = Math.floor(ms / 3600000);
   const m = Math.floor((ms % 3600000) / 60000);
   const readyAt = new Date(Date.now() + ms);
-  return `⏳ Next claim in ${h}h ${m}m. | Ready at ${formatTime(readyAt, guildTimeZone(guildId))}`;
+  return t("daily.cooldown", {
+    hours: h,
+    minutes: m,
+    time: formatTime(readyAt, guildTimeZone(guildId)),
+  });
 }
 
 function response(
@@ -280,16 +284,16 @@ function response(
   const main = items[0];
 
   if (main) {
-    lines.push(`🎁 **Daily Reward:** ${fmt(main)}`);
+    lines.push(t("daily.reward", { reward: fmt(main) }));
   }
 
   if (hasBonus && items.length > 1) {
     const bonusItems = items.slice(1);
     const bonusList = bonusItems.map(fmt).join(", ");
-    lines.push(`🔥 **${bs}-day bonus:** ${bonusList}`);
+    lines.push(t("daily.bonus", { days: bs, rewards: bonusList }));
   }
 
-  lines.push(`📈 Streak: ${cs} days`);
+  lines.push(t("daily.streak", { days: cs }));
   if (note) lines.push(note);
   return { content: lines.join("\n") };
 }
