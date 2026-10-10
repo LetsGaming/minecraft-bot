@@ -94,6 +94,45 @@ describe("scriptTimeoutsMs", () => {
     expect(parsed?.scriptTimeoutsMs).toEqual({ stop: 240_000 });
   });
 
+  const advertise = (scriptTimeoutsMs: unknown) =>
+    parseManifest({ ...goodManifest(), scriptTimeoutsMs })?.scriptTimeoutsMs;
+
+  it("clamps huge and tiny values into the sane window", () => {
+    expect(advertise({ stop: 1e12, start: 1 })).toEqual({
+      stop: 15 * 60_000,
+      start: 5_000,
+    });
+  });
+
+  it.each([
+    ["zero", 0],
+    ["negative", -1],
+    ["NaN", NaN],
+    ["Infinity", Infinity],
+    ["fraction", 1.5],
+    ["string", "240000"],
+    ["array", [240000]],
+    ["null", null],
+  ])("ignores a %s value", (_l, v) => {
+    expect(advertise({ stop: v })).toBeUndefined();
+    expect(parseManifest({ ...goodManifest(), scriptTimeoutsMs: { stop: v } })).not.toBeNull();
+  });
+
+  it("ignores unknown actions, prototype keys and non-object tables", () => {
+    const polluted = JSON.parse('{"__proto__": 99999, "constructor": 99999, "evil": 99999, "stop": 60000}');
+    expect(advertise(polluted)).toEqual({ stop: 60_000 });
+    expect(({} as Record<string, unknown>).evil).toBeUndefined();
+    expect(advertise([1, 2])).toBeUndefined();
+    expect(advertise("x")).toBeUndefined();
+  });
+
+  it("caps the number of keys it inspects", () => {
+    const many: Record<string, number> = {};
+    for (let i = 0; i < 1000; i++) many[`k${i}`] = 10_000;
+    many.stop = 60_000;
+    expect(advertise(many)).toBeUndefined();
+  });
+
   it("leaves the field absent on wrappers that predate it", () => {
     expect(parseManifest(goodManifest())?.scriptTimeoutsMs).toBeUndefined();
   });
@@ -103,6 +142,7 @@ describe("scriptTimeoutsMs", () => {
     expect(scriptTimeoutMs("restart", {})).toBe(FALLBACK_SCRIPT_TIMEOUTS_MS.restart);
     expect(scriptTimeoutMs("restart")).toBe(420_000);
     expect(scriptTimeoutMs("mystery")).toBe(DEFAULT_SCRIPT_TIMEOUT_MS);
+    expect(scriptTimeoutMs("constructor")).toBe(DEFAULT_SCRIPT_TIMEOUT_MS);
   });
 });
 

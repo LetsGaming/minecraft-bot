@@ -200,20 +200,31 @@ export function scriptTimeoutMs(
   action: string,
   advertised?: Readonly<Record<string, number>>,
 ): number {
-  return (
-    advertised?.[action] ??
-    FALLBACK_SCRIPT_TIMEOUTS_MS[action] ??
-    DEFAULT_SCRIPT_TIMEOUT_MS
-  );
+  const own = (table: Readonly<Record<string, number>> | undefined): number | undefined =>
+    table && Object.hasOwn(table, action) ? table[action] : undefined;
+  return own(advertised) ?? own(FALLBACK_SCRIPT_TIMEOUTS_MS) ?? DEFAULT_SCRIPT_TIMEOUT_MS;
 }
 
+/** Bounds applied to every advertised script ceiling; the manifest is remote input. */
+export const MIN_ADVERTISED_SCRIPT_TIMEOUT_MS = 5_000;
+export const MAX_ADVERTISED_SCRIPT_TIMEOUT_MS = 15 * 60_000;
+const MAX_SCRIPT_TIMEOUT_KEYS = 64;
+
 function parseScriptTimeouts(raw: unknown): Record<string, number> | null {
-  if (!isRecord(raw)) return null;
-  const out: Record<string, number> = {};
-  for (const [action, ms] of Object.entries(raw)) {
-    if (typeof ms === "number" && Number.isFinite(ms) && ms > 0) out[action] = ms;
+  if (!isRecord(raw) || Array.isArray(raw)) return null;
+  const out: Record<string, number> = Object.create(null) as Record<string, number>;
+  let seen = 0;
+  for (const action of Object.keys(raw)) {
+    if (++seen > MAX_SCRIPT_TIMEOUT_KEYS) break;
+    if (!Object.hasOwn(FALLBACK_SCRIPT_TIMEOUTS_MS, action)) continue;
+    const ms = raw[action];
+    if (typeof ms !== "number" || !Number.isInteger(ms) || ms <= 0) continue;
+    out[action] = Math.min(
+      MAX_ADVERTISED_SCRIPT_TIMEOUT_MS,
+      Math.max(MIN_ADVERTISED_SCRIPT_TIMEOUT_MS, ms),
+    );
   }
-  return Object.keys(out).length > 0 ? out : null;
+  return Object.keys(out).length > 0 ? { ...out } : null;
 }
 
 /**
