@@ -702,12 +702,16 @@ export interface components {
             result: string | null;
         };
         ConfigFileInfo: {
+            /** @description False when the file is listed but cannot be read or written. */
+            editable: boolean;
+            /** @description File type by extension: toml, json, json5, properties, cfg, conf, ini, yaml, text or snbt. */
             format: string;
             id: string;
             modId: string;
             mtimeMs: number;
             relPath: string;
             sizeBytes: number;
+            tooLarge: boolean;
         };
         ConfigFileRead: {
             etag: string;
@@ -1566,6 +1570,8 @@ export interface operations {
                 content: {
                     "application/json": {
                         files: components["schemas"]["ConfigFileInfo"][];
+                        /** @description The listing was cut at the file limit; some files are missing. */
+                        truncated: boolean;
                     };
                 };
             };
@@ -1650,6 +1656,15 @@ export interface operations {
             };
             /** @description Not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Payload too large */
+            413: {
                 headers: {
                     [name: string]: unknown;
                 };

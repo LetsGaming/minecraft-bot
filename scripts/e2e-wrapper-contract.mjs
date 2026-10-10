@@ -420,6 +420,8 @@ function scaffold() {
   }
   fs.mkdirSync(path.join(serverPath, "config"), { recursive: true });
   fs.writeFileSync(path.join(serverPath, "config", "example-mod.toml"), CONFIG_TEXT);
+  fs.mkdirSync(path.join(serverPath, "config", "xaero", "minimap", "profiles", "a"), { recursive: true });
+  fs.writeFileSync(path.join(serverPath, "config", "xaero", "minimap", "profiles", "a", "xaerominimap.txt"), "minimap:true\nzoom:2\n");
   // The suite keys mods BY SLUG; the wrapper reads Object.keys(raw.mods).
   // An array here yields slugs ["0","1"] — which is how this fixture was
   // wrong the first time, and why the fixture mirrors the real file.
@@ -1086,13 +1088,20 @@ const restoreTarget = archives.files.find((f) => f.name === "2026-07-06.tar.zst"
 
 console.log("\n── mod config files: index, read, write, revert");
 {
-  const files = await serverAccess.indexConfigFiles(cfg);
+  const { files } = await serverAccess.indexConfigFiles(cfg);
   const file = files.find((f) => f.relPath === "config/example-mod.toml");
   check(
     "the index lists the config with an opaque id, owning mod and format",
     file !== undefined && /^[A-Za-z0-9_-]{22}$/.test(file.id) && file.modId === "example" && file.format === "toml" && file.sizeBytes === CONFIG_TEXT.length,
     JSON.stringify(files),
   );
+  const nested = files.find((f) => f.relPath === "config/xaero/minimap/profiles/a/xaerominimap.txt");
+  check(
+    "a text file five levels down is listed under its mod folder with an editable flag",
+    nested !== undefined && nested.modId === "xaero" && nested.format === "text" && nested.editable === true && nested.tooLarge === false,
+    JSON.stringify(files),
+  );
+  eq("a small tree is not truncated", (await serverAccess.indexConfigFiles(cfg)).truncated, false);
   const read = await serverAccess.readConfigFile(cfg, file.id);
   check(
     "reading returns text, etag, file info and snapshots",
@@ -1113,6 +1122,12 @@ console.log("\n── mod config files: index, read, write, revert");
     reread.text === edited && reread.etag === written.etag && reread.snapshots.includes(written.snapshot),
     JSON.stringify(reread),
   );
+  const big = `# ${"x".repeat(100 * 1024)}
+${edited}`;
+  const bigWritten = await serverAccess.writeConfigFile(cfg, file.id, big, written.etag);
+  check("a 100 KB config saves (per-route body limit)", bigWritten.ok === true, JSON.stringify(bigWritten));
+  const tooBig = await serverAccess.writeConfigFile(cfg, file.id, "x".repeat(1024 * 1024 + 1), bigWritten.etag).catch((e) => e);
+  check("a text over the cap is a typed too-large error", tooBig?.name === "ConfigAccessError" && tooBig.kind === "too-large", String(tooBig));
   const reverted = await serverAccess.revertConfigFile(cfg, file.id, written.snapshot);
   check("revert returns the etag of the restored content", typeof reverted.etag === "string", JSON.stringify(reverted));
   eq("revert restores the snapshotted text", (await serverAccess.readConfigFile(cfg, file.id)).text, CONFIG_TEXT);
