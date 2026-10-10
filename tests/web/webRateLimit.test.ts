@@ -157,14 +157,30 @@ describe("buckets behind one shared proxy address", () => {
 });
 
 describe("bucket map bound", () => {
-  it("never drops a live exhausted bucket to make room, and refuses new keys instead", async () => {
+  it("routes new keys to a per-source overflow bucket when full of live buckets", async () => {
     const { createRateLimiter } = await import("../../src/core/utils/rateLimiter.js");
-    const limiter = createRateLimiter({ capacity: 1, windowMs: 60_000, maxBuckets: 3 });
-    expect(limiter.consumeToken("A")).toBe(true);
-    expect(limiter.consumeToken("A")).toBe(false);
-    const flood = Array.from({ length: 50 }, (_, i) => limiter.consumeToken(`k${i}`));
-    expect(flood.filter(Boolean)).toHaveLength(2);
-    expect(limiter.consumeToken("A")).toBe(false);
+    const limiter = createRateLimiter({ capacity: 1, windowMs: 60_000, maxBuckets: 3, overflowCapacity: 2 });
+    for (const k of ["A", "B", "C"]) {
+      limiter.consumeToken(k);
+      expect(limiter.consumeToken(k)).toBe(false);
+    }
+    // (a) a new legitimate key is still admitted, up to the overflow limit
+    expect(limiter.consumeToken("new1", "10.0.0.1")).toBe(true);
+    expect(limiter.consumeToken("new2", "10.0.0.1")).toBe(true);
+    expect(limiter.consumeToken("new3", "10.0.0.1")).toBe(false);
+    // (b) the original exhausted keys remain limited
+    for (const k of ["A", "B", "C"]) expect(limiter.consumeToken(k, "10.0.0.1")).toBe(false);
+    // (c) one source exhausting overflow does not block another source
+    expect(limiter.consumeToken("other", "10.0.0.2")).toBe(true);
+    expect(limiter.cooldownSeconds("new4", "10.0.0.1")).toBeGreaterThan(0);
+  });
+
+  it("uses one global overflow bucket when no source is given", async () => {
+    const { createRateLimiter } = await import("../../src/core/utils/rateLimiter.js");
+    const limiter = createRateLimiter({ capacity: 1, windowMs: 60_000, maxBuckets: 1 });
+    limiter.consumeToken("A");
+    expect(limiter.consumeToken("x")).toBe(true);
+    expect(limiter.consumeToken("y")).toBe(false);
   });
 
   it("sweeps buckets idle for a full window to admit new keys", async () => {
@@ -174,9 +190,11 @@ describe("bucket map bound", () => {
       const limiter = createRateLimiter({ capacity: 1, windowMs: 60_000, maxBuckets: 2 });
       limiter.consumeToken("a");
       limiter.consumeToken("b");
-      expect(limiter.consumeToken("c")).toBe(false);
+      expect(limiter.consumeToken("c")).toBe(true); // overflow bucket
+      expect(limiter.consumeToken("d")).toBe(false); // overflow spent
       vi.advanceTimersByTime(60_001);
-      expect(limiter.consumeToken("c")).toBe(true);
+      expect(limiter.consumeToken("d")).toBe(true); // swept, own bucket
+      expect(limiter.consumeToken("d")).toBe(false);
     } finally {
       vi.useRealTimers();
     }

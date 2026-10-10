@@ -79,15 +79,15 @@ export function registerRateLimiting(app: FastifyInstance): void {
     // The narrower limiter decides first; the shared address ceiling only
     // counts requests it admitted, so one user's rejected flood cannot drain
     // the budget of everyone else behind the same address.
-    const denied = !target.limiter.consumeToken(target.key)
+    const denied = !target.limiter.consumeToken(target.key, req.ip)
       ? target
-      : target.ceiling && !target.ceiling.limiter.consumeToken(target.ceiling.key)
+      : target.ceiling && !target.ceiling.limiter.consumeToken(target.ceiling.key, req.ip)
         ? target.ceiling
         : null;
     if (!denied) return;
 
     reply
-      .header("retry-after", String(denied.limiter.cooldownSeconds(denied.key)))
+      .header("retry-after", String(denied.limiter.cooldownSeconds(denied.key, req.ip)))
       .code(429)
       .send({ error: "Too many requests — slow down and try again shortly." });
     return reply;
