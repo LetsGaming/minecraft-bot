@@ -1,6 +1,10 @@
-# Release — on a version tag: full build (bot + dashboard), a tarball
-# artifact attached to the GitHub release, and a Docker image pushed to
-# GHCR (ghcr.io/<owner>/minecraft-bot:<version> + :latest).
+# Release — on a version tag: the full CI gate, then a full build (bot +
+# dashboard), a tarball artifact attached to the GitHub release, and a Docker
+# image pushed to GHCR (ghcr.io/<owner>/minecraft-bot:<version> + :latest).
+#
+# The gate is the same one CI runs plus the wrapper contract check, run
+# against the wrapper's default branch: nothing is published from a tag whose
+# tests, drift checks or wire contract are red.
 #
 # The release body is the CHANGELOG.md section for the tag, followed by
 # GitHub's generated notes (What's Changed / Full Changelog).
@@ -22,14 +26,54 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Workspace layout (src/ holds workspaces only)
+        run: npm run layout:check
+
+      - name: Locale parity (en/de)
+        run: npm run i18n:check
+
+      - name: Schema drift (config.schema.json matches the types)
+        run: npm run schema:check
+
+      - name: Tests
+        run: npm test
+
+      - name: Check out the wrapper
+        uses: actions/checkout@v4
+        with:
+          repository: LetsGaming/minecraft-server-api
+          path: api-wrapper
+
+      - name: Wire contract drift (vendored openapi.json and generated types)
+        run: npm run wire:check
+        env:
+          WRAPPER_DIR: ${{ github.workspace }}/api-wrapper
+
       - name: Build (bot + schema)
         run: npm run build
+
+      - name: Build the wrapper
+        working-directory: api-wrapper
+        run: npm ci && npm run build
+
+      - name: Wrapper contract (bot against a real wrapper)
+        run: npm run e2e:contract
+        env:
+          WRAPPER_DIR: ${{ github.workspace }}/api-wrapper
+          E2E_REQUIRE_SUDO: "1"
+          E2E_DUMP_WRAPPER_LOG: "1"
 
       - name: Build dashboard frontend
         run: npm run build:web
