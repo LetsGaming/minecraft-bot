@@ -128,7 +128,7 @@ export function registerGuildConfigRoutes(app: FastifyInstance): void {
 
       // Build the new config from the current one on disk, replacing ONLY
       // this guild's block. The manager can't touch other guilds, servers,
-      // or top-level settings — those are copied through untouched — then
+      // or top-level settings; those are copied through untouched. Then
       // the whole thing is validated as one.
       const current = readRawConfig();
 

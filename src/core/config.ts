@@ -321,7 +321,7 @@ export function watchConfig(
   onChange?: (newConfig: BotConfig) => void,
   options: WatchConfigOptions = {},
 ): void {
-  if (_watcher || _rearmTimer) return; // idempotent — only one watcher per process
+  if (_watcher || _rearmTimer) return; // idempotent: only one watcher per process
 
   const debounceMs = options.debounceMs ?? WATCH_DEBOUNCE_MS;
   const rearmMs = options.rearmMs ?? WATCH_REARM_MS;
