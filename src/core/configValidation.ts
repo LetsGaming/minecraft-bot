@@ -158,6 +158,9 @@ function scopeRefs(
 /** Schema enum failure on a notifications.events entry — downgraded. */
 const UNKNOWN_EVENT_ERROR = /\.notifications\.events\.\d+: must be one of/;
 
+/** Schema enum failure on a guild language, downgraded to a locale warning. */
+const UNKNOWN_LANGUAGE_ERROR = /^ {2}- guilds\.[^.]+\.language: must be one of/;
+
 const hasScope = (scope: string | string[] | undefined): boolean =>
   typeof scope === "string" || (Array.isArray(scope) && scope.length > 0);
 
@@ -465,17 +468,6 @@ function checkPresence({ raw, warnings, knownServers }: SectionContext): void {
   }
 }
 
-// The schema says "number"; whole-number-ness is the semantic part.
-function checkWaypoints({ raw, errors }: SectionContext): void {
-  const maxPerServer = raw.waypoints?.maxPerServer;
-  if (
-    maxPerServer !== undefined &&
-    (!Number.isInteger(maxPerServer) || maxPerServer < 1)
-  ) {
-    errors.push("  - waypoints.maxPerServer: must be a positive integer");
-  }
-}
-
 function checkSchedules({ raw, errors, warnings, knownServers }: SectionContext): void {
   if (!usable(raw.schedules)) return;
   const dayCodes = new Set(["SU", "MO", "TU", "WE", "TH", "FR", "SA"]);
@@ -490,12 +482,6 @@ function checkSchedules({ raw, errors, warnings, knownServers }: SectionContext)
     if (!restart) continue;
 
     if (
-      typeof restart.time !== "string" ||
-      !/^([01]\d|2[0-3]):([0-5]\d)$/.test(restart.time)
-    ) {
-      errors.push(`  - schedules.${sid}.restart.time: must be "HH:MM" (24h)`);
-    }
-    if (
       restart.days !== undefined &&
       (!Array.isArray(restart.days) ||
         restart.days.some(
@@ -505,38 +491,6 @@ function checkSchedules({ raw, errors, warnings, knownServers }: SectionContext)
       errors.push(
         `  - schedules.${sid}.restart.days: must be an array of "SU".."SA"`,
       );
-    }
-    if (
-      restart.warnMinutes !== undefined &&
-      (!Array.isArray(restart.warnMinutes) ||
-        restart.warnMinutes.some(
-          (m) => typeof m !== "number" || !Number.isFinite(m) || m <= 0,
-        ))
-    ) {
-      errors.push(
-        `  - schedules.${sid}.restart.warnMinutes: must be an array of positive numbers`,
-      );
-    }
-  }
-}
-
-function checkWebui({ raw, errors }: SectionContext): void {
-  const port = raw.webui?.port;
-  if (
-    port !== undefined &&
-    (!Number.isInteger(port) || port < 1 || port > 65535)
-  ) {
-    errors.push("  - webui.port: must be a port number (1–65535)");
-  }
-}
-
-// Typed Record<string, unknown> in the schema, so the thresholds are ours to
-// check.
-function checkMilestones({ raw, errors }: SectionContext): void {
-  if (!usable(raw.milestones)) return;
-  for (const [key, arr] of Object.entries(raw.milestones)) {
-    if (!Array.isArray(arr) || arr.some((v) => typeof v !== "number" || !(v > 0))) {
-      errors.push(`  - milestones.${key}: must be an array of positive numbers`);
     }
   }
 }
@@ -581,7 +535,7 @@ export function validateCandidateConfig(
   // broken config: a file written for a newer bot must still boot. The
   // semantic pass below warns about it by name instead.
   const errors: string[] = structural.errors.filter(
-    (line) => !UNKNOWN_EVENT_ERROR.test(line),
+    (line) => !UNKNOWN_EVENT_ERROR.test(line) && !UNKNOWN_LANGUAGE_ERROR.test(line),
   );
   const warnings: string[] = [...structural.warnings];
 
@@ -609,10 +563,7 @@ export function validateCandidateConfig(
   checkServers(ctx);
   checkGuilds(ctx);
   checkPresence(ctx);
-  checkWaypoints(ctx);
   checkSchedules(ctx);
-  checkWebui(ctx);
-  checkMilestones(ctx);
 
   return { valid: errors.length === 0, errors, warnings };
 }

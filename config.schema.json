@@ -8,7 +8,7 @@
       "type": "object",
       "properties": {
         "configVersion": {
-          "type": "number",
+          "type": "integer",
           "description": "Format version of this file. Written by the bot when it migrates an older file (a copy of the original is kept next to it) and by the dashboard on every save. A missing value means the file predates versioning. A value newer than the running bot supports is refused rather than loaded.",
           "minimum": 0
         },
@@ -108,7 +108,7 @@
           "additionalProperties": {
             "type": "array",
             "items": {
-              "type": "number"
+              "$ref": "#/definitions/PositiveNumber"
             }
           },
           "description": "Milestone announcement thresholds per leaderboard stat key, in the stat's NATIVE unit (playtime = ticks, distances = cm, counters = counts). First activation seeds silently; see milestoneWatcher."
@@ -220,6 +220,10 @@
         },
         "language": {
           "type": "string",
+          "enum": [
+            "en",
+            "de"
+          ],
           "description": "Locale for user-visible bot strings in THIS guild (\"en\" | \"de\"). Falls back to the global `language` when unset. Applies to slash command replies and per-guild notifications; in-game (!command) strings and DMs follow the global language, since a server instance can serve several guilds."
         },
         "timezone": {
@@ -554,8 +558,10 @@
       "type": "object",
       "properties": {
         "maxPerServer": {
-          "type": "number",
-          "description": "Per-server cap on stored waypoints (default 100). Raise it once a server actually hits the limit; the file and the in-game list grow with it."
+          "type": "integer",
+          "description": "Per-server cap on stored waypoints (default 100). Raise it once a server actually hits the limit; the file and the in-game list grow with it.",
+          "minimum": 1,
+          "default": 100
         }
       },
       "additionalProperties": false,
@@ -640,7 +646,8 @@
       "properties": {
         "time": {
           "type": "string",
-          "description": "Wall-clock time \"HH:MM\" in the process TZ."
+          "description": "Wall-clock time \"HH:MM\" in the process TZ.",
+          "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
         },
         "days": {
           "type": "array",
@@ -652,7 +659,7 @@
         "warnMinutes": {
           "type": "array",
           "items": {
-            "type": "number"
+            "$ref": "#/definitions/PositiveNumber"
           },
           "description": "Countdown warnings in minutes before the restart (default 15,5,1)."
         }
@@ -663,6 +670,11 @@
       "additionalProperties": false,
       "description": "One server's scheduled restart."
     },
+    "PositiveNumber": {
+      "type": "number",
+      "description": "A number greater than zero.",
+      "exclusiveMinimum": 0
+    },
     "WebUiConfig": {
       "type": "object",
       "properties": {
@@ -670,8 +682,11 @@
           "type": "boolean"
         },
         "port": {
-          "type": "number",
-          "description": "HTTP port (default 8130)."
+          "type": "integer",
+          "description": "HTTP port.",
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 8130
         },
         "host": {
           "type": "string",

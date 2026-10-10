@@ -17,6 +17,8 @@ const base = {
   servers: { a: { apiUrl: "http://127.0.0.1:3030", apiKey: "k" } },
 };
 
+const plain = (line: string): string => line.replace(/[\u2013\u2014]/g, "-");
+
 const errorsOf = (extra: object): string =>
   validateCandidateConfig({ ...base, ...extra }).errors.join("\n");
 
@@ -90,7 +92,7 @@ describe("schedules restart", () => {
   });
 });
 
-describe("validateCandidateConfig output", () => {
+describe("validateCandidateConfig semantic output", () => {
   it("reports semantic errors and warnings across sections in a stable order", () => {
     const result = validateCandidateConfig({
       token: "t",
@@ -111,31 +113,43 @@ describe("validateCandidateConfig output", () => {
         "2": { defaultServer: "a" },
       },
       presence: { server: "ghost" },
-      waypoints: { maxPerServer: 0 },
-      schedules: { ghost: { restart: { time: "99:00" } } },
-      milestones: { x: [-1] },
+      schedules: { ghost: { restart: { time: "04:00", days: ["XX"] } } },
     });
-    expect(result).toMatchInlineSnapshot(`
+    expect({
+      ...result,
+      errors: result.errors.map(plain),
+      warnings: result.warnings.map(plain),
+    }).toMatchInlineSnapshot(`
       {
         "errors": [
-          "  - guilds.1.chatBridge (channel 7): multiple servers are configured — set "server" on the bridge (or a guild "defaultServer") so the channel is bound to exactly one server.",
-          "  - waypoints.maxPerServer: must be a positive integer",
-          "  - schedules.ghost.restart.time: must be "HH:MM" (24h)",
-          "  - milestones.x: must be an array of positive numbers",
+          "  - guilds.1.chatBridge (channel 7): multiple servers are configured - set "server" on the bridge (or a guild "defaultServer") so the channel is bound to exactly one server.",
+          "  - schedules.ghost.restart.days: must be an array of "SU".."SA"",
         ],
         "valid": false,
         "warnings": [
-          "servers.a: apiUrl "http://127.0.0.1:3030" uses plaintext HTTP. This is acceptable ONLY on a trusted LAN segment — the x-api-key and all server-control commands travel unencrypted. Use https:// if the wrapper is reachable beyond your local network.",
-          "servers.b: apiUrl "http://10.0.0.5:3030" uses plaintext HTTP. This is acceptable ONLY on a trusted LAN segment — the x-api-key and all server-control commands travel unencrypted. Use https:// if the wrapper is reachable beyond your local network.",
-          "guilds.1.language "fr" is not a known locale (en, de) — the global language will be used",
-          "guilds.1.linkedRole "nope" does not look like a Discord ID (17–20 digits)",
-          "guilds.1.whitelistApplications needs BOTH channelId and adminChannelId — the feature stays off until both are set",
-          "guilds.1.notifications has a channel but an empty events list — no messages will be sent (omit "events" to use the default set)",
+          "servers.a: apiUrl "http://127.0.0.1:3030" uses plaintext HTTP. This is acceptable ONLY on a trusted LAN segment - the x-api-key and all server-control commands travel unencrypted. Use https:// if the wrapper is reachable beyond your local network.",
+          "servers.b: apiUrl "http://10.0.0.5:3030" uses plaintext HTTP. This is acceptable ONLY on a trusted LAN segment - the x-api-key and all server-control commands travel unencrypted. Use https:// if the wrapper is reachable beyond your local network.",
+          "guilds.1.language "fr" is not a known locale (en, de) - the global language will be used",
+          "guilds.1.linkedRole "nope" does not look like a Discord ID (17-20 digits)",
+          "guilds.1.whitelistApplications needs BOTH channelId and adminChannelId - the feature stays off until both are set",
+          "guilds.1.notifications has a channel but an empty events list - no messages will be sent (omit "events" to use the default set)",
           "guilds.1.allowedServers references unknown server "ghost" (configured servers: a, b)",
           "presence.server references unknown server "ghost" (configured servers: a, b)",
           "schedules.ghost references unknown server "ghost" (configured servers: a, b)",
         ],
       }
     `);
+  });
+});
+
+describe("structural errors stop the semantic pass", () => {
+  it("reports schema violations before any meaning-level finding", () => {
+    const result = validateCandidateConfig({
+      ...base,
+      waypoints: { maxPerServer: 0 },
+      presence: { server: "ghost" },
+    });
+    expect(result.errors).toEqual(["  - waypoints.maxPerServer: must be >= 1"]);
+    expect(result.warnings.join(" ")).not.toContain("ghost");
   });
 });

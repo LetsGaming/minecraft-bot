@@ -293,7 +293,7 @@ export interface GuildConfig {
    * strings and DMs follow the global language, since a server instance
    * can serve several guilds.
    */
-  language?: string;
+  language?: "en" | "de";
   /**
    * IANA timezone for THIS guild's wall-clock features — the nightly
    * channel purge, "busiest hour" in /activity, and anything else that
@@ -438,15 +438,17 @@ export interface LimitsConfig {
 
 /** One server's scheduled restart. */
 export interface ServerRestartSchedule {
-  /** Wall-clock time "HH:MM" in the process TZ. */
+  /**
+   * Wall-clock time "HH:MM" in the process TZ.
+   * @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$
+   */
   time: string;
   /** Weekday codes ("SU".."SA"); omitted = every day. */
   days?: string[];
   /**
    * Countdown warnings in minutes before the restart (default 15,5,1).
-   * @items.exclusiveMinimum 0
    */
-  warnMinutes?: number[];
+  warnMinutes?: PositiveNumber[];
 }
 
 /** Per-server schedule entries, keyed by server ID at the top level. */
@@ -494,7 +496,13 @@ export interface ServerScheduleConfig {
  */
 export interface WebUiConfig {
   enabled?: boolean;
-  /** HTTP port (default 8130). */
+  /**
+   * HTTP port.
+   * @asType integer
+   * @minimum 1
+   * @maximum 65535
+   * @default 8130
+   */
   port?: number;
   /** Bind address (default 127.0.0.1 — put a reverse proxy in front). */
   host?: string;
@@ -562,6 +570,9 @@ export interface WaypointsConfig {
    * Per-server cap on stored waypoints (default 100). Raise it once a
    * server actually hits the limit; the file and the in-game list grow
    * with it.
+   * @asType integer
+   * @minimum 1
+   * @default 100
    */
   maxPerServer?: number;
 }
@@ -590,13 +601,19 @@ export interface HostAlertsConfig {
   backupMaxAgeHours?: number;
 }
 
+/**
+ * A number greater than zero.
+ * @exclusiveMinimum 0
+ */
+export type PositiveNumber = number;
+
 export interface RawBotConfig {
   /**
    * Format version of this file. Written by the bot when it migrates an older
    * file (a copy of the original is kept next to it) and by the dashboard on
    * every save. A missing value means the file predates versioning. A value
    * newer than the running bot supports is refused rather than loaded.
-   * @TJS-type integer
+   * @asType integer
    * @minimum 0
    */
   configVersion?: number;
@@ -652,7 +669,7 @@ export interface RawBotConfig {
    * stat's NATIVE unit (playtime = ticks, distances = cm, counters =
    * counts). First activation seeds silently; see milestoneWatcher.
    */
-  milestones?: Record<string, number[]>;
+  milestones?: Record<string, PositiveNumber[]>;
   /** Web dashboard settings (see WebUiConfig). */
   webui?: WebUiConfig;
 }
