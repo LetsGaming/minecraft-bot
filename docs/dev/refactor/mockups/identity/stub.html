@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en" data-ui-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Not mocked - mcbot</title>
+<link rel="stylesheet" href="style.css">
+<!--
+THESIS: Placeholder for screens this direction does not mock. Owns nothing.
+WORLD: Same shell as every other page.
+STORY: The reader learns which screen is reused from which pattern.
+FIRST VIEWPORT: Heading, one sentence, one link back.
+RISK: Dead-end if mistaken for product UI; it is mockup chrome only.
+-->
+</head>
+<body data-page="stub" data-server="smp" data-worst="warn">
+<main id="main" class="main"><div class="page">
+  <div class="page-head"><div><h1 id="t">Not mocked</h1><p id="p">This screen is not part of the mockup set.</p></div></div>
+  <a class="btn primary" href="watch.html">Back to Watch</a>
+</div></main>
+<script src="shell.js"></script>
+<script>
+  var map = {
+    console: ["Console", "Same server strip and tab layout as Backups. The log pane becomes a role=log region with a labelled composer and a wrapped, searchable view (DASH-23)."],
+    activity: ["Players and stats", "Analytics with two-unit durations and 'no data' instead of bare dashes (DASH-22). Reuses the rows and badge components from Mods."],
+    guilds: ["Discord servers", "List of guild rows with the setup wizard as an editor shell. Reuses the field and change bar patterns from Settings."],
+    commands: ["Commands", "Rows with per-command switches. An empty manifest shows the empty state with the cause, and Save stays disabled."],
+    history: ["Change history", "Settings changes and rollbacks in one timeline with absolute time on hover and a typed-confirm rollback, same dialog as Backups restore."],
+    classic: ["Classic layout", "A user setting that renders the current 11-tab sidebar with the new tokens applied. Recommended for one release, then removed."]
+  };
+  var k = new URLSearchParams(location.search).get("page"), v = map[k] || ["Not mocked", "This screen is not part of the mockup set."];
+  document.getElementById("t").textContent = v[0]; document.getElementById("p").textContent = v[1]; document.title = v[0] + " (not mocked) - mcbot";
+</script>
+</body>
+</html>

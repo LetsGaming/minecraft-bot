@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en" data-ui-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backups of smp - mcbot</title>
+<link rel="stylesheet" href="style.css">
+<!--
+THESIS: Backups is where trust is earned: the dangerous action looks different from the safe one, says what it will overwrite, and shows its progress as a job. Refuses the identical Restore and Delete buttons in a 530px table.
+WORLD: Hairline rows that stack at 760px, tier shown as a word badge (never a raw folder name), files in mono, restore in a ledger dialog with a typed confirmation, a job panel with named steps.
+STORY: The admin finds the right backup by tier and age, starts a restore knowing it will stop smp and overwrite the world, and watches each step finish.
+FIRST VIEWPORT: Server strip, "Back up now" and tier filter, newest backup row with its age, per-row actions named after the backup.
+RISK: Typed confirmation on every restore and delete adds friction for experts; and the "pre-restore snapshot" copy assumes the wrapper takes one, which must be verified.
+-->
+</head>
+<body data-page="backups" data-server="smp" data-worst="warn" data-states='[["list","List"],["filtered","Filtered to Daily"],["creating","Backup running"],["restoring","Restore running, row busy"],["restore","Restore confirmation"],["delete","Delete confirmation"],["loading","Loading"],["empty","Empty"],["error","Error with retry"],["readonly","Read-only"]]'>
+<main id="main" class="main">
+<div class="page">
+
+<p class="crumb"><a href="watch.html">Watch</a> / <span class="mono">smp</span> / Backups</p>
+<div class="strip" role="region" aria-label="Server smp">
+  <div class="id"><span class="lamp ok lg" aria-hidden="true"></span><span class="mono">smp</span><span class="state-text ok" data-not="restoring">Online</span><span class="state-text warn" data-for="restoring">Restoring</span></div>
+  <dl><div><dt>Players</dt><dd data-not="restoring">3 / 20</dd><dd data-for="restoring">0, disconnected</dd></div><div><dt>World</dt><dd>2.4 GB</dd></div><div><dt>Disk free</dt><dd>41 GB</dd></div></dl>
+</div>
+
+<div class="page-head">
+  <div><h1>Backups</h1><p>Pick a backup to restore, or make one now. Restoring stops smp and replaces its world.</p></div>
+  <div class="btn-row"><button class="btn primary" type="button" id="b-create" data-not="readonly creating restoring">Back up now</button><button class="btn" type="button" data-for="creating" disabled aria-busy="true"><span class="spinner" aria-hidden="true"></span>Backing up</button><button class="btn" type="button" data-for="readonly" disabled aria-disabled="true">Back up now</button></div>
+</div>
+
+<div class="notice warn" data-for="readonly" role="status"><span class="lamp warn" aria-hidden="true"></span><div class="body"><strong>You can look, not change</strong><p>Your account has <code>backups:read</code> on smp. Ask a bot admin for <code>backups:write</code> to create, restore or delete backups.</p></div></div>
+
+<div class="job" data-for="creating" role="status">
+  <div class="top"><span class="what">Backing up smp</span><span class="badge info"><span class="lamp info"></span>Step 2 of 3</span></div>
+  <ol class="steps"><li class="done">Save the world</li><li aria-current="step">Archive world files (1.1 of about 2.4 GB)</li><li>Verify archive</li></ol>
+  <div class="progress" role="progressbar" aria-valuenow="46" aria-valuemin="0" aria-valuemax="100" aria-label="Backup progress"><i style="--w:46%"></i></div>
+  <p class="detail">Players are not disconnected. The backup appears in the list when it is verified.</p>
+</div>
+<div class="job" data-for="restoring" role="status">
+  <div class="top"><span class="what">Restoring smp from Daily, 9 Oct 03:00</span><span class="badge warn"><span class="lamp warn"></span>Step 3 of 5</span></div>
+  <ol class="steps"><li class="done">Warn players</li><li class="done">Stop smp</li><li aria-current="step">Replace world files</li><li>Start smp</li><li>Check that smp answers</li></ol>
+  <div class="progress" role="progressbar" aria-valuenow="58" aria-valuemin="0" aria-valuemax="100" aria-label="Restore progress"><i style="--w:58%"></i></div>
+  <p class="detail">Started 15:41 by maya_k. About 2 minutes left. Back up now and restore are off until this finishes.</p>
+</div>
+
+<section class="section" aria-labelledby="bl-h">
+  <header><h2 id="bl-h">Backups of smp</h2><span class="sub" data-for="list creating restoring restore delete readonly">7 backups, 15.7 GB. Newest 38 minutes ago.</span><span class="sub" data-for="filtered">2 Daily backups</span></header>
+
+  <div class="toolbar" data-for="list filtered creating restoring restore delete readonly">
+    <div class="chips" role="group" aria-label="Filter by tier">
+      <button class="chip" type="button" data-t="all" aria-pressed="true">All <span class="n">7</span></button>
+      <button class="chip" type="button" data-t="Hourly" aria-pressed="false">Hourly <span class="n">2</span></button>
+      <button class="chip" type="button" data-t="Daily" aria-pressed="false">Daily <span class="n">2</span></button>
+      <button class="chip" type="button" data-t="Pre-update" aria-pressed="false">Pre-update <span class="n">1</span></button>
+      <button class="chip" type="button" data-t="Archive" aria-pressed="false">Archive <span class="n">1</span></button>
+      <button class="chip" type="button" data-t="Manual" aria-pressed="false">Manual <span class="n">1</span></button>
+    </div>
+  </div>
+
+  <div class="notice bad" role="alert" data-for="error"><span class="lamp bad" aria-hidden="true"></span><div class="body"><strong>Could not list backups for smp</strong><p>The API wrapper answered, but <code>backups/</code> is not readable: permission denied. Existing backups are not affected.</p><div class="btn-row"><button class="btn" type="button" onclick="toast('Retrying','Asking smp for its backup list again.')">Try again</button><a class="btn ghost" href="stub.html?page=console">Open console</a></div></div></div>
+  <div data-for="loading" aria-busy="true"><p style="color:var(--text-dim);margin-bottom:var(--space-2)">Reading backups from smp...</p><ul class="rows" aria-hidden="true"><li class="row" style="opacity:.5"><div class="name">&nbsp;</div></li><li class="row" style="opacity:.3"><div class="name">&nbsp;</div></li></ul></div>
+  <div class="empty" data-for="empty"><h3>No backups of smp yet</h3><p>The backup job has not run, or it writes somewhere else. Back up now to create the first one; it takes about 3 minutes and does not disconnect players.</p><button class="btn primary" type="button">Back up now</button></div>
+
+  <div id="bk-wrap" data-for="list filtered creating restoring restore delete readonly">
+    <div class="row-head baks" aria-hidden="true"><span>Kind</span><span>Backup</span><span>Size</span><span>Taken</span><span></span></div>
+    <ul class="rows" id="bk-rows"></ul>
+  </div>
+</section>
+
+<dialog class="dlg" id="dlg-restore" aria-labelledby="dlg-restore-t">
+  <form method="dialog">
+    <h2 id="dlg-restore-t">Restore smp from Daily, 9 Oct 03:00?</h2>
+    <p class="lead"><strong>This replaces the current world.</strong> Everything built since Friday 3:00 is gone unless you restore the snapshot we take first.</p>
+    <dl class="ledger">
+      <dt>Affects</dt><dd><code>smp</code> world, 2.4 GB. 3 players are online and are disconnected after a 30 s warning.</dd>
+      <dt>Takes effect</dt><dd>Immediately after the warning. smp is offline for about 4 minutes. Needs 5 GB free, 41 GB available.</dd>
+      <dt>Undo</dt><dd>A snapshot <code>smp-pre-restore-2026-10-10_1545</code> is taken first. Restore it to come back to now.</dd>
+    </dl>
+    <div><label for="t-restore" style="font-weight:600;display:block;margin-bottom:var(--space-1)">Type <code>smp</code> to confirm</label><input class="input mono" id="t-restore" autocomplete="off" spellcheck="false" data-confirm-match="smp" data-confirm-target="go-restore" autofocus></div>
+    <div class="btn-row"><button class="btn ghost" value="cancel">Cancel</button><button class="btn danger" value="ok" id="go-restore" disabled aria-disabled="true">Restore smp</button></div>
+  </form>
+</dialog>
+<dialog class="dlg" id="dlg-delete" aria-labelledby="dlg-delete-t">
+  <form method="dialog">
+    <h2 id="dlg-delete-t">Delete Pre-update, 8 Oct 22:10?</h2>
+    <p class="lead">This backup is the only copy from before Create 6.0.3.</p>
+    <dl class="ledger"><dt>Affects</dt><dd><code>pre-update/smp-pre-update-2026-10-08_2210.tar.zst</code>, 2.3 GB</dd><dt>Takes effect</dt><dd>Immediately. 2.3 GB of disk is freed.</dd><dt>Undo</dt><dd>Not possible. Deleted backups are not recoverable.</dd></dl>
+    <div><label for="t-delete" style="font-weight:600;display:block;margin-bottom:var(--space-1)">Type <code>2026-10-08_2210</code> to confirm</label><input class="input mono" id="t-delete" autocomplete="off" spellcheck="false" data-confirm-match="2026-10-08_2210" data-confirm-target="go-delete"></div>
+    <div class="btn-row"><button class="btn ghost" value="cancel">Cancel</button><button class="btn danger" value="ok" id="go-delete" disabled aria-disabled="true">Delete backup</button></div>
+  </form>
+</dialog>
+
+</div>
+</main>
+<script src="shell.js"></script>
+<script>
+  var BK = [
+    ["Hourly", "Hourly, 15:04", "hourly/smp-2026-10-10_1504.tar.zst", "2.4 GB", "38 min ago", "2026-10-10 15:04"],
+    ["Hourly", "Hourly, 14:04", "hourly/smp-2026-10-10_1404.tar.zst", "2.4 GB", "1 h ago", "2026-10-10 14:04"],
+    ["Daily", "Daily, 10 Oct 03:00", "daily/smp-2026-10-10_0300.tar.zst", "2.4 GB", "12 h ago", "2026-10-10 03:00"],
+    ["Daily", "Daily, 9 Oct 03:00", "daily/smp-2026-10-09_0300.tar.zst", "2.3 GB", "1 d ago", "2026-10-09 03:00"],
+    ["Pre-update", "Pre-update, 8 Oct 22:10", "pre-update/smp-pre-update-2026-10-08_2210.tar.zst", "2.3 GB", "2 d ago", "2026-10-08 22:10"],
+    ["Archive", "Archive, 1 Oct 03:00", "archives/smp-2026-10-01_0300.tar.zst", "2.1 GB", "9 d ago", "2026-10-01 03:00"],
+    ["Manual", "Manual, before 1.21.5 test", "manual/smp-before-1.21.5-test.tar.zst", "2.2 GB", "6 d ago", "2026-10-04 19:32"]
+  ];
+  var state = "list", tier = "all";
+  function render() {
+    var ro = state === "readonly", locked = state === "restoring" || state === "creating";
+    var f = state === "filtered" ? "Daily" : tier;
+    var list = BK.filter(function (b) { return f === "all" || b[0] === f; });
+    document.getElementById("bk-rows").innerHTML = list.map(function (b) {
+      var busy = state === "restoring" && b[1] === "Daily, 9 Oct 03:00";
+      var act = busy ? '<button class="btn sm" type="button" disabled aria-busy="true"><span class="spinner" aria-hidden="true"></span>Restoring</button>' :
+        (ro ? "" : '<button class="btn sm" type="button" ' + (locked ? "disabled aria-disabled=true " : "") + 'aria-label="Restore ' + b[1] + '" data-open="dlg-restore">Restore</button><button class="btn sm ghost" type="button" ' + (locked ? "disabled aria-disabled=true " : "") + 'aria-label="Delete ' + b[1] + '" data-open="dlg-delete">Delete</button>');
+      return '<li><div class="row baks' + (busy ? " is-busy" : "") + '"><div><span class="badge neutral">' + b[0] + '</span></div><div><div class="name">' + b[1] + '</div><div class="file" title="' + b[2] + '">' + b[2] + '</div></div><div><span class="cell-label">Size</span>' + b[3] + '</div><div title="' + b[5] + '"><span class="cell-label">Taken</span>' + b[4] + '</div><div class="actions">' + act + "</div></div></li>";
+    }).join("");
+  }
+  window.onState = function (s) {
+    state = s; tier = "all";
+    Array.prototype.forEach.call(document.querySelectorAll(".chip"), function (c) { c.setAttribute("aria-pressed", String(c.dataset.t === (s === "filtered" ? "Daily" : "all"))); });
+    render();
+    setJobs(s === "creating" ? [{ label: "Backing up smp, 46%", href: "backups.html?state=creating", pct: 46 }] : s === "restoring" ? [{ label: "Restoring smp, step 3 of 5", href: "backups.html?state=restoring", pct: 58 }] : []);
+    if (s === "restore") document.getElementById("dlg-restore").showModal();
+    if (s === "delete") document.getElementById("dlg-delete").showModal();
+  };
+  Array.prototype.forEach.call(document.querySelectorAll(".chip"), function (c) {
+    c.addEventListener("click", function () { tier = c.dataset.t; if (state === "filtered") state = "list"; Array.prototype.forEach.call(document.querySelectorAll(".chip"), function (o) { o.setAttribute("aria-pressed", String(o === c)); }); render(); });
+  });
+  document.getElementById("b-create").addEventListener("click", function () { var s = document.getElementById("state-sel"); s.value = "creating"; s.dispatchEvent(new Event("change")); });
+</script>
+</body>
+</html>
