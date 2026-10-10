@@ -539,6 +539,18 @@ export interface WebUiConfig {
    */
   publicUrl?: string;
   /**
+   * Which proxies the dashboard trusts to report the client address
+   * (`X-Forwarded-For`). `false` (default): none, the socket address is
+   * used, which is right when the dashboard is reached directly. A list of IPs
+   * or CIDR ranges (or `loopback`, `linklocal`, `uniquelocal`) trusts
+   * exactly those proxies, e.g. `["127.0.0.1"]` for a proxy on the same host.
+   * `true` trusts every hop and lets any client spoof its address past the
+   * rate limiter, so avoid it.
+   *
+   * @default false
+   */
+  trustProxy?: boolean | string[];
+  /**
    * Host-side capability grants: Discord user ID → server id (or "*") →
    * capabilities. Lets an operator delegate part of the host API without
    * handing over `adminUsers`, which is all of it.

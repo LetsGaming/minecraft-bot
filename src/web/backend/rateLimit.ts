@@ -13,7 +13,7 @@
  * Read-only GETs are left unlimited. Buckets self-prune. This is per-process:
  * the dashboard is a single instance bound to loopback behind a reverse proxy
  * (see docker-compose.yml), so an in-process limiter is the right scope;
- * trustProxy is on, so req.ip honors X-Forwarded-For from that proxy.
+ * req.ip honors X-Forwarded-For only for the proxies named in webui.trustProxy.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {

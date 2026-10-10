@@ -41,6 +41,7 @@ import helmet from "@fastify/helmet";
 import { loadConfig } from "@mcbot/core/config.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { registerErrorHandler } from "./errors.js";
+import { resolveTrustProxy } from "./trustProxy.js";
 import { registerSetupGuard } from "./requiredEnv.js";
 import { DISCORD_CDN_URL } from "@mcbot/schema";
 import { requireSession } from "./auth/auth.js";
@@ -64,7 +65,10 @@ import { registerProbeRoutes } from "./status/metrics.js";
 import { registerStaticFrontend } from "./static.js";
 
 export function buildServer(): FastifyInstance {
-  const app = Fastify({ logger: false, trustProxy: true });
+  const app = Fastify({
+    logger: false,
+    trustProxy: resolveTrustProxy(loadConfig().webui?.trustProxy),
+  });
 
   // ── Security headers (SEC-01) ── registered first so they apply to every
   // response, including the OAuth surface and the static SPA. The CSP is
