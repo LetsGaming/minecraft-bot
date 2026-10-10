@@ -25,6 +25,89 @@
       </div>
     </header>
 
+    <section v-if="installed?.compat" class="compat">
+      <div class="compat-h">
+        <i class="pi pi-sync" /> Check another Minecraft version
+      </div>
+      <div class="compat-row">
+        <select
+          v-if="!useCustom"
+          v-model="selectedVersion"
+          class="select"
+          :disabled="checkingCompat || loadingVersions"
+          aria-label="Target Minecraft version"
+        >
+          <option v-for="v in versionChoices" :key="v" :value="v">
+            {{ v }}{{ v === installed.gameVersion ? " (installed)" : "" }}
+          </option>
+        </select>
+        <input
+          v-else
+          v-model="customVersion"
+          class="compat-input"
+          placeholder="e.g. 1.21.5"
+          :disabled="checkingCompat"
+          aria-label="Target Minecraft version"
+          @keyup.enter="checkVersion()"
+        />
+        <button
+          class="linkbtn"
+          :disabled="checkingCompat"
+          @click="useCustom = !useCustom"
+        >
+          {{ useCustom ? "Pick from list" : "Type a version" }}
+        </button>
+        <button
+          class="btn"
+          :disabled="checkingCompat || !targetValid"
+          @click="checkVersion()"
+        >
+          <i class="pi pi-search" :class="{ spin: checkingCompat }" /> Check
+        </button>
+        <button
+          v-if="compatJob?.state === 'done'"
+          class="linkbtn"
+          :disabled="checkingCompat"
+          title="Ask Modrinth again instead of using the saved answer"
+          @click="checkVersion(true)"
+        >
+          Check again
+        </button>
+      </div>
+      <p v-if="loadingVersions" class="empty sm">Loading Minecraft versions…</p>
+      <p v-else-if="checkingCompat" class="empty sm" role="status">
+        {{ progressText }}
+      </p>
+      <p v-else-if="compatFailed" class="msg err" role="alert">
+        The check for {{ checkedVersion }} failed.
+        {{ compatJob?.error ?? "" }}
+      </p>
+      <p v-else-if="compatEmpty" class="empty sm">
+        No mods installed, so there is nothing to check.
+      </p>
+      <p v-else-if="compatDone && compatStale" class="msg stale">
+        These results are for the mods installed when you checked. Check again
+        to refresh them.
+      </p>
+      <div v-if="compatDone && !compatEmpty" class="compat-filter">
+        <span class="muted">Minecraft {{ checkedVersion }}</span>
+        <button
+          class="chip"
+          :class="{ on: compatFilter === 'all' }"
+          @click="compatFilter = 'all'"
+        >
+          All
+        </button>
+        <button
+          class="chip"
+          :class="{ on: compatFilter === 'blockers' }"
+          @click="compatFilter = 'blockers'"
+        >
+          Only blockers
+        </button>
+      </div>
+    </section>
+
     <div class="stats">
       <div class="stat">
         <div class="n">{{ installed?.mods.length ?? "—" }}</div>
@@ -41,6 +124,14 @@
       <div class="stat" :class="{ warn: updateCount > 0 }">
         <div class="n">{{ updateCount }}</div>
         <div class="l">updates available</div>
+      </div>
+      <div
+        v-if="compatSummaryText"
+        class="stat compat-stat"
+        :class="{ warn: (compatSummary?.unavailable ?? 0) > 0 }"
+      >
+        <div class="n sm">{{ compatSummaryText }}</div>
+        <div class="l">for Minecraft {{ checkedVersion }}</div>
       </div>
     </div>
 
@@ -235,15 +326,20 @@
                 <th>MOD</th>
                 <th>VERSION</th>
                 <th>STATUS</th>
+                <th v-if="showCompatColumn">
+                  {{ checkedVersion ? "MC " + checkedVersion : "COMPAT" }}
+                </th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              <tr
-                v-for="m in installed.mods"
-                :key="m.slug"
-                :class="{ 'row-disabled': isDisabled(m) }"
-              >
+              <tr v-if="visibleMods.length === 0">
+                <td :colspan="showCompatColumn ? 5 : 4" class="empty sm">
+                  No blockers for Minecraft {{ checkedVersion }}.
+                </td>
+              </tr>
+              <template v-for="m in visibleMods" :key="m.slug">
+              <tr :class="{ 'row-disabled': isDisabled(m) }">
                 <td>
                   <div class="mod-name">{{ m.slug }}</div>
                   <div class="mod-file">{{ m.filename ?? "—" }}</div>
@@ -262,6 +358,19 @@
                     >↑ update</span
                   >
                   <span v-else class="pill ok">✓ up to date</span>
+                </td>
+                <td v-if="showCompatColumn">
+                  <button
+                    v-if="compatFor(m.slug)"
+                    class="pill compat-badge"
+                    :class="'c-' + compatFor(m.slug)!.availability"
+                    :aria-expanded="openCompat === m.slug"
+                    @click="openCompat = openCompat === m.slug ? null : m.slug"
+                  >
+                    {{ compatLabel(compatFor(m.slug)!.availability) }}
+                  </button>
+                  <span v-else-if="checkingCompat" class="muted small">…</span>
+                  <span v-else class="muted small">—</span>
                 </td>
                 <td>
                   <div class="row-actions">
@@ -306,6 +415,38 @@
                   </div>
                 </td>
               </tr>
+              <tr
+                v-if="openCompat === m.slug && compatFor(m.slug)"
+                class="compat-detail"
+              >
+                <td :colspan="5">
+                  <template v-if="compatFor(m.slug)!.availability === 'available'">
+                    <template v-if="compatFor(m.slug)!.target">
+                      Release for Minecraft {{ checkedVersion }}:
+                      <b>{{ compatFor(m.slug)!.target!.versionName }}</b>
+                      <span v-if="compatFor(m.slug)!.target!.datePublished">
+                        , published
+                        {{ date(compatFor(m.slug)!.target!.datePublished) }}</span
+                      >.
+                      <a
+                        v-if="compatFor(m.slug)!.target!.downloadUrl"
+                        :href="compatFor(m.slug)!.target!.downloadUrl"
+                        target="_blank"
+                        rel="noopener"
+                        >Download</a
+                      >
+                    </template>
+                    <template v-else>
+                      The installed build is already the newest release for
+                      Minecraft {{ checkedVersion }}.
+                    </template>
+                  </template>
+                  <template v-else>
+                    {{ compatFor(m.slug)!.reason ?? "No details." }}
+                  </template>
+                </td>
+              </tr>
+              </template>
             </tbody>
           </table>
         </div>
@@ -315,8 +456,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from "vue";
+import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
 import { useMods, ENVIRONMENT_META } from "../composables/useMods";
+import { useModCompat } from "../composables/useModCompat";
 import { useCapabilities } from "../composables/useCapabilities";
 import { useToast } from "primevue/usetoast";
 import { UnauthorizedError } from "../api";
@@ -363,6 +505,73 @@ const page = computed(() => Math.floor(offset.value / PAGE) + 1);
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE)));
 
 const updateCount = computed(() => updates.value.size);
+
+const compat = useModCompat({
+  api: {
+    start: (v, refresh) => mods.compatStart(v, refresh),
+    poll: (id) => mods.compatPoll(id),
+    versions: () => mods.compatVersions(),
+  },
+  installedVersion: () => installed.value?.gameVersion,
+  onError: (text) => flash("err", text),
+});
+const {
+  selected: selectedVersion,
+  customVersion,
+  useCustom,
+  versionChoices,
+  targetValid,
+  loadingVersions,
+  checkingCompat,
+  job: compatJob,
+  checkedVersion,
+  stale: compatStale,
+  filter: compatFilter,
+  progressText,
+  summary: compatSummary,
+  summaryText: compatSummaryText,
+  failed: compatFailed,
+  hasResult: compatDone,
+  emptyResult: compatEmpty,
+  forSlug: compatFor,
+} = compat;
+
+const openCompat = ref<string | null>(null);
+const showCompatColumn = computed(
+  () => compat.rows.value.length > 0 || checkingCompat.value,
+);
+const visibleMods = computed(() => {
+  const all = installed.value?.mods ?? [];
+  if (compatFilter.value !== "blockers" || !compatDone.value) return all;
+  return all.filter((m) => compat.isBlocker(m.slug));
+});
+
+function compatLabel(a: "available" | "unavailable" | "unknown"): string {
+  if (a === "available") return "✓ ready";
+  if (a === "unavailable") return "✕ missing";
+  return "? unknown";
+}
+
+/** What a finished check was computed from: slug, build and enabled state. */
+function installedSignature(list: InstalledMods | null): string {
+  return (list?.mods ?? [])
+    .map((m) => `${m.slug}:${m.versionId ?? ""}:${m.enabled === false ? 0 : 1}`)
+    .sort()
+    .join("|");
+}
+let checkedSignature = "";
+
+function checkVersion(refresh = false) {
+  checkedSignature = installedSignature(installed.value);
+  openCompat.value = null;
+  return compat.check(refresh);
+}
+
+watch(installed, (next) => {
+  if (compatDone.value && installedSignature(next) !== checkedSignature) {
+    compat.markStale();
+  }
+});
 
 function env(e: ModSearchHit["environment"]) {
   return ENVIRONMENT_META[e] ?? ENVIRONMENT_META.unknown;
@@ -632,10 +841,23 @@ async function reload() {
   if (!props.activeServer) return;
   await loadInstalled();
   await Promise.all([checkNow(), runSearch()]);
+  if (installed.value?.compat) await compat.loadVersions();
 }
 
 onMounted(reload);
-watch(() => props.activeServer, reload);
+watch(
+  () => props.activeServer,
+  () => {
+    compat.reset();
+    openCompat.value = null;
+    selectedVersion.value = "";
+    return reload();
+  },
+);
+onBeforeUnmount(() => {
+  window.clearTimeout(searchTimer);
+  compat.dispose();
+});
 </script>
 
 <style scoped>
@@ -1238,6 +1460,108 @@ tbody tr:last-child td {
 .pg-info {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+}
+.compat {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 20px;
+  margin-bottom: 16px;
+}
+.compat-h {
+  font-weight: 600;
+  font-size: 13.5px;
+  margin-bottom: 10px;
+}
+.compat-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.compat-input {
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-2);
+  background: var(--card-2);
+  color: #ededf0;
+  font-size: 13px;
+  width: 140px;
+}
+.linkbtn {
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.linkbtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.msg.stale {
+  background: rgba(229, 161, 58, 0.13);
+  color: var(--amber);
+  margin: 10px 0 0;
+}
+.compat .msg.err {
+  margin: 10px 0 0;
+}
+.compat-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 12.5px;
+}
+.chip {
+  padding: 3px 11px;
+  border-radius: 20px;
+  border: 1px solid var(--border-2);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.chip.on {
+  color: #ededf0;
+  background: rgba(255, 255, 255, 0.09);
+}
+.compat .muted,
+td .muted {
+  color: var(--muted);
+}
+td .small {
+  font-size: 12px;
+}
+.compat-stat {
+  grid-column: 1 / -1;
+}
+.stat .n.sm {
+  font-size: 20px;
+}
+.compat-badge {
+  border: 0;
+  cursor: pointer;
+}
+.compat-badge.c-available {
+  background: rgba(62, 207, 110, 0.14);
+  color: var(--green);
+}
+.compat-badge.c-unavailable {
+  background: rgba(229, 84, 75, 0.13);
+  color: var(--red);
+}
+.compat-badge.c-unknown {
+  background: rgba(229, 161, 58, 0.14);
+  color: var(--amber);
+}
+.compat-detail td {
+  padding: 8px 20px 12px;
+  color: var(--muted);
+  font-size: 12.5px;
+  background: rgba(255, 255, 255, 0.02);
 }
 @media (max-width: 1100px) {
   .grid {

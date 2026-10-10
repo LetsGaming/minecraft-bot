@@ -9,6 +9,8 @@ import type {
   ModApplyResult,
   ModToggleResult,
   ModEnvironment,
+  ModCompatJob,
+  ModCompatStarted,
 } from "../api";
 
 /**
@@ -58,6 +60,21 @@ export function useMods(serverId: () => string) {
 
   function checkUpdates(refresh = false): Promise<ModUpdateCheck> {
     return apiGet<ModUpdateCheck>(`${base()}/updates${refresh ? "?refresh=true" : ""}`);
+  }
+
+  function compatStart(mcVersion: string, refresh = false): Promise<ModCompatStarted> {
+    return apiSend<ModCompatStarted>("POST", `${base()}/compat`, {
+      mcVersion,
+      ...(refresh ? { refresh: true } : {}),
+    });
+  }
+
+  function compatPoll(jobId: string): Promise<ModCompatJob> {
+    return apiGet<ModCompatJob>(`${base()}/compat/${enc(jobId)}`);
+  }
+
+  function compatVersions(): Promise<{ versions: string[] }> {
+    return apiGet<{ versions: string[] }>(`${base()}/compat/versions`);
   }
 
   function applyUpdates(mcVersion?: string): Promise<ModApplyResult> {
@@ -111,6 +128,9 @@ export function useMods(serverId: () => string) {
   return {
     fetchInstalled,
     checkUpdates,
+    compatStart,
+    compatPoll,
+    compatVersions,
     applyUpdates,
     install,
     remove,

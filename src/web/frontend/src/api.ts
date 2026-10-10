@@ -173,9 +173,14 @@ export type {
   ModRemoveResult,
   ModApplyResult,
   ModToggleResult,
+  ModCompatJob,
+  ModCompatMod,
+  ModCompatStarted,
 } from "@mcbot/schema";
 export interface InstalledMods extends BaseInstalledMods {
   stale?: boolean;
+  /** The wrapper can check another Minecraft version. */
+  compat?: boolean;
 }
 export interface ModSearchHit {
   projectId: string;
