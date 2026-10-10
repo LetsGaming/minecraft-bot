@@ -1,6 +1,6 @@
 # Continuous integration — every gate the project's definition-of-done
-# lists: typecheck, lint, tests, locale parity, schema drift, dependency
-# audit, and the dashboard frontend build.
+# lists: typecheck, lint, tests, locale parity, schema drift, wire contract
+# drift, dependency audit, and the dashboard frontend build.
 name: CI
 
 on:
@@ -16,8 +16,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          # engines requires >= 22.13 (node:sqlite); CI runs the LTS that
-          # ships it stable.
+          # The project runs on Node 24; engines allows >= 20. better-sqlite3
+          # is the default SQLite driver (src/core/db/driver.ts).
           node-version: 24
           cache: npm
 
@@ -38,6 +38,20 @@ jobs:
 
       - name: Schema drift (config.schema.json matches the types)
         run: npm run schema:check
+
+      # The wire types are generated from the wrapper's openapi.json, which
+      # the wrapper generates from its router. The wrapper default branch is
+      # checked out only to compare that file against the vendored copy.
+      - name: Check out the wrapper (source of the wire contract)
+        uses: actions/checkout@v4
+        with:
+          repository: LetsGaming/minecraft-server-api
+          path: api-wrapper
+
+      - name: Wire contract drift (vendored openapi.json and generated types)
+        run: npm run wire:check
+        env:
+          WRAPPER_DIR: ${{ github.workspace }}/api-wrapper
 
       - name: Tests
         run: npm test

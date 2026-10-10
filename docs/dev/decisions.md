@@ -589,3 +589,41 @@ breaker above stays a separate module rather than a `lastKnown.ts` addition.
 - The guild feature list (`GUILD_FEATURE_KEYS` in `schema/config.ts`, constrained to `keyof GuildConfig`) is the single source for the backend summary, the guilds view and the setup wizard; a test ties it to the generated schema.
 
 **Deliberately not done:** the migrator does not try to turn local-mode settings into wrapper settings, and the bot does not delete old backups.
+
+---
+
+## Wire types come from the wrapper's generated OpenAPI document (D1)
+
+**Problem:** the shapes of the wrapper's replies existed in at least six
+hand-copied places: the wrapper's `wire.ts`, `serverAccess.ts`, the schema
+contract, core's backup types, and two sets in the dashboard frontend. The
+wrapper's `openapi.yaml` was a seventh, hand-written, and had drifted
+(`info.version` read 3.0.0 against a 3.5.0 package). The contract check covered
+roughly a third of the surface, so a renamed field on an uncovered route
+compiled everywhere and failed in the field.
+
+**Decision:** the wrapper owns the contract. Every route there declares a
+response schema, Fastify serializes replies through it, and `openapi.json` is
+generated from the router. The bot vendors that file, generates its types with
+`openapi-typescript` (a devDependency; no runtime dependency, no shared
+package, no registry), and re-exports them under the existing names with
+fields that only newer wrappers send kept optional. Both repos drift-check
+their committed copies in CI.
+
+**Rejected:** a shared `@mcbot/wire` package (publishing, coupled release
+cadence, a new dependency) and a hand-written spec as the source (it is what
+drifted).
+
+**The contract check is derived, not listed.** `e2e:contract` reads the route
+list from the wrapper's manifest and fails when a route is never requested, so
+a new route cannot ship without a case. Script-running routes need
+`sudo -n -u <user>`; where that is unavailable the run reports them as
+unverified, and CI requires it.
+
+**Compatibility policy (D2):** a one-minor window using manifest feature
+versions; the wrapper ships first; the order is wrapper, suite submodule
+pointer, bot. `contract.yml` tests the wrapper default branch and the pinned
+commit, the suite repo builds its pinned wrapper and runs this check, and
+`release.yml` runs the full gate before publishing. Docs name manifest
+capabilities, not wrapper versions, so they cannot go stale when a version
+number moves.

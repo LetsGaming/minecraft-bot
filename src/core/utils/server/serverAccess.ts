@@ -49,6 +49,31 @@ import type {
   TpsResult,
 } from "../../types/index.js";
 import { allCapabilities } from "../../types/index.js";
+import type {
+  BackupDeleteResult,
+  ConfigFileInfo,
+  InstalledMod,
+  InstalledMods,
+  ModAddResult,
+  ModApplyResult,
+  ModRemoveResult,
+  ModToggleResult,
+  ModUpdateCheck,
+  RemoteHostInfo,
+  WireSchemas,
+} from "@mcbot/schema/wire/index.js";
+
+export type {
+  BackupDeleteResult,
+  InstalledMod,
+  InstalledMods,
+  ModAddResult,
+  ModApplyResult,
+  ModRemoveResult,
+  ModToggleResult,
+  ModUpdateCheck,
+  RemoteHostInfo,
+};
 
 // ── UUID sink guard ───────────────────────────────────────────────────────
 
@@ -228,24 +253,9 @@ export async function tailLog(cfg: ServerConfig, lines = 10): Promise<string> {
 
 // ── Server status ────────────────────────────────────────────────────────
 
-/** The wrapper's `/health` body (`server-health` feature, v2 fields optional). */
-interface WrapperHealth {
-  state: string;
-  processUp: boolean;
-  probe: string;
-  rcon: {
-    configured: boolean;
-    responsive: boolean;
-    lastSuccessMsAgo: number | null;
-  };
-  /** The server's `server-port`, so a direct ping works without configuration. */
-  gamePort: number | null;
-  /** v2 — absent on a v1 wrapper. */
-  restartCount?: number;
-  unitFailed?: boolean;
-  checkedAt: number;
-  ageMs: number;
-}
+/** The wrapper's `/health` body. `restartCount` and `unitFailed` are absent on a v1 wrapper. */
+type WrapperHealth = Omit<WireSchemas["InstanceHealth"], "restartCount" | "unitFailed"> &
+  Partial<Pick<WireSchemas["InstanceHealth"], "restartCount" | "unitFailed">>;
 
 /**
  * Narrow a `/health` body instead of casting it.
@@ -597,47 +607,6 @@ export {
 } from "./wrapperContract.js";
 import { errMsg } from "../error.js";
 
-/**
- * The `host` block of the wrapper's /info.
- *
- * Every field is optional because this is read from wrappers of several
- * ages: host-info v1 sent `process` + a flat `disks`, v2 adds the
- * whole-machine `host` block and moves the filesystem figures under
- * `disks[].filesystem` alongside a per-directory `sizeBytes`. Both shapes
- * are accepted; hostResources normalises them.
- */
-export interface RemoteHostInfo {
-  process?: {
-    pid: number;
-    cpuPercent: number;
-    rssBytes: number;
-  } | null;
-  /** Whole machine. v2+; null on non-Linux hosts. */
-  host?: {
-    cpuPercent: number;
-    cpuCount: number;
-    memTotalBytes: number;
-    memUsedBytes: number;
-    uptimeSeconds: number;
-  } | null;
-  disks?: Array<{
-    path: string;
-    /** v2+: the directory's own size. null when du timed out. */
-    sizeBytes?: number | null;
-    /** v2+. */
-    filesystem?: {
-      mountPoint: string;
-      usedPercent: number;
-      availableBytes: number;
-      totalBytes: number;
-    };
-    /** v1 flat fields, kept so an un-upgraded wrapper still reports. */
-    usedPercent?: number;
-    availableBytes?: number;
-    totalBytes?: number;
-  }>;
-}
-
 export interface RemoteInfo {
   /** Wrapper semver, present from wrapper >= 1.2.0. */
   version?: string;
@@ -876,80 +845,9 @@ export async function readModSlugs(
 
 // ── Mod management (the wrapper's `mod-management` feature) ────────────────
 //
-// These mirror the wrapper's wire types (api-server src/contracts/wire.ts).
-// They are a pinned first-party contract, gated at connect time by the
-// feature handshake, so casting the JSON asserts that contract — the same
-// basis as every apiGet above.
-
-export interface InstalledMod {
-  slug: string;
-  versionId: string | null;
-  filename: string | null;
-  /**
-   * Whether the mod is active (jar in mods/) vs disabled (jar in
-   * mods/disabled/) — see disableMod/enableMod below. Absent on a v1
-   * wrapper (mod-management feature version 1); treated as enabled, the
-   * behavior before disable/enable existed.
-   */
-  enabled?: boolean;
-}
-
-export interface ModToggleResult {
-  ok: boolean;
-  slug?: string;
-  filename?: string | null;
-  alreadyEnabled?: boolean;
-  alreadyDisabled?: boolean;
-  error?: string;
-  code?: string;
-}
-
-export interface InstalledMods {
-  gameVersion: string | null;
-  modLoader: string | null;
-  mtimeMs: number;
-  mods: InstalledMod[];
-}
-
-export interface ModAddResult {
-  ok: boolean;
-  slug?: string;
-  action?: string;
-  versionId?: string;
-  filename?: string;
-  dependencies?: Array<{ slug: string; action: string }>;
-  error?: string;
-  code?: string;
-}
-
-export interface ModRemoveResult {
-  ok: boolean;
-  slug?: string;
-  removedFile?: string | null;
-  orphanedDependencies?: string[];
-  error?: string;
-  code?: string;
-}
-
-export interface ModUpdateCheck {
-  mcVersion: string;
-  modLoader: string;
-  results: Array<{ slug: string; status: string; [key: string]: unknown }>;
-}
-
-export interface ModApplyResult {
-  ok: boolean;
-  updated?: Array<{
-    slug: string;
-    toVersionId: string;
-    filename: string;
-    fromVersionId?: string | null;
-  }>;
-  upToDate?: string[];
-  failed?: Array<{ slug: string; error: string }>;
-  error?: string;
-  code?: string;
-}
+// The result types come from the wrapper's generated contract
+// (@mcbot/schema/wire). Casting the JSON asserts that contract, gated at
+// connect time by the feature handshake, the same basis as every apiGet above.
 
 /** The richer installed list (versions, loader, filenames) the Mods tab reads. */
 export async function listInstalledMods(cfg: ServerConfig): Promise<InstalledMods> {
@@ -1142,13 +1040,6 @@ export async function restoreBackupFile(
   return res.json() as Promise<ScriptResult>;
 }
 
-export interface BackupDeleteResult {
-  ok: boolean;
-  name?: string;
-  tier?: string;
-  sizeBytes?: number;
-}
-
 /**
  * Permanently delete one archive (wrapper's backup-files feature v2).
  *
@@ -1172,24 +1063,11 @@ export async function deleteBackupFile(
   return res.json() as Promise<BackupDeleteResult>;
 }
 
-// ── Mod config files (wrapper >= 3.4.0) ────────────────────────────
+// ── Mod config files ───────────────────────────────────────────────
 
-/** One editable config file. `id` is opaque; no caller ever names a path. */
-export interface ConfigFileInfo {
-  id: string;
-  relPath: string;
-  modId: string;
-  format: string;
-  sizeBytes: number;
-  mtimeMs: number;
-}
+export type { ConfigFileInfo };
 
-export interface ConfigFileContents {
-  text: string;
-  etag: string;
-  file: ConfigFileInfo;
-  snapshots: string[];
-}
+export type ConfigFileContents = WireSchemas["ConfigFileRead"];
 
 export async function indexConfigFiles(
   cfg: ServerConfig,

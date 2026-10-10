@@ -24,6 +24,7 @@ pure functions — `@mcbot/schema` used to be types-only, and no longer is
 | `config.ts` | `RawBotConfig` and every config sub-shape. The source `config.schema.json` is generated from. |
 | `stats.ts` | Stat/leaderboard shapes, plus the leaderboard interval durations |
 | `contract.ts` | Web API request/response DTOs |
+| `wire/` | The wrapper's HTTP wire types, generated from the vendored `openapi.json` (`npm run wire:sync`), plus the names the bot and dashboard import them by |
 | `notifications.ts` | The notification event keys and the default set |
 | `commandOptions.ts` | Slash-command option names shared by bot and dashboard |
 | `discord.ts` | Discord origins/endpoints, and the snowflake ID format |
@@ -31,6 +32,61 @@ pure functions — `@mcbot/schema` used to be types-only, and no longer is
 | `capabilities.ts` | Dashboard capabilities, the grant shape, and the resolution rules the gate and the UI both use |
 | `analytics.ts` | The dashboard analytics response DTOs and `ANALYTICS_CAP_HOURS`, the per-section retention ceilings the routes clamp to and the view labels with |
 | `consoleCommands.ts` | The console deny-list: normalisation and matching, shared by the route that enforces it and the editor that greys a command out |
+
+## The wrapper wire contract
+
+The types for the wrapper's HTTP API are not written here. The wrapper owns
+them and the bot generates its side:
+
+1. The wrapper declares a response schema on every route
+   (`src/contracts/schemas.ts` there) and generates `openapi.json` from its
+   router (`npm run openapi:generate`). The committed file has a drift test in
+   the wrapper, so it cannot disagree with the routes it serves.
+2. The bot vendors that file as `src/schema/wire/openapi.json` and generates
+   `src/schema/wire/types.ts` from it with `openapi-typescript`:
+
+   ```bash
+   npm run wire:sync -- <wrapper checkout>   # or WRAPPER_DIR=<checkout>
+   npm run wire:check                        # CI: vendored copy and types are current
+   ```
+
+   `wire:check` always verifies `types.ts` against the vendored file; with a
+   wrapper checkout it also verifies the vendored file against the wrapper's.
+3. `src/schema/wire/index.ts` names the generated schemas the way the bot uses
+   them. Where a newer wrapper feature added a field, the name declares it
+   optional (`InstalledMod.enabled`), because the bot also talks to older
+   wrappers. `serverAccess.ts` and the dashboard frontend import these names;
+   nobody restates a wire shape by hand.
+
+`parseManifest` in `wrapperContract.ts` stays hand-written and strict: the
+manifest is read before the feature gate can vouch for anything else, and
+`/health`'s `state` flows into alerting, so those are narrowed from `unknown`
+rather than cast.
+
+### Changing a wrapper route
+
+The order is fixed by who depends on whom:
+
+1. Wrapper: change the route and its schema, regenerate `openapi.json`, extend
+   its tests. Bump the feature version in its manifest if the shape changed in
+   a way an older reader would misparse.
+2. minecraft-server-setup: bump the submodule pointer to that wrapper commit
+   (see that repo's `docs/wrapper-submodule.md`).
+3. Bot: `wire:sync`, adapt callers, extend `scripts/e2e-wrapper-contract.mjs`
+   (it fails on a manifest route with no case), raise
+   `EXPECTED_WRAPPER_FEATURES` if the bot now needs the new version.
+
+The wrapper always ships first. The compatibility policy is a one-minor
+window: within a major version the wrapper serves the old and the new shape
+side by side, and the bot negotiates through the manifest's per-feature
+versions rather than the wrapper's semver. The old shape goes in the next major.
+Lockstep releases are for the cases where that window is impractical; both pull
+requests then link each other and merge together.
+
+CI enforces the order: `contract.yml` runs the e2e against the wrapper's
+default branch and against the commit the suite pins, so a bot that is ahead of
+either shows up as a red leg, and `release.yml` runs the same gate before it
+publishes anything.
 
 ## When something becomes a contract
 

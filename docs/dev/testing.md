@@ -110,7 +110,7 @@ docker compose -f docker-compose.e2e.yml up -d --wait
 npm run e2e:smoke        # a real Paper server, through the bot's own RCON layer
 docker compose -f docker-compose.e2e.yml down -v
 
-WRAPPER_DIR=../api-wrapper npm run e2e:contract   # a real api-wrapper
+WRAPPER_DIR=<built wrapper checkout> npm run e2e:contract   # a real api-wrapper
 ```
 
 `e2e:smoke` runs nightly against a pinned Paper image: connect, `list`,
@@ -140,6 +140,22 @@ is fine here: the contract under test is wrapper → bot, so what sits behind th
 wrapper only has to make it produce a genuine response. That keeps the check at
 about ten seconds and free of Minecraft, which is why it can run on every PR
 rather than nightly.
+
+`WRAPPER_DIR` is required: there is no default location. The list of routes to
+cover comes from the wrapper's own manifest, and any manifest route the run
+never requests fails it unless `SKIPPED_ROUTES` in the script lists it with a
+reason, so a new wrapper route cannot ship without a case. Cases cover the
+whole surface: health v2, bulk stats, stats deletion, every mod-management
+route against stub suite scripts, backup file list, download, range and delete,
+restore (refused while the scaffold's server is online, run against the
+scaffold once it is offline, never against real data), mod config read, write,
+conflict and revert, `scripts/run`, and the `/command` result shapes.
+
+The routes that run a suite script spawn `sudo -n -u <user>`. Where that cannot
+work (a developer machine without passwordless sudo, Windows), those routes are
+checked for their failure shape only and the run prints which routes are
+unverified. CI sets `E2E_REQUIRE_SUDO=1`, which turns that into a failure, so
+the success paths are always proven there.
 
 It runs from **both** repos' CI — the check lives here (it asserts this bot's
 expectations), and the wrapper's `contract` workflow checks the bot out and

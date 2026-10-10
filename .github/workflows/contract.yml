@@ -7,6 +7,14 @@
 #
 # A red build here usually means the wrapper needs to land its half first —
 # that ordering is the point, not a nuisance.
+#
+# Two legs, because two wrappers matter:
+#   default  the wrapper's default branch: what the next wrapper release will be.
+#   pinned   the wrapper commit the minecraft-server-setup submodule points at:
+#            what operators get when they update the suite.
+# A red pinned leg with a green default leg means the suite's pointer is behind
+# the wrapper this bot needs. Bump the pin (minecraft-server-setup
+# docs/wrapper-submodule.md); the bot merges after that, not before.
 name: Wrapper contract
 
 on:
@@ -16,36 +24,57 @@ on:
   workflow_dispatch:
     inputs:
       wrapper_ref:
-        description: "api-wrapper ref to test against"
+        description: "api-wrapper ref for the default leg (empty: its default branch)"
         required: false
-        default: main
+        default: ""
 
 env:
   # The api-wrapper repo. Note the repo and the package are named differently:
   # the package is `mc-api-server`, the repo is `minecraft-server-api`.
   WRAPPER_REPO: LetsGaming/minecraft-server-api
+  # Holds the wrapper as a submodule at src/scripts/api-server.
+  SETUP_REPO: LetsGaming/minecraft-server-setup
 
 jobs:
   contract:
+    name: contract (${{ matrix.wrapper }})
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        wrapper: [default, pinned]
     steps:
       - name: Check out the bot
         uses: actions/checkout@v4
         with:
           path: bot
 
+      # The gitlink SHA the suite repo records for the wrapper submodule. The
+      # contents API reports a submodule path as { type: "submodule", sha }.
+      - name: Resolve the wrapper ref
+        id: wrapper
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ matrix.wrapper }}" = "pinned" ]; then
+            ref=$(gh api "repos/${SETUP_REPO}/contents/src/scripts/api-server" --jq .sha)
+            echo "Suite pins ${WRAPPER_REPO}@${ref}"
+          else
+            ref="${{ inputs.wrapper_ref }}"
+          fi
+          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
+
       - name: Check out the api-wrapper
         uses: actions/checkout@v4
         with:
           repository: ${{ env.WRAPPER_REPO }}
-          ref: ${{ inputs.wrapper_ref || 'main' }}
+          ref: ${{ steps.wrapper.outputs.ref }}
           path: api-wrapper
 
       - uses: actions/setup-node@v4
         with:
-          # The script imports the bot's built core, whose engines require
-          # >= 22.13 for node:sqlite.
+          # The project runs on Node 24; engines allows >= 20.
           node-version: 24
 
       - name: Build the bot
@@ -61,15 +90,20 @@ jobs:
         env:
           WRAPPER_DIR: ${{ github.workspace }}/api-wrapper
           E2E_DUMP_WRAPPER_LOG: "1"
+          # GitHub-hosted runners have passwordless sudo, which the wrapper
+          # needs to run the suite scripts. Without it the script routes would
+          # only be checked for their failure shape; here that is a failure.
+          E2E_REQUIRE_SUDO: "1"
         run: |
           # Land order matters and this is the job that notices when it was
-          # wrong. The check runs this branch against the wrapper's DEFAULT
-          # branch, so a bot change that expects a new wrapper feature fails
-          # here until the wrapper's half is merged — correctly, but the raw
-          # output reads like a broken contract rather than a sequencing
-          # problem. Say which it is.
+          # wrong. The check runs this branch against the wrapper's default
+          # branch and against the commit the suite pins, so a bot change that
+          # expects a new wrapper feature fails here until the wrapper's half
+          # is merged (default leg) and the suite points at it (pinned leg).
+          # Correct, but the raw output reads like a broken contract rather
+          # than a sequencing problem. Say which it is.
           if ! npm run e2e:contract; then
-            echo "::error::Contract check failed against ${WRAPPER_REPO}@main."
+            echo "::error::Contract check failed against the ${{ matrix.wrapper }} wrapper (${{ steps.wrapper.outputs.ref }})."
             echo "This fails only on a real disagreement: a feature the bot CALLS"
             echo "that the wrapper cannot serve, or one whose contract version has"
             echo "moved under it."

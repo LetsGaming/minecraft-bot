@@ -3,6 +3,7 @@ import { apiGet, apiSend } from "../api";
 import { errorMessage } from "../utils/errorMessage";
 import { disambiguateLabels } from "../utils/fieldLabels";
 import type { StaleInfo, QueuedWriteResult } from "@mcbot/schema/contract.js";
+import type { ConfigFileInfo } from "@mcbot/schema";
 
 /**
  * The mod config editor's client half.
@@ -27,14 +28,7 @@ export interface EditConflict {
   fileId?: string;
 }
 
-export interface ConfigFileInfo {
-  id: string;
-  relPath: string;
-  modId: string;
-  format: string;
-  sizeBytes: number;
-  mtimeMs: number;
-}
+export type { ConfigFileInfo };
 
 export interface ConfigField {
   path: string[];

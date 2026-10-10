@@ -102,6 +102,16 @@ describe("compareContract", () => {
     expect(report.missing.every((f) => f.degrades.length > 0)).toBe(true);
   });
 
+  it("expects stats-bulk, which the leaderboard build calls", () => {
+    expect(EXPECTED_WRAPPER_FEATURES["stats-bulk"]).toMatchObject({ version: 1 });
+
+    const m = goodManifest();
+    delete m.features["stats-bulk"];
+    const report = compareContract(m);
+    expect(report.missing.map((f) => f.name)).toEqual(["stats-bulk"]);
+    expect(report.unused).toEqual([]);
+  });
+
   it("flags a wrapper feature older than the bot expects", () => {
     const m = goodManifest();
     m.features["host-info"] = { version: 0, summary: "old" };
