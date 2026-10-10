@@ -2,6 +2,7 @@ import { ref } from "vue";
 import { errorMessage } from "../utils/errorMessage";
 import { useToast } from "primevue/usetoast";
 import { useConfirm } from "primevue/useconfirm";
+import { useTypedConfirm } from "./useTypedConfirm";
 import { apiGet, apiSend } from "../api";
 import {
   isDisruptiveServerAction,
@@ -22,6 +23,7 @@ function capitalize(s: string): string {
 export function useServerActions(refresh: () => Promise<unknown>) {
   const toast = useToast();
   const confirm = useConfirm();
+  const confirmTyped = useTypedConfirm();
 
   const busy = ref("");
   const logServer = ref("");
@@ -40,21 +42,12 @@ export function useServerActions(refresh: () => Promise<unknown>) {
     serverId: string,
     action: string,
   ): Promise<boolean> {
-    const typed = window.prompt(
-      `This will ${action} "${serverId}" and cannot be undone.\n\n` +
-        `Type the server name to confirm:`,
-    );
-    if (typed === null) return false;
-    if (typed.trim() !== serverId) {
-      toast.add({
-        severity: "warn",
-        summary: `${capitalize(action)} cancelled`,
-        detail: "The name did not match.",
-        life: 3000,
-      });
-      return false;
-    }
-    return true;
+    return confirmTyped({
+      header: `Confirm ${action}`,
+      message: `This will ${action} "${serverId}" and cannot be undone.`,
+      expected: serverId,
+      acceptLabel: capitalize(action),
+    });
   }
 
   async function runAction(serverId: string, action: string): Promise<void> {

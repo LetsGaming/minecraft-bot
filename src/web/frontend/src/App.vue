@@ -150,6 +150,7 @@
 
     <Toast position="bottom-right" />
     <ConfirmDialog />
+    <TypedConfirmDialog />
   </div>
 </template>
 
@@ -159,6 +160,7 @@ import Button from "primevue/button";
 import Message from "primevue/message";
 import Toast from "primevue/toast";
 import ConfirmDialog from "primevue/confirmdialog";
+import TypedConfirmDialog from "./components/ui/TypedConfirmDialog.vue";
 import { apiGet, apiSend, UnauthorizedError } from "./api";
 import type { MeResponse, ServerStatus, GrantableCapability } from "./api";
 import { useCapabilities, setCapabilities } from "./composables/useCapabilities";
@@ -202,7 +204,9 @@ interface NavItem {
 
 export default defineComponent({
   name: "App",
-  components: { Button, Message, Toast, ConfirmDialog, StatusDot, EmptyState },
+  components: {
+    Button, Message, Toast, ConfirmDialog, TypedConfirmDialog, StatusDot, EmptyState,
+  },
   setup() {
     return { ...useInvite(), ...useCapabilities(), statusDot, stateIsUp };
   },
