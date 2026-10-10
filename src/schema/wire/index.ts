@@ -34,6 +34,9 @@ export type ModAddResult = Wire["ModAddResult"];
 export type ModRemoveResult = Wire["ModRemoveResult"];
 export type ModUpdateCheck = Wire["ModUpdateCheck"];
 export type ModApplyResult = Wire["ModApplyResult"];
+export type ModCompatJob = Wire["ModCompatJob"];
+export type ModCompatMod = Wire["ModCompatMod"];
+export type ModCompatStarted = Wire["ModCompatStarted"];
 
 /** A 404 answers `{ ok: false }` alone; the rest is the wrapper's body. */
 export type BackupDeleteResult = Pick<Wire["BackupFileDeleted"], "ok"> &
