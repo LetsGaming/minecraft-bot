@@ -40,7 +40,10 @@ shape uniform without each caller remembering.
 Failures arrive as `ApiError { status, code, body }` (`isConflict(err)` and
 `validationErrors(err)` are the two helpers). Branch on `status` or `code`
 (`ApiErrorCode` in `@mcbot/schema`), never on the message text; the backend sets
-`code` on every typed failure.
+`code` on every typed failure. A failed Discord read carries
+`DISCORD_TOKEN_MISSING` or `DISCORD_TOKEN_REJECTED` when the bot token is the
+cause; `utils/discordFailure.ts` turns any Discord failure into the problem and
+recovery that Guilds and the setup wizard show in an `InlineError`.
 
 ## Editing a server-held document
 

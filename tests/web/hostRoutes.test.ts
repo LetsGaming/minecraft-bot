@@ -387,17 +387,20 @@ describe("setup routes", () => {
   });
 
   it("maps Discord failures to typed HTTP errors", async () => {
-    const cases: Array<[unknown, number]> = [
-      [new DiscordApiError("no token", "no-token"), 503],
-      [new DiscordApiError("slow down", "rate-limit", null, 4), 429],
-      [new DiscordApiError("missing access", "http", 403), 403],
-      [new DiscordApiError("unknown guild", "http", 404), 404],
-      [new DiscordApiError("oops", "http", 500), 502],
-      [new Error("socket hang up"), 502],
+    const cases: Array<[unknown, number, string]> = [
+      [new DiscordApiError("no token", "no-token"), 503, "DISCORD_TOKEN_MISSING"],
+      [new DiscordApiError("slow down", "rate-limit", null, 4), 429, "RATE_LIMITED"],
+      [new DiscordApiError("bad token", "http", 401), 502, "DISCORD_TOKEN_REJECTED"],
+      [new DiscordApiError("missing access", "http", 403), 403, "FORBIDDEN"],
+      [new DiscordApiError("unknown guild", "http", 404), 404, "NOT_FOUND"],
+      [new DiscordApiError("oops", "http", 500), 502, "BAD_GATEWAY"],
+      [new Error("socket hang up"), 502, "BAD_GATEWAY"],
     ];
-    for (const [err, status] of cases) {
+    for (const [err, status, code] of cases) {
       discord.listBotGuilds.mockRejectedValueOnce(err);
-      expect((await call("GET", "/api/setup/guilds")).statusCode).toBe(status);
+      const res = await call("GET", "/api/setup/guilds");
+      expect(res.statusCode).toBe(status);
+      expect(res.json().code).toBe(code);
     }
   });
 

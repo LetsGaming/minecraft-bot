@@ -2,7 +2,7 @@
  * Minimal Discord REST client for the dashboard's guided guild setup.
  *
  * The web image deliberately excludes discord.js (that library lives in
- * the bot image only), so this uses plain fetch with the bot token —
+ * the bot image only), so this uses plain fetch with the bot token,
  * the same approach auth.ts already takes for the OAuth flow. Only the
  * three read endpoints the setup wizard needs are implemented:
  *   - the guilds the bot is in         (GET /users/@me/guilds)
@@ -17,22 +17,21 @@ import { loadConfig } from "@mcbot/core/config.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { isRecord } from "@mcbot/core/utils/objects.js";
 import {
-  type HttpError,
-  ServiceUnavailable,
+  HttpError,
   TooManyRequests,
   Forbidden,
   NotFound,
   BadGateway,
 } from "../errors.js";
 
-import { DISCORD_API_V10_BASE } from "@mcbot/schema";
+import { ApiErrorCode, DISCORD_API_V10_BASE } from "@mcbot/schema";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
 const API = DISCORD_API_V10_BASE;
 const TIMEOUT_MS = 10_000;
 const CACHE_TTL_MS = 30_000;
 
-/** Why a Discord read failed — a typed discriminator so callers map failures
+/** Why a Discord read failed: a typed discriminator so callers map failures
  *  to an HTTP status without parsing error strings (QUAL-11). */
 export type DiscordErrorReason = "no-token" | "rate-limit" | "http";
 
@@ -57,20 +56,26 @@ export class DiscordApiError extends Error {
  * error handler over typed failures", not a hand-built `reply.code().send()`
  * per call site). Switches on the DiscordApiError discriminator rather than
  * matching message substrings (QUAL-11):
- *   - no token configured        → 503 (operator needs to set it)
+ *   - no token configured        → 503, code DISCORD_TOKEN_MISSING
  *   - Discord rate-limited us    → 429 (carry the retry hint)
+ *   - upstream 401 (bad token)   → 502, code DISCORD_TOKEN_REJECTED
  *   - upstream 403 / 404         → pass through
  *   - any other upstream/network → 502 (bad gateway)
  * The client-facing message keeps the "Couldn't reach Discord" framing the
- * dashboard already showed.
+ * dashboard already showed; the two token codes let it say which setting to fix.
  */
 export function discordHttpError(err: unknown): HttpError {
   const detail = errMsg(err);
   const message = `Couldn't reach Discord: ${detail}`;
   if (err instanceof DiscordApiError) {
-    if (err.reason === "no-token") return new ServiceUnavailable(message);
+    if (err.reason === "no-token") {
+      return new HttpError(503, message, undefined, ApiErrorCode.DiscordTokenMissing);
+    }
     if (err.reason === "rate-limit")
       return new TooManyRequests(message, err.retryAfterSeconds);
+    if (err.status === 401) {
+      return new HttpError(502, message, undefined, ApiErrorCode.DiscordTokenRejected);
+    }
     if (err.status === 403) return new Forbidden(message);
     if (err.status === 404) return new NotFound(message);
   }
@@ -88,7 +93,7 @@ export interface DiscordGuild {
 export interface DiscordChannel {
   id: string;
   name: string;
-  /** Discord channel type; 0 = text, 5 = announcement — the ones we offer. */
+  /** Discord channel type; 0 = text, 5 = announcement; the ones we offer. */
   type: number;
   position: number;
   parentId: string | null;
@@ -104,7 +109,7 @@ export interface DiscordRole {
 }
 
 // A guild counts as configurable if the bot has Manage Guild (0x20) OR
-// Administrator (0x8) — Discord's Administrator implicitly grants every
+// Administrator (0x8): Discord's Administrator implicitly grants every
 // permission, so a bot invited with Administrator (common) must not be
 // excluded just because the literal Manage Guild bit isn't also set.
 const MANAGE_GUILD = 0x20n;
@@ -120,7 +125,7 @@ function botToken(): string {
   const cfg = loadConfig();
   if (!cfg.token) {
     throw new DiscordApiError(
-      "Bot token is not configured — cannot query Discord.",
+      "Bot token is not configured, so Discord cannot be queried.",
       "no-token",
     );
   }
@@ -145,7 +150,7 @@ async function discordGet(path: string, cacheKey?: string): Promise<unknown> {
     const retryHeader = res.headers.get("retry-after");
     const retry = retryHeader ?? "a few";
     throw new DiscordApiError(
-      `Discord rate limit hit — retry in ${retry}s.`,
+      `Discord rate limit hit; retry in ${retry}s.`,
       "rate-limit",
       429,
       retryHeader ? Number(retryHeader) : undefined,
@@ -163,7 +168,7 @@ async function discordGet(path: string, cacheKey?: string): Promise<unknown> {
 
 /**
  * Guilds the bot is a member of. `manageable` reflects whether the BOT
- * account has Manage Guild there — a good proxy for "the bot can be set
+ * account has Manage Guild there, a good proxy for "the bot can be set
  * up here", and independent of which OAuth scopes the admin granted.
  */
 export async function listBotGuilds(): Promise<DiscordGuild[]> {
@@ -220,7 +225,7 @@ export async function listGuildChannels(guildId: string): Promise<DiscordChannel
 
 /**
  * Assignable roles of a guild. @everyone (id === guildId) and
- * bot/integration-managed roles are excluded — they can't be handed to
+ * bot/integration-managed roles are excluded: they can't be handed to
  * members, so they'd be dead options in a role picker.
  */
 export async function listGuildRoles(guildId: string): Promise<DiscordRole[]> {
