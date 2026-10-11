@@ -52,6 +52,12 @@ export interface DowntimeState {
   lastKnownState: ServerState | null;
   /** First failed check of the current outage, for the recovery's duration. */
   downSince?: number;
+  /** Last check that found the server up. */
+  lastUpAt?: number;
+  /** Players online at the last check that found the server up. */
+  lastKnownPlayers?: number;
+  /** Last stop or restart the bot knows was asked for: a bot command or a "Stopping server" log line. */
+  stopRequestedAt?: number;
 }
 
 export interface JsonCacheEntry {
