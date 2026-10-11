@@ -556,8 +556,10 @@ export default defineComponent({
   border-radius: var(--radius-control);
   font: inherit;
 }
+/* Under 1100px the Jump to group select stands in for the group list. */
 @media (max-width: 1099px) {
   .cv-groupselect { display: block; }
+  .config-view :deep(.es-nav) { display: none; }
 }
 .cv-filter { position: relative; }
 .cv-filter .pi { position: absolute; left: var(--space-3); top: 50%; transform: translateY(-50%); color: var(--text-dim); pointer-events: none; }
