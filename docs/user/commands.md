@@ -15,7 +15,7 @@ Options in `(parentheses)` are optional. Commands that act on a server accept an
 | `/tps` | (`server`) | Current TPS. Paper-style servers show 1/5/15-minute averages, vanilla shows TPS plus MSPT and tick timing percentiles. |
 | `/backup` | (`server`) | Backup overview: count, age, and size of the latest backup per backup tier. |
 | `/whitelisted` | (`server`) | All whitelisted players, paginated. |
-| `/mods` | (`server`) | All installed server mods as clickable Modrinth links, grouped by whether you need to install them on your client. Large modpacks are split over pages. |
+| `/mods` | (`server`) | All installed server mods as clickable Modrinth links, grouped by whether you need to install them on your client, under a line with the count, loader and Minecraft version. Large modpacks are split over pages. |
 | `/map` | | Link to the live web map (Dynmap/Bluemap), if the admin configured one. |
 
 ## Stats
@@ -29,7 +29,7 @@ Options in `(parentheses)` are optional. Commands that act on a server accept an
 | `/leaderboard` | (`stat`), (`server`) | Top 10 by a chosen stat: playtime, mob kills, deaths, blocks mined, distance walked, items crafted, player kills, jumps, animals bred, fish caught, diamond ore — plus the daily-streak boards (current and longest streak). Defaults to playtime. |
 | `/top` | (`stat`), (`server`) | Same as `/leaderboard`. |
 | `/sessions` | `player`, (`server`) | A player's recent sessions: online-now / last-seen, playtime across the recorded sessions, and the last 10 individual sessions. |
-| `/players` | (`server`), (`sort`), (`inactive`), (`include_unknown`) | Every player who has played on the server, 20 per page, with online state or last-seen and lifetime playtime. `sort` is `last-seen` (default; online first), `playtime` or `name`. `inactive:<days>` keeps only players last active more than that many days ago; players with no tracked activity are added with `include_unknown:true`. Last-seen only covers time since the bot started tracking sessions, so earlier players show "before tracking". The name list comes from the whitelist and the server's usercache, which vanilla caps at about 1000 entries, so very old players without a stats file may be missing. |
+| `/players` | (`server`), (`sort`), (`inactive`), (`include_unknown`) | Every player who has played on the server, 20 per page, with online state or last-seen and lifetime playtime, under a line such as "3 online, 41 known. Sorted by playtime." `sort` is `last-seen` (default; online first), `playtime` or `name`. `inactive:<days>` keeps only players last active more than that many days ago; players with no tracked activity are added with `include_unknown:true`. Last-seen only covers time since the bot started tracking sessions, so earlier players show "before tracking". The name list comes from the whitelist and the server's usercache, which vanilla caps at about 1000 entries, so very old players without a stats file may be missing. |
 | `/activity` | (`server`) | When is the server busy? 24-hour sparkline of average player counts plus the busiest hours of day (14-day average). |
 | `/profile` | (`player`), (`server`) | One player card: head, linked Discord account, who whitelisted them and when, playtime, last seen, daily streak. Without `player`, shows your linked account. |
 

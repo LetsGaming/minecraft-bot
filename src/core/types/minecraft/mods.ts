@@ -15,4 +15,7 @@ export interface ModList {
   clientOptional: ModInfo[];
   clientAndServer: ModInfo[];
   fetchedAt: number;
+  /** Optional because a last-known list cached by an older bot lacks them. */
+  gameVersion?: string | null;
+  modLoader?: string | null;
 }

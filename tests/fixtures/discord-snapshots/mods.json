@@ -10,7 +10,7 @@
         {
           "color": "#7cb4ff",
           "title": "Mods on smp",
-          "description": "62 mods installed.",
+          "description": "62 mods on Fabric 1.21.1. Install them all to join.",
           "fields": [
             {
               "name": "Client and server (41)",
@@ -54,7 +54,7 @@
         {
           "color": "#7cb4ff",
           "title": "Mods auf smp",
-          "description": "62 Mods installiert.",
+          "description": "62 Mods auf Fabric 1.21.1. Installiere alle, um beizutreten.",
           "fields": [
             {
               "name": "Client und Server (41)",

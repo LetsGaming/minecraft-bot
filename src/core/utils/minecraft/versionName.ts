@@ -61,3 +61,9 @@ export function formatVersionLabel(info: VersionInfo): string | null {
   if (!info.minecraftVersion) return null;
   return info.loader ? `${info.loader} ${info.minecraftVersion}` : info.minecraftVersion;
 }
+
+/** "fabric" from a manifest reads as "Fabric"; an unknown loader keeps its own spelling, capitalised. */
+export function loaderDisplayName(raw: string): string {
+  const known = KNOWN_LOADERS.find((name) => name.toLowerCase() === raw.toLowerCase());
+  return known ?? raw.charAt(0).toUpperCase() + raw.slice(1);
+}

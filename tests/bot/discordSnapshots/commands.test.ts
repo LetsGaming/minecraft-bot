@@ -250,7 +250,7 @@ describe("Discord snapshots: slash commands", () => {
   });
 
   it("/players page 1 of a 41 player roster, live and after the pager timed out", async () => {
-    const { buildPages } = await import("../../../src/bot/commands/stats/players.js");
+    const { buildPages, describeRoster } = await import("../../../src/bot/commands/stats/players.js");
     const { createPaginationButtons } = await import(
       "../../../src/bot/utils/embeds/embedUtils.js"
     );
@@ -282,7 +282,7 @@ describe("Discord snapshots: slash commands", () => {
     ];
     const out = await bothLanguages(async (language) =>
       runWithGuildLocale(GUILD[language], () => {
-        const pages = buildPages(roster, "smp");
+        const pages = buildPages(roster, "smp", describeRoster(roster, roster.length, "playtime", null));
         return {
           pages: pages.length,
           page1: renderEmbed(pages[0]),
@@ -327,6 +327,8 @@ describe("Discord snapshots: slash commands", () => {
       clientOptional: optional,
       serverOnly,
       fetchedAt: NOW,
+      gameVersion: "1.21.1",
+      modLoader: "fabric",
     } as never);
     const out = await bothLanguages((language) =>
       runCommand(execute as Execute, language, { commandName: "mods" }),

@@ -437,6 +437,7 @@ export const en: Record<string, string> = {
   // ── /mods, /status, /uptime ──
   "mods.title": "Mods on {server}",
   "mods.count": "{count|# mod|# mods} installed.",
+  "mods.summary": "{count|# mod|# mods} on {platform}. Install them all to join.",
   "mods.groupBoth": "Client and server",
   "mods.groupOptional": "Client only, optional",
   "mods.groupServer": "Server only",
@@ -674,7 +675,12 @@ export const en: Record<string, string> = {
   "waypoint.count": "{count|# waypoint|# waypoints}",
   "dailyHistory.shown": "Showing {shown} of {total|# stored claim|# stored claims}.",
   "status.players": "Players",
-  "players.count": "{count|# player|# players}.",
+  "players.summary": "{online} online, {known} known.",
+  "players.summaryInactive": "{count} inactive for more than {days|# day|# days}, {known} known.",
+  "players.sortedBy": "Sorted by {sort}.",
+  "players.sortLastSeen": "last seen",
+  "players.sortPlaytime": "playtime",
+  "players.sortName": "name",
   "statusEmbed.fetchFailed": "Could not read the status.",
   "statusEmbed.onlineNames": "Online: {names}",
 };

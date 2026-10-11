@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { parseVersionName } from "../../src/core/utils/minecraft/versionName.js";
+import {
+  formatVersionLabel,
+  loaderDisplayName,
+  parseVersionName,
+} from "../../src/core/utils/minecraft/versionName.js";
 
 describe("parseVersionName", () => {
   it("reads a bare vanilla version", () => {
@@ -45,5 +49,19 @@ describe("parseVersionName", () => {
       loader: null,
       raw: "",
     });
+  });
+});
+
+describe("formatVersionLabel and loaderDisplayName", () => {
+  it("joins loader and version when both are known", () => {
+    expect(formatVersionLabel(parseVersionName("Fabric 1.21.1"))).toBe("Fabric 1.21.1");
+    expect(formatVersionLabel(parseVersionName("1.21.4"))).toBe("1.21.4");
+    expect(formatVersionLabel(parseVersionName(null))).toBeNull();
+  });
+
+  it("spells manifest loader ids like the loaders do", () => {
+    expect(loaderDisplayName("fabric")).toBe("Fabric");
+    expect(loaderDisplayName("neoforge")).toBe("NeoForge");
+    expect(loaderDisplayName("custom")).toBe("Custom");
   });
 });

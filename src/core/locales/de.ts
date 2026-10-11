@@ -429,6 +429,7 @@ export const de: Record<string, string> = {
   // ── /mods, /status, /uptime ──
   "mods.title": "Mods auf {server}",
   "mods.count": "{count|# Mod|# Mods} installiert.",
+  "mods.summary": "{count|# Mod|# Mods} auf {platform}. Installiere alle, um beizutreten.",
   "mods.groupBoth": "Client und Server",
   "mods.groupOptional": "Nur Client, optional",
   "mods.groupServer": "Nur Server",
@@ -666,7 +667,12 @@ export const de: Record<string, string> = {
   "waypoint.count": "{count|# Waypoint|# Waypoints}",
   "dailyHistory.shown": "{shown} von {total|# gespeicherten Abholung|# gespeicherten Abholungen}.",
   "status.players": "Spieler",
-  "players.count": "{count|# Spieler|# Spieler}.",
+  "players.summary": "{online} online, {known} bekannt.",
+  "players.summaryInactive": "{count} länger als {days|# Tag|# Tage} inaktiv, {known} bekannt.",
+  "players.sortedBy": "Sortiert nach {sort}.",
+  "players.sortLastSeen": "letzter Aktivität",
+  "players.sortPlaytime": "Spielzeit",
+  "players.sortName": "Name",
   "statusEmbed.fetchFailed": "Der Status konnte nicht gelesen werden.",
   "statusEmbed.onlineNames": "Online: {names}",
 };

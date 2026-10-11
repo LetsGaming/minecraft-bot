@@ -56,10 +56,11 @@ function classifySide(project: ModrinthProject): ModSide {
 /** Get the mod list for the given server instance. */
 export async function getModList(server: ServerInstance): Promise<ModList> {
   const cfg = server.config;
-  const { slugs, mtimeMs } = await serverAccess.readModSlugs(cfg);
+  const { slugs, mtimeMs, gameVersion, modLoader } = await serverAccess.readModSlugs(cfg);
+  const platform = { gameVersion, modLoader };
   const cacheKey = `${cfg.id}:${mtimeMs}`;
   const cached = cache.get(cacheKey);
-  if (cached) return cached.modList;
+  if (cached) return { ...cached.modList, ...platform };
 
   // Evict stale entries for this server before inserting
   for (const k of cache.keys()) {
@@ -72,13 +73,14 @@ export async function getModList(server: ServerInstance): Promise<ModList> {
       clientOptional: [],
       clientAndServer: [],
       fetchedAt: Date.now(),
+      ...platform,
     };
     cache.set(cacheKey, { mtimeMs, modList: empty });
     return empty;
   }
 
   const projects = await fetchModrinthProjects(slugs);
-  const modList = buildModList(projects);
+  const modList = { ...buildModList(projects), ...platform };
   cache.set(cacheKey, { mtimeMs, modList });
   return modList;
 }

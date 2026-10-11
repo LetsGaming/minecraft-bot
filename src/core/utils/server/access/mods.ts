@@ -11,15 +11,32 @@ import type {
 } from "@mcbot/schema/wire/index.js";
 import { apiGet, apiPost, apiDelete } from "./apiClient.js";
 
+export interface ModSlugs {
+  slugs: string[];
+  /** mtime of downloaded_versions.json. */
+  mtimeMs: number;
+  gameVersion: string | null;
+  modLoader: string | null;
+}
+
 /**
- * Return the raw mod slugs and the mtime of downloaded_versions.json.
- * The caller (modUtils.ts) handles the Modrinth lookup and caching;
- * that logic is the same regardless of local/remote.
+ * Return the raw mod slugs and the mtime of downloaded_versions.json, plus
+ * the game version and loader when the wrapper offers the installed list.
+ * The caller (modUtils.ts) handles the Modrinth lookup and caching.
  */
-export async function readModSlugs(
-  cfg: ServerConfig,
-): Promise<{ slugs: string[]; mtimeMs: number }> {
-  return apiGet<{ slugs: string[]; mtimeMs: number }>(cfg, "/mods");
+export async function readModSlugs(cfg: ServerConfig): Promise<ModSlugs> {
+  const [list, installed] = await Promise.all([
+    apiGet<{ slugs: string[]; mtimeMs: number }>(cfg, "/mods"),
+    // Version and loader come only with the mod-management feature; without
+    // it the plain slug list still answers /mods.
+    listInstalledMods(cfg).catch(() => null),
+  ]);
+  return {
+    slugs: list.slugs,
+    mtimeMs: list.mtimeMs,
+    gameVersion: installed?.gameVersion ?? null,
+    modLoader: installed?.modLoader ?? null,
+  };
 }
 
 //

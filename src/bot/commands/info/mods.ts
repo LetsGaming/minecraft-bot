@@ -16,7 +16,8 @@ import {
   paginateFields,
   reservedLength,
 } from "../../utils/embeds/embedUtils.js";
-import { getModList, type ModInfo } from "@mcbot/core/utils/minecraft/modUtils.js";
+import { getModList, type ModInfo, type ModList } from "@mcbot/core/utils/minecraft/modUtils.js";
+import { loaderDisplayName } from "@mcbot/core/utils/minecraft/versionName.js";
 import { readThrough } from "@mcbot/core/utils/wrapper/lastKnown.js";
 import { withErrorHandling } from "../middleware.js";
 import { relativeTimestamp } from "../../utils/discordTime.js";
@@ -33,6 +34,19 @@ function groupFields(label: string, mods: ModInfo[]): APIEmbedField[] {
     value,
     inline: false,
   }));
+}
+
+/** "62 mods on Fabric 1.21.1. Install them all to join.", or the bare count when the platform is unknown. */
+function summaryLine(modList: ModList, total: number): string {
+  const platform = [
+    modList.modLoader ? loaderDisplayName(modList.modLoader) : null,
+    modList.gameVersion ?? null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return total > 0 && platform
+    ? t("mods.summary", { count: total, platform })
+    : t("mods.count", { count: total });
 }
 
 export const data = new SlashCommandBuilder()
@@ -66,7 +80,7 @@ export const execute = withErrorHandling(async (interaction) => {
   const title = t("mods.title", { server: server.id });
   // An old list shown as current is worse than an old list labelled old.
   const description = [
-    t("mods.count", { count: total }),
+    summaryLine(modList, total),
     ...(stale
       ? [t("mods.stale", { age: relativeTimestamp(new Date(stale.asOf).getTime()) })]
       : []),
