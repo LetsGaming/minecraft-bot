@@ -448,7 +448,7 @@ function capitalize(s: string): string {
 .ops { display: flex; flex-wrap: wrap; gap: 6px; }
 
 .log {
-  background: #101114; border: 0.5px solid var(--mc-border); border-radius: 8px;
+  background: var(--bg-sunken); border: 0.5px solid var(--mc-border); border-radius: 8px;
   padding: 12px; margin-top: 14px; font-size: 12px; line-height: 1.5;
   max-height: 320px; overflow: auto; white-space: pre-wrap; word-break: break-all;
 }

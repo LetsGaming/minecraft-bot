@@ -54,7 +54,7 @@ export default defineComponent({
 .guild-avatar { flex: none; object-fit: cover; }
 .guild-avatar.placeholder {
   display: grid; place-items: center;
-  background: #1e2b22; border: 0.5px solid var(--mc-accent-border);
+  background: var(--accent-tint); border: 0.5px solid var(--mc-accent-border);
   color: var(--mc-accent); font-weight: 600;
 }
 </style>

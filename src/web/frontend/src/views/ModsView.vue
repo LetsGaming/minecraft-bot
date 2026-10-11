@@ -862,16 +862,16 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .mods {
-  --green: #3ecf6e;
-  --amber: #e5a13a;
-  --red: #e5544b;
-  --muted: #8a8a90;
-  --muted-2: #6a6a70;
-  --card: #141416;
-  --card-2: #161618;
+  --green: var(--mods-green);
+  --amber: var(--mods-amber);
+  --red: var(--mods-red);
+  --muted: var(--mods-muted);
+  --muted-2: var(--mods-muted-2);
+  --card: var(--mods-card);
+  --card-2: var(--mods-card-2);
   --border: rgba(255, 255, 255, 0.07);
   --border-2: rgba(255, 255, 255, 0.11);
-  color: #ededf0;
+  color: var(--mods-text);
 }
 .mods-head {
   display: flex;
@@ -891,7 +891,7 @@ onBeforeUnmount(() => {
   font-size: 13.5px;
 }
 .mods-head b {
-  color: #ededf0;
+  color: var(--mods-text);
 }
 .head-actions {
   display: flex;
@@ -907,7 +907,7 @@ onBeforeUnmount(() => {
   font-weight: 500;
   border: 1px solid var(--border-2);
   background: var(--card-2);
-  color: #ededf0;
+  color: var(--mods-text);
   cursor: pointer;
 }
 .btn:disabled {
@@ -916,7 +916,7 @@ onBeforeUnmount(() => {
 }
 .btn.green {
   background: var(--green);
-  color: #05130a;
+  color: var(--mods-on-green);
   border-color: transparent;
   font-weight: 600;
 }
@@ -1049,7 +1049,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border-2);
   border-radius: 9px;
   padding: 10px 12px 10px 36px;
-  color: #ededf0;
+  color: var(--mods-text);
   font-size: 13.5px;
   outline: none;
 }
@@ -1088,7 +1088,7 @@ onBeforeUnmount(() => {
   width: 15px;
   height: 15px;
   border-radius: 50%;
-  background: #c7c7cc;
+  background: var(--mods-text-2);
   transition: 0.15s;
 }
 .toggle input:checked + .sw {
@@ -1096,7 +1096,7 @@ onBeforeUnmount(() => {
 }
 .toggle input:checked + .sw::after {
   left: 17px;
-  background: #05130a;
+  background: var(--mods-on-green);
 }
 .select {
   background: var(--card-2);
@@ -1140,7 +1140,7 @@ onBeforeUnmount(() => {
   place-items: center;
   font-weight: 700;
   font-size: 16px;
-  color: #05130a;
+  color: var(--mods-on-green);
   overflow: hidden;
 }
 .ricon img {
@@ -1158,7 +1158,7 @@ onBeforeUnmount(() => {
   gap: 8px;
 }
 .rt a {
-  color: #ededf0;
+  color: var(--mods-text);
 }
 .rt b {
   font-size: 13.5px;
@@ -1214,7 +1214,7 @@ onBeforeUnmount(() => {
   flex: 0 0 26px;
 }
 .extlink:hover {
-  color: #ededf0;
+  color: var(--mods-text);
   background: rgba(255, 255, 255, 0.05);
 }
 .add {
@@ -1227,7 +1227,7 @@ onBeforeUnmount(() => {
   font-weight: 600;
   cursor: pointer;
   background: var(--green);
-  color: #05130a;
+  color: var(--mods-on-green);
   border: none;
   white-space: nowrap;
 }
@@ -1303,7 +1303,7 @@ onBeforeUnmount(() => {
   font-size: 12px;
   font-weight: 600;
   background: var(--green);
-  color: #05130a;
+  color: var(--mods-on-green);
   border: none;
   cursor: pointer;
 }
@@ -1358,7 +1358,7 @@ tbody tr:last-child td {
 .ver {
   font-family: ui-monospace, monospace;
   font-size: 12.5px;
-  color: #cfcfd4;
+  color: var(--mods-text-3);
 }
 .pill {
   display: inline-flex;
@@ -1401,11 +1401,11 @@ tbody tr:last-child td {
   cursor: pointer;
   border: 1px solid var(--border-2);
   background: transparent;
-  color: #ededf0;
+  color: var(--mods-text);
 }
 .mini.update {
   background: var(--amber);
-  color: #160e02;
+  color: var(--mods-on-amber);
   border-color: transparent;
   font-weight: 600;
 }
@@ -1450,7 +1450,7 @@ tbody tr:last-child td {
   cursor: pointer;
 }
 .pg:hover:not(:disabled) {
-  color: #ededf0;
+  color: var(--mods-text);
   border-color: rgba(255, 255, 255, 0.2);
 }
 .pg:disabled {
@@ -1484,7 +1484,7 @@ tbody tr:last-child td {
   border-radius: 8px;
   border: 1px solid var(--border-2);
   background: var(--card-2);
-  color: #ededf0;
+  color: var(--mods-text);
   font-size: 13px;
   width: 140px;
 }
@@ -1525,7 +1525,7 @@ tbody tr:last-child td {
   cursor: pointer;
 }
 .chip.on {
-  color: #ededf0;
+  color: var(--mods-text);
   background: rgba(255, 255, 255, 0.09);
 }
 .compat .muted,

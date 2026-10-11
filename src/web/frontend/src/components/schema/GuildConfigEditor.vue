@@ -207,7 +207,7 @@ export default defineComponent({
   padding: 2rem;
 }
 .gce-hint {
-  color: var(--muted, #8a929c);
+  color: var(--text-muted);
   font-size: 0.9rem;
   margin: 0 0 1rem;
 }
@@ -219,7 +219,7 @@ export default defineComponent({
 .gce-retry { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .gce-conflict-actions { margin: -6px 0 12px; }
 .gce-section.is-dirty { box-shadow: -3px 0 0 0 var(--mc-accent); padding-left: 10px; margin-left: -13px; }
-.gce-field-errors { margin: 2px 0 8px; padding-left: 18px; color: var(--p-red-400, #f87171); font-size: 12.5px; }
+.gce-field-errors { margin: 2px 0 8px; padding-left: 18px; color: var(--danger); font-size: 12.5px; }
 .gce-new-banner {
   display: flex; align-items: center; gap: 8px;
   background: color-mix(in srgb, var(--mc-accent) 12%, transparent);

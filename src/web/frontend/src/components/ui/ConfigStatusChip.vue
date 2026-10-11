@@ -33,6 +33,6 @@ watch(() => props.refreshKey, () => void refresh());
 }
 .cfg-chip.success { color: var(--mc-accent); border-color: color-mix(in srgb, var(--mc-accent) 40%, transparent); }
 .cfg-chip.info { border-color: var(--mc-mid); }
-.cfg-chip.warn { color: #e0b34a; border-color: color-mix(in srgb, #e0b34a 45%, transparent); }
-.cfg-chip.secondary { color: var(--mc-muted, #8a9099); }
+.cfg-chip.warn { color: var(--warn-chip); border-color: color-mix(in srgb, var(--warn-chip) 45%, transparent); }
+.cfg-chip.secondary { color: var(--mc-muted); }
 </style>
