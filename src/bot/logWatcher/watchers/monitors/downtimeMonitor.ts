@@ -8,7 +8,7 @@ import {
 import { recordCheck } from "@mcbot/core/utils/stores/uptimeTracker.js";
 import { createEmbed } from "../../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../../utils/embeds/embedColors.js";
-import { roleMention } from "../../../utils/embeds/alertUtils.js";
+import { alertMention, type AlertLevel } from "../../../utils/embeds/alertUtils.js";
 import { fireWatches } from "../watchFirer.js";
 import { t, runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
 import {
@@ -26,6 +26,7 @@ import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 import type { ServerHealth } from "@mcbot/schema/serverState.js";
 import type { DowntimeState, GuildConfig } from "@mcbot/core/types/index.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
+import { formatSpan } from "@mcbot/core/utils/duration.js";
 
 const CHECK_INTERVAL_MS = 60 * 1000;
 const FAILURES_BEFORE_ALERT = 3;
@@ -66,6 +67,7 @@ export function suppressAlerts(
   state.suppressUntil = Date.now() + graceMs;
   state.consecutiveFailures = 0;
   state.alerted = false;
+  state.downSince = undefined;
   state.consecutiveUnreachable = 0;
   state.wrapperAlerted = false;
   state.crashLoopAlerted = false;
@@ -163,14 +165,14 @@ async function checkServer(
       // Say what the server is doing in the same breath. An operator woken by
       // this needs to know whether players are affected before anything else.
       const failures = state.consecutiveUnreachable;
-      await alertGuilds(client, guildsWithAlerts, server.id, () => {
+      await alertGuilds(client, guildsWithAlerts, server.id, ["ok", "warning"], () => {
         const serverNote = stateIsKnown(health)
           ? t("downtime.apiDownServerKnown", {
               state: t(`state.${health.state}`),
             })
           : t("downtime.apiDownServerUnknown");
         return {
-          title: t("downtime.apiDownTitle"),
+          title: t("downtime.apiDownTitle", { server: server.id }),
           description: `${t("downtime.apiDown", {
             server: server.id,
             failures,
@@ -188,8 +190,8 @@ async function checkServer(
   } else if (state.wrapperAlerted) {
     state.wrapperAlerted = false;
     state.consecutiveUnreachable = 0;
-    await alertGuilds(client, guildsWithAlerts, server.id, () => ({
-      title: t("downtime.apiUpTitle"),
+    await alertGuilds(client, guildsWithAlerts, server.id, ["warning", "ok"], () => ({
+      title: t("downtime.apiUpTitle", { server: server.id }),
       description: t("downtime.apiUp", { server: server.id }),
       color: EmbedColor.Success,
     }));
@@ -207,13 +209,14 @@ async function checkServer(
   if (health.unitFailed) {
     if (!state.crashLoopAlerted && now >= state.suppressUntil) {
       state.crashLoopAlerted = true;
-      await alertGuilds(client, guildsWithAlerts, server.id, () => ({
-        title: t("downtime.crashLoopTitle"),
+      const before: AlertLevel = state.alerted ? "error" : "ok";
+      await alertGuilds(client, guildsWithAlerts, server.id, [before, "critical"], () => ({
+        title: t("downtime.crashLoopTitle", { server: server.id }),
         description: t("downtime.crashLoop", {
           server: server.id,
           restarts: health.restartCount,
         }),
-        color: EmbedColor.Error,
+        state: ServerState.Offline,
       }));
       log.warn(
         "downtime",
@@ -223,8 +226,8 @@ async function checkServer(
     }
   } else if (state.crashLoopAlerted) {
     state.crashLoopAlerted = false;
-    await alertGuilds(client, guildsWithAlerts, server.id, () => ({
-      title: t("downtime.crashLoopRecoveredTitle"),
+    await alertGuilds(client, guildsWithAlerts, server.id, ["critical", "ok"], () => ({
+      title: t("downtime.crashLoopRecoveredTitle", { server: server.id }),
       description: t("downtime.crashLoopRecovered", { server: server.id }),
       color: EmbedColor.Success,
     }));
@@ -249,7 +252,9 @@ async function checkServer(
 
   if (isOnline) {
     const wasDown = state.alerted;
+    const downFor = state.downSince === undefined ? null : now - state.downSince;
     state.consecutiveFailures = 0;
+    state.downSince = undefined;
 
     if (wasDown) {
       state.alerted = false;
@@ -258,10 +263,13 @@ async function checkServer(
       // any guild alert channel config.
       fireWatches(client, { kind: "server", serverId: server.id });
 
-      await alertGuilds(client, guildsWithAlerts, server.id, () => ({
-        title: t("downtime.upTitle"),
-        description: t("downtime.up", { server: server.id }),
-        color: EmbedColor.Success,
+      await alertGuilds(client, guildsWithAlerts, server.id, ["error", "ok"], () => ({
+        title: t("downtime.upTitle", { server: server.id }),
+        description:
+          downFor === null
+            ? t("downtime.up", { server: server.id })
+            : t("downtime.upAfter", { server: server.id, duration: formatSpan(downFor) }),
+        state: ServerState.Online,
       }));
 
       log.info("downtime", `${server.id} recovered`);
@@ -270,6 +278,7 @@ async function checkServer(
     state.lastKnownState = health.state;
   } else {
     state.consecutiveFailures++;
+    state.downSince ??= now;
 
     if (now < state.suppressUntil) {
       state.lastKnownState = ServerState.Offline;
@@ -303,13 +312,14 @@ async function checkServer(
         );
       });
 
-      await alertGuilds(client, guildsWithAlerts, server.id, () => ({
-        title: t("downtime.downTitle"),
+      const before: AlertLevel = state.crashLoopAlerted ? "critical" : "ok";
+      await alertGuilds(client, guildsWithAlerts, server.id, [before, "error"], () => ({
+        title: t("downtime.downTitle", { server: server.id }),
         description: t("downtime.down", {
           server: server.id,
           failures: state.consecutiveFailures,
         }),
-        color: EmbedColor.Error,
+        state: ServerState.Offline,
       }));
 
       log.warn(
@@ -320,48 +330,48 @@ async function checkServer(
   }
 }
 
+interface Alert {
+  title: string;
+  description: string;
+  /** Server state for the title circle and colour; otherwise `color`. */
+  state?: ServerState;
+  color?: number;
+}
+
 /**
- * Fan one alert out to every guild that subscribed to this server.
- *
- * Extracted because there are now four of these (server down/up, wrapper
- * down/up) and the scope check, the locale wrapper, and the per-guild mention
- * role have to be identical in all of them — the kind of block that drifts the
- * moment it is written twice.
+ * Fan one alert out to every guild that subscribed to this server. The text
+ * is built inside each guild's locale context, and whether the role is
+ * pinged follows the guild's mention policy for the change `levels`
+ * describes (previous, next).
  */
 async function alertGuilds(
   client: Client,
   guildsWithAlerts: Array<[string, GuildConfig]>,
   serverId: string,
-  buildAlert: () => { title: string; description: string; color: number },
+  levels: [AlertLevel, AlertLevel],
+  buildAlert: () => Alert,
 ): Promise<void> {
   for (const [guildId, gcfg] of guildsWithAlerts) {
     const alertCfg = gcfg.downtimeAlerts;
     if (!alertCfg?.channelId) continue;
     if (!serverInScope(alertCfg.server, serverId, guildId)) continue;
 
-    // Text is built inside the guild's locale context so t() resolves its language.
     await runWithGuildLocale(guildId, () =>
-      sendAlert(client, alertCfg.channelId!, {
-        ...buildAlert(),
-        serverId,
-        mentionRole: alertCfg.mentionRole,
-      }),
+      sendAlert(
+        client,
+        alertCfg.channelId!,
+        buildAlert(),
+        alertMention(alertCfg.mentionRole, alertCfg.mentionPolicy, ...levels),
+      ),
     );
   }
-}
-
-interface AlertOptions {
-  title: string;
-  description: string;
-  color: number;
-  serverId: string;
-  mentionRole?: string;
 }
 
 async function sendAlert(
   client: Client,
   channelId: string,
-  { title, description, color, serverId, mentionRole }: AlertOptions,
+  { title, description, state, color }: Alert,
+  mention: ReturnType<typeof alertMention>,
 ): Promise<void> {
   try {
     const channel = await client.channels.fetch(channelId);
@@ -370,11 +380,12 @@ async function sendAlert(
     const embed = createEmbed({
       title,
       description,
-      color,
-      footer: { text: serverId },
+      state,
+      color: color ?? (state ? undefined : EmbedColor.Info),
+      timestamp: true,
     });
 
-    await channel.send({ embeds: [embed], ...roleMention(mentionRole) });
+    await channel.send({ embeds: [embed], ...mention });
   } catch (err) {
     log.error("downtime", `Failed to send alert: ${errMsg(err)}`);
   }

@@ -39,9 +39,9 @@ export function roleMention(mentionRole: string | undefined): AlertMention {
 }
 
 /** How bad an alert is. Ordered: a higher rank is worse. */
-export type AlertLevel = "ok" | "warning" | "critical";
+export type AlertLevel = "ok" | "warning" | "error" | "critical";
 
-const LEVEL_RANK: Record<AlertLevel, number> = { ok: 0, warning: 1, critical: 2 };
+const LEVEL_RANK: Record<AlertLevel, number> = { ok: 0, warning: 1, error: 2, critical: 3 };
 
 /**
  * Whether a change from `previous` to `next` deserves a ping under the
