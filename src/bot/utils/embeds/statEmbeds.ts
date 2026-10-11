@@ -2,11 +2,12 @@ import { type APIEmbedField, type EmbedBuilder } from "discord.js";
 import { chunkLines, createEmbed, paginateFields, reservedLength } from "./embedUtils.js";
 import {
   humanizeKey,
-  formatPlaytime,
+  ticksToMs,
   formatDistance,
   type LeaderboardData,
 } from "@mcbot/core/utils/minecraft/statUtils.js";
 import type { FlattenedStat } from "@mcbot/core/types/index.js";
+import { formatSpan } from "@mcbot/core/utils/duration.js";
 
 import { t } from "@mcbot/core/utils/i18n.js";
 
@@ -42,7 +43,7 @@ export function buildStatsEmbeds(
       const isTime = /(_time|Time)$/.test(key);
       const isDistance = /one_cm$/.test(key);
       const displayValue = isTime
-        ? formatPlaytime(s.value)
+        ? formatSpan(ticksToMs(s.value))
         : isDistance
           ? formatDistance(s.value)
           : s.value.toLocaleString();

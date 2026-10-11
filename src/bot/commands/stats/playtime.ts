@@ -3,7 +3,7 @@ import {
   loadStats,
   flattenStats,
   findPlayTimeStat,
-  formatPlaytime,
+  ticksToMs,
 } from "@mcbot/core/utils/minecraft/statUtils.js";
 import { findPlayer } from "@mcbot/core/utils/minecraft/playerUtils.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
@@ -12,6 +12,7 @@ import { withErrorHandling } from "../middleware.js";
 import { CommandError } from "@mcbot/core/utils/error.js";
 import { noStatsYet, playerNotFound } from "./statErrors.js";
 
+import { formatSpan } from "@mcbot/core/utils/duration.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 export const data = new SlashCommandBuilder()
   .setName("playtime")
@@ -50,7 +51,7 @@ export const execute = withErrorHandling(async (interaction) => {
     embeds: [
       createPlayerEmbed(playerName, {
         title: t("playtime.title", { player: playerName }),
-        description: t("playtime.total", { time: formatPlaytime(totalPlaytime) }),
+        description: t("playtime.total", { time: formatSpan(ticksToMs(totalPlaytime)) }),
       }, true),
     ],
   });

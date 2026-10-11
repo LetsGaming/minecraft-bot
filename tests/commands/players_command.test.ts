@@ -4,7 +4,7 @@ vi.mock("../../src/core/utils/minecraft/statUtils.js", () => ({
   loadAllStats: vi.fn(),
   flattenStats: vi.fn((f: { ticks: number }) => [f]),
   findPlayTimeStat: vi.fn((flat: Array<{ ticks: number }>) => flat[0]!.ticks),
-  formatPlaytime: vi.fn((n: number) => `pt${n}`),
+  ticksToMs: vi.fn((n: number) => n * 50),
 }));
 vi.mock("../../src/core/utils/minecraft/whitelist.js", () => ({
   loadKnownPlayers: vi.fn(),

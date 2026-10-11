@@ -5,6 +5,7 @@ import { log } from "../logger.js";
 import { isRecord } from "../objects.js";
 import { cached, invalidate, invalidatePrefix } from "../cache.js";
 import { mapLimit } from "../concurrency.js";
+import { formatSpan } from "../duration.js";
 import * as serverAccess from "../server/serverAccess.js";
 import type {
   FlattenedStat,
@@ -27,7 +28,7 @@ export const LEADERBOARD_STATS: Record<string, LeaderboardStatDefinition> = {
   playtime: {
     label: "Playtime",
     extract: (flat) => findPlayTimeStat(flat),
-    format: (v) => formatPlaytime(v),
+    format: (v) => formatSpan(ticksToMs(v)),
     sortAscending: false,
   },
   mob_kills: {
@@ -206,19 +207,11 @@ export function humanizeKey(rawKey: string): string {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-/**
- * Format playtime in ticks to a human-readable string.
- * 1 tick = 1/20 second.
- */
-export function formatPlaytime(ticks: number): string {
-  if (typeof ticks !== "number" || ticks <= 0) return "0s";
-  const seconds = Math.floor(ticks / 20);
-  const days = Math.floor(seconds / 86400);
-  const hours = Math.floor((seconds % 86400) / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
+/** Minecraft counts playtime in game ticks, 20 per second. */
+export const MS_PER_TICK = 50;
 
-  return `${days}d ${hours}h ${minutes}m ${secs}s`;
+export function ticksToMs(ticks: number): number {
+  return ticks * MS_PER_TICK;
 }
 
 /**

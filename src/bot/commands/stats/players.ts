@@ -19,7 +19,7 @@ import {
   loadAllStats,
   flattenStats,
   findPlayTimeStat,
-  formatPlaytime,
+  ticksToMs,
 } from "@mcbot/core/utils/minecraft/statUtils.js";
 import { loadKnownPlayers } from "@mcbot/core/utils/minecraft/whitelist.js";
 import {
@@ -33,6 +33,7 @@ import {
   type RosterEntry,
   type RosterSort,
 } from "@mcbot/core/utils/minecraft/playerRoster.js";
+import { formatSpan } from "@mcbot/core/utils/duration.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 
 const PER_PAGE = 20;
@@ -71,7 +72,7 @@ function describeEntry(e: RosterEntry): string {
   const name = `**${e.name}**`;
   const playtime =
     e.playtimeTicks !== null && e.playtimeTicks > 0
-      ? ` · ${formatPlaytime(e.playtimeTicks)}`
+      ? ` · ${formatSpan(ticksToMs(e.playtimeTicks))}`
       : "";
   if (e.online) return `${name} · ${t("players.online")}${playtime}`;
   if (e.lastSeen !== null) {

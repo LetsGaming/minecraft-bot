@@ -54,6 +54,7 @@ Wave 2: the dashboard and the Discord replies reworked on one shared status syst
 - **Toasts appear top right**, below the top bar on phones, so they no longer cover the console's Send button or the docked edit bar (`App.vue`, `style.css`).
 - The login page's heading says what it is for ("Sign in to the dashboard"); the app name above it is no longer the heading (`App.vue`).
 - The dashboard's "bot looks down" banner is one status line with the time of the last heartbeat and a link to Overview, instead of a large orange block (`App.vue`, `StatusView.vue`). Pages use the full width beside the sidebar up to 2400 px, and Overview panels no longer run off a 360 px screen (`AppShell.vue`, `OverviewView.vue`).
+- **Playtime reads like every other duration.** `/players`, `/playtime`, `/compare`, `/profile`, `/stats`, the playtime leaderboard and the in-game playtime milestone announcements show the two largest units in the shared format ("8 d 20 h", "45 min 12 s") instead of "8d 20h 0m 0s", the same as the dashboard and in both languages (`core/utils/minecraft/statUtils.ts`, `core/utils/duration.ts`, `commands/stats/*`, `commands/info/profile.ts`, `utils/embeds/statEmbeds.ts`).
 
 ### Security
 

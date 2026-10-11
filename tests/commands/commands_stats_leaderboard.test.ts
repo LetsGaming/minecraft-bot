@@ -33,7 +33,7 @@ vi.mock("../../src/core/utils/minecraft/statUtils.js", () => ({
   flattenStats: vi.fn().mockReturnValue([]),
   filterStats: vi.fn((s) => s),
   findPlayTimeStat: vi.fn().mockReturnValue(0),
-  formatPlaytime: vi.fn().mockReturnValue("0s"),
+  ticksToMs: vi.fn((n: number) => n * 50),
   formatDistance: vi.fn().mockReturnValue("0km"),
   humanizeKey: vi.fn((k) => k),
   invalidateAllStatsCache: vi.fn(),

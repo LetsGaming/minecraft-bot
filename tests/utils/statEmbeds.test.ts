@@ -13,7 +13,7 @@ describe("buildLeaderboardEmbed", () => {
   const sampleData: LeaderboardData = {
     entries: [],
     title: "🏆 Leaderboard — Playtime",
-    description: "🥇 **Steve** — 2d 3h 0m 0s\n🥈 **Alex** — 1d 0h 0m 0s",
+    description: "🥇 **Steve** — 2 d 3 h\n🥈 **Alex** — 1 d",
     footerText: "2 players tracked",
   };
 
