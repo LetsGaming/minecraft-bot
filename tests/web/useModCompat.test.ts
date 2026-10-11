@@ -267,4 +267,32 @@ describe("results", () => {
     expect(compat.forSlug("a")?.availability).toBe("available");
     expect(compat.summaryText.value).toBe("");
   });
+
+  it("summarises a finished check with unknown counted on its own", async () => {
+    const compat = await finished();
+    expect(compat.summary.value).toEqual({ available: 1, unavailable: 1, unknown: 1, total: 3 });
+    expect(compat.rows.value.map((m) => m.slug)).toEqual(["a", "b", "c"]);
+    expect(compat.checkedVersion.value).toBe("1.21.5");
+  });
+
+  it("a second check while one runs starts nothing", async () => {
+    const { compat, api } = setup({ poll: vi.fn(async () => job()) });
+    compat.selected.value = "1.21.5";
+    await compat.check();
+    await compat.check(true);
+    expect(api.start).toHaveBeenCalledTimes(1);
+    compat.dispose();
+  });
+
+  it("a new check clears the stale mark and reset forgets version and filter", async () => {
+    const compat = await finished();
+    compat.markStale();
+    compat.filter.value = "blockers";
+    await compat.check();
+    expect(compat.stale.value).toBe(false);
+    compat.reset();
+    expect(compat.checkedVersion.value).toBeNull();
+    expect(compat.filter.value).toBe("all");
+    expect(compat.rows.value).toEqual([]);
+  });
 });
