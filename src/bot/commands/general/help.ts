@@ -1,28 +1,22 @@
-import {
-  SlashCommandBuilder,
-  MessageFlags,
-  type ChatInputCommandInteraction,
-} from "discord.js";
+import { SlashCommandBuilder } from "discord.js";
 import {
   createEmbed,
   createPaginationButtons,
   handlePagination,
 } from "../../utils/embeds/embedUtils.js";
 import type { BotClient } from "@mcbot/core/types/index.js";
-import { log } from "@mcbot/core/utils/logger.js";
 import { isRecord } from "@mcbot/core/utils/objects.js";
 import { resolveCommandPolicy } from "@mcbot/core/utils/commands/commandPolicy.js";
 import { commandsUsedBy } from "@mcbot/core/utils/commands/commandUsage.js";
 import { t } from "@mcbot/core/utils/i18n.js";
-import { errMsg } from "@mcbot/core/utils/error.js";
+import { withErrorHandling } from "../middleware.js";
 
 export const data = new SlashCommandBuilder()
   .setName("help")
   .setDescription("Show all available commands with descriptions and options");
 
-export async function execute(
-  interaction: ChatInputCommandInteraction,
-): Promise<void> {
+export const execute = withErrorHandling(
+  async (interaction) => {
   // Hide commands that are disabled for THIS guild — /help should match
   // what the guild can actually run (registration is enabled-anywhere).
   const commands = [
@@ -54,7 +48,7 @@ export async function execute(
 
   for (let i = 0; i < totalPages; i++) {
     const embed = createEmbed({
-      title: t("help.title", { page: i + 1, pages: totalPages }, guildId),
+      title: t("help.title", {}, guildId),
       ...(i === 0 && unseen.length > 0
         ? { description: t("help.newToYou", { count: unseen.length }, guildId) }
         : {}),
@@ -85,7 +79,7 @@ export async function execute(
 
       embed.addFields({
         name: used.has(name) ? `/${name}` : `/${name} ✨`,
-        value: t("help.description", { description }, guildId),
+        value: description,
         inline: false,
       });
 
@@ -110,21 +104,11 @@ export async function execute(
     embeds.push(embed);
   }
 
-  await interaction.reply({
+  const message = await interaction.editReply({
     embeds: [embeds[0]!],
     components: totalPages > 1 ? [createPaginationButtons(0, totalPages)] : [],
-    flags: MessageFlags.Ephemeral,
   });
-
-  let message;
-  try {
-    message = await interaction.fetchReply();
-  } catch (err) {
-    log.warn("help", `Could not fetch interaction reply: ${errMsg(err)}`);
-    return;
-  }
-
-  if (totalPages > 1 && message) {
-    await handlePagination(message, interaction, embeds);
-  }
-}
+  if (totalPages > 1) await handlePagination(message, interaction, embeds);
+  },
+  { ephemeral: true },
+);

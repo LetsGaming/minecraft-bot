@@ -1,6 +1,5 @@
 import {
   SlashCommandBuilder,
-  MessageFlags,
   type ChatInputCommandInteraction,
 } from "discord.js";
 import {
@@ -24,7 +23,10 @@ import {
   isLinked,
   getLinkedAccount,
 } from "@mcbot/core/utils/stores/linkUtils.js";
-import { createErrorEmbed } from "../../../utils/embeds/embedUtils.js";
+import { createInfoEmbed, createSuccessEmbed } from "../../../utils/embeds/embedUtils.js";
+import { withErrorHandling } from "../../middleware.js";
+import { clockTimestamp, relativeTimestamp } from "../../../utils/discordTime.js";
+import { CommandError } from "@mcbot/core/utils/error.js";
 import type {
   DailyRewardItem,
   UserClaimData,
@@ -37,8 +39,6 @@ import {
   DAILY_COOLDOWN_MS,
 } from "@mcbot/core/utils/minecraft/rewards.js";
 import { resolveServer } from "../../../utils/guild/guildRouter.js";
-import { formatTime } from "@mcbot/core/utils/time.js";
-import { guildTimeZone } from "@mcbot/core/utils/config/timezones.js";
 
 const claimLock = new Set<string>();
 
@@ -52,60 +52,51 @@ export const data = new SlashCommandBuilder()
       .setAutocomplete(true),
   );
 
-export async function execute(
-  interaction: ChatInputCommandInteraction,
-): Promise<void> {
-  const userId = interaction.user.id;
+/**
+ * The whole claim is ephemeral: the reward, the streak and every refusal are
+ * personal. The reply is deferred first because the online lookup and RCON
+ * delivery can outlast Discord's 3 s window.
+ */
+export const execute = withErrorHandling(
+  async (interaction) => {
+    const userId = interaction.user.id;
 
-  if (claimLock.has(userId)) {
-    await interaction.reply({
-      content: t("daily.processing", {}, interaction.guildId ?? undefined),
-      flags: MessageFlags.Ephemeral,
-    });
-    return;
-  }
-  claimLock.add(userId);
+    if (claimLock.has(userId)) {
+      await interaction.editReply({ embeds: [createInfoEmbed(t("daily.processing"))] });
+      return;
+    }
+    claimLock.add(userId);
 
-  try {
-    await _execute(interaction, userId);
-  } finally {
-    claimLock.delete(userId);
-  }
-}
+    try {
+      await _execute(interaction, userId);
+    } finally {
+      claimLock.delete(userId);
+    }
+  },
+  { ephemeral: true },
+);
 
 async function _execute(
   interaction: ChatInputCommandInteraction,
   userId: string,
 ): Promise<void> {
   if (!(await isLinked(userId))) {
-    await interaction.reply(
-      errorReply(t("daily.linkRequired"), t("daily.linkRequiredFooter")),
-    );
-    return;
+    throw new CommandError({
+      title: t("daily.linkRequiredTitle"),
+      problem: t("daily.linkRequired"),
+      recovery: t("daily.linkRequiredRecovery"),
+    });
   }
 
   const username = await getLinkedAccount(userId);
   if (!username) {
-    await interaction.reply(
-      errorReply(t("daily.linkError"), t("daily.linkErrorFooter")),
-    );
-    return;
+    throw new CommandError({
+      problem: t("daily.linkError"),
+      recovery: t("daily.linkErrorRecovery"),
+    });
   }
 
-  let server: ReturnType<typeof resolveServer>;
-  try {
-    server = resolveServer(interaction);
-  } catch (err) {
-    await interaction.reply({
-      embeds: [
-        createErrorEmbed(
-          err instanceof Error ? err.message : t("common.unexpectedError"),
-        ),
-      ],
-      flags: MessageFlags.Ephemeral,
-    });
-    return;
-  }
+  const server = resolveServer(interaction);
 
   // Cooldown, streak, and history are all per server.
   const [rewardsCfg, rewardsOverride, store] = await Promise.all([
@@ -117,10 +108,10 @@ async function _execute(
   const pool = rewardPoolForServer(rewardsCfg, server.id, rewardsOverride);
 
   if (!pool.default.length) {
-    await interaction.reply(
-      errorReply(t("daily.dataError"), t("daily.dataErrorFooter")),
-    );
-    return;
+    throw new CommandError({
+      problem: t("daily.dataError"),
+      recovery: t("daily.dataErrorRecovery"),
+    });
   }
 
   const now = Date.now();
@@ -134,15 +125,15 @@ async function _execute(
   const delta = now - userData.lastClaim;
 
   if (delta < DAILY_COOLDOWN_MS) {
-    await interaction.reply({
-      content: cooldownMsg(DAILY_COOLDOWN_MS - delta, interaction.guildId ?? ""),
-      flags: MessageFlags.Ephemeral,
+    await interaction.editReply({
+      embeds: [
+        createInfoEmbed(cooldownMsg(now + DAILY_COOLDOWN_MS - delta), {
+          title: t("daily.cooldownTitle"),
+        }),
+      ],
     });
     return;
   }
-
-  // The online lookup and RCON delivery can outlast Discord's 3 s window.
-  await interaction.deferReply();
 
   const online = isPlayerOnline(await getOnlinePlayers(server), username);
 
@@ -208,14 +199,10 @@ async function _execute(
     const list = (queue[key] ??= []);
 
     if (list.length >= MAX_PENDING_PER_PLAYER) {
-      await failEphemeral(
-        interaction,
-        errorReply(
-          t("daily.queueFull", { max: MAX_PENDING_PER_PLAYER }),
-          t("daily.queueFullFooter"),
-        ),
-      );
-      return;
+      throw new CommandError({
+        title: t("daily.queueFullTitle"),
+        problem: t("daily.queueFull", { max: MAX_PENDING_PER_PLAYER }),
+      });
     }
 
     list.push({ discordId: userId, items: grantedRewards, queuedAt: now });
@@ -228,6 +215,7 @@ async function _execute(
         streakBonus,
         currentStreak,
         bonusStreak,
+        now,
         t("daily.queued", { server: server.id }),
       ),
     );
@@ -241,58 +229,25 @@ async function _execute(
   for (const reward of grantedRewards) {
     const ok = await give(server, username, reward);
     if (!ok) {
-      await failEphemeral(
-        interaction,
-        errorReply(
-          t("daily.deliveryFailed"),
-          t("daily.deliveryFailedFooter"),
-        ),
-      );
-      return;
+      throw new CommandError({
+        title: t("daily.deliveryFailedTitle"),
+        problem: t("daily.deliveryFailed"),
+        recovery: t("common.retryLater"),
+      });
     }
   }
 
   await persistClaim();
   await interaction.editReply(
-    response(mainReward, streakBonus, currentStreak, bonusStreak),
+    response(mainReward, streakBonus, currentStreak, bonusStreak, now),
   );
 }
 
-/**
- * The deferred reply is public, so a failure replaces the placeholder with an
- * ephemeral follow-up instead of exposing the error to the channel.
- */
-async function failEphemeral(
-  interaction: ChatInputCommandInteraction,
-  payload: ReturnType<typeof errorReply>,
-): Promise<void> {
-  await interaction.deleteReply();
-  await interaction.followUp(payload);
-}
-
-function errorReply(
-  msg: string,
-  footer: string,
-): { embeds: [ReturnType<typeof createErrorEmbed>]; flags: number } {
-  return {
-    embeds: [
-      createErrorEmbed(msg, {
-        footer: { text: footer },
-        timestamp: new Date(),
-      }),
-    ],
-    flags: MessageFlags.Ephemeral,
-  };
-}
-
-function cooldownMsg(ms: number, guildId?: string): string {
-  const h = Math.floor(ms / 3600000);
-  const m = Math.floor((ms % 3600000) / 60000);
-  const readyAt = new Date(Date.now() + ms);
+/** When the next reward is ready, as Discord timestamps in each reader's zone. */
+function cooldownMsg(readyAt: number): string {
   return t("daily.cooldown", {
-    hours: h,
-    minutes: m,
-    time: formatTime(readyAt, guildTimeZone(guildId)),
+    relative: relativeTimestamp(readyAt),
+    time: clockTimestamp(readyAt),
   });
 }
 
@@ -301,19 +256,24 @@ function response(
   streakBonus: DailyRewardItem[],
   cs: number,
   bs: number,
+  claimedAt: number,
   note?: string,
-): { content: string } {
+): { embeds: ReturnType<typeof createSuccessEmbed>[] } {
   const lines: string[] = [t("daily.reward", { reward: fmt(main) })];
-
   if (streakBonus.length > 0) {
     lines.push(
       t("daily.bonus", { days: bs, rewards: streakBonus.map(fmt).join(", ") }),
     );
   }
-
-  lines.push(t("daily.streak", { days: cs }));
   if (note) lines.push(note);
-  return { content: lines.join("\n") };
+
+    const embed = createSuccessEmbed(lines.join("\n"), {
+    title: t("daily.claimedTitle"),
+  }).addFields(
+    { name: t("daily.streakField"), value: t("streak.days", { count: cs }), inline: true },
+    { name: t("daily.nextField"), value: relativeTimestamp(claimedAt + DAILY_COOLDOWN_MS), inline: true },
+  );
+  return { embeds: [embed] };
 }
 
 function fmt({ item = "???", amount = 1 }: DailyRewardItem): string {

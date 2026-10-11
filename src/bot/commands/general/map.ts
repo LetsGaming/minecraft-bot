@@ -1,8 +1,7 @@
-import {
-  SlashCommandBuilder,
-  type ChatInputCommandInteraction,
-} from "discord.js";
-import { createEmbed, createErrorEmbed } from "../../utils/embeds/embedUtils.js";
+import { SlashCommandBuilder } from "discord.js";
+import { createEmbed } from "../../utils/embeds/embedUtils.js";
+import { withErrorHandling } from "../middleware.js";
+import { CommandError } from "@mcbot/core/utils/error.js";
 import { loadConfig } from "@mcbot/core/config.js";
 
 import { t } from "@mcbot/core/utils/i18n.js";
@@ -10,27 +9,24 @@ export const data = new SlashCommandBuilder()
   .setName("map")
   .setDescription("Shows the link to the live Minecraft map (Dynmap)");
 
-export async function execute(
-  interaction: ChatInputCommandInteraction,
-): Promise<void> {
-  await interaction.deferReply();
-
-  const guildId = interaction.guildId ?? undefined;
+export const execute = withErrorHandling(async (interaction) => {
   const url = getUrl();
   if (!url) {
-    const errorEmbed = createErrorEmbed(t("map.notConfigured", {}, guildId));
-    await interaction.editReply({ embeds: [errorEmbed] });
-    return;
+    throw new CommandError({
+      problem: t("map.notConfigured"),
+      recovery: t("map.notConfiguredRecovery"),
+    });
   }
 
-  const embed = createEmbed({
-    title: t("map.title", {}, guildId),
-    description: t("map.description", { url }, guildId),
-    footer: { text: t("common.requestedBy", { user: interaction.user.tag }, guildId) },
+  await interaction.editReply({
+    embeds: [
+      createEmbed({
+        title: t("map.title"),
+        description: t("map.description", { url }),
+      }),
+    ],
   });
-
-  await interaction.editReply({ embeds: [embed] });
-}
+});
 
 // Read through loadConfig() so env overrides, validation, and config
 // hot-reload apply — instead of re-reading config.json from disk directly.
