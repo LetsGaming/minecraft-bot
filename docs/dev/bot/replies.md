@@ -137,9 +137,24 @@ side.
 Every user-visible string goes through `t()` with keys in both
 [`en.ts`](../../../src/core/locales/en.ts) and
 [`de.ts`](../../../src/core/locales/de.ts). German uses du-form and one word
-per concept ("Server" for Minecraft, "Discord-Server" for the guild,
-"Bot-Admin", "Kanal"). Plurals use `{count|one|other}`. Shared terms (status
-labels, backup types) come from the glossary in `@mcbot/schema`.
+per concept:
+
+| Concept | German |
+|---|---|
+| Minecraft server | "Server" (or "Minecraft-Server" where both servers appear) |
+| Discord guild | "Discord-Server"; never "Guild" or "Gilde" in user-facing text |
+| Bot admin | "Bot-Admin" |
+| Channel | "Kanal" (as in Discord's German UI) |
+| API wrapper | "der API-Wrapper" (masculine) |
+| Claiming a reward | verb "abholen", noun "Belohnung"; "Daily" stays as a name |
+| Streak | "Serie" |
+| Application | "Antrag" |
+| A `/watch` subscription | "Benachrichtigung" |
+| Waypoint | "Waypoint" |
+
+No gendered forms such as "Erste(r)" (rephrase neutrally), no "(s)" or "(en)"
+plurals (use `{count|one|other}`), no dashes. Shared terms (status labels,
+backup types) come from the glossary in `@mcbot/schema`.
 
 Text built for a guild must be built inside that guild's locale context:
 `withErrorHandling` enters it for commands, and the broadcasters
