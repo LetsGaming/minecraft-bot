@@ -1,18 +1,47 @@
 import { ref, computed } from "vue";
-import { apiGet, apiSend } from "../api";
+import { ApiError, apiGet, apiSend } from "../api";
 import type { StaleInfo } from "@mcbot/schema/contract.js";
 import { errorMessage } from "../utils/errorMessage";
-import type { BackupFileInfo } from "../api";
+import type { BackupFileInfo, BackupSummaryResponse } from "../api";
 
 /**
- * DSH-03 — the backup panel's client half.
+ * The backup panel's client half.
  *
  * Per-view state rather than a module singleton: the list is per server, and
  * caching it across servers would show one server's archives under another's
  * name at the moment of switching.
+ *
+ * `error` belongs to the list. Create, restore and delete report their own
+ * outcome to the caller, so a failed delete never replaces a list that loaded.
  */
 
 const PAGE_SIZE = 50;
+
+/** What a script run reported: exit code and the tail of its output. */
+export interface ScriptOutcome {
+  ok: boolean;
+  exitCode: number | null;
+  output: string;
+  /** Set when the request itself failed and no script result came back. */
+  error: string;
+}
+
+export interface ActionOutcome {
+  ok: boolean;
+  error: string;
+}
+
+interface ScriptResponse {
+  ok: boolean;
+  exitCode: number | null;
+  output?: string;
+  stderr?: string;
+}
+
+function outcomeOf(res: ScriptResponse): ScriptOutcome {
+  const output = [res.output ?? "", res.stderr ?? ""].filter((part) => part.trim() !== "").join("\n");
+  return { ok: res.ok, exitCode: res.exitCode, output, error: "" };
+}
 
 export function useBackups() {
   const files = ref<BackupFileInfo[]>([]);
@@ -21,18 +50,24 @@ export function useBackups() {
   const stale = ref<StaleInfo | null>(null);
   const cursor = ref<string | null>(null);
   const loading = ref(false);
-  const restoring = ref("");
-  const deleting = ref("");
+  /** True until the first page of the current server has arrived or failed. */
+  const initialLoad = ref(true);
   const error = ref("");
+  /** HTTP status of the failed list request, for the error's detail line. */
+  const errorStatus = ref<number | null>(null);
+  const summary = ref<BackupSummaryResponse | null>(null);
+  const summaryError = ref("");
   let serverId = "";
 
   const hasMore = computed(() => cursor.value !== null);
 
   async function load(id: string, append = false): Promise<void> {
     if (loading.value) return;
+    if (id !== serverId) initialLoad.value = true;
     serverId = id;
     loading.value = true;
     error.value = "";
+    errorStatus.value = null;
     try {
       const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
       if (append && cursor.value) params.set("cursor", cursor.value);
@@ -52,14 +87,29 @@ export function useBackups() {
       stale.value = res.stale ?? null;
     } catch (err) {
       error.value = errorMessage(err);
+      errorStatus.value = err instanceof ApiError ? err.status : null;
       if (!append) files.value = [];
     } finally {
       loading.value = false;
+      initialLoad.value = false;
     }
   }
 
   function loadMore(): Promise<void> {
     return load(serverId, true);
+  }
+
+  /** Counts and sizes per folder. Optional: the list works without it. */
+  async function loadSummary(id: string): Promise<void> {
+    summaryError.value = "";
+    try {
+      summary.value = await apiGet<BackupSummaryResponse>(
+        `/api/servers/${encodeURIComponent(id)}/backups/summary`,
+      );
+    } catch (err) {
+      summary.value = null;
+      summaryError.value = errorMessage(err);
+    }
   }
 
   /**
@@ -77,22 +127,29 @@ export function useBackups() {
       `/backups/files/${encodeURIComponent(fileId)}/download`;
   }
 
-  async function restore(file: BackupFileInfo): Promise<boolean> {
-    restoring.value = file.id;
-    error.value = "";
+  /** Runs the suite's backup script through the `backup` server action. */
+  async function create(): Promise<ScriptOutcome> {
     try {
-      const res = await apiSend<{ ok: boolean; exitCode: number | null }>(
+      const res = await apiSend<ScriptResponse>(
+        "POST",
+        `/api/servers/${encodeURIComponent(serverId)}/backup`,
+      );
+      return outcomeOf(res);
+    } catch (err) {
+      return { ok: false, exitCode: null, output: "", error: errorMessage(err) };
+    }
+  }
+
+  async function restore(file: BackupFileInfo): Promise<ScriptOutcome> {
+    try {
+      const res = await apiSend<ScriptResponse>(
         "POST",
         `/api/servers/${encodeURIComponent(serverId)}` +
           `/backups/files/${encodeURIComponent(file.id)}/restore`,
       );
-      if (!res.ok) error.value = `Restore exited with code ${res.exitCode}.`;
-      return res.ok;
+      return outcomeOf(res);
     } catch (err) {
-      error.value = errorMessage(err);
-      return false;
-    } finally {
-      restoring.value = "";
+      return { ok: false, exitCode: null, output: "", error: errorMessage(err) };
     }
   }
 
@@ -103,9 +160,7 @@ export function useBackups() {
    * backend's own readThrough cache is invalidated on delete, but the
    * cursor/total this composable holds still need a fresh first page.
    */
-  async function remove(file: BackupFileInfo): Promise<boolean> {
-    deleting.value = file.id;
-    error.value = "";
+  async function remove(file: BackupFileInfo): Promise<ActionOutcome> {
     try {
       await apiSend<{ ok: boolean }>(
         "DELETE",
@@ -115,12 +170,10 @@ export function useBackups() {
       files.value = files.value.filter((f) => f.id !== file.id);
       total.value = Math.max(0, total.value - 1);
       void load(serverId);
-      return true;
+      void loadSummary(serverId);
+      return { ok: true, error: "" };
     } catch (err) {
-      error.value = errorMessage(err);
-      return false;
-    } finally {
-      deleting.value = "";
+      return { ok: false, error: errorMessage(err) };
     }
   }
 
@@ -129,13 +182,17 @@ export function useBackups() {
     total,
     stale,
     loading,
-    restoring,
-    deleting,
+    initialLoad,
     error,
+    errorStatus,
     hasMore,
+    summary,
+    summaryError,
     load,
     loadMore,
+    loadSummary,
     download,
+    create,
     restore,
     remove,
   };
