@@ -140,6 +140,7 @@ these before writing markup of your own:
 | `StatusChip`, `StatusDot` | Any status. Takes a status role, a `ServerState` or a `ConfigApplyState`; draws a shape and a label, never colour alone |
 | `ConfigStatusChip` | Whether the bot applied the saved config |
 | `EditorShell`, `EditBar`, `FieldRow`, `ReviewChanges` | Every editor (below) |
+| `ChipsInput` | A free-text list: Enter or the optional separator adds, Backspace or a named remove button drops. PrimeVue's `AutoComplete` with typeahead off, since `InputChips` is deprecated |
 | `ResponsiveTable` | A table that becomes one card per row on phones |
 | `JobBlock` | One long operation: title, state, elapsed time or progress, output |
 | `TypedConfirmDialog` | Confirms that need the target typed; mounted once in `App.vue` |

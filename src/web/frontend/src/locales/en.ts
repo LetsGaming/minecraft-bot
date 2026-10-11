@@ -128,6 +128,7 @@ export const en = {
   "field.secretHelp": "The current value is never sent to the browser.",
   "field.unsetChoice": "(unset)",
   "field.noneChoice": "(none)",
+  "field.removeChip": "Remove {value}",
   "field.unsetValue": "(unset)",
   "field.was": "Was",
   "field.reset": "Reset",

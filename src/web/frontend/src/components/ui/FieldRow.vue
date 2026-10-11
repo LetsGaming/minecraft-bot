@@ -161,7 +161,7 @@ const describedBy = computed(
 .fr-control > :deep(.p-select),
 .fr-control > :deep(.p-multiselect),
 .fr-control > :deep(.p-inputnumber),
-.fr-control > :deep(.p-inputchips),
+.fr-control > :deep(.p-autocomplete),
 .fr-control > :deep(.p-textarea) {
   width: 100%;
   min-width: 0;
