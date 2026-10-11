@@ -483,7 +483,7 @@ describe("startDowntimeMonitor — no downtime alert guilds", () => {
 
 // ── mention policy ─────────────────────────────────────────────────────────
 
-describe("startDowntimeMonitor — mention policy", () => {
+describe("startDowntimeMonitor: mention policy", () => {
   function guildsWithRole(mentionPolicy?: string) {
     return {
       g1: {
