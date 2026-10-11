@@ -1,5 +1,5 @@
 /**
- * DSH-03/DSH-04 — the backup panel's server side: list, download, restore, delete.
+ * DSH-03/DSH-04: the backup panel's server side: summary, list, download, restore, delete.
  *
  * Every one of these proxies the wrapper. That is not indirection for its own
  * sake: the wrapper's API key authenticates the request and must never reach a
@@ -17,6 +17,7 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
 import { getServerInstance } from "@mcbot/core/utils/server/server.js";
 import {
+  readBackups,
   indexBackupFiles,
   openBackupDownload,
   restoreBackupFile,
@@ -30,6 +31,7 @@ import { errMsg } from "@mcbot/core/utils/error.js";
 import { sessionFromRequest } from "../auth/auth.js";
 import { BadRequest, NotFound, HttpError } from "../errors.js";
 import { IdParams, BackupFileParams, BackupIndexQuery } from "./schemas.js";
+import type { BackupSummaryBody } from "@mcbot/schema/wire/index.js";
 
 const OPERATION_FAILED =
   "The operation failed unexpectedly — see the bot logs for details.";
@@ -88,6 +90,42 @@ export function registerBackupRoutes(app: FastifyInstance): void {
         return { ...value, stale };
       } catch (err) {
         log.error("web", `Backup index for ${req.params.id} failed: ${errMsg(err)}`);
+        throw new HttpError(502, OPERATION_FAILED);
+      }
+    },
+  );
+
+  api.get(
+    "/api/servers/:id/backups/summary",
+    {
+      schema: { params: IdParams },
+      // Counts, sizes and the newest name per folder: the same metadata level
+      // as the index above.
+      config: { capability: "server:read", scope: "server", param: "id" },
+    },
+    async (req) => {
+      const server = requireServer(req.params.id);
+      try {
+        const { value, stale } = await readThrough(
+          req.params.id,
+          "backupSummary",
+          async (): Promise<BackupSummaryBody> => {
+            const summary = await readBackups(server.config);
+            return {
+              dirs: summary.dirs.map((d) => ({
+                dir: d.dir,
+                count: d.count,
+                latestFile: d.latestFile,
+                latestMtimeMs: d.latestMtime.getTime(),
+                latestSizeBytes: d.latestSizeBytes,
+              })),
+              totalBytes: summary.totalBytes,
+            };
+          },
+        );
+        return { ...value, stale };
+      } catch (err) {
+        log.error("web", `Backup summary for ${req.params.id} failed: ${errMsg(err)}`);
         throw new HttpError(502, OPERATION_FAILED);
       }
     },
@@ -221,6 +259,7 @@ export function registerBackupRoutes(app: FastifyInstance): void {
         const result = await deleteBackupFile(server.config, fileId);
         if (!result.ok) throw new NotFound("Backup not found.");
         forget(req.params.id, "backupIndex");
+        forget(req.params.id, "backupSummary");
         return { ok: true, name: result.name ?? null };
       } catch (err) {
         if (err instanceof NotFound) throw err;
