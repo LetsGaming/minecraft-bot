@@ -50,7 +50,7 @@ behind a single endpoint. The dashboard does not know or care which it used.
 Every host needs a wrapper that offers the `backup-files` and `backup-restore`
 features and the `rollback` script action, for the backup index, download,
 restore and rollback. Older wrappers still work; the dashboard hides the
-Backups tab and the Rollback button on a host that cannot serve them, so a
+Backups page and the Rollback button on a host that cannot serve them, so a
 staggered rollout is safe and shows nothing broken in the meantime.
 
 Check what a host is running:

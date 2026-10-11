@@ -28,7 +28,7 @@ Passwordless sudo is the **wrapper's** requirement, on the Minecraft host: it is
 
 ## Mod install, update, remove or toggle fails with a sudo error
 
-Mod management runs the suite's `update/*.js` scripts with `node` as the Minecraft user, which is a second sudoers grant besides the `bash` one for the management scripts. If the Mods tab lists mods but changing them fails, the `node` grant is missing. The sudoers example is in the wrapper's `docs/sudoers-setup.md`.
+Mod management runs the suite's `update/*.js` scripts with `node` as the Minecraft user, which is a second sudoers grant besides the `bash` one for the management scripts. If the Mods page lists mods but changing them fails, the `node` grant is missing. The sudoers example is in the wrapper's `docs/sudoers-setup.md`.
 
 ## The wrapper refuses to start, "API key too short"
 
@@ -93,10 +93,10 @@ Per-user rate limit: 5 commands per rolling 30 seconds. It protects the RCON con
 
 That is by design: the feature self-heals. To remove the channels permanently, disable the feature for the guild first (`"statusEmbed": { "enabled": false }`), reload the config, then delete the channels.
 
-## Dashboard: the Backups tab is missing
+## Dashboard: the Backups page is missing
 
 The wrapper on that host does not offer the `backup-files` feature, so it
-cannot serve the archive index. The tab is hidden rather than shown-and-broken.
+cannot serve the archive index. The page is hidden rather than shown and broken.
 Check with:
 
 ```bash

@@ -144,7 +144,7 @@ list it:
 
 - **Backup archives** (`backup-files`, `backup-restore`): listing individual
   archives, downloading one, and restoring from one. Without it the dashboard
-  hides its Backups tab entirely rather than showing a panel that errors on
+  hides its Backups page entirely rather than showing a panel that errors on
   open, and you keep the per-tier summary that `/backup` has always shown.
 - **Console command reporting** (`rcon-command` version 2): the wrapper says
   whether a command went over RCON or the screen fallback, and answers an error
@@ -155,7 +155,7 @@ list it:
 - **Rollback** (`rollback` in the script actions): the Rollback button is hidden
   when the wrapper does not advertise `rollback.sh`.
 
-- **Mod version check** (`mod-compat`): the Mods tab's "Check another Minecraft
+- **Mod version check** (`mod-compat`): the Mods page's "Check another Minecraft
   version" panel, which starts a background job on the wrapper
   (`POST /instances/:id/mods/compat`, polled at `GET .../mods/compat/:jobId`).
   It needs a wrapper that serves the feature and a setup suite whose

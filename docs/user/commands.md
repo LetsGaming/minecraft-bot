@@ -101,6 +101,8 @@ If the guild has whitelist applications configured, non-admins apply for the whi
 
 ## How replies look
 
+- **Who sees a reply:** errors, "admins only" denials, confirmations, cooldowns and your own settings are visible only to you. Status, stats, leaderboards, moderation results and a claimed `/daily` reward are public.
+- **Confirmations** for actions that disconnect players (`/server stop`, `/server restart`) are a violet message with a red action button and Cancel. The buttons expire after 60 seconds and keep working if the bot restarts in between.
 - **Errors** are only visible to you. They say what went wrong and what to do next, for example "`Steve` is not known on this server. Check the spelling or pick a name from the suggestions."
 - **Long lists** (`/players`, `/mods`, `/stats`, `/help`, ...) have a row of buttons: Previous, a grey "Page 2/5" and Next. After 3 minutes the buttons switch off but stay visible.
 - **Colours** match the dashboard: green for online and done, amber for "not responding" and warnings, red for offline and failures, grey for unknown and plain events (joins, leaves, deaths), violet for things waiting on you (confirmations, whitelist applications), blue for answers and running jobs.

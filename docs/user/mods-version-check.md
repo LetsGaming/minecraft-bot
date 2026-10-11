@@ -1,6 +1,6 @@
 # Checking mods against another Minecraft version
 
-The dashboard's Mods tab can tell you which of the installed mods already have
+The dashboard's Mods page can tell you which of the installed mods already have
 a release for a Minecraft version you are thinking of moving to. It only
 checks and reports. Moving a server to a new version is a manual operation
 that this feature does not perform.
@@ -21,7 +21,7 @@ updates" button keeps working in that case.
 3. Press **Check N mods for &lt;version&gt;**. A progress block shows "Checking 14
    of 62" with a bar while the server's wrapper asks Modrinth about each
    installed mod, and the rows fill in as answers arrive. The check cannot be
-   cancelled; it ends on its own. You can leave the tab; the page stops polling
+   cancelled; it ends on its own. You can leave the page; the page stops polling
    while hidden and picks up when you return.
 
 The address keeps the check and the filter

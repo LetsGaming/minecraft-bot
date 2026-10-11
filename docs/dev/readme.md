@@ -17,7 +17,9 @@ need to know it.
 | `@mcbot/schema`: what a shared contract is and when something becomes one | [contracts.md](contracts.md) |
 | Running and writing tests | [testing.md](testing.md) |
 | Where to put a new command, watcher, or stat | [adding-features.md](adding-features.md) |
-| Why things are the way they are — the decision log | [decisions.md](decisions.md) |
+| Why things are the way they are: the decision log | [decisions.md](decisions.md) |
+| How Discord replies look: builders, colours, errors, confirm rows, paging, mentions | [bot/replies.md](bot/replies.md) |
+| Dashboard frontend: tokens, density, components, routes, `t()`, the hex and literal checks | [web/frontend.md](web/frontend.md) |
 
 ## Per workspace
 
@@ -34,6 +36,8 @@ is that every workspace depends on it, which makes it root material.
 ## Refactor records
 
 [refactor/](refactor/) holds the Wave 1 audit and its [summary](refactor/wave1-summary.md): what changed per phase, what was deferred, how it was verified and the cross-repo merge order.
+
+[wave2-summary.md](wave2-summary.md) records Wave 2 (the dashboard and Discord rework, 7.1.0): what changed per phase, which audit findings were closed, what was deferred, the limits of its verification and the open owner decisions. The Wave 2 working material (audit appendices, mockups, spike notes) is still under [refactor/](refactor/) until the owner confirms its removal; [wave2-cleanup-candidates.md](wave2-cleanup-candidates.md) lists it.
 
 ## History
 

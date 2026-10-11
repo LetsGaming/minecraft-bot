@@ -304,7 +304,7 @@ In this example `/say` is admin-only everywhere except guild `1112…`, `/poll` 
 - `adminOnly` — gates the command behind the admin check. For slash commands that is the global `adminUsers` or the issuing guild's `adminUsers`; for in-game commands the player's **linked Discord account** must pass the global admin check (game chat has no guild context, so guild-scoped admin lists don't apply there). `adminOnly` can only **add** a restriction: built-in admin commands (`/server`, `/config`, `/kick`, …) keep their own admin gate no matter what is configured here.
 - `url` — used by `/map` only, pointing at your Dynmap/Bluemap instance.
 
-The web dashboard has a **Commands** tab that edits exactly these blocks with a scope selector and shows the effective value per scope. Note that `/say` and the chat bridge are also rate-limited per user (the bridge allows short bursts), so a flood cannot saturate the game console either way.
+The web dashboard has a **Commands** page that edits exactly these blocks with a scope selector and shows the effective value per scope. Note that `/say` and the chat bridge are also rate-limited per user (the bridge allows short bursts), so a flood cannot saturate the game console either way.
 
 ## Environment variable overrides
 
@@ -326,7 +326,7 @@ The **Config**, **Commands** and guild editors share one behaviour:
 - Each section you change is marked **modified**, the Save button counts the changes (`Save 3 changes`) and stays disabled until something changed, and **Discard** puts the form back to what is on disk.
 - A save sends the hash of the file as you loaded it. If the file changed in between (another admin, a hand edit, the bot's `/config` command), nothing is overwritten: your edits are kept, changes you did not touch are merged in, and any field both of you changed is shown with three values (what it was, yours, what is on disk now) so you can keep yours or the disk value for each.
 - The per-guild editor and the setup wizard use a hash of that guild's own block, so editing one guild never conflicts with a save to another guild or a server entry.
-- Validation errors from the server are listed on the section they belong to and in the banner. The page asks before you leave it, close the tab or switch dashboard tabs while edits are unsaved.
+- Validation errors are shown at the field they belong to, and the edit bar offers "Go to first problem". The page asks before you leave it, switch server, press Back or close the browser tab while edits are unsaved.
 - The setup wizard reads the guild's current block before you start and merges its choices into it: settings it does not ask about (`server`, `mentionRole`, `postTime`, `events`, several chat bridges) are kept.
 
 ### Applied status
@@ -345,7 +345,7 @@ Guild managers do not see the chip: the file-level status is sysadmin-only.
 
 ## Hot reload
 
-The bot watches `config.json` for changes and reloads it automatically (debounced, a malformed save keeps the old config active). It watches the directory the file lives in, so a save that replaces the file (as the dashboard does) is seen on every platform. The dashboard process runs the same watcher: `webui.grants`, `adminUsers`, `webui.console.blockedCommands` and the server list take effect without restarting it, and a console stream held by someone whose access you removed is closed within seconds. `webui.port` and `webui.host` are read once at start and need a dashboard restart. Admins can also run `/config reload` in Discord, and `/config show` displays the running configuration with secrets redacted.
+The bot watches `config.json` for changes and reloads it automatically (debounced, a malformed save keeps the old config active). It watches the directory the file lives in, so a save that replaces the file (as the dashboard does) is seen on every platform. The dashboard process runs the same watcher: `webui.grants`, `adminUsers`, `webui.console.blockedCommands` and the server list take effect without restarting it, and a console stream held by someone whose access you removed is closed within seconds. `webui.port` and `webui.host` are read once at start and need a dashboard restart. Admins can also run `/config reload` in Discord, and `/config show` displays the running configuration only to the admin who ran it: servers by wrapper host, the current guild only, admins as a count, and never the bot token.
 
 What applies live:
 
