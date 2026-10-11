@@ -63,6 +63,18 @@ export const MinecraftPreset = definePreset(Aura, {
         },
       },
     },
+    togglebutton: {
+      colorScheme: {
+        dark: {
+          // Aura draws the unselected segments of a SelectButton in
+          // {surface.400}, 3.9:1 on its track; the dim text role passes.
+          root: {
+            color: "var(--text-dim)",
+            hoverColor: "var(--text)",
+          },
+        },
+      },
+    },
     toggleswitch: {
       colorScheme: {
         dark: {
