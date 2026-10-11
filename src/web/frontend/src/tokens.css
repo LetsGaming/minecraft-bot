@@ -94,13 +94,6 @@
   --discord-strong: #4752c4;
   --on-brand: #fff;
 
-  /* mod environment dots */
-  --env-both: #5b8def;
-  --env-server: #3ecf6e;
-  --env-optional: #e5a13a;
-  --env-client: #e5544b;
-  --env-unknown: #8a8a90;
-
   /* initials tiles (ModIcon fallback): picked by a hash of the slug, --text reads on each */
   --tile-1: #2d3a4f;
   --tile-2: #3a2f4a;
@@ -108,20 +101,6 @@
   --tile-4: #4a3a2a;
   --tile-5: #45303a;
   --tile-6: #2c4246;
-
-  /* Mods view palette: differs from the roles above and stays until that view moves onto them */
-  --mods-green: #3ecf6e;
-  --mods-amber: #e5a13a;
-  --mods-red: #e5544b;
-  --mods-muted: #8a8a90;
-  --mods-muted-2: #6a6a70;
-  --mods-card: #141416;
-  --mods-card-2: #161618;
-  --mods-text: #ededf0;
-  --mods-text-2: #c7c7cc;
-  --mods-text-3: #cfcfd4;
-  --mods-on-green: #05130a;
-  --mods-on-amber: #160e02;
 
   /* colour ramps the PrimeVue preset maps onto its primary and surface scales */
   --ramp-primary-50: #eafaf0;

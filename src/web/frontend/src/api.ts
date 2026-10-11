@@ -124,7 +124,14 @@ export {
 export type { Capability, GrantableCapability } from "@mcbot/schema";
 // `export ... from` re-exports without binding locally, and MeResponse below
 // uses the name — so it needs a real import as well.
-import type { GrantableCapability, InstalledMods as BaseInstalledMods } from "@mcbot/schema";
+import type {
+  GrantableCapability,
+  InstalledMod as BaseInstalledMod,
+  InstalledMods as BaseInstalledMods,
+  ModCompatJob as BaseModCompatJob,
+  ModCompatMod as BaseModCompatMod,
+  StaleInfo,
+} from "@mcbot/schema";
 
 // ── Dashboard-specific shapes (not in @mcbot/schema — web-only) ──
 export interface MeResponse {
@@ -169,18 +176,24 @@ export interface SetupRole {
 export type ModEnvironment = "server" | "client" | "both" | "optional" | "unknown";
 
 export type {
-  InstalledMod,
   ModUpdateCheck,
   ModAddResult,
   ModRemoveResult,
   ModApplyResult,
   ModToggleResult,
-  ModCompatJob,
-  ModCompatMod,
   ModCompatStarted,
 } from "@mcbot/schema";
-export interface InstalledMods extends BaseInstalledMods {
-  stale?: boolean;
+/** The dashboard adds `iconUrl` (same-origin proxy) when Modrinth has an icon for the project. */
+export type InstalledMod = BaseInstalledMod & { iconUrl?: string };
+export type ModCompatMod = BaseModCompatMod & { iconUrl?: string };
+export interface ModCompatJob extends Omit<BaseModCompatJob, "mods" | "partial"> {
+  mods?: ModCompatMod[];
+  partial: ModCompatMod[];
+}
+export interface InstalledMods extends Omit<BaseInstalledMods, "mods"> {
+  mods: InstalledMod[];
+  /** Set when the wrapper did not answer and this is the last list it sent. */
+  stale?: StaleInfo | null;
   /** The wrapper can check another Minecraft version. */
   compat?: boolean;
 }
