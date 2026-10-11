@@ -17,6 +17,7 @@ import type {
 } from "@mcbot/core/types/index.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { playerAvatarUrl } from "../mcHeads.js";
+import { relativeTimestamp } from "../discordTime.js";
 import { EmbedColor } from "./embedColors.js";
 import { statusCircle } from "./serverStateDisplay.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
@@ -158,9 +159,7 @@ export function createProgressEmbed({
   description?: string;
   startedAt?: number;
 }): EmbedBuilder {
-  const started = t("progress.started", {
-    time: `<t:${Math.floor(startedAt / 1000)}:R>`,
-  });
+  const started = t("progress.started", { time: relativeTimestamp(startedAt) });
   return createEmbed({
     title,
     description: description ? `${description}\n${started}` : started,
