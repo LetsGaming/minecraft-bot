@@ -6,11 +6,37 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **`/server stop` and `/server restart` ask first.** The command replies only to you with the number of online players, a red confirm button and Cancel; the buttons expire after 60 seconds and keep working across a bot restart. After confirming, a public message says who stopped or restarted the server and shows the progress. Script output of a failed run is shown only to the admin (`commands/server/control.ts`, `utils/embeds/confirm.ts`, `interactions/confirmActions.ts`).
+- **Optional alert mention policy.** `guilds.<id>.downtimeAlerts.mentionPolicy` and `guilds.<id>.tpsAlerts.mentionPolicy` accept `"always"` (default, every alert pings `mentionRole` as before) or `"escalation"` (only the first failure and a rise in severity ping; recoveries and repeats are posted silently). Additive field, no migration (`schema/config.ts`, `utils/embeds/alertUtils.ts`, `config.schema.json`, `docs/admin/configuration.md`).
+- **TPS recovery message.** When TPS is back above `tpsWarningThreshold` after a warning, the TPS channel gets a "back to normal" post; a drop below 10 TPS alerts at once instead of waiting for the 5 minute repeat (`watchers/monitors/tpsMonitor.ts`).
+- Server recovery alerts say how long the server was down (`watchers/monitors/downtimeMonitor.ts`).
+
+### Changed
+
+- **Discord messages follow the dashboard's status colours.** Green for online and done, amber for warnings and "not responding", red for offline and failures, grey for unknown and plain events, violet for confirmations and whitelist applications, blue for answers and running jobs; the old gold, purple and brand colours are gone. Joins, leaves and deaths are grey one-line events instead of red or green embeds (`utils/embeds/embedColors.ts`, `schema/status.ts`, `watchers/log/*`).
+- **Titles name the action or object** ("Player banned", "Backups of smp", "smp is offline") instead of "✅ Success", "❌ Error" or "ℹ️ Info", in sentence case. The only emoji left in titles is the server state circle (🟢 🟡 🔴 ⚪). Embeds no longer carry a timestamp except live data (status, uptime, TPS, alerts), and "Requested by" and page-number footers are gone; page numbers live on the pager (`utils/embeds/embedUtils.ts`, command files).
+- **Errors are only visible to you and say what to do next.** Every slash command now runs through the shared error wrapper (daily, streak, link, linkstatus, unlink, help, map, whitelisted, compare, playtime and stats did not), errors are ephemeral with a problem and a recovery line, and a public "thinking..." placeholder is removed instead of turned into a public error (`commands/middleware.ts`).
+- **Admin commands deny before posting anything.** A non-admin running an admin command gets one ephemeral "Bot admins only" reply before the command defers; the dispatcher's `adminOnly` denial uses the same message (`commands/middleware.ts`, `index.ts`).
+- **`/daily` replies only to you** with a "Daily reward claimed" embed showing your streak and when the next reward is ready; the cooldown is shown as Discord timestamps (`commands/connection/daily/daily.ts`). `/streak`, `/link`, `/linkstatus` and `/unlink` reply with embeds.
+- **Pagination** is Previous, a disabled "Page n/m" button and Next; after 3 minutes the buttons switch off instead of disappearing, also on replies only you can see (`utils/embeds/embedUtils.ts`).
+- The live status embed takes the colour of the worst server, lists servers that need attention first and shows when it was last updated (`watchers/schedulers/statusEmbed.ts`). `/uptime` shows the same state labels as `/status`.
+- `/backup` names the backup types like the dashboard (Hourly, Daily, Pre-update, Manual, Archive) and shows ages as Discord timestamps (`commands/server/backup.ts`, `schema/glossary.ts`).
+- German copy uses du-form and one word per concept ("Discord-Server" for the guild, "Kanal", "Benachrichtigung", "Antrag", "Serie", "der API-Wrapper"); plurals come from `Intl.PluralRules` instead of "(s)" and "(en)" (`core/locales/*.ts`, `core/utils/i18n.ts`). The German strings still need a native read.
+
 ### Security
 
+- **Relayed text never pings.** The chat bridge, `/console live`, in-game reports and event notifications set `allowedMentions` explicitly, and alerts allow exactly the configured role (`watchers/log/chatBridge.ts`, `watchers/log/consoleRelay.ts`, `commands/communication/report.ts`, `watchers/notifyGuilds.ts`).
+- The admin audit record of a `/server` action is written only after the capability check passes, and for stop and restart only once confirmed (`commands/server/control.ts`).
 - **`/config show` no longer exposes secrets.** The reply is now ephemeral, drops the (partially masked) bot token and the admin IDs, shows only the guild the command was run in, and lists each Minecraft server by wrapper host instead of its full URL. Admins are shown as a count. `/config reload` replies are ephemeral too (`commands/admin/config.ts`).
 
 ### Fixed
+
+- **`/mods` works for large modpacks.** Above about 110 mods the reply exceeded Discord's 6000 character embed limit and failed with a generic error; the list is now split into pages that each stay within the limits (`commands/info/mods.ts`, `paginateFields` in `utils/embeds/embedUtils.ts`).
+- Pager buttons on replies only you can see stayed clickable but dead after the timeout; they now switch off (`handlePagination`).
+- German guilds saw English fragments in German messages: "players" and "including" in `/status` and the status embed, raw `online`/`offline` in `/uptime`, "*None*" and "(cont.)" in `/mods`, and English feature names in the "needs the setup suite" error (`serverStateDisplay.ts`, `capabilities` callers).
+- The crash loop alert told admins to run `/mods disable`, which does not exist; it now points at the logs and `/server restart`. The German wrapper alerts used the wrong grammatical gender for "API-Wrapper" (`core/locales/*.ts`).
 
 - **German whitelist application form works again.** The German label of the optional note field was 53 characters, over Discord's 45 character limit, so Discord rejected the form and the Apply button did nothing. The label is shorter, and a test now checks every locale string used for a modal title or label, button label, placeholder, select option or embed title against Discord's limits in both languages (`locales/de.ts`, `tests/core/localeLimits.test.ts`).
 - **`/daily` no longer fails on slow servers.** It acknowledges the command before the online lookup and the reward delivery, so a slow wrapper no longer produces "The application did not respond". Errors after that point (full offline queue, failed delivery) are shown only to you. An unresolvable server is reported instead of throwing (`commands/connection/daily/daily.ts`).
