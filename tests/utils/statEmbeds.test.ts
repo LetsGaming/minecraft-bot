@@ -100,16 +100,15 @@ describe("buildStatsEmbeds", () => {
     expect(embeds[0]!.toJSON().title).toContain("Notch");
   });
 
-  it("includes page numbering in the title", () => {
+  it("leaves the page number to the pager, not the title", () => {
     const embeds = buildStatsEmbeds(minimalStats, "Steve");
-    expect(embeds[0]!.toJSON().title).toMatch(/Page \d+\/\d+/);
+    expect(embeds[0]!.toJSON().title).not.toMatch(/Page \d+\/\d+/);
   });
 
-  it("includes total stats count in footer", () => {
-    const embeds = buildStatsEmbeds(minimalStats, "Steve");
-    expect(embeds[0]!.toJSON().footer?.text).toContain(
-      String(minimalStats.length),
-    );
+  it("states the total stats count in the description, with no footer", () => {
+    const json = buildStatsEmbeds(minimalStats, "Steve")[0]!.toJSON();
+    expect(json.description).toContain(String(minimalStats.length));
+    expect(json.footer).toBeUndefined();
   });
 
   it("formats _time keys as human-readable duration", () => {

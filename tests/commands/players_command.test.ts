@@ -93,9 +93,11 @@ describe("/players", () => {
     const i = makeInteraction();
     await execute(i);
     const desc = i.editReply.mock.calls[0]![0].embeds[0].data.description as string;
-    const lines = desc.split("\n");
+    // First line is the count, then a blank line, then one line per player.
+    expect(desc.split("\n")[0]).toBe("3 players.");
+    const lines = desc.split("\n").slice(2);
     expect(lines[0]).toContain("P000");
-    expect(lines[0]).toContain("🟢");
+    expect(lines[0]).toContain("online now");
     expect(lines[1]).toContain(`<t:${Math.floor((NOW - 1000) / 1000)}:R>`);
     expect(lines[2]).toContain("P002");
     expect(lines[2]).not.toContain("<t:");
@@ -124,9 +126,10 @@ describe("/players", () => {
     expect(handlePagination).toHaveBeenCalledTimes(1);
     const pages = vi.mocked(handlePagination).mock.calls[0]![2];
     expect(pages).toHaveLength(3);
-    expect(pages[0]!.data.description!.split("\n")).toHaveLength(20);
-    expect(pages[2]!.data.description!.split("\n")).toHaveLength(5);
-    expect(pages[0]!.data.footer!.text).toContain("1/3");
+    expect(pages[0]!.data.description!.split("\n").slice(2)).toHaveLength(20);
+    expect(pages[2]!.data.description!.split("\n").slice(2)).toHaveLength(5);
+    expect(pages[0]!.data.description).toContain("45 players.");
+    expect(pages[0]!.data.footer).toBeUndefined();
     expect(i.editReply.mock.calls[0]![0].components).toHaveLength(1);
   });
 

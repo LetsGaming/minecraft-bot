@@ -73,6 +73,9 @@ describe("downtime alert language", () => {
     const titles = createEmbed.mock.calls.map(
       (c) => (c[0] as { title: string }).title,
     );
-    expect(titles).toEqual([en["downtime.downTitle"], de["downtime.downTitle"]]);
+    expect(titles).toEqual([
+      en["downtime.downTitle"]!.replace("{server}", "locale-srv"),
+      de["downtime.downTitle"]!.replace("{server}", "locale-srv"),
+    ]);
   });
 });

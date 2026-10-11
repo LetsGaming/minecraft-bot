@@ -14,7 +14,8 @@ vi.mock("../../src/bot/utils/guild/guildRouter.js", () => ({
   resolveServer: vi.fn(),
 }));
 
-vi.mock("../../src/bot/utils/embeds/embedUtils.js", () => ({
+vi.mock("../../src/bot/utils/embeds/embedUtils.js", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   createEmbed: vi.fn().mockImplementation((opts) => ({
     _opts: opts,
     addFields: vi.fn().mockReturnThis(),
@@ -184,7 +185,7 @@ describe("/whitelist command", () => {
     const interaction = makeInteraction({
       options: { getString: vi.fn().mockReturnValue("NotAPlayer") },
     });
-    await expect(execute(interaction)).rejects.toThrow("not found");
+    await expect(execute(interaction)).rejects.toThrow("Mojang has no player");
   });
 });
 
@@ -286,11 +287,10 @@ describe("/whitelisted command", () => {
     vi.mocked(loadWhitelist).mockResolvedValue([]);
     const interaction = makeInteraction();
     await execute(interaction);
-    expect(interaction.editReply).toHaveBeenCalledWith(
-      expect.objectContaining({
-        content: expect.stringContaining("may be disabled"),
-      }),
-    );
+    const call = vi.mocked(interaction.editReply).mock.calls[0]![0] as {
+      embeds: Array<{ toJSON(): { description?: string } }>;
+    };
+    expect(call.embeds[0]!.toJSON().description).toContain("turned off");
   });
 
   it("paginates when there are many players", async () => {
@@ -350,11 +350,12 @@ describe("/map command", () => {
     ({ execute } = await import("../../src/bot/commands/general/map.js"));
   });
 
-  it("replies with error when map URL is not configured", async () => {
+  it("fails with a recovery step when the map URL is not configured", async () => {
     vi.mocked(loadConfig).mockReturnValue({ commands: {} } as never);
     const interaction = makeInteraction();
-    await execute(interaction);
-    expect(interaction.editReply).toHaveBeenCalled();
+    await expect(execute(interaction)).rejects.toMatchObject({
+      recovery: expect.stringContaining("url"),
+    });
   });
 
   it("replies with map embed when URL is configured", async () => {

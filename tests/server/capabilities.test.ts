@@ -168,7 +168,7 @@ describe("requireCapability", () => {
     const server = inst(caps({ backups: false }));
     expect(() =>
       requireCapability(server, (c) => c.backups, "the suite backup layout"),
-    ).toThrow(/setup-suite layout.*docs\/admin\/setup\.md/s);
+    ).toThrow(/setup suite.*docs\/admin\/setup\.md/s);
   });
 
   it("passes when the capability exists or the instance is unprobed", () => {

@@ -81,7 +81,7 @@ describe("resolveServer", () => {
       guildId: "guild1",
     });
     expect(() => resolveServer(interaction)).toThrow(
-      'Server "unknown" not found.',
+      'No server called "unknown".',
     );
   });
 
@@ -225,7 +225,7 @@ describe("resolveServer tenant isolation", () => {
       userId: "someMember",
     });
     expect(() => resolveServer(interaction)).toThrow(
-      /must be used inside a Discord server/,
+      /in a Discord server/,
     );
   });
 
