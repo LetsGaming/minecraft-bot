@@ -94,6 +94,16 @@ describe("glossary", () => {
 
   it("looks terms up by language", () => {
     expect(glossaryText("term.guild")).toBe("Guild");
-    expect(glossaryText("term.guild", "de")).toBe("Gilde");
+    expect(glossaryText("term.guild", "de")).toBe("Discord-Server");
+  });
+});
+
+describe("backupTierLabel", () => {
+  it("labels wrapper tier directories in both languages", async () => {
+    const { backupTierLabel } = await import("../../src/schema/glossary.js");
+    expect(backupTierLabel("hourly")).toBe("Hourly");
+    expect(backupTierLabel("archives/update")).toBe("Pre-update");
+    expect(backupTierLabel("archives/daily", "de")).toBe("Täglich");
+    expect(backupTierLabel("archives/custom")).toBe("Custom");
   });
 });

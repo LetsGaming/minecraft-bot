@@ -104,17 +104,12 @@ export function errorText(content: string | ErrorContent): string {
  * Red embed for a failure: the problem, then what to do about it. Send it
  * through `replyError`, which keeps it visible only to the invoker.
  */
-export function createErrorEmbed(
-  content: string | ErrorContent,
-  { footer, timestamp = false }: EmbedStyleOptions = {},
-): EmbedBuilder {
+export function createErrorEmbed(content: string | ErrorContent): EmbedBuilder {
   const title = typeof content === "string" ? undefined : content.title;
   return createEmbed({
     title: title ?? t("embed.errorTitle"),
     description: errorText(content),
     color: EmbedColor.Error,
-    footer,
-    timestamp,
   });
 }
 

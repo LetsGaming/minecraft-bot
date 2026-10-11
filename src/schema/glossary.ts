@@ -13,7 +13,7 @@ export interface GlossaryEntry {
  */
 export const GLOSSARY = {
   "term.server": { en: "Server", de: "Server" },
-  "term.guild": { en: "Guild", de: "Gilde" },
+  "term.guild": { en: "Guild", de: "Discord-Server" },
   "term.mod": { en: "Mod", de: "Mod" },
   "term.player": { en: "Player", de: "Spieler" },
   "term.backup": { en: "Backup", de: "Backup" },
