@@ -11,7 +11,7 @@
           {
             "color": "#4ade80",
             "title": "Daily reward claimed",
-            "description": "Reward: 3x diamond\n6-day streak bonus: 16x cooked beef",
+            "description": "Reward: 3 × Diamond\n6-day streak bonus: 16 × Cooked Beef",
             "fields": [
               {
                 "name": "Streak",
@@ -39,7 +39,65 @@
           {
             "color": "#4ade80",
             "title": "Tägliche Belohnung abgeholt",
-            "description": "Belohnung: 3x diamond\nBonus für 6 Tage Serie: 16x cooked beef",
+            "description": "Belohnung: 3 × Diamond\nBonus für 6 Tage Serie: 16 × Cooked Beef",
+            "fields": [
+              {
+                "name": "Serie",
+                "value": "6 Tage",
+                "inline": true
+              },
+              {
+                "name": "Nächste Belohnung",
+                "value": "<t:1791729360:R>",
+                "inline": true
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "claimed with a lucky bonus": {
+    "en": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "editReply",
+        "embeds": [
+          {
+            "color": "#4ade80",
+            "title": "Daily reward claimed",
+            "description": "Reward: 3 × Diamond\nLucky bonus: 3 × Diamond\n6-day streak bonus: 16 × Cooked Beef",
+            "fields": [
+              {
+                "name": "Streak",
+                "value": "6 days",
+                "inline": true
+              },
+              {
+                "name": "Next reward",
+                "value": "<t:1791729360:R>",
+                "inline": true
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "de": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "editReply",
+        "embeds": [
+          {
+            "color": "#4ade80",
+            "title": "Tägliche Belohnung abgeholt",
+            "description": "Belohnung: 3 × Diamond\nGlücksbonus: 3 × Diamond\nBonus für 6 Tage Serie: 16 × Cooked Beef",
             "fields": [
               {
                 "name": "Serie",
@@ -69,7 +127,7 @@
           {
             "color": "#4ade80",
             "title": "Daily reward claimed",
-            "description": "Reward: 3x diamond\n6-day streak bonus: 16x cooked beef\nYou are offline on **smp** right now, so the reward is queued and delivered the next time you join. Your streak is safe.",
+            "description": "Reward: 3 × Diamond\n6-day streak bonus: 16 × Cooked Beef\nYou are offline on **smp** right now, so the reward is queued and delivered the next time you join. Your streak is safe.",
             "fields": [
               {
                 "name": "Streak",
@@ -97,7 +155,7 @@
           {
             "color": "#4ade80",
             "title": "Tägliche Belohnung abgeholt",
-            "description": "Belohnung: 3x diamond\nBonus für 6 Tage Serie: 16x cooked beef\nDu bist auf **smp** gerade offline. Die Belohnung ist vorgemerkt und kommt beim nächsten Betreten an. Deine Serie bleibt erhalten.",
+            "description": "Belohnung: 3 × Diamond\nBonus für 6 Tage Serie: 16 × Cooked Beef\nDu bist auf **smp** gerade offline. Die Belohnung ist vorgemerkt und kommt beim nächsten Betreten an. Deine Serie bleibt erhalten.",
             "fields": [
               {
                 "name": "Serie",

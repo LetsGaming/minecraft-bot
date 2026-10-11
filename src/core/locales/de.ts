@@ -91,7 +91,7 @@ export const de: Record<string, string> = {
   // ── daily delivery queue ──
   "daily.queueFull": "Im Spiel warten schon {max} Belohnungen auf dich. Betritt den Server und hol sie ab, bevor du die nächste anforderst.",
   "daily.queued": "Du bist auf **{server}** gerade offline. Die Belohnung ist vorgemerkt und kommt beim nächsten Betreten an. Deine Serie bleibt erhalten.",
-  "daily.delivered": "📦 {count|# vorgemerkte Daily-Belohnung|# vorgemerkte Daily-Belohnungen} geliefert. Viel Spaß!",
+  "daily.delivered": "📦 {count|# vorgemerkte Daily-Belohnung|# vorgemerkte Daily-Belohnungen} geliefert: {items}. Viel Spaß!",
   // ── sessions ──
   "sessions.none": "Noch keine Session-Daten für **{player}** auf **{server}**.",
   "sessions.onlineNow": "Gerade online",
@@ -515,6 +515,7 @@ export const de: Record<string, string> = {
   "daily.cooldown": "Die nächste Belohnung gibt es {relative} (um {time}).",
   "daily.reward": "Belohnung: {reward}",
   "daily.bonus": "Bonus für {days} Tage Serie: {rewards}",
+  "daily.randomBonus": "Glücksbonus: {reward}",
   // ── server events, leaderboard, console relay ──
   "serverEvent.startedTitle": "{server} gestartet",
   "serverEvent.startedBody": "Der Server ist online und bereit für Spieler.",

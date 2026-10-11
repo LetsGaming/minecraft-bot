@@ -39,6 +39,7 @@ import {
   DAILY_COOLDOWN_MS,
 } from "@mcbot/core/utils/minecraft/rewards.js";
 import { resolveServer } from "../../../utils/guild/guildRouter.js";
+import { formatItemList, formatItemStack } from "@mcbot/core/utils/minecraft/itemNames.js";
 
 const claimLock = new Set<string>();
 
@@ -140,23 +141,24 @@ async function _execute(
     deriveMaxStreak(pool.streakBonuses),
   );
 
-  const grantedRewards: DailyRewardItem[] = [];
   const mainReward = pick(pool.default);
-  grantedRewards.push(mainReward);
 
-  // Have a rare chance to give a bonus reward from the pool even if the streak bonus isn't active.
-  // This is separate from the streak bonus, which is always granted if the streak is high enough.
-  // The bonusChance is a percentage chance (0-100) to grant a bonus reward on any given claim.
-  if (pool.bonusChance && Math.random() * 100 < pool.bonusChance) {
-    const bonusReward = pick(pool.default);
-    if (bonusReward) {
-      grantedRewards.push(bonusReward);
-    }
-  }
+  // bonusChance is a percentage (0-100) for an extra roll from the same pool,
+  // independent of the streak bonus.
+  const randomBonus =
+    pool.bonusChance && Math.random() * 100 < pool.bonusChance
+      ? pick(pool.default)
+      : null;
 
   const bonus = pool.streakBonuses?.[String(bonusStreak)] ?? null;
   const streakBonus = bonus && bonus.length > 0 ? bonus : [];
-  grantedRewards.push(...streakBonus);
+
+  const grantedRewards: DailyRewardItem[] = [
+    mainReward,
+    ...(randomBonus ? [randomBonus] : []),
+    ...streakBonus,
+  ];
+  const granted: GrantedRewards = { main: mainReward, randomBonus, streakBonus, bonusStreak };
 
   // Persisting the claim is shared between the online and offline paths;
   // it must only run once delivery is confirmed (online) or queued
@@ -207,14 +209,7 @@ async function _execute(
     await persistClaim();
 
     await interaction.editReply(
-      response(
-        mainReward,
-        streakBonus,
-        currentStreak,
-        bonusStreak,
-        now,
-        t("daily.queued", { server: server.id }),
-      ),
+      response(granted, currentStreak, now, t("daily.queued", { server: server.id })),
     );
     return;
   }
@@ -236,7 +231,7 @@ async function _execute(
 
   await persistClaim();
   await interaction.editReply(
-    response(mainReward, streakBonus, currentStreak, bonusStreak, now),
+    response(granted, currentStreak, now),
   );
 }
 
@@ -248,32 +243,35 @@ function cooldownMsg(readyAt: number): string {
   });
 }
 
+interface GrantedRewards {
+  main: DailyRewardItem;
+  randomBonus: DailyRewardItem | null;
+  streakBonus: DailyRewardItem[];
+  bonusStreak: number;
+}
+
 function response(
-  main: DailyRewardItem,
-  streakBonus: DailyRewardItem[],
+  granted: GrantedRewards,
   cs: number,
-  bs: number,
   claimedAt: number,
   note?: string,
 ): { embeds: ReturnType<typeof createSuccessEmbed>[] } {
-  const lines: string[] = [t("daily.reward", { reward: fmt(main) })];
-  if (streakBonus.length > 0) {
+  const lines: string[] = [t("daily.reward", { reward: formatItemStack(granted.main) })];
+  if (granted.randomBonus) {
+    lines.push(t("daily.randomBonus", { reward: formatItemStack(granted.randomBonus) }));
+  }
+  if (granted.streakBonus.length > 0) {
     lines.push(
-      t("daily.bonus", { days: bs, rewards: streakBonus.map(fmt).join(", ") }),
+      t("daily.bonus", { days: granted.bonusStreak, rewards: formatItemList(granted.streakBonus) }),
     );
   }
   if (note) lines.push(note);
 
-    const embed = createSuccessEmbed(lines.join("\n"), {
+  const embed = createSuccessEmbed(lines.join("\n"), {
     title: t("daily.claimedTitle"),
   }).addFields(
     { name: t("daily.streakField"), value: t("streak.days", { count: cs }), inline: true },
     { name: t("daily.nextField"), value: relativeTimestamp(claimedAt + DAILY_COOLDOWN_MS), inline: true },
   );
   return { embeds: [embed] };
-}
-
-function fmt({ item = "???", amount = 1 }: DailyRewardItem): string {
-  const cleanName = item.replace(/^minecraft:/, "").replace(/_/g, " ");
-  return `${amount}x ${cleanName}`;
 }

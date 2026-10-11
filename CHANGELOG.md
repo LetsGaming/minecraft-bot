@@ -55,6 +55,7 @@ Wave 2: the dashboard and the Discord replies reworked on one shared status syst
 - The login page's heading says what it is for ("Sign in to the dashboard"); the app name above it is no longer the heading (`App.vue`).
 - The dashboard's "bot looks down" banner is one status line with the time of the last heartbeat and a link to Overview, instead of a large orange block (`App.vue`, `StatusView.vue`). Pages use the full width beside the sidebar up to 2400 px, and Overview panels no longer run off a 360 px screen (`AppShell.vue`, `OverviewView.vue`).
 - **Playtime reads like every other duration.** `/players`, `/playtime`, `/compare`, `/profile`, `/stats`, the playtime leaderboard and the in-game playtime milestone announcements show the two largest units in the shared format ("8 d 20 h", "45 min 12 s") instead of "8d 20h 0m 0s", the same as the dashboard and in both languages (`core/utils/minecraft/statUtils.ts`, `core/utils/duration.ts`, `commands/stats/*`, `commands/info/profile.ts`, `utils/embeds/statEmbeds.ts`).
+- **Reward items have readable names.** `/daily`, `/daily history` and the in-game notice for queued rewards show "3 × Diamond" and "16 × Cooked Beef" instead of "3x diamond", the same in both languages; the in-game notice now lists what was delivered (`core/utils/minecraft/itemNames.ts`, `core/utils/minecraft/rewards.ts`, `commands/connection/daily/*`).
 
 ### Security
 
@@ -88,6 +89,7 @@ Wave 2: the dashboard and the Discord replies reworked on one shared status syst
 - **Save conflicts in the config editors** were labelled with mod config's queue wording ("Was, when you queued"); they now say the field changed on disk while you edited and show its value from when you opened the page (`components/schema/ConflictPicker.vue`).
 - **Raw JSON edits count as unsaved work.** Text that does not parse, or differs from the loaded config, enables Discard and triggers the leave prompt (`useConfig.ts`).
 - **Dashboard contrast and keyboard focus.** Primary buttons now read at 7.6:1 (was 2.1:1), dim text at 6.9:1 (was 3.4:1), secondary outlined and text buttons (Reload, Download and similar) at 5.9:1 (was 3.2:1), and unselected segmented options (Show, Layout, Enabled, Who can use it) and form placeholders at 5.9:1 (was 3.9:1). Every control shows a visible focus ring (`main.ts`, `style.css`, `preset.ts`).
+- **`/daily` lists the lucky bonus.** When `bonusChance` rolled an extra item, it was given and saved in the history but missing from the reply; it now has its own "Lucky bonus" line (`commands/connection/daily/daily.ts`).
 
 ## [7.0.0] - 2026-10-10
 

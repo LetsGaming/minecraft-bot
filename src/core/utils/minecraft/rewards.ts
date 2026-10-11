@@ -17,6 +17,7 @@ import {
 } from "../stores/dailyStore.js";
 import type { ServerInstance } from "../server/server.js";
 import { tellraw } from "./serverMessages.js";
+import { formatItemList } from "./itemNames.js";
 import type {
   DailyRewardsConfig,
   DailyRewardItem,
@@ -155,13 +156,13 @@ export async function deliverPendingRewards(
   const list = queue[key];
   if (!list || list.length === 0) return 0;
 
-  let delivered = 0;
+  const delivered: DailyRewardItem[] = [];
   const remaining: typeof list = [];
 
   for (const entry of list) {
     const undelivered: DailyRewardItem[] = [];
     for (const item of entry.items) {
-      if (await give(server, player, item)) delivered++;
+      if (await give(server, player, item)) delivered.push(item);
       else undelivered.push(item);
     }
     if (undelivered.length > 0) {
@@ -173,11 +174,14 @@ export async function deliverPendingRewards(
   else delete queue[key];
   await savePendingRewards(store);
 
-  if (delivered > 0) {
+  if (delivered.length > 0) {
     await tellraw(server, player, {
-      text: t("daily.delivered", { count: delivered }),
+      text: t("daily.delivered", {
+        count: delivered.length,
+        items: formatItemList(delivered),
+      }),
       color: "green",
     });
   }
-  return delivered;
+  return delivered.length;
 }
