@@ -62,7 +62,7 @@ False-positive protection:
 - `/server stop` and `/server restart` suppress alerts for 5 minutes, so planned maintenance never pages anyone.
 - Exactly one "down" alert per outage, plus one recovery message when the server returns that says how long it was down.
 
-Alerts are red with 🔴 in the title when a server goes down, green with 🟢 when it is back, and amber when the API wrapper stops answering while the server itself may be fine. Whether `mentionRole` is pinged on every alert or only on the first failure and on escalation is set by `mentionPolicy` ([configuration.md](configuration.md#alert-mentions)).
+Alerts are red with 🔴 in the title when a server goes down, green with 🟢 when it is back, and amber when the API wrapper stops answering while the server itself may be fine. By default `mentionRole` is pinged only on the first failure and when severity rises; recoveries and repeats are posted without a ping. `"mentionPolicy": "always"` pings on every alert instead ([configuration.md](configuration.md#alert-mentions)).
 
 These checks also feed the `/uptime` command's history.
 

@@ -268,10 +268,10 @@ describe("TPS recovery and escalation", () => {
     );
   });
 
-  it("under escalation the recovery does not ping", async () => {
+  it("by default (escalation) the recovery does not ping", async () => {
     const send = vi.fn().mockResolvedValue(undefined);
     const server = srv("rec-2", { tps1m: 12 });
-    const t = startTpsMonitor(server, client(send), guildWithRole("escalation"));
+    const t = startTpsMonitor(server, client(send), guildWithRole());
     await vi.advanceTimersByTimeAsync(TICK);
     vi.mocked((server as unknown as { getTps: ReturnType<typeof vi.fn> }).getTps).mockResolvedValue({ tps1m: 19.9 });
     await vi.advanceTimersByTimeAsync(TICK);

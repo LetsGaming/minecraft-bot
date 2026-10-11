@@ -508,15 +508,15 @@ describe("startDowntimeMonitor: mention policy", () => {
     return send.mock.calls.map(([payload]) => payload as { content?: string; allowedMentions: unknown });
   }
 
-  it("pings on the outage and the recovery by default, as before", async () => {
-    const [down, up] = await downThenUp();
+  it("always pings on the outage and the recovery", async () => {
+    const [down, up] = await downThenUp("always");
     expect(down!.content).toBe("<@&42>");
     expect(up!.content).toBe("<@&42>");
     expect(down!.allowedMentions).toEqual({ parse: [], roles: ["42"] });
   });
 
-  it("escalation pings the outage only and posts the recovery silently", async () => {
-    const [down, up] = await downThenUp("escalation");
+  it("by default pings the outage only and posts the recovery silently", async () => {
+    const [down, up] = await downThenUp();
     expect(down!.content).toBe("<@&42>");
     expect(up!.content).toBeUndefined();
     expect(up!.allowedMentions).toEqual({ parse: [] });

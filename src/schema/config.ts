@@ -277,9 +277,9 @@ export interface GuildDowntimeAlertsConfig {
    */
   mentionRole?: string;
   /**
-   * When `mentionRole` is pinged. "always" (default): on every alert,
-   * including recoveries. "escalation": only on the first failure and when
-   * severity rises; recoveries and repeats are posted without a ping.
+   * When `mentionRole` is pinged. "escalation" (default): only on the first
+   * failure and when severity rises; recoveries and repeats are posted
+   * without a ping. "always": on every alert, including recoveries.
    */
   mentionPolicy?: MentionPolicy;
 }

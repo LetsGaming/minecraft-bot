@@ -302,7 +302,7 @@ function checkGuildIds(
     if (policy !== undefined && policy !== "always" && policy !== "escalation") {
       warnings.push(
         `guilds.${gid}.${block}.mentionPolicy "${String(policy)}" is not ` +
-          `"always" or "escalation"; "always" will be used`,
+          `"always" or "escalation"; "escalation" will be used`,
       );
     }
   }
