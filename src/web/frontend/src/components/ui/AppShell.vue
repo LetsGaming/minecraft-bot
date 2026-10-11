@@ -531,7 +531,7 @@ watch(
     background: var(--scrim);
   }
 
-  .nav-link, .seg button, .icon-btn { min-height: var(--touch-min); }
+  .nav-link, .seg button, .icon-btn, .invite__btn { min-height: var(--touch-min); }
   .icon-btn { min-width: var(--touch-min); }
 
   .topbar {
