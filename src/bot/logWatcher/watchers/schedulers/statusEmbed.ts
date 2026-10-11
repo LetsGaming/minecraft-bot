@@ -191,22 +191,19 @@ async function provisionGuildChannels(
 
 function buildTpsLine(tps: TpsResult | null): string {
   if (tps?.tps1m == null) return "";
-  const emoji = tps.tps1m >= 18 ? "🟢" : tps.tps1m >= 15 ? "🟡" : "🔴";
-  return `\nTPS: ${emoji} ${tps.tps1m.toFixed(1)}`;
+  return `\nTPS: ${tps.tps1m.toFixed(1)}`;
 }
 
 function buildPlayerListLine(players: string[]): string {
-  return players.length > 0 ? `\nOnline: ${players.join(", ")}` : "";
+  return players.length > 0
+    ? `\n${t("statusEmbed.onlineNames", { names: players.join(", ") })}`
+    : "";
 }
 
 async function buildServerField(
   server: ReturnType<typeof getAllInstances>[number],
   isInline: boolean,
-): Promise<{
-  field: { name: string; value: string; inline: boolean };
-  counts: PlayerCounts;
-  online: boolean;
-}> {
+): Promise<ServerFieldResult> {
   let tps: TpsResult | null = null;
   const counts: PlayerCounts = { online: 0, max: 0 };
 
@@ -220,6 +217,7 @@ async function buildServerField(
   }
 
   const display = describeHealth(health);
+  const severity = severityOf(display.color);
 
   // Anything short of responsive gets its state and nothing else: no player
   // count, no TPS. Reporting "0/20 players" for a server that simply did not
@@ -237,12 +235,14 @@ async function buildServerField(
         name: server.id,
         value:
           `${display.emoji} ${display.label}` +
-          (players ? ` — ${players}` : "") +
+          (players ? `, ${players}` : "") +
           (display.hint ? `\n${display.hint}` : ""),
         inline: isInline,
       },
       counts,
       online: false,
+      color: display.color,
+      severity,
     };
   }
 
@@ -277,7 +277,7 @@ async function buildServerField(
     const players: string[] = list.players ?? [];
 
     statusLine =
-      `${display.emoji} ${display.label} — ${counts.online}/${counts.max} players` +
+      `${display.emoji} ${display.label}, ${t("state.playerCount", { ...counts })}` +
       buildTpsLine(tps) +
       buildPlayerListLine(players);
   } catch (err) {
@@ -288,7 +288,7 @@ async function buildServerField(
       `${server.id}: /list failed, using health counts: ${errMsg(err)}`,
     );
     statusLine =
-      `${display.emoji} ${display.label} — ${counts.online}/${counts.max} players` +
+      `${display.emoji} ${display.label}, ${t("state.playerCount", { ...counts })}` +
       buildTpsLine(tps);
   }
 
@@ -296,6 +296,8 @@ async function buildServerField(
     field: { name: server.id, value: statusLine, inline: isInline },
     counts,
     online: true,
+    color: display.color,
+    severity,
   };
 }
 
@@ -304,6 +306,21 @@ interface ServerFieldResult {
   counts: PlayerCounts;
   /** Whether the server answered as running this pass. */
   online?: boolean;
+  /** The server's state colour; the embed takes the worst one. */
+  color: number;
+  severity: number;
+}
+
+const SEVERITY_ORDER = [
+  EmbedColor.Online,
+  EmbedColor.Neutral,
+  EmbedColor.Warning,
+  EmbedColor.Error,
+];
+
+/** Higher is worse: online, unknown, needs a look, offline. */
+function severityOf(color: number): number {
+  return Math.max(0, SEVERITY_ORDER.indexOf(color));
 }
 
 /**
@@ -337,11 +354,13 @@ async function buildAllServerFields(): Promise<
       map.set(instanceId, {
         field: {
           name: instanceId,
-          value: "⚠️ Error fetching status",
+          value: t("statusEmbed.fetchFailed"),
           inline: isInline,
         },
         counts: { online: 0, max: 0 },
         online: false,
+        color: EmbedColor.Neutral,
+        severity: severityOf(EmbedColor.Neutral),
       });
     }
   });
@@ -359,19 +378,22 @@ function buildStatusEmbed(
 ): StatusBuildResult {
   const allowed = getAllowedServerIds(guildId);
   const total: PlayerCounts = { online: 0, max: 0 };
-  const fields: ServerFieldResult["field"][] = [];
+  const entries: ServerFieldResult[] = [];
 
   for (const [serverId, entry] of fieldMap) {
     if (allowed && !allowed.has(serverId)) continue;
     total.online += entry.counts.online;
     total.max += entry.counts.max;
-    fields.push(entry.field);
+    entries.push(entry);
   }
+  // Servers that need attention first; the bar shows the worst state.
+  entries.sort((a, b) => b.severity - a.severity);
+  const fields = entries.map((e) => e.field);
 
   const embed = createEmbed({
     title: t("statusEmbed.title", {}, guildId),
-    color: EmbedColor.Info,
-    footer: { text: t("statusEmbed.footer", {}, guildId) },
+    color: entries[0]?.color ?? EmbedColor.Neutral,
+    timestamp: true,
   });
 
   if (fields.length > 0) {
