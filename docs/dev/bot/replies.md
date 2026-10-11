@@ -82,7 +82,12 @@ action. The middleware renders problem, then recovery, in a red embed visible
 only to the invoker. Never put config paths, ids, stack text or raw wrapper or
 script output in front of a non-admin; script output goes to the admin only
 (`control.ts` shows the pattern). A thrown plain `Error` shows its message as
-the problem, so prefer `CommandError` with localised text.
+the problem, so prefer `CommandError` with localised text. A failure to reach
+the API wrapper (unreachable, timed out, circuit breaker open, rate limited;
+`classifyTransportError` in
+[`core/utils/server/transportError.ts`](../../../src/core/utils/server/transportError.ts))
+becomes "Could not reach smp" with a localised problem and recovery; the raw
+cause goes to the log only.
 
 ## Confirm rows
 

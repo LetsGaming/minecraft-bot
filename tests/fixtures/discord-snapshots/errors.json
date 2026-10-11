@@ -14,8 +14,8 @@
         "embeds": [
           {
             "color": "#f87171",
-            "title": "Command failed",
-            "description": "fetch failed"
+            "title": "Could not reach smp",
+            "description": "smp did not answer, so this is not available.\nTry again in a minute. If it keeps failing, tell a bot admin."
           }
         ]
       }
@@ -34,8 +34,8 @@
         "embeds": [
           {
             "color": "#f87171",
-            "title": "Befehl fehlgeschlagen",
-            "description": "fetch failed"
+            "title": "smp ist nicht erreichbar",
+            "description": "smp hat nicht geantwortet, deshalb ist das gerade nicht verfügbar.\nVersuch es in einer Minute noch einmal. Wenn es so bleibt, sag einem Bot-Admin Bescheid."
           }
         ]
       }

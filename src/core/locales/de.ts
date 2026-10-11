@@ -464,6 +464,12 @@ export const de: Record<string, string> = {
   "common.rateLimited": "Zu viele Befehle. Bitte warte {seconds} s.",
   "common.unexpectedError": "Etwas ist schiefgelaufen, der Befehl wurde nicht abgeschlossen.",
   "common.unexpectedErrorRecovery": "Versuch es gleich noch einmal. Wenn es so bleibt, sag einem Bot-Admin Bescheid.",
+  "transport.title": "{server} ist nicht erreichbar",
+  "transport.titleNoServer": "Der Server ist nicht erreichbar",
+  "transport.problem": "{server} hat nicht geantwortet, deshalb ist das gerade nicht verfügbar.",
+  "transport.problemNoServer": "Der Server hat nicht geantwortet, deshalb ist das gerade nicht verfügbar.",
+  "transport.recovery": "Versuch es in einer Minute noch einmal. Wenn es so bleibt, sag einem Bot-Admin Bescheid.",
+  "transport.recoveryRateLimited": "Versuch es gleich noch einmal.",
   "common.playerNotFound": "`{player}` ist auf diesem Server unbekannt.",
   "pagination.notForYou": "Diese Buttons sind nicht für dich.",
 

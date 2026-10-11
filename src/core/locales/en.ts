@@ -472,6 +472,12 @@ export const en: Record<string, string> = {
   "common.rateLimited": "Too many commands. Please wait {seconds}s.",
   "common.unexpectedError": "Something went wrong and the command did not finish.",
   "common.unexpectedErrorRecovery": "Try again in a moment. If it keeps happening, tell a bot admin.",
+  "transport.title": "Could not reach {server}",
+  "transport.titleNoServer": "Could not reach the server",
+  "transport.problem": "{server} did not answer, so this is not available.",
+  "transport.problemNoServer": "The server did not answer, so this is not available.",
+  "transport.recovery": "Try again in a minute. If it keeps failing, tell a bot admin.",
+  "transport.recoveryRateLimited": "Try again in a moment.",
   "common.playerNotFound": "`{player}` is not known on this server.",
   "pagination.notForYou": "These buttons aren't for you.",
 

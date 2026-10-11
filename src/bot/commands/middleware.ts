@@ -8,9 +8,11 @@ import { EmbedColor } from "../utils/embeds/embedColors.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { loadConfig } from "@mcbot/core/config.js";
 import { runWithGuildLocale, t } from "@mcbot/core/utils/i18n.js";
-import { CommandError } from "@mcbot/core/utils/error.js";
+import { CommandError, errMsg } from "@mcbot/core/utils/error.js";
+import { classifyTransportError } from "@mcbot/core/utils/server/transportError.js";
 import type { ErrorContent } from "@mcbot/core/types/index.js";
 import { attachFollowUpHint } from "../utils/hints/followUps.js";
+import { resolveServer } from "../utils/guild/guildRouter.js";
 
 /**
  * Checks whether a Discord user is an admin.
@@ -150,16 +152,45 @@ export async function replyDenied(interaction: RepliableInteraction): Promise<vo
   await send(interaction, { embeds: [embed] });
 }
 
-/** What a thrown value should say to the user. */
-export function errorContentOf(err: unknown): ErrorContent {
+/**
+ * What a thrown value should say to the user. `serverId` names the server in
+ * a transport failure; without it the reply says "the server".
+ */
+export function errorContentOf(err: unknown, serverId?: string): ErrorContent {
   if (err instanceof CommandError) {
     return { title: err.title, problem: err.problem, recovery: err.recovery };
+  }
+  const transport = classifyTransportError(err);
+  if (transport) {
+    const recovery =
+      transport === "rate-limited" ? t("transport.recoveryRateLimited") : t("transport.recovery");
+    return serverId
+      ? {
+          title: t("transport.title", { server: serverId }),
+          problem: t("transport.problem", { server: serverId }),
+          recovery,
+        }
+      : {
+          title: t("transport.titleNoServer"),
+          problem: t("transport.problemNoServer"),
+          recovery,
+        };
   }
   if (err instanceof Error && err.message) return { problem: err.message };
   return {
     problem: t("common.unexpectedError"),
     recovery: t("common.unexpectedErrorRecovery"),
   };
+}
+
+/** The server a failed command targeted, when the failure was reaching it. */
+function serverIdOf(interaction: ChatInputCommandInteraction, err: unknown): string | undefined {
+  if (!classifyTransportError(err)) return undefined;
+  try {
+    return resolveServer(interaction).id;
+  } catch {
+    return undefined;
+  }
 }
 
 interface ErrorHandlingOptions {
@@ -200,8 +231,8 @@ export function withErrorHandling(
       await runWithGuildLocale(guildId, () => attachFollowUpHint(interaction));
     } catch (err) {
       await runWithGuildLocale(guildId, async () => {
-        const content = errorContentOf(err);
-        log.error("command", `/${interaction.commandName}: ${content.problem}`);
+        const content = errorContentOf(err, serverIdOf(interaction, err));
+        log.error("command", `/${interaction.commandName}: ${errMsg(err)}`);
         await replyError(interaction, content);
       });
     }

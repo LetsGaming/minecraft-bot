@@ -141,7 +141,7 @@ export async function handleConfirmInteraction(
       await entry.handler(interaction, parsed);
     } catch (err) {
       log.error("confirm", `${parsed.action} on ${parsed.serverId}: ${errMsg(err)}`);
-      await replyError(interaction, errorContentOf(err));
+      await replyError(interaction, errorContentOf(err, parsed.serverId));
     }
   });
   return true;

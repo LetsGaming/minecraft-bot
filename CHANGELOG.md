@@ -92,6 +92,7 @@ Wave 2: the dashboard and the Discord replies reworked on one shared status syst
 - **Raw JSON edits count as unsaved work.** Text that does not parse, or differs from the loaded config, enables Discard and triggers the leave prompt (`useConfig.ts`).
 - **Dashboard contrast and keyboard focus.** Primary buttons now read at 7.6:1 (was 2.1:1), dim text at 6.9:1 (was 3.4:1), secondary outlined and text buttons (Reload, Download and similar) at 5.9:1 (was 3.2:1), and unselected segmented options (Show, Layout, Enabled, Who can use it) and form placeholders at 5.9:1 (was 3.9:1). Every control shows a visible focus ring (`main.ts`, `style.css`, `preset.ts`).
 - **`/daily` lists the lucky bonus.** When `bonusChance` rolled an extra item, it was given and saved in the history but missing from the reply; it now has its own "Lucky bonus" line (`commands/connection/daily/daily.ts`).
+- **An unreachable wrapper no longer shows "fetch failed".** When a command cannot reach the server's API wrapper (refused, timed out, paused after repeated failures, or rate limited), the private error is titled "Could not reach smp", says the server did not answer and what to do next, in the guild's language; the raw cause only goes to the log (`core/utils/server/transportError.ts`, `commands/middleware.ts`, `interactions/confirmActions.ts`).
 
 ## [7.0.0] - 2026-10-10
 
