@@ -1,47 +1,37 @@
 /* Base layer: app-shell scaffolding + helpers only. All widget styling
-   comes from the PrimeVue refined preset (see main.ts). */
+   comes from the PrimeVue preset (see preset.ts). */
 @layer theme, base, primevue;
 
 :root {
-  --mc-bg: #15171a;
-  --mc-surface: #191b1f;
-  --mc-card: #22252a;
-  --mc-border: #24272c;
-  --mc-border-strong: #333842;
-  --mc-text: #e7e9ec;
-  --mc-muted: #8a9099;
-  --mc-dim: #9aa1ac;
-  --mc-focus: #8cc8ff;
-  --mc-accent: #34c56a;
-  --mc-accent-strong: #2f9d57;
-  --mc-accent-border: #2c4433;
-  --mc-good: #4ade80;
-  --mc-mid: #fbbf24;
-  --mc-bad: #e05858;
-  --mc-warn: #d9b25a;
-  /* Discord brand (matches the bot's EmbedColor.Blurple) + text on brand fill. */
-  --mc-discord: #5865f2;
-  --mc-discord-strong: #4752c4;
-  --mc-on-brand: #fff;
-  /* Accent-tinted surface + dark text that reads on an accent-filled element. */
-  --mc-accent-bg: #1e2b22;
-  --mc-on-accent: #06210f;
+  /* Legacy names the views still use; each is an alias of a role in tokens.css. */
+  --mc-bg: var(--bg);
+  --mc-surface: var(--surface-nav);
+  --mc-card: var(--surface);
+  --mc-border: var(--border);
+  --mc-border-strong: var(--border-strong);
+  --mc-text: var(--text);
+  --mc-muted: var(--text-muted);
+  --mc-dim: var(--text-dim);
+  --mc-focus: var(--focus);
+  --mc-accent: var(--accent);
+  --mc-accent-strong: var(--accent-strong);
+  --mc-accent-border: var(--accent-border);
+  --mc-accent-bg: var(--accent-tint);
+  --mc-on-accent: var(--on-accent);
+  --mc-good: var(--st-online);
+  --mc-mid: var(--st-degraded);
+  --mc-bad: var(--danger-solid);
+  --mc-warn: var(--warn);
+  --mc-danger: var(--danger-solid);
+  --mc-hover: var(--surface);
+  --mc-discord: var(--discord);
+  --mc-discord-strong: var(--discord-strong);
+  --mc-on-brand: var(--on-brand);
+  --mc-radius: var(--radius-surface);
+  --mc-radius-sm: var(--radius-control);
+  --mc-mono: var(--font-mono);
 
-  /* Semantic aliases. Views ask for the meaning, not the swatch, so a
-     severity can be retuned in one place. `--mc-danger` was referenced by
-     ConsoleView with a raw blue-red fallback before it existed. */
-  --mc-danger: var(--mc-bad);
-  --mc-hover: #22252a;
-
-  /* Shape + type. `--mc-radius` and `--mc-mono` were both used in view
-     styles while undefined, so those panes rendered with square corners
-     and the browser's default monospace instead of the intended stack. */
-  --mc-radius: 10px;
-  --mc-radius-sm: 7px;
-  --mc-mono: ui-monospace, "SF Mono", "Cascadia Code", monospace;
-
-  /* Shell metrics. The content column was capped at 1160px and pinned
-     left, so on a wide display more than half the viewport was empty. */
+  /* Shell metrics. */
   --mc-sidebar-w: 210px;
   --mc-content-max: 1720px;
 }
@@ -52,7 +42,7 @@ body {
   margin: 0;
   background: var(--mc-bg);
   color: var(--mc-text);
-  font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: var(--text-md)/var(--leading-body) var(--font-ui);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -80,4 +70,4 @@ a { color: var(--mc-accent); }
   border-radius: 6px;
   border: 2px solid var(--mc-bg);
 }
-::-webkit-scrollbar-thumb:hover { background: #454a52; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }

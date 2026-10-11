@@ -1,0 +1,156 @@
+/* Design tokens: the only place raw hex values live (enforced by `npm run lint`).
+   Components and the PrimeVue preset read these names. The seven status roles
+   (--st-*) are not declared here: they are written from the shared status table
+   in @mcbot/schema at startup (see statusTokens.ts). */
+
+:root {
+  color-scheme: dark;
+
+  /* type */
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 0.9375rem;
+  --text-lg: 1rem;
+  --text-xl: 1.125rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --leading-tight: 1.2;
+  --leading-body: 1.55;
+  --tracking-caps: 0.06em;
+
+  /* spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  /* shape: two radii, separation by border, one overlay shadow */
+  --radius-control: 7px;
+  --radius-surface: 10px;
+  --radius-full: 999px;
+  --shadow-overlay: 0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
+  --scrim: rgba(8, 9, 11, 0.7);
+
+  /* control sizes: density sets --control-h and --row-pad-y */
+  --control-h: 36px;
+  --row-pad-y: 10px;
+  --field-gap: var(--space-4);
+  --touch-min: 44px;
+  --page-max: 2400px;
+
+  /* z scale */
+  --z-sticky: 10;
+  --z-nav: 30;
+  --z-dialog: 50;
+  --z-toast: 60;
+
+  /* motion */
+  --ease-settle: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur-state: 180ms;
+
+  /* surfaces */
+  --bg: #15171a;
+  --bg-sunken: #101114;
+  --bg-code: #0e100e;
+  --surface-nav: #191b1f;
+  --surface: #22252a;
+  --surface-raised: #2a2e34;
+  --border: #24272c;
+  --border-strong: #333842;
+  --border-hover: #454a52;
+
+  /* text */
+  --text: #e7e9ec;
+  --text-muted: #8a9099;
+  --text-dim: #9aa1ac;
+
+  /* accent */
+  --accent: #34c56a;
+  --accent-hover: #5cc985;
+  --accent-strong: #2f9d57;
+  --accent-border: #2c4433;
+  --accent-tint: #1e2b22;
+  --on-accent: #06210f;
+  --link: var(--accent);
+
+  /* focus: blue so the ring stays visible next to the green accent */
+  --focus: #8cc8ff;
+
+  /* feedback */
+  --danger: #f87171;
+  --danger-solid: #e05858;
+  --on-danger: #1d0707;
+  --warn: #d9b25a;
+  --warn-chip: #e0b34a;
+
+  /* external brand: Discord blurple, matches the bot's EmbedColor.Blurple */
+  --discord: #5865f2;
+  --discord-strong: #4752c4;
+  --on-brand: #fff;
+
+  /* mod environment dots */
+  --env-both: #5b8def;
+  --env-server: #3ecf6e;
+  --env-optional: #e5a13a;
+  --env-client: #e5544b;
+  --env-unknown: #8a8a90;
+
+  /* Mods view palette: differs from the roles above and stays until that view moves onto them */
+  --mods-green: #3ecf6e;
+  --mods-amber: #e5a13a;
+  --mods-red: #e5544b;
+  --mods-muted: #8a8a90;
+  --mods-muted-2: #6a6a70;
+  --mods-card: #141416;
+  --mods-card-2: #161618;
+  --mods-text: #ededf0;
+  --mods-text-2: #c7c7cc;
+  --mods-text-3: #cfcfd4;
+  --mods-on-green: #05130a;
+  --mods-on-amber: #160e02;
+
+  /* colour ramps the PrimeVue preset maps onto its primary and surface scales */
+  --ramp-primary-50: #eafaf0;
+  --ramp-primary-100: #c9f0d8;
+  --ramp-primary-200: #9ce3b6;
+  --ramp-primary-300: #6fdb98;
+  --ramp-primary-400: #5cc985;
+  --ramp-primary-500: #34c56a;
+  --ramp-primary-600: #2f9d57;
+  --ramp-primary-700: #268049;
+  --ramp-primary-800: #1f6339;
+  --ramp-primary-900: #17472a;
+  --ramp-primary-950: #0c2617;
+  --ramp-surface-0: #ffffff;
+  --ramp-surface-50: #f5f6f7;
+  --ramp-surface-100: #e1e3e6;
+  --ramp-surface-200: #c4c8cd;
+  --ramp-surface-300: #8a9099;
+  --ramp-surface-400: #6b7280;
+  --ramp-surface-500: #4a4f57;
+  --ramp-surface-600: #333842;
+  --ramp-surface-700: #24272c;
+  --ramp-surface-800: #191b1f;
+  --ramp-surface-900: #15171a;
+  --ramp-surface-950: #101114;
+}
+
+:root[data-density="compact"] {
+  --control-h: 30px;
+  --row-pad-y: 5px;
+  --field-gap: var(--space-3);
+}
+
+@media (pointer: coarse), (max-width: 760px) {
+  :root,
+  :root[data-density="compact"] {
+    --control-h: var(--touch-min);
+    --row-pad-y: 12px;
+  }
+}

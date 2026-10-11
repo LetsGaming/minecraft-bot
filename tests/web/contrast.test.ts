@@ -3,25 +3,26 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const root = resolve(__dirname, "../../src/web/frontend/src");
-const css = readFileSync(resolve(root, "style.css"), "utf8");
-const preset = readFileSync(resolve(root, "main.ts"), "utf8");
+const tokens = readFileSync(resolve(root, "tokens.css"), "utf8");
+const style = readFileSync(resolve(root, "style.css"), "utf8");
+const preset = readFileSync(resolve(root, "preset.ts"), "utf8");
 
+/** Resolves a custom property to a hex value, following var() aliases across both stylesheets. */
 function cssVar(name: string): string {
-  const m = new RegExp(`${name}: *(#[0-9a-fA-F]{6})`).exec(css);
+  const m = new RegExp(`${name}: *([^;]+);`).exec(tokens) ?? new RegExp(`${name}: *([^;]+);`).exec(style);
   if (!m) throw new Error(`token ${name} not found`);
-  return m[1]!;
+  const value = m[1]!.trim();
+  const alias = /^var\((--[\w-]+)\)$/.exec(value);
+  if (alias) return cssVar(alias[1]!);
+  if (!/^#[0-9a-fA-F]{6}$/.test(value)) throw new Error(`token ${name} is not a hex value: ${value}`);
+  return value;
 }
 
+/** The token a preset key points at, resolved to hex. */
 function presetValue(key: string): string {
-  const m = new RegExp(`${key}: *"(#[0-9a-fA-F]{6})"`).exec(preset);
+  const m = new RegExp(`${key}: *"var\\((--[\\w-]+)\\)"`).exec(preset);
   if (!m) throw new Error(`preset value ${key} not found`);
-  return m[1]!;
-}
-
-function presetAccent(): string {
-  const m = /primary:\s*\{\s*color:\s*"(#[0-9a-fA-F]{6})"/.exec(preset);
-  if (!m) throw new Error("preset primary.color not found");
-  return m[1]!;
+  return cssVar(m[1]!);
 }
 
 function luminance(hex: string): number {
@@ -41,12 +42,12 @@ describe("dashboard colour tokens", () => {
   const surfaces = ["--mc-bg", "--mc-surface", "--mc-card"].map(cssVar);
 
   it("primary button text is AAA on the accent fill", () => {
-    expect(ratio(presetValue("contrastColor"), presetAccent())).toBeGreaterThanOrEqual(7);
-    expect(ratio(cssVar("--mc-on-accent"), cssVar("--mc-accent"))).toBeGreaterThanOrEqual(7);
+    expect(ratio(presetValue("contrastColor"), cssVar("--accent"))).toBeGreaterThanOrEqual(7);
+    expect(ratio(cssVar("--on-accent"), cssVar("--accent"))).toBeGreaterThanOrEqual(7);
   });
 
   it("the preset and the stylesheet agree on the accent text colour", () => {
-    expect(presetValue("contrastColor")).toBe(cssVar("--mc-on-accent"));
+    expect(presetValue("contrastColor")).toBe(cssVar("--on-accent"));
   });
 
   it.each(["--mc-text", "--mc-muted", "--mc-dim"])("%s reads as body text on every surface", (token) => {
@@ -56,7 +57,7 @@ describe("dashboard colour tokens", () => {
   });
 
   it("the preset muted text matches the dim token", () => {
-    expect(presetValue("mutedColor")).toBe(cssVar("--mc-dim"));
+    expect(presetValue("mutedColor")).toBe(cssVar("--text-dim"));
   });
 
   it("the focus ring clears the 3:1 non-text minimum on every surface", () => {
