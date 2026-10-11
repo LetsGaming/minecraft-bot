@@ -72,7 +72,8 @@
       </template>
     </AppShell>
 
-    <Toast position="bottom-right" />
+    <!-- On phones the edit bar docks to the bottom edge, so toasts move under the top bar. -->
+    <Toast position="bottom-right" :breakpoints="toastBreakpoints" />
     <ConfirmDialog />
     <TypedConfirmDialog />
   </div>
@@ -157,6 +158,9 @@ export default defineComponent({
       ...useInvite(),
       ...useCapabilities(),
       t,
+      toastBreakpoints: {
+        "760px": { top: "64px", bottom: "auto", left: "16px", right: "16px", width: "auto" },
+      },
       views: VIEWS,
     };
   },

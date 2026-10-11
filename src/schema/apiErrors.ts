@@ -13,5 +13,9 @@ export const ApiErrorCode = {
   RateLimited: "RATE_LIMITED",
   Unavailable: "UNAVAILABLE",
   BadGateway: "BAD_GATEWAY",
+  /** The bot has no Discord token configured, so Discord cannot be read. */
+  DiscordTokenMissing: "DISCORD_TOKEN_MISSING",
+  /** Discord answered 401: the configured bot token is wrong or was reset. */
+  DiscordTokenRejected: "DISCORD_TOKEN_REJECTED",
 } as const;
 export type ApiErrorCode = (typeof ApiErrorCode)[keyof typeof ApiErrorCode];
