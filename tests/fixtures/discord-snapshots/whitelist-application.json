@@ -1,0 +1,76 @@
+{
+  "en": [
+    {
+      "via": "admin queue",
+      "content": "<@&role-admins>",
+      "allowedMentions": {
+        "parse": [],
+        "roles": [
+          "role-admins"
+        ]
+      },
+      "embeds": [
+        {
+          "color": "#b7a1ff",
+          "title": "Whitelist application",
+          "description": "Applicant: <@player-1> (nils_builds)\nMinecraft name: **Nils_Builds**\nServer: **smp**\nNote: Marlene's cousin. I build big redstone farms and have been on the Discord for 3 weeks."
+        }
+      ],
+      "components": [
+        [
+          {
+            "label": "Approve",
+            "style": "Success",
+            "disabled": false
+          },
+          {
+            "label": "Deny",
+            "style": "Danger",
+            "disabled": false
+          }
+        ]
+      ]
+    },
+    {
+      "via": "editReply",
+      "content": "Application for **Nils_Builds** on **smp** submitted. You get a DM once it is decided, so keep your DMs open."
+    }
+  ],
+  "de": [
+    {
+      "via": "admin queue",
+      "content": "<@&role-admins>",
+      "allowedMentions": {
+        "parse": [],
+        "roles": [
+          "role-admins"
+        ]
+      },
+      "embeds": [
+        {
+          "color": "#b7a1ff",
+          "title": "Whitelist-Antrag",
+          "description": "Bewerber: <@player-1> (nils_builds)\nMinecraft-Name: **Nils_Builds**\nServer: **smp**\nNotiz: Marlene's cousin. I build big redstone farms and have been on the Discord for 3 weeks."
+        }
+      ],
+      "components": [
+        [
+          {
+            "label": "Annehmen",
+            "style": "Success",
+            "disabled": false
+          },
+          {
+            "label": "Ablehnen",
+            "style": "Danger",
+            "disabled": false
+          }
+        ]
+      ]
+    },
+    {
+      "via": "editReply",
+      "content": "Antrag für **Nils_Builds** auf **smp** eingereicht. Du bekommst eine DM, sobald entschieden ist. Deine DMs müssen dafür offen sein."
+    }
+  ]
+}

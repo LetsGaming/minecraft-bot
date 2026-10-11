@@ -1,0 +1,182 @@
+{
+  "confirm": {
+    "en": [
+      {
+        "via": "reply",
+        "ephemeral": true,
+        "embeds": [
+          {
+            "color": "#b7a1ff",
+            "title": "Stop smp?",
+            "description": "3 players are online. They get a 30 second warning, then are disconnected. They can rejoin once you start the server again.",
+            "footer": {
+              "text": "The buttons expire in 60 s."
+            }
+          }
+        ],
+        "components": [
+          [
+            {
+              "label": "Stop smp",
+              "style": "Danger",
+              "disabled": false,
+              "customId": "confirm:yes:server-stop:smp:admin-1:tmp4lo"
+            },
+            {
+              "label": "Cancel",
+              "style": "Secondary",
+              "disabled": false,
+              "customId": "confirm:no:server-stop:smp:admin-1:tmp4lo"
+            }
+          ]
+        ]
+      }
+    ],
+    "de": [
+      {
+        "via": "reply",
+        "ephemeral": true,
+        "embeds": [
+          {
+            "color": "#b7a1ff",
+            "title": "smp stoppen?",
+            "description": "3 Spieler sind online. Sie bekommen eine Warnung mit 30 Sekunden Vorlauf und werden dann getrennt. Sie können wieder beitreten, sobald du den Server startest.",
+            "footer": {
+              "text": "Die Buttons laufen in 60 s ab."
+            }
+          }
+        ],
+        "components": [
+          [
+            {
+              "label": "smp stoppen",
+              "style": "Danger",
+              "disabled": false,
+              "customId": "confirm:yes:server-stop:smp:admin-1:tmp4lo"
+            },
+            {
+              "label": "Abbrechen",
+              "style": "Secondary",
+              "disabled": false,
+              "customId": "confirm:no:server-stop:smp:admin-1:tmp4lo"
+            }
+          ]
+        ]
+      }
+    ]
+  },
+  "denied": {
+    "en": [
+      {
+        "via": "reply",
+        "ephemeral": true,
+        "embeds": [
+          {
+            "color": "#f87171",
+            "title": "Bot admins only",
+            "description": "/server is for bot admins. Ask one of them if you need it."
+          }
+        ]
+      }
+    ],
+    "de": [
+      {
+        "via": "reply",
+        "ephemeral": true,
+        "embeds": [
+          {
+            "color": "#f87171",
+            "title": "Nur für Bot-Admins",
+            "description": "/server ist Bot-Admins vorbehalten. Frag einen von ihnen, wenn du den Befehl brauchst."
+          }
+        ]
+      }
+    ]
+  },
+  "confirmed": {
+    "en": [
+      {
+        "via": "update",
+        "embeds": [
+          {
+            "color": "#b7a1ff",
+            "description": "Confirmed. The notice about smp is posted in this channel."
+          }
+        ],
+        "components": []
+      },
+      {
+        "via": "followUp",
+        "embeds": [
+          {
+            "color": "#7cb4ff",
+            "title": "Stopping smp",
+            "description": "domenic stopped the server. Players get a 30 second warning, then the world is saved and the server shuts down.\nStarted <t:1791642960:R>."
+          }
+        ]
+      },
+      {
+        "via": "webhook.editMessage",
+        "embeds": [
+          {
+            "color": "#7cb4ff",
+            "title": "Stopping smp",
+            "description": "domenic stopped the server. Players get a 30 second warning, then the world is saved and the server shuts down.\nStarted <t:1791642960:R>."
+          }
+        ]
+      },
+      {
+        "via": "webhook.editMessage",
+        "embeds": [
+          {
+            "color": "#4ade80",
+            "title": "smp stopped",
+            "description": "The server is stopped."
+          }
+        ]
+      }
+    ],
+    "de": [
+      {
+        "via": "update",
+        "embeds": [
+          {
+            "color": "#b7a1ff",
+            "description": "Bestätigt. Die Meldung zu smp steht in diesem Kanal."
+          }
+        ],
+        "components": []
+      },
+      {
+        "via": "followUp",
+        "embeds": [
+          {
+            "color": "#7cb4ff",
+            "title": "smp wird gestoppt",
+            "description": "domenic hat den Server gestoppt. Die Spieler bekommen eine Warnung mit 30 Sekunden Vorlauf, dann wird die Welt gespeichert und der Server fährt herunter.\nGestartet <t:1791642960:R>."
+          }
+        ]
+      },
+      {
+        "via": "webhook.editMessage",
+        "embeds": [
+          {
+            "color": "#7cb4ff",
+            "title": "smp wird gestoppt",
+            "description": "domenic hat den Server gestoppt. Die Spieler bekommen eine Warnung mit 30 Sekunden Vorlauf, dann wird die Welt gespeichert und der Server fährt herunter.\nGestartet <t:1791642960:R>."
+          }
+        ]
+      },
+      {
+        "via": "webhook.editMessage",
+        "embeds": [
+          {
+            "color": "#4ade80",
+            "title": "smp gestoppt",
+            "description": "Der Server ist gestoppt."
+          }
+        ]
+      }
+    ]
+  }
+}

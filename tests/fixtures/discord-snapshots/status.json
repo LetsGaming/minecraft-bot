@@ -1,0 +1,318 @@
+{
+  "online, wrapper up": {
+    "en": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "editReply",
+        "embeds": [
+          {
+            "color": "#4ade80",
+            "title": "🟢 smp: Online",
+            "fields": [
+              {
+                "name": "Online",
+                "value": "Marlene_B, TheRedstoneKid, ikarus_77",
+                "inline": false
+              },
+              {
+                "name": "Players",
+                "value": "3/20",
+                "inline": true
+              },
+              {
+                "name": "Bot Ping",
+                "value": "42ms",
+                "inline": true
+              },
+              {
+                "name": "Round Trip",
+                "value": "0ms",
+                "inline": true
+              }
+            ],
+            "timestamp": "2026-10-10T14:36:00.000Z"
+          }
+        ]
+      }
+    ],
+    "de": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "editReply",
+        "embeds": [
+          {
+            "color": "#4ade80",
+            "title": "🟢 smp: Online",
+            "fields": [
+              {
+                "name": "Online",
+                "value": "Marlene_B, TheRedstoneKid, ikarus_77",
+                "inline": false
+              },
+              {
+                "name": "Spieler",
+                "value": "3/20",
+                "inline": true
+              },
+              {
+                "name": "Bot-Ping",
+                "value": "42ms",
+                "inline": true
+              },
+              {
+                "name": "Roundtrip",
+                "value": "0ms",
+                "inline": true
+              }
+            ],
+            "timestamp": "2026-10-10T14:36:00.000Z"
+          }
+        ]
+      }
+    ]
+  },
+  "unresponsive, wrapper up": {
+    "en": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "editReply",
+        "embeds": [
+          {
+            "color": "#fbbf24",
+            "title": "🟡 smp: Not responding",
+            "description": "The server process is running but is not answering commands. It may be starting up or under heavy load.",
+            "fields": [
+              {
+                "name": "Bot Ping",
+                "value": "42ms",
+                "inline": true
+              },
+              {
+                "name": "Round Trip",
+                "value": "0ms",
+                "inline": true
+              }
+            ],
+            "timestamp": "2026-10-10T14:36:00.000Z"
+          }
+        ]
+      }
+    ],
+    "de": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "editReply",
+        "embeds": [
+          {
+            "color": "#fbbf24",
+            "title": "🟡 smp: Antwortet nicht",
+            "description": "Der Server-Prozess läuft, antwortet aber nicht auf Befehle. Vielleicht startet er gerade oder ist stark ausgelastet.",
+            "fields": [
+              {
+                "name": "Bot-Ping",
+                "value": "42ms",
+                "inline": true
+              },
+              {
+                "name": "Roundtrip",
+                "value": "0ms",
+                "inline": true
+              }
+            ],
+            "timestamp": "2026-10-10T14:36:00.000Z"
+          }
+        ]
+      }
+    ]
+  },
+  "offline, wrapper up": {
+    "en": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "editReply",
+        "embeds": [
+          {
+            "color": "#f87171",
+            "title": "🔴 smp: Offline",
+            "fields": [
+              {
+                "name": "Bot Ping",
+                "value": "42ms",
+                "inline": true
+              },
+              {
+                "name": "Round Trip",
+                "value": "0ms",
+                "inline": true
+              }
+            ],
+            "timestamp": "2026-10-10T14:36:00.000Z"
+          }
+        ]
+      }
+    ],
+    "de": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "editReply",
+        "embeds": [
+          {
+            "color": "#f87171",
+            "title": "🔴 smp: Offline",
+            "fields": [
+              {
+                "name": "Bot-Ping",
+                "value": "42ms",
+                "inline": true
+              },
+              {
+                "name": "Roundtrip",
+                "value": "0ms",
+                "inline": true
+              }
+            ],
+            "timestamp": "2026-10-10T14:36:00.000Z"
+          }
+        ]
+      }
+    ]
+  },
+  "unknown, wrapper unreachable": {
+    "en": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "editReply",
+        "embeds": [
+          {
+            "color": "#9aa1ac",
+            "title": "⚪ smp: State unknown",
+            "description": "Neither the API wrapper nor the server answered, so the state is unknown. Check that the host is reachable.",
+            "fields": [
+              {
+                "name": "Bot Ping",
+                "value": "42ms",
+                "inline": true
+              },
+              {
+                "name": "Round Trip",
+                "value": "0ms",
+                "inline": true
+              }
+            ],
+            "timestamp": "2026-10-10T14:36:00.000Z"
+          }
+        ]
+      }
+    ],
+    "de": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "editReply",
+        "embeds": [
+          {
+            "color": "#9aa1ac",
+            "title": "⚪ smp: Zustand unbekannt",
+            "description": "Weder der API-Wrapper noch der Server hat geantwortet, der Zustand ist deshalb unbekannt. Prüfe, ob der Host erreichbar ist.",
+            "fields": [
+              {
+                "name": "Bot-Ping",
+                "value": "42ms",
+                "inline": true
+              },
+              {
+                "name": "Roundtrip",
+                "value": "0ms",
+                "inline": true
+              }
+            ],
+            "timestamp": "2026-10-10T14:36:00.000Z"
+          }
+        ]
+      }
+    ]
+  },
+  "online, wrapper unreachable": {
+    "en": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "editReply",
+        "embeds": [
+          {
+            "color": "#fbbf24",
+            "title": "🟢 smp: Online",
+            "description": "3/20 players: Marlene_B, TheRedstoneKid, ikarus_77\nThe server is reachable, but its API wrapper is not. Server controls, the chat bridge, stats and log watching are unavailable until the wrapper answers again.",
+            "fields": [
+              {
+                "name": "Bot Ping",
+                "value": "42ms",
+                "inline": true
+              },
+              {
+                "name": "Round Trip",
+                "value": "0ms",
+                "inline": true
+              }
+            ],
+            "timestamp": "2026-10-10T14:36:00.000Z"
+          }
+        ]
+      }
+    ],
+    "de": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "editReply",
+        "embeds": [
+          {
+            "color": "#fbbf24",
+            "title": "🟢 smp: Online",
+            "description": "3/20 Spieler: Marlene_B, TheRedstoneKid, ikarus_77\nDer Server ist erreichbar, sein API-Wrapper nicht. Steuerung, Chat-Bridge, Statistiken und Log-Überwachung fallen aus, bis der Wrapper wieder antwortet.",
+            "fields": [
+              {
+                "name": "Bot-Ping",
+                "value": "42ms",
+                "inline": true
+              },
+              {
+                "name": "Roundtrip",
+                "value": "0ms",
+                "inline": true
+              }
+            ],
+            "timestamp": "2026-10-10T14:36:00.000Z"
+          }
+        ]
+      }
+    ]
+  }
+}

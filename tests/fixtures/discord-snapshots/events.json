@@ -1,0 +1,198 @@
+{
+  "join": [
+    {
+      "via": "channel.send to the en guild",
+      "allowedMentions": {
+        "parse": []
+      },
+      "embeds": [
+        {
+          "color": "#9aa1ac",
+          "author": {
+            "name": "Nils_Builds",
+            "icon_url": "https://mc-heads.net/avatar/Nils_Builds/64"
+          },
+          "description": "Nils_Builds joined smp"
+        }
+      ]
+    },
+    {
+      "via": "channel.send to the de guild",
+      "allowedMentions": {
+        "parse": []
+      },
+      "embeds": [
+        {
+          "color": "#9aa1ac",
+          "author": {
+            "name": "Nils_Builds",
+            "icon_url": "https://mc-heads.net/avatar/Nils_Builds/64"
+          },
+          "description": "Nils_Builds ist smp beigetreten"
+        }
+      ]
+    }
+  ],
+  "leave": [
+    {
+      "via": "channel.send to the en guild",
+      "allowedMentions": {
+        "parse": []
+      },
+      "embeds": [
+        {
+          "color": "#9aa1ac",
+          "author": {
+            "name": "Nils_Builds",
+            "icon_url": "https://mc-heads.net/avatar/Nils_Builds/64"
+          },
+          "description": "Nils_Builds left smp"
+        }
+      ]
+    },
+    {
+      "via": "channel.send to the de guild",
+      "allowedMentions": {
+        "parse": []
+      },
+      "embeds": [
+        {
+          "color": "#9aa1ac",
+          "author": {
+            "name": "Nils_Builds",
+            "icon_url": "https://mc-heads.net/avatar/Nils_Builds/64"
+          },
+          "description": "Nils_Builds hat smp verlassen"
+        }
+      ]
+    }
+  ],
+  "death": [
+    {
+      "via": "channel.send to the en guild",
+      "allowedMentions": {
+        "parse": []
+      },
+      "embeds": [
+        {
+          "color": "#9aa1ac",
+          "author": {
+            "name": "creeperchen",
+            "icon_url": "https://mc-heads.net/avatar/creeperchen/64"
+          },
+          "description": "creeperchen was blown up by Creeper"
+        }
+      ]
+    },
+    {
+      "via": "channel.send to the de guild",
+      "allowedMentions": {
+        "parse": []
+      },
+      "embeds": [
+        {
+          "color": "#9aa1ac",
+          "author": {
+            "name": "creeperchen",
+            "icon_url": "https://mc-heads.net/avatar/creeperchen/64"
+          },
+          "description": "creeperchen was blown up by Creeper"
+        }
+      ]
+    }
+  ],
+  "advancement": [
+    {
+      "via": "channel.send to the en guild",
+      "allowedMentions": {
+        "parse": []
+      },
+      "embeds": [
+        {
+          "color": "#9aa1ac",
+          "author": {
+            "name": "ikarus_77",
+            "icon_url": "https://mc-heads.net/avatar/ikarus_77/64"
+          },
+          "description": "ikarus_77 made the advancement **Diamonds!**"
+        }
+      ]
+    },
+    {
+      "via": "channel.send to the de guild",
+      "allowedMentions": {
+        "parse": []
+      },
+      "embeds": [
+        {
+          "color": "#9aa1ac",
+          "author": {
+            "name": "ikarus_77",
+            "icon_url": "https://mc-heads.net/avatar/ikarus_77/64"
+          },
+          "description": "ikarus_77 hat den Fortschritt **Diamonds!** erreicht"
+        }
+      ]
+    }
+  ],
+  "challenge": [
+    {
+      "via": "channel.send to the en guild",
+      "allowedMentions": {
+        "parse": []
+      },
+      "embeds": [
+        {
+          "color": "#4ade80",
+          "author": {
+            "name": "Marlene_B",
+            "icon_url": "https://mc-heads.net/avatar/Marlene_B/64"
+          },
+          "description": "Marlene_B completed the challenge **How Did We Get Here?**"
+        }
+      ]
+    },
+    {
+      "via": "channel.send to the de guild",
+      "allowedMentions": {
+        "parse": []
+      },
+      "embeds": [
+        {
+          "color": "#4ade80",
+          "author": {
+            "name": "Marlene_B",
+            "icon_url": "https://mc-heads.net/avatar/Marlene_B/64"
+          },
+          "description": "Marlene_B hat die Herausforderung **How Did We Get Here?** abgeschlossen"
+        }
+      ]
+    },
+    {
+      "via": "channel.send to the en guild",
+      "allowedMentions": {
+        "parse": []
+      },
+      "embeds": [
+        {
+          "color": "#4ade80",
+          "title": "Challenge won!",
+          "description": "**Marlene_B** was first to earn **How Did We Get Here?**!\n🎁 Reward: a diamond block"
+        }
+      ]
+    },
+    {
+      "via": "channel.send to the de guild",
+      "allowedMentions": {
+        "parse": []
+      },
+      "embeds": [
+        {
+          "color": "#4ade80",
+          "title": "Challenge gewonnen!",
+          "description": "**Marlene_B** hat **How Did We Get Here?** als Erstes geschafft!\n🎁 Belohnung: a diamond block"
+        }
+      ]
+    }
+  ]
+}

@@ -45,9 +45,9 @@ No stat picked means playtime.
 
 If your server has a leaderboard channel, the bot posts playtime and blocks-mined leaderboards there automatically (daily, weekly, or monthly, depending on configuration). These count only the stats gained during that period, not all-time totals, so newer players have a fair shot every period. The footer states the exact data window.
 
-## The dashboard Analytics tab
+## The dashboard Analytics page
 
-The Analytics tab has one range control (24h to 90d) that applies to every panel. Each panel can only look as far back as the history behind it, so a longer range is clamped and the panel says how far it actually reached:
+The Analytics page has one range control (24h to 90d) that applies to every panel. Each panel can only look as far back as the history behind it, so a longer range is clamped and the panel says how far it actually reached:
 
 | Panel | History kept |
 |---|---|

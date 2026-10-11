@@ -4,7 +4,7 @@ Commands are auto-discovered: any file under `src/bot/commands/` (except
 `middleware.ts`) that exports `data` and `execute` is loaded and registered at
 startup. There is no central registry to edit.
 
-Categories are directories — `admin/`, `info/`, `stats/`, `server/`,
+Categories are directories: `admin/`, `info/`, `stats/`, `server/`,
 `moderation/`, `connection/`, `general/`, `communication/`, `shared/`. Put the
 file where a reader would look for it.
 
@@ -16,6 +16,7 @@ import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embeds/embedUtils.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { withErrorHandling } from "../middleware.js";
+import { t } from "@mcbot/core/utils/i18n.js";
 
 export const data = new SlashCommandBuilder()
   .setName("ping")
@@ -34,8 +35,8 @@ export const execute = withErrorHandling(async (interaction) => {
   await interaction.editReply({
     embeds: [
       createEmbed({
-        title: `Ping — ${server.id}`,
-        description: running ? `Server reachable in ${rtt}ms` : "Server offline",
+        title: t("ping.title", { server: server.id }),
+        description: running ? t("ping.reachable", { ms: rtt }) : t("ping.offline"),
       }),
     ],
   });
@@ -54,7 +55,7 @@ What the pieces buy you:
   `server` with `.setAutocomplete(true)` gets server-ID autocomplete, handled
   centrally in `index.ts`. Options named `player`, `player1`, `player2` get
   player-name autocomplete the same way. The names are a shared contract
-  (`@mcbot/schema/commandOptions.js`) — the dashboard reads them too.
+  (`@mcbot/schema/commandOptions.js`); the dashboard reads them too.
 - **Imports end in `.js`, not `.ts`.** The project is ESM with Node16
   resolution; that is the compiled path, even in a `.ts` source.
 
@@ -63,14 +64,15 @@ so an admin can disable it without a code change.
 
 ## Errors that reach the user
 
-Throw an `Error` with a user-readable message and the middleware turns it into
-the error embed. Do not build your own try/catch + reply ladder unless you need
-custom flow.
+Throw a `CommandError` with a localised `problem`, a `recovery` and, where it
+helps, a `title`; the middleware turns it into an error embed only the invoker
+sees. Do not build your own try/catch + reply ladder unless you need custom
+flow.
 
 What you must not do is hand the raw error text to Discord. Server errors carry
 absolute paths, sudo output, and stderr fragments; map them to something a user
-can act on and log the detail. The generic "the operation failed — see the bot
-logs" string exists for exactly this.
+can act on and log the detail. [replies.md](replies.md) has the full rules for
+errors, visibility, confirmations, paging and mentions.
 
 ## Checklist
 
@@ -78,7 +80,7 @@ logs" string exists for exactly this.
 2. Wrapped in `withErrorHandling`, plus `requireServerAdmin` if it is admin-only.
 3. Target server via `resolveServer(interaction)`.
 4. User-visible strings through `t()`.
-5. A test in `tests/` mocking the interaction — see `tests/commands/commands_misc.test.ts`
+5. A test in `tests/` mocking the interaction; see `tests/commands/commands_misc.test.ts`
    for the pattern.
 6. Documented in [user/commands.md](../../user/commands.md), and in
    [admin/permissions.md](../../admin/permissions.md) if admin-only.

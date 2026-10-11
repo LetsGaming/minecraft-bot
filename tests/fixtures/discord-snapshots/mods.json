@@ -1,0 +1,90 @@
+{
+  "en": [
+    {
+      "via": "deferReply",
+      "ephemeral": false
+    },
+    {
+      "via": "editReply",
+      "embeds": [
+        {
+          "color": "#7cb4ff",
+          "title": "Mods on smp",
+          "description": "62 mods installed.",
+          "fields": [
+            {
+              "name": "Client and server (41)",
+              "value": "[Create](https://modrinth.com/mod/create)\n[Create Deco](https://modrinth.com/mod/create-deco)\n[Fabric API](https://modrinth.com/mod/fabric-api)\n[Farmer's Delight Refabricated](https://modrinth.com/mod/farmer-s-delight-refabricated)\n[Supplementaries](https://modrinth.com/mod/supplementaries)\n[Terralith](https://modrinth.com/mod/terralith)\n[Waystones](https://modrinth.com/mod/waystones)\n[Content Mod 1](https://modrinth.com/mod/content-mod-1)\n[Content Mod 2](https://modrinth.com/mod/content-mod-2)\n[Content Mod 3](https://modrinth.com/mod/content-mod-3)\n[Content Mod 4](https://modrinth.com/mod/content-mod-4)\n[Content Mod 5](https://modrinth.com/mod/content-mod-5)\n[Content Mod 6](https://modrinth.com/mod/content-mod-6)\n[Content Mod 7](https://modrinth.com/mod/content-mod-7)\n[Content Mod 8](https://modrinth.com/mod/content-mod-8)\n[Content Mod 9](https://modrinth.com/mod/content-mod-9)\n[Content Mod 10](https://modrinth.com/mod/content-mod-10)\n[Content Mod 11](https://modrinth.com/mod/content-mod-11)",
+              "inline": false
+            },
+            {
+              "name": "Client and server (41)",
+              "value": "[Content Mod 12](https://modrinth.com/mod/content-mod-12)\n[Content Mod 13](https://modrinth.com/mod/content-mod-13)\n[Content Mod 14](https://modrinth.com/mod/content-mod-14)\n[Content Mod 15](https://modrinth.com/mod/content-mod-15)\n[Content Mod 16](https://modrinth.com/mod/content-mod-16)\n[Content Mod 17](https://modrinth.com/mod/content-mod-17)\n[Content Mod 18](https://modrinth.com/mod/content-mod-18)\n[Content Mod 19](https://modrinth.com/mod/content-mod-19)\n[Content Mod 20](https://modrinth.com/mod/content-mod-20)\n[Content Mod 21](https://modrinth.com/mod/content-mod-21)\n[Content Mod 22](https://modrinth.com/mod/content-mod-22)\n[Content Mod 23](https://modrinth.com/mod/content-mod-23)\n[Content Mod 24](https://modrinth.com/mod/content-mod-24)\n[Content Mod 25](https://modrinth.com/mod/content-mod-25)\n[Content Mod 26](https://modrinth.com/mod/content-mod-26)\n[Content Mod 27](https://modrinth.com/mod/content-mod-27)\n[Content Mod 28](https://modrinth.com/mod/content-mod-28)",
+              "inline": false
+            },
+            {
+              "name": "Client and server (41)",
+              "value": "[Content Mod 29](https://modrinth.com/mod/content-mod-29)\n[Content Mod 30](https://modrinth.com/mod/content-mod-30)\n[Content Mod 31](https://modrinth.com/mod/content-mod-31)\n[Content Mod 32](https://modrinth.com/mod/content-mod-32)\n[Content Mod 33](https://modrinth.com/mod/content-mod-33)\n[Content Mod 34](https://modrinth.com/mod/content-mod-34)",
+              "inline": false
+            },
+            {
+              "name": "Client only, optional (11)",
+              "value": "[Iris Shaders](https://modrinth.com/mod/iris-shaders)\n[Sodium](https://modrinth.com/mod/sodium)\n[Xaero's Minimap](https://modrinth.com/mod/xaero-s-minimap)\n[Xaero's World Map](https://modrinth.com/mod/xaero-s-world-map)\n[Client Mod 1](https://modrinth.com/mod/client-mod-1)\n[Client Mod 2](https://modrinth.com/mod/client-mod-2)\n[Client Mod 3](https://modrinth.com/mod/client-mod-3)\n[Client Mod 4](https://modrinth.com/mod/client-mod-4)\n[Client Mod 5](https://modrinth.com/mod/client-mod-5)\n[Client Mod 6](https://modrinth.com/mod/client-mod-6)\n[Client Mod 7](https://modrinth.com/mod/client-mod-7)",
+              "inline": false
+            },
+            {
+              "name": "Server only (10)",
+              "value": "[Server Mod 1](https://modrinth.com/mod/server-mod-1)\n[Server Mod 2](https://modrinth.com/mod/server-mod-2)\n[Server Mod 3](https://modrinth.com/mod/server-mod-3)\n[Server Mod 4](https://modrinth.com/mod/server-mod-4)\n[Server Mod 5](https://modrinth.com/mod/server-mod-5)\n[Server Mod 6](https://modrinth.com/mod/server-mod-6)\n[Server Mod 7](https://modrinth.com/mod/server-mod-7)\n[Server Mod 8](https://modrinth.com/mod/server-mod-8)\n[Server Mod 9](https://modrinth.com/mod/server-mod-9)\n[Server Mod 10](https://modrinth.com/mod/server-mod-10)",
+              "inline": false
+            }
+          ]
+        }
+      ],
+      "components": []
+    }
+  ],
+  "de": [
+    {
+      "via": "deferReply",
+      "ephemeral": false
+    },
+    {
+      "via": "editReply",
+      "embeds": [
+        {
+          "color": "#7cb4ff",
+          "title": "Mods auf smp",
+          "description": "62 Mods installiert.",
+          "fields": [
+            {
+              "name": "Client und Server (41)",
+              "value": "[Create](https://modrinth.com/mod/create)\n[Create Deco](https://modrinth.com/mod/create-deco)\n[Fabric API](https://modrinth.com/mod/fabric-api)\n[Farmer's Delight Refabricated](https://modrinth.com/mod/farmer-s-delight-refabricated)\n[Supplementaries](https://modrinth.com/mod/supplementaries)\n[Terralith](https://modrinth.com/mod/terralith)\n[Waystones](https://modrinth.com/mod/waystones)\n[Content Mod 1](https://modrinth.com/mod/content-mod-1)\n[Content Mod 2](https://modrinth.com/mod/content-mod-2)\n[Content Mod 3](https://modrinth.com/mod/content-mod-3)\n[Content Mod 4](https://modrinth.com/mod/content-mod-4)\n[Content Mod 5](https://modrinth.com/mod/content-mod-5)\n[Content Mod 6](https://modrinth.com/mod/content-mod-6)\n[Content Mod 7](https://modrinth.com/mod/content-mod-7)\n[Content Mod 8](https://modrinth.com/mod/content-mod-8)\n[Content Mod 9](https://modrinth.com/mod/content-mod-9)\n[Content Mod 10](https://modrinth.com/mod/content-mod-10)\n[Content Mod 11](https://modrinth.com/mod/content-mod-11)",
+              "inline": false
+            },
+            {
+              "name": "Client und Server (41)",
+              "value": "[Content Mod 12](https://modrinth.com/mod/content-mod-12)\n[Content Mod 13](https://modrinth.com/mod/content-mod-13)\n[Content Mod 14](https://modrinth.com/mod/content-mod-14)\n[Content Mod 15](https://modrinth.com/mod/content-mod-15)\n[Content Mod 16](https://modrinth.com/mod/content-mod-16)\n[Content Mod 17](https://modrinth.com/mod/content-mod-17)\n[Content Mod 18](https://modrinth.com/mod/content-mod-18)\n[Content Mod 19](https://modrinth.com/mod/content-mod-19)\n[Content Mod 20](https://modrinth.com/mod/content-mod-20)\n[Content Mod 21](https://modrinth.com/mod/content-mod-21)\n[Content Mod 22](https://modrinth.com/mod/content-mod-22)\n[Content Mod 23](https://modrinth.com/mod/content-mod-23)\n[Content Mod 24](https://modrinth.com/mod/content-mod-24)\n[Content Mod 25](https://modrinth.com/mod/content-mod-25)\n[Content Mod 26](https://modrinth.com/mod/content-mod-26)\n[Content Mod 27](https://modrinth.com/mod/content-mod-27)\n[Content Mod 28](https://modrinth.com/mod/content-mod-28)",
+              "inline": false
+            },
+            {
+              "name": "Client und Server (41)",
+              "value": "[Content Mod 29](https://modrinth.com/mod/content-mod-29)\n[Content Mod 30](https://modrinth.com/mod/content-mod-30)\n[Content Mod 31](https://modrinth.com/mod/content-mod-31)\n[Content Mod 32](https://modrinth.com/mod/content-mod-32)\n[Content Mod 33](https://modrinth.com/mod/content-mod-33)\n[Content Mod 34](https://modrinth.com/mod/content-mod-34)",
+              "inline": false
+            },
+            {
+              "name": "Nur Client, optional (11)",
+              "value": "[Iris Shaders](https://modrinth.com/mod/iris-shaders)\n[Sodium](https://modrinth.com/mod/sodium)\n[Xaero's Minimap](https://modrinth.com/mod/xaero-s-minimap)\n[Xaero's World Map](https://modrinth.com/mod/xaero-s-world-map)\n[Client Mod 1](https://modrinth.com/mod/client-mod-1)\n[Client Mod 2](https://modrinth.com/mod/client-mod-2)\n[Client Mod 3](https://modrinth.com/mod/client-mod-3)\n[Client Mod 4](https://modrinth.com/mod/client-mod-4)\n[Client Mod 5](https://modrinth.com/mod/client-mod-5)\n[Client Mod 6](https://modrinth.com/mod/client-mod-6)\n[Client Mod 7](https://modrinth.com/mod/client-mod-7)",
+              "inline": false
+            },
+            {
+              "name": "Nur Server (10)",
+              "value": "[Server Mod 1](https://modrinth.com/mod/server-mod-1)\n[Server Mod 2](https://modrinth.com/mod/server-mod-2)\n[Server Mod 3](https://modrinth.com/mod/server-mod-3)\n[Server Mod 4](https://modrinth.com/mod/server-mod-4)\n[Server Mod 5](https://modrinth.com/mod/server-mod-5)\n[Server Mod 6](https://modrinth.com/mod/server-mod-6)\n[Server Mod 7](https://modrinth.com/mod/server-mod-7)\n[Server Mod 8](https://modrinth.com/mod/server-mod-8)\n[Server Mod 9](https://modrinth.com/mod/server-mod-9)\n[Server Mod 10](https://modrinth.com/mod/server-mod-10)",
+              "inline": false
+            }
+          ]
+        }
+      ],
+      "components": []
+    }
+  ]
+}

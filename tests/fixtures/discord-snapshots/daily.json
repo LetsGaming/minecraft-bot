@@ -1,0 +1,202 @@
+{
+  "claimed, online": {
+    "en": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "editReply",
+        "embeds": [
+          {
+            "color": "#4ade80",
+            "title": "Daily reward claimed",
+            "description": "Reward: 3x diamond\n6-day streak bonus: 16x cooked beef",
+            "fields": [
+              {
+                "name": "Streak",
+                "value": "6 days",
+                "inline": true
+              },
+              {
+                "name": "Next reward",
+                "value": "<t:1791729360:R>",
+                "inline": true
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "de": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "editReply",
+        "embeds": [
+          {
+            "color": "#4ade80",
+            "title": "Tägliche Belohnung abgeholt",
+            "description": "Belohnung: 3x diamond\nBonus für 6 Tage Serie: 16x cooked beef",
+            "fields": [
+              {
+                "name": "Serie",
+                "value": "6 Tage",
+                "inline": true
+              },
+              {
+                "name": "Nächste Belohnung",
+                "value": "<t:1791729360:R>",
+                "inline": true
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "claimed, offline so queued": {
+    "en": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "editReply",
+        "embeds": [
+          {
+            "color": "#4ade80",
+            "title": "Daily reward claimed",
+            "description": "Reward: 3x diamond\n6-day streak bonus: 16x cooked beef\nYou are offline on **smp** right now, so the reward is queued and delivered the next time you join. Your streak is safe.",
+            "fields": [
+              {
+                "name": "Streak",
+                "value": "6 days",
+                "inline": true
+              },
+              {
+                "name": "Next reward",
+                "value": "<t:1791729360:R>",
+                "inline": true
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "de": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "editReply",
+        "embeds": [
+          {
+            "color": "#4ade80",
+            "title": "Tägliche Belohnung abgeholt",
+            "description": "Belohnung: 3x diamond\nBonus für 6 Tage Serie: 16x cooked beef\nDu bist auf **smp** gerade offline. Die Belohnung ist vorgemerkt und kommt beim nächsten Betreten an. Deine Serie bleibt erhalten.",
+            "fields": [
+              {
+                "name": "Serie",
+                "value": "6 Tage",
+                "inline": true
+              },
+              {
+                "name": "Nächste Belohnung",
+                "value": "<t:1791729360:R>",
+                "inline": true
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "cooldown": {
+    "en": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "deleteReply"
+      },
+      {
+        "via": "followUp",
+        "ephemeral": true,
+        "embeds": [
+          {
+            "color": "#7cb4ff",
+            "title": "Already claimed",
+            "description": "The next reward is ready <t:1791696960:R> (at <t:1791696960:t>)."
+          }
+        ]
+      }
+    ],
+    "de": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "deleteReply"
+      },
+      {
+        "via": "followUp",
+        "ephemeral": true,
+        "embeds": [
+          {
+            "color": "#7cb4ff",
+            "title": "Schon abgeholt",
+            "description": "Die nächste Belohnung gibt es <t:1791696960:R> (um <t:1791696960:t>)."
+          }
+        ]
+      }
+    ]
+  },
+  "not linked": {
+    "en": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "deleteReply"
+      },
+      {
+        "via": "followUp",
+        "ephemeral": true,
+        "embeds": [
+          {
+            "color": "#f87171",
+            "title": "Account not linked",
+            "description": "Link your Minecraft account first.\nRun /link, then /daily again."
+          }
+        ]
+      }
+    ],
+    "de": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "deleteReply"
+      },
+      {
+        "via": "followUp",
+        "ephemeral": true,
+        "embeds": [
+          {
+            "color": "#f87171",
+            "title": "Account nicht verknüpft",
+            "description": "Verknüpfe zuerst deinen Minecraft-Account.\nNutze /link, dann klappt /daily."
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "en, always": [
+    {
+      "via": "channel.send",
+      "content": "<@&role-admins>",
+      "allowedMentions": {
+        "parse": [],
+        "roles": [
+          "role-admins"
+        ]
+      },
+      "embeds": [
+        {
+          "color": "#f87171",
+          "title": "🔴 smp is offline",
+          "description": "**smp** failed 3 checks in a row. The bot keeps checking and posts here when it is back.",
+          "timestamp": "2026-10-10T14:39:00.000Z"
+        }
+      ]
+    },
+    {
+      "via": "channel.send",
+      "content": "<@&role-admins>",
+      "allowedMentions": {
+        "parse": [],
+        "roles": [
+          "role-admins"
+        ]
+      },
+      "embeds": [
+        {
+          "color": "#4ade80",
+          "title": "🟢 smp is back online",
+          "description": "Down for 3 min.",
+          "timestamp": "2026-10-10T14:40:00.000Z"
+        }
+      ]
+    }
+  ],
+  "de, escalation": [
+    {
+      "via": "channel.send",
+      "content": "<@&role-admins>",
+      "allowedMentions": {
+        "parse": [],
+        "roles": [
+          "role-admins"
+        ]
+      },
+      "embeds": [
+        {
+          "color": "#f87171",
+          "title": "🔴 smp ist offline",
+          "description": "**smp** hat 3 Prüfungen in Folge nicht bestanden. Der Bot prüft weiter und meldet sich hier, sobald der Server wieder läuft.",
+          "timestamp": "2026-10-10T14:39:00.000Z"
+        }
+      ]
+    },
+    {
+      "via": "channel.send",
+      "allowedMentions": {
+        "parse": []
+      },
+      "embeds": [
+        {
+          "color": "#4ade80",
+          "title": "🟢 smp ist wieder online",
+          "description": "Ausfall: 3 min.",
+          "timestamp": "2026-10-10T14:40:00.000Z"
+        }
+      ]
+    }
+  ]
+}
