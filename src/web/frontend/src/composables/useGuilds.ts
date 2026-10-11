@@ -1,6 +1,7 @@
 import { ref } from "vue";
 import { errorMessage } from "../utils/errorMessage";
 import { apiGet } from "../api";
+import { t } from "../i18n";
 import type { SetupGuild } from "../api";
 
 // Shared guild-name resolution. The config only stores guild IDs, but the
@@ -38,7 +39,7 @@ async function load(force = false): Promise<void> {
 function guildName(id: string): string {
   const hit = guilds.value.find((g) => g.id === id);
   if (hit) return hit.name;
-  return `Server …${id.slice(-4)}`;
+  return t("guilds.unknownName", { suffix: id.slice(-4) });
 }
 
 /**
@@ -46,7 +47,7 @@ function guildName(id: string): string {
  *
  * `guildName` always returns something printable, which is right for a
  * heading and wrong for substitution: replacing an ID inside a log line with
- * "Server …3999" would destroy the one identifier that line carried without
+ * "Guild …3999" would destroy the one identifier that line carried without
  * putting a real name in its place.
  */
 function knownGuildName(id: string): string | undefined {

@@ -3,7 +3,7 @@
     <button
       type="button"
       class="fh-btn"
-      :aria-label="label ? `${COPY.helpFor} ${label}` : COPY.help"
+      :aria-label="label ? t('ui.helpFor', { label }) : t('ui.help')"
       :aria-expanded="pinned"
       :aria-describedby="popId"
       @click.stop="pinned = !pinned"
@@ -18,11 +18,7 @@
 
 <script setup lang="ts">
 import { ref, useId } from "vue";
-
-const COPY = {
-  help: "Help",
-  helpFor: "Help for",
-} as const;
+import { t } from "../../i18n";
 
 /**
  * Schema help text as an info affordance.

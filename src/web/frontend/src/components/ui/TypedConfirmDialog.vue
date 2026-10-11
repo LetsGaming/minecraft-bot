@@ -26,7 +26,7 @@
           <label class="tc-label" for="typed-confirm">
             <template v-if="extras.typedLabel">{{ extras.typedLabel }}</template>
             <template v-else>
-              {{ COPY.typeBefore }} <code class="mono">{{ typedExpected }}</code> {{ COPY.typeAfter }}
+              {{ t("ui.confirm.typeBefore") }} <code class="mono">{{ typedExpected }}</code> {{ t("ui.confirm.typeAfter") }}
             </template>
           </label>
           <InputText
@@ -44,7 +44,7 @@
           <Button
             v-if="extras.level !== 'inform'"
             class="tap"
-            :label="message.rejectLabel || COPY.cancel"
+            :label="message.rejectLabel || t('ui.confirm.cancel')"
             severity="secondary"
             text
             :autofocus="!typing"
@@ -79,6 +79,7 @@ import InputText from "primevue/inputtext";
 import Button from "primevue/button";
 import InlineBanner from "./InlineBanner.vue";
 import ModIcon from "./ModIcon.vue";
+import { t } from "../../i18n";
 import {
   TYPED_CONFIRM_GROUP,
   confirmExtras,
@@ -87,12 +88,6 @@ import {
   type ConfirmLevel,
   type ConfirmTone,
 } from "../../composables/useTypedConfirm";
-
-const COPY = {
-  cancel: "Cancel",
-  typeBefore: "Type",
-  typeAfter: "to confirm",
-} as const;
 
 const LEVEL_LABEL: Record<ConfirmLevel, string> = {
   inform: "Notice",
