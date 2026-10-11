@@ -1,102 +1,110 @@
 <template>
-  <div>
-    <ViewHeader title="Guilds" subtitle="Discord servers the bot is configured for, and how to add more." />
+  <div class="guilds-view">
+    <ViewHeader :title="t('guilds.title')" :subtitle="t('guilds.lede')">
+      <template v-if="ready && guildRows.length > 0" #actions>
+        <Button class="tap" :label="t('guilds.setUp')" icon="pi pi-plus" @click="openWizard('')" />
+      </template>
+    </ViewHeader>
 
-    <!-- The invite action lives in the sidebar, on every page. Repeating it
-         here as a hero made it the third copy of one button and pushed the
-         list this page exists for below the fold. -->
-    <p class="invite-note muted small">
-      <i class="pi pi-discord" />
-      Not listed? Use <strong>Add to Server</strong> in the sidebar to invite the
-      bot to a Discord server you manage, then set it up here.
+    <!-- The invite action lives in the sidebar, on every page; this only points at it. -->
+    <p class="gv-invite">
+      <i class="pi pi-discord" aria-hidden="true" />
+      <span>{{ t("guilds.inviteLead") }} <strong>{{ t("shell.invite") }}</strong> {{ t("guilds.inviteTail") }}</span>
     </p>
 
-    <div v-if="loading" class="center muted">
-      <i class="pi pi-spin pi-spinner" style="font-size: 1.4rem" />
-    </div>
+    <p v-if="!ready && !failure" class="gv-note" role="status">
+      <i class="pi pi-spin pi-spinner" aria-hidden="true" /> {{ t("guilds.loading") }}
+    </p>
 
-    <template v-else>
-      <div class="section-label">
-        <span class="muted small">CONFIGURED GUILDS · {{ guildIds.length }}</span>
+    <InlineError
+      v-else-if="failure"
+      :title="failure.title"
+      :recovery="failure.recovery"
+      :detail="failure.detail"
+      :busy="loading"
+      :heading-level="2"
+      @retry="reload"
+    >
+      <template v-if="failure.fixInConfig" #actions>
         <Button
-          label="Set up a guild"
-          icon="pi pi-plus"
+          class="tap"
+          :label="t('guilds.openConfig')"
+          icon="pi pi-sliders-h"
           size="small"
-          @click="openWizard('')"
+          severity="secondary"
+          outlined
+          @click="$emit('goto-config')"
         />
-      </div>
+      </template>
+    </InlineError>
 
-      <EmptyState v-if="guildIds.length === 0" icon="pi pi-inbox">
-        No guilds configured yet.
-        <template #action>
-          <div class="muted small" style="margin-bottom: 12px">Invite the bot with <strong>Add to Server</strong> in the sidebar, then set up its first guild.</div>
+    <EmptyState
+      v-else-if="guildIds.length === 0"
+      icon="pi pi-inbox"
+      :title="t('guilds.emptyTitle')"
+      :heading-level="2"
+    >
+      {{ guildRows.length > 0 ? t("guilds.emptyWaiting", { count: guildRows.length }) : t("guilds.emptyNoBot") }}
+      <template v-if="guildRows.length > 0" #action>
+        <Button class="tap" :label="t('guilds.setUpFirst')" icon="pi pi-plus" @click="openWizard('')" />
+      </template>
+    </EmptyState>
+
+    <section v-else class="gv-list" aria-labelledby="gv-list-h">
+      <h2 id="gv-list-h" class="gv-caps">
+        {{ t("guilds.configured") }} <span class="gv-count">{{ guildIds.length }}</span>
+      </h2>
+      <article v-for="gid in guildIds" :key="gid" class="gv-card" :aria-labelledby="`gv-name-${gid}`">
+        <div class="gv-head">
+          <div class="gv-identity">
+            <GuildAvatar :guild-id="gid" :size="34" />
+            <h3 :id="`gv-name-${gid}`" class="gv-name">{{ guildName(gid) }}</h3>
+          </div>
+          <div class="gv-actions">
+            <Button
+              class="tap"
+              :label="t('guilds.editConfig')"
+              icon="pi pi-sliders-h"
+              size="small"
+              @click="openConfigEditor(gid)"
+            />
+            <Button
+              v-tooltip.top="t('guilds.wizardTip')"
+              class="tap"
+              :label="t('guilds.wizard')"
+              icon="pi pi-sparkles"
+              size="small"
+              severity="secondary"
+              outlined
+              @click="openWizard(gid)"
+            />
+          </div>
+        </div>
+
+        <div class="gv-features">
+          <h4 class="gv-caps">{{ t("guilds.features") }}</h4>
+          <ul v-if="enabledFeatures(gid).length" class="gv-chips">
+            <li v-for="f in enabledFeatures(gid)" :key="f.key" v-tooltip.top="f.hint" class="gv-chip">
+              <i :class="f.icon" aria-hidden="true" /> {{ f.label }}
+            </li>
+          </ul>
+          <p v-else class="gv-none">{{ t("guilds.noFeatures") }}</p>
+        </div>
+
+        <div v-if="sysadmin" class="gv-foot">
           <Button
-            label="Set up first guild"
-            icon="pi pi-plus"
-            @click="openWizard('')"
+            v-tooltip.top="t('guilds.advancedTip')"
+            class="tap"
+            :label="t('guilds.advanced')"
+            icon="pi pi-code"
+            size="small"
+            text
+            severity="secondary"
+            @click="$emit('goto-config')"
           />
-        </template>
-      </EmptyState>
-
-      <div class="guild-list" v-else>
-        <Card v-for="gid in guildIds" :key="gid" class="guild-card">
-          <template #content>
-            <div class="guild-header">
-              <div class="guild-identity">
-                <GuildAvatar :guild-id="gid" :size="34" />
-                <span class="guild-name">{{ guildName(gid) }}</span>
-              </div>
-              <div class="guild-actions">
-                <Button
-                  label="Edit config"
-                  icon="pi pi-sliders-h"
-                  size="small"
-                  @click="openConfigEditor(gid)"
-                />
-                <Button
-                  label="Setup wizard"
-                  icon="pi pi-magic"
-                  size="small"
-                  text
-                  severity="secondary"
-                  v-tooltip.top="'Step-by-step guided setup for the common features.'"
-                  @click="openWizard(gid)"
-                />
-              </div>
-            </div>
-
-            <div class="guild-features">
-              <span class="features-label muted small">ACTIVE FEATURES</span>
-              <div class="feature-chips">
-                <Tag
-                  v-for="f in enabledFeatures(gid)"
-                  :key="f.key"
-                  :value="f.label"
-                  :icon="f.icon"
-                  severity="success"
-                  v-tooltip.top="f.hint"
-                />
-                <span v-if="enabledFeatures(gid).length === 0" class="muted small">
-                  None yet — click <strong>Edit setup</strong> to turn features on.
-                </span>
-              </div>
-            </div>
-
-            <div v-if="sysadmin" class="guild-foot">
-              <Button
-                label="Advanced JSON config"
-                icon="pi pi-code"
-                size="small"
-                text
-                severity="secondary"
-                v-tooltip.top="'Opens the full config editor. Only needed for rarely-changed fields the setup wizard does not cover.'"
-                @click="$emit('goto-config')"
-              />
-            </div>
-          </template>
-        </Card>
-      </div>
-    </template>
+        </div>
+      </article>
+    </section>
 
     <SetupWizard
       v-model:visible="wizardOpen"
@@ -116,42 +124,30 @@
 
 <script lang="ts">
 import { defineComponent } from "vue";
-import Card from "primevue/card";
 import Button from "primevue/button";
-import Tag from "primevue/tag";
 import SetupWizard from "../components/SetupWizard.vue";
 import GuildConfigEditor from "../components/schema/GuildConfigEditor.vue";
 import ViewHeader from "../components/ui/ViewHeader.vue";
 import GuildAvatar from "../components/ui/GuildAvatar.vue";
 import EmptyState from "../components/ui/EmptyState.vue";
+import InlineError from "../components/ui/InlineError.vue";
 import { GUILD_FEATURE_KEYS, type GuildFeatureKey } from "@mcbot/schema";
 import { useGuilds } from "../composables/useGuilds";
 import { useMyGuilds } from "../composables/useMyGuilds";
-import { useInvite } from "../composables/useInvite";
+import { describeDiscordFailure, type FailureCopy } from "../utils/discordFailure";
+import { FEATURE_ICON, featureHint, featureLabel } from "../utils/guildFeatures";
+import { t } from "../i18n";
 
-// Feature keys inside a guild block: chip label, icon, and a one-line hint
-// shown on hover. The Record type makes a new GUILD_FEATURE_KEYS entry a
-// compile error until it has a label here.
-const FEATURE_META: Record<GuildFeatureKey, { label: string; icon: string; hint: string }> = {
-  notifications: { label: "Notifications", icon: "pi pi-bell", hint: "Join/leave and server-event messages." },
-  chatBridge: { label: "Chat Bridge", icon: "pi pi-comments", hint: "Relays chat between Discord and Minecraft." },
-  leaderboard: { label: "Leaderboard", icon: "pi pi-chart-bar", hint: "Scheduled stat leaderboards." },
-  statusEmbed: { label: "Status Embed", icon: "pi pi-desktop", hint: "Live auto-updating status embed." },
-  downtimeAlerts: { label: "Downtime Alerts", icon: "pi pi-exclamation-triangle", hint: "Alerts when a server goes down." },
-  tpsAlerts: { label: "TPS Alerts", icon: "pi pi-gauge", hint: "Alerts on sustained low TPS." },
-  channelPurge: { label: "Channel Purge", icon: "pi pi-trash", hint: "Auto-clears a channel on a schedule." },
-  reports: { label: "Reports", icon: "pi pi-flag", hint: "Routes in-game !report to a channel." },
-  console: { label: "Console", icon: "pi pi-code", hint: "Admin live console relay." },
-  whitelistApplications: { label: "Whitelist Apps", icon: "pi pi-user-plus", hint: "Button-based whitelist applications." },
-  linkedRole: { label: "Linked Role", icon: "pi pi-link", hint: "Assigns a role to linked members." },
-};
-
-const FEATURES: { key: GuildFeatureKey; label: string; icon: string; hint: string }[] =
-  GUILD_FEATURE_KEYS.map((key) => ({ key, ...FEATURE_META[key] }));
+interface FeatureChip {
+  key: GuildFeatureKey;
+  label: string;
+  icon: string;
+  hint: string;
+}
 
 export default defineComponent({
   name: "GuildsView",
-  components: { Card, Button, Tag, SetupWizard, GuildConfigEditor, ViewHeader, GuildAvatar, EmptyState },
+  components: { Button, SetupWizard, GuildConfigEditor, ViewHeader, GuildAvatar, EmptyState, InlineError },
   props: {
     sysadmin: { type: Boolean, default: false },
     /** The guild whose config editor the URL (`#/guilds/<id>`) opens. */
@@ -159,10 +155,9 @@ export default defineComponent({
   },
   emits: ["goto-config", "update-route"],
   setup() {
-    const { guilds: guildRows, loading, load: loadGuilds } = useMyGuilds();
+    const { guilds: guildRows, loading, error, load: loadGuilds } = useMyGuilds();
     const { guildName, load: loadGuildNames } = useGuilds();
-    const { inviting, invite } = useInvite();
-    return { guildRows, loading, loadGuilds, guildName, loadGuildNames, inviting, invite };
+    return { t, guildRows, loading, loadError: error, loadGuilds, guildName, loadGuildNames };
   },
   data() {
     return {
@@ -170,9 +165,20 @@ export default defineComponent({
       wizardGuildId: "",
       configEditorOpen: false,
       configEditorGuildId: "",
+      loadedOnce: false,
     };
   },
   computed: {
+    ready(): boolean {
+      return this.loadedOnce && !this.loadError;
+    },
+    failure(): FailureCopy | null {
+      if (!this.loadError) return null;
+      return describeDiscordFailure(this.loadError, this.sysadmin, {
+        title: t("guilds.loadFailed"),
+        recovery: t("guilds.loadFailedRecovery"),
+      });
+    },
     guildIds(): string[] {
       return this.guildRows.filter((g) => g.configured).map((g) => g.id);
     },
@@ -195,7 +201,8 @@ export default defineComponent({
       // Names (for display) and the scoped guild list load together; a
       // name-lookup failure is non-fatal.
       void this.loadGuildNames();
-      await this.loadGuilds();
+      await this.loadGuilds(true);
+      this.loadedOnce = true;
     },
     openWizard(gid: string) {
       this.wizardGuildId = gid;
@@ -205,50 +212,106 @@ export default defineComponent({
       this.configEditorGuildId = gid;
       this.configEditorOpen = true;
     },
-    enabledFeatures(gid: string): { key: string; label: string; icon: string; hint: string }[] {
+    enabledFeatures(gid: string): FeatureChip[] {
       const row = this.guildRows.find((g) => g.id === gid);
       const keys = new Set(row?.features ?? []);
-      return FEATURES.filter((f) => keys.has(f.key));
+      return GUILD_FEATURE_KEYS.filter((key) => keys.has(key)).map((key) => ({
+        key,
+        label: featureLabel(key),
+        icon: FEATURE_ICON[key],
+        hint: featureHint(key),
+      }));
     },
   },
 });
 </script>
 
 <style scoped>
-.invite-note {
-  display: flex; align-items: baseline; gap: 8px;
-  max-width: 78ch; margin: 0 0 18px;
+.guilds-view { display: flex; flex-direction: column; gap: var(--space-4); }
+.guilds-view > :deep(.view-head) { margin-bottom: 0; }
+
+.gv-invite {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: baseline;
+  max-width: 78ch;
+  margin: 0;
+  color: var(--text-dim);
+  font-size: var(--text-sm);
 }
-.invite-note i { color: var(--mc-discord); }
+.gv-invite i { color: var(--discord); }
+.gv-invite strong { color: var(--text); }
 
+.gv-note { margin: 0; padding: var(--space-5) 0; color: var(--text-dim); }
 
-.section-label {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 0 2px 12px; letter-spacing: 0.05em;
+.gv-caps {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--text-dim);
 }
-.guild-list { display: flex; flex-direction: column; gap: 12px; }
-.guild-card { border: 0.5px solid var(--mc-border); }
-
-.guild-header {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 16px; padding-bottom: 12px; margin-bottom: 12px;
-  border-bottom: 0.5px solid var(--mc-border);
-}
-.guild-identity { display: flex; align-items: center; gap: 11px; min-width: 0; }
-.guild-actions { display: flex; gap: 8px; flex-shrink: 0; }
-.guild-name {
-  font-size: 15.5px; font-weight: 500;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-
-.guild-features { margin-bottom: 4px; }
-.features-label { display: block; letter-spacing: 0.05em; margin-bottom: 7px; }
-.feature-chips { display: flex; flex-wrap: wrap; gap: 5px; }
-
-.guild-foot {
-  margin-top: 12px; padding-top: 10px;
-  border-top: 0.5px solid var(--mc-border);
+.gv-count {
+  margin-left: var(--space-1);
+  padding: 0 7px;
+  border-radius: var(--radius-full);
+  background: var(--surface-raised);
+  color: var(--text);
+  font-weight: 500;
 }
 
-.center { display: grid; place-items: center; padding: 60px 0; }
+.gv-list { display: flex; flex-direction: column; gap: var(--space-3); }
+.gv-card {
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-surface);
+  background: var(--surface);
+  min-width: 0;
+}
+.gv-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-4);
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+.gv-identity { display: flex; align-items: center; gap: var(--space-3); min-width: 0; flex: 1 1 16ch; }
+.gv-name {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.gv-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+.gv-features { display: flex; flex-direction: column; gap: var(--space-2); }
+.gv-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.gv-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px var(--space-2);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-control);
+  background: var(--accent-tint);
+  color: var(--text);
+  font-size: var(--text-xs);
+}
+.gv-chip i { color: var(--accent); font-size: var(--text-xs); }
+.gv-none { margin: 0; color: var(--text-dim); font-size: var(--text-sm); }
+
+.gv-foot { margin-top: var(--space-3); padding-top: var(--space-2); border-top: 1px solid var(--border); }
+
+@media (pointer: coarse), (max-width: 760px) {
+  .tap { min-height: var(--touch-min); }
+}
+@media (max-width: 760px) {
+  .gv-actions { width: 100%; }
+  .gv-actions > * { flex: 1 1 auto; }
+}
 </style>
