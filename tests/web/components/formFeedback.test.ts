@@ -9,6 +9,7 @@ import InlineBanner from "../../../src/web/frontend/src/components/ui/InlineBann
 import EmptyState from "../../../src/web/frontend/src/components/ui/EmptyState.vue";
 import ViewHeader from "../../../src/web/frontend/src/components/ui/ViewHeader.vue";
 import { uiGlobal } from "./mountUi";
+import { t } from "../../../src/web/frontend/src/i18n";
 
 describe("FieldRow", () => {
   function row(props: Record<string, unknown>) {
@@ -76,6 +77,12 @@ describe("InlineError", () => {
     expect(retry.classes()).toContain("tap");
     await retry.trigger("click");
     expect(w.emitted("retry")).toHaveLength(1);
+  });
+
+  it("takes its default labels from the copy table", () => {
+    const w = mount(InlineError, { props: { title: "x" }, global: uiGlobal });
+    expect(w.find("button").text()).toBe(t("ui.retry"));
+    expect(w.text()).toContain(t("ui.error"));
   });
 });
 

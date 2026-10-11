@@ -111,10 +111,11 @@
             <span v-if="currentServer" class="scope-tag mono">{{ currentServer }}</span>
           </h2>
           <span v-if="availableStats.length" class="stat-field">
-            <label for="an-stat" class="sr-only">{{ t("analytics.statLabel") }}</label>
+            <label id="an-stat-label" for="an-stat" class="sr-only">{{ t("analytics.statLabel") }}</label>
             <Select
               v-model="stat"
               inputId="an-stat"
+              ariaLabelledby="an-stat-label"
               :options="availableStats"
               optionLabel="label"
               optionValue="key"
@@ -166,43 +167,49 @@
           :busy="loading"
           @retry="retry(playersFailure?.kind ?? null, reload)"
         />
-        <DataTable
-          v-else-if="players.length"
-          :value="players"
-          :pt="{ pcPaginator: { paginatorContainer: { 'aria-label': t('analytics.playersPages') } } }"
-          size="small"
-          sortField="playtimeMs"
-          :sortOrder="-1"
-          paginator
-          :rows="15"
-          class="table stack-table"
-        >
-          <Column field="name" :header="t('analytics.col.player')" :pt="{ bodyCell: { 'data-label': t('analytics.col.player') } }" sortable>
-            <template #body="{ data }">
-              <span class="p-name">
-                <StatusChip v-if="data.online" state="online" variant="dot" :label="t('analytics.onlineNow')" />
-                {{ data.name }}
-              </span>
-            </template>
-          </Column>
-          <Column field="playtimeMs" :header="t('analytics.col.playtime')" :pt="{ bodyCell: { 'data-label': t('analytics.col.playtime') } }" sortable>
-            <template #body="{ data }">{{ formatSpan(data.playtimeMs) }}</template>
-          </Column>
-          <Column field="sessions" :header="t('analytics.col.sessions')" :pt="{ bodyCell: { 'data-label': t('analytics.col.sessions') } }" sortable />
-          <Column field="lastSeen" :header="t('analytics.col.lastSeen')" :pt="{ bodyCell: { 'data-label': t('analytics.col.lastSeen') } }" sortable>
-            <template #body="{ data }">
-              <span v-if="data.online" class="dim">{{ t("analytics.onlineNow") }}</span>
-              <span v-else-if="data.lastSeen" class="dim" :title="timestampTitle(data.lastSeen)">{{ relativeAge(data.lastSeen) }}</span>
-              <span v-else class="dim">{{ t("analytics.notRecorded") }}</span>
-            </template>
-          </Column>
-          <Column field="firstSeen" :header="t('analytics.col.firstSeen')" :pt="{ bodyCell: { 'data-label': t('analytics.col.firstSeen') } }" sortable>
-            <template #body="{ data }">
-              <span v-if="data.firstSeen" class="dim" :title="timestampTitle(data.firstSeen)">{{ relativeAge(data.firstSeen) }}</span>
-              <span v-else class="dim">{{ t("analytics.notRecorded") }}</span>
-            </template>
-          </Column>
-        </DataTable>
+        <template v-else-if="players.length">
+          <SortControl
+            v-model:field="playersSort.field"
+            v-model:order="playersSort.order"
+            :options="playersSortOptions"
+          />
+          <DataTable
+            v-model:sortField="playersSort.field"
+            v-model:sortOrder="playersSort.order"
+            :value="players"
+            :pt="{ pcPaginator: { paginatorContainer: { 'aria-label': t('analytics.playersPages') } } }"
+            size="small"
+            paginator
+            :rows="15"
+            class="table stack-table"
+          >
+            <Column field="name" :header="t('analytics.col.player')" :pt="{ bodyCell: { 'data-label': t('analytics.col.player') } }" sortable>
+              <template #body="{ data }">
+                <span class="p-name">
+                  <StatusChip v-if="data.online" state="online" variant="dot" :label="t('analytics.onlineNow')" />
+                  {{ data.name }}
+                </span>
+              </template>
+            </Column>
+            <Column field="playtimeMs" :header="t('analytics.col.playtime')" :pt="{ bodyCell: { 'data-label': t('analytics.col.playtime') } }" sortable>
+              <template #body="{ data }">{{ formatSpan(data.playtimeMs) }}</template>
+            </Column>
+            <Column field="sessions" :header="t('analytics.col.sessions')" :pt="{ bodyCell: { 'data-label': t('analytics.col.sessions') } }" sortable />
+            <Column field="lastSeen" :header="t('analytics.col.lastSeen')" :pt="{ bodyCell: { 'data-label': t('analytics.col.lastSeen') } }" sortable>
+              <template #body="{ data }">
+                <span v-if="data.online" class="dim">{{ t("analytics.onlineNow") }}</span>
+                <span v-else-if="data.lastSeen" class="dim" :title="timestampTitle(data.lastSeen)">{{ relativeAge(data.lastSeen) }}</span>
+                <span v-else class="dim">{{ t("analytics.notRecorded") }}</span>
+              </template>
+            </Column>
+            <Column field="firstSeen" :header="t('analytics.col.firstSeen')" :pt="{ bodyCell: { 'data-label': t('analytics.col.firstSeen') } }" sortable>
+              <template #body="{ data }">
+                <span v-if="data.firstSeen" class="dim" :title="timestampTitle(data.firstSeen)">{{ relativeAge(data.firstSeen) }}</span>
+                <span v-else class="dim">{{ t("analytics.notRecorded") }}</span>
+              </template>
+            </Column>
+          </DataTable>
+        </template>
         <p v-else-if="loaded" class="note">{{ t("analytics.noPlayers", { range: rangeLabel }) }}</p>
         <p v-if="playersNote" class="note section-note">{{ playersNote }}</p>
       </section>
@@ -221,32 +228,38 @@
           :busy="loading"
           @retry="retry(usageFailure?.kind ?? null, reload)"
         />
-        <DataTable
-          v-else-if="commands.length"
-          :value="commands"
-          :pt="{ pcPaginator: { paginatorContainer: { 'aria-label': t('analytics.commandsPages') } } }"
-          size="small"
-          sortField="uses"
-          :sortOrder="-1"
-          paginator
-          :rows="15"
-          class="table stack-table"
-        >
-          <Column field="command" :header="t('analytics.col.command')" :pt="{ bodyCell: { 'data-label': t('analytics.col.command') } }" sortable>
-            <template #body="{ data }">
-              <code class="mono">{{ data.surface === "ingame" ? "!" : "/" }}{{ data.command }}</code>
-            </template>
-          </Column>
-          <Column field="surface" :header="t('analytics.col.surface')" :pt="{ bodyCell: { 'data-label': t('analytics.col.surface') } }" sortable />
-          <Column field="uses" :header="t('analytics.col.uses')" :pt="{ bodyCell: { 'data-label': t('analytics.col.uses') } }" sortable />
-          <Column field="users" :header="t('analytics.col.people')" :pt="{ bodyCell: { 'data-label': t('analytics.col.people') } }" sortable />
-          <Column field="lastUsed" :header="t('analytics.col.lastUsed')" :pt="{ bodyCell: { 'data-label': t('analytics.col.lastUsed') } }" sortable>
-            <template #body="{ data }">
-              <span v-if="data.lastUsed" class="dim" :title="timestampTitle(data.lastUsed)">{{ relativeAge(data.lastUsed) }}</span>
-              <span v-else class="dim">{{ t("analytics.notRecorded") }}</span>
-            </template>
-          </Column>
-        </DataTable>
+        <template v-else-if="commands.length">
+          <SortControl
+            v-model:field="commandsSort.field"
+            v-model:order="commandsSort.order"
+            :options="commandsSortOptions"
+          />
+          <DataTable
+            v-model:sortField="commandsSort.field"
+            v-model:sortOrder="commandsSort.order"
+            :value="commands"
+            :pt="{ pcPaginator: { paginatorContainer: { 'aria-label': t('analytics.commandsPages') } } }"
+            size="small"
+            paginator
+            :rows="15"
+            class="table stack-table"
+          >
+            <Column field="command" :header="t('analytics.col.command')" :pt="{ bodyCell: { 'data-label': t('analytics.col.command') } }" sortable>
+              <template #body="{ data }">
+                <code class="mono">{{ data.surface === "ingame" ? "!" : "/" }}{{ data.command }}</code>
+              </template>
+            </Column>
+            <Column field="surface" :header="t('analytics.col.surface')" :pt="{ bodyCell: { 'data-label': t('analytics.col.surface') } }" sortable />
+            <Column field="uses" :header="t('analytics.col.uses')" :pt="{ bodyCell: { 'data-label': t('analytics.col.uses') } }" sortable />
+            <Column field="users" :header="t('analytics.col.people')" :pt="{ bodyCell: { 'data-label': t('analytics.col.people') } }" sortable />
+            <Column field="lastUsed" :header="t('analytics.col.lastUsed')" :pt="{ bodyCell: { 'data-label': t('analytics.col.lastUsed') } }" sortable>
+              <template #body="{ data }">
+                <span v-if="data.lastUsed" class="dim" :title="timestampTitle(data.lastUsed)">{{ relativeAge(data.lastUsed) }}</span>
+                <span v-else class="dim">{{ t("analytics.notRecorded") }}</span>
+              </template>
+            </Column>
+          </DataTable>
+        </template>
         <p v-else-if="loaded" class="note">{{ t("analytics.noCommands", { range: rangeLabel }) }}</p>
         <p v-if="commandsNote" class="note section-note">{{ commandsNote }}</p>
       </section>
@@ -267,6 +280,7 @@ import ViewHeader from "../components/ui/ViewHeader.vue";
 import StatusChip from "../components/ui/StatusChip.vue";
 import EmptyState from "../components/ui/EmptyState.vue";
 import InlineError from "../components/ui/InlineError.vue";
+import SortControl from "../components/ui/SortControl.vue";
 import {
   useAnalytics,
   clampNote,
@@ -293,7 +307,7 @@ interface UptimeWindow {
 export default defineComponent({
   name: "AnalyticsView",
   components: {
-    Button, DataTable, Column, Select, SelectButton, ViewHeader, StatusChip, EmptyState, InlineError,
+    Button, DataTable, Column, Select, SelectButton, ViewHeader, StatusChip, EmptyState, InlineError, SortControl,
   },
   props: {
     serverIds: { type: Array as () => string[], default: () => [] },
@@ -316,6 +330,8 @@ export default defineComponent({
       // One control for every section. Each section keeps a different amount
       // of history, so a range past a section's cap is clamped and noted there.
       rangeHours: 24 * 14,
+      playersSort: { field: "playtimeMs", order: -1 as 1 | -1 },
+      commandsSort: { field: "uses", order: -1 as 1 | -1 },
       rangeOptions: [
         { label: "24h", value: 24 },
         { label: "3d", value: 24 * 3 },
@@ -327,6 +343,24 @@ export default defineComponent({
     };
   },
   computed: {
+    playersSortOptions(): Array<{ field: string; label: string }> {
+      return [
+        { field: "name", label: t("analytics.col.player") },
+        { field: "playtimeMs", label: t("analytics.col.playtime") },
+        { field: "sessions", label: t("analytics.col.sessions") },
+        { field: "lastSeen", label: t("analytics.col.lastSeen") },
+        { field: "firstSeen", label: t("analytics.col.firstSeen") },
+      ];
+    },
+    commandsSortOptions(): Array<{ field: string; label: string }> {
+      return [
+        { field: "command", label: t("analytics.col.command") },
+        { field: "surface", label: t("analytics.col.surface") },
+        { field: "uses", label: t("analytics.col.uses") },
+        { field: "users", label: t("analytics.col.people") },
+        { field: "lastUsed", label: t("analytics.col.lastUsed") },
+      ];
+    },
     uptimeWindows(): UptimeWindow[] {
       const u = this.uptime;
       if (!u) return [];

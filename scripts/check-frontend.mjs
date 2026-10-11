@@ -39,6 +39,7 @@ const TRANSLATED = new Set([
   "components/ui/InlineError.vue",
   "components/ui/JobBlock.vue",
   "components/ui/ReviewChanges.vue",
+  "components/ui/SortControl.vue",
   "components/ui/TypedConfirmDialog.vue",
   "components/schema/ArrayField.vue",
   "components/schema/ConflictPicker.vue",
