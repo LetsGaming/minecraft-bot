@@ -87,6 +87,14 @@ a { color: var(--mc-accent); }
   }
 }
 
+@media (pointer: coarse), (max-width: 760px) {
+  .p-dialog .p-dialog-close-button { width: var(--touch-min); height: var(--touch-min); }
+  .p-dialog .p-dialog-footer .p-button { min-height: var(--touch-min); }
+  .p-inputtext, .p-select, .p-inputchips, .p-multiselect, .sf-reveal { min-height: var(--touch-min); }
+  /* The switch keeps its drawn size; its invisible input grows to a 48x44 hit area. */
+  .p-toggleswitch-input { inset: -10px -4px; width: calc(100% + 8px); height: calc(100% + 20px); }
+}
+
 /* A PrimeVue DataTable marked .stack-table turns into one card per row under
    760px: the header row hides and each cell names its column from the
    data-label its Column passes through `pt`. */

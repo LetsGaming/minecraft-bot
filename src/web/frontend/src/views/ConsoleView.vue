@@ -70,6 +70,40 @@
           {{ t("console.follow") }}
         </label>
         <span class="foot-count">{{ countText }}</span>
+        <span class="foot-actions">
+          <Button
+            class="tap"
+            :label="copyLabel"
+            :icon="copyState === 'copied' ? 'pi pi-check' : 'pi pi-copy'"
+            :title="t('console.copyTip')"
+            size="small"
+            text
+            :disabled="visibleLines.length === 0"
+            @click="copyLines"
+          />
+          <Button
+            class="tap"
+            :label="t('console.download')"
+            icon="pi pi-download"
+            :title="t('console.downloadTip')"
+            size="small"
+            text
+            :disabled="visibleLines.length === 0"
+            @click="downloadLines"
+          />
+          <Button
+            class="tap"
+            :label="t('console.clear')"
+            icon="pi pi-eraser"
+            :title="t('console.clearTip')"
+            size="small"
+            text
+            severity="secondary"
+            :disabled="lines.length === 0"
+            @click="clearLines"
+          />
+        </span>
+        <span class="sr-only" role="status">{{ copyState === "idle" ? "" : copyLabel }}</span>
       </div>
 
       <!-- Command input, only for those who may send. -->
@@ -164,6 +198,8 @@ export default defineComponent({
       query: "",
       wrap: true,
       minLevel: "info" as LogLevel,
+      copyState: "idle" as "idle" | "copied" | "failed",
+      copyTimer: 0,
       levelOptions: [
         { value: "info", label: t("console.levelAll") },
         { value: "warn", label: t("console.levelWarn") },
@@ -188,6 +224,11 @@ export default defineComponent({
       return this.lines.filter((l) =>
         lineMatches(l.text, { minLevel: this.minLevel, query: this.query }),
       );
+    },
+    copyLabel(): string {
+      if (this.copyState === "copied") return t("console.copied");
+      if (this.copyState === "failed") return t("console.copyFailed");
+      return t("console.copy");
     },
     countText(): string {
       return this.visibleLines.length === this.lines.length
@@ -248,6 +289,9 @@ export default defineComponent({
       if (this.autoScroll) void this.$nextTick(() => this.scrollToBottom());
     },
   },
+  beforeUnmount() {
+    window.clearTimeout(this.copyTimer);
+  },
   methods: {
     async select(id: string): Promise<void> {
       this.current = id;
@@ -259,6 +303,30 @@ export default defineComponent({
       // ticks and the lastLineId watcher scrolls for it. This handles an
       // already-warm buffer.
       void this.$nextTick(() => this.scrollToBottom());
+    },
+    visibleText(): string {
+      return this.visibleLines.map((l) => l.text).join("\n") + "\n";
+    },
+    async copyLines(): Promise<void> {
+      try {
+        await navigator.clipboard.writeText(this.visibleText());
+        this.copyState = "copied";
+      } catch {
+        this.copyState = "failed";
+      }
+      window.clearTimeout(this.copyTimer);
+      this.copyTimer = window.setTimeout(() => (this.copyState = "idle"), 2500);
+    },
+    downloadLines(): void {
+      const url = URL.createObjectURL(new Blob([this.visibleText()], { type: "text/plain" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${this.current || "console"}-${new Date().toISOString().replace(/[:.]/g, "-")}.log`;
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+    clearLines(): void {
+      this.lines = [];
     },
     reconnect(): void {
       if (this.current) void this.select(this.current);
@@ -340,6 +408,7 @@ export default defineComponent({
   padding: var(--space-2) 2px 0;
 }
 .foot-count { color: var(--text-dim); font-size: var(--text-sm); }
+.foot-actions { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-left: auto; }
 .toggle { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--text-dim); font-size: var(--text-sm); cursor: pointer; }
 .toggle input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
 

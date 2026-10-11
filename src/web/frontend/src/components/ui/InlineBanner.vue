@@ -15,14 +15,15 @@
 import { computed } from "vue";
 import { StatusRole } from "@mcbot/schema";
 import StatusChip from "./StatusChip.vue";
+import { t } from "../../i18n";
 
 type Tone = "info" | "warn" | "danger";
 
-const COPY: Record<Tone, string> = {
-  info: "Note",
-  warn: "Warning",
-  danger: "Problem",
-};
+const TONE_LABEL = {
+  info: "ui.tone.info",
+  warn: "ui.tone.warn",
+  danger: "ui.tone.danger",
+} as const satisfies Record<Tone, string>;
 
 const ROLE: Record<Tone, StatusRole> = {
   info: StatusRole.Info,
@@ -36,7 +37,7 @@ const props = withDefaults(defineProps<{ tone?: Tone; title?: string }>(), {
   title: "",
 });
 
-const toneLabel = computed(() => COPY[props.tone]);
+const toneLabel = computed(() => t(TONE_LABEL[props.tone]));
 </script>
 
 <style scoped>

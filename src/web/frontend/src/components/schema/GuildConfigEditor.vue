@@ -247,6 +247,7 @@ export default defineComponent({
         rejectLabel: t("guildEditor.keepEditing"),
         acceptProps: { severity: "danger" },
         rejectProps: { severity: "secondary", outlined: true },
+        defaultFocus: "reject",
         accept: close,
       });
     },

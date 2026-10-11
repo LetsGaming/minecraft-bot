@@ -399,7 +399,7 @@ export default defineComponent({
 .login-brand { margin: 16px 0 2px; color: var(--text-dim); font-weight: 500; }
 .login-card h1 { margin: 0; font-size: var(--text-2xl); font-weight: 600; }
 .login-hint { margin: 18px 0 22px; }
-.discord-btn { width: 100%; }
+.discord-btn { width: 100%; min-height: var(--touch-min); }
 :deep(.discord-btn.p-button) {
   background: var(--discord);
   border-color: var(--discord);

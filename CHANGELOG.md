@@ -34,6 +34,8 @@ project follows [Semantic Versioning](https://semver.org/).
 - **Server actions show their run on the card.** Start, stop, restart, roll back and back up on the Servers page show a job block with the elapsed time while the script runs; a failed run stays on the card with the exit code, the script output, "Try again" and "Dismiss", and a finished one is a toast that says what happened. Stop and restart ask first with the number of players online (the same wording as `/server`), and a rollback asks for the server name and says there is no undo (`views/StatusView.vue`, `composables/useServerActions.ts`).
 - **Console history and wrap.** Up and Down recall earlier commands, "Wrap long lines" can be turned off, and typing a blocked command says which command is blocked (`views/ConsoleView.vue`, `utils/commandHistory.ts`).
 - **Config schema titles and effect notes.** Top-level settings, the server API URL and key, and the dashboard port and session epoch carry a `title` in `config.schema.json`, which the dashboard and editors with JSON schema support show as the field name; `effect` says when a change takes hold (`schema/config.ts`, `scripts/generate-schema.mjs`, `config.schema.json`).
+- **Console copy, download and clear.** Under the log, Copy puts the lines shown on the clipboard, Download saves them as a `.log` file and Clear view empties the view without touching the server log (`views/ConsoleView.vue`).
+- **Sort control on phones.** Under 760 px the Audit log and Analytics tables, shown as one card per row, get a "Sort by" picker and an order button in place of the hidden column headers (`components/ui/SortControl.vue`, `views/{AuditView,AnalyticsView}.vue`).
 
 ### Changed
 
@@ -69,6 +71,10 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Dialog close buttons, the "Skip to content" link and the "Open overview" link in the bot status line are 44 px targets on phones; the guild config dialog close button was 40 px (`style.css`, `components/ui/AppShell.vue`). A guild whose name is not known yet shows as "Guild …1234" instead of "Server …1234" (`composables/useGuilds.ts`).
+- On phones, text inputs, selects, chips inputs, the secret Show button, switches (by a larger invisible hit area), dialog footer buttons, Add to Discord and Log in with Discord are 44 px targets; they were 39 to 40 px (`style.css`, `AppShell.vue`, `App.vue`).
+- "Discard unsaved changes?" puts focus on Stay instead of the destructive button, also in the guild config dialog (`composables/useDiscardPrompt.ts`, `GuildConfigEditor.vue`). The setup wizard moves focus to the new step when Next or Back is pressed instead of dropping it to the page (`SetupWizard.vue`).
+- Under 1100 px the Config page showed both the group list and the Jump to group select above the settings; only the select remains (`views/ConfigView.vue`). The Mod config load error uses the right heading level (`views/ModConfigView.vue`).
 - **Mods page failures are shown where they happen.** A failed installed-list load showed "No mods installed", a failed update check and a failed catalogue search were dropped or only toasted; each now says what failed with Retry, and a list that could not be refreshed stays visible with a note. The update count no longer includes a mod that was removed since the check (`views/ModsView.vue`, `composables/useInstalledMods.ts`).
 - **`/mods` works for large modpacks.** Above about 110 mods the reply exceeded Discord's 6000 character embed limit and failed with a generic error; the list is now split into pages that each stay within the limits (`commands/info/mods.ts`, `paginateFields` in `utils/embeds/embedUtils.ts`).
 - Pager buttons on replies only you can see stayed clickable but dead after the timeout; they now switch off (`handlePagination`).

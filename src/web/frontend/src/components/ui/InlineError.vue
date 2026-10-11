@@ -1,6 +1,6 @@
 <template>
   <div class="inline-error" role="alert">
-    <StatusChip state="offline" variant="dot" :label="COPY.error" class="ie-mark" />
+    <StatusChip state="offline" variant="dot" :label="t('ui.error')" class="ie-mark" />
     <div class="ie-body">
       <component :is="headingTag" class="ie-title">{{ title }}</component>
       <p v-if="recovery || $slots.default" class="ie-recovery">
@@ -11,7 +11,7 @@
         <Button
           v-if="retryable"
           class="tap"
-          :label="retryLabel || COPY.retry"
+          :label="retryLabel || t('ui.retry')"
           icon="pi pi-refresh"
           size="small"
           :loading="busy"
@@ -27,11 +27,7 @@
 import { computed } from "vue";
 import Button from "primevue/button";
 import StatusChip from "./StatusChip.vue";
-
-const COPY = {
-  error: "Error",
-  retry: "Try again",
-} as const;
+import { t } from "../../i18n";
 
 /** A failure in place of the content it stopped: what went wrong, what to do, and Retry. */
 const props = withDefaults(

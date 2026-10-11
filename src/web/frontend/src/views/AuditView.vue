@@ -111,40 +111,44 @@
             <Button class="tap" :label="t('audit.clearFilter')" size="small" outlined @click="filter = ''" />
           </template>
         </EmptyState>
-        <DataTable
-          v-else
-          :value="filtered"
-          :pt="{ pcPaginator: { paginatorContainer: { 'aria-label': t('audit.pages') } } }"
-          paginator
-          :rows="20"
-          :rowsPerPageOptions="[20, 50, 100]"
-          size="small"
-          stripedRows
-          class="audit-table stack-table"
-        >
-          <Column field="at" :header="t('audit.col.when')" :pt="{ bodyCell: { 'data-label': t('audit.col.when') } }" class="col-when" sortable>
-            <template #body="{ data }">
-              <span class="when" :title="timestampTitle(data.at)">{{ relativeAge(data.at) }}</span>
-            </template>
-          </Column>
-          <Column field="action" :header="t('audit.col.action')" :pt="{ bodyCell: { 'data-label': t('audit.col.action') } }" sortable>
-            <template #body="{ data }"><span class="action-tag">{{ data.action }}</span></template>
-          </Column>
-          <Column field="server" :header="t('audit.col.server')" :pt="{ bodyCell: { 'data-label': t('audit.col.server') } }" class="col-server">
-            <template #body="{ data }">
-              <span v-if="data.server" class="mono">{{ data.server }}</span>
-              <span v-else class="dim">{{ t("audit.allServers") }}</span>
-            </template>
-          </Column>
-          <Column field="by" :header="t('audit.col.by')" :pt="{ bodyCell: { 'data-label': t('audit.col.by') } }" class="col-by">
-            <template #body="{ data }">{{ data.by }}</template>
-          </Column>
-          <Column field="detail" :header="t('audit.col.detail')" :pt="{ bodyCell: { 'data-label': t('audit.col.detail') } }">
-            <template #body="{ data }">
-              <span class="dim">{{ humanise(data.detail ?? "") }}</span>
-            </template>
-          </Column>
-        </DataTable>
+        <template v-else>
+          <SortControl v-model:field="sort.field" v-model:order="sort.order" :options="sortOptions" />
+          <DataTable
+            v-model:sortField="sort.field"
+            v-model:sortOrder="sort.order"
+            :value="filtered"
+            :pt="{ pcPaginator: { paginatorContainer: { 'aria-label': t('audit.pages') } } }"
+            paginator
+            :rows="20"
+            :rowsPerPageOptions="[20, 50, 100]"
+            size="small"
+            stripedRows
+            class="audit-table stack-table"
+          >
+            <Column field="at" :header="t('audit.col.when')" :pt="{ bodyCell: { 'data-label': t('audit.col.when') } }" class="col-when" sortable>
+              <template #body="{ data }">
+                <span class="when" :title="timestampTitle(data.at)">{{ relativeAge(data.at) }}</span>
+              </template>
+            </Column>
+            <Column field="action" :header="t('audit.col.action')" :pt="{ bodyCell: { 'data-label': t('audit.col.action') } }" sortable>
+              <template #body="{ data }"><span class="action-tag">{{ data.action }}</span></template>
+            </Column>
+            <Column field="server" :header="t('audit.col.server')" :pt="{ bodyCell: { 'data-label': t('audit.col.server') } }" class="col-server">
+              <template #body="{ data }">
+                <span v-if="data.server" class="mono">{{ data.server }}</span>
+                <span v-else class="dim">{{ t("audit.allServers") }}</span>
+              </template>
+            </Column>
+            <Column field="by" :header="t('audit.col.by')" :pt="{ bodyCell: { 'data-label': t('audit.col.by') } }" class="col-by">
+              <template #body="{ data }">{{ data.by }}</template>
+            </Column>
+            <Column field="detail" :header="t('audit.col.detail')" :pt="{ bodyCell: { 'data-label': t('audit.col.detail') } }">
+              <template #body="{ data }">
+                <span class="dim">{{ humanise(data.detail ?? "") }}</span>
+              </template>
+            </Column>
+          </DataTable>
+        </template>
       </section>
     </div>
   </div>
@@ -169,11 +173,12 @@ import { t } from "../i18n";
 import ViewHeader from "../components/ui/ViewHeader.vue";
 import EmptyState from "../components/ui/EmptyState.vue";
 import InlineError from "../components/ui/InlineError.vue";
+import SortControl from "../components/ui/SortControl.vue";
 
 export default defineComponent({
   name: "AuditView",
   components: {
-    DataTable, Column, InputText, IconField, InputIcon, Button, ViewHeader, EmptyState, InlineError,
+    DataTable, Column, InputText, IconField, InputIcon, Button, ViewHeader, EmptyState, InlineError, SortControl,
   },
   setup() {
     const audit = useAudit();
@@ -204,9 +209,15 @@ export default defineComponent({
     };
   },
   data() {
-    return { filter: "" };
+    return { filter: "", sort: { field: "at", order: -1 as 1 | -1 } };
   },
   computed: {
+    sortOptions(): Array<{ field: string; label: string }> {
+      return [
+        { field: "at", label: t("audit.col.when") },
+        { field: "action", label: t("audit.col.action") },
+      ];
+    },
     filtered(): AuditEntry[] {
       const q = this.filter.trim().toLowerCase();
       if (!q) return this.entries;

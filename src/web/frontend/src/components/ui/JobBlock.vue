@@ -28,7 +28,7 @@
       v-if="output"
       class="jb-output"
       tabindex="0"
-      :aria-label="outputLabel || COPY.output"
+      :aria-label="outputLabel || t('ui.job.output')"
     >{{ output }}</pre>
     <div v-if="$slots.default" class="jb-note"><slot /></div>
     <div v-if="$slots.actions" class="jb-actions"><slot name="actions" /></div>
@@ -40,16 +40,9 @@ import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { StatusRole } from "@mcbot/schema";
 import { formatDuration } from "@mcbot/core/utils/duration.js";
 import StatusChip from "./StatusChip.vue";
+import { t } from "../../i18n";
 
 type JobState = "running" | "done" | "failed";
-
-const COPY = {
-  running: "Running",
-  done: "Finished",
-  failed: "Failed",
-  exitCode: "Exit code",
-  output: "Script output",
-} as const;
 
 const ROLE: Record<JobState, StatusRole> = {
   running: StatusRole.Info,
@@ -109,14 +102,14 @@ onBeforeUnmount(stopTimer);
 
 const statusText = computed(() => {
   if (props.state === "running") {
-    if (!props.startedAt) return COPY.running;
+    if (!props.startedAt) return t("ui.job.running");
     const seconds = Math.max(0, Math.floor((now.value - props.startedAt) / 1000));
-    return `${COPY.running}, ${formatDuration(seconds * 1000)}`;
+    return t("ui.job.runningFor", { duration: formatDuration(seconds * 1000) });
   }
   if (props.exitCode !== undefined && props.exitCode !== null) {
-    return `${COPY.exitCode} ${props.exitCode}`;
+    return t("ui.job.exitCode", { code: props.exitCode });
   }
-  return props.state === "done" ? COPY.done : COPY.failed;
+  return props.state === "done" ? t("ui.job.done") : t("ui.job.failed");
 });
 </script>
 

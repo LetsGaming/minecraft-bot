@@ -24,7 +24,7 @@
       </li>
     </ol>
 
-    <section v-if="step === 0" class="panel">
+    <section v-if="step === 0" ref="panel" class="panel" tabindex="-1">
       <p v-if="loadingGuilds" class="center" role="status">
         <i class="pi pi-spin pi-spinner" aria-hidden="true" /> {{ t("wizard.loadingGuilds") }}
       </p>
@@ -92,7 +92,7 @@
       </template>
     </section>
 
-    <section v-else-if="step === 1" class="panel">
+    <section v-else-if="step === 1" ref="panel" class="panel" tabindex="-1">
       <p v-if="loadingChannels" class="center" role="status">
         <i class="pi pi-spin pi-spinner" aria-hidden="true" /> {{ t("wizard.loadingChannels") }}
       </p>
@@ -202,7 +202,7 @@
       </template>
     </section>
 
-    <section v-else class="panel">
+    <section v-else ref="panel" class="panel" tabindex="-1">
       <p class="hint top-hint">{{ t("wizard.reviewHint") }}</p>
       <dl class="review">
         <div class="review-row">
@@ -373,6 +373,11 @@ export default defineComponent({
     },
   },
   watch: {
+    // The footer swaps Next for Write and drops Back on the first step, so the
+    // button that was pressed can vanish; focus moves to the new step instead.
+    step() {
+      void this.$nextTick(() => (this.$refs.panel as HTMLElement | undefined)?.focus());
+    },
     visible(open: boolean) {
       if (open) {
         this.step = 0;
@@ -508,12 +513,5 @@ export default defineComponent({
 }
 @media (pointer: coarse), (max-width: 760px) {
   .tap, .w-full { min-height: var(--touch-min); }
-}
-</style>
-
-<style>
-/* The dialog header is rendered by PrimeVue outside this component's scope. */
-@media (pointer: coarse), (max-width: 760px) {
-  .setup-wizard .p-dialog-close-button { width: var(--touch-min); height: var(--touch-min); }
 }
 </style>

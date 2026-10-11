@@ -40,6 +40,7 @@
           :detail="error"
           :busy="loading"
           :retry-label="current ? t('modconfig.reloadFile') : ''"
+          :heading-level="2"
           @retry="retry"
         />
       </template>
