@@ -168,3 +168,11 @@ The editor handles primitives, objects, arrays, and maps. `anyOf`/union nodes
 are the known gap — they fall back to a raw JSON textarea, which works but asks
 the operator to know the shape. Rendering them as a proper multiselect is the
 open piece of work.
+
+## Design tokens
+
+`src/web/frontend/src/tokens.css` is the only file that may contain raw hex colours. It holds the surface, text, accent, focus and feedback roles, the type, spacing, radius, z and motion scales, and the density variables (`--control-h`, `--row-pad-y`). The seven status roles (`--st-<role>`, `--st-<role>-bg`) are written at startup from the table in `@mcbot/schema` by `statusTokens.ts`, so the dashboard and the Discord embeds share one set of values. `style.css` keeps the older `--mc-*` names as aliases of these roles. `preset.ts` builds the PrimeVue preset from `var(--...)` references only.
+
+`composables/useDensity.ts` stores the comfortable or compact choice in `localStorage` and sets `data-density` on the root element.
+
+`npm run lint` also runs `scripts/check-frontend.mjs`, which fails on raw hex outside `tokens.css` and on frontend imports of anything but `@mcbot/core` and `@mcbot/schema` (ESLint cannot parse `.vue` files here, so the script covers them).
