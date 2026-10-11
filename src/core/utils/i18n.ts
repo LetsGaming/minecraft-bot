@@ -22,8 +22,12 @@
  * several guilds, so there is no single correct guild to borrow a locale
  * from (see docs/dev/decisions.md).
  *
- * Deliberately tiny: no plural rules, no nested keys, no runtime loading —
- * locales are plain TS maps (src/core/locales/) so typos surface at
+ * Plurals use `{count|one form|other form}` inside a template, resolved
+ * through `Intl.PluralRules` for the effective language; `#` in a form is
+ * replaced by the number.
+ *
+ * Deliberately tiny: no nested keys, no runtime loading. Locales are plain
+ * TS maps (src/core/locales/) so typos surface at
  * review time and the bundle stays dependency-free. `npm run i18n:check`
  * fails when en and de diverge on keys.
  */
@@ -80,7 +84,37 @@ export function t(
 ): string {
   const lang = resolveLanguage(guildId);
   const template = LOCALES[lang]?.[key] ?? en[key] ?? key;
-  return template.replace(/\{(\w+)\}/g, (match, name: string) =>
-    name in vars ? String(vars[name]) : match,
-  );
+  return template
+    .replace(PLURAL_PATTERN, (match, name: string, one: string, other: string) => {
+      if (!(name in vars)) return match;
+      const count = Number(vars[name]);
+      const form = pluralCategory(count, lang) === "one" ? one : other;
+      return form.replace(/#/g, String(vars[name]));
+    })
+    .replace(/\{(\w+)\}/g, (match, name: string) =>
+      name in vars ? String(vars[name]) : match,
+    );
+}
+
+const PLURAL_PATTERN = /\{(\w+)\|([^|{}]*)\|([^|{}]*)\}/g;
+
+const pluralRules = new Map<string, Intl.PluralRules>();
+
+/** The CLDR plural category of `count` in `lang` ("one", "other", ...). */
+export function pluralCategory(count: number, lang: "en" | "de"): Intl.LDMLPluralRule {
+  let rules = pluralRules.get(lang);
+  if (!rules) {
+    rules = new Intl.PluralRules(lang);
+    pluralRules.set(lang, rules);
+  }
+  return rules.select(count);
+}
+
+/** Picks the singular or plural form for `count` in the effective language. */
+export function plural(
+  count: number,
+  forms: { one: string; other: string },
+  guildId?: string,
+): string {
+  return pluralCategory(count, resolveLanguage(guildId)) === "one" ? forms.one : forms.other;
 }
