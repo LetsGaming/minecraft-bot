@@ -31,12 +31,32 @@ export const GLOSSARY = {
   "apply.botDown": { en: "Bot is not running", de: "Bot läuft nicht" },
   "apply.restartRequired": { en: "Restart required", de: "Neustart erforderlich" },
   "apply.unknown": { en: "Not reported", de: "Nicht gemeldet" },
+
+  "tier.hourly": { en: "Hourly", de: "Stündlich" },
+  "tier.daily": { en: "Daily", de: "Täglich" },
+  "tier.weekly": { en: "Weekly", de: "Wöchentlich" },
+  "tier.monthly": { en: "Monthly", de: "Monatlich" },
+  "tier.update": { en: "Pre-update", de: "Vor Update" },
+  "tier.manual": { en: "Manual", de: "Manuell" },
+  "tier.archive": { en: "Archive", de: "Archiv" },
 } as const satisfies Record<string, GlossaryEntry>;
 
 export type GlossaryKey = keyof typeof GLOSSARY;
 
 export function glossaryText(key: GlossaryKey, language: GlossaryLanguage = "en"): string {
   return GLOSSARY[key][language];
+}
+
+/**
+ * The label of a backup tier directory as the wrapper files it ("hourly",
+ * "archives/daily", "archives/update"). An unknown leaf comes back
+ * capitalised, so a new tier still reads as a word.
+ */
+export function backupTierLabel(dir: string, language: GlossaryLanguage = "en"): string {
+  const leaf = dir.split("/").pop() ?? dir;
+  const key = `tier.${leaf.toLowerCase()}`;
+  if (key in GLOSSARY) return GLOSSARY[key as GlossaryKey][language];
+  return leaf.charAt(0).toUpperCase() + leaf.slice(1);
 }
 
 /** The glossary key of the label for a status role. */

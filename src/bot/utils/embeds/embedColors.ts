@@ -3,8 +3,7 @@ import { StatusRole, statusEmbedColor } from "@mcbot/schema/status.js";
 /**
  * Embed side-bar colours. Every semantic value is a status role from
  * `@mcbot/schema` (the same colours as the dashboard chips), so Discord and
- * the dashboard cannot drift apart. Only external brand colours live here
- * as literals.
+ * the dashboard cannot drift apart.
  */
 export const EmbedColor = {
   /** Running, answering. */
@@ -21,5 +20,4 @@ export const EmbedColor = {
   Pending: statusEmbedColor(StatusRole.Pending),
   /** Neutral answers and running jobs. */
   Info: statusEmbedColor(StatusRole.Info),
-  Modrinth: 0x1bd96a,
 } as const;
