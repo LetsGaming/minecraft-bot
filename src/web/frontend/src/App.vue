@@ -72,7 +72,7 @@
       </template>
     </AppShell>
 
-    <Toast position="bottom-right" />
+    <Toast position="top-right" class="app-toast" />
     <ConfirmDialog />
     <TypedConfirmDialog />
   </div>

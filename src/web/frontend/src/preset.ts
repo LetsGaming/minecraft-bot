@@ -84,5 +84,15 @@ export const MinecraftPreset = definePreset(Aura, {
         },
       },
     },
+    togglebutton: {
+      colorScheme: {
+        dark: {
+          // Aura draws unselected segments in {surface.400}, 3.9:1 on the
+          // segment track; the dim text role keeps them readable.
+          root: { color: "var(--text-dim)" },
+          icon: { color: "var(--text-dim)" },
+        },
+      },
+    },
   },
 });
