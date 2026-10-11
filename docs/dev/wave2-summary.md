@@ -114,7 +114,12 @@ The base for every diff below is `e0357ec` (Wave 1, 7.0.0; there is no
   native reviewer.
 - **Config history drawer and diff (DASH-18).** Not built in this wave; the
   failure handling and the rollback copy were done first.
-- **Console copy, clear and download (DASH-23).** Not picked up by any phase.
+- **Open after the P7 browser pass:** the Backups page copy still bypasses
+  `t()` (about 100 strings, not under the literal-text lint), PrimeVue's
+  deprecated `InputChips` is still used in the schema form, Config section
+  header buttons are verbose for screen readers, the kept-mounted Servers view
+  leaves a second hidden h1 in the DOM, and Console copy, download and clear
+  have no unit test (jsdom has no `EventSource`).
 - **Discord items outside reply UX:** bridge reliability and formatting
   (DISC-10, DISC-17), command consolidation and naming (DISC-18, DISC-26,
   DISC-27), autocomplete and DM contexts (DISC-20, DISC-21), the restart message
@@ -138,23 +143,33 @@ that remain, all reviewed:
 - **Fixed in P7:** the challenge reward line was built in the global language
   for every guild; the challenge and streak leaderboard titles carried a trophy
   emoji; backup sizes used a decimal point in German.
-- **Open, larger than a P7 fix:**
-  - `/status` shows bot ping and round trip instead of the mockup's TPS, uptime
-    and version, and an offline server has no "who stopped it, how to start it"
-    line (needs data the command does not have today).
-  - An unreachable wrapper surfaces as "Command failed" with the raw transport
-    message (for example "fetch failed") in English, also in German guilds.
-    Needs a mapping from wrapper errors to a localised problem and recovery,
-    ideally titled "Could not reach smp" as in the mockup.
-  - `/players` prints playtime as "8d 20h 0m 0s" (see open decisions), has no
-    "3 online, 41 known" summary and no sort line.
-  - `/mods` has no loader and version line and lists every mod as a link per
-    line, so a 62 mod pack is one long page rather than the mockup's grouped
-    names.
-  - The downtime alert has no "last seen", "players hit" or crash report hint.
-  - `/daily` shows raw item ids ("3x diamond", "cooked beef") in English in
-    every language, and a random bonus item is given but not listed.
-  - The denial names the command (`/server`) but not the subcommand.
+- **Fixed after the snapshot comparison (owner decisions in parentheses):**
+  - `/status` shows TPS, "online for" and the version, and an offline server
+    says who stopped or restarted it and how to start it, from a persisted
+    record written when `/server stop` or `/server restart` confirms. Bot ping
+    and round trip stay next to the new fields.
+  - An unreachable wrapper reads "Could not reach <server>" with a recovery
+    line, localised; the raw cause goes to the log only.
+  - `/players` has the "N online, M known. Sorted by ..." line, `/mods` the
+    "N mods on <loader> <version>" line (layout and links kept: summary lines
+    only).
+  - The downtime alert has "Last seen" and "Players hit" fields and a static
+    crash report hint when the process ended without a stop command.
+  - `/daily`, its history and the in-game delivery notice show items as
+    "3 × Diamond" (title-cased ids, no name table), and the random bonus item
+    has its own line.
+  - All playtime in Discord uses the shared duration format (plain shared
+    format).
+  - The denial names the subcommand (`/server stop`).
+- **Still open:**
+  - The challenge reward line (`challenge.fieldItem`) still shows raw item ids.
+  - Wrapper 5xx errors still show their raw message; only the transport kinds
+    (unreachable, timeout, breaker open, rate limited) are mapped.
+  - The mods summary says "Install them all to join" but counts server-only and
+    client-optional mods too, so it slightly overstates what players need.
+  - "Players hit" costs one extra wrapper call per online server per check,
+    because health checks carry no player list; the alternative is counting
+    open sessions when the server goes down.
 
 ## Limits of the verification
 
