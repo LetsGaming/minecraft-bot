@@ -1,120 +1,154 @@
 import { ref } from "vue";
-import { errorMessage } from "../utils/errorMessage";
 import { useToast } from "primevue/usetoast";
-import { useConfirm } from "primevue/useconfirm";
-import { useTypedConfirm } from "./useTypedConfirm";
-import { apiGet, apiSend } from "../api";
 import {
   isDisruptiveServerAction,
   isIrreversibleServerAction,
+  type ServerOperatorAction,
 } from "@mcbot/schema/serverActions.js";
+import { apiSend } from "../api";
+import type { ServerStatus } from "../api";
+import { errorMessage } from "../utils/errorMessage";
+import { t } from "../i18n";
+import { useConfirmAction, type ConfirmActionOptions } from "./useConfirmAction";
 
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
+export interface ServerActionJob {
+  action: ServerOperatorAction;
+  state: "running" | "failed";
+  startedAt: number;
+  exitCode: number | null | undefined;
+  output: string;
+  note: string;
+}
+
+interface ScriptResponse {
+  ok: boolean;
+  exitCode: number | null;
+  output?: string;
+  stderr?: string;
+}
+
+function scriptOutput(res: ScriptResponse): string {
+  return [res.output ?? "", res.stderr ?? ""]
+    .filter((part) => part.trim() !== "")
+    .join("\n")
+    .replace(/\r\n?/g, "\n");
+}
+
+/** What the confirm says for an action, or null when it runs without one. */
+export function confirmOptions(
+  server: ServerStatus,
+  action: ServerOperatorAction,
+): ConfirmActionOptions | null {
+  const id = server.id;
+  if (isIrreversibleServerAction(action)) {
+    return {
+      level: "irreversible",
+      tone: "danger",
+      header: t("servers.confirm.rollbackHeader", { server: id }),
+      message: t("servers.confirm.rollbackMessage", { server: id }),
+      acceptLabel: t("servers.confirm.rollbackAccept", { server: id }),
+      expected: id,
+      facts: [
+        { term: t("servers.confirm.factApplies"), detail: t("servers.confirm.rollbackApplies", { server: id }) },
+        { term: t("servers.confirm.factRecover"), detail: t("servers.confirm.rollbackRecover") },
+      ],
+    };
+  }
+  if (!isDisruptiveServerAction(action) || (action !== "stop" && action !== "restart")) return null;
+  const players = server.players;
+  const message = !players
+    ? t(`servers.confirm.${action}Unknown`)
+    : players.online === 0
+      ? t(`servers.confirm.${action}Empty`)
+      : t(`servers.confirm.${action}Players`, { count: players.online });
+  return {
+    level: "disruptive",
+    tone: action === "stop" ? "danger" : "warn",
+    header: t(`servers.confirm.${action}Header`, { server: id }),
+    message,
+    acceptLabel: t(`servers.confirm.${action}Accept`, { server: id }),
+    facts: [
+      { term: t("servers.confirm.factApplies"), detail: t("servers.confirm.applyNow") },
+      { term: t("servers.confirm.factRecover"), detail: t(`servers.confirm.${action}Recover`, { server: id }) },
+    ],
+  };
 }
 
 /**
- * Server operations for the Servers view: run an action (start / stop /
- * restart / backup) with a confirm step for the destructive ones, and
- * toggle a tail of the server log. Owns its own toast + confirm so the
- * view just calls the methods. `refresh` is invoked after a successful
- * action so the caller can re-pull status (and emit it onward).
+ * Server operations for the Servers view: confirm at the level the action
+ * needs, run it, and keep a job per server while the script runs or after it
+ * failed. A finished action is a toast; a failed one stays on the card with
+ * its exit code and output until it is dismissed or retried.
  */
-export function useServerActions(refresh: () => Promise<unknown>) {
+export function useServerActions(afterAction: () => Promise<unknown>) {
   const toast = useToast();
-  const confirm = useConfirm();
-  const confirmTyped = useTypedConfirm();
+  const confirmAction = useConfirmAction();
+  const jobs = ref<Record<string, ServerActionJob>>({});
 
-  const busy = ref("");
-  const logServer = ref("");
-  const logLines = ref<string[]>([]);
+  function isRunning(serverId: string): boolean {
+    return jobs.value[serverId]?.state === "running";
+  }
 
-  /**
-   * Confirm an action the operator cannot take back.
-   *
-   * A separate dialog rather than the disruptive one with harsher wording:
-   * clicking OK is a reflex, and the point of this one is to interrupt the
-   * reflex. Typing the server's name is the smallest thing that cannot be
-   * done by accident. A rollback replaces the world; "restart" is a question
-   * you can answer wrong and recover from, this is not.
-   */
-  async function confirmIrreversible(
-    serverId: string,
-    action: string,
-  ): Promise<boolean> {
-    return confirmTyped({
-      header: `Confirm ${action}`,
-      message: `This will ${action} "${serverId}" and cannot be undone.`,
-      expected: serverId,
-      acceptLabel: capitalize(action),
+  function dismiss(serverId: string): void {
+    const next = { ...jobs.value };
+    delete next[serverId];
+    jobs.value = next;
+  }
+
+  function setJob(serverId: string, job: ServerActionJob): void {
+    jobs.value = { ...jobs.value, [serverId]: job };
+  }
+
+  async function runAction(server: ServerStatus, action: ServerOperatorAction): Promise<void> {
+    const id = server.id;
+    if (isRunning(id)) return;
+    const options = confirmOptions(server, action);
+    if (options && (await confirmAction(options)) !== "confirm") return;
+
+    const startedAt = Date.now();
+    setJob(id, {
+      action,
+      state: "running",
+      startedAt,
+      exitCode: undefined,
+      output: "",
+      note: t("servers.job.runningNote"),
     });
-  }
-
-  async function runAction(serverId: string, action: string): Promise<void> {
-    if (isIrreversibleServerAction(action)) {
-      if (!(await confirmIrreversible(serverId, action))) return;
-    } else if (isDisruptiveServerAction(action)) {
-      const ok = await new Promise<boolean>((resolve) => {
-        confirm.require({
-          message: `Really ${action} "${serverId}"?`,
-          header: `Confirm ${action}`,
-          icon: "pi pi-exclamation-triangle",
-          acceptLabel: capitalize(action),
-          rejectLabel: "Cancel",
-          acceptClass: action === "stop" ? "p-button-danger" : "",
-          accept: () => resolve(true),
-          reject: () => resolve(false),
-          onHide: () => resolve(false),
-        });
-      });
-      if (!ok) return;
-    }
-    busy.value = serverId;
     try {
-      const res = await apiSend<{ ok: boolean; exitCode: number | null }>(
+      const res = await apiSend<ScriptResponse>(
         "POST",
-        `/api/servers/${encodeURIComponent(serverId)}/${action}`,
+        `/api/servers/${encodeURIComponent(id)}/${action}`,
       );
-      toast.add({
-        severity: res.ok ? "success" : "warn",
-        summary: `${capitalize(action)} · ${serverId}`,
-        detail: res.ok ? "Done" : `Exit code ${res.exitCode}`,
-        life: 3000,
-      });
-      await refresh();
+      if (res.ok) {
+        dismiss(id);
+        toast.add({
+          severity: "success",
+          summary: t(`servers.done.${action}`, { server: id }),
+          detail: t(`servers.doneDetail.${action}`, { server: id }),
+          life: 5000,
+        });
+      } else {
+        setJob(id, {
+          action,
+          state: "failed",
+          startedAt,
+          exitCode: res.exitCode,
+          output: scriptOutput(res),
+          note: t("servers.job.failedNote"),
+        });
+      }
     } catch (err) {
-      toast.add({
-        severity: "error",
-        summary: `${capitalize(action)} failed`,
-        detail: errorMessage(err),
-        life: 4000,
+      setJob(id, {
+        action,
+        state: "failed",
+        startedAt,
+        exitCode: undefined,
+        output: "",
+        note: t("servers.job.requestFailed", { message: errorMessage(err) }),
       });
-    } finally {
-      busy.value = "";
     }
+    await afterAction();
   }
 
-  async function toggleLog(serverId: string): Promise<void> {
-    if (logServer.value === serverId) {
-      logServer.value = "";
-      logLines.value = [];
-      return;
-    }
-    try {
-      const res = await apiGet<{ lines: string[] }>(
-        `/api/servers/${encodeURIComponent(serverId)}/log?lines=50`,
-      );
-      logServer.value = serverId;
-      logLines.value = res.lines;
-    } catch (err) {
-      toast.add({
-        severity: "error",
-        summary: "Log tail failed",
-        detail: errorMessage(err),
-        life: 4000,
-      });
-    }
-  }
-
-  return { busy, logServer, logLines, runAction, toggleLog };
+  return { jobs, isRunning, runAction, dismiss };
 }

@@ -70,6 +70,55 @@ a { color: var(--mc-accent); }
   border: 0;
 }
 
+/* Toasts sit top right, clear of the console composer and the edit bar that
+   docks to the bottom on phones; under 760px they drop below the 56px top
+   bar so the menu button stays reachable. */
+.app-toast.p-toast {
+  top: var(--space-4);
+  right: var(--space-4);
+  width: min(380px, calc(100vw - 2 * var(--space-4)));
+}
+@media (max-width: 760px) {
+  .app-toast.p-toast {
+    top: 64px;
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+
+/* A PrimeVue DataTable marked .stack-table turns into one card per row under
+   760px: the header row hides and each cell names its column from the
+   data-label its Column passes through `pt`. */
+@media (max-width: 760px) {
+  .stack-table .p-datatable-thead { display: none; }
+  .stack-table .p-datatable-table,
+  .stack-table .p-datatable-tbody { display: block; width: 100%; min-width: 0; }
+  .stack-table .p-datatable-tbody > tr {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .stack-table .p-datatable-tbody > tr > td {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-1) var(--space-3);
+    width: auto !important;
+    padding: 0;
+    border: 0;
+    overflow-wrap: anywhere;
+  }
+  .stack-table .p-datatable-tbody > tr > td[data-label]::before {
+    content: attr(data-label);
+    flex: 0 0 9ch;
+    color: var(--text-dim);
+    font-size: var(--text-xs);
+  }
+}
+
 /* Scrollbar polish */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb {

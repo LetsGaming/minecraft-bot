@@ -190,7 +190,7 @@ describe("playersLabel", () => {
   it("distinguishes an empty server from an unknown one", () => {
     expect(playersLabel({ online: 0, max: 20 })).toBe("0/20");
     // Not "0/0": the interface has no idea, and should not claim nobody.
-    expect(playersLabel(null)).toBe("—");
+    expect(playersLabel(null)).toBe("not known");
   });
 });
 

@@ -1,43 +1,62 @@
 <template>
   <div class="view-fill console-view">
-    <ViewHeader title="Console" subtitle="Live server log, and a command line into it.">
-      <template #actions>
-        <span :class="['conn', connected ? 'up' : 'down']">
-          <StatusDot :state="connected ? 'up' : 'down'" />
-          {{ connected ? "Live" : statusDetail || "Disconnected" }}
-        </span>
+    <ViewHeader :title="t('console.title')" :subtitle="t('console.lede')">
+      <template v-if="current" #actions>
+        <StatusChip :state="connectionRole" :label="connectionLabel" :busy="connecting" live />
       </template>
     </ViewHeader>
 
-    <EmptyState v-if="serverIds.length === 0" icon="pi pi-server">
-      No servers you can view.
+    <EmptyState v-if="serverIds.length === 0" icon="pi pi-server" :title="t('console.noServersTitle')">
+      {{ t("console.noServers") }}
     </EmptyState>
 
     <template v-else>
+      <InlineError
+        v-if="closedReason"
+        class="closed"
+        :title="closedTitle"
+        :recovery="closedRecovery"
+        :detail="statusDetail"
+        :retry-label="t('console.reconnect')"
+        :heading-level="2"
+        @retry="reconnect"
+      />
+
       <!-- Filters sit above the pane so the pane itself can own all the
            remaining height. -->
       <div class="pane-tools">
+        <span :id="levelLabelId" class="sr-only">{{ t("console.levelLabel") }}</span>
         <SelectButton
           v-model="minLevel"
+          class="levels"
           :options="levelOptions"
           optionLabel="label"
           optionValue="value"
           :allowEmpty="false"
           size="small"
+          :aria-labelledby="levelLabelId"
         />
+        <label for="console-filter" class="sr-only">{{ t("console.filterLabel") }}</label>
         <IconField class="pane-search">
           <InputIcon class="pi pi-search" />
-          <InputText v-model="query" placeholder="Filter lines…" size="small" />
+          <InputText id="console-filter" v-model="query" :placeholder="t('console.filterPlaceholder')" size="small" />
         </IconField>
+        <label class="toggle">
+          <input v-model="wrap" type="checkbox" />
+          {{ t("console.wrap") }}
+        </label>
       </div>
 
-      <div ref="pane" class="pane mono" @scroll="onScroll">
-        <div v-if="lines.length === 0" class="muted small pane-empty">
-          Waiting for output…
-        </div>
-        <div v-else-if="visibleLines.length === 0" class="muted small pane-empty">
-          No buffered line matches those filters.
-        </div>
+      <div
+        ref="pane"
+        :class="['pane', 'mono', { nowrap: !wrap }]"
+        role="log"
+        tabindex="0"
+        :aria-label="t('console.logLabel', { server: current })"
+        @scroll="onScroll"
+      >
+        <p v-if="lines.length === 0" class="pane-empty">{{ t("console.waiting") }}</p>
+        <p v-else-if="visibleLines.length === 0" class="pane-empty">{{ t("console.noMatch") }}</p>
         <div
           v-for="line in visibleLines"
           :key="line.id"
@@ -46,64 +65,73 @@
       </div>
 
       <div class="pane-foot">
-        <label class="follow small muted">
-          <input type="checkbox" v-model="autoScroll" />
-          Follow output
+        <label class="toggle">
+          <input v-model="autoScroll" type="checkbox" />
+          {{ t("console.follow") }}
         </label>
-        <span class="muted small">
-          <template v-if="visibleLines.length !== lines.length">
-            {{ visibleLines.length }} of
-          </template>
-          {{ lines.length }} lines buffered
-        </span>
+        <span class="foot-count">{{ countText }}</span>
       </div>
 
       <!-- Command input, only for those who may send. -->
-      <div v-if="canSendCommands" class="composer">
+      <form v-if="canSendCommands" class="composer" @submit.prevent="submit">
+        <label for="console-command" class="sr-only">{{ t("console.commandLabel", { server: current }) }}</label>
         <InputText
+          id="console-command"
           v-model="command"
           :maxlength="maxLength"
-          placeholder="Type a command, e.g. list"
+          :placeholder="t('console.commandPlaceholder')"
           :invalid="commandBlocked"
+          aria-describedby="console-command-hint"
+          autocomplete="off"
           class="composer-input"
-          @keyup.enter="send"
+          @keydown.up.prevent="recall('previous')"
+          @keydown.down.prevent="recall('next')"
         />
         <Button
-          label="Send"
+          type="submit"
+          class="tap"
+          :label="t('console.send')"
           icon="pi pi-send"
           size="small"
           :loading="sending"
           :disabled="!canSend"
-          @click="send"
         />
-      </div>
-      <p v-if="commandBlocked" class="blocked small">
-        That command is blocked on this dashboard.
+      </form>
+      <p v-if="canSendCommands" id="console-command-hint" :class="['hint', { blocked: commandBlocked }]">
+        <template v-if="commandBlocked">{{ t("console.blocked", { command: commandWord }) }}</template>
+        <template v-else>{{ blockedHint }}</template>
       </p>
-      <p v-else-if="canSendCommands" class="muted small hint">
-        Blocked here: {{ blockedCommands.join(", ") || "nothing" }}. The leading slash is optional.
-      </p>
-      <Message v-if="error" severity="error" :closable="false" class="composer-error">
-        {{ error }}
-      </Message>
+      <InlineError
+        v-if="error"
+        class="send-error"
+        :title="t('console.sendFailedTitle')"
+        :recovery="t('console.sendFailedText')"
+        :detail="error"
+        :retry-label="t('console.sendAgain')"
+        :busy="sending"
+        @retry="submit"
+      />
     </template>
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent } from "vue";
+import { defineComponent, useId } from "vue";
 import Button from "primevue/button";
 import InputText from "primevue/inputtext";
 import IconField from "primevue/iconfield";
 import InputIcon from "primevue/inputicon";
 import SelectButton from "primevue/selectbutton";
-import Message from "primevue/message";
+import { StatusRole } from "@mcbot/schema";
 import { logLevel, lineMatches, type LogLevel } from "../utils/logLine";
+import { CommandHistory } from "../utils/commandHistory";
 import { useConsole, type ConsoleLine } from "../composables/useConsole";
 import { useCapabilities } from "../composables/useCapabilities";
+import { t } from "../i18n";
 import ViewHeader from "../components/ui/ViewHeader.vue";
-import StatusDot from "../components/ui/StatusDot.vue";
+import StatusChip from "../components/ui/StatusChip.vue";
 import EmptyState from "../components/ui/EmptyState.vue";
+import InlineError from "../components/ui/InlineError.vue";
 
 /** Distance from the bottom still counted as "at the bottom", in px. */
 const STICK_THRESHOLD = 40;
@@ -111,8 +139,8 @@ const STICK_THRESHOLD = 40;
 export default defineComponent({
   name: "ConsoleView",
   components: {
-    Button, InputText, IconField, InputIcon, SelectButton, Message,
-    ViewHeader, StatusDot, EmptyState,
+    Button, InputText, IconField, InputIcon, SelectButton,
+    ViewHeader, StatusChip, EmptyState, InlineError,
   },
   props: {
     /** Server ids the caller may read, from the shell's status poll. */
@@ -120,18 +148,26 @@ export default defineComponent({
     activeServer: { type: String, default: "" },
   },
   setup() {
-    return { ...useConsole(), ...useCapabilities(), logLevel };
+    return {
+      ...useConsole(),
+      ...useCapabilities(),
+      logLevel,
+      t,
+      levelLabelId: `console-levels-${useId()}`,
+      history: new CommandHistory(),
+    };
   },
   data() {
     return {
       current: "",
       programmaticScroll: false,
       query: "",
+      wrap: true,
       minLevel: "info" as LogLevel,
       levelOptions: [
-        { value: "info", label: "All" },
-        { value: "warn", label: "Warn+" },
-        { value: "error", label: "Errors" },
+        { value: "info", label: t("console.levelAll") },
+        { value: "warn", label: t("console.levelWarn") },
+        { value: "error", label: t("console.levelError") },
       ],
     };
   },
@@ -139,20 +175,49 @@ export default defineComponent({
     canSendCommands(): boolean {
       return this.can("server:console", this.current);
     },
-    /**
-     * Filtering is client-side over the buffer the stream already delivered,
-     * so switching level never re-requests and never loses backlog: clearing
-     * the filter brings every line straight back.
-     */
     /** Monotonic id of the newest buffered line; 0 when the buffer is empty. */
     lastLineId(): number {
       return this.lines[this.lines.length - 1]?.id ?? 0;
     },
+    /**
+     * Filtering is client-side over the buffer the stream already delivered,
+     * so switching level never re-requests and never loses backlog.
+     */
     visibleLines(): ConsoleLine[] {
       if (this.minLevel === "info" && this.query.trim() === "") return this.lines;
       return this.lines.filter((l) =>
         lineMatches(l.text, { minLevel: this.minLevel, query: this.query }),
       );
+    },
+    countText(): string {
+      return this.visibleLines.length === this.lines.length
+        ? t("console.buffered", { count: this.lines.length })
+        : t("console.bufferedFiltered", { shown: this.visibleLines.length, count: this.lines.length });
+    },
+    connectionRole(): StatusRole {
+      if (this.connecting) return StatusRole.Info;
+      if (this.connected) return StatusRole.Online;
+      return this.closedReason ? StatusRole.Offline : StatusRole.Degraded;
+    },
+    connectionLabel(): string {
+      if (this.connecting) return t("console.connecting");
+      if (this.connected) return t("console.live");
+      if (this.closedReason) return t("console.closed");
+      return this.statusDetail || t("console.disconnected");
+    },
+    closedTitle(): string {
+      return this.closedReason === "removed" ? t("console.removedTitle") : t("console.revokedTitle");
+    },
+    closedRecovery(): string {
+      return this.closedReason === "removed" ? t("console.removedText") : t("console.revokedText");
+    },
+    commandWord(): string {
+      return this.command.trim().replace(/^\//, "").split(/\s+/)[0] ?? "";
+    },
+    blockedHint(): string {
+      return this.blockedCommands.length
+        ? t("console.blockedList", { list: this.blockedCommands.join(", ") })
+        : t("console.blockedNone");
     },
   },
   watch: {
@@ -176,10 +241,8 @@ export default defineComponent({
      *
      * `visibleLines` returns `this.lines` itself when no filter is active, so
      * pushing a line mutates it in place and the computed's value is
-     * reference-identical. A default (shallow) watcher never fired, which is
-     * why the pane sat wherever it was while output streamed past. Watching
-     * the id also survives the ring buffer: at the 100-line cap the length
-     * stops changing but the newest id still climbs.
+     * reference-identical; a shallow watcher never fires. The id also climbs
+     * past the ring buffer cap, where the length stops changing.
      */
     lastLineId() {
       if (this.autoScroll) void this.$nextTick(() => this.scrollToBottom());
@@ -192,10 +255,21 @@ export default defineComponent({
       // from the previous server must not carry over to this one.
       this.autoScroll = true;
       await this.open(id);
-      // `open()` only starts the stream — the backlog arrives over the next
-      // few ticks, so there is nothing to scroll to yet. The lastLineId
-      // watcher takes it from here; this just handles an already-warm buffer.
+      // `open()` only starts the stream; the backlog arrives over the next
+      // ticks and the lastLineId watcher scrolls for it. This handles an
+      // already-warm buffer.
       void this.$nextTick(() => this.scrollToBottom());
+    },
+    reconnect(): void {
+      if (this.current) void this.select(this.current);
+    },
+    async submit(): Promise<void> {
+      const text = this.command;
+      if (await this.send()) this.history.record(text);
+    },
+    recall(direction: "previous" | "next"): void {
+      const value = direction === "previous" ? this.history.previous(this.command) : this.history.next();
+      if (value !== null) this.command = value;
     },
     scrollToBottom(): void {
       const pane = this.$refs.pane as HTMLElement | undefined;
@@ -204,9 +278,8 @@ export default defineComponent({
       pane.scrollTop = pane.scrollHeight;
       // Assigning scrollTop fires a scroll event asynchronously. Measured
       // against layout that has not settled, `onScroll` read a large distance
-      // from the bottom and switched following off — so the pane disengaged
-      // itself on the very first backlog flush and stayed at the top. Hold
-      // the guard until after that event has been delivered.
+      // from the bottom and switched following off on the first backlog
+      // flush. Hold the guard until after that event has been delivered.
       requestAnimationFrame(() => {
         this.programmaticScroll = false;
       });
@@ -228,54 +301,58 @@ export default defineComponent({
 </script>
 
 <style scoped>
-.conn { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
-.conn.up { color: var(--mc-text); }
-.conn.down { color: var(--mc-muted); }
-
 /* The view is a column that fills the shell's content area, so the pane
-   grows into whatever height is left instead of taking a fixed 55vh and
-   leaving the rest of a tall screen empty. */
-.console-view { display: flex; flex-direction: column; }
+   grows into whatever height is left instead of a fixed share. */
+.console-view { display: flex; flex-direction: column; min-width: 0; }
+.closed { margin-bottom: var(--space-3); }
 
-.pane-tools { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; }
-.pane-search { flex: 1; min-width: 200px; }
+.pane-tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-bottom: var(--space-2); }
+.pane-search { flex: 1 1 200px; min-width: 0; }
 .pane-search :deep(input) { width: 100%; }
 
 .pane {
   flex: 1;
   min-height: 220px;
-  /* Fill the available height, but stop growing on a tall display. Without a
-     ceiling the pane stretched to the full viewport, so a 1440p screen showed
-     a console taller than anyone reads and pushed the composer off the fold.
-     Capped so it fills a normal window yet stays a readable block on a big
-     one. */
+  /* Fills the window but stops growing on a tall display, so the composer
+     stays above the fold. */
   max-height: 68vh;
-  overflow-y: auto;
-  padding: 10px 12px;
-  background: var(--mc-card);
-  border: 1px solid var(--mc-border);
-  border-radius: var(--mc-radius);
-  font-size: 12px;
-  line-height: 1.55;
+  overflow: auto;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-surface);
+  font-size: var(--text-xs);
+  line-height: var(--leading-body);
 }
-.pane-empty { padding: 4px 0; }
+.pane-empty { margin: 0; padding: var(--space-1) 0; color: var(--text-dim); font-family: var(--font-ui); font-size: var(--text-sm); }
 /* Three weights, so the line that matters is the one that stands out. */
-.line { white-space: pre-wrap; word-break: break-word; color: var(--mc-muted); }
-.line.info { color: var(--mc-muted); }
-.line.warn { color: var(--mc-mid); }
-.line.error { color: var(--mc-bad); }
+.line { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-muted); }
+.nowrap .line { white-space: pre; overflow-wrap: normal; width: max-content; min-width: 100%; }
+.line.warn { color: var(--st-degraded); }
+.line.error { color: var(--danger); }
 
 .pane-foot {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 2px 0;
+  gap: var(--space-2);
+  padding: var(--space-2) 2px 0;
 }
-.follow { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.foot-count { color: var(--text-dim); font-size: var(--text-sm); }
+.toggle { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--text-dim); font-size: var(--text-sm); cursor: pointer; }
+.toggle input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
 
-.composer { display: flex; gap: 8px; margin-top: 10px; }
-.composer-input { flex: 1; font-family: var(--mc-mono); }
-.composer-error { margin-top: 8px; }
-.blocked { color: var(--mc-danger); margin: 6px 2px 0; }
-.hint { margin: 6px 2px 0; }
+.composer { display: flex; gap: var(--space-2); margin-top: var(--space-3); }
+.composer-input { flex: 1; min-width: 0; font-family: var(--font-mono); }
+.hint { margin: var(--space-2) 2px 0; color: var(--text-dim); font-size: var(--text-sm); }
+.hint.blocked { color: var(--danger); }
+.send-error { margin-top: var(--space-3); }
+
+@media (pointer: coarse), (max-width: 760px) {
+  .tap, .composer-input { min-height: var(--touch-min); }
+  .pane-search :deep(input) { min-height: var(--touch-min); }
+  .levels :deep(.p-togglebutton) { min-height: var(--touch-min); }
+  .toggle { min-height: var(--touch-min); }
+}
 </style>

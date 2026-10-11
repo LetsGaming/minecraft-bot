@@ -1,13 +1,14 @@
 import { ref, computed, onUnmounted } from "vue";
 import { apiGet, apiSend } from "../api";
 import { errorMessage } from "../utils/errorMessage";
+import { t } from "../i18n";
 import {
   isBlockedConsoleCommand,
   MAX_CONSOLE_COMMAND_LENGTH,
 } from "@mcbot/schema/consoleCommands.js";
 
 /**
- * DSH-01 — the live console: a relayed log stream plus a command input.
+ * The live console: a relayed log stream plus a command input.
  *
  * Per-view state, not module-level: two people could reasonably watch two
  * servers, and a shared singleton would make the second one hijack the first.
@@ -25,13 +26,14 @@ type ConsoleEvent =
  * How many lines the pane keeps.
  *
  * A busy modded server writes thousands of lines an hour, and every one of
- * them is a DOM node if nothing caps it — leave the tab open over lunch and
+ * them is a DOM node if nothing caps it: leave the tab open over lunch and
  * the page is unusable. Oldest out, and the server's log file is still the
  * place to go for history.
  */
 const MAX_LINES = 2000;
-const SENT_NO_OUTPUT =
-  "(sent; this server has no console output channel, so there is no reply)";
+
+/** Why the stream stopped for good; a reconfigured stream reconnects by itself. */
+export type ConsoleClosedReason = "revoked" | "removed";
 
 export interface ConsoleLine {
   /** Monotonic, so v-for has a stable key even for two identical lines. */
@@ -42,6 +44,9 @@ export interface ConsoleLine {
 export function useConsole() {
   const lines = ref<ConsoleLine[]>([]);
   const connected = ref(false);
+  /** True from open() until the stream first reports its state. */
+  const connecting = ref(false);
+  const closedReason = ref<ConsoleClosedReason | null>(null);
   const statusDetail = ref("");
   const error = ref("");
   const sending = ref(false);
@@ -86,6 +91,8 @@ export function useConsole() {
     serverId = id;
     lines.value = [];
     error.value = "";
+    closedReason.value = null;
+    connecting.value = true;
 
     try {
       const policy = await apiGet<{ blockedCommands: string[] }>(
@@ -111,6 +118,7 @@ export function useConsole() {
       } catch {
         return;
       }
+      connecting.value = false;
       if (event.type === "line") {
         push(event.line);
       } else if (event.type === "closed") {
@@ -119,6 +127,7 @@ export function useConsole() {
         // A revoked or removed console must not auto-reconnect; a changed
         // connection setting should, and EventSource does that by itself.
         if (event.reason !== "reconfigured") {
+          closedReason.value = event.reason;
           source?.close();
           source = null;
         }
@@ -131,7 +140,8 @@ export function useConsole() {
     source.onerror = () => {
       // EventSource reconnects on its own; say so rather than looking dead.
       connected.value = false;
-      statusDetail.value = "Reconnecting…";
+      connecting.value = false;
+      statusDetail.value = t("console.reconnecting");
     };
   }
 
@@ -139,11 +149,13 @@ export function useConsole() {
     source?.close();
     source = null;
     connected.value = false;
+    connecting.value = false;
     statusDetail.value = "";
   }
 
-  async function send(): Promise<void> {
-    if (!canSend.value) return;
+  /** Sends the typed command; true when the server took it. */
+  async function send(): Promise<boolean> {
+    if (!canSend.value) return false;
     const text = command.value.trim();
     sending.value = true;
     error.value = "";
@@ -157,11 +169,13 @@ export function useConsole() {
       // carry the server's own record of it a moment later; a command with no
       // RCON output would otherwise vanish without a trace.
       push(`> ${text}`);
-      if (res.kind === "sent") push(SENT_NO_OUTPUT);
+      if (res.kind === "sent") push(t("console.sentNoOutput"));
       else if (res.output) push(res.output);
       command.value = "";
+      return true;
     } catch (err) {
       error.value = errorMessage(err);
+      return false;
     } finally {
       sending.value = false;
     }
@@ -172,6 +186,8 @@ export function useConsole() {
   return {
     lines,
     connected,
+    connecting,
+    closedReason,
     statusDetail,
     error,
     sending,

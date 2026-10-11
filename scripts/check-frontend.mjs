@@ -41,11 +41,17 @@ const TRANSLATED = new Set([
   "components/schema/MapEntry.vue",
   "components/schema/MapField.vue",
   "components/schema/SchemaField.vue",
+  "components/ui/AlertList.vue",
+  "views/AnalyticsView.vue",
+  "views/AuditView.vue",
   "views/CommandsView.vue",
   "views/ConfigView.vue",
+  "views/ConsoleView.vue",
   "views/GuildsView.vue",
   "views/ModConfigView.vue",
   "views/ModsView.vue",
+  "views/OverviewView.vue",
+  "views/StatusView.vue",
 ]);
 const TEXT_ATTRS = /(?<![:@\w.-])(label|title|placeholder|aria-label|alt|header|subtitle|summary|message)="([^"]*)"/g;
 const HAS_LETTER = /\p{L}/u;

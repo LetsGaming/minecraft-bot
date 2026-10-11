@@ -15,6 +15,8 @@ import type {
 } from "@mcbot/schema";
 import { apiGet } from "../api";
 import { errorMessage } from "../utils/errorMessage";
+import { loadFailure, type LoadFailure } from "../utils/loadFailure";
+import { t } from "../i18n";
 
 /**
  * The bot's own history, for the dashboard.
@@ -52,7 +54,17 @@ export function formatHours(hours: number): string {
  */
 export function clampNote(requestedHours: number, appliedHours: number | null): string {
   if (appliedHours === null || appliedHours >= requestedHours) return "";
-  return `Only the last ${formatHours(appliedHours)} is kept for this section, so that is what is shown.`;
+  return t("analytics.clampNote", { range: formatHours(appliedHours) });
+}
+
+/** One section's failed read: the message for the detail line and its kind. */
+export interface SectionFailure {
+  error: string;
+  kind: LoadFailure;
+}
+
+function sectionFailure(err: unknown): SectionFailure {
+  return { error: errorMessage(err), kind: loadFailure(err) };
 }
 
 export function useAnalytics() {
@@ -79,9 +91,15 @@ export function useAnalytics() {
    * blank them.
    */
   const boardError = ref("");
+  const boardFailure = ref<LoadFailure | null>(null);
   const boardLoading = ref(false);
   const loading = ref(false);
+  /** False until the first load has answered, success or failure. */
+  const loaded = ref(false);
   const error = ref("");
+  const failure = ref<LoadFailure | null>(null);
+  const usageFailure = ref<SectionFailure | null>(null);
+  const playersFailure = ref<SectionFailure | null>(null);
 
   /**
    * Server history, players and command usage load independently.
@@ -93,6 +111,7 @@ export function useAnalytics() {
   async function load(serverId: string, hours = 24 * 14): Promise<void> {
     loading.value = true;
     error.value = "";
+    failure.value = null;
     const base = `/api/servers/${encodeURIComponent(serverId)}`;
     const [server, usage, playerList] = await Promise.allSettled([
       apiGet<ServerAnalyticsResponse>(`${base}/analytics?hours=${hours}`),
@@ -112,32 +131,39 @@ export function useAnalytics() {
       activityRangeHours.value = null;
       busiest.value = [];
       error.value = errorMessage(server.reason);
+      failure.value = loadFailure(server.reason);
     }
 
     if (usage.status === "fulfilled") {
       commands.value = usage.value.commands;
       commandsRangeHours.value = usage.value.rangeHours;
       caps.value ??= usage.value.caps;
+      usageFailure.value = null;
     } else {
       commands.value = [];
       commandsRangeHours.value = null;
+      usageFailure.value = sectionFailure(usage.reason);
     }
 
     if (playerList.status === "fulfilled") {
       players.value = playerList.value.players;
       playersRangeHours.value = playerList.value.rangeHours;
       sessionsKeptPerPlayer.value = playerList.value.sessionsKeptPerPlayer;
+      playersFailure.value = null;
     } else {
       players.value = [];
       playersRangeHours.value = null;
+      playersFailure.value = sectionFailure(playerList.reason);
     }
     loading.value = false;
+    loaded.value = true;
   }
 
   /** Load one stat board. Separate from `load` because the picker re-runs it. */
   async function loadBoard(serverId: string, stat: string, hours: number): Promise<void> {
     boardLoading.value = true;
     boardError.value = "";
+    boardFailure.value = null;
     try {
       const res = await apiGet<LeaderboardResponse>(
         `/api/servers/${encodeURIComponent(serverId)}/analytics/leaderboard?stat=${encodeURIComponent(stat)}&hours=${hours}`,
@@ -152,6 +178,7 @@ export function useAnalytics() {
     } catch (err) {
       board.value = [];
       boardError.value = errorMessage(err);
+      boardFailure.value = loadFailure(err);
     } finally {
       boardLoading.value = false;
     }
@@ -161,7 +188,7 @@ export function useAnalytics() {
     uptime, activity, activityRangeHours, busiest, commands, commandsRangeHours,
     players, playersRangeHours, sessionsKeptPerPlayer,
     board, boardTitle, boardRangeHours, boardBaselineAt, boardHistoryShort,
-    availableStats, caps, boardError, boardLoading,
-    loading, error, load, loadBoard,
+    availableStats, caps, boardError, boardFailure, boardLoading,
+    loading, loaded, error, failure, usageFailure, playersFailure, load, loadBoard,
   };
 }
