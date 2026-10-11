@@ -140,7 +140,15 @@ export async function replyPrivate(
 
 /** The one denial shape: who may use the command and what to do instead. */
 export async function replyDenied(interaction: RepliableInteraction): Promise<void> {
-  const command = interaction.isChatInputCommand() ? interaction.commandName : undefined;
+  const command = interaction.isChatInputCommand()
+    ? [
+        interaction.commandName,
+        interaction.options.getSubcommandGroup(false),
+        interaction.options.getSubcommand(false),
+      ]
+        .filter(Boolean)
+        .join(" ")
+    : undefined;
   const guildId = interaction.guild?.id;
   const embed = createEmbed({
     title: t("denied.title", {}, guildId),

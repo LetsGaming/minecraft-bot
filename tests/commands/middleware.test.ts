@@ -43,6 +43,7 @@ function makeInteraction(
     replied: opts.replied ?? false,
     ephemeral: opts.ephemeral ?? null,
     isChatInputCommand: () => true,
+    options: { getSubcommand: () => null, getSubcommandGroup: () => null },
     deferReply: vi.fn().mockResolvedValue(undefined),
     editReply: vi.fn().mockResolvedValue(undefined),
     reply: vi.fn().mockResolvedValue(undefined),
