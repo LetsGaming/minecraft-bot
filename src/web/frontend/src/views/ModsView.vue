@@ -470,7 +470,19 @@ import type {
   ModProjectDetail,
 } from "../api";
 
-const props = defineProps<{ activeServer: string }>();
+const props = withDefaults(
+  defineProps<{
+    activeServer: string;
+    /** Minecraft version from the URL (`?check=`) to run the upgrade check for. */
+    check?: string;
+    /** Result filter from the URL (`?filter=blockers`). */
+    filter?: string;
+  }>(),
+  { check: "", filter: "" },
+);
+const emit = defineEmits<{
+  "update-route": [patch: { query: Record<string, string | undefined> }];
+}>();
 const serverId = computed(() => props.activeServer);
 
 const mods = useMods(() => props.activeServer);
@@ -571,6 +583,39 @@ watch(installed, (next) => {
   if (compatDone.value && installedSignature(next) !== checkedSignature) {
     compat.markStale();
   }
+});
+
+/** Runs the check the URL names, once the installed list says checks are possible. */
+async function applyRouteCheck(): Promise<void> {
+  if (!props.check || !installed.value?.compat || checkingCompat.value) return;
+  if (versionChoices.value.includes(props.check)) {
+    useCustom.value = false;
+    selectedVersion.value = props.check;
+  } else {
+    useCustom.value = true;
+    customVersion.value = props.check;
+  }
+  compatFilter.value = props.filter === "blockers" ? "blockers" : "all";
+  await checkVersion();
+}
+
+watch(
+  () => props.check,
+  (version) => {
+    if (version && version !== checkedVersion.value) void applyRouteCheck();
+  },
+);
+watch(
+  () => props.filter,
+  (value) => {
+    if (compatDone.value) compatFilter.value = value === "blockers" ? "blockers" : "all";
+  },
+);
+watch([checkedVersion, compatFilter], ([version, filter]) => {
+  const check = version ?? "";
+  const shownFilter = version && filter === "blockers" ? "blockers" : "";
+  if (check === props.check && shownFilter === props.filter) return;
+  emit("update-route", { query: { check: check || undefined, filter: shownFilter || undefined } });
 });
 
 function env(e: ModSearchHit["environment"]) {
@@ -842,6 +887,7 @@ async function reload() {
   await loadInstalled();
   await Promise.all([checkNow(), runSearch()]);
   if (installed.value?.compat) await compat.loadVersions();
+  await applyRouteCheck();
 }
 
 onMounted(reload);

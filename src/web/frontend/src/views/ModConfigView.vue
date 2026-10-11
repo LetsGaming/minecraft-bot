@@ -60,18 +60,6 @@
     </EmptyState>
 
     <template v-else>
-      <div v-if="serverIds.length > 1" class="picker">
-        <Button
-          v-for="id in serverIds"
-          :key="id"
-          :label="id"
-          size="small"
-          :severity="id === currentServer ? 'primary' : 'secondary'"
-          :outlined="id !== currentServer"
-          @click="select(id)"
-        />
-      </div>
-
       <InputText
         v-model="search"
         placeholder="Filter files and fields…"
@@ -336,7 +324,10 @@ export default defineComponent({
   props: {
     serverIds: { type: Array as () => string[], default: () => [] },
     activeServer: { type: String, default: "" },
+    /** The file the URL names; opened once the server's index is loaded. */
+    fileId: { type: String, default: "" },
   },
+  emits: ["update-route"],
   setup() {
     const confirm = useConfirm();
     return {
@@ -377,6 +368,12 @@ export default defineComponent({
   watch: {
     activeServer(id: string) {
       if (id && id !== this.currentServer) void this.select(id, false);
+    },
+    fileId(id: string) {
+      if (id && this.currentServer && id !== this.current?.file.id) void this.openFromRoute(id);
+    },
+    "current.file.id"(id: string | undefined) {
+      if (id && id !== this.fileId) this.$emit("update-route", { params: { fileId: id } });
     },
     serverIds: {
       immediate: true,
@@ -452,7 +449,7 @@ export default defineComponent({
     },
     /**
      * `guarded` is false when the switch already passed the app-level guard
-     * (the sidebar picker), so the same edits are not asked about twice.
+     * (the router leave guard), so the same edits are not asked about twice.
      */
     async select(id: string, guarded = true): Promise<void> {
       if (guarded && !(await this.confirmDiscard())) return;
@@ -460,6 +457,14 @@ export default defineComponent({
       this.showHistory = false;
       this.showSource = false;
       await Promise.all([this.loadFiles(id), this.refreshPending()]);
+      if (this.fileId) await this.openFile(this.fileId);
+    },
+    /** A file named by the URL; when the switch is refused the URL follows
+     *  the file that stays open. */
+    async openFromRoute(id: string): Promise<void> {
+      await this.openFile(id);
+      const open = this.current?.file.id;
+      if (open && open !== id) this.$emit("update-route", { params: { fileId: open } });
     },
     /** The file name, with its folder shown by the group above it. */
     fileName(relPath: string, modId: string): string {
@@ -517,7 +522,6 @@ export default defineComponent({
 .queue-banner :deep(.p-message-text) {
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
 }
-.picker { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 .search { width: 100%; margin-bottom: 12px; }
 .filter-note { margin: -6px 0 10px; }
 .mb { margin-bottom: 10px; }

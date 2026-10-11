@@ -148,6 +148,11 @@ export default defineComponent({
   components: {
     SchemaField, Button, Textarea, ToggleSwitch, Message, ViewHeader, ConfigStatusChip, ConflictPicker,
   },
+  props: {
+    /** Raw JSON mode, as the URL (`#/config/raw`) asks for it. */
+    raw: { type: Boolean, default: false },
+  },
+  emits: ["update-route"],
   setup() {
     // Provide server options so ID fields (defaultServer, allowedServers, the
     // per-feature `server` scope) render as name dropdowns. Channels/roles are
@@ -200,7 +205,24 @@ export default defineComponent({
       );
     },
   },
+  watch: {
+    raw() {
+      this.applyRouteMode();
+    },
+    rawMode(on: boolean) {
+      if (on !== this.raw) this.$emit("update-route", { params: { mode: on ? "raw" : undefined } });
+    },
+  },
   methods: {
+    /** Follows the URL's mode; leaving raw mode with unparsable text is
+     *  refused, and then the URL follows the editor instead. */
+    applyRouteMode(): void {
+      if (!this.model || this.schemaFailed) return;
+      this.setRawMode(this.raw);
+      if (this.rawMode !== this.raw) {
+        this.$emit("update-route", { params: { mode: this.rawMode ? "raw" : undefined } });
+      }
+    },
     async onSave(): Promise<void> {
       if (await this.save()) this.refreshKey += 1;
     },
@@ -210,6 +232,7 @@ export default defineComponent({
   },
   async mounted() {
     await Promise.all([this.load(), this.loadServerRefs(), this.loadGuildNames()]);
+    this.applyRouteMode();
     // Now that the schema is loaded, mark its feature keys seen so a later
     // visit only flags genuinely new additions (this session's badges are held
     // by the frozen snapshot in useSeenFeatures).
