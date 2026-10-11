@@ -430,9 +430,20 @@
         "mentionRole": {
           "type": "string",
           "description": "Role ID mentioned on every downtime, disk, and backup-age alert in this guild, so the on-call person gets pinged instead of hoping someone reads the channel."
+        },
+        "mentionPolicy": {
+          "$ref": "#/definitions/MentionPolicy",
+          "description": "When `mentionRole` is pinged. \"always\" (default): on every alert, including recoveries. \"escalation\": only on the first failure and when severity rises; recoveries and repeats are posted without a ping."
         }
       },
       "additionalProperties": false
+    },
+    "MentionPolicy": {
+      "type": "string",
+      "enum": [
+        "always",
+        "escalation"
+      ]
     },
     "GuildTpsAlertsConfig": {
       "type": "object",
@@ -446,7 +457,11 @@
         },
         "mentionRole": {
           "type": "string",
-          "description": "Role ID mentioned on every low-TPS alert in this guild."
+          "description": "Role ID mentioned on low-TPS alerts in this guild."
+        },
+        "mentionPolicy": {
+          "$ref": "#/definitions/MentionPolicy",
+          "description": "When `mentionRole` is pinged; see `GuildDowntimeAlertsConfig.mentionPolicy`."
         }
       },
       "additionalProperties": false
