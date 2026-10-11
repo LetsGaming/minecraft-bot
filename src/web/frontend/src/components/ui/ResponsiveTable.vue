@@ -103,6 +103,7 @@ thead th {
   letter-spacing: var(--tracking-caps);
   padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--border-strong);
+  text-align: start;
   white-space: nowrap;
 }
 thead th:first-child { border-top-left-radius: var(--radius-control); }

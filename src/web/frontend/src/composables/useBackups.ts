@@ -39,7 +39,10 @@ interface ScriptResponse {
 }
 
 function outcomeOf(res: ScriptResponse): ScriptOutcome {
-  const output = [res.output ?? "", res.stderr ?? ""].filter((part) => part.trim() !== "").join("\n");
+  const output = [res.output ?? "", res.stderr ?? ""]
+    .filter((part) => part.trim() !== "")
+    .join("\n")
+    .replace(/\r\n?/g, "\n");
   return { ok: res.ok, exitCode: res.exitCode, output, error: "" };
 }
 

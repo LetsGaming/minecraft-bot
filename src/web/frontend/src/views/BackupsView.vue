@@ -43,6 +43,7 @@
 
         <JobBlock
           v-if="job"
+          ref="jobBlock"
           :title="job.title"
           :state="job.state"
           :started-at="job.startedAt"
@@ -184,7 +185,7 @@
                     <i class="pi pi-spin pi-spinner" aria-hidden="true" />
                     {{ busyLabel(row.id) }}
                   </span>
-                  <span v-else class="cluster">
+                  <span v-else class="cluster row-actions">
                     <Button
                       v-if="canDownload"
                       class="tap"
@@ -265,7 +266,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent } from "vue";
+import { defineComponent, nextTick } from "vue";
 import Button from "primevue/button";
 import { useToast } from "primevue/usetoast";
 import { backupTierLabel, formatBytes, ServerState, StatusRole, SERVER_STATE_ROLE } from "@mcbot/schema";
@@ -630,6 +631,12 @@ export default defineComponent({
       if (leaf === "manual") return "tag-manual";
       return "tag-tier";
     },
+    /** The row that started the job loses its buttons, so focus moves to the job. */
+    async focusJob(): Promise<void> {
+      await nextTick();
+      const block = this.$refs.jobBlock as { $el?: HTMLElement } | undefined;
+      block?.$el?.focus?.();
+    },
     openServers(): void {
       this.$emit("navigate", "status");
     },
@@ -725,6 +732,7 @@ export default defineComponent({
         output: "",
         note: COPY.restoringNote,
       };
+      void this.focusJob();
       const outcome: ScriptOutcome = await this.runRow(file.id, () => this.restore(file), {
         label: COPY.restoring,
         exclusive: true,
@@ -856,7 +864,8 @@ export default defineComponent({
 .tag-pre { background: var(--st-info-bg); color: var(--st-info); }
 .tag-manual { border-color: var(--accent); color: var(--accent); }
 .tag-new { margin-left: var(--space-2); background: var(--accent); color: var(--on-accent); font-weight: 600; }
-.when { display: inline-flex; flex-direction: column; }
+.when { display: inline-flex; flex-direction: column; white-space: nowrap; }
+.row-actions { flex-wrap: nowrap; justify-content: flex-end; }
 .rel { color: var(--text-dim); font-size: var(--text-xs); }
 .row-busy { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--st-info); font-size: var(--text-sm); }
 

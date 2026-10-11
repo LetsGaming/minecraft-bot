@@ -1,5 +1,5 @@
 <template>
-  <section :class="['job-block', `job-${state}`]" :aria-labelledby="titleId">
+  <section :class="['job-block', `job-${state}`]" :aria-labelledby="titleId" tabindex="-1">
     <div class="jb-head">
       <h2 :id="titleId" class="jb-title">{{ title }}</h2>
       <StatusChip :state="ROLE[state]" :label="statusText" :busy="state === 'running'" live />
@@ -111,6 +111,8 @@ const statusText = computed(() => {
   border-radius: var(--radius-surface);
   background: var(--surface);
 }
+.job-block:focus { outline: none; }
+.job-block:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .job-done { --job-edge: var(--st-applied); }
 .job-failed { --job-edge: var(--st-offline); }
 .jb-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); }
