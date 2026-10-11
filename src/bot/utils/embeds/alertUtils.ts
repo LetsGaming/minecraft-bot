@@ -53,8 +53,9 @@ export function shouldPing(previous: AlertLevel, next: AlertLevel): boolean {
 }
 
 /**
- * The mention fields for one alert. `always` pings the role on every alert
- * (the default, as before); `escalation` pings only when `shouldPing` says so.
+ * The mention fields for one alert. `escalation` (the default, also used for
+ * an unknown value) pings only when `shouldPing` says so; `always` pings the
+ * role on every alert.
  */
 export function alertMention(
   mentionRole: string | undefined,
@@ -62,6 +63,6 @@ export function alertMention(
   previous: AlertLevel,
   next: AlertLevel,
 ): AlertMention {
-  const ping = policy !== "escalation" || shouldPing(previous, next);
+  const ping = policy === "always" ||shouldPing(previous, next);
   return roleMention(ping ? mentionRole : undefined);
 }

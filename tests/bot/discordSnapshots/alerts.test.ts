@@ -1,7 +1,7 @@
 /**
  * Snapshots of the downtime alert and its recovery, rendered through the
  * real monitor and embed builders for an English and a German guild, with
- * the `always` and `escalation` mention policies.
+ * the explicit `always` mention policy and the default `escalation` one.
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { NOW, SNAPSHOT_CONFIG, fixturePath, renderMessage, stringify } from "./render.js";
@@ -65,14 +65,14 @@ describe("Discord snapshots: downtime alerts", () => {
       channels: { fetch: vi.fn(async (id: string) => channel(id)) },
     } as never;
     const guilds = {
-      "g-en": { downtimeAlerts: { channelId: "en, always", mentionRole: "role-admins" } },
-      "g-de": {
+      "g-en": {
         downtimeAlerts: {
-          channelId: "de, escalation",
+          channelId: "en, always",
           mentionRole: "role-admins",
-          mentionPolicy: "escalation",
+          mentionPolicy: "always",
         },
       },
+      "g-de": { downtimeAlerts: { channelId: "de, escalation", mentionRole: "role-admins" } },
     } as never;
     const server = { id: "smp", getHealth: vi.fn().mockResolvedValue(health("offline")) };
 

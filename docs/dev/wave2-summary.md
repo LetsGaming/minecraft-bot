@@ -1,4 +1,4 @@
-# Wave 2 summary: dashboard and Discord rework (7.1.0)
+# Wave 2 summary: dashboard and Discord rework (8.0.0)
 
 Wave 2 audited the dashboard and the Discord replies, built four mockup
 directions, and implemented the chosen one, Hybrid: today's look on a token,
@@ -6,7 +6,7 @@ status and component system shared between the dashboard and Discord. The
 reasoning is in the [decision log](decisions.md#wave-2-the-hybrid-direction-for-the-dashboard-and-discord);
 the resulting rules are in [web/frontend.md](web/frontend.md) and
 [bot/replies.md](bot/replies.md); the user-facing changes are in
-`CHANGELOG.md` (under `[Unreleased]` until 7.1.0 is dated by the release).
+`CHANGELOG.md` (under `[Unreleased]` until 8.0.0 is dated by the release).
 
 Finding ids (DASH-xx, DISC-xx) are those of the Wave 2 audit. Its appendices
 live under `docs/dev/refactor/wave2-audit/` until the working material is
@@ -25,14 +25,14 @@ The base for every diff below is `e0357ec` (Wave 1, 7.0.0; there is no
 | P0a bot hotfixes | `3ba1b2e` | Shorter German whitelist modal label and a locale length test; `/config show` private and without secrets; localised dispatcher errors; `/daily` defers and shows the main reward; downtime alerts built per guild locale. |
 | P0b web hotfixes | `50e9baf` | SQLite timestamps read as UTC; unsaved Mod config and invalid Raw JSON edits guarded; primary button and dim text contrast; a visible focus ring; an interim phone navigation. |
 | P1 tokens, preset, density, hex lint | `4274116` | `tokens.css` role tokens, a PrimeVue preset built from token references, status tokens written from the schema table, the density switch, 44 px touch targets, and `check-frontend.mjs` failing on raw hex and on foreign workspace imports. |
-| P5 Discord builders and replies | `16f1cc4`, then `9a7c79c` | Embed colours from the status table, the state circle as the only title emoji, titles that name the action, no "Requested by" or page footers, timestamps on live data only; errors private with problem and recovery; admin denial before the defer; every command in `withErrorHandling`; limit-aware paging with a "Page n/m" button that switches off after 3 minutes; restart-safe confirm rows for `/server stop` and `/server restart`; explicit `allowedMentions` everywhere and the opt-in `mentionPolicy`; TPS recovery post; plurals through `Intl.PluralRules`; the German copy pass (du-form, one word per concept, no dashes). `9a7c79c` made a claimed `/daily` reward public again. |
+| P5 Discord builders and replies | `16f1cc4`, then `9a7c79c` | Embed colours from the status table, the state circle as the only title emoji, titles that name the action, no "Requested by" or page footers, timestamps on live data only; errors private with problem and recovery; admin denial before the defer; every command in `withErrorHandling`; limit-aware paging with a "Page n/m" button that switches off after 3 minutes; restart-safe confirm rows for `/server stop` and `/server restart`; explicit `allowedMentions` everywhere and the `mentionPolicy` flag; TPS recovery post; plurals through `Intl.PluralRules`; the German copy pass (du-form, one word per concept, no dashes). `9a7c79c` made a claimed `/daily` reward public again. |
 | P2 shell, router, drawer, `t()` | `bf1f05d` | `vue-router` with hash history and an address for every page, server, file and filter; one leave guard; `AppShell` with grouped navigation, one server picker, phone top bar and drawer, skip link; the `t()` seam with an English table. |
 | P3 base components and Backups | `5671cf9`, then `a9d6b28` | jsdom component tests and the PrimeVue spike; `StatusChip` with shapes, `FieldRow`, `InlineError`, `ResponsiveTable`, `JobBlock`, `EditorShell`, `ModIcon`; three confirm levels (`useConfirmAction`) and per-row busy (`useRowBusy`); `GET /api/servers/:id/backups/summary` and the rebuilt Backups page. `a9d6b28` removed the Backups page's own server picker. |
 | P4 editor frame, Config, Mod config | `4cb72e8` | Schema `title` and `effect` notes; `EditorShell`, `EditBar`, `FieldRow`, `ReviewChanges`; the Config editor with groups, a filter in the address, field errors and password fields for secrets; Mod config and the guild dialog on the same frame; a queued Mod config save reported as held. |
 | P6a Mods and icons | `d7890c9` | Characterisation tests first, then `useInstalledMods`; bounded, cached bulk Modrinth icon lookup (`lookupProjectIcons`) and `iconUrl` on installed and compat rows; the Mods page rebuilt on tokens, components and `t()`; Remove through the shared confirm. |
 | P6b admin pages | `3b5c175` | `DISCORD_TOKEN_MISSING` and `DISCORD_TOKEN_REJECTED` error codes; Commands on the editor frame; Guilds and the setup wizard show failures in place; segmented control contrast. |
 | P6b monitor pages | `89a2bf0` | Failures by cause through `utils/loadFailure.ts`; server actions as job blocks with levelled confirms; an accessible console log with wrap and history; the shared duration format in Analytics; Retry on Audit log and config history failures; toasts top right; tables as cards on phones. |
-| P7 docs and release prep | this branch | Discord reply snapshots (`tests/bot/discordSnapshots/`, `npm run discord:snapshots`) and the fixes they found; durable docs; this summary; the cleanup list; the 7.1.0 version and changelog. The browser and accessibility pass of P7 ran on a separate branch. |
+| P7 docs and release prep | this branch | Discord reply snapshots (`tests/bot/discordSnapshots/`, `npm run discord:snapshots`) and the fixes they found; durable docs; this summary; the cleanup list; the 8.0.0 version and changelog. The browser and accessibility pass of P7 ran on a separate branch. |
 
 ## Dashboard findings
 
@@ -59,7 +59,7 @@ The base for every diff below is `e0357ec` (Wave 1, 7.0.0; there is no
 | DASH-19 | Dark only, no theme decision | Deferred by decision: dark only, light theme is the optional P8 |
 | DASH-20 | Large "bot looks down" banner | Closed (P2) |
 | DASH-21 | Backups: unnamed actions, no create, no type filter | Closed (P3) |
-| DASH-22 | "0d 12h 0m 0s" durations, bare "Unknown" | Closed in the dashboard (P6b); see the open decision on the bot below |
+| DASH-22 | "0d 12h 0m 0s" durations, bare "Unknown" | Closed in the dashboard (P6b); the bot follows by owner decision (see below) |
 | DASH-23 | Console log not accessible, no history, wrap, copy, clear or download | Partly closed: log role, labels, wrap, history (P6b). Deferred: copy, clear, download, and `aria-live`. |
 | DASH-24 | Em dashes, "(s)", no dashboard i18n | Closed for copy and the `t()` seam; a German dashboard is deferred by decision |
 | DASH-25 | Flat navigation, duplicate icons | Closed (P2) |
@@ -76,7 +76,7 @@ The base for every diff below is `e0357ec` (Wave 1, 7.0.0; there is no
 | DISC-06 | Public permission error after the defer | Closed (P5) |
 | DISC-07 | Internal feature phrases in capability errors | Closed in code (P5); German wording awaits a native read |
 | DISC-08 | Hard-coded English in localised replies | Closed (P5) |
-| DISC-09 | Every alert pinged, recoveries included | Closed (P5) as the opt-in `mentionPolicy`; the default still pings every alert |
+| DISC-09 | Every alert pinged, recoveries included | Closed (P5) as `mentionPolicy`; the default is `escalation` since 8.0.0, and `always` keeps the old behaviour |
 | DISC-10 | Bridge webhook cache drops messages silently | Deferred (bridge logic, not reply UX) |
 | DISC-11 | `/help` marks subcommands optional, nine pages, no categories | Not fixed |
 | DISC-12 | Errors without a next step | Closed (P5) |
@@ -128,7 +128,7 @@ The P7 snapshots render the mockup's cases through the real code. Differences
 that remain, all reviewed:
 
 - **Intended:** `/daily` is public (decision log); recoveries ping under the
-  default `always` policy (only `escalation` matches the mockup's silent
+  opt-in `always` policy (the default `escalation` matches the mockup's silent
   recovery); event lines carry the player as the embed author rather than a
   bold name; death messages are the game's English log text in every language;
   ages and times are Discord timestamps instead of "35 minutes ago"; the
@@ -173,17 +173,20 @@ that remain, all reviewed:
 - The mod management scripts need `sudo` on a Linux host; their success paths
   were not run on Windows and rely on CI and the wrapper contract tests.
 
-## Open owner decisions
+## Owner decisions
 
-- **`formatPlaytime` in Discord.** The bot still prints "0d 12h 0m 0s"
-  (`core/utils/minecraft/statUtils.ts`, used by `/players`, `/playtime`,
-  `/compare`, `/profile` and the stat embeds) while the dashboard uses the shared "12 h 7 min"
-  format. Switching changes every playtime reply.
-- **Status table mappings.** `CONFIG_APPLY_STATE_ROLE` in
+All decisions that were open at the end of P7 are settled:
+
+- **`formatPlaytime` in Discord: decided, plain shared format.** The bot
+  printed "0d 12h 0m 0s" (`core/utils/minecraft/statUtils.ts`, used by
+  `/players`, `/playtime`, `/compare`, `/profile` and the stat embeds) while
+  the dashboard used the shared "12 h 7 min" format. Discord switches to the
+  shared format, which changes every playtime reply.
+- **Status table mappings: decided, kept.** `CONFIG_APPLY_STATE_ROLE` in
   `src/schema/status.ts` maps `BotDown` to offline (a red ring) and
-  `RestartRequired` to pending (a violet dashed ring, the same as a save the
-  bot has not picked up yet). Both are judgement calls the owner has not
-  confirmed.
-- **Alert mention default.** `mentionPolicy` defaults to `always`. Making
-  `escalation` the default is a behaviour change for every guild and would make
-  the next release a major one.
+  `RestartRequired` to pending (a violet dashed ring), because every role
+  means something different (decision log).
+- **Alert mention default: decided, `escalation`.** `mentionPolicy` defaults
+  to `escalation`; `always` is the opt-in to the old behaviour. Existing
+  configs page less after the upgrade, so Wave 2 ships as the major release
+  8.0.0 (decision log).

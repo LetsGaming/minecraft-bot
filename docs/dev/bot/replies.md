@@ -127,9 +127,9 @@ explicitly, using the helpers in
   the configured role and nothing else.
 
 The guild's `mentionPolicy` decides when an alert pings:
-`always` (the default, every alert) or `escalation` (the first failure and a
-rise in severity only; recoveries and repeats are silent). `shouldPing` holds
-the rule. See [configuration.md](../../admin/configuration.md) for the config
+`escalation` (the default, also used for an unknown value: the first failure
+and a rise in severity only; recoveries and repeats are silent) or `always`
+(every alert). `shouldPing` holds the rule. See [configuration.md](../../admin/configuration.md) for the config
 side.
 
 ## Language

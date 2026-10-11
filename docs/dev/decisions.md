@@ -728,13 +728,15 @@ The typed confirm stays on PrimeVue's `ConfirmDialog` (its container slot gives 
 
 ---
 
-## Wave 2: alert mention policy is a flag, and the default keeps pinging
+## Wave 2: alert mention policy is a flag, and the default is escalation
 
 **Problem:** Every downtime, TPS and host alert pinged the configured role, recoveries included, and a long TPS dip re-pinged every five minutes.
 
-**Decision:** `guilds.<id>.downtimeAlerts.mentionPolicy` and `guilds.<id>.tpsAlerts.mentionPolicy` accept `"always"` (the default, unchanged behaviour) or `"escalation"` (ping on the first failure and on a rise in severity only). Every alert and every relayed message sets `allowedMentions` explicitly either way (`src/bot/utils/embeds/alertUtils.ts`).
+**Decision:** `guilds.<id>.downtimeAlerts.mentionPolicy` and `guilds.<id>.tpsAlerts.mentionPolicy` accept `"escalation"` (the default: ping on the first failure and on a rise in severity only) or `"always"` (every alert, the behaviour before 8.0.0). Any other value fails the schema check; the code falls back to `"escalation"` (with a warning when the schema could not be read). Every alert and every relayed message sets `allowedMentions` explicitly either way (`src/bot/utils/embeds/alertUtils.ts`).
 
-**Why a flag:** changing who gets paged is a behaviour change admins should opt into. Keeping the default made this release a minor version (7.1.0) instead of a major one.
+**Why a flag:** some on-call setups want every recovery to ping, so the old behaviour stays one setting away.
+
+**Why the default changed:** the flag first shipped with `"always"` as the default so the release could stay a minor version. The owner decided that the Wave 2 changes ship as a major release (8.0.0, see below), which removed that reason; `"escalation"` is what the audit (DISC-09) and the mockup asked for. Configs without the field page less after the upgrade, which is why the changelog lists it under Breaking.
 
 ---
 
@@ -743,3 +745,19 @@ The typed confirm stays on PrimeVue's `ConfirmDialog` (its container slot gives 
 **Decision:** A successful claim is a public embed with the reward, the streak and when the next reward is ready. The cooldown notice, "already processing" and every error stay private (`replyPrivate` in `src/bot/commands/middleware.ts`).
 
 **Why:** showing off, or being laughed at for, the roll is the point of the command, and the channel sees streaks build. The reply rule "personal data is private" does not cover a reward the player chose to claim in a channel.
+
+---
+
+## Wave 2: config apply states map to offline and pending
+
+**Decision:** `CONFIG_APPLY_STATE_ROLE` in `src/schema/status.ts` maps `ConfigApplyState.BotDown` to the offline role (red ring) and `ConfigApplyState.RestartRequired` to the pending role (violet dashed ring, the same as a save the bot has not picked up yet). The owner confirmed both mappings.
+
+**Why:** every status role means something different, so each state goes to the role that says what is true. A bot that is down cannot apply anything, which is offline, not pending. A change that waits for a restart will apply without further edits, which is pending, not unknown (the state is known), degraded (nothing is broken) or info.
+
+---
+
+## Wave 2 ships as the 8.0.0 major release
+
+**Decision:** The Wave 2 changes are released as 8.0.0, not 7.1.0.
+
+**Why:** the owner made `"escalation"` the default alert mention policy (see above), which changes who gets paged for every guild that has a `mentionRole` and no `mentionPolicy`. A change existing configs notice without being edited is a breaking change, so the version is a major one. The changelog lists it under Breaking with the one-line opt-out (`"mentionPolicy": "always"`).

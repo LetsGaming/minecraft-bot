@@ -466,7 +466,7 @@
         },
         "mentionPolicy": {
           "$ref": "#/definitions/MentionPolicy",
-          "description": "When `mentionRole` is pinged. \"always\" (default): on every alert, including recoveries. \"escalation\": only on the first failure and when severity rises; recoveries and repeats are posted without a ping."
+          "description": "When `mentionRole` is pinged. \"escalation\" (default): only on the first failure and when severity rises; recoveries and repeats are posted without a ping. \"always\": on every alert, including recoveries."
         }
       },
       "additionalProperties": false

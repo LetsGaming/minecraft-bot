@@ -45,9 +45,14 @@ describe("shouldPing", () => {
 });
 
 describe("alertMention policy", () => {
-  it("keeps today's behaviour by default: every alert pings", () => {
-    expect(alertMention("42", undefined, "critical", "ok").content).toBe("<@&42>");
+  it("defaults to escalation: the first failure pings, the recovery does not", () => {
+    expect(alertMention("42", undefined, "ok", "critical").content).toBe("<@&42>");
+    expect(alertMention("42", undefined, "critical", "ok").content).toBeUndefined();
+  });
+
+  it("always pings every alert, including repeats and recoveries", () => {
     expect(alertMention("42", "always", "warning", "warning").content).toBe("<@&42>");
+    expect(alertMention("42", "always", "critical", "ok").content).toBe("<@&42>");
   });
 
   it("escalation pings the first failure only", () => {
@@ -62,6 +67,7 @@ describe("alertMention policy", () => {
   });
 
   it("treats an unknown policy value like the default", () => {
-    expect(alertMention("42", "bogus" as never, "critical", "ok").content).toBe("<@&42>");
+    expect(alertMention("42", "bogus" as never, "critical", "ok").content).toBeUndefined();
+    expect(alertMention("42", "bogus" as never, "ok", "critical").content).toBe("<@&42>");
   });
 });

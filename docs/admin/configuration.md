@@ -153,16 +153,18 @@ Details on how each feature behaves are in [automated-features.md](automated-fea
 
 | Value | Pings |
 |---|---|
-| `"always"` (default) | Every alert, including recoveries ("back online", "disk space recovered") and repeated TPS warnings. This is how alerts behaved before the option existed. |
-| `"escalation"` | Only the first failure and a rise in severity (for example a TPS warning that drops below 10, or a crash loop after an outage). Recoveries and repeats are posted without a ping. |
+| `"escalation"` (default) | Only the first failure and a rise in severity (for example a TPS warning that drops below 10, or a crash loop after an outage). Recoveries and repeats are posted without a ping. |
+| `"always"` | Every alert, including recoveries ("back online", "disk space recovered") and repeated TPS warnings. This is how alerts behaved before 8.0.0. |
 
-Every alert sets Discord's `allowedMentions` explicitly, so it can ping the configured role and nothing else. Relayed text (chat bridge, `/console live`, in-game reports) never pings anyone.
+Any other value is a config error. Every alert sets Discord's `allowedMentions` explicitly, so it can ping the configured role and nothing else. Relayed text (chat bridge, `/console live`, in-game reports) never pings anyone.
+
+To keep the pre-8.0.0 behaviour, set `"always"` in each block that has a `mentionRole`:
 
 ```json
 "downtimeAlerts": {
   "channelId": "234567890123456789",
   "mentionRole": "456789012345678901",
-  "mentionPolicy": "escalation"
+  "mentionPolicy": "always"
 }
 ```
 
