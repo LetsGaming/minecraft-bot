@@ -294,7 +294,7 @@ import { t } from "../i18n";
 /** Minecraft counts playtime in game ticks, 20 per second. */
 const MS_PER_TICK = MS.second / 20;
 
-/** Stats whose value is a playtime in ticks; the bot's own text for them is "0d 12h 0m 0s". */
+/** Stats whose value is a playtime in ticks. */
 const TICK_STATS = new Set(["playtime"]);
 
 interface UptimeWindow {

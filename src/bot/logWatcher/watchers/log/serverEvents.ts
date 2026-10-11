@@ -17,6 +17,7 @@ import { errMsg } from "@mcbot/core/utils/error.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { ServerState } from "@mcbot/schema/serverState.js";
 import { formatSpan } from "@mcbot/core/utils/duration.js";
+import { noteServerStopping } from "../monitors/downtimeMonitor.js";
 // SEC-01: anchored on the server thread tag — a chat message must not
 // forge start/stop (a forged stop closes every open play session).
 const START_REGEX = serverEventRegex(String.raw`Done \([\d.]+s\)!`);
@@ -68,6 +69,7 @@ export function registerServerEventWatcher(
   });
 
   registerServerEvent(logWatcher, STOP_REGEX, async () => {
+    noteServerStopping(serverId);
     await closeSessions(serverId);
     let uptime: string | null = null;
     const started = startTimes.get(serverId);

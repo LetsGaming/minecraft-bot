@@ -1,4 +1,5 @@
-import { type Client } from "discord.js";
+import { type APIEmbedField, type Client } from "discord.js";
+import { relativeTimestamp } from "../../../utils/discordTime.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { serverInScope } from "../../../utils/guild/guildRouter.js";
 import {
@@ -71,10 +72,27 @@ export function suppressAlerts(
   state.consecutiveUnreachable = 0;
   state.wrapperAlerted = false;
   state.crashLoopAlerted = false;
+  state.stopRequestedAt = Date.now();
   log.info(
     "downtime",
     `Alerts suppressed for ${serverId} (${graceMs / 1000}s grace)`,
   );
+}
+
+/** A "Stopping server" log line: the next downtime is not a crash. */
+export function noteServerStopping(serverId: string): void {
+  getState(serverId).stopRequestedAt = Date.now();
+}
+
+/** Players online right now, for the alert if the server goes down next. */
+async function countPlayers(server: ServerInstance, health: ServerHealth): Promise<number | undefined> {
+  if (health.players) return health.players.online;
+  try {
+    const online = parseInt(String((await server.getList()).playerCount), 10);
+    return Number.isFinite(online) ? online : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -255,6 +273,10 @@ async function checkServer(
     const downFor = state.downSince === undefined ? null : now - state.downSince;
     state.consecutiveFailures = 0;
     state.downSince = undefined;
+    state.lastUpAt = now;
+    if (health.state === ServerState.Online) {
+      state.lastKnownPlayers = (await countPlayers(server, health)) ?? state.lastKnownPlayers;
+    }
 
     if (wasDown) {
       state.alerted = false;
@@ -313,14 +335,28 @@ async function checkServer(
       });
 
       const before: AlertLevel = state.crashLoopAlerted ? "critical" : "ok";
-      await alertGuilds(client, guildsWithAlerts, server.id, [before, "error"], () => ({
-        title: t("downtime.downTitle", { server: server.id }),
-        description: t("downtime.down", {
-          server: server.id,
-          failures: state.consecutiveFailures,
-        }),
-        state: ServerState.Offline,
-      }));
+      const { lastUpAt, lastKnownPlayers, stopRequestedAt } = state;
+      // A stop request can land shortly before the last check that still
+      // saw the server up, while it was shutting down.
+      const crashed =
+        lastUpAt !== undefined &&
+        (stopRequestedAt === undefined || stopRequestedAt < lastUpAt - CHECK_INTERVAL_MS);
+      await alertGuilds(client, guildsWithAlerts, server.id, [before, "error"], () => {
+        const fields: APIEmbedField[] = [];
+        if (lastUpAt !== undefined) {
+          fields.push({ name: t("downtime.lastSeen"), value: relativeTimestamp(lastUpAt), inline: true });
+        }
+        if (lastKnownPlayers !== undefined) {
+          fields.push({ name: t("downtime.playersHit"), value: String(lastKnownPlayers), inline: true });
+        }
+        const down = t("downtime.down", { server: server.id, failures: state.consecutiveFailures });
+        return {
+          title: t("downtime.downTitle", { server: server.id }),
+          description: crashed ? `${down}\n${t("downtime.crashHint")}` : down,
+          state: ServerState.Offline,
+          fields,
+        };
+      });
 
       log.warn(
         "downtime",
@@ -336,6 +372,7 @@ interface Alert {
   /** Server state for the title circle and colour; otherwise `color`. */
   state?: ServerState;
   color?: number;
+  fields?: APIEmbedField[];
 }
 
 /**
@@ -370,7 +407,7 @@ async function alertGuilds(
 async function sendAlert(
   client: Client,
   channelId: string,
-  { title, description, state, color }: Alert,
+  { title, description, state, color, fields }: Alert,
   mention: ReturnType<typeof alertMention>,
 ): Promise<void> {
   try {
@@ -384,6 +421,7 @@ async function sendAlert(
       color: color ?? (state ? undefined : EmbedColor.Info),
       timestamp: true,
     });
+    if (fields && fields.length > 0) embed.addFields(fields);
 
     await channel.send({ embeds: [embed], ...mention });
   } catch (err) {

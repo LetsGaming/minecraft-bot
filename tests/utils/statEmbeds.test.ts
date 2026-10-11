@@ -13,7 +13,7 @@ describe("buildLeaderboardEmbed", () => {
   const sampleData: LeaderboardData = {
     entries: [],
     title: "🏆 Leaderboard — Playtime",
-    description: "🥇 **Steve** — 2d 3h 0m 0s\n🥈 **Alex** — 1d 0h 0m 0s",
+    description: "🥇 **Steve** — 2 d 3 h\n🥈 **Alex** — 1 d",
     footerText: "2 players tracked",
   };
 
@@ -114,9 +114,7 @@ describe("buildStatsEmbeds", () => {
   it("formats _time keys as human-readable duration", () => {
     const embeds = buildStatsEmbeds(minimalStats, "Steve");
     const allFields = embeds.flatMap((e) => e.toJSON().fields ?? []);
-    const timeField = allFields.find((f) =>
-      f.value.match(/\d+d \d+h \d+m \d+s/),
-    );
+    const timeField = allFields.find((f) => f.value.includes("Play Time: 1 h"));
     expect(timeField).toBeDefined();
   });
 

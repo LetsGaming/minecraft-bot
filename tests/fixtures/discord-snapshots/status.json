@@ -23,6 +23,21 @@
                 "inline": true
               },
               {
+                "name": "TPS",
+                "value": "19.8",
+                "inline": true
+              },
+              {
+                "name": "Online for",
+                "value": "2 d 7 h",
+                "inline": true
+              },
+              {
+                "name": "Version",
+                "value": "Fabric 1.21.1",
+                "inline": true
+              },
+              {
                 "name": "Bot Ping",
                 "value": "42ms",
                 "inline": true
@@ -58,6 +73,21 @@
               {
                 "name": "Spieler",
                 "value": "3/20",
+                "inline": true
+              },
+              {
+                "name": "TPS",
+                "value": "19,8",
+                "inline": true
+              },
+              {
+                "name": "Online seit",
+                "value": "2 d 7 h",
+                "inline": true
+              },
+              {
+                "name": "Version",
+                "value": "Fabric 1.21.1",
                 "inline": true
               },
               {
@@ -149,6 +179,7 @@
           {
             "color": "#f87171",
             "title": "🔴 smp: Offline",
+            "description": "The server is not running. Start it with /server start.",
             "fields": [
               {
                 "name": "Bot Ping",
@@ -177,6 +208,7 @@
           {
             "color": "#f87171",
             "title": "🔴 smp: Offline",
+            "description": "Der Server läuft nicht. Starte ihn mit /server start.",
             "fields": [
               {
                 "name": "Bot-Ping",
@@ -297,6 +329,126 @@
             "color": "#fbbf24",
             "title": "🟢 smp: Online",
             "description": "3/20 Spieler: Marlene_B, TheRedstoneKid, ikarus_77\nDer Server ist erreichbar, sein API-Wrapper nicht. Steuerung, Chat-Bridge, Statistiken und Log-Überwachung fallen aus, bis der Wrapper wieder antwortet.",
+            "fields": [
+              {
+                "name": "Bot-Ping",
+                "value": "42ms",
+                "inline": true
+              },
+              {
+                "name": "Roundtrip",
+                "value": "0ms",
+                "inline": true
+              }
+            ],
+            "timestamp": "2026-10-10T14:36:00.000Z"
+          }
+        ]
+      }
+    ]
+  },
+  "offline, stopped by an admin": {
+    "en": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "editReply",
+        "embeds": [
+          {
+            "color": "#f87171",
+            "title": "🔴 smp: Offline",
+            "description": "Stopped by marlene at <t:1791637080:t>. Start it with /server start.",
+            "fields": [
+              {
+                "name": "Bot Ping",
+                "value": "42ms",
+                "inline": true
+              },
+              {
+                "name": "Round Trip",
+                "value": "0ms",
+                "inline": true
+              }
+            ],
+            "timestamp": "2026-10-10T14:36:00.000Z"
+          }
+        ]
+      }
+    ],
+    "de": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "editReply",
+        "embeds": [
+          {
+            "color": "#f87171",
+            "title": "🔴 smp: Offline",
+            "description": "marlene hat den Server um <t:1791637080:t> gestoppt. Starte ihn mit /server start.",
+            "fields": [
+              {
+                "name": "Bot-Ping",
+                "value": "42ms",
+                "inline": true
+              },
+              {
+                "name": "Roundtrip",
+                "value": "0ms",
+                "inline": true
+              }
+            ],
+            "timestamp": "2026-10-10T14:36:00.000Z"
+          }
+        ]
+      }
+    ]
+  },
+  "offline, no start script": {
+    "en": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "editReply",
+        "embeds": [
+          {
+            "color": "#f87171",
+            "title": "🔴 smp: Offline",
+            "description": "Stopped by marlene at <t:1791637080:t>.",
+            "fields": [
+              {
+                "name": "Bot Ping",
+                "value": "42ms",
+                "inline": true
+              },
+              {
+                "name": "Round Trip",
+                "value": "0ms",
+                "inline": true
+              }
+            ],
+            "timestamp": "2026-10-10T14:36:00.000Z"
+          }
+        ]
+      }
+    ],
+    "de": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "editReply",
+        "embeds": [
+          {
+            "color": "#f87171",
+            "title": "🔴 smp: Offline",
+            "description": "marlene hat den Server um <t:1791637080:t> gestoppt.",
             "fields": [
               {
                 "name": "Bot-Ping",

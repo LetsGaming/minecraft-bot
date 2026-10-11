@@ -1,5 +1,5 @@
 /**
- * Snapshots of `/daily` replies (claimed, queued while offline, cooldown,
+ * Snapshots of `/daily` replies (claimed, a lucky bonus, queued while offline, cooldown,
  * not linked) through the real command, middleware and embed builders, in
  * English and German. Stores and delivery are faked.
  */
@@ -41,7 +41,7 @@ vi.mock("../../../src/core/utils/minecraft/rewards.js", async (importOriginal) =
 }));
 
 const HOUR = 3_600_000;
-const claims = vi.hoisted(() => ({ lastClaim: 0 }));
+const claims = vi.hoisted(() => ({ lastClaim: 0, bonusChance: 0 }));
 vi.mock("../../../src/core/utils/stores/dailyStore.js", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   loadDailyRewardsConfig: vi.fn().mockResolvedValue({}),
@@ -49,7 +49,7 @@ vi.mock("../../../src/core/utils/stores/dailyStore.js", async (importOriginal) =
   rewardPoolForServer: vi.fn(() => ({
     default: [{ item: "minecraft:diamond", amount: 3, weight: 1 }],
     streakBonuses: { "6": [{ item: "minecraft:cooked_beef", amount: 16 }] },
-    bonusChance: 0,
+    bonusChance: claims.bonusChance,
   })),
   loadClaimedStore: vi.fn(async () => ({})),
   getServerClaims: vi.fn(() => ({
@@ -91,7 +91,14 @@ describe("Discord snapshots: /daily", () => {
         vi.mocked(getOnlinePlayers).mockResolvedValue(["ikarus_77"]);
         claims.lastClaim = NOW - 25 * HOUR;
       },
+      "claimed with a lucky bonus": () => {
+        vi.mocked(isLinked).mockResolvedValue(true);
+        vi.mocked(getOnlinePlayers).mockResolvedValue(["ikarus_77"]);
+        claims.lastClaim = NOW - 25 * HOUR;
+        claims.bonusChance = 100;
+      },
       "claimed, offline so queued": () => {
+        claims.bonusChance = 0;
         vi.mocked(isLinked).mockResolvedValue(true);
         vi.mocked(getOnlinePlayers).mockResolvedValue([]);
         claims.lastClaim = NOW - 25 * HOUR;

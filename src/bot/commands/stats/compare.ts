@@ -4,7 +4,7 @@ import {
   flattenStats,
   filterStats,
   humanizeKey,
-  formatPlaytime,
+  ticksToMs,
   formatDistance,
 } from "@mcbot/core/utils/minecraft/statUtils.js";
 import {
@@ -23,6 +23,7 @@ import { resolveServer } from "../../utils/guild/guildRouter.js";
 import type { EmbedBuilder } from "discord.js";
 import type { FlattenedStat } from "@mcbot/core/types/index.js";
 
+import { formatSpan } from "@mcbot/core/utils/duration.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 export const data = new SlashCommandBuilder()
   .setName("compare")
@@ -116,7 +117,7 @@ export function buildComparisonEmbeds(
 
     const key = s1.key.toLowerCase();
     const format = key.includes("time")
-      ? formatPlaytime
+      ? (v: number) => formatSpan(ticksToMs(v))
       : key.includes("one_cm")
         ? formatDistance
         : (v: number) => v.toLocaleString();

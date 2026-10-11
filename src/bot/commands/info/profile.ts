@@ -27,7 +27,7 @@ import {
   loadClaimedStore,
   getServerClaims,
 } from "@mcbot/core/utils/stores/dailyStore.js";
-import { formatPlaytime } from "@mcbot/core/utils/minecraft/statUtils.js";
+import { formatSpan } from "@mcbot/core/utils/duration.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 
 export const data = new SlashCommandBuilder()
@@ -95,10 +95,9 @@ export const execute = withErrorHandling(async (interaction) => {
   if (sessions) {
     const playtime = totalPlaytimeMs(sessions);
     if (playtime > 0) {
-      // formatPlaytime takes ticks (20/s), the session store keeps ms.
       lines.push(
         t("profile.playtime", {
-          playtime: formatPlaytime((playtime / 1000) * 20),
+          playtime: formatSpan(playtime),
           sessions: sessions.sessions.length,
         }),
       );

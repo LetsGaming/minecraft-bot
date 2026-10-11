@@ -4,7 +4,7 @@ vi.mock("../../src/core/utils/minecraft/statUtils.js", () => ({
   loadAllStats: vi.fn(),
   flattenStats: vi.fn((f: { ticks: number }) => [f]),
   findPlayTimeStat: vi.fn((flat: Array<{ ticks: number }>) => flat[0]!.ticks),
-  formatPlaytime: vi.fn((n: number) => `pt${n}`),
+  ticksToMs: vi.fn((n: number) => n * 50),
 }));
 vi.mock("../../src/core/utils/minecraft/whitelist.js", () => ({
   loadKnownPlayers: vi.fn(),
@@ -30,7 +30,7 @@ import { loadKnownPlayers } from "../../src/core/utils/minecraft/whitelist.js";
 import { loadSessionStore } from "../../src/core/utils/stores/sessionStore.js";
 import { resolveServer } from "../../src/bot/utils/guild/guildRouter.js";
 import { handlePagination } from "../../src/bot/utils/embeds/embedUtils.js";
-import { execute } from "../../src/bot/commands/stats/players.js";
+import { describeRoster, execute } from "../../src/bot/commands/stats/players.js";
 import type { ChatInputCommandInteraction } from "discord.js";
 
 const NOW = Date.now();
@@ -93,8 +93,8 @@ describe("/players", () => {
     const i = makeInteraction();
     await execute(i);
     const desc = i.editReply.mock.calls[0]![0].embeds[0].data.description as string;
-    // First line is the count, then a blank line, then one line per player.
-    expect(desc.split("\n")[0]).toBe("3 players.");
+    // First line is the summary, then a blank line, then one line per player.
+    expect(desc.split("\n")[0]).toBe("1 online, 3 known. Sorted by last seen.");
     const lines = desc.split("\n").slice(2);
     expect(lines[0]).toContain("P000");
     expect(lines[0]).toContain("online now");
@@ -128,7 +128,7 @@ describe("/players", () => {
     expect(pages).toHaveLength(3);
     expect(pages[0]!.data.description!.split("\n").slice(2)).toHaveLength(20);
     expect(pages[2]!.data.description!.split("\n").slice(2)).toHaveLength(5);
-    expect(pages[0]!.data.description).toContain("45 players.");
+    expect(pages[0]!.data.description).toContain("0 online, 45 known. Sorted by name.");
     expect(pages[0]!.data.footer).toBeUndefined();
     expect(i.editReply.mock.calls[0]![0].components).toHaveLength(1);
   });
@@ -138,5 +138,27 @@ describe("/players", () => {
     await execute(makeInteraction());
     const pages = vi.mocked(handlePagination).mock.calls[0]![2];
     for (const p of pages) expect(p.data.description!.length).toBeLessThanOrEqual(4096);
+  });
+});
+
+describe("describeRoster", () => {
+  const entry = (online: boolean) => ({
+    uuid: null,
+    name: "x",
+    online,
+    lastSeen: null,
+    playtimeTicks: null,
+  });
+
+  it("counts online and known players and names the sort", () => {
+    expect(describeRoster([entry(true), entry(false)], 41, "playtime", null)).toBe(
+      "1 online, 41 known. Sorted by playtime.",
+    );
+  });
+
+  it("counts inactive players under the inactive filter", () => {
+    expect(describeRoster([entry(false)], 41, "name", 30)).toBe(
+      "1 inactive for more than 30 days, 41 known. Sorted by name.",
+    );
   });
 });

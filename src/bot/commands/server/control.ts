@@ -23,10 +23,11 @@ import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { getServerInstance } from "@mcbot/core/utils/server/server.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 import { getOnlinePlayers } from "@mcbot/core/utils/minecraft/playerUtils.js";
-import { CommandError } from "@mcbot/core/utils/error.js";
+import { CommandError, errMsg } from "@mcbot/core/utils/error.js";
 import { suppressAlerts } from "../../logWatcher/watchers/monitors/downtimeMonitor.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
+import { recordControlAction } from "@mcbot/core/utils/stores/serverControlRecord.js";
 import * as serverAccess from "@mcbot/core/utils/server/serverAccess.js";
 import { requireCapability } from "@mcbot/core/utils/server/capabilities.js";
 import { loadAllStats } from "@mcbot/core/utils/minecraft/statUtils.js";
@@ -275,6 +276,16 @@ async function onConfirmed(
 
   log.info("control", `${interaction.user.tag} → /server ${sub} on ${server.id} (confirmed)`);
   await audit(interaction.user, interaction.guild?.id ?? null, sub, server);
+  try {
+    recordControlAction(server.id, {
+      kind: sub,
+      by: interaction.user.username,
+      byId: interaction.user.id,
+      at: Date.now(),
+    });
+  } catch (err) {
+    log.warn("control", `Could not record /server ${sub} on ${server.id}: ${errMsg(err)}`);
+  }
   suppressAlerts(server.id);
 
   await interaction.update({

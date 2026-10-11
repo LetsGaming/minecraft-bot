@@ -124,7 +124,9 @@ describe("buildComparisonEmbeds", () => {
       "Alex",
     );
     const allFields = embeds.flatMap((e) => e.toJSON().fields ?? []);
-    const hasTimeFormat = allFields.some((f) => f.value.match(/\d+d \d+h/));
+    const hasTimeFormat = allFields.some(
+      (f) => f.value.includes("Steve: 2 h") && f.value.includes("Alex: 1 h"),
+    );
     expect(hasTimeFormat).toBe(true);
   });
 

@@ -19,7 +19,7 @@ import {
   loadAllStats,
   flattenStats,
   findPlayTimeStat,
-  formatPlaytime,
+  ticksToMs,
 } from "@mcbot/core/utils/minecraft/statUtils.js";
 import { loadKnownPlayers } from "@mcbot/core/utils/minecraft/whitelist.js";
 import {
@@ -33,6 +33,7 @@ import {
   type RosterEntry,
   type RosterSort,
 } from "@mcbot/core/utils/minecraft/playerRoster.js";
+import { formatSpan } from "@mcbot/core/utils/duration.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 
 const PER_PAGE = 20;
@@ -71,7 +72,7 @@ function describeEntry(e: RosterEntry): string {
   const name = `**${e.name}**`;
   const playtime =
     e.playtimeTicks !== null && e.playtimeTicks > 0
-      ? ` · ${formatPlaytime(e.playtimeTicks)}`
+      ? ` · ${formatSpan(ticksToMs(e.playtimeTicks))}`
       : "";
   if (e.online) return `${name} · ${t("players.online")}${playtime}`;
   if (e.lastSeen !== null) {
@@ -86,18 +87,38 @@ function clamp(text: string): string {
     : `${text.slice(0, MAX_DESCRIPTION - 1)}…`;
 }
 
+const SORT_LABEL_KEY: Record<RosterSort, string> = {
+  "last-seen": "players.sortLastSeen",
+  playtime: "players.sortPlaytime",
+  name: "players.sortName",
+};
+
+/** "3 online, 41 known. Sorted by playtime." */
+export function describeRoster(
+  shown: RosterEntry[],
+  known: number,
+  sort: RosterSort,
+  inactiveDays: number | null,
+): string {
+  const counts =
+    inactiveDays !== null
+      ? t("players.summaryInactive", { count: shown.length, days: inactiveDays, known })
+      : t("players.summary", { online: shown.filter((e) => e.online).length, known });
+  return `${counts} ${t("players.sortedBy", { sort: t(SORT_LABEL_KEY[sort]) })}`;
+}
+
 export function buildPages(
   entries: RosterEntry[],
   serverId: string,
+  summary: string,
 ): EmbedBuilder[] {
   const pages: EmbedBuilder[] = [];
-  const count = t("players.count", { count: entries.length });
   for (let i = 0; i < entries.length; i += PER_PAGE) {
     const slice = entries.slice(i, i + PER_PAGE);
     pages.push(
       createEmbed({
         title: t("players.title", { server: serverId }),
-        description: clamp(`${count}\n\n${slice.map(describeEntry).join("\n")}`),
+        description: clamp(`${summary}\n\n${slice.map(describeEntry).join("\n")}`),
       }),
     );
   }
@@ -126,6 +147,7 @@ export const execute = withErrorHandling(async (interaction) => {
     known,
     sessions: getServerSessions(sessionStore, server.id),
   });
+  const knownCount = roster.length;
   if (inactiveDays !== null) {
     roster = filterInactive(roster, inactiveDays, includeUnknown);
   }
@@ -146,7 +168,11 @@ export const execute = withErrorHandling(async (interaction) => {
     return;
   }
 
-  const pages = buildPages(roster, server.id);
+  const pages = buildPages(
+    roster,
+    server.id,
+    describeRoster(roster, knownCount, sort, inactiveDays),
+  );
   const message = await interaction.editReply({
     embeds: [pages[0]!],
     components:

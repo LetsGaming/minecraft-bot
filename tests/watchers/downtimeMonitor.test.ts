@@ -41,9 +41,11 @@ vi.mock("../../src/bot/utils/embeds/embedUtils.js", () => ({
 const TICK = 60_001; // just past the 60 000 ms check interval
 
 import {
+  noteServerStopping,
   startDowntimeMonitor,
   suppressAlerts,
 } from "../../src/bot/logWatcher/watchers/monitors/downtimeMonitor.js";
+import { createEmbed } from "../../src/bot/utils/embeds/embedUtils.js";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -520,5 +522,48 @@ describe("startDowntimeMonitor: mention policy", () => {
     expect(down!.content).toBe("<@&42>");
     expect(up!.content).toBeUndefined();
     expect(up!.allowedMentions).toEqual({ parse: [] });
+  });
+});
+
+describe("downtime alert details", () => {
+  function upThenDown(id: string) {
+    let up = true;
+    const server = {
+      id,
+      getHealth: vi.fn(async () => health(up ? "online" : "offline")),
+      getList: vi.fn().mockResolvedValue({ playerCount: "5", maxPlayers: "20", players: [] }),
+    };
+    return { server, goDown: () => (up = false) };
+  }
+
+  function downAlertDescription(id: string): string | undefined {
+    const call = vi
+      .mocked(createEmbed)
+      .mock.calls.find(([opts]) => String(opts.title).includes(id) && opts.state === "offline");
+    return call?.[0].description;
+  }
+
+  it("hints at a crash when the server went down without a stop", async () => {
+    const id = uid();
+    const { server, goDown } = upThenDown(id);
+    const timer = startDowntimeMonitor([server as never], fakeClient(), guildsFor());
+    await vi.advanceTimersByTimeAsync(TICK);
+    goDown();
+    for (let i = 0; i < 3; i++) await vi.advanceTimersByTimeAsync(TICK);
+    clearInterval(timer);
+    expect(downAlertDescription(id)).toContain("crash reports");
+  });
+
+  it("leaves the hint out after a Stopping server line", async () => {
+    const id = uid();
+    const { server, goDown } = upThenDown(id);
+    const timer = startDowntimeMonitor([server as never], fakeClient(), guildsFor());
+    await vi.advanceTimersByTimeAsync(TICK);
+    noteServerStopping(id);
+    goDown();
+    for (let i = 0; i < 3; i++) await vi.advanceTimersByTimeAsync(TICK);
+    clearInterval(timer);
+    expect(downAlertDescription(id)).toBeDefined();
+    expect(downAlertDescription(id)).not.toContain("crash reports");
   });
 });

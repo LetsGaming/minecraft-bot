@@ -1,5 +1,5 @@
 /**
- * Snapshots of the downtime alert and its recovery, rendered through the
+ * Snapshots of the downtime alert after a crash and its recovery, rendered through the
  * real monitor and embed builders for an English and a German guild, with
  * the explicit `always` mention policy and the default `escalation` one.
  */
@@ -74,9 +74,15 @@ describe("Discord snapshots: downtime alerts", () => {
       },
       "g-de": { downtimeAlerts: { channelId: "de, escalation", mentionRole: "role-admins" } },
     } as never;
-    const server = { id: "smp", getHealth: vi.fn().mockResolvedValue(health("offline")) };
+    const server = {
+      id: "smp",
+      getHealth: vi.fn().mockResolvedValue(health("online")),
+      getList: vi.fn().mockResolvedValue({ playerCount: "3", maxPlayers: "20", players: [] }),
+    };
 
     const timer = startDowntimeMonitor([server as never], client, guilds);
+    await vi.advanceTimersByTimeAsync(TICK);
+    server.getHealth.mockResolvedValue(health("offline"));
     for (let i = 0; i < 3; i++) await vi.advanceTimersByTimeAsync(TICK);
     server.getHealth.mockResolvedValue(health("online"));
     await vi.advanceTimersByTimeAsync(TICK);

@@ -2,17 +2,30 @@ import { formatBytes } from "@mcbot/schema";
 import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embeds/embedUtils.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
+import { clockTimestamp } from "../../utils/discordTime.js";
 
 import { withErrorHandling } from "../middleware.js";
 import {
   describeHealth,
   describePlayers,
 } from "../../utils/embeds/serverStateDisplay.js";
-import { canQueryServer } from "@mcbot/schema/serverState.js";
+import { ServerState, canQueryServer } from "@mcbot/schema/serverState.js";
 import {
   getHostResources,
 } from "@mcbot/core/utils/server/hostResources.js";
-import { t } from "@mcbot/core/utils/i18n.js";
+import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
+import { pingServer } from "@mcbot/core/utils/server/serverAccess.js";
+import {
+  formatVersionLabel,
+  parseVersionName,
+} from "@mcbot/core/utils/minecraft/versionName.js";
+import { getUptimeStats } from "@mcbot/core/utils/stores/uptimeTracker.js";
+import { controlActionBehindDowntime } from "@mcbot/core/utils/stores/serverControlRecord.js";
+import { formatSpan } from "@mcbot/core/utils/duration.js";
+import { resolveLanguage, t } from "@mcbot/core/utils/i18n.js";
+
+/** TPS and the version ping are extras: a slow answer drops the field instead of delaying the reply. */
+const EXTRA_BUDGET_MS = 2_000;
 
 export const data = new SlashCommandBuilder()
   .setName("status")
@@ -20,6 +33,67 @@ export const data = new SlashCommandBuilder()
   .addStringOption((o) =>
     o.setName("server").setDescription("Server instance").setAutocomplete(true),
   );
+
+async function withinBudget<T>(work: Promise<T>): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work.catch(() => null),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), EXTRA_BUDGET_MS);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function readTps(server: ServerInstance): Promise<string | null> {
+  if (!server.supportsTps) return null;
+  const tps = await withinBudget(server.getTps());
+  if (!tps) return null;
+  return tps.tps1m.toLocaleString(resolveLanguage(), {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+}
+
+async function readVersion(server: ServerInstance): Promise<string | null> {
+  const ping = await withinBudget(pingServer(server.config));
+  return formatVersionLabel(
+    parseVersionName(ping?.kind === "status" ? ping.result.version : null),
+  );
+}
+
+async function readOnlineFor(server: ServerInstance): Promise<string | null> {
+  try {
+    const stats = await getUptimeStats(server.id);
+    return stats.currentState === "online" && stats.currentStateDuration > 0
+      ? formatSpan(stats.currentStateDuration)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Who took the server down and how to bring it back, when that is known. */
+function offlineLine(server: ServerInstance): string {
+  let record: ReturnType<typeof controlActionBehindDowntime> = null;
+  try {
+    record = controlActionBehindDowntime(server.id);
+  } catch {
+    /* the record is additive; fall back to the plain line */
+  }
+  const first = record
+    ? t(record.kind === "stop" ? "status.stoppedBy" : "status.restartedBy", {
+        user: record.by,
+        time: clockTimestamp(record.at),
+      })
+    : t("status.notRunning");
+  return server.capabilities?.scripts.start === true
+    ? `${first} ${t("status.startHint")}`
+    : first;
+}
 
 export const execute = withErrorHandling(async (interaction) => {
   const sent = Date.now();
@@ -37,7 +111,8 @@ export const execute = withErrorHandling(async (interaction) => {
     // A direct ping can still supply counts with the wrapper down, so show
     // them — "online, 4 players, controls unavailable" is the whole point.
     const players = describePlayers(health);
-    const description = [players, display.hint].filter(Boolean).join("\n");
+    const offline = health.state === ServerState.Offline ? offlineLine(server) : null;
+    const description = [players, display.hint, offline].filter(Boolean).join("\n");
     const embed = createEmbed({
       title: t("status.title", { server: server.id, label: display.label }),
       state: health.state,
@@ -53,7 +128,12 @@ export const execute = withErrorHandling(async (interaction) => {
     return;
   }
 
-  const { playerCount, maxPlayers, players } = await server.getList();
+  const [{ playerCount, maxPlayers, players }, tps, onlineFor, version] = await Promise.all([
+    server.getList(),
+    readTps(server),
+    readOnlineFor(server),
+    readVersion(server),
+  ]);
   const embed = createEmbed({
     title: t("status.title", { server: server.id, label: display.label }),
     state: health.state,
@@ -72,6 +152,11 @@ export const execute = withErrorHandling(async (interaction) => {
     value: `${playerCount}/${maxPlayers}`,
     inline: true,
   });
+  if (tps) embed.addFields({ name: t("status.tps"), value: tps, inline: true });
+  if (onlineFor) {
+    embed.addFields({ name: t("status.onlineFor"), value: onlineFor, inline: true });
+  }
+  if (version) embed.addFields({ name: t("status.version"), value: version, inline: true });
   embed.addFields(
     { name: t("status.botPing"), value: `${botPing}ms`, inline: true },
     { name: t("status.roundTrip"), value: `${roundTrip}ms`, inline: true },

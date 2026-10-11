@@ -8,14 +8,14 @@ Options in `(parentheses)` are optional. Commands that act on a server accept an
 
 | Command | Options | Description |
 |---|---|---|
-| `/status` | (`server`) | Online/offline, player count, who is online, and bot latency. On locally managed servers also a **Host** section: RAM/CPU of the server process and disk usage of the world and backup paths. |
+| `/status` | (`server`) | Online/offline, player count, who is online, TPS, how long the server has been online, its version, and bot latency. An offline server says who stopped it and when (after a confirmed `/server stop` or `restart`) and how to start it. On locally managed servers also a **Host** section: RAM/CPU of the server process and disk usage of the world and backup paths. |
 | `/uptime` | (`server`) | Uptime history with 24h/7d/30d percentage bars and an hourly 24h sparkline for one server. Use `server:all` for an overview of every server your guild may use. |
 | `/info` | (`server`) | How to join: address, version, loader and required mods. |
 | `/seed` | (`server`) | The world seed. |
 | `/tps` | (`server`) | Current TPS. Paper-style servers show 1/5/15-minute averages, vanilla shows TPS plus MSPT and tick timing percentiles. |
 | `/backup` | (`server`) | Backup overview: count, age, and size of the latest backup per backup tier. |
 | `/whitelisted` | (`server`) | All whitelisted players, paginated. |
-| `/mods` | (`server`) | All installed server mods as clickable Modrinth links, grouped by whether you need to install them on your client. Large modpacks are split over pages. |
+| `/mods` | (`server`) | All installed server mods as clickable Modrinth links, grouped by whether you need to install them on your client, under a line with the count, loader and Minecraft version. Large modpacks are split over pages. |
 | `/map` | | Link to the live web map (Dynmap/Bluemap), if the admin configured one. |
 
 ## Stats
@@ -29,7 +29,7 @@ Options in `(parentheses)` are optional. Commands that act on a server accept an
 | `/leaderboard` | (`stat`), (`server`) | Top 10 by a chosen stat: playtime, mob kills, deaths, blocks mined, distance walked, items crafted, player kills, jumps, animals bred, fish caught, diamond ore — plus the daily-streak boards (current and longest streak). Defaults to playtime. |
 | `/top` | (`stat`), (`server`) | Same as `/leaderboard`. |
 | `/sessions` | `player`, (`server`) | A player's recent sessions: online-now / last-seen, playtime across the recorded sessions, and the last 10 individual sessions. |
-| `/players` | (`server`), (`sort`), (`inactive`), (`include_unknown`) | Every player who has played on the server, 20 per page, with online state or last-seen and lifetime playtime. `sort` is `last-seen` (default; online first), `playtime` or `name`. `inactive:<days>` keeps only players last active more than that many days ago; players with no tracked activity are added with `include_unknown:true`. Last-seen only covers time since the bot started tracking sessions, so earlier players show "before tracking". The name list comes from the whitelist and the server's usercache, which vanilla caps at about 1000 entries, so very old players without a stats file may be missing. |
+| `/players` | (`server`), (`sort`), (`inactive`), (`include_unknown`) | Every player who has played on the server, 20 per page, with online state or last-seen and lifetime playtime, under a line such as "3 online, 41 known. Sorted by playtime." `sort` is `last-seen` (default; online first), `playtime` or `name`. `inactive:<days>` keeps only players last active more than that many days ago; players with no tracked activity are added with `include_unknown:true`. Last-seen only covers time since the bot started tracking sessions, so earlier players show "before tracking". The name list comes from the whitelist and the server's usercache, which vanilla caps at about 1000 entries, so very old players without a stats file may be missing. |
 | `/activity` | (`server`) | When is the server busy? 24-hour sparkline of average player counts plus the busiest hours of day (14-day average). |
 | `/profile` | (`player`), (`server`) | One player card: head, linked Discord account, who whitelisted them and when, playtime, last seen, daily streak. Without `player`, shows your linked account. |
 

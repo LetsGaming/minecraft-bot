@@ -7,7 +7,7 @@ vi.mock("../../src/core/utils/minecraft/statUtils.js", () => ({
   loadStats: vi.fn(),
   flattenStats: vi.fn().mockReturnValue([]),
   filterStats: vi.fn((stats) => stats),
-  formatPlaytime: vi.fn().mockReturnValue("1h"),
+  ticksToMs: vi.fn((n: number) => n * 50),
   formatDistance: vi.fn().mockReturnValue("1km"),
   humanizeKey: vi.fn((k) => k),
   LEADERBOARD_STATS: {},

@@ -25,7 +25,7 @@ export function instanceUrl(cfg: ServerConfig, route: string): string {
  * kept distinguishable from a real fetch failure only in that it never
  * touched the network, which is the whole point.
  */
-class BreakerOpenError extends Error {
+export class BreakerOpenError extends Error {
   constructor(serverId: string) {
     super(`circuit breaker open for ${serverId}; wrapper reads paused`);
     this.name = "BreakerOpenError";

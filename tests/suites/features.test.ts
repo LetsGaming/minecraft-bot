@@ -391,7 +391,11 @@ describe("/whois command", () => {
       deferReply: vi.fn().mockResolvedValue(undefined),
       editReply: vi.fn().mockResolvedValue(undefined),
       reply: vi.fn().mockResolvedValue(undefined),
-      options: { getString: vi.fn().mockReturnValue(username) },
+      options: {
+        getString: vi.fn().mockReturnValue(username),
+        getSubcommand: () => null,
+        getSubcommandGroup: () => null,
+      },
     } as never;
   }
 

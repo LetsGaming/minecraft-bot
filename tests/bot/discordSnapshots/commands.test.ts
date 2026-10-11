@@ -40,6 +40,11 @@ vi.mock("../../../src/core/utils/server/serverAccess.js", async (importOriginal)
   ...(await importOriginal<object>()),
   readBackups: vi.fn(),
   runScript: vi.fn(),
+  pingServer: vi.fn().mockResolvedValue({ kind: "status", result: { version: "Fabric 1.21.1" } }),
+}));
+vi.mock("../../../src/core/utils/stores/uptimeTracker.js", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getUptimeStats: vi.fn(),
 }));
 vi.mock("../../../src/core/utils/minecraft/modUtils.js", async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -69,6 +74,8 @@ import * as serverAccess from "../../../src/core/utils/server/serverAccess.js";
 import { getModList } from "../../../src/core/utils/minecraft/modUtils.js";
 import { loadAllStats } from "../../../src/core/utils/minecraft/statUtils.js";
 import { runWithGuildLocale } from "../../../src/core/utils/i18n.js";
+import { getUptimeStats } from "../../../src/core/utils/stores/uptimeTracker.js";
+import { recordControlAction } from "../../../src/core/utils/stores/serverControlRecord.js";
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -101,6 +108,15 @@ function fakeServer(id = "smp", state = "online", wrapper: "up" | "unreachable" 
   return {
     id,
     config: { id, serverDir: "/fake" },
+    capabilities: {
+      scripts: { start: true, stop: true, restart: true, backup: true, status: true },
+      backups: true,
+      restore: true,
+      modManifest: true,
+      variablesFile: true,
+    },
+    supportsTps: true,
+    getTps: vi.fn().mockResolvedValue({ tps1m: 19.8 }),
     getHealth: vi.fn().mockResolvedValue(health(state, wrapper)),
     getList: vi.fn().mockResolvedValue({
       playerCount: "3",
@@ -140,6 +156,10 @@ describe("Discord snapshots: slash commands", () => {
       ["unknown", "unreachable"],
       ["online", "unreachable"],
     ] as const;
+    vi.mocked(getUptimeStats).mockImplementation(async () => ({
+      currentState: "online",
+      currentStateDuration: 2 * DAY + 7 * HOUR + 12 * 60_000,
+    }) as never);
     const out: Record<string, unknown> = {};
     for (const [state, wrapper] of cases) {
       out[`${state}, wrapper ${wrapper}`] = await bothLanguages(async (language) => {
@@ -147,6 +167,16 @@ describe("Discord snapshots: slash commands", () => {
         return runCommand(execute as Execute, language, { commandName: "status" });
       });
     }
+    recordControlAction("smp", { kind: "stop", by: "marlene", byId: "admin-2", at: NOW - 98 * 60_000 });
+    out["offline, stopped by an admin"] = await bothLanguages(async (language) => {
+      vi.mocked(resolveServer).mockReturnValue(fakeServer("smp", "offline") as never);
+      return runCommand(execute as Execute, language, { commandName: "status" });
+    });
+    out["offline, no start script"] = await bothLanguages(async (language) => {
+      const server = { ...fakeServer("smp", "offline"), capabilities: null };
+      vi.mocked(resolveServer).mockReturnValue(server as never);
+      return runCommand(execute as Execute, language, { commandName: "status" });
+    });
     await expect(stringify(out)).toMatchFileSnapshot(fixturePath("status"));
   });
 
@@ -220,7 +250,7 @@ describe("Discord snapshots: slash commands", () => {
   });
 
   it("/players page 1 of a 41 player roster, live and after the pager timed out", async () => {
-    const { buildPages } = await import("../../../src/bot/commands/stats/players.js");
+    const { buildPages, describeRoster } = await import("../../../src/bot/commands/stats/players.js");
     const { createPaginationButtons } = await import(
       "../../../src/bot/utils/embeds/embedUtils.js"
     );
@@ -252,7 +282,7 @@ describe("Discord snapshots: slash commands", () => {
     ];
     const out = await bothLanguages(async (language) =>
       runWithGuildLocale(GUILD[language], () => {
-        const pages = buildPages(roster, "smp");
+        const pages = buildPages(roster, "smp", describeRoster(roster, roster.length, "playtime", null));
         return {
           pages: pages.length,
           page1: renderEmbed(pages[0]),
@@ -297,6 +327,8 @@ describe("Discord snapshots: slash commands", () => {
       clientOptional: optional,
       serverOnly,
       fetchedAt: NOW,
+      gameVersion: "1.21.1",
+      modLoader: "fabric",
     } as never);
     const out = await bothLanguages((language) =>
       runCommand(execute as Execute, language, { commandName: "mods" }),

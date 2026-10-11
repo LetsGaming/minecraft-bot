@@ -28,6 +28,7 @@ function interaction(state: { deferred: boolean; replied: boolean; ephemeral?: b
     guild: null as { id: string } | null,
     commandName: "server",
     isChatInputCommand: () => true,
+    options: { getSubcommand: () => "stop", getSubcommandGroup: () => null },
     reply: vi.fn().mockResolvedValue(undefined),
     deferReply: vi.fn().mockResolvedValue(undefined),
     editReply: vi.fn().mockResolvedValue(undefined),
@@ -91,7 +92,7 @@ describe("replyError", () => {
 });
 
 describe("replyDenied", () => {
-  it("names the command and stays ephemeral", async () => {
+  it("names the command and subcommand and stays ephemeral", async () => {
     const i = interaction({ deferred: false, replied: false });
     await replyDenied(i as never);
     expect(i.reply).toHaveBeenCalledWith(
@@ -99,7 +100,7 @@ describe("replyDenied", () => {
     );
     const json = firstEmbed(i.reply);
     expect(json.title).toBe("Bot admins only");
-    expect(json.description).toContain("/server");
+    expect(json.description).toContain("/server stop is for bot admins");
   });
 
   it("uses the guild's language", async () => {

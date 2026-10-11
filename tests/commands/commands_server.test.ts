@@ -52,6 +52,7 @@ vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
   readUserCache: vi.fn().mockResolvedValue([]),
   readBackups: vi.fn(),
   runScript: vi.fn(),
+  pingServer: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("../../src/bot/logWatcher/watchers/monitors/downtimeMonitor.js", () => ({

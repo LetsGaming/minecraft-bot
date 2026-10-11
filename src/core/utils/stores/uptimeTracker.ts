@@ -93,6 +93,26 @@ export function buildSparkline(
   return out;
 }
 
+/**
+ * When the most recent online period began: the first online check after
+ * the last offline check that precedes the latest online check. Null when
+ * the server was never seen online.
+ */
+export function lastOnlineStreakStart(serverId: string): number | null {
+  const row = getDb()
+    .prepare(
+      `SELECT MIN(t) AS t FROM uptime_checks
+       WHERE server_id = ? AND up = 1 AND t > COALESCE((
+         SELECT MAX(t) FROM uptime_checks
+         WHERE server_id = ? AND up = 0 AND t < (
+           SELECT MAX(t) FROM uptime_checks WHERE server_id = ? AND up = 1
+         )
+       ), -1)`,
+    )
+    .get(serverId, serverId, serverId) as { t: number | bigint | null } | undefined;
+  return row?.t == null ? null : Number(row.t);
+}
+
 export interface UptimeStatsOptions {
   /** Also compute uptime over this many hours, clamped to the retained history. */
   rangeHours?: number;

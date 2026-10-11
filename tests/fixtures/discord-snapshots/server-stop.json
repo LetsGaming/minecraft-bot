@@ -74,7 +74,7 @@
           {
             "color": "#f87171",
             "title": "Bot admins only",
-            "description": "/server is for bot admins. Ask one of them if you need it."
+            "description": "/server stop is for bot admins. Ask one of them if you need it."
           }
         ]
       }
@@ -87,7 +87,7 @@
           {
             "color": "#f87171",
             "title": "Nur für Bot-Admins",
-            "description": "/server ist Bot-Admins vorbehalten. Frag einen von ihnen, wenn du den Befehl brauchst."
+            "description": "/server stop ist Bot-Admins vorbehalten. Frag einen von ihnen, wenn du den Befehl brauchst."
           }
         ]
       }
