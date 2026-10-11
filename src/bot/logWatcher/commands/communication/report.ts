@@ -17,10 +17,11 @@ import { serverInScope } from "../../../utils/guild/guildRouter.js";
 import { createPlayerEmbed } from "../../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../../utils/embeds/embedColors.js";
 import { stripControlChars } from "@mcbot/core/utils/sanitize.js";
-import { t } from "@mcbot/core/utils/i18n.js";
+import { runWithGuildLocale, t } from "@mcbot/core/utils/i18n.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 import { tellraw, whisper } from "@mcbot/core/utils/minecraft/serverMessages.js";
+import { roleMention } from "../../../utils/embeds/alertUtils.js";
 
 const MAX_REPORT_LENGTH = 500;
 
@@ -50,19 +51,16 @@ const cmd = defineCommand({
         const channel = await client.channels.fetch(reports.channelId);
         if (!channel || !("send" in channel)) continue;
 
-        const embed = createPlayerEmbed(username, {
-          title: t("report.embedTitle", { player: username }),
-          description: text,
-          color: EmbedColor.Warning,
-          footer: { text: server.id },
-        });
+        const embed = runWithGuildLocale(guildId, () =>
+          createPlayerEmbed(username, {
+            title: t("report.embedTitle", { player: username, server: server.id }),
+            description: text,
+            color: EmbedColor.Warning,
+            timestamp: true,
+          }),
+        );
 
-        await channel.send({
-          ...(reports.mentionRole
-            ? { content: `<@&${reports.mentionRole}>` }
-            : {}),
-          embeds: [embed],
-        });
+        await channel.send({ ...roleMention(reports.mentionRole), embeds: [embed] });
         delivered++;
       } catch (err) {
         log.error("report", `Failed to deliver report to ${guildId}: ${errMsg(err)}`);

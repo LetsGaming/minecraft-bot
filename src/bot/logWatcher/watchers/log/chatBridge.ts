@@ -17,6 +17,7 @@ import {
 } from "../../../utils/guild/guildConfigs.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 import { announce } from "@mcbot/core/utils/minecraft/serverMessages.js";
+import { safeMentions } from "../../../utils/embeds/alertUtils.js";
 
 const CHAT_REGEX = /\[.+?\]: <(?:\[AFK\]\s*)?([^>]+)>\s+(.+)/;
 
@@ -354,7 +355,7 @@ async function deliver(
         username: player.slice(0, 80),
         avatarURL: playerAvatarUrl(player),
         content: message.slice(0, 2000),
-        allowedMentions: { parse: [] },
+        allowedMentions: safeMentions("none"),
       });
       return;
     }
@@ -370,6 +371,7 @@ async function deliver(
         color: EmbedColor.Info,
       }),
     ],
+    allowedMentions: safeMentions("none"),
   });
 }
 
