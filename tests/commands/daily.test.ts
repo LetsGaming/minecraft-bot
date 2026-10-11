@@ -219,11 +219,13 @@ describe("claimLock — concurrent claim prevention", () => {
       reply: vi.fn().mockResolvedValue(undefined),
       deferred: false,
       ephemeral: null as boolean | null,
-      deferReply: vi.fn().mockImplementation(async function (this: { deferred: boolean; ephemeral: boolean | null }) {
+      deferReply: vi.fn().mockImplementation(async function (this: { deferred: boolean; ephemeral: boolean | null }, options?: { flags?: number }) {
         this.deferred = true;
-        this.ephemeral = true;
+        this.ephemeral = Boolean(options?.flags);
       }),
       editReply: vi.fn().mockResolvedValue(undefined),
+      deleteReply: vi.fn().mockResolvedValue(undefined),
+      followUp: vi.fn().mockResolvedValue(undefined),
     };
   }
 
@@ -268,7 +270,7 @@ describe("claimLock — concurrent claim prevention", () => {
 
     // Second execution for the same user must be rejected immediately.
     await execute(i2 as never);
-    expect(embedOf(i2.editReply.mock.calls[0]![0]).description).toContain(
+    expect(embedOf(i2.followUp.mock.calls[0]![0]).description).toContain(
       "still being processed",
     );
 
@@ -554,9 +556,9 @@ describe("deferred replies", () => {
       reply: vi.fn().mockResolvedValue(undefined),
       deferred: false,
       ephemeral: null as boolean | null,
-      deferReply: vi.fn().mockImplementation(async function (this: { deferred: boolean; ephemeral: boolean | null }) {
+      deferReply: vi.fn().mockImplementation(async function (this: { deferred: boolean; ephemeral: boolean | null }, options?: { flags?: number }) {
         this.deferred = true;
-        this.ephemeral = true;
+        this.ephemeral = Boolean(options?.flags);
       }),
       editReply: vi.fn().mockResolvedValue(undefined),
       deleteReply: vi.fn().mockResolvedValue(undefined),
@@ -565,13 +567,35 @@ describe("deferred replies", () => {
     return { execute, interaction };
   }
 
-  it("defers ephemerally and edits the reply on a successful online claim", async () => {
+  it("defers publicly and edits the reply on a successful online claim", async () => {
     const { execute, interaction } = await setup({ online: true });
     await execute(interaction as never);
-    expect(interaction.deferReply).toHaveBeenCalledWith({ flags: 64 });
+    expect(interaction.deferReply).toHaveBeenCalledWith({});
     expect(interaction.reply).not.toHaveBeenCalled();
+    expect(interaction.followUp).not.toHaveBeenCalled();
     expect(interaction.editReply).toHaveBeenCalledTimes(1);
     expect(embedOf(interaction.editReply.mock.calls[0]![0]).title).toBe("Daily reward claimed");
+  });
+
+  it("keeps the queued reward public on an offline claim", async () => {
+    const { execute, interaction } = await setup({ online: false });
+    await execute(interaction as never);
+    expect(interaction.deferReply).toHaveBeenCalledWith({});
+    expect(interaction.followUp).not.toHaveBeenCalled();
+  });
+
+  it("shows the cooldown only to the claimer", async () => {
+    const { execute, interaction } = await setup({ online: true });
+    await execute(interaction as never);
+    interaction.deleteReply.mockClear();
+    interaction.followUp.mockClear();
+    interaction.deferred = false;
+    await execute(interaction as never);
+    expect(interaction.deleteReply).toHaveBeenCalledTimes(1);
+    expect(interaction.followUp).toHaveBeenCalledWith(
+      expect.objectContaining({ flags: 64 }),
+    );
+    expect(embedOf(interaction.followUp.mock.calls[0]![0]).title).toBe("Already claimed");
   });
 
   it("edits the reply with the queued note on an offline claim", async () => {
@@ -600,9 +624,12 @@ describe("deferred replies", () => {
       },
     });
     await execute(interaction as never);
-    expect(interaction.deferReply).toHaveBeenCalledWith({ flags: 64 });
-    expect(embedOf(interaction.editReply.mock.calls[0]![0]).title).toBe("Rewards waiting in game");
-    expect(interaction.followUp).not.toHaveBeenCalled();
+    expect(interaction.editReply).not.toHaveBeenCalled();
+    expect(interaction.deleteReply).toHaveBeenCalledTimes(1);
+    expect(interaction.followUp).toHaveBeenCalledWith(
+      expect.objectContaining({ flags: 64 }),
+    );
+    expect(embedOf(interaction.followUp.mock.calls[0]![0]).title).toBe("Rewards waiting in game");
   });
 
   it("answers a failed delivery with an error only the claimer sees", async () => {
@@ -611,8 +638,11 @@ describe("deferred replies", () => {
       send: { kind: "unreachable", reason: "timeout", detail: "x" },
     });
     await execute(interaction as never);
-    expect(embedOf(interaction.editReply.mock.calls[0]![0]).title).toBe("Reward not delivered");
-    expect(interaction.followUp).not.toHaveBeenCalled();
+    expect(interaction.editReply).not.toHaveBeenCalled();
+    expect(interaction.followUp).toHaveBeenCalledWith(
+      expect.objectContaining({ flags: 64 }),
+    );
+    expect(embedOf(interaction.followUp.mock.calls[0]![0]).title).toBe("Reward not delivered");
   });
 
   it("answers an unresolvable server ephemerally", async () => {
@@ -621,8 +651,10 @@ describe("deferred replies", () => {
       resolveThrows: true,
     });
     await execute(interaction as never);
-    expect(interaction.deferReply).toHaveBeenCalledWith({ flags: 64 });
-    expect(interaction.editReply).toHaveBeenCalledTimes(1);
+    expect(interaction.editReply).not.toHaveBeenCalled();
+    expect(interaction.followUp).toHaveBeenCalledWith(
+      expect.objectContaining({ flags: 64 }),
+    );
     expect(interaction.reply).not.toHaveBeenCalled();
   });
 

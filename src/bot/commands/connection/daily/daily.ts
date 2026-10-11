@@ -24,7 +24,7 @@ import {
   getLinkedAccount,
 } from "@mcbot/core/utils/stores/linkUtils.js";
 import { createInfoEmbed, createSuccessEmbed } from "../../../utils/embeds/embedUtils.js";
-import { withErrorHandling } from "../../middleware.js";
+import { replyPrivate, withErrorHandling } from "../../middleware.js";
 import { clockTimestamp, relativeTimestamp } from "../../../utils/discordTime.js";
 import { CommandError } from "@mcbot/core/utils/error.js";
 import type {
@@ -53,16 +53,16 @@ export const data = new SlashCommandBuilder()
   );
 
 /**
- * The whole claim is ephemeral: the reward, the streak and every refusal are
- * personal. The reply is deferred first because the online lookup and RCON
+ * A successful claim is public: showing off (or getting laughed at for) the
+ * reward is the point of the command. Refusals and errors go to the invoker
+ * only. The reply is deferred first because the online lookup and RCON
  * delivery can outlast Discord's 3 s window.
  */
-export const execute = withErrorHandling(
-  async (interaction) => {
+export const execute = withErrorHandling(async (interaction) => {
     const userId = interaction.user.id;
 
     if (claimLock.has(userId)) {
-      await interaction.editReply({ embeds: [createInfoEmbed(t("daily.processing"))] });
+      await replyPrivate(interaction, createInfoEmbed(t("daily.processing")));
       return;
     }
     claimLock.add(userId);
@@ -72,9 +72,7 @@ export const execute = withErrorHandling(
     } finally {
       claimLock.delete(userId);
     }
-  },
-  { ephemeral: true },
-);
+});
 
 async function _execute(
   interaction: ChatInputCommandInteraction,
@@ -125,13 +123,12 @@ async function _execute(
   const delta = now - userData.lastClaim;
 
   if (delta < DAILY_COOLDOWN_MS) {
-    await interaction.editReply({
-      embeds: [
-        createInfoEmbed(cooldownMsg(now + DAILY_COOLDOWN_MS - delta), {
-          title: t("daily.cooldownTitle"),
-        }),
-      ],
-    });
+    await replyPrivate(
+      interaction,
+      createInfoEmbed(cooldownMsg(now + DAILY_COOLDOWN_MS - delta), {
+        title: t("daily.cooldownTitle"),
+      }),
+    );
     return;
   }
 

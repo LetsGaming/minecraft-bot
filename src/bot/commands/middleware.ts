@@ -128,6 +128,14 @@ export async function replyError(
   await send(interaction, { embeds: [createErrorEmbed(content)] });
 }
 
+/** Shows a non-error notice to the invoker only, resolving a pending deferred reply. */
+export async function replyPrivate(
+  interaction: RepliableInteraction,
+  embed: ReturnType<typeof createEmbed>,
+): Promise<void> {
+  await send(interaction, { embeds: [embed] });
+}
+
 /** The one denial shape: who may use the command and what to do instead. */
 export async function replyDenied(interaction: RepliableInteraction): Promise<void> {
   const command = interaction.isChatInputCommand() ? interaction.commandName : undefined;

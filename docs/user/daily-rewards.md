@@ -15,7 +15,7 @@ Requirements:
 
 After a claim there is a 24-hour cooldown. If you try too early, the bot tells you exactly how long is left and at what time your next claim is ready.
 
-The reply is only visible to you: the reward, your streak and when the next reward is ready.
+The reply is public: everyone in the channel sees your reward, your streak and when the next reward is ready. Cooldown notices and errors are only visible to you.
 
 ## Streaks
 

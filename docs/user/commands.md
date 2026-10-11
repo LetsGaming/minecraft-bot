@@ -49,7 +49,7 @@ See [linking.md](linking.md) for the walkthrough and what linking unlocks.
 
 | Command | Description |
 |---|---|
-| `/daily` | Claim your daily item reward. Needs a linked account. If you are offline the reward is queued for your next join. The reply is only visible to you. |
+| `/daily` | Claim your daily item reward. Needs a linked account. If you are offline the reward is queued for your next join. The reward is shown to the whole channel; cooldown notices and errors are only visible to you. |
 | `/daily-reminder` | Opt in/out of a DM when your next daily reward is ready (`enabled: true/false`). |
 | `/streak` | Your current streak, longest streak, and the next bonus milestone. |
 | `/daily-history` | Your recent claims on a server: date, streak at the time, and what dropped (last 30 are stored). |
