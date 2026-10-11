@@ -135,7 +135,7 @@ export const de: Record<string, string> = {
   "challenge.status.expired": "abgelaufen",
   "challenge.status.cancelled": "abgebrochen",
   "challenge.fieldAdvancement": "Es gewinnt, wer **{advancement}** zuerst schafft",
-  "challenge.fieldItem": "Item-Bonus: {amount}× {item}",
+  "challenge.fieldItem": "Item-Bonus: {item}",
   "challenge.fieldStartedBy": "Gestartet von {by} {when}",
   "challenge.fieldEnds": "Endet {when}",
   "challenge.fieldWonBy": "Gewonnen von **{player}** 🎉",

@@ -31,6 +31,7 @@ import {
 } from "@mcbot/core/utils/stores/challengeStore.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { tellraw } from "@mcbot/core/utils/minecraft/serverMessages.js";
+import { formatItemStack, itemDisplayName } from "@mcbot/core/utils/minecraft/itemNames.js";
 
 const MAX_DURATION_HOURS = 24 * 14; // two weeks
 
@@ -111,12 +112,11 @@ function statusEmbed(challenge: Challenge, serverId: string) {
     lines.push(t("challenge.rewardLine", { reward: challenge.reward }));
   }
   if (challenge.item) {
-    lines.push(
-      t("challenge.fieldItem", {
-        amount: challenge.amount ?? 1,
-        item: challenge.item,
-      }),
-    );
+    const item =
+      challenge.amount === undefined
+        ? itemDisplayName(challenge.item)
+        : formatItemStack({ item: challenge.item, amount: challenge.amount });
+    lines.push(t("challenge.fieldItem", { item }));
   }
   lines.push(
     t("challenge.fieldStartedBy", {

@@ -139,7 +139,7 @@ export const en: Record<string, string> = {
   "challenge.status.expired": "expired",
   "challenge.status.cancelled": "cancelled",
   "challenge.fieldAdvancement": "First to earn: **{advancement}**",
-  "challenge.fieldItem": "Item bonus: {amount}× {item}",
+  "challenge.fieldItem": "Item bonus: {item}",
   "challenge.fieldStartedBy": "Started by {by} {when}",
   "challenge.fieldEnds": "Ends {when}",
   "challenge.fieldWonBy": "Won by **{player}** 🎉",

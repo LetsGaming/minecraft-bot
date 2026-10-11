@@ -278,6 +278,7 @@ describe("/challenge start", () => {
     );
     expect(tellraw).toHaveBeenCalledTimes(1);
     expect(i.editReply).toHaveBeenCalledTimes(1);
+    expect(replyText(i)).toContain("Item bonus: 3 × Diamond");
   });
 
   it("omits optional fields and the end time when not given", async () => {
@@ -336,6 +337,14 @@ describe("/challenge status", () => {
     const j = interaction("status");
     await run(challengeExecute, j);
     expect(replyText(j)).toContain("second");
+  });
+
+  it("names an item bonus without an amount by its display name only", async () => {
+    await seedChallenge(challenge({ item: "minecraft:cooked_beef" }));
+    const i = interaction("status");
+    await run(challengeExecute, i);
+    expect(replyText(i)).toContain("Item bonus: Cooked Beef\n");
+    expect(replyText(i)).not.toContain("cooked_beef");
   });
 
   it("persists the lazy expiry it noticed", async () => {
