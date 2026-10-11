@@ -139,7 +139,7 @@ function statusEmbed(challenge: Challenge, serverId: string) {
       status: t(`challenge.status.${challenge.status}`),
     }),
     description: lines.join("\n"),
-    color: challenge.status === "active" ? EmbedColor.Gold : EmbedColor.Info,
+    color: challenge.status === "active" ? EmbedColor.Info : EmbedColor.Neutral,
     footer: { text: serverId },
   });
 }
@@ -245,7 +245,7 @@ export const execute = withErrorHandling(
           title: t("challenge.startedTitle"),
           description:
             t("challenge.startedEmbed", { advancement }) + rewardLine,
-          color: EmbedColor.Gold,
+          color: EmbedColor.Info,
           ...(withServerFooter ? { footer: { text: server.id } } : {}),
         }),
     });

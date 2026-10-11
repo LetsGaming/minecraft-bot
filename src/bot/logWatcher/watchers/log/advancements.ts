@@ -89,7 +89,7 @@ async function handleChallenge(
             player,
             advancement: active.advancement,
           }) + rewardLine,
-        color: EmbedColor.Gold,
+        color: EmbedColor.Success,
         ...(withServerFooter ? { footer: { text: server.id } } : {}),
       }),
   });
@@ -143,7 +143,7 @@ export function registerAdvancementWatcher(
         createPlayerEmbed(player, {
           title: isChallenge ? t("advancement.challenge") : t("advancement.made"),
           description: `**${advancement}**`,
-          color: isChallenge ? EmbedColor.Challenge : EmbedColor.Success,
+          color: EmbedColor.Success,
           ...(withServerFooter ? { footer: { text: serverId } } : {}),
         }),
     });

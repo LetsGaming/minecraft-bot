@@ -183,7 +183,7 @@ export async function closePoll(client: Client, pollId: string): Promise<void> {
                 "poll.resultTotal",
                 { total },
               )}`,
-              color: EmbedColor.Gold,
+              color: EmbedColor.Info,
               footer: { text: pollServerIds(poll).join(", ") },
             }),
           ],

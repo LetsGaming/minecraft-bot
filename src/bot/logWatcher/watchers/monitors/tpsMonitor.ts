@@ -73,7 +73,7 @@ export function startTpsMonitor(
               createEmbed({
                 title: t("tps.lowTitle"),
                 description: t("tps.low", { threshold }),
-                color: tps.tps1m < 10 ? EmbedColor.Critical : EmbedColor.Warning,
+                color: tps.tps1m < 10 ? EmbedColor.Error : EmbedColor.Warning,
                 footer: { text: serverInstance.id },
               }),
             );

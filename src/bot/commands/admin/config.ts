@@ -163,7 +163,7 @@ export const execute = withErrorHandling(
 
     const embed = createEmbed({
       title: t("config.title"),
-      color: EmbedColor.Blurple,
+      color: EmbedColor.Info,
     });
 
     embed.addFields(
