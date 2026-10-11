@@ -1,53 +1,57 @@
 <template>
   <div v-if="conflicts.length" class="conflicts">
     <div class="c-head">
-      <h4>{{ conflicts.length }} queued {{ conflicts.length === 1 ? "change needs" : "changes need" }} a decision</h4>
-      <p class="muted small">
-        These keys changed on disk while your edits waited. Everything else
-        applied on its own.
+      <p class="c-title">
+        {{ mode === "queued" ? t("conflict.queuedTitle", { count: conflicts.length }) : t("conflict.editTitle", { count: conflicts.length }) }}
       </p>
+      <p class="c-lede">{{ mode === "queued" ? t("conflict.queuedLede") : t("conflict.editLede") }}</p>
     </div>
 
     <div v-for="conflict in conflicts" :key="keyOf(conflict)" class="c-row">
-      <code class="c-key mono">{{ conflict.keyPath.join(".") }}</code>
+      <code class="c-key">{{ keyOf(conflict) }}</code>
 
       <!-- All three values, because "someone changed this" is not a decision
-           anyone can make. What it was when you queued, what you wanted, and
-           what is there now. -->
-      <div class="c-values">
+           anyone can make: what it was, what you wanted, and what is there now. -->
+      <dl class="c-values">
         <div class="c-val">
-          <span class="c-label muted small">Was, when you queued</span>
-          <code class="mono">{{ show(conflict.base) }}</code>
+          <dt>{{ mode === "queued" ? t("conflict.baseQueued") : t("conflict.baseEdit") }}</dt>
+          <dd><code>{{ show(conflict.base) }}</code></dd>
         </div>
         <div class="c-val c-mine">
-          <span class="c-label muted small">Yours</span>
-          <code class="mono">{{ show(conflict.queued) }}</code>
+          <dt>{{ t("conflict.mine") }}</dt>
+          <dd><code>{{ show(conflict.queued) }}</code></dd>
         </div>
         <div class="c-val">
-          <span class="c-label muted small">On disk now</span>
-          <code class="mono">{{ show(conflict.current) }}</code>
+          <dt>{{ t("conflict.current") }}</dt>
+          <dd><code>{{ show(conflict.current) }}</code></dd>
         </div>
-      </div>
+      </dl>
 
       <div class="c-actions">
         <Button
-          label="Keep mine"
+          :label="t('conflict.keepMine')"
+          :aria-label="t('conflict.keepMineFor', { key: keyOf(conflict) })"
           size="small"
+          class="tap"
           :loading="busy === keyOf(conflict)"
           @click="$emit('resolve', { conflict, choice: 'queued' })"
         />
         <Button
-          label="Keep disk"
+          :label="t('conflict.keepCurrent')"
+          :aria-label="t('conflict.keepCurrentFor', { key: keyOf(conflict) })"
           size="small"
           severity="secondary"
           outlined
+          class="tap"
           :loading="busy === keyOf(conflict)"
           @click="$emit('resolve', { conflict, choice: 'current' })"
         />
       </div>
 
-      <span class="c-meta muted small" :title="timestampTitle(conflict.queuedAt)">
-        queued {{ relativeAge(conflict.queuedAt) }}<template v-if="conflict.byTag"> by {{ conflict.byTag }}</template>
+      <span v-if="mode === 'queued'" class="c-meta" :title="timestampTitle(conflict.queuedAt)">
+        {{ conflict.byTag
+          ? t("conflict.queuedBy", { age: relativeAge(conflict.queuedAt), who: conflict.byTag })
+          : t("conflict.queuedAt", { age: relativeAge(conflict.queuedAt) }) }}
       </span>
     </div>
   </div>
@@ -56,24 +60,29 @@
 <script setup lang="ts">
 import Button from "primevue/button";
 import { relativeAge, timestampTitle } from "../../utils/time";
+import { t } from "../../i18n";
 import type { EditConflict } from "../../composables/useModConfigs";
 
 /**
- * Resolving queued edits whose keys moved underneath them.
+ * Settling fields that changed underneath the user.
  *
- * "Keep mine" does not rewrite the file directly: it rebases the queued edit
- * onto the current value, so the next flush sees an untouched key and applies
- * it through the same path as every other edit. That keeps one write path
- * rather than a second one that only conflict resolution uses.
+ * `edit`: a save found the document changed on disk; fields both sides
+ * changed are listed, keep mine or take the version on disk.
  *
- * "Keep disk" drops the queued edit. Both are one click, because the operator
- * has already done the hard part by reading three values.
+ * `queued`: mod config edits held while the wrapper was away. "Keep mine"
+ * does not rewrite the file directly: it rebases the queued edit onto the
+ * current value, so the next flush applies it through the same path as every
+ * other edit. "Keep disk" drops the queued edit.
  */
-defineProps<{
-  conflicts: EditConflict[];
-  /** Key currently being resolved, so its buttons show progress. */
-  busy?: string;
-}>();
+withDefaults(
+  defineProps<{
+    conflicts: EditConflict[];
+    /** Key currently being resolved, so its buttons show progress. */
+    busy?: string;
+    mode?: "edit" | "queued";
+  }>(),
+  { busy: "", mode: "edit" },
+);
 
 defineEmits<{
   resolve: [payload: { conflict: EditConflict; choice: "queued" | "current" }];
@@ -81,43 +90,48 @@ defineEmits<{
 
 const keyOf = (conflict: EditConflict): string => conflict.keyPath.join(".");
 
-/** Values are config scalars or lists; render them the way the file would. */
+/** Values are config scalars, lists or objects; render them the way the file would. */
 function show(value: unknown): string {
-  if (value === null || value === undefined) return "(unset)";
-  if (Array.isArray(value)) return value.length ? value.join(", ") : "(empty)";
+  if (value === null || value === undefined) return t("field.unsetValue");
+  if (Array.isArray(value)) {
+    if (value.length === 0) return t("conflict.empty");
+    return value.map((v) => (typeof v === "object" ? JSON.stringify(v) : String(v))).join(", ");
+  }
+  if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }
 </script>
 
 <style scoped>
 .conflicts {
-  border: 1px solid var(--mc-mid);
-  border-radius: var(--mc-radius);
-  background: var(--mc-card);
-  padding: 14px 16px;
-  margin-bottom: 14px;
+  border: 1px solid var(--st-degraded);
+  border-radius: var(--radius-surface);
+  background: var(--surface);
+  padding: var(--space-3) var(--space-4);
 }
-.c-head h4 { margin: 0 0 2px; font-size: 14px; font-weight: 600; }
-.c-head p { margin: 0 0 12px; max-width: 70ch; }
-
+.c-title { margin: 0 0 2px; font-weight: 600; }
+.c-lede { margin: 0 0 var(--space-3); max-width: 70ch; color: var(--text-dim); font-size: var(--text-sm); }
 .c-row {
   display: grid;
   grid-template-columns: minmax(140px, 1fr) minmax(0, 2fr) auto;
   align-items: center;
-  gap: 8px 16px;
-  padding: 10px 0;
-  border-top: 0.5px solid var(--mc-border);
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border);
 }
-.c-key { font-size: 12.5px; word-break: break-word; }
-.c-values { display: flex; flex-wrap: wrap; gap: 14px; }
+.c-key { font: 400 var(--text-sm) / 1.4 var(--font-mono); overflow-wrap: anywhere; }
+.c-values { display: flex; flex-wrap: wrap; gap: var(--space-3); margin: 0; min-width: 0; }
 .c-val { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.c-label { line-height: 1.2; }
-.c-val code { font-size: 12.5px; overflow-wrap: anywhere; }
-.c-mine code { color: var(--mc-accent); }
-.c-actions { display: flex; gap: 6px; }
-.c-meta { grid-column: 1 / -1; }
-
+.c-val dt { color: var(--text-dim); font-size: var(--text-xs); }
+.c-val dd { margin: 0; min-width: 0; }
+.c-val code { font: 400 var(--text-sm) / 1.4 var(--font-mono); overflow-wrap: anywhere; }
+.c-mine code { color: var(--accent); }
+.c-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.c-meta { grid-column: 1 / -1; color: var(--text-dim); font-size: var(--text-xs); }
 @media (max-width: 900px) {
-  .c-row { grid-template-columns: 1fr; }
+  .c-row { grid-template-columns: minmax(0, 1fr); }
+}
+@media (pointer: coarse), (max-width: 760px) {
+  .tap { min-height: var(--touch-min); }
 }
 </style>

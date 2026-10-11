@@ -3,8 +3,8 @@
     <div v-if="!loading && !me" class="login-screen">
       <main class="login-card">
         <div class="brand-mark"><i class="pi pi-box" aria-hidden="true" /></div>
-        <h1>{{ t("app.name") }}</h1>
-        <p class="muted">{{ t("login.subtitle") }}</p>
+        <p class="login-brand">{{ t("app.name") }}</p>
+        <h1>{{ t("login.title") }}</h1>
         <p class="login-hint muted small">
           {{ t("login.hintLead") }} <code class="mono">adminUsers</code>.
         </p>
@@ -367,6 +367,7 @@ export default defineComponent({
         out.fileId = queryText(params.fileId);
       } else if (id === "config") {
         out.raw = params.mode === "raw";
+        out.q = queryText(query.q);
       } else if (id === "guilds") {
         out.guildId = queryText(params.guildId);
       }
@@ -395,7 +396,8 @@ export default defineComponent({
   width: 100%;
   box-shadow: var(--shadow-overlay);
 }
-.login-card h1 { margin: 16px 0 2px; font-size: var(--text-2xl); font-weight: 600; }
+.login-brand { margin: 16px 0 2px; color: var(--text-dim); font-weight: 500; }
+.login-card h1 { margin: 0; font-size: var(--text-2xl); font-weight: 600; }
 .login-hint { margin: 18px 0 22px; }
 .discord-btn { width: 100%; }
 :deep(.discord-btn.p-button) {

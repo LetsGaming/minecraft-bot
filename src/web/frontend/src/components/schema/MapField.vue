@@ -1,42 +1,50 @@
 <template>
-  <fieldset class="group">
-    <legend>{{ name }}</legend>
-    <FieldHint v-if="description" :text="description" class="group-hint" />
+  <fieldset :id="fieldId || undefined" :class="['group', { 'has-error': !!error }]">
+    <legend>
+      <span class="g-title">{{ label || name }}</span>
+      <code v-if="keyText" class="g-key">{{ keyText }}</code>
+    </legend>
+    <p v-if="description" class="g-help">{{ description }}</p>
+    <p v-if="error" class="g-error" role="alert">{{ error }}</p>
 
-    <div v-if="keys.length === 0" class="muted small map-empty">No entries yet.</div>
+    <p v-if="keys.length === 0" class="g-empty">{{ t("map.empty") }}</p>
 
-    <MapEntry
-      v-for="key in keys"
-      :key="key"
-      :map-name="name"
-      :entry-key="key"
-      :value-schema="valueSchema"
-      :definitions="definitions"
-      :path="path"
-      :model-value="model[key]"
-      @update:model-value="setValue(key, $event)"
-      @remove="removeKey"
-    />
+    <template v-for="key in keys" :key="key">
+      <MapEntry
+        v-if="entryVisible(key)"
+        :map-name="name"
+        :entry-key="key"
+        :value-schema="valueSchema"
+        :definitions="definitions"
+        :path="path"
+        :key-path="[...keyPath, key]"
+        :model-value="model[key]"
+        @update:model-value="setValue(key, $event)"
+        @remove="removeKey"
+      />
+    </template>
 
-    <div class="map-add">
+    <div v-if="!filtering && !locked" class="map-add">
+      <label class="sr-only" :for="addId">{{ t("map.newKeyLabel", { name: label || name }) }}</label>
       <InputText
+        :id="addId"
         v-model="newKey"
-        placeholder="New entry key…"
-        size="small"
+        :placeholder="t('map.newKeyPlaceholder')"
+        :invalid="!!addError"
+        :aria-describedby="addError ? `${addId}-error` : undefined"
         @keyup.enter="addKey"
       />
-      <Button label="Add" icon="pi pi-plus" size="small" :disabled="!canAdd" @click="addKey" />
+      <Button :label="t('map.add')" icon="pi pi-plus" class="tap" :disabled="!canAdd" @click="addKey" />
     </div>
-    <span v-if="addError" class="err">{{ addError }}</span>
+    <p v-if="addError" :id="`${addId}-error`" class="g-error" role="alert">{{ addError }}</p>
   </fieldset>
 </template>
 
 <script lang="ts">
-import { defineComponent, type PropType } from "vue";
+import { defineComponent, inject, useId, type PropType } from "vue";
 import { isRecord } from "../../utils/isRecord";
 import InputText from "primevue/inputtext";
 import Button from "primevue/button";
-import FieldHint from "../ui/FieldHint.vue";
 import MapEntry from "./MapEntry.vue";
 import {
   mapValueSchema,
@@ -44,25 +52,21 @@ import {
   type JsonSchemaNode,
   type Definitions,
 } from "./schemaField.js";
+import { SchemaFormKey } from "../../composables/useSchemaForm.js";
+import { t } from "../../i18n.js";
 
 /**
- * Editor for a Record<string, X> map (commands, options, servers, schedules,
- * …) — a row per key with a Remove button and the value rendered by
- * SchemaField (so the value gets its own typed inputs, recursively), plus an
- * add-key row. Reused wherever the schema is an object with additionalProperties
- * instead of a raw JSON textarea. <SchemaField> is resolved from the global
- * registration (main.ts) to avoid a SchemaField ⇄ MapField import cycle.
+ * Editor for a Record<string, X> map (commands, servers, schedules, guilds):
+ * one entry per key with its own Remove button, the value rendered by
+ * SchemaField, and a row to add a key. <SchemaField> is resolved from the
+ * global registration (main.ts) to avoid a SchemaField, MapField import cycle.
  */
 export default defineComponent({
   name: "MapField",
-  components: {
-    InputText,
-    Button,
-    FieldHint,
-    MapEntry,
-  },
+  components: { InputText, Button, MapEntry },
   props: {
     name: { type: String, required: true },
+    label: { type: String, default: "" },
     schema: { type: Object as PropType<JsonSchemaNode>, required: true },
     definitions: {
       type: Object as PropType<Definitions>,
@@ -71,8 +75,12 @@ export default defineComponent({
     },
     modelValue: { type: null as unknown as PropType<unknown>, required: false },
     path: { type: Array as PropType<string[]>, required: false, default: () => [] },
+    keyPath: { type: Array as PropType<string[]>, required: false, default: () => [] },
   },
   emits: ["update:model-value"],
+  setup() {
+    return { form: inject(SchemaFormKey, undefined), t, addId: `map-add-${useId()}` };
+  },
   data() {
     return { newKey: "", addError: "" };
   },
@@ -89,16 +97,31 @@ export default defineComponent({
     description(): string {
       return this.schema.description ?? "";
     },
+    keyText(): string {
+      return this.keyPath.join(".");
+    },
+    fieldId(): string {
+      return this.form && this.keyPath.length ? this.form.idFor(this.keyPath) : "";
+    },
+    error(): string {
+      return this.form && this.keyPath.length ? this.form.errorFor(this.keyPath) : "";
+    },
+    filtering(): boolean {
+      return this.form?.filtering() ?? false;
+    },
+    locked(): boolean {
+      return this.form?.locked() ?? false;
+    },
     canAdd(): boolean {
       return this.newKey.trim().length > 0;
     },
   },
   methods: {
+    entryVisible(key: string): boolean {
+      return !this.form || this.keyPath.length === 0 || this.form.isVisible([...this.keyPath, key]);
+    },
     emitMap(next: Record<string, unknown>) {
-      this.$emit(
-        "update:model-value",
-        Object.keys(next).length > 0 ? next : undefined,
-      );
+      this.$emit("update:model-value", Object.keys(next).length > 0 ? next : undefined);
     },
     setValue(key: string, value: unknown) {
       const next = { ...this.model };
@@ -125,7 +148,7 @@ export default defineComponent({
       this.addError = "";
       if (!key) return;
       if (key in this.model) {
-        this.addError = `"${key}" already exists.`;
+        this.addError = t("map.exists", { key });
         return;
       }
       this.newKey = "";
@@ -136,32 +159,34 @@ export default defineComponent({
 </script>
 
 <style scoped>
-.map-add {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-top: 10px;
-}
-.map-empty {
-  margin: 4px 0 10px;
-}
-.err {
-  color: var(--mc-bad);
-  font-size: 12.5px;
-}
-.group-hint {
-  margin: 0 0 8px;
-}
 .group {
-  border: 1px solid var(--mc-border);
-  border-radius: 10px;
-  margin: 14px 0;
-  padding: 6px 16px 14px;
-  background: rgba(255, 255, 255, 0.012);
+  min-width: 0;
+  margin: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-surface);
+  scroll-margin-top: 112px;
 }
+.group.has-error { border-left: 3px solid var(--danger); }
 .group legend {
-  font-weight: 700;
-  padding: 0 8px;
-  color: var(--mc-text);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  padding: 0 var(--space-2);
+  max-width: 100%;
+}
+.g-title { font-weight: 600; color: var(--text); }
+.g-key { font: 400 var(--text-xs) / 1.4 var(--font-mono); color: var(--text-dim); overflow-wrap: anywhere; }
+.g-help { margin: var(--space-1) var(--space-2) var(--space-2); color: var(--text-dim); font-size: var(--text-sm); max-width: 64ch; }
+.g-error { margin: var(--space-1) var(--space-2); color: var(--danger); font-size: var(--text-sm); }
+.g-empty { margin: var(--space-1) var(--space-2) var(--space-2); color: var(--text-dim); font-size: var(--text-sm); }
+.map-add { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; margin: var(--space-3) var(--space-2) 0; }
+.map-add :deep(.p-inputtext) { flex: 1 1 180px; min-width: 0; }
+@media (max-width: 760px) {
+  .group { margin: var(--space-2) 0; padding: var(--space-2) var(--space-1) var(--space-3); }
+}
+@media (pointer: coarse), (max-width: 760px) {
+  .tap { min-height: var(--touch-min); }
 }
 </style>
