@@ -144,12 +144,12 @@ function strArray(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 }
 
-async function getJson(url: string): Promise<unknown> {
+async function getJson(url: string, timeoutMs = TIMEOUT_MS): Promise<unknown> {
   let res: Response;
   try {
     res = await fetch(url, {
       headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -326,4 +326,121 @@ export async function getProjectDetail(
     pageUrl: `https://modrinth.com/mod/${slug || projectId}`,
     versions,
   };
+}
+
+// ── Project icons, looked up in bulk ────────────────────────────────────────
+
+/** Ids or slugs per `GET /projects?ids=` request; keeps the URL a few KB long. */
+export const ICON_LOOKUP_BATCH = 50;
+/** Keys one lookup resolves; the rest of a larger list gets no icon. */
+export const ICON_LOOKUP_MAX_KEYS = 300;
+/** Entries the icon cache holds before the oldest is evicted. */
+export const ICON_CACHE_MAX_ENTRIES = 2000;
+const ICON_TTL_MS = 6 * 60 * 60 * 1000;
+/** A key Modrinth does not know (a jar from elsewhere) is asked again after this. */
+const ICON_MISS_TTL_MS = 60 * 60 * 1000;
+/** After a failed request the keys rest this long, so a polling view cannot hammer Modrinth. */
+const ICON_FAILURE_TTL_MS = 60 * 1000;
+const ICON_LOOKUP_TIMEOUT_MS = 4_000;
+const ICON_HOST = "cdn.modrinth.com";
+const PROJECT_KEY = /^[A-Za-z0-9_.-]{1,64}$/;
+
+const iconCache = new Map<string, { expires: number; iconUrl: string | null }>();
+const iconInflight = new Map<string, Promise<void>>();
+
+export function clearProjectIconCache(): void {
+  iconCache.clear();
+  iconInflight.clear();
+}
+
+function rememberIcon(key: string, iconUrl: string | null, ttlMs: number): void {
+  iconCache.delete(key);
+  iconCache.set(key, { expires: Date.now() + ttlMs, iconUrl });
+  while (iconCache.size > ICON_CACHE_MAX_ENTRIES) {
+    const oldest = iconCache.keys().next().value;
+    if (oldest === undefined) break;
+    iconCache.delete(oldest);
+  }
+}
+
+/** Only Modrinth's own CDN over https; anything else is treated as no icon. */
+function cdnIcon(raw: unknown): string | null {
+  if (typeof raw !== "string" || !raw) return null;
+  try {
+    const url = new URL(raw);
+    return url.protocol === "https:" && url.hostname === ICON_HOST ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchIconBatch(keys: string[]): Promise<void> {
+  try {
+    const body = await getJson(
+      `${MODRINTH_API}/projects?ids=${encodeURIComponent(JSON.stringify(keys))}`,
+      ICON_LOOKUP_TIMEOUT_MS,
+    );
+    const found = new Map<string, string | null>();
+    for (const raw of Array.isArray(body) ? body : []) {
+      if (!isRecord(raw)) continue;
+      const icon = cdnIcon(raw.icon_url);
+      for (const name of [str(raw.slug), str(raw.id)]) {
+        if (name) found.set(name.toLowerCase(), icon);
+      }
+    }
+    for (const key of keys) {
+      if (found.has(key)) rememberIcon(key, found.get(key) ?? null, ICON_TTL_MS);
+      else rememberIcon(key, null, ICON_MISS_TTL_MS);
+    }
+  } catch (err) {
+    log.warn("modrinth", `icon lookup failed for ${keys.length} projects: ${err instanceof Error ? err.message : String(err)}`);
+    for (const key of keys) rememberIcon(key, null, ICON_FAILURE_TTL_MS);
+  }
+}
+
+/**
+ * Icon URLs for installed projects, by slug or project id. Answers come from
+ * a bounded cache; what is missing is asked in batches, and a key that is
+ * already being asked waits for that request instead of sending another.
+ * Never throws: a key without an answer simply has no icon in the result.
+ */
+export async function lookupProjectIcons(keys: Iterable<string>): Promise<Map<string, string>> {
+  const wanted: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of keys) {
+    if (wanted.length >= ICON_LOOKUP_MAX_KEYS) break;
+    if (!PROJECT_KEY.test(raw)) continue;
+    const key = raw.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    wanted.push(key);
+  }
+
+  const now = Date.now();
+  const waiting: Promise<void>[] = [];
+  const missing: string[] = [];
+  for (const key of wanted) {
+    const hit = iconCache.get(key);
+    if (hit && hit.expires > now) continue;
+    const pending = iconInflight.get(key);
+    if (pending) waiting.push(pending);
+    else missing.push(key);
+  }
+
+  for (let i = 0; i < missing.length; i += ICON_LOOKUP_BATCH) {
+    const batch = missing.slice(i, i + ICON_LOOKUP_BATCH);
+    const request = fetchIconBatch(batch).finally(() => {
+      for (const key of batch) if (iconInflight.get(key) === request) iconInflight.delete(key);
+    });
+    for (const key of batch) iconInflight.set(key, request);
+    waiting.push(request);
+  }
+  await Promise.all(waiting);
+
+  const out = new Map<string, string>();
+  for (const key of wanted) {
+    const icon = iconCache.get(key)?.iconUrl;
+    if (icon) out.set(key, icon);
+  }
+  return out;
 }
