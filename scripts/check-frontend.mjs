@@ -9,6 +9,9 @@
  *     PrimeVue preset and TypeScript read tokens (`var(--accent)`) instead.
  *  2. The frontend may import only @mcbot/core and @mcbot/schema from the
  *     workspace, and no relative path may leave src/web/frontend/src.
+ *  3. Files already moved onto t() (TRANSLATED below) carry no literal UI
+ *     text in their template: no words between tags and no static label,
+ *     title, placeholder or aria text. Config keys inside <code> are exempt.
  */
 import { readdirSync, readFileSync } from "fs";
 import path from "path";
@@ -22,6 +25,47 @@ const ALLOWED_WORKSPACES = new Set(["@mcbot/core", "@mcbot/schema"]);
 
 const HEX = /(?<![\w&])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})\b/g;
 const IMPORT = /(?:\bfrom\s*|\bimport\s*\(?\s*)(["'])([^"'\n]+)\1/g;
+
+/** Frontend files whose template text goes through t(); grow this as views migrate. */
+const TRANSLATED = new Set(["App.vue", "components/ui/AppShell.vue"]);
+const TEXT_ATTRS = /(?<![:@\w.-])(label|title|placeholder|aria-label|alt|header|subtitle|summary|message)="([^"]*)"/g;
+const HAS_LETTER = /\p{L}/u;
+/** An opening or closing tag; quoted attribute values may contain `>`. */
+const TAG = /<\/?[A-Za-z][^>"']*(?:(?:"[^"]*"|'[^']*')[^>"']*)*>/g;
+
+function templateOf(text) {
+  const start = text.indexOf("<template>");
+  const end = text.lastIndexOf("</template>");
+  return start === -1 || end === -1 ? null : { body: text.slice(start, end), offset: start };
+}
+
+/** Blank out a match but keep its newlines, so reported line numbers stay right. */
+function blank(source, pattern) {
+  return source.replace(pattern, (m) => m.replace(/[^\n]/g, " "));
+}
+
+function literalTextProblems(rel, text) {
+  const tpl = templateOf(text);
+  if (!tpl) return [];
+  let body = blank(tpl.body, /<!--[\s\S]*?-->/g);
+  body = blank(body, /\{\{[\s\S]*?\}\}/g);
+  body = blank(body, /<code\b[^>]*>[\s\S]*?<\/code>/g);
+  const found = [];
+  for (const tag of body.matchAll(TAG)) {
+    for (const m of tag[0].matchAll(TEXT_ATTRS)) {
+      if (HAS_LETTER.test(m[2])) {
+        found.push(`${rel}:${lineOf(text, tpl.offset + tag.index + m.index)} literal ${m[1]}="${m[2]}"; bind it to t()`);
+      }
+    }
+  }
+  const textOnly = blank(body, TAG);
+  for (const m of textOnly.matchAll(/\S[^\n]*/g)) {
+    if (HAS_LETTER.test(m[0])) {
+      found.push(`${rel}:${lineOf(text, tpl.offset + m.index)} literal text "${m[0].trim()}"; use t()`);
+    }
+  }
+  return found;
+}
 
 function* walk(dir) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -48,6 +92,9 @@ for (const file of walk(srcDir)) {
   }
 
   if (path.extname(file) === ".css") continue;
+  if (TRANSLATED.has(path.relative(srcDir, file).split(path.sep).join("/"))) {
+    problems.push(...literalTextProblems(rel, text));
+  }
   for (const m of text.matchAll(IMPORT)) {
     const spec = m[2];
     const where = `${rel}:${lineOf(text, m.index)}`;
@@ -70,4 +117,6 @@ if (problems.length > 0) {
   for (const p of problems) console.error(`  ${p}`);
   process.exit(1);
 }
-console.log("frontend check OK (no raw hex outside tokens.css, imports within the boundary)");
+console.log(
+  "frontend check OK (no raw hex outside tokens.css, imports within the boundary, no literal text in translated files)",
+);
