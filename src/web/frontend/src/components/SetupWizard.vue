@@ -510,10 +510,3 @@ export default defineComponent({
   .tap, .w-full { min-height: var(--touch-min); }
 }
 </style>
-
-<style>
-/* The dialog header is rendered by PrimeVue outside this component's scope. */
-@media (pointer: coarse), (max-width: 760px) {
-  .setup-wizard .p-dialog-close-button { width: var(--touch-min); height: var(--touch-min); }
-}
-</style>

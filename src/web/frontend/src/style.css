@@ -87,6 +87,10 @@ a { color: var(--mc-accent); }
   }
 }
 
+@media (pointer: coarse), (max-width: 760px) {
+  .p-dialog .p-dialog-close-button { width: var(--touch-min); height: var(--touch-min); }
+}
+
 /* A PrimeVue DataTable marked .stack-table turns into one card per row under
    760px: the header row hides and each cell names its column from the
    data-label its Column passes through `pt`. */
