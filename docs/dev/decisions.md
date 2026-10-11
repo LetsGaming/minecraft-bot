@@ -732,7 +732,7 @@ The typed confirm stays on PrimeVue's `ConfirmDialog` (its container slot gives 
 
 **Problem:** Every downtime, TPS and host alert pinged the configured role, recoveries included, and a long TPS dip re-pinged every five minutes.
 
-**Decision:** `guilds.<id>.downtimeAlerts.mentionPolicy` and `guilds.<id>.tpsAlerts.mentionPolicy` accept `"escalation"` (the default: ping on the first failure and on a rise in severity only) or `"always"` (every alert, the behaviour before 8.0.0). An unknown value is a config warning and acts as `"escalation"`. Every alert and every relayed message sets `allowedMentions` explicitly either way (`src/bot/utils/embeds/alertUtils.ts`).
+**Decision:** `guilds.<id>.downtimeAlerts.mentionPolicy` and `guilds.<id>.tpsAlerts.mentionPolicy` accept `"escalation"` (the default: ping on the first failure and on a rise in severity only) or `"always"` (every alert, the behaviour before 8.0.0). Any other value fails the schema check; the code falls back to `"escalation"` (with a warning when the schema could not be read). Every alert and every relayed message sets `allowedMentions` explicitly either way (`src/bot/utils/embeds/alertUtils.ts`).
 
 **Why a flag:** some on-call setups want every recovery to ping, so the old behaviour stays one setting away.
 

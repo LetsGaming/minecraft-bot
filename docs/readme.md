@@ -15,6 +15,7 @@ You host the bot and/or the Minecraft server.
 | Running the bot with Docker | [admin/docker.md](admin/docker.md) |
 | Installing the API wrapper on the Minecraft host | [admin/remote-setup.md](admin/remote-setup.md) |
 | Upgrading from 4.x | [admin/migrating-to-5.md](admin/migrating-to-5.md) |
+| Upgrading to 8.0 (alert mention default) | [admin/migrating-to-8.md](admin/migrating-to-8.md) |
 | Upgrading to 7.0 (config versioning, automatic migration) | [admin/migrating-to-7.md](admin/migrating-to-7.md) |
 | Retiring the standalone server-manager panel | [admin/retiring-server-manager.md](admin/retiring-server-manager.md) |
 | Using the dashboard: pages, links, phones, backups, mods | [admin/dashboard.md](admin/dashboard.md) |

@@ -6,20 +6,24 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-Wave 2: the dashboard and the Discord replies reworked on one shared status system. What admins and players will notice first:
+8.0.0 is Wave 2: the dashboard and the Discord replies reworked on one shared status system. It is a major release because alerts ping less by default (see Breaking). What admins and players will notice first:
 
+- **Breaking:** downtime, host and TPS alerts ping `mentionRole` only on the first failure and when severity rises; recoveries and repeats are posted without a ping. Set `"mentionPolicy": "always"` to keep pinging on every alert.
 - Discord messages change colour: one status colour per meaning, shared with the dashboard; joins, leaves and deaths turn grey; titles name the action and the server state circle (🟢 🟡 🔴 ⚪) is the only title emoji.
 - `/server stop` and `/server restart` ask first with a confirm row that expires after 60 seconds.
 - Errors, denials, confirmations and cooldowns are visible only to the person who ran the command; a claimed `/daily` reward is public.
 - `/config show` is private and lists servers by wrapper host only, without the token or admin IDs.
-- Alerts still ping `mentionRole` on every alert by default; the new `mentionPolicy: "escalation"` pings only on the first failure and on escalation.
 - Every dashboard page has its own address; secrets are password fields; toasts appear top right.
+
+### Breaking
+
+- BREAKING: **Alert mentions default to the escalation policy.** A guild with a `mentionRole` in `downtimeAlerts` or `tpsAlerts` and no `mentionPolicy` used to be pinged on every alert, recoveries ("back online", "disk space recovered") and repeated TPS warnings included. It is now pinged only on the first failure and when severity rises (for example a TPS warning that drops below 10); recoveries and repeats are still posted, without a ping. To keep the old behaviour, add `"mentionPolicy": "always"` to each `downtimeAlerts` and `tpsAlerts` block that has a `mentionRole`. Any other value is still a config error. No migration rewrites the file. See `docs/admin/migrating-to-8.md` (`utils/embeds/alertUtils.ts`, `core/configValidation.ts`, `schema/config.ts`, `config.schema.json`, `docs/admin/configuration.md`).
 
 ### Added
 
 - **Mod icons everywhere a mod is listed.** Installed rows, check progress and results, the blocker summary, the Modrinth catalogue, the version picker and the remove dialog show the project's Modrinth icon, or an initials tile on a stable colour when there is none or it fails to load. The dashboard looks the icons up in bulk by slug (`GET /v2/projects?ids=`) and adds an optional `iconUrl` to `GET /api/servers/:id/mods/installed` and to compat job rows, served through the existing same-origin icon proxy (`core/utils/modrinth.ts` `lookupProjectIcons`, `web/backend/routes/mods.ts`, `components/ui/ModIcon.vue`).
 - **`/server stop` and `/server restart` ask first.** The command replies only to you with the number of online players, a red confirm button and Cancel; the buttons expire after 60 seconds and keep working across a bot restart. After confirming, a public message says who stopped or restarted the server and shows the progress. Script output of a failed run is shown only to the admin (`commands/server/control.ts`, `utils/embeds/confirm.ts`, `interactions/confirmActions.ts`).
-- **Optional alert mention policy.** `guilds.<id>.downtimeAlerts.mentionPolicy` and `guilds.<id>.tpsAlerts.mentionPolicy` accept `"always"` (default, every alert pings `mentionRole` as before) or `"escalation"` (only the first failure and a rise in severity ping; recoveries and repeats are posted silently). Additive field, no migration (`schema/config.ts`, `utils/embeds/alertUtils.ts`, `config.schema.json`, `docs/admin/configuration.md`).
+- **Alert mention policy.** `guilds.<id>.downtimeAlerts.mentionPolicy` and `guilds.<id>.tpsAlerts.mentionPolicy` accept `"escalation"` (default: only the first failure and a rise in severity ping; recoveries and repeats are posted silently) or `"always"` (every alert pings `mentionRole`, the behaviour before 8.0.0; see Breaking). New optional field, no config migration (`schema/config.ts`, `utils/embeds/alertUtils.ts`, `config.schema.json`, `docs/admin/configuration.md`).
 - **TPS recovery message.** When TPS is back above `tpsWarningThreshold` after a warning, the TPS channel gets a "back to normal" post; a drop below 10 TPS alerts at once instead of waiting for the 5 minute repeat (`watchers/monitors/tpsMonitor.ts`).
 - Server recovery alerts say how long the server was down (`watchers/monitors/downtimeMonitor.ts`).
 - **Dashboard links and the back button.** Every dashboard page has its own address (`#/overview`, `#/console/<server>`, `#/mods/<server>?check=1.21.4&filter=blockers`, `#/modconfig/<server>/<file>`, `#/config/raw`, `#/guilds/<id>` and so on), so a reload keeps your place, a link can be shared in a ticket and Back goes to the previous page. Leaving a page or switching server with unsaved edits asks first, also on Back. The bare dashboard address opens the first page you may see, as before (`frontend/src/router.ts`, `App.vue`; the Mods, Mod config, Config and Guilds views).

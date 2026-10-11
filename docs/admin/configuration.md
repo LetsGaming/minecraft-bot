@@ -156,7 +156,7 @@ Details on how each feature behaves are in [automated-features.md](automated-fea
 | `"escalation"` (default) | Only the first failure and a rise in severity (for example a TPS warning that drops below 10, or a crash loop after an outage). Recoveries and repeats are posted without a ping. |
 | `"always"` | Every alert, including recoveries ("back online", "disk space recovered") and repeated TPS warnings. This is how alerts behaved before 8.0.0. |
 
-An unknown value logs a config warning and acts as `"escalation"`. Every alert sets Discord's `allowedMentions` explicitly, so it can ping the configured role and nothing else. Relayed text (chat bridge, `/console live`, in-game reports) never pings anyone.
+Any other value is a config error. Every alert sets Discord's `allowedMentions` explicitly, so it can ping the configured role and nothing else. Relayed text (chat bridge, `/console live`, in-game reports) never pings anyone.
 
 To keep the pre-8.0.0 behaviour, set `"always"` in each block that has a `mentionRole`:
 
