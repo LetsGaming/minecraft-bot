@@ -6,7 +6,7 @@ status and component system shared between the dashboard and Discord. The
 reasoning is in the [decision log](decisions.md#wave-2-the-hybrid-direction-for-the-dashboard-and-discord);
 the resulting rules are in [web/frontend.md](web/frontend.md) and
 [bot/replies.md](bot/replies.md); the user-facing changes are in
-`CHANGELOG.md` under 7.1.0.
+`CHANGELOG.md` (under `[Unreleased]` until 7.1.0 is dated by the release).
 
 Finding ids (DASH-xx, DISC-xx) are those of the Wave 2 audit. Its appendices
 live under `docs/dev/refactor/wave2-audit/` until the working material is
