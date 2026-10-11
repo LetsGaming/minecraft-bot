@@ -67,7 +67,6 @@ has its own directory.
 | Shared contracts (`@mcbot/schema`) | [dev/contracts.md](dev/contracts.md) |
 | Running and writing tests | [dev/testing.md](dev/testing.md) |
 | Architectural decision log | [dev/decisions.md](dev/decisions.md) |
-| Wave 1 refactor: audit and summary | [dev/refactor/wave1-summary.md](dev/refactor/wave1-summary.md) |
 | Wave 2 (dashboard and Discord rework): what changed, what was deferred | [dev/wave2-summary.md](dev/wave2-summary.md) |
 | How Discord replies look and behave | [dev/bot/replies.md](dev/bot/replies.md) |
 | Dashboard frontend: tokens, components, routes, `t()` | [dev/web/frontend.md](dev/web/frontend.md) |

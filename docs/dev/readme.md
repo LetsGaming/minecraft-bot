@@ -35,9 +35,9 @@ is that every workspace depends on it, which makes it root material.
 
 ## Refactor records
 
-[refactor/](refactor/) holds the Wave 1 audit and its [summary](refactor/wave1-summary.md): what changed per phase, what was deferred, how it was verified and the cross-repo merge order.
+[wave2-summary.md](wave2-summary.md) records Wave 2 (the dashboard and Discord rework, 8.0.0): what changed per phase, which audit findings were closed, what was deferred, the limits of its verification and the owner decisions.
 
-[wave2-summary.md](wave2-summary.md) records Wave 2 (the dashboard and Discord rework, 8.0.0): what changed per phase, which audit findings were closed, what was deferred, the limits of its verification and the owner decisions. The Wave 2 working material (audit appendices, mockups, spike notes) is still under [refactor/](refactor/) until the owner confirms its removal; [wave2-cleanup-candidates.md](wave2-cleanup-candidates.md) lists it.
+The Wave 1 audit and summary (7.0.0) and the Wave 2 working material (audit appendices, mockups, spike notes, screenshots) were removed from the tree after release prep. They are in git history: `git log --diff-filter=D --name-only -- docs/dev/refactor` finds the commit that removed them, and its parent still has them.
 
 ## History
 

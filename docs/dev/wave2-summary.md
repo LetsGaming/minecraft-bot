@@ -8,11 +8,10 @@ the resulting rules are in [web/frontend.md](web/frontend.md) and
 [bot/replies.md](bot/replies.md); the user-facing changes are in
 `CHANGELOG.md` (under `[Unreleased]` until 8.0.0 is dated by the release).
 
-Finding ids (DASH-xx, DISC-xx) are those of the Wave 2 audit. Its appendices
-live under `docs/dev/refactor/wave2-audit/` until the working material is
-removed (see [wave2-cleanup-candidates.md](wave2-cleanup-candidates.md)); this
-page carries every id with a one-line description so it stays readable without
-them.
+Finding ids (DASH-xx, DISC-xx) are those of the Wave 2 audit. The audit
+appendices were removed from the tree with the other working material (they
+are in git history); this page carries every id with a one-line description so
+it stays readable without them.
 
 The base for every diff below is `e0357ec` (Wave 1, 7.0.0; there is no
 `v7.0.0` tag).
