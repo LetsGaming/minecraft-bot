@@ -46,6 +46,7 @@ and are used by both.
 | Topic | File |
 |---|---|
 | Slash commands: the middleware, autocomplete, adding one | [commands.md](commands.md) |
+| How replies look: builders, colours, errors, confirm rows, paging, mentions | [replies.md](replies.md) |
 | In-game `!commands` and the `defineCommand` framework | [in-game-commands.md](in-game-commands.md) |
 | Log watchers and scheduled tasks | [watchers.md](watchers.md) |
 
@@ -53,7 +54,7 @@ and are used by both.
 
 **Embeds come from the factories.** No naked `new EmbedBuilder()`, no raw
 `0x…` colour literals — `createEmbed` and friends from `utils/embeds/`, with
-colours from `EmbedColor`. The palette is a separate module from the builders
+colours from `EmbedColor` (see [replies.md](replies.md)). The palette is a separate module from the builders
 because it is pure data: tests can mock the builders and still get the real
 colours.
 

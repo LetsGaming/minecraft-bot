@@ -10,7 +10,7 @@
  * The snapshots are vitest tests under tests/bot/discordSnapshots/ that run
  * real commands, watchers and embed builders in English and German and write
  * JSON to tests/fixtures/discord-snapshots/. They also run in `npm test`.
- * See docs/dev/discord-replies.md for how to read them against the rules.
+ * See docs/dev/bot/replies.md for how to read them against the rules.
  */
 import { spawnSync } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";

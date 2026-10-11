@@ -2,7 +2,7 @@
  * Turns what the bot hands to discord.js into plain JSON for the Discord
  * snapshot fixtures under tests/fixtures/discord-snapshots/. Colours become
  * hex strings and button styles their names, so a fixture reads like the
- * mockup it is compared with (docs/dev/discord-replies.md).
+ * mockup it is compared with (docs/dev/bot/replies.md).
  */
 import path from "node:path";
 import { ButtonStyle, MessageFlags } from "discord.js";
