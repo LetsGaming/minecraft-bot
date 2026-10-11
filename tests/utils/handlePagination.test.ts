@@ -100,48 +100,6 @@ describe("handlePagination", () => {
     expect(prev.update).toHaveBeenCalled();
   });
 
-  it("navigates to first page when 'first' is pressed", async () => {
-    const collector = makeCollector();
-    const message = {
-      createMessageComponentCollector: vi.fn().mockReturnValue(collector),
-      edit: vi.fn(),
-    };
-    await handlePagination(
-      message as never,
-      { user: { id: "u1" }, ephemeral: false } as never,
-      [{}, {}, {}] as never,
-    );
-
-    const btn = {
-      user: { id: "u1" },
-      customId: "first",
-      update: vi.fn().mockResolvedValue(undefined),
-    };
-    await collector._trigger("collect", btn as never);
-    expect(btn.update).toHaveBeenCalled();
-  });
-
-  it("navigates to last page when 'last' is pressed", async () => {
-    const collector = makeCollector();
-    const message = {
-      createMessageComponentCollector: vi.fn().mockReturnValue(collector),
-      edit: vi.fn(),
-    };
-    await handlePagination(
-      message as never,
-      { user: { id: "u1" }, ephemeral: false } as never,
-      [{}, {}, {}] as never,
-    );
-
-    const btn = {
-      user: { id: "u1" },
-      customId: "last",
-      update: vi.fn().mockResolvedValue(undefined),
-    };
-    await collector._trigger("collect", btn as never);
-    expect(btn.update).toHaveBeenCalled();
-  });
-
   it("replies with rejection when the wrong user presses a button", async () => {
     const collector = makeCollector();
     const message = {
@@ -167,33 +125,54 @@ describe("handlePagination", () => {
     );
   });
 
-  it("removes buttons on 'end' when interaction is not ephemeral", async () => {
+  it("switches the buttons off on 'end' through the interaction", async () => {
     const collector = makeCollector();
     const message = {
       createMessageComponentCollector: vi.fn().mockReturnValue(collector),
-      edit: vi.fn().mockResolvedValue(undefined),
+      edit: vi.fn(),
+    };
+    const interaction = {
+      user: { id: "u1" },
+      ephemeral: false,
+      editReply: vi.fn().mockResolvedValue(undefined),
+    };
+    await handlePagination(message as never, interaction as never, [{}, {}] as never);
+    await collector._trigger("end");
+    const [[payload]] = interaction.editReply.mock.calls as [[{ components: { toJSON(): { components: { disabled?: boolean }[] } }[] }]];
+    const buttons = payload.components[0]!.toJSON().components;
+    expect(buttons).toHaveLength(3);
+    expect(buttons.every((b) => b.disabled)).toBe(true);
+    expect(message.edit).not.toHaveBeenCalled();
+  });
+
+  it("also switches off the buttons of an ephemeral reply", async () => {
+    const collector = makeCollector();
+    const message = {
+      createMessageComponentCollector: vi.fn().mockReturnValue(collector),
+      edit: vi.fn(),
+    };
+    const interaction = {
+      user: { id: "u1" },
+      ephemeral: true,
+      editReply: vi.fn().mockResolvedValue(undefined),
+    };
+    await handlePagination(message as never, interaction as never, [{} as never]);
+    await collector._trigger("end");
+    expect(interaction.editReply).toHaveBeenCalledTimes(1);
+  });
+
+  it("answers for three minutes", async () => {
+    const collector = makeCollector();
+    const message = {
+      createMessageComponentCollector: vi.fn().mockReturnValue(collector),
     };
     await handlePagination(
       message as never,
       { user: { id: "u1" }, ephemeral: false } as never,
       [{} as never],
     );
-    await collector._trigger("end");
-    expect(message.edit).toHaveBeenCalledWith({ components: [] });
-  });
-
-  it("skips removing buttons on 'end' when interaction IS ephemeral", async () => {
-    const collector = makeCollector();
-    const message = {
-      createMessageComponentCollector: vi.fn().mockReturnValue(collector),
-      edit: vi.fn(),
-    };
-    await handlePagination(
-      message as never,
-      { user: { id: "u1" }, ephemeral: true } as never,
-      [{} as never],
+    expect(message.createMessageComponentCollector).toHaveBeenCalledWith(
+      expect.objectContaining({ time: 180_000 }),
     );
-    await collector._trigger("end");
-    expect(message.edit).not.toHaveBeenCalled();
   });
 });

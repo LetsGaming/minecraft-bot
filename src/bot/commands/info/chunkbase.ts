@@ -44,9 +44,8 @@ export const execute = withErrorHandling(async (interaction) => {
   await interaction.editReply({
     embeds: [
       createEmbed({
-        title: t("chunkbase.title"),
+        title: t("chunkbase.title", { server: server.id }),
         description: t("chunkbase.open", { url }),
-        footer: { text: `${server.id} | ${interaction.user.tag}` },
       }),
     ],
   });

@@ -175,7 +175,7 @@ export async function ensureApplicationPrompts(
             createEmbed({
               title: t("wlapp.promptTitle"),
               description: t("wlapp.promptBody"),
-              color: EmbedColor.Success,
+              color: EmbedColor.Info,
             }),
           ],
           components: [
@@ -409,8 +409,7 @@ function buildQueueEmbed(
         ? EmbedColor.Success
         : app.status === "denied"
           ? EmbedColor.Error
-          : EmbedColor.Warning,
-    footer: { text: `wlapp:${app.id}` },
+          : EmbedColor.Pending,
   });
 }
 

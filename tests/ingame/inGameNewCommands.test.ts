@@ -175,13 +175,15 @@ describe("!report handler", () => {
     expect(send).toHaveBeenCalledTimes(1);
     const payload = send.mock.calls[0]![0] as {
       content?: string;
-      embeds: Array<{ data: { description?: string; footer?: { text: string } } }>;
+      allowedMentions?: unknown;
+      embeds: Array<{ data: { title?: string; description?: string } }>;
     };
     expect(payload.content).toBe("<@&role9>");
+    expect(payload.allowedMentions).toEqual({ parse: [], roles: ["role9"] });
     expect(payload.embeds[0]!.data.description).toContain(
       "lava griefing at spawn shop",
     );
-    expect(payload.embeds[0]!.data.footer?.text).toBe("smp");
+    expect(payload.embeds[0]!.data.title).toContain("smp");
     // Reporter got the green confirmation.
     const srv = server as { send: ReturnType<typeof vi.fn> };
     expect(

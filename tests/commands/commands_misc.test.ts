@@ -16,7 +16,8 @@ vi.mock("../../src/bot/utils/guild/guildRouter.js", () => ({
   resolveServer: vi.fn(),
 }));
 
-vi.mock("../../src/bot/utils/embeds/embedUtils.js", () => ({
+vi.mock("../../src/bot/utils/embeds/embedUtils.js", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   createEmbed: vi.fn().mockImplementation((opts) => ({
     _opts: opts,
     addFields: vi.fn().mockReturnThis(),

@@ -54,7 +54,6 @@ export const execute = withErrorHandling(async (interaction) => {
       `${t("activity.busiest", { tz })}\n` +
       (busyLines.length > 0 ? busyLines.join("\n") : t("activity.noBusyData")),
     color: EmbedColor.Info,
-    footer: { text: server.id },
   });
 
   await interaction.editReply({ embeds: [embed] });

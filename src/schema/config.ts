@@ -256,14 +256,24 @@ export interface GuildDowntimeAlertsConfig {
    * someone reads the channel.
    */
   mentionRole?: string;
+  /**
+   * When `mentionRole` is pinged. "always" (default): on every alert,
+   * including recoveries. "escalation": only on the first failure and when
+   * severity rises; recoveries and repeats are posted without a ping.
+   */
+  mentionPolicy?: MentionPolicy;
 }
+
+export type MentionPolicy = "always" | "escalation";
 
 export interface GuildTpsAlertsConfig {
   channelId?: string;
   /** One server ID, a list, or unset = every server this guild can see. */
   server?: ServerScope;
-  /** Role ID mentioned on every low-TPS alert in this guild. */
+  /** Role ID mentioned on low-TPS alerts in this guild. */
   mentionRole?: string;
+  /** When `mentionRole` is pinged; see `GuildDowntimeAlertsConfig.mentionPolicy`. */
+  mentionPolicy?: MentionPolicy;
 }
 
 export interface GuildChannelPurgeConfig {

@@ -1,8 +1,6 @@
-import {
-  SlashCommandBuilder,
-  MessageFlags,
-  type ChatInputCommandInteraction,
-} from "discord.js";
+import { SlashCommandBuilder } from "discord.js";
+import { createInfoEmbed, createSuccessEmbed } from "../../utils/embeds/embedUtils.js";
+import { withErrorHandling } from "../middleware.js";
 import { unlinkAccount } from "@mcbot/core/utils/stores/linkUtils.js";
 import { syncLinkedRole } from "../../utils/guild/linkedRole.js";
 
@@ -11,25 +9,19 @@ export const data = new SlashCommandBuilder()
   .setName("unlink")
   .setDescription("Unlink your Discord account from your Minecraft account");
 
-export async function execute(
-  interaction: ChatInputCommandInteraction,
-): Promise<void> {
-  const userId = interaction.user.id;
+export const execute = withErrorHandling(
+  async (interaction) => {
+    const userId = interaction.user.id;
+    const removed = await unlinkAccount(userId).catch(() => false);
+    if (!removed) {
+      await interaction.editReply({ embeds: [createInfoEmbed(t("link.notLinked"))] });
+      return;
+    }
 
-  // Atomic check-and-delete: no load/mutate/save round-trip to race.
-  const removed = await unlinkAccount(userId).catch(() => false);
-  if (!removed) {
-    await interaction.reply({
-      content: t("link.notLinked", {}, interaction.guildId ?? undefined),
-      flags: MessageFlags.Ephemeral,
+    await syncLinkedRole(interaction.client, userId, "remove");
+    await interaction.editReply({
+      embeds: [createSuccessEmbed(t("link.unlinked"), { title: t("link.unlinkedTitle") })],
     });
-    return;
-  }
-
-  // Remove the auto-assigned linked role again; never fails the unlink.
-  await syncLinkedRole(interaction.client, userId, "remove");
-  await interaction.reply({
-    content: t("link.unlinked", {}, interaction.guildId ?? undefined),
-    flags: MessageFlags.Ephemeral,
-  });
-}
+  },
+  { ephemeral: true },
+);

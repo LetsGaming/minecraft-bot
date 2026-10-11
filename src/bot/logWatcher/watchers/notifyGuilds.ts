@@ -23,6 +23,7 @@ import {
   type GuildConfigSource,
 } from "../../utils/guild/guildConfigs.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
+import { safeMentions } from "../../utils/embeds/alertUtils.js";
 
 // Shared player-name pattern source. \w+ alone silently drops Bedrock
 // players whose names Geyser/Floodgate prefixes with "." — every
@@ -75,7 +76,7 @@ export async function broadcastNotification(
       const embed = runWithGuildLocale(guildId, () =>
         buildEmbed(withServerFooter),
       );
-      await channel.send({ embeds: [embed] });
+      await channel.send({ embeds: [embed], allowedMentions: safeMentions("none") });
     } catch (err) {
       log.error(logTag, `Failed: ${errMsg(err)}`);
     }

@@ -15,7 +15,7 @@ Options in `(parentheses)` are optional. Commands that act on a server accept an
 | `/tps` | (`server`) | Current TPS. Paper-style servers show 1/5/15-minute averages, vanilla shows TPS plus MSPT and tick timing percentiles. |
 | `/backup` | (`server`) | Backup overview: count, age, and size of the latest backup per backup tier. |
 | `/whitelisted` | (`server`) | All whitelisted players, paginated. |
-| `/mods` | (`server`) | All installed server mods as clickable Modrinth links, grouped by whether you need to install them on your client. |
+| `/mods` | (`server`) | All installed server mods as clickable Modrinth links, grouped by whether you need to install them on your client. Large modpacks are split over pages. |
 | `/map` | | Link to the live web map (Dynmap/Bluemap), if the admin configured one. |
 
 ## Stats
@@ -49,7 +49,7 @@ See [linking.md](linking.md) for the walkthrough and what linking unlocks.
 
 | Command | Description |
 |---|---|
-| `/daily` | Claim your daily item reward. Needs a linked account and you must be online in Minecraft. |
+| `/daily` | Claim your daily item reward. Needs a linked account. If you are offline the reward is queued for your next join. The reply is only visible to you. |
 | `/daily-reminder` | Opt in/out of a DM when your next daily reward is ready (`enabled: true/false`). |
 | `/streak` | Your current streak, longest streak, and the next bonus milestone. |
 | `/daily-history` | Your recent claims on a server: date, streak at the time, and what dropped (last 30 are stored). |
@@ -86,6 +86,8 @@ See [daily-rewards.md](daily-rewards.md).
 
 `/server` (start/stop/restart/backup/status/prune-stats), `/whitelist`, `/verify`, `/unwhitelist`, `/config`, `/note` (admin notes on players, shown in `/whois`), `/challenge` (advancement challenges: first player to earn X wins), `/daily-admin` (move/reset/inspect daily-claim records per server), `/console` (log tail + live console relay), and the moderation shortcuts above are restricted to configured admins. They are documented in [../admin/permissions.md](../admin/permissions.md).
 
+`/server stop` and `/server restart` first ask for confirmation, visible only to you: the reply says how many players are online, and the action runs only after you press the red button. The buttons expire after 60 seconds. Once confirmed, a public message in the channel says who stopped or restarted the server and follows the progress. If you are not a bot admin, admin commands answer only to you, before anything is posted in the channel.
+
 `/config show` replies only to you. It lists the servers by host, the current guild's features and counts, and never prints the bot token or admin IDs.
 
 If the guild has whitelist applications configured, non-admins apply for the whitelist with a button (no command needed) — an admin reviews the application in the queue channel.
@@ -96,6 +98,14 @@ If the guild has whitelist applications configured, non-admins apply for the whi
 |---|---|
 | `/help` | All commands with their options, paginated, only visible to you. |
 | `/clear-dm` | Deletes the bot's own messages from your DM with it. Options: `amount` (omit for all) and `save_history` (sends a `.txt` copy of the deleted messages first). |
+
+## How replies look
+
+- **Errors** are only visible to you. They say what went wrong and what to do next, for example "`Steve` is not known on this server. Check the spelling or pick a name from the suggestions."
+- **Long lists** (`/players`, `/mods`, `/stats`, `/help`, ...) have a row of buttons: Previous, a grey "Page 2/5" and Next. After 3 minutes the buttons switch off but stay visible.
+- **Colours** match the dashboard: green for online and done, amber for "not responding" and warnings, red for offline and failures, grey for unknown and plain events (joins, leaves, deaths), violet for things waiting on you (confirmations, whitelist applications), blue for answers and running jobs.
+- **Server state** is the only emoji in a title: 🟢 online, 🟡 not responding, 🔴 offline, ⚪ unknown.
+- **Times** are Discord timestamps, so everyone sees them in their own time zone.
 
 ## Rate limit
 

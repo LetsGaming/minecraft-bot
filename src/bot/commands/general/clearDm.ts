@@ -113,7 +113,9 @@ export const execute = withErrorHandling(
       await sleep(DELETE_DELAY_MS);
     }
 
-    const embed = createSuccessEmbed(t("clearDm.deleted", { count: deleted }));
+    const embed = createSuccessEmbed(t("clearDm.deleted", { count: deleted }), {
+      title: t("clearDm.deletedTitle"),
+    });
     if (!saveHistory) {
       await interaction.editReply({ embeds: [embed] });
       return;

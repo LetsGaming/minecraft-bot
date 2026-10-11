@@ -50,6 +50,8 @@ export interface DowntimeState {
   crashLoopAlerted: boolean;
   suppressUntil: number;
   lastKnownState: ServerState | null;
+  /** First failed check of the current outage, for the recovery's duration. */
+  downSince?: number;
 }
 
 export interface JsonCacheEntry {

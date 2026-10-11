@@ -7,6 +7,10 @@ vi.mock("../../src/core/config.js", () => ({
 
 vi.mock("../../src/bot/utils/embeds/embedUtils.js", () => ({
   createErrorEmbed: vi.fn().mockReturnValue({ type: "error-embed" }),
+  createEmbed: vi.fn().mockReturnValue({ type: "denied-embed" }),
+}));
+vi.mock("../../src/bot/utils/hints/followUps.js", () => ({
+  attachFollowUpHint: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("../../src/core/utils/logger.js", () => ({
@@ -29,6 +33,7 @@ function makeInteraction(
     commandName?: string;
     deferred?: boolean;
     replied?: boolean;
+    ephemeral?: boolean;
   } = {},
 ): ChatInputCommandInteraction {
   return {
@@ -36,6 +41,8 @@ function makeInteraction(
     commandName: opts.commandName ?? "cmd",
     deferred: opts.deferred ?? false,
     replied: opts.replied ?? false,
+    ephemeral: opts.ephemeral ?? null,
+    isChatInputCommand: () => true,
     deferReply: vi.fn().mockResolvedValue(undefined),
     editReply: vi.fn().mockResolvedValue(undefined),
     reply: vi.fn().mockResolvedValue(undefined),
@@ -157,7 +164,7 @@ describe("requireServerAdmin", () => {
     expect(execute).toHaveBeenCalledWith(interaction);
   });
 
-  it("throws when the user is not an admin", async () => {
+  it("answers a non-admin with an ephemeral denial instead of running", async () => {
     vi.mocked(loadConfig).mockReturnValue({ adminUsers: [] } as ReturnType<
       typeof loadConfig
     >);
@@ -165,8 +172,9 @@ describe("requireServerAdmin", () => {
     const wrapped = requireServerAdmin(execute);
     const interaction = makeInteraction({ userId: "nobody" });
 
-    await expect(wrapped(interaction)).rejects.toThrow(
-      "You do not have permission to use this command.",
+    await wrapped(interaction);
+    expect(interaction.reply).toHaveBeenCalledWith(
+      expect.objectContaining({ embeds: [{ type: "denied-embed" }], flags: 64 }),
     );
     expect(execute).not.toHaveBeenCalled();
   });
@@ -209,10 +217,10 @@ describe("withErrorHandling", () => {
     expect(execute).toHaveBeenCalled();
   });
 
-  it("calls editReply with error embed when execute throws (deferred=true)", async () => {
+  it("calls editReply with error embed when execute throws (deferred ephemerally)", async () => {
     const execute = vi.fn().mockRejectedValue(new Error("boom"));
     const wrapped = withErrorHandling(execute);
-    const interaction = makeInteraction({ deferred: true });
+    const interaction = makeInteraction({ deferred: true, ephemeral: true });
 
     await wrapped(interaction);
 

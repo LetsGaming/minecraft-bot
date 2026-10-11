@@ -84,24 +84,25 @@ describe("buildComparisonEmbeds", () => {
     expect(embeds[0]!.toJSON().title).toContain("Alex");
   });
 
-  it("includes page numbering in titles", () => {
+  it("names both players in the title and leaves paging to the pager", () => {
     const embeds = buildComparisonEmbeds(
       player1Stats,
       player2Stats,
       "Steve",
       "Alex",
     );
-    expect(embeds[0]!.toJSON().title).toMatch(/Page \d+\/\d+/);
+    expect(embeds[0]!.toJSON().title).toBe("Steve compared with Alex");
   });
 
-  it("sets footer with shared stat count", () => {
+  it("states the shared stat count in the description", () => {
     const embeds = buildComparisonEmbeds(
       player1Stats,
       player2Stats,
       "Steve",
       "Alex",
     );
-    expect(embeds[0]!.toJSON().footer?.text).toContain("Shared stats");
+    expect(embeds[0]!.toJSON().description).toMatch(/shared stat/);
+    expect(embeds[0]!.toJSON().footer).toBeUndefined();
   });
 
   it("returns an empty array when stats share no fullKeys", () => {

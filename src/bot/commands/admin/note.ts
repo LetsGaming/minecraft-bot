@@ -224,13 +224,10 @@ export const execute = withErrorHandling(
       embeds: [
         createEmbed({
           title: t("note.listTitle", { player: resolved.name }),
-          description: lines.join("\n"),
-          footer: {
-            text: t("note.listFooter", {
-              count: notes.length,
-              max: MAX_NOTES_PER_PLAYER,
-            }),
-          },
+          description: `${lines.join("\n")}\n\n${t("note.listCount", {
+            count: notes.length,
+            max: MAX_NOTES_PER_PLAYER,
+          })}`,
         }),
       ],
     });

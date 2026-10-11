@@ -53,14 +53,11 @@ export const execute = withErrorHandling(
 
     const embed = createEmbed({
       title: t("dailyHistory.title", { server: server.id }),
-      description: lines.join("\n"),
+      description: `${lines.join("\n")}\n\n${t("dailyHistory.shown", {
+        shown: recent.length,
+        total: record.rewards.length,
+      })}`,
       color: EmbedColor.Info,
-      footer: {
-        text: t("dailyHistory.footer", {
-          shown: recent.length,
-          total: record.rewards.length,
-        }),
-      },
     });
 
     await interaction.editReply({ embeds: [embed] });

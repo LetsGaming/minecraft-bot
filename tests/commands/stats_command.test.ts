@@ -72,13 +72,20 @@ function makeInteraction(
   playerName = "Steve",
   filterStat: string | null = null,
 ): ChatInputCommandInteraction {
-  return {
+  const interaction = {
     user: { id: "user1" },
     commandName: "stats",
     deferred: false,
     replied: false,
-    deferReply: vi.fn().mockResolvedValue(undefined),
+    ephemeral: null as boolean | null,
+    deferReply: vi.fn().mockImplementation(async () => {
+      interaction.deferred = true;
+      interaction.ephemeral = false;
+    }),
     editReply: vi.fn().mockResolvedValue({ id: "msg1" }),
+    deleteReply: vi.fn().mockResolvedValue(undefined),
+    followUp: vi.fn().mockResolvedValue(undefined),
+    reply: vi.fn().mockResolvedValue(undefined),
     options: {
       getSubcommand: vi.fn().mockReturnValue(sub),
       getString: vi.fn().mockImplementation((name: string) => {
@@ -87,7 +94,8 @@ function makeInteraction(
         return null;
       }),
     },
-  } as unknown as ChatInputCommandInteraction;
+  };
+  return interaction as unknown as ChatInputCommandInteraction;
 }
 
 beforeEach(() => {
@@ -118,21 +126,22 @@ describe("stats execute — player subcommand", () => {
     );
   });
 
-  it("replies with error embed when player is not found", async () => {
+  it("answers only the invoker when the player is not found", async () => {
     vi.mocked(findPlayer).mockResolvedValue(null);
     const interaction = makeInteraction("player", "NotFound");
     await execute(interaction);
-    expect(interaction.editReply).toHaveBeenCalledWith(
-      expect.objectContaining({ embeds: expect.any(Array) }),
+    expect(interaction.deleteReply).toHaveBeenCalled();
+    expect(interaction.followUp).toHaveBeenCalledWith(
+      expect.objectContaining({ flags: 64, embeds: expect.any(Array) }),
     );
   });
 
-  it("replies with error embed when stats file is missing", async () => {
+  it("answers only the invoker when the stats file is missing", async () => {
     vi.mocked(loadStats).mockResolvedValue(null);
     const interaction = makeInteraction("player");
     await execute(interaction);
-    expect(interaction.editReply).toHaveBeenCalledWith(
-      expect.objectContaining({ embeds: expect.any(Array) }),
+    expect(interaction.followUp).toHaveBeenCalledWith(
+      expect.objectContaining({ flags: 64, embeds: expect.any(Array) }),
     );
   });
 
@@ -146,7 +155,9 @@ describe("stats execute — player subcommand", () => {
     vi.mocked(filterStats).mockReturnValue([]);
     const interaction = makeInteraction("player", "Steve", "xyzzy");
     await execute(interaction);
-    expect(interaction.editReply).toHaveBeenCalled();
+    expect(interaction.followUp).toHaveBeenCalledWith(
+      expect.objectContaining({ flags: 64, embeds: expect.any(Array) }),
+    );
   });
 });
 
@@ -163,7 +174,9 @@ describe("stats execute — daily subcommand", () => {
     vi.mocked(getSnapshotForDailyDiff).mockResolvedValue(null);
     const interaction = makeInteraction("daily");
     await execute(interaction);
-    expect(interaction.editReply).toHaveBeenCalled();
+    expect(interaction.followUp).toHaveBeenCalledWith(
+      expect.objectContaining({ flags: 64, embeds: expect.any(Array) }),
+    );
   });
 
   it("replies when snapshot exists and stats are computed", async () => {

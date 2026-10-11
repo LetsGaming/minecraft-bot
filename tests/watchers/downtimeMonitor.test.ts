@@ -480,3 +480,45 @@ describe("startDowntimeMonitor — no downtime alert guilds", () => {
     clearInterval(timer);
   });
 });
+
+// ── mention policy ─────────────────────────────────────────────────────────
+
+describe("startDowntimeMonitor: mention policy", () => {
+  function guildsWithRole(mentionPolicy?: string) {
+    return {
+      g1: {
+        downtimeAlerts: {
+          channelId: "ch1",
+          mentionRole: "42",
+          ...(mentionPolicy ? { mentionPolicy } : {}),
+        },
+      },
+    } as never;
+  }
+
+  async function downThenUp(mentionPolicy?: string) {
+    const id = uid();
+    const send = vi.fn().mockResolvedValue(undefined);
+    const srv = { id, getHealth: vi.fn().mockResolvedValue(health("offline")) } as never;
+    const timer = startDowntimeMonitor([srv], fakeClient(send), guildsWithRole(mentionPolicy));
+    for (let i = 0; i < 3; i++) await vi.advanceTimersByTimeAsync(TICK);
+    vi.mocked(srv.getHealth).mockResolvedValue(health("online"));
+    await vi.advanceTimersByTimeAsync(TICK);
+    clearInterval(timer);
+    return send.mock.calls.map(([payload]) => payload as { content?: string; allowedMentions: unknown });
+  }
+
+  it("pings on the outage and the recovery by default, as before", async () => {
+    const [down, up] = await downThenUp();
+    expect(down!.content).toBe("<@&42>");
+    expect(up!.content).toBe("<@&42>");
+    expect(down!.allowedMentions).toEqual({ parse: [], roles: ["42"] });
+  });
+
+  it("escalation pings the outage only and posts the recovery silently", async () => {
+    const [down, up] = await downThenUp("escalation");
+    expect(down!.content).toBe("<@&42>");
+    expect(up!.content).toBeUndefined();
+    expect(up!.allowedMentions).toEqual({ parse: [] });
+  });
+});

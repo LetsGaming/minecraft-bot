@@ -1,11 +1,13 @@
 import { SlashCommandBuilder } from "discord.js";
-import { createEmbed } from "../../utils/embeds/embedUtils.js";
+import { createEmbed, createInfoEmbed } from "../../utils/embeds/embedUtils.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { withErrorHandling } from "../middleware.js";
+import { relativeTimestamp } from "../../utils/discordTime.js";
 import * as serverAccess from "@mcbot/core/utils/server/serverAccess.js";
 import { requireCapability } from "@mcbot/core/utils/server/capabilities.js";
+import { resolveLanguage, t } from "@mcbot/core/utils/i18n.js";
+import { backupTierLabel } from "@mcbot/schema/glossary.js";
 
-import { t } from "@mcbot/core/utils/i18n.js";
 export const data = new SlashCommandBuilder()
   .setName("backup")
   .setDescription("Show backup status for a server")
@@ -15,37 +17,41 @@ export const data = new SlashCommandBuilder()
 
 export const execute = withErrorHandling(async (interaction) => {
   const server = resolveServer(interaction);
-  // Friendly gate instead of an empty/raw error on plain servers.
-  requireCapability(server, (c) => c.backups, "the suite backup layout");
+  requireCapability(server, (c) => c.backups, t("capability.feature.backups"));
 
   const { dirs, totalBytes } = await serverAccess.readBackups(server.config);
+  const title = t("backup.title", { server: server.id });
 
-  if (dirs.length === 0) throw new Error(t("backup.none"));
+  if (dirs.length === 0) {
+    await interaction.editReply({ embeds: [createInfoEmbed(t("backup.none"), { title })] });
+    return;
+  }
 
-  // The one number that matters when things go wrong: how old is the
-  // newest backup across ALL tiers (hourly wins normally; if it stops,
-  // this line is where you notice).
+  // The one number that matters when things go wrong: how old the newest
+  // backup is across all tiers.
   const newest = dirs.reduce((a, b) =>
     a.latestMtime.getTime() >= b.latestMtime.getTime() ? a : b,
   );
-  const newestMb = (newest.latestSizeBytes / 1048576).toFixed(1);
+  const count = dirs.reduce((n, b) => n + b.count, 0);
 
   const embed = createEmbed({
-    title: t("backup.title", { server: server.id }),
+    title,
     description: t("backup.summary", {
-      age: getAge(newest.latestMtime),
-      size: newestMb,
-      dir: newest.dir,
-      total: (totalBytes / 1073741824).toFixed(2),
+      count,
+      total: formatSize(totalBytes),
+      age: since(newest.latestMtime),
     }),
   });
 
+  const language = resolveLanguage();
   for (const b of dirs) {
-    const sizeMb = (b.latestSizeBytes / 1048576).toFixed(1);
-    const age = getAge(b.latestMtime);
     embed.addFields({
-      name: b.dir.replace("archives/", "📁 "),
-      value: t("backup.entry", { count: b.count, age, size: sizeMb }),
+      name: backupTierLabel(b.dir, language),
+      value: t("backup.entry", {
+        count: b.count,
+        age: since(b.latestMtime),
+        size: formatSize(b.latestSizeBytes),
+      }),
       inline: true,
     });
   }
@@ -53,9 +59,11 @@ export const execute = withErrorHandling(async (interaction) => {
   await interaction.editReply({ embeds: [embed] });
 });
 
-function getAge(date: Date): string {
-  const s = Math.floor((Date.now() - date.getTime()) / 1000);
-  if (s < 3600) return `${Math.floor(s / 60)}m`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h`;
-  return `${Math.floor(s / 86400)}d`;
+function since(date: Date): string {
+  return relativeTimestamp(date.getTime());
+}
+
+function formatSize(bytes: number): string {
+  const gb = bytes / 1073741824;
+  return gb >= 1 ? `${gb.toFixed(2)} GB` : `${(bytes / 1048576).toFixed(1)} MB`;
 }

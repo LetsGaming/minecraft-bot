@@ -28,7 +28,7 @@ import {
 } from "@mcbot/core/utils/server/hostResources.js";
 import type { DiskUsage } from "@mcbot/core/utils/server/hostResources.js";
 import { t, runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
-import { roleMention } from "../../../utils/embeds/alertUtils.js";
+import { alertMention, type AlertLevel } from "../../../utils/embeds/alertUtils.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 import type { GuildConfig } from "@mcbot/core/types/index.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
@@ -148,8 +148,8 @@ async function checkServer(
         "hostAlerts",
         `${server.id}: ${usage.path} at ${usage.filesystem.usedPercent}% (threshold ${threshold}%)`,
       );
-      await broadcast(client, guildsWithAlerts, server.id, () => ({
-        title: t("hostAlerts.diskFullTitle"),
+      await broadcast(client, guildsWithAlerts, server.id, ["ok", "error"], () => ({
+        title: t("hostAlerts.diskFullTitle", { server: server.id }),
         description: t("hostAlerts.diskFull", {
           server: server.id,
           path: usage.path,
@@ -163,8 +163,8 @@ async function checkServer(
       usage.filesystem.usedPercent <= threshold - HYSTERESIS_PERCENT
     ) {
       alertState.set(key, false);
-      await broadcast(client, guildsWithAlerts, server.id, () => ({
-        title: t("hostAlerts.diskOkTitle"),
+      await broadcast(client, guildsWithAlerts, server.id, ["error", "ok"], () => ({
+        title: t("hostAlerts.diskOkTitle", { server: server.id }),
         description: t("hostAlerts.diskOk", {
           server: server.id,
           path: usage.path,
@@ -212,8 +212,8 @@ async function checkBackupAge(
       "hostAlerts",
       `${server.id}: newest backup is ${ageHours.toFixed(1)}h old (threshold ${maxAgeHours}h)`,
     );
-    await broadcast(client, guildsWithAlerts, server.id, () => ({
-      title: t("backupAlert.staleTitle"),
+    await broadcast(client, guildsWithAlerts, server.id, ["ok", "error"], () => ({
+      title: t("backupAlert.staleTitle", { server: server.id }),
       description: t("backupAlert.stale", {
         server: server.id,
         age: ageHours.toFixed(1),
@@ -223,8 +223,8 @@ async function checkBackupAge(
     }));
   } else if (alerted && ageHours < maxAgeHours) {
     backupAlertState.set(server.id, false);
-    await broadcast(client, guildsWithAlerts, server.id, () => ({
-      title: t("backupAlert.freshTitle"),
+    await broadcast(client, guildsWithAlerts, server.id, ["error", "ok"], () => ({
+      title: t("backupAlert.freshTitle", { server: server.id }),
       description: t("backupAlert.fresh", {
         server: server.id,
         age: ageHours < 1 ? "<1" : ageHours.toFixed(1),
@@ -238,6 +238,7 @@ export async function broadcast(
   client: Client,
   guildsWithAlerts: Array<[string, GuildConfig]>,
   serverId: string,
+  levels: [AlertLevel, AlertLevel],
   buildEmbedOpts: () => { title: string; description: string; color: number },
   logTag = "hostAlerts",
 ): Promise<void> {
@@ -253,8 +254,8 @@ export async function broadcast(
       // factory resolve this guild's language.
       const embedOpts = runWithGuildLocale(guildId, buildEmbedOpts);
       await channel.send({
-        embeds: [createEmbed({ ...embedOpts, footer: { text: serverId } })],
-        ...roleMention(alertCfg.mentionRole),
+        embeds: [createEmbed({ ...embedOpts, timestamp: true })],
+        ...alertMention(alertCfg.mentionRole, alertCfg.mentionPolicy, ...levels),
       });
     } catch (err) {
       log.error(logTag, `Failed to send alert: ${errMsg(err)}`);

@@ -116,6 +116,7 @@ export const execute = withErrorHandling(
         embeds: [
           createSuccessEmbed(
             t("config.reloaded", { details: codeBlock(lines.join("\n")) }),
+            { title: t("config.reloadedTitle") },
           ),
         ],
       });
@@ -163,7 +164,7 @@ export const execute = withErrorHandling(
 
     const embed = createEmbed({
       title: t("config.title"),
-      color: EmbedColor.Blurple,
+      color: EmbedColor.Info,
     });
 
     embed.addFields(

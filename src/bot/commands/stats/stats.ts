@@ -1,6 +1,7 @@
 import {
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
+  type EmbedBuilder,
 } from "discord.js";
 import { loadStats, flattenStats, filterStats } from "@mcbot/core/utils/minecraft/statUtils.js";
 import { getSnapshotForDailyDiff } from "@mcbot/core/utils/minecraft/snapshotUtils.js";
@@ -11,10 +12,11 @@ import { log } from "@mcbot/core/utils/logger.js";
 import {
   createPaginationButtons,
   handlePagination,
-  createErrorEmbed,
 } from "../../utils/embeds/embedUtils.js";
+import { withErrorHandling } from "../middleware.js";
+import { noStatsYet, playerNotFound } from "./statErrors.js";
 import type { FlattenedStat } from "@mcbot/core/types/index.js";
-import { errMsg } from "@mcbot/core/utils/error.js";
+import { CommandError, errMsg } from "@mcbot/core/utils/error.js";
 
 import { t } from "@mcbot/core/utils/i18n.js";
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -69,205 +71,114 @@ export const data = new SlashCommandBuilder()
       ),
   );
 
-export async function execute(
-  interaction: ChatInputCommandInteraction,
-): Promise<void> {
+export const execute = withErrorHandling(async (interaction) => {
   const sub = interaction.options.getSubcommand();
   if (sub === "daily") {
     await runDaily(interaction);
   } else {
     await runPlayer(interaction);
   }
+});
+
+async function replyPaged(
+  interaction: ChatInputCommandInteraction,
+  embeds: EmbedBuilder[],
+): Promise<void> {
+  if (embeds.length === 1) {
+    await interaction.editReply({ embeds });
+    return;
+  }
+  const message = await interaction.editReply({
+    embeds: [embeds[0]!],
+    components: [createPaginationButtons(0, embeds.length)],
+  });
+  await handlePagination(message, interaction, embeds);
 }
 
 /**
- * Original /stats behaviour — full all-time stats.
+ * All-time stats, optionally filtered by category or stat id.
  */
 async function runPlayer(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
-  await interaction.deferReply();
-
   const server = resolveServer(interaction);
   const playerName = interaction.options.getString("player", true);
   const filterStat = interaction.options.getString("stat");
 
-  try {
-    const player = await findPlayer(playerName, server);
-    if (!player) {
-      await interaction.editReply({
-        embeds: [
-          createErrorEmbed(t("common.playerNotFound", { player: playerName }), {
-            footer: { text: t("common.playerNotFoundFooter") },
-            timestamp: new Date(),
-          }),
-        ],
-      });
-      return;
-    }
+  const player = await findPlayer(playerName, server);
+  if (!player) throw playerNotFound(playerName);
 
-    const statsFile = await loadStats(player.uuid, server);
-    if (!statsFile) {
-      await interaction.editReply({
-        embeds: [
-          createErrorEmbed(t("stats.fileNotFound", { player: playerName }), {
-            footer: { text: t("stats.fileNotFoundFooter") },
-            timestamp: new Date(),
-          }),
-        ],
-      });
-      return;
-    }
-
-    let flattened = flattenStats(statsFile);
-    flattened = filterStats(flattened, filterStat);
-
-    if (flattened.length === 0) {
-      await interaction.editReply({
-        embeds: [
-          createErrorEmbed(t("stats.noMatch", { filter: filterStat }), {
-            footer: { text: t("stats.noMatchFooter") },
-            timestamp: new Date(),
-          }),
-        ],
-      });
-      return;
-    }
-
-    const embeds = buildStatsEmbeds(flattened, playerName);
-
-    if (embeds.length === 1) {
-      await interaction.editReply({ embeds });
-    } else {
-      const message = await interaction.editReply({
-        embeds: [embeds[0]!],
-        components: [createPaginationButtons(0, embeds.length)],
-      });
-
-      await handlePagination(message, interaction, embeds);
-    }
-  } catch (err) {
+  const statsFile = await loadStats(player.uuid, server).catch((err: unknown) => {
     log.error("stats", errMsg(err));
-    await interaction.editReply({
-      embeds: [createErrorEmbed(t("stats.failed"))],
+    throw new CommandError({ problem: t("stats.failed"), recovery: t("common.retryLater") });
+  });
+  if (!statsFile) throw noStatsYet(playerName);
+
+  const flattened = filterStats(flattenStats(statsFile), filterStat);
+  if (flattened.length === 0) {
+    throw new CommandError({
+      title: t("stats.noMatchTitle"),
+      problem: t("stats.noMatch", { filter: filterStat }),
+      recovery: t("stats.noMatchRecovery"),
     });
   }
+
+  await replyPaged(interaction, buildStatsEmbeds(flattened, playerName));
 }
 
 /**
- * /stats daily — diff current stats against snapshot from ~24h ago.
+ * /stats daily: diff current stats against the snapshot from about 24 h ago.
  * Stats present now but missing in the baseline (or with value 0) count
- * as fully gained. Only positive deltas are shown — a server-side reset
+ * as fully gained. Only positive deltas are shown; a server-side reset
  * could produce negative values which are meaningless in this context.
  */
 async function runDaily(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
-  await interaction.deferReply();
-
   const server = resolveServer(interaction);
   const playerName = interaction.options.getString("player", true);
   const filterStat = interaction.options.getString("stat");
 
-  try {
-    const player = await findPlayer(playerName, server);
-    if (!player) {
-      await interaction.editReply({
-        embeds: [
-          createErrorEmbed(t("common.playerNotFound", { player: playerName }), {
-            footer: { text: t("common.playerNotFoundFooter") },
-            timestamp: new Date(),
-          }),
-        ],
-      });
-      return;
-    }
+  const player = await findPlayer(playerName, server);
+  if (!player) throw playerNotFound(playerName);
 
-    const statsFile = await loadStats(player.uuid, server);
-    if (!statsFile) {
-      await interaction.editReply({
-        embeds: [
-          createErrorEmbed(t("stats.fileNotFound", { player: playerName }), {
-            footer: { text: t("stats.fileNotFoundFooter") },
-            timestamp: new Date(),
-          }),
-        ],
-      });
-      return;
-    }
+  const statsFile = await loadStats(player.uuid, server);
+  if (!statsFile) throw noStatsYet(playerName);
 
-    const snapshot = await getSnapshotForDailyDiff(
-      server.id,
-      Date.now() - DAY_MS,
-    );
-    if (!snapshot || !snapshot.flatStats) {
-      await interaction.editReply({
-        embeds: [
-          createErrorEmbed(
-            t("stats.noSnapshot"),
-            {
-              footer: { text: t("stats.noSnapshotFooter") },
-              timestamp: new Date(),
-            },
-          ),
-        ],
-      });
-      return;
-    }
-
-    const baseline = snapshot.flatStats[player.uuid] ?? {};
-    const current = flattenStats(statsFile);
-
-    // Diff current state against baseline. Stats not in baseline default to 0
-    // (which usually means "didn't exist yet for this player") so the full
-    // current value counts as gained. Drop zero/negative deltas.
-    const delta: FlattenedStat[] = [];
-    for (const stat of current) {
-      const before = baseline[stat.fullKey] ?? 0;
-      const diff = stat.value - before;
-      if (diff <= 0) continue;
-      delta.push({ ...stat, value: diff });
-    }
-
-    let filtered = filterStats(delta, filterStat);
-
-    if (filtered.length === 0) {
-      const reason = filterStat
-        ? t("stats.noChangeFiltered", { filter: filterStat })
-        : t("stats.noChange", { player: playerName });
-      await interaction.editReply({
-        embeds: [
-          createErrorEmbed(reason, {
-            footer: { text: t("stats.noActivityFooter") },
-            timestamp: new Date(),
-          }),
-        ],
-      });
-      return;
-    }
-
-    // Show how old the baseline actually is — if the bot just started,
-    // it might be much less than 24h, and the user should know.
-    const ageHours = (Date.now() - snapshot.timestamp) / (60 * 60 * 1000);
-    const embeds = buildStatsEmbeds(
-      filtered,
-      t("stats.dailyLabel", { player: playerName, hours: ageHours.toFixed(1) }),
-    );
-
-    if (embeds.length === 1) {
-      await interaction.editReply({ embeds });
-    } else {
-      const message = await interaction.editReply({
-        embeds: [embeds[0]!],
-        components: [createPaginationButtons(0, embeds.length)],
-      });
-
-      await handlePagination(message, interaction, embeds);
-    }
-  } catch (err) {
-    log.error("stats", errMsg(err));
-    await interaction.editReply({
-      embeds: [createErrorEmbed(t("stats.dailyFailed"))],
+  const snapshot = await getSnapshotForDailyDiff(server.id, Date.now() - DAY_MS);
+  if (!snapshot || !snapshot.flatStats) {
+    throw new CommandError({
+      title: t("stats.noSnapshotTitle"),
+      problem: t("stats.noSnapshot"),
+      recovery: t("stats.noSnapshotRecovery"),
     });
   }
+
+  const baseline = snapshot.flatStats[player.uuid] ?? {};
+  const delta: FlattenedStat[] = [];
+  for (const stat of flattenStats(statsFile)) {
+    const diff = stat.value - (baseline[stat.fullKey] ?? 0);
+    if (diff > 0) delta.push({ ...stat, value: diff });
+  }
+
+  const filtered = filterStats(delta, filterStat);
+  if (filtered.length === 0) {
+    throw new CommandError({
+      title: t("stats.noActivityTitle"),
+      problem: filterStat
+        ? t("stats.noChangeFiltered", { filter: filterStat })
+        : t("stats.noChange", { player: playerName }),
+    });
+  }
+
+  // The baseline can be younger than 24 h right after a bot start; the label
+  // says how old it really is.
+  const ageHours = (Date.now() - snapshot.timestamp) / (60 * 60 * 1000);
+  await replyPaged(
+    interaction,
+    buildStatsEmbeds(
+      filtered,
+      t("stats.dailyLabel", { player: playerName, hours: ageHours.toFixed(1) }),
+    ),
+  );
 }

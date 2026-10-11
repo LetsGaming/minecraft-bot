@@ -62,7 +62,7 @@ describe("resolveServer through the real chain", () => {
   it("rejects an explicit unknown server", () => {
     setup(["a"], { g1: { defaultServer: "a" } } as never);
     expect(() => resolveServer(interaction({ server: "zzz", guildId: "g1" }))).toThrow(
-      /not found/,
+      /No server called/,
     );
   });
 
@@ -112,7 +112,7 @@ describe("resolveServer through the real chain", () => {
   it("denies a multi-guild DM for non-operators even with one server", () => {
     setup(["a"], { g1: { defaultServer: "a" }, g2: {} } as never);
     expect(() => resolveServer(interaction({ guildId: null }))).toThrow(
-      /inside a Discord server/,
+      /in a Discord server/,
     );
   });
 

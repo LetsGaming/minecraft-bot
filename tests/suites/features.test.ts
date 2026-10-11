@@ -83,12 +83,12 @@ beforeEach(() => {
 
 describe("i18n t()", () => {
   it("resolves English by default", () => {
-    expect(t("common.serverNotFound")).toBe("Server not found.");
+    expect(t("common.serverNotFound")).toBe("That server does not exist. Pick one from the suggestions.");
   });
 
   it("resolves German when config.language is de", () => {
     mockConfig.language = "de";
-    expect(t("common.serverNotFound")).toBe("Server nicht gefunden.");
+    expect(t("common.serverNotFound")).toBe("Diesen Server gibt es nicht. Nimm einen aus den Vorschlägen.");
   });
 
   it("falls back to English for keys missing in the active locale", () => {
@@ -97,7 +97,7 @@ describe("i18n t()", () => {
     // All current keys are translated; assert the chain via unknown locale
     // value handling instead:
     mockConfig.language = "fr"; // unsupported → en
-    expect(t("common.serverNotFound")).toBe("Server not found.");
+    expect(t("common.serverNotFound")).toBe("That server does not exist. Pick one from the suggestions.");
   });
 
   it("returns the key itself when unknown everywhere", () => {
@@ -108,18 +108,18 @@ describe("i18n t()", () => {
     expect(t("common.invalidUsername", { username: "Bob" })).toBe(
       "**Bob** is not a valid Minecraft username.",
     );
-    expect(t("whois.title", {})).toBe("Whois — {username}");
+    expect(t("whois.title", {})).toBe("Whois: {username}");
   });
 
   it("prefers guilds.<id>.language over the global language", () => {
     mockConfig.language = "en";
     (mockConfig.guilds as Record<string, unknown>)["g1"] = { language: "de" };
     expect(t("common.serverNotFound", undefined, "g1")).toBe(
-      "Server nicht gefunden.",
+      "Diesen Server gibt es nicht. Nimm einen aus den Vorschlägen.",
     );
     // Unknown guild → global.
     expect(t("common.serverNotFound", undefined, "g2")).toBe(
-      "Server not found.",
+      "That server does not exist. Pick one from the suggestions.",
     );
     delete (mockConfig.guilds as Record<string, unknown>)["g1"];
   });
@@ -131,16 +131,16 @@ describe("i18n t()", () => {
     const ambient = runWithGuildLocale("g-de", () =>
       t("common.serverNotFound"),
     );
-    expect(ambient).toBe("Server nicht gefunden.");
+    expect(ambient).toBe("Diesen Server gibt es nicht. Nimm einen aus den Vorschlägen.");
 
     // Explicit argument overrides the ambient context.
     const explicit = runWithGuildLocale("g-de", () =>
       t("common.serverNotFound", undefined, "unknown-guild"),
     );
-    expect(explicit).toBe("Server not found.");
+    expect(explicit).toBe("That server does not exist. Pick one from the suggestions.");
 
     // Outside any context: global language.
-    expect(t("common.serverNotFound")).toBe("Server not found.");
+    expect(t("common.serverNotFound")).toBe("That server does not exist. Pick one from the suggestions.");
     delete (mockConfig.guilds as Record<string, unknown>)["g-de"];
   });
 });
@@ -387,6 +387,7 @@ describe("/whois command", () => {
       commandName: "whois",
       deferred: false,
       replied: false,
+      isChatInputCommand: () => true,
       deferReply: vi.fn().mockResolvedValue(undefined),
       editReply: vi.fn().mockResolvedValue(undefined),
       reply: vi.fn().mockResolvedValue(undefined),
@@ -454,7 +455,9 @@ describe("/whois command", () => {
     const interaction = makeInteraction("Steve");
     (interaction as { user: { id: string } }).user.id = "rando";
     await execute(interaction);
-    expect(errorText(interaction)).toMatch(/permission/);
+    expect(errorText(interaction)).toMatch(/for bot admins/);
+    // The denial comes before the defer, so nothing public is ever posted.
+    expect((interaction as { deferReply: ReturnType<typeof vi.fn> }).deferReply).not.toHaveBeenCalled();
     expect(getAuditEntry).not.toHaveBeenCalled();
   });
 });

@@ -103,7 +103,7 @@ export const execute = withErrorHandling(
       store.watches = store.watches.filter((w) => w !== watch);
       await saveWatchStore(store);
       await interaction.editReply({
-        embeds: [createSuccessEmbed(t("watch.removed", { id }))],
+        embeds: [createSuccessEmbed(t("watch.removed", { id }), { title: t("watch.removedTitle") })],
       });
       return;
     }
@@ -141,9 +141,9 @@ export const execute = withErrorHandling(
       await saveWatchStore(store);
       await interaction.editReply({
         embeds: [
-          createSuccessEmbed(
-            t("watch.playerArmed", { player, server: server.id }),
-          ),
+          createSuccessEmbed(t("watch.playerArmed", { player, server: server.id }), {
+            title: t("watch.armedTitle"),
+          }),
         ],
       });
       return;
@@ -163,7 +163,9 @@ export const execute = withErrorHandling(
     await saveWatchStore(store);
     await interaction.editReply({
       embeds: [
-        createSuccessEmbed(t("watch.serverArmed", { server: server.id })),
+        createSuccessEmbed(t("watch.serverArmed", { server: server.id }), {
+          title: t("watch.armedTitle"),
+        }),
       ],
     });
   },
