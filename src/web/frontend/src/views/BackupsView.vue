@@ -1,17 +1,17 @@
 <template>
   <div class="backups-view">
     <ViewHeader
-      :title="COPY.title"
+      :title="t('backups.title')"
       :server="current"
       :server-state="serverRole"
     >
       <template v-if="current" #subtitle>
-        {{ COPY.purposeBefore }} <strong>{{ current }}</strong>. {{ COPY.purposeAfter(current) }}
+        {{ t("backups.purposeBefore") }} <strong>{{ current }}</strong>. {{ t("backups.purposeAfter", { server: current }) }}
       </template>
     </ViewHeader>
 
     <EmptyState v-if="serverIds.length === 0" icon="pi pi-server">
-      {{ COPY.noServers }}
+      {{ t("backups.noServers") }}
     </EmptyState>
 
     <template v-else>
@@ -21,9 +21,9 @@
         </InlineBanner>
 
         <StaleBanner :stale="stale">
-          {{ COPY.staleText(staleAt, current) }}
+          {{ t("backups.staleText", { at: staleAt, server: current }) }}
           <template #actions>
-            <Button class="tap" :label="COPY.retry" size="small" outlined :loading="loading" @click="reload" />
+            <Button class="tap" :label="t('backups.action.retry')" size="small" outlined :loading="loading" @click="reload" />
           </template>
         </StaleBanner>
 
@@ -41,47 +41,47 @@
             <Button
               v-if="job.state === 'failed' && job.kind === 'create'"
               class="tap"
-              :label="COPY.tryAgain"
+              :label="t('backups.action.tryAgain')"
               size="small"
               @click="createBackup"
             />
             <Button
               v-if="job.kind === 'restore'"
               class="tap"
-              :label="COPY.openServers"
+              :label="t('backups.action.openServers')"
               size="small"
               :outlined="job.state === 'failed'"
               @click="openServers"
             />
-            <Button class="tap" :label="COPY.dismiss" size="small" severity="secondary" text @click="job = null" />
+            <Button class="tap" :label="t('backups.action.dismiss')" size="small" severity="secondary" text @click="job = null" />
           </template>
         </JobBlock>
 
         <div v-if="metrics" class="metrics">
           <div class="metric">
             <span class="metric-n">{{ metrics.count }}</span>
-            <span class="metric-l">{{ COPY.metricCount(current) }}</span>
+            <span class="metric-l">{{ t("backups.metric.count", { server: current }) }}</span>
           </div>
           <div v-if="metrics.bytes !== null" class="metric">
             <span class="metric-n">{{ formatBytes(metrics.bytes) }}</span>
-            <span class="metric-l">{{ COPY.metricBytes }}</span>
+            <span class="metric-l">{{ t("backups.metric.bytes") }}</span>
           </div>
           <div v-if="metrics.newest !== null" class="metric">
             <span class="metric-n" :title="timestampTitle(metrics.newest)">{{ relativeAge(metrics.newest) }}</span>
-            <span class="metric-l">{{ COPY.metricNewest }}</span>
+            <span class="metric-l">{{ t("backups.metric.newest") }}</span>
           </div>
         </div>
 
         <div class="layout">
           <section class="card list-card" aria-labelledby="backups-list-h" :aria-busy="loading ? 'true' : undefined">
             <div class="card-head">
-              <h2 id="backups-list-h">{{ COPY.listTitle }} <span class="mono">{{ current }}</span></h2>
+              <h2 id="backups-list-h">{{ t("backups.list.title") }} <span class="mono">{{ current }}</span></h2>
               <span class="card-meta">{{ listMeta }}</span>
               <span class="cluster">
                 <Button
                   class="tap"
                   icon="pi pi-refresh"
-                  :label="COPY.reload"
+                  :label="t('backups.action.reload')"
                   size="small"
                   severity="secondary"
                   outlined
@@ -92,7 +92,7 @@
                   v-if="createAvailable"
                   class="tap"
                   icon="pi pi-plus"
-                  :label="COPY.create"
+                  :label="t('backups.action.create')"
                   size="small"
                   :disabled="!canCreate || jobRunning"
                   @click="createBackup"
@@ -100,7 +100,7 @@
               </span>
             </div>
 
-            <div v-if="filterChips.length > 1 && files.length" class="filters" role="group" :aria-label="COPY.filterLabel">
+            <div v-if="filterChips.length > 1 && files.length" class="filters" role="group" :aria-label="t('backups.filter.label')">
               <button
                 v-for="chip in filterChips"
                 :key="chip.key"
@@ -114,31 +114,31 @@
             </div>
 
             <div v-if="initialLoad && loading" class="skeleton" role="status">
-              <span class="sr-only">{{ COPY.loading(current) }}</span>
+              <span class="sr-only">{{ t("backups.list.loading", { server: current }) }}</span>
               <span v-for="n in 5" :key="n" class="sk-row" aria-hidden="true" />
             </div>
 
             <InlineError
               v-else-if="error && files.length === 0"
-              :title="COPY.errorTitle"
-              :recovery="COPY.errorRecovery(current)"
+              :title="t('backups.error.title')"
+              :recovery="t('backups.error.recovery', { server: current })"
               :detail="errorDetail"
               :busy="loading"
               @retry="reload"
             >
               <template #actions>
-                <Button class="tap" :label="COPY.openServers" size="small" outlined @click="openServers" />
+                <Button class="tap" :label="t('backups.action.openServers')" size="small" outlined @click="openServers" />
               </template>
             </InlineError>
 
             <EmptyState
               v-else-if="files.length === 0"
               icon="pi pi-box"
-              :title="COPY.emptyTitle(current)"
+              :title="t('backups.empty.title', { server: current })"
             >
-              {{ COPY.emptyText }}
+              {{ t("backups.empty.text") }}
               <template v-if="createAvailable && canCreate" #action>
-                <Button class="tap" icon="pi pi-plus" :label="COPY.create" :disabled="jobRunning" @click="createBackup" />
+                <Button class="tap" icon="pi pi-plus" :label="t('backups.action.create')" :disabled="jobRunning" @click="createBackup" />
               </template>
             </EmptyState>
 
@@ -146,15 +146,15 @@
               <ResponsiveTable
                 :columns="columns"
                 :rows="visibleFiles"
-                :caption="COPY.caption(current)"
+                :caption="t('backups.list.caption', { server: current })"
                 :row-key="(f: BackupFileInfo) => f.id"
                 :busy="(f: BackupFileInfo) => isBusy(f.id)"
-                :actions-label="COPY.actions"
+                :actions-label="t('backups.actions')"
                 :actions-label-visible="false"
               >
                 <template #cell-name="{ row }">
                   <span class="file-name mono">{{ row.name }}</span>
-                  <span v-if="newIds.includes(row.id)" class="tag tag-new">{{ COPY.newTag }}</span>
+                  <span v-if="newIds.includes(row.id)" class="tag tag-new">{{ t("backups.newTag") }}</span>
                 </template>
                 <template #cell-tier="{ row }">
                   <span :class="['tag', tierClass(row.tier)]">{{ backupTierLabel(row.tier) }}</span>
@@ -179,19 +179,19 @@
                       size="small"
                       severity="secondary"
                       text
-                      :aria-label="`${COPY.download} ${stem(row.name)}`"
-                      v-tooltip.top="COPY.download"
+                      :aria-label="t('backups.action.downloadNamed', { name: stem(row.name) })"
+                      v-tooltip.top="t('backups.action.download')"
                       @click="download(row.id)"
                     />
                     <Button
                       v-if="restoreAvailable"
                       class="tap"
                       icon="pi pi-replay"
-                      :label="COPY.restore"
+                      :label="t('backups.action.restore')"
                       size="small"
                       severity="secondary"
                       outlined
-                      :aria-label="`${COPY.restore} ${stem(row.name)}`"
+                      :aria-label="t('backups.action.restoreNamed', { name: stem(row.name) })"
                       :disabled="!canRestore || isLocked(row.id) || jobRunning"
                       @click="confirmRestore(row)"
                     />
@@ -202,8 +202,8 @@
                       size="small"
                       severity="danger"
                       text
-                      :aria-label="`${COPY.delete} ${stem(row.name)}`"
-                      v-tooltip.top="COPY.delete"
+                      :aria-label="t('backups.action.deleteNamed', { name: stem(row.name) })"
+                      v-tooltip.top="t('backups.action.delete')"
                       :disabled="!canDelete || isLocked(row.id)"
                       @click="confirmDelete(row)"
                     />
@@ -216,7 +216,7 @@
                 <Button
                   v-if="hasMore && !stale"
                   class="tap"
-                  :label="COPY.loadMore(nextPage)"
+                  :label="t('backups.action.loadMore', { count: nextPage })"
                   size="small"
                   severity="secondary"
                   outlined
@@ -229,14 +229,14 @@
 
           <section v-if="latest.length" class="card latest-card" aria-labelledby="backups-latest-h">
             <div class="card-head">
-              <h2 id="backups-latest-h">{{ COPY.latestTitle }}</h2>
-              <span class="card-meta">{{ COPY.latestMeta }}</span>
+              <h2 id="backups-latest-h">{{ t("backups.latest.title") }}</h2>
+              <span class="card-meta">{{ t("backups.latest.meta") }}</span>
             </div>
             <ul class="latest">
               <li v-for="dir in latest" :key="dir.dir">
                 <div class="latest-top">
                   <span :class="['tag', tierClass(dir.dir)]">{{ backupTierLabel(dir.dir) }}</span>
-                  <span class="latest-count">{{ COPY.countBackups(dir.count) }}</span>
+                  <span class="latest-count">{{ t("backups.latest.count", { count: dir.count }) }}</span>
                 </div>
                 <span class="file-name mono">{{ dir.latestFile }}</span>
                 <span class="latest-when" :title="timestampTitle(dir.latestMtimeMs)">
@@ -271,115 +271,9 @@ import JobBlock from "../components/ui/JobBlock.vue";
 import ResponsiveTable from "../components/ui/ResponsiveTable.vue";
 import type { ResponsiveColumn } from "../components/ui/types";
 import type { BackupDirInfo, BackupFileInfo, ServerStatus } from "../api";
+import { t } from "../i18n";
 
-const COPY = {
-  title: "Backups",
-  purposeBefore: "Browse, create, restore and delete backups of",
-  purposeAfter: (server: string) =>
-    `Restoring replaces the server files and needs ${server} stopped first.`,
-  noServers: "No servers you can view.",
-  retry: "Retry",
-  tryAgain: "Try again",
-  dismiss: "Dismiss",
-  openServers: "Open Servers",
-  reload: "Reload",
-  create: "Create backup",
-  restore: "Restore",
-  delete: "Delete",
-  download: "Download",
-  actions: "Actions",
-  newTag: "New",
-  listTitle: "Backups of",
-  latestTitle: "Latest per type",
-  latestMeta: "One folder per type",
-  filterLabel: "Filter by type",
-  all: "All",
-  caption: (server: string) => `Backups of ${server}, newest first`,
-  loading: (server: string) => `Loading backups of ${server}`,
-  metricCount: (server: string) => `backups of ${server}`,
-  metricBytes: "used by backups",
-  metricNewest: "newest backup",
-  countBackups: (n: number) => (n === 1 ? "1 backup" : `${n} backups`),
-  zone: (zone: string) => `Times in your zone${zone ? `, ${zone}` : ""}`,
-  readAt: (at: string) => `Read at ${at}`,
-  showing: (shown: number, total: number) => `Showing ${shown} of ${total}`,
-  showingTier: (shown: number, total: number, tier: string) =>
-    `Showing ${shown} of ${total} ${tier.toLowerCase()}`,
-  showingStale: (shown: number, total: number) =>
-    `Showing ${shown} of ${total}, from memory. Loading more needs the wrapper.`,
-  loadMore: (n: number) => `Load ${n} more`,
-  staleText: (at: string, server: string) =>
-    `Showing the list from ${at}. The API wrapper for ${server} is not answering, so newer backups may be missing. Restore and Delete need the wrapper and will fail until it is back.`,
-  readOnlyAll: "You can see the backups but not change them.",
-  readOnlySome: "Some backup actions are off for you.",
-  needs: {
-    create: "Creating needs server:control",
-    restore: "restoring backup:restore",
-    delete: "deleting backup:delete",
-  },
-  askSysadmin: "Ask a sysadmin for the ones you need.",
-  errorTitle: "The backup list did not load",
-  errorRecovery: (server: string) =>
-    `The dashboard could not get the list from the API wrapper for ${server}, and it has no earlier copy to show. Your backup files are not affected. Try again, or check that the wrapper is running.`,
-  emptyTitle: (server: string) => `No backups of ${server} yet`,
-  emptyText:
-    "The wrapper lists no backup for this server. You can make one now; the list updates when the script finishes.",
-  creatingTitle: (server: string) => `Creating a backup of ${server}`,
-  creatingNote:
-    "The script does not report progress, so this bar only shows that it is still running. The result appears here when it ends.",
-  createFailedTitle: (server: string) => `Creating a backup of ${server} failed`,
-  createFailedNote: "Check the output, fix the cause, then try again.",
-  createRequestFailed: (message: string) =>
-    `The dashboard did not get a result: ${message}. The script may still have run; reload the list to check.`,
-  createdSummary: "Backup created",
-  createdDetail: (name: string, size: string) => `${name}, ${size}. It is at the top of the list.`,
-  createdNoFile: "The script finished. The list is reloaded.",
-  restoringTitle: (server: string, file: string) => `Restoring ${server} from ${file}`,
-  restoringNote:
-    "The restore script unpacks the archive next to the server folder and swaps it in when that worked. The wrapper waits up to 10 minutes. Keep this tab open: the result is reported here. Restore and Delete are off in the list until it ends.",
-  restoredTitle: "Restore finished",
-  restoredNote: (server: string) =>
-    `${server} is still stopped. Start it in Servers. The last 4000 characters of the output are shown.`,
-  restoreFailedTitle: "Restore failed",
-  restoreFailedNote: (server: string) =>
-    `The archive is unpacked next to the server folder and swapped in only when that worked, so the current files were not replaced. ${server} is still stopped. Check the output, fix the cause, then try again.`,
-  restoreRefusedNote: (server: string) =>
-    `The restore script refused to run because ${server} was not stopped. Nothing was changed. Stop ${server} in Servers, then try again.`,
-  restoreRequestFailed: (server: string, message: string) =>
-    `The dashboard did not get a result from the wrapper: ${message}. Check the bot logs, and check ${server} before starting it.`,
-  restoreHeader: (server: string, file: string) => `Restore ${server} from ${file}?`,
-  restoreMessage: (server: string, when: string) =>
-    `This replaces the server files of ${server} with the backup from ${when}. Everything changed since then is gone from the live files.`,
-  restoreAccept: (server: string) => `Restore ${server}`,
-  restoreAlternate: (server: string) => `Open Servers to stop ${server}`,
-  blockedOnline: (server: string, players: string) =>
-    `${server} is online${players}. The restore script refuses to run while the server is up. Stop ${server} first, then come back.`,
-  blockedUnresponsive: (server: string) =>
-    `${server} is not responding, which still counts as running. The restore only runs on a server that is confirmed stopped. Stop ${server} first, then come back.`,
-  blockedUnknown: (server: string) =>
-    `The dashboard cannot tell whether ${server} is stopped. The restore only runs on a server that is confirmed stopped. Check ${server} in Servers, then come back.`,
-  withPlayers: (n: number) => (n === 1 ? " with 1 player" : ` with ${n} players`),
-  factBackup: "Backup",
-  factServer: "Server",
-  factEffect: "Effect",
-  factApplies: "Applies",
-  factRecover: "Recover",
-  factCreated: "Created",
-  serverStopped: (server: string) => `${server} is stopped, so the restore can run. It stays stopped afterwards.`,
-  effect: "Replaces the server files (world, mods, config) with the archive. Everything changed since is gone.",
-  appliesRestore: "Now. The archive is unpacked next to the server folder first and swapped in only when that worked.",
-  noUndo: "There is no undo. Create a backup of the current state first if you may want it back.",
-  deleteHeader: (file: string) => `Delete ${file}?`,
-  deleteMessage: (size: string) => `The backup file (${size}) is removed from the host. It cannot be recovered.`,
-  deleteApplies: "Now. No player is affected.",
-  deleteRecover: "Not possible. If you may need it, copy it off the host first.",
-  deleteAccept: "Delete backup",
-  deleteWord: "delete",
-  deleting: "Deleting",
-  restoring: "Restoring",
-  deletedSummary: "Backup deleted",
-  deleteFailed: "Delete failed",
-} as const;
+type NeedKey = "create" | "restore" | "delete";
 
 const PAGE_SIZE = 50;
 const ARCHIVE_EXT = /\.(tar\.(zst|gz|xz|bz2)|tgz|zip)$/i;
@@ -435,7 +329,7 @@ export default defineComponent({
       refreshStatus: status.refresh,
       confirmAction: useConfirmAction(),
       toast: useToast(),
-      COPY,
+      t,
       formatBytes,
       backupTierLabel,
       absoluteStamp,
@@ -450,10 +344,10 @@ export default defineComponent({
       job: null as Job | null,
       newIds: [] as string[],
       columns: [
-        { key: "name", label: "Backup", primary: true },
-        { key: "tier", label: "Type" },
-        { key: "created", label: "Created" },
-        { key: "size", label: "Size", align: "end", numeric: true },
+        { key: "name", label: t("backups.col.name"), primary: true },
+        { key: "tier", label: t("backups.col.tier") },
+        { key: "created", label: t("backups.col.created") },
+        { key: "size", label: t("backups.col.size"), align: "end", numeric: true },
       ] as ResponsiveColumn[],
     };
   },
@@ -490,9 +384,9 @@ export default defineComponent({
     canDownload(): boolean {
       return this.can("backup:download", this.current);
     },
-    missingCaps(): Array<keyof typeof COPY.needs> {
+    missingCaps(): NeedKey[] {
       if (!this.current) return [];
-      const missing: Array<keyof typeof COPY.needs> = [];
+      const missing: NeedKey[] = [];
       if (this.createAvailable && !this.canCreate) missing.push("create");
       if (this.restoreAvailable && !this.canRestore) missing.push("restore");
       if (this.deleteAvailable && !this.canDelete) missing.push("delete");
@@ -500,31 +394,31 @@ export default defineComponent({
     },
     readOnlyTitle(): string {
       const offered = [this.createAvailable, this.restoreAvailable, this.deleteAvailable].filter(Boolean).length;
-      return this.missingCaps.length === offered ? COPY.readOnlyAll : COPY.readOnlySome;
+      return this.missingCaps.length === offered ? t("backups.readOnly.all") : t("backups.readOnly.some");
     },
     readOnlyText(): string {
-      const parts = this.missingCaps.map((key) => COPY.needs[key]);
+      const parts = this.missingCaps.map((key) => t(`backups.readOnly.needs.${key}`));
       if (parts.length === 0) return "";
       const first = parts[0]!.charAt(0).toUpperCase() + parts[0]!.slice(1);
       const rest = parts.slice(1);
       const sentence =
         rest.length === 0
           ? first
-          : `${[first, ...rest.slice(0, -1)].join(", ")} and ${rest[rest.length - 1]}`;
-      return `${sentence}. ${COPY.askSysadmin}`;
+          : t("backups.readOnly.join", { list: [first, ...rest.slice(0, -1)].join(", "), last: rest[rest.length - 1]! });
+      return t("backups.readOnly.text", { needs: sentence });
     },
     staleAt(): string {
       return this.stale ? absoluteStamp(this.stale.asOf) : "";
     },
     listMeta(): string {
-      if (this.stale) return COPY.readAt(this.staleAt);
+      if (this.stale) return t("backups.list.readAt", { at: this.staleAt });
       let zone = "";
       try {
         zone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? "";
       } catch {
         zone = "";
       }
-      return COPY.zone(zone);
+      return zone ? t("backups.list.zoneNamed", { zone }) : t("backups.list.zone");
     },
     metrics(): { count: number; bytes: number | null; newest: number | null } | null {
       const dirs = this.summary?.dirs ?? [];
@@ -556,7 +450,7 @@ export default defineComponent({
         }
       }
       const all = this.metrics?.count ?? this.total;
-      return [{ key: "all", label: COPY.all, count: all }, ...counts.values()];
+      return [{ key: "all", label: t("backups.filter.all"), count: all }, ...counts.values()];
     },
     visibleFiles(): BackupFileInfo[] {
       if (this.filter === "all") return this.files;
@@ -566,16 +460,20 @@ export default defineComponent({
       return Math.max(1, Math.min(PAGE_SIZE, this.total - this.files.length));
     },
     footText(): string {
-      if (this.stale) return COPY.showingStale(this.files.length, this.total);
+      if (this.stale) return t("backups.list.showingStale", { shown: this.files.length, total: this.total });
       if (this.filter !== "all") {
         const chip = this.filterChips.find((c) => c.key === this.filter);
-        return COPY.showingTier(this.visibleFiles.length, chip?.count ?? this.visibleFiles.length, chip?.label ?? "");
+        return t("backups.list.showingTier", {
+          shown: this.visibleFiles.length,
+          total: chip?.count ?? this.visibleFiles.length,
+          tier: (chip?.label ?? "").toLowerCase(),
+        });
       }
-      return COPY.showing(this.files.length, this.total);
+      return t("backups.list.showing", { shown: this.files.length, total: this.total });
     },
     errorDetail(): string {
       if (!this.current) return "";
-      const status = this.errorStatus ?? "no response";
+      const status = this.errorStatus ?? t("backups.error.noResponse");
       return `GET /api/servers/${this.current}/backups/files -> ${status}`;
     },
   },
@@ -631,12 +529,12 @@ export default defineComponent({
       const startedAt = Date.now();
       this.job = {
         kind: "create",
-        title: COPY.creatingTitle(server),
+        title: t("backups.create.runningTitle", { server }),
         state: "running",
         startedAt,
         exitCode: undefined,
         output: "",
-        note: COPY.creatingNote,
+        note: t("backups.create.runningNote"),
       };
       const outcome = await this.create();
       if (this.current !== server) return;
@@ -647,31 +545,35 @@ export default defineComponent({
         if (fresh) this.newIds = [fresh.id];
         this.toast.add({
           severity: "success",
-          summary: COPY.createdSummary,
-          detail: fresh ? COPY.createdDetail(this.stem(fresh.name), formatBytes(fresh.sizeBytes)) : COPY.createdNoFile,
+          summary: t("backups.create.done"),
+          detail: fresh
+            ? t("backups.create.doneDetail", { name: this.stem(fresh.name), size: formatBytes(fresh.sizeBytes) })
+            : t("backups.create.doneNoFile"),
           life: 5000,
         });
         return;
       }
       this.job = {
         kind: "create",
-        title: COPY.createFailedTitle(server),
+        title: t("backups.create.failedTitle", { server }),
         state: "failed",
         startedAt,
         exitCode: outcome.exitCode,
         output: outcome.output,
-        note: outcome.error ? COPY.createRequestFailed(outcome.error) : COPY.createFailedNote,
+        note: outcome.error
+          ? t("backups.create.requestFailed", { message: outcome.error })
+          : t("backups.create.failedNote"),
       };
     },
     blockedReason(server: string): string {
       const s = this.serverStatus;
       if (s?.state === ServerState.Offline) return "";
       if (s?.state === ServerState.Online) {
-        const players = s.players ? COPY.withPlayers(s.players.online) : "";
-        return COPY.blockedOnline(server, players);
+        const players = s.players ? t("backups.restore.withPlayers", { count: s.players.online }) : "";
+        return t("backups.restore.blockedOnline", { server, players });
       }
-      if (s?.state === ServerState.Unresponsive) return COPY.blockedUnresponsive(server);
-      return COPY.blockedUnknown(server);
+      if (s?.state === ServerState.Unresponsive) return t("backups.restore.blockedUnresponsive", { server });
+      return t("backups.restore.blockedUnknown", { server });
     },
     async confirmRestore(file: BackupFileInfo): Promise<void> {
       const server = this.current;
@@ -681,22 +583,22 @@ export default defineComponent({
       const result = await this.confirmAction({
         level: "irreversible",
         tone: "warn",
-        header: COPY.restoreHeader(server, this.stem(file.name)),
-        message: COPY.restoreMessage(server, when),
-        acceptLabel: COPY.restoreAccept(server),
+        header: t("backups.restore.header", { server, file: this.stem(file.name) }),
+        message: t("backups.restore.message", { server, when }),
+        acceptLabel: t("backups.restore.accept", { server }),
         expected: server,
         blockedReason: blocked,
-        alternateLabel: blocked ? COPY.restoreAlternate(server) : "",
+        alternateLabel: blocked ? t("backups.restore.alternate", { server }) : "",
         facts: blocked
           ? [
-              { term: COPY.factBackup, detail: `${file.name}, ${when}`, mono: true },
-              { term: COPY.factEffect, detail: COPY.effect },
-              { term: COPY.factRecover, detail: COPY.noUndo },
+              { term: t("backups.fact.backup"), detail: `${file.name}, ${when}`, mono: true },
+              { term: t("backups.fact.effect"), detail: t("backups.restore.effect") },
+              { term: t("backups.fact.recover"), detail: t("backups.restore.noUndo") },
             ]
           : [
-              { term: COPY.factServer, detail: COPY.serverStopped(server) },
-              { term: COPY.factApplies, detail: COPY.appliesRestore },
-              { term: COPY.factRecover, detail: COPY.noUndo },
+              { term: t("backups.fact.server"), detail: t("backups.restore.serverStopped", { server }) },
+              { term: t("backups.fact.applies"), detail: t("backups.restore.applies") },
+              { term: t("backups.fact.recover"), detail: t("backups.restore.noUndo") },
             ],
       });
       if (result === "alternate") {
@@ -710,22 +612,22 @@ export default defineComponent({
       const startedAt = Date.now();
       this.job = {
         kind: "restore",
-        title: COPY.restoringTitle(server, this.stem(file.name)),
+        title: t("backups.restore.runningTitle", { server, file: this.stem(file.name) }),
         state: "running",
         startedAt,
         exitCode: undefined,
         output: "",
-        note: COPY.restoringNote,
+        note: t("backups.restore.runningNote"),
       };
       void this.focusJob();
       const outcome: ScriptOutcome = await this.runRow(file.id, () => this.restore(file), {
-        label: COPY.restoring,
+        label: t("backups.restore.busy"),
         exclusive: true,
       });
       void this.refreshStatus();
       this.job = {
         kind: "restore",
-        title: outcome.ok ? COPY.restoredTitle : COPY.restoreFailedTitle,
+        title: outcome.ok ? t("backups.restore.doneTitle") : t("backups.restore.failedTitle"),
         state: outcome.ok ? "done" : "failed",
         startedAt,
         exitCode: outcome.exitCode,
@@ -734,30 +636,30 @@ export default defineComponent({
       };
     },
     restoreNote(server: string, outcome: ScriptOutcome): string {
-      if (outcome.ok) return COPY.restoredNote(server);
-      if (outcome.error) return COPY.restoreRequestFailed(server, outcome.error);
-      if (outcome.exitCode === 3) return COPY.restoreRefusedNote(server);
-      return COPY.restoreFailedNote(server);
+      if (outcome.ok) return t("backups.restore.doneNote", { server });
+      if (outcome.error) return t("backups.restore.requestFailed", { server, message: outcome.error });
+      if (outcome.exitCode === 3) return t("backups.restore.refusedNote", { server });
+      return t("backups.restore.failedNote", { server });
     },
     async confirmDelete(file: BackupFileInfo): Promise<void> {
       const result = await this.confirmAction({
         level: "irreversible",
         tone: "danger",
-        header: COPY.deleteHeader(this.stem(file.name)),
-        message: COPY.deleteMessage(formatBytes(file.sizeBytes)),
-        acceptLabel: COPY.deleteAccept,
-        expected: COPY.deleteWord,
+        header: t("backups.delete.header", { file: this.stem(file.name) }),
+        message: t("backups.delete.message", { size: formatBytes(file.sizeBytes) }),
+        acceptLabel: t("backups.delete.accept"),
+        expected: t("backups.delete.word"),
         facts: [
-          { term: COPY.factCreated, detail: absoluteStamp(file.mtimeMs) },
-          { term: COPY.factApplies, detail: COPY.deleteApplies },
-          { term: COPY.factRecover, detail: COPY.deleteRecover },
+          { term: t("backups.fact.created"), detail: absoluteStamp(file.mtimeMs) },
+          { term: t("backups.fact.applies"), detail: t("backups.delete.applies") },
+          { term: t("backups.fact.recover"), detail: t("backups.delete.recover") },
         ],
       });
       if (result !== "confirm") return;
-      const outcome = await this.runRow(file.id, () => this.remove(file), { label: COPY.deleting });
+      const outcome = await this.runRow(file.id, () => this.remove(file), { label: t("backups.delete.busy") });
       this.toast.add({
         severity: outcome.ok ? "success" : "error",
-        summary: outcome.ok ? COPY.deletedSummary : COPY.deleteFailed,
+        summary: outcome.ok ? t("backups.delete.done") : t("backups.delete.failed"),
         detail: outcome.ok ? this.stem(file.name) : outcome.error,
         life: outcome.ok ? 4000 : 6000,
       });

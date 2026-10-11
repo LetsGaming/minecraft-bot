@@ -50,6 +50,7 @@ const TRANSLATED = new Set([
   "components/ui/AlertList.vue",
   "views/AnalyticsView.vue",
   "views/AuditView.vue",
+  "views/BackupsView.vue",
   "views/CommandsView.vue",
   "views/ConfigView.vue",
   "views/ConsoleView.vue",
