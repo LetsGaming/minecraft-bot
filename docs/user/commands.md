@@ -8,7 +8,7 @@ Options in `(parentheses)` are optional. Commands that act on a server accept an
 
 | Command | Options | Description |
 |---|---|---|
-| `/status` | (`server`) | Online/offline, player count, who is online, and bot latency. On locally managed servers also a **Host** section: RAM/CPU of the server process and disk usage of the world and backup paths. |
+| `/status` | (`server`) | Online/offline, player count, who is online, TPS, how long the server has been online, its version, and bot latency. An offline server says who stopped it and when (after a confirmed `/server stop` or `restart`) and how to start it. On locally managed servers also a **Host** section: RAM/CPU of the server process and disk usage of the world and backup paths. |
 | `/uptime` | (`server`) | Uptime history with 24h/7d/30d percentage bars and an hourly 24h sparkline for one server. Use `server:all` for an overview of every server your guild may use. |
 | `/info` | (`server`) | How to join: address, version, loader and required mods. |
 | `/seed` | (`server`) | The world seed. |
