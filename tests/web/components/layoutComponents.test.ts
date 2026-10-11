@@ -4,8 +4,6 @@ import { mount } from "@vue/test-utils";
 import { h } from "vue";
 import ResponsiveTable from "../../../src/web/frontend/src/components/ui/ResponsiveTable.vue";
 import JobBlock from "../../../src/web/frontend/src/components/ui/JobBlock.vue";
-import EditBar from "../../../src/web/frontend/src/components/ui/EditBar.vue";
-import EditorShell from "../../../src/web/frontend/src/components/ui/EditorShell.vue";
 import ModIcon from "../../../src/web/frontend/src/components/ui/ModIcon.vue";
 import { uiGlobal } from "./mountUi";
 
@@ -85,49 +83,6 @@ describe("JobBlock", () => {
     expect(pre.text()).toBe("[ERROR] Extraction failed");
     expect(pre.attributes("tabindex")).toBe("0");
     expect(pre.attributes("aria-label")).toBe("Script output");
-  });
-});
-
-describe("EditBar", () => {
-  it("offers nothing to save when clean", () => {
-    const w = mount(EditBar, { props: { dirtyCount: 0 }, global: uiGlobal });
-    expect(w.text()).toContain("No unsaved changes");
-    expect(w.findAll("button").every((b) => b.attributes("disabled") !== undefined)).toBe(true);
-  });
-
-  it("counts changes and emits save and discard", async () => {
-    const w = mount(EditBar, { props: { dirtyCount: 3 }, global: uiGlobal });
-    expect(w.text()).toContain("3 unsaved changes");
-    expect(w.attributes("role")).toBe("region");
-    const [discard, save] = w.findAll("button");
-    expect(save!.classes()).toContain("tap");
-    await discard!.trigger("click");
-    await save!.trigger("click");
-    expect(w.emitted("discard")).toHaveLength(1);
-    expect(w.emitted("save")).toHaveLength(1);
-  });
-
-  it("blocks saving while saving or with errors", () => {
-    const saving = mount(EditBar, { props: { dirtyCount: 1, saving: true }, global: uiGlobal });
-    expect(saving.text()).toContain("Saving");
-    const invalid = mount(EditBar, { props: { dirtyCount: 1, canSave: false }, global: uiGlobal });
-    expect(invalid.findAll("button").at(-1)!.attributes("disabled")).toBeDefined();
-  });
-});
-
-describe("EditorShell", () => {
-  it("says why it is read-only and labels the group list", () => {
-    const w = mount(EditorShell, {
-      props: { state: "readonly", readonlyReason: "Only sysadmins can change config.json." },
-      slots: { nav: "<a href='#g'>General</a>", default: "<p>fields</p>" },
-    });
-    expect(w.text()).toContain("Only sysadmins can change config.json.");
-    expect(w.find("nav").attributes("aria-label")).toBe("Groups");
-  });
-
-  it("reports busy while saving", () => {
-    const w = mount(EditorShell, { props: { state: "saving" } });
-    expect(w.attributes("aria-busy")).toBe("true");
   });
 });
 

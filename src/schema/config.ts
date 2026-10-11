@@ -46,6 +46,22 @@ export const GUILD_FEATURE_KEYS = [
 
 export type GuildFeatureKey = (typeof GUILD_FEATURE_KEYS)[number];
 
+/** What the dashboard sends instead of a secret that is set. */
+export const SECRET_PLACEHOLDER = "•••••";
+
+/** Per-server secrets; with the top-level `token` these are all the secrets config.json holds. */
+export const SECRET_SERVER_KEYS = ["rconPassword", "apiKey"] as const;
+
+/** Whether a config path (`["servers", "smp", "apiKey"]`) holds a secret. */
+export function isSecretConfigPath(path: readonly string[]): boolean {
+  if (path.length === 1) return path[0] === "token";
+  return (
+    path.length === 3 &&
+    path[0] === "servers" &&
+    (SECRET_SERVER_KEYS as readonly string[]).includes(path[2]!)
+  );
+}
+
 export interface RawServerConfig {
   id?: string;
   /**
@@ -57,9 +73,13 @@ export interface RawServerConfig {
    * Plaintext http:// is only accepted for loopback/private/LAN hosts —
    * the x-api-key and all commands travel unencrypted. Public hosts
    * require https:// (or an explicit allowInsecureHttp override).
+   * @title API URL
    */
   apiUrl?: string;
-  /** Shared secret sent as x-api-key to the API wrapper. **Required**. */
+  /**
+   * Shared secret sent as x-api-key to the API wrapper. **Required**.
+   * @title API key
+   */
   apiKey?: string;
   /**
    * Opt-out for the plaintext-HTTP-to-public-host rejection.
@@ -530,6 +550,8 @@ export interface WebUiConfig {
   enabled?: boolean;
   /**
    * HTTP port.
+   * @title Dashboard port
+   * @effect Read when the dashboard starts. Restart the dashboard after changing it.
    * @asType integer
    * @minimum 1
    * @maximum 65535
@@ -569,6 +591,8 @@ export interface WebUiConfig {
    * dashboard re-reads config.json, no restart needed). Use it after a leaked
    * cookie or a removed admin.
    *
+   * @title Session epoch
+   * @effect Raising it signs everyone out of the dashboard.
    * @asType integer
    * @minimum 0
    * @default 0
@@ -671,17 +695,41 @@ export interface RawBotConfig {
    * file (a copy of the original is kept next to it) and by the dashboard on
    * every save. A missing value means the file predates versioning. A value
    * newer than the running bot supports is refused rather than loaded.
+   * @title Config format version
    * @asType integer
    * @minimum 0
    */
   configVersion?: number;
+  /**
+   * The bot's login token from the Discord developer portal.
+   * @title Discord bot token
+   * @effect Read when the bot starts. Restart the bot after changing it.
+   */
   token: string;
+  /**
+   * The application ID of the bot in the Discord developer portal.
+   * @title Discord application ID
+   */
   clientId: string;
+  /**
+   * The Minecraft servers the bot manages, by id.
+   * @title Servers
+   */
   servers?: Record<string, RawServerConfig>;
+  /**
+   * Per-guild features, by Discord guild ID.
+   * @title Guilds
+   */
   guilds?: Record<string, GuildConfig>;
-  /** May contain Discord user IDs and/or role IDs. */
+  /**
+   * May contain Discord user IDs and/or role IDs.
+   * @title Bot admins
+   */
   adminUsers?: string[];
-  /** Locale for user-visible bot strings ("en" | "de", default "en"). */
+  /**
+   * Locale for user-visible bot strings ("en" | "de", default "en").
+   * @title Language
+   */
   language?: string;
   /**
    * Default IANA timezone for wall-clock features, used when a guild or a
@@ -692,43 +740,71 @@ export interface RawBotConfig {
    * This replaces the TZ environment variable, which forced one zone on
    * the whole process: a bot serving guilds in Berlin and Denver purged
    * both at Berlin midnight.
+   * @title Time zone
    */
   timezone?: string;
+  /** @title Command overrides */
   commands?: Record<string, CommandOverrideConfig>;
   leaderboard?: Record<string, unknown>;
   /**
    * TPS below this triggers an alert (default 15).
+   * @title TPS warning threshold
    * @exclusiveMinimum 0
    */
   tpsWarningThreshold?: number;
-  /** @minimum 1000 */
+  /**
+   * How often the bot asks each server for its TPS, in milliseconds.
+   * @title TPS poll interval (ms)
+   * @minimum 1000
+   */
   tpsPollIntervalMs?: number;
+  /** @title Leaderboard interval */
   leaderboardInterval?: LeaderboardInterval;
   /**
    * Global default for GuildLeaderboardConfig.postTime — a guild-level
    * postTime wins when set. Unset on both keeps the legacy drift-based
    * scheduling (no anchor).
+   * @title Leaderboard post time
    */
   leaderboardPostTime?: string;
-  /** Global default for GuildLeaderboardConfig.postDay. */
+  /**
+   * Global default for GuildLeaderboardConfig.postDay.
+   * @title Leaderboard post day
+   */
   leaderboardPostDay?: string;
+  /** @title Bot presence */
   presence?: PresenceConfig;
+  /** @title Death coordinates */
   deathCoords?: DeathCoordsConfig;
+  /** @title Host alerts */
   hostAlerts?: HostAlertsConfig;
+  /** @title Waypoints */
   waypoints?: WaypointsConfig;
+  /** @title Limits */
   limits?: LimitsConfig;
+  /** @title Update notifier */
   updateNotifier?: UpdateNotifierConfig;
-  /** Scheduled restarts (and future scheduled actions) per server. */
-  /** In-game discoverability nudges (see FeatureNudgeConfig). */
+  /**
+   * In-game discoverability nudges (see FeatureNudgeConfig).
+   * @title Feature nudges
+   */
   featureNudges?: FeatureNudgeConfig;
+  /**
+   * Scheduled restarts (and future scheduled actions) per server.
+   * @title Schedules
+   */
   schedules?: Record<string, ServerScheduleConfig>;
   /**
    * Milestone announcement thresholds per leaderboard stat key, in the
    * stat's NATIVE unit (playtime = ticks, distances = cm, counters =
    * counts). First activation seeds silently; see milestoneWatcher.
+   * @title Milestones
    */
   milestones?: Record<string, PositiveNumber[]>;
-  /** Web dashboard settings (see WebUiConfig). */
+  /**
+   * Web dashboard settings (see WebUiConfig).
+   * @title Web dashboard
+   */
   webui?: WebUiConfig;
 }
 

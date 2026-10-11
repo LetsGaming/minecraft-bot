@@ -41,6 +41,10 @@ export const MinecraftPreset = definePreset(Aura, {
           mutedColor: "var(--text-dim)",
           hoverMutedColor: "var(--ramp-surface-200)",
         },
+        // Aura's placeholder is {surface.400}, 3.9:1 on an input; dim text passes.
+        formField: {
+          placeholderColor: "var(--text-dim)",
+        },
       },
     },
   },

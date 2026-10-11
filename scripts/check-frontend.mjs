@@ -27,7 +27,22 @@ const HEX = /(?<![\w&])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA
 const IMPORT = /(?:\bfrom\s*|\bimport\s*\(?\s*)(["'])([^"'\n]+)\1/g;
 
 /** Frontend files whose template text goes through t(); grow this as views migrate. */
-const TRANSLATED = new Set(["App.vue", "components/ui/AppShell.vue"]);
+const TRANSLATED = new Set([
+  "App.vue",
+  "components/ui/AppShell.vue",
+  "components/ui/EditBar.vue",
+  "components/ui/EditorShell.vue",
+  "components/ui/FieldRow.vue",
+  "components/ui/ReviewChanges.vue",
+  "components/schema/ArrayField.vue",
+  "components/schema/ConflictPicker.vue",
+  "components/schema/GuildConfigEditor.vue",
+  "components/schema/MapEntry.vue",
+  "components/schema/MapField.vue",
+  "components/schema/SchemaField.vue",
+  "views/ConfigView.vue",
+  "views/ModConfigView.vue",
+]);
 const TEXT_ATTRS = /(?<![:@\w.-])(label|title|placeholder|aria-label|alt|header|subtitle|summary|message)="([^"]*)"/g;
 const HAS_LETTER = /\p{L}/u;
 /** An opening or closing tag; quoted attribute values may contain `>`. */

@@ -19,6 +19,14 @@ export interface JsonSchemaNode {
   oneOf?: unknown[];
   $ref?: string;
   title?: string;
+  /** When a change to this field takes hold (`@effect` in src/schema/config.ts). */
+  effect?: string;
+  default?: unknown;
+  minimum?: number;
+  maximum?: number;
+  exclusiveMinimum?: number;
+  exclusiveMaximum?: number;
+  pattern?: string;
 }
 
 export type Definitions = Record<string, unknown> | undefined;
@@ -236,13 +244,21 @@ export function sectionState(
   return { chip, isNew, hasEnabled };
 }
 
-/** Turn a schema key into a section title: `hostAlerts` → `Host alerts`. */
+const ACRONYMS: Record<string, string> = {
+  api: "API", dm: "DM", http: "HTTP", https: "HTTPS", id: "ID", ids: "IDs", ip: "IP",
+  json: "JSON", mc: "MC", ms: "ms", rcon: "RCON", tps: "TPS", ui: "UI", url: "URL",
+};
+
+/** Turn a schema key into a label: `hostAlerts` → `Host alerts`, `apiUrl` → `API URL`. */
 export function humanizeKey(key: string): string {
   const words = key
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .replace(/[_-]+/g, " ")
     .trim()
-    .toLowerCase();
+    .toLowerCase()
+    .split(/\s+/)
+    .map((word) => ACRONYMS[word] ?? word)
+    .join(" ");
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 

@@ -1,36 +1,31 @@
 import { computed, onBeforeUnmount, ref } from "vue";
 import { ConfigApplyState, type ConfigStatusResponse } from "@mcbot/schema";
 import { ApiError, apiGet } from "../api";
+import { t } from "../i18n";
 
 const POLL_MS = 5_000;
 
 export interface ChipView {
   label: string;
   hint: string;
-  severity: "success" | "info" | "warn" | "secondary";
-  icon: string;
 }
 
 export function describeStatus(status: ConfigStatusResponse | null): ChipView {
-  if (!status) {
-    return { label: "Status unknown", hint: "Could not read the applied-config status.", severity: "secondary", icon: "pi pi-question-circle" };
-  }
+  if (!status) return { label: t("applyView.unreadable"), hint: t("applyView.unreadableHint") };
   switch (status.state) {
     case ConfigApplyState.Applied:
-      return { label: "Applied", hint: "The running bot has loaded this config.", severity: "success", icon: "pi pi-check-circle" };
+      return { label: t("apply.applied"), hint: t("applyView.appliedHint") };
     case ConfigApplyState.Pending:
-      return { label: "Pending", hint: "Saved. Waiting for the bot to load it.", severity: "info", icon: "pi pi-spin pi-spinner" };
+      return { label: t("apply.pending"), hint: t("applyView.pendingHint") };
     case ConfigApplyState.BotDown:
-      return { label: "Bot not running", hint: "Saved. It takes effect when the bot starts.", severity: "warn", icon: "pi pi-power-off" };
+      return { label: t("applyView.botDown"), hint: t("applyView.botDownHint") };
     case ConfigApplyState.RestartRequired:
       return {
-        label: "Restart required",
-        hint: `Applied, but connection settings for ${status.restartRequired.join(", ")} only take effect after a bot restart.`,
-        severity: "warn",
-        icon: "pi pi-refresh",
+        label: t("apply.restartRequired"),
+        hint: t("applyView.restartHint", { servers: status.restartRequired.join(", ") }),
       };
     default:
-      return { label: "Status unavailable", hint: "The running bot does not report which config it applied.", severity: "secondary", icon: "pi pi-question-circle" };
+      return { label: t("apply.unknown"), hint: t("applyView.unknownHint") };
   }
 }
 
