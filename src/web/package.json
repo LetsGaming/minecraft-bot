@@ -14,7 +14,8 @@
     "@sinclair/typebox": "^0.34.52",
     "fastify": "^5.10.0",
     "primeicons": "^7.0.0",
-    "primevue": "^4.5.5"
+    "primevue": "^4.5.5",
+    "vue-router": "^4.6.4"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.1",

@@ -237,7 +237,7 @@ export default defineComponent({
     async function refresh(): Promise<void> {
       const res = await pullStatus();
       if (res) {
-        emit("bot-state", res.bot.alive);
+        emit("bot-state", res.bot.alive, res.bot.lastBeat);
         emit("servers", res.servers);
       } else if (error.value) {
         toast.add({ severity: "error", summary: "Status refresh failed", detail: error.value, life: 3500 });

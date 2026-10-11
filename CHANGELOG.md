@@ -12,6 +12,9 @@ project follows [Semantic Versioning](https://semver.org/).
 - **Optional alert mention policy.** `guilds.<id>.downtimeAlerts.mentionPolicy` and `guilds.<id>.tpsAlerts.mentionPolicy` accept `"always"` (default, every alert pings `mentionRole` as before) or `"escalation"` (only the first failure and a rise in severity ping; recoveries and repeats are posted silently). Additive field, no migration (`schema/config.ts`, `utils/embeds/alertUtils.ts`, `config.schema.json`, `docs/admin/configuration.md`).
 - **TPS recovery message.** When TPS is back above `tpsWarningThreshold` after a warning, the TPS channel gets a "back to normal" post; a drop below 10 TPS alerts at once instead of waiting for the 5 minute repeat (`watchers/monitors/tpsMonitor.ts`).
 - Server recovery alerts say how long the server was down (`watchers/monitors/downtimeMonitor.ts`).
+- **Dashboard links and the back button.** Every dashboard page has its own address (`#/overview`, `#/console/<server>`, `#/mods/<server>?check=1.21.4&filter=blockers`, `#/modconfig/<server>/<file>`, `#/config/raw`, `#/guilds/<id>` and so on), so a reload keeps your place, a link can be shared in a ticket and Back goes to the previous page. Leaving a page or switching server with unsaved edits asks first, also on Back. The bare dashboard address opens the first page you may see, as before (`frontend/src/router.ts`, `App.vue`; the Mods, Mod config, Config and Guilds views).
+- **Phone navigation.** Under 760 px the dashboard shows a top bar with a menu button, the page title and the current server; the menu opens a drawer that closes with Escape or a tap outside and returns focus to the button. A "Skip to content" link comes first for keyboard users (`frontend/src/components/ui/AppShell.vue`).
+- **Density switch.** "Roomy" or "Compact" in the sidebar sets row and control height for this browser (`AppShell.vue`, `composables/useDensity.ts`).
 
 ### Changed
 
@@ -24,6 +27,8 @@ project follows [Semantic Versioning](https://semver.org/).
 - The live status embed takes the colour of the worst server, lists servers that need attention first and shows when it was last updated (`watchers/schedulers/statusEmbed.ts`). `/uptime` shows the same state labels as `/status`.
 - `/backup` names the backup types like the dashboard (Hourly, Daily, Pre-update, Manual, Archive) and shows ages as Discord timestamps (`commands/server/backup.ts`, `schema/glossary.ts`).
 - German copy uses du-form and one word per concept ("Discord-Server" for the guild, "Kanal", "Benachrichtigung", "Antrag", "Serie", "der API-Wrapper"); plurals come from `Intl.PluralRules` instead of "(s)" and "(en)" (`core/locales/*.ts`, `core/utils/i18n.ts`). The German strings still need a native read.
+- **Dashboard sidebar.** The eleven pages are grouped under Monitor, Manage and Admin, each with its own icon (Config and Mod config no longer share one), and there is one server picker. Console, Analytics and Mod config lost their own server buttons and follow the sidebar; Backups keeps its picker for now (`AppShell.vue`, `ConsoleView.vue`, `AnalyticsView.vue`, `ModConfigView.vue`).
+- The dashboard's "bot looks down" banner is one status line with the time of the last heartbeat and a link to Overview, instead of a large orange block (`App.vue`, `StatusView.vue`). Pages use the full width beside the sidebar up to 2400 px, and Overview panels no longer run off a 360 px screen (`AppShell.vue`, `OverviewView.vue`).
 
 ### Security
 

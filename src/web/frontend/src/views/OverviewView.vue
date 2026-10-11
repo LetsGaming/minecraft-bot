@@ -58,7 +58,7 @@
       <section class="panel">
         <header class="panel-head">
           <span class="panel-title"><i class="pi pi-server" /> Servers</span>
-          <Button label="Manage" size="small" text @click="$emit('navigate', 'status')" />
+          <Button label="Manage" size="small" text @click="$emit('navigate', 'servers')" />
         </header>
         <div v-if="servers.length === 0" class="muted small pad">No servers configured.</div>
         <ul v-else class="server-list">
@@ -203,7 +203,7 @@ export default defineComponent({
 .tile-label { letter-spacing: 0.02em; }
 
 /* Panel grid */
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); gap: 14px; }
 .panel { background: var(--mc-surface); border: 0.5px solid var(--mc-border); border-radius: 11px; padding: 4px 16px 12px; }
 .panel-head {
   display: flex; align-items: center; justify-content: space-between;

@@ -18,18 +18,6 @@
     </ViewHeader>
 
     <div v-if="serverIds.length" class="scope-bar">
-      <span class="scope-label muted small">Server</span>
-      <div class="picker">
-        <Button
-          v-for="id in serverIds"
-          :key="id"
-          :label="id"
-          size="small"
-          :outlined="id !== currentServer"
-          :disabled="serverIds.length === 1"
-          @click="select(id)"
-        />
-      </div>
       <label class="ctl-label muted small">Range</label>
       <SelectButton
         v-model="rangeHours"
@@ -332,10 +320,13 @@ export default defineComponent({
     },
   },
   watch: {
+    activeServer(id: string) {
+      if (id && id !== this.currentServer) void this.select(id);
+    },
     serverIds: {
       immediate: true,
       handler(ids: string[]) {
-        if (ids.length === 0) return;
+        if (ids.length === 0 || ids.includes(this.currentServer)) return;
         const next =
           this.activeServer && ids.includes(this.activeServer) ? this.activeServer : ids[0]!;
         void this.select(next);
@@ -393,9 +384,7 @@ export default defineComponent({
 
 <style scoped>
 .scope-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
-.scope-label { text-transform: uppercase; letter-spacing: 0.04em; }
-.picker { display: flex; flex-wrap: wrap; gap: 6px; }
-.ctl-label { letter-spacing: 0.02em; margin-left: 8px; }
+.ctl-label { letter-spacing: 0.02em; }
 .scope-tag {
   font-size: 11px; font-weight: 500; color: var(--mc-accent);
   background: var(--mc-accent-bg); border: 0.5px solid var(--mc-accent-border);

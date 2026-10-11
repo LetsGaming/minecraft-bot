@@ -1,6 +1,7 @@
 import type { useConfirm } from "primevue/useconfirm";
+import { t } from "../i18n";
 
-type ConfirmService = ReturnType<typeof useConfirm>;
+type ConfirmService = Pick<ReturnType<typeof useConfirm>, "require">;
 
 /**
  * The "Discard unsaved changes?" question as an `ask` for `confirmLeave`.
@@ -9,16 +10,16 @@ type ConfirmService = ReturnType<typeof useConfirm>;
  */
 export function discardPrompt(
   confirm: ConfirmService,
-  message = "This tab has changes that are not saved. Leaving it discards them.",
+  message = t("leave.message"),
 ): () => Promise<boolean> {
   return () =>
     new Promise<boolean>((resolve) => {
       confirm.require({
-        header: "Discard unsaved changes?",
+        header: t("leave.header"),
         message,
         icon: "pi pi-exclamation-triangle",
-        acceptLabel: "Discard and leave",
-        rejectLabel: "Stay",
+        acceptLabel: t("leave.accept"),
+        rejectLabel: t("leave.reject"),
         accept: () => resolve(true),
         reject: () => resolve(false),
         onHide: () => resolve(false),

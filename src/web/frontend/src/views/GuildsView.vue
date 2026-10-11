@@ -154,8 +154,10 @@ export default defineComponent({
   components: { Card, Button, Tag, SetupWizard, GuildConfigEditor, ViewHeader, GuildAvatar, EmptyState },
   props: {
     sysadmin: { type: Boolean, default: false },
+    /** The guild whose config editor the URL (`#/guilds/<id>`) opens. */
+    guildId: { type: String, default: "" },
   },
-  emits: ["goto-config"],
+  emits: ["goto-config", "update-route"],
   setup() {
     const { guilds: guildRows, loading, load: loadGuilds } = useMyGuilds();
     const { guildName, load: loadGuildNames } = useGuilds();
@@ -175,8 +177,18 @@ export default defineComponent({
       return this.guildRows.filter((g) => g.configured).map((g) => g.id);
     },
   },
+  watch: {
+    guildId(id: string) {
+      if (id && !this.configEditorOpen) this.openConfigEditor(id);
+    },
+    configEditorOpen(open: boolean) {
+      const id = open ? this.configEditorGuildId : "";
+      if (id !== this.guildId) this.$emit("update-route", { params: { guildId: id || undefined } });
+    },
+  },
   async mounted() {
     await this.reload();
+    if (this.guildId) this.openConfigEditor(this.guildId);
   },
   methods: {
     async reload() {

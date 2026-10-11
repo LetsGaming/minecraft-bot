@@ -1,4 +1,5 @@
 import { createApp } from "vue";
+import { createWebHashHistory } from "vue-router";
 import PrimeVue from "primevue/config";
 import ToastService from "primevue/toastservice";
 import ConfirmationService from "primevue/confirmationservice";
@@ -9,6 +10,9 @@ import "primeicons/primeicons.css";
 import { MinecraftPreset } from "./preset";
 import { installStatusTokens } from "./statusTokens";
 import { initDensity } from "./composables/useDensity";
+import { discardPrompt } from "./composables/useDiscardPrompt";
+import { createAppRouter } from "./router";
+import { t } from "./i18n";
 import "./tokens.css";
 import "./style.css";
 
@@ -35,4 +39,11 @@ app.directive("tooltip", Tooltip);
 // can use <SchemaField> without importing it (which would create an import
 // cycle). See shims.d.ts for the matching type declaration.
 app.component("SchemaField", SchemaField);
+
+const confirm = app.config.globalProperties.$confirm;
+app.use(
+  createAppRouter(createWebHashHistory(), (reason) =>
+    discardPrompt(confirm, t(reason === "server" ? "leave.messageServer" : "leave.message"))(),
+  ),
+);
 app.mount("#app");

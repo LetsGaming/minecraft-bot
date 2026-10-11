@@ -14,19 +14,6 @@
     </EmptyState>
 
     <template v-else>
-      <!-- Server picker, only when there is a choice to make. -->
-      <div v-if="serverIds.length > 1" class="picker">
-        <Button
-          v-for="id in serverIds"
-          :key="id"
-          :label="id"
-          size="small"
-          :severity="id === current ? 'primary' : 'secondary'"
-          :outlined="id !== current"
-          @click="select(id)"
-        />
-      </div>
-
       <!-- Filters sit above the pane so the pane itself can own all the
            remaining height. -->
       <div class="pane-tools">
@@ -244,8 +231,6 @@ export default defineComponent({
 .conn { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
 .conn.up { color: var(--mc-text); }
 .conn.down { color: var(--mc-muted); }
-
-.picker { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 
 /* The view is a column that fills the shell's content area, so the pane
    grows into whatever height is left instead of taking a fixed 55vh and
