@@ -232,6 +232,8 @@ export const en = {
   "modconfig.queuedTitle.other": "{count} changes are waiting for the wrapper",
   "modconfig.queuedText": "They apply per field, so anything that did not change on disk meanwhile goes through untouched.",
   "modconfig.applyNow": "Apply now",
+  "modconfig.queuedToast": "Held, not written yet",
+  "modconfig.queuedToastDetail": "The wrapper is not answering. The change is queued and written when it is back.",
   "modconfig.truncatedTitle": "Some files are not listed",
   "modconfig.truncatedText": "This server has more config files than can be listed. Use the filter, or open them on the server.",
   "modconfig.loadFailed": "The config files could not be loaded",

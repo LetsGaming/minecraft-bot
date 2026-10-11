@@ -537,6 +537,10 @@ export default defineComponent({
     async onSave(): Promise<void> {
       const changes = this.changeCount;
       const ok = await this.save();
+      if (ok && this.queued) {
+        this.toast.add({ severity: "info", summary: t("modconfig.queuedToast"), detail: t("modconfig.queuedToastDetail"), life: 8000 });
+        return;
+      }
       this.toast.add({
         severity: ok ? "success" : "error",
         summary: ok ? t("modconfig.savedToast", { count: changes }) : t("modconfig.saveFailed"),

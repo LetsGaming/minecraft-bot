@@ -54,6 +54,8 @@
         :icon="state === 'saving' ? undefined : 'pi pi-check'"
         :loading="state === 'saving'"
         :disabled="!saveEnabled"
+        :severity="state === 'clean' ? 'secondary' : undefined"
+        :outlined="state === 'clean'"
         @click="$emit('save')"
       />
     </div>
