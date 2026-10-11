@@ -68,23 +68,28 @@ type CommandExecutor = (
   interaction: ChatInputCommandInteraction,
 ) => Promise<void>;
 
-const ADMIN_GATE = Symbol("adminGate");
+// Commands call withErrorHandling while this module may still be loading
+// (import cycle through the hint registry), so the marker comes from a
+// hoisted function rather than a module-level const.
+function adminGate(): symbol {
+  return Symbol.for("mcbot.adminGate");
+}
 
-type GatedExecutor = CommandExecutor & { [ADMIN_GATE]?: true };
+type GatedExecutor = CommandExecutor & Record<symbol, true | undefined>;
 
 /**
  * Gates a command behind bot-admin status. Inside `withErrorHandling` the
  * check runs before the reply is deferred, so a denial is never public.
  */
 export function requireServerAdmin(execute: CommandExecutor): CommandExecutor {
-  const gated: GatedExecutor = async (interaction) => {
+  const gated = (async (interaction: ChatInputCommandInteraction) => {
     if (!invokerIsAdmin(interaction)) {
       await replyDenied(interaction);
       return;
     }
     return execute(interaction);
-  };
-  gated[ADMIN_GATE] = true;
+  }) as GatedExecutor;
+  gated[adminGate()] = true;
   return gated;
 }
 
@@ -165,7 +170,7 @@ export function withErrorHandling(
   execute: CommandExecutor,
   { defer = true, ephemeral = false }: ErrorHandlingOptions = {},
 ): CommandExecutor {
-  const gated = (execute as GatedExecutor)[ADMIN_GATE] === true;
+  const gated = (execute as GatedExecutor)[adminGate()] === true;
   return async (interaction) => {
     const guildId = interaction.guild?.id;
     try {
