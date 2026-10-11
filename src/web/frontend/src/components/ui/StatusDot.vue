@@ -1,26 +1,38 @@
 <template>
-  <span :class="['dot', state]" />
+  <StatusChip :state="role" variant="dot" :label="label" />
 </template>
 
 <script lang="ts">
 import { defineComponent, type PropType } from "vue";
+import { StatusRole } from "@mcbot/schema";
+import StatusChip from "./StatusChip.vue";
 
-// The small status indicator used for servers and the bot process.
+type DotState = "up" | "down" | "stale";
+
+// The shape-only status for servers and the bot process, drawn by StatusChip.
 //   up    = healthy / answering
 //   down  = confirmed stopped
 //   stale = up but not answering, or state unknown (wrapper unreachable,
-//           heartbeat lost). Deliberately not red: nothing is confirmed down.
+//           heartbeat lost). Deliberately not the offline role: nothing is
+//           confirmed down.
+const ROLE: Record<DotState, StatusRole> = {
+  up: StatusRole.Online,
+  down: StatusRole.Offline,
+  stale: StatusRole.Degraded,
+};
+
 export default defineComponent({
   name: "StatusDot",
+  components: { StatusChip },
   props: {
-    state: { type: String as PropType<"up" | "down" | "stale">, default: "down" },
+    state: { type: String as PropType<DotState>, default: "down" },
+    /** Read by assistive tech and shown as the tooltip; defaults to the role's label. */
+    label: { type: String, default: "" },
+  },
+  computed: {
+    role(): StatusRole {
+      return ROLE[this.state] ?? StatusRole.Unknown;
+    },
   },
 });
 </script>
-
-<style scoped>
-.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; }
-.dot.up { background: var(--mc-good); box-shadow: 0 0 6px rgba(74, 222, 128, 0.45); }
-.dot.down { background: var(--mc-bad); }
-.dot.stale { background: var(--mc-mid); }
-</style>

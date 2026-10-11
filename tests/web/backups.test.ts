@@ -37,6 +37,7 @@ const mockConfig = {
 };
 
 const {
+  readBackupsMock,
   indexBackupFilesMock,
   detectCapabilitiesMock,
   getRemoteManifestMock,
@@ -45,6 +46,7 @@ const {
   deleteBackupFileMock,
   recordAdminActionMock,
 } = vi.hoisted(() => ({
+  readBackupsMock: vi.fn(),
   indexBackupFilesMock: vi.fn(),
   detectCapabilitiesMock: vi.fn(),
   getRemoteManifestMock: vi.fn(),
@@ -62,6 +64,7 @@ vi.mock("../../src/core/config.js", () => ({
 vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
   detectCapabilities: detectCapabilitiesMock,
   getRemoteManifest: getRemoteManifestMock,
+  readBackups: readBackupsMock,
   indexBackupFiles: indexBackupFilesMock,
   openBackupDownload: openBackupDownloadMock,
   restoreBackupFile: restoreBackupFileMock,
@@ -138,6 +141,7 @@ vi.mock("../../src/core/utils/commands/commandManifest.js", () => ({
 import { encodeSigned, SESSION_COOKIE } from "../../src/web/backend/auth/auth.js";
 import { buildServer } from "../../src/web/backend/server.js";
 import { clearFeatureCache } from "../../src/web/backend/status/status.js";
+import { clearLastKnown } from "../../src/core/utils/wrapper/lastKnown.js";
 
 const FILE_ID = "AbCdEfGhIjKlMnOpQrStUv";
 
@@ -180,6 +184,18 @@ beforeEach(() => {
     ],
     nextCursor: null,
     total: 1,
+  });
+  readBackupsMock.mockResolvedValue({
+    dirs: [
+      {
+        dir: "hourly",
+        count: 3,
+        latestFile: "world-01.tar.zst",
+        latestMtime: new Date(5_000),
+        latestSizeBytes: 2048,
+      },
+    ],
+    totalBytes: 6144,
   });
   restoreBackupFileMock.mockResolvedValue({ output: "done", stderr: "", exitCode: 0 });
   deleteBackupFileMock.mockResolvedValue({
@@ -339,6 +355,52 @@ describe("GET /api/servers/:id/backups/files", () => {
       method: "GET",
       url: "/api/servers/smp/backups/files",
     });
+    expect(res.statusCode).toBe(401);
+  });
+});
+
+// ── The summary ─────────────────────────────────────────────────────────────
+
+describe("GET /api/servers/:id/backups/summary", () => {
+  it("serves folder counts and sizes for server:read, times as epoch ms", async () => {
+    const app = buildServer();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/servers/smp/backups/summary",
+      headers: { cookie: cookieFor(READER) },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      dirs: [
+        {
+          dir: "hourly",
+          count: 3,
+          latestFile: "world-01.tar.zst",
+          latestMtimeMs: 5_000,
+          latestSizeBytes: 2048,
+        },
+      ],
+      totalBytes: 6144,
+      stale: null,
+    });
+  });
+
+  it("502s with a fixed message when the wrapper fails and nothing is cached", async () => {
+    clearLastKnown();
+    readBackupsMock.mockRejectedValueOnce(new Error("ECONNREFUSED /srv/secret/path"));
+    const app = buildServer();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/servers/smp/backups/summary",
+      headers: { cookie: cookieFor(READER) },
+    });
+    expect(res.statusCode).toBe(502);
+    expect(res.body).not.toContain("/srv/secret/path");
+  });
+
+  it("401s without a session", async () => {
+    const app = buildServer();
+    const res = await app.inject({ method: "GET", url: "/api/servers/smp/backups/summary" });
     expect(res.statusCode).toBe(401);
   });
 });

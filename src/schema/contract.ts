@@ -7,7 +7,7 @@
  * This module must stay isomorphic: types only, no Node imports.
  */
 
-import type { BackupFileIndexBody } from "./wire/index.js";
+import type { BackupFileIndexBody, BackupSummaryBody } from "./wire/index.js";
 import type {
   ServerState,
   RconState,
@@ -55,6 +55,14 @@ export interface QueuedWriteResult {
 export type { BackupFileInfo } from "./wire/index.js";
 
 export interface BackupFileIndex extends BackupFileIndexBody {
+  /** Set when served from cache because the wrapper did not answer. */
+  stale?: StaleInfo | null;
+}
+
+/** Count, newest archive and size per backup folder, plus the total size. */
+export type { BackupDirInfo } from "./wire/index.js";
+
+export interface BackupSummaryResponse extends BackupSummaryBody {
   /** Set when served from cache because the wrapper did not answer. */
   stale?: StaleInfo | null;
 }

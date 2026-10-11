@@ -3,38 +3,47 @@
     <button
       type="button"
       class="fh-btn"
-      aria-label="Help"
+      :aria-label="label ? `${COPY.helpFor} ${label}` : COPY.help"
+      :aria-expanded="pinned"
+      :aria-describedby="popId"
       @click.stop="pinned = !pinned"
       @blur="pinned = false"
+      @keydown.escape="pinned = false"
     >
-      <i class="pi pi-info-circle" />
+      <i class="pi pi-info-circle" aria-hidden="true" />
     </button>
-    <span class="fh-pop" role="tooltip">{{ text }}</span>
+    <span :id="popId" class="fh-pop" role="tooltip">{{ text }}</span>
   </span>
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, useId } from "vue";
+
+const COPY = {
+  help: "Help",
+  helpFor: "Help for",
+} as const;
 
 /**
- * Schema help text as an info affordance (audit P3).
+ * Schema help text as an info affordance.
  *
- * The generated help on this config is genuinely good — it explains what
- * `allowedServers` does in multi-guild deployments, what happens when `events`
- * is omitted — but there is six to eight lines of it under nearly every field,
- * and the same scoping paragraph repeats across notifications, leaderboard,
- * tpsAlerts and reports for every guild. Rendered inline it turned a form of
- * twelve inputs into an essay with twelve inputs buried in it, and the old
- * two-line clamp cut sentences mid-word.
+ * The generated help runs to six to eight lines under nearly every field, and
+ * the same scoping paragraph repeats across notifications, leaderboard,
+ * tpsAlerts and reports for every guild. Inline, a form of twelve inputs read
+ * as an essay with the inputs buried in it.
  *
- * So it collapses to one icon per field. The full text — never truncated —
- * appears on hover, and a click pins it open for a reader who wants to keep it
- * up while they edit. Nothing shows until asked for, so the same paragraph is
- * no longer visually repeated down the page.
+ * So it collapses to one icon per field. The full text, never truncated,
+ * appears on hover and is the button's description for assistive tech; a click
+ * pins it open while the reader edits, Escape or leaving the button closes it.
  */
-defineProps<{ text?: string }>();
+defineProps<{
+  text?: string;
+  /** The field this explains, so the button is not one of many called "Help". */
+  label?: string;
+}>();
 
 const pinned = ref(false);
+const popId = `fh-${useId()}`;
 </script>
 
 <style scoped>
@@ -79,7 +88,16 @@ const pinned = ref(false);
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.38);
 }
 .fh:hover .fh-pop,
-.fh.pinned .fh-pop {
+.fh.pinned .fh-pop,
+.fh-btn:focus-visible + .fh-pop {
   display: block;
+}
+@media (pointer: coarse) {
+  .fh-btn {
+    min-width: var(--touch-min);
+    min-height: var(--touch-min);
+    justify-content: center;
+    align-items: center;
+  }
 }
 </style>

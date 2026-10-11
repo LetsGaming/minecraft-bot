@@ -95,6 +95,8 @@ export function apiSend<T>(
 export type {
   BackupFileInfo,
   BackupFileIndex,
+  BackupDirInfo,
+  BackupSummaryResponse,
   ServerStatus,
   StatusResponse,
   AuditEntry,

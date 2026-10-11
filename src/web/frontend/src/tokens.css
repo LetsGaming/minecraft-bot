@@ -101,6 +101,14 @@
   --env-client: #e5544b;
   --env-unknown: #8a8a90;
 
+  /* initials tiles (ModIcon fallback): picked by a hash of the slug, --text reads on each */
+  --tile-1: #2d3a4f;
+  --tile-2: #3a2f4a;
+  --tile-3: #2f4436;
+  --tile-4: #4a3a2a;
+  --tile-5: #45303a;
+  --tile-6: #2c4246;
+
   /* Mods view palette: differs from the roles above and stays until that view moves onto them */
   --mods-green: #3ecf6e;
   --mods-amber: #e5a13a;
