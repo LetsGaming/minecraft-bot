@@ -252,13 +252,12 @@
                     :pt="{ pcInputText: { root: { 'aria-describedby': describedBy } } }"
                     @update:model-value="setFromInput(field, $event)"
                   />
-                  <InputChips
+                  <ChipsInput
                     v-else-if="field.kind === 'stringList' || field.kind === 'numberList'"
                     :model-value="listValue(field)"
                     :input-id="id"
-                    :input-props="{ 'aria-describedby': describedBy }"
-                    :aria-labelledby="labelId"
-                    :pt="CHIPS_PT"
+                    :describedby="describedBy"
+                    :labelledby="labelId"
                     :disabled="locked || isLocked(field)"
                     @update:model-value="setFromInput(field, $event)"
                   />
@@ -311,7 +310,6 @@ import InputText from "primevue/inputtext";
 import InputNumber from "primevue/inputnumber";
 import ToggleSwitch from "primevue/toggleswitch";
 import Select from "primevue/select";
-import InputChips from "primevue/inputchips";
 import { useToast } from "primevue/usetoast";
 import { useConfirm } from "primevue/useconfirm";
 import type { EditConflict } from "../composables/useModConfigs";
@@ -320,7 +318,7 @@ import { discardPrompt } from "../composables/useDiscardPrompt";
 import { useCapabilities } from "../composables/useCapabilities";
 import { displayPath, pathKey } from "../utils/configTree";
 import { fieldDomId } from "../components/schema/formIndex";
-import { CHIPS_PT } from "../components/ui/chipsA11y";
+import ChipsInput from "../components/ui/ChipsInput.vue";
 import ViewHeader from "../components/ui/ViewHeader.vue";
 import StaleBanner from "../components/ui/StaleBanner.vue";
 import ConflictPicker from "../components/schema/ConflictPicker.vue";
@@ -340,7 +338,7 @@ const SHOWN_MAX = 80;
 export default defineComponent({
   name: "ModConfigView",
   components: {
-    Button, InputText, InputNumber, ToggleSwitch, Select, InputChips,
+    Button, InputText, InputNumber, ToggleSwitch, Select, ChipsInput,
     ViewHeader, StaleBanner, ConflictPicker, EmptyState, EditorShell, EditBar, FieldRow,
     InlineBanner, InlineError, StatusChip, ReviewChanges,
   },
@@ -359,7 +357,6 @@ export default defineComponent({
       toast: useToast(),
       t,
       fieldDomId,
-      CHIPS_PT,
     };
   },
   data() {

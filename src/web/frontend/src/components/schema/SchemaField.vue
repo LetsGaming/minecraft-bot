@@ -130,26 +130,24 @@
           :invalid="invalid"
           @update:model-value="emitArray($event)"
         />
-        <InputChips
+        <ChipsInput
           v-else-if="kind === 'chips'"
-          :model-value="(arrayModel as string[])"
+          :model-value="arrayModel.map(String)"
           separator=","
           :input-id="id"
-          :input-props="{ 'aria-describedby': describedBy }"
-          :aria-labelledby="labelId"
-          :pt="CHIPS_PT"
+          :describedby="describedBy"
+          :labelledby="labelId"
           :disabled="locked"
           :invalid="invalid"
           @update:model-value="emitArray($event)"
         />
-        <InputChips
+        <ChipsInput
           v-else-if="kind === 'numberList'"
           :model-value="arrayModel.map(String)"
           separator=","
           :input-id="id"
-          :input-props="{ 'aria-describedby': describedBy }"
-          :aria-labelledby="labelId"
-          :pt="CHIPS_PT"
+          :describedby="describedBy"
+          :labelledby="labelId"
           :disabled="locked"
           :invalid="invalid"
           @update:model-value="emitNumberArray($event)"
@@ -298,14 +296,13 @@ import InputText from "primevue/inputtext";
 import InputNumber from "primevue/inputnumber";
 import Select from "primevue/select";
 import MultiSelect from "primevue/multiselect";
-import InputChips from "primevue/inputchips";
 import ToggleSwitch from "primevue/toggleswitch";
 import Textarea from "primevue/textarea";
 import Button from "primevue/button";
 import MapField from "./MapField.vue";
 import ArrayField from "./ArrayField.vue";
 import FieldRow from "../ui/FieldRow.vue";
-import { CHIPS_PT } from "../ui/chipsA11y";
+import ChipsInput from "../ui/ChipsInput.vue";
 import {
   derefNode,
   classifyField,
@@ -337,7 +334,7 @@ function shortValue(value: unknown): string {
 export default defineComponent({
   name: "SchemaField",
   components: {
-    InputText, InputNumber, Select, MultiSelect, InputChips, ToggleSwitch,
+    InputText, InputNumber, Select, MultiSelect, ChipsInput, ToggleSwitch,
     Textarea, Button, MapField, ArrayField, FieldRow,
   },
   props: {
@@ -373,7 +370,6 @@ export default defineComponent({
       schemaRefs: inject(SchemaRefsKey, undefined),
       form: inject(SchemaFormKey, undefined),
       t,
-      CHIPS_PT,
     };
   },
   data() {
