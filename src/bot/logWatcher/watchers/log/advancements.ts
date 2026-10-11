@@ -74,9 +74,7 @@ async function handleChallenge(
     detail: active.advancement,
   });
 
-  const rewardLine = active.reward
-    ? `\n${t("challenge.rewardLine", { reward: active.reward })}`
-    : "";
+  const reward = active.reward;
   await broadcastNotification(client, guildConfigs, {
     serverId: server.id,
     event: "challenge",
@@ -88,7 +86,7 @@ async function handleChallenge(
           t("challenge.wonEmbed", {
             player,
             advancement: active.advancement,
-          }) + rewardLine,
+          }) + (reward ? `\n${t("challenge.rewardLine", { reward })}` : ""),
         color: EmbedColor.Success,
         ...(withServerFooter ? { footer: { text: server.id } } : {}),
       }),
