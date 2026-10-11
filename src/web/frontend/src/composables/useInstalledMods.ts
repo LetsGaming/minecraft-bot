@@ -64,7 +64,8 @@ export function useInstalledMods(api: InstalledModsApi) {
   const rows = useRowBusy<string>();
 
   const mods = computed<InstalledMod[]>(() => installed.value?.mods ?? []);
-  const updateCount = computed(() => updates.value.size);
+  /** Only installed mods count; the update check may still list one removed since. */
+  const updateCount = computed(() => mods.value.filter((m) => updates.value.has(m.slug)).length);
 
   function hasUpdate(slug: string): boolean {
     return updates.value.has(slug);

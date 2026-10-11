@@ -79,6 +79,7 @@ describe("installed list", () => {
 describe("update check", () => {
   it("collects the slugs with an update", async () => {
     const { mods, api } = setup();
+    await mods.load();
     await mods.refreshUpdates(false);
     expect(api.checkUpdates).toHaveBeenCalledWith(false);
     expect(mods.updateCount.value).toBe(1);

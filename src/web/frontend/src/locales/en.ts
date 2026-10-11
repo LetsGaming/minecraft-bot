@@ -388,6 +388,7 @@ export const en = {
   "mods.toast.installFailed": "Install failed",
   "mods.toast.noDetail": "The wrapper gave no reason. Check the dashboard logs.",
 
+  "mods.remove.level": "Applies on restart",
   "mods.remove.header": "Remove {name} from {server}?",
   "mods.remove.message": "The mod's file is deleted from the mods folder.",
   "mods.remove.factFile": "File",

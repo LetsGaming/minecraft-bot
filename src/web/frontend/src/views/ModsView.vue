@@ -49,7 +49,7 @@
             </span>
           </div>
 
-          <div v-if="inst.installed.value?.compat" class="check" role="group" aria-labelledby="mods-check-label">
+          <div v-if="showCheck" class="check" role="group" aria-labelledby="mods-check-label">
             <div class="check-row">
               <div class="check-field">
                 <label id="mods-check-label" for="mods-check-target">{{ t("mods.check.target") }}</label>
@@ -193,11 +193,11 @@
               <span class="card-meta">{{ t("mods.check.progressMeta") }}</span>
             </div>
             <ResponsiveTable
+              stack-below="narrow"
               :columns="checkColumns"
               :rows="progressRows"
               :caption="t('mods.check.progressCaption')"
               :row-key="(r: CheckRow) => r.slug"
-              max-height="60vh"
             >
               <template #cell-mod="{ row }">
                 <span class="modcell">
@@ -243,6 +243,7 @@
               </button>
             </div>
             <ResponsiveTable
+              stack-below="narrow"
               v-if="visibleResults.length"
               :columns="resultColumns"
               :rows="visibleResults"
@@ -370,6 +371,7 @@
               </div>
 
               <ResponsiveTable
+                stack-below="narrow"
                 v-if="visibleInstalled.length"
                 :columns="installedColumns"
                 :rows="visibleInstalled"
@@ -384,7 +386,7 @@
                     <ModIcon :name="nameOf(row)" :slug="row.slug" :src="row.iconUrl" :size="36" decorative />
                     <span class="modcell-text">
                       <span class="name">{{ nameOf(row) }}</span>
-                      <span v-if="row.filename" class="sub mono">{{ row.filename }}</span>
+                      <span v-if="row.filename" class="sub mono" :title="row.filename">{{ row.filename }}</span>
                     </span>
                   </span>
                 </template>
@@ -508,7 +510,7 @@
             </span>
           </div>
 
-          <div v-if="searching && results.length === 0" class="skeleton" role="status">
+          <div v-if="(searching || !searched) && results.length === 0" class="skeleton" role="status">
             <span class="sr-only">{{ t("mods.catalog.loading") }}</span>
             <span v-for="n in 3" :key="n" class="sk-row" aria-hidden="true">
               <span class="sk-tile" />
@@ -873,6 +875,7 @@ async function confirmRemove(m: InstalledMod): Promise<void> {
   const players = playersOnline.value;
   const result = await confirmAction({
     level: "disruptive",
+    levelLabel: t("mods.remove.level"),
     tone: "danger",
     header: t("mods.remove.header", { name, server }),
     message: t("mods.remove.message"),
@@ -912,6 +915,13 @@ const versionOptions = computed(() =>
     value: v,
     label: v === inst.installed.value?.gameVersion ? t("mods.check.installedSuffix", { version: v }) : v,
   })),
+);
+
+/** The check group, unless there is nothing to check and no check to show. */
+const showCheck = computed(
+  () =>
+    !!inst.installed.value?.compat &&
+    (inst.mods.value.length > 0 || compat.checkedVersion.value !== null || compat.checkingCompat.value),
 );
 
 const checkButtonLabel = computed(() =>
@@ -1104,6 +1114,8 @@ const results = ref<ModSearchHit[]>([]);
 const total = ref(0);
 const searching = ref(false);
 const searchError = ref("");
+/** False until the first search for this server answered, so nothing reads as "no results" early. */
+const searched = ref(false);
 const offset = ref(0);
 const page = computed(() => Math.floor(offset.value / PAGE) + 1);
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE)));
@@ -1219,7 +1231,10 @@ async function runSearch(): Promise<void> {
     total.value = 0;
     searchError.value = errorText(err, "no response");
   } finally {
-    if (mine === searchSeq) searching.value = false;
+    if (mine === searchSeq) {
+      searching.value = false;
+      searched.value = true;
+    }
   }
 }
 
@@ -1304,6 +1319,8 @@ watch(
     installedQuery.value = "";
     onlyUpdates.value = false;
     openSlug.value = null;
+    searched.value = false;
+    results.value = [];
     return reload();
   },
 );
@@ -1442,7 +1459,16 @@ onBeforeUnmount(() => {
 .modcell.off { opacity: 0.7; }
 .modcell-text { display: grid; min-width: 0; }
 .name { font-weight: 600; overflow-wrap: anywhere; }
-.sub { color: var(--text-dim); font-size: var(--text-xs); overflow-wrap: anywhere; font-weight: 400; }
+.sub {
+  display: block;
+  max-width: 34ch;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .version { font-size: var(--text-xs); white-space: nowrap; }
 .detail { overflow-wrap: anywhere; }
 .row-actions { flex-wrap: nowrap; justify-content: flex-end; }
