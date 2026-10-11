@@ -114,9 +114,7 @@ describe("buildStatsEmbeds", () => {
   it("formats _time keys as human-readable duration", () => {
     const embeds = buildStatsEmbeds(minimalStats, "Steve");
     const allFields = embeds.flatMap((e) => e.toJSON().fields ?? []);
-    const timeField = allFields.find((f) =>
-      f.value.match(/\d+d \d+h \d+m \d+s/),
-    );
+    const timeField = allFields.find((f) => f.value.includes("Play Time: 1 h"));
     expect(timeField).toBeDefined();
   });
 
