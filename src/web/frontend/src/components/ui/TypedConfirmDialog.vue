@@ -3,7 +3,17 @@
     <template #container="{ message, acceptCallback, rejectCallback }">
       <div ref="body" class="tc-body">
         <span :class="['tc-level', `tc-${extras.level}`]">{{ LEVEL_LABEL[extras.level] }}</span>
-        <h2 ref="heading" class="tc-head">{{ message.header }}</h2>
+        <div class="tc-title">
+          <ModIcon
+            v-if="extras.media"
+            :name="extras.media.name"
+            :slug="extras.media.slug"
+            :src="extras.media.src"
+            :size="40"
+            decorative
+          />
+          <h2 ref="heading" class="tc-head">{{ message.header }}</h2>
+        </div>
         <InlineBanner v-if="extras.blockedReason" tone="warn">{{ extras.blockedReason }}</InlineBanner>
         <p class="tc-msg">{{ message.message }}</p>
         <dl v-if="extras.facts.length" class="tc-facts">
@@ -68,6 +78,7 @@ import ConfirmDialog from "primevue/confirmdialog";
 import InputText from "primevue/inputtext";
 import Button from "primevue/button";
 import InlineBanner from "./InlineBanner.vue";
+import ModIcon from "./ModIcon.vue";
 import {
   TYPED_CONFIRM_GROUP,
   confirmExtras,
@@ -147,6 +158,7 @@ watch(body, (el) => {
 }
 .tc-irreversible { color: var(--danger); }
 .tc-disruptive { color: var(--st-degraded); }
+.tc-title { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
 .tc-head { margin: 0; font-size: var(--text-xl); font-weight: 600; overflow-wrap: anywhere; }
 .tc-msg { margin: 0; white-space: pre-line; max-width: 64ch; }
 .tc-facts {

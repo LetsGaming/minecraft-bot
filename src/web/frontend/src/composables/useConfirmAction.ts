@@ -5,6 +5,7 @@ import {
   typedExpected,
   typedNonce,
   type ConfirmFact,
+  type ConfirmMedia,
   type ConfirmLevel,
   type ConfirmTone,
 } from "./useTypedConfirm";
@@ -34,6 +35,8 @@ export interface ConfirmActionOptions {
   /** A way out offered next to Cancel, typically while blocked. */
   alternateLabel?: string;
   cancelLabel?: string;
+  /** Shown beside the heading so the target is recognisable at a glance. */
+  media?: ConfirmMedia;
 }
 
 const DEFAULT_TONE: Record<ConfirmLevel, ConfirmTone> = {
@@ -70,6 +73,7 @@ export function useConfirmAction() {
         blockedReason: options.blockedReason ?? "",
         alternateLabel: options.alternateLabel ?? "",
         onAlternate: options.alternateLabel ? () => settle("alternate") : null,
+        media: options.media ?? null,
       };
       typedNonce.value += 1;
       confirm.require({
