@@ -658,7 +658,7 @@ describe("deferred replies", () => {
     expect(interaction.reply).not.toHaveBeenCalled();
   });
 
-  it("shows the main reward, not the random bonus, as the daily reward", async () => {
+  it("shows the main reward as the daily reward and the random bonus on its own line", async () => {
     // Order of Math.random calls: pick main, bonus-chance roll, pick bonus.
     vi.spyOn(Math, "random")
       .mockReturnValueOnce(0.1)
@@ -677,8 +677,7 @@ describe("deferred replies", () => {
     });
     await execute(interaction as never);
     const text = embedOf(interaction.editReply.mock.calls[0]![0]).description ?? "";
-    expect(text).toContain("apple");
-    expect(text).not.toContain("bread");
-    expect(text).not.toContain("bonus");
+    expect(text).toContain("Reward: 1 × Apple");
+    expect(text).toContain("Lucky bonus: 1 × Bread");
   });
 });
