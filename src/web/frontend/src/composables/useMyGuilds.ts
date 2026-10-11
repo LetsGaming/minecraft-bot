@@ -1,5 +1,6 @@
 import { ref } from "vue";
 import { errorMessage } from "../utils/errorMessage";
+import { loadFailure, type LoadFailure } from "../utils/loadFailure";
 import { useToast } from "primevue/usetoast";
 import { apiGet } from "../api";
 
@@ -19,13 +20,21 @@ export function useMyGuilds() {
   const toast = useToast();
   const guilds = ref<MyGuildRow[]>([]);
   const loading = ref(true);
+  /** False until the first answer, success or failure, has arrived. */
+  const loaded = ref(false);
+  const error = ref("");
+  const failure = ref<LoadFailure | null>(null);
 
   async function load(silent = false): Promise<void> {
     loading.value = true;
+    error.value = "";
+    failure.value = null;
     try {
       const res = await apiGet<{ guilds: MyGuildRow[] }>("/api/guilds");
       guilds.value = res.guilds;
     } catch (err) {
+      error.value = errorMessage(err);
+      failure.value = loadFailure(err);
       if (!silent) {
         toast.add({
           severity: "error",
@@ -36,8 +45,9 @@ export function useMyGuilds() {
       }
     } finally {
       loading.value = false;
+      loaded.value = true;
     }
   }
 
-  return { guilds, loading, load };
+  return { guilds, loading, loaded, error, failure, load };
 }

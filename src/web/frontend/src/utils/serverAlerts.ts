@@ -1,69 +1,79 @@
 /**
- * "What's wrong with this server" — one place, so OverviewView (the fleet
+ * "What's wrong with this server" in one place, so OverviewView (the fleet
  * summary) and StatusView (the per-server card) read off the same logic
- * instead of each hand-rolling their own subset. Extracted verbatim from
- * OverviewView's `alerts()` computed, which used to be the only place this
- * existed — adding a new check meant deciding whether to also add it to
- * StatusView, and usually nobody did.
+ * instead of each hand-rolling their own subset.
  */
 import { ServerState, WrapperState, type ServerStatus } from "../api";
+import { t } from "../i18n";
 import { diskLabel, stateLabel } from "./format";
 
+export type AlertKind =
+  | "wrapper"
+  | "offline"
+  | "unknown"
+  | "unresponsive"
+  | "lowTps"
+  | "diskFull"
+  | "botDown";
+
 export interface Alert {
+  kind: AlertKind;
   level: "warn" | "danger";
-  icon: string;
   text: string;
 }
 
-/** Everything wrong with one server, most severe first. Pure — no fetching. */
+/** Everything wrong with one server, most severe first. Pure, no fetching. */
 export function serverAlerts(s: ServerStatus): Alert[] {
   const out: Alert[] = [];
 
   // The wrapper is its own axis: it can be down while the server is
-  // demonstrably fine, and that is worth saying on its own rather than being
-  // folded into the server's state. Not an early return — a server can be
-  // both unresponsive and missing its wrapper.
+  // demonstrably fine. Not an early return: a server can be both
+  // unresponsive and missing its wrapper.
   if (s.wrapper === WrapperState.Unreachable && s.state !== ServerState.Unknown) {
     out.push({
+      kind: "wrapper",
       level: "warn",
-      icon: "pi pi-link",
-      text: `${s.id}: API wrapper unreachable — controls, logs and stats are down. The server itself is ${stateLabel(s.state).toLowerCase()}.`,
+      text: t("servers.alert.wrapper", { server: s.id, state: stateLabel(s.state).toLowerCase() }),
     });
   }
 
   // Three different incidents, three different alerts. Collapsed into one
   // "is offline" line, a wrapper restart and a lag spike both read as an
-  // outage — and the actual outage looked no worse than either.
+  // outage, and the actual outage looked no worse than either.
   if (s.state === ServerState.Offline) {
-    out.push({ level: "danger", icon: "pi pi-times-circle", text: `${s.id} is offline.` });
+    out.push({ kind: "offline", level: "danger", text: t("servers.alert.offline", { server: s.id }) });
     return out;
   }
   if (s.state === ServerState.Unknown) {
-    out.push({
-      level: "warn",
-      icon: "pi pi-question-circle",
-      text: `${s.id}: neither its API wrapper nor the server answered — state unknown.`,
-    });
+    out.push({ kind: "unknown", level: "warn", text: t("servers.alert.unknown", { server: s.id }) });
     return out;
   }
   if (s.state === ServerState.Unresponsive) {
     out.push({
+      kind: "unresponsive",
       level: "warn",
-      icon: "pi pi-clock",
-      text: `${s.id} is running but not answering commands — starting up, or under heavy load.`,
+      text: t("servers.alert.unresponsive", { server: s.id }),
     });
     return out;
   }
 
   if (s.tps !== null && s.tps < 15) {
-    out.push({ level: "warn", icon: "pi pi-gauge", text: `${s.id} has low TPS (${s.tps.toFixed(1)}).` });
+    out.push({
+      kind: "lowTps",
+      level: "warn",
+      text: t("servers.alert.lowTps", { server: s.id, tps: s.tps.toFixed(1) }),
+    });
   }
   for (const disk of s.host?.disks ?? []) {
     if (disk.usedPercent >= 90) {
       out.push({
+        kind: "diskFull",
         level: "warn",
-        icon: "pi pi-database",
-        text: `${s.id} ${diskLabel(disk.path).toLowerCase()} is ${disk.usedPercent}% full.`,
+        text: t("servers.alert.diskFull", {
+          server: s.id,
+          disk: diskLabel(disk.path).toLowerCase(),
+          percent: disk.usedPercent,
+        }),
       });
     }
   }
@@ -74,6 +84,6 @@ export function serverAlerts(s: ServerStatus): Alert[] {
 export function fleetAlerts(servers: ServerStatus[], botAlive: boolean): Alert[] {
   const heartbeat: Alert[] = botAlive
     ? []
-    : [{ level: "danger", icon: "pi pi-times-circle", text: "Bot process heartbeat is stale — status may be outdated." }];
+    : [{ kind: "botDown", level: "danger", text: t("overview.alert.botDown") }];
   return [...heartbeat, ...servers.flatMap(serverAlerts)];
 }
