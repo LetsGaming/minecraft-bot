@@ -15,7 +15,7 @@ export const MC_VERSION_RE = /^[A-Za-z0-9_.-]{1,20}$/;
 
 export const POLL_INTERVAL_MS = 1500;
 
-export type CompatFilter = "all" | "blockers";
+export type CompatFilter = "all" | "blockers" | "ready";
 
 export interface ModCompatApi {
   start(mcVersion: string, refresh: boolean): Promise<{ jobId: string }>;

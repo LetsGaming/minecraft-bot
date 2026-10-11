@@ -1,11 +1,22 @@
 <template>
   <section :class="['job-block', `job-${state}`]" :aria-labelledby="titleId" tabindex="-1">
     <div class="jb-head">
-      <h2 :id="titleId" class="jb-title">{{ title }}</h2>
+      <component :is="`h${headingLevel}`" :id="titleId" class="jb-title">{{ title }}</component>
       <StatusChip :state="ROLE[state]" :label="statusText" :busy="state === 'running'" live />
     </div>
     <div
-      v-if="state === 'running'"
+      v-if="state === 'running' && progress && progress.total > 0"
+      class="jb-bar"
+      role="progressbar"
+      :aria-labelledby="titleId"
+      aria-valuemin="0"
+      :aria-valuemax="progress.total"
+      :aria-valuenow="Math.min(progress.done, progress.total)"
+    >
+      <span class="jb-bar-fill is-determinate" :style="{ width: `${percent}%` }" />
+    </div>
+    <div
+      v-else-if="state === 'running'"
       class="jb-bar"
       role="progressbar"
       :aria-labelledby="titleId"
@@ -47,9 +58,10 @@ const ROLE: Record<JobState, StatusRole> = {
 };
 
 /**
- * One long operation: title, status, an indeterminate bar while it runs and the
- * output once it ends. No steps and no percentage, because the scripts behind
- * these jobs report neither.
+ * One long operation: title, status, a bar while it runs and the output once
+ * it ends. The bar is indeterminate unless the job reports `progress`, which
+ * only jobs that count their work (the mod compatibility check) do; scripts
+ * report neither steps nor a percentage.
  */
 const props = withDefaults(
   defineProps<{
@@ -60,9 +72,18 @@ const props = withDefaults(
     exitCode?: number | null;
     output?: string;
     outputLabel?: string;
+    /** Work done of total, for a job that counts it. */
+    progress?: { done: number; total: number } | null;
+    headingLevel?: 2 | 3 | 4;
   }>(),
-  { startedAt: 0, exitCode: undefined, output: "", outputLabel: "" },
+  { startedAt: 0, exitCode: undefined, output: "", outputLabel: "", progress: null, headingLevel: 2 },
 );
+
+const percent = computed(() => {
+  const p = props.progress;
+  if (!p || p.total <= 0) return 0;
+  return Math.round((Math.min(p.done, p.total) / p.total) * 100);
+});
 
 const titleId = `job-${useId()}`;
 const now = ref(Date.now());
@@ -132,12 +153,18 @@ const statusText = computed(() => {
   background: var(--st-info);
   animation: jb-slide 1.4s var(--ease-settle) infinite;
 }
+.jb-bar-fill.is-determinate {
+  width: 0;
+  animation: none;
+  transition: width var(--dur-state) var(--ease-settle);
+}
 @keyframes jb-slide {
   from { transform: translateX(-100%); }
   to { transform: translateX(290%); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .jb-bar-fill { animation: none; width: 100%; opacity: 0.6; }
+  .jb-bar-fill:not(.is-determinate) { animation: none; width: 100%; opacity: 0.6; }
+  .jb-bar-fill.is-determinate { transition: none; }
 }
 .jb-output {
   margin: 0;

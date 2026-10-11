@@ -42,6 +42,7 @@ const TRANSLATED = new Set([
   "components/schema/SchemaField.vue",
   "views/ConfigView.vue",
   "views/ModConfigView.vue",
+  "views/ModsView.vue",
 ]);
 const TEXT_ATTRS = /(?<![:@\w.-])(label|title|placeholder|aria-label|alt|header|subtitle|summary|message)="([^"]*)"/g;
 const HAS_LETTER = /\p{L}/u;

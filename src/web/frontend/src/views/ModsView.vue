@@ -1,481 +1,692 @@
 <template>
-  <div class="mods">
-    <header class="mods-head">
-      <div>
-        <h1>Mods</h1>
-        <p>
-          Install, update and remove mods on <b>{{ serverId || "—" }}</b
-          >.
-        </p>
-      </div>
-      <div class="head-actions">
-        <button class="btn" :disabled="checking || !serverId" @click="checkNow">
-          <i class="pi pi-refresh" :class="{ spin: checking }" /> Check for
-          updates
-        </button>
-        <button
-          v-if="canWrite && updateCount > 0"
-          class="btn green"
-          :disabled="applyingAll"
-          @click="applyAll"
-        >
-          <i class="pi pi-arrow-circle-up" /> Apply all
-          <span class="badge">{{ updateCount }}</span>
-        </button>
-      </div>
-    </header>
-
-    <section v-if="installed?.compat" class="compat">
-      <div class="compat-h">
-        <i class="pi pi-sync" /> Check another Minecraft version
-      </div>
-      <div class="compat-row">
-        <select
-          v-if="!useCustom"
-          v-model="selectedVersion"
-          class="select"
-          :disabled="checkingCompat || loadingVersions"
-          aria-label="Target Minecraft version"
-        >
-          <option v-for="v in versionChoices" :key="v" :value="v">
-            {{ v }}{{ v === installed.gameVersion ? " (installed)" : "" }}
-          </option>
-        </select>
-        <input
-          v-else
-          v-model="customVersion"
-          class="compat-input"
-          placeholder="e.g. 1.21.5"
-          :disabled="checkingCompat"
-          aria-label="Target Minecraft version"
-          @keyup.enter="checkVersion()"
+  <div class="mods-view">
+    <ViewHeader :title="t('mods.title')" :server="serverId" :server-state="serverRole">
+      <template v-if="serverId" #subtitle>{{ lede }}</template>
+      <template v-if="serverId && canWrite" #actions>
+        <Button
+          class="tap"
+          icon="pi pi-search"
+          :label="t('mods.addFromModrinth')"
+          severity="secondary"
+          outlined
+          @click="focusCatalog"
         />
-        <button
-          class="linkbtn"
-          :disabled="checkingCompat"
-          @click="useCustom = !useCustom"
-        >
-          {{ useCustom ? "Pick from list" : "Type a version" }}
-        </button>
-        <button
-          class="btn"
-          :disabled="checkingCompat || !targetValid"
-          @click="checkVersion()"
-        >
-          <i class="pi pi-search" :class="{ spin: checkingCompat }" /> Check
-        </button>
-        <button
-          v-if="compatJob?.state === 'done'"
-          class="linkbtn"
-          :disabled="checkingCompat"
-          title="Ask Modrinth again instead of using the saved answer"
-          @click="checkVersion(true)"
-        >
-          Check again
-        </button>
-      </div>
-      <p v-if="loadingVersions" class="empty sm">Loading Minecraft versions…</p>
-      <p v-else-if="checkingCompat" class="empty sm" role="status">
-        {{ progressText }}
-      </p>
-      <p v-else-if="compatFailed" class="msg err" role="alert">
-        The check for {{ checkedVersion }} failed.
-        {{ compatJob?.error ?? "" }}
-      </p>
-      <p v-else-if="compatEmpty" class="empty sm">
-        No mods installed, so there is nothing to check.
-      </p>
-      <p v-else-if="compatDone && compatStale" class="msg stale">
-        These results are for the mods installed when you checked. Check again
-        to refresh them.
-      </p>
-      <div v-if="compatDone && !compatEmpty" class="compat-filter">
-        <span class="muted">Minecraft {{ checkedVersion }}</span>
-        <button
-          class="chip"
-          :class="{ on: compatFilter === 'all' }"
-          @click="compatFilter = 'all'"
-        >
-          All
-        </button>
-        <button
-          class="chip"
-          :class="{ on: compatFilter === 'blockers' }"
-          @click="compatFilter = 'blockers'"
-        >
-          Only blockers
-        </button>
-      </div>
-    </section>
+      </template>
+    </ViewHeader>
 
-    <div class="stats">
-      <div class="stat">
-        <div class="n">{{ installed?.mods.length ?? "—" }}</div>
-        <div class="l">installed mods</div>
-      </div>
-      <div class="stat">
-        <div class="n mono">{{ installed?.gameVersion ?? "—" }}</div>
-        <div class="l">minecraft version</div>
-      </div>
-      <div class="stat">
-        <div class="n cap">{{ installed?.modLoader ?? "—" }}</div>
-        <div class="l">mod loader</div>
-      </div>
-      <div class="stat" :class="{ warn: updateCount > 0 }">
-        <div class="n">{{ updateCount }}</div>
-        <div class="l">updates available</div>
-      </div>
-      <div
-        v-if="compatSummaryText"
-        class="stat compat-stat"
-        :class="{ warn: (compatSummary?.unavailable ?? 0) > 0 }"
-      >
-        <div class="n sm">{{ compatSummaryText }}</div>
-        <div class="l">for Minecraft {{ checkedVersion }}</div>
-      </div>
-    </div>
+    <EmptyState v-if="!serverId" icon="pi pi-server">{{ t("mods.noServer") }}</EmptyState>
 
-    <div class="grid">
-      <!-- Browse / Add (primary) -->
-      <section class="card">
-        <div class="card-h">
-          <div class="t"><i class="pi pi-search" /> Add from Modrinth</div>
-          <div class="a muted">catalogue</div>
-        </div>
-        <div class="browse-top">
-          <div class="search">
-            <i class="pi pi-search" />
-            <input
-              v-model="query"
-              placeholder="Search mods…"
-              @input="onQueryInput"
-            />
-          </div>
-          <div class="browse-controls">
-            <label class="toggle"
-              ><input
-                type="checkbox"
-                v-model="compatible"
-                @change="resetSearch"
+    <div v-else class="mods-layout">
+      <div class="mods-main">
+        <section
+          class="card"
+          aria-labelledby="mods-installed-h"
+          :aria-busy="inst.loading.value ? 'true' : undefined"
+        >
+          <div class="card-head">
+            <h2 id="mods-installed-h">{{ t("mods.installed.title") }}</h2>
+            <span class="card-meta">{{ installedMeta }}</span>
+            <span v-if="inst.installed.value" class="cluster">
+              <Button
+                class="tap"
+                icon="pi pi-refresh"
+                :label="t('mods.installed.lookForUpdates')"
+                size="small"
+                severity="secondary"
+                outlined
+                :loading="inst.checkingUpdates.value"
+                @click="inst.refreshUpdates(true)"
               />
-              <span class="sw" /> Compatible with
-              {{ installed?.gameVersion ?? "any" }} ·
-              {{ installed?.modLoader ?? "any" }}</label
-            >
-            <select v-model="sort" class="select" @change="resetSearch">
-              <option value="relevance">Relevance</option>
-              <option value="downloads">Downloads</option>
-              <option value="follows">Follows</option>
-              <option value="newest">Newest</option>
-              <option value="updated">Updated</option>
-            </select>
-          </div>
-          <div class="browse-controls">
-            <label class="toggle"
-              ><input
-                type="checkbox"
-                v-model="hideClientOnly"
-                @change="resetSearch"
+              <Button
+                v-if="canWrite && inst.updateCount.value > 0"
+                class="tap"
+                icon="pi pi-arrow-circle-up"
+                :label="t('mods.installed.updateAll', { count: inst.updateCount.value })"
+                size="small"
+                :loading="inst.applyingAll.value"
+                @click="applyAll"
               />
-              <span class="sw" /> Hide client-only mods</label
-            >
+            </span>
           </div>
-        </div>
 
-        <div class="results">
-          <p v-if="searching" class="empty">Searching…</p>
-          <p v-else-if="results.length === 0" class="empty">No results.</p>
-
-          <div
-            v-for="hit in results"
-            :key="hit.projectId"
-            class="item"
-            :class="{ open: openSlug === hit.slug }"
-          >
-            <div class="result">
-              <div class="ricon" :style="iconStyle(hit)">
-                <img v-if="hit.iconUrl" :src="hit.iconUrl" alt="" />
-                <span v-else>{{ hit.title.charAt(0) }}</span>
-              </div>
-              <div class="info">
-                <div class="rt">
-                  <a :href="hit.pageUrl" target="_blank" rel="noopener"
-                    ><b>{{ hit.title }}</b></a
-                  >
-                  <span class="by">by {{ hit.author }}</span>
-                </div>
-                <div class="rd">{{ hit.description }}</div>
-                <div class="meta">
-                  <span class="env"
-                    ><span
-                      class="d"
-                      :style="{ background: env(hit.environment).color }"
-                    />
-                    {{ env(hit.environment).label }}</span
-                  >
-                  <span class="dl"
-                    ><i class="pi pi-download" /> {{ fmt(hit.downloads) }}</span
-                  >
-                </div>
-              </div>
-              <a
-                class="extlink"
-                :href="hit.pageUrl"
-                target="_blank"
-                rel="noopener"
-                title="Open on Modrinth"
-                ><i class="pi pi-external-link"
-              /></a>
-              <button v-if="hit.installed" class="add installed" disabled>
-                Installed
-              </button>
-              <button
-                v-else-if="canWrite"
-                class="add"
-                :disabled="busy.has(hit.slug)"
-                @click="toggleVersions(hit)"
-              >
-                {{ busy.has(hit.slug) ? "…" : "Add" }}
-                <i
-                  class="pi"
-                  :class="
-                    openSlug === hit.slug ? 'pi-chevron-up' : 'pi-chevron-down'
-                  "
+          <div v-if="showCheck" class="check" role="group" aria-labelledby="mods-check-label">
+            <div class="check-row">
+              <div class="check-field">
+                <label id="mods-check-label" for="mods-check-target">{{ t("mods.check.target") }}</label>
+                <Select
+                  v-if="!compat.useCustom.value"
+                  v-model="compat.selected.value"
+                  class="check-select tap"
+                  :options="versionOptions"
+                  option-label="label"
+                  option-value="value"
+                  label-id="mods-check-target"
+                  aria-labelledby="mods-check-label"
+                  :loading="compat.loadingVersions.value"
+                  :disabled="compat.checkingCompat.value || compat.loadingVersions.value"
                 />
-              </button>
+                <InputText
+                  v-else
+                  id="mods-check-target"
+                  v-model="compat.customVersion.value"
+                  class="check-input tap mono"
+                  :placeholder="t('mods.check.customPlaceholder')"
+                  :disabled="compat.checkingCompat.value"
+                  autocomplete="off"
+                  spellcheck="false"
+                  @keyup.enter="startCheck()"
+                />
+              </div>
+              <Button
+                class="tap"
+                :label="compat.checkingCompat.value ? t('mods.check.checking') : checkButtonLabel"
+                :loading="compat.checkingCompat.value"
+                :disabled="compat.checkingCompat.value || !compat.targetValid.value || inst.mods.value.length === 0"
+                @click="startCheck()"
+              />
+              <Button
+                class="tap"
+                :label="compat.useCustom.value ? t('mods.check.pickFromList') : t('mods.check.typeVersion')"
+                severity="secondary"
+                text
+                :disabled="compat.checkingCompat.value || (compat.useCustom.value && compat.releases.value.length === 0)"
+                @click="compat.useCustom.value = !compat.useCustom.value"
+              />
             </div>
 
-            <!-- version picker -->
-            <div v-if="openSlug === hit.slug" class="picker">
-              <div class="picker-h">
-                <span class="lbl">CHOOSE VERSION</span>
+            <p v-if="checkedAtText" class="small dim">{{ checkedAtText }}</p>
+
+            <JobBlock
+              v-if="compat.checkingCompat.value"
+              :title="progressTitle"
+              state="running"
+              :progress="compat.job.value?.progress ?? null"
+              :heading-level="3"
+            >
+              <p>{{ t("mods.check.runningNote", { version: checkVersionShown }) }}</p>
+            </JobBlock>
+
+            <JobBlock
+              v-else-if="checkFailed"
+              :title="t('mods.check.failedTitle', { version: checkVersionShown })"
+              state="failed"
+              :heading-level="3"
+            >
+              <p class="failure">{{ failureText }}</p>
+              <template #actions>
+                <Button class="tap" :label="t('mods.check.again')" size="small" @click="startCheck(true)" />
+                <Button
+                  class="tap"
+                  :label="t('mods.check.close')"
+                  size="small"
+                  severity="secondary"
+                  text
+                  @click="closeResults"
+                />
+                <span class="small dim nothing-changed">{{ t("mods.check.nothingChanged") }}</span>
+              </template>
+            </JobBlock>
+
+            <InlineBanner v-else-if="checkNotice" tone="warn">{{ checkNotice }}</InlineBanner>
+
+            <p v-if="compat.emptyResult.value" class="small dim">{{ t("mods.check.emptyResult") }}</p>
+
+            <template v-if="compat.hasResult.value && !compat.emptyResult.value">
+              <InlineBanner v-if="compat.stale.value" tone="warn" :title="t('mods.check.staleTitle')">
+                {{ t("mods.check.staleText") }}
+                <template #actions>
+                  <Button class="tap" :label="t('mods.check.again')" size="small" outlined @click="startCheck(true)" />
+                </template>
+              </InlineBanner>
+              <InlineBanner
+                v-else
+                :tone="blockerCount > 0 ? 'warn' : 'info'"
+                :title="blockerCount > 0 ? t('mods.check.blockedTitle') : t('mods.check.readyTitle')"
+              >
+                {{ verdictText }}
+                <template v-if="blockerCount > 0" #actions>
+                  <Button
+                    class="tap"
+                    icon="pi pi-copy"
+                    :label="t('mods.check.copyBlockers')"
+                    size="small"
+                    severity="secondary"
+                    outlined
+                    @click="copyBlockers"
+                  />
+                </template>
+              </InlineBanner>
+
+              <div class="check-results">
+                <div class="minimeter">
+                  <div class="metric metric-ready">
+                    <span class="metric-n">{{ summary.available }}</span>
+                    <span class="metric-l">{{ t("mods.check.metricReady") }}</span>
+                  </div>
+                  <div class="metric metric-missing">
+                    <span class="metric-n">{{ summary.unavailable }}</span>
+                    <span class="metric-l">{{ t("mods.check.metricMissing") }}</span>
+                  </div>
+                  <div class="metric metric-unknown">
+                    <span class="metric-n">{{ summary.unknown }}</span>
+                    <span class="metric-l">{{ t("mods.check.metricUnknown") }}</span>
+                  </div>
+                </div>
+                <div v-if="blockerRows.length" class="blockers">
+                  <span id="mods-blockers-l" class="caps">{{ t("mods.check.blocking") }}</span>
+                  <ul class="iconstrip" aria-labelledby="mods-blockers-l">
+                    <li v-for="row in blockerRows.slice(0, BLOCKER_ICONS)" :key="row.slug">
+                      <ModIcon :name="nameOf(row)" :slug="row.slug" :src="iconOf(row.slug, row.iconUrl)" :size="32" />
+                    </li>
+                    <li v-if="blockerRows.length > BLOCKER_ICONS" class="more">
+                      {{ t("mods.check.more", { count: blockerRows.length - BLOCKER_ICONS }) }}
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </template>
+          </div>
+
+          <template v-if="compat.checkingCompat.value">
+            <div class="subhead">
+              <h3>{{ t("mods.check.progressTitle") }}</h3>
+              <span class="card-meta">{{ t("mods.check.progressMeta") }}</span>
+            </div>
+            <ResponsiveTable
+              stack-below="narrow"
+              :columns="checkColumns"
+              :rows="progressRows"
+              :caption="t('mods.check.progressCaption')"
+              :row-key="(r: CheckRow) => r.slug"
+            >
+              <template #cell-mod="{ row }">
+                <span class="modcell">
+                  <ModIcon :name="row.name" :slug="row.slug" :src="row.iconUrl" :size="32" decorative />
+                  <span class="name">{{ row.name }}</span>
+                </span>
+              </template>
+              <template #cell-installed="{ row }"><span class="mono">{{ row.installedVersion }}</span></template>
+              <template #cell-at="{ row }">
+                <StatusChip v-if="row.result" :state="CHIP[row.result.availability].role" :label="t(CHIP[row.result.availability].label)" />
+                <StatusChip v-else state="unknown" :label="t('mods.check.waiting')" />
+              </template>
+              <template #cell-detail="{ row }">
+                <span class="small dim">{{ row.result ? detailOf(row.result) : t("mods.check.detailQueued") }}</span>
+              </template>
+            </ResponsiveTable>
+          </template>
+
+          <template v-else-if="compat.hasResult.value && !compat.emptyResult.value">
+            <div class="subhead">
+              <h3>{{ t("mods.check.resultsTitle", { version: checkVersionShown }) }}</h3>
+              <span class="card-meta">{{ t("mods.check.resultsOrder") }}</span>
+              <Button
+                class="tap"
+                icon="pi pi-arrow-left"
+                :label="t('mods.check.close')"
+                size="small"
+                severity="secondary"
+                text
+                @click="closeResults"
+              />
+            </div>
+            <div class="toolbar" role="group" :aria-label="t('mods.check.filterLabel')">
+              <button
+                v-for="chip in resultFilters"
+                :key="chip.key"
+                type="button"
+                :class="['chip', 'tap', { on: compat.filter.value === chip.key }]"
+                :aria-pressed="compat.filter.value === chip.key"
+                @click="compat.filter.value = chip.key"
+              >
+                {{ chip.label }} <span class="chip-n">{{ chip.count }}</span>
+              </button>
+            </div>
+            <ResponsiveTable
+              stack-below="narrow"
+              v-if="visibleResults.length"
+              :columns="resultColumns"
+              :rows="visibleResults"
+              :caption="t('mods.check.caption', { version: checkVersionShown })"
+              :row-key="(r: CheckRow) => r.slug"
+              :actions-label="t('mods.installed.actions')"
+              :actions-label-visible="false"
+            >
+              <template #cell-mod="{ row }">
+                <span class="modcell">
+                  <ModIcon :name="row.name" :slug="row.slug" :src="row.iconUrl" :size="32" decorative />
+                  <span class="name">{{ row.name }}</span>
+                </span>
+              </template>
+              <template #cell-installed="{ row }"><span class="mono">{{ row.installedVersion }}</span></template>
+              <template #cell-at="{ row }">
+                <StatusChip
+                  v-if="row.result"
+                  :state="CHIP[row.result.availability].role"
+                  :label="t(CHIP[row.result.availability].label)"
+                />
+              </template>
+              <template #cell-detail="{ row }">
+                <span class="small dim detail">{{ row.result ? detailOf(row.result) : "" }}</span>
+              </template>
+              <template #actions="{ row }">
+                <a
+                  v-if="row.result && row.result.availability !== 'available'"
+                  class="link-btn tap"
+                  :href="modrinthUrl(row.slug)"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  :aria-label="t('mods.check.openProjectNamed', { name: row.name })"
+                >{{ t("mods.check.openProject") }}</a>
+              </template>
+            </ResponsiveTable>
+            <p v-else class="none-in-filter small dim">{{ t("mods.check.noneInFilter") }}</p>
+            <div class="foot">
+              <span class="foot-count" aria-live="polite">
+                {{ t("mods.check.showing", { shown: visibleResults.length, total: allResults.length }) }}
+              </span>
+            </div>
+          </template>
+
+          <template v-else>
+            <div v-if="inst.loading.value && !inst.installed.value" class="skeleton" role="status">
+              <span class="sr-only">{{ t("mods.installed.loading", { server: serverId }) }}</span>
+              <span v-for="n in 5" :key="n" class="sk-row" aria-hidden="true">
+                <span class="sk-tile" />
+                <span class="sk-lines"><span /><span /></span>
+              </span>
+            </div>
+
+            <InlineError
+              v-else-if="inst.loadError.value && !inst.installed.value"
+              :title="t('mods.installed.loadFailed')"
+              :recovery="t('mods.installed.loadFailedRecovery', { server: serverId })"
+              :detail="loadErrorDetail"
+              :retry-label="t('mods.reload')"
+              :busy="inst.loading.value"
+              @retry="reload"
+            />
+
+            <EmptyState
+              v-else-if="inst.installed.value && inst.mods.value.length === 0"
+              icon="pi pi-box"
+              :title="t('mods.installed.emptyTitle', { server: serverId })"
+            >
+              {{ t("mods.installed.emptyText") }}
+              <template v-if="canWrite" #action>
+                <Button class="tap" icon="pi pi-search" :label="t('mods.installed.searchModrinth')" @click="focusCatalog" />
+              </template>
+            </EmptyState>
+
+            <template v-else-if="inst.installed.value">
+              <div class="notices">
+                <StaleBanner v-if="inst.installed.value.stale" :stale="inst.installed.value.stale">
+                  {{ t("mods.installed.staleText", { age: relativeAge(inst.installed.value.stale.asOf), server: serverId }) }}
+                  <template #actions>
+                    <Button class="tap" :label="t('mods.reload')" size="small" outlined :loading="inst.loading.value" @click="reload" />
+                  </template>
+                </StaleBanner>
+                <InlineBanner v-if="inst.loadError.value" tone="warn" :title="t('mods.installed.reloadFailed')">
+                  {{ t("mods.installed.reloadFailedText", { server: serverId, message: inst.loadError.value.message || String(inst.loadError.value.status ?? "") }) }}
+                  <template #actions>
+                    <Button class="tap" :label="t('mods.reload')" size="small" outlined :loading="inst.loading.value" @click="reload" />
+                  </template>
+                </InlineBanner>
+                <InlineBanner v-if="inst.updatesError.value" tone="warn" :title="t('mods.installed.updatesFailed')">
+                  {{ t("mods.installed.updatesFailedText", { message: inst.updatesError.value }) }}
+                  <template #actions>
+                    <Button
+                      class="tap"
+                      :label="t('mods.installed.lookForUpdates')"
+                      size="small"
+                      outlined
+                      :loading="inst.checkingUpdates.value"
+                      @click="inst.refreshUpdates(true)"
+                    />
+                  </template>
+                </InlineBanner>
+              </div>
+
+              <div class="toolbar">
+                <span class="search">
+                  <i class="pi pi-search" aria-hidden="true" />
+                  <label class="sr-only" for="mods-installed-q">{{ t("mods.installed.search") }}</label>
+                  <InputText
+                    id="mods-installed-q"
+                    v-model="installedQuery"
+                    type="search"
+                    class="tap"
+                    :placeholder="t('mods.installed.searchPlaceholder', { count: inst.mods.value.length })"
+                  />
+                </span>
                 <button
-                  class="install ghost sm"
-                  :disabled="busy.has(hit.slug)"
-                  @click="installLatest(hit)"
+                  v-if="inst.updateCount.value > 0"
+                  type="button"
+                  :class="['chip', 'tap', { on: onlyUpdates }]"
+                  :aria-pressed="onlyUpdates"
+                  @click="onlyUpdates = !onlyUpdates"
                 >
-                  Install latest compatible
+                  {{ t("mods.installed.onlyUpdates") }} <span class="chip-n">{{ inst.updateCount.value }}</span>
                 </button>
               </div>
-              <p v-if="loadingDetail" class="empty sm">Loading versions…</p>
-              <template v-else-if="detail">
-                <p v-if="detail.versions.length === 0" class="empty sm">
-                  No versions for this loader.
-                </p>
-                <div
-                  v-for="v in detail.versions.slice(0, 12)"
-                  :key="v.id"
-                  class="vrow"
-                >
-                  <span class="vv">{{ v.versionNumber }}</span>
-                  <span class="gt">{{ v.gameVersions[0] }}</span>
-                  <span
-                    class="ty"
-                    :class="{ beta: v.versionType !== 'release' }"
-                    >{{ label(v.versionType) }}</span
-                  >
-                  <span class="dt">{{ date(v.datePublished) }}</span>
-                  <button
-                    class="install"
-                    :disabled="busy.has(hit.slug)"
-                    @click="installVersion(hit, v)"
-                  >
-                    Install
-                  </button>
-                </div>
-              </template>
-            </div>
-          </div>
-        </div>
-        <div class="foot">
-          <span>Modrinth · {{ total }} results</span>
-          <span v-if="total > PAGE" class="pager">
-            <button
-              class="pg"
-              :disabled="offset === 0 || searching"
-              @click="prevPage"
-            >
-              <i class="pi pi-chevron-left" />
-            </button>
-            <span class="pg-info">Page {{ page }} / {{ totalPages }}</span>
-            <button
-              class="pg"
-              :disabled="offset + PAGE >= total || searching"
-              @click="nextPage"
-            >
-              <i class="pi pi-chevron-right" />
-            </button>
-          </span>
-        </div>
-      </section>
 
-      <!-- Installed -->
-      <section class="card">
-        <div class="card-h">
-          <div class="t"><i class="pi pi-box" /> Installed mods</div>
-          <div class="a muted">{{ installed?.mods.length ?? 0 }} mods</div>
-        </div>
-        <p v-if="loadingInstalled" class="empty">Loading…</p>
-        <p v-else-if="!installed || installed.mods.length === 0" class="empty">
-          No mods installed.
-        </p>
-        <div v-else class="scroll-body">
-          <table>
-            <thead>
-              <tr>
-                <th>MOD</th>
-                <th>VERSION</th>
-                <th>STATUS</th>
-                <th v-if="showCompatColumn">
-                  {{ checkedVersion ? "MC " + checkedVersion : "COMPAT" }}
-                </th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-if="visibleMods.length === 0">
-                <td :colspan="showCompatColumn ? 5 : 4" class="empty sm">
-                  No blockers for Minecraft {{ checkedVersion }}.
-                </td>
-              </tr>
-              <template v-for="m in visibleMods" :key="m.slug">
-              <tr :class="{ 'row-disabled': isDisabled(m) }">
-                <td>
-                  <div class="mod-name">{{ m.slug }}</div>
-                  <div class="mod-file">{{ m.filename ?? "—" }}</div>
-                </td>
-                <td>
-                  <span class="ver">{{ shortVersion(m.versionId) }}</span>
-                </td>
-                <td>
-                  <span
-                    v-if="isDisabled(m)"
-                    class="pill off"
-                    title="Disabled mods only take effect on the next server start"
-                    >⏸ disabled</span
-                  >
-                  <span v-else-if="update(m.slug)" class="pill up"
-                    >↑ update</span
-                  >
-                  <span v-else class="pill ok">✓ up to date</span>
-                </td>
-                <td v-if="showCompatColumn">
-                  <button
-                    v-if="compatFor(m.slug)"
-                    class="pill compat-badge"
-                    :class="'c-' + compatFor(m.slug)!.availability"
-                    :aria-expanded="openCompat === m.slug"
-                    @click="openCompat = openCompat === m.slug ? null : m.slug"
-                  >
-                    {{ compatLabel(compatFor(m.slug)!.availability) }}
-                  </button>
-                  <span v-else-if="checkingCompat" class="muted small">…</span>
-                  <span v-else class="muted small">—</span>
-                </td>
-                <td>
-                  <div class="row-actions">
-                    <button
-                      v-if="canWrite && update(m.slug)"
-                      class="mini update"
-                      :disabled="busy.has(m.slug)"
-                      @click="updateOne(m.slug)"
-                    >
-                      Update
-                    </button>
-                    <button
-                      v-if="canWrite"
-                      class="mini toggle"
-                      :disabled="busy.has(m.slug)"
-                      :title="
-                        isDisabled(m)
-                          ? 'Enable (takes effect on next restart)'
-                          : 'Disable without uninstalling (takes effect on next restart)'
-                      "
-                      @click="doToggle(m)"
-                    >
-                      {{ isDisabled(m) ? "Enable" : "Disable" }}
-                    </button>
-                    <a
-                      class="extlink"
-                      :href="'https://modrinth.com/mod/' + m.slug"
-                      target="_blank"
-                      rel="noopener"
-                      title="Open on Modrinth"
-                      ><i class="pi pi-external-link"
-                    /></a>
-                    <button
-                      v-if="canWrite"
-                      class="mini remove"
-                      :disabled="busy.has(m.slug)"
-                      title="Remove"
-                      @click="doRemove(m.slug)"
-                    >
-                      <i class="pi pi-trash" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-              <tr
-                v-if="openCompat === m.slug && compatFor(m.slug)"
-                class="compat-detail"
+              <ResponsiveTable
+                stack-below="narrow"
+                v-if="visibleInstalled.length"
+                :columns="installedColumns"
+                :rows="visibleInstalled"
+                :caption="t('mods.installed.caption', { server: serverId })"
+                :row-key="(m: InstalledMod) => m.slug"
+                :busy="(m: InstalledMod) => inst.isBusy(m.slug)"
+                :actions-label="t('mods.installed.actions')"
+                :actions-label-visible="false"
               >
-                <td :colspan="5">
-                  <template v-if="compatFor(m.slug)!.availability === 'available'">
-                    <template v-if="compatFor(m.slug)!.target">
-                      Release for Minecraft {{ checkedVersion }}:
-                      <b>{{ compatFor(m.slug)!.target!.versionName }}</b>
-                      <span v-if="compatFor(m.slug)!.target!.datePublished">
-                        , published
-                        {{ date(compatFor(m.slug)!.target!.datePublished) }}</span
-                      >.
-                      <a
-                        v-if="compatFor(m.slug)!.target!.downloadUrl"
-                        :href="compatFor(m.slug)!.target!.downloadUrl"
-                        target="_blank"
-                        rel="noopener"
-                        >Download</a
-                      >
-                    </template>
-                    <template v-else>
-                      The installed build is already the newest release for
-                      Minecraft {{ checkedVersion }}.
-                    </template>
+                <template #cell-mod="{ row }">
+                  <span :class="['modcell', { off: row.enabled === false }]">
+                    <ModIcon :name="nameOf(row)" :slug="row.slug" :src="row.iconUrl" :size="36" decorative />
+                    <span class="modcell-text">
+                      <span class="name">{{ nameOf(row) }}</span>
+                      <span v-if="row.filename" class="sub mono" :title="row.filename">{{ row.filename }}</span>
+                    </span>
+                  </span>
+                </template>
+                <template #cell-version="{ row }">
+                  <span class="mono version">{{ row.versionId ?? "" }}</span>
+                </template>
+                <template #cell-status="{ row }">
+                  <StatusChip v-bind="statusOf(row)" />
+                </template>
+                <template #actions="{ row, busy }">
+                  <span v-if="busy" class="row-busy" role="status">
+                    {{ inst.busyLabel(row.slug) }}. {{ t("mods.installed.rowBusyNote") }}
+                  </span>
+                  <span v-else class="cluster row-actions">
+                    <Button
+                      v-if="canWrite && inst.hasUpdate(row.slug)"
+                      class="tap"
+                      :label="t('mods.installed.update')"
+                      size="small"
+                      :aria-label="t('mods.installed.updateNamed', { name: nameOf(row) })"
+                      :disabled="inst.isLocked(row.slug)"
+                      @click="act(row, 'update')"
+                    />
+                    <Button
+                      v-if="canWrite"
+                      class="tap"
+                      :label="row.enabled === false ? t('mods.installed.enable') : t('mods.installed.disable')"
+                      size="small"
+                      severity="secondary"
+                      outlined
+                      :aria-label="
+                        row.enabled === false
+                          ? t('mods.installed.enableNamed', { name: nameOf(row) })
+                          : t('mods.installed.disableNamed', { name: nameOf(row) })
+                      "
+                      :disabled="inst.isLocked(row.slug)"
+                      @click="act(row, row.enabled === false ? 'enable' : 'disable')"
+                    />
+                    <a
+                      class="icon-link tap"
+                      :href="modrinthUrl(row.slug)"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      :aria-label="t('mods.installed.openNamed', { name: nameOf(row) })"
+                      :title="t('mods.installed.openModrinth')"
+                    ><i class="pi pi-external-link" aria-hidden="true" /></a>
+                    <Button
+                      v-if="canWrite"
+                      class="tap"
+                      :label="t('mods.installed.remove')"
+                      size="small"
+                      severity="danger"
+                      text
+                      :aria-label="t('mods.installed.removeNamed', { name: nameOf(row) })"
+                      :disabled="inst.isLocked(row.slug)"
+                      @click="confirmRemove(row)"
+                    />
+                  </span>
+                </template>
+              </ResponsiveTable>
+              <p v-else class="none-in-filter small dim">{{ t("mods.installed.noMatch") }}</p>
+
+              <div class="foot">
+                <span class="foot-count">
+                  {{ t("mods.installed.showing", { shown: visibleInstalled.length, total: inst.mods.value.length }) }}
+                </span>
+              </div>
+            </template>
+          </template>
+        </section>
+      </div>
+
+      <div class="mods-catalog">
+        <section class="card" aria-labelledby="mods-catalog-h" :aria-busy="searching ? 'true' : undefined">
+          <div class="card-head">
+            <h2 id="mods-catalog-h">{{ t("mods.catalog.title") }}</h2>
+            <span class="card-meta">{{ catalogMeta }}</span>
+          </div>
+          <div class="toolbar catalog-tools">
+            <span class="search">
+              <i class="pi pi-search" aria-hidden="true" />
+              <label class="sr-only" for="mods-catalog-q">{{ t("mods.catalog.search") }}</label>
+              <InputText
+                id="mods-catalog-q"
+                ref="catalogSearch"
+                v-model="query"
+                type="search"
+                class="tap"
+                :placeholder="t('mods.catalog.searchPlaceholder')"
+                @input="onQueryInput"
+              />
+            </span>
+            <button
+              type="button"
+              :class="['chip', 'tap', { on: compatible }]"
+              :aria-pressed="compatible"
+              @click="toggleCompatible"
+            >
+              {{ compatibleLabel }}
+            </button>
+            <button
+              type="button"
+              :class="['chip', 'tap', { on: hideClientOnly }]"
+              :aria-pressed="hideClientOnly"
+              @click="toggleClientOnly"
+            >
+              {{ t("mods.catalog.hideClientOnly") }}
+            </button>
+            <span class="sort">
+              <span id="mods-sort-l" class="small dim">{{ t("mods.catalog.sort") }}</span>
+              <Select
+                v-model="sort"
+                class="tap"
+                :options="sortOptions"
+                option-label="label"
+                option-value="value"
+                label-id="mods-sort"
+                aria-labelledby="mods-sort-l"
+                @update:model-value="resetSearch"
+              />
+            </span>
+          </div>
+
+          <div v-if="(searching || !searched) && results.length === 0" class="skeleton" role="status">
+            <span class="sr-only">{{ t("mods.catalog.loading") }}</span>
+            <span v-for="n in 3" :key="n" class="sk-row" aria-hidden="true">
+              <span class="sk-tile" />
+              <span class="sk-lines"><span /><span /></span>
+            </span>
+          </div>
+
+          <InlineError
+            v-else-if="searchError"
+            :title="t('mods.catalog.failed')"
+            :recovery="t('mods.catalog.failedRecovery')"
+            :detail="searchError"
+            :busy="searching"
+            @retry="runSearch"
+          />
+
+          <p v-else-if="results.length === 0" class="none-in-filter small dim">{{ t("mods.catalog.empty") }}</p>
+
+          <template v-else>
+            <ul class="cat">
+              <li v-for="hit in results" :key="hit.projectId || hit.slug" class="cat-item">
+                <div class="cat-row">
+                  <ModIcon :name="hit.title || hit.slug" :slug="hit.slug" :src="hit.iconUrl ?? ''" :size="48" decorative />
+                  <div class="cat-body">
+                    <div class="cat-title">
+                      <a :href="hit.pageUrl" target="_blank" rel="noopener noreferrer">{{ hit.title || hit.slug }}</a>
+                      <span v-if="hit.author" class="cat-by">{{ t("mods.catalog.by", { author: hit.author }) }}</span>
+                    </div>
+                    <p class="cat-desc">{{ hit.description }}</p>
+                    <div class="cat-meta">
+                      <span>{{ t(ENVIRONMENT_LABEL[hit.environment] ?? ENVIRONMENT_LABEL.unknown) }}</span>
+                      <span>{{ t("mods.catalog.downloads", { count: compact(hit.downloads) }) }}</span>
+                    </div>
+                  </div>
+                  <Button
+                    v-if="hit.installed"
+                    class="tap cat-action"
+                    :label="t('mods.catalog.installed')"
+                    size="small"
+                    severity="secondary"
+                    outlined
+                    disabled
+                  />
+                  <Button
+                    v-else-if="canWrite"
+                    class="tap cat-action"
+                    :label="installs.isBusy(hit.slug) ? installs.busyLabel(hit.slug) : t('mods.catalog.add')"
+                    :icon="openSlug === hit.slug ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"
+                    icon-pos="right"
+                    size="small"
+                    severity="secondary"
+                    outlined
+                    :loading="installs.isBusy(hit.slug)"
+                    :aria-expanded="openSlug === hit.slug"
+                    :aria-controls="pickerId(hit.slug)"
+                    :aria-label="t('mods.catalog.addNamed', { name: hit.title || hit.slug })"
+                    @click="toggleVersions(hit)"
+                  />
+                </div>
+
+                <div v-if="openSlug === hit.slug" :id="pickerId(hit.slug)" class="picker">
+                  <div class="picker-head">
+                    <span class="picker-title">
+                      <ModIcon :name="hit.title || hit.slug" :slug="hit.slug" :src="hit.iconUrl ?? ''" :size="24" decorative />
+                      <span class="caps">{{ t("mods.catalog.chooseVersion") }}</span>
+                    </span>
+                    <Button
+                      class="tap"
+                      :label="t('mods.catalog.installLatest')"
+                      :aria-label="t('mods.catalog.installLatestNamed', { name: hit.title || hit.slug })"
+                      size="small"
+                      :disabled="installs.isLocked(hit.slug)"
+                      @click="install(hit)"
+                    />
+                  </div>
+                  <p v-if="loadingDetail" class="small dim" role="status">{{ t("mods.catalog.loadingVersions") }}</p>
+                  <InlineError
+                    v-else-if="detailError"
+                    :title="t('mods.catalog.versionsFailed')"
+                    :detail="detailError"
+                    :heading-level="4"
+                    @retry="loadDetail(hit)"
+                  />
+                  <template v-else-if="detail">
+                    <p v-if="detail.versions.length === 0" class="small dim">{{ t("mods.catalog.noVersions") }}</p>
+                    <div v-for="v in detail.versions.slice(0, VERSIONS_SHOWN)" :key="v.id" class="vrow">
+                      <div class="vinfo">
+                        <strong class="mono">{{ v.versionNumber }}</strong>
+                        <span class="vmeta">{{ versionMeta(v) }}</span>
+                      </div>
+                      <span class="cluster">
+                        <span :class="['tag', { 'tag-beta': v.versionType && v.versionType !== 'release' }]">{{ versionTypeLabel(v.versionType) }}</span>
+                        <Button
+                          class="tap"
+                          :label="t('mods.catalog.install')"
+                          size="small"
+                          severity="secondary"
+                          outlined
+                          :aria-label="t('mods.catalog.installNamed', { name: hit.title || hit.slug, version: v.versionNumber })"
+                          :disabled="installs.isLocked(hit.slug)"
+                          @click="install(hit, v)"
+                        />
+                      </span>
+                    </div>
                   </template>
-                  <template v-else>
-                    {{ compatFor(m.slug)!.reason ?? "No details." }}
-                  </template>
-                </td>
-              </tr>
-              </template>
-            </tbody>
-          </table>
-        </div>
-      </section>
+                </div>
+              </li>
+            </ul>
+            <div class="foot">
+              <span class="foot-count">{{ t("mods.catalog.results", { count: total.toLocaleString("en") }) }}</span>
+              <span v-if="total > PAGE" class="cluster">
+                <Button
+                  class="tap"
+                  :label="t('mods.catalog.previous')"
+                  :aria-label="t('mods.catalog.previousPage')"
+                  size="small"
+                  severity="secondary"
+                  outlined
+                  :disabled="offset === 0 || searching"
+                  @click="prevPage"
+                />
+                <span class="foot-count" aria-live="polite">{{ t("mods.catalog.page", { page, pages: totalPages }) }}</span>
+                <Button
+                  class="tap"
+                  :label="t('mods.catalog.next')"
+                  :aria-label="t('mods.catalog.nextPage')"
+                  size="small"
+                  severity="secondary"
+                  outlined
+                  :disabled="offset + PAGE >= total || searching"
+                  @click="nextPage"
+                />
+              </span>
+            </div>
+          </template>
+        </section>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
-import { useMods, ENVIRONMENT_META } from "../composables/useMods";
-import { useModCompat } from "../composables/useModCompat";
-import { useCapabilities } from "../composables/useCapabilities";
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from "vue";
+import Button from "primevue/button";
+import Select from "primevue/select";
+import InputText from "primevue/inputtext";
 import { useToast } from "primevue/usetoast";
-import { UnauthorizedError } from "../api";
-import type {
-  InstalledMods,
-  InstalledMod,
-  ModSearchHit,
-  ModVersion,
-  ModProjectDetail,
-} from "../api";
+import { SERVER_STATE_ROLE, StatusRole, type StatusInput } from "@mcbot/schema";
+import { t, type MessageKey } from "../i18n";
+import { absoluteStamp, relativeAge } from "../utils/time";
+import { ApiError } from "../api";
+import type { InstalledMod, ModCompatMod, ModProjectDetail, ModSearchHit, ModVersion } from "../api";
+import { useMods, ENVIRONMENT_LABEL } from "../composables/useMods";
+import { useModCompat, type CompatFilter } from "../composables/useModCompat";
+import { useInstalledMods, type RowAction, type RowOutcome } from "../composables/useInstalledMods";
+import { useCapabilities } from "../composables/useCapabilities";
+import { useConfirmAction } from "../composables/useConfirmAction";
+import { useRowBusy } from "../composables/useRowBusy";
+import { useServerStatus } from "../composables/useServerStatus";
+import ViewHeader from "../components/ui/ViewHeader.vue";
+import EmptyState from "../components/ui/EmptyState.vue";
+import InlineError from "../components/ui/InlineError.vue";
+import InlineBanner from "../components/ui/InlineBanner.vue";
+import StaleBanner from "../components/ui/StaleBanner.vue";
+import JobBlock from "../components/ui/JobBlock.vue";
+import ResponsiveTable from "../components/ui/ResponsiveTable.vue";
+import StatusChip from "../components/ui/StatusChip.vue";
+import ModIcon from "../components/ui/ModIcon.vue";
+import type { ResponsiveColumn } from "../components/ui/types";
 
 const props = withDefaults(
   defineProps<{
     activeServer: string;
     /** Minecraft version from the URL (`?check=`) to run the upgrade check for. */
     check?: string;
-    /** Result filter from the URL (`?filter=blockers`). */
+    /** Result filter from the URL (`?filter=blockers` or `?filter=ready`). */
     filter?: string;
   }>(),
   { check: "", filter: "" },
@@ -483,19 +694,418 @@ const props = withDefaults(
 const emit = defineEmits<{
   "update-route": [patch: { query: Record<string, string | undefined> }];
 }>();
-const serverId = computed(() => props.activeServer);
 
+interface CheckRow {
+  slug: string;
+  name: string;
+  iconUrl: string;
+  installedVersion: string;
+  result: ModCompatMod | undefined;
+}
+
+const PAGE = 20;
+const VERSIONS_SHOWN = 12;
+const BLOCKER_ICONS = 6;
+const SEARCH_DEBOUNCE_MS = 300;
+const ORDER: Record<ModCompatMod["availability"], number> = { unavailable: 0, unknown: 1, available: 2 };
+const CHIP: Record<ModCompatMod["availability"], { role: StatusRole; label: MessageKey }> = {
+  available: { role: StatusRole.Online, label: "mods.check.ready" },
+  unavailable: { role: StatusRole.Offline, label: "mods.check.noBuild" },
+  // Unknown blocks an upgrade decision, so it reads as "needs a look", not as grey.
+  unknown: { role: StatusRole.Degraded, label: "mods.check.unknown" },
+};
+const BUSY_LABEL: Record<RowAction, MessageKey> = {
+  update: "mods.busy.update",
+  remove: "mods.busy.remove",
+  disable: "mods.busy.disable",
+  enable: "mods.busy.enable",
+};
+
+const serverId = computed(() => props.activeServer);
 const mods = useMods(() => props.activeServer);
+const inst = useInstalledMods(mods);
+const installs = useRowBusy<string>();
+const status = useServerStatus();
 const { can } = useCapabilities();
+const confirmAction = useConfirmAction();
 const toast = useToast();
 const canWrite = computed(() => can("mods:write", props.activeServer));
 
-const installed = ref<InstalledMods | null>(null);
-const loadingInstalled = ref(false);
-const updates = ref<Map<string, string>>(new Map());
-const checking = ref(false);
-const applyingAll = ref(false);
+const checkError = ref("");
+const compat = useModCompat({
+  api: {
+    start: (v, refresh) => mods.compatStart(v, refresh),
+    poll: (id) => mods.compatPoll(id),
+    versions: () => mods.compatVersions(),
+  },
+  installedVersion: () => inst.installed.value?.gameVersion,
+  onError: (text) => (checkError.value = text),
+});
 
+// ── Header ────────────────────────────────────────────────────────────────
+
+const serverStatus = computed(() => status.servers.value.find((s) => s.id === props.activeServer) ?? null);
+const serverRole = computed<StatusInput>(() => {
+  const state = serverStatus.value?.state;
+  return state ? SERVER_STATE_ROLE[state] : StatusRole.Unknown;
+});
+const playersOnline = computed(() => serverStatus.value?.players?.online ?? 0);
+
+function capitalise(text: string): string {
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+}
+
+const lede = computed(() => {
+  const list = inst.installed.value;
+  const server = props.activeServer;
+  const base =
+    list?.modLoader && list.gameVersion
+      ? t("mods.lede", { loader: capitalise(list.modLoader), version: list.gameVersion, server })
+      : t("mods.ledeUnknown", { server });
+  return playersOnline.value > 0 ? `${base} ${t("mods.ledePlayers", { count: playersOnline.value })}` : base;
+});
+
+// ── Installed list ────────────────────────────────────────────────────────
+
+const installedQuery = ref("");
+const onlyUpdates = ref(false);
+
+const installedColumns = computed<ResponsiveColumn[]>(() => [
+  { key: "mod", label: t("mods.installed.colMod"), primary: true },
+  { key: "version", label: t("mods.installed.colVersion") },
+  { key: "status", label: t("mods.installed.colStatus") },
+]);
+
+const installedMeta = computed(() => {
+  const list = inst.installed.value;
+  if (!list) return "";
+  const parts = [t("mods.installed.count", { count: list.mods.length })];
+  if (inst.updateCount.value > 0) parts.push(t("mods.installed.updates", { count: inst.updateCount.value }));
+  return parts.join(", ");
+});
+
+const visibleInstalled = computed(() => {
+  const q = installedQuery.value.trim().toLowerCase();
+  return inst.mods.value.filter((m) => {
+    if (onlyUpdates.value && !inst.hasUpdate(m.slug)) return false;
+    if (!q) return true;
+    return (
+      m.slug.toLowerCase().includes(q) ||
+      (m.filename ?? "").toLowerCase().includes(q) ||
+      nameOf(m).toLowerCase().includes(q)
+    );
+  });
+});
+
+watch(inst.updateCount, (n) => {
+  if (n === 0) onlyUpdates.value = false;
+});
+
+const loadErrorDetail = computed(() => {
+  const err = inst.loadError.value;
+  if (!err) return "";
+  const outcome = err.status !== null ? String(err.status) : err.message || "no response";
+  return `GET /api/servers/${props.activeServer}/mods/installed -> ${outcome}`;
+});
+
+/** The compat check knows a project's display name; the installed list only has the slug. */
+function nameOf(m: { slug: string; name?: string }): string {
+  return m.name || compat.forSlug(m.slug)?.name || m.slug;
+}
+
+function iconOf(slug: string, own?: string): string {
+  return own || inst.mods.value.find((m) => m.slug === slug)?.iconUrl || "";
+}
+
+function modrinthUrl(slug: string): string {
+  return `https://modrinth.com/mod/${encodeURIComponent(slug)}`;
+}
+
+function statusOf(m: InstalledMod): { state: StatusInput; label: string; busy?: boolean } {
+  if (inst.isBusy(m.slug)) return { state: StatusRole.Info, label: inst.busyLabel(m.slug), busy: true };
+  if (inst.changedSinceLoad.has(m.slug)) return { state: StatusRole.Pending, label: t("mods.installed.statusChanged") };
+  if (m.enabled === false) return { state: StatusRole.Unknown, label: t("mods.installed.statusDisabled") };
+  if (inst.hasUpdate(m.slug)) return { state: StatusRole.Info, label: t("mods.installed.statusUpdate") };
+  return { state: StatusRole.Applied, label: t("mods.installed.statusUpToDate") };
+}
+
+function notify(ok: boolean, summary: string, detail: string): void {
+  toast.add({
+    severity: ok ? "success" : "error",
+    summary,
+    detail,
+    life: ok ? 4000 : 7000,
+  });
+}
+
+const FAILED: Record<RowAction, MessageKey> = {
+  update: "mods.toast.updateFailed",
+  remove: "mods.toast.removeFailed",
+  disable: "mods.toast.toggleFailed",
+  enable: "mods.toast.toggleFailed",
+};
+
+function report(action: RowAction, name: string, outcome: RowOutcome): void {
+  if (!outcome.ok) {
+    if (outcome.error || outcome.changed === 0) {
+      notify(false, t(FAILED[action]), `${name}: ${outcome.error || t("mods.toast.noDetail")}`);
+    }
+    return;
+  }
+  const restart = t("mods.toast.restartNote", { server: props.activeServer });
+  if (action === "update") {
+    if (outcome.changed > 0) notify(true, t("mods.toast.updated", { name }), restart);
+    else notify(true, t("mods.toast.upToDate", { name }), "");
+  } else if (action === "remove") notify(true, t("mods.toast.removed", { name }), restart);
+  else if (action === "disable") notify(true, t("mods.toast.disabled", { name }), restart);
+  else notify(true, t("mods.toast.enabled", { name }), restart);
+}
+
+async function act(m: InstalledMod, action: RowAction): Promise<void> {
+  if (inst.isLocked(m.slug)) return;
+  const name = nameOf(m);
+  const outcome = await inst.runRow(m.slug, action, t(BUSY_LABEL[action]));
+  report(action, name, outcome);
+  if (outcome.ok && (action === "remove" || action === "update")) void runSearch();
+}
+
+async function confirmRemove(m: InstalledMod): Promise<void> {
+  const name = nameOf(m);
+  const server = props.activeServer;
+  const players = playersOnline.value;
+  const result = await confirmAction({
+    level: "disruptive",
+    levelLabel: t("mods.remove.level"),
+    tone: "danger",
+    header: t("mods.remove.header", { name, server }),
+    message: t("mods.remove.message"),
+    acceptLabel: t("mods.remove.accept", { name }),
+    cancelLabel: t("mods.remove.cancel", { name }),
+    media: { name, slug: m.slug, src: m.iconUrl ?? "" },
+    facts: [
+      ...(m.filename ? [{ term: t("mods.remove.factFile"), detail: m.filename, mono: true }] : []),
+      {
+        term: t("mods.remove.factEffect"),
+        detail: players > 0 ? t("mods.remove.effectPlayers", { name, count: players }) : t("mods.remove.effect", { name }),
+      },
+      { term: t("mods.remove.factRecover"), detail: t("mods.remove.recover", { name }) },
+    ],
+  });
+  if (result !== "confirm" || props.activeServer !== server) return;
+  await act(m, "remove");
+}
+
+async function applyAll(): Promise<void> {
+  const outcome = await inst.applyAll();
+  if (!outcome.ok) {
+    notify(false, t("mods.toast.updateFailed"), outcome.error || t("mods.toast.noDetail"));
+    return;
+  }
+  if (outcome.changed > 0) {
+    notify(true, t("mods.toast.updatedAll", { count: outcome.changed }), t("mods.toast.restartNote", { server: props.activeServer }));
+  } else {
+    notify(true, t("mods.toast.allUpToDate"), "");
+  }
+}
+
+// ── Upgrade check ─────────────────────────────────────────────────────────
+
+const versionOptions = computed(() =>
+  compat.versionChoices.value.map((v) => ({
+    value: v,
+    label: v === inst.installed.value?.gameVersion ? t("mods.check.installedSuffix", { version: v }) : v,
+  })),
+);
+
+/** The check group, unless there is nothing to check and no check to show. */
+const showCheck = computed(
+  () =>
+    !!inst.installed.value?.compat &&
+    (inst.mods.value.length > 0 || compat.checkedVersion.value !== null || compat.checkingCompat.value),
+);
+
+const checkButtonLabel = computed(() =>
+  compat.targetValid.value
+    ? t("mods.check.button", { count: inst.mods.value.length, version: compat.targetVersion.value })
+    : t("mods.check.buttonNoVersion"),
+);
+
+const checkVersionShown = computed(() => compat.checkedVersion.value ?? compat.targetVersion.value);
+
+const progressTitle = computed(() => {
+  const p = compat.job.value?.progress;
+  if (!p || p.total === 0) return t("mods.check.starting", { version: checkVersionShown.value });
+  return t("mods.check.progress", { done: Math.min(p.done, p.total), total: p.total });
+});
+
+/** A finished job that failed, or a start or poll that failed before any job answered. */
+const checkFailed = computed(
+  () =>
+    compat.failed.value ||
+    (!!checkError.value && compat.checkedVersion.value !== null && !compat.checkingCompat.value && !compat.hasResult.value),
+);
+const failureText = computed(
+  () => compat.job.value?.error || checkError.value || t("mods.check.failedNoReason"),
+);
+/** Problems outside a check, such as the version list not loading. */
+const checkNotice = computed(() => (checkFailed.value ? "" : checkError.value));
+
+const checkedAtText = computed(() => {
+  const at = compat.job.value?.checkedAt;
+  if (!compat.hasResult.value || !at || compat.stale.value) return "";
+  return t("mods.check.checkedAt", { version: checkVersionShown.value, time: absoluteStamp(at) });
+});
+
+const summary = computed(
+  () => compat.summary.value ?? { available: 0, unavailable: 0, unknown: 0, total: 0 },
+);
+const blockerCount = computed(() => summary.value.unavailable + summary.value.unknown);
+
+const verdictText = computed(() => {
+  const version = checkVersionShown.value;
+  if (blockerCount.value === 0) return t("mods.check.readyText", { version });
+  const parts: string[] = [];
+  if (summary.value.unavailable > 0) parts.push(t("mods.check.blockedMissing", { count: summary.value.unavailable, version }));
+  if (summary.value.unknown > 0) parts.push(t("mods.check.blockedUnknown", { count: summary.value.unknown }));
+  parts.push(t("mods.check.blockedAdvice"));
+  return parts.join(" ");
+});
+
+function installedVersionOf(slug: string): string {
+  return inst.mods.value.find((m) => m.slug === slug)?.versionId ?? "";
+}
+
+function toCheckRow(slug: string, result: ModCompatMod | undefined, name?: string): CheckRow {
+  return {
+    slug,
+    name: name || result?.name || nameOf({ slug }),
+    iconUrl: iconOf(slug, result?.iconUrl),
+    installedVersion: installedVersionOf(slug),
+    result,
+  };
+}
+
+const allResults = computed<CheckRow[]>(() =>
+  [...compat.rows.value]
+    .sort((a, b) => ORDER[a.availability] - ORDER[b.availability] || nameOf(a).localeCompare(nameOf(b)))
+    .map((r) => toCheckRow(r.slug, r)),
+);
+const blockerRows = computed(() =>
+  compat.rows.value
+    .filter((r) => r.availability !== "available")
+    .sort((a, b) => ORDER[a.availability] - ORDER[b.availability]),
+);
+const visibleResults = computed(() => {
+  const f = compat.filter.value;
+  if (f === "blockers") return allResults.value.filter((r) => r.result?.availability !== "available");
+  if (f === "ready") return allResults.value.filter((r) => r.result?.availability === "available");
+  return allResults.value;
+});
+const resultFilters = computed<Array<{ key: CompatFilter; label: string; count: number }>>(() => [
+  { key: "all", label: t("mods.check.filterAll"), count: allResults.value.length },
+  { key: "blockers", label: t("mods.check.filterBlockers"), count: blockerCount.value },
+  { key: "ready", label: t("mods.check.filterReady"), count: summary.value.available },
+]);
+const progressRows = computed<CheckRow[]>(() =>
+  inst.mods.value.map((m) => toCheckRow(m.slug, compat.forSlug(m.slug), nameOf(m))),
+);
+
+const checkColumns = computed<ResponsiveColumn[]>(() => [
+  { key: "mod", label: t("mods.installed.colMod"), primary: true },
+  { key: "installed", label: t("mods.check.colInstalled") },
+  { key: "at", label: t("mods.check.colAt", { version: checkVersionShown.value }) },
+  { key: "detail", label: t("mods.check.colDetail") },
+]);
+const resultColumns = checkColumns;
+
+function detailOf(r: ModCompatMod): string {
+  if (r.availability === "available") {
+    return r.target
+      ? t("mods.check.detailBuild", { name: r.target.versionName })
+      : t("mods.check.detailNewest", { version: checkVersionShown.value });
+  }
+  return r.reason || t("mods.check.detailNoReason");
+}
+
+/** What a finished check was computed from: slug, build and enabled state. */
+function installedSignature(list: InstalledMod[]): string {
+  return list
+    .map((m) => `${m.slug}:${m.versionId ?? ""}:${m.enabled === false ? 0 : 1}`)
+    .sort()
+    .join("|");
+}
+let checkedSignature = "";
+
+function runCheck(refresh: boolean): Promise<void> {
+  checkError.value = "";
+  checkedSignature = installedSignature(inst.mods.value);
+  return compat.check(refresh);
+}
+
+function startCheck(refresh = false): Promise<void> {
+  compat.filter.value = "blockers";
+  return runCheck(refresh);
+}
+
+function closeResults(): void {
+  compat.reset();
+  checkError.value = "";
+}
+
+async function copyBlockers(): Promise<void> {
+  const lines = blockerRows.value.map((r) => `${nameOf(r)} (${t(CHIP[r.availability].label)})`);
+  try {
+    await navigator.clipboard.writeText(lines.join("\n"));
+    toast.add({ severity: "success", summary: t("mods.check.copied"), life: 3000 });
+  } catch {
+    toast.add({ severity: "warn", summary: t("mods.check.copyFailed"), life: 6000 });
+  }
+}
+
+watch(inst.mods, (next) => {
+  if (compat.hasResult.value && installedSignature(next) !== checkedSignature) compat.markStale();
+});
+
+function routeFilter(value: string): CompatFilter {
+  return value === "blockers" || value === "ready" ? value : "all";
+}
+
+/** Runs the check the URL names, once the installed list says checks are possible. */
+async function applyRouteCheck(): Promise<void> {
+  if (!props.check || !inst.installed.value?.compat || compat.checkingCompat.value) return;
+  if (compat.versionChoices.value.includes(props.check)) {
+    compat.useCustom.value = false;
+    compat.selected.value = props.check;
+  } else {
+    compat.useCustom.value = true;
+    compat.customVersion.value = props.check;
+  }
+  compat.filter.value = routeFilter(props.filter);
+  await runCheck(false);
+}
+
+watch(
+  () => props.check,
+  (version) => {
+    if (version && version !== compat.checkedVersion.value) void applyRouteCheck();
+  },
+);
+watch(
+  () => props.filter,
+  (value) => {
+    if (compat.hasResult.value) compat.filter.value = routeFilter(value);
+  },
+);
+watch([compat.checkedVersion, compat.filter], ([version, filter]) => {
+  const check = version ?? "";
+  const shownFilter = version && filter !== "all" ? filter : "";
+  if (check === props.check && shownFilter === props.filter) return;
+  emit("update-route", { query: { check: check || undefined, filter: shownFilter || undefined } });
+});
+
+// ── Catalogue ─────────────────────────────────────────────────────────────
+
+const catalogSearch = ref<{ $el?: HTMLElement } | null>(null);
 const query = ref("");
 const sort = ref("relevance");
 const compatible = ref(true);
@@ -503,220 +1113,103 @@ const hideClientOnly = ref(true);
 const results = ref<ModSearchHit[]>([]);
 const total = ref(0);
 const searching = ref(false);
-
-const openSlug = ref<string | null>(null);
-const detail = ref<ModProjectDetail | null>(null);
-const loadingDetail = ref(false);
-
-const busy = ref<Set<string>>(new Set());
-
-// Pagination for the browse results.
-const PAGE = 20;
+const searchError = ref("");
+/** False until the first search for this server answered, so nothing reads as "no results" early. */
+const searched = ref(false);
 const offset = ref(0);
 const page = computed(() => Math.floor(offset.value / PAGE) + 1);
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE)));
 
-const updateCount = computed(() => updates.value.size);
+const openSlug = ref<string | null>(null);
+const detail = ref<ModProjectDetail | null>(null);
+const loadingDetail = ref(false);
+const detailError = ref("");
 
-const compat = useModCompat({
-  api: {
-    start: (v, refresh) => mods.compatStart(v, refresh),
-    poll: (id) => mods.compatPoll(id),
-    versions: () => mods.compatVersions(),
-  },
-  installedVersion: () => installed.value?.gameVersion,
-  onError: (text) => flash("err", text),
+const sortOptions = computed(() => [
+  { value: "relevance", label: t("mods.catalog.sortRelevance") },
+  { value: "downloads", label: t("mods.catalog.sortDownloads") },
+  { value: "follows", label: t("mods.catalog.sortFollows") },
+  { value: "newest", label: t("mods.catalog.sortNewest") },
+  { value: "updated", label: t("mods.catalog.sortUpdated") },
+]);
+
+const catalogMeta = computed(() => {
+  const list = inst.installed.value;
+  if (!compatible.value || !list?.modLoader || !list.gameVersion) return t("mods.catalog.metaAny");
+  return `${capitalise(list.modLoader)}, ${list.gameVersion}`;
 });
-const {
-  selected: selectedVersion,
-  customVersion,
-  useCustom,
-  versionChoices,
-  targetValid,
-  loadingVersions,
-  checkingCompat,
-  job: compatJob,
-  checkedVersion,
-  stale: compatStale,
-  filter: compatFilter,
-  progressText,
-  summary: compatSummary,
-  summaryText: compatSummaryText,
-  failed: compatFailed,
-  hasResult: compatDone,
-  emptyResult: compatEmpty,
-  forSlug: compatFor,
-} = compat;
-
-const openCompat = ref<string | null>(null);
-const showCompatColumn = computed(
-  () => compat.rows.value.length > 0 || checkingCompat.value,
-);
-const visibleMods = computed(() => {
-  const all = installed.value?.mods ?? [];
-  if (compatFilter.value !== "blockers" || !compatDone.value) return all;
-  return all.filter((m) => compat.isBlocker(m.slug));
+const compatibleLabel = computed(() => {
+  const version = inst.installed.value?.gameVersion;
+  return version ? t("mods.catalog.compatible", { version }) : t("mods.catalog.compatibleAny");
 });
 
-function compatLabel(a: "available" | "unavailable" | "unknown"): string {
-  if (a === "available") return "✓ ready";
-  if (a === "unavailable") return "✕ missing";
-  return "? unknown";
+const compactNumber = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
+function compact(n: number): string {
+  return compactNumber.format(n);
 }
 
-/** What a finished check was computed from: slug, build and enabled state. */
-function installedSignature(list: InstalledMods | null): string {
-  return (list?.mods ?? [])
-    .map((m) => `${m.slug}:${m.versionId ?? ""}:${m.enabled === false ? 0 : 1}`)
-    .sort()
-    .join("|");
-}
-let checkedSignature = "";
-
-function checkVersion(refresh = false) {
-  checkedSignature = installedSignature(installed.value);
-  openCompat.value = null;
-  return compat.check(refresh);
+function pickerId(slug: string): string {
+  return `mods-picker-${slug.replace(/[^\w-]/g, "-")}`;
 }
 
-watch(installed, (next) => {
-  if (compatDone.value && installedSignature(next) !== checkedSignature) {
-    compat.markStale();
+function versionTypeLabel(type: string): string {
+  if (type === "beta") return t("mods.catalog.beta");
+  if (type === "alpha") return t("mods.catalog.alpha");
+  return t("mods.catalog.release");
+}
+
+function versionMeta(v: ModVersion): string {
+  const parts = [v.gameVersions[0] ?? "", v.loaders.map(capitalise).join(", ")].filter(Boolean);
+  if (v.datePublished) {
+    parts.push(new Date(v.datePublished).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }));
   }
-});
-
-/** Runs the check the URL names, once the installed list says checks are possible. */
-async function applyRouteCheck(): Promise<void> {
-  if (!props.check || !installed.value?.compat || checkingCompat.value) return;
-  if (versionChoices.value.includes(props.check)) {
-    useCustom.value = false;
-    selectedVersion.value = props.check;
-  } else {
-    useCustom.value = true;
-    customVersion.value = props.check;
-  }
-  compatFilter.value = props.filter === "blockers" ? "blockers" : "all";
-  await checkVersion();
+  return parts.join(", ");
 }
 
-watch(
-  () => props.check,
-  (version) => {
-    if (version && version !== checkedVersion.value) void applyRouteCheck();
-  },
-);
-watch(
-  () => props.filter,
-  (value) => {
-    if (compatDone.value) compatFilter.value = value === "blockers" ? "blockers" : "all";
-  },
-);
-watch([checkedVersion, compatFilter], ([version, filter]) => {
-  const check = version ?? "";
-  const shownFilter = version && filter === "blockers" ? "blockers" : "";
-  if (check === props.check && shownFilter === props.filter) return;
-  emit("update-route", { query: { check: check || undefined, filter: shownFilter || undefined } });
-});
-
-function env(e: ModSearchHit["environment"]) {
-  return ENVIRONMENT_META[e] ?? ENVIRONMENT_META.unknown;
-}
-function fmt(n: number): string {
-  if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
-  if (n >= 1e3) return (n / 1e3).toFixed(1) + "K";
-  return String(n);
-}
-function label(t: string): string {
-  return t ? t.charAt(0).toUpperCase() + t.slice(1) : "Release";
-}
-function date(iso: string): string {
-  return iso
-    ? new Date(iso).toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      })
-    : "";
-}
-function shortVersion(v: string | null): string {
-  return v ? v.slice(0, 12) : "—";
-}
-function update(slug: string): boolean {
-  return updates.value.has(slug);
-}
-/** Absent `enabled` means an old wrapper — treat as enabled, same default as before this existed. */
-function isDisabled(m: InstalledMod): boolean {
-  return m.enabled === false;
-}
-function iconStyle(hit: ModSearchHit) {
-  const c = env(hit.environment).color;
-  return { background: hit.iconUrl ? "transparent" : c };
-}
-function flash(type: "ok" | "err", text: string) {
-  toast.add({
-    severity: type === "ok" ? "success" : "error",
-    summary: type === "ok" ? "Mods" : "Mods — error",
-    detail: text,
-    life: type === "ok" ? 3500 : 6000,
-  });
-}
-function setBusy(slug: string, on: boolean) {
-  const next = new Set(busy.value);
-  on ? next.add(slug) : next.delete(slug);
-  busy.value = next;
+function errorText(err: unknown, fallback: string): string {
+  if (err instanceof ApiError) return `${err.status}: ${err.message}`;
+  return err instanceof Error && err.message ? err.message : fallback;
 }
 
-async function loadInstalled() {
-  loadingInstalled.value = true;
-  try {
-    installed.value = await mods.fetchInstalled();
-  } catch (err) {
-    if (!(err instanceof UnauthorizedError)) installed.value = null;
-  } finally {
-    loadingInstalled.value = false;
-  }
-}
-
-async function checkNow() {
-  checking.value = true;
-  try {
-    const res = await mods.checkUpdates(true);
-    const map = new Map<string, string>();
-    for (const r of res.results) {
-      if (r.status === "update_available")
-        map.set(r.slug, String(r.latestVersionId ?? ""));
-    }
-    updates.value = map;
-  } catch {
-    /* leave prior state; a failed check is not fatal */
-  } finally {
-    checking.value = false;
-  }
+async function focusCatalog(): Promise<void> {
+  await nextTick();
+  const el = catalogSearch.value?.$el;
+  el?.scrollIntoView({ block: "center" });
+  el?.focus();
 }
 
 let searchTimer: number | undefined;
-function onQueryInput() {
+let searchSeq = 0;
+function onQueryInput(): void {
   window.clearTimeout(searchTimer);
-  searchTimer = window.setTimeout(resetSearch, 300);
+  searchTimer = window.setTimeout(resetSearch, SEARCH_DEBOUNCE_MS);
 }
 
-/** A new query or filter starts back at page one. */
-function resetSearch() {
+function resetSearch(): Promise<void> {
   offset.value = 0;
   return runSearch();
 }
-function nextPage() {
+function toggleCompatible(): void {
+  compatible.value = !compatible.value;
+  void resetSearch();
+}
+function toggleClientOnly(): void {
+  hideClientOnly.value = !hideClientOnly.value;
+  void resetSearch();
+}
+function nextPage(): void {
   if (offset.value + PAGE >= total.value) return;
   offset.value += PAGE;
-  runSearch();
+  void runSearch();
 }
-function prevPage() {
+function prevPage(): void {
   offset.value = Math.max(0, offset.value - PAGE);
-  runSearch();
+  void runSearch();
 }
 
-async function runSearch() {
+async function runSearch(): Promise<void> {
   if (!props.activeServer) return;
+  const mine = ++searchSeq;
   searching.value = true;
   openSlug.value = null;
   try {
@@ -728,165 +1221,90 @@ async function runSearch() {
       limit: PAGE,
       offset: offset.value,
     });
+    if (mine !== searchSeq) return;
     results.value = res.hits;
     total.value = res.totalHits;
+    searchError.value = "";
   } catch (err) {
-    flash("err", err instanceof Error ? err.message : "Search failed.");
+    if (mine !== searchSeq) return;
+    results.value = [];
+    total.value = 0;
+    searchError.value = errorText(err, "no response");
   } finally {
-    searching.value = false;
+    if (mine === searchSeq) {
+      searching.value = false;
+      searched.value = true;
+    }
   }
 }
 
-async function toggleVersions(hit: ModSearchHit) {
-  if (openSlug.value === hit.slug) {
-    openSlug.value = null;
-    return;
-  }
-  openSlug.value = hit.slug;
+async function loadDetail(hit: ModSearchHit): Promise<void> {
   detail.value = null;
+  detailError.value = "";
   loadingDetail.value = true;
   try {
-    detail.value = await mods.catalog(hit.slug);
+    const next = await mods.catalog(hit.slug);
+    if (openSlug.value === hit.slug) detail.value = next;
   } catch (err) {
-    flash(
-      "err",
-      err instanceof Error ? err.message : "Could not load versions.",
-    );
-    openSlug.value = null;
+    if (openSlug.value === hit.slug) detailError.value = errorText(err, "no response");
   } finally {
     loadingDetail.value = false;
   }
 }
 
-async function runInstall(
-  slug: string,
-  mcVersion?: string,
-  versionId?: string,
-) {
-  setBusy(slug, true);
-  try {
-    const r = await mods.install({
-      slug,
-      ...(mcVersion ? { mcVersion } : {}),
-      ...(versionId ? { versionId } : {}),
-    });
-    if (r.ok) {
-      flash(
-        "ok",
-        `Installed ${r.slug ?? slug}${r.dependencies?.length ? ` (+${r.dependencies.length} deps)` : ""}.`,
-      );
-      openSlug.value = null;
-      await Promise.all([loadInstalled(), checkNow(), runSearch()]);
-    } else {
-      flash("err", r.error ?? "Install failed.");
-    }
-  } catch (err) {
-    flash("err", err instanceof Error ? err.message : "Install failed.");
-  } finally {
-    setBusy(slug, false);
+function toggleVersions(hit: ModSearchHit): void {
+  if (openSlug.value === hit.slug) {
+    openSlug.value = null;
+    return;
   }
-}
-function installLatest(hit: ModSearchHit) {
-  return runInstall(hit.slug);
-}
-function installVersion(hit: ModSearchHit, v: ModVersion) {
-  return runInstall(hit.slug, v.gameVersions[0], v.id);
-}
-async function updateOne(slug: string) {
-  setBusy(slug, true);
-  try {
-    const r = await mods.updateOne(slug);
-    if (r.ok) {
-      const n = r.updated?.length ?? 0;
-      flash(
-        "ok",
-        n > 0 ? `Updated ${slug}.` : `${slug} is already up to date.`,
-      );
-      await Promise.all([loadInstalled(), checkNow()]);
-    } else {
-      flash("err", r.error ?? "Update failed.");
-    }
-  } catch (err) {
-    flash("err", err instanceof Error ? err.message : "Update failed.");
-  } finally {
-    setBusy(slug, false);
-  }
+  openSlug.value = hit.slug;
+  void loadDetail(hit);
 }
 
-async function doToggle(m: InstalledMod) {
-  const disabling = !isDisabled(m);
-  setBusy(m.slug, true);
-  try {
-    const r = disabling
-      ? await mods.disable(m.slug)
-      : await mods.enable(m.slug);
-    if (r.ok) {
-      flash(
-        "ok",
-        `${disabling ? "Disabled" : "Enabled"} ${m.slug}. Restart the server to apply.`,
-      );
-      await loadInstalled();
-    } else {
-      flash("err", r.error ?? `${disabling ? "Disable" : "Enable"} failed.`);
-    }
-  } catch (err) {
-    flash(
-      "err",
-      err instanceof Error
-        ? err.message
-        : `${disabling ? "Disable" : "Enable"} failed.`,
-    );
-  } finally {
-    setBusy(m.slug, false);
-  }
+async function install(hit: ModSearchHit, v?: ModVersion): Promise<void> {
+  if (installs.isLocked(hit.slug)) return;
+  const name = hit.title || hit.slug;
+  const server = props.activeServer;
+  await installs.run(
+    hit.slug,
+    async () => {
+      try {
+        const r = await mods.install({
+          slug: hit.slug,
+          ...(v?.gameVersions[0] ? { mcVersion: v.gameVersions[0] } : {}),
+          ...(v ? { versionId: v.id } : {}),
+        });
+        if (!r.ok) {
+          notify(false, t("mods.toast.installFailed"), `${name}: ${r.error || t("mods.toast.noDetail")}`);
+          return;
+        }
+        const deps = r.dependencies?.length ?? 0;
+        notify(
+          true,
+          deps > 0 ? t("mods.toast.installedDeps", { name, count: deps }) : t("mods.toast.installed", { name }),
+          t("mods.toast.restartNote", { server }),
+        );
+        if (r.slug) inst.changedSinceLoad.add(r.slug);
+        openSlug.value = null;
+        if (props.activeServer === server) {
+          await Promise.all([inst.load(), inst.refreshUpdates(true), runSearch()]);
+        }
+      } catch (err) {
+        notify(false, t("mods.toast.installFailed"), `${name}: ${errorText(err, t("mods.toast.noDetail"))}`);
+      }
+    },
+    { label: t("mods.busy.install") },
+  );
 }
 
-async function doRemove(slug: string) {
-  if (!window.confirm(`Remove "${slug}" from ${props.activeServer}?`)) return;
-  setBusy(slug, true);
-  try {
-    const r = await mods.remove(slug);
-    if (r.ok) {
-      flash("ok", `Removed ${slug}.`);
-      await Promise.all([loadInstalled(), checkNow(), runSearch()]);
-    } else {
-      flash("err", r.error ?? "Remove failed.");
-    }
-  } catch (err) {
-    flash("err", err instanceof Error ? err.message : "Remove failed.");
-  } finally {
-    setBusy(slug, false);
-  }
-}
+// ── Lifecycle ─────────────────────────────────────────────────────────────
 
-async function applyAll() {
-  applyingAll.value = true;
-  try {
-    const r = await mods.applyUpdates();
-    if (r.ok) {
-      const n = r.updated?.length ?? 0;
-      flash(
-        "ok",
-        n > 0
-          ? `Updated ${n} mod${n === 1 ? "" : "s"}.`
-          : "Everything already up to date.",
-      );
-      await Promise.all([loadInstalled(), checkNow()]);
-    } else {
-      flash("err", r.error ?? "Update failed.");
-    }
-  } catch (err) {
-    flash("err", err instanceof Error ? err.message : "Update failed.");
-  } finally {
-    applyingAll.value = false;
-  }
-}
-
-async function reload() {
+async function reload(): Promise<void> {
   if (!props.activeServer) return;
-  await loadInstalled();
-  await Promise.all([checkNow(), runSearch()]);
-  if (installed.value?.compat) await compat.loadVersions();
+  void status.refresh();
+  await inst.load();
+  await Promise.all([inst.refreshUpdates(false), runSearch()]);
+  if (inst.installed.value?.compat && compat.releases.value.length === 0) await compat.loadVersions();
   await applyRouteCheck();
 }
 
@@ -895,8 +1313,14 @@ watch(
   () => props.activeServer,
   () => {
     compat.reset();
-    openCompat.value = null;
-    selectedVersion.value = "";
+    checkError.value = "";
+    compat.selected.value = "";
+    inst.reset();
+    installedQuery.value = "";
+    onlyUpdates.value = false;
+    openSlug.value = null;
+    searched.value = false;
+    results.value = [];
     return reload();
   },
 );
@@ -907,714 +1331,269 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.mods {
-  --green: var(--mods-green);
-  --amber: var(--mods-amber);
-  --red: var(--mods-red);
-  --muted: var(--mods-muted);
-  --muted-2: var(--mods-muted-2);
-  --card: var(--mods-card);
-  --card-2: var(--mods-card-2);
-  --border: rgba(255, 255, 255, 0.07);
-  --border-2: rgba(255, 255, 255, 0.11);
-  color: var(--mods-text);
+.mods-view { container-type: inline-size; min-width: 0; }
+
+.mods-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-5); align-items: start; }
+.mods-main, .mods-catalog { display: grid; gap: var(--space-4); min-width: 0; align-content: start; }
+@container (min-width: 1100px) {
+  .mods-layout { grid-template-columns: minmax(0, 1fr) minmax(340px, 400px); }
 }
-.mods-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 20px;
-}
-.mods-head h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-}
-.mods-head p {
-  margin: 4px 0 0;
-  color: var(--muted);
-  font-size: 13.5px;
-}
-.mods-head b {
-  color: var(--mods-text);
-}
-.head-actions {
-  display: flex;
-  gap: 10px;
-}
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 8px 13px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  border: 1px solid var(--border-2);
-  background: var(--card-2);
-  color: var(--mods-text);
-  cursor: pointer;
-}
-.btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-.btn.green {
-  background: var(--green);
-  color: var(--mods-on-green);
-  border-color: transparent;
-  font-weight: 600;
-}
-.btn .badge {
-  background: rgba(5, 19, 10, 0.22);
-  border-radius: 20px;
-  padding: 0 7px;
-}
-.spin {
-  animation: spin 1s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-.msg {
-  padding: 9px 13px;
-  border-radius: 8px;
-  font-size: 13px;
-  margin-bottom: 14px;
-}
-.msg.ok {
-  background: rgba(62, 207, 110, 0.14);
-  color: var(--green);
-}
-.msg.err {
-  background: rgba(229, 84, 75, 0.13);
-  color: var(--red);
+@container (min-width: 1900px) {
+  .mods-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 900px); }
+  .cat { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cat-item:nth-child(2) { border-top: 0; }
+  .cat-item:nth-child(even) { border-left: 1px solid var(--border); }
 }
 
-.stats {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-bottom: 16px;
-}
-.stat {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 18px 20px;
-}
-.stat .n {
-  font-size: 26px;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-}
-.stat .n.mono {
-  font-family: ui-monospace, monospace;
-  font-size: 22px;
-}
-.stat .n.cap {
-  text-transform: capitalize;
-}
-.stat.warn .n {
-  color: var(--amber);
-}
-.stat .l {
-  color: var(--muted);
-  font-size: 12.5px;
-  margin-top: 4px;
-}
-
-.grid {
-  display: grid;
-  grid-template-columns: 1.35fr 1fr;
-  gap: 16px;
-  align-items: stretch;
-}
 .card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  display: flex;
-  flex-direction: column;
   min-width: 0;
-}
-.card-h {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border);
-}
-.card-h .t {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  font-weight: 600;
-  font-size: 14.5px;
-}
-.card-h .t i {
-  color: var(--green);
-}
-.card-h .a.muted {
-  color: var(--muted);
-  font-size: 13px;
-}
-.empty {
-  padding: 22px 20px;
-  color: var(--muted-2);
-  font-size: 13px;
-}
-.empty.sm {
-  padding: 12px;
-}
-
-.browse-top {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  gap: 11px;
-}
-.search {
-  position: relative;
-}
-.search i {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--muted);
-  font-size: 14px;
-}
-.search input {
-  width: 100%;
-  background: var(--card-2);
-  border: 1px solid var(--border-2);
-  border-radius: 9px;
-  padding: 10px 12px 10px 36px;
-  color: var(--mods-text);
-  font-size: 13.5px;
-  outline: none;
-}
-.search input:focus {
-  border-color: rgba(62, 207, 110, 0.5);
-}
-.browse-controls {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--muted);
-  font-size: 12.5px;
-  cursor: pointer;
-}
-.toggle input {
-  display: none;
-}
-.sw {
-  width: 34px;
-  height: 19px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.14);
-  position: relative;
-  transition: 0.15s;
-}
-.sw::after {
-  content: "";
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  background: var(--mods-text-2);
-  transition: 0.15s;
-}
-.toggle input:checked + .sw {
-  background: var(--green);
-}
-.toggle input:checked + .sw::after {
-  left: 17px;
-  background: var(--mods-on-green);
-}
-.select {
-  background: var(--card-2);
-  border: 1px solid var(--border-2);
-  border-radius: 8px;
-  padding: 7px 10px;
-  color: var(--muted);
-  font-size: 12.5px;
-  cursor: pointer;
-}
-
-.results {
-  padding: 6px 8px;
-  flex: 1 1 auto;
-  min-height: 0;
-  max-height: 60vh;
-  overflow-y: auto;
-}
-.scroll-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  max-height: 75vh;
-  overflow-y: auto;
-}
-.item.open {
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: 10px;
-}
-.result {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  padding: 12px;
-}
-.ricon {
-  width: 42px;
-  height: 42px;
-  border-radius: 9px;
-  flex: 0 0 42px;
-  display: grid;
-  place-items: center;
-  font-weight: 700;
-  font-size: 16px;
-  color: var(--mods-on-green);
-  overflow: hidden;
-}
-.ricon img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.info {
-  min-width: 0;
-  flex: 1;
-}
-.rt {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.rt a {
-  color: var(--mods-text);
-}
-.rt b {
-  font-size: 13.5px;
-}
-.rt .by {
-  color: var(--muted-2);
-  font-size: 11.5px;
-}
-.rd {
-  color: var(--muted);
-  font-size: 12.5px;
-  margin-top: 3px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 340px;
-}
-.meta {
-  display: flex;
-  gap: 10px;
-  margin-top: 7px;
-  color: var(--muted-2);
-  font-size: 11.5px;
-  align-items: center;
-}
-.meta .dl {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-.env {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 8px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.05);
+  padding: var(--space-4);
   border: 1px solid var(--border);
-  color: var(--muted);
+  border-radius: var(--radius-surface);
+  background: var(--surface-nav);
 }
-.env .d {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-}
-.extlink {
-  color: var(--muted-2);
-  display: inline-grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
-  flex: 0 0 26px;
-}
-.extlink:hover {
-  color: var(--mods-text);
-  background: rgba(255, 255, 255, 0.05);
-}
-.add {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 13px;
-  border-radius: 8px;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-  background: var(--green);
-  color: var(--mods-on-green);
-  border: none;
-  white-space: nowrap;
-}
-.add:disabled {
-  opacity: 0.6;
-}
-.add.installed {
-  background: transparent;
-  color: var(--muted);
-  border: 1px solid var(--border-2);
-  cursor: default;
-  font-weight: 500;
-}
-
-.picker {
-  margin: 0 12px 12px 66px;
-  background: var(--card-2);
-  border: 1px solid var(--border-2);
-  border-radius: 10px;
-  overflow: hidden;
-}
-.picker-h {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 9px 12px;
-  border-bottom: 1px solid var(--border);
-}
-.picker-h .lbl {
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: var(--muted-2);
-  font-weight: 600;
-}
-.vrow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-}
-.vrow:last-child {
-  border-bottom: 0;
-}
-.vv {
-  font-family: ui-monospace, monospace;
-  font-size: 12.5px;
-  min-width: 64px;
-}
-.gt {
-  font-family: ui-monospace, monospace;
-  font-size: 10.5px;
-  color: var(--muted);
-  background: rgba(255, 255, 255, 0.06);
-  padding: 1px 7px;
-  border-radius: 20px;
-}
-.ty {
-  font-size: 11px;
-  color: var(--muted);
-}
-.ty.beta {
-  color: var(--amber);
-}
-.dt {
-  margin-left: auto;
-  color: var(--muted-2);
-  font-size: 11.5px;
-}
-.install {
-  padding: 5px 12px;
-  border-radius: 7px;
-  font-size: 12px;
-  font-weight: 600;
-  background: var(--green);
-  color: var(--mods-on-green);
-  border: none;
-  cursor: pointer;
-}
-.install.ghost {
-  background: transparent;
-  color: var(--muted);
-  border: 1px solid var(--border-2);
-}
-.install.sm {
-  padding: 4px 10px;
-  font-size: 11.5px;
-}
-.install:disabled {
-  opacity: 0.6;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-thead th {
-  text-align: left;
-  color: var(--muted-2);
-  font-size: 10.5px;
-  letter-spacing: 0.1em;
-  font-weight: 600;
-  padding: 11px 20px;
-  border-bottom: 1px solid var(--border);
-}
-tbody td {
-  padding: 12px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  vertical-align: middle;
-}
-tbody tr:last-child td {
-  border-bottom: 0;
-}
-.mod-name {
-  font-weight: 550;
-  font-size: 13.5px;
-}
-.mod-file {
-  color: var(--muted-2);
-  font-family: ui-monospace, monospace;
-  font-size: 11px;
-  margin-top: 2px;
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ver {
-  font-family: ui-monospace, monospace;
-  font-size: 12.5px;
-  color: var(--mods-text-3);
-}
-.pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 9px;
-  border-radius: 20px;
-  font-size: 11.5px;
-  font-weight: 500;
-}
-.pill.ok {
-  background: rgba(62, 207, 110, 0.14);
-  color: var(--green);
-}
-.pill.up {
-  background: rgba(229, 161, 58, 0.14);
-  color: var(--amber);
-}
-.pill.off {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--muted);
-  cursor: help;
-}
-.row-disabled {
-  opacity: 0.6;
-}
-.row-actions {
-  display: flex;
-  gap: 7px;
-  justify-content: flex-end;
-  align-items: center;
-}
-.mini {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 11px;
-  border-radius: 7px;
-  font-size: 12.5px;
-  font-weight: 500;
-  cursor: pointer;
-  border: 1px solid var(--border-2);
-  background: transparent;
-  color: var(--mods-text);
-}
-.mini.update {
-  background: var(--amber);
-  color: var(--mods-on-amber);
-  border-color: transparent;
-  font-weight: 600;
-}
-.mini.toggle {
-  color: var(--muted);
-}
-.mini.remove {
-  color: var(--muted);
-  padding: 6px 9px;
-}
-.mini.remove:hover {
-  color: var(--red);
-  border-color: rgba(229, 84, 75, 0.13);
-  background: rgba(229, 84, 75, 0.13);
-}
-.mini:disabled {
-  opacity: 0.5;
-}
-.foot {
-  padding: 10px 20px;
-  border-top: 1px solid var(--border);
-  color: var(--muted-2);
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.pager {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-.pg {
-  display: inline-grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
-  border: 1px solid var(--border-2);
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-.pg:hover:not(:disabled) {
-  color: var(--mods-text);
-  border-color: rgba(255, 255, 255, 0.2);
-}
-.pg:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-.pg-info {
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-.compat {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 14px 20px;
-  margin-bottom: 16px;
-}
-.compat-h {
-  font-weight: 600;
-  font-size: 13.5px;
-  margin-bottom: 10px;
-}
-.compat-row {
+.card-head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
 }
-.compat-input {
-  padding: 7px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border-2);
-  background: var(--card-2);
-  color: var(--mods-text);
-  font-size: 13px;
-  width: 140px;
+.card-head h2 { margin: 0; font-size: var(--text-xl); font-weight: 600; }
+.card-meta { color: var(--text-dim); font-size: var(--text-sm); flex: 1 1 auto; }
+.cluster { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.small { font-size: var(--text-sm); }
+.dim { color: var(--text-dim); }
+.mono { font-family: var(--font-mono); }
+.caps {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--text-dim);
 }
-.linkbtn {
-  background: transparent;
-  border: 0;
-  color: var(--muted);
-  font-size: 12.5px;
-  cursor: pointer;
-  text-decoration: underline;
+
+.check {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0 calc(-1 * var(--space-4)) var(--space-3);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  border-bottom: 1px solid var(--border);
 }
-.linkbtn:disabled {
-  opacity: 0.5;
-  cursor: default;
+.check p { margin: 0; }
+.check-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3) var(--space-4); }
+.check-field { display: grid; gap: var(--space-1); min-width: 180px; }
+.check-field label { font-size: var(--text-sm); color: var(--text-dim); }
+.check-select, .check-input { min-width: 180px; }
+.failure { overflow-wrap: anywhere; }
+.nothing-changed { align-self: center; }
+
+.check-results {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4) var(--space-5);
+  align-items: start;
 }
-.msg.stale {
-  background: rgba(229, 161, 58, 0.13);
-  color: var(--amber);
-  margin: 10px 0 0;
+@container (min-width: 760px) {
+  .check-results { grid-template-columns: minmax(0, 420px) minmax(0, 1fr); }
 }
-.compat .msg.err {
-  margin: 10px 0 0;
+.minimeter { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
+.metric {
+  display: grid;
+  gap: 2px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--metric-edge, var(--border));
+  border-radius: var(--radius-surface);
+  background: var(--surface);
 }
-.compat-filter {
+.metric-ready { --metric-edge: var(--st-online); }
+.metric-missing { --metric-edge: var(--st-offline); }
+.metric-unknown { --metric-edge: var(--st-degraded); }
+.metric-n { font-size: var(--text-3xl); font-weight: 600; line-height: var(--leading-tight); font-variant-numeric: tabular-nums; }
+.metric-l { font-size: var(--text-sm); color: var(--text-dim); }
+.blockers { display: grid; gap: var(--space-2); }
+.iconstrip { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.iconstrip .more { font-size: var(--text-sm); color: var(--text-dim); }
+
+.subhead {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  margin-top: 10px;
-  font-size: 12.5px;
+  gap: var(--space-1) var(--space-4);
+  margin-bottom: var(--space-3);
 }
+.subhead h3 { margin: 0; font-size: var(--text-lg); font-weight: 600; }
+
+.notices { display: grid; gap: var(--space-3); margin-bottom: var(--space-3); }
+.notices:empty { display: none; }
+.notices :deep(.stale-banner) { margin-bottom: 0; }
+
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
+.search { position: relative; flex: 1 1 220px; min-width: 0; }
+.search .pi { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-dim); pointer-events: none; }
+.search :deep(input) { width: 100%; padding-left: 36px; }
+.sort { display: inline-flex; align-items: center; gap: var(--space-2); }
+
 .chip {
-  padding: 3px 11px;
-  border-radius: 20px;
-  border: 1px solid var(--border-2);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 30px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-full);
   background: transparent;
-  color: var(--muted);
-  font-size: 12px;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm);
   cursor: pointer;
+  transition: background-color var(--dur-fast), border-color var(--dur-fast);
 }
-.chip.on {
-  color: var(--mods-text);
-  background: rgba(255, 255, 255, 0.09);
+.chip:hover { border-color: var(--border-hover); background: var(--surface); }
+.chip.on { background: var(--accent-tint); border-color: var(--accent); }
+.chip-n { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.chip.on .chip-n { color: var(--text); }
+
+.modcell { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.modcell.off { opacity: 0.7; }
+.modcell-text { display: grid; min-width: 0; }
+.name { font-weight: 600; overflow-wrap: anywhere; }
+.sub {
+  display: block;
+  max-width: 34ch;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.compat .muted,
-td .muted {
-  color: var(--muted);
+.version { font-size: var(--text-xs); white-space: nowrap; }
+.detail { overflow-wrap: anywhere; }
+.row-actions { flex-wrap: nowrap; justify-content: flex-end; }
+.row-busy { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--st-info); font-size: var(--text-sm); }
+.icon-link, .link-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  border-radius: var(--radius-control);
+  color: var(--text-dim);
+  text-decoration: none;
 }
-td .small {
-  font-size: 12px;
+.icon-link { width: 32px; }
+.link-btn {
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  font-size: var(--text-sm);
+  white-space: nowrap;
 }
-.compat-stat {
-  grid-column: 1 / -1;
+.icon-link:hover, .link-btn:hover { background: var(--surface-raised); color: var(--text); }
+.none-in-filter { margin: var(--space-3) 0; }
+
+.skeleton { display: flex; flex-direction: column; gap: var(--space-3); }
+.sk-row { display: flex; align-items: center; gap: var(--space-3); }
+.sk-tile { flex: none; width: 36px; height: 36px; border-radius: var(--radius-control); background: var(--surface-raised); }
+.sk-lines { flex: 1; display: grid; gap: var(--space-2); }
+.sk-lines span { height: 10px; border-radius: var(--radius-full); background: var(--surface-raised); }
+.sk-lines span:first-child { width: 45%; }
+.sk-lines span:last-child { width: 85%; opacity: 0.6; }
+
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
 }
-.stat .n.sm {
-  font-size: 20px;
+.foot-count { color: var(--text-dim); font-size: var(--text-sm); }
+
+.cat { list-style: none; margin: 0 calc(-1 * var(--space-4)); padding: 0; }
+.cat-item { border-top: 1px solid var(--border); }
+.cat-item:first-child { border-top: 0; }
+.cat-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
 }
-.compat-badge {
+.cat-body { min-width: 0; }
+.cat-title { display: flex; flex-wrap: wrap; gap: 0 var(--space-2); align-items: baseline; }
+.cat-title a { color: var(--text); font-weight: 600; text-underline-offset: 2px; overflow-wrap: anywhere; }
+.cat-by { font-size: var(--text-xs); color: var(--text-dim); }
+.cat-desc {
+  margin: 2px 0 0;
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.cat-meta { display: flex; flex-wrap: wrap; gap: 0 var(--space-3); margin-top: 2px; font-size: var(--text-xs); color: var(--text-dim); }
+
+.picker {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+.picker p { margin: 0; }
+.picker-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); }
+.picker-title { display: inline-flex; align-items: center; gap: var(--space-2); }
+.vrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-1) var(--space-3);
+  align-items: center;
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--border);
+}
+.vinfo { display: grid; min-width: 0; }
+.vinfo strong { overflow-wrap: anywhere; }
+.vmeta { font-size: var(--text-xs); color: var(--text-dim); }
+.tag {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--text-dim);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+.tag-beta { background: var(--st-degraded-bg); color: var(--st-degraded); }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
   border: 0;
-  cursor: pointer;
 }
-.compat-badge.c-available {
-  background: rgba(62, 207, 110, 0.14);
-  color: var(--green);
+
+@media (max-width: 760px) {
+  .cat-row { grid-template-columns: auto minmax(0, 1fr); }
+  .cat-row > .cat-action { grid-column: 1 / -1; }
+  .cat-title a { display: inline-flex; align-items: center; min-height: var(--touch-min); }
+  .check-row > * { flex: 1 1 100%; }
+  .check-select, .check-input { width: 100%; }
+  .metric { padding: var(--space-3); }
+  .metric-n { font-size: var(--text-2xl); }
+  .vrow { grid-template-columns: minmax(0, 1fr); }
 }
-.compat-badge.c-unavailable {
-  background: rgba(229, 84, 75, 0.13);
-  color: var(--red);
-}
-.compat-badge.c-unknown {
-  background: rgba(229, 161, 58, 0.14);
-  color: var(--amber);
-}
-.compat-detail td {
-  padding: 8px 20px 12px;
-  color: var(--muted);
-  font-size: 12.5px;
-  background: rgba(255, 255, 255, 0.02);
-}
-@media (max-width: 1100px) {
-  .grid {
-    grid-template-columns: 1fr;
-  }
-  .stats {
-    grid-template-columns: repeat(2, 1fr);
-  }
+@media (pointer: coarse), (max-width: 760px) {
+  .tap { min-height: var(--touch-min); }
+  .chip.tap { min-height: var(--touch-min); }
+  .icon-link, .link-btn { min-height: var(--touch-min); }
+  .icon-link { width: var(--touch-min); }
 }
 </style>

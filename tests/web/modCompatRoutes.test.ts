@@ -45,7 +45,9 @@ const {
   listInstalledModsMock,
   fetchReleaseVersionsMock,
   logErrorMock,
+  lookupIconsMock,
 } = vi.hoisted(() => ({
+  lookupIconsMock: vi.fn(),
   supportsModCompatMock: vi.fn(),
   startModCompatMock: vi.fn(),
   getModCompatMock: vi.fn(),
@@ -84,6 +86,11 @@ vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
   deleteStatsFile: vi.fn(),
   readWhitelist: vi.fn(async () => []),
   readUserCache: vi.fn(async () => []),
+}));
+
+vi.mock("../../src/core/utils/modrinth.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/core/utils/modrinth.js")>()),
+  lookupProjectIcons: lookupIconsMock,
 }));
 
 vi.mock("../../src/core/utils/minecraft/mojang.js", () => ({
@@ -193,6 +200,7 @@ beforeEach(() => {
     mods: [],
   });
   fetchReleaseVersionsMock.mockResolvedValue(["1.21.5", "1.21.4"]);
+  lookupIconsMock.mockResolvedValue(new Map());
 });
 
 describe("capability and server scope", () => {
@@ -467,5 +475,79 @@ describe("fairness between guilds and atomic admission", () => {
     const retry = await app.inject(post(MODS_READER, { mcVersion: "1.21.5", refresh: true }));
     expect(retry.statusCode).toBe(200);
     expect(retry.json()).toEqual({ jobId: JOB });
+  });
+});
+
+describe("mod icons on installed and compat rows", () => {
+  const ICON = "https://cdn.modrinth.com/data/AANobbMI/icon.png";
+  const proxied = `/api/servers/smp/mods/icon?url=${encodeURIComponent(ICON)}`;
+
+  beforeEach(() => {
+    listInstalledModsMock.mockResolvedValue({
+      gameVersion: "1.21.4",
+      modLoader: "fabric",
+      mtimeMs: 1,
+      mods: [
+        { slug: "Sodium", filename: "sodium.jar", versionId: "v1", enabled: true },
+        { slug: "local-jar", filename: "local.jar", versionId: null, enabled: true },
+      ],
+    });
+    lookupIconsMock.mockResolvedValue(new Map([["sodium", ICON]]));
+  });
+
+  it("adds a proxied iconUrl to installed rows Modrinth has an icon for", async () => {
+    const app = buildServer();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/servers/smp/mods/installed",
+      headers: { cookie: cookieFor(MODS_READER) },
+    });
+    expect(res.statusCode).toBe(200);
+    const mods = res.json().mods as Array<{ slug: string; iconUrl?: string }>;
+    expect(mods[0]).toMatchObject({ slug: "Sodium", iconUrl: proxied });
+    expect(mods[1]).not.toHaveProperty("iconUrl");
+    expect(lookupIconsMock).toHaveBeenCalledWith(["Sodium", "local-jar"]);
+  });
+
+  it("serves the list without icons when the lookup fails", async () => {
+    lookupIconsMock.mockRejectedValue(new Error("boom"));
+    const app = buildServer();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/servers/smp/mods/installed",
+      headers: { cookie: cookieFor(MODS_READER) },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().mods.some((m: { iconUrl?: string }) => m.iconUrl)).toBe(false);
+  });
+
+  it("adds icons to partial and final compat rows", async () => {
+    getModCompatMock.mockResolvedValueOnce({
+      jobId: JOB,
+      state: "running",
+      mcVersion: "1.21.5",
+      modLoader: "fabric",
+      progress: { done: 1, total: 2 },
+      partial: [{ slug: "Sodium", availability: "available" }],
+    });
+    getModCompatMock.mockResolvedValueOnce({
+      jobId: JOB,
+      state: "done",
+      mcVersion: "1.21.5",
+      modLoader: "fabric",
+      progress: { done: 2, total: 2 },
+      partial: [],
+      summary: { available: 1, unavailable: 0, unknown: 1, total: 2 },
+      mods: [
+        { slug: "Sodium", availability: "available" },
+        { slug: "local-jar", availability: "unknown" },
+      ],
+    });
+    const running = (await buildServer().inject(get(MODS_READER, `/${JOB}`))).json();
+    expect(running.partial[0].iconUrl).toBe(proxied);
+    const finished = (await buildServer().inject(get(MODS_READER, `/${JOB}`))).json();
+    expect(finished.mods[0].iconUrl).toBe(proxied);
+    expect(finished.mods[1]).not.toHaveProperty("iconUrl");
+    expect(finished.partial).toEqual([]);
   });
 });

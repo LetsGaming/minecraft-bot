@@ -18,6 +18,13 @@ export interface ConfirmFact {
   mono?: boolean;
 }
 
+/** An image of the target next to the heading, such as a mod's icon. */
+export interface ConfirmMedia {
+  name: string;
+  slug?: string;
+  src?: string;
+}
+
 /** Everything the dialog shows beyond PrimeVue's header, message and labels. */
 export interface ConfirmExtras {
   level: ConfirmLevel;
@@ -30,6 +37,9 @@ export interface ConfirmExtras {
   /** One way out offered instead of the blocked action. */
   alternateLabel: string;
   onAlternate: (() => void) | null;
+  media: ConfirmMedia | null;
+  /** Replaces the level's default label above the heading. */
+  levelLabel: string;
 }
 
 export function defaultExtras(): ConfirmExtras {
@@ -41,6 +51,8 @@ export function defaultExtras(): ConfirmExtras {
     blockedReason: "",
     alternateLabel: "",
     onAlternate: null,
+    media: null,
+    levelLabel: "",
   };
 }
 

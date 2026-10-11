@@ -1,5 +1,5 @@
 <template>
-  <div class="rt" :style="maxHeight ? { maxHeight, overflowY: 'auto' } : undefined">
+  <div :class="['rt', { 'stack-narrow': stackBelow === 'narrow' }]" :style="maxHeight ? { maxHeight, overflowY: 'auto' } : undefined">
     <table class="rt-table">
       <caption class="sr-only">{{ caption }}</caption>
       <thead>
@@ -64,6 +64,8 @@ const props = withDefaults(
     actionsLabelVisible?: boolean;
     /** Caps the height so the header sticks inside the table instead of the page. */
     maxHeight?: string;
+    /** "narrow" keeps rows down to 600px of width, for a table beside another column. */
+    stackBelow?: "default" | "narrow";
   }>(),
   {
     rowKey: undefined,
@@ -71,6 +73,7 @@ const props = withDefaults(
     actionsLabel: "Actions",
     actionsLabelVisible: true,
     maxHeight: "",
+    stackBelow: "default",
   },
 );
 
@@ -127,10 +130,12 @@ th.align-end, td.align-end { text-align: end; }
 .rt-actions { white-space: nowrap; }
 .rt-actions :deep(> *) { vertical-align: middle; }
 
+/* Cards instead of rows: below 760px of table width, or 600px for a table that
+   shares its row with another column (stackBelow="narrow"). */
 @container (max-width: 760px) {
-  .rt-table, .rt-table tbody { display: block; }
-  .rt-table thead { display: none; }
-  .rt-row {
+  .rt:not(.stack-narrow) .rt-table, .rt:not(.stack-narrow) .rt-table tbody { display: block; }
+  .rt:not(.stack-narrow) .rt-table thead { display: none; }
+  .rt:not(.stack-narrow) .rt-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: var(--space-1) var(--space-3);
@@ -140,10 +145,10 @@ th.align-end, td.align-end { text-align: end; }
     margin-bottom: var(--space-2);
     background: var(--surface);
   }
-  .rt-row.busy { background: var(--surface-raised); box-shadow: inset 3px 0 0 var(--st-info); }
-  .rt-row.busy > * { background: none; box-shadow: none; }
-  .rt-row > th,
-  .rt-row > td {
+  .rt:not(.stack-narrow) .rt-row.busy { background: var(--surface-raised); box-shadow: inset 3px 0 0 var(--st-info); }
+  .rt:not(.stack-narrow) .rt-row.busy > * { background: none; box-shadow: none; }
+  .rt:not(.stack-narrow) .rt-row > th,
+  .rt:not(.stack-narrow) .rt-row > td {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
@@ -153,14 +158,56 @@ th.align-end, td.align-end { text-align: end; }
     border: none;
     text-align: start;
   }
-  .rt-row > td:not(.rt-actions)::before {
+  .rt:not(.stack-narrow) .rt-row > td:not(.rt-actions)::before {
     content: attr(data-label);
     flex: none;
     color: var(--text-dim);
     font-size: var(--text-xs);
   }
-  .rt-row > .rt-primary { font-size: var(--text-md); margin-bottom: var(--space-1); }
-  .rt-row > .rt-actions {
+  .rt:not(.stack-narrow) .rt-row > .rt-primary { font-size: var(--text-md); margin-bottom: var(--space-1); }
+  .rt:not(.stack-narrow) .rt-row > .rt-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+    white-space: normal;
+  }
+}
+@container (max-width: 600px) {
+  .rt.stack-narrow .rt-table, .rt.stack-narrow .rt-table tbody { display: block; }
+  .rt.stack-narrow .rt-table thead { display: none; }
+  .rt.stack-narrow .rt-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--space-1) var(--space-3);
+    padding: var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-surface);
+    margin-bottom: var(--space-2);
+    background: var(--surface);
+  }
+  .rt.stack-narrow .rt-row.busy { background: var(--surface-raised); box-shadow: inset 3px 0 0 var(--st-info); }
+  .rt.stack-narrow .rt-row.busy > * { background: none; box-shadow: none; }
+  .rt.stack-narrow .rt-row > th,
+  .rt.stack-narrow .rt-row > td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+    grid-column: 1 / -1;
+    padding: 0;
+    border: none;
+    text-align: start;
+  }
+  .rt.stack-narrow .rt-row > td:not(.rt-actions)::before {
+    content: attr(data-label);
+    flex: none;
+    color: var(--text-dim);
+    font-size: var(--text-xs);
+  }
+  .rt.stack-narrow .rt-row > .rt-primary { font-size: var(--text-md); margin-bottom: var(--space-1); }
+  .rt.stack-narrow .rt-row > .rt-actions {
     display: flex;
     flex-wrap: wrap;
     justify-content: flex-start;
