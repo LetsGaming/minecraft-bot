@@ -672,3 +672,74 @@ that means for its own state, which a thrown error lets it skip.
 
 **Circuit breaker:** console commands now go through it (an open breaker is
 `unreachable`/`breaker-open`). Scripts, mod mutations and restore still do not.
+
+---
+
+## Wave 2: the Hybrid direction for the dashboard and Discord
+
+**Problem:** The Wave 2 UX audit found a dashboard without a system (raw colours per view, four confirm patterns, toast-only errors, no routes, a phone layout that scrolled sideways) and Discord replies whose colours, titles and visibility meant different things per command. Four mockup directions were built; two of them, Polish (keep today's look, fix the defects) and Evolve (a complete token and component system, a new look), disagreed on most points.
+
+**Decision:** Hybrid: Evolve's architecture with Polish's values. Today's charcoal and green stay, so existing admins see the same product, corrected. Underneath sit role tokens (`tokens.css`), seven status roles with distinct shapes in one table in `@mcbot/schema` (`status.ts`) that drives both the dashboard chips and the Discord embed colours, a small set of shared components (`AppShell`, `EditorShell`, `StatusChip`, `ResponsiveTable`, `JobBlock`, `InlineError`), a density switch, and Discord reply rules (colour is status, titles name the action, errors are private and say what to do next). The work was cut into phases that each shipped alone. The rules are in [web/frontend.md](web/frontend.md) and [bot/replies.md](bot/replies.md).
+
+**Rejected:** a new accent and a bundled typeface (cost recognition and 110 KB for a cosmetic gain); Evolve's sweeping state-edge motion (a static 3 px edge carries the same information under reduced motion); a `SectionCard` wrapper and a theme composable (a card is one class, and there is no theme switch).
+
+---
+
+## Wave 2: the dashboard is English only, behind a `t()` seam
+
+**Problem:** The bot is bilingual and the dashboard was English literals. German admins get a German bot and an English dashboard, and shared terms existed only in English.
+
+**Decision:** All dashboard copy goes through `t()` (`src/web/frontend/src/i18n.ts`) with one English table, and `scripts/check-frontend.mjs` rejects literal template text in every file listed as translated. Shared terms (status labels, backup types) live in the glossary in `@mcbot/schema` with English and German, so the bot already uses the German half. A German dashboard is a second table plus a switch; no view changes.
+
+**Rejected:** translating the dashboard in this wave. It doubles copy review for a surface used by a handful of admins per deployment, and nobody was available to review German natively. The seam is cheap now and expensive to retrofit later.
+
+---
+
+## Wave 2: dark only
+
+**Decision:** The dashboard ships one dark theme. Tokens are named by role, never by value, so a light theme is a second value set in `tokens.css` (estimated 3 to 4 days, including the contrast tests and screenshots), not a migration.
+
+**Why:** No audit finding except the theme question itself (DASH-19) needs a light theme, and two themes double every contrast check and screenshot pass.
+
+---
+
+## Wave 2: `vue-router` with hash history
+
+**Problem:** The active page and server lived in `App.vue` state. A reload lost your place, a link could not be shared, Back left the dashboard, and the leave guard was a hand-written tab switch that the sidebar server picker bypassed.
+
+**Decision:** `vue-router` 4 with hash history (`src/web/frontend/src/router.ts`). One nav table builds the routes, the sidebar and the drawer. The route owns the server and the in-view state worth sharing (Mods check and filter, Config filter and Raw tab, the Mod config file, the open guild). One `beforeEach` guard asks before unsaved work is lost, for every page and server switch, Back included.
+
+**Why hash history:** the dashboard often runs behind a reverse proxy at a sub-path, and hash URLs need no rewrite rules on the proxy or the backend.
+
+**Rejected:** a hand-rolled hash parser. The router is one dependency the frontend already effectively needed, and its guard is what made the unsaved-changes rule hold everywhere.
+
+---
+
+## Wave 2: PrimeVue stays the base; DataTable is not used for new tables
+
+**Decision:** PrimeVue keeps providing form controls, dialogs, toasts and menus, through a preset built only from token references (`preset.ts`). Two pieces were judged in a spike against PrimeVue 4.5.5 and are plain markup instead:
+
+- **Tables:** `ResponsiveTable` is a native `table`. `DataTable` 4.5.5 has no stacked layout (the `breakpoint` prop is declared but unused), cards would mean restyling its internal cells per column, and its paginator counts pages while the backup list pages forward with a cursor. A native table keeps caption and header semantics, and a container query turns rows into cards. Analytics and the Audit log still use `DataTable` with their own card layout; new tables use `ResponsiveTable`.
+- **Status chips:** `StatusChip` is a `span` with a CSS shape. `Tag` colours come from its severities, which are not the seven status roles.
+
+The typed confirm stays on PrimeVue's `ConfirmDialog` (its container slot gives autofocus and focus return), and one global host carries all three confirm levels (`useConfirmAction`).
+
+**Limit:** the judgement came from mounting the components in jsdom and reading the sources, not from real phones or screen readers.
+
+---
+
+## Wave 2: alert mention policy is a flag, and the default keeps pinging
+
+**Problem:** Every downtime, TPS and host alert pinged the configured role, recoveries included, and a long TPS dip re-pinged every five minutes.
+
+**Decision:** `guilds.<id>.downtimeAlerts.mentionPolicy` and `guilds.<id>.tpsAlerts.mentionPolicy` accept `"always"` (the default, unchanged behaviour) or `"escalation"` (ping on the first failure and on a rise in severity only). Every alert and every relayed message sets `allowedMentions` explicitly either way (`src/bot/utils/embeds/alertUtils.ts`).
+
+**Why a flag:** changing who gets paged is a behaviour change admins should opt into. Keeping the default made this release a minor version (7.1.0) instead of a major one.
+
+---
+
+## Wave 2: a claimed `/daily` reward is public
+
+**Decision:** A successful claim is a public embed with the reward, the streak and when the next reward is ready. The cooldown notice, "already processing" and every error stay private (`replyPrivate` in `src/bot/commands/middleware.ts`).
+
+**Why:** showing off, or being laughed at for, the roll is the point of the command, and the channel sees streaks build. The reply rule "personal data is private" does not cover a reward the player chose to claim in a channel.
