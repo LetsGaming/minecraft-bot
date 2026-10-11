@@ -110,12 +110,13 @@ async function notify(
     serverId,
     event,
     logTag: "joinLeave",
-    buildEmbed: (withServerFooter) =>
+    buildEmbed: () =>
       createPlayerEmbed(player, {
-        title: isJoin ? t("joinLeave.joinedTitle") : t("joinLeave.leftTitle"),
-        description: t(isJoin ? "joinLeave.joined" : "joinLeave.left", { player }),
-        color: isJoin ? EmbedColor.Success : EmbedColor.Error,
-        ...(withServerFooter ? { footer: { text: serverId } } : {}),
+        description: t(isJoin ? "joinLeave.joined" : "joinLeave.left", {
+          player,
+          server: serverId,
+        }),
+        color: EmbedColor.Neutral,
       }),
   });
 }
