@@ -94,7 +94,7 @@ export const en: Record<string, string> = {
 
   // ── reports (!report) ──
   "report.usage": "Usage: !report <message>",
-  "report.embedTitle": "🚨 Report from {player}",
+  "report.embedTitle": "Report from {player} on {server}",
   "report.sent": "✅ Your report has been sent to the admins. Thank you!",
   "report.noChannel":
     "Reports are not set up for this server yet — please contact an admin directly.",
@@ -194,31 +194,24 @@ export const en: Record<string, string> = {
   "status.hostFilesystem": "{mount} — {percent}% used, {free} free of {total}",
   "status.hostDir": "\u00a0\u00a0`{path}`: {size}",
   "status.hostDirUnknown": "\u00a0\u00a0`{path}`: size unavailable",
-  "hostAlerts.diskFullTitle": "⚠️ Disk space warning",
-  "hostAlerts.diskFull":
-    "**{server}**: `{path}` is at **{percent}%** disk usage ({free} free). Backups and world saves may start failing.",
-  "hostAlerts.diskOkTitle": "✅ Disk space recovered",
-  "hostAlerts.diskOk": "**{server}**: `{path}` is back down to {percent}% disk usage.",
-
+  "hostAlerts.diskFullTitle": "Disk on {server} is almost full",
+  "hostAlerts.diskFull": "`{path}` is at **{percent}%** disk usage ({free} free). Backups and world saves may start failing.",
+  "hostAlerts.diskOkTitle": "Disk space on {server} recovered",
+  "hostAlerts.diskOk": "`{path}` is back down to {percent}% disk usage.",
   // ── downtime + TPS alerts ──
-  "downtime.upTitle": "✅ Server Back Online",
-  "downtime.up": "**{server}** is back online.",
-  "downtime.downTitle": "🔴 Server Down",
-  "downtime.down":
-    "**{server}** appears to be offline.\nFailed {failures} consecutive checks.",
-  "downtime.apiDownTitle": "🟠 Server API Unreachable",
-  "downtime.apiDown":
-    "The API wrapper for **{server}** has not answered for {failures} checks.\nThe Minecraft server itself may well still be running — its state is currently **unknown**, not offline.",
-  "downtime.apiUpTitle": "✅ Server API Reachable",
+  "downtime.upTitle": "{server} is back online",
+  "downtime.up": "**{server}** answers again.",
+  "downtime.downTitle": "{server} is offline",
+  "downtime.down": "**{server}** failed {failures} checks in a row. The bot keeps checking and posts here when it is back.",
+  "downtime.apiDownTitle": "API wrapper of {server} is not answering",
+  "downtime.apiDown": "The API wrapper for **{server}** did not answer {failures} checks in a row.\nThe Minecraft server may still be running. Its state is **unknown**, not offline.",
+  "downtime.apiUpTitle": "API wrapper of {server} answers again",
   "downtime.apiUp": "The API wrapper for **{server}** is answering again.",
-  "downtime.apiDownServerKnown":
-    "The Minecraft server itself answered a direct ping and is **{state}** — players are unaffected, but server controls, the chat bridge and stats are down until the wrapper is back.",
-  "downtime.apiDownServerUnknown":
-    "The Minecraft server did not answer a direct ping either, so its state is **unknown** — it may or may not still be running.",
-  "downtime.crashLoopTitle": "🔁 Server Crash Loop",
-  "downtime.crashLoop":
-    "**{server}** has restarted {restarts} times and systemd has given up retrying — it will stay down until someone intervenes.\nCheck the logs for what's causing the crash (a broken mod is the usual suspect — try `/mods` disable on anything recently changed), then use **/server restart** to bring it back; that also clears systemd's failure state.",
-  "downtime.crashLoopRecoveredTitle": "✅ Crash Loop Cleared",
+  "downtime.apiDownServerKnown": "The Minecraft server answered a direct ping and is **{state}**. Players are not affected, but server controls, the chat bridge and stats are down until the wrapper is back.",
+  "downtime.apiDownServerUnknown": "The Minecraft server did not answer a direct ping either, so its state is **unknown**. It may still be running.",
+  "downtime.crashLoopTitle": "{server} is in a crash loop",
+  "downtime.crashLoop": "**{server}** restarted {restarts} times and systemd stopped retrying. It stays down until someone steps in.\nCheck the logs for the cause. A broken mod is the usual suspect, especially after a mod change. Then run **/server restart**, which also clears the failure state of systemd.",
+  "downtime.crashLoopRecoveredTitle": "{server} left the crash loop",
   "downtime.crashLoopRecovered": "**{server}** is no longer in a crash loop.",
   "state.online": "Online",
   "state.unresponsive": "Not responding",
@@ -228,9 +221,8 @@ export const en: Record<string, string> = {
   "state.unknownHint": "Neither the API wrapper nor the server answered, so the state is unknown. Check that the host is reachable.",
   "state.wrapperDownHint": "The server is reachable, but its API wrapper is not. Server controls, the chat bridge, stats and log watching are unavailable until the wrapper answers again.",
   "state.viaPing": "via direct server ping",
-  "tps.lowTitle": "⚠️ Low TPS Warning",
-  "tps.low": "Server TPS has dropped below {threshold}",
-
+  "tps.lowTitle": "Low TPS on {server}",
+  "tps.low": "TPS dropped below {threshold}.",
   // ── /daily-admin ──
   "dailyAdmin.unknownServer":
     'Unknown server "{server}". Configured servers: {servers}',
@@ -255,12 +247,10 @@ export const en: Record<string, string> = {
     'Server **{server}** already has an open poll: "{question}". Close it first, or leave that server out of the span.',
 
   // ── backup staleness ──
-  "backupAlert.staleTitle": "⚠️ Backups are getting stale",
-  "backupAlert.stale":
-    "**{server}**: the newest backup is **{age}h** old (threshold {max}h). Check the backup job before you need it.",
-  "backupAlert.freshTitle": "✅ Fresh backup detected",
-  "backupAlert.fresh": "**{server}**: a new backup appeared ({age}h old).",
-
+  "backupAlert.staleTitle": "Backups of {server} are getting old",
+  "backupAlert.stale": "The newest backup is **{age} h** old (limit {max} h). Check the backup job before you need it.",
+  "backupAlert.freshTitle": "New backup of {server}",
+  "backupAlert.fresh": "A new backup appeared ({age} h old).",
   // ── moderation shortcuts ──
   "moderation.kicked": "Kicked **{player}** from **{server}**.",
   "moderation.banned": "Banned **{player}** on **{server}**.",
@@ -563,13 +553,8 @@ export const en: Record<string, string> = {
   "whitelist.removed": "**{username}** has been removed from the whitelist on **{server}**.",
 
   // ── watcher embeds ──
-  "advancement.challenge": "✨ Completed challenge",
-  "advancement.made": "⭐ Made advancement",
-  "death.title": "☠️ Death",
-  "joinLeave.joinedTitle": "Player Joined",
-  "joinLeave.leftTitle": "Player Left",
-  "joinLeave.joined": "{player} joined the server",
-  "joinLeave.left": "{player} left the server",
+  "joinLeave.joined": "{player} joined {server}",
+  "joinLeave.left": "{player} left {server}",
   "updateNotifier.message": "📦 minecraft-bot {latest} is available (you run {current}). Release notes: {url}",
   "leaderboard.streakFooter": "{server} · all-time streaks",
   "statusEmbed.title": "📊 Server Status",
@@ -585,11 +570,11 @@ export const en: Record<string, string> = {
   "daily.reward": "Reward: {reward}",
   "daily.bonus": "{days}-day streak bonus: {rewards}",
   // ── server events, leaderboard, console relay ──
-  "serverEvent.startedTitle": "🟢 Server Started",
-  "serverEvent.startedBody": "Server is now online and ready for players.",
-  "serverEvent.stoppedTitle": "🔴 Server Stopped",
-  "serverEvent.stoppedBody": "Server is shutting down.",
-  "serverEvent.uptime": "Uptime: {h}h {m}m",
+  "serverEvent.startedTitle": "{server} started",
+  "serverEvent.startedBody": "The server is online and ready for players.",
+  "serverEvent.stoppedTitle": "{server} stopped",
+  "serverEvent.stoppedBody": "The server is shutting down.",
+  "serverEvent.uptime": "Uptime: {duration}",
   "leaderboard.periodDaily": "Daily",
   "leaderboard.periodWeekly": "Weekly",
   "leaderboard.periodMonthly": "Monthly",
@@ -703,4 +688,9 @@ export const en: Record<string, string> = {
   "capability.feature.backups": "the backup layout of the setup suite",
   "mods.stale": "This is the last known list, from {age}. The server is not answering right now.",
   "mods.group": "{label} ({count})",
+  "downtime.upAfter": "Down for {duration}.",
+  "tps.recoveredTitle": "TPS on {server} back to normal",
+  "tps.recovered": "TPS is back at {threshold} or above.",
+  "advancement.madeLine": "{player} made the advancement **{advancement}**",
+  "advancement.challengeLine": "{player} completed the challenge **{advancement}**",
 };
