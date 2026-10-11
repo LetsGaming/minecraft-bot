@@ -30,6 +30,7 @@ const manifestSlash: Array<{
 import {
   isServerAdmin,
   getMemberRoleIds,
+  replyDenied,
   replyError,
 } from "./commands/middleware.js";
 import { initServers, getAllInstances } from "@mcbot/core/utils/server/server.js";
@@ -395,6 +396,17 @@ void (async () => {
         log.error("hint", `Interaction failed: ${errMsg(err)}`);
         return;
       }
+
+      // Confirmation rows (stop, restart) carry their expiry in the customId.
+      try {
+        const { handleConfirmInteraction } = await import(
+          "./interactions/confirmActions.js"
+        );
+        if (await handleConfirmInteraction(interaction)) return;
+      } catch (err) {
+        log.error("confirm", `Interaction failed: ${errMsg(err)}`);
+        return;
+      }
     }
 
     if (!interaction.isChatInputCommand()) return;
@@ -429,10 +441,7 @@ void (async () => {
         chatInteraction.guild?.id,
       );
       if (!allowed) {
-        await chatInteraction.reply({
-          content: t("common.noPermission", {}, chatInteraction.guild?.id),
-          flags: MessageFlags.Ephemeral,
-        });
+        await replyDenied(chatInteraction);
         return;
       }
     }
@@ -472,10 +481,10 @@ void (async () => {
     } catch (err) {
       log.error("command", `/${chatInteraction.commandName}: ${errMsg(err)}`);
       const guildId = chatInteraction.guild?.id;
-      await replyError(
-        chatInteraction,
-        `${t("common.unexpectedError", {}, guildId)} ${t("common.unexpectedErrorRecovery", {}, guildId)}`,
-      );
+      await replyError(chatInteraction, {
+        problem: t("common.unexpectedError", {}, guildId),
+        recovery: t("common.unexpectedErrorRecovery", {}, guildId),
+      });
     }
   });
 
