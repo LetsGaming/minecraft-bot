@@ -3,27 +3,26 @@
  */
 export const de: Record<string, string> = {
   // ── info (how to join) ──
-  "info.title": "Beitreten — {server}",
+  "info.title": "So trittst du {server} bei",
   "info.address": "Adresse",
   "info.addressUnset": "Nicht veröffentlicht. Adresse bei einem Admin erfragen.",
   "info.version": "Minecraft-Version",
-  "info.versionUnknown": "Unbekannt — der Server hat nicht geantwortet.",
+  "info.versionUnknown": "Unbekannt. Der Server hat nicht geantwortet.",
   "info.loader": "Loader",
   "info.loaderUnknown": "Nicht gemeldet",
   "info.modpack": "Modpack",
   "info.required": "Benötigte Mods",
-  "info.requiredCount": "{count} Mod(s) müssen auf dem Client installiert sein. Liste unter `/mods`.",
+  "info.requiredCount": "{count|# Mod muss|# Mods müssen} auf dem Client installiert sein. Die Liste zeigt `/mods`.",
   "info.requiredUnknown": "Die Modliste ist derzeit nicht lesbar.",
-  "info.vanillaJoin": "Keine — ein Vanilla-Client kann beitreten.",
-
+  "info.vanillaJoin": "Keine. Ein Vanilla-Client kann beitreten.",
   // ── common ──
-  "common.serverNotFound": "Server nicht gefunden.",
+  "common.serverNotFound": "Diesen Server gibt es nicht. Nimm einen aus den Vorschlägen.",
   "common.noPermission": "Dieser Befehl ist nur für Bot-Admins. Frag einen Bot-Admin, wenn du ihn brauchst.",
   "common.invalidUsername":
     "**{username}** ist kein gültiger Minecraft-Benutzername.",
 
   // ── whois ──
-  "whois.title": "Whois — {username}",
+  "whois.title": "Whois: {username}",
   "whois.noData":
     "Keine Whitelist- oder Link-Daten für **{username}** gefunden.",
   "whois.addedBy": "Hinzugefügt von",
@@ -36,8 +35,7 @@ export const de: Record<string, string> = {
   "whois.notLinked": "Nicht verknüpft",
 
   // ── daily reminders ──
-  "dailyReminder.enabled":
-    "✅ Tägliche Erinnerungen aktiviert — ich schicke dir eine DM, sobald dein nächstes /daily bereit ist. Stelle sicher, dass deine DMs für diesen Server offen sind.",
+  "dailyReminder.enabled": "Erinnerung aktiv. Du bekommst eine DM, sobald dein nächstes /daily bereit ist. Deine DMs müssen dafür offen sein.",
   "dailyReminder.disabled": "✅ Tägliche Erinnerungen deaktiviert.",
   "dailyReminder.dmServer":
     "🎁 Deine tägliche Belohnung auf **{server}** ist bereit! Hol sie dir mit /daily server:{server}.",
@@ -60,31 +58,28 @@ export const de: Record<string, string> = {
   "slime.no": "Chunk [{cx}, {cz}] ist kein Slime-Chunk.",
 
   // ── death position (!deathpos + watcher DM) ──
-  "deathpos.none":
-    "Kein Tod gefunden — vielleicht bist du in dieser Welt noch nicht gestorben.",
+  "deathpos.none": "Kein Tod gefunden. Vielleicht bist du in dieser Welt noch nicht gestorben.",
   "deathpos.result": "☠ Dein letzter Tod: {x} / {y} / {z} ({dimension})",
   "deathpos.dm":
     "☠ Du bist auf **{server}** bei **{x} / {y} / {z}** ({dimension}) gestorben. Hol deine Sachen, bevor sie despawnen!",
 
   // ── waypoints ──
-  "waypoint.usage":
-    "Nutzung: !waypoint <name> — nachschlagen | !waypoint set <name> [kategorie] — speichern | !waypoint del <name> — eigenen löschen",
+  "waypoint.usage": "Nutzung: !waypoint <name> zum Nachschlagen | !waypoint set <name> [kategorie] zum Speichern | !waypoint del <name> zum Löschen deiner eigenen",
   "waypoint.invalidName":
     "Waypoint-Namen dürfen nur Buchstaben, Zahlen, _ oder - enthalten (max. 24 Zeichen).",
   "waypoint.noPosition": "Konnte deine Position nicht ermitteln. Versuch es gleich nochmal.",
-  "waypoint.taken": 'Waypoint "{name}" gehört {author} — nur er/sie kann ihn ändern.',
+  "waypoint.taken": 'Waypoint "{name}" gehört {author}. Nur diese Person kann ihn ändern.',
   "waypoint.limitReached": "Dieser Server hat bereits {max} Waypoints.",
   "waypoint.saved": '📍 Waypoint "{name}" bei {x} / {y} / {z} gespeichert.',
   "waypoint.deleted": 'Waypoint "{name}" gelöscht.',
   "waypoint.deletedByAdmin": 'Waypoint "{name}" gelöscht (erstellt von {author}).',
   "waypoint.notFound": 'Kein Waypoint namens "{name}". Mit !waypoints alle anzeigen.',
-  "waypoint.result": "📍 {name}: {x} / {y} / {z} ({dimension}) — gesetzt von {author}",
+  "waypoint.result": "📍 {name}: {x} / {y} / {z} ({dimension}), gesetzt von {author}",
   "waypoint.noneInGame": "Noch keine Waypoints. Erstelle einen mit: !waypoint set <name>",
   "waypoint.listHeader": "📍 Waypoints auf diesem Server ({count}):",
-  "waypoint.listMore": "…und {more} weitere — siehe /waypoints auf Discord.",
-  "waypoint.embedTitle": "📍 Waypoints — {server}",
-  "waypoint.embedFooter": "Seite {page}/{pages} • {count} Waypoints",
-  "waypoint.embedEntry": "`{x} / {y} / {z}` ({dimension}) — von **{author}**, {date}",
+  "waypoint.listMore": "…und {more} weitere. Siehe /waypoints auf Discord.",
+  "waypoint.embedTitle": "Waypoints auf {server}",
+  "waypoint.embedEntry": "`{x} / {y} / {z}` ({dimension}), von **{author}**, {date}",
   "waypoint.noneDiscord":
     "Noch keine Waypoints. Spieler können sie ingame mit `!waypoint set <name>` erstellen.",
 
@@ -92,38 +87,32 @@ export const de: Record<string, string> = {
   "report.usage": "Nutzung: !report <nachricht>",
   "report.embedTitle": "Meldung von {player} auf {server}",
   "report.sent": "✅ Dein Report wurde an die Admins geschickt. Danke!",
-  "report.noChannel":
-    "Reports sind für diesen Server noch nicht eingerichtet — wende dich bitte direkt an einen Admin.",
-
+  "report.noChannel": "Meldungen sind für diesen Server noch nicht eingerichtet. Wende dich bitte direkt an einen Admin.",
   // ── daily delivery queue ──
   "daily.queueFull": "Im Spiel warten schon {max} Belohnungen auf dich. Betritt den Server und hol sie ab, bevor du die nächste anforderst.",
   "daily.queued": "Du bist auf **{server}** gerade offline. Die Belohnung ist vorgemerkt und kommt beim nächsten Betreten an. Deine Serie bleibt erhalten.",
-  "daily.delivered": "📦 {count} vorgemerkte Daily-Belohnung(en) geliefert. Viel Spaß!",
-
+  "daily.delivered": "📦 {count|# vorgemerkte Daily-Belohnung|# vorgemerkte Daily-Belohnungen} geliefert. Viel Spaß!",
   // ── sessions ──
   "sessions.none": "Noch keine Session-Daten für **{player}** auf **{server}**.",
-  "sessions.onlineNow": "🟢 Gerade online",
+  "sessions.onlineNow": "Gerade online",
   "sessions.lastSeen": "Zuletzt gesehen {when}",
   "sessions.lastSeenUnknown": "Zuletzt gesehen: unbekannt",
-  "sessions.title": "Sessions — {player} @ {server}",
+  "sessions.title": "Sessions von {player} auf {server}",
   "sessions.playtime": "Spielzeit (zuletzt)",
-  "sessions.playtimeValue": "{duration} über die letzten {count} Session(s)",
-  "sessions.recent": "Letzte {count} Session(s)",
+  "sessions.playtimeValue": "{duration} in den letzten {count|Session|# Sessions}",
+  "sessions.recent": "{count|Letzte Session|Letzte # Sessions}",
   "sessions.stillOnline": "noch online",
   "players.title": "Spieler auf {server}",
-  "players.footer": "Seite {page}/{pages} • {count} Spieler",
   "players.online": "gerade online",
   "players.beforeTracking": "vor der Aufzeichnung",
   "players.none": "Auf diesem Server wurden noch keine Spieler gefunden.",
-  "players.noneInactive": "Seit mehr als {days} Tag(en) war kein Spieler inaktiv.",
-
+  "players.noneInactive": "Kein Spieler war länger als {days} d inaktiv.",
   // ── whois additions ──
   "whois.lastSeen": "Zuletzt gesehen",
   "whois.onlineNow": "🟢 Gerade online auf **{server}**",
   "whois.lastSeenValue": "{when} auf **{server}**",
   "whois.notes": "Admin-Notizen",
-  "whois.moreNotes": "…und {more} weitere — siehe /note list.",
-
+  "whois.moreNotes": "…und {more} weitere. Siehe /note list.",
   // ── admin notes (/note) ──
   "note.unknownPlayer":
     "**{player}** ist diesem Server nicht bekannt (weder Whitelist noch User-Cache).",
@@ -132,22 +121,20 @@ export const de: Record<string, string> = {
   "note.added": "Notiz für **{player}** gespeichert.",
   "note.removedTitle": "Notiz entfernt",
   "note.removed": "Notiz #{index} für **{player}** entfernt.",
-  "note.badIndex": "Keine Notiz mit dieser Nummer für **{player}** — siehe /note list.",
+  "note.badIndex": "Keine Notiz mit dieser Nummer für **{player}**. Sieh in /note list nach.",
   "note.none": "Keine Notizen für **{player}**.",
-  "note.listTitle": "Notizen — {player}",
-  "note.listFooter": "{count}/{max} Notizen",
-
+  "note.listTitle": "Notizen zu {player}",
   // ── challenges ──
   "challenge.alreadyActive":
     'Es läuft bereits eine Challenge: **{advancement}**. Brich sie ab oder warte auf einen Gewinner.',
   "challenge.noneActive": "Keine aktive Challenge auf **{server}**.",
   "challenge.noneYet": "Auf **{server}** gab es noch keine Challenges.",
-  "challenge.statusTitle": "🏆 Challenge — {status}",
+  "challenge.statusTitle": "Challenge auf {server}: {status}",
   "challenge.status.active": "aktiv",
   "challenge.status.won": "gewonnen",
   "challenge.status.expired": "abgelaufen",
   "challenge.status.cancelled": "abgebrochen",
-  "challenge.fieldAdvancement": "Wer zuerst **{advancement}** erspielt, gewinnt",
+  "challenge.fieldAdvancement": "Es gewinnt, wer **{advancement}** zuerst schafft",
   "challenge.fieldItem": "Item-Bonus: {amount}× {item}",
   "challenge.fieldStartedBy": "Gestartet von {by} {when}",
   "challenge.fieldEnds": "Endet {when}",
@@ -158,7 +145,7 @@ export const de: Record<string, string> = {
   "challenge.startedInGame":
     "🏆 Neue Challenge: Wer zuerst \"{advancement}\" erspielt, gewinnt!",
   "challenge.wonTitle": "🏆 Challenge gewonnen!",
-  "challenge.wonEmbed": "**{player}** hat als Erste(r) **{advancement}** erspielt!",
+  "challenge.wonEmbed": "**{player}** hat **{advancement}** als Erstes geschafft!",
   "challenge.wonInGame": "🏆 {player} hat die Challenge \"{advancement}\" gewonnen!",
   "challenge.cancelledTitle": "Challenge abgebrochen",
   "challenge.cancelled": "Challenge **{advancement}** abgebrochen.",
@@ -169,9 +156,8 @@ export const de: Record<string, string> = {
   "poll.noneActive": "Keine offene Umfrage auf **{server}**.",
   "poll.noneInGame": "Gerade läuft keine Umfrage.",
   "poll.needChannel": "Umfragen müssen in einem Textkanal erstellt werden.",
-  "poll.badOptions": "Bitte gib {min}–{max} Optionen getrennt durch | an.",
+  "poll.badOptions": "Gib {min} bis {max} Optionen an, getrennt durch |.",
   "poll.howToVote": "Stimme mit den Buttons ab oder ingame mit `!vote <nummer>`.",
-  "poll.ends": "Endet",
   "poll.voted": '✅ Stimme gezählt: "{option}"',
   "poll.badVote": "Bitte stimme mit einer Zahl zwischen 1 und {max} ab.",
   "poll.voteHint": "Abstimmen mit: !vote <nummer>",
@@ -179,15 +165,15 @@ export const de: Record<string, string> = {
   "poll.closedReply": "Diese Umfrage ist bereits geschlossen.",
   "poll.closedTitle": "Umfrage geschlossen",
   "poll.closed": 'Umfrage "{question}" geschlossen und Ergebnisse verkündet.',
-  "poll.resultTitle": "🗳️ Umfrage-Ergebnisse",
-  "poll.resultTotal": "{total} Stimme(n) insgesamt",
+  "poll.resultTitle": "Umfrage-Ergebnisse",
+  "poll.resultTotal": "{total|# Stimme|# Stimmen} insgesamt",
   "poll.resultInGame": '🗳️ Umfrage-Ergebnisse: "{question}"',
 
   // ── host resources ──
   "status.hostTitle": "Host",
   "status.hostMachine": "Maschine: {ram} / {ramTotal} RAM, {cpu}% CPU ({cores} Kerne)",
   "status.hostProcess": "Serverprozess: {ram} RAM, {cpu}% CPU",
-  "status.hostFilesystem": "{mount} — {percent}% belegt, {free} frei von {total}",
+  "status.hostFilesystem": "{mount}: {percent}% belegt, {free} frei von {total}",
   "status.hostDir": "\u00a0\u00a0`{path}`: {size}",
   "status.hostDirUnknown": "\u00a0\u00a0`{path}`: Größe nicht verfügbar",
   "hostAlerts.diskFullTitle": "Speicher von {server} ist fast voll",
@@ -223,20 +209,18 @@ export const de: Record<string, string> = {
   "dailyAdmin.unknownServer":
     'Unbekannter Server "{server}". Konfigurierte Server: {servers}',
   "dailyAdmin.samServer": "Quell- und Zielserver sind identisch.",
-  "dailyAdmin.noRecord": "**{user}** hat keinen Claim-Eintrag auf **{server}**.",
-  "dailyAdmin.targetExists":
-    "**{user}** hat bereits einen Eintrag auf **{server}** — overwrite:true zum Überschreiben.",
+  "dailyAdmin.noRecord": "**{user}** hat keinen Daily-Eintrag auf **{server}**.",
+  "dailyAdmin.targetExists": "**{user}** hat auf **{server}** schon einen Eintrag. Mit `overwrite:true` wird er ersetzt.",
   "dailyAdmin.moved": "Daily-Eintrag von **{user}** von **{from}** nach **{to}** verschoben.",
   "dailyAdmin.reset": "Daily-Eintrag von **{user}** auf **{server}** zurückgesetzt.",
-  "dailyAdmin.showTitle": "Daily-Einträge — {user}",
-  "dailyAdmin.showLine":
-    "**{server}**: Streak {streak} (Rekord {longest}), letzter Claim {last}",
-  "dailyAdmin.showNone": "Keine Claim-Einträge auf irgendeinem Server.",
+  "dailyAdmin.showTitle": "Daily-Einträge von {user}",
+  "dailyAdmin.showLine": "**{server}**: Serie {streak} (Rekord {longest}), zuletzt abgeholt {last}",
+  "dailyAdmin.showNone": "Auf keinem Server gibt es Daily-Einträge.",
   "control.stillRunning": "Das dauert länger, als der Bot wartet. Das Skript läuft vielleicht noch. Prüfe mit `/server status`, bevor du es noch einmal startest.",
   // ── waypoint categories ──
   "waypoint.invalidCategory":
     "Kategorien dürfen nur Buchstaben, Zahlen, _ oder - enthalten (max. 16 Zeichen).",
-  "waypoint.noneInCategory": 'Keine Wegpunkte in der Kategorie "{category}".',
+  "waypoint.noneInCategory": 'Keine Waypoints in der Kategorie "{category}".',
 
   // ── span polls ──
   "poll.alreadyActiveOn":
@@ -251,33 +235,29 @@ export const de: Record<string, string> = {
   "moderation.kicked": "**{player}** von **{server}** gekickt.",
   "moderation.banned": "**{player}** auf **{server}** gebannt.",
   "moderation.pardoned": "**{player}** auf **{server}** entbannt.",
-  "moderation.bannedTemp":
-    "**{player}** auf **{server}** für **{duration}** gebannt — bis {until}.",
-  "tempban.dmExpired":
-    "Dein zeitlich begrenzter Bann auf **{server}** ist abgelaufen — **{player}** kann wieder joinen. Bitte halte dich an die Regeln.",
+  "moderation.bannedTemp": "**{player}** auf **{server}** für **{duration}** gebannt, bis {until}.",
+  "tempban.dmExpired": "Dein befristeter Bann auf **{server}** ist abgelaufen. **{player}** kann wieder beitreten. Bitte halte dich an die Regeln.",
   "moderation.invalidDuration":
     "`{input}` ist keine gültige Dauer. Nutze z. B. `30m`, `2h`, `3d`, `1w`, `2mo`, `1.5y` (max. 10y).",
 
   // ── /activity ──
-  "activity.title": "📈 Aktivität — {server}",
-  "activity.noData":
-    "Noch keine Spielerzahl-Historie für **{server}** — Daten sammeln sich, während der Bot läuft.",
+  "activity.title": "Aktivität auf {server}",
+  "activity.noData": "Noch keine Spielerzahl-Historie für **{server}**. Die Daten sammeln sich, während der Bot läuft.",
   "activity.last24h": "Durchschnittliche Spieler, letzte 24h (alt → neu):",
   "activity.peak": "Spitze in dem Zeitraum: **{peak}**",
   "activity.busiest": "Stoßzeiten ({tz}, 14-Tage-Schnitt):",
-  "activity.busyLine": "**{hour}:00–{next}:00** — Ø {avg} Spieler",
+  "activity.busyLine": "**{hour}:00–{next}:00**: Ø {avg} Spieler",
   "activity.noBusyData": "Noch nicht genug Daten.",
 
   // ── /console ──
-  "console.tailTitle": "letzte {lines} Log-Zeile(n)",
+  "console.tailTitle": "{lines|letzte Log-Zeile|letzte # Log-Zeilen}",
   "console.emptyLog": "(Log ist leer)",
-  "console.guildOnly": "Der Live-Relay ist pro Discord-Server — bitte dort verwenden.",
+  "console.guildOnly": "Das Live-Relay gehört zu einem Discord-Server. Nutze den Befehl dort.",
   "console.noChannel":
     'Kein Konsolen-Channel für diese Guild konfiguriert. Erst guilds.<id>.console.channelId in config.json setzen.',
   "console.liveEnabled":
     "Live-Konsole für **{server}** läuft jetzt in {channel} (gebündelt alle paar Sekunden).",
-  "console.liveDisabled": "Live-Konsole für **{server}** deaktiviert.",
-
+  "console.liveDisabled": "Live-Konsole für **{server}** ist ausgeschaltet.",
   // ── console command delivery ──
   "console.notDelivered":
     "Der Befehl hat **{server}** nicht erreicht ({reason}). Es wurde nichts geändert.",
@@ -294,151 +274,127 @@ export const de: Record<string, string> = {
   "console.reason.rejected": "der API-Wrapper hat den Befehl abgelehnt",
 
   // ── scheduled restarts ──
-  "schedule.warnInGame": "Server-Neustart in {minutes} Minute(n)!",
-  "schedule.warnTitle": "🔄 Geplanter Neustart steht an",
+  "schedule.warnInGame": "Server-Neustart in {minutes|# Minute|# Minuten}!",
+  "schedule.warnTitle": "Geplanter Neustart von {server}",
   "schedule.warn": "**{server}** startet in **{minutes} min** neu (um {time}).",
-  "schedule.doneTitle": "🔄 Geplanter Neustart ausgeführt",
+  "schedule.doneTitle": "{server} planmäßig neu gestartet",
   "schedule.done": "**{server}**: der geplante Neustart wurde ausgelöst.",
 
   // ── /daily-history ──
-  "dailyHistory.title": "🗓️ Daily-Claims — {server}",
-  "dailyHistory.none":
-    "Noch keine Claims für dich auf **{server}** — `/daily` startet die Historie.",
-  "dailyHistory.line": "{when} · Streak {streak} — {items}",
-  "dailyHistory.footer": "{shown} von {total} gespeicherten Claim(s)",
-
+  "dailyHistory.title": "Deine Daily-Abholungen auf {server}",
+  "dailyHistory.none": "Auf **{server}** hast du noch nichts abgeholt. Mit `/daily` beginnt die Historie.",
+  "dailyHistory.line": "{when} · Serie {streak}: {items}",
   // ── /profile ──
-  "profile.title": "👤 {player}",
-  "profile.noPlayer":
-    "Kein Spieler angegeben und kein verknüpfter Account — player: mitgeben oder erst /link ausführen.",
+  "profile.title": "{player} auf {server}",
+  "profile.noPlayer": "Kein Spieler angegeben und kein verknüpfter Account. Gib `player:` an oder nutze zuerst /link.",
   "profile.linked": "🔗 Verknüpft mit {mention}",
   "profile.notLinked": "🔗 Mit keinem Discord-Account verknüpft",
-  "profile.whitelisted": "📋 Gewhitelistet von {by} am {at}",
-  "profile.playtime": "⏱️ {playtime} Spielzeit über {sessions} Session(s)",
-  "profile.onlineNow": "🟢 Gerade online",
+  "profile.whitelisted": "📋 Auf die Whitelist gesetzt von {by} am {at}",
+  "profile.playtime": "⏱️ {playtime} Spielzeit in {sessions|# Session|# Sessions}",
+  "profile.onlineNow": "Gerade online",
   "profile.lastSeen": "⚪ Zuletzt gesehen {when}",
-  "profile.streak": "🔥 Daily-Streak: {current} (Rekord {longest})",
+  "profile.streak": "🔥 Daily-Serie: {current} (Rekord {longest})",
   "profile.nothingKnown": "Zu diesem Spieler ist auf diesem Server noch nichts bekannt.",
 
   // ── milestones ──
-  "milestone.title": "🏅 Meilenstein erreicht!",
+  "milestone.title": "Meilenstein erreicht",
   "milestone.body": "**{player}** hat gerade **{value}** {stat} geknackt!",
   "milestone.inGame": "{player} hat gerade {value} {stat} geknackt!",
 
   // ── /watch ──
-  "watch.listTitle": "👁️ Deine Watches",
-  "watch.listNone": "Keine aktiven Watches. Probier `/watch server` oder `/watch player`.",
-  "watch.listServer": "`{id}` — Server **{server}** wieder online",
-  "watch.listPlayer": "`{id}` — Spieler **{player}** joint **{server}**",
-  "watch.notFound": "Kein Watch mit der ID `{id}` auf deinem Account.",
-  "watch.removed": "Watch `{id}` entfernt.",
-  "watch.limit": "Du hast bereits {max} Watches — entferne erst einen (/watch list).",
-  "watch.duplicate": "Genau diesen Watch hast du schon aktiv.",
-  "watch.serverArmed":
-    "Aktiv: du bekommst **eine DM**, sobald **{server}** wieder online ist. DMs müssen offen sein.",
-  "watch.playerArmed":
-    "Aktiv: du bekommst **eine DM**, sobald **{player}** auf **{server}** joint. DMs müssen offen sein.",
-  "watch.dmServer": "✅ **{server}** ist wieder online. (Dieser Watch ist damit verbraucht.)",
-  "watch.dmPlayer": "👋 **{player}** ist gerade **{server}** beigetreten. (Dieser Watch ist damit verbraucht.)",
-
+  "watch.listTitle": "Deine Benachrichtigungen",
+  "watch.listNone": "Keine aktiven Benachrichtigungen. Probier `/watch server` oder `/watch player`.",
+  "watch.listServer": "`{id}`: Server **{server}** wieder online",
+  "watch.listPlayer": "`{id}`: Spieler **{player}** betritt **{server}**",
+  "watch.notFound": "Keine Benachrichtigung mit der ID `{id}` auf deinem Account.",
+  "watch.removed": "Benachrichtigung `{id}` entfernt.",
+  "watch.limit": "Du hast schon {max} Benachrichtigungen. Entferne zuerst eine (/watch list).",
+  "watch.duplicate": "Diese Benachrichtigung hast du schon aktiv.",
+  "watch.serverArmed": "Du bekommst **eine DM**, sobald **{server}** wieder online ist. Deine DMs müssen dafür offen sein.",
+  "watch.playerArmed": "Du bekommst **eine DM**, sobald **{player}** **{server}** betritt. Deine DMs müssen dafür offen sein.",
+  "watch.dmServer": "✅ **{server}** ist wieder online. Diese Benachrichtigung ist damit erledigt.",
+  "watch.dmPlayer": "👋 **{player}** hat gerade **{server}** betreten. Diese Benachrichtigung ist damit erledigt.",
   // ── whitelist applications ──
-  "wlapp.promptTitle": "📋 Whitelist-Bewerbung",
+  "wlapp.promptTitle": "Whitelist-Antrag",
   "wlapp.promptBody":
     "Du willst auf dem Server spielen? Klick den Button, nenn uns deinen Minecraft-Namen, und ein Admin schaut drüber.",
   "wlapp.applyButton": "Für Whitelist bewerben",
-  "wlapp.modalTitle": "Whitelist-Bewerbung",
+  "wlapp.modalTitle": "Whitelist-Antrag",
   "wlapp.modalName": "Dein Minecraft-Name",
   "wlapp.modalNote": "Hinweis für die Admins (optional)",
   "wlapp.invalidName": "**{name}** ist kein gültiger Minecraft-Name.",
-  "wlapp.noServer":
-    "Diese Guild hat mehrere Server und keinen Default — ein Admin muss erst guilds.<id>.defaultServer setzen.",
-  "wlapp.alreadyPending":
-    "Du hast bereits eine offene Bewerbung — ein Admin kümmert sich darum.",
-  "wlapp.queueBroken":
-    "Der Bewerbungs-Channel ist nicht erreichbar — sag bitte einem Admin Bescheid.",
-  "wlapp.submitted":
-    "Bewerbung für **{name}** auf **{server}** eingereicht — du bekommst eine DM, sobald entschieden ist (DMs müssen offen sein).",
-  "wlapp.queueTitle": "📋 Whitelist-Bewerbung",
+  "wlapp.noServer": "Anträge sind gerade nicht möglich. Sag bitte einem Bot-Admin Bescheid.",
+  "wlapp.alreadyPending": "Du hast schon einen offenen Antrag. Ein Admin kümmert sich darum.",
+  "wlapp.queueBroken": "Der Kanal für Anträge ist nicht erreichbar. Sag bitte einem Bot-Admin Bescheid.",
+  "wlapp.submitted": "Antrag für **{name}** auf **{server}** eingereicht. Du bekommst eine DM, sobald entschieden ist. Deine DMs müssen dafür offen sein.",
+  "wlapp.queueTitle": "Whitelist-Antrag",
   "wlapp.queueApplicant": "Bewerber: {mention} ({tag})",
   "wlapp.queueName": "Minecraft-Name: **{name}**",
   "wlapp.queueServer": "Server: **{server}**",
   "wlapp.queueNote": "Notiz: {note}",
   "wlapp.approveButton": "Annehmen",
   "wlapp.denyButton": "Ablehnen",
-  "wlapp.notAdmin": "Nur Server-Admins können über Bewerbungen entscheiden.",
-  "wlapp.stale": "Diese Bewerbung wurde bereits entschieden (oder existiert nicht mehr).",
-  "wlapp.serverGone":
-    "Server **{server}** ist nicht mehr konfiguriert — die Bewerbung kann nicht angenommen werden.",
+  "wlapp.notAdmin": "Nur Bot-Admins können über Anträge entscheiden.",
+  "wlapp.stale": "Über diesen Antrag wurde schon entschieden (oder es gibt ihn nicht mehr).",
+  "wlapp.serverGone": "Server **{server}** ist nicht mehr eingerichtet, deshalb kann der Antrag nicht angenommen werden.",
   "wlapp.approveFailed": "Whitelisting fehlgeschlagen: {error}",
   "wlapp.approvedBy": "✅ Angenommen von {by}",
   "wlapp.deniedBy": "⛔ Abgelehnt von {by}",
-  "wlapp.dmApproved":
-    "✅ Deine Whitelist-Bewerbung für **{name}** wurde angenommen — willkommen auf **{server}**!",
-  "wlapp.dmDenied": "⛔ Deine Whitelist-Bewerbung für **{name}** wurde abgelehnt.",
+  "wlapp.dmApproved": "✅ Dein Whitelist-Antrag für **{name}** wurde angenommen. Willkommen auf **{server}**!",
+  "wlapp.dmDenied": "⛔ Dein Whitelist-Antrag für **{name}** wurde abgelehnt.",
   "wlapp.modalServer": "Welcher Server?",
 
   // ── command policy ──
-  "command.disabledHere": "`/{command}` ist hier deaktiviert.",
+  "command.disabledHere": "`/{command}` ist auf diesem Discord-Server ausgeschaltet. Ein Bot-Admin kann den Befehl einschalten.",
   "command.adminOnlyInGame":
     "!{command} ist auf diesem Server nur für Admins (dein verknüpfter Discord-Account muss Bot-Admin sein).",
-  "nudge.link":
-    "Tipp: Verbinde dein Discord für Belohnungen und Statistiken — nutze /link in Discord und tippe dann hier !link <code> in den Chat.",
-  "nudge.daily":
-    "Tipp: Du bist verbunden! Nutze einmal täglich /daily in Discord für eine Gratis-Belohnung — sie landet in deinem Inventar, auch wenn du offline bist.",
+  "nudge.link": "Tipp: Verknüpfe dein Discord für Belohnungen und Statistiken. Nutze /link in Discord und tippe dann hier !link <code> in den Chat.",
+  "nudge.daily": "Tipp: Du bist verknüpft! Nutze einmal täglich /daily in Discord für eine Gratis-Belohnung. Sie landet in deinem Inventar, auch wenn du sie offline abholst.",
   "nudge.lastTime":
     "(Das war das letzte Mal, dass ich das erwähne.)",
   "hint.dailyReminder.label":
     "Erinnere mich",
-  "hint.dailyReminder.confirm":
-    "Erinnerungen an — ich schreibe dir per DM, sobald dein nächstes Daily bereit ist. Jederzeit abschaltbar mit /daily-reminder.",
+  "hint.dailyReminder.confirm": "Erinnerungen an. Du bekommst eine DM, sobald dein nächstes Daily bereit ist. Ausschalten kannst du sie jederzeit mit /daily-reminder.",
   "hint.noThanks":
     "Nein danke",
   "hint.notYours":
     "Dieser Button gehört zur Antwort einer anderen Person.",
-  "hint.failed":
-    "Konnte das nicht aktivieren — bitte nutze den Befehl direkt.",
+  "hint.failed": "Das hat nicht geklappt. Nutze /daily-reminder direkt.",
   "hint.watchServer.label":
     "Benachrichtige mich",
-  "hint.watchServer.confirm":
-    "Ich schreibe dir per DM, sobald der Server wieder online ist. Deine DMs müssen offen sein — verwalten kannst du das mit /watch.",
+  "hint.watchServer.confirm": "Du bekommst eine DM, sobald der Server wieder online ist. Deine DMs müssen offen sein. Deine Benachrichtigungen verwaltest du mit /watch.",
   "hint.statsLeaderboard":
     "Tipp: /leaderboard sortiert alle nach derselben Statistik, und /compare stellt zwei Spieler nebeneinander.",
-  "hint.playtimeActivity":
-    "Tipp: /activity zeigt, wann auf dem Server wirklich etwas los ist — praktisch, um andere Spieler anzutreffen.",
+  "hint.playtimeActivity": "Tipp: /activity zeigt, wann auf dem Server wirklich etwas los ist. Praktisch, um andere Spieler zu treffen.",
   "hint.seedChunkbase":
     "Tipp: /chunkbase öffnet diesen Seed in einer Kartenansicht, und /slime findet darin Slime-Chunks.",
   "help.newToYou": "✨ = noch nicht ausprobiert ({count}). Diese Befehle stehen zuerst.",
   "deathpos.hint":
     "Tipp: Tippe !deathpos in den Chat, um diese Koordinaten jederzeit erneut zu bekommen.",
-  "report.hint":
-    "Tipp: Wenn das unfair war, tippe !report <was passiert ist> in den Chat — die Admins sehen es dann.",
-
+  "report.hint": "Tipp: Wenn das unfair war, tippe !report <was passiert ist> in den Chat. Die Admins sehen es dann.",
   // ── /clear-dm ──
   "clearDm.none": "Keine Bot-Nachrichten zum Löschen gefunden.",
-  "clearDm.deleted": "**{count}** Bot-Nachricht(en) aus dieser DM gelöscht.",
-
+  "clearDm.deleted": "{count|**#** Bot-Nachricht|**#** Bot-Nachrichten} aus dieser DM gelöscht.",
   // ── embed helpers ──
   "embed.errorTitle": "Befehl fehlgeschlagen",
-  "common.requestedBy": "Angefragt von {user}",
-
   // ── /config ──
   "config.sumServers": "Server: {servers}",
-  "config.sumGuilds": "Gilden: {count}",
+  "config.sumGuilds": "Discord-Server: {count}",
   "config.sumAdmins": "Admins: {count}",
   "config.added": "+ Hinzugefügt (live): {list}",
   "config.removed": "- Entfernt (live): {list}",
   "config.rebuilt": "~ Neu aufgebaut (live): {list}",
   "config.needsRestart": "⚠ Geänderte Einstellungen an bestehenden Servern greifen erst nach einem Neustart: {list}",
-  "config.moreChanges": "~ …und {count} weitere Änderung(en)",
+  "config.moreChanges": "~ …und {count|# weitere Änderung|# weitere Änderungen}",
   "config.noChanges": "Keine Änderungen erkannt.",
-  "config.reloaded": "Konfiguration von der Festplatte neu geladen.\n{details}",
+  "config.reloaded": "Von der Festplatte neu geladen.\n{details}",
   "config.featStatus": "Status",
   "config.featNotifications": "Benachrichtigungen",
   "config.noFeatures": "keine Funktionen eingerichtet",
   "config.title": "⚙️ Bot-Konfiguration",
   "config.fieldClientId": "Client-ID",
   "config.fieldServers": "Server ({count})",
-  "config.fieldGuild": "Gilde",
+  "config.fieldGuild": "Discord-Server",
   "config.fieldAdmins": "Admins",
   "config.fieldDisabled": "Deaktivierte Befehle",
   "config.fieldTpsThreshold": "TPS-Schwelle",
@@ -467,32 +423,28 @@ export const de: Record<string, string> = {
   "map.notConfigured": "Für diesen Bot ist kein Kartenlink eingerichtet.",
   "map.title": "Live-Karte",
   "map.description": "Die Live-Karte findest du [hier]({url}).",
-  "chunkbase.title": "Chunkbase-Karte",
+  "chunkbase.title": "Chunkbase-Karte von {server}",
   "chunkbase.open": "[Seed-Karte öffnen]({url})",
-  "seed.title": "Welt-Seed: {server}",
-
+  "seed.title": "Welt-Seed von {server}",
   // ── /mods, /status, /uptime ──
   "mods.title": "Mods auf {server}",
   "mods.count": "{count|# Mod|# Mods} installiert.",
   "mods.groupBoth": "Client und Server",
   "mods.groupOptional": "Nur Client, optional",
   "mods.groupServer": "Nur Server",
-  "status.title": "Server-Status: {server}",
-  "status.playersSuffix": ": {players}",
-  "status.summary": "{emoji} **{label}**: {online}/{max} Spieler",
+  "status.title": "{server}: {label}",
   "status.botPing": "Bot-Ping",
   "status.roundTrip": "Roundtrip",
   "status.online": "Online",
-  "uptime.overviewTitle": "📈 Server-Uptime",
+  "uptime.overviewTitle": "Uptime aller Server",
   "uptime.forDuration": " seit {duration}",
-  "uptime.currently": "{emoji} Aktuell **{state}**",
-  "uptime.title": "📈 Uptime: {server}",
+  "uptime.title": "Uptime von {server}",
   "uptime.last24h": "Letzte 24 Stunden",
   "uptime.last7d": "Letzte 7 Tage",
   "uptime.last30d": "Letzte 30 Tage",
   "uptime.trend": "24-h-Verlauf (stündlich)",
   "uptime.trendLegend": "`{bar}` (älteste → jetzt, · = keine Daten)",
-  "uptime.basedOn": "Basierend auf {checks24h} Checks (24 h) · {checks7d} Checks (7 d)",
+  "uptime.basedOn": "Basierend auf {checks24h} Prüfungen in 24 h und {checks7d} in 7 d.",
   "uptime.noData": "Noch keine Uptime-Daten gesammelt. Die Statistik füllt sich mit der Zeit.",
 
   // ── /whitelisted ──
@@ -523,15 +475,15 @@ export const de: Record<string, string> = {
   "playtime.total": "Gesamte Spielzeit: **{time}**",
   // ── /clear, /backup, /tps ──
   "clear.textChannelOnly": "Dieser Befehl funktioniert nur in Textkanälen.",
-  "clear.deleted": "**{count}** Nachricht(en) gelöscht.",
+  "clear.deleted": "{count|**#** Nachricht|**#** Nachrichten} gelöscht.",
   "clear.tooOld": "_Nachrichten, die älter als 14 Tage sind, lassen sich nicht per Bulk-Löschung entfernen._",
   "backup.none": "Noch keine Backups. Ein Bot-Admin kann mit /server backup eines erstellen.",
   "backup.title": "Backups von {server}",
   "backup.summary": "{count|# Backup|# Backups}, zusammen {total}. Das neueste wurde {age} erstellt.",
   "backup.entry": "{count|# Backup|# Backups}\nNeuestes {age}, {size}",
   "tps.unsupported": "Für das TPS-Monitoring braucht es RCON oder einen API-Wrapper.",
-  "tps.unavailable": "TPS konnten nicht abgerufen werden. Der Server ist möglicherweise offline.",
-  "tps.title": "{emoji} TPS: {server}",
+  "tps.unavailable": "Die TPS konnten nicht gelesen werden. Prüfe mit /status, ob der Server läuft.",
+  "tps.title": "TPS von {server}",
   "tps.tickTiming": "Tick-Timing",
   "tps.current": "Aktuelle TPS: **{value}**",
 
@@ -544,17 +496,15 @@ export const de: Record<string, string> = {
   "control.pruneDryTitle": "Statistiken auf {server} bereinigen: Testlauf",
   "control.pruneDryBody": "{count|# Statistikdatei gehört|# Statistikdateien gehören} zu Spielern, die nicht auf der Whitelist stehen:\n```\n{list}\n```\nFühre den Befehl mit `confirm: true` noch einmal aus, um sie endgültig zu löschen.",
   "control.pruned": "{count|# verwaiste Statistikdatei|# verwaiste Statistikdateien} auf **{server}** gelöscht.",
-  "whitelist.notFound": "Benutzername **{username}** nicht gefunden.",
-  "whitelist.added": "**{name}** wurde auf **{server}** auf die Whitelist gesetzt.",
-  "whitelist.removed": "**{username}** wurde auf **{server}** von der Whitelist entfernt.",
-
+  "whitelist.notFound": "Mojang kennt keinen Spieler **{username}**. Prüfe die Schreibweise.",
+  "whitelist.added": "**{name}** steht jetzt auf der Whitelist von **{server}**.",
+  "whitelist.removed": "**{username}** steht nicht mehr auf der Whitelist von **{server}**.",
   // ── watcher embeds ──
   "joinLeave.joined": "{player} ist {server} beigetreten",
   "joinLeave.left": "{player} hat {server} verlassen",
   "updateNotifier.message": "📦 minecraft-bot {latest} ist verfügbar (du nutzt {current}). Release Notes: {url}",
-  "leaderboard.streakFooter": "{server} · Streaks gesamt",
-  "statusEmbed.title": "📊 Server-Status",
-  "statusEmbed.footer": "Aktualisiert sich alle 60 s",
+  "leaderboard.streakFooter": "{server} · Serien gesamt",
+  "statusEmbed.title": "Server-Status",
   "statusEmbed.none": "Keine Server eingerichtet.",
 
   // ── /daily messages ──
@@ -581,19 +531,19 @@ export const de: Record<string, string> = {
   "leaderboard.tracked": "{count} Spieler erfasst",
   "leaderboard.title": "🏆 Leaderboard: {stat}{period}",
   "leaderboard.streakTitle": "🏆 {stat}: {server}",
-  "leaderboard.noClaims": "Auf diesem Server wurde noch nichts abgeholt.",
-  "leaderboard.streakNote": "Top {limit} · /daily-Streaks gelten pro Server",
-  "console.dropped": "… {count} Zeile(n) verworfen (Server ausgelastet)",
+  "leaderboard.noClaims": "Auf diesem Server hat noch niemand eine Daily-Belohnung abgeholt.",
+  "leaderboard.streakNote": "Top {limit} · /daily-Serien gelten pro Server",
+  "console.dropped": "… {count|# Zeile|# Zeilen} verworfen (Server ausgelastet)",
   "uptime.barNoData": "keine Daten",
 
   // ── server targeting ──
-  "router.guildOnly": "Bei mehreren Servern müssen Befehle auf einem Discord-Server ausgeführt werden.",
-  "router.notAllowed": "Der Server \"{server}\" ist von diesem Discord-Server aus nicht verfügbar. Ein Betreiber kann ihn in der config.json unter \"allowedServers\" dieser Gilde freigeben.",
-  "router.serverNotFound": "Server \"{server}\" nicht gefunden.",
+  "router.guildOnly": "Es gibt mehrere Minecraft-Server. Führe den Befehl auf einem Discord-Server aus, damit der passende gewählt wird.",
+  "router.notAllowed": "Der Server \"{server}\" ist von diesem Discord-Server aus nicht verfügbar. Ein Betreiber kann ihn in der config.json unter \"allowedServers\" dieses Discord-Servers freigeben.",
+  "router.serverNotFound": "Es gibt keinen Server namens \"{server}\". Nimm einen aus den Vorschlägen.",
   "capability.missing": "**{server}** unterstützt diese Funktion nicht: {feature}. Sie braucht die Setup-Suite. {hint}",
-  "target.defaultNotRunning": "Der defaultServer \"{server}\" dieser Gilde läuft nicht. Korrigiere ihn in der config.json oder gib `server:` direkt an. Verfügbar: {available}.",
+  "target.defaultNotRunning": "Der defaultServer \"{server}\" dieses Discord-Servers läuft nicht. Korrigiere ihn in der config.json oder gib `server:` direkt an. Verfügbar: {available}.",
   "target.none": "keine",
-  "target.noneAvailable": "Für diese Gilde ist kein Server verfügbar.",
+  "target.noneAvailable": "Für diesen Discord-Server ist kein Server verfügbar.",
   "target.several": "Es sind mehrere Server verfügbar ({servers}). Gib `server:` an, um einen auszuwählen.",
   "state.playerCount": "{online}/{max} Spieler",
   "state.playersIncluding": "{counts}, darunter {names}",
@@ -689,4 +639,26 @@ export const de: Record<string, string> = {
   "tps.recovered": "Die TPS liegen wieder bei {threshold} oder darüber.",
   "advancement.madeLine": "{player} hat den Fortschritt **{advancement}** erreicht",
   "advancement.challengeLine": "{player} hat die Herausforderung **{advancement}** abgeschlossen",
+  "moderation.bannedTitle": "Spieler gebannt",
+  "moderation.kickedTitle": "Spieler gekickt",
+  "moderation.pardonedTitle": "Bann aufgehoben",
+  "clear.title": "Nachrichten gelöscht",
+  "whitelist.addedTitle": "Auf die Whitelist gesetzt",
+  "whitelist.removedTitle": "Von der Whitelist entfernt",
+  "console.liveEnabledTitle": "Live-Konsole an",
+  "console.liveDisabledTitle": "Live-Konsole aus",
+  "config.reloadedTitle": "Konfiguration neu geladen",
+  "dailyAdmin.movedTitle": "Daily-Eintrag verschoben",
+  "dailyAdmin.resetTitle": "Daily-Eintrag zurückgesetzt",
+  "note.listCount": "{count}/{max} Notizen",
+  "clearDm.deletedTitle": "DM aufgeräumt",
+  "watch.removedTitle": "Benachrichtigung entfernt",
+  "watch.armedTitle": "Benachrichtigung aktiv",
+  "poll.endsAt": "Endet {time}.",
+  "waypoint.count": "{count|# Waypoint|# Waypoints}",
+  "dailyHistory.shown": "{shown} von {total|# gespeicherten Abholung|# gespeicherten Abholungen}.",
+  "status.players": "Spieler",
+  "players.count": "{count|# Spieler|# Spieler}.",
+  "statusEmbed.fetchFailed": "Der Status konnte nicht gelesen werden.",
+  "statusEmbed.onlineNames": "Online: {names}",
 };

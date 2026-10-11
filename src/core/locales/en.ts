@@ -2,33 +2,32 @@
  * English locale (default + fallback).
  *
  * Key convention: `<area>.<message>` in camelCase. Placeholders use
- * {curlyBraces} and are substituted by t() — see utils/i18n.ts.
+ * {curlyBraces} and are substituted by t(); see utils/i18n.ts.
  *
  * Every user-visible string goes through t(); `npm run i18n:check` rejects
  * hard-coded literals in the Discord layer and any key missing from de.ts.
  */
 export const en: Record<string, string> = {
   // ── info (how to join) ──
-  "info.title": "How to join — {server}",
+  "info.title": "How to join {server}",
   "info.address": "Address",
   "info.addressUnset": "Not published. Ask an admin for the join address.",
   "info.version": "Minecraft version",
-  "info.versionUnknown": "Unknown — the server did not answer.",
+  "info.versionUnknown": "Unknown. The server did not answer.",
   "info.loader": "Loader",
   "info.loaderUnknown": "Not reported",
   "info.modpack": "Modpack",
   "info.required": "Required mods",
-  "info.requiredCount": "{count} mod(s) must be installed on the client. See `/mods` for the list.",
+  "info.requiredCount": "{count|# mod must|# mods must} be installed on the client. See `/mods` for the list.",
   "info.requiredUnknown": "Could not read the mod list right now.",
-  "info.vanillaJoin": "None — a vanilla client can join.",
-
+  "info.vanillaJoin": "None. A vanilla client can join.",
   // ── common ──
-  "common.serverNotFound": "Server not found.",
+  "common.serverNotFound": "That server does not exist. Pick one from the suggestions.",
   "common.noPermission": "This command is for bot admins only. Ask a bot admin if you need it.",
   "common.invalidUsername": "**{username}** is not a valid Minecraft username.",
 
   // ── whois ──
-  "whois.title": "Whois — {username}",
+  "whois.title": "Whois: {username}",
   "whois.noData": "No whitelist or link data found for **{username}**.",
   "whois.addedBy": "Added by",
   "whois.addedAt": "Added at",
@@ -40,8 +39,7 @@ export const en: Record<string, string> = {
   "whois.notLinked": "Not linked",
 
   // ── daily reminders ──
-  "dailyReminder.enabled":
-    "✅ Daily reminders enabled — I'll DM you when your next /daily is ready. Make sure your DMs are open for this server.",
+  "dailyReminder.enabled": "Reminder on. You get a DM when your next /daily is ready. Your DMs need to be open for that.",
   "dailyReminder.disabled": "✅ Daily reminders disabled.",
   "dailyReminder.dm":
     "🎁 Your daily reward is ready! Claim it with /daily on the server.",
@@ -64,31 +62,28 @@ export const en: Record<string, string> = {
   "slime.no": "Chunk [{cx}, {cz}] is not a slime chunk.",
 
   // ── death position (!deathpos + watcher DM) ──
-  "deathpos.none":
-    "No recorded death found — you may not have died yet on this world.",
+  "deathpos.none": "No recorded death found. You may not have died on this world yet.",
   "deathpos.result": "☠ Your last death: {x} / {y} / {z} ({dimension})",
   "deathpos.dm":
     "☠ You died on **{server}** at **{x} / {y} / {z}** ({dimension}). Grab your stuff before it despawns!",
 
   // ── waypoints ──
-  "waypoint.usage":
-    "Usage: !waypoint <name> — look up | !waypoint set <name> — save | !waypoint del <name> — delete yours",
+  "waypoint.usage": "Usage: !waypoint <name> to look up | !waypoint set <name> to save | !waypoint del <name> to delete yours",
   "waypoint.invalidName":
     "Waypoint names may only contain letters, numbers, _ or - (max 24 characters).",
   "waypoint.noPosition": "Could not get your position. Try again in a moment.",
-  "waypoint.taken": 'Waypoint "{name}" belongs to {author} — only they can change it.',
+  "waypoint.taken": 'Waypoint "{name}" belongs to {author}. Only they can change it.',
   "waypoint.limitReached": "This server already has {max} waypoints.",
   "waypoint.saved": '📍 Saved waypoint "{name}" at {x} / {y} / {z}.',
   "waypoint.deleted": 'Deleted waypoint "{name}".',
   "waypoint.deletedByAdmin": 'Deleted waypoint "{name}" (created by {author}).',
   "waypoint.notFound": 'No waypoint named "{name}". Use !waypoints to list all.',
-  "waypoint.result": "📍 {name}: {x} / {y} / {z} ({dimension}) — set by {author}",
+  "waypoint.result": "📍 {name}: {x} / {y} / {z} ({dimension}), set by {author}",
   "waypoint.noneInGame": "No waypoints yet. Create one with: !waypoint set <name>",
   "waypoint.listHeader": "📍 Waypoints on this server ({count}):",
-  "waypoint.listMore": "…and {more} more — see /waypoints on Discord.",
-  "waypoint.embedTitle": "📍 Waypoints — {server}",
-  "waypoint.embedFooter": "Page {page}/{pages} • {count} waypoints",
-  "waypoint.embedEntry": "`{x} / {y} / {z}` ({dimension}) — by **{author}**, {date}",
+  "waypoint.listMore": "…and {more} more. See /waypoints on Discord.",
+  "waypoint.embedTitle": "Waypoints on {server}",
+  "waypoint.embedEntry": "`{x} / {y} / {z}` ({dimension}), by **{author}**, {date}",
   "waypoint.noneDiscord":
     "No waypoints yet. Players can create them in-game with `!waypoint set <name>`.",
 
@@ -96,38 +91,32 @@ export const en: Record<string, string> = {
   "report.usage": "Usage: !report <message>",
   "report.embedTitle": "Report from {player} on {server}",
   "report.sent": "✅ Your report has been sent to the admins. Thank you!",
-  "report.noChannel":
-    "Reports are not set up for this server yet — please contact an admin directly.",
-
+  "report.noChannel": "Reports are not set up for this server yet. Please contact an admin directly.",
   // ── daily delivery queue ──
   "daily.queueFull": "{max} rewards are already waiting for you in game. Join the server and collect them before claiming the next one.",
   "daily.queued": "You are offline on **{server}** right now, so the reward is queued and delivered the next time you join. Your streak is safe.",
-  "daily.delivered": "📦 Delivered {count} queued daily reward item(s). Enjoy!",
-
+  "daily.delivered": "📦 Delivered {count|# queued daily reward|# queued daily rewards}. Enjoy!",
   // ── sessions ──
   "sessions.none": "No session data recorded for **{player}** on **{server}** yet.",
-  "sessions.onlineNow": "🟢 Online right now",
+  "sessions.onlineNow": "Online right now",
   "sessions.lastSeen": "Last seen {when}",
   "sessions.lastSeenUnknown": "Last seen: unknown",
-  "sessions.title": "Sessions — {player} @ {server}",
+  "sessions.title": "Sessions of {player} on {server}",
   "sessions.playtime": "Recent playtime",
-  "sessions.playtimeValue": "{duration} across the last {count} session(s)",
-  "sessions.recent": "Last {count} session(s)",
+  "sessions.playtimeValue": "{duration} across the last {count|session|# sessions}",
+  "sessions.recent": "{count|Last session|Last # sessions}",
   "sessions.stillOnline": "still online",
   "players.title": "Players on {server}",
-  "players.footer": "Page {page}/{pages} • {count} players",
   "players.online": "online now",
   "players.beforeTracking": "before tracking",
   "players.none": "No players found on this server yet.",
-  "players.noneInactive": "No players have been inactive for more than {days} day(s).",
-
+  "players.noneInactive": "No player has been inactive for more than {days|# day|# days}.",
   // ── whois additions ──
   "whois.lastSeen": "Last seen",
   "whois.onlineNow": "🟢 Online right now on **{server}**",
   "whois.lastSeenValue": "{when} on **{server}**",
   "whois.notes": "Admin notes",
-  "whois.moreNotes": "…and {more} more — see /note list.",
-
+  "whois.moreNotes": "…and {more} more. See /note list.",
   // ── admin notes (/note) ──
   "note.unknownPlayer":
     "**{player}** is not known to this server (not in whitelist or user cache).",
@@ -136,17 +125,15 @@ export const en: Record<string, string> = {
   "note.added": "Note saved for **{player}**.",
   "note.removedTitle": "Note removed",
   "note.removed": "Removed note #{index} for **{player}**.",
-  "note.badIndex": "No note with that number for **{player}** — check /note list.",
+  "note.badIndex": "No note with that number for **{player}**. Check /note list.",
   "note.none": "No notes for **{player}**.",
-  "note.listTitle": "Notes — {player}",
-  "note.listFooter": "{count}/{max} notes",
-
+  "note.listTitle": "Notes on {player}",
   // ── challenges ──
   "challenge.alreadyActive":
     'A challenge is already running: **{advancement}**. Cancel it first or wait for a winner.',
   "challenge.noneActive": "No active challenge on **{server}**.",
   "challenge.noneYet": "No challenges have been run on **{server}** yet.",
-  "challenge.statusTitle": "🏆 Challenge — {status}",
+  "challenge.statusTitle": "Challenge on {server}: {status}",
   "challenge.status.active": "active",
   "challenge.status.won": "won",
   "challenge.status.expired": "expired",
@@ -173,9 +160,8 @@ export const en: Record<string, string> = {
   "poll.noneActive": "No open poll on **{server}**.",
   "poll.noneInGame": "There is no open poll right now.",
   "poll.needChannel": "Polls must be created in a text channel.",
-  "poll.badOptions": "Please provide {min}–{max} options separated by |.",
+  "poll.badOptions": "Give {min} to {max} options, separated by |.",
   "poll.howToVote": "Vote with the buttons below or in-game with `!vote <number>`.",
-  "poll.ends": "Ends",
   "poll.voted": '✅ Vote recorded: "{option}"',
   "poll.badVote": "Please vote with a number between 1 and {max}.",
   "poll.voteHint": "Vote with: !vote <number>",
@@ -183,15 +169,15 @@ export const en: Record<string, string> = {
   "poll.closedReply": "This poll is already closed.",
   "poll.closedTitle": "Poll closed",
   "poll.closed": 'Closed the poll "{question}" and announced the results.',
-  "poll.resultTitle": "🗳️ Poll results",
-  "poll.resultTotal": "{total} vote(s) total",
+  "poll.resultTitle": "Poll results",
+  "poll.resultTotal": "{total|# vote|# votes} in total",
   "poll.resultInGame": '🗳️ Poll results: "{question}"',
 
   // ── host resources ──
   "status.hostTitle": "Host",
   "status.hostMachine": "Machine: {ram} / {ramTotal} RAM, {cpu}% CPU ({cores} cores)",
   "status.hostProcess": "Server process: {ram} RAM, {cpu}% CPU",
-  "status.hostFilesystem": "{mount} — {percent}% used, {free} free of {total}",
+  "status.hostFilesystem": "{mount}: {percent}% used, {free} free of {total}",
   "status.hostDir": "\u00a0\u00a0`{path}`: {size}",
   "status.hostDirUnknown": "\u00a0\u00a0`{path}`: size unavailable",
   "hostAlerts.diskFullTitle": "Disk on {server} is almost full",
@@ -228,11 +214,10 @@ export const en: Record<string, string> = {
     'Unknown server "{server}". Configured servers: {servers}',
   "dailyAdmin.samServer": "Source and target server are the same.",
   "dailyAdmin.noRecord": "**{user}** has no claim record on **{server}**.",
-  "dailyAdmin.targetExists":
-    "**{user}** already has a record on **{server}** — pass overwrite:true to replace it.",
+  "dailyAdmin.targetExists": "**{user}** already has a record on **{server}**. Pass `overwrite:true` to replace it.",
   "dailyAdmin.moved": "Moved **{user}**'s daily record from **{from}** to **{to}**.",
   "dailyAdmin.reset": "Reset **{user}**'s daily record on **{server}**.",
-  "dailyAdmin.showTitle": "Daily records — {user}",
+  "dailyAdmin.showTitle": "Daily records of {user}",
   "dailyAdmin.showLine":
     "**{server}**: streak {streak} (longest {longest}), last claim {last}",
   "dailyAdmin.showNone": "No claim records on any server.",
@@ -255,33 +240,29 @@ export const en: Record<string, string> = {
   "moderation.kicked": "Kicked **{player}** from **{server}**.",
   "moderation.banned": "Banned **{player}** on **{server}**.",
   "moderation.pardoned": "Unbanned **{player}** on **{server}**.",
-  "moderation.bannedTemp":
-    "Banned **{player}** on **{server}** for **{duration}** — until {until}.",
-  "tempban.dmExpired":
-    "Your temporary ban on **{server}** has expired — **{player}** can join again. Please keep to the rules.",
+  "moderation.bannedTemp": "Banned **{player}** on **{server}** for **{duration}**, until {until}.",
+  "tempban.dmExpired": "Your temporary ban on **{server}** has expired. **{player}** can join again. Please keep to the rules.",
   "moderation.invalidDuration":
     "`{input}` is not a valid duration. Use e.g. `30m`, `2h`, `3d`, `1w`, `2mo`, `1.5y` (max 10y).",
 
   // ── /activity ──
-  "activity.title": "📈 Activity — {server}",
-  "activity.noData":
-    "No player-count history for **{server}** yet — samples accrue while the bot runs.",
+  "activity.title": "Activity on {server}",
+  "activity.noData": "No player-count history for **{server}** yet. Samples are collected while the bot runs.",
   "activity.last24h": "Average players, last 24h (oldest → newest):",
   "activity.peak": "Peak in that window: **{peak}**",
   "activity.busiest": "Busiest hours ({tz}, 14-day average):",
-  "activity.busyLine": "**{hour}:00–{next}:00** — {avg} players on average",
+  "activity.busyLine": "**{hour}:00–{next}:00**: {avg} players on average",
   "activity.noBusyData": "Not enough data yet.",
 
   // ── /console ──
-  "console.tailTitle": "last {lines} log line(s)",
+  "console.tailTitle": "{lines|last log line|last # log lines}",
   "console.emptyLog": "(log is empty)",
-  "console.guildOnly": "The live relay is per Discord server — use this inside one.",
+  "console.guildOnly": "The live relay belongs to one Discord server. Use this command inside one.",
   "console.noChannel":
     'No console channel configured for this guild. Set guilds.<id>.console.channelId in config.json first.',
   "console.liveEnabled":
     "Live console for **{server}** now relays into {channel} (batched every few seconds).",
-  "console.liveDisabled": "Live console for **{server}** disabled.",
-
+  "console.liveDisabled": "Live console for **{server}** is turned off.",
   // ── console command delivery ──
   "console.notDelivered":
     "The command did not reach **{server}** ({reason}). Nothing was changed.",
@@ -298,55 +279,48 @@ export const en: Record<string, string> = {
   "console.reason.rejected": "the API wrapper rejected the command",
 
   // ── scheduled restarts ──
-  "schedule.warnInGame": "Server restart in {minutes} minute(s)!",
-  "schedule.warnTitle": "🔄 Scheduled restart ahead",
+  "schedule.warnInGame": "Server restart in {minutes|# minute|# minutes}!",
+  "schedule.warnTitle": "Scheduled restart of {server}",
   "schedule.warn": "**{server}** restarts in **{minutes} min** (at {time}).",
-  "schedule.doneTitle": "🔄 Scheduled restart executed",
+  "schedule.doneTitle": "{server} restarted as scheduled",
   "schedule.done": "**{server}**: the scheduled restart was triggered.",
 
   // ── /daily-history ──
-  "dailyHistory.title": "🗓️ Daily claims — {server}",
-  "dailyHistory.none":
-    "No claims recorded for you on **{server}** yet — `/daily` starts the history.",
-  "dailyHistory.line": "{when} · streak {streak} — {items}",
-  "dailyHistory.footer": "Showing {shown} of {total} stored claim(s)",
-
+  "dailyHistory.title": "Your daily claims on {server}",
+  "dailyHistory.none": "No claims recorded for you on **{server}** yet. `/daily` starts the history.",
+  "dailyHistory.line": "{when} · streak {streak}: {items}",
   // ── /profile ──
-  "profile.title": "👤 {player}",
-  "profile.noPlayer":
-    "No player given and no linked account — pass player: or run /link first.",
+  "profile.title": "{player} on {server}",
+  "profile.noPlayer": "No player given and no linked account. Pass `player:` or run /link first.",
   "profile.linked": "🔗 Linked to {mention}",
   "profile.notLinked": "🔗 Not linked to any Discord account",
   "profile.whitelisted": "📋 Whitelisted by {by} on {at}",
-  "profile.playtime": "⏱️ {playtime} play time across {sessions} session(s)",
-  "profile.onlineNow": "🟢 Online right now",
+  "profile.playtime": "⏱️ {playtime} play time across {sessions|# session|# sessions}",
+  "profile.onlineNow": "Online right now",
   "profile.lastSeen": "⚪ Last seen {when}",
   "profile.streak": "🔥 Daily streak: {current} (longest {longest})",
   "profile.nothingKnown": "Nothing on record for this player on this server yet.",
 
   // ── milestones ──
-  "milestone.title": "🏅 Milestone reached!",
+  "milestone.title": "Milestone reached",
   "milestone.body": "**{player}** just passed **{value}** {stat}!",
   "milestone.inGame": "{player} just passed {value} {stat}!",
 
   // ── /watch ──
-  "watch.listTitle": "👁️ Your watches",
-  "watch.listNone": "No active watches. Try `/watch server` or `/watch player`.",
-  "watch.listServer": "`{id}` — server **{server}** back online",
-  "watch.listPlayer": "`{id}` — player **{player}** joins **{server}**",
-  "watch.notFound": "No watch with ID `{id}` on your account.",
-  "watch.removed": "Watch `{id}` removed.",
-  "watch.limit": "You already have {max} watches — remove one first (/watch list).",
-  "watch.duplicate": "You already have that exact watch armed.",
-  "watch.serverArmed":
-    "Armed: you'll get **one DM** when **{server}** is back online. Make sure your DMs are open.",
-  "watch.playerArmed":
-    "Armed: you'll get **one DM** when **{player}** joins **{server}**. Make sure your DMs are open.",
-  "watch.dmServer": "✅ **{server}** is back online. (This watch is now used up.)",
-  "watch.dmPlayer": "👋 **{player}** just joined **{server}**. (This watch is now used up.)",
-
+  "watch.listTitle": "Your notifications",
+  "watch.listNone": "No active notifications. Try `/watch server` or `/watch player`.",
+  "watch.listServer": "`{id}`: server **{server}** back online",
+  "watch.listPlayer": "`{id}`: player **{player}** joins **{server}**",
+  "watch.notFound": "No notification with the ID `{id}` on your account.",
+  "watch.removed": "Notification `{id}` removed.",
+  "watch.limit": "You already have {max} notifications. Remove one first (/watch list).",
+  "watch.duplicate": "You already have exactly this notification.",
+  "watch.serverArmed": "You get **one DM** when **{server}** is back online. Your DMs need to be open for that.",
+  "watch.playerArmed": "You get **one DM** when **{player}** joins **{server}**. Your DMs need to be open for that.",
+  "watch.dmServer": "✅ **{server}** is back online. This notification is now done.",
+  "watch.dmPlayer": "👋 **{player}** just joined **{server}**. This notification is now done.",
   // ── whitelist applications ──
-  "wlapp.promptTitle": "📋 Whitelist application",
+  "wlapp.promptTitle": "Whitelist application",
   "wlapp.promptBody":
     "Want to play on the server? Hit the button, tell us your Minecraft name, and an admin will review it.",
   "wlapp.applyButton": "Apply for whitelist",
@@ -354,57 +328,46 @@ export const en: Record<string, string> = {
   "wlapp.modalName": "Your Minecraft username",
   "wlapp.modalNote": "Anything the admins should know? (optional)",
   "wlapp.invalidName": "**{name}** is not a valid Minecraft username.",
-  "wlapp.noServer":
-    "This guild has multiple servers and no default — an admin needs to set guilds.<id>.defaultServer before applications can route.",
-  "wlapp.alreadyPending":
-    "You already have a pending application — an admin will get to it.",
-  "wlapp.queueBroken":
-    "The application queue channel is unavailable — please tell an admin.",
-  "wlapp.submitted":
-    "Application for **{name}** on **{server}** submitted — you'll get a DM once it's decided (make sure DMs are open).",
-  "wlapp.queueTitle": "📋 Whitelist application",
+  "wlapp.noServer": "Applications are not available right now. Please tell a bot admin.",
+  "wlapp.alreadyPending": "You already have an open application. An admin will get to it.",
+  "wlapp.queueBroken": "The application queue channel is unavailable. Please tell a bot admin.",
+  "wlapp.submitted": "Application for **{name}** on **{server}** submitted. You get a DM once it is decided, so keep your DMs open.",
+  "wlapp.queueTitle": "Whitelist application",
   "wlapp.queueApplicant": "Applicant: {mention} ({tag})",
   "wlapp.queueName": "Minecraft name: **{name}**",
   "wlapp.queueServer": "Server: **{server}**",
   "wlapp.queueNote": "Note: {note}",
   "wlapp.approveButton": "Approve",
   "wlapp.denyButton": "Deny",
-  "wlapp.notAdmin": "Only server admins can decide applications.",
+  "wlapp.notAdmin": "Only bot admins can decide applications.",
   "wlapp.stale": "This application was already decided (or no longer exists).",
-  "wlapp.serverGone":
-    "Server **{server}** is no longer configured — the application cannot be approved.",
+  "wlapp.serverGone": "Server **{server}** is no longer configured, so the application cannot be approved.",
   "wlapp.approveFailed": "Whitelisting failed: {error}",
   "wlapp.approvedBy": "✅ Approved by {by}",
   "wlapp.deniedBy": "⛔ Denied by {by}",
-  "wlapp.dmApproved":
-    "✅ Your whitelist application for **{name}** was approved — welcome to **{server}**!",
+  "wlapp.dmApproved": "✅ Your whitelist application for **{name}** was approved. Welcome to **{server}**!",
   "wlapp.dmDenied": "⛔ Your whitelist application for **{name}** was denied.",
   "wlapp.modalServer": "Which server?",
 
   // ── command policy ──
-  "command.disabledHere": "`/{command}` is disabled here.",
+  "command.disabledHere": "`/{command}` is turned off on this Discord server. A bot admin can turn it on.",
   "command.adminOnlyInGame":
     "!{command} is admin-only on this server (your linked Discord account must be a bot admin).",
-  "nudge.link":
-    "Tip: link your Discord to unlock rewards and stats — run /link in Discord, then type !link <code> here in chat.",
-  "nudge.daily":
-    "Tip: you're linked! Run /daily in Discord once a day for a free reward — it lands in your inventory, even if you claim it while offline.",
+  "nudge.link": "Tip: link your Discord to unlock rewards and stats. Run /link in Discord, then type !link <code> here in chat.",
+  "nudge.daily": "Tip: you're linked! Run /daily in Discord once a day for a free reward. It lands in your inventory, even if you claim it while offline.",
   "nudge.lastTime":
     "(That's the last time I'll mention it.)",
   "hint.dailyReminder.label":
     "Remind me next time",
-  "hint.dailyReminder.confirm":
-    "Reminders on — I'll DM you when your next daily is ready. Turn them off any time with /daily-reminder.",
+  "hint.dailyReminder.confirm": "Reminders on. You get a DM when your next daily is ready. Turn them off any time with /daily-reminder.",
   "hint.noThanks":
     "No thanks",
   "hint.notYours":
     "That button belongs to someone else's reply.",
-  "hint.failed":
-    "Could not turn that on — please try the command directly.",
+  "hint.failed": "Could not turn that on. Run /daily-reminder yourself.",
   "hint.watchServer.label":
     "Notify me when it's back",
-  "hint.watchServer.confirm":
-    "I'll DM you once the server is back online. Make sure your DMs are open — manage watches with /watch.",
+  "hint.watchServer.confirm": "You get a DM once the server is back online. Your DMs need to be open. Manage your notifications with /watch.",
   "hint.statsLeaderboard":
     "Tip: /leaderboard ranks everyone on the same stat, and /compare puts two players side by side.",
   "hint.playtimeActivity":
@@ -419,12 +382,9 @@ export const en: Record<string, string> = {
 
   // ── /clear-dm ──
   "clearDm.none": "No bot messages found to delete.",
-  "clearDm.deleted": "Deleted **{count}** bot message(s) from this DM.",
-
+  "clearDm.deleted": "Deleted {count|**#** bot message|**#** bot messages} from this DM.",
   // ── embed helpers ──
   "embed.errorTitle": "Command failed",
-  "common.requestedBy": "Requested by {user}",
-
   // ── /config ──
   "config.sumServers": "Servers: {servers}",
   "config.sumGuilds": "Guilds: {count}",
@@ -432,10 +392,10 @@ export const en: Record<string, string> = {
   "config.added": "+ Added (live): {list}",
   "config.removed": "- Removed (live): {list}",
   "config.rebuilt": "~ Rebuilt (live): {list}",
-  "config.needsRestart": "⚠ Changed settings on existing server(s) require a restart: {list}",
-  "config.moreChanges": "~ …and {count} more change(s)",
+  "config.needsRestart": "⚠ Changed settings on existing servers require a restart: {list}",
+  "config.moreChanges": "~ …and {count|# more change|# more changes}",
   "config.noChanges": "No changes detected.",
-  "config.reloaded": "Config reloaded from disk.\n{details}",
+  "config.reloaded": "Reloaded from disk.\n{details}",
   "config.featStatus": "status",
   "config.featNotifications": "notifications",
   "config.noFeatures": "no features configured",
@@ -471,32 +431,28 @@ export const en: Record<string, string> = {
   "map.notConfigured": "No map link is set up for this bot.",
   "map.title": "Live map",
   "map.description": "You can view the live Minecraft map [here]({url}).",
-  "chunkbase.title": "Chunkbase Map",
+  "chunkbase.title": "Chunkbase map of {server}",
   "chunkbase.open": "[Open Seed Map]({url})",
-  "seed.title": "World Seed: {server}",
-
+  "seed.title": "World seed of {server}",
   // ── /mods, /status, /uptime ──
   "mods.title": "Mods on {server}",
   "mods.count": "{count|# mod|# mods} installed.",
   "mods.groupBoth": "Client and server",
   "mods.groupOptional": "Client only, optional",
   "mods.groupServer": "Server only",
-  "status.title": "Server Status: {server}",
-  "status.playersSuffix": ": {players}",
-  "status.summary": "{emoji} **{label}**: {online}/{max} players",
+  "status.title": "{server}: {label}",
   "status.botPing": "Bot Ping",
   "status.roundTrip": "Round Trip",
   "status.online": "Online",
-  "uptime.overviewTitle": "📈 Server Uptime",
+  "uptime.overviewTitle": "Uptime of all servers",
   "uptime.forDuration": " for {duration}",
-  "uptime.currently": "{emoji} Currently **{state}**",
-  "uptime.title": "📈 Uptime: {server}",
+  "uptime.title": "Uptime of {server}",
   "uptime.last24h": "Last 24 hours",
   "uptime.last7d": "Last 7 days",
   "uptime.last30d": "Last 30 days",
   "uptime.trend": "24h trend (hourly)",
   "uptime.trendLegend": "`{bar}` (oldest → now, · = no data)",
-  "uptime.basedOn": "Based on {checks24h} checks (24h) · {checks7d} checks (7d)",
+  "uptime.basedOn": "Based on {checks24h} checks in 24 h and {checks7d} in 7 d.",
   "uptime.noData": "No uptime data collected yet. Stats fill in over time.",
 
   // ── /whitelisted ──
@@ -527,15 +483,15 @@ export const en: Record<string, string> = {
   "playtime.total": "Total playtime: **{time}**",
   // ── /clear, /backup, /tps ──
   "clear.textChannelOnly": "This command can only be used in a text channel.",
-  "clear.deleted": "Deleted **{count}** message(s).",
+  "clear.deleted": "Deleted {count|**#** message|**#** messages}.",
   "clear.tooOld": "_Messages older than 14 days cannot be bulk-deleted._",
   "backup.none": "No backups yet. A bot admin can create one with /server backup.",
   "backup.title": "Backups of {server}",
   "backup.summary": "{count|# backup|# backups}, {total} in total. The newest was made {age}.",
   "backup.entry": "{count|# backup|# backups}\nLatest {age}, {size}",
   "tps.unsupported": "TPS monitoring requires RCON or an API wrapper.",
-  "tps.unavailable": "Could not retrieve TPS. Server may be offline.",
-  "tps.title": "{emoji} TPS: {server}",
+  "tps.unavailable": "Could not read the TPS. Check /status to see if the server is up.",
+  "tps.title": "TPS of {server}",
   "tps.tickTiming": "Tick Timing",
   "tps.current": "Current TPS: **{value}**",
 
@@ -548,17 +504,15 @@ export const en: Record<string, string> = {
   "control.pruneDryTitle": "Prune stats on {server}: dry run",
   "control.pruneDryBody": "{count|# stats file belongs|# stats files belong} to players not on the whitelist:\n```\n{list}\n```\nRun the command again with `confirm: true` to delete them for good.",
   "control.pruned": "Deleted {count|# orphaned stats file|# orphaned stats files} on **{server}**.",
-  "whitelist.notFound": "Username **{username}** not found.",
-  "whitelist.added": "**{name}** has been whitelisted on **{server}**.",
-  "whitelist.removed": "**{username}** has been removed from the whitelist on **{server}**.",
-
+  "whitelist.notFound": "Mojang has no player called **{username}**. Check the spelling.",
+  "whitelist.added": "**{name}** is now on the whitelist of **{server}**.",
+  "whitelist.removed": "**{username}** is no longer on the whitelist of **{server}**.",
   // ── watcher embeds ──
   "joinLeave.joined": "{player} joined {server}",
   "joinLeave.left": "{player} left {server}",
   "updateNotifier.message": "📦 minecraft-bot {latest} is available (you run {current}). Release notes: {url}",
   "leaderboard.streakFooter": "{server} · all-time streaks",
-  "statusEmbed.title": "📊 Server Status",
-  "statusEmbed.footer": "Updates every 60s",
+  "statusEmbed.title": "Server status",
   "statusEmbed.none": "No servers configured.",
 
   // ── /daily messages ──
@@ -585,15 +539,15 @@ export const en: Record<string, string> = {
   "leaderboard.tracked": "{count} players tracked",
   "leaderboard.title": "🏆 Leaderboard: {stat}{period}",
   "leaderboard.streakTitle": "🏆 {stat}: {server}",
-  "leaderboard.noClaims": "No claims on this server yet.",
+  "leaderboard.noClaims": "Nobody has claimed a daily reward on this server yet.",
   "leaderboard.streakNote": "Top {limit} · /daily streaks are per server",
-  "console.dropped": "… {count} line(s) dropped (busy server)",
+  "console.dropped": "… {count|# line|# lines} dropped (busy server)",
   "uptime.barNoData": "no data",
 
   // ── server targeting ──
-  "router.guildOnly": "In a multi-server setup, commands must be used inside a Discord server.",
+  "router.guildOnly": "There is more than one Minecraft server. Run this command in a Discord server so the right one is chosen.",
   "router.notAllowed": "Server \"{server}\" is not available from this Discord server. An operator can allow it by adding it to this guild's \"allowedServers\" in config.json.",
-  "router.serverNotFound": "Server \"{server}\" not found.",
+  "router.serverNotFound": "No server called \"{server}\". Pick one from the suggestions.",
   "capability.missing": "**{server}** does not provide {feature}. This feature needs the setup suite. {hint}",
   "target.defaultNotRunning": "This guild's defaultServer \"{server}\" is not a running server. Fix it in config.json or pass `server:` explicitly. Available: {available}.",
   "target.none": "none",
@@ -693,4 +647,26 @@ export const en: Record<string, string> = {
   "tps.recovered": "TPS is back at {threshold} or above.",
   "advancement.madeLine": "{player} made the advancement **{advancement}**",
   "advancement.challengeLine": "{player} completed the challenge **{advancement}**",
+  "moderation.bannedTitle": "Player banned",
+  "moderation.kickedTitle": "Player kicked",
+  "moderation.pardonedTitle": "Ban lifted",
+  "clear.title": "Messages deleted",
+  "whitelist.addedTitle": "Added to the whitelist",
+  "whitelist.removedTitle": "Removed from the whitelist",
+  "console.liveEnabledTitle": "Live console on",
+  "console.liveDisabledTitle": "Live console off",
+  "config.reloadedTitle": "Config reloaded",
+  "dailyAdmin.movedTitle": "Daily record moved",
+  "dailyAdmin.resetTitle": "Daily record reset",
+  "note.listCount": "{count}/{max} notes",
+  "clearDm.deletedTitle": "DM cleaned up",
+  "watch.removedTitle": "Notification removed",
+  "watch.armedTitle": "Notification set",
+  "poll.endsAt": "Ends {time}.",
+  "waypoint.count": "{count|# waypoint|# waypoints}",
+  "dailyHistory.shown": "Showing {shown} of {total|# stored claim|# stored claims}.",
+  "status.players": "Players",
+  "players.count": "{count|# player|# players}.",
+  "statusEmbed.fetchFailed": "Could not read the status.",
+  "statusEmbed.onlineNames": "Online: {names}",
 };
