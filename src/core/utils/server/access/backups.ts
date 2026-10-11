@@ -7,7 +7,7 @@ import type {
   ScriptResult,
 } from "../../../types/index.js";
 import type { BackupDeleteResult } from "@mcbot/schema/wire/index.js";
-import { instanceUrl, apiGet } from "./apiClient.js";
+import { instanceUrl, apiGet, ApiError } from "./apiClient.js";
 
 /** Scan the backup directories for a server. */
 export async function readBackups(cfg: ServerConfig): Promise<BackupSummary> {
@@ -133,7 +133,7 @@ export async function restoreBackupFile(
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`API POST /backups/restore → ${res.status}: ${text}`);
+    throw new ApiError("POST /backups/restore", res.status, text);
   }
   return res.json() as Promise<ScriptResult>;
 }
@@ -160,7 +160,7 @@ export async function deleteBackupFile(
   if (res.status === 404) return { ok: false };
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`API DELETE /backups/files → ${res.status}: ${text}`);
+    throw new ApiError("DELETE /backups/files", res.status, text);
   }
   return res.json() as Promise<BackupDeleteResult>;
 }

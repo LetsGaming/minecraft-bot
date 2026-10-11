@@ -16,8 +16,11 @@ import {
   replyDenied,
   requireServerAdmin,
   withErrorHandling,
+  errorContentOf,
 } from "../../src/bot/commands/middleware.js";
 import { CommandError } from "../../src/core/utils/error.js";
+import { ApiError } from "../../src/core/utils/server/access/apiClient.js";
+import { runWithGuildLocale } from "../../src/core/utils/i18n.js";
 
 function interaction(state: { deferred: boolean; replied: boolean; ephemeral?: boolean }) {
   return {
@@ -142,5 +145,24 @@ describe("withErrorHandling", () => {
     const i = interaction({ deferred: false, replied: false });
     await execute(i as never);
     expect(firstEmbed(i.reply).description).toBe("No stats yet.\nPlay a session first.");
+  });
+});
+
+describe("errorContentOf", () => {
+  const failure = new ApiError("POST /backups/restore", 500, "/home/mc/scripts/restore.sh: Permission denied");
+
+  it("turns a 5xx from the wrapper into a localised problem without the raw body", () => {
+    const content = errorContentOf(failure, "smp");
+    expect(content).toEqual({
+      title: "smp had a problem",
+      problem: "smp answered with an error, so this did not work.",
+      recovery: "Try again in a minute. If it keeps failing, tell a bot admin.",
+    });
+    expect(JSON.stringify(errorContentOf(failure))).not.toContain("/home/mc");
+  });
+
+  it("speaks the guild's language", () => {
+    const content = runWithGuildLocale("g1", () => errorContentOf(failure, "smp"));
+    expect(content.title).toBe("smp hatte ein Problem");
   });
 });

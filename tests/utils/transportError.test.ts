@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { classifyTransportError } from "../../src/core/utils/server/transportError.js";
 import {
+  ApiError,
   BreakerOpenError,
   RateLimitedError,
 } from "../../src/core/utils/server/access/apiClient.js";
@@ -27,6 +28,23 @@ describe("classifyTransportError", () => {
   it("names an open breaker and a rate limit", () => {
     expect(classifyTransportError(new BreakerOpenError("smp"))).toBe("breaker-open");
     expect(classifyTransportError(new RateLimitedError("/stats", 1000))).toBe("rate-limited");
+  });
+
+  it("reads a 5xx answer from the wrapper as a wrapper error, also as a cause", () => {
+    expect(classifyTransportError(new ApiError("/stats", 500, "boom"))).toBe("wrapper-error");
+    expect(classifyTransportError(new ApiError("POST /mods", 503, ""))).toBe("wrapper-error");
+    expect(
+      classifyTransportError(new Error("wrapped", { cause: new ApiError("/stats", 502, "") })),
+    ).toBe("wrapper-error");
+  });
+
+  it("keeps the logged message format and leaves a 4xx answer alone", () => {
+    const err = new ApiError("POST /backups/restore", 500, "/home/mc/restore.sh failed");
+    expect(err).toBeInstanceOf(Error);
+    expect(err.message).toBe("API POST /backups/restore → 500: /home/mc/restore.sh failed");
+    expect(err.status).toBe(500);
+    expect(err.route).toBe("POST /backups/restore");
+    expect(classifyTransportError(new ApiError("/stats", 404, "not found"))).toBeNull();
   });
 
   it("leaves other errors alone", () => {

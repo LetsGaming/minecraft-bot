@@ -41,6 +41,48 @@
       }
     ]
   },
+  "players, wrapper answered 500": {
+    "en": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "deleteReply"
+      },
+      {
+        "via": "followUp",
+        "ephemeral": true,
+        "embeds": [
+          {
+            "color": "#f87171",
+            "title": "smp had a problem",
+            "description": "smp answered with an error, so this did not work.\nTry again in a minute. If it keeps failing, tell a bot admin."
+          }
+        ]
+      }
+    ],
+    "de": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "deleteReply"
+      },
+      {
+        "via": "followUp",
+        "ephemeral": true,
+        "embeds": [
+          {
+            "color": "#f87171",
+            "title": "smp hatte ein Problem",
+            "description": "smp hat mit einem Fehler geantwortet, deshalb hat das nicht geklappt.\nVersuch es in einer Minute noch einmal. Wenn es so bleibt, sag einem Bot-Admin Bescheid."
+          }
+        ]
+      }
+    ]
+  },
   "players, non-Error thrown": {
     "en": [
       {

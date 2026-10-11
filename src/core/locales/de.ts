@@ -473,6 +473,10 @@ export const de: Record<string, string> = {
   "transport.problemNoServer": "Der Server hat nicht geantwortet, deshalb ist das gerade nicht verfügbar.",
   "transport.recovery": "Versuch es in einer Minute noch einmal. Wenn es so bleibt, sag einem Bot-Admin Bescheid.",
   "transport.recoveryRateLimited": "Versuch es gleich noch einmal.",
+  "transport.wrapperErrorTitle": "{server} hatte ein Problem",
+  "transport.wrapperErrorTitleNoServer": "Der Server hatte ein Problem",
+  "transport.wrapperErrorProblem": "{server} hat mit einem Fehler geantwortet, deshalb hat das nicht geklappt.",
+  "transport.wrapperErrorProblemNoServer": "Der Server hat mit einem Fehler geantwortet, deshalb hat das nicht geklappt.",
   "common.playerNotFound": "`{player}` ist auf diesem Server unbekannt.",
   "pagination.notForYou": "Diese Buttons sind nicht für dich.",
 

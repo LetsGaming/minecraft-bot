@@ -1,10 +1,16 @@
 /**
  * Which way a call to the API wrapper failed in transport, so a reply can
  * say "could not reach smp" instead of passing on "fetch failed".
+ * "wrapper-error" is the wrapper answering with a 5xx: reachable, but failing.
  */
-import { BreakerOpenError, RateLimitedError } from "./access/apiClient.js";
+import { ApiError, BreakerOpenError, RateLimitedError } from "./access/apiClient.js";
 
-export type TransportFailure = "unreachable" | "timeout" | "breaker-open" | "rate-limited";
+export type TransportFailure =
+  | "unreachable"
+  | "timeout"
+  | "breaker-open"
+  | "rate-limited"
+  | "wrapper-error";
 
 const TIMEOUT_CODES = new Set([
   "ETIMEDOUT",
@@ -47,6 +53,7 @@ export function classifyTransportError(err: unknown): TransportFailure | null {
   const chain = causeChain(err);
   if (chain.some((e) => e instanceof RateLimitedError)) return "rate-limited";
   if (chain.some((e) => e instanceof BreakerOpenError)) return "breaker-open";
+  if (chain.some((e) => e instanceof ApiError && e.status >= 500)) return "wrapper-error";
   if (
     chain.some(
       (e) => field(e, "name") === "TimeoutError" || TIMEOUT_CODES.has(field(e, "code") ?? ""),

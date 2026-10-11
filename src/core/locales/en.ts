@@ -481,6 +481,10 @@ export const en: Record<string, string> = {
   "transport.problemNoServer": "The server did not answer, so this is not available.",
   "transport.recovery": "Try again in a minute. If it keeps failing, tell a bot admin.",
   "transport.recoveryRateLimited": "Try again in a moment.",
+  "transport.wrapperErrorTitle": "{server} had a problem",
+  "transport.wrapperErrorTitleNoServer": "The server had a problem",
+  "transport.wrapperErrorProblem": "{server} answered with an error, so this did not work.",
+  "transport.wrapperErrorProblemNoServer": "The server answered with an error, so this did not work.",
   "common.playerNotFound": "`{player}` is not known on this server.",
   "pagination.notForYou": "These buttons aren't for you.",
 

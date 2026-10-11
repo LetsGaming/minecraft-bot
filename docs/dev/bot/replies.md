@@ -86,8 +86,11 @@ the problem, so prefer `CommandError` with localised text. A failure to reach
 the API wrapper (unreachable, timed out, circuit breaker open, rate limited;
 `classifyTransportError` in
 [`core/utils/server/transportError.ts`](../../../src/core/utils/server/transportError.ts))
-becomes "Could not reach smp" with a localised problem and recovery; the raw
-cause goes to the log only.
+becomes "Could not reach smp" with a localised problem and recovery. A 5xx
+answer from the wrapper (an `ApiError` from
+[`apiClient.ts`](../../../src/core/utils/server/access/apiClient.ts) with its
+`status`) becomes "smp had a problem" the same way. In both cases the raw cause
+goes to the log only.
 
 ## Confirm rows
 
