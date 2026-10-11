@@ -337,6 +337,9 @@ watch(
   border-radius: var(--radius-control);
   font-weight: 600;
   text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-min);
 }
 .skip:focus { top: var(--space-2); }
 
@@ -565,6 +568,7 @@ watch(
   }
 
   .status-line { padding: var(--space-2) var(--space-4); }
+  .status-line :slotted(a) { display: inline-flex; align-items: center; min-height: var(--touch-min); }
   .content { overflow: visible; }
   .page { padding: var(--space-4) var(--space-4) 96px; }
 }
