@@ -45,6 +45,20 @@ export const MinecraftPreset = definePreset(Aura, {
     },
   },
   components: {
+    button: {
+      colorScheme: {
+        dark: {
+          // Aura draws secondary outlined and text buttons in {surface.400},
+          // 3.2:1 on a card; the dim text role reads at 5.9:1.
+          outlined: {
+            secondary: { borderColor: "var(--border-strong)", color: "var(--text-dim)" },
+          },
+          text: {
+            secondary: { color: "var(--text-dim)" },
+          },
+        },
+      },
+    },
     toggleswitch: {
       colorScheme: {
         dark: {
