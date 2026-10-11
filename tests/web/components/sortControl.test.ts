@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount } from "@vue/test-utils";
 import SortControl from "../../../src/web/frontend/src/components/ui/SortControl.vue";
 import { uiGlobal } from "./mountUi";
@@ -10,6 +10,17 @@ const options = [
 ];
 
 describe("SortControl", () => {
+  // jsdom has no matchMedia; PrimeVue's Select asks for one on mount.
+  beforeEach(() => {
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
   it("names its picker by the visible label, not by the picked value", () => {
     const w = mount(SortControl, { props: { field: "playtimeMs", order: -1, options }, global: uiGlobal });
     const label = w.find("label");
