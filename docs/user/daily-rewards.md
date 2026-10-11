@@ -15,6 +15,8 @@ Requirements:
 
 After a claim there is a 24-hour cooldown. If you try too early, the bot tells you exactly how long is left and at what time your next claim is ready.
 
+The reply is only visible to you: the reward, your streak and when the next reward is ready.
+
 ## Streaks
 
 Claiming on consecutive days builds a streak. The rules:

@@ -137,8 +137,8 @@ Each Discord server is configured independently. The key is the guild ID. Every 
 | `chatBridge` | one or more `{ channelId, server, useWebhook }` | Two-way chat between a Discord channel and **exactly one** server. Use an array for one channel per server. With `"useWebhook": true` MC→Discord lines appear as the player (name + head) via a channel webhook (bot needs Manage Webhooks; falls back to the embed form on any webhook problem). See [Chat bridges](#chat-bridges-one-channel--one-server). |
 | `notifications` | `channelId`, `events`, `server` | Posts join/leave/death/advancement/start/stop events. Remove event names you do not want. `server` scopes the source (see [Server scoping](#server-scoping-one-several-or-all)); the source server is shown in the embed footer when more than one server is configured. |
 | `leaderboard` | `channelId`, `interval`, `server`, `categories` | Auto-posts period leaderboards. `interval` is `daily`, `weekly`, or `monthly`. With a `server` list, one set is posted per server. `categories` picks the boards (any `/leaderboard` stat key plus `"streak"` / `"longest_streak"`, max 10); default `["playtime", "mined"]`. |
-| `tpsAlerts` | `channelId`, `server`, `mentionRole` | Warns when TPS drops below `tpsWarningThreshold`. `server` scopes which servers alert; `mentionRole` pings a role with each alert. |
-| `downtimeAlerts` | `channelId`, `server`, `mentionRole` | Alerts on unexpected downtime and recovery (host-disk and backup-age alerts use this channel too). `mentionRole` pings a role with each alert. |
+| `tpsAlerts` | `channelId`, `server`, `mentionRole`, `mentionPolicy` | Warns when TPS drops below `tpsWarningThreshold` (repeated every 5 minutes while it stays low, at once when it drops below 10) and posts a recovery when it is back. `server` scopes which servers alert; `mentionRole` pings a role, `mentionPolicy` decides when (see below). |
+| `downtimeAlerts` | `channelId`, `server`, `mentionRole`, `mentionPolicy` | Alerts on unexpected downtime and recovery (host-disk and backup-age alerts use this channel too). `mentionRole` pings a role, `mentionPolicy` decides when (see below). |
 | `statusEmbed` | `enabled` | Self-provisioning live status display, see below. |
 | `channelPurge` | `channelId` | Deletes all messages in the channel daily at local midnight, except pinned messages and the status embed. |
 | `commands` | per-command settings | Per-guild overrides for slash commands (enabled / adminOnly), merged field-by-field over the global `commands` block — see [Command settings](#command-settings-per-command-three-scopes). |
@@ -146,6 +146,25 @@ Each Discord server is configured independently. The key is the guild ID. Every 
 | `whitelistApplications` | `channelId`, `adminChannelId`, `mentionRole` | Button-based whitelist applications: the bot posts a persistent **Apply** button into `channelId`; applications (Minecraft name + optional note, server select in multi-server guilds) queue in `adminChannelId` with Approve/Deny buttons that survive restarts. Approval takes the same path as `/whitelist` and DMs the applicant. `mentionRole` pings a role on new applications. Both channel IDs are required for the feature to arm. |
 
 Details on how each feature behaves are in [automated-features.md](automated-features.md).
+
+### Alert mentions
+
+`mentionPolicy` in `downtimeAlerts` and `tpsAlerts` decides when `mentionRole` is pinged:
+
+| Value | Pings |
+|---|---|
+| `"always"` (default) | Every alert, including recoveries ("back online", "disk space recovered") and repeated TPS warnings. This is how alerts behaved before the option existed. |
+| `"escalation"` | Only the first failure and a rise in severity (for example a TPS warning that drops below 10, or a crash loop after an outage). Recoveries and repeats are posted without a ping. |
+
+Every alert sets Discord's `allowedMentions` explicitly, so it can ping the configured role and nothing else. Relayed text (chat bridge, `/console live`, in-game reports) never pings anyone.
+
+```json
+"downtimeAlerts": {
+  "channelId": "234567890123456789",
+  "mentionRole": "456789012345678901",
+  "mentionPolicy": "escalation"
+}
+```
 
 ### Linked role and reports
 
