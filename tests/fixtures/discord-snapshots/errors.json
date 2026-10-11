@@ -1,0 +1,86 @@
+{
+  "players, wrapper unreachable": {
+    "en": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "deleteReply"
+      },
+      {
+        "via": "followUp",
+        "ephemeral": true,
+        "embeds": [
+          {
+            "color": "#f87171",
+            "title": "Command failed",
+            "description": "fetch failed"
+          }
+        ]
+      }
+    ],
+    "de": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "deleteReply"
+      },
+      {
+        "via": "followUp",
+        "ephemeral": true,
+        "embeds": [
+          {
+            "color": "#f87171",
+            "title": "Befehl fehlgeschlagen",
+            "description": "fetch failed"
+          }
+        ]
+      }
+    ]
+  },
+  "players, non-Error thrown": {
+    "en": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "deleteReply"
+      },
+      {
+        "via": "followUp",
+        "ephemeral": true,
+        "embeds": [
+          {
+            "color": "#f87171",
+            "title": "Command failed",
+            "description": "Something went wrong and the command did not finish.\nTry again in a moment. If it keeps happening, tell a bot admin."
+          }
+        ]
+      }
+    ],
+    "de": [
+      {
+        "via": "deferReply",
+        "ephemeral": false
+      },
+      {
+        "via": "deleteReply"
+      },
+      {
+        "via": "followUp",
+        "ephemeral": true,
+        "embeds": [
+          {
+            "color": "#f87171",
+            "title": "Befehl fehlgeschlagen",
+            "description": "Etwas ist schiefgelaufen, der Befehl wurde nicht abgeschlossen.\nVersuch es gleich noch einmal. Wenn es so bleibt, sag einem Bot-Admin Bescheid."
+          }
+        ]
+      }
+    ]
+  }
+}

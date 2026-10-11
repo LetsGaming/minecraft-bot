@@ -1,0 +1,98 @@
+{
+  "en": {
+    "pages": 3,
+    "page1": {
+      "color": "#7cb4ff",
+      "title": "Players on smp",
+      "description": "41 players.\n\n**Marlene_B** · online now · 8d 20h 0m 0s\n**TheRedstoneKid** · online now · 7d 20h 0m 0s\n**ikarus_77** · online now · 6d 20h 0m 0s\n**creeperchen** · <t:1791470160:R> · 5d 11h 0m 0s\n**Tobi2k** · <t:1791297360:R> · 4d 1h 0m 0s\n**Nils_Builds** · <t:1791639360:R> · 2d 6h 0m 0s\n**Lena_Fox** · <t:1791124560:R> · 2d 1h 0m 0s\n**kartoffel_pro** · <t:1790692560:R> · 1d 9h 0m 0s\n**player_01** · before tracking · 1d 6h 0m 0s\n**player_02** · <t:1790519760:R> · 1d 5h 0m 0s\n**player_03** · <t:1790433360:R> · 1d 4h 0m 0s\n**player_04** · <t:1790346960:R> · 1d 3h 0m 0s\n**player_05** · before tracking · 1d 2h 0m 0s\n**player_06** · <t:1790174160:R> · 1d 1h 0m 0s\n**player_07** · <t:1790087760:R> · 1d 0h 0m 0s\n**player_08** · <t:1790001360:R> · 0d 23h 0m 0s\n**player_09** · before tracking · 0d 22h 0m 0s\n**player_10** · <t:1789828560:R> · 0d 21h 0m 0s\n**player_11** · <t:1789742160:R> · 0d 20h 0m 0s\n**player_12** · <t:1789655760:R> · 0d 19h 0m 0s"
+    },
+    "pager": [
+      {
+        "label": "Previous",
+        "style": "Secondary",
+        "disabled": true,
+        "customId": "prev"
+      },
+      {
+        "label": "Page 1/3",
+        "style": "Secondary",
+        "disabled": true,
+        "customId": "page"
+      },
+      {
+        "label": "Next",
+        "style": "Secondary",
+        "disabled": false,
+        "customId": "next"
+      }
+    ],
+    "pagerTimedOut": [
+      {
+        "label": "Previous",
+        "style": "Secondary",
+        "disabled": true,
+        "customId": "prev"
+      },
+      {
+        "label": "Page 1/3",
+        "style": "Secondary",
+        "disabled": true,
+        "customId": "page"
+      },
+      {
+        "label": "Next",
+        "style": "Secondary",
+        "disabled": true,
+        "customId": "next"
+      }
+    ]
+  },
+  "de": {
+    "pages": 3,
+    "page1": {
+      "color": "#7cb4ff",
+      "title": "Spieler auf smp",
+      "description": "41 Spieler.\n\n**Marlene_B** · gerade online · 8d 20h 0m 0s\n**TheRedstoneKid** · gerade online · 7d 20h 0m 0s\n**ikarus_77** · gerade online · 6d 20h 0m 0s\n**creeperchen** · <t:1791470160:R> · 5d 11h 0m 0s\n**Tobi2k** · <t:1791297360:R> · 4d 1h 0m 0s\n**Nils_Builds** · <t:1791639360:R> · 2d 6h 0m 0s\n**Lena_Fox** · <t:1791124560:R> · 2d 1h 0m 0s\n**kartoffel_pro** · <t:1790692560:R> · 1d 9h 0m 0s\n**player_01** · vor der Aufzeichnung · 1d 6h 0m 0s\n**player_02** · <t:1790519760:R> · 1d 5h 0m 0s\n**player_03** · <t:1790433360:R> · 1d 4h 0m 0s\n**player_04** · <t:1790346960:R> · 1d 3h 0m 0s\n**player_05** · vor der Aufzeichnung · 1d 2h 0m 0s\n**player_06** · <t:1790174160:R> · 1d 1h 0m 0s\n**player_07** · <t:1790087760:R> · 1d 0h 0m 0s\n**player_08** · <t:1790001360:R> · 0d 23h 0m 0s\n**player_09** · vor der Aufzeichnung · 0d 22h 0m 0s\n**player_10** · <t:1789828560:R> · 0d 21h 0m 0s\n**player_11** · <t:1789742160:R> · 0d 20h 0m 0s\n**player_12** · <t:1789655760:R> · 0d 19h 0m 0s"
+    },
+    "pager": [
+      {
+        "label": "Zurück",
+        "style": "Secondary",
+        "disabled": true,
+        "customId": "prev"
+      },
+      {
+        "label": "Seite 1/3",
+        "style": "Secondary",
+        "disabled": true,
+        "customId": "page"
+      },
+      {
+        "label": "Weiter",
+        "style": "Secondary",
+        "disabled": false,
+        "customId": "next"
+      }
+    ],
+    "pagerTimedOut": [
+      {
+        "label": "Zurück",
+        "style": "Secondary",
+        "disabled": true,
+        "customId": "prev"
+      },
+      {
+        "label": "Seite 1/3",
+        "style": "Secondary",
+        "disabled": true,
+        "customId": "page"
+      },
+      {
+        "label": "Weiter",
+        "style": "Secondary",
+        "disabled": true,
+        "customId": "next"
+      }
+    ]
+  }
+}
