@@ -34,23 +34,23 @@ export const execute = withErrorHandling(async (interaction) => {
   );
   const count = dirs.reduce((n, b) => n + b.count, 0);
 
+  const language = resolveLanguage();
   const embed = createEmbed({
     title,
     description: t("backup.summary", {
       count,
-      total: formatSize(totalBytes),
+      total: formatSize(totalBytes, language),
       age: since(newest.latestMtime),
     }),
   });
 
-  const language = resolveLanguage();
   for (const b of dirs) {
     embed.addFields({
       name: backupTierLabel(b.dir, language),
       value: t("backup.entry", {
         count: b.count,
         age: since(b.latestMtime),
-        size: formatSize(b.latestSizeBytes),
+        size: formatSize(b.latestSizeBytes, language),
       }),
       inline: true,
     });
@@ -63,7 +63,14 @@ function since(date: Date): string {
   return relativeTimestamp(date.getTime());
 }
 
-function formatSize(bytes: number): string {
+function formatSize(bytes: number, language: "en" | "de"): string {
   const gb = bytes / 1073741824;
-  return gb >= 1 ? `${gb.toFixed(2)} GB` : `${(bytes / 1048576).toFixed(1)} MB`;
+  const [value, digits, unit]: [number, number, string] =
+    gb >= 1 ? [gb, 2, "GB"] : [bytes / 1048576, 1, "MB"];
+  const number = value.toLocaleString(language, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+    useGrouping: false,
+  });
+  return `${number} ${unit}`;
 }
