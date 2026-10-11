@@ -29,6 +29,7 @@ const IMPORT = /(?:\bfrom\s*|\bimport\s*\(?\s*)(["'])([^"'\n]+)\1/g;
 /** Frontend files whose template text goes through t(); grow this as views migrate. */
 const TRANSLATED = new Set([
   "App.vue",
+  "components/SetupWizard.vue",
   "components/ui/AppShell.vue",
   "components/ui/EditBar.vue",
   "components/ui/EditorShell.vue",
@@ -40,7 +41,9 @@ const TRANSLATED = new Set([
   "components/schema/MapEntry.vue",
   "components/schema/MapField.vue",
   "components/schema/SchemaField.vue",
+  "views/CommandsView.vue",
   "views/ConfigView.vue",
+  "views/GuildsView.vue",
   "views/ModConfigView.vue",
 ]);
 const TEXT_ATTRS = /(?<![:@\w.-])(label|title|placeholder|aria-label|alt|header|subtitle|summary|message)="([^"]*)"/g;
