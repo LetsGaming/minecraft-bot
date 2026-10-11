@@ -45,7 +45,7 @@ describe("useDensity", () => {
       getItem: (k: string) => store.get(k) ?? null,
       setItem: (k: string, v: string) => void store.set(k, v),
     });
-    vi.stubGlobal("document", { documentElement: root });
+    vi.stubGlobal("document", { documentElement: root, createElement: () => ({}) });
   });
 
   afterEach(() => {
