@@ -15,20 +15,6 @@
     </EmptyState>
 
     <template v-else>
-      <div v-if="serverIds.length > 1" class="picker" role="group" :aria-label="COPY.pickServer">
-        <Button
-          v-for="id in serverIds"
-          :key="id"
-          class="tap"
-          :label="id"
-          size="small"
-          :severity="id === current ? 'primary' : 'secondary'"
-          :outlined="id !== current"
-          :aria-pressed="id === current"
-          @click="select(id)"
-        />
-      </div>
-
       <div class="stack-gap">
         <InlineBanner v-if="missingCaps.length" tone="info" :title="readOnlyTitle">
           {{ readOnlyText }}
@@ -292,7 +278,6 @@ const COPY = {
   purposeAfter: (server: string) =>
     `Restoring replaces the server files and needs ${server} stopped first.`,
   noServers: "No servers you can view.",
-  pickServer: "Server",
   retry: "Retry",
   tryAgain: "Try again",
   dismiss: "Dismiss",
@@ -783,7 +768,6 @@ export default defineComponent({
 
 <style scoped>
 .backups-view { container-type: inline-size; min-width: 0; }
-.picker { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-3); }
 .stack-gap { display: flex; flex-direction: column; gap: var(--space-4); }
 .stack-gap :deep(.stale-banner) { margin-bottom: 0; }
 
