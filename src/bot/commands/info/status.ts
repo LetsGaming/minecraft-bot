@@ -37,13 +37,13 @@ export const execute = withErrorHandling(async (interaction) => {
     // A direct ping can still supply counts with the wrapper down, so show
     // them — "online, 4 players, controls unavailable" is the whole point.
     const players = describePlayers(health);
+    const description = [players, display.hint].filter(Boolean).join("\n");
     const embed = createEmbed({
-      title: t("status.title", { server: server.id }),
-      description:
-        `${display.emoji} **${display.label}**` +
-        (players ? t("status.playersSuffix", { players }) : "") +
-        (display.hint ? `\n${display.hint}` : ""),
+      title: t("status.title", { server: server.id, label: display.label }),
+      state: health.state,
       color: display.color,
+      timestamp: true,
+      ...(description ? { description } : {}),
     });
     embed.addFields(
       { name: t("status.botPing"), value: `${botPing}ms`, inline: true },
@@ -55,14 +55,11 @@ export const execute = withErrorHandling(async (interaction) => {
 
   const { playerCount, maxPlayers, players } = await server.getList();
   const embed = createEmbed({
-    title: t("status.title", { server: server.id }),
-    description: t("status.summary", {
-      emoji: display.emoji,
-      label: display.label,
-      online: playerCount,
-      max: maxPlayers,
-    }),
+    title: t("status.title", { server: server.id, label: display.label }),
+    state: health.state,
     color: display.color,
+    timestamp: true,
+    ...(display.hint ? { description: display.hint } : {}),
   });
   if (players.length > 0)
     embed.addFields({
@@ -70,6 +67,11 @@ export const execute = withErrorHandling(async (interaction) => {
       value: players.join(", "),
       inline: false,
     });
+  embed.addFields({
+    name: t("status.players"),
+    value: `${playerCount}/${maxPlayers}`,
+    inline: true,
+  });
   embed.addFields(
     { name: t("status.botPing"), value: `${botPing}ms`, inline: true },
     { name: t("status.roundTrip"), value: `${roundTrip}ms`, inline: true },
