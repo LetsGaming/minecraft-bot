@@ -16,6 +16,7 @@ function onBeforeUnload(event: BeforeUnloadEvent): void {
   if (!hasUnsavedChanges()) return;
   event.preventDefault();
   // Legacy browsers only show the prompt when returnValue is set.
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
   event.returnValue = "";
 }
 

@@ -4,6 +4,7 @@
 // typecheck under vue-tsc.
 import type { ToastServiceMethods } from "primevue/toastservice";
 import type { ConfirmationServiceMethods } from "primevue/confirmationservice";
+import type SchemaFieldComponent from "./components/schema/SchemaField.vue";
 
 declare module "vue" {
   interface ComponentCustomProperties {
@@ -15,7 +16,7 @@ declare module "vue" {
   // which would create a value-initializer cycle. Declared here so their
   // templates typecheck.
   interface GlobalComponents {
-    SchemaField: (typeof import("./components/schema/SchemaField.vue"))["default"];
+    SchemaField: typeof SchemaFieldComponent;
   }
 }
 

@@ -42,11 +42,11 @@ export const ENVIRONMENT_META: Record<
   ModEnvironment,
   { label: string; color: string }
 > = {
-  both: { label: "Client + Server", color: "#5b8def" },
-  server: { label: "Server only", color: "#3ecf6e" },
-  optional: { label: "Client optional", color: "#e5a13a" },
-  client: { label: "Client only", color: "#e5544b" },
-  unknown: { label: "Unknown", color: "#8a8a90" },
+  both: { label: "Client + Server", color: "var(--env-both)" },
+  server: { label: "Server only", color: "var(--env-server)" },
+  optional: { label: "Client optional", color: "var(--env-optional)" },
+  client: { label: "Client only", color: "var(--env-client)" },
+  unknown: { label: "Unknown", color: "var(--env-unknown)" },
 };
 
 export function useMods(serverId: () => string) {

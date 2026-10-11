@@ -231,11 +231,11 @@ export default defineComponent({
 .section.is-dirty { box-shadow: -3px 0 0 0 var(--mc-accent); padding-left: 10px; margin-left: -13px; }
 .dirty-mark { position: absolute; right: 0; top: 0; font-size: 11px; color: var(--mc-accent); }
 .dirty-mark .pi { font-size: 6px; vertical-align: middle; }
-.field-errors { margin: 4px 0 10px; padding-left: 18px; color: var(--p-red-400, #f87171); font-size: 12.5px; }
+.field-errors { margin: 4px 0 10px; padding-left: 18px; color: var(--danger); font-size: 12.5px; }
 .msg-list { margin: 0; padding-left: 18px; }
 .raw {
   width: 100%; min-height: 520px;
-  background: #0e100e !important; color: var(--mc-text);
+  background: var(--bg-code) !important; color: var(--mc-text);
   border: 1px solid var(--mc-border); border-radius: 10px; padding: 14px;
   font: 13px/1.55 ui-monospace, monospace;
 }
