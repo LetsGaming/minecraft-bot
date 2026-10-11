@@ -691,7 +691,7 @@ that means for its own state, which a thrown error lets it skip.
 
 **Decision:** All dashboard copy goes through `t()` (`src/web/frontend/src/i18n.ts`) with one English table, and `scripts/check-frontend.mjs` rejects literal template text in every file listed as translated. Shared terms (status labels, backup types) live in the glossary in `@mcbot/schema` with English and German, so the bot already uses the German half. A German dashboard is a second table plus a switch; no view changes.
 
-**Rejected:** translating the dashboard in this wave. It doubles copy review for a surface used by a handful of admins per deployment, and nobody was available to review German natively. The seam is cheap now and expensive to retrofit later.
+**Rejected:** translating the dashboard in this wave. It doubles copy review, and no native German review was available. The seam is cheap now and expensive to retrofit later.
 
 ---
 
@@ -709,9 +709,9 @@ that means for its own state, which a thrown error lets it skip.
 
 **Decision:** `vue-router` 4 with hash history (`src/web/frontend/src/router.ts`). One nav table builds the routes, the sidebar and the drawer. The route owns the server and the in-view state worth sharing (Mods check and filter, Config filter and Raw tab, the Mod config file, the open guild). One `beforeEach` guard asks before unsaved work is lost, for every page and server switch, Back included.
 
-**Why hash history:** the dashboard often runs behind a reverse proxy at a sub-path, and hash URLs need no rewrite rules on the proxy or the backend.
+**Why hash history:** both mockup directions chose it, and hash URLs need no rewrite rules on the backend or on a reverse proxy in front of it.
 
-**Rejected:** a hand-rolled hash parser. The router is one dependency the frontend already effectively needed, and its guard is what made the unsaved-changes rule hold everywhere.
+**Rejected:** a hand-rolled hash parser. A second guard implementation is how the sidebar picker came to bypass the first one.
 
 ---
 
