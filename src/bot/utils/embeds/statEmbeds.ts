@@ -59,6 +59,8 @@ export function buildStatsEmbeds(
     });
   }
 
+  if (fields.length === 0) return [];
+
   const title = t("stats.pageTitle", { name: username });
   const description = t("stats.total", { count: stats.length });
   return paginateFields(fields, {
