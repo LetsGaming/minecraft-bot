@@ -488,7 +488,9 @@ watch(
   font-size: var(--text-sm);
 }
 
-.content { flex: 1; min-height: 0; overflow-y: auto; }
+/* Positioned so visually hidden text (absolute) is clipped by this scroller
+   instead of stretching the document behind the fixed shell. */
+.content { position: relative; flex: 1; min-height: 0; overflow-y: auto; }
 .content:focus { outline: none; }
 .page {
   width: 100%;
