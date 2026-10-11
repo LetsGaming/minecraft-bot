@@ -162,7 +162,19 @@ it.
 
 `SchemaField.vue` renders `config.schema.json` — the file generated from
 `RawBotConfig` (see [contracts.md](../contracts.md)). That is why doc comments
-on config types matter: they arrive here as help text.
+on config types matter: they arrive here as help text. A `@title` tag names the
+field (otherwise the key is humanised), and an `@effect` tag (emitted through
+`extraTags` in `scripts/generate-schema.mjs`) is shown as a line saying when a
+change takes hold. Only add `@effect` where the code confirms the claim.
+
+Every editor (Config, Mod config, the guild config dialog) sits in
+`components/ui/EditorShell.vue` with `EditBar.vue` for the save controls and
+`FieldRow.vue` per field; the view's composable owns the state
+(`clean`, `dirty`, `error`, `conflict`, `saving`, `readonly`) and the shell
+draws it. Schema forms call `composables/useSchemaForm.ts`, which indexes the
+form (`components/schema/formIndex.ts`) for the filter, the per-field errors,
+the old value and the review list, and provides that context to every
+`SchemaField` by its `keyPath`.
 
 The editor handles primitives, objects, arrays, and maps. `anyOf`/union nodes
 are the known gap — they fall back to a raw JSON textarea, which works but asks
