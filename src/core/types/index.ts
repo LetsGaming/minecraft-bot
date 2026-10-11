@@ -33,6 +33,7 @@ export type {
   GuildStatusEmbedConfig,
   GuildDowntimeAlertsConfig,
   GuildTpsAlertsConfig,
+  MentionPolicy,
   GuildChannelPurgeConfig,
   GuildConsoleConfig,
   GuildReportsConfig,
@@ -108,6 +109,7 @@ export type {
   EmbedOptions,
   EmbedWithThumbnailOptions,
   EmbedStyleOptions,
+  ErrorContent,
 } from "./discord/embed.js";
 
 export type {

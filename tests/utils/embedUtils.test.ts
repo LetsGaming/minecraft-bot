@@ -9,13 +9,46 @@ import {
   createEmbedWithThumbnail,
   createPlayerEmbed,
   createPaginationButtons,
+  createProgressEmbed,
+  paginateFields,
+  paginateLines,
+  chunkLines,
+  truncate,
+  EMBED_LIMITS,
 } from "../../src/bot/utils/embeds/embedUtils.js";
+import { ServerState } from "../../src/schema/serverState.js";
+import { STATUS_TABLE } from "../../src/schema/status.js";
+
+const INFO = STATUS_TABLE.info.embedColour;
+const RED = STATUS_TABLE.offline.embedColour;
+const GREEN = STATUS_TABLE.applied.embedColour;
 
 // ── createEmbed ──────────────────────────────────────────────────────────────
 
 describe("createEmbed", () => {
   it("returns an EmbedBuilder instance", () => {
     expect(createEmbed({})).toBeInstanceOf(EmbedBuilder);
+  });
+
+  it("has no timestamp by default", () => {
+    expect(createEmbed({ title: "x" }).toJSON().timestamp).toBeUndefined();
+  });
+
+  it("prefixes the state circle and takes the state colour", () => {
+    const json = createEmbed({ title: "smp: Online", state: ServerState.Online }).toJSON();
+    expect(json.title).toBe("🟢 smp: Online");
+    expect(json.color).toBe(STATUS_TABLE.online.embedColour);
+  });
+
+  it("cuts a title to the 256 character limit", () => {
+    const title = createEmbed({ title: "x".repeat(400) }).toJSON().title!;
+    expect(title).toHaveLength(EMBED_LIMITS.title);
+    expect(title.endsWith("…")).toBe(true);
+  });
+
+  it("cuts a description to the 4096 character limit", () => {
+    const description = createEmbed({ description: "y".repeat(5000) }).toJSON().description!;
+    expect(description).toHaveLength(EMBED_LIMITS.description);
   });
 
   it("sets title when provided", () => {
@@ -28,8 +61,8 @@ describe("createEmbed", () => {
     expect(embed.toJSON().description).toBe("World");
   });
 
-  it("uses default color 0x00bfff", () => {
-    expect(createEmbed({}).toJSON().color).toBe(0x00bfff);
+  it("uses the info status colour by default", () => {
+    expect(createEmbed({}).toJSON().color).toBe(INFO);
   });
 
   it("applies a custom color", () => {
@@ -116,67 +149,149 @@ describe("addFieldsBulk", () => {
 // ── createErrorEmbed ─────────────────────────────────────────────────────────
 
 describe("createErrorEmbed", () => {
-  it("sets title to ❌ Error", () => {
-    expect(createErrorEmbed("broken").toJSON().title).toBe("❌ Error");
+  it("falls back to a generic title without an emoji", () => {
+    expect(createErrorEmbed("broken").toJSON().title).toBe("Command failed");
   });
 
-  it("sets description to the provided message", () => {
+  it("renders problem then recovery and uses the given title", () => {
+    const json = createErrorEmbed({
+      title: "Could not reach smp",
+      problem: "smp did not answer.",
+      recovery: "Try again in a minute.",
+    }).toJSON();
+    expect(json.title).toBe("Could not reach smp");
+    expect(json.description).toBe("smp did not answer.\nTry again in a minute.");
+  });
+
+  it("sets description to a plain message", () => {
     expect(createErrorEmbed("oops").toJSON().description).toBe("oops");
   });
 
-  it("uses red color 0xff5555", () => {
-    expect(createErrorEmbed("x").toJSON().color).toBe(0xff5555);
+  it("uses the offline status red", () => {
+    expect(createErrorEmbed("x").toJSON().color).toBe(RED);
   });
 
-  it("accepts optional footer", () => {
-    const embed = createErrorEmbed("err", { footer: { text: "hint" } });
-    expect(embed.toJSON().footer?.text).toBe("hint");
-  });
-
-  it("includes timestamp by default", () => {
-    expect(createErrorEmbed("err").toJSON().timestamp).toBeTruthy();
-  });
-
-  it("omits timestamp when timestamp=false", () => {
-    expect(
-      createErrorEmbed("err", { timestamp: false }).toJSON().timestamp,
-    ).toBeUndefined();
+  it("has no timestamp and no footer by default", () => {
+    const json = createErrorEmbed("err").toJSON();
+    expect(json.timestamp).toBeUndefined();
+    expect(json.footer).toBeUndefined();
   });
 });
 
-// ── createSuccessEmbed ───────────────────────────────────────────────────────
+// ── createSuccessEmbed / createInfoEmbed ─────────────────────────────────────
 
 describe("createSuccessEmbed", () => {
-  it("sets title to ✅ Success", () => {
-    expect(createSuccessEmbed("done").toJSON().title).toBe("✅ Success");
+  it("has no default title", () => {
+    expect(createSuccessEmbed("done").toJSON().title).toBeUndefined();
   });
 
-  it("uses green color 0x55ff55", () => {
-    expect(createSuccessEmbed("done").toJSON().color).toBe(0x55ff55);
+  it("takes a title naming the action", () => {
+    expect(createSuccessEmbed("done", { title: "Player banned" }).toJSON().title).toBe(
+      "Player banned",
+    );
+  });
+
+  it("uses the applied status green", () => {
+    expect(createSuccessEmbed("done").toJSON().color).toBe(GREEN);
   });
 
   it("sets description", () => {
-    expect(createSuccessEmbed("it worked").toJSON().description).toBe(
-      "it worked",
-    );
+    expect(createSuccessEmbed("it worked").toJSON().description).toBe("it worked");
   });
 });
 
-// ── createInfoEmbed ──────────────────────────────────────────────────────────
-
 describe("createInfoEmbed", () => {
-  it("sets title to ℹ️ Info", () => {
-    expect(createInfoEmbed("info").toJSON().title).toBe("ℹ️ Info");
+  it("has no default title", () => {
+    expect(createInfoEmbed("info").toJSON().title).toBeUndefined();
   });
 
-  it("uses the shared Info blue (EmbedColor.Info)", () => {
-    // QUAL-09: createInfoEmbed used a second, conflicting blue (0x3498db);
-    // it now shares the one Info colour with createEmbed's default.
-    expect(createInfoEmbed("msg").toJSON().color).toBe(0x00bfff);
+  it("shares the info colour with createEmbed's default", () => {
+    expect(createInfoEmbed("msg").toJSON().color).toBe(createEmbed({}).toJSON().color);
+  });
+});
+
+// ── createProgressEmbed ──────────────────────────────────────────────────────
+
+describe("createProgressEmbed", () => {
+  it("adds the start as a relative Discord timestamp", () => {
+    const json = createProgressEmbed({
+      title: "Stopping smp",
+      description: "Saving the world.",
+      startedAt: 1_700_000_000_000,
+    }).toJSON();
+    expect(json.color).toBe(INFO);
+    expect(json.description).toContain("Saving the world.");
+    expect(json.description).toContain("<t:1700000000:R>");
+  });
+});
+
+// ── limit-aware paging ───────────────────────────────────────────────────────
+
+describe("truncate", () => {
+  it("leaves short text alone and marks a cut", () => {
+    expect(truncate("abc", 5)).toBe("abc");
+    expect(truncate("abcdef", 4)).toBe("abc…");
+  });
+});
+
+describe("chunkLines", () => {
+  it("packs lines into values under the field limit", () => {
+    const lines = Array.from({ length: 200 }, (_, i) => `[Mod ${i}](https://modrinth.com/mod/mod-${i})`);
+    const chunks = chunkLines(lines);
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const c of chunks) expect(c.length).toBeLessThanOrEqual(EMBED_LIMITS.fieldValue);
+    expect(chunks.join("\n").split("\n")).toHaveLength(200);
   });
 
-  it("sets description", () => {
-    expect(createInfoEmbed("tip here").toJSON().description).toBe("tip here");
+  it("cuts a single line that is longer than the limit", () => {
+    const [chunk] = chunkLines(["z".repeat(2000)]);
+    expect(chunk).toHaveLength(EMBED_LIMITS.fieldValue);
+  });
+});
+
+describe("paginateLines", () => {
+  it("respects the line count per page", () => {
+    const pages = paginateLines(Array.from({ length: 25 }, (_, i) => `line ${i}`), 10);
+    expect(pages).toHaveLength(3);
+    expect(pages[2]!.split("\n")).toHaveLength(5);
+  });
+
+  it("returns one empty page for no lines", () => {
+    expect(paginateLines([], 10)).toEqual([""]);
+  });
+});
+
+describe("paginateFields", () => {
+  const field = (i: number, size = 1000) => ({ name: `Field ${i}`, value: "v".repeat(size) });
+
+  it("keeps every page under 6000 characters including the reserved part", () => {
+    const fields = Array.from({ length: 30 }, (_, i) => field(i));
+    const pages = paginateFields(fields, { reserved: 300 });
+    for (const page of pages) {
+      const total = page.reduce((n, f) => n + f.name.length + f.value.length, 0);
+      expect(total + 300).toBeLessThanOrEqual(EMBED_LIMITS.total);
+    }
+    expect(pages.flat()).toHaveLength(30);
+  });
+
+  it("never puts more than 25 fields on a page", () => {
+    const pages = paginateFields(Array.from({ length: 60 }, (_, i) => field(i, 10)));
+    expect(pages.map((p) => p.length)).toEqual([25, 25, 10]);
+  });
+
+  it("honours a smaller maxFields", () => {
+    const pages = paginateFields(Array.from({ length: 7 }, (_, i) => field(i, 10)), { maxFields: 3 });
+    expect(pages.map((p) => p.length)).toEqual([3, 3, 1]);
+  });
+
+  it("cuts oversized names and values", () => {
+    const [[only]] = paginateFields([{ name: "n".repeat(300), value: "v".repeat(2000) }]);
+    expect(only!.name).toHaveLength(EMBED_LIMITS.fieldName);
+    expect(only!.value).toHaveLength(EMBED_LIMITS.fieldValue);
+  });
+
+  it("returns one empty page for no fields", () => {
+    expect(paginateFields([])).toEqual([[]]);
   });
 });
 
@@ -245,56 +360,44 @@ describe("createPlayerEmbed", () => {
 // ── createPaginationButtons ──────────────────────────────────────────────────
 
 describe("createPaginationButtons", () => {
-  it("disables first and prev on page 0", () => {
-    const row = createPaginationButtons(0, 5);
-    const components = row.toJSON().components;
-    const first = components.find((c) => c.custom_id === "first");
-    const prev = components.find((c) => c.custom_id === "prev");
-    expect(first?.disabled).toBe(true);
-    expect(prev?.disabled).toBe(true);
+  it("is Previous, a disabled page indicator, Next", () => {
+    const components = createPaginationButtons(1, 6).toJSON().components;
+    expect(components.map((c) => ("custom_id" in c ? c.custom_id : ""))).toEqual([
+      "prev",
+      "page",
+      "next",
+    ]);
+    const page = components[1]!;
+    expect("label" in page ? page.label : "").toBe("Page 2/6");
+    expect(page.disabled).toBe(true);
   });
 
-  it("disables next and last on the last page", () => {
-    const row = createPaginationButtons(4, 5);
-    const components = row.toJSON().components;
-    const next = components.find((c) => c.custom_id === "next");
-    const last = components.find((c) => c.custom_id === "last");
-    expect(next?.disabled).toBe(true);
-    expect(last?.disabled).toBe(true);
+  it("disables Previous on the first page and Next on the last", () => {
+    const first = createPaginationButtons(0, 3).toJSON().components;
+    const last = createPaginationButtons(2, 3).toJSON().components;
+    expect(first[0]!.disabled).toBe(true);
+    expect(first[2]!.disabled).toBe(false);
+    expect(last[0]!.disabled).toBe(false);
+    expect(last[2]!.disabled).toBe(true);
   });
 
-  it("enables all buttons on a middle page", () => {
-    const row = createPaginationButtons(2, 5);
-    expect(row.toJSON().components.every((c) => !c.disabled)).toBe(true);
-  });
-
-  it("creates exactly 4 button components", () => {
-    const row = createPaginationButtons(1, 3);
-    expect(row.toJSON().components).toHaveLength(4);
-  });
-
-  it("disables all navigation when there is only one page", () => {
-    const row = createPaginationButtons(0, 1);
-    const components = row.toJSON().components;
+  it("switches the whole row off when disabled", () => {
+    const components = createPaginationButtons(1, 3, { disabled: true }).toJSON().components;
     expect(components.every((c) => c.disabled)).toBe(true);
   });
 });
 
-// ── EmbedColor palette (QUAL-09) ─────────────────────────────────────────────
-describe("EmbedColor palette", () => {
-  it("exposes the semantic colours as a single source", async () => {
-    const { EmbedColor } = await import("../../src/bot/utils/embeds/embedColors.js");
-    expect(EmbedColor.Success).toBe(0x55ff55);
-    expect(EmbedColor.Error).toBe(0xff5555);
-    expect(EmbedColor.Info).toBe(0x00bfff);
-    expect(EmbedColor.Warning).toBe(0xffaa00);
-    expect(EmbedColor.Gold).toBe(0xffd700);
-  });
+// ── EmbedColor palette ───────────────────────────────────────────────────────
 
-  it("resolves the info colour to one value (createEmbed default === createInfoEmbed)", () => {
-    // Guards the two-blues drift the palette fixed.
-    const defaultInfo = createEmbed({ title: "x" }).toJSON().color;
-    const infoHelper = createInfoEmbed("y").toJSON().color;
-    expect(infoHelper).toBe(defaultInfo);
+describe("EmbedColor palette", () => {
+  it("takes every semantic colour from the status table", async () => {
+    const { EmbedColor } = await import("../../src/bot/utils/embeds/embedColors.js");
+    expect(EmbedColor.Online).toBe(STATUS_TABLE.online.embedColour);
+    expect(EmbedColor.Success).toBe(STATUS_TABLE.applied.embedColour);
+    expect(EmbedColor.Warning).toBe(STATUS_TABLE.degraded.embedColour);
+    expect(EmbedColor.Error).toBe(STATUS_TABLE.offline.embedColour);
+    expect(EmbedColor.Neutral).toBe(STATUS_TABLE.unknown.embedColour);
+    expect(EmbedColor.Pending).toBe(STATUS_TABLE.pending.embedColour);
+    expect(EmbedColor.Info).toBe(STATUS_TABLE.info.embedColour);
   });
 });
