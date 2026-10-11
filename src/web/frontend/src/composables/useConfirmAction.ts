@@ -37,6 +37,8 @@ export interface ConfirmActionOptions {
   cancelLabel?: string;
   /** Shown beside the heading so the target is recognisable at a glance. */
   media?: ConfirmMedia;
+  /** Overrides the level's label when its default would claim too much. */
+  levelLabel?: string;
 }
 
 const DEFAULT_TONE: Record<ConfirmLevel, ConfirmTone> = {
@@ -74,6 +76,7 @@ export function useConfirmAction() {
         alternateLabel: options.alternateLabel ?? "",
         onAlternate: options.alternateLabel ? () => settle("alternate") : null,
         media: options.media ?? null,
+        levelLabel: options.levelLabel ?? "",
       };
       typedNonce.value += 1;
       confirm.require({

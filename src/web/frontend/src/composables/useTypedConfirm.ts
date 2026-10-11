@@ -38,6 +38,8 @@ export interface ConfirmExtras {
   alternateLabel: string;
   onAlternate: (() => void) | null;
   media: ConfirmMedia | null;
+  /** Replaces the level's default label above the heading. */
+  levelLabel: string;
 }
 
 export function defaultExtras(): ConfirmExtras {
@@ -50,6 +52,7 @@ export function defaultExtras(): ConfirmExtras {
     alternateLabel: "",
     onAlternate: null,
     media: null,
+    levelLabel: "",
   };
 }
 

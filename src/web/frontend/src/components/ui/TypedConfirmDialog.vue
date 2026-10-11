@@ -2,7 +2,7 @@
   <ConfirmDialog :group="TYPED_CONFIRM_GROUP" :style="{ width: '480px', maxWidth: 'calc(100vw - 32px)' }">
     <template #container="{ message, acceptCallback, rejectCallback }">
       <div ref="body" class="tc-body">
-        <span :class="['tc-level', `tc-${extras.level}`]">{{ LEVEL_LABEL[extras.level] }}</span>
+        <span :class="['tc-level', `tc-${extras.level}`]">{{ extras.levelLabel || LEVEL_LABEL[extras.level] }}</span>
         <div class="tc-title">
           <ModIcon
             v-if="extras.media"
