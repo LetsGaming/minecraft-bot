@@ -62,6 +62,13 @@ const STATUS = {
 
 beforeEach(() => {
   setCapabilities({ "*": ["server:read", "server:control", "audit:read"] });
+  // jsdom has no matchMedia; PrimeVue's Select (paginator, stat picker) asks for one on mount.
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: false,
+    media: query,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }));
 });
 
 afterEach(() => {
