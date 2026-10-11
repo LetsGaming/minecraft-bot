@@ -1,7 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const apiGet = vi.hoisted(() => vi.fn());
-vi.mock("../../src/web/frontend/src/api", () => ({ apiGet }));
+vi.mock("../../src/web/frontend/src/api", async (importActual) => ({
+  ...(await importActual<typeof import("../../src/web/frontend/src/api")>()),
+  apiGet,
+}));
 
 import {
   useAnalytics,
@@ -80,7 +83,10 @@ describe("useAnalytics", () => {
     expect(a.uptime.value).not.toBeNull();
     expect(a.commands.value).toEqual([]);
     expect(a.error.value).toBe("");
+    expect(a.usageFailure.value).toEqual({ error: "boom", kind: "failed" });
+    expect(a.playersFailure.value).toBeNull();
     expect(a.loading.value).toBe(false);
+    expect(a.loaded.value).toBe(true);
   });
 
   it("reports a board failure without touching the other sections", async () => {
