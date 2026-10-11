@@ -18,7 +18,7 @@ export const de: Record<string, string> = {
 
   // ── common ──
   "common.serverNotFound": "Server nicht gefunden.",
-  "common.noPermission": "Du hast keine Berechtigung für diesen Befehl.",
+  "common.noPermission": "Dieser Befehl ist nur für Bot-Admins. Frag einen Bot-Admin, wenn du ihn brauchst.",
   "common.invalidUsername":
     "**{username}** ist kein gültiger Minecraft-Benutzername.",
 
@@ -222,12 +222,9 @@ export const de: Record<string, string> = {
   "state.unresponsive": "Antwortet nicht",
   "state.offline": "Offline",
   "state.unknown": "Zustand unbekannt",
-  "state.unresponsiveHint":
-    "Der Server-Prozess läuft, antwortet aber nicht auf Befehle — er startet möglicherweise gerade oder ist stark ausgelastet.",
-  "state.unknownHint":
-    "Weder die API-Wrapper des Servers noch der Server selbst haben geantwortet, daher konnte der Zustand nicht ermittelt werden. Prüfe, ob der Host erreichbar ist.",
-  "state.wrapperDownHint":
-    "Der Server selbst ist erreichbar, seine API-Wrapper jedoch nicht — Server-Steuerung, Chat-Bridge, Statistiken und Log-Überwachung sind daher nicht verfügbar, bis sie wieder läuft.",
+  "state.unresponsiveHint": "Der Server-Prozess läuft, antwortet aber nicht auf Befehle. Vielleicht startet er gerade oder ist stark ausgelastet.",
+  "state.unknownHint": "Weder der API-Wrapper noch der Server hat geantwortet, der Zustand ist deshalb unbekannt. Prüfe, ob der Host erreichbar ist.",
+  "state.wrapperDownHint": "Der Server ist erreichbar, sein API-Wrapper nicht. Steuerung, Chat-Bridge, Statistiken und Log-Überwachung fallen aus, bis der Wrapper wieder antwortet.",
   "state.viaPing": "per direktem Server-Ping",
   "tps.lowTitle": "⚠️ Niedrige-TPS-Warnung",
   "tps.low": "Die Server-TPS sind unter {threshold} gefallen",
@@ -439,9 +436,7 @@ export const de: Record<string, string> = {
   "clearDm.deleted": "**{count}** Bot-Nachricht(en) aus dieser DM gelöscht.",
 
   // ── embed helpers ──
-  "embed.errorTitle": "❌ Fehler",
-  "embed.successTitle": "✅ Erfolg",
-  "embed.infoTitle": "ℹ️ Info",
+  "embed.errorTitle": "Befehl fehlgeschlagen",
   "common.requestedBy": "Angefragt von {user}",
 
   // ── /config ──
@@ -534,8 +529,8 @@ export const de: Record<string, string> = {
 
   // ── shared command messages ──
   "common.rateLimited": "Zu viele Befehle. Bitte warte {seconds} s.",
-  "common.unexpectedError": "Es ist ein unerwarteter Fehler aufgetreten.",
-  "common.unexpectedErrorRecovery": "Versuch es gleich noch einmal. Wenn es weiter auftritt, sag einem Admin Bescheid.",
+  "common.unexpectedError": "Etwas ist schiefgelaufen, der Befehl wurde nicht abgeschlossen.",
+  "common.unexpectedErrorRecovery": "Versuch es gleich noch einmal. Wenn es so bleibt, sag einem Bot-Admin Bescheid.",
   "common.playerNotFound": "Spieler `{player}` nicht gefunden.",
   "common.playerNotFoundFooter": "Spieler nicht gefunden",
   "pagination.notForYou": "Diese Buttons sind nicht für dich.",
@@ -666,4 +661,20 @@ export const de: Record<string, string> = {
   "target.none": "keine",
   "target.noneAvailable": "Für diese Gilde ist kein Server verfügbar.",
   "target.several": "Es sind mehrere Server verfügbar ({servers}). Gib `server:` an, um einen auszuwählen.",
+  "state.playerCount": "{online}/{max} Spieler",
+  "state.playersIncluding": "{counts}, darunter {names}",
+  "state.playersNamed": "{counts}: {names}",
+  "denied.title": "Nur für Bot-Admins",
+  "denied.command": "/{command} ist Bot-Admins vorbehalten. Frag einen von ihnen, wenn du den Befehl brauchst.",
+  "denied.action": "Das ist Bot-Admins vorbehalten. Frag einen von ihnen, wenn du es brauchst.",
+  "pagination.previous": "Zurück",
+  "pagination.next": "Weiter",
+  "pagination.page": "Seite {page}/{total}",
+  "progress.started": "Gestartet {time}.",
+  "confirm.expires": "Die Buttons laufen in {seconds} s ab.",
+  "confirm.confirm": "Bestätigen",
+  "confirm.cancel": "Abbrechen",
+  "confirm.cancelled": "Abgebrochen. Es wurde nichts geändert.",
+  "confirm.expired": "Diese Bestätigung ist abgelaufen. Führe den Befehl noch einmal aus.",
+  "confirm.notYours": "Nur die Person, die den Befehl ausgeführt hat, kann das beantworten.",
 };

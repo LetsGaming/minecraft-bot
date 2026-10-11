@@ -24,7 +24,7 @@ export const en: Record<string, string> = {
 
   // ── common ──
   "common.serverNotFound": "Server not found.",
-  "common.noPermission": "You do not have permission to use this command.",
+  "common.noPermission": "This command is for bot admins only. Ask a bot admin if you need it.",
   "common.invalidUsername": "**{username}** is not a valid Minecraft username.",
 
   // ── whois ──
@@ -226,12 +226,9 @@ export const en: Record<string, string> = {
   "state.unresponsive": "Not responding",
   "state.offline": "Offline",
   "state.unknown": "State unknown",
-  "state.unresponsiveHint":
-    "The server process is running but is not answering commands — it may be starting up or under heavy load.",
-  "state.unknownHint":
-    "Neither the server's API wrapper nor the server itself answered, so its state could not be determined. Check that the host is reachable.",
-  "state.wrapperDownHint":
-    "The server itself is reachable, but its API wrapper is not — so server controls, the chat bridge, stats and log watching are unavailable until it is back.",
+  "state.unresponsiveHint": "The server process is running but is not answering commands. It may be starting up or under heavy load.",
+  "state.unknownHint": "Neither the API wrapper nor the server answered, so the state is unknown. Check that the host is reachable.",
+  "state.wrapperDownHint": "The server is reachable, but its API wrapper is not. Server controls, the chat bridge, stats and log watching are unavailable until the wrapper answers again.",
   "state.viaPing": "via direct server ping",
   "tps.lowTitle": "⚠️ Low TPS Warning",
   "tps.low": "Server TPS has dropped below {threshold}",
@@ -443,9 +440,7 @@ export const en: Record<string, string> = {
   "clearDm.deleted": "Deleted **{count}** bot message(s) from this DM.",
 
   // ── embed helpers ──
-  "embed.errorTitle": "❌ Error",
-  "embed.successTitle": "✅ Success",
-  "embed.infoTitle": "ℹ️ Info",
+  "embed.errorTitle": "Command failed",
   "common.requestedBy": "Requested by {user}",
 
   // ── /config ──
@@ -538,8 +533,8 @@ export const en: Record<string, string> = {
 
   // ── shared command messages ──
   "common.rateLimited": "Too many commands. Please wait {seconds}s.",
-  "common.unexpectedError": "An unexpected error occurred.",
-  "common.unexpectedErrorRecovery": "Try again in a moment. If it keeps happening, tell an admin.",
+  "common.unexpectedError": "Something went wrong and the command did not finish.",
+  "common.unexpectedErrorRecovery": "Try again in a moment. If it keeps happening, tell a bot admin.",
   "common.playerNotFound": "Player `{player}` not found.",
   "common.playerNotFoundFooter": "Player Not Found",
   "pagination.notForYou": "These buttons aren't for you.",
@@ -670,4 +665,20 @@ export const en: Record<string, string> = {
   "target.none": "none",
   "target.noneAvailable": "No server is available for this guild.",
   "target.several": "Several servers are available ({servers}). Pass `server:` to choose one.",
+  "state.playerCount": "{online}/{max} players",
+  "state.playersIncluding": "{counts}, including {names}",
+  "state.playersNamed": "{counts}: {names}",
+  "denied.title": "Bot admins only",
+  "denied.command": "/{command} is for bot admins. Ask one of them if you need it.",
+  "denied.action": "This is for bot admins. Ask one of them if you need it.",
+  "pagination.previous": "Previous",
+  "pagination.next": "Next",
+  "pagination.page": "Page {page}/{total}",
+  "progress.started": "Started {time}.",
+  "confirm.expires": "The buttons expire in {seconds} s.",
+  "confirm.confirm": "Confirm",
+  "confirm.cancel": "Cancel",
+  "confirm.cancelled": "Cancelled. Nothing was changed.",
+  "confirm.expired": "This confirmation has expired. Run the command again.",
+  "confirm.notYours": "Only the person who ran the command can answer this.",
 };
