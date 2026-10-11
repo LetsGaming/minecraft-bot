@@ -169,6 +169,19 @@ export function errorContentOf(err: unknown, serverId?: string): ErrorContent {
     return { title: err.title, problem: err.problem, recovery: err.recovery };
   }
   const transport = classifyTransportError(err);
+  if (transport === "wrapper-error") {
+    return serverId
+      ? {
+          title: t("transport.wrapperErrorTitle", { server: serverId }),
+          problem: t("transport.wrapperErrorProblem", { server: serverId }),
+          recovery: t("transport.recovery"),
+        }
+      : {
+          title: t("transport.wrapperErrorTitleNoServer"),
+          problem: t("transport.wrapperErrorProblemNoServer"),
+          recovery: t("transport.recovery"),
+        };
+  }
   if (transport) {
     const recovery =
       transport === "rate-limited" ? t("transport.recoveryRateLimited") : t("transport.recovery");

@@ -3,7 +3,7 @@
 import type { ServerConfig } from "../../../types/index.js";
 import { ConfigAccessError, configAccessErrorFor } from "../configAccessError.js";
 import type { ConfigFileInfo, WireSchemas } from "@mcbot/schema/wire/index.js";
-import { instanceUrl, apiGetRaw, apiGet, apiPost } from "./apiClient.js";
+import { instanceUrl, apiGetRaw, apiGet, apiPost, ApiError } from "./apiClient.js";
 
 export type { ConfigFileInfo };
 
@@ -35,7 +35,7 @@ async function throwConfigFailure(
   const message = await wrapperErrorText(res);
   throw (
     configAccessErrorFor(res.status, action, message) ??
-    new Error(`API ${route} → ${res.status}: ${message}`)
+    new ApiError(route, res.status, message)
   );
 }
 
