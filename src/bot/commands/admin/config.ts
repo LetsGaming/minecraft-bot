@@ -116,6 +116,7 @@ export const execute = withErrorHandling(
         embeds: [
           createSuccessEmbed(
             t("config.reloaded", { details: codeBlock(lines.join("\n")) }),
+            { title: t("config.reloadedTitle") },
           ),
         ],
       });

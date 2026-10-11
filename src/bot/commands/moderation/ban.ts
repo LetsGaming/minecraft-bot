@@ -130,7 +130,11 @@ export const execute = withErrorHandling(
           });
 
     await interaction.editReply({
-      embeds: [createSuccessEmbed(withUnverifiedNote(message, verdict))],
+      embeds: [
+        createSuccessEmbed(withUnverifiedNote(message, verdict), {
+          title: t("moderation.bannedTitle"),
+        }),
+      ],
     });
   }),
 );

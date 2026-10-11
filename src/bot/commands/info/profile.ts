@@ -130,10 +130,9 @@ export const execute = withErrorHandling(async (interaction) => {
   const embed = createPlayerEmbed(
     player,
     {
-      title: t("profile.title", { player }),
+      title: t("profile.title", { player, server: server.id }),
       description: lines.join("\n"),
       color: EmbedColor.Info,
-      footer: { text: server.id },
     },
     true,
   );

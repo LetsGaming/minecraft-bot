@@ -104,6 +104,7 @@ export const executeWhitelistAdd = withErrorHandling(
             t("whitelist.added", { name: added.name, server: server.id }),
             added,
           ),
+          { title: t("whitelist.addedTitle") },
         ),
       ],
     });

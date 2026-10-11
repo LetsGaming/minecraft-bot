@@ -124,6 +124,7 @@ export const execute = withErrorHandling(
                 channel: `<#${channelId}>`,
               })
             : t("console.liveDisabled", { server: server.id }),
+          { title: t(enable ? "console.liveEnabledTitle" : "console.liveDisabledTitle") },
         ),
       ],
     });

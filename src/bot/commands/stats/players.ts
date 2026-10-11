@@ -73,11 +73,11 @@ function describeEntry(e: RosterEntry): string {
     e.playtimeTicks !== null && e.playtimeTicks > 0
       ? ` · ${formatPlaytime(e.playtimeTicks)}`
       : "";
-  if (e.online) return `🟢 ${name} · ${t("players.online")}${playtime}`;
+  if (e.online) return `${name} · ${t("players.online")}${playtime}`;
   if (e.lastSeen !== null) {
-    return `⚫ ${name} · ${formatLastSeen(e.lastSeen)}${playtime}`;
+    return `${name} · ${formatLastSeen(e.lastSeen)}${playtime}`;
   }
-  return `⚫ ${name} · ${t("players.beforeTracking")}${playtime}`;
+  return `${name} · ${t("players.beforeTracking")}${playtime}`;
 }
 
 function clamp(text: string): string {
@@ -91,20 +91,13 @@ export function buildPages(
   serverId: string,
 ): EmbedBuilder[] {
   const pages: EmbedBuilder[] = [];
-  const total = Math.ceil(entries.length / PER_PAGE);
+  const count = t("players.count", { count: entries.length });
   for (let i = 0; i < entries.length; i += PER_PAGE) {
     const slice = entries.slice(i, i + PER_PAGE);
     pages.push(
       createEmbed({
         title: t("players.title", { server: serverId }),
-        description: clamp(slice.map(describeEntry).join("\n")),
-        footer: {
-          text: t("players.footer", {
-            page: Math.floor(i / PER_PAGE) + 1,
-            pages: total,
-            count: entries.length,
-          }),
-        },
+        description: clamp(`${count}\n\n${slice.map(describeEntry).join("\n")}`),
       }),
     );
   }

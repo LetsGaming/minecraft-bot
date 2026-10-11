@@ -41,17 +41,11 @@ function buildPages(waypoints: Waypoint[], serverId: string): EmbedBuilder[] {
     const slice = waypoints.slice(i, i + PER_PAGE);
     const embed = createEmbed({
       title: t("waypoint.embedTitle", { server: serverId }),
-      footer: {
-        text: t("waypoint.embedFooter", {
-          page: Math.floor(i / PER_PAGE) + 1,
-          pages: Math.ceil(waypoints.length / PER_PAGE),
-          count: waypoints.length,
-        }),
-      },
+      description: t("waypoint.count", { count: waypoints.length }),
     });
     embed.addFields(
       slice.map((wp) => ({
-        name: `📍 ${wp.name}${wp.category ? ` — ${wp.category}` : ""}`,
+        name: wp.category ? `${wp.name} (${wp.category})` : wp.name,
         value: t("waypoint.embedEntry", {
           x: wp.x,
           y: wp.y,

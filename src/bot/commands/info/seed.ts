@@ -23,7 +23,6 @@ export const execute = withErrorHandling(async (interaction) => {
       createEmbed({
         title: t("seed.title", { server: server.id }),
         description: `\`${seed.value}\``,
-        footer: { text: t("common.requestedBy", { user: interaction.user.tag }) },
       }),
     ],
   });

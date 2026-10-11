@@ -56,6 +56,7 @@ export const execute = withErrorHandling(
             t("whitelist.removed", { username, server: server.id }),
             verdict,
           ),
+          { title: t("whitelist.removedTitle") },
         ),
       ],
     });

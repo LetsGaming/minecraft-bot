@@ -116,7 +116,7 @@ export const execute = withErrorHandling(
     }
 
     const embed = createEmbed({
-      title: `🔎 ${t("whois.title", { username: audit?.username ?? username })}`,
+      title: t("whois.title", { username: audit?.username ?? username }),
     });
 
     if (audit?.addedBy) {
