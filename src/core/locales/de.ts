@@ -106,7 +106,7 @@ export const de: Record<string, string> = {
   "players.online": "gerade online",
   "players.beforeTracking": "vor der Aufzeichnung",
   "players.none": "Auf diesem Server wurden noch keine Spieler gefunden.",
-  "players.noneInactive": "Kein Spieler war länger als {days} d inaktiv.",
+  "players.noneInactive": "Kein Spieler war länger als {days|# Tag|# Tage} inaktiv.",
   // ── whois additions ──
   "whois.lastSeen": "Zuletzt gesehen",
   "whois.onlineNow": "🟢 Gerade online auf **{server}**",
@@ -368,7 +368,7 @@ export const de: Record<string, string> = {
   "hint.playtimeActivity": "Tipp: /activity zeigt, wann auf dem Server wirklich etwas los ist. Praktisch, um andere Spieler zu treffen.",
   "hint.seedChunkbase":
     "Tipp: /chunkbase öffnet diesen Seed in einer Kartenansicht, und /slime findet darin Slime-Chunks.",
-  "help.newToYou": "✨ = noch nicht ausprobiert ({count}). Diese Befehle stehen zuerst.",
+  "help.newToYou": "✨ = noch nicht ausprobiert ({count|# Befehl|# Befehle}). Diese Befehle stehen zuerst.",
   "deathpos.hint":
     "Tipp: Tippe !deathpos in den Chat, um diese Koordinaten jederzeit erneut zu bekommen.",
   "report.hint": "Tipp: Wenn das unfair war, tippe !report <was passiert ist> in den Chat. Die Admins sehen es dann.",
@@ -537,7 +537,7 @@ export const de: Record<string, string> = {
   "uptime.barNoData": "keine Daten",
 
   // ── server targeting ──
-  "router.guildOnly": "Es gibt mehrere Minecraft-Server. Führe den Befehl auf einem Discord-Server aus, damit der passende gewählt wird.",
+  "router.guildOnly": "Führe den Befehl auf einem Discord-Server aus, damit der Bot weiß, welche Minecraft-Server du nutzen darfst.",
   "router.notAllowed": "Der Server \"{server}\" ist von diesem Discord-Server aus nicht verfügbar. Ein Betreiber kann ihn in der config.json unter \"allowedServers\" dieses Discord-Servers freigeben.",
   "router.serverNotFound": "Es gibt keinen Server namens \"{server}\". Nimm einen aus den Vorschlägen.",
   "capability.missing": "**{server}** unterstützt diese Funktion nicht: {feature}. Sie braucht die Setup-Suite. {hint}",

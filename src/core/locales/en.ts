@@ -545,7 +545,7 @@ export const en: Record<string, string> = {
   "uptime.barNoData": "no data",
 
   // ── server targeting ──
-  "router.guildOnly": "There is more than one Minecraft server. Run this command in a Discord server so the right one is chosen.",
+  "router.guildOnly": "Run this command in a Discord server, so the bot knows which Minecraft servers you may use.",
   "router.notAllowed": "Server \"{server}\" is not available from this Discord server. An operator can allow it by adding it to this guild's \"allowedServers\" in config.json.",
   "router.serverNotFound": "No server called \"{server}\". Pick one from the suggestions.",
   "capability.missing": "**{server}** does not provide {feature}. This feature needs the setup suite. {hint}",
