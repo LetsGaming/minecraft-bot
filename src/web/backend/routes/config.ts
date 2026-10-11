@@ -91,7 +91,7 @@ export function registerConfigRoutes(app: FastifyInstance): void {
     const manifest = await readCommandManifest();
     if (!manifest) {
       throw new ServiceUnavailable(
-        "Command manifest not written yet — start the bot once so it can discover its commands.",
+        "Command manifest not written yet. Start the bot once so it can discover its commands.",
       );
     }
     // Hashed before the read: a write landing in between leaves the token
