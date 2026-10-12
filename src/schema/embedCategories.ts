@@ -94,3 +94,33 @@ export function parseHexColor(value: unknown): number | undefined {
   if (typeof value !== "string" || !/^#[0-9a-fA-F]{6}$/.test(value)) return undefined;
   return parseInt(value.slice(1), 16);
 }
+
+/** 0xRRGGBB to `#rrggbb`. */
+export function colorToHex(color: number): string {
+  return `#${color.toString(16).padStart(6, "0")}`;
+}
+
+/** Discord's embed card backgrounds, for previews and contrast checks. */
+export const DISCORD_EMBED_BACKGROUND = { dark: 0x2b2d31, light: 0xf2f3f5 } as const;
+
+function channel(value: number): number {
+  const c = value / 255;
+  return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+}
+
+function luminance(color: number): number {
+  return (
+    0.2126 * channel((color >> 16) & 0xff) +
+    0.7152 * channel((color >> 8) & 0xff) +
+    0.0722 * channel(color & 0xff)
+  );
+}
+
+/** WCAG contrast ratio of two colours, 1 (identical) to 21. */
+export function contrastRatio(a: number, b: number): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/** Below this ratio a side bar nearly vanishes into the card. */
+export const MIN_BAR_CONTRAST = 1.5;

@@ -15,6 +15,7 @@ project follows [Semantic Versioning](https://semver.org/).
 
 - **A livelier `/daily`.** The claim shows your head, the reward with a rarity badge (common to legendary, from how rare the item is in the pool), a streak progress bar, the next milestone and the next claim time. Streak bonuses turn the message gold, a lost streak is called out, and the cooldown reply shows a time bar and the deadline that keeps your streak. Offline claims show the queue size (`daily/dailyEmbeds.ts`).
 - `/streak` shows a progress bar and a milestone track; `/daily-history` and the streak leaderboard use flame icons, the leaderboard shows the leader's head, and the daily reminder DM is an embed.
+- **Appearance page in the dashboard** (sysadmins): pick the color of every embed category and rarity tier, with a live Discord-style preview on dark and light backgrounds and a warning when a color is hard to see (`views/AppearanceView.vue`, `composables/useEmbedColors.ts`).
 - `embedColors` in `config.json` recolours any embed category or rarity tier (`#rrggbb`; `src/core/configValidation.ts`, `docs/admin/configuration.md`).
 
 ### Fixed

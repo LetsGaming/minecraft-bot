@@ -111,6 +111,7 @@ import ModConfigView from "./views/ModConfigView.vue";
 import ModsView from "./views/ModsView.vue";
 import GuildsView from "./views/GuildsView.vue";
 import CommandsView from "./views/CommandsView.vue";
+import AppearanceView from "./views/AppearanceView.vue";
 import ConfigView from "./views/ConfigView.vue";
 import AuditView from "./views/AuditView.vue";
 import AnalyticsView from "./views/AnalyticsView.vue";
@@ -140,6 +141,7 @@ const VIEWS: Record<NavId, ViewEntry> = {
   modconfig: { component: markRaw(ModConfigView), props: ["serverIds", "activeServer"] },
   config: { component: markRaw(ConfigView) },
   commands: { component: markRaw(CommandsView) },
+  appearance: { component: markRaw(AppearanceView) },
   guilds: { component: markRaw(GuildsView), props: ["sysadmin"] },
 };
 

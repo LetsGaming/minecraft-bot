@@ -16,6 +16,7 @@ for state, categories for everything else (see [replies.md](replies.md)).
 | Restart schedule | `schedulers/restartScheduler.ts` | server, recovery | Icons added |
 | Whitelist prompt | `interactions/whitelistApplications.ts` | whitelist | Icon added |
 | Confirmations | `utils/embeds/confirm.ts` | confirm | Pending colour kept via category |
+| Appearance page | `src/web/frontend/src/views/AppearanceView.vue` | all | Colour picker, hex input, dark and light preview, contrast warning, saves `embedColors` through the config route |
 | Errors | `utils/embeds/embedUtils.ts` `createErrorEmbed` | error | ⛔ title icon |
 
 ## Still on fixed status colours (state-driven, by design)
@@ -27,7 +28,5 @@ info answers. They carry state or are plain answers, so they keep `EmbedColor`.
 
 ## Not done yet
 
-- Dashboard "Appearance" page for `embedColors` (the config field, validation
-  and resolver are in place; edit the field in the config page for now).
 - A lint rule against colour literals and direct `EmbedColor` use.
 - Item icon thumbnails for rewards.

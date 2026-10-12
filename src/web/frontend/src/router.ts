@@ -23,6 +23,7 @@ export type NavId =
   | "modconfig"
   | "config"
   | "commands"
+  | "appearance"
   | "guilds";
 
 export type NavGate = GrantableCapability | "sysadmin" | "guild";
@@ -72,6 +73,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     items: [
       { id: "config", labelKey: "nav.config", icon: "pi pi-cog", gate: "sysadmin", serverScoped: false, path: "/config/:mode(raw)?" },
       { id: "commands", labelKey: "nav.commands", icon: "pi pi-bolt", gate: "sysadmin", serverScoped: false, path: "/commands" },
+      { id: "appearance", labelKey: "nav.appearance", icon: "pi pi-palette", gate: "sysadmin", serverScoped: false, path: "/appearance" },
       { id: "guilds", labelKey: "nav.guilds", icon: "pi pi-discord", gate: "guild", serverScoped: false, path: "/guilds/:guildId?" },
     ],
   },

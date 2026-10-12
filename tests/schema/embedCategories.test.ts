@@ -41,3 +41,19 @@ describe("embed categories", () => {
     expect(parseHexColor(123)).toBeUndefined();
   });
 });
+
+describe("colour helpers", () => {
+  it("round-trips colours through hex", async () => {
+    const { colorToHex, parseHexColor: parse } = await import("@mcbot/schema/embedCategories.js");
+    expect(colorToHex(0x00ff7f)).toBe("#00ff7f");
+    expect(parse(colorToHex(0x123456))).toBe(0x123456);
+  });
+
+  it("flags a colour that vanishes into Discord's dark card", async () => {
+    const { contrastRatio, DISCORD_EMBED_BACKGROUND, MIN_BAR_CONTRAST } = await import(
+      "@mcbot/schema/embedCategories.js"
+    );
+    expect(contrastRatio(0x2b2d31, DISCORD_EMBED_BACKGROUND.dark)).toBeLessThan(MIN_BAR_CONTRAST);
+    expect(contrastRatio(0xfbbf24, DISCORD_EMBED_BACKGROUND.dark)).toBeGreaterThan(MIN_BAR_CONTRAST);
+  });
+});
