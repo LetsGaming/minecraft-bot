@@ -85,7 +85,7 @@ const SCRIPT_FILES = {
  * validator forbids "/". It still has to exist for `capabilities.restore` to
  * come back true.
  */
-const EXTRA_SUITE_SCRIPTS = ["backup/restore.sh"];
+const EXTRA_SUITE_SCRIPTS = ["backup/restore.sh", "update/upgrade.sh"];
 
 const unmappedActions = SERVER_SCRIPT_ACTIONS.filter((a) => !SCRIPT_FILES[a]);
 if (unmappedActions.length > 0) {
@@ -1358,6 +1358,61 @@ console.log("\n── mod compatibility check");
       "without sudo every mod fails to check, the job fails, and the reason is a fixed phrase",
       finished?.state === "failed" && finished.error === "script failed" && !/sudo|[/]home|secret/.test(text),
       text,
+    );
+  }
+}
+
+console.log("\n── upgrade job and lifecycle events");
+{
+  const JOB_ABSENT = "00000000-0000-4000-8000-000000000000";
+  check("the bot sees the wrapper can upgrade", (await serverAccess.supportsUpgrade(cfg)) === true);
+  check("the bot sees the lifecycle event feed", (await serverAccess.supportsLifecycleEvents(cfg)) === true);
+
+  const eventsFile = path.join(paths.serverPath, "logs", "lifecycle.ndjson");
+  eq("before start.sh writes anything the feed is empty", (await serverAccess.readLifecycleEvents(cfg, 0)).events, []);
+  fs.writeFileSync(
+    eventsFile,
+    '{"ts":1,"type":"jvm_start","rapid_crashes":0}\n{"ts":2,"type":"crash_loop_gave_up","rapid_crashes":5,"exit_code":1}\n',
+  );
+  const feed = await serverAccess.readLifecycleEvents(cfg, 0);
+  check(
+    "the feed returns the events and a cursor at the end",
+    feed.events.length === 2 && feed.events[1].type === "crash_loop_gave_up" && feed.next === fs.statSync(eventsFile).size && feed.reset === false,
+    JSON.stringify(feed),
+  );
+  eq("reading from the cursor returns nothing new", (await serverAccess.readLifecycleEvents(cfg, feed.next)).events, []);
+  const badSince = await raw("GET", inst("/events?since=abc"));
+  check("a malformed cursor is 400 { error }", badSince.status === 400 && isErrorBody(badSince), badSince.text);
+
+  const noVersion = await raw("POST", inst("/operations/upgrade"), { body: {} });
+  check("starting an upgrade without mcVersion is 400 { error }", noVersion.status === 400 && isErrorBody(noVersion), noVersion.text);
+  const badMods = await raw("POST", inst("/operations/upgrade"), { body: { mcVersion: "1.21.5", expectUnavailable: ["bad slug!"] } });
+  check("an invalid mod slug is 400 { error }", badMods.status === 400 && isErrorBody(badMods), badMods.text);
+  const badJob = await raw("GET", inst("/operations/upgrade/not-a-job"));
+  check("polling a malformed job id is 400 { error }", badJob.status === 400 && isErrorBody(badJob), badJob.text);
+  eq("polling a job the wrapper never had is null (404)", await serverAccess.getUpgrade(cfg, JOB_ABSENT), null);
+  eq("before any upgrade, current is null (404)", await serverAccess.getCurrentUpgrade(cfg), null);
+
+  const started = await serverAccess.startUpgrade(cfg, { mcVersion: "1.21.5", countdownSeconds: 0 });
+  check("starting returns a uuid job id", /^[0-9a-f-]{36}$/.test(started.jobId), JSON.stringify(started));
+  let job = null;
+  for (let i = 0; i < 100; i++) {
+    job = await serverAccess.getUpgrade(cfg, started.jobId);
+    if (job === null || job.state !== "running") break;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  const jobText = JSON.stringify(job);
+  const latest = await serverAccess.getCurrentUpgrade(cfg);
+  check("after a job ran, current reports it", latest?.jobId === started.jobId, JSON.stringify(latest));
+  if (sudoWorks) {
+    check("the stub script runs to the end and the job is done", job?.state === "done" && job.mcVersion === "1.21.5", jobText);
+    const ran = fs.readFileSync(ranLogPath(paths.scriptsDir), "utf8");
+    check("the wrapper passed the version and countdown to upgrade.sh", /update\/upgrade[.]sh 1[.]21[.]5 --countdown=0/.test(ran), ran);
+  } else {
+    check(
+      "without sudo the job fails and nothing but a fixed phrase reaches the client",
+      job?.state === "failed" && job.error === "failed" && !/sudo|[/]home|secret/.test(jobText),
+      jobText,
     );
   }
 }
