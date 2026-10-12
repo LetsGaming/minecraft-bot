@@ -56,7 +56,7 @@ export async function buildStreakLeaderboard(
   const medals = ["🥇", "🥈", "🥉"];
   const lines = entries.map((e, i) => {
     const rank = medals[i] ?? `**${i + 1}.**`;
-    return `${rank} ${e.name} — ${e.value} day(s)`;
+    return `${rank} **${e.name}**: 🔥 ${t("streak.days", { count: e.value })}`;
   });
 
   return {

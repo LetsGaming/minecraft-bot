@@ -22,6 +22,7 @@
  * TZ-aware helpers and re-armed after each run (a fixed 24h interval
  * drifts across DST changes) and on every config reload.
  */
+import { EmbedCategory } from "@mcbot/schema/embedCategories.js";
 import { scheduleTimeZone } from "@mcbot/core/utils/config/timezones.js";
 import { type Client } from "discord.js";
 import { loadConfig } from "@mcbot/core/config.js";
@@ -35,7 +36,6 @@ import {
 } from "@mcbot/core/utils/time.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { createEmbed } from "../../../utils/embeds/embedUtils.js";
-import { EmbedColor } from "../../../utils/embeds/embedColors.js";
 import { suppressAlerts } from "../monitors/downtimeMonitor.js";
 import { broadcastNotification } from "../notifyGuilds.js";
 import { t } from "@mcbot/core/utils/i18n.js";
@@ -122,7 +122,7 @@ async function announceWarning(
           minutes,
           time: formatTime(restartAt),
         }),
-        color: EmbedColor.Info,
+        category: EmbedCategory.Server,
       }),
     logTag: "schedule",
   });
@@ -171,7 +171,7 @@ async function performRestart(
       createEmbed({
         title: t("schedule.doneTitle", { server: serverId }),
         description: t("schedule.done", { server: serverId }),
-        color: EmbedColor.Success,
+        category: EmbedCategory.Recovery,
       }),
     logTag: "schedule",
   });

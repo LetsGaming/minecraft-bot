@@ -20,6 +20,7 @@
  * that get posted. data/milestones.json is the single owner of that
  * state.
  */
+import { EmbedCategory } from "@mcbot/schema/embedCategories.js";
 import { type Client } from "discord.js";
 import { loadConfig } from "@mcbot/core/config.js";
 import { getAllInstances } from "@mcbot/core/utils/server/server.js";
@@ -31,7 +32,6 @@ import {
 import { loadKnownPlayers } from "@mcbot/core/utils/minecraft/whitelist.js";
 import { kvGet, kvSet } from "@mcbot/core/db/kv.js";
 import { createEmbed } from "../../../utils/embeds/embedUtils.js";
-import { EmbedColor } from "../../../utils/embeds/embedColors.js";
 import { broadcastNotification } from "../notifyGuilds.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { announce as sayInGame } from "@mcbot/core/utils/minecraft/serverMessages.js";
@@ -159,7 +159,7 @@ async function announce(
           value: formatted,
           stat: statLabel,
         }),
-        color: EmbedColor.Success,
+        category: EmbedCategory.Milestone,
       });
       if (withServerFooter) embed.setFooter({ text: serverId });
       return embed;

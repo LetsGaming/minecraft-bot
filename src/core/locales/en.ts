@@ -42,9 +42,9 @@ export const en: Record<string, string> = {
   "dailyReminder.enabled": "Reminder on. You get a DM when your next /daily is ready. Your DMs need to be open for that.",
   "dailyReminder.disabled": "✅ Daily reminders disabled.",
   "dailyReminder.dm":
-    "🎁 Your daily reward is ready! Claim it with /daily on the server.",
+    "Your daily reward is ready! Claim it with /daily on the server.",
   "dailyReminder.dmServer":
-    "🎁 Your daily reward on **{server}** is ready! Claim it with /daily server:{server}.",
+    "Your daily reward on **{server}** is ready! Claim it with /daily server:{server}.",
 
   // ── live server queries ──
   "query.unreachable":
@@ -291,7 +291,7 @@ export const en: Record<string, string> = {
   // ── /daily-history ──
   "dailyHistory.title": "Your daily claims on {server}",
   "dailyHistory.none": "No claims recorded for you on **{server}** yet. `/daily` starts the history.",
-  "dailyHistory.line": "{when} · streak {streak}: {items}",
+  "dailyHistory.line": "{when} · 🔥 {streak}: {items}",
   // ── /profile ──
   "profile.title": "{player} on {server}",
   "profile.noPlayer": "No player given and no linked account. Pass `player:` or run /link first.",
@@ -711,4 +711,20 @@ export const en: Record<string, string> = {
   "players.sortName": "name",
   "statusEmbed.fetchFailed": "Could not read the status.",
   "statusEmbed.onlineNames": "Online: {names}",
+  "daily.headline": "**{reward}**  {rarity}",
+  "daily.rarity.common": "Common",
+  "daily.rarity.uncommon": "Uncommon",
+  "daily.rarity.rare": "Rare",
+  "daily.rarity.epic": "Epic",
+  "daily.rarity.legendary": "Legendary",
+  "daily.streakLost": "Streak lost (was {previous|# day|# days}). A new one starts today.",
+  "daily.nextMilestoneField": "Next milestone",
+  "daily.nextMilestoneValue": "Day {day}: {rewards}",
+  "daily.footerTip": "Come back within {hours} hours to keep your streak going.",
+  "daily.streakDeadline": "Claim before {time} to keep your {streak|# day|# days} streak.",
+  "daily.queuedTitle": "Reward queued",
+  "daily.queueSize": "Waiting in game: {count}/{max}",
+  "streak.trackField": "Milestones",
+  "streak.barField": "Progress to next bonus",
+  "dailyReminder.title": "Your daily reward is ready",
 };

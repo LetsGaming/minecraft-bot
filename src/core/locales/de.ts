@@ -38,9 +38,9 @@ export const de: Record<string, string> = {
   "dailyReminder.enabled": "Erinnerung aktiv. Du bekommst eine DM, sobald dein nächstes /daily bereit ist. Deine DMs müssen dafür offen sein.",
   "dailyReminder.disabled": "✅ Tägliche Erinnerungen deaktiviert.",
   "dailyReminder.dmServer":
-    "🎁 Deine tägliche Belohnung auf **{server}** ist bereit! Hol sie dir mit /daily server:{server}.",
+    "Deine tägliche Belohnung auf **{server}** ist bereit! Hol sie dir mit /daily server:{server}.",
   "dailyReminder.dm":
-    "🎁 Deine tägliche Belohnung ist bereit! Hol sie dir mit /daily auf dem Server ab.",
+    "Deine tägliche Belohnung ist bereit! Hol sie dir mit /daily auf dem Server ab.",
 
   // ── live server queries ──
   "query.unreachable":
@@ -286,7 +286,7 @@ export const de: Record<string, string> = {
   // ── /daily-history ──
   "dailyHistory.title": "Deine Daily-Abholungen auf {server}",
   "dailyHistory.none": "Auf **{server}** hast du noch nichts abgeholt. Mit `/daily` beginnt die Historie.",
-  "dailyHistory.line": "{when} · Serie {streak}: {items}",
+  "dailyHistory.line": "{when} · 🔥 {streak}: {items}",
   // ── /profile ──
   "profile.title": "{player} auf {server}",
   "profile.noPlayer": "Kein Spieler angegeben und kein verknüpfter Account. Gib `player:` an oder nutze zuerst /link.",
@@ -703,4 +703,20 @@ export const de: Record<string, string> = {
   "players.sortName": "Name",
   "statusEmbed.fetchFailed": "Der Status konnte nicht gelesen werden.",
   "statusEmbed.onlineNames": "Online: {names}",
+  "daily.headline": "**{reward}**  {rarity}",
+  "daily.rarity.common": "Gewöhnlich",
+  "daily.rarity.uncommon": "Ungewöhnlich",
+  "daily.rarity.rare": "Selten",
+  "daily.rarity.epic": "Episch",
+  "daily.rarity.legendary": "Legendär",
+  "daily.streakLost": "Serie verloren (war {previous|# Tag|# Tage}). Heute beginnt eine neue.",
+  "daily.nextMilestoneField": "Nächster Meilenstein",
+  "daily.nextMilestoneValue": "Tag {day}: {rewards}",
+  "daily.footerTip": "Komm innerhalb von {hours} Stunden wieder, damit deine Serie weiterläuft.",
+  "daily.streakDeadline": "Hole die Belohnung vor {time} ab, damit deine Serie von {streak|# Tag|# Tagen} bleibt.",
+  "daily.queuedTitle": "Belohnung vorgemerkt",
+  "daily.queueSize": "Wartet im Spiel: {count}/{max}",
+  "streak.trackField": "Meilensteine",
+  "streak.barField": "Fortschritt zum nächsten Bonus",
+  "dailyReminder.title": "Deine tägliche Belohnung ist bereit",
 };

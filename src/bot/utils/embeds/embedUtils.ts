@@ -18,7 +18,8 @@ import type {
 import { log } from "@mcbot/core/utils/logger.js";
 import { playerAvatarUrl } from "../mcHeads.js";
 import { relativeTimestamp } from "../discordTime.js";
-import { EmbedColor } from "./embedColors.js";
+import { EmbedColor, embedColorFor } from "./embedColors.js";
+import { CATEGORY_STYLE, EmbedCategory } from "@mcbot/schema/embedCategories.js";
 import { statusCircle } from "./serverStateDisplay.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 import { statusEmbedColor } from "@mcbot/schema/status.js";
@@ -43,6 +44,11 @@ export function truncate(text: string, max: number): string {
   return text.slice(0, Math.max(0, max - ELLIPSIS.length)) + ELLIPSIS;
 }
 
+/** True when the text already opens with an emoji, so an icon is not stacked on it. */
+function startsWithEmoji(text: string): boolean {
+  return /^\p{Extended_Pictographic}/u.test(text);
+}
+
 /**
  * Creates an embed. Titles and descriptions are cut to Discord's limits so a
  * long server name or list can never make the whole reply fail. A `state`
@@ -56,13 +62,20 @@ export function createEmbed({
   timestamp = false,
   author,
   state,
+  category,
 }: EmbedOptions): EmbedBuilder {
   const embed = new EmbedBuilder().setColor(
-    color ?? (state ? statusEmbedColor(state) : EmbedColor.Info),
+    color ??
+      (state
+        ? statusEmbedColor(state)
+        : category
+          ? embedColorFor(category)
+          : EmbedColor.Info),
   );
 
   if (title) {
-    const full = state ? `${statusCircle(state)} ${title}` : title;
+    const icon = state ? statusCircle(state) : category ? CATEGORY_STYLE[category].icon : "";
+    const full = icon && !startsWithEmoji(title) ? `${icon} ${title}` : title;
     embed.setTitle(truncate(full, EMBED_LIMITS.title));
   }
   if (description) embed.setDescription(truncate(description, EMBED_LIMITS.description));
@@ -109,6 +122,7 @@ export function createErrorEmbed(content: string | ErrorContent): EmbedBuilder {
   return createEmbed({
     title: title ?? t("embed.errorTitle"),
     description: errorText(content),
+    category: EmbedCategory.Error,
     color: EmbedColor.Error,
   });
 }

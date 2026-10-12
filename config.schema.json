@@ -95,6 +95,15 @@
           "description": "Global default for GuildLeaderboardConfig.postDay.",
           "title": "Leaderboard post day"
         },
+        "embedColors": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Side-bar colour overrides for Discord embeds, as #rrggbb. Keys are embed categories (server, alert, reward, ...) and rarity tiers (rarity.rare, ...). Unset keys use the built-in defaults.",
+          "title": "Embed colors",
+          "effect": "Applied to the next embed the bot sends. No restart needed."
+        },
         "presence": {
           "$ref": "#/definitions/PresenceConfig",
           "title": "Bot presence"

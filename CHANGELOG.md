@@ -6,6 +6,21 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### General
+
+- Discord messages get their own look per kind: joins, leaves, deaths, advancements, chat, milestones, rewards, leaderboards and whitelist prompts each have an icon and a colour instead of one shared grey or blue (`src/schema/embedCategories.ts`, `createEmbed` `category`).
+- Error embeds carry a ⛔ icon in the title.
+
+### Added
+
+- **A livelier `/daily`.** The claim shows your head, the reward with a rarity badge (common to legendary, from how rare the item is in the pool), a streak progress bar, the next milestone and the next claim time. Streak bonuses turn the message gold, a lost streak is called out, and the cooldown reply shows a time bar and the deadline that keeps your streak. Offline claims show the queue size (`daily/dailyEmbeds.ts`).
+- `/streak` shows a progress bar and a milestone track; `/daily-history` and the streak leaderboard use flame icons, the leaderboard shows the leader's head, and the daily reminder DM is an embed.
+- `embedColors` in `config.json` recolours any embed category or rarity tier (`#rrggbb`; `src/core/configValidation.ts`, `docs/admin/configuration.md`).
+
+### Fixed
+
+- The streak leaderboard no longer prints the English "day(s)" in German.
+
 ## [8.0.0] — 2026-10-12
 
 ### General

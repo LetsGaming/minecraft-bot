@@ -28,7 +28,7 @@ import type { ChatInputCommandInteraction } from "discord.js";
 
 function makeInteraction(userId = "user1"): ChatInputCommandInteraction {
   const interaction = {
-    user: { id: userId },
+    user: { id: userId, username: "tester" },
     commandName: "streak",
     deferReply: vi.fn().mockImplementation(async () => {
       interaction.deferred = true;

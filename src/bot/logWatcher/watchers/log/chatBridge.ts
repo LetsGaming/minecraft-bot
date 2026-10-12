@@ -1,8 +1,8 @@
 import { type Client, type Webhook } from "discord.js";
+import { EmbedCategory } from "@mcbot/schema/embedCategories.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { createPlayerEmbed } from "../../../utils/embeds/embedUtils.js";
 import { playerAvatarUrl } from "../../../utils/mcHeads.js";
-import { EmbedColor } from "../../../utils/embeds/embedColors.js";
 import type { ILogWatcher } from "../../logWatcher.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 import type { GuildConfig, GuildChatBridgeConfig } from "@mcbot/core/types/index.js";
@@ -368,7 +368,7 @@ async function deliver(
     embeds: [
       createPlayerEmbed(player, {
         description: message,
-        color: EmbedColor.Info,
+        category: EmbedCategory.Chat,
       }),
     ],
     allowedMentions: safeMentions("none"),

@@ -22,6 +22,7 @@ import type {
   RawBotConfig,
 } from "./types/index.js";
 import { isSnowflake, SNOWFLAKE_DESCRIPTION } from "@mcbot/schema/discord.js";
+import { isEmbedColorKey, parseHexColor } from "@mcbot/schema/embedCategories.js";
 
 // ── Runtime schema validation ─────────────────────────────────────────────
 // TypeScript's type system only operates at compile time. A malformed
@@ -475,6 +476,17 @@ function checkPresence({ raw, warnings, knownServers }: SectionContext): void {
   }
 }
 
+function checkEmbedColors({ raw, errors, warnings }: SectionContext): void {
+  if (!usable(raw.embedColors)) return;
+  for (const [key, value] of Object.entries(raw.embedColors)) {
+    if (!isEmbedColorKey(key)) {
+      warnings.push(`embedColors.${key} is not a known embed category or rarity and is ignored`);
+    } else if (parseHexColor(value) === undefined) {
+      errors.push(`  - embedColors.${key}: must be a color like #4ade80`);
+    }
+  }
+}
+
 function checkSchedules({ raw, errors, warnings, knownServers }: SectionContext): void {
   if (!usable(raw.schedules)) return;
   const dayCodes = new Set(["SU", "MO", "TU", "WE", "TH", "FR", "SA"]);
@@ -570,6 +582,7 @@ export function validateCandidateConfig(
   checkServers(ctx);
   checkGuilds(ctx);
   checkPresence(ctx);
+  checkEmbedColors(ctx);
   checkSchedules(ctx);
 
   return { valid: errors.length === 0, errors, warnings };

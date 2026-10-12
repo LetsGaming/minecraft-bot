@@ -7,7 +7,7 @@
         "embeds": [
           {
             "color": "#b7a1ff",
-            "title": "Stop smp?",
+            "title": "❓ Stop smp?",
             "description": "3 players are online. They get a 30 second warning, then are disconnected. They can rejoin once you start the server again.",
             "footer": {
               "text": "The buttons expire in 60 s."
@@ -39,7 +39,7 @@
         "embeds": [
           {
             "color": "#b7a1ff",
-            "title": "smp stoppen?",
+            "title": "❓ smp stoppen?",
             "description": "3 Spieler sind online. Sie bekommen eine Warnung mit 30 Sekunden Vorlauf und werden dann getrennt. Sie können wieder beitreten, sobald du den Server startest.",
             "footer": {
               "text": "Die Buttons laufen in 60 s ab."

@@ -16,7 +16,7 @@ import {
 } from "discord.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { createEmbed } from "./embedUtils.js";
-import { EmbedColor } from "./embedColors.js";
+import { EmbedCategory } from "@mcbot/schema/embedCategories.js";
 
 export const CONFIRM_PREFIX = "confirm";
 export const CONFIRM_TTL_MS = 60_000;
@@ -63,7 +63,7 @@ export function createConfirmEmbed({
   return createEmbed({
     title,
     description,
-    color: EmbedColor.Pending,
+    category: EmbedCategory.Confirm,
     footer: { text: t("confirm.expires", { seconds: CONFIRM_TTL_MS / 1000 }) },
   });
 }

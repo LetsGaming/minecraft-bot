@@ -2,9 +2,9 @@ import {
   deliverEventTip,
   tipForEvent,
 } from "@mcbot/core/utils/minecraft/eventTips.js";
+import { EmbedCategory, CATEGORY_STYLE } from "@mcbot/schema/embedCategories.js";
 import { type Client } from "discord.js";
 import { createPlayerEmbed } from "../../../utils/embeds/embedUtils.js";
-import { EmbedColor } from "../../../utils/embeds/embedColors.js";
 import type { ILogWatcher } from "../../logWatcher.js";
 import { broadcastNotification, PLAYER_NAME } from "../notifyGuilds.js";
 import type { GuildConfigSource } from "../../../utils/guild/guildConfigs.js";
@@ -152,8 +152,8 @@ export function registerDeathWatcher(
       logTag: "deaths",
       buildEmbed: (withServerFooter) =>
         createPlayerEmbed(player, {
-          description: deathMessage,
-          color: EmbedColor.Neutral,
+          description: `${CATEGORY_STYLE[EmbedCategory.Death].icon} ${deathMessage}`,
+          category: EmbedCategory.Death,
           ...(withServerFooter ? { footer: { text: serverId } } : {}),
         }),
     });

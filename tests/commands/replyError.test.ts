@@ -86,7 +86,7 @@ describe("replyError", () => {
     const i = interaction({ deferred: false, replied: false });
     await replyError(i as never, { title: "Could not reach smp", problem: "No answer.", recovery: "Try later." });
     const json = firstEmbed(i.reply);
-    expect(json.title).toBe("Could not reach smp");
+    expect(json.title).toBe("⛔ Could not reach smp");
     expect(json.description).toBe("No answer.\nTry later.");
   });
 
@@ -210,7 +210,7 @@ describe("errorContentOf", () => {
     vi.mocked(resolveServer).mockReturnValue({ id: "smp" } as never);
     await execute(i as never);
     const embed = firstEmbed(i.reply);
-    expect(embed.title).toBe("smp refused the request");
+    expect(embed.title).toBe("⛔ smp refused the request");
     expect(JSON.stringify(embed)).not.toContain("/srv/mc");
     expect(vi.mocked(log.error).mock.calls.at(-1)!.join(" ")).toContain(body);
   });

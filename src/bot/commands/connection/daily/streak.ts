@@ -7,10 +7,14 @@ import {
   rewardPoolForServer,
 } from "@mcbot/core/utils/stores/dailyStore.js";
 import { resolveServer } from "../../../utils/guild/guildRouter.js";
-import { createEmbed } from "../../../utils/embeds/embedUtils.js";
+import { createPlayerEmbed } from "../../../utils/embeds/embedUtils.js";
+import { milestoneTrack, progressBar } from "../../../utils/embeds/gameDisplay.js";
+import { getLinkedAccount } from "@mcbot/core/utils/stores/linkUtils.js";
+import { milestoneDays, nextMilestone } from "@mcbot/core/utils/minecraft/rewards.js";
+import { EmbedCategory } from "@mcbot/schema/embedCategories.js";
 import { withErrorHandling } from "../../middleware.js";
 import { CommandError } from "@mcbot/core/utils/error.js";
-import type { StreakData, NextBonusStreak } from "@mcbot/core/types/index.js";
+import type { StreakData, RewardPool } from "@mcbot/core/types/index.js";
 
 import { t } from "@mcbot/core/utils/i18n.js";
 export const data = new SlashCommandBuilder()
@@ -37,21 +41,33 @@ export const execute = withErrorHandling(
     }
 
     const { currentStreak, longestStreak, bonusStreak } = streakData;
-    const nextBonus = await getNextBonusStreak(bonusStreak, server.id);
+    const pool = await getPool(server.id);
+    const nextBonus = nextMilestone(bonusStreak, pool.streakBonuses);
+    const days = milestoneDays(pool.streakBonuses);
 
-    await interaction.editReply({
-      embeds: [
-        createEmbed({ title: t("streak.title", { server: server.id }) }).addFields(
-          { name: t("streak.current"), value: t("streak.days", { count: currentStreak }), inline: true },
-          { name: t("streak.longest"), value: t("streak.days", { count: longestStreak }), inline: true },
-          {
-            name: t("streak.nextBonus"),
-            value: nextBonus ? t("streak.days", { count: nextBonus.streak }) : t("streak.na"),
-            inline: true,
-          },
-        ),
-      ],
-    });
+    const embed = createPlayerEmbed(await getLinkedAccount(interaction.user.id) ?? interaction.user.username, {
+      title: t("streak.title", { server: server.id }),
+      category: EmbedCategory.Reward,
+    }).addFields(
+      { name: `🔥 ${t("streak.current")}`, value: t("streak.days", { count: currentStreak }), inline: true },
+      { name: `🏅 ${t("streak.longest")}`, value: t("streak.days", { count: longestStreak }), inline: true },
+      {
+        name: `🎯 ${t("streak.nextBonus")}`,
+        value: nextBonus ? t("streak.days", { count: nextBonus.day }) : t("streak.na"),
+        inline: true,
+      },
+    );
+    if (nextBonus) {
+      embed.addFields({
+        name: t("streak.barField"),
+        value: `${progressBar(bonusStreak, nextBonus.day, 10)} ${bonusStreak}/${nextBonus.day}`,
+      });
+    }
+    if (days.length > 0) {
+      embed.addFields({ name: t("streak.trackField"), value: milestoneTrack(bonusStreak, days) });
+    }
+
+    await interaction.editReply({ embeds: [embed] });
   },
   { ephemeral: true },
 );
@@ -75,23 +91,10 @@ async function getStreakData(
   };
 }
 
-async function getNextBonusStreak(
-  bonusStreak: number,
-  serverId: string,
-): Promise<NextBonusStreak | null> {
+async function getPool(serverId: string): Promise<RewardPool> {
   const [dailyRewards, rewardsOverride] = await Promise.all([
     loadDailyRewardsConfig(),
     loadServerRewardsOverride(serverId),
   ]);
-  const pool = rewardPoolForServer(dailyRewards, serverId, rewardsOverride);
-  if (!pool.streakBonuses || !Object.keys(pool.streakBonuses).length) {
-    return null;
-  }
-
-  const bonuses = Object.entries(pool.streakBonuses)
-    .map(([key, value]) => ({ streak: parseInt(key, 10), reward: value }))
-    .filter((entry) => entry.streak > bonusStreak)
-    .sort((a, b) => a.streak - b.streak);
-
-  return bonuses.length > 0 ? bonuses[0]! : null;
+  return rewardPoolForServer(dailyRewards, serverId, rewardsOverride);
 }

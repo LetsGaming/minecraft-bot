@@ -574,7 +574,7 @@ describe("deferred replies", () => {
     expect(interaction.reply).not.toHaveBeenCalled();
     expect(interaction.followUp).not.toHaveBeenCalled();
     expect(interaction.editReply).toHaveBeenCalledTimes(1);
-    expect(embedOf(interaction.editReply.mock.calls[0]![0]).title).toBe("Daily reward claimed");
+    expect(embedOf(interaction.editReply.mock.calls[0]![0]).title).toBe("🎁 Daily reward claimed");
   });
 
   it("keeps the queued reward public on an offline claim", async () => {
@@ -595,7 +595,7 @@ describe("deferred replies", () => {
     expect(interaction.followUp).toHaveBeenCalledWith(
       expect.objectContaining({ flags: 64 }),
     );
-    expect(embedOf(interaction.followUp.mock.calls[0]![0]).title).toBe("Already claimed");
+    expect(embedOf(interaction.followUp.mock.calls[0]![0]).title).toBe("⏳ Already claimed");
   });
 
   it("edits the reply with the queued note on an offline claim", async () => {
@@ -629,7 +629,7 @@ describe("deferred replies", () => {
     expect(interaction.followUp).toHaveBeenCalledWith(
       expect.objectContaining({ flags: 64 }),
     );
-    expect(embedOf(interaction.followUp.mock.calls[0]![0]).title).toBe("Rewards waiting in game");
+    expect(embedOf(interaction.followUp.mock.calls[0]![0]).title).toBe("⛔ Rewards waiting in game");
   });
 
   it("answers a failed delivery with an error only the claimer sees", async () => {
@@ -642,7 +642,7 @@ describe("deferred replies", () => {
     expect(interaction.followUp).toHaveBeenCalledWith(
       expect.objectContaining({ flags: 64 }),
     );
-    expect(embedOf(interaction.followUp.mock.calls[0]![0]).title).toBe("Reward not delivered");
+    expect(embedOf(interaction.followUp.mock.calls[0]![0]).title).toBe("⛔ Reward not delivered");
   });
 
   it("answers an unresolvable server ephemerally", async () => {
@@ -677,7 +677,7 @@ describe("deferred replies", () => {
     });
     await execute(interaction as never);
     const text = embedOf(interaction.editReply.mock.calls[0]![0]).description ?? "";
-    expect(text).toContain("Reward: 1 × Apple");
+    expect(text).toContain("1 × Apple");
     expect(text).toContain("Lucky bonus: 1 × Bread");
   });
 });

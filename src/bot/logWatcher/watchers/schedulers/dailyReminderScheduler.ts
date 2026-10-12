@@ -18,6 +18,8 @@ import {
 } from "@mcbot/core/utils/stores/dailyStore.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { t } from "@mcbot/core/utils/i18n.js";
+import { createEmbed } from "../../../utils/embeds/embedUtils.js";
+import { EmbedCategory } from "@mcbot/schema/embedCategories.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
 const CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
@@ -51,11 +53,17 @@ export async function processDailyReminders(
 
       try {
         const user = await client.users.fetch(userId);
-        await user.send(
-          multiServer
-            ? t("dailyReminder.dmServer", { server: serverId })
-            : t("dailyReminder.dm"),
-        );
+        await user.send({
+          embeds: [
+            createEmbed({
+              title: t("dailyReminder.title"),
+              description: multiServer
+                ? t("dailyReminder.dmServer", { server: serverId })
+                : t("dailyReminder.dm"),
+              category: EmbedCategory.Reward,
+            }),
+          ],
+        });
         sent++;
       } catch (err) {
         // Closed DMs or unknown user — lastReminderAt is already advanced,
