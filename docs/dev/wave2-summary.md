@@ -113,12 +113,12 @@ The base for every diff below is `e0357ec` (Wave 1, 7.0.0; there is no
   native reviewer.
 - **Config history drawer and diff (DASH-18).** Not built in this wave; the
   failure handling and the rollback copy were done first.
-- **Open after the P7 browser pass:** the Backups page copy still bypasses
-  `t()` (about 100 strings, not under the literal-text lint), PrimeVue's
-  deprecated `InputChips` is still used in the schema form, Config section
-  header buttons are verbose for screen readers, the kept-mounted Servers view
-  leaves a second hidden h1 in the DOM, and Console copy, download and clear
-  have no unit test (jsdom has no `EventSource`).
+- **Open after the P7 browser pass:** Config section header buttons are
+  verbose for screen readers, the kept-mounted Servers view leaves a second
+  hidden h1 in the DOM, and Console copy, download and clear have no unit test
+  (jsdom has no `EventSource`). The Backups copy, the deprecated `InputChips`,
+  the challenge reward item names and raw wrapper error text were closed after
+  the P7 pass.
 - **Discord items outside reply UX:** bridge reliability and formatting
   (DISC-10, DISC-17), command consolidation and naming (DISC-18, DISC-26,
   DISC-27), autocomplete and DM contexts (DISC-20, DISC-21), the restart message
@@ -161,14 +161,16 @@ that remain, all reviewed:
     format).
   - The denial names the subcommand (`/server stop`).
 - **Still open:**
-  - The challenge reward line (`challenge.fieldItem`) still shows raw item ids.
-  - Wrapper 5xx errors still show their raw message; only the transport kinds
-    (unreachable, timeout, breaker open, rate limited) are mapped.
   - The mods summary says "Install them all to join" but counts server-only and
     client-optional mods too, so it slightly overstates what players need.
   - "Players hit" costs one extra wrapper call per online server per check,
     because health checks carry no player list; the alternative is counting
     open sessions when the server goes down.
+  - `/mods` shows "Modrinth API: unreachable (fetch failed)" style text to
+    anyone when Modrinth fails and no last-known list exists
+    (`getModList`); it carries no wrapper body or paths.
+  - A refused console command shows the game server's console reply inside a
+    localised sentence (`requireAccepted`); callers are mostly admin commands.
 
 ## Limits of the verification
 
