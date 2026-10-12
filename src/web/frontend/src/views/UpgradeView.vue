@@ -383,7 +383,8 @@ watch(server, () => {
   compat.reset();
   upgrade.reset();
   error.value = "";
-  void load();
+  // The shell fills the server in after the first render; never call with none.
+  if (server.value) void load();
 }, { immediate: true });
 
 onBeforeUnmount(() => {
