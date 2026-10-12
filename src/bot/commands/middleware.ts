@@ -9,7 +9,11 @@ import { log } from "@mcbot/core/utils/logger.js";
 import { loadConfig } from "@mcbot/core/config.js";
 import { runWithGuildLocale, t } from "@mcbot/core/utils/i18n.js";
 import { CommandError, errMsg } from "@mcbot/core/utils/error.js";
-import { classifyTransportError } from "@mcbot/core/utils/server/transportError.js";
+import {
+  classifyTransportError,
+  classifyWrapperRejection,
+  type WrapperRejection,
+} from "@mcbot/core/utils/server/transportError.js";
 import type { ErrorContent } from "@mcbot/core/types/index.js";
 import { attachFollowUpHint } from "../utils/hints/followUps.js";
 import { resolveServer } from "../utils/guild/guildRouter.js";
@@ -160,6 +164,27 @@ export async function replyDenied(interaction: RepliableInteraction): Promise<vo
   await send(interaction, { embeds: [embed] });
 }
 
+const REJECTION_PREFIX: Record<WrapperRejection, string> = {
+  denied: "transport.denied",
+  "not-found": "transport.notFound",
+  refused: "transport.refused",
+};
+
+/** Title and problem from `<prefix>Title`/`<prefix>Problem`, or their NoServer forms. */
+function wrapperContent(prefix: string, serverId: string | undefined, recovery: string): ErrorContent {
+  return serverId
+    ? {
+        title: t(`${prefix}Title`, { server: serverId }),
+        problem: t(`${prefix}Problem`, { server: serverId }),
+        recovery,
+      }
+    : {
+        title: t(`${prefix}TitleNoServer`),
+        problem: t(`${prefix}ProblemNoServer`),
+        recovery,
+      };
+}
+
 /**
  * What a thrown value should say to the user. `serverId` names the server in
  * a transport failure; without it the reply says "the server".
@@ -170,17 +195,7 @@ export function errorContentOf(err: unknown, serverId?: string): ErrorContent {
   }
   const transport = classifyTransportError(err);
   if (transport === "wrapper-error") {
-    return serverId
-      ? {
-          title: t("transport.wrapperErrorTitle", { server: serverId }),
-          problem: t("transport.wrapperErrorProblem", { server: serverId }),
-          recovery: t("transport.recovery"),
-        }
-      : {
-          title: t("transport.wrapperErrorTitleNoServer"),
-          problem: t("transport.wrapperErrorProblemNoServer"),
-          recovery: t("transport.recovery"),
-        };
+    return wrapperContent("transport.wrapperError", serverId, t("transport.recovery"));
   }
   if (transport) {
     const recovery =
@@ -197,6 +212,11 @@ export function errorContentOf(err: unknown, serverId?: string): ErrorContent {
           recovery,
         };
   }
+  const rejection = classifyWrapperRejection(err);
+  if (rejection) {
+    const prefix = REJECTION_PREFIX[rejection];
+    return wrapperContent(prefix, serverId, t(`${prefix}Recovery`));
+  }
   if (err instanceof Error && err.message) return { problem: err.message };
   return {
     problem: t("common.unexpectedError"),
@@ -206,7 +226,7 @@ export function errorContentOf(err: unknown, serverId?: string): ErrorContent {
 
 /** The server a failed command targeted, when the failure was reaching it. */
 function serverIdOf(interaction: ChatInputCommandInteraction, err: unknown): string | undefined {
-  if (!classifyTransportError(err)) return undefined;
+  if (!classifyTransportError(err) && !classifyWrapperRejection(err)) return undefined;
   try {
     return resolveServer(interaction).id;
   } catch {

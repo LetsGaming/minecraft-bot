@@ -51,7 +51,13 @@ function field(err: unknown, key: "name" | "code" | "message"): string | undefin
 /** The transport failure behind `err`, or null when it is some other error. */
 export function classifyTransportError(err: unknown): TransportFailure | null {
   const chain = causeChain(err);
-  if (chain.some((e) => e instanceof RateLimitedError)) return "rate-limited";
+  if (
+    chain.some(
+      (e) => e instanceof RateLimitedError || (e instanceof ApiError && e.status === 429),
+    )
+  ) {
+    return "rate-limited";
+  }
   if (chain.some((e) => e instanceof BreakerOpenError)) return "breaker-open";
   if (chain.some((e) => e instanceof ApiError && e.status >= 500)) return "wrapper-error";
   if (
@@ -71,4 +77,21 @@ export function classifyTransportError(err: unknown): TransportFailure | null {
     return "unreachable";
   }
   return null;
+}
+
+/**
+ * How the wrapper turned a request down with a 4xx (429 counts as a rate
+ * limit above, not here), or null when `err` is no such answer.
+ */
+export type WrapperRejection = "denied" | "not-found" | "refused";
+
+export function classifyWrapperRejection(err: unknown): WrapperRejection | null {
+  const rejection = causeChain(err).find(
+    (e): e is ApiError =>
+      e instanceof ApiError && e.status >= 400 && e.status < 500 && e.status !== 429,
+  );
+  if (!rejection) return null;
+  if (rejection.status === 401 || rejection.status === 403) return "denied";
+  if (rejection.status === 404) return "not-found";
+  return "refused";
 }

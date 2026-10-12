@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { classifyTransportError } from "../../src/core/utils/server/transportError.js";
+import {
+  classifyTransportError,
+  classifyWrapperRejection,
+} from "../../src/core/utils/server/transportError.js";
 import {
   ApiError,
   BreakerOpenError,
@@ -47,10 +50,34 @@ describe("classifyTransportError", () => {
     expect(classifyTransportError(new ApiError("/stats", 404, "not found"))).toBeNull();
   });
 
+  it("reads a 429 answer from a write as a rate limit", () => {
+    expect(classifyTransportError(new ApiError("POST /mods", 429, "slow down"))).toBe("rate-limited");
+    expect(classifyWrapperRejection(new ApiError("POST /mods", 429, "slow down"))).toBeNull();
+  });
+
   it("leaves other errors alone", () => {
     expect(classifyTransportError(new Error("API /stats → 500: boom"))).toBeNull();
     expect(classifyTransportError(new TypeError("x is not a function"))).toBeNull();
     expect(classifyTransportError({})).toBeNull();
     expect(classifyTransportError(undefined)).toBeNull();
+  });
+});
+
+describe("classifyWrapperRejection", () => {
+  it("names a 4xx answer from the wrapper, also as a cause", () => {
+    expect(classifyWrapperRejection(new ApiError("/stats", 401, ""))).toBe("denied");
+    expect(classifyWrapperRejection(new ApiError("POST /whitelist", 403, ""))).toBe("denied");
+    expect(classifyWrapperRejection(new ApiError("/level-name", 404, ""))).toBe("not-found");
+    expect(classifyWrapperRejection(new ApiError("POST /mods", 400, ""))).toBe("refused");
+    expect(classifyWrapperRejection(new ApiError("PUT /configs", 413, ""))).toBe("refused");
+    expect(
+      classifyWrapperRejection(new Error("wrapped", { cause: new ApiError("/stats", 403, "") })),
+    ).toBe("denied");
+  });
+
+  it("leaves 5xx answers and other errors alone", () => {
+    expect(classifyWrapperRejection(new ApiError("/stats", 500, ""))).toBeNull();
+    expect(classifyWrapperRejection(new Error("API /stats → 404: nope"))).toBeNull();
+    expect(classifyWrapperRejection(undefined)).toBeNull();
   });
 });

@@ -10,6 +10,7 @@ vi.mock("../../src/core/config.js", () => ({
 vi.mock("../../src/bot/utils/hints/followUps.js", () => ({
   attachFollowUpHint: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("../../src/bot/utils/guild/guildRouter.js", () => ({ resolveServer: vi.fn() }));
 
 import {
   replyError,
@@ -21,6 +22,8 @@ import {
 import { CommandError } from "../../src/core/utils/error.js";
 import { ApiError } from "../../src/core/utils/server/access/apiClient.js";
 import { runWithGuildLocale } from "../../src/core/utils/i18n.js";
+import { log } from "../../src/core/utils/logger.js";
+import { resolveServer } from "../../src/bot/utils/guild/guildRouter.js";
 
 function interaction(state: { deferred: boolean; replied: boolean; ephemeral?: boolean }) {
   return {
@@ -164,5 +167,51 @@ describe("errorContentOf", () => {
   it("speaks the guild's language", () => {
     const content = runWithGuildLocale("g1", () => errorContentOf(failure, "smp"));
     expect(content.title).toBe("smp hatte ein Problem");
+  });
+
+  const body = '{"error":"invalid api key for /srv/mc/instances/smp"}';
+
+  it("turns a 401 or 403 from the wrapper into a localised denial without the raw body", () => {
+    for (const status of [401, 403]) {
+      const content = errorContentOf(new ApiError("/stats", status, body), "smp");
+      expect(content).toEqual({
+        title: "Not allowed on smp",
+        problem: "The bot is not allowed to do that on smp.",
+        recovery: "Tell a bot admin so the bot's access can be checked.",
+      });
+    }
+    expect(errorContentOf(new ApiError("/stats", 403, body)).title).toBe("Not allowed on the server");
+  });
+
+  it("turns a 404 and any other 4xx into their own localised problems", () => {
+    expect(errorContentOf(new ApiError("/level-name", 404, body), "smp")).toEqual({
+      title: "Not available on smp",
+      problem: "smp could not find what this needs. Its API wrapper may be older than the bot.",
+      recovery: "If you need this, tell a bot admin.",
+    });
+    expect(errorContentOf(new ApiError("POST /mods", 400, body), "smp")).toEqual({
+      title: "smp refused the request",
+      problem: "smp refused the request, so this did not work.",
+      recovery: "Check what you entered and try again. If it keeps failing, tell a bot admin.",
+    });
+    for (const status of [400, 401, 404, 409, 422]) {
+      expect(JSON.stringify(errorContentOf(new ApiError("/x", status, body)))).not.toContain("/srv/mc");
+    }
+  });
+
+  it("names the targeted server and logs the raw body only", async () => {
+    const execute = withErrorHandling(
+      async () => {
+        throw new ApiError("POST /whitelist", 400, body);
+      },
+      { defer: false },
+    );
+    const i = { ...interaction({ deferred: false, replied: false }), commandName: "whitelist" };
+    vi.mocked(resolveServer).mockReturnValue({ id: "smp" } as never);
+    await execute(i as never);
+    const embed = firstEmbed(i.reply);
+    expect(embed.title).toBe("smp refused the request");
+    expect(JSON.stringify(embed)).not.toContain("/srv/mc");
+    expect(vi.mocked(log.error).mock.calls.at(-1)!.join(" ")).toContain(body);
   });
 });
