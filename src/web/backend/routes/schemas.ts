@@ -235,6 +235,27 @@ export const ModCompatJobParams = Type.Object({
 });
 export type ModCompatJobParams = Static<typeof ModCompatJobParams>;
 
+export const UpgradeStartBody = Type.Object({
+  mcVersion: Type.String({ pattern: MC_VERSION_PATTERN, maxLength: 20 }),
+  /** The mods the shown compatibility check reported as unavailable. */
+  expectUnavailable: Type.Optional(
+    Type.Array(Type.String({ minLength: 1, maxLength: 96 }), { maxItems: 500 }),
+  ),
+  countdownSeconds: Type.Optional(Type.Integer({ minimum: 0, maximum: 600 })),
+});
+export type UpgradeStartBody = Static<typeof UpgradeStartBody>;
+
+export const UpgradeJobParams = Type.Object({
+  id: Type.String(),
+  jobId: Type.String({ pattern: "^[a-f0-9-]{36}$" }),
+});
+export type UpgradeJobParams = Static<typeof UpgradeJobParams>;
+
+export const UpgradePollQuery = Type.Object({
+  since: Type.Optional(Type.String({ pattern: "^\\d{1,12}$" })),
+});
+export type UpgradePollQuery = Static<typeof UpgradePollQuery>;
+
 export const ModUpdatesQuery = Type.Object({
   refresh: Type.Optional(Type.String()),
 });

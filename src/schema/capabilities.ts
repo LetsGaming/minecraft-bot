@@ -22,7 +22,7 @@
  *   read        server:read, audit:read
  *   reversible  server:control, backup:create, config:read
  *   sensitive   server:console, backup:download, config:write
- *   irreversible backup:restore, backup:delete, server:rollback
+ *   irreversible backup:restore, backup:delete, server:rollback, server:update
  *
  * `server:console` sits above `server:control` on purpose. One console command
  * can op an account, ban a player or run a worldedit operation; a restart
@@ -42,6 +42,7 @@ export const GRANTABLE_CAPABILITIES = [
   "backup:restore",
   "backup:delete",
   "server:rollback",
+  "server:update",
 ] as const;
 
 /**
@@ -71,6 +72,7 @@ export const IRREVERSIBLE_CAPABILITIES = [
   "backup:restore",
   "backup:delete",
   "server:rollback",
+  "server:update",
 ] as const satisfies readonly Capability[];
 
 /** The wildcard server key in a grant block: every configured server. */

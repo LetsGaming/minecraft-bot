@@ -131,6 +131,19 @@ export const EXPECTED_WRAPPER_FEATURES: Record<string, ExpectedFeature> = {
       "the dashboard Mods tab's check against another Minecraft version; " +
       "the per-installed-version update check keeps working",
   },
+  operations: {
+    version: 1,
+    degrades:
+      "upgrading the Minecraft version from the dashboard, and the guarantee " +
+      "that stop, backup, restore and mod writes never overlap: on an older " +
+      "wrapper they can race each other",
+  },
+  "lifecycle-events": {
+    version: 1,
+    degrades:
+      "naming a crash loop in downtime alerts and the upgrade progress; the " +
+      "server just shows as offline or unresponsive",
+  },
   backups: { version: 1, degrades: "/backup" },
   "backup-files": {
     // v2: delete an archive from the dashboard (see status.ts's backupDelete

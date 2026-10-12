@@ -222,6 +222,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/instances/{id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Server lifecycle events
+         * @description What start.sh recorded: JVM started and exited, restart scheduled, crash loop gave up. Read with a byte-offset cursor: pass the previous `next` as `since`. `reset` means the file was rotated and this read starts from its beginning.
+         */
+        get: operations["getInstancesByIdEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/instances/{id}/health": {
         parameters: {
             query?: never;
@@ -500,6 +520,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/instances/{id}/operations/upgrade": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a Minecraft version upgrade
+         * @description Runs the suite's upgrade job in the background: players are warned, the server is stopped and backed up, the new version and mods are installed, and the server is started and watched. If it does not come up, the mods without a build are disabled and it starts again; if that fails too, this job's own backup is restored. Refused with 423 while anything else holds the instance.
+         */
+        post: operations["postInstancesByIdOperationsUpgrade"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/instances/{id}/operations/upgrade/{jobId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Progress and result of an upgrade
+         * @description Finished jobs are kept for a few hours (the last five); after that the id is unknown (404).
+         */
+        get: operations["getInstancesByIdOperationsUpgradeByJobId"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/instances/{id}/operations/upgrade/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The running or most recent upgrade
+         * @description The job this wrapper is running, else the latest one it knows, else what the script left behind (so a wrapper restart does not lose the outcome). 404 when there has been none.
+         */
+        get: operations["getInstancesByIdOperationsUpgradeCurrent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/instances/{id}/running": {
         parameters: {
             query?: never;
@@ -731,6 +811,8 @@ export interface components {
                 status: boolean;
                 stop: boolean;
             };
+            /** @description update/upgrade.sh exists, so the version upgrade job can run. */
+            upgrade: boolean;
             variablesFile: boolean;
         };
         CommandRequest: {
@@ -840,6 +922,15 @@ export interface components {
             instances: {
                 id: string;
             }[];
+        };
+        LifecycleEvents: {
+            events: {
+                [key: string]: unknown;
+            }[];
+            /** @description Byte offset to pass as `since`. */
+            next: number;
+            /** @description The file was rotated; this is a read from its start. */
+            reset: boolean;
         };
         /** @description What this wrapper serves; see src/contracts/manifest.ts. */
         Manifest: {
@@ -1033,6 +1124,16 @@ export interface components {
         ModUpdatesRequest: {
             mcVersion?: string;
         };
+        /** @description Another operation holds the instance. Try again when it finishes. */
+        OperationBusy: {
+            busy: {
+                /** @description Set when the holder is a job that can be polled. */
+                jobId?: string;
+                /** @description What holds the instance: stop, backup, restore, mods, upgrade, ... */
+                kind: string;
+            };
+            error: string;
+        };
         /** @description `playerCount` and `maxPlayers` are strings; maxPlayers is "?" when unknown. */
         PlayerList: {
             maxPlayers: string;
@@ -1072,6 +1173,61 @@ export interface components {
             tps15m?: number;
             /** @enum {string} */
             type: "paper" | "vanilla";
+        };
+        UpgradeEvent: {
+            msg: string;
+            phase: string;
+            seq: number;
+            /** @enum {string} */
+            status: "running" | "done" | "error" | "info";
+            /** @description Epoch seconds. */
+            ts: number;
+        };
+        UpgradeJob: {
+            /** @description busy, failed or interrupted when there is no result. */
+            error?: string;
+            /** @description Progress lines after `since`. */
+            events: components["schemas"]["UpgradeEvent"][];
+            jobId: string;
+            mcVersion: string;
+            /** @description Pass as `since` to get only newer events. */
+            next: number;
+            result?: components["schemas"]["UpgradeResult"];
+            /** @enum {string} */
+            state: "running" | "done" | "failed";
+        };
+        UpgradeRequest: {
+            /** @description Warning before the stop; default 30, at most 600. */
+            countdownSeconds?: number;
+            /** @description The mods a compatibility check reported as unavailable. The job refuses to start if the installed set no longer gives the same list. */
+            expectUnavailable?: string[];
+            /** @description The Minecraft version to move to. */
+            mcVersion: string;
+        };
+        UpgradeResult: {
+            /** @description Name of the backup this job took. */
+            archive?: string;
+            /**
+             * @description How a successful upgrade got there.
+             * @enum {string}
+             */
+            branch?: "clean" | "mods_disabled";
+            /** @description Mods moved to mods/disabled/ to get the server up. */
+            disabled?: string[];
+            /** @description Mods running on a build made for an older version. */
+            keptOnOldBuild?: string[];
+            ok: boolean;
+            previousVersionRunning?: boolean;
+            /** @description Why it failed: apply_failed, prune_failed, crash_loop, timeout, backup_failed, ... */
+            reason?: string;
+            rolledBack?: boolean;
+            target?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        UpgradeStarted: {
+            /** @description The job to poll. */
+            jobId: string;
         };
         WhitelistEntry: {
             name?: string;
@@ -1924,6 +2080,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConfigFileReverted"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getInstancesByIdEvents: {
+        parameters: {
+            query?: {
+                /** @description Byte offset from the previous reply; default 0. */
+                since?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Instance id from `GET /instances`. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LifecycleEvents"];
                 };
             };
             /** @description Invalid input */
@@ -3074,6 +3301,222 @@ export interface operations {
             };
             /** @description Internal server error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postInstancesByIdOperationsUpgrade: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Instance id from `GET /instances`. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpgradeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpgradeStarted"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Locked: another operation holds the instance */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationBusy"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Status 501 */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getInstancesByIdOperationsUpgradeByJobId: {
+        parameters: {
+            query?: {
+                /** @description Progress sequence number; only newer lines are returned. */
+                since?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Instance id from `GET /instances`. */
+                id: string;
+                /** @description Job id from the start request. */
+                jobId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpgradeJob"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getInstancesByIdOperationsUpgradeCurrent: {
+        parameters: {
+            query?: {
+                /** @description Progress sequence number; only newer lines are returned. */
+                since?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Instance id from `GET /instances`. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpgradeJob"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

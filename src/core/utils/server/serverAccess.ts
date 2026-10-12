@@ -41,6 +41,14 @@ export {
 } from "./access/mods.js";
 export { supportsModCompat, startModCompat, getModCompat } from "./access/modCompat.js";
 export {
+  supportsUpgrade,
+  supportsLifecycleEvents,
+  startUpgrade,
+  getUpgrade,
+  getCurrentUpgrade,
+  readLifecycleEvents,
+} from "./access/upgrade.js";
+export {
   readBackups,
   indexBackupFiles,
   openBackupDownload,

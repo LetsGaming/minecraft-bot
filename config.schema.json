@@ -825,7 +825,8 @@
         "mods:write",
         "backup:restore",
         "backup:delete",
-        "server:rollback"
+        "server:rollback",
+        "server:update"
       ]
     },
     "WebUiConsoleConfig": {

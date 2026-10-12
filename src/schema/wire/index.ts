@@ -40,6 +40,13 @@ export type ModCompatJob = Wire["ModCompatJob"];
 export type ModCompatMod = Wire["ModCompatMod"];
 export type ModCompatStarted = Wire["ModCompatStarted"];
 
+export type UpgradeRequest = Wire["UpgradeRequest"];
+export type UpgradeStarted = Wire["UpgradeStarted"];
+export type UpgradeJob = Wire["UpgradeJob"];
+export type UpgradeEvent = Wire["UpgradeJob"]["events"][number];
+export type UpgradeResult = NonNullable<Wire["UpgradeJob"]["result"]>;
+export type LifecycleEventsBody = Wire["LifecycleEvents"];
+
 /** A 404 answers `{ ok: false }` alone; the rest is the wrapper's body. */
 export type BackupDeleteResult = Pick<Wire["BackupFileDeleted"], "ok"> &
   Partial<Wire["BackupFileDeleted"]>;
