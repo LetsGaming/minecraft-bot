@@ -233,7 +233,7 @@ describe("Discord snapshots: slash commands", () => {
     await expect(stringify(out)).toMatchFileSnapshot(fixturePath("server-stop"));
   });
 
-  it("errors: an unreachable wrapper, a failing wrapper and an unexpected throw", async () => {
+  it("errors: an unreachable, failing or refusing wrapper and an unexpected throw", async () => {
     const { execute } = await import("../../../src/bot/commands/stats/players.js");
     const { ApiError } = await import("../../../src/core/utils/server/access/apiClient.js");
     vi.mocked(resolveServer).mockReturnValue(fakeServer() as never);
@@ -245,6 +245,18 @@ describe("Discord snapshots: slash commands", () => {
       "players, wrapper answered 500": await bothLanguages(async (language) => {
         vi.mocked(loadAllStats).mockRejectedValueOnce(
           new ApiError("/stats", 500, "EACCES: permission denied, open '/srv/mc/world/stats'"),
+        );
+        return runCommand(execute as Execute, language, { commandName: "players" });
+      }),
+      "players, wrapper answered 403": await bothLanguages(async (language) => {
+        vi.mocked(loadAllStats).mockRejectedValueOnce(
+          new ApiError("/stats", 403, '{"error":"invalid api key"}'),
+        );
+        return runCommand(execute as Execute, language, { commandName: "players" });
+      }),
+      "players, wrapper answered 400": await bothLanguages(async (language) => {
+        vi.mocked(loadAllStats).mockRejectedValueOnce(
+          new ApiError("/stats", 400, '{"error":"bad world path /srv/mc/world"}'),
         );
         return runCommand(execute as Execute, language, { commandName: "players" });
       }),

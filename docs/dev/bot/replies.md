@@ -89,8 +89,11 @@ the API wrapper (unreachable, timed out, circuit breaker open, rate limited;
 becomes "Could not reach smp" with a localised problem and recovery. A 5xx
 answer from the wrapper (an `ApiError` from
 [`apiClient.ts`](../../../src/core/utils/server/access/apiClient.ts) with its
-`status`) becomes "smp had a problem" the same way. In both cases the raw cause
-goes to the log only.
+`status`) becomes "smp had a problem" the same way. A 4xx answer
+(`classifyWrapperRejection`) becomes "Not allowed on smp" for 401 and 403,
+"Not available on smp" for 404 and "smp refused the request" for the rest; a
+429 counts as rate limited. In every case the raw cause, wrapper body
+included, goes to the log only.
 
 ## Confirm rows
 
