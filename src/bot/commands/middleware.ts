@@ -1,8 +1,22 @@
-import { MessageFlags, type ChatInputCommandInteraction } from "discord.js";
-import { createErrorEmbed } from "../utils/embeds/embedUtils.js";
+import {
+  MessageFlags,
+  type ChatInputCommandInteraction,
+  type RepliableInteraction,
+} from "discord.js";
+import { createEmbed, createErrorEmbed } from "../utils/embeds/embedUtils.js";
+import { EmbedColor } from "../utils/embeds/embedColors.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { loadConfig } from "@mcbot/core/config.js";
 import { runWithGuildLocale, t } from "@mcbot/core/utils/i18n.js";
+import { CommandError, errMsg } from "@mcbot/core/utils/error.js";
+import {
+  classifyTransportError,
+  classifyWrapperRejection,
+  type WrapperRejection,
+} from "@mcbot/core/utils/server/transportError.js";
+import type { ErrorContent } from "@mcbot/core/types/index.js";
+import { attachFollowUpHint } from "../utils/hints/followUps.js";
+import { resolveServer } from "../utils/guild/guildRouter.js";
 
 /**
  * Checks whether a Discord user is an admin.
@@ -36,9 +50,8 @@ export function isServerAdmin(
  * cached GuildMember shape (roles.cache Map) and the raw API shape
  * (roles as a string array).
  *
- * Typed by the only field it reads — `member` — so any interaction that
- * carries one (chat command, button, autocomplete) can be passed directly,
- * with no force-cast between discord.js's separate interaction classes.
+ * Typed by the only field it reads, `member`, so any interaction that
+ * carries one (chat command, button, autocomplete) can be passed directly.
  */
 export function getMemberRoleIds(
   interaction: Pick<ChatInputCommandInteraction, "member">,
@@ -49,32 +62,177 @@ export function getMemberRoleIds(
   return [...roles.cache.keys()];
 }
 
+function invokerIsAdmin(interaction: RepliableInteraction): boolean {
+  return isServerAdmin(
+    interaction.user.id,
+    getMemberRoleIds(interaction),
+    interaction.guild?.id,
+  );
+}
+
 type CommandExecutor = (
   interaction: ChatInputCommandInteraction,
 ) => Promise<void>;
 
+// Commands call withErrorHandling while this module may still be loading
+// (import cycle through the hint registry), so the marker comes from a
+// hoisted function rather than a module-level const.
+function adminGate(): symbol {
+  return Symbol.for("mcbot.adminGate");
+}
+
+type GatedExecutor = CommandExecutor & Record<symbol, true | undefined>;
+
 /**
- * Middleware that gates a command behind server admin status.
- * Must be used AFTER deferReply (i.e. inside withErrorHandling).
+ * Gates a command behind bot-admin status. Inside `withErrorHandling` the
+ * check runs before the reply is deferred, so a denial is never public.
  */
 export function requireServerAdmin(execute: CommandExecutor): CommandExecutor {
-  return async (interaction) => {
-    // Roles make role-based admin entries match; the guild ID scopes
-    // per-guild admin lists to their own guild.
-    if (
-      !isServerAdmin(
-        interaction.user.id,
-        getMemberRoleIds(interaction),
-        interaction.guild?.id,
-      )
-    ) {
-      throw new Error(t("common.noPermission"));
+  const gated = (async (interaction: ChatInputCommandInteraction) => {
+    if (!invokerIsAdmin(interaction)) {
+      await replyDenied(interaction);
+      return;
     }
     return execute(interaction);
+  }) as GatedExecutor;
+  gated[adminGate()] = true;
+  return gated;
+}
+
+async function send(
+  interaction: RepliableInteraction,
+  payload: { embeds: ReturnType<typeof createEmbed>[] },
+): Promise<void> {
+  try {
+    if (interaction.deferred && !interaction.replied) {
+      if (interaction.ephemeral) {
+        await interaction.editReply(payload);
+        return;
+      }
+      // A public "thinking..." placeholder cannot turn ephemeral, so it is
+      // removed and the message goes out as an ephemeral follow-up instead.
+      await interaction.deleteReply().catch(() => undefined);
+      await interaction.followUp({ ...payload, flags: MessageFlags.Ephemeral });
+    } else if (interaction.replied || interaction.deferred) {
+      await interaction.followUp({ ...payload, flags: MessageFlags.Ephemeral });
+    } else {
+      await interaction.reply({ ...payload, flags: MessageFlags.Ephemeral });
+    }
+  } catch {
+    /* interaction expired */
+  }
+}
+
+/**
+ * Shows an error to the invoker only: problem, then recovery. A pending
+ * deferred reply is resolved, so no "thinking..." placeholder is left behind.
+ */
+export async function replyError(
+  interaction: RepliableInteraction,
+  content: string | ErrorContent,
+): Promise<void> {
+  await send(interaction, { embeds: [createErrorEmbed(content)] });
+}
+
+/** Shows a non-error notice to the invoker only, resolving a pending deferred reply. */
+export async function replyPrivate(
+  interaction: RepliableInteraction,
+  embed: ReturnType<typeof createEmbed>,
+): Promise<void> {
+  await send(interaction, { embeds: [embed] });
+}
+
+/** The one denial shape: who may use the command and what to do instead. */
+export async function replyDenied(interaction: RepliableInteraction): Promise<void> {
+  const command = interaction.isChatInputCommand()
+    ? [
+        interaction.commandName,
+        interaction.options.getSubcommandGroup(false),
+        interaction.options.getSubcommand(false),
+      ]
+        .filter(Boolean)
+        .join(" ")
+    : undefined;
+  const guildId = interaction.guild?.id;
+  const embed = createEmbed({
+    title: t("denied.title", {}, guildId),
+    description: command
+      ? t("denied.command", { command }, guildId)
+      : t("denied.action", {}, guildId),
+    color: EmbedColor.Error,
+  });
+  await send(interaction, { embeds: [embed] });
+}
+
+const REJECTION_PREFIX: Record<WrapperRejection, string> = {
+  denied: "transport.denied",
+  "not-found": "transport.notFound",
+  refused: "transport.refused",
+};
+
+/** Title and problem from `<prefix>Title`/`<prefix>Problem`, or their NoServer forms. */
+function wrapperContent(prefix: string, serverId: string | undefined, recovery: string): ErrorContent {
+  return serverId
+    ? {
+        title: t(`${prefix}Title`, { server: serverId }),
+        problem: t(`${prefix}Problem`, { server: serverId }),
+        recovery,
+      }
+    : {
+        title: t(`${prefix}TitleNoServer`),
+        problem: t(`${prefix}ProblemNoServer`),
+        recovery,
+      };
+}
+
+/**
+ * What a thrown value should say to the user. `serverId` names the server in
+ * a transport failure; without it the reply says "the server".
+ */
+export function errorContentOf(err: unknown, serverId?: string): ErrorContent {
+  if (err instanceof CommandError) {
+    return { title: err.title, problem: err.problem, recovery: err.recovery };
+  }
+  const transport = classifyTransportError(err);
+  if (transport === "wrapper-error") {
+    return wrapperContent("transport.wrapperError", serverId, t("transport.recovery"));
+  }
+  if (transport) {
+    const recovery =
+      transport === "rate-limited" ? t("transport.recoveryRateLimited") : t("transport.recovery");
+    return serverId
+      ? {
+          title: t("transport.title", { server: serverId }),
+          problem: t("transport.problem", { server: serverId }),
+          recovery,
+        }
+      : {
+          title: t("transport.titleNoServer"),
+          problem: t("transport.problemNoServer"),
+          recovery,
+        };
+  }
+  const rejection = classifyWrapperRejection(err);
+  if (rejection) {
+    const prefix = REJECTION_PREFIX[rejection];
+    return wrapperContent(prefix, serverId, t(`${prefix}Recovery`));
+  }
+  if (err instanceof Error && err.message) return { problem: err.message };
+  return {
+    problem: t("common.unexpectedError"),
+    recovery: t("common.unexpectedErrorRecovery"),
   };
 }
 
-import { attachFollowUpHint } from "../utils/hints/followUps.js";
+/** The server a failed command targeted, when the failure was reaching it. */
+function serverIdOf(interaction: ChatInputCommandInteraction, err: unknown): string | undefined {
+  if (!classifyTransportError(err) && !classifyWrapperRejection(err)) return undefined;
+  try {
+    return resolveServer(interaction).id;
+  } catch {
+    return undefined;
+  }
+}
 
 interface ErrorHandlingOptions {
   defer?: boolean;
@@ -83,16 +241,23 @@ interface ErrorHandlingOptions {
 
 /**
  * Wraps a slash command execute function with:
- * - Auto deferReply
- * - Standardized error handling with error embed
- * - Logging
+ * - the admin check of `requireServerAdmin`, before anything is sent
+ * - auto deferReply
+ * - per-guild language for every t() call inside the command
+ * - standardized, ephemeral error replies and logging
  */
 export function withErrorHandling(
   execute: CommandExecutor,
   { defer = true, ephemeral = false }: ErrorHandlingOptions = {},
 ): CommandExecutor {
+  const gated = (execute as GatedExecutor)[adminGate()] === true;
   return async (interaction) => {
+    const guildId = interaction.guild?.id;
     try {
+      if (gated && !invokerIsAdmin(interaction)) {
+        await runWithGuildLocale(guildId, () => replyDenied(interaction));
+        return;
+      }
       if (defer) {
         await interaction.deferReply(
           ephemeral ? { flags: MessageFlags.Ephemeral } : {},
@@ -100,39 +265,17 @@ export function withErrorHandling(
       }
       // Every t() call inside the command resolves this guild's language
       // (guilds.<id>.language, falling back to the global setting).
-      await runWithGuildLocale(interaction.guild?.id, () =>
-        execute(interaction),
-      );
+      await runWithGuildLocale(guildId, () => execute(interaction));
 
-      // Usage recording moved to the single dispatch path in bot/index.ts, so
-      // every command is counted whether or not it uses this wrapper. Leaving
-      // it here would double-count the commands that do.
-
-      // The command answered without throwing, which is the only place
-      // that knows the reply is worth riding along on. Putting this here
-      // rather than in each command means a new hint needs a registry
-      // entry and nothing else — and an errored command can never
-      // advertise anything, because this line is not reached.
-      await runWithGuildLocale(interaction.guild?.id, () =>
-        attachFollowUpHint(interaction),
-      );
+      // Only a command that answered without throwing may carry a hint;
+      // an errored command never advertises anything.
+      await runWithGuildLocale(guildId, () => attachFollowUpHint(interaction));
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : t("common.unexpectedError");
-      log.error("command", `/${interaction.commandName}: ${message}`);
-      const embed = createErrorEmbed(message);
-      try {
-        if (interaction.deferred || interaction.replied) {
-          await interaction.editReply({ embeds: [embed] });
-        } else {
-          await interaction.reply({
-            embeds: [embed],
-            flags: MessageFlags.Ephemeral,
-          });
-        }
-      } catch {
-        /* interaction expired */
-      }
+      await runWithGuildLocale(guildId, async () => {
+        const content = errorContentOf(err, serverIdOf(interaction, err));
+        log.error("command", `/${interaction.commandName}: ${errMsg(err)}`);
+        await replyError(interaction, content);
+      });
     }
   };
 }

@@ -373,7 +373,7 @@ describe("/profile", () => {
     expect(text).toContain("Admin#1");
     expect(text).toContain("4");
     expect(text).toContain("9");
-    expect(text).toContain("1h");
+    expect(text).toContain("1 h play time");
   });
 
   it("omits 'whitelisted by' for a player who was later removed", async () => {

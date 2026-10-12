@@ -18,6 +18,8 @@ type Wire = WireSchemas;
 export type ScriptResult = Wire["ScriptResult"];
 export type BackupFileInfo = Wire["BackupFileInfo"];
 export type BackupFileIndexBody = Wire["BackupFileIndex"];
+export type BackupDirInfo = Wire["BackupDirInfo"];
+export type BackupSummaryBody = Wire["BackupSummary"];
 export type ConfigFileInfo = Wire["ConfigFileInfo"];
 
 /** `enabled` arrived with mod-management v2; absent means active. */

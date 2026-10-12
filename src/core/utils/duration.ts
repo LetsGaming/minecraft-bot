@@ -91,3 +91,31 @@ export function formatDuration(ms: number): string {
   }
   return parts.join(" ");
 }
+
+/**
+ * Spaced rendering for message text ("2 d 7 h", "4 min 18 s"), the form the
+ * Discord embeds use. The unit abbreviations read the same in English and
+ * German. Only adjacent units are shown, so "2 d 0 h 5 min" becomes "2 d".
+ */
+export function formatSpan(ms: number, maxUnits = 2): string {
+  if (!Number.isFinite(ms) || ms < MS.second) return "0 s";
+
+  const parts: string[] = [];
+  let rest = ms;
+  for (const [suffix, unitMs] of [
+    ["d", MS.day],
+    ["h", MS.hour],
+    ["min", MS.minute],
+    ["s", MS.second],
+  ] as const) {
+    const value = Math.floor(rest / unitMs);
+    if (value > 0) {
+      parts.push(`${value} ${suffix}`);
+      rest -= value * unitMs;
+    } else if (parts.length > 0) {
+      break;
+    }
+    if (parts.length === maxUnits) break;
+  }
+  return parts.join(" ");
+}

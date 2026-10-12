@@ -137,10 +137,10 @@ function parseOptions(raw: string): string[] {
 function pollEmbed(poll: Poll) {
   const optionLines = poll.options.map((o, i) => `**${i + 1}.** ${o}`);
   return createEmbed({
-    title: `🗳️ ${poll.question}`,
-    description: `${optionLines.join("\n")}\n\n${t("poll.howToVote")}\n⏳ ${t(
-      "poll.ends",
-    )} ${formatLastSeen(poll.endsAt)}`,
+    title: poll.question,
+    description: `${optionLines.join("\n")}\n\n${t("poll.howToVote")}\n${t("poll.endsAt", {
+      time: formatLastSeen(poll.endsAt),
+    })}`,
     color: EmbedColor.Info,
     footer: { text: pollServerIds(poll).join(", ") },
   });
@@ -192,11 +192,10 @@ export const execute = withErrorHandling(
       await interaction.editReply({
         embeds: [
           createEmbed({
-            title: `🗳️ ${open.question}`,
+            title: open.question,
             description: `${lines.join("\n")}\n\n${t("poll.resultTotal", {
               total,
-            })}\n⏳ ${t("poll.ends")} ${formatLastSeen(open.endsAt)}`,
-            footer: { text: server.id },
+            })}\n${t("poll.endsAt", { time: formatLastSeen(open.endsAt) })}`,
           }),
         ],
       });

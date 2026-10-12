@@ -10,46 +10,60 @@
         "configVersion": {
           "type": "integer",
           "description": "Format version of this file. Written by the bot when it migrates an older file (a copy of the original is kept next to it) and by the dashboard on every save. A missing value means the file predates versioning. A value newer than the running bot supports is refused rather than loaded.",
+          "title": "Config format version",
           "minimum": 0
         },
         "token": {
-          "type": "string"
+          "type": "string",
+          "description": "The bot's login token from the Discord developer portal.",
+          "title": "Discord bot token",
+          "effect": "Read when the bot starts. Restart the bot after changing it."
         },
         "clientId": {
-          "type": "string"
+          "type": "string",
+          "description": "The application ID of the bot in the Discord developer portal.",
+          "title": "Discord application ID"
         },
         "servers": {
           "type": "object",
           "additionalProperties": {
             "$ref": "#/definitions/RawServerConfig"
-          }
+          },
+          "description": "The Minecraft servers the bot manages, by id.",
+          "title": "Servers"
         },
         "guilds": {
           "type": "object",
           "additionalProperties": {
             "$ref": "#/definitions/GuildConfig"
-          }
+          },
+          "description": "Per-guild features, by Discord guild ID.",
+          "title": "Guilds"
         },
         "adminUsers": {
           "type": "array",
           "items": {
             "type": "string"
           },
-          "description": "May contain Discord user IDs and/or role IDs."
+          "description": "May contain Discord user IDs and/or role IDs.",
+          "title": "Bot admins"
         },
         "language": {
           "type": "string",
-          "description": "Locale for user-visible bot strings (\"en\" | \"de\", default \"en\")."
+          "description": "Locale for user-visible bot strings (\"en\" | \"de\", default \"en\").",
+          "title": "Language"
         },
         "timezone": {
           "type": "string",
-          "description": "Default IANA timezone for wall-clock features, used when a guild or a schedule does not set its own. Default UTC — the zone everything is stored in, so an unconfigured deployment is coherent rather than dependent on the container's clock.\n\nThis replaces the TZ environment variable, which forced one zone on the whole process: a bot serving guilds in Berlin and Denver purged both at Berlin midnight."
+          "description": "Default IANA timezone for wall-clock features, used when a guild or a schedule does not set its own. Default UTC — the zone everything is stored in, so an unconfigured deployment is coherent rather than dependent on the container's clock.\n\nThis replaces the TZ environment variable, which forced one zone on the whole process: a bot serving guilds in Berlin and Denver purged both at Berlin midnight.",
+          "title": "Time zone"
         },
         "commands": {
           "type": "object",
           "additionalProperties": {
             "$ref": "#/definitions/CommandOverrideConfig"
-          }
+          },
+          "title": "Command overrides"
         },
         "leaderboard": {
           "type": "object",
@@ -58,50 +72,65 @@
         "tpsWarningThreshold": {
           "type": "number",
           "description": "TPS below this triggers an alert (default 15).",
+          "title": "TPS warning threshold",
           "exclusiveMinimum": 0
         },
         "tpsPollIntervalMs": {
           "type": "number",
+          "description": "How often the bot asks each server for its TPS, in milliseconds.",
+          "title": "TPS poll interval (ms)",
           "minimum": 1000
         },
         "leaderboardInterval": {
-          "$ref": "#/definitions/LeaderboardInterval"
+          "$ref": "#/definitions/LeaderboardInterval",
+          "title": "Leaderboard interval"
         },
         "leaderboardPostTime": {
           "type": "string",
-          "description": "Global default for GuildLeaderboardConfig.postTime — a guild-level postTime wins when set. Unset on both keeps the legacy drift-based scheduling (no anchor)."
+          "description": "Global default for GuildLeaderboardConfig.postTime — a guild-level postTime wins when set. Unset on both keeps the legacy drift-based scheduling (no anchor).",
+          "title": "Leaderboard post time"
         },
         "leaderboardPostDay": {
           "type": "string",
-          "description": "Global default for GuildLeaderboardConfig.postDay."
+          "description": "Global default for GuildLeaderboardConfig.postDay.",
+          "title": "Leaderboard post day"
         },
         "presence": {
-          "$ref": "#/definitions/PresenceConfig"
+          "$ref": "#/definitions/PresenceConfig",
+          "title": "Bot presence"
         },
         "deathCoords": {
-          "$ref": "#/definitions/DeathCoordsConfig"
+          "$ref": "#/definitions/DeathCoordsConfig",
+          "title": "Death coordinates"
         },
         "hostAlerts": {
-          "$ref": "#/definitions/HostAlertsConfig"
+          "$ref": "#/definitions/HostAlertsConfig",
+          "title": "Host alerts"
         },
         "waypoints": {
-          "$ref": "#/definitions/WaypointsConfig"
+          "$ref": "#/definitions/WaypointsConfig",
+          "title": "Waypoints"
         },
         "limits": {
-          "$ref": "#/definitions/LimitsConfig"
+          "$ref": "#/definitions/LimitsConfig",
+          "title": "Limits"
         },
         "updateNotifier": {
-          "$ref": "#/definitions/UpdateNotifierConfig"
+          "$ref": "#/definitions/UpdateNotifierConfig",
+          "title": "Update notifier"
         },
         "featureNudges": {
           "$ref": "#/definitions/FeatureNudgeConfig",
-          "description": "In-game discoverability nudges (see FeatureNudgeConfig)."
+          "description": "In-game discoverability nudges (see FeatureNudgeConfig).",
+          "title": "Feature nudges"
         },
         "schedules": {
           "type": "object",
           "additionalProperties": {
             "$ref": "#/definitions/ServerScheduleConfig"
-          }
+          },
+          "description": "Scheduled restarts (and future scheduled actions) per server.",
+          "title": "Schedules"
         },
         "milestones": {
           "type": "object",
@@ -111,11 +140,13 @@
               "$ref": "#/definitions/PositiveNumber"
             }
           },
-          "description": "Milestone announcement thresholds per leaderboard stat key, in the stat's NATIVE unit (playtime = ticks, distances = cm, counters = counts). First activation seeds silently; see milestoneWatcher."
+          "description": "Milestone announcement thresholds per leaderboard stat key, in the stat's NATIVE unit (playtime = ticks, distances = cm, counters = counts). First activation seeds silently; see milestoneWatcher.",
+          "title": "Milestones"
         },
         "webui": {
           "$ref": "#/definitions/WebUiConfig",
-          "description": "Web dashboard settings (see WebUiConfig)."
+          "description": "Web dashboard settings (see WebUiConfig).",
+          "title": "Web dashboard"
         }
       },
       "required": [
@@ -132,11 +163,13 @@
         },
         "apiUrl": {
           "type": "string",
-          "description": "Base URL of the API wrapper on the Minecraft host. **Required** since 5.0.0: every filesystem, shell and RCON operation for this instance goes through it. Example: \"http://192.168.1.10:3030\" (trusted LAN) or \"https://mc-api.example.com\" (anything beyond the LAN).\n\nPlaintext http:// is only accepted for loopback/private/LAN hosts — the x-api-key and all commands travel unencrypted. Public hosts require https:// (or an explicit allowInsecureHttp override)."
+          "description": "Base URL of the API wrapper on the Minecraft host. **Required** since 5.0.0: every filesystem, shell and RCON operation for this instance goes through it. Example: \"http://192.168.1.10:3030\" (trusted LAN) or \"https://mc-api.example.com\" (anything beyond the LAN).\n\nPlaintext http:// is only accepted for loopback/private/LAN hosts — the x-api-key and all commands travel unencrypted. Public hosts require https:// (or an explicit allowInsecureHttp override).",
+          "title": "API URL"
         },
         "apiKey": {
           "type": "string",
-          "description": "Shared secret sent as x-api-key to the API wrapper. **Required**."
+          "description": "Shared secret sent as x-api-key to the API wrapper. **Required**.",
+          "title": "API key"
         },
         "allowInsecureHttp": {
           "type": "boolean",
@@ -430,9 +463,20 @@
         "mentionRole": {
           "type": "string",
           "description": "Role ID mentioned on every downtime, disk, and backup-age alert in this guild, so the on-call person gets pinged instead of hoping someone reads the channel."
+        },
+        "mentionPolicy": {
+          "$ref": "#/definitions/MentionPolicy",
+          "description": "When `mentionRole` is pinged. \"escalation\" (default): only on the first failure and when severity rises; recoveries and repeats are posted without a ping. \"always\": on every alert, including recoveries."
         }
       },
       "additionalProperties": false
+    },
+    "MentionPolicy": {
+      "type": "string",
+      "enum": [
+        "always",
+        "escalation"
+      ]
     },
     "GuildTpsAlertsConfig": {
       "type": "object",
@@ -446,7 +490,11 @@
         },
         "mentionRole": {
           "type": "string",
-          "description": "Role ID mentioned on every low-TPS alert in this guild."
+          "description": "Role ID mentioned on low-TPS alerts in this guild."
+        },
+        "mentionPolicy": {
+          "$ref": "#/definitions/MentionPolicy",
+          "description": "When `mentionRole` is pinged; see `GuildDowntimeAlertsConfig.mentionPolicy`."
         }
       },
       "additionalProperties": false
@@ -684,6 +732,8 @@
         "port": {
           "type": "integer",
           "description": "HTTP port.",
+          "title": "Dashboard port",
+          "effect": "Read when the dashboard starts. Restart the dashboard after changing it.",
           "minimum": 1,
           "maximum": 65535,
           "default": 8130
@@ -721,6 +771,8 @@
         "sessionEpoch": {
           "type": "integer",
           "description": "Dashboard session version. Sessions issued under a different value are rejected, so raising this number signs everyone out at once (the dashboard re-reads config.json, no restart needed). Use it after a leaked cookie or a removed admin.",
+          "title": "Session epoch",
+          "effect": "Raising it signs everyone out of the dashboard.",
           "minimum": 0,
           "default": 0
         },

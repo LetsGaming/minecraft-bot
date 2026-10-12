@@ -1,14 +1,16 @@
-import { type EmbedBuilder } from "discord.js";
-import { createEmbed } from "./embedUtils.js";
+import { type APIEmbedField, type EmbedBuilder } from "discord.js";
+import { chunkLines, createEmbed, paginateFields, reservedLength } from "./embedUtils.js";
 import {
   humanizeKey,
-  formatPlaytime,
+  ticksToMs,
   formatDistance,
   type LeaderboardData,
 } from "@mcbot/core/utils/minecraft/statUtils.js";
 import type { FlattenedStat } from "@mcbot/core/types/index.js";
+import { formatSpan } from "@mcbot/core/utils/duration.js";
 
 import { t } from "@mcbot/core/utils/i18n.js";
+
 /**
  * Converts plain leaderboard data (from buildLeaderboard) into a Discord EmbedBuilder.
  */
@@ -25,98 +27,47 @@ export function buildLeaderboardEmbed({
 }
 
 /**
- * Builds an array of paginated embeds for displaying player stats.
- * Splits stats by category and chunks fields to stay within Discord's limits.
+ * Builds the pages for a player's stats: one or more fields per category
+ * (each under Discord's 1024 character field limit), at most two fields per
+ * page so a page stays readable on a phone.
  */
 export function buildStatsEmbeds(
   stats: FlattenedStat[],
   username: string,
 ): EmbedBuilder[] {
-  const embeds: EmbedBuilder[] = [];
-  let currentEmbed = createEmbed({});
-  let fieldCount = 0;
+  const fields: APIEmbedField[] = [];
 
-  const grouped = groupByCategory(stats);
-
-  for (const [category, entries] of Object.entries(grouped)) {
+  for (const [category, entries] of Object.entries(groupByCategory(stats))) {
     const lines = entries.map((s) => {
       const key = s.key.toLowerCase();
-      const value = s.value;
-
       const isTime = /(_time|Time)$/.test(key);
       const isDistance = /one_cm$/.test(key);
-
-      let displayValue: string;
-      if (isTime) {
-        displayValue = formatPlaytime(value);
-      } else if (isDistance) {
-        displayValue = formatDistance(value);
-      } else {
-        displayValue = value.toLocaleString();
-      }
-
+      const displayValue = isTime
+        ? formatSpan(ticksToMs(s.value))
+        : isDistance
+          ? formatDistance(s.value)
+          : s.value.toLocaleString();
       return `• ${humanizeKey(s.key)}: ${displayValue}`;
     });
 
-    let index = 0;
-    let chunkNumber = 1;
-
-    while (index < lines.length) {
-      const chunk: string[] = [];
-      let chunkLength = 0;
-
-      while (
-        index < lines.length &&
-        chunkLength + lines[index]!.length + 1 < 1024
-      ) {
-        chunk.push(lines[index]!);
-        chunkLength += lines[index]!.length + 1;
-        index++;
-      }
-
-      const name =
-        chunkNumber === 1
-          ? humanizeKey(category)
-          : `${humanizeKey(category)} (${chunkNumber})`;
-      const value = chunk.join("\n");
-
-      if (fieldCount >= 2) {
-        embeds.push(currentEmbed);
-        currentEmbed = createEmbed({});
-        fieldCount = 0;
-      }
-
-      currentEmbed.addFields({
-        name,
+    chunkLines(lines).forEach((value, i) => {
+      const lineCount = value.split("\n").length;
+      fields.push({
+        name: i === 0 ? humanizeKey(category) : `${humanizeKey(category)} (${i + 1})`,
         value,
-        inline: chunk.length <= 3 && chunkLength <= 100,
+        inline: lineCount <= 3 && value.length <= 100,
       });
-
-      fieldCount++;
-      chunkNumber++;
-    }
-  }
-
-  if (fieldCount > 0) {
-    embeds.push(currentEmbed);
-  }
-
-  const totalPages = embeds.length;
-  for (let i = 0; i < totalPages; i++) {
-    const embed = embeds[i]!;
-    embed.setTitle(
-      t("stats.pageTitle", { name: username, page: i + 1, pages: totalPages }),
-    );
-    embed.setFooter({
-      text: t("stats.pageFooter", {
-        total: stats.length,
-        page: i + 1,
-        pages: totalPages,
-      }),
     });
   }
 
-  return embeds;
+  if (fields.length === 0) return [];
+
+  const title = t("stats.pageTitle", { name: username });
+  const description = t("stats.total", { count: stats.length });
+  return paginateFields(fields, {
+    maxFields: 2,
+    reserved: reservedLength({ title, description }),
+  }).map((page) => createEmbed({ title, description }).addFields(page));
 }
 
 function groupByCategory(

@@ -1,19 +1,18 @@
-import {
-  SlashCommandBuilder,
-  type ChatInputCommandInteraction,
-} from "discord.js";
+import { SlashCommandBuilder } from "discord.js";
 import {
   loadStats,
   flattenStats,
   findPlayTimeStat,
-  formatPlaytime,
+  ticksToMs,
 } from "@mcbot/core/utils/minecraft/statUtils.js";
 import { findPlayer } from "@mcbot/core/utils/minecraft/playerUtils.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
-import { createEmbed, createErrorEmbed } from "../../utils/embeds/embedUtils.js";
-import { log } from "@mcbot/core/utils/logger.js";
-import { errMsg } from "@mcbot/core/utils/error.js";
+import { createPlayerEmbed } from "../../utils/embeds/embedUtils.js";
+import { withErrorHandling } from "../middleware.js";
+import { CommandError } from "@mcbot/core/utils/error.js";
+import { noStatsYet, playerNotFound } from "./statErrors.js";
 
+import { formatSpan } from "@mcbot/core/utils/duration.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 export const data = new SlashCommandBuilder()
   .setName("playtime")
@@ -29,73 +28,31 @@ export const data = new SlashCommandBuilder()
     o.setName("server").setDescription("Server instance").setAutocomplete(true),
   );
 
-export async function execute(
-  interaction: ChatInputCommandInteraction,
-): Promise<void> {
-  await interaction.deferReply();
-
+export const execute = withErrorHandling(async (interaction) => {
   const server = resolveServer(interaction);
   const playerName = interaction.options.getString("player", true);
 
-  try {
-    const player = await findPlayer(playerName, server);
-    if (!player) {
-      await interaction.editReply({
-        embeds: [
-          createErrorEmbed(t("common.playerNotFound", { player: playerName }), {
-            footer: { text: t("common.playerNotFoundFooter") },
-            timestamp: new Date(),
-          }),
-        ],
-      });
-      return;
-    }
+  const player = await findPlayer(playerName, server);
+  if (!player) throw playerNotFound(playerName);
 
-    const statsFile = await loadStats(player.uuid, server);
-    if (!statsFile) {
-      await interaction.editReply({
-        embeds: [
-          createErrorEmbed(t("stats.fileNotFound", { player: playerName }), {
-            footer: { text: t("stats.fileNotFoundFooter") },
-            timestamp: new Date(),
-          }),
-        ],
-      });
-      return;
-    }
+  const statsFile = await loadStats(player.uuid, server);
+  if (!statsFile) throw noStatsYet(playerName);
 
-    const flattened = flattenStats(statsFile);
-    const totalPlaytime = findPlayTimeStat(flattened);
-
-    if (!totalPlaytime) {
-      await interaction.editReply({
-        embeds: [
-          createErrorEmbed(t("playtime.statNotFound", { player: playerName }), {
-            footer: { text: t("playtime.statNotFoundFooter") },
-            timestamp: new Date(),
-          }),
-        ],
-      });
-      return;
-    }
-
-    const totalPlaytimeFormatted = formatPlaytime(totalPlaytime);
-
-    const embed = createEmbed({
-      title: t("playtime.title", { player: playerName }),
-      description: t("playtime.total", { time: totalPlaytimeFormatted }),
-    });
-
-    await interaction.editReply({ embeds: [embed] });
-  } catch (err) {
-    log.error("playtime", errMsg(err));
-    await interaction.editReply({
-      embeds: [
-        createErrorEmbed(t("common.unexpectedError"), {
-          footer: { text: t("playtime.errorFooter") },
-          timestamp: new Date(),
-        }),
-      ],
+  const totalPlaytime = findPlayTimeStat(flattenStats(statsFile));
+  if (!totalPlaytime) {
+    throw new CommandError({
+      title: t("playtime.statNotFoundTitle"),
+      problem: t("playtime.statNotFound", { player: playerName }),
+      recovery: t("stats.fileNotFoundRecovery"),
     });
   }
-}
+
+  await interaction.editReply({
+    embeds: [
+      createPlayerEmbed(playerName, {
+        title: t("playtime.title", { player: playerName }),
+        description: t("playtime.total", { time: formatSpan(ticksToMs(totalPlaytime)) }),
+      }, true),
+    ],
+  });
+});

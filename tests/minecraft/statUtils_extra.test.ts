@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  formatPlaytime,
+  ticksToMs,
   findPlayTimeStat,
   formatDistance,
   humanizeKey,
@@ -9,45 +9,13 @@ import {
 } from "../../src/core/utils/minecraft/statUtils.js";
 import type { FlattenedStat } from "../../src/core/types/index.js";
 
-// ── formatPlaytime ────────────────────────────────────────────────────────────
+// ── ticksToMs ─────────────────────────────────────────────────────────────────
 
-describe("formatPlaytime", () => {
-  it("returns '0s' for 0 ticks", () => {
-    expect(formatPlaytime(0)).toBe("0s");
-  });
-
-  it("returns '0s' for negative ticks", () => {
-    expect(formatPlaytime(-500)).toBe("0s");
-  });
-
-  it("returns '0s' for non-numeric input", () => {
-    expect(formatPlaytime("xyz" as unknown as number)).toBe("0s");
-  });
-
-  it("formats ticks under 60 seconds correctly", () => {
-    // 200 ticks = 10 seconds
-    expect(formatPlaytime(200)).toBe("0d 0h 0m 10s");
-  });
-
-  it("formats exactly 1 minute", () => {
-    // 60s * 20 = 1200 ticks
-    expect(formatPlaytime(1200)).toBe("0d 0h 1m 0s");
-  });
-
-  it("formats exactly 1 hour", () => {
-    // 3600s * 20 = 72000 ticks
-    expect(formatPlaytime(72000)).toBe("0d 1h 0m 0s");
-  });
-
-  it("formats exactly 1 day", () => {
-    // 86400s * 20 = 1728000 ticks
-    expect(formatPlaytime(1728000)).toBe("1d 0h 0m 0s");
-  });
-
-  it("formats a complex value with all parts", () => {
-    // 2d 3h 5m 7s = (2*86400 + 3*3600 + 5*60 + 7) * 20 ticks
-    const seconds = 2 * 86400 + 3 * 3600 + 5 * 60 + 7;
-    expect(formatPlaytime(seconds * 20)).toBe("2d 3h 5m 7s");
+describe("ticksToMs", () => {
+  it("converts game ticks (20 per second) to milliseconds", () => {
+    expect(ticksToMs(0)).toBe(0);
+    expect(ticksToMs(20)).toBe(1000);
+    expect(ticksToMs(72000)).toBe(3_600_000);
   });
 });
 
@@ -212,7 +180,10 @@ describe("LEADERBOARD_STATS.playtime", () => {
   });
 
   it("formats as a human-readable string", () => {
-    expect(def.format(72000)).toBe("0d 1h 0m 0s");
+    expect(def.format(72000)).toBe("1 h");
+    const ticks = (8 * 86400 + 20 * 3600 + 7 * 60) * 20;
+    expect(def.format(ticks)).toBe("8 d 20 h");
+    expect(def.format(0)).toBe("0 s");
   });
 
   it("sorts descending (highest playtime first)", () => {

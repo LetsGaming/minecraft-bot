@@ -1,11 +1,10 @@
 /**
  * One place that knows whether any editor on the page holds unsaved work, so
- * the things that would throw it away (closing the tab, switching dashboard
- * tabs) can ask before doing it.
+ * the things that would throw it away (closing the tab, changing view or
+ * server) can ask before doing it.
  *
- * The dashboard has no URL router: tabs are an `activeTab` ref in App.vue, so
- * the equivalent of a router leave guard is `confirmLeave` below, called by the
- * tab switch. `beforeunload` covers the browser itself.
+ * The router's `beforeEach` (router.ts) and in-view switches call
+ * `confirmLeave` below; `beforeunload` covers the browser itself.
  */
 type DirtySource = () => boolean;
 
@@ -16,6 +15,7 @@ function onBeforeUnload(event: BeforeUnloadEvent): void {
   if (!hasUnsavedChanges()) return;
   event.preventDefault();
   // Legacy browsers only show the prompt when returnValue is set.
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
   event.returnValue = "";
 }
 

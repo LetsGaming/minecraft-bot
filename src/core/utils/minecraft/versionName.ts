@@ -55,3 +55,15 @@ export function parseVersionName(raw: string | null): VersionInfo {
       .find((name) => new RegExp(`\\b${name}\\b`, "i").test(text)) ?? null;
   return { minecraftVersion: version, loader, raw: text };
 }
+
+/** "Fabric 1.21.4", "1.21.4" without a known loader, null without a version. */
+export function formatVersionLabel(info: VersionInfo): string | null {
+  if (!info.minecraftVersion) return null;
+  return info.loader ? `${info.loader} ${info.minecraftVersion}` : info.minecraftVersion;
+}
+
+/** "fabric" from a manifest reads as "Fabric"; an unknown loader keeps its own spelling, capitalised. */
+export function loaderDisplayName(raw: string): string {
+  const known = KNOWN_LOADERS.find((name) => name.toLowerCase() === raw.toLowerCase());
+  return known ?? raw.charAt(0).toUpperCase() + raw.slice(1);
+}

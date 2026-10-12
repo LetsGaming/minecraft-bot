@@ -110,9 +110,19 @@ describe("useCommands", () => {
     await c.load();
     expect(c.loadError.value).toMatch(/manifest/);
     expect(c.ready.value).toBe(false);
+    expect(c.manifestMissing.value).toBe(true);
     await c.load();
     expect(c.loadError.value).toBe("");
     expect(c.ready.value).toBe(true);
+    expect(c.manifestMissing.value).toBe(false);
+  });
+
+  it("tells a missing manifest apart from any other load failure", async () => {
+    net.apiGet.mockRejectedValueOnce(new ApiError(500, "Internal server error"));
+    const c = useCommands();
+    await c.load();
+    expect(c.loadError.value).not.toBe("");
+    expect(c.manifestMissing.value).toBe(false);
   });
 
   it("lists validation failures from the backend", async () => {

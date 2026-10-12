@@ -79,6 +79,7 @@ function call(opts: {
     member: null,
     commandName: "daily-admin",
     deferred: true,
+    ephemeral: true,
     replied: false,
     deferReply: vi.fn().mockResolvedValue(undefined),
     reply: vi.fn().mockResolvedValue(undefined),

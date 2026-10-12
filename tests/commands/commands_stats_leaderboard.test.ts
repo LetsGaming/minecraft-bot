@@ -33,7 +33,7 @@ vi.mock("../../src/core/utils/minecraft/statUtils.js", () => ({
   flattenStats: vi.fn().mockReturnValue([]),
   filterStats: vi.fn((s) => s),
   findPlayTimeStat: vi.fn().mockReturnValue(0),
-  formatPlaytime: vi.fn().mockReturnValue("0s"),
+  ticksToMs: vi.fn((n: number) => n * 50),
   formatDistance: vi.fn().mockReturnValue("0km"),
   humanizeKey: vi.fn((k) => k),
   invalidateAllStatsCache: vi.fn(),
@@ -49,7 +49,8 @@ vi.mock("../../src/core/utils/minecraft/playerUtils.js", () => ({
   getPlayerNames: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock("../../src/bot/utils/embeds/embedUtils.js", () => ({
+vi.mock("../../src/bot/utils/embeds/embedUtils.js", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   createEmbed: vi
     .fn()
     .mockReturnValue({
@@ -192,13 +193,15 @@ describe("/playtime command", () => {
     ({ execute } = await import("../../src/bot/commands/stats/playtime.js"));
   });
 
-  it("replies with error when player not found", async () => {
+  it("fails with a recovery step when the player is not found", async () => {
     vi.mocked(findPlayer).mockResolvedValue(null);
     const interaction = makeInteraction({
       options: { getString: vi.fn().mockReturnValue("Unknown") },
     });
-    await execute(interaction);
-    expect(interaction.editReply).toHaveBeenCalled();
+    await expect(execute(interaction)).rejects.toMatchObject({
+      problem: expect.stringContaining("Unknown"),
+      recovery: expect.stringContaining("spelling"),
+    });
   });
 
   it("replies with error when stats file is missing", async () => {
@@ -210,8 +213,7 @@ describe("/playtime command", () => {
     const interaction = makeInteraction({
       options: { getString: vi.fn().mockReturnValue("Steve") },
     });
-    await execute(interaction);
-    expect(interaction.editReply).toHaveBeenCalled();
+    await expect(execute(interaction)).rejects.toThrow("No stats for `Steve` yet.");
   });
 
   it("replies with playtime embed on success", async () => {
@@ -222,6 +224,8 @@ describe("/playtime command", () => {
     vi.mocked(loadStats).mockResolvedValue({
       stats: { "minecraft:custom": { "minecraft:play_time": 72000 } },
     } as never);
+    const { findPlayTimeStat } = await import("../../src/core/utils/minecraft/statUtils.js");
+    vi.mocked(findPlayTimeStat).mockReturnValueOnce(72000);
     const interaction = makeInteraction({
       options: { getString: vi.fn().mockReturnValue("Steve") },
     });

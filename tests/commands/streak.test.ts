@@ -15,9 +15,6 @@ vi.mock("../../src/core/utils/paths.js", () => ({
   getRootDir: vi.fn().mockReturnValue("/tmp"),
 }));
 
-vi.mock("../../src/bot/utils/embeds/embedUtils.js", () => ({
-  createErrorEmbed: vi.fn().mockReturnValue({ type: "error-embed" }),
-}));
 
 vi.mock("../../src/bot/utils/guild/guildRouter.js", () => ({
   resolveServer: vi.fn().mockReturnValue({ id: "main" }),
@@ -30,14 +27,27 @@ import { execute } from "../../src/bot/commands/connection/daily/streak.js";
 import type { ChatInputCommandInteraction } from "discord.js";
 
 function makeInteraction(userId = "user1"): ChatInputCommandInteraction {
-  return {
+  const interaction = {
     user: { id: userId },
     commandName: "streak",
-    deferReply: vi.fn().mockResolvedValue(undefined),
+    deferReply: vi.fn().mockImplementation(async () => {
+      interaction.deferred = true;
+      interaction.ephemeral = true;
+    }),
     editReply: vi.fn().mockResolvedValue({}),
     deferred: false,
     replied: false,
-  } as unknown as ChatInputCommandInteraction;
+    ephemeral: null as boolean | null,
+  };
+  return interaction as unknown as ChatInputCommandInteraction;
+}
+
+/** Everything the first edited embed says, as one string. */
+function repliedText(interaction: ChatInputCommandInteraction): string {
+  const payload = vi.mocked(interaction.editReply).mock.calls[0]![0] as {
+    embeds: { toJSON(): unknown }[];
+  };
+  return JSON.stringify(payload.embeds[0]!.toJSON());
 }
 
 beforeEach(() => {
@@ -51,9 +61,7 @@ describe("streak execute", () => {
     vi.mocked(loadJson).mockResolvedValue({}); // empty claimedDaily
     const interaction = makeInteraction();
     await execute(interaction);
-    expect(interaction.editReply).toHaveBeenCalledWith(
-      expect.objectContaining({ embeds: expect.any(Array) }),
-    );
+    expect(repliedText(interaction)).toContain("/daily");
   });
 
   it("replies with streak info when user has data and no rewards config", async () => {
@@ -69,9 +77,7 @@ describe("streak execute", () => {
 
     const interaction = makeInteraction();
     await execute(interaction);
-    expect(interaction.editReply).toHaveBeenCalledWith(
-      expect.stringContaining("7"),
-    );
+    expect(repliedText(interaction)).toContain("7 days");
   });
 
   it("includes next bonus streak when rewards config has a higher milestone", async () => {
@@ -90,9 +96,7 @@ describe("streak execute", () => {
     const interaction = makeInteraction();
     await execute(interaction);
     // Should mention "7 days" as the next bonus streak
-    const editReplyArg = vi.mocked(interaction.editReply).mock
-      .calls[0]![0] as string;
-    expect(editReplyArg).toContain("7 days");
+    expect(repliedText(interaction)).toContain("7 days");
   });
 
   it("shows N/A when all bonuses are already surpassed", async () => {
@@ -110,9 +114,7 @@ describe("streak execute", () => {
 
     const interaction = makeInteraction();
     await execute(interaction);
-    const editReplyArg = vi.mocked(interaction.editReply).mock
-      .calls[0]![0] as string;
-    expect(editReplyArg).toContain("N/A");
+    expect(repliedText(interaction)).toContain("None");
   });
 
   it("defers reply as ephemeral", async () => {

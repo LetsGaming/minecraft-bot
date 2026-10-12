@@ -143,9 +143,9 @@ export const execute = withErrorHandling(
 
       await interaction.editReply({
         embeds: [
-          createSuccessEmbed(
-            t("dailyAdmin.moved", { user: user.tag, from, to }),
-          ),
+          createSuccessEmbed(t("dailyAdmin.moved", { user: user.tag, from, to }), {
+            title: t("dailyAdmin.movedTitle"),
+          }),
         ],
       });
       return;
@@ -176,7 +176,9 @@ export const execute = withErrorHandling(
 
       await interaction.editReply({
         embeds: [
-          createSuccessEmbed(t("dailyAdmin.reset", { user: user.tag, server })),
+          createSuccessEmbed(t("dailyAdmin.reset", { user: user.tag, server }), {
+            title: t("dailyAdmin.resetTitle"),
+          }),
         ],
       });
       return;

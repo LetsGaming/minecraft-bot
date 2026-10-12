@@ -74,9 +74,7 @@ async function handleChallenge(
     detail: active.advancement,
   });
 
-  const rewardLine = active.reward
-    ? `\n${t("challenge.rewardLine", { reward: active.reward })}`
-    : "";
+  const reward = active.reward;
   await broadcastNotification(client, guildConfigs, {
     serverId: server.id,
     event: "challenge",
@@ -88,8 +86,8 @@ async function handleChallenge(
           t("challenge.wonEmbed", {
             player,
             advancement: active.advancement,
-          }) + rewardLine,
-        color: EmbedColor.Gold,
+          }) + (reward ? `\n${t("challenge.rewardLine", { reward })}` : ""),
+        color: EmbedColor.Success,
         ...(withServerFooter ? { footer: { text: server.id } } : {}),
       }),
   });
@@ -141,9 +139,11 @@ export function registerAdvancementWatcher(
       logTag: "advancements",
       buildEmbed: (withServerFooter) =>
         createPlayerEmbed(player, {
-          title: isChallenge ? t("advancement.challenge") : t("advancement.made"),
-          description: `**${advancement}**`,
-          color: isChallenge ? EmbedColor.Challenge : EmbedColor.Success,
+          description: t(isChallenge ? "advancement.challengeLine" : "advancement.madeLine", {
+            player,
+            advancement,
+          }),
+          color: isChallenge ? EmbedColor.Success : EmbedColor.Neutral,
           ...(withServerFooter ? { footer: { text: serverId } } : {}),
         }),
     });

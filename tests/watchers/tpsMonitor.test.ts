@@ -158,7 +158,7 @@ it("does not crash when getTps() throws", async () => {
   t!.stop();
 });
 
-it("uses red color (0xff0000) for critically low TPS (< 10)", async () => {
+it("uses the offline status red for critically low TPS (< 10)", async () => {
   const { createEmbed } = await import("../../src/bot/utils/embeds/embedUtils.js");
   vi.mocked(createEmbed).mockClear();
   const t = startTpsMonitor(
@@ -168,12 +168,12 @@ it("uses red color (0xff0000) for critically low TPS (< 10)", async () => {
   );
   await vi.advanceTimersByTimeAsync(TICK);
   expect(vi.mocked(createEmbed)).toHaveBeenCalledWith(
-    expect.objectContaining({ color: 0xff0000 }),
+    expect.objectContaining({ color: 0xf87171 }),
   );
   t!.stop();
 });
 
-it("uses amber color (0xffaa00) for TPS between 10 and threshold", async () => {
+it("uses the degraded status amber for TPS between 10 and threshold", async () => {
   const { createEmbed } = await import("../../src/bot/utils/embeds/embedUtils.js");
   vi.mocked(createEmbed).mockClear();
   const t = startTpsMonitor(
@@ -183,7 +183,7 @@ it("uses amber color (0xffaa00) for TPS between 10 and threshold", async () => {
   );
   await vi.advanceTimersByTimeAsync(TICK);
   expect(vi.mocked(createEmbed)).toHaveBeenCalledWith(
-    expect.objectContaining({ color: 0xffaa00 }),
+    expect.objectContaining({ color: 0xfbbf24 }),
   );
   t!.stop();
 });
@@ -240,5 +240,55 @@ describe("live config", () => {
     t!.stop();
     await vi.advanceTimersByTimeAsync(1000);
     expect((server as { getTps: ReturnType<typeof vi.fn> }).getTps).not.toHaveBeenCalled();
+  });
+});
+
+describe("TPS recovery and escalation", () => {
+  function guildWithRole(mentionPolicy?: string) {
+    return {
+      g1: {
+        tpsAlerts: { channelId: "ch1", mentionRole: "42", ...(mentionPolicy ? { mentionPolicy } : {}) },
+      },
+    } as never;
+  }
+
+  it("posts a recovery once TPS is back above the threshold", async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    const server = srv("rec-1", { tps1m: 12 });
+    const t = startTpsMonitor(server, client(send), guildWithRole());
+    await vi.advanceTimersByTimeAsync(TICK);
+    vi.mocked((server as unknown as { getTps: ReturnType<typeof vi.fn> }).getTps).mockResolvedValue({ tps1m: 19.9 });
+    await vi.advanceTimersByTimeAsync(TICK);
+    await vi.advanceTimersByTimeAsync(TICK);
+    t!.stop();
+    expect(send).toHaveBeenCalledTimes(2);
+    const { createEmbed } = await import("../../src/bot/utils/embeds/embedUtils.js");
+    expect(vi.mocked(createEmbed)).toHaveBeenLastCalledWith(
+      expect.objectContaining({ title: expect.stringContaining("back to normal") }),
+    );
+  });
+
+  it("by default (escalation) the recovery does not ping", async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    const server = srv("rec-2", { tps1m: 12 });
+    const t = startTpsMonitor(server, client(send), guildWithRole());
+    await vi.advanceTimersByTimeAsync(TICK);
+    vi.mocked((server as unknown as { getTps: ReturnType<typeof vi.fn> }).getTps).mockResolvedValue({ tps1m: 19.9 });
+    await vi.advanceTimersByTimeAsync(TICK);
+    t!.stop();
+    expect(send.mock.calls[0]![0]).toEqual(expect.objectContaining({ content: "<@&42>" }));
+    expect(send.mock.calls[1]![0]).not.toHaveProperty("content");
+  });
+
+  it("a drop from warning to severe alerts again without waiting", async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    const server = srv("rec-3", { tps1m: 12 });
+    const t = startTpsMonitor(server, client(send), guildWithRole("escalation"));
+    await vi.advanceTimersByTimeAsync(TICK);
+    vi.mocked((server as unknown as { getTps: ReturnType<typeof vi.fn> }).getTps).mockResolvedValue({ tps1m: 5 });
+    await vi.advanceTimersByTimeAsync(TICK);
+    t!.stop();
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send.mock.calls[1]![0]).toEqual(expect.objectContaining({ content: "<@&42>" }));
   });
 });

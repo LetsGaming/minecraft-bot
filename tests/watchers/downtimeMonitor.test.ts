@@ -41,9 +41,11 @@ vi.mock("../../src/bot/utils/embeds/embedUtils.js", () => ({
 const TICK = 60_001; // just past the 60 000 ms check interval
 
 import {
+  noteServerStopping,
   startDowntimeMonitor,
   suppressAlerts,
 } from "../../src/bot/logWatcher/watchers/monitors/downtimeMonitor.js";
+import { createEmbed } from "../../src/bot/utils/embeds/embedUtils.js";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -478,5 +480,90 @@ describe("startDowntimeMonitor — no downtime alert guilds", () => {
     await vi.advanceTimersByTimeAsync(TICK);
     expect(timer).toBeTruthy();
     clearInterval(timer);
+  });
+});
+
+// ── mention policy ─────────────────────────────────────────────────────────
+
+describe("startDowntimeMonitor: mention policy", () => {
+  function guildsWithRole(mentionPolicy?: string) {
+    return {
+      g1: {
+        downtimeAlerts: {
+          channelId: "ch1",
+          mentionRole: "42",
+          ...(mentionPolicy ? { mentionPolicy } : {}),
+        },
+      },
+    } as never;
+  }
+
+  async function downThenUp(mentionPolicy?: string) {
+    const id = uid();
+    const send = vi.fn().mockResolvedValue(undefined);
+    const srv = { id, getHealth: vi.fn().mockResolvedValue(health("offline")) } as never;
+    const timer = startDowntimeMonitor([srv], fakeClient(send), guildsWithRole(mentionPolicy));
+    for (let i = 0; i < 3; i++) await vi.advanceTimersByTimeAsync(TICK);
+    vi.mocked(srv.getHealth).mockResolvedValue(health("online"));
+    await vi.advanceTimersByTimeAsync(TICK);
+    clearInterval(timer);
+    return send.mock.calls.map(([payload]) => payload as { content?: string; allowedMentions: unknown });
+  }
+
+  it("always pings on the outage and the recovery", async () => {
+    const [down, up] = await downThenUp("always");
+    expect(down!.content).toBe("<@&42>");
+    expect(up!.content).toBe("<@&42>");
+    expect(down!.allowedMentions).toEqual({ parse: [], roles: ["42"] });
+  });
+
+  it("by default pings the outage only and posts the recovery silently", async () => {
+    const [down, up] = await downThenUp();
+    expect(down!.content).toBe("<@&42>");
+    expect(up!.content).toBeUndefined();
+    expect(up!.allowedMentions).toEqual({ parse: [] });
+  });
+});
+
+describe("downtime alert details", () => {
+  function upThenDown(id: string) {
+    let up = true;
+    const server = {
+      id,
+      getHealth: vi.fn(async () => health(up ? "online" : "offline")),
+      getList: vi.fn().mockResolvedValue({ playerCount: "5", maxPlayers: "20", players: [] }),
+    };
+    return { server, goDown: () => (up = false) };
+  }
+
+  function downAlertDescription(id: string): string | undefined {
+    const call = vi
+      .mocked(createEmbed)
+      .mock.calls.find(([opts]) => String(opts.title).includes(id) && opts.state === "offline");
+    return call?.[0].description;
+  }
+
+  it("hints at a crash when the server went down without a stop", async () => {
+    const id = uid();
+    const { server, goDown } = upThenDown(id);
+    const timer = startDowntimeMonitor([server as never], fakeClient(), guildsFor());
+    await vi.advanceTimersByTimeAsync(TICK);
+    goDown();
+    for (let i = 0; i < 3; i++) await vi.advanceTimersByTimeAsync(TICK);
+    clearInterval(timer);
+    expect(downAlertDescription(id)).toContain("crash reports");
+  });
+
+  it("leaves the hint out after a Stopping server line", async () => {
+    const id = uid();
+    const { server, goDown } = upThenDown(id);
+    const timer = startDowntimeMonitor([server as never], fakeClient(), guildsFor());
+    await vi.advanceTimersByTimeAsync(TICK);
+    noteServerStopping(id);
+    goDown();
+    for (let i = 0; i < 3; i++) await vi.advanceTimersByTimeAsync(TICK);
+    clearInterval(timer);
+    expect(downAlertDescription(id)).toBeDefined();
+    expect(downAlertDescription(id)).not.toContain("crash reports");
   });
 });

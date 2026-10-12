@@ -1,29 +1,29 @@
-import {
-  SlashCommandBuilder,
-  type ChatInputCommandInteraction,
-} from "discord.js";
+import { SlashCommandBuilder, type APIEmbedField } from "discord.js";
 import {
   loadStats,
   flattenStats,
   filterStats,
   humanizeKey,
-  formatPlaytime,
+  ticksToMs,
   formatDistance,
 } from "@mcbot/core/utils/minecraft/statUtils.js";
 import {
+  chunkLines,
   createEmbed,
   createPaginationButtons,
   handlePagination,
-  createErrorEmbed,
   createInfoEmbed,
+  paginateFields,
+  reservedLength,
 } from "../../utils/embeds/embedUtils.js";
+import { withErrorHandling } from "../middleware.js";
+import { noStatsYet, playerNotFound } from "./statErrors.js";
 import { findPlayer } from "@mcbot/core/utils/minecraft/playerUtils.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
 import type { EmbedBuilder } from "discord.js";
 import type { FlattenedStat } from "@mcbot/core/types/index.js";
-import { log } from "@mcbot/core/utils/logger.js";
-import { errMsg } from "@mcbot/core/utils/error.js";
 
+import { formatSpan } from "@mcbot/core/utils/duration.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 export const data = new SlashCommandBuilder()
   .setName("compare")
@@ -52,101 +52,55 @@ export const data = new SlashCommandBuilder()
     o.setName("server").setDescription("Server instance").setAutocomplete(true),
   );
 
-export async function execute(
-  interaction: ChatInputCommandInteraction,
-): Promise<void> {
-  await interaction.deferReply();
-
+export const execute = withErrorHandling(async (interaction) => {
   const server = resolveServer(interaction);
   const player1 = interaction.options.getString("player1", true);
   const player2 = interaction.options.getString("player2", true);
   const filterStat = interaction.options.getString("stat");
 
-  try {
-    const player1Data = await findPlayer(player1, server);
-    const player2Data = await findPlayer(player2, server);
+  const [player1Data, player2Data] = await Promise.all([
+    findPlayer(player1, server),
+    findPlayer(player2, server),
+  ]);
+  if (!player1Data) throw playerNotFound(player1);
+  if (!player2Data) throw playerNotFound(player2);
 
-    if (!player1Data || !player2Data) {
-      await interaction.editReply({
-        embeds: [
-          createErrorEmbed(
-            t("compare.notFound", { player1, player2 }),
-          ),
-        ],
-      });
-      return;
-    }
+  const [stats1, stats2] = await Promise.all([
+    loadStats(player1Data.uuid, server),
+    loadStats(player2Data.uuid, server),
+  ]);
+  if (!stats1) throw noStatsYet(player1);
+  if (!stats2) throw noStatsYet(player2);
 
-    const stats1 = await loadStats(player1Data.uuid, server);
-    const stats2 = await loadStats(player2Data.uuid, server);
+  const embeds = buildComparisonEmbeds(
+    filterStats(flattenStats(stats1), filterStat),
+    filterStats(flattenStats(stats2), filterStat),
+    player1,
+    player2,
+  );
 
-    if (!stats1 || !stats2) {
-      await interaction.editReply({
-        embeds: [
-          createErrorEmbed(
-            t("compare.noStatsFile", { player1, player2 }),
-          ),
-        ],
-      });
-      return;
-    }
-
-    let flattened1 = flattenStats(stats1);
-    let flattened2 = flattenStats(stats2);
-
-    if (filterStat) {
-      flattened1 = filterStats(flattened1, filterStat);
-      flattened2 = filterStats(flattened2, filterStat);
-    }
-
-    const embeds = buildComparisonEmbeds(
-      flattened1,
-      flattened2,
-      player1,
-      player2,
-    );
-
-    if (embeds.length === 0) {
-      await interaction.editReply({
-        embeds: [
-          createInfoEmbed(
-            t("compare.noStats", { player1, player2 }),
-          ),
-        ],
-      });
-      return;
-    }
-
-    if (embeds.length === 1) {
-      await interaction.editReply({ embeds });
-    } else {
-      const message = await interaction.editReply({
-        embeds: [embeds[0]!],
-        components: [createPaginationButtons(0, embeds.length)],
-      });
-
-      await handlePagination(message, interaction, embeds);
-    }
-  } catch (error) {
-    log.error(
-      "compare",
-      `Error comparing players: ${errMsg(error)}`,
-    );
+  if (embeds.length === 0) {
     await interaction.editReply({
-      embeds: [
-        createErrorEmbed(t("compare.error")),
-      ],
+      embeds: [createInfoEmbed(t("compare.noStats", { player1, player2 }))],
     });
+    return;
   }
-}
+
+  if (embeds.length === 1) {
+    await interaction.editReply({ embeds });
+    return;
+  }
+  const message = await interaction.editReply({
+    embeds: [embeds[0]!],
+    components: [createPaginationButtons(0, embeds.length)],
+  });
+  await handlePagination(message, interaction, embeds);
+});
 
 interface ComparisonLine {
   category: string;
   line: string;
 }
-
-/** Discord's hard limit on an embed field's value. */
-const FIELD_VALUE_LIMIT = 1024;
 
 export function buildComparisonEmbeds(
   flat1: FlattenedStat[],
@@ -154,10 +108,6 @@ export function buildComparisonEmbeds(
   name1: string,
   name2: string,
 ): EmbedBuilder[] {
-  const embeds: EmbedBuilder[] = [];
-  let currentEmbed = createEmbed({});
-  let fieldCount = 0;
-
   const statMap2 = new Map(flat2.map((stat) => [stat.fullKey, stat]));
   const combined: ComparisonLine[] = [];
 
@@ -166,114 +116,37 @@ export function buildComparisonEmbeds(
     if (!s2) continue;
 
     const key = s1.key.toLowerCase();
-    const value1 = s1.value;
-    const value2 = s2.value;
+    const format = key.includes("time")
+      ? (v: number) => formatSpan(ticksToMs(v))
+      : key.includes("one_cm")
+        ? formatDistance
+        : (v: number) => v.toLocaleString();
 
-    const isTime = key.includes("time");
-    const isDistance = key.includes("one_cm");
-
-    let formatted1: string;
-    let formatted2: string;
-    if (isTime) {
-      formatted1 = formatPlaytime(value1);
-      formatted2 = formatPlaytime(value2);
-    } else if (isDistance) {
-      formatted1 = formatDistance(value1);
-      formatted2 = formatDistance(value2);
-    } else {
-      formatted1 = value1.toLocaleString();
-      formatted2 = value2.toLocaleString();
-    }
-
-    const line = `• ${humanizeKey(
-      s1.key,
-    )}:\n> ${name1}: ${formatted1}\n> ${name2}: ${formatted2}`;
+    const line = `• ${humanizeKey(s1.key)}:\n> ${name1}: ${format(s1.value)}\n> ${name2}: ${format(s2.value)}`;
     combined.push({ category: s1.category, line });
   }
 
   const grouped: Record<string, string[]> = {};
   for (const item of combined) {
-    if (!grouped[item.category]) grouped[item.category] = [];
-    grouped[item.category]!.push(item.line);
+    (grouped[item.category] ??= []).push(item.line);
   }
 
+  const fields: APIEmbedField[] = [];
   for (const [category, lines] of Object.entries(grouped)) {
-    let index = 0;
-    let chunkNumber = 1;
-
-    while (index < lines.length) {
-      const chunk: string[] = [];
-      let chunkLength = 0;
-
-      // The field value is chunk.join("\n"), so it is the sum of the line
-      // lengths PLUS one newline between each. Counting only the lines let a
-      // chunk that measured 1020 ship 1029 and Discord rejects any field
-      // over 1024 — which is why /compare worked on thin data and threw for
-      // anyone with a real stat file. `chunk.length` is the separator count
-      // this line would need (one per line already in the chunk).
-      while (
-        index < lines.length &&
-        chunkLength + chunk.length + lines[index]!.length <= FIELD_VALUE_LIMIT
-      ) {
-        chunk.push(lines[index]!);
-        chunkLength += lines[index]!.length;
-        index++;
-      }
-
-      // A single line longer than the whole limit can never satisfy the
-      // condition above, so the chunk would stay empty, `index` would never
-      // advance, and the loop would spin forever emitting empty fields.
-      // Not reachable with today's line format, which is exactly why it
-      // would be missed if the format ever changed.
-      if (chunk.length === 0) {
-        chunk.push(lines[index]!.slice(0, FIELD_VALUE_LIMIT - 1) + "…");
-        index++;
-      }
-
-      const name =
-        chunkNumber === 1
-          ? humanizeKey(category)
-          : `${humanizeKey(category)} (${chunkNumber})`;
-      const value = chunk.join("\n");
-
-      if (fieldCount >= 2) {
-        embeds.push(currentEmbed);
-        currentEmbed = createEmbed({});
-        fieldCount = 0;
-      }
-
-      currentEmbed.addFields({
-        name,
+    chunkLines(lines).forEach((value, i) => {
+      fields.push({
+        name: i === 0 ? humanizeKey(category) : `${humanizeKey(category)} (${i + 1})`,
         value,
         inline: false,
       });
-
-      fieldCount++;
-      chunkNumber++;
-    }
-  }
-
-  if (fieldCount > 0) {
-    embeds.push(currentEmbed);
-  }
-
-  const totalPages = embeds.length;
-  for (let i = 0; i < totalPages; i++) {
-    const embed = embeds[i]!;
-    embed.data.title = t("compare.title", {
-      player1: name1,
-      player2: name2,
-      page: i + 1,
-      pages: totalPages,
-    });
-    embed.setFooter({
-      text: t("compare.footer", {
-        count: combined.length,
-        page: i + 1,
-        pages: totalPages,
-      }),
     });
   }
+  if (fields.length === 0) return [];
 
-  return embeds;
+  const title = t("compare.title", { player1: name1, player2: name2 });
+  const description = t("compare.shared", { count: combined.length });
+  return paginateFields(fields, {
+    maxFields: 2,
+    reserved: reservedLength({ title, description }),
+  }).map((page) => createEmbed({ title, description }).addFields(page));
 }

@@ -1339,6 +1339,8 @@ console.log("\n── mod compatibility check");
       text,
     );
 
+    // The management checks above leave lithium on its latest version; the stub only offers an update from the first.
+    await serverAccess.addMod(cfg, { slug: "lithium", versionId: "v-lithium-1" });
     const ready = await settle((await serverAccess.startModCompat(cfg, "1.21.5")).jobId);
     check(
       "a version every mod supports reports them available, with the target release of an update",

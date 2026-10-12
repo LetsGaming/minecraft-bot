@@ -14,7 +14,7 @@
  * different dates to two people matters more than locale niceties.
  */
 
-/** What a timestamp can arrive as: epoch ms, an ISO string, or "YYYY-MM-DD HH:mm:ss". */
+/** What a timestamp can arrive as: epoch ms, an ISO string, or "YYYY-MM-DD HH:mm:ss" (UTC). */
 export type Timestamp = number | string;
 
 const MINUTE_MS = 60_000;
@@ -37,10 +37,14 @@ export function parseStamp(value: Timestamp): Date | null {
   const text = value.trim();
   if (text === "") return null;
   // "2026-08-08 11:37:34" is not ISO-8601. Browsers mostly accept it, but not
-  // all of them and not consistently, so normalise before parsing.
-  const iso = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(text)
-    ? text.replace(" ", "T")
-    : text;
+  // all of them and not consistently, so normalise before parsing. It is what
+  // SQLite's CURRENT_TIMESTAMP writes, which is UTC: without the "Z" it would
+  // be read as local time and every age would be off by the zone offset.
+  const iso = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(text)
+    ? `${text.replace(" ", "T")}Z`
+    : /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(text)
+      ? text.replace(" ", "T")
+      : text;
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? null : date;
 }

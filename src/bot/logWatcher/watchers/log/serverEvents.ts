@@ -15,6 +15,9 @@ import { log } from "@mcbot/core/utils/logger.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
 import { t } from "@mcbot/core/utils/i18n.js";
+import { ServerState } from "@mcbot/schema/serverState.js";
+import { formatSpan } from "@mcbot/core/utils/duration.js";
+import { noteServerStopping } from "../monitors/downtimeMonitor.js";
 // SEC-01: anchored on the server thread tag — a chat message must not
 // forge start/stop (a forged stop closes every open play session).
 const START_REGEX = serverEventRegex(String.raw`Done \([\d.]+s\)!`);
@@ -59,22 +62,19 @@ export function registerServerEventWatcher(
       guildConfigs,
       serverId,
       "start",
-      () => t("serverEvent.startedTitle"),
-      EmbedColor.Success,
+      () => t("serverEvent.startedTitle", { server: serverId }),
+      ServerState.Online,
       () => t("serverEvent.startedBody"),
     );
   });
 
   registerServerEvent(logWatcher, STOP_REGEX, async () => {
+    noteServerStopping(serverId);
     await closeSessions(serverId);
-    let uptime: { h: number; m: number } | null = null;
+    let uptime: string | null = null;
     const started = startTimes.get(serverId);
     if (started) {
-      const seconds = Math.floor((Date.now() - started.getTime()) / 1000);
-      uptime = {
-        h: Math.floor(seconds / 3600),
-        m: Math.floor((seconds % 3600) / 60),
-      };
+      uptime = formatSpan(Date.now() - started.getTime());
       startTimes.delete(serverId);
     }
     await notifyEvent(
@@ -82,11 +82,11 @@ export function registerServerEventWatcher(
       guildConfigs,
       serverId,
       "stop",
-      () => t("serverEvent.stoppedTitle"),
-      EmbedColor.Error,
+      () => t("serverEvent.stoppedTitle", { server: serverId }),
+      ServerState.Offline,
       () =>
         t("serverEvent.stoppedBody") +
-        (uptime ? `\n${t("serverEvent.uptime", uptime)}` : ""),
+        (uptime ? `\n${t("serverEvent.uptime", { duration: uptime })}` : ""),
     );
   });
 }
@@ -97,19 +97,21 @@ async function notifyEvent(
   serverId: string,
   event: NotificationEvent,
   title: () => string,
-  color: number,
+  state: ServerState,
   description: () => string,
 ): Promise<void> {
   await broadcastNotification(client, guildConfigs, {
     serverId,
     event,
     logTag: "serverEvents",
-    buildEmbed: (withServerFooter) =>
+    // The title names the server, so no footer. A planned stop is a plain
+    // event: the circle shows the state, the bar stays grey.
+    buildEmbed: () =>
       createEmbed({
         title: title(),
         description: description(),
-        color,
-        ...(withServerFooter ? { footer: { text: serverId } } : {}),
+        state,
+        ...(state === ServerState.Offline ? { color: EmbedColor.Neutral } : {}),
       }),
   });
 }

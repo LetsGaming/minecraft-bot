@@ -11,13 +11,18 @@ vi.mock("../../src/bot/commands/middleware.js", () => ({
   withErrorHandling: vi.fn((fn) => fn),
   requireServerAdmin: vi.fn((fn) => fn),
   isServerAdmin: vi.fn().mockReturnValue(true),
+  getMemberRoleIds: vi.fn().mockReturnValue([]),
+  replyDenied: vi.fn(),
+  replyError: vi.fn(),
+  errorContentOf: vi.fn((err: Error) => ({ problem: err.message })),
 }));
 
 vi.mock("../../src/bot/utils/guild/guildRouter.js", () => ({
   resolveServer: vi.fn(),
 }));
 
-vi.mock("../../src/bot/utils/embeds/embedUtils.js", () => ({
+vi.mock("../../src/bot/utils/embeds/embedUtils.js", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   createEmbed: vi.fn().mockImplementation((opts) => ({
     _opts: opts,
     addFields: vi.fn().mockReturnThis(),
@@ -47,6 +52,7 @@ vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
   readUserCache: vi.fn().mockResolvedValue([]),
   readBackups: vi.fn(),
   runScript: vi.fn(),
+  pingServer: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("../../src/bot/logWatcher/watchers/monitors/downtimeMonitor.js", () => ({
@@ -168,12 +174,13 @@ describe("/status command", () => {
       const interaction = makeInteraction();
       await execute(interaction);
 
-      // The mocked createEmbed keeps its options on `_opts`, which is where
-      // the state copy lands.
+      // The mocked createEmbed keeps its options on `_opts`; the state label
+      // is in the title, next to the state circle.
       const call = vi.mocked(interaction.editReply).mock.calls[0]![0] as {
-        embeds: Array<{ _opts?: { description?: string } }>;
+        embeds: Array<{ _opts?: { title?: string; state?: string } }>;
       };
-      expect(call.embeds[0]?._opts?.description).toContain(label);
+      expect(call.embeds[0]?._opts?.title).toContain(label);
+      expect(call.embeds[0]?._opts?.state).toBe(state);
       // …and a non-online server is never asked for a player list.
       expect(server.getList).not.toHaveBeenCalled();
     },
@@ -191,12 +198,13 @@ describe("/status command", () => {
     await execute(interaction);
 
     const call = vi.mocked(interaction.editReply).mock.calls[0]![0] as {
-      embeds: Array<{ _opts?: { description?: string } }>;
+      embeds: Array<{ _opts?: { title?: string; description?: string } }>;
     };
+    const title = call.embeds[0]?._opts?.title ?? "";
     const description = call.embeds[0]?._opts?.description ?? "";
-    expect(description).toContain("Online");
+    expect(title).toContain("Online");
+    expect(title).not.toContain("Offline");
     expect(description).toContain("4/20 players");
-    expect(description).not.toContain("Offline");
     // The wrapper being down still has to be said — controls are gone.
     expect(description.toLowerCase()).toContain("wrapper");
   });
@@ -240,7 +248,7 @@ describe("/tps command", () => {
       getTps: vi.fn().mockResolvedValue(null),
     });
     vi.mocked(resolveServer).mockReturnValue(server);
-    await expect(execute(makeInteraction())).rejects.toThrow("offline");
+    await expect(execute(makeInteraction())).rejects.toThrow("/status");
   });
 
   it("includes Paper TPS fields (1m/5m/15m) when tps5m is present", async () => {
@@ -330,14 +338,19 @@ describe("/backup command", () => {
     expect(interaction.editReply).toHaveBeenCalled();
   });
 
-  it("throws when no backups exist", async () => {
+  it("shows an empty state, not an error, when no backups exist", async () => {
     const server = makeServer();
     vi.mocked(resolveServer).mockReturnValue(server);
     vi.mocked(serverAccess.readBackups).mockResolvedValue({
       dirs: [],
       totalBytes: 0,
     } as never);
-    await expect(execute(makeInteraction())).rejects.toThrow("No backups");
+    const interaction = makeInteraction();
+    await execute(interaction);
+    const call = vi.mocked(interaction.editReply).mock.calls[0]![0] as {
+      embeds: Array<{ toJSON(): { description?: string } }>;
+    };
+    expect(call.embeds[0]!.toJSON().description).toContain("No backups yet");
   });
 });
 
@@ -396,7 +409,7 @@ describe("/server control command", () => {
     });
 
     await expect(execute(interaction)).rejects.toThrow(
-      /setup-suite layout.*docs\/admin\/setup\.md/s,
+      /setup suite.*docs\/admin\/setup\.md/s,
     );
     expect(serverAccess.runScript).not.toHaveBeenCalled();
   });
@@ -411,7 +424,7 @@ describe("/server control command", () => {
       options: {
         getString: vi.fn().mockReturnValue(null),
         getBoolean: vi.fn().mockReturnValue(null),
-        getSubcommand: vi.fn().mockReturnValue("restart"),
+        getSubcommand: vi.fn().mockReturnValue("backup"),
       },
     });
     await execute(interaction);
@@ -440,17 +453,17 @@ describe("/server control command", () => {
     expect(interaction.editReply).toHaveBeenCalledTimes(2); // progress + result
   });
 
-  it("runs stop subcommand and suppresses downtime alerts", async () => {
+  it("asks before stopping: an ephemeral confirm row, nothing run or audited yet", async () => {
     const server = makeServer();
     vi.mocked(resolveServer).mockReturnValue(server);
-    vi.mocked(serverAccess.runScript).mockResolvedValue({
-      exitCode: 0,
-      output: "Server stopped",
-      stderr: "",
-    } as never);
+    vi.mocked(serverAccess.runScript).mockClear();
     const { suppressAlerts } =
       await import("../../src/bot/logWatcher/watchers/monitors/downtimeMonitor.js");
+    const { recordAdminAction } = await import("../../src/core/utils/stores/adminAudit.js");
+    vi.mocked(suppressAlerts).mockClear();
+    vi.mocked(recordAdminAction).mockClear();
     const interaction = makeInteraction({
+      reply: vi.fn().mockResolvedValue(undefined),
       options: {
         getString: vi.fn().mockReturnValue(null),
         getBoolean: vi.fn().mockReturnValue(null),
@@ -458,7 +471,57 @@ describe("/server control command", () => {
       },
     });
     await execute(interaction);
+    const { MessageFlags } = await import("discord.js");
+    const reply = vi.mocked(interaction.reply).mock.calls[0]![0] as unknown as {
+      flags: number;
+      components: { toJSON(): { components: { custom_id: string }[] } }[];
+    };
+    expect(reply.flags).toBe(MessageFlags.Ephemeral);
+    const ids = reply.components[0]!.toJSON().components.map((c) => c.custom_id);
+    expect(ids[0]).toMatch(/^confirm:yes:server-stop:survival:/);
+    expect(ids[1]).toMatch(/^confirm:no:server-stop:survival:/);
+    expect(serverAccess.runScript).not.toHaveBeenCalled();
+    expect(suppressAlerts).not.toHaveBeenCalled();
+    expect(recordAdminAction).not.toHaveBeenCalled();
+  });
+
+  it("stops after the confirm button: audit, alert suppression, public progress", async () => {
+    const server = makeServer();
+    const serverModule = await import("../../src/core/utils/server/server.js");
+    vi.spyOn(serverModule, "getServerInstance").mockReturnValue(server as never);
+    vi.mocked(serverAccess.runScript).mockResolvedValue({
+      exitCode: 0,
+      output: "Server stopped",
+      stderr: "",
+    } as never);
+    await import("../../src/bot/commands/server/control.js");
+    const { handleConfirmInteraction, confirmTarget } = await import(
+      "../../src/bot/interactions/confirmActions.js"
+    );
+    const { confirmCustomId } = await import("../../src/bot/utils/embeds/confirm.js");
+    const { suppressAlerts } =
+      await import("../../src/bot/logWatcher/watchers/monitors/downtimeMonitor.js");
+    const { recordAdminAction } = await import("../../src/core/utils/stores/adminAudit.js");
+    const notice = { id: "notice" };
+    const button = {
+      customId: confirmCustomId("yes", confirmTarget("server-stop", server.id, "user1")),
+      user: { id: "user1", tag: "Admin#0001", username: "admin" },
+      member: null,
+      guild: null,
+      isButton: () => true,
+      update: vi.fn().mockResolvedValue(undefined),
+      followUp: vi.fn().mockResolvedValue(notice),
+      webhook: { editMessage: vi.fn().mockResolvedValue(undefined) },
+    };
+    expect(await handleConfirmInteraction(button as never)).toBe(true);
+    expect(recordAdminAction).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "server stop", server: server.id }),
+    );
     expect(suppressAlerts).toHaveBeenCalledWith(server.id);
+    expect(serverAccess.runScript).toHaveBeenCalledWith(server.config, "stop", []);
+    // The notice is posted without the ephemeral flag and edited in place.
+    expect(button.followUp.mock.calls[0]![0]).not.toHaveProperty("flags");
+    expect(button.webhook.editMessage).toHaveBeenCalledWith(notice, expect.anything());
   });
 
   it("replies with error embed when runScript returns non-zero exit code", async () => {
@@ -470,6 +533,7 @@ describe("/server control command", () => {
       stderr: "Script failed",
     } as never);
     const interaction = makeInteraction({
+      followUp: vi.fn().mockResolvedValue(undefined),
       options: {
         getString: vi.fn().mockReturnValue(null),
         getBoolean: vi.fn().mockReturnValue(null),
@@ -478,5 +542,9 @@ describe("/server control command", () => {
     });
     await execute(interaction);
     expect(interaction.editReply).toHaveBeenCalledTimes(2);
+    // Script output can carry paths, so it goes to the admin only.
+    expect(interaction.followUp).toHaveBeenCalledWith(
+      expect.objectContaining({ flags: 64 }),
+    );
   });
 });

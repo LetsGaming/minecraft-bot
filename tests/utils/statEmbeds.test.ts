@@ -13,7 +13,7 @@ describe("buildLeaderboardEmbed", () => {
   const sampleData: LeaderboardData = {
     entries: [],
     title: "🏆 Leaderboard — Playtime",
-    description: "🥇 **Steve** — 2d 3h 0m 0s\n🥈 **Alex** — 1d 0h 0m 0s",
+    description: "🥇 **Steve** — 2 d 3 h\n🥈 **Alex** — 1 d",
     footerText: "2 players tracked",
   };
 
@@ -100,24 +100,21 @@ describe("buildStatsEmbeds", () => {
     expect(embeds[0]!.toJSON().title).toContain("Notch");
   });
 
-  it("includes page numbering in the title", () => {
+  it("leaves the page number to the pager, not the title", () => {
     const embeds = buildStatsEmbeds(minimalStats, "Steve");
-    expect(embeds[0]!.toJSON().title).toMatch(/Page \d+\/\d+/);
+    expect(embeds[0]!.toJSON().title).not.toMatch(/Page \d+\/\d+/);
   });
 
-  it("includes total stats count in footer", () => {
-    const embeds = buildStatsEmbeds(minimalStats, "Steve");
-    expect(embeds[0]!.toJSON().footer?.text).toContain(
-      String(minimalStats.length),
-    );
+  it("states the total stats count in the description, with no footer", () => {
+    const json = buildStatsEmbeds(minimalStats, "Steve")[0]!.toJSON();
+    expect(json.description).toContain(String(minimalStats.length));
+    expect(json.footer).toBeUndefined();
   });
 
   it("formats _time keys as human-readable duration", () => {
     const embeds = buildStatsEmbeds(minimalStats, "Steve");
     const allFields = embeds.flatMap((e) => e.toJSON().fields ?? []);
-    const timeField = allFields.find((f) =>
-      f.value.match(/\d+d \d+h \d+m \d+s/),
-    );
+    const timeField = allFields.find((f) => f.value.includes("Play Time: 1 h"));
     expect(timeField).toBeDefined();
   });
 

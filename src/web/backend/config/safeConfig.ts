@@ -12,10 +12,9 @@
  * dashboard edits the file, resolution happens in the bot process.
  */
 import type { RawBotConfig } from "@mcbot/core/types/index.js";
+import { SECRET_PLACEHOLDER, SECRET_SERVER_KEYS as SERVER_SECRET_KEYS } from "@mcbot/schema";
 
-export const SECRET_PLACEHOLDER = "•••••";
-
-const SERVER_SECRET_KEYS = ["rconPassword", "apiKey"] as const;
+export { SECRET_PLACEHOLDER };
 
 function clone<T>(value: T): T {
   // Deep clone via JSON round-trip. Config is plain JSON data (no functions,

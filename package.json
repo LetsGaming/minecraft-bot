@@ -1,6 +1,6 @@
 {
   "name": "minecraft-bot",
-  "version": "7.0.0",
+  "version": "8.0.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/LetsGaming/minecraft-bot.git"
@@ -24,7 +24,8 @@
     "start:web": "node --enable-source-maps src/web/dist/backend/index.js",
     "dev": "tsc -b src/bot src/web --watch",
     "typecheck": "tsc -b src/bot src/web && npm run typecheck:frontend --workspace=@mcbot/web",
-    "lint": "eslint src --max-warnings 0",
+    "lint": "eslint src --max-warnings 0 && node scripts/check-frontend.mjs",
+    "frontend:check": "node scripts/check-frontend.mjs",
     "pm2:start": "pm2 start ecosystem.config.cjs --env production",
     "pm2:stop": "pm2 stop minecraft-bot",
     "pm2:restart": "npm run build && pm2 restart minecraft-bot",
@@ -42,14 +43,17 @@
     "bump-version": "node scripts/bump-version.mjs",
     "clean": "rm -rf src/*/dist",
     "e2e:contract": "node scripts/e2e-wrapper-contract.mjs",
-    "e2e:dashboard": "node scripts/e2e-dashboard-reports.mjs"
+    "e2e:dashboard": "node scripts/e2e-dashboard-reports.mjs",
+    "discord:snapshots": "node scripts/discord-snapshots.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
     "@typescript-eslint/eslint-plugin": "^8.67.0",
     "@typescript-eslint/parser": "^8.67.0",
     "@vitest/coverage-v8": "^4.1.10",
+    "@vue/test-utils": "^2.5.1",
     "eslint": "^10.8.1",
+    "jsdom": "^27.4.0",
     "openapi-typescript": "^7.13.0",
     "ts-json-schema-generator": "^2.9.0",
     "typescript": "^6.0.3",

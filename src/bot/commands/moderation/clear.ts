@@ -39,6 +39,7 @@ export const execute = withErrorHandling(
     const embed = createSuccessEmbed(
       t("clear.deleted", { count: deleted.size }) +
         (deleted.size < amount ? `\n${t("clear.tooOld")}` : ""),
+      { title: t("clear.title") },
     );
     await interaction.editReply({ embeds: [embed] });
   },

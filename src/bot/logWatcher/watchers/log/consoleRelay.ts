@@ -17,6 +17,7 @@ import type { ILogWatcher } from "../../logWatcher.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
 import { t } from "@mcbot/core/utils/i18n.js";
+import { safeMentions } from "../../../utils/embeds/alertUtils.js";
 const FLUSH_INTERVAL_MS = 3_000;
 /** Discord message budget per flush (codeblock fences + margin < 2000). */
 const MAX_FLUSH_CHARS = 1_800;
@@ -137,7 +138,7 @@ async function flush(client: Client): Promise<void> {
       try {
         const channel = await client.channels.fetch(channelId);
         if (!channel || !("send" in channel)) continue;
-        await channel.send({ content });
+        await channel.send({ content, allowedMentions: safeMentions("none") });
       } catch (err) {
         log.warn("console", `Relay send failed for ${serverId}: ${errMsg(err)}`);
       }

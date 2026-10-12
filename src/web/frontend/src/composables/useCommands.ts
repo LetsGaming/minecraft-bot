@@ -1,11 +1,12 @@
 import { computed, ref } from "vue";
 import { isRecord } from "../utils/isRecord";
 import { useToast } from "primevue/usetoast";
-import { apiGet, apiSend } from "../api";
+import { ApiError, apiGet, apiSend } from "../api";
 import type { ConfigResponse } from "../api";
 import { useEditableDocument, type DocUnits } from "./useEditableDocument";
+import { t } from "../i18n";
 
-// ── Shapes for the /api/commands payload ──
+// Shapes for the /api/commands payload
 export interface ManifestEntry {
   name: string;
   description: string;
@@ -31,7 +32,7 @@ export interface CommandsResponse {
   manifest: { slash: ManifestEntry[]; ingame: ManifestEntry[] };
   /**
    * How often each command was actually used, over `windowDays`.
-   * Commands absent from `byCommand` were not used at all — the manifest
+   * Commands absent from `byCommand` were not used at all: the manifest
    * is the full list, so a missing entry is a real zero.
    */
   usage: {
@@ -105,11 +106,20 @@ export function useCommands() {
   const toast = useToast();
 
   const scope = ref("global");
+  /** HTTP status of the last failed load; 0 when the last load worked or never reached the server. */
+  const loadStatus = ref(0);
 
   const editor = useEditableDocument<OverrideDoc, CommandsResponse>(
     {
       async load() {
-        const res = await apiGet<CommandsResponse>("/api/commands");
+        let res: CommandsResponse;
+        try {
+          res = await apiGet<CommandsResponse>("/api/commands");
+          loadStatus.value = 0;
+        } catch (err) {
+          loadStatus.value = err instanceof ApiError ? err.status : 0;
+          throw err;
+        }
         return {
           doc: {
             global: res.overrides.global,
@@ -152,6 +162,11 @@ export function useCommands() {
   );
 
   const data = computed(() => editor.meta.value ?? null);
+  /**
+   * The bot has not written its command manifest yet. /api/commands answers
+   * 503 for nothing else, so this is a "start the bot" state, not a fault.
+   */
+  const manifestMissing = computed(() => loadStatus.value === 503 && !editor.ready.value);
   const overrides = computed(() => editor.draft.value ?? emptyDoc());
   /** Persistent save-failure lines: the failure itself, then the backend's validation list. */
   const saveFailure = computed(() => [
@@ -272,8 +287,8 @@ export function useCommands() {
     if (ok) {
       toast.add({
         severity: "success",
-        summary: "Saved",
-        detail: "Written to config.json. The status chip shows when the bot has applied it.",
+        summary: t("commands.savedToast"),
+        detail: t("commands.savedToastDetail"),
         life: 3000,
       });
     }
@@ -284,7 +299,7 @@ export function useCommands() {
     loadError: editor.loadError, loading: editor.loading, ready: editor.ready,
     saving: editor.saving, dirty: editor.dirty, saved: editor.saved,
     stale: editor.stale, conflicts: editor.conflicts,
-    saveFailure, scope, data, overrides,
+    saveFailure, scope, data, overrides, manifestMissing,
     load, currentBlock, fieldValue, setField, effectiveFor, save,
     optionSpecs, optionValue, setOption,
     discard, resetScope, isOverridden, overriddenCount, pendingCount,

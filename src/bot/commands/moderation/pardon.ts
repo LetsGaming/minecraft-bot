@@ -65,6 +65,7 @@ export const execute = withErrorHandling(
             t("moderation.pardoned", { player, server: server.id }),
             verdict,
           ),
+          { title: t("moderation.pardonedTitle") },
         ),
       ],
     });

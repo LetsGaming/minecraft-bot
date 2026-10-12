@@ -6,6 +6,7 @@ const SRC_GLOBS = [
   "src/web/backend/**/*.ts",
   "src/core/**/*.ts",
   "src/schema/**/*.ts",
+  "src/web/frontend/**/*.ts",
 ];
 
 export default [
@@ -111,6 +112,25 @@ export default [
     },
   },
   {
+    // The dashboard bundle may use the two shared workspaces and nothing else.
+    // .vue files are covered by scripts/check-frontend.mjs (no Vue parser).
+    files: ["src/web/frontend/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/src/bot/**", "**/src/web/backend/**", "@mcbot/bot*", "@mcbot/web*"],
+              message:
+                "src/web/frontend may import only @mcbot/core and @mcbot/schema — never the bot or the backend.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ["src/bot/**/*.ts"],
     rules: {
       "no-restricted-imports": [
@@ -132,7 +152,6 @@ export default [
       "**/dist/",
       "node_modules/",
       "vitest.config.ts",
-      "src/web/frontend/",
     ],
   },
 ];

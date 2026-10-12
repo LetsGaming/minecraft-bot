@@ -41,3 +41,23 @@ export function errMsg(err: unknown): string {
   }
   return String(err);
 }
+
+/**
+ * A failure meant for the person who ran a command: the problem, an optional
+ * next step and an optional title naming the failed action. The command
+ * wrapper renders it as problem plus recovery; `message` is the problem, so
+ * anything that only logs it still reads well.
+ */
+export class CommandError extends Error {
+  readonly title?: string;
+  readonly problem: string;
+  readonly recovery?: string;
+
+  constructor(content: { title?: string; problem: string; recovery?: string }) {
+    super(content.problem);
+    this.name = "CommandError";
+    this.title = content.title;
+    this.problem = content.problem;
+    this.recovery = content.recovery;
+  }
+}

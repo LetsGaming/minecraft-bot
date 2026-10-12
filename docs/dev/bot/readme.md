@@ -2,7 +2,7 @@
 
 The product: the Discord process. It owns the gateway connection, the commands,
 the watchers, and everything Discord-facing. It depends on `@mcbot/core` and
-`@mcbot/schema`, and never on `src/web` — the bot does not know its extension
+`@mcbot/schema`, and never on `src/web`: the bot does not know its extension
 exists.
 
 Started with `npm start` → `src/bot/dist/index.js`.
@@ -23,7 +23,7 @@ src/bot/
 │   ├── defineCommand.ts  Declarative framework for in-game !commands
 │   ├── initMinecraftCommands.ts   Wires watchers + schedulers per server
 │   ├── commands/<category>/<name>.ts   In-game !commands, same categories
-│   │                     as commands/ above — /seed is info/, so !seed is too
+│   │                     as commands/ above; /seed is info/, so !seed is too
 │   └── watchers/
 │       ├── log/          React to a log line (register*)
 │       ├── monitors/     Poll something, alert on a condition (start*)
@@ -46,14 +46,15 @@ and are used by both.
 | Topic | File |
 |---|---|
 | Slash commands: the middleware, autocomplete, adding one | [commands.md](commands.md) |
+| How replies look: builders, colours, errors, confirm rows, paging, mentions | [replies.md](replies.md) |
 | In-game `!commands` and the `defineCommand` framework | [in-game-commands.md](in-game-commands.md) |
 | Log watchers and scheduled tasks | [watchers.md](watchers.md) |
 
 ## Things that are true across all of them
 
 **Embeds come from the factories.** No naked `new EmbedBuilder()`, no raw
-`0x…` colour literals — `createEmbed` and friends from `utils/embeds/`, with
-colours from `EmbedColor`. The palette is a separate module from the builders
+`0x…` colour literals. Use `createEmbed` and friends from `utils/embeds/`, with
+colours from `EmbedColor` (see [replies.md](replies.md)). The palette is a separate module from the builders
 because it is pure data: tests can mock the builders and still get the real
 colours.
 

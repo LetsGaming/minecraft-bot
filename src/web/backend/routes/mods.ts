@@ -18,7 +18,9 @@
  * button.
  *
  * Modrinth serves icons from its own CDN, which the page's CSP does not allow,
- * so they are proxied through /mods/icon and loaded same-origin.
+ * so they are proxied through /mods/icon and loaded same-origin. The wrapper's
+ * installed and compat rows carry no icon, so they get one from a cached bulk
+ * project lookup (lookupProjectIcons) and the same proxy.
  */
 import type { FastifyInstance } from "fastify";
 import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
@@ -36,10 +38,12 @@ import {
   startModCompat,
   getModCompat,
   type InstalledMods,
+  type ModCompatJob,
 } from "@mcbot/core/utils/server/serverAccess.js";
 import {
   searchProjects,
   getProjectDetail,
+  lookupProjectIcons,
   ModrinthError,
   type ModSearchResult,
   type ModProjectDetail,
@@ -118,6 +122,30 @@ function throwModrinth(err: unknown, where: string): never {
 function proxyIcon(serverId: string, url: string | null): string | null {
   if (!url) return null;
   return `/api/servers/${encodeURIComponent(serverId)}/mods/icon?url=${encodeURIComponent(url)}`;
+}
+
+/**
+ * Adds `iconUrl` (through the proxy) to every row whose project has an icon on
+ * Modrinth. Rows without one keep their shape; the view shows initials then.
+ */
+async function withIcons<T extends { slug: string }>(
+  serverId: string,
+  rows: readonly T[],
+): Promise<Array<T & { iconUrl?: string }>> {
+  if (rows.length === 0) return [...rows];
+  const icons = await lookupProjectIcons(rows.map((r) => r.slug)).catch(() => new Map<string, string>());
+  return rows.map((r) => {
+    const icon = proxyIcon(serverId, icons.get(r.slug.toLowerCase()) ?? null);
+    return icon ? { ...r, iconUrl: icon } : r;
+  });
+}
+
+async function compatWithIcons(serverId: string, job: ModCompatJob): Promise<ModCompatJob> {
+  const [partial, mods] = await Promise.all([
+    withIcons(serverId, job.partial),
+    job.mods ? withIcons(serverId, job.mods) : Promise.resolve(undefined),
+  ]);
+  return { ...job, partial, ...(mods ? { mods } : {}) };
 }
 
 export function registerModRoutes(app: FastifyInstance): void {
@@ -223,7 +251,7 @@ export function registerModRoutes(app: FastifyInstance): void {
     async (req) => {
       const server = requireServer(req.params.id);
       const remembered = compatGuard.recall(req.params.id, req.params.jobId);
-      if (remembered) return remembered;
+      if (remembered) return compatWithIcons(req.params.id, remembered);
       let job;
       try {
         job = await getModCompat(server.config, req.params.jobId);
@@ -239,7 +267,7 @@ export function registerModRoutes(app: FastifyInstance): void {
         throw new NotFound("This check expired. Start it again.");
       }
       compatGuard.observe(req.params.id, job);
-      return job;
+      return compatWithIcons(req.params.id, job);
     },
   );
 
@@ -254,7 +282,11 @@ export function registerModRoutes(app: FastifyInstance): void {
       const server = requireServer(req.params.id);
       try {
         const { value, stale } = await loadInstalled(req.params.id, server.config);
-        return { ...value, stale, compat: await compatSupported(req.params.id, server.config) };
+        const [mods, compat] = await Promise.all([
+          withIcons(req.params.id, value.mods),
+          compatSupported(req.params.id, server.config),
+        ]);
+        return { ...value, mods, stale, compat };
       } catch (err) {
         log.error("web", `Installed mods for ${req.params.id} failed: ${errMsg(err)}`);
         throw new HttpError(502, OPERATION_FAILED);

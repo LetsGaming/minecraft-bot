@@ -152,9 +152,8 @@ export function registerDeathWatcher(
       logTag: "deaths",
       buildEmbed: (withServerFooter) =>
         createPlayerEmbed(player, {
-          title: t("death.title"),
           description: deathMessage,
-          color: EmbedColor.Error,
+          color: EmbedColor.Neutral,
           ...(withServerFooter ? { footer: { text: serverId } } : {}),
         }),
     });

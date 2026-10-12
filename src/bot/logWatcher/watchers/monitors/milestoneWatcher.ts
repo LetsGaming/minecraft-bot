@@ -159,7 +159,7 @@ async function announce(
           value: formatted,
           stat: statLabel,
         }),
-        color: EmbedColor.Gold,
+        color: EmbedColor.Success,
       });
       if (withServerFooter) embed.setFooter({ text: serverId });
       return embed;

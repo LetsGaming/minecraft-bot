@@ -25,7 +25,7 @@ export function instanceUrl(cfg: ServerConfig, route: string): string {
  * kept distinguishable from a real fetch failure only in that it never
  * touched the network, which is the whole point.
  */
-class BreakerOpenError extends Error {
+export class BreakerOpenError extends Error {
   constructor(serverId: string) {
     super(`circuit breaker open for ${serverId}; wrapper reads paused`);
     this.name = "BreakerOpenError";
@@ -45,6 +45,22 @@ export class RateLimitedError extends Error {
     super(`API ${route} → 429: rate limited${retryAfterMs !== null ? ` (retry after ${retryAfterMs}ms)` : ""}`);
     this.name = "RateLimitedError";
     this.retryAfterMs = retryAfterMs;
+  }
+}
+
+/**
+ * The wrapper answered with a non-OK status. The message keeps the
+ * "API <route> → <status>: <body>" form for the log; the body is raw wrapper
+ * output and must not reach a non-admin.
+ */
+export class ApiError extends Error {
+  readonly status: number;
+  readonly route: string;
+  constructor(route: string, status: number, body: string) {
+    super(`API ${route} → ${status}: ${body}`);
+    this.name = "ApiError";
+    this.route = route;
+    this.status = status;
   }
 }
 
@@ -97,7 +113,7 @@ const DEFAULT_GET_TIMEOUT_MS = 8_000;
 export async function readApiJson<T>(res: Response, route: string): Promise<T> {
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`API ${route} → ${res.status}: ${body}`);
+    throw new ApiError(route, res.status, body);
   }
   return res.json() as Promise<T>; // pinned first-party contract (see note above)
 }
@@ -131,7 +147,7 @@ export async function apiPost<T>(
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`API POST ${route} → ${res.status}: ${text}`);
+    throw new ApiError(`POST ${route}`, res.status, text);
   }
   return res.json() as Promise<T>; // pinned first-party contract (see apiGet)
 }
@@ -151,7 +167,7 @@ export async function apiDelete<T>(
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`API DELETE ${route} → ${res.status}: ${text}`);
+    throw new ApiError(`DELETE ${route}`, res.status, text);
   }
   return res.json() as Promise<T>; // pinned first-party contract (see apiGet)
 }

@@ -1,7 +1,9 @@
-import { formatDuration } from "@mcbot/core/utils/duration.js";
+import { formatSpan } from "@mcbot/core/utils/duration.js";
 import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../utils/embeds/embedColors.js";
+import { describeState } from "../../utils/embeds/serverStateDisplay.js";
+import type { ServerState } from "@mcbot/schema/serverState.js";
 import {
   getAllInstances,
   getServerInstance,
@@ -22,8 +24,14 @@ function uptimeBar(pct: number | null, width = 10): string {
   return `${bar} ${pct.toFixed(1)}%`;
 }
 
-function stateEmoji(state: string): string {
-  return state === "online" ? "🟢" : state === "offline" ? "🔴" : "⚫";
+/** "🟢 Online for 2 d 7 h", in the same words as /status. */
+function describeUptimeState(stats: Awaited<ReturnType<typeof getUptimeStats>>): string {
+  const display = describeState(stats.currentState as ServerState);
+  const since =
+    stats.currentState !== "unknown"
+      ? t("uptime.forDuration", { duration: formatSpan(stats.currentStateDuration) })
+      : "";
+  return `${display.emoji} ${display.label}${since}`;
 }
 
 export const data = new SlashCommandBuilder()
@@ -61,18 +69,13 @@ export const execute = withErrorHandling(async (interaction) => {
   const embed = createEmbed({
     title: t("uptime.overviewTitle"),
     color: EmbedColor.Info,
+    timestamp: true,
   });
 
   for (const server of instances) {
     const stats = await getUptimeStats(server.id);
-    const state = `${stateEmoji(stats.currentState)} ${stats.currentState}`;
-    const since =
-      stats.currentState !== "unknown"
-        ? t("uptime.forDuration", { duration: formatDuration(stats.currentStateDuration) })
-        : "";
-
     const lines = [
-      `${state}${since}`,
+      describeUptimeState(stats),
       `24h: ${uptimeBar(stats.pct24h)}`,
       ` 7d: ${uptimeBar(stats.pct7d)}`,
       `30d: ${uptimeBar(stats.pct30d)}`,
@@ -92,24 +95,18 @@ function buildSingleEmbed(
   serverId: string,
   stats: Awaited<ReturnType<typeof getUptimeStats>>,
 ) {
-  const state = t("uptime.currently", {
-    emoji: stateEmoji(stats.currentState),
-    state: stats.currentState,
-  });
-  const since =
-    stats.currentState !== "unknown"
-      ? t("uptime.forDuration", { duration: formatDuration(stats.currentStateDuration) })
-      : "";
-
+  const basis =
+    stats.checks24h.total > 0
+      ? t("uptime.basedOn", {
+          checks24h: stats.checks24h.total,
+          checks7d: stats.checks7d.total,
+        })
+      : t("uptime.noData");
   const embed = createEmbed({
     title: t("uptime.title", { server: serverId }),
-    description: `${state}${since}`,
-    color:
-      stats.currentState === "online"
-        ? EmbedColor.Success
-        : stats.currentState === "offline"
-          ? EmbedColor.Error
-          : EmbedColor.Neutral,
+    description: `${describeUptimeState(stats)}\n${basis}`,
+    color: describeState(stats.currentState as ServerState).color,
+    timestamp: true,
   });
 
   embed.addFields(
@@ -129,19 +126,6 @@ function buildSingleEmbed(
       name: t("uptime.trend"),
       value: t("uptime.trendLegend", { bar: stats.sparkline24h }),
       inline: false,
-    });
-  }
-
-  if (stats.checks24h.total > 0) {
-    embed.setFooter({
-      text: t("uptime.basedOn", {
-        checks24h: stats.checks24h.total,
-        checks7d: stats.checks7d.total,
-      }),
-    });
-  } else {
-    embed.setFooter({
-      text: t("uptime.noData"),
     });
   }
 

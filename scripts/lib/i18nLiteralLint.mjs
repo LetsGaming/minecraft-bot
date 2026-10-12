@@ -49,6 +49,8 @@ const TEXT_PROPS = new Set([
   "value",
   "label",
   "placeholder",
+  "problem",
+  "recovery",
 ]);
 
 const HAS_LETTER = /\p{L}/u;
@@ -179,7 +181,9 @@ export function lintSource(fileName, source) {
       /Error$/.test(node.expression.expression.getText(sf)) &&
       node.expression.arguments?.[0]
     ) {
-      report(node.expression.arguments[0]);
+      const [arg] = node.expression.arguments;
+      report(arg);
+      for (const v of objectArgValues(arg)) report(v);
     }
     if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
       const callee = node.expression;
@@ -190,7 +194,13 @@ export function lintSource(fileName, source) {
           : "";
       const args = node.arguments ?? [];
       if (/^create(Error|Success|Info)Embed$/.test(name) && args[0]) report(args[0]);
-      if (name === "errorReply") for (const arg of args) report(arg);
+      if (/^(errorReply|replyError)$/.test(name)) {
+        for (const arg of args) {
+          report(arg);
+          for (const v of objectArgValues(arg)) report(v);
+        }
+      }
+      if (name === "createConfirmRow" && args[1]) report(args[1]);
       if (/^(create\w*Embed\w*|EmbedBuilder)$/.test(name)) {
         for (const arg of args) for (const v of objectArgValues(arg)) report(v);
       }

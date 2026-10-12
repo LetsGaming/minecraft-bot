@@ -5,7 +5,6 @@ import {
   REST,
   Routes,
   MessageFlags,
-  type InteractionReplyOptions,
 } from "discord.js";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -31,6 +30,8 @@ const manifestSlash: Array<{
 import {
   isServerAdmin,
   getMemberRoleIds,
+  replyDenied,
+  replyError,
 } from "./commands/middleware.js";
 import { initServers, getAllInstances } from "@mcbot/core/utils/server/server.js";
 import { getDb } from "@mcbot/core/db/index.js";
@@ -395,6 +396,17 @@ void (async () => {
         log.error("hint", `Interaction failed: ${errMsg(err)}`);
         return;
       }
+
+      // Confirmation rows (stop, restart) carry their expiry in the customId.
+      try {
+        const { handleConfirmInteraction } = await import(
+          "./interactions/confirmActions.js"
+        );
+        if (await handleConfirmInteraction(interaction)) return;
+      } catch (err) {
+        log.error("confirm", `Interaction failed: ${errMsg(err)}`);
+        return;
+      }
     }
 
     if (!interaction.isChatInputCommand()) return;
@@ -429,10 +441,7 @@ void (async () => {
         chatInteraction.guild?.id,
       );
       if (!allowed) {
-        await chatInteraction.reply({
-          content: t("common.noPermission"),
-          flags: MessageFlags.Ephemeral,
-        });
+        await replyDenied(chatInteraction);
         return;
       }
     }
@@ -442,7 +451,11 @@ void (async () => {
       if (!consumeToken(chatInteraction.user.id)) {
         const secs = cooldownSeconds(chatInteraction.user.id);
         await chatInteraction.reply({
-          content: t("common.rateLimited", { seconds: secs }),
+          content: t(
+            "common.rateLimited",
+            { seconds: secs },
+            chatInteraction.guild?.id,
+          ),
           flags: MessageFlags.Ephemeral,
         });
         return;
@@ -467,17 +480,11 @@ void (async () => {
       });
     } catch (err) {
       log.error("command", `/${chatInteraction.commandName}: ${errMsg(err)}`);
-      const errorMsg: InteractionReplyOptions = {
-        content: "❌ An error occurred.",
-        flags: MessageFlags.Ephemeral,
-      };
-      try {
-        if (chatInteraction.replied || chatInteraction.deferred)
-          await chatInteraction.followUp(errorMsg);
-        else await chatInteraction.reply(errorMsg);
-      } catch {
-        /* expired */
-      }
+      const guildId = chatInteraction.guild?.id;
+      await replyError(chatInteraction, {
+        problem: t("common.unexpectedError", {}, guildId),
+        recovery: t("common.unexpectedErrorRecovery", {}, guildId),
+      });
     }
   });
 

@@ -23,11 +23,11 @@ export const execute = withErrorHandling(async (interaction) => {
 
   const tpsColor =
     tps.tps1m >= 18 ? EmbedColor.Success : tps.tps1m >= 15 ? EmbedColor.Warning : EmbedColor.Error;
-  const emoji = tps.tps1m >= 18 ? "🟢" : tps.tps1m >= 15 ? "🟡" : "🔴";
 
   const embed = createEmbed({
-    title: t("tps.title", { emoji, server: server.id }),
+    title: t("tps.title", { server: server.id }),
     color: tpsColor,
+    timestamp: true,
   });
 
   if ("tps5m" in tps && tps.tps5m !== undefined) {
@@ -61,8 +61,6 @@ export const execute = withErrorHandling(async (interaction) => {
   } else {
     embed.setDescription(t("tps.current", { value: tps.tps1m.toFixed(1) }));
   }
-
-  if (tps.raw) embed.setFooter({ text: tps.raw.slice(0, 100) });
 
   await interaction.editReply({ embeds: [embed] });
 });

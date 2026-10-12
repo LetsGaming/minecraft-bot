@@ -27,12 +27,12 @@ vi.mock("../../src/bot/utils/embeds/embedUtils.js", () => ({
     toJSON: () => ({ title: opts?.title }),
   })),
   createErrorEmbed: vi.fn().mockReturnValue({ type: "error-embed" }),
-  createSuccessEmbed: vi
-    .fn()
-    .mockReturnValue({
-      type: "success-embed",
-      setDescription: vi.fn().mockReturnThis(),
-    }),
+  createSuccessEmbed: vi.fn().mockImplementation((text: string) => ({
+    type: "success-embed",
+    text,
+    setDescription: vi.fn().mockReturnThis(),
+  })),
+  createInfoEmbed: vi.fn().mockImplementation((text: string) => ({ type: "info-embed", text })),
   createPaginationButtons: vi.fn().mockReturnValue({ type: "buttons" }),
   handlePagination: vi.fn().mockResolvedValue(undefined),
 }));
@@ -100,6 +100,13 @@ import {
 } from "../../src/core/utils/stores/linkUtils.js";
 import type { ChatInputCommandInteraction } from "discord.js";
 
+/** Text of the embed the command last answered with through editReply. */
+function repliedText(interaction: ChatInputCommandInteraction): string {
+  const calls = vi.mocked(interaction.editReply).mock.calls;
+  const payload = calls[calls.length - 1]![0] as { embeds: { text: string }[] };
+  return payload.embeds[0]!.text;
+}
+
 function makeInteraction(overrides: Record<string, unknown> = {}) {
   return {
     user: { id: "user123", tag: "User#0001" },
@@ -150,12 +157,7 @@ describe("/link command", () => {
       "user123",
       expect.stringMatching(/^[0-9A-F]{8}$/),
     );
-    expect(interaction.reply).toHaveBeenCalledWith(
-      expect.objectContaining({
-        content: expect.stringContaining("ABCD1234"),
-        flags: expect.anything(),
-      }),
-    );
+    expect(repliedText(interaction)).toContain("ABCD1234");
   });
 
   it("replies with 'already pending' when the store reports a pending code", async () => {
@@ -165,22 +167,14 @@ describe("/link command", () => {
     });
     const interaction = makeInteraction();
     await execute(interaction as never);
-    expect(interaction.reply).toHaveBeenCalledWith(
-      expect.objectContaining({
-        content: expect.stringContaining("already have"),
-      }),
-    );
+    expect(repliedText(interaction)).toContain("already have");
   });
 
   it("replies with 'already linked' when an account link exists", async () => {
     vi.mocked(issueLinkCode).mockResolvedValue({ status: "already-linked" });
     const interaction = makeInteraction();
     await execute(interaction as never);
-    expect(interaction.reply).toHaveBeenCalledWith(
-      expect.objectContaining({
-        content: expect.stringContaining("already linked"),
-      }),
-    );
+    expect(repliedText(interaction)).toContain("already linked");
   });
 
   it("relies on the store to prune expired codes and issue a new one", async () => {
@@ -193,11 +187,7 @@ describe("/link command", () => {
     });
     const interaction = makeInteraction();
     await execute(interaction as never);
-    expect(interaction.reply).toHaveBeenCalledWith(
-      expect.objectContaining({
-        content: expect.stringContaining("NEW45678"),
-      }),
-    );
+    expect(repliedText(interaction)).toContain("NEW45678");
   });
 });
 
@@ -215,20 +205,14 @@ describe("/linkstatus command", () => {
     vi.mocked(getLinkedAccount).mockResolvedValue(null);
     const interaction = makeInteraction();
     await execute(interaction as never);
-    expect(interaction.reply).toHaveBeenCalledWith(
-      expect.objectContaining({
-        content: expect.stringContaining("not linked"),
-      }),
-    );
+    expect(repliedText(interaction)).toContain("not linked");
   });
 
   it("replies with the linked Minecraft username", async () => {
     vi.mocked(getLinkedAccount).mockResolvedValue("Steve");
     const interaction = makeInteraction();
     await execute(interaction as never);
-    expect(interaction.reply).toHaveBeenCalledWith(
-      expect.objectContaining({ content: expect.stringContaining("Steve") }),
-    );
+    expect(repliedText(interaction)).toContain("Steve");
   });
 });
 
@@ -246,11 +230,7 @@ describe("/unlink command", () => {
     vi.mocked(unlinkAccount).mockResolvedValue(false);
     const interaction = makeInteraction();
     await execute(interaction as never);
-    expect(interaction.reply).toHaveBeenCalledWith(
-      expect.objectContaining({
-        content: expect.stringContaining("not linked"),
-      }),
-    );
+    expect(repliedText(interaction)).toContain("not linked");
   });
 
   it("unlinks the account and replies with success", async () => {
@@ -258,9 +238,7 @@ describe("/unlink command", () => {
     const interaction = makeInteraction();
     await execute(interaction as never);
     expect(unlinkAccount).toHaveBeenCalledWith("user123");
-    expect(interaction.reply).toHaveBeenCalledWith(
-      expect.objectContaining({ content: expect.stringContaining("unlinked") }),
-    );
+    expect(repliedText(interaction)).toContain("no longer linked");
   });
 });
 
@@ -274,14 +252,10 @@ describe("/help command", () => {
     ({ execute } = await import("../../src/bot/commands/general/help.js"));
   });
 
-  it("calls reply with help embed and handles fetchReply error gracefully", async () => {
+  it("answers with the help embed through the deferred reply", async () => {
     const interaction = makeInteraction();
-    // help.ts calls fetchReply after reply — add that mock
-    (
-      interaction as never as { fetchReply: ReturnType<typeof vi.fn> }
-    ).fetchReply = vi.fn().mockRejectedValue(new Error("Interaction expired"));
     await execute(interaction as never);
-    expect(interaction.reply).toHaveBeenCalled();
+    expect(interaction.editReply).toHaveBeenCalled();
   });
 });
 

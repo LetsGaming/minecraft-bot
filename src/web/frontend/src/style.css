@@ -1,48 +1,35 @@
 /* Base layer: app-shell scaffolding + helpers only. All widget styling
-   comes from the PrimeVue refined preset (see main.ts). */
+   comes from the PrimeVue preset (see preset.ts). */
 @layer theme, base, primevue;
 
 :root {
-  --mc-bg: #15171a;
-  --mc-surface: #191b1f;
-  --mc-card: #22252a;
-  --mc-border: #24272c;
-  --mc-border-strong: #333842;
-  --mc-text: #e7e9ec;
-  --mc-muted: #8a9099;
-  --mc-dim: #6b7280;
-  --mc-accent: #34c56a;
-  --mc-accent-strong: #2f9d57;
-  --mc-accent-border: #2c4433;
-  --mc-good: #4ade80;
-  --mc-mid: #fbbf24;
-  --mc-bad: #e05858;
-  --mc-warn: #d9b25a;
-  /* Discord brand (matches the bot's EmbedColor.Blurple) + text on brand fill. */
-  --mc-discord: #5865f2;
-  --mc-discord-strong: #4752c4;
-  --mc-on-brand: #fff;
-  /* Accent-tinted surface + dark text that reads on an accent-filled element. */
-  --mc-accent-bg: #1e2b22;
-  --mc-on-accent: #06210f;
-
-  /* Semantic aliases. Views ask for the meaning, not the swatch, so a
-     severity can be retuned in one place. `--mc-danger` was referenced by
-     ConsoleView with a raw blue-red fallback before it existed. */
-  --mc-danger: var(--mc-bad);
-  --mc-hover: #22252a;
-
-  /* Shape + type. `--mc-radius` and `--mc-mono` were both used in view
-     styles while undefined, so those panes rendered with square corners
-     and the browser's default monospace instead of the intended stack. */
-  --mc-radius: 10px;
-  --mc-radius-sm: 7px;
-  --mc-mono: ui-monospace, "SF Mono", "Cascadia Code", monospace;
-
-  /* Shell metrics. The content column was capped at 1160px and pinned
-     left, so on a wide display more than half the viewport was empty. */
-  --mc-sidebar-w: 210px;
-  --mc-content-max: 1720px;
+  /* Legacy names the views still use; each is an alias of a role in tokens.css. */
+  --mc-bg: var(--bg);
+  --mc-surface: var(--surface-nav);
+  --mc-card: var(--surface);
+  --mc-border: var(--border);
+  --mc-border-strong: var(--border-strong);
+  --mc-text: var(--text);
+  --mc-muted: var(--text-muted);
+  --mc-dim: var(--text-dim);
+  --mc-focus: var(--focus);
+  --mc-accent: var(--accent);
+  --mc-accent-strong: var(--accent-strong);
+  --mc-accent-border: var(--accent-border);
+  --mc-accent-bg: var(--accent-tint);
+  --mc-on-accent: var(--on-accent);
+  --mc-good: var(--st-online);
+  --mc-mid: var(--st-degraded);
+  --mc-bad: var(--danger-solid);
+  --mc-warn: var(--warn);
+  --mc-danger: var(--danger-solid);
+  --mc-hover: var(--surface);
+  --mc-discord: var(--discord);
+  --mc-discord-strong: var(--discord-strong);
+  --mc-on-brand: var(--on-brand);
+  --mc-radius: var(--radius-surface);
+  --mc-radius-sm: var(--radius-control);
+  --mc-mono: var(--font-mono);
 }
 
 * { box-sizing: border-box; }
@@ -51,11 +38,18 @@ body {
   margin: 0;
   background: var(--mc-bg);
   color: var(--mc-text);
-  font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: var(--text-md)/var(--leading-body) var(--font-ui);
   -webkit-font-smoothing: antialiased;
 }
 
 a { color: var(--mc-accent); }
+
+/* Keyboard focus. Unlayered on purpose: it must win over the layered
+   PrimeVue theme and over the plain buttons the shell renders itself. */
+:focus-visible {
+  outline: 2px solid var(--mc-focus);
+  outline-offset: 2px;
+}
 
 /* Utility helpers */
 .muted { color: var(--mc-muted); }
@@ -64,6 +58,74 @@ a { color: var(--mc-accent); }
 .stack { display: flex; flex-direction: column; gap: 4px; }
 .row-between { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .mono { font-family: var(--mc-mono); }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Toasts sit top right, clear of the console composer and the edit bar that
+   docks to the bottom on phones; under 760px they drop below the 56px top
+   bar so the menu button stays reachable. */
+.app-toast.p-toast {
+  top: var(--space-4);
+  right: var(--space-4);
+  width: min(380px, calc(100vw - 2 * var(--space-4)));
+}
+@media (max-width: 760px) {
+  .app-toast.p-toast {
+    top: 64px;
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+
+@media (pointer: coarse), (max-width: 760px) {
+  .p-dialog .p-dialog-close-button { width: var(--touch-min); height: var(--touch-min); }
+  .p-dialog .p-dialog-footer .p-button { min-height: var(--touch-min); }
+  .p-inputtext, .p-select, .p-autocomplete-input-multiple, .p-multiselect, .sf-reveal { min-height: var(--touch-min); }
+  /* The switch keeps its drawn size; its invisible input grows to a 48x44 hit area. */
+  .p-toggleswitch-input { inset: -10px -4px; width: calc(100% + 8px); height: calc(100% + 20px); }
+}
+
+/* A PrimeVue DataTable marked .stack-table turns into one card per row under
+   760px: the header row hides and each cell names its column from the
+   data-label its Column passes through `pt`. */
+@media (max-width: 760px) {
+  .stack-table .p-datatable-thead { display: none; }
+  .stack-table .p-datatable-table,
+  .stack-table .p-datatable-tbody { display: block; width: 100%; min-width: 0; }
+  .stack-table .p-datatable-tbody > tr {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .stack-table .p-datatable-tbody > tr > td {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-1) var(--space-3);
+    width: auto !important;
+    padding: 0;
+    border: 0;
+    overflow-wrap: anywhere;
+  }
+  .stack-table .p-datatable-tbody > tr > td[data-label]::before {
+    content: attr(data-label);
+    flex: 0 0 9ch;
+    color: var(--text-dim);
+    font-size: var(--text-xs);
+  }
+}
 
 /* Scrollbar polish */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -72,4 +134,4 @@ a { color: var(--mc-accent); }
   border-radius: 6px;
   border: 2px solid var(--mc-bg);
 }
-::-webkit-scrollbar-thumb:hover { background: #454a52; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }

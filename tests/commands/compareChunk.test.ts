@@ -54,9 +54,9 @@ describe("buildComparisonEmbeds", () => {
     }
   });
 
-  it("reports the shared-stat count in the footer", () => {
+  it("reports the shared-stat count in the description", () => {
     const a = stats(50);
     const embeds = buildComparisonEmbeds(a, a, "PlayerOne", "PlayerTwo");
-    expect(embeds[0]!.data.footer?.text).toContain("50");
+    expect(embeds[0]!.data.description).toContain("50");
   });
 });

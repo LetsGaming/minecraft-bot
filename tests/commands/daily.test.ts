@@ -29,9 +29,15 @@ vi.mock("../../src/bot/utils/guild/guildRouter.js", () => ({
   resolveServer: vi.fn(),
 }));
 
-vi.mock("../../src/bot/utils/embeds/embedUtils.js", () => ({
-  createErrorEmbed: vi.fn().mockReturnValue({}),
+vi.mock("../../src/bot/utils/hints/followUps.js", () => ({
+  attachFollowUpHint: vi.fn().mockResolvedValue(undefined),
 }));
+
+/** The first embed of a reply payload, as JSON. */
+function embedOf(payload: unknown): { title?: string; description?: string } {
+  return (payload as { embeds: { toJSON(): { title?: string; description?: string } }[] })
+    .embeds[0]!.toJSON();
+}
 
 vi.mock("../../src/core/utils/jsonStore.js", () => ({
   loadJson: vi.fn(),
@@ -211,6 +217,15 @@ describe("claimLock — concurrent claim prevention", () => {
       guild: { id: "guild-1" },
       options: { getString: vi.fn().mockReturnValue(null) },
       reply: vi.fn().mockResolvedValue(undefined),
+      deferred: false,
+      ephemeral: null as boolean | null,
+      deferReply: vi.fn().mockImplementation(async function (this: { deferred: boolean; ephemeral: boolean | null }, options?: { flags?: number }) {
+        this.deferred = true;
+        this.ephemeral = Boolean(options?.flags);
+      }),
+      editReply: vi.fn().mockResolvedValue(undefined),
+      deleteReply: vi.fn().mockResolvedValue(undefined),
+      followUp: vi.fn().mockResolvedValue(undefined),
     };
   }
 
@@ -255,10 +270,8 @@ describe("claimLock — concurrent claim prevention", () => {
 
     // Second execution for the same user must be rejected immediately.
     await execute(i2 as never);
-    expect(i2.reply).toHaveBeenCalledWith(
-      expect.objectContaining({
-        content: expect.stringContaining("Already processing"),
-      }),
+    expect(embedOf(i2.followUp.mock.calls[0]![0]).description).toContain(
+      "still being processed",
     );
 
     // Release the first execution.
@@ -346,6 +359,8 @@ describe("claim persistence", () => {
       guild: { id: "guild-1" },
       options: { getString: vi.fn().mockReturnValue(null) },
       reply: vi.fn().mockResolvedValue(undefined),
+      deferReply: vi.fn().mockResolvedValue(undefined),
+      editReply: vi.fn().mockResolvedValue(undefined),
     };
     await execute(interaction as never);
 
@@ -457,6 +472,8 @@ describe("per-server claim independence", () => {
       guild: { id: "guild-1" },
       options: { getString: vi.fn().mockReturnValue(null) },
       reply: vi.fn().mockResolvedValue(undefined),
+      deferReply: vi.fn().mockResolvedValue(undefined),
+      editReply: vi.fn().mockResolvedValue(undefined),
     };
     await execute(interaction as never);
 
@@ -474,5 +491,193 @@ describe("per-server claim independence", () => {
       freshClaimOnOther.lastClaim,
     );
     expect(store.servers["other"]!["user-1"]!.rewards).toHaveLength(0);
+  });
+});
+
+// ── Deferral, edited replies and ephemeral failures ─────────────────────────
+
+describe("deferred replies", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  async function setup(opts: {
+    online: boolean;
+    send?: unknown;
+    resolveThrows?: boolean;
+    pool?: unknown;
+  }) {
+    const utils = await import("../../src/core/utils/jsonStore.js");
+    const linkUtils = await import("../../src/core/utils/stores/linkUtils.js");
+    const playerUtils = await import("../../src/core/utils/minecraft/playerUtils.js");
+    const guildRouter = await import("../../src/bot/utils/guild/guildRouter.js");
+    const { closeDbForTesting } = await import("../../src/core/db/index.js");
+    closeDbForTesting();
+
+    vi.mocked(linkUtils.isLinked).mockResolvedValue(true);
+    vi.mocked(linkUtils.getLinkedAccount).mockResolvedValue("Steve");
+    vi.mocked(playerUtils.getOnlinePlayers).mockResolvedValue(
+      opts.online ? ["Steve"] : [],
+    );
+    if (opts.resolveThrows) {
+      vi.mocked(guildRouter.resolveServer).mockImplementation(() => {
+        throw new Error("Server not found.");
+      });
+    } else {
+      vi.mocked(guildRouter.resolveServer).mockReturnValue({
+        id: "main",
+        config: { apiUrl: "http://w:3030", apiKey: "k" },
+        send: vi
+          .fn()
+          .mockResolvedValue(
+            opts.send ?? { kind: "delivered", output: "Gave 1 [Diamond] to Steve" },
+          ),
+      } as never);
+    }
+    vi.mocked(utils.loadJson).mockResolvedValue(
+      opts.pool ?? {
+        default: [{ item: "minecraft:diamond", amount: 1, weight: 1 }],
+        streakBonuses: {},
+      },
+    );
+
+    const { execute } = await import(
+      "../../src/bot/commands/connection/daily/daily.js"
+    );
+    const interaction = {
+      user: { id: "user-1" },
+      guild: { id: "guild-1" },
+      guildId: "guild-1",
+      options: { getString: vi.fn().mockReturnValue(null) },
+      reply: vi.fn().mockResolvedValue(undefined),
+      deferred: false,
+      ephemeral: null as boolean | null,
+      deferReply: vi.fn().mockImplementation(async function (this: { deferred: boolean; ephemeral: boolean | null }, options?: { flags?: number }) {
+        this.deferred = true;
+        this.ephemeral = Boolean(options?.flags);
+      }),
+      editReply: vi.fn().mockResolvedValue(undefined),
+      deleteReply: vi.fn().mockResolvedValue(undefined),
+      followUp: vi.fn().mockResolvedValue(undefined),
+    };
+    return { execute, interaction };
+  }
+
+  it("defers publicly and edits the reply on a successful online claim", async () => {
+    const { execute, interaction } = await setup({ online: true });
+    await execute(interaction as never);
+    expect(interaction.deferReply).toHaveBeenCalledWith({});
+    expect(interaction.reply).not.toHaveBeenCalled();
+    expect(interaction.followUp).not.toHaveBeenCalled();
+    expect(interaction.editReply).toHaveBeenCalledTimes(1);
+    expect(embedOf(interaction.editReply.mock.calls[0]![0]).title).toBe("Daily reward claimed");
+  });
+
+  it("keeps the queued reward public on an offline claim", async () => {
+    const { execute, interaction } = await setup({ online: false });
+    await execute(interaction as never);
+    expect(interaction.deferReply).toHaveBeenCalledWith({});
+    expect(interaction.followUp).not.toHaveBeenCalled();
+  });
+
+  it("shows the cooldown only to the claimer", async () => {
+    const { execute, interaction } = await setup({ online: true });
+    await execute(interaction as never);
+    interaction.deleteReply.mockClear();
+    interaction.followUp.mockClear();
+    interaction.deferred = false;
+    await execute(interaction as never);
+    expect(interaction.deleteReply).toHaveBeenCalledTimes(1);
+    expect(interaction.followUp).toHaveBeenCalledWith(
+      expect.objectContaining({ flags: 64 }),
+    );
+    expect(embedOf(interaction.followUp.mock.calls[0]![0]).title).toBe("Already claimed");
+  });
+
+  it("edits the reply with the queued note on an offline claim", async () => {
+    const { execute, interaction } = await setup({ online: false });
+    await execute(interaction as never);
+    expect(interaction.deferReply).toHaveBeenCalled();
+    expect(embedOf(interaction.editReply.mock.calls[0]![0]).description).toContain("main");
+  });
+
+  it("answers a full queue with an error only the claimer sees", async () => {
+    const { execute, interaction } = await setup({ online: false });
+    const { kvSet } = await import("../../src/core/db/kv.js");
+    const { MAX_PENDING_PER_PLAYER } = await import(
+      "../../src/core/utils/stores/dailyStore.js"
+    );
+    kvSet("pendingRewards", {
+      version: 1,
+      servers: {
+        main: {
+          steve: Array.from({ length: MAX_PENDING_PER_PLAYER }, () => ({
+            discordId: "user-1",
+            items: [],
+            queuedAt: 0,
+          })),
+        },
+      },
+    });
+    await execute(interaction as never);
+    expect(interaction.editReply).not.toHaveBeenCalled();
+    expect(interaction.deleteReply).toHaveBeenCalledTimes(1);
+    expect(interaction.followUp).toHaveBeenCalledWith(
+      expect.objectContaining({ flags: 64 }),
+    );
+    expect(embedOf(interaction.followUp.mock.calls[0]![0]).title).toBe("Rewards waiting in game");
+  });
+
+  it("answers a failed delivery with an error only the claimer sees", async () => {
+    const { execute, interaction } = await setup({
+      online: true,
+      send: { kind: "unreachable", reason: "timeout", detail: "x" },
+    });
+    await execute(interaction as never);
+    expect(interaction.editReply).not.toHaveBeenCalled();
+    expect(interaction.followUp).toHaveBeenCalledWith(
+      expect.objectContaining({ flags: 64 }),
+    );
+    expect(embedOf(interaction.followUp.mock.calls[0]![0]).title).toBe("Reward not delivered");
+  });
+
+  it("answers an unresolvable server ephemerally", async () => {
+    const { execute, interaction } = await setup({
+      online: true,
+      resolveThrows: true,
+    });
+    await execute(interaction as never);
+    expect(interaction.editReply).not.toHaveBeenCalled();
+    expect(interaction.followUp).toHaveBeenCalledWith(
+      expect.objectContaining({ flags: 64 }),
+    );
+    expect(interaction.reply).not.toHaveBeenCalled();
+  });
+
+  it("shows the main reward as the daily reward and the random bonus on its own line", async () => {
+    // Order of Math.random calls: pick main, bonus-chance roll, pick bonus.
+    vi.spyOn(Math, "random")
+      .mockReturnValueOnce(0.1)
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0.9);
+    const { execute, interaction } = await setup({
+      online: true,
+      pool: {
+        default: [
+          { item: "minecraft:apple", amount: 1, weight: 1 },
+          { item: "minecraft:bread", amount: 1, weight: 1 },
+        ],
+        bonusChance: 100,
+        streakBonuses: {},
+      },
+    });
+    await execute(interaction as never);
+    const text = embedOf(interaction.editReply.mock.calls[0]![0]).description ?? "";
+    expect(text).toContain("Reward: 1 × Apple");
+    expect(text).toContain("Lucky bonus: 1 × Bread");
   });
 });

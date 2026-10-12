@@ -2,118 +2,127 @@
   <Dialog
     :visible="visible"
     modal
-    :header="`Edit config — ${guildName || guildId}`"
-    :style="{ width: '680px' }"
+    :header="t('guildEditor.title', { name: guildName || guildId })"
+    :style="{ width: 'min(760px, calc(100vw - 32px))' }"
     :dismissable-mask="false"
     @update:visible="onVisible"
   >
-    <div v-if="loading && !ready" class="gce-center">
-      <i class="pi pi-spin pi-spinner" style="font-size: 1.4rem" />
-    </div>
+    <InlineError
+      v-if="loadError && !ready"
+      :title="t('guildEditor.loadFailed')"
+      :detail="loadError"
+      :busy="loading"
+      @retry="retry"
+    />
+    <p v-else-if="!ready" class="gce-note" role="status">
+      <i class="pi pi-spin pi-spinner" aria-hidden="true" /> {{ t("guildEditor.loading") }}
+    </p>
 
-    <Message v-else-if="loadError && !ready" severity="error" :closable="false">
-      <div class="gce-retry">
-        <span>Could not load this guild's config: {{ loadError }}</span>
-        <Button label="Retry" icon="pi pi-refresh" size="small" severity="secondary" outlined @click="retry" />
-      </div>
-    </Message>
-
-    <template v-else>
-      <p class="gce-hint">
-        Every feature for this guild. Leave a channel blank to turn a feature
-        off. Changes apply to this guild only.
-      </p>
-
-      <Message v-if="stale" severity="warn" :closable="false">
-        Your last save went through, but it could not be re-read. Close and reopen this editor before changing more.
-      </Message>
-      <Message
-        v-for="(e, i) in errors"
-        :key="'e' + i"
-        severity="error"
-        :closable="false"
-        >{{ e }}</Message
-      >
-      <Message
-        v-for="(w, i) in warnings"
-        :key="'w' + i"
-        severity="warn"
-        :closable="false"
-        >{{ w }}</Message
-      >
-
-      <ConflictPicker :conflicts="conflicts" @resolve="resolveConflict($event.conflict, $event.choice)" />
-      <div v-if="conflicts.length" class="gce-conflict-actions">
+    <EditorShell v-else :state="editorState">
+      <template #banners>
+        <p class="gce-hint">{{ t("guildEditor.hint") }}</p>
+        <InlineBanner v-if="stale" tone="warn" :title="t('guildEditor.staleTitle')">
+          {{ t("guildEditor.staleText") }}
+        </InlineBanner>
+        <InlineBanner v-if="bannerErrors.length" tone="danger" :title="t('guildEditor.saveFailedTitle')">
+          <ul class="gce-list">
+            <li v-for="(line, i) in bannerErrors" :key="i">{{ line }}</li>
+          </ul>
+        </InlineBanner>
+        <InlineBanner v-if="warnings.length" tone="warn" :title="t('config.warningsTitle')">
+          <ul class="gce-list">
+            <li v-for="(line, i) in warnings" :key="i">{{ line }}</li>
+          </ul>
+        </InlineBanner>
+        <InlineBanner v-if="newFeatureCount > 0" tone="info">
+          {{ t("config.newFeatures", { count: newFeatureCount }) }}
+        </InlineBanner>
+        <InlineError
+          v-if="model && !hasFields"
+          :title="t('guildEditor.schemaFailed')"
+          :detail="schemaError"
+          @retry="retry"
+        />
+      </template>
+      <template #conflict>
+        <ConflictPicker :conflicts="conflicts" @resolve="resolveConflict($event.conflict, $event.choice)" />
+      </template>
+      <template #conflict-actions>
         <Button
-          label="Discard my edits and reload"
+          :label="t('config.dropMine')"
           icon="pi pi-refresh"
           size="small"
           severity="secondary"
           outlined
+          class="tap"
           @click="reloadDiscardingMine"
         />
-      </div>
+      </template>
 
-      <div v-if="newFeatureCount > 0" class="gce-new-banner">
-        <i class="pi pi-sparkles" />
-        {{ newFeatureCount }} new feature{{ newFeatureCount === 1 ? "" : "s" }} available to enable
-      </div>
-
-      <div v-if="model && Object.keys(topLevelProps).length" class="gce-fields">
-        <div
+      <div v-if="model && hasFields" class="gce-fields">
+        <SchemaField
           v-for="(propSchema, key) in topLevelProps"
           :key="key"
-          :class="['gce-section', { 'is-dirty': isDirty(String(key)) }]"
-        >
-          <SchemaField
-            :name="String(key)"
-            :schema="propSchema"
-            :definitions="definitions"
-            :model-value="model[key]"
-            @update:model-value="setField(String(key), $event)"
-          />
-          <ul v-if="sectionErrors[String(key)]" class="gce-field-errors">
-            <li v-for="(msg, i) in sectionErrors[String(key)]" :key="i">{{ msg }}</li>
-          </ul>
-        </div>
+          :name="String(key)"
+          :schema="propSchema"
+          :definitions="definitions"
+          :key-path="[String(key)]"
+          :model-value="model[key]"
+          @update:model-value="setField(String(key), $event)"
+        />
       </div>
-      <p v-else-if="model" class="gce-hint">
-        {{ schemaError ? `Schema unavailable (${schemaError}).` : "Schema unavailable." }}
-        <a href="#" @click.prevent="retry">Retry</a>
-      </p>
-    </template>
+    </EditorShell>
 
     <template #footer>
-      <ConfigStatusChip :refresh-key="savedCount" />
-      <Button label="Cancel" text @click="requestClose" />
-      <Button
-        :label="pendingCount > 0 ? `Save ${pendingCount} change${pendingCount === 1 ? '' : 's'}` : 'Save'"
-        icon="pi pi-check"
-        :loading="saving"
-        :disabled="!canSave"
-        @click="onSave"
-      />
+      <EditBar
+        class="gce-bar"
+        :docked="false"
+        :state="editorState"
+        :change-count="changes.length"
+        :problem-count="problems.length"
+        :conflict-count="conflicts.length"
+        :can-save="canSave"
+        @save="onSave"
+        @discard="discard"
+        @first-problem="goToFirstProblem"
+      >
+        <template #status>
+          <ConfigStatusChip :refresh-key="savedCount" />
+        </template>
+        <template #extra>
+          <Button :label="t('guildEditor.close')" severity="secondary" text class="tap" @click="requestClose" />
+        </template>
+      </EditBar>
     </template>
   </Dialog>
 </template>
 
 <script lang="ts">
-import { defineComponent, provide } from "vue";
+import { computed, defineComponent, nextTick, provide } from "vue";
 import Dialog from "primevue/dialog";
 import Button from "primevue/button";
-import Message from "primevue/message";
 import SchemaField from "./SchemaField.vue";
 import ConflictPicker from "./ConflictPicker.vue";
 import ConfigStatusChip from "../ui/ConfigStatusChip.vue";
+import EditorShell from "../ui/EditorShell.vue";
+import EditBar from "../ui/EditBar.vue";
+import InlineBanner from "../ui/InlineBanner.vue";
+import InlineError from "../ui/InlineError.vue";
+import type { EditorState } from "../ui/types";
 import { useConfirm } from "primevue/useconfirm";
 import { derefNode, countNewSections, topLevelSectionKeys } from "./schemaField";
 import { isFeatureNew, commitSeenFeatures } from "../../composables/useSeenFeatures";
 import { useGuildConfig } from "../../composables/useGuildConfig";
 import { useSchemaRefs, SchemaRefsKey } from "../../composables/useSchemaRefs";
+import { useSchemaForm } from "../../composables/useSchemaForm";
+import { t } from "../../i18n";
 
 export default defineComponent({
   name: "GuildConfigEditor",
-  components: { Dialog, Button, Message, SchemaField, ConflictPicker, ConfigStatusChip },
+  components: {
+    Dialog, Button, SchemaField, ConflictPicker, ConfigStatusChip, EditorShell, EditBar,
+    InlineBanner, InlineError,
+  },
   props: {
     visible: { type: Boolean, required: true },
     guildId: { type: String, default: "" },
@@ -121,17 +130,40 @@ export default defineComponent({
   },
   emits: ["update:visible", "saved"],
   setup(props) {
-    // Provide named-entity options (servers + this guild's channels/roles) so
-    // SchemaField renders ID fields as name dropdowns instead of text boxes.
-    // The scope is a live view onto the shared per-guild cache, so it is the
-    // same object the config page hands its matching entry: one guild, one
-    // channel list, whichever editor you opened.
+    // Named-entity options (servers plus this guild's channels and roles) so
+    // ID fields render as name dropdowns. The scope follows the prop: this
+    // dialog is one instance reused for every guild.
     const refsApi = useSchemaRefs();
-    // Follows the prop: this dialog is one instance reused for every guild,
-    // so a scope captured at setup would pin it to whichever opened first.
     provide(SchemaRefsKey, refsApi.dynamicGuildScope(() => props.guildId));
+
+    const guild = useGuildConfig();
+    const topLevelProps = computed<Record<string, unknown>>(
+      () => derefNode(guild.schema.value, guild.definitions.value).properties ?? {},
+    );
+    const form = useSchemaForm({
+      props: () => topLevelProps.value,
+      definitions: () => guild.definitions.value,
+      draft: () => guild.model.value,
+      baseline: () => guild.baseline.value,
+      serverErrors: () => guild.fieldErrors.value,
+      conflicts: () => guild.conflicts.value,
+      query: () => "",
+      locked: () => guild.saving.value,
+      stripPath: (path) => (path[0] === "guilds" && path[1] === props.guildId ? path.slice(2) : path),
+      isSecret: () => false,
+      idPrefix: "gce",
+    });
+
     return {
-      ...useGuildConfig(),
+      ...guild,
+      t,
+      topLevelProps,
+      problems: form.problems,
+      issues: form.issues,
+      changes: form.changes,
+      generalErrors: form.generalErrors,
+      reveal: form.reveal,
+      formContext: form.context,
       confirm: useConfirm(),
       loadServers: refsApi.loadServers,
       loadGuildRefs: refsApi.loadGuildRefs,
@@ -141,14 +173,24 @@ export default defineComponent({
     return { savedCount: 0 };
   },
   computed: {
-    topLevelProps(): Record<string, unknown> {
-      // The GuildConfig node's properties (notifications, tpsAlerts, …). The
-      // node may be a $ref, so resolve it first (same as ConfigView's root).
-      return derefNode(this.schema, this.definitions).properties ?? {};
+    hasFields(): boolean {
+      return Object.keys(this.topLevelProps).length > 0;
     },
     newFeatureCount(): number {
       if (!this.model) return 0;
       return countNewSections(this.topLevelProps, this.model, this.definitions, isFeatureNew);
+    },
+    editorState(): EditorState {
+      if (this.saving) return "saving";
+      if (this.conflicts.length > 0) return "conflict";
+      if (this.problems.length > 0) return "error";
+      if (this.dirty) return "dirty";
+      return "clean";
+    },
+    bannerErrors(): string[] {
+      // The conflict banner already says why a save stopped on a conflict.
+      const saveError = this.conflicts.length > 0 ? "" : this.saveError;
+      return [...(saveError ? [saveError] : []), ...this.generalErrors];
     },
   },
   watch: {
@@ -172,6 +214,18 @@ export default defineComponent({
         this.$emit("update:visible", false);
       }
     },
+    async goToFirstProblem(): Promise<void> {
+      const first = this.issues[0];
+      if (!first) return;
+      this.reveal(first.path);
+      await nextTick();
+      const el = document.getElementById(this.formContext.idFor(first.path));
+      el?.scrollIntoView({ block: "center" });
+      const target = el?.matches("input, textarea, select, button, [tabindex]")
+        ? el
+        : el?.querySelector<HTMLElement>("input, textarea, select, button");
+      target?.focus({ preventScroll: true });
+    },
     onVisible(open: boolean): void {
       if (open) this.$emit("update:visible", true);
       else this.requestClose();
@@ -186,13 +240,14 @@ export default defineComponent({
         return;
       }
       this.confirm.require({
-        header: "Discard unsaved changes?",
-        message: `You have ${this.pendingCount} unsaved change${this.pendingCount === 1 ? "" : "s"} in this guild's config.`,
+        header: t("leave.header"),
+        message: t("guildEditor.discardMessage", { count: this.changes.length || 1 }),
         icon: "pi pi-exclamation-triangle",
-        acceptLabel: "Discard",
-        rejectLabel: "Keep editing",
+        acceptLabel: t("editor.discard"),
+        rejectLabel: t("guildEditor.keepEditing"),
         acceptProps: { severity: "danger" },
         rejectProps: { severity: "secondary", outlined: true },
+        defaultFocus: "reject",
         accept: close,
       });
     },
@@ -201,30 +256,13 @@ export default defineComponent({
 </script>
 
 <style scoped>
-.gce-center {
-  display: flex;
-  justify-content: center;
-  padding: 2rem;
-}
-.gce-hint {
-  color: var(--muted, #8a929c);
-  font-size: 0.9rem;
-  margin: 0 0 1rem;
-}
-.gce-fields {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-.gce-retry { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.gce-conflict-actions { margin: -6px 0 12px; }
-.gce-section.is-dirty { box-shadow: -3px 0 0 0 var(--mc-accent); padding-left: 10px; margin-left: -13px; }
-.gce-field-errors { margin: 2px 0 8px; padding-left: 18px; color: var(--p-red-400, #f87171); font-size: 12.5px; }
-.gce-new-banner {
-  display: flex; align-items: center; gap: 8px;
-  background: color-mix(in srgb, var(--mc-accent) 12%, transparent);
-  color: var(--mc-accent);
-  border: 1px solid color-mix(in srgb, var(--mc-accent) 28%, transparent);
-  border-radius: 8px; padding: 8px 12px; font-size: 0.85rem; margin-bottom: 1rem;
+.gce-note { display: flex; align-items: center; gap: var(--space-2); justify-content: center; padding: var(--space-6) 0; margin: 0; color: var(--text-dim); }
+.gce-hint { margin: 0; color: var(--text-dim); font-size: var(--text-sm); max-width: 64ch; }
+.gce-list { margin: 0; padding-left: 18px; }
+.gce-list li { overflow-wrap: anywhere; }
+.gce-fields { display: flex; flex-direction: column; min-width: 0; }
+.gce-bar { width: 100%; }
+@media (pointer: coarse), (max-width: 760px) {
+  .tap { min-height: var(--touch-min); }
 }
 </style>

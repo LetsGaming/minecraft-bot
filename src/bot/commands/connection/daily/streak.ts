@@ -1,8 +1,4 @@
-import {
-  SlashCommandBuilder,
-  MessageFlags,
-  type ChatInputCommandInteraction,
-} from "discord.js";
+import { SlashCommandBuilder } from "discord.js";
 import {
   loadDailyRewardsConfig,
   loadServerRewardsOverride,
@@ -11,7 +7,9 @@ import {
   rewardPoolForServer,
 } from "@mcbot/core/utils/stores/dailyStore.js";
 import { resolveServer } from "../../../utils/guild/guildRouter.js";
-import { createErrorEmbed } from "../../../utils/embeds/embedUtils.js";
+import { createEmbed } from "../../../utils/embeds/embedUtils.js";
+import { withErrorHandling } from "../../middleware.js";
+import { CommandError } from "@mcbot/core/utils/error.js";
 import type { StreakData, NextBonusStreak } from "@mcbot/core/types/index.js";
 
 import { t } from "@mcbot/core/utils/i18n.js";
@@ -25,46 +23,38 @@ export const data = new SlashCommandBuilder()
       .setAutocomplete(true),
   );
 
-export async function execute(
-  interaction: ChatInputCommandInteraction,
-): Promise<void> {
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+export const execute = withErrorHandling(
+  async (interaction) => {
+    const server = resolveServer(interaction);
+    const streakData = await getStreakData(interaction.user.id, server.id);
 
-  const userId = interaction.user.id;
-  const server = resolveServer(interaction);
-  const streakData = await getStreakData(userId, server.id);
-  const guildId = interaction.guildId ?? undefined;
+    if (!streakData) {
+      throw new CommandError({
+        title: t("streak.noDataTitle"),
+        problem: t("streak.noData"),
+        recovery: t("streak.noDataRecovery"),
+      });
+    }
 
-  if (!streakData) {
-    const errorEmbed = createErrorEmbed(
-      t("streak.noData", {}, guildId),
-      {
-        footer: { text: t("streak.noDataFooter", {}, guildId) },
-        timestamp: new Date(),
-      },
-    );
-    await interaction.editReply({ embeds: [errorEmbed] });
-    return;
-  }
+    const { currentStreak, longestStreak, bonusStreak } = streakData;
+    const nextBonus = await getNextBonusStreak(bonusStreak, server.id);
 
-  const { currentStreak, longestStreak, bonusStreak } = streakData;
-  const nextBonus = await getNextBonusStreak(bonusStreak, server.id);
-
-  const nextBonusText = nextBonus ? t("streak.days", { count: nextBonus.streak }, guildId)
-    : t("streak.na", {}, guildId);
-
-  await interaction.editReply(
-    t(
-      "streak.info",
-      {
-        current: t("streak.days", { count: currentStreak }, guildId),
-        longest: t("streak.days", { count: longestStreak }, guildId),
-        next: nextBonusText,
-      },
-      guildId,
-    ),
-  );
-}
+    await interaction.editReply({
+      embeds: [
+        createEmbed({ title: t("streak.title", { server: server.id }) }).addFields(
+          { name: t("streak.current"), value: t("streak.days", { count: currentStreak }), inline: true },
+          { name: t("streak.longest"), value: t("streak.days", { count: longestStreak }), inline: true },
+          {
+            name: t("streak.nextBonus"),
+            value: nextBonus ? t("streak.days", { count: nextBonus.streak }) : t("streak.na"),
+            inline: true,
+          },
+        ),
+      ],
+    });
+  },
+  { ephemeral: true },
+);
 
 async function getStreakData(
   userId: string,

@@ -114,19 +114,16 @@ async function announceWarning(
   await broadcastNotification(client, loadConfig().guilds, {
     serverId,
     event: "scheduledRestart",
-    buildEmbed: (withServerFooter) => {
-      const embed = createEmbed({
-        title: t("schedule.warnTitle"),
+    buildEmbed: () =>
+      createEmbed({
+        title: t("schedule.warnTitle", { server: serverId }),
         description: t("schedule.warn", {
           server: serverId,
           minutes,
           time: formatTime(restartAt),
         }),
-        color: EmbedColor.Warning,
-      });
-      if (withServerFooter) embed.setFooter({ text: serverId });
-      return embed;
-    },
+        color: EmbedColor.Info,
+      }),
     logTag: "schedule",
   });
 }
@@ -170,15 +167,12 @@ async function performRestart(
   await broadcastNotification(client, loadConfig().guilds, {
     serverId,
     event: "scheduledRestart",
-    buildEmbed: (withServerFooter) => {
-      const embed = createEmbed({
-        title: t("schedule.doneTitle"),
+    buildEmbed: () =>
+      createEmbed({
+        title: t("schedule.doneTitle", { server: serverId }),
         description: t("schedule.done", { server: serverId }),
         color: EmbedColor.Success,
-      });
-      if (withServerFooter) embed.setFooter({ text: serverId });
-      return embed;
-    },
+      }),
     logTag: "schedule",
   });
 }

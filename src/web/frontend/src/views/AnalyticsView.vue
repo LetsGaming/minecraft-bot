@@ -1,12 +1,13 @@
 <template>
-  <div>
+  <div class="analytics-view">
     <ViewHeader
-      title="Analytics"
-      :subtitle="`Per-server history${currentServer ? ` for ${currentServer}` : ''}. Command usage is bot-wide.`"
+      :title="t('analytics.title')"
+      :subtitle="currentServer ? t('analytics.ledeServer', { server: currentServer }) : t('analytics.lede')"
     >
       <template #actions>
         <Button
-          label="Refresh"
+          class="tap"
+          :label="t('analytics.refresh')"
           icon="pi pi-refresh"
           size="small"
           severity="secondary"
@@ -17,219 +18,296 @@
       </template>
     </ViewHeader>
 
-    <div v-if="serverIds.length" class="scope-bar">
-      <span class="scope-label muted small">Server</span>
-      <div class="picker">
-        <Button
-          v-for="id in serverIds"
-          :key="id"
-          :label="id"
-          size="small"
-          :outlined="id !== currentServer"
-          :disabled="serverIds.length === 1"
-          @click="select(id)"
-        />
-      </div>
-      <label class="ctl-label muted small">Range</label>
-      <SelectButton
-        v-model="rangeHours"
-        :options="rangeOptions"
-        optionLabel="label"
-        optionValue="value"
-        :allowEmpty="false"
-        size="small"
-        aria-label="Time range"
-      />
-    </div>
+    <EmptyState v-if="serverIds.length === 0" icon="pi pi-server" :title="t('analytics.noServersTitle')">
+      {{ t("analytics.noServers") }}
+    </EmptyState>
 
-    <Message v-if="error" severity="warn" :closable="false">{{ error }}</Message>
-
-    <!-- Uptime. Percentages first because that is the question; the check
-         counts sit underneath so a 100% built from nine samples cannot pass
-         for a month of evidence. -->
-    <section class="panel">
-      <h3>Uptime</h3>
-      <div v-if="uptime" class="uptime-row">
-        <div v-for="w in uptimeWindows" :key="w.label" class="u-cell" :class="{ 'u-selected': w.selected }">
-          <span class="u-pct">{{ w.pct === null ? "—" : `${w.pct.toFixed(1)}%` }}</span>
-          <span class="u-label muted small">{{ w.label }}</span>
-          <span class="u-checks muted small">
-            {{ w.checks.online }} / {{ w.checks.total }} checks
-          </span>
-        </div>
-        <div class="u-cell">
-          <span class="u-pct" :class="uptime.currentState">{{ stateWord }}</span>
-          <span class="u-label muted small">right now</span>
-          <span class="u-checks muted small">for {{ duration(uptime.currentStateDuration) }}</span>
-        </div>
-      </div>
-      <p v-else class="muted small">No uptime history recorded for this server yet.</p>
-      <p v-if="uptimeNote" class="muted small section-note">{{ uptimeNote }}</p>
-    </section>
-
-    <!-- Activity. A real chart rather than eight block characters: the shape
-         over two weeks is the whole point, and an embed could never show it. -->
-    <section class="panel">
-      <h3>Players over the last {{ rangeLabel }}</h3>
-      <div v-if="activity.length" class="chart" role="img" :aria-label="chartLabel">
-        <div
-          v-for="hour in activity"
-          :key="hour.at"
-          class="bar"
-          :style="{ height: `${barHeight(hour.avg)}%` }"
-          :title="`${absolute(hour.at)} · avg ${hour.avg.toFixed(1)}, peak ${hour.peak}`"
-        />
-      </div>
-      <p v-else class="muted small">No activity samples recorded yet.</p>
-      <p v-if="activityNote" class="muted small section-note">{{ activityNote }}</p>
-
-      <div v-if="busiest.length" class="busiest">
-        <span class="muted small">Busiest hours</span>
-        <Tag
-          v-for="slot in busiest"
-          :key="slot.hour"
-          :value="`${String(slot.hour).padStart(2, '0')}:00 · ${slot.avg.toFixed(1)} avg`"
-          severity="secondary"
-        />
-      </div>
-    </section>
-
-    <!-- Leaderboard. Same builder the bot uses, so a board here and a board
-         in Discord cannot rank the same players differently. -->
-    <section class="panel">
-      <div class="p-head">
-        <h3>{{ boardTitle || "Leaderboard" }} <span v-if="currentServer" class="scope-tag">{{ currentServer }}</span></h3>
-        <Select
-          v-if="availableStats.length"
-          v-model="stat"
-          :options="availableStats"
+    <div v-else class="stack-gap">
+      <div class="scope-bar">
+        <span :id="rangeLabelId" class="ctl-label">{{ t("analytics.range") }}</span>
+        <SelectButton
+          v-model="rangeHours"
+          class="ranges"
+          :options="rangeOptions"
           optionLabel="label"
-          optionValue="key"
+          optionValue="value"
+          :allowEmpty="false"
           size="small"
-          class="stat-picker"
-          @change="reloadBoard"
+          :aria-labelledby="rangeLabelId"
         />
       </div>
-      <p v-if="boardLoading" class="muted small">Loading board…</p>
-      <Message v-else-if="boardError" severity="warn" :closable="false" class="panel-msg">
-        {{ boardError }}
-      </Message>
-      <ol v-else-if="board.length" class="board">
-        <li v-for="(entry, i) in board" :key="entry.name" class="b-row">
-          <span class="b-rank muted mono">{{ i + 1 }}</span>
-          <span class="b-name">{{ entry.name }}</span>
-          <span class="b-bar">
-            <span class="b-fill" :style="{ width: `${boardWidth(entry.value)}%` }" />
+
+      <p v-if="!loaded" class="note" role="status">{{ t("analytics.loading", { server: currentServer }) }}</p>
+
+      <InlineError
+        v-if="failure"
+        :title="historyFailureCopy.title"
+        :recovery="historyFailureCopy.recovery"
+        :detail="historyFailureCopy.detail"
+        :retryable="historyFailureCopy.retryable"
+        :retry-label="historyFailureCopy.retryLabel"
+        :busy="loading"
+        :heading-level="2"
+        @retry="retry(failure, reload)"
+      />
+
+      <!-- Uptime. Percentages first because that is the question; the check
+           counts sit underneath so a 100% built from nine samples cannot pass
+           for a month of evidence. -->
+      <section v-if="uptime" class="panel" aria-labelledby="an-uptime-h">
+        <h2 id="an-uptime-h">{{ t("analytics.uptime") }}</h2>
+        <div class="uptime-row">
+          <template v-if="hasChecks">
+            <div v-for="w in uptimeWindows" :key="w.label" :class="['u-cell', { 'u-selected': w.selected }]">
+              <span :class="['u-pct', { 'u-none': w.pct === null }]">
+                {{ w.pct === null ? t("analytics.noChecks") : `${w.pct.toFixed(1)}%` }}
+              </span>
+              <span class="u-label">{{ w.label }}</span>
+              <span class="u-checks">{{ t("analytics.checks", { online: w.checks.online, count: w.checks.total }) }}</span>
+            </div>
+          </template>
+          <div class="u-cell">
+            <StatusChip :state="currentRole" :label="currentLabel" />
+            <span class="u-label">{{ t("analytics.rightNow") }}</span>
+            <span v-if="uptime.currentState !== 'unknown'" class="u-checks">
+              {{ t("analytics.forDuration", { duration: formatSpan(uptime.currentStateDuration) }) }}
+            </span>
+          </div>
+        </div>
+        <p v-if="!hasChecks" class="note section-note">{{ t("analytics.noChecksYet", { server: currentServer }) }}</p>
+        <p v-if="uptimeNote" class="note section-note">{{ uptimeNote }}</p>
+      </section>
+
+      <!-- Activity. A real chart rather than eight block characters: the shape
+           over two weeks is the whole point, and an embed could never show it. -->
+      <section v-if="loaded && !failure" class="panel" aria-labelledby="an-activity-h">
+        <h2 id="an-activity-h">{{ t("analytics.activity", { range: rangeLabel }) }}</h2>
+        <div v-if="activity.length" class="chart" role="img" :aria-label="chartLabel">
+          <div
+            v-for="hour in activity"
+            :key="hour.at"
+            class="bar"
+            :style="{ height: `${barHeight(hour.avg)}%` }"
+            :title="t('analytics.barTitle', { at: absolute(hour.at), avg: hour.avg.toFixed(1), peak: hour.peak })"
+          />
+        </div>
+        <p v-else class="note">{{ t("analytics.noActivity") }}</p>
+        <p v-if="activityNote" class="note section-note">{{ activityNote }}</p>
+
+        <div v-if="busiest.length" class="busiest">
+          <span class="note">{{ t("analytics.busiest") }}</span>
+          <span v-for="slot in busiest" :key="slot.hour" class="slot">
+            {{ t("analytics.busySlot", { hour: String(slot.hour).padStart(2, "0"), avg: slot.avg.toFixed(1) }) }}
           </span>
-          <span class="b-value mono">{{ entry.formatted }}</span>
-        </li>
-      </ol>
-      <p v-else class="muted small">No stats recorded for this board yet.</p>
-      <p v-if="boardNote" class="muted small section-note">{{ boardNote }}</p>
-    </section>
+        </div>
+      </section>
 
-    <!-- Players. "Who is still around and who stopped coming" is a sorted
-         table, and it has been one row per Discord message until now. -->
-    <section class="panel">
-      <h3>Players <span v-if="currentServer" class="scope-tag">{{ currentServer }}</span> · {{ players.length }} active in the last {{ rangeLabel }}</h3>
-      <DataTable
-        v-if="players.length"
-        :value="players"
-        size="small"
-        sortField="playtimeMs"
-        :sortOrder="-1"
-        paginator
-        :rows="15"
-      >
-        <Column field="name" header="Player" sortable>
-          <template #body="{ data }">
-            <span class="p-name">
-              <StatusDot v-if="data.online" state="up" />
-              {{ data.name }}
+      <!-- Leaderboard. Same builder the bot uses, so a board here and a board
+           in Discord cannot rank the same players differently. -->
+      <section class="panel" aria-labelledby="an-board-h" :aria-busy="boardLoading ? 'true' : undefined">
+        <div class="p-head">
+          <h2 id="an-board-h">
+            {{ boardTitle || t("analytics.leaderboard") }}
+            <span v-if="currentServer" class="scope-tag mono">{{ currentServer }}</span>
+          </h2>
+          <span v-if="availableStats.length" class="stat-field">
+            <label id="an-stat-label" for="an-stat" class="sr-only">{{ t("analytics.statLabel") }}</label>
+            <Select
+              v-model="stat"
+              inputId="an-stat"
+              ariaLabelledby="an-stat-label"
+              :options="availableStats"
+              optionLabel="label"
+              optionValue="key"
+              size="small"
+              class="stat-picker"
+              @change="reloadBoard"
+            />
+          </span>
+        </div>
+        <p v-if="boardLoading" class="note" role="status">{{ t("analytics.boardLoading") }}</p>
+        <InlineError
+          v-else-if="boardFailure"
+          :title="boardFailureCopy.title"
+          :recovery="boardFailureCopy.recovery"
+          :detail="boardFailureCopy.detail"
+          :retryable="boardFailureCopy.retryable"
+          :retry-label="boardFailureCopy.retryLabel"
+          @retry="retry(boardFailure, reloadBoard)"
+        />
+        <ol v-else-if="board.length" class="board">
+          <li v-for="(entry, i) in board" :key="entry.name" class="b-row">
+            <span class="b-rank mono">{{ i + 1 }}</span>
+            <span class="b-name">{{ entry.name }}</span>
+            <span class="b-bar" aria-hidden="true">
+              <span class="b-fill" :style="{ width: `${boardWidth(entry.value)}%` }" />
             </span>
-          </template>
-        </Column>
-        <Column field="playtimeMs" header="Playtime" sortable>
-          <template #body="{ data }">{{ duration(data.playtimeMs) }}</template>
-        </Column>
-        <Column field="sessions" header="Sessions" sortable />
-        <Column field="lastSeen" header="Last seen" sortable>
-          <template #body="{ data }">
-            <span v-if="data.online" class="muted small">online now</span>
-            <span
-              v-else-if="data.lastSeen"
-              class="muted small"
-              :title="timestampTitle(data.lastSeen)"
-            >{{ relativeAge(data.lastSeen) }}</span>
-            <span v-else class="muted small">—</span>
-          </template>
-        </Column>
-        <Column field="firstSeen" header="First seen" sortable>
-          <template #body="{ data }">
-            <span v-if="data.firstSeen" class="muted small" :title="timestampTitle(data.firstSeen)">
-              {{ relativeAge(data.firstSeen) }}
-            </span>
-            <span v-else class="muted small">—</span>
-          </template>
-        </Column>
-      </DataTable>
-      <p v-else class="muted small">No sessions recorded for this server in the last {{ rangeLabel }}.</p>
-      <p v-if="playersNote" class="muted small section-note">{{ playersNote }}</p>
-    </section>
+            <span class="b-value mono">{{ boardValue(entry) }}</span>
+          </li>
+        </ol>
+        <p v-else class="note">{{ t("analytics.boardEmpty") }}</p>
+        <p v-if="boardNote" class="note section-note">{{ boardNote }}</p>
+      </section>
 
-    <!-- Command usage: the data that used to be a one-line footnote under 57
-         cards on the Commands page, where it could not be sorted or compared. -->
-    <section class="panel">
-      <h3>Command usage, last {{ rangeLabel }}</h3>
-      <DataTable
-        v-if="commands.length"
-        :value="commands"
-        size="small"
-        sortField="uses"
-        :sortOrder="-1"
-        paginator
-        :rows="15"
-      >
-        <Column field="command" header="Command" sortable>
-          <template #body="{ data }">
-            <code class="mono">{{ data.surface === "ingame" ? "!" : "/" }}{{ data.command }}</code>
-          </template>
-        </Column>
-        <Column field="surface" header="Surface" sortable />
-        <Column field="uses" header="Uses" sortable />
-        <Column field="users" header="People" sortable />
-        <Column field="lastUsed" header="Last used" sortable>
-          <template #body="{ data }">
-            <span class="muted small" :title="timestampTitle(data.lastUsed)">
-              {{ relativeAge(data.lastUsed) }}
-            </span>
-          </template>
-        </Column>
-      </DataTable>
-      <p v-else class="muted small">Nothing recorded in the last {{ rangeLabel }}.</p>
-      <p v-if="commandsNote" class="muted small section-note">{{ commandsNote }}</p>
-    </section>
+      <!-- Players. "Who is still around and who stopped coming" is a sorted
+           table, not one row per Discord message. -->
+      <section class="panel" aria-labelledby="an-players-h">
+        <h2 id="an-players-h">
+          {{ t("analytics.players") }}
+          <span v-if="currentServer" class="scope-tag mono">{{ currentServer }}</span>
+          <span v-if="!playersFailure" class="h-meta">{{ t("analytics.playersActive", { count: players.length, range: rangeLabel }) }}</span>
+        </h2>
+        <InlineError
+          v-if="playersFailure"
+          :title="playersFailureCopy.title"
+          :recovery="playersFailureCopy.recovery"
+          :detail="playersFailureCopy.detail"
+          :retryable="playersFailureCopy.retryable"
+          :retry-label="playersFailureCopy.retryLabel"
+          :busy="loading"
+          @retry="retry(playersFailure?.kind ?? null, reload)"
+        />
+        <template v-else-if="players.length">
+          <SortControl
+            v-model:field="playersSort.field"
+            v-model:order="playersSort.order"
+            :options="playersSortOptions"
+          />
+          <DataTable
+            v-model:sortField="playersSort.field"
+            v-model:sortOrder="playersSort.order"
+            :value="players"
+            :pt="{ pcPaginator: { paginatorContainer: { 'aria-label': t('analytics.playersPages') } } }"
+            size="small"
+            paginator
+            :rows="15"
+            class="table stack-table"
+          >
+            <Column field="name" :header="t('analytics.col.player')" :pt="{ bodyCell: { 'data-label': t('analytics.col.player') } }" sortable>
+              <template #body="{ data }">
+                <span class="p-name">
+                  <StatusChip v-if="data.online" state="online" variant="dot" :label="t('analytics.onlineNow')" />
+                  {{ data.name }}
+                </span>
+              </template>
+            </Column>
+            <Column field="playtimeMs" :header="t('analytics.col.playtime')" :pt="{ bodyCell: { 'data-label': t('analytics.col.playtime') } }" sortable>
+              <template #body="{ data }">{{ formatSpan(data.playtimeMs) }}</template>
+            </Column>
+            <Column field="sessions" :header="t('analytics.col.sessions')" :pt="{ bodyCell: { 'data-label': t('analytics.col.sessions') } }" sortable />
+            <Column field="lastSeen" :header="t('analytics.col.lastSeen')" :pt="{ bodyCell: { 'data-label': t('analytics.col.lastSeen') } }" sortable>
+              <template #body="{ data }">
+                <span v-if="data.online" class="dim">{{ t("analytics.onlineNow") }}</span>
+                <span v-else-if="data.lastSeen" class="dim" :title="timestampTitle(data.lastSeen)">{{ relativeAge(data.lastSeen) }}</span>
+                <span v-else class="dim">{{ t("analytics.notRecorded") }}</span>
+              </template>
+            </Column>
+            <Column field="firstSeen" :header="t('analytics.col.firstSeen')" :pt="{ bodyCell: { 'data-label': t('analytics.col.firstSeen') } }" sortable>
+              <template #body="{ data }">
+                <span v-if="data.firstSeen" class="dim" :title="timestampTitle(data.firstSeen)">{{ relativeAge(data.firstSeen) }}</span>
+                <span v-else class="dim">{{ t("analytics.notRecorded") }}</span>
+              </template>
+            </Column>
+          </DataTable>
+        </template>
+        <p v-else-if="loaded" class="note">{{ t("analytics.noPlayers", { range: rangeLabel }) }}</p>
+        <p v-if="playersNote" class="note section-note">{{ playersNote }}</p>
+      </section>
+
+      <!-- Command usage: sortable and comparable, which a footnote under the
+           command cards never was. -->
+      <section class="panel" aria-labelledby="an-commands-h">
+        <h2 id="an-commands-h">{{ t("analytics.commands", { range: rangeLabel }) }}</h2>
+        <InlineError
+          v-if="usageFailure"
+          :title="usageFailureCopy.title"
+          :recovery="usageFailureCopy.recovery"
+          :detail="usageFailureCopy.detail"
+          :retryable="usageFailureCopy.retryable"
+          :retry-label="usageFailureCopy.retryLabel"
+          :busy="loading"
+          @retry="retry(usageFailure?.kind ?? null, reload)"
+        />
+        <template v-else-if="commands.length">
+          <SortControl
+            v-model:field="commandsSort.field"
+            v-model:order="commandsSort.order"
+            :options="commandsSortOptions"
+          />
+          <DataTable
+            v-model:sortField="commandsSort.field"
+            v-model:sortOrder="commandsSort.order"
+            :value="commands"
+            :pt="{ pcPaginator: { paginatorContainer: { 'aria-label': t('analytics.commandsPages') } } }"
+            size="small"
+            paginator
+            :rows="15"
+            class="table stack-table"
+          >
+            <Column field="command" :header="t('analytics.col.command')" :pt="{ bodyCell: { 'data-label': t('analytics.col.command') } }" sortable>
+              <template #body="{ data }">
+                <code class="mono">{{ data.surface === "ingame" ? "!" : "/" }}{{ data.command }}</code>
+              </template>
+            </Column>
+            <Column field="surface" :header="t('analytics.col.surface')" :pt="{ bodyCell: { 'data-label': t('analytics.col.surface') } }" sortable />
+            <Column field="uses" :header="t('analytics.col.uses')" :pt="{ bodyCell: { 'data-label': t('analytics.col.uses') } }" sortable />
+            <Column field="users" :header="t('analytics.col.people')" :pt="{ bodyCell: { 'data-label': t('analytics.col.people') } }" sortable />
+            <Column field="lastUsed" :header="t('analytics.col.lastUsed')" :pt="{ bodyCell: { 'data-label': t('analytics.col.lastUsed') } }" sortable>
+              <template #body="{ data }">
+                <span v-if="data.lastUsed" class="dim" :title="timestampTitle(data.lastUsed)">{{ relativeAge(data.lastUsed) }}</span>
+                <span v-else class="dim">{{ t("analytics.notRecorded") }}</span>
+              </template>
+            </Column>
+          </DataTable>
+        </template>
+        <p v-else-if="loaded" class="note">{{ t("analytics.noCommands", { range: rangeLabel }) }}</p>
+        <p v-if="commandsNote" class="note section-note">{{ commandsNote }}</p>
+      </section>
+    </div>
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent } from "vue";
+import { defineComponent, useId } from "vue";
 import Button from "primevue/button";
-import Message from "primevue/message";
-import Tag from "primevue/tag";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
 import Select from "primevue/select";
 import SelectButton from "primevue/selectbutton";
+import { StatusRole } from "@mcbot/schema";
+import { formatSpan, MS } from "@mcbot/core/utils/duration.js";
 import ViewHeader from "../components/ui/ViewHeader.vue";
-import StatusDot from "../components/ui/StatusDot.vue";
-import { useAnalytics, clampNote, formatHours } from "../composables/useAnalytics";
+import StatusChip from "../components/ui/StatusChip.vue";
+import EmptyState from "../components/ui/EmptyState.vue";
+import InlineError from "../components/ui/InlineError.vue";
+import SortControl from "../components/ui/SortControl.vue";
+import {
+  useAnalytics,
+  clampNote,
+  formatHours,
+  type LeaderboardEntry,
+} from "../composables/useAnalytics";
+import { failureCopy, signIn, type FailureCopy, type LoadFailure } from "../utils/loadFailure";
 import { relativeAge, timestampTitle, absoluteStamp } from "../utils/time";
+import { t } from "../i18n";
+
+/** Minecraft counts playtime in game ticks, 20 per second. */
+const MS_PER_TICK = MS.second / 20;
+
+/** Stats whose value is a playtime in ticks. */
+const TICK_STATS = new Set(["playtime"]);
+
+interface UptimeWindow {
+  label: string;
+  pct: number | null;
+  checks: { total: number; online: number };
+  selected: boolean;
+}
 
 export default defineComponent({
   name: "AnalyticsView",
   components: {
-    Button, Message, Tag, DataTable, Column, Select, SelectButton, ViewHeader, StatusDot,
+    Button, DataTable, Column, Select, SelectButton, ViewHeader, StatusChip, EmptyState, InlineError, SortControl,
   },
   props: {
     serverIds: { type: Array as () => string[], default: () => [] },
@@ -240,6 +318,9 @@ export default defineComponent({
       ...useAnalytics(),
       relativeAge,
       timestampTitle,
+      formatSpan,
+      t,
+      rangeLabelId: `analytics-range-${useId()}`,
     };
   },
   data() {
@@ -249,6 +330,8 @@ export default defineComponent({
       // One control for every section. Each section keeps a different amount
       // of history, so a range past a section's cap is clamped and noted there.
       rangeHours: 24 * 14,
+      playersSort: { field: "playtimeMs", order: -1 as 1 | -1 },
+      commandsSort: { field: "uses", order: -1 as 1 | -1 },
       rangeOptions: [
         { label: "24h", value: 24 },
         { label: "3d", value: 24 * 3 },
@@ -260,13 +343,31 @@ export default defineComponent({
     };
   },
   computed: {
-    uptimeWindows(): { label: string; pct: number | null; checks: { total: number; online: number }; selected: boolean }[] {
+    playersSortOptions(): Array<{ field: string; label: string }> {
+      return [
+        { field: "name", label: t("analytics.col.player") },
+        { field: "playtimeMs", label: t("analytics.col.playtime") },
+        { field: "sessions", label: t("analytics.col.sessions") },
+        { field: "lastSeen", label: t("analytics.col.lastSeen") },
+        { field: "firstSeen", label: t("analytics.col.firstSeen") },
+      ];
+    },
+    commandsSortOptions(): Array<{ field: string; label: string }> {
+      return [
+        { field: "command", label: t("analytics.col.command") },
+        { field: "surface", label: t("analytics.col.surface") },
+        { field: "uses", label: t("analytics.col.uses") },
+        { field: "users", label: t("analytics.col.people") },
+        { field: "lastUsed", label: t("analytics.col.lastUsed") },
+      ];
+    },
+    uptimeWindows(): UptimeWindow[] {
       const u = this.uptime;
       if (!u) return [];
       const fixed = [
-        { hours: 24, label: "24 hours", pct: u.pct24h, checks: u.checks24h },
-        { hours: 24 * 7, label: "7 days", pct: u.pct7d, checks: u.checks7d },
-        { hours: 24 * 30, label: "30 days", pct: u.pct30d, checks: u.checks30d },
+        { hours: 24, label: t("analytics.window24h"), pct: u.pct24h, checks: u.checks24h },
+        { hours: 24 * 7, label: t("analytics.window7d"), pct: u.pct7d, checks: u.checks7d },
+        { hours: 24 * 30, label: t("analytics.window30d"), pct: u.pct30d, checks: u.checks30d },
       ];
       const range = u.range;
       const rows = fixed.map((w) => ({
@@ -277,7 +378,7 @@ export default defineComponent({
       }));
       if (range && !fixed.some((w) => w.hours === range.rangeHours)) {
         rows.push({
-          label: `selected range (${formatHours(range.rangeHours)})`,
+          label: t("analytics.windowRange", { range: formatHours(range.rangeHours) }),
           pct: range.pct,
           checks: range.checks,
           selected: true,
@@ -285,8 +386,24 @@ export default defineComponent({
       }
       return rows;
     },
+    /** A server the bot never polled has empty windows; one sentence says so instead of a row of blanks. */
+    hasChecks(): boolean {
+      return this.uptimeWindows.some((w) => w.checks.total > 0);
+    },
+    currentRole(): StatusRole {
+      const state = this.uptime?.currentState ?? "unknown";
+      if (state === "online") return StatusRole.Online;
+      if (state === "offline") return StatusRole.Offline;
+      return StatusRole.Unknown;
+    },
+    currentLabel(): string {
+      const state = this.uptime?.currentState ?? "unknown";
+      if (state === "online") return t("status.online");
+      if (state === "offline") return t("status.offline");
+      return t("status.unknown");
+    },
     uptimeNote(): string {
-      return clampNote(this.rangeHours, this.uptime?.range?.rangeHours ?? null);
+      return this.hasChecks ? clampNote(this.rangeHours, this.uptime?.range?.rangeHours ?? null) : "";
     },
     activityNote(): string {
       return clampNote(this.rangeHours, this.activityRangeHours);
@@ -297,24 +414,21 @@ export default defineComponent({
     playersNote(): string {
       const kept = this.sessionsKeptPerPlayer;
       if (kept === null || this.players.length === 0) return "";
-      return `Playtime and session counts cover each player's last ${kept} sessions inside the range.`;
+      return t("analytics.playersNote", { count: kept });
     },
     boardNote(): string {
+      if (this.boardFailure) return "";
       const parts: string[] = [];
       const clamp = clampNote(this.rangeHours, this.boardRangeHours);
       if (clamp) parts.push(clamp);
       if (this.boardHistoryShort) {
         parts.push(
           this.boardBaselineAt
-            ? `Snapshot history only goes back to ${absoluteStamp(this.boardBaselineAt)}, so this board covers less than the range.`
-            : "No snapshot history exists yet, so this board shows all-time totals.",
+            ? t("analytics.boardShort", { at: absoluteStamp(this.boardBaselineAt) })
+            : t("analytics.boardAllTime"),
         );
       }
       return parts.join(" ");
-    },
-    stateWord(): string {
-      const state = this.uptime?.currentState ?? "unknown";
-      return state === "online" ? "Up" : state === "offline" ? "Down" : "Unknown";
     },
     /** The top entry's value, so board bars scale to the board shown. */
     boardPeak(): number {
@@ -325,17 +439,65 @@ export default defineComponent({
       return this.activity.reduce((max, h) => Math.max(max, h.avg), 0);
     },
     chartLabel(): string {
-      return `Average concurrent players per hour over ${this.activity.length} hours, peaking at ${this.peakAvg.toFixed(1)}.`;
+      return t("analytics.chartLabel", { count: this.activity.length, peak: this.peakAvg.toFixed(1) });
     },
     rangeLabel(): string {
-      return this.rangeOptions.find((o) => o.value === this.rangeHours)?.label ?? "14d";
+      return this.rangeOptions.find((o) => o.value === this.rangeHours)?.label ?? formatHours(this.rangeHours);
+    },
+    historyFailureCopy(): FailureCopy {
+      return failureCopy(this.failure ?? "failed", {
+        failedTitle: t("analytics.historyFailedTitle", { server: this.currentServer }),
+        failedText: t("analytics.historyFailedText"),
+        forbiddenTitle: t("analytics.forbiddenTitle", { server: this.currentServer }),
+        capability: "server:read",
+        request: `GET /api/servers/${this.currentServer}/analytics`,
+        error: this.error,
+      });
+    },
+    boardFailureCopy(): FailureCopy {
+      // The board is the one panel read through the wrapper (stats live in the
+      // world folder), so "did not answer" points there, not at the dashboard.
+      return failureCopy(this.boardFailure ?? "failed", {
+        failedTitle: t("analytics.boardFailedTitle"),
+        failedText:
+          this.boardFailure === "unreachable"
+            ? t("analytics.boardWrapperText", { server: this.currentServer })
+            : t("analytics.boardFailedText"),
+        forbiddenTitle: t("analytics.forbiddenTitle", { server: this.currentServer }),
+        capability: "server:read",
+        request: `GET /api/servers/${this.currentServer}/analytics/leaderboard`,
+        error: this.boardError,
+      });
+    },
+    playersFailureCopy(): FailureCopy {
+      return failureCopy(this.playersFailure?.kind ?? "failed", {
+        failedTitle: t("analytics.playersFailedTitle"),
+        failedText: t("analytics.sectionFailedText"),
+        forbiddenTitle: t("analytics.forbiddenTitle", { server: this.currentServer }),
+        capability: "server:read",
+        request: `GET /api/servers/${this.currentServer}/analytics/players`,
+        error: this.playersFailure?.error ?? "",
+      });
+    },
+    usageFailureCopy(): FailureCopy {
+      return failureCopy(this.usageFailure?.kind ?? "failed", {
+        failedTitle: t("analytics.commandsFailedTitle"),
+        failedText: t("analytics.sectionFailedText"),
+        forbiddenTitle: t("analytics.commandsForbiddenTitle"),
+        capability: "server:read",
+        request: "GET /api/analytics/commands",
+        error: this.usageFailure?.error ?? "",
+      });
     },
   },
   watch: {
+    activeServer(id: string) {
+      if (id && id !== this.currentServer) void this.select(id);
+    },
     serverIds: {
       immediate: true,
       handler(ids: string[]) {
-        if (ids.length === 0) return;
+        if (ids.length === 0 || ids.includes(this.currentServer)) return;
         const next =
           this.activeServer && ids.includes(this.activeServer) ? this.activeServer : ids[0]!;
         void this.select(next);
@@ -361,18 +523,22 @@ export default defineComponent({
     async reloadBoard(): Promise<void> {
       if (this.currentServer) await this.loadBoard(this.currentServer, this.stat, this.rangeHours);
     },
+    retry(kind: LoadFailure | null, again: () => Promise<void>): void {
+      if (kind === "signedOut") signIn();
+      else void again();
+    },
+    boardValue(entry: LeaderboardEntry): string {
+      return TICK_STATS.has(this.stat) ? formatSpan(entry.value * MS_PER_TICK) : entry.formatted;
+    },
     /** Bar width relative to first place, which is what a rank reads against. */
     boardWidth(value: number): number {
       if (this.boardPeak <= 0) return 0;
       return Math.max(1, (value / this.boardPeak) * 100);
     },
     /**
-     * Bar height as a share of the window's own peak.
-     *
-     * Scaling to max-players instead would flatten every server that never
-     * fills, which is nearly all of them, and hide the shape this chart
-     * exists to show. A floor of 2% keeps a quiet hour visible as a quiet
-     * hour rather than as missing data.
+     * Bar height as a share of the window's own peak. Scaling to max-players
+     * would flatten every server that never fills. A floor of 2% keeps a
+     * quiet hour visible as a quiet hour rather than as missing data.
      */
     barHeight(avg: number): number {
       if (this.peakAvg <= 0) return 2;
@@ -381,81 +547,77 @@ export default defineComponent({
     absolute(at: number): string {
       return absoluteStamp(at);
     },
-    duration(ms: number): string {
-      const hours = Math.floor(ms / 3_600_000);
-      if (hours < 1) return `${Math.max(1, Math.round(ms / 60_000))} min`;
-      if (hours < 48) return `${hours} h`;
-      return `${Math.round(hours / 24)} days`;
-    },
   },
 });
 </script>
 
 <style scoped>
-.scope-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
-.scope-label { text-transform: uppercase; letter-spacing: 0.04em; }
-.picker { display: flex; flex-wrap: wrap; gap: 6px; }
-.ctl-label { letter-spacing: 0.02em; margin-left: 8px; }
+.analytics-view { min-width: 0; }
+.stack-gap { display: flex; flex-direction: column; gap: var(--space-4); }
+.scope-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.ctl-label { color: var(--text-dim); font-size: var(--text-sm); }
 .scope-tag {
-  font-size: 11px; font-weight: 500; color: var(--mc-accent);
-  background: var(--mc-accent-bg); border: 0.5px solid var(--mc-accent-border);
-  border-radius: 999px; padding: 1px 9px; vertical-align: middle;
-  text-transform: none; letter-spacing: 0;
+  margin-left: var(--space-2);
+  padding: 1px var(--space-2);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-full);
+  background: var(--accent-tint);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  vertical-align: middle;
 }
+.h-meta { margin-left: var(--space-2); color: var(--text-dim); font-size: var(--text-sm); font-weight: 400; }
 
 .panel {
-  border: 0.5px solid var(--mc-border);
-  border-radius: var(--mc-radius);
-  background: var(--mc-card);
-  padding: 14px 16px;
-  margin-bottom: 14px;
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-surface);
+  background: var(--surface-nav);
 }
-.panel h3 { margin: 0 0 12px; font-size: 14px; font-weight: 600; }
+.panel h2 { margin: 0 0 var(--space-3); font-size: var(--text-lg); font-weight: 600; }
+.note { margin: 0; color: var(--text-dim); font-size: var(--text-sm); }
+.section-note { margin-top: var(--space-3); }
+.dim { color: var(--text-dim); font-size: var(--text-sm); }
 
-.uptime-row { display: flex; flex-wrap: wrap; gap: 28px; }
-.u-cell { display: flex; flex-direction: column; gap: 1px; }
-.u-pct { font-size: 26px; font-weight: 500; line-height: 1.1; }
-.u-pct.online { color: var(--mc-accent); }
-.u-pct.offline { color: var(--mc-bad); }
-.u-pct.unknown { color: var(--mc-dim); }
-.section-note { margin: 10px 0 0; }
-.u-selected .u-label { color: var(--mc-accent); }
+.uptime-row { display: flex; flex-wrap: wrap; gap: var(--space-4) var(--space-6); }
+.u-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.u-pct { font-size: var(--text-3xl); font-weight: 600; line-height: var(--leading-tight); font-variant-numeric: tabular-nums; }
+.u-pct.u-none { font-size: var(--text-lg); font-weight: 400; color: var(--text-dim); line-height: 2.25rem; }
+.u-label, .u-checks { color: var(--text-dim); font-size: var(--text-sm); }
+.u-selected .u-label { color: var(--accent); }
 
-.chart {
-  display: flex; align-items: flex-end; gap: 1px;
-  height: 140px; padding: 4px 0;
-}
-.bar {
-  flex: 1; min-width: 1px;
-  background: var(--mc-accent);
-  border-radius: 1px 1px 0 0;
-  opacity: 0.85;
-}
+.chart { display: flex; align-items: flex-end; gap: 1px; height: 140px; padding: var(--space-1) 0; }
+.bar { flex: 1; min-width: 1px; border-radius: 1px 1px 0 0; background: var(--accent); opacity: 0.85; }
 .bar:hover { opacity: 1; }
 
-.busiest { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.busiest { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-top: var(--space-3); }
+.slot { padding: 2px var(--space-2); border-radius: var(--radius-control); background: var(--surface-raised); font-size: var(--text-xs); }
 
-.p-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.p-head h3 { margin-bottom: 12px; }
-.stat-picker { min-width: 180px; margin-bottom: 12px; }
-.panel-msg { margin: 0; }
+.p-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); margin-bottom: var(--space-3); }
+.p-head h2 { margin: 0; }
+.stat-picker { min-width: 180px; }
 
-.board { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.b-row {
-  display: grid;
-  grid-template-columns: 26px minmax(90px, 1fr) minmax(0, 3fr) auto;
-  align-items: center; gap: 10px;
-}
-.b-rank { font-size: 12px; text-align: right; }
-.b-name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.b-bar { height: 6px; border-radius: 999px; background: var(--mc-border-strong); overflow: hidden; }
-.b-fill { display: block; height: 100%; background: var(--mc-accent); border-radius: 999px; }
-.b-value { font-size: 12.5px; white-space: nowrap; }
+.board { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.b-row { display: grid; grid-template-columns: 26px minmax(90px, 1fr) minmax(0, 3fr) auto; align-items: center; gap: var(--space-3); }
+.b-rank { color: var(--text-dim); font-size: var(--text-xs); text-align: right; }
+.b-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); }
+.b-bar { height: 6px; overflow: hidden; border-radius: var(--radius-full); background: var(--border-strong); }
+.b-fill { display: block; height: 100%; border-radius: var(--radius-full); background: var(--accent); }
+.b-value { font-size: var(--text-xs); white-space: nowrap; }
 
-.p-name { display: inline-flex; align-items: center; gap: 7px; }
+.p-name { display: inline-flex; align-items: center; gap: var(--space-2); }
+
 
 @media (max-width: 700px) {
   .b-row { grid-template-columns: 22px 1fr auto; }
   .b-bar { display: none; }
+}
+@media (pointer: coarse), (max-width: 760px) {
+  .tap { min-height: var(--touch-min); }
+  .ranges :deep(.p-togglebutton) { min-height: var(--touch-min); }
+  .stat-picker { min-height: var(--touch-min); }
+  .table :deep(.p-paginator button) { min-width: var(--touch-min); min-height: var(--touch-min); }
 }
 </style>

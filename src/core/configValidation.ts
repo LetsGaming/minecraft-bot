@@ -298,6 +298,13 @@ function checkGuildIds(
       guild[block]?.mentionRole,
       `guilds.${gid}.${block}.mentionRole`,
     );
+    const policy = guild[block]?.mentionPolicy;
+    if (policy !== undefined && policy !== "always" && policy !== "escalation") {
+      warnings.push(
+        `guilds.${gid}.${block}.mentionPolicy "${String(policy)}" is not ` +
+          `"always" or "escalation"; "escalation" will be used`,
+      );
+    }
   }
   checkSnowflake(
     warnings,

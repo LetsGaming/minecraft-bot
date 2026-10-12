@@ -1,6 +1,6 @@
 # Mod config editor: what it lists and what it can edit
 
-The dashboard's Mod Config tab reads config files through the wrapper and edits the ones it understands. It needs the `config:read` capability to view and `config:write` to save (see [capabilities.md](capabilities.md)).
+The dashboard's Mod config page reads config files through the wrapper and edits the ones it understands. It needs the `config:read` capability to view and `config:write` to save (see [capabilities.md](capabilities.md)).
 
 ## Where it looks
 

@@ -74,6 +74,7 @@ export const execute = withErrorHandling(
             t("moderation.kicked", { player, server: server.id }),
             verdict,
           ),
+          { title: t("moderation.kickedTitle") },
         ),
       ],
     });

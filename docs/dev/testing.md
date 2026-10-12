@@ -31,12 +31,15 @@ npx vitest run -t "streak"
   | `commands/` | Slash commands, middleware, the resolver |
   | `ingame/` | `!commands` and their loader |
   | `watchers/` | Log watchers, monitors, schedulers |
-  | `web/` | Dashboard backend and frontend logic |
+  | `web/` | Dashboard backend and frontend logic; `web/components/` mounts views and components in jsdom |
+  | `bot/` | Interactions, process guards, and the Discord reply snapshots (`bot/discordSnapshots/`) |
   | `utils/` | The framework-free primitives |
   | `suites/` | Thematic sets that span everything — regressions, audit fixes |
 
   `setup.ts` stays at the root; `vitest.config.ts` names it directly. The `include` glob is already recursive, so a new subdirectory needs no config change.
 - Workspace specifiers resolve to TypeScript sources via the aliases in `vitest.config.ts`, so tests, `vi.mock()` specifiers, and the code under test all hit the same files with no build step.
+- Component tests opt into jsdom per file with `// @vitest-environment jsdom` and mount through `@vue/test-utils`; everything else runs in Node.
+- **Discord reply snapshots** (`tests/bot/discordSnapshots/`) run real commands, watchers and embed builders in English and German and compare the result with JSON fixtures in `tests/fixtures/discord-snapshots/`. A changed reply fails the suite until the fixture is updated with `npm run discord:snapshots -- --update`; review the fixture diff like code. `npm run discord:snapshots` prints them as text. The rules they encode are in [bot/replies.md](bot/replies.md).
 - `globals: false`: import `describe`, `it`, `expect`, `vi` from `vitest` explicitly.
 - Tests import from `src/.../*.js` (the same ESM suffix convention as the source).
 

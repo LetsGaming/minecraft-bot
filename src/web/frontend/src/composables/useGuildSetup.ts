@@ -1,10 +1,12 @@
-import { computed, ref, toValue } from "vue";
+import { computed, ref, shallowRef, toValue } from "vue";
 import { errorMessage } from "../utils/errorMessage";
 import { isRecord } from "../utils/isRecord";
+import { FEATURE_ICON, featureHint, featureLabel } from "../utils/guildFeatures";
 import { useToast } from "primevue/usetoast";
 import { DEFAULT_NOTIFICATION_EVENTS, type GuildFeatureKey } from "@mcbot/schema";
 import { apiGet, apiSend, isConflict, validationErrors } from "../api";
 import type { SetupGuild, SetupChannel, SetupRole } from "../api";
+import { t } from "../i18n";
 
 export type FeatureInput =
   | "channel"
@@ -22,22 +24,30 @@ export interface FeatureDesc {
   hint: string;
 }
 
-// Declarative feature set — order is the display order. Each maps to a
+const feature = (key: GuildFeatureKey, input: FeatureInput): FeatureDesc => ({
+  key,
+  input,
+  icon: FEATURE_ICON[key],
+  label: featureLabel(key),
+  hint: featureHint(key),
+});
+
+// Declarative feature set; order is the display order. Each maps to a
 // key in the guild config block. `server` is intentionally never asked
 // per-feature: an unset server inherits the guild's defaultServer (see
 // schema), which keeps this flow simple.
 export const FEATURES: FeatureDesc[] = [
-  { key: "notifications", label: "Notifications", icon: "pi pi-bell", input: "channel", hint: "Join/leave and server-event messages." },
-  { key: "chatBridge", label: "Chat Bridge", icon: "pi pi-comments", input: "channel+webhook", hint: "Relay chat between Discord and Minecraft." },
-  { key: "leaderboard", label: "Leaderboard", icon: "pi pi-chart-bar", input: "channel+interval", hint: "Periodic stat leaderboards." },
-  { key: "statusEmbed", label: "Status Embed", icon: "pi pi-desktop", input: "enabled", hint: "Live status embed (creates its own channel)." },
-  { key: "downtimeAlerts", label: "Downtime Alerts", icon: "pi pi-exclamation-triangle", input: "channel", hint: "Alerts when a server goes down." },
-  { key: "tpsAlerts", label: "TPS Alerts", icon: "pi pi-gauge", input: "channel", hint: "Alerts on sustained low TPS." },
-  { key: "reports", label: "Reports", icon: "pi pi-flag", input: "channel", hint: "In-game !report routed to a channel." },
-  { key: "console", label: "Console Relay", icon: "pi pi-code", input: "channel", hint: "Admin-only live console via /console live." },
-  { key: "channelPurge", label: "Channel Purge", icon: "pi pi-trash", input: "channel", hint: "Auto-clear a channel on a schedule." },
-  { key: "whitelistApplications", label: "Whitelist Apps", icon: "pi pi-user-plus", input: "channel+admin", hint: "Application prompt + a staff review channel." },
-  { key: "linkedRole", label: "Linked Role", icon: "pi pi-id-card", input: "role", hint: "Role granted when a member links their account." },
+  feature("notifications", "channel"),
+  feature("chatBridge", "channel+webhook"),
+  feature("leaderboard", "channel+interval"),
+  feature("statusEmbed", "enabled"),
+  feature("downtimeAlerts", "channel"),
+  feature("tpsAlerts", "channel"),
+  feature("reports", "channel"),
+  feature("console", "channel"),
+  feature("channelPurge", "channel"),
+  feature("whitelistApplications", "channel+admin"),
+  feature("linkedRole", "role"),
 ];
 
 export interface FeatureModel {
@@ -177,7 +187,7 @@ export function useGuildSetup(
 ) {
   const toast = useToast();
 
-  // step 0 — guild + server selection
+  // step 0: guild + server selection
   const guilds = ref<SetupGuild[]>([]);
   const configuredGuildIds = ref<string[]>([]);
   const configuredServers = ref<string[]>([]);
@@ -185,6 +195,8 @@ export function useGuildSetup(
   const defaultServer = ref<string | null>(null);
   const loadingGuilds = ref(false);
   const guildError = ref("");
+  /** The failure behind `guildError`, so the wizard can tell a bad token from an outage. */
+  const guildFailure = shallowRef<unknown>(null);
 
   // The guild's current block and the token read with it. Writing is only
   // possible once both are in hand.
@@ -193,7 +205,7 @@ export function useGuildSetup(
   const seeded = ref(false);
   let seedHash = "";
 
-  // step 1 — feature model + the target guild's channels/roles
+  // step 1: feature model + the target guild's channels/roles
   const channels = ref<SetupChannel[]>([]);
   const roles = ref<SetupRole[]>([]);
   const channelsForGuild = ref("");
@@ -201,8 +213,9 @@ export function useGuildSetup(
   const existingGuildBlock = ref<Record<string, unknown>>({});
   const loadingChannels = ref(false);
   const channelError = ref("");
+  const channelFailure = shallowRef<unknown>(null);
 
-  // step 2 — write
+  // step 2: write
   const writing = ref(false);
   const writeError = ref("");
   const conflicted = ref(false);
@@ -230,6 +243,7 @@ export function useGuildSetup(
   async function loadGuilds(): Promise<void> {
     loadingGuilds.value = true;
     guildError.value = "";
+    guildFailure.value = null;
     try {
       const [guildsRes, myGuildsRes] = await Promise.all([
         apiGet<{ guilds: SetupGuild[] }>("/api/setup/guilds"),
@@ -239,7 +253,7 @@ export function useGuildSetup(
       configuredGuildIds.value = myGuildsRes.guilds
         .filter((g) => g.configured)
         .map((g) => g.id);
-      // The server picker (and thus the server list) is sysadmin-only —
+      // The server picker (and thus the server list) is sysadmin-only;
       // guild managers get no information about the Minecraft servers.
       if (toValue(getSysadmin)) {
         try {
@@ -259,6 +273,7 @@ export function useGuildSetup(
       }
     } catch (err) {
       guildError.value = errorMessage(err);
+      guildFailure.value = err;
     } finally {
       loadingGuilds.value = false;
     }
@@ -296,7 +311,7 @@ export function useGuildSetup(
       return true;
     } catch (err) {
       if (guildId.value === id) {
-        seedError.value = `Could not read this guild's current config: ${errorMessage(err)}`;
+        seedError.value = errorMessage(err);
       }
       return false;
     } finally {
@@ -308,6 +323,7 @@ export function useGuildSetup(
     if (channelsForGuild.value === guildId.value && channels.value.length) return;
     loadingChannels.value = true;
     channelError.value = "";
+    channelFailure.value = null;
     try {
       const [ch, rl] = await Promise.all([
         apiGet<{ channels: SetupChannel[] }>(
@@ -322,6 +338,7 @@ export function useGuildSetup(
       channelsForGuild.value = guildId.value;
     } catch (err) {
       channelError.value = errorMessage(err);
+      channelFailure.value = err;
     } finally {
       loadingChannels.value = false;
     }
@@ -337,7 +354,7 @@ export function useGuildSetup(
   /** Write this guild's block. Returns true on success (caller emits). */
   async function write(): Promise<boolean> {
     if (!canWrite.value) {
-      writeError.value = seedError.value || "The guild's current config has not been read yet.";
+      writeError.value = t("wizard.notSeeded");
       return false;
     }
     writing.value = true;
@@ -350,16 +367,15 @@ export function useGuildSetup(
       const name = guilds.value.find((g) => g.id === guildId.value)?.name ?? guildId.value;
       toast.add({
         severity: "success",
-        summary: "Guild configured",
-        detail: `${name} is set up. Written to config.json.`,
+        summary: t("wizard.writtenToast"),
+        detail: t("wizard.writtenToastDetail", { name }),
         life: 4000,
       });
       return true;
     } catch (err) {
       if (isConflict(err)) {
         conflicted.value = true;
-        writeError.value =
-          "This guild's config changed while the wizard was open (someone else saved). Reload the latest config to start from it; nothing was written.";
+        writeError.value = t("wizard.conflict");
       } else {
         const list = validationErrors(err);
         writeError.value = list.length > 0 ? list.join("\n") : errorMessage(err);
@@ -373,7 +389,8 @@ export function useGuildSetup(
   return {
     guilds, configuredGuildIds, configuredServers, guildId, defaultServer,
     channels, roles, channelsForGuild, model, existingGuildBlock,
-    loadingGuilds, guildError, loadingChannels, channelError, writing, writeError,
+    loadingGuilds, guildError, guildFailure, loadingChannels, channelError, channelFailure,
+    writing, writeError,
     seeding, seedError, seeded, canWrite, conflicted,
     reset, loadGuilds, onGuildPicked, seedFromExisting, loadChannelsRoles, reloadLatest, write,
   };

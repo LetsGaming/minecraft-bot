@@ -1,4 +1,4 @@
-import { computed, ref } from "vue";
+import { computed, getCurrentInstance, onBeforeUnmount, ref } from "vue";
 import { errorMessage } from "../utils/errorMessage";
 import { isRecord } from "../utils/isRecord";
 import { groupErrors } from "../utils/fieldErrors";
@@ -6,6 +6,9 @@ import { useToast } from "primevue/usetoast";
 import { apiGet, apiSend } from "../api";
 import type { ConfigResponse } from "../api";
 import { useEditableDocument } from "./useEditableDocument";
+import { registerDirtySource } from "./useUnsavedGuard";
+import { SECRET_PLACEHOLDER } from "@mcbot/schema";
+import { t } from "../i18n";
 
 export interface JsonSchema {
   $ref?: string;
@@ -25,7 +28,7 @@ type ConfigDoc = Record<string, unknown>;
 export function useConfig() {
   const toast = useToast();
 
-  const placeholder = "•••••";
+  const placeholder = SECRET_PLACEHOLDER;
   const schema = ref<JsonSchema | null>(null);
   const schemaFailed = ref(false);
   const rawMode = ref(false);
@@ -46,6 +49,21 @@ export function useConfig() {
   });
 
   const model = editor.draft;
+
+  /**
+   * Raw mode holds edits the draft cannot show while the text does not parse
+   * (and text that differs from the baseline in a way the draft has not
+   * adopted yet), so the editor's own dirty flag alone would miss them.
+   */
+  const rawDirty = computed(() => {
+    if (!rawMode.value || !editor.ready.value) return false;
+    if (rawError.value) return true;
+    return rawText.value !== JSON.stringify(editor.baseline.value ?? {}, null, 2);
+  });
+  const dirty = computed(() => editor.dirty.value || rawDirty.value);
+
+  const unregisterRaw = registerDirtySource(() => rawDirty.value);
+  if (getCurrentInstance()) onBeforeUnmount(unregisterRaw);
 
   function syncRawFromDraft(): void {
     rawText.value = JSON.stringify(editor.draft.value ?? {}, null, 2);
@@ -71,7 +89,7 @@ export function useConfig() {
     rawText.value = text;
     try {
       const parsed: unknown = JSON.parse(text);
-      if (!isRecord(parsed)) throw new Error("The config must be a JSON object.");
+      if (!isRecord(parsed)) throw new Error(t("config.rawNotObject"));
       editor.draft.value = parsed;
       rawError.value = "";
     } catch (err) {
@@ -106,8 +124,8 @@ export function useConfig() {
     if (ok) {
       toast.add({
         severity: "success",
-        summary: "Config saved",
-        detail: "Written to config.json. The status chip shows when the bot has applied it.",
+        summary: t("config.savedToast"),
+        detail: t("config.savedToastDetail"),
         life: 3000,
       });
     }
@@ -126,7 +144,7 @@ export function useConfig() {
   const sectionErrors = computed(() => grouped.value.bySection);
   /** Banner lines: a raw-JSON problem, the save failure, and validation lines with no section. */
   const errors = computed(() => [
-    ...(rawError.value ? [`Raw JSON does not parse: ${rawError.value}`] : []),
+    ...(rawError.value ? [t("config.rawInvalid", { error: rawError.value })] : []),
     ...(editor.saveError.value ? [editor.saveError.value] : []),
     ...grouped.value.general,
   ]);
@@ -145,8 +163,9 @@ export function useConfig() {
     placeholder, schema, schemaFailed, model, rawMode, rawText, rawError,
     errors, sectionErrors, pendingCount, canSave,
     loading: editor.loading, loadError: editor.loadError, ready: editor.ready,
+    baseline: editor.baseline, fieldErrors: editor.fieldErrors, saveError: editor.saveError,
     saving: editor.saving, saved: editor.saved, warnings: editor.warnings,
-    stale: editor.stale, dirty: editor.dirty, isDirty: editor.isDirty,
+    stale: editor.stale, dirty, rawDirty, isDirty: editor.isDirty,
     conflicts: editor.conflicts, resolveConflict: editor.resolveConflict,
     load, setTop, setRawMode, setRawText, discard, save, reloadDiscardingMine,
   };

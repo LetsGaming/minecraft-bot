@@ -1,4 +1,5 @@
 import { apiGet, apiSend } from "../api";
+import type { MessageKey } from "../i18n";
 import type {
   InstalledMods,
   ModSearchResult,
@@ -19,8 +20,7 @@ import type {
  * Deliberately stateless: the view owns the reactive state (there is one Mods
  * view at a time, so a module-level singleton like useCapabilities would buy
  * nothing). This just builds the URLs, keeps the encoding in one place, and
- * carries the environment-label mapping the installed list and the browse list
- * both render.
+ * carries the environment-label mapping the catalogue renders.
  */
 
 const enc = encodeURIComponent;
@@ -37,16 +37,13 @@ export interface SearchOptions {
   hideClientOnly?: boolean;
 }
 
-/** Label + dot colour for a mod's environment, shared by both lists. */
-export const ENVIRONMENT_META: Record<
-  ModEnvironment,
-  { label: string; color: string }
-> = {
-  both: { label: "Client + Server", color: "#5b8def" },
-  server: { label: "Server only", color: "#3ecf6e" },
-  optional: { label: "Client optional", color: "#e5a13a" },
-  client: { label: "Client only", color: "#e5544b" },
-  unknown: { label: "Unknown", color: "#8a8a90" },
+/** The label key for a mod's environment, shared by the catalogue rows. */
+export const ENVIRONMENT_LABEL: Record<ModEnvironment, MessageKey> = {
+  both: "mods.env.both",
+  server: "mods.env.server",
+  optional: "mods.env.optional",
+  client: "mods.env.client",
+  unknown: "mods.env.unknown",
 };
 
 export function useMods(serverId: () => string) {

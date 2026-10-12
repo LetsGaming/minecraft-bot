@@ -62,3 +62,14 @@ describe("formatDuration", () => {
     expect(formatDuration(parseDuration("3d")!)).toBe("3d");
   });
 });
+
+describe("formatSpan", () => {
+  it("renders the two largest adjacent units with spaces", async () => {
+    const { formatSpan, MS } = await import("../../src/core/utils/duration.js");
+    expect(formatSpan(2 * MS.day + 7 * MS.hour + 5 * MS.minute)).toBe("2 d 7 h");
+    expect(formatSpan(4 * MS.minute + 18 * MS.second)).toBe("4 min 18 s");
+    expect(formatSpan(2 * MS.day + 5 * MS.minute)).toBe("2 d");
+    expect(formatSpan(500)).toBe("0 s");
+    expect(formatSpan(Number.NaN)).toBe("0 s");
+  });
+});

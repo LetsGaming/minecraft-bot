@@ -27,6 +27,8 @@ const config = {
   expose: "export",
   topRef: true,
   jsDoc: "extended",
+  // `@effect` on a field says when a change takes hold; the dashboard shows it next to the field.
+  extraTags: ["effect"],
   skipTypeCheck: false,
   additionalProperties: false,
 };

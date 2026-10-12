@@ -1,154 +1,78 @@
 <template>
   <div class="app-root">
-    <!-- ── Login gate ── -->
     <div v-if="!loading && !me" class="login-screen">
-      <div class="login-card">
-        <div class="brand-mark"><i class="pi pi-box" /></div>
-        <h1>Minecraft Bot</h1>
-        <p class="muted">Server dashboard</p>
+      <main class="login-card">
+        <div class="brand-mark"><i class="pi pi-box" aria-hidden="true" /></div>
+        <p class="login-brand">{{ t("app.name") }}</p>
+        <h1>{{ t("login.title") }}</h1>
         <p class="login-hint muted small">
-          Sign in with the Discord account listed in
-          <code class="mono">adminUsers</code>.
+          {{ t("login.hintLead") }} <code class="mono">adminUsers</code>.
         </p>
         <Button
-          label="Login with Discord"
+          :label="t('login.button')"
           icon="pi pi-discord"
           class="discord-btn"
           @click="goLogin"
         />
-      </div>
-    </div>
-
-    <!-- ── Main app ── -->
-    <div v-else class="shell">
-      <aside class="sidebar">
-        <div class="sidebar-brand">
-          <div class="brand-mark sm"><i class="pi pi-box" /></div>
-          <div class="brand-text">
-            <strong>Minecraft Bot</strong>
-            <span class="muted small">Dashboard</span>
-          </div>
-        </div>
-
-        <!-- Server switcher. /api/status already returns only the servers the
-             caller may read, so the list needs no client-side filter: an empty
-             list is either "none configured" or "none granted", and both read
-             the same to the person looking at it. -->
-        <template v-if="canAnywhere('server:read')">
-          <div class="switcher-label muted small">SERVER</div>
-          <div class="switcher">
-            <button
-              v-for="s in servers"
-              :key="s.id"
-              :class="['switch-item', { active: s.id === activeServer }]"
-              @click="activeServer = s.id"
-            >
-              <StatusDot :state="statusDot(s)" />
-              <span class="switch-name">{{ s.id }}</span>
-              <span v-if="stateIsUp(s.state) && s.tps !== null" class="switch-tps muted small">
-                {{ s.tps.toFixed(0) }} TPS
-              </span>
-            </button>
-            <div v-if="servers.length === 0" class="muted small switcher-empty">
-              No servers configured
-            </div>
-          </div>
-        </template>
-
-        <!-- Nav -->
-        <nav class="nav">
-          <button
-            v-for="item in visibleNav"
-            :key="item.id"
-            :class="['nav-item', { active: activeTab === item.id }]"
-            @click="goToTab(item.id)"
-          >
-            <i :class="item.icon" />
-            <span>{{ item.label }}</span>
-          </button>
-        </nav>
-
-        <!-- Add to Server: the headline action -->
-        <div class="sidebar-cta">
-          <Button
-            label="Add to Server"
-            icon="pi pi-plus-circle"
-            class="w-full"
-            :loading="inviting"
-            @click="invite"
-          />
-          <p class="muted small cta-hint">Invite the bot to a new Discord guild.</p>
-        </div>
-
-        <!-- Session footer -->
-        <div class="sidebar-foot">
-          <div class="who">
-            <i class="pi pi-user" />
-            <span class="small">{{ me?.tag }}</span>
-          </div>
-          <Button
-            icon="pi pi-sign-out"
-            text
-            rounded
-            severity="secondary"
-            aria-label="Logout"
-            v-tooltip.top="'Logout'"
-            @click="logout"
-          />
-        </div>
-      </aside>
-
-      <main class="content">
-        <div class="content-inner">
-        <Message
-          v-if="botDown && isSysadmin"
-          severity="warn"
-          :closable="false"
-          class="bot-down"
-        >
-          The bot process looks down (heartbeat stale) — status data may be
-          outdated and config changes only apply once it's back.
-        </Message>
-
-        <div v-if="loading" class="center muted">
-          <i class="pi pi-spin pi-spinner" style="font-size: 1.5rem" />
-        </div>
-
-        <!-- Signed in and granted nothing. Better one clear line than an
-             empty shell that looks broken. -->
-        <EmptyState v-else-if="hasNothing" icon="pi pi-lock">
-          Your account has no dashboard access yet.
-          <template #action>
-            <span class="muted small">
-              Ask an operator to grant you access under <strong>webui.grants</strong>.
-            </span>
-          </template>
-        </EmptyState>
-
-        <!-- Each view is gated by the same predicate as its tab (visibleNav
-             drives both), so the two can never disagree. `keepMounted` views
-             (just Status) stay mounted so their poll never restarts — every
-             other view still mounts on demand, exactly as before this was a
-             loop rather than eleven hand-written branches. -->
-        <template v-else>
-          <template v-for="item in visibleNav" :key="item.id">
-            <component
-              v-if="item.keepMounted || activeTab === item.id"
-              :is="item.component"
-              v-show="activeTab === item.id"
-              v-bind="viewProps(item)"
-              @navigate="goToTab($event)"
-              @goto-config="goToTab('config')"
-              @bot-state="botDown = !$event"
-              @servers="onServers"
-            />
-          </template>
-        </template>
-        </div>
       </main>
     </div>
 
-    <Toast position="bottom-right" />
+    <div v-else-if="loading" class="boot" role="status">
+      <i class="pi pi-spin pi-spinner" aria-hidden="true" />
+      <span class="sr-only">{{ t("shell.loading") }}</span>
+    </div>
+
+    <AppShell
+      v-else
+      :groups="shellGroups"
+      :title="currentLabel"
+      :servers="servers"
+      :active-server="activeServer"
+      :show-server-picker="canAnywhere('server:read')"
+      :user-tag="me?.tag ?? ''"
+      :inviting="inviting"
+      @switch-server="switchServer"
+      @invite="invite"
+      @logout="logout"
+    >
+      <template v-if="botDown && isSysadmin" #status>
+        <i class="pi pi-exclamation-triangle bot-down-icon" aria-hidden="true" />
+        <span>{{ botDownText }}</span>
+        <RouterLink v-if="activeTab !== 'overview' && shows('overview')" :to="{ name: 'overview' }">
+          {{ t("shell.botDownLink") }}
+        </RouterLink>
+      </template>
+
+      <EmptyState v-if="hasNothing" icon="pi pi-lock">
+        {{ t("shell.noAccess") }}
+        <template #action>
+          <span class="muted small">
+            {{ t("shell.noAccessHintLead") }} <code class="mono">webui.grants</code>.
+          </span>
+        </template>
+      </EmptyState>
+
+      <!-- Each view is gated by the same predicate as its nav entry, so the
+           two can never disagree. Servers stays mounted on every route: its
+           poll feeds the server picker and the bot status line. -->
+      <template v-else>
+        <template v-for="entry in visibleEntries" :key="entry.id">
+          <component
+            :is="views[entry.id].component"
+            v-if="views[entry.id].keepMounted || activeTab === entry.id"
+            v-show="activeTab === entry.id"
+            v-bind="viewProps(entry.id)"
+            @navigate="goToNav"
+            @goto-config="goToNav('config')"
+            @bot-state="onBotState"
+            @servers="onServers"
+            @update-route="patchRoute"
+          />
+        </template>
+      </template>
+    </AppShell>
+
+    <Toast position="top-right" class="app-toast" />
     <ConfirmDialog />
     <TypedConfirmDialog />
   </div>
@@ -156,21 +80,29 @@
 
 <script lang="ts">
 import { defineComponent, markRaw, type Component } from "vue";
+import { RouterLink } from "vue-router";
 import Button from "primevue/button";
-import Message from "primevue/message";
 import Toast from "primevue/toast";
 import ConfirmDialog from "primevue/confirmdialog";
-import { useConfirm } from "primevue/useconfirm";
-import { confirmLeave } from "./composables/useUnsavedGuard";
 import TypedConfirmDialog from "./components/ui/TypedConfirmDialog.vue";
+import AppShell, { type ShellNavGroup } from "./components/ui/AppShell.vue";
+import EmptyState from "./components/ui/EmptyState.vue";
 import { apiGet, apiSend, UnauthorizedError } from "./api";
-import type { MeResponse, ServerStatus, GrantableCapability } from "./api";
+import type { MeResponse, ServerStatus } from "./api";
 import { useCapabilities, setCapabilities } from "./composables/useCapabilities";
 import { useInvite } from "./composables/useInvite";
-import StatusDot from "./components/ui/StatusDot.vue";
-import EmptyState from "./components/ui/EmptyState.vue";
-import { statusDot } from "./utils/format";
-import { stateIsUp } from "@mcbot/schema/serverState.js";
+import {
+  NAV_ENTRIES,
+  NAV_GROUPS,
+  navLocation,
+  patchedLocation,
+  serverOf,
+  type NavEntry,
+  type NavId,
+  type RoutePatch,
+} from "./router";
+import { relativeAge } from "./utils/time";
+import { t } from "./i18n";
 import OverviewView from "./views/OverviewView.vue";
 import StatusView from "./views/StatusView.vue";
 import ConsoleView from "./views/ConsoleView.vue";
@@ -183,39 +115,49 @@ import ConfigView from "./views/ConfigView.vue";
 import AuditView from "./views/AuditView.vue";
 import AnalyticsView from "./views/AnalyticsView.vue";
 
-/** Props a view can receive, picked off one shared context per tab. */
+/** Props a view can receive, picked off one shared context per view. */
 interface AppViewContext {
   serverIds: string[];
   activeServer: string;
   sysadmin: boolean;
 }
 
-/** A sidebar entry, the condition for showing it, and the view it renders. */
-interface NavItem {
-  id: string;
-  label: string;
-  icon: string;
-  gate: GrantableCapability | "sysadmin" | "guild";
+interface ViewEntry {
   component: Component;
   /** Which keys of AppViewContext this view takes as props. */
   props?: Array<keyof AppViewContext>;
-  /** Stays mounted while another tab is active — only Status needs this: it
-   *  owns the poll that feeds the server switcher and the bot-down banner. */
   keepMounted?: boolean;
+}
+
+const VIEWS: Record<NavId, ViewEntry> = {
+  overview: { component: markRaw(OverviewView) },
+  analytics: { component: markRaw(AnalyticsView), props: ["serverIds", "activeServer"] },
+  console: { component: markRaw(ConsoleView), props: ["serverIds", "activeServer"] },
+  audit: { component: markRaw(AuditView) },
+  servers: { component: markRaw(StatusView), props: ["activeServer"], keepMounted: true },
+  backups: { component: markRaw(BackupsView), props: ["serverIds", "activeServer"] },
+  mods: { component: markRaw(ModsView), props: ["activeServer"] },
+  modconfig: { component: markRaw(ModConfigView), props: ["serverIds", "activeServer"] },
+  config: { component: markRaw(ConfigView) },
+  commands: { component: markRaw(CommandsView) },
+  guilds: { component: markRaw(GuildsView), props: ["sysadmin"] },
+};
+
+function queryText(value: unknown): string {
+  return typeof value === "string" ? value : "";
 }
 
 export default defineComponent({
   name: "App",
   components: {
-    Button, Message, Toast, ConfirmDialog, TypedConfirmDialog, StatusDot, EmptyState,
+    AppShell, Button, Toast, ConfirmDialog, TypedConfirmDialog, EmptyState, RouterLink,
   },
   setup() {
     return {
       ...useInvite(),
       ...useCapabilities(),
-      statusDot,
-      stateIsUp,
-      confirm: useConfirm(),
+      t,
+      views: VIEWS,
     };
   },
   data() {
@@ -223,61 +165,85 @@ export default defineComponent({
       loading: true,
       me: null as MeResponse | null,
       botDown: false,
-      activeTab: "overview",
-      activeServer: "",
+      lastBeat: null as number | null,
+      /** The server views fall back to on routes that carry none. */
+      lastServer: "",
       servers: [] as ServerStatus[],
-      // One table drives the sidebar and the view switch below, so a tab
-      // can't be visible and its view gated differently (or the reverse).
-      //
-      // `gate` is a capability, or one of two things a capability can't
-      // express: "sysadmin" for the config surface (bot:config is never
-      // granted, by design) and "guild" for the Discord-side tab, which has
-      // nothing to do with host access.
-      nav: [
-        { id: "overview", label: "Overview", icon: "pi pi-th-large", gate: "server:read",
-          component: markRaw(OverviewView) },
-        { id: "status", label: "Servers", icon: "pi pi-server", gate: "server:read",
-          component: markRaw(StatusView), props: ["activeServer"], keepMounted: true },
-        { id: "guilds", label: "Guilds", icon: "pi pi-discord", gate: "guild",
-          component: markRaw(GuildsView), props: ["sysadmin"] },
-        { id: "console", label: "Console", icon: "pi pi-desktop", gate: "server:read",
-          component: markRaw(ConsoleView), props: ["serverIds", "activeServer"] },
-        { id: "analytics", label: "Analytics", icon: "pi pi-chart-bar", gate: "server:read",
-          component: markRaw(AnalyticsView), props: ["serverIds", "activeServer"] },
-        { id: "commands", label: "Commands", icon: "pi pi-bolt", gate: "sysadmin",
-          component: markRaw(CommandsView) },
-        { id: "backups", label: "Backups", icon: "pi pi-box", gate: "server:read",
-          component: markRaw(BackupsView), props: ["serverIds", "activeServer"] },
-        { id: "mods", label: "Mods", icon: "pi pi-download", gate: "mods:read",
-          component: markRaw(ModsView), props: ["activeServer"] },
-        { id: "modconfig", label: "Mod Config", icon: "pi pi-sliders-h", gate: "config:read",
-          component: markRaw(ModConfigView), props: ["serverIds", "activeServer"] },
-        { id: "config", label: "Config", icon: "pi pi-sliders-h", gate: "sysadmin",
-          component: markRaw(ConfigView) },
-        { id: "audit", label: "Audit Log", icon: "pi pi-history", gate: "audit:read",
-          component: markRaw(AuditView) },
-      ] as NavItem[],
+      serversLoaded: false,
     };
   },
   computed: {
     isSysadmin(): boolean {
       return !!this.me?.sysadmin;
     },
-    visibleNav(): NavItem[] {
-      return this.nav.filter((item) => this.navAllowed(item));
+    visibleEntries(): NavEntry[] {
+      return NAV_ENTRIES.filter((entry) => this.navAllowed(entry));
     },
-    /** Signed in, but granted nothing: one honest empty state beats six
-     *  tabs that all 403. */
+    /** Signed in, but granted nothing: one honest empty state beats views
+     *  that all 403. */
     hasNothing(): boolean {
-      return this.visibleNav.length === 0;
+      return this.visibleEntries.length === 0;
     },
-    /** The one source every view's props are picked from — see viewProps. */
+    activeTab(): NavId | "" {
+      return this.$route.meta.nav ?? "";
+    },
+    activeEntry(): NavEntry | undefined {
+      return NAV_ENTRIES.find((entry) => entry.id === this.activeTab);
+    },
+    routeServer(): string {
+      return serverOf(this.$route);
+    },
+    activeServer(): string {
+      return this.routeServer || this.lastServer;
+    },
+    currentLabel(): string {
+      return this.activeEntry ? t(this.activeEntry.labelKey) : t("app.name");
+    },
+    shellGroups(): ShellNavGroup[] {
+      const visible = new Set(this.visibleEntries.map((entry) => entry.id));
+      return NAV_GROUPS.map((group) => ({
+        id: group.id,
+        label: t(group.labelKey),
+        items: group.items
+          .filter((entry) => visible.has(entry.id))
+          .map((entry) => ({
+            id: entry.id,
+            label: t(entry.labelKey),
+            icon: entry.icon,
+            to: navLocation(entry, this.activeServer),
+            active: entry.id === this.activeTab,
+          })),
+      })).filter((group) => group.items.length > 0);
+    },
+    /** The one source every view's props are picked from, see viewProps. */
     viewContext(): AppViewContext {
       return {
         serverIds: this.servers.map((s) => s.id),
         activeServer: this.activeServer,
         sysadmin: this.isSysadmin,
       };
+    },
+    botDownText(): string {
+      return this.lastBeat
+        ? t("shell.botDown", { age: relativeAge(this.lastBeat) })
+        : t("shell.botDownNever");
+    },
+  },
+  watch: {
+    routeServer(id: string) {
+      if (id) this.lastServer = id;
+    },
+    currentLabel: {
+      immediate: true,
+      handler(label: string) {
+        document.title = t("app.pageTitle", { view: label });
+      },
+    },
+    "$route.fullPath"() {
+      this.ensureRoute();
+    },
+    visibleEntries() {
+      this.ensureRoute();
     },
   },
   async mounted() {
@@ -286,8 +252,6 @@ export default defineComponent({
       // One owner of this request, so the composable is populated rather than
       // fetching for itself (see useCapabilities).
       setCapabilities(this.me.capabilities);
-      // Land on the first tab this user can actually see, whatever that is.
-      this.activeTab = this.visibleNav[0]?.id ?? "";
     } catch (err) {
       if (!(err instanceof UnauthorizedError)) {
         // Browser context: console is the only error sink available, and an
@@ -300,49 +264,68 @@ export default defineComponent({
     } finally {
       this.loading = false;
     }
+    await this.$router.isReady();
+    this.ensureRoute();
   },
   methods: {
     /**
-     * Switch tab, asking first when an editor on the current tab holds
-     * unsaved changes (the view unmounts on leave, so they would be lost).
+     * Keeps the URL on something this user may see: a route they cannot open
+     * (or the bare `#/`) lands on the first allowed view, and a server scoped
+     * view gets the remembered server once the status poll names one.
      */
-    async goToTab(id: string): Promise<void> {
-      if (id === this.activeTab) return;
-      const proceed = await confirmLeave(
-        () =>
-          new Promise<boolean>((resolve) => {
-            this.confirm.require({
-              header: "Discard unsaved changes?",
-              message: "This tab has changes that are not saved. Leaving it discards them.",
-              icon: "pi pi-exclamation-triangle",
-              acceptLabel: "Discard and leave",
-              rejectLabel: "Stay",
-              accept: () => resolve(true),
-              reject: () => resolve(false),
-              onHide: () => resolve(false),
-            });
-          }),
-      );
-      if (proceed) this.activeTab = id;
+    ensureRoute(): void {
+      if (this.loading || !this.me || this.hasNothing) return;
+      const first = this.visibleEntries[0]!;
+      const entry = this.activeEntry;
+      if (!entry || !this.navAllowed(entry)) {
+        void this.$router.replace(navLocation(first, this.activeServer));
+        return;
+      }
+      if (!entry.serverScoped || !this.serversLoaded || this.servers.length === 0) return;
+      const known = this.servers.some((s) => s.id === this.routeServer);
+      if (!known) {
+        const fallback = this.servers.some((s) => s.id === this.lastServer)
+          ? this.lastServer
+          : this.servers[0]!.id;
+        void this.$router.replace(navLocation(entry, fallback));
+      }
     },
-    /** Is this tab id one the caller may see? The view switch reads the same
-     *  answer the sidebar does. */
-    shows(id: string): boolean {
-      return this.visibleNav.some((item) => item.id === id);
+    goToNav(id: string): void {
+      const entry = NAV_ENTRIES.find((e) => e.id === id);
+      if (entry) void this.$router.push(navLocation(entry, this.activeServer));
     },
-    navAllowed(item: NavItem): boolean {
-      if (item.gate === "sysadmin") return this.isSysadmin;
-      if (item.gate === "guild") return this.isSysadmin || (this.me?.guildCount ?? 0) > 0;
-      if (!this.canAnywhere(item.gate)) return false;
+    /** In-view state (open file, filters, raw mode) replaces the URL rather
+     *  than stacking history; the view guards its own switch. */
+    patchRoute(patch: RoutePatch): void {
+      void this.$router.replace(patchedLocation(this.$route, patch));
+    },
+    /** A server switch on a server scoped view is a route change, so the
+     *  router's leave guard asks before unsaved work is thrown away. */
+    switchServer(id: string): void {
+      if (id === this.activeServer) return;
+      const entry = this.activeEntry;
+      if (entry?.serverScoped) {
+        void this.$router.push(navLocation(entry, id));
+      } else {
+        this.lastServer = id;
+      }
+    },
+    shows(id: NavId): boolean {
+      return this.visibleEntries.some((entry) => entry.id === id);
+    },
+    navAllowed(entry: NavEntry): boolean {
+      if (entry.gate === "sysadmin") return this.isSysadmin;
+      if (entry.gate === "guild") return this.isSysadmin || (this.me?.guildCount ?? 0) > 0;
+      if (!this.canAnywhere(entry.gate)) return false;
       // The Backups panel needs a wrapper new enough to serve the archive
-      // index, so hide it when one positively says it cannot — better than a
-      // tab that errors on open.
+      // index, so hide it when one positively says it cannot. Until the first
+      // status poll answers nothing is known, so a deep link is kept.
       //
       // `!== false` and not `=== true`: null means "could not ask the wrapper"
-      // (unreachable, or still loading), and that must not hide the tab. It
+      // (unreachable, or still loading), and that must not hide the view. It
       // matches how action buttons already treat unknown, and it avoids an
       // outage looking like the feature disappeared.
-      if (item.id === "backups") {
+      if (entry.id === "backups" && this.serversLoaded) {
         return this.servers.some((s) => s.features?.backupFiles !== false);
       }
       return true;
@@ -358,17 +341,36 @@ export default defineComponent({
       }
       this.me = null;
     },
+    onBotState(alive: boolean, lastBeat?: number | null) {
+      this.botDown = !alive;
+      this.lastBeat = lastBeat ?? null;
+    },
     onServers(servers: ServerStatus[]) {
       this.servers = servers;
-      if (!this.activeServer && servers.length) {
-        this.activeServer = servers[0].id;
+      this.serversLoaded = true;
+      if (!this.lastServer && servers.length) {
+        this.lastServer = this.routeServer || servers[0]!.id;
       }
+      this.ensureRoute();
     },
-    /** This view's declared props, picked off the shared viewContext. */
-    viewProps(item: NavItem): Partial<AppViewContext> {
+    /** This view's declared props plus the route state it owns. */
+    viewProps(id: NavId): Record<string, unknown> {
       const ctx = this.viewContext;
-      const out: Partial<AppViewContext> = {};
-      for (const key of item.props ?? []) out[key] = ctx[key] as never;
+      const out: Record<string, unknown> = {};
+      for (const key of this.views[id].props ?? []) out[key] = ctx[key];
+      if (id !== this.activeTab) return out;
+      const { params, query } = this.$route;
+      if (id === "mods") {
+        out.check = queryText(query.check);
+        out.filter = queryText(query.filter);
+      } else if (id === "modconfig") {
+        out.fileId = queryText(params.fileId);
+      } else if (id === "config") {
+        out.raw = params.mode === "raw";
+        out.q = queryText(query.q);
+      } else if (id === "guilds") {
+        out.guildId = queryText(params.guildId);
+      }
       return out;
     },
   },
@@ -378,147 +380,54 @@ export default defineComponent({
 <style scoped>
 .app-root { min-height: 100vh; position: relative; z-index: 1; }
 
-/* ── Login ── */
 .login-screen {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: var(--space-5);
 }
 .login-card {
-  background: var(--mc-surface);
-  border: 0.5px solid var(--mc-border);
-  border-radius: 14px;
+  background: var(--surface-nav);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-surface);
   padding: 40px 44px;
   text-align: center;
   max-width: 380px;
   width: 100%;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-overlay);
 }
-.login-card h1 { margin: 16px 0 2px; font-size: 22px; font-weight: 500; }
+.login-brand { margin: 16px 0 2px; color: var(--text-dim); font-weight: 500; }
+.login-card h1 { margin: 0; font-size: var(--text-2xl); font-weight: 600; }
 .login-hint { margin: 18px 0 22px; }
-.discord-btn { width: 100%; }
+.discord-btn { width: 100%; min-height: var(--touch-min); }
 :deep(.discord-btn.p-button) {
-  background: var(--mc-discord);
-  border-color: var(--mc-discord);
-  color: var(--mc-on-brand);
+  background: var(--discord);
+  border-color: var(--discord);
+  color: var(--on-brand);
 }
 :deep(.discord-btn.p-button:hover) {
-  background: var(--mc-discord-strong);
-  border-color: var(--mc-discord-strong);
+  background: var(--discord-strong);
+  border-color: var(--discord-strong);
 }
 
 .brand-mark {
   width: 56px; height: 56px;
-  border-radius: 14px;
+  border-radius: var(--radius-surface);
   display: grid; place-items: center;
   margin: 0 auto;
-  background: var(--mc-accent-bg);
-  border: 0.5px solid var(--mc-accent-border);
-  color: var(--mc-accent);
+  background: var(--accent-tint);
+  border: 1px solid var(--accent-border);
+  color: var(--accent);
   font-size: 26px;
 }
-.brand-mark.sm { width: 34px; height: 34px; border-radius: 9px; font-size: 16px; margin: 0; }
 
-/* ── Shell ── */
-/* The shell owns the viewport and the content column owns the scroll, so
-   the sidebar never scrolls away, `position: sticky` inside a view sticks
-   to the top of the content area, and a view can claim the remaining
-   height (Console, Mod Config) instead of guessing at a vh fraction. */
-.shell { display: flex; height: 100dvh; overflow: hidden; }
+.boot {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  color: var(--text-dim);
+  font-size: var(--text-2xl);
+}
 
-.sidebar {
-  width: var(--mc-sidebar-w);
-  flex: none;
-  background: var(--mc-surface);
-  border-right: 0.5px solid var(--mc-border);
-  display: flex;
-  flex-direction: column;
-  padding: 14px 10px;
-  height: 100%;
-  overflow-y: auto;
-}
-.sidebar-brand {
-  display: flex; align-items: center; gap: 10px;
-  padding: 2px 4px 14px;
-  margin-bottom: 4px;
-  border-bottom: 0.5px solid var(--mc-border);
-}
-.brand-text { display: flex; flex-direction: column; line-height: 1.25; }
-.brand-text strong { font-size: 13.5px; font-weight: 500; }
-
-.switcher-label { padding: 8px 6px 6px; letter-spacing: 0.07em; }
-.switcher { display: flex; flex-direction: column; gap: 1px; margin-bottom: 4px; }
-.switch-item {
-  display: flex; align-items: center; gap: 8px;
-  background: none; border: none; color: var(--mc-text);
-  padding: 7px 9px; border-radius: 7px; cursor: pointer;
-  font-size: 13px; text-align: left; width: 100%;
-}
-.switch-item:hover { background: var(--mc-card); }
-.switch-item.active {
-  background: linear-gradient(90deg, rgba(52, 197, 106, 0.10), transparent);
-  box-shadow: inset 2px 0 0 var(--mc-accent);
-}
-.switch-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.switcher-empty { padding: 6px 9px; }
-
-.nav {
-  display: flex; flex-direction: column; gap: 1px;
-  margin-top: 10px; padding-top: 11px;
-  border-top: 0.5px solid var(--mc-border);
-}
-.nav-item {
-  display: flex; align-items: center; gap: 10px;
-  background: none; border: none; color: var(--mc-muted);
-  padding: 8px 10px; border-radius: 7px; cursor: pointer;
-  font-size: 13.5px; text-align: left; width: 100%;
-}
-.nav-item i { font-size: 15px; width: 17px; }
-.nav-item:hover { color: var(--mc-text); background: var(--mc-card); }
-.nav-item.active { color: var(--mc-text); background: var(--mc-card); }
-.nav-item.active i { color: var(--mc-accent); }
-
-.sidebar-cta { margin-top: auto; padding: 12px 2px 4px; }
-.w-full { width: 100%; }
-.cta-hint { margin: 7px 2px 0; line-height: 1.4; }
-
-.sidebar-foot {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-top: 8px; padding: 9px 4px 0;
-  border-top: 0.5px solid var(--mc-border);
-}
-.who { display: flex; align-items: center; gap: 7px; color: var(--mc-muted); }
-.who i { font-size: 13px; }
-
-/* ── Content ── */
-.content { flex: 1; min-width: 0; overflow-y: auto; }
-.content-inner {
-  min-height: 100%;
-  max-width: var(--mc-content-max);
-  margin-inline: auto;
-  padding: 24px 26px 48px;
-  display: flex;
-  flex-direction: column;
-}
-/* A view that opts into filling (`.view-fill`) takes the leftover height;
-   every other view keeps its natural height. `min-height: 0` is what lets
-   an inner pane scroll instead of stretching its parent. */
-.content-inner > :deep(.view-fill) { flex: 1; min-height: 0; }
-
-.bot-down { margin-bottom: 20px; }
-.center { display: grid; place-items: center; padding: 80px 0; }
-
-@media (max-width: 760px) {
-  .shell { flex-direction: column; height: auto; overflow: visible; }
-  .sidebar {
-    width: 100%; height: auto;
-    flex-direction: row; flex-wrap: wrap; align-items: center;
-    gap: 8px;
-  }
-  .sidebar-cta { margin: 0; padding: 0; }
-  .sidebar-cta .cta-hint { display: none; }
-  .content { overflow: visible; }
-  .content-inner { padding: 20px 16px 40px; }
-}
+.bot-down-icon { color: var(--st-degraded); }
 </style>

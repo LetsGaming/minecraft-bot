@@ -15,8 +15,10 @@ You host the bot and/or the Minecraft server.
 | Running the bot with Docker | [admin/docker.md](admin/docker.md) |
 | Installing the API wrapper on the Minecraft host | [admin/remote-setup.md](admin/remote-setup.md) |
 | Upgrading from 4.x | [admin/migrating-to-5.md](admin/migrating-to-5.md) |
+| Upgrading to 8.0 (alert mention default) | [admin/migrating-to-8.md](admin/migrating-to-8.md) |
 | Upgrading to 7.0 (config versioning, automatic migration) | [admin/migrating-to-7.md](admin/migrating-to-7.md) |
 | Retiring the standalone server-manager panel | [admin/retiring-server-manager.md](admin/retiring-server-manager.md) |
+| Using the dashboard: pages, links, phones, backups, mods | [admin/dashboard.md](admin/dashboard.md) |
 | Dashboard access: capabilities and grants | [admin/capabilities.md](admin/capabilities.md) |
 | Mod config editor: formats, depth, limits | [admin/mod-configs.md](admin/mod-configs.md) |
 | Getting in when the dashboard is down | [admin/emergency-access.md](admin/emergency-access.md) |
@@ -52,7 +54,7 @@ You use the bot as a Discord member or Minecraft player.
 
 You want to change the code or contribute.
 
-Start at [dev/readme.md](dev/readme.md) — it maps the rest. The docs are split
+Start at [dev/readme.md](dev/readme.md); it maps the rest. The docs are split
 the way the repo is: what is true everywhere sits in `dev/`, and each workspace
 has its own directory.
 
@@ -65,7 +67,9 @@ has its own directory.
 | Shared contracts (`@mcbot/schema`) | [dev/contracts.md](dev/contracts.md) |
 | Running and writing tests | [dev/testing.md](dev/testing.md) |
 | Architectural decision log | [dev/decisions.md](dev/decisions.md) |
-| Wave 1 refactor: audit and summary | [dev/refactor/wave1-summary.md](dev/refactor/wave1-summary.md) |
+| Wave 2 (dashboard and Discord rework): what changed, what was deferred | [dev/wave2-summary.md](dev/wave2-summary.md) |
+| How Discord replies look and behave | [dev/bot/replies.md](dev/bot/replies.md) |
+| Dashboard frontend: tokens, components, routes, `t()` | [dev/web/frontend.md](dev/web/frontend.md) |
 | The Discord process | [dev/bot/](dev/bot/readme.md) |
 | Config, data layer, server access, Minecraft domain | [dev/core/](dev/core/readme.md) |
 | The dashboard (backend + frontend) | [dev/web/](dev/web/readme.md) |

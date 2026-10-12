@@ -5,6 +5,7 @@ import { useToast } from "primevue/usetoast";
 import { apiGet, apiSend } from "../api";
 import type { JsonSchema } from "./useConfig";
 import { useEditableDocument } from "./useEditableDocument";
+import { t } from "../i18n";
 
 type GuildDoc = Record<string, unknown>;
 
@@ -73,8 +74,8 @@ export function useGuildConfig() {
     if (ok) {
       toast.add({
         severity: "success",
-        summary: "Guild config saved",
-        detail: "Written to config.json.",
+        summary: t("guildEditor.savedToast"),
+        detail: t("guildEditor.savedToastDetail"),
         life: 3000,
       });
     }
@@ -105,6 +106,9 @@ export function useGuildConfig() {
   return {
     schema, definitions, schemaError,
     model: editor.draft,
+    baseline: editor.baseline,
+    fieldErrors: editor.fieldErrors,
+    saveError: editor.saveError,
     errors, sectionErrors, canSave,
     warnings: editor.warnings,
     loading: editor.loading, loadError: editor.loadError, ready: editor.ready,
