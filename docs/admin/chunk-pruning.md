@@ -26,15 +26,31 @@ has the details of the engine.
 
 ## Using it
 
-1. **Scan.** Reads every region file and shows how many chunks would go, per
-   dimension, and a map: red would be deleted, green is in use, blue is protected,
-   violet is buffer, amber is unreadable. A second view shades by time used. A scan
-   changes nothing and is safe on a running server; its answer is approximate while
-   chunks are being written.
-2. **Adjust.** Change the numbers or draw protected zones, then scan again. A summary
-   made with other settings is marked out of date and cannot be applied. **Save as
-   default** keeps the settings for this server.
-3. **Delete.** Asks you to type the server name. The server is stopped, a backup is
+1. **Pick the dimensions.** If the world has more than one, tick the ones to scan. Only
+   those are read, cached and pruned; the others are not touched. To prune just the Nether,
+   untick the rest.
+2. **Scan.** Reads the region files of the chosen dimensions and shows how many chunks would
+   go, per dimension, and a map: red would be deleted, green is in use, blue is protected,
+   violet is buffer, amber is unreadable. A second view shades by time used. While it runs
+   you see the regions read, chunks per second and an estimate, and you can stop it. A scan
+   changes nothing and is safe on a running server; its answer is approximate while chunks
+   are being written. Regions are read on several threads and remembered, so a second scan,
+   or one with different numbers, takes seconds (a 1 million chunk world: about 28 s the
+   first time on a 4 core host, instead of 4.5 minutes).
+3. **Look around.** The map fills the page: scroll to zoom, drag to move (the Move tool, or
+   hold Space), pinch on a touch screen, or use the arrow keys, plus and minus, and 0 to fit
+   the whole world. Hovering a chunk says what it is and how long players were near it.
+4. **Adjust.** Change the numbers or draw protected zones (the Protect tool), then scan
+   again. A summary made with other settings is marked out of date and cannot be applied.
+   **Save as default** keeps the settings for this server.
+5. **Choose by hand (optional).** With the Select tool drag rectangles over chunks to delete
+   them even where a rule would keep them (in use, or inside the buffer); Alt-drag, or the
+   Unselect tool, takes chunks out again; Ctrl+Z and Ctrl+Y undo and redo. Unreadable chunks
+   can never be chosen. Spawn, player areas and your protected zones also hold, unless you
+   tick **Also allow selecting protected areas** (it asks first). Press **Update preview** to
+   see exactly what the delete would then do; the result separates what the rules found,
+   what you chose over a rule, and what you chose over a protected area.
+6. **Delete.** Asks you to type the server name. The server is stopped, a backup is
    taken, the plan is applied, and the server is started. A fresh scan has to still
    agree with at least 90 % of the plan; the job deletes only what both scans agree on.
    If the delete fails or the server does not come up, the job's own backup is restored.
@@ -47,3 +63,8 @@ be deleted.
 
 Progress is the same as an upgrade's: live on the page, and one message in the
 downtime alert channel on Discord.
+
+If a delete ever dies half way (the host loses power, the job is killed), the page shows
+**An earlier prune did not finish** and the world may be half pruned. Restore the backup
+that job took before pruning again. A delete also stops itself after 45 minutes and rolls
+back rather than being cut off in the middle.
