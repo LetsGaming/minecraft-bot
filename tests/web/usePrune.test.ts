@@ -182,6 +182,28 @@ describe("maps", () => {
     expect(api.map).toHaveBeenCalledTimes(1);
   });
 
+  it("joins a load already in flight instead of requesting the map twice", async () => {
+    const { prune, api } = setup();
+    await prune.scan();
+    const [a, b] = await Promise.all([prune.loadMap(0), prune.loadMap(0)]);
+    expect(a).toBe(b);
+    expect(api.map).toHaveBeenCalledTimes(1);
+    expect(prune.loadingMap.value).toBe(false);
+  });
+
+  it("drops a map that arrives after a newer scan started", async () => {
+    let release: (v: never) => void = () => undefined;
+    const slow = vi.fn(() => new Promise<never>((resolve) => { release = resolve; }));
+    const { prune, onError } = setup({ map: slow });
+    await prune.scan();
+    const stale = prune.loadMap(0);
+    await prune.scan();
+    release({ dimension: "overworld", regions: { "r.0.0": { cell: b64([1]), heat: b64([1]) } } } as never);
+    expect(await stale).toBeNull();
+    expect(prune.maps.value[0]).toBeUndefined();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it("is null without a scan, and reports a failed load", async () => {
     const none = setup();
     expect(await none.prune.loadMap(0)).toBeNull();

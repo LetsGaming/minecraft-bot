@@ -17,6 +17,9 @@ export const RECENT_RESULT_SECONDS = 24 * 3600;
 /** The steps of a clean upgrade, in order. */
 export const UPGRADE_STEPS = ["plan", "countdown", "stop", "backup", "apply", "start"] as const;
 
+/** A prune-only job has no install: its fifth step is the prune. */
+export const PRUNE_STEPS = ["plan", "countdown", "stop", "backup", "prune", "start"] as const;
+
 export interface UpgradeApi {
   support(): Promise<{ supported: boolean }>;
   start(body: UpgradeRequest): Promise<UpgradeStarted>;
@@ -99,8 +102,9 @@ export function useServerUpgrade(options: UseServerUpgradeOptions) {
   const phases = computed(() => phaseRows(events.value));
   const stepsDone = computed(
     () =>
-      UPGRADE_STEPS.filter((s) => phases.value.some((p) => p.phase === s && p.status === "done"))
-        .length,
+      (job.value?.kind === "prune" ? PRUNE_STEPS : UPGRADE_STEPS).filter((s) =>
+        phases.value.some((p) => p.phase === s && p.status === "done"),
+      ).length,
   );
 
   function clearTimer(): void {

@@ -129,6 +129,8 @@ export function usePrune(options: UsePruneOptions) {
   const scannedWith = ref<string | null>(null);
   const maps = ref<Record<number, DecodedMap>>({});
   const loadingMap = ref(false);
+  /** Loads in flight by dimension index, so a second request for the same map joins the first. */
+  const mapLoads = new Map<number, Promise<DecodedMap | null>>();
   const starting = ref(false);
 
   let jobId: string | null = null;
@@ -175,6 +177,7 @@ export function usePrune(options: UsePruneOptions) {
       if (next.state === "done" && next.result) {
         summary.value = next.result;
         maps.value = {};
+    dropMapLoads();
       } else {
         options.onError(next.error ? `The scan failed (${next.error}).` : "The scan failed.");
       }
@@ -231,6 +234,7 @@ export function usePrune(options: UsePruneOptions) {
     scanning.value = true;
     summary.value = null;
     maps.value = {};
+    dropMapLoads();
     const used = key(params.value);
     try {
       const started = await options.api.scan(params.value);
@@ -247,21 +251,43 @@ export function usePrune(options: UsePruneOptions) {
     }
   }
 
-  async function loadMap(index: number): Promise<DecodedMap | null> {
-    if (maps.value[index]) return maps.value[index]!;
-    const plan = summary.value?.id;
-    if (!plan) return null;
-    loadingMap.value = true;
+  /** Forget loads that belong to a plan no longer shown; their results are discarded on arrival. */
+  function dropMapLoads(): void {
+    mapLoads.clear();
+    loadingMap.value = false;
+  }
+
+  async function fetchMap(plan: string, index: number, mine: number): Promise<DecodedMap | null> {
     try {
       const decoded = decodeMap(await options.api.map(plan, index));
+      // A newer scan or a reset replaced the plan while this was in flight.
+      if (mine !== generation) return null;
       maps.value = { ...maps.value, [index]: decoded };
       return decoded;
     } catch (err) {
-      options.onError(messageOf(err, "Could not load the map."));
+      if (mine === generation) options.onError(messageOf(err, "Could not load the map."));
       return null;
-    } finally {
-      loadingMap.value = false;
     }
+  }
+
+  function loadMap(index: number): Promise<DecodedMap | null> {
+    const cached = maps.value[index];
+    if (cached) return Promise.resolve(cached);
+    const plan = summary.value?.id;
+    if (!plan) return Promise.resolve(null);
+    const running = mapLoads.get(index);
+    if (running) return running;
+
+    const mine = generation;
+    loadingMap.value = true;
+    const load: Promise<DecodedMap | null> = fetchMap(plan, index, mine).finally(() => {
+      if (mapLoads.get(index) === load) {
+        mapLoads.delete(index);
+        loadingMap.value = mapLoads.size > 0;
+      }
+    });
+    mapLoads.set(index, load);
+    return load;
   }
 
   /** Start the delete for the shown summary. Returns the job id to follow, or null. */
@@ -295,6 +321,7 @@ export function usePrune(options: UsePruneOptions) {
     summary.value = null;
     scannedWith.value = null;
     maps.value = {};
+    dropMapLoads();
     supported.value = null;
     params.value = emptyParams();
     saved.value = emptyParams();

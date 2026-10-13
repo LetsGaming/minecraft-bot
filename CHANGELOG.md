@@ -24,6 +24,8 @@ project follows [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - The streak leaderboard no longer prints the English "day(s)" in German.
+- Prune chunks page: a map that finishes loading after a rescan no longer replaces the new one, and a second request for the same map joins the first (`composables/usePrune.ts`).
+- The progress bar of a prune-only job can now reach 6 of 6 (`composables/useServerUpgrade.ts`).
 
 ## [8.0.0] — 2026-10-12
 

@@ -151,6 +151,18 @@ describe("starting and following a job", () => {
     await vi.advanceTimersByTimeAsync(UPGRADE_POLL_MS);
     expect(upgrade.stepsDone.value).toBe(2);
   });
+
+  it("reaches every step on a prune-only job, whose fifth step is prune", async () => {
+    const phases = ["plan", "countdown", "stop", "backup", "prune", "start"];
+    const { upgrade } = setup({
+      poll: vi.fn(async () =>
+        job({ kind: "prune", state: "done", result: { ok: true }, events: phases.map((p, i) => ev(i + 1, p, "done")), next: 6 }),
+      ),
+    });
+    await upgrade.start({ mcVersion: "" });
+    await vi.advanceTimersByTimeAsync(UPGRADE_POLL_MS);
+    expect(upgrade.stepsDone.value).toBe(6);
+  });
 });
 
 describe("attach after a page load", () => {
