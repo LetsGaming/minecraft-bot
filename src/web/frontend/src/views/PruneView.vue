@@ -390,14 +390,7 @@ const run = useServerUpgrade({
     support: () => apiGet<{ supported: boolean }>(`${base()}/upgrade/support`),
     start: () => Promise.reject(new Error("The prune is started from this page.")),
     poll: (jobId, since) => apiGet<UpgradeJob>(`${base()}/upgrade/${jobId}?since=${since}`),
-    current: async (since) => {
-      try {
-        return await apiGet<UpgradeJob>(`${base()}/upgrade/current?since=${since}`);
-      } catch (err) {
-        if ((err as { status?: number }).status === 404) return null;
-        throw err;
-      }
-    },
+    current: async (since) => (await apiGet<{ job: UpgradeJob | null }>(`${base()}/upgrade/current?since=${since}`)).job,
   },
   onError: (message) => (error.value = message),
 });
