@@ -43,6 +43,13 @@
             <InputNumber v-model="prune.params.value.bufferChunks" input-id="pv-buffer" :min="0" :max="32" show-buttons />
             <span class="pv-help">{{ t("prune.params.bufferHelp") }}</span>
           </div>
+          <div class="pv-field">
+            <label class="pv-check">
+              <Checkbox :model-value="buildProtected" binary input-id="pv-build" @update:model-value="setBuildProtection" />
+              {{ t("prune.params.build") }}
+            </label>
+            <span class="pv-help">{{ t("prune.params.buildHelp") }}</span>
+          </div>
         </div>
 
         <InlineBanner v-if="prune.unfinishedApply.value" tone="danger" :title="t('prune.unfinished.title')">
@@ -167,6 +174,7 @@
                 <th scope="col">{{ t("prune.table.protected") }}</th>
                 <th scope="col">{{ t("prune.table.buffer") }}</th>
                 <th scope="col">{{ t("prune.table.unreadable") }}</th>
+                <th scope="col">{{ t("prune.table.uncertain") }}</th>
                 <th scope="col">{{ t("prune.table.manual") }}</th>
                 <th scope="col">{{ t("prune.table.blocked") }}</th>
                 <th scope="col">{{ t("prune.table.size") }}</th>
@@ -180,6 +188,7 @@
                 <td>{{ d.protected.toLocaleString() }}</td>
                 <td>{{ d.buffer.toLocaleString() }}</td>
                 <td>{{ d.unreadable.toLocaleString() }}</td>
+                <td>{{ (d.uncertain ?? 0).toLocaleString() }}</td>
                 <td>{{ ((d.manualSoft ?? 0) + (d.manualHard ?? 0)).toLocaleString() }}</td>
                 <td>{{ (d.manualBlocked ?? 0).toLocaleString() }}</td>
                 <td>{{ formatBytes(d.bytes) }}</td>
@@ -216,13 +225,59 @@
             :tool="tool"
             :selection="selection"
             :selection-version="selectionVersion"
+            :inspected="inspectedAt"
             :label="t('prune.map.label', { dimension: currentDimension })"
+            @inspect="onInspect"
             @zone="onDrawn"
             @select="onSelect"
             @camera="onCamera"
             @undo="undoSelection"
             @redo="redoSelection"
           />
+          <section v-if="prune.inspected.value" class="pv-inspector" aria-labelledby="pv-inspect-title">
+            <div class="pv-inspector-head">
+              <h3 id="pv-inspect-title">{{ t("prune.inspect.heading", { x: prune.inspected.value.cx, z: prune.inspected.value.cz }) }}</h3>
+              <Button class="tap" icon="pi pi-times" severity="secondary" text :label="t('prune.inspect.close')" @click="prune.clearInspection" />
+            </div>
+            <p v-if="prune.inspected.value.loading" class="pv-note" role="status">{{ t("prune.inspect.loading") }}</p>
+            <template v-else-if="prune.inspected.value.info">
+              <p v-if="!prune.inspected.value.info.present" class="pv-note">{{ t("prune.inspect.empty") }}</p>
+              <p v-else-if="prune.inspected.value.info.readable === false" class="pv-note">
+                {{ t("prune.inspect.unreadable", { reason: prune.inspected.value.info.unreadableReason ?? "?" }) }}
+              </p>
+              <ul v-else class="pv-facts">
+                <li>{{ t("prune.inspect.plan", { answer: prune.inspected.value.info.plannedForDeletion ? t("prune.inspect.yes") : t("prune.inspect.no") }) }}</li>
+                <li v-if="inspectedClass">{{ inspectedClass }}</li>
+                <li>
+                  {{ prune.inspected.value.info.inhabitedMinutes == null
+                    ? t("prune.inspect.unknownTime")
+                    : t("prune.inspect.used", { minutes: prune.inspected.value.info.inhabitedMinutes.toLocaleString(), threshold: prune.inspected.value.info.thresholdMinutes }) }}
+                </li>
+                <li v-if="prune.inspected.value.info.status">
+                  {{ t("prune.inspect.status", { status: prune.inspected.value.info.status, version: prune.inspected.value.info.dataVersion ?? "?" }) }}
+                </li>
+                <li v-if="prune.inspected.value.info.bytes">
+                  {{ t("prune.inspect.size", {
+                    region: formatBytes(prune.inspected.value.info.bytes.region),
+                    entities: formatBytes(prune.inspected.value.info.bytes.entities),
+                    poi: formatBytes(prune.inspected.value.info.bytes.poi),
+                  }) }}
+                </li>
+                <li>
+                  {{ (prune.inspected.value.info.blockEntities ?? []).length
+                    ? t("prune.inspect.blockEntities", { list: (prune.inspected.value.info.blockEntities ?? []).map((b) => `${b.id.replace("minecraft:", "")} x${b.count}`).join(", ") })
+                    : t("prune.inspect.noBlockEntities") }}
+                </li>
+                <li>
+                  {{ structureNames.length ? t("prune.inspect.structures", { list: structureNames.join(", ") }) : t("prune.inspect.noStructures") }}
+                </li>
+                <li v-if="prune.inspected.value.info.unexplained">{{ t("prune.inspect.unexplained") }}</li>
+                <li v-if="(prune.inspected.value.info.protectedBy ?? []).length">
+                  {{ t("prune.inspect.protectedBy", { list: (prune.inspected.value.info.protectedBy ?? []).map(protectionText).join(", ") }) }}
+                </li>
+              </ul>
+            </template>
+          </section>
           <ul class="pv-legend">
             <li v-for="item in legend" :key="item.cell"><span class="pv-swatch" :class="`is-${item.role}`" aria-hidden="true" /> {{ t(item.label) }}</li>
           </ul>
@@ -292,6 +347,7 @@ import PruneMap, { type MapTool } from "../components/PruneMap.vue";
 import UpgradeRun from "../components/UpgradeRun.vue";
 import { t, type MessageKey } from "../i18n";
 import type {
+  PruneChunkInfo,
   PruneDimensions,
   PruneEngineStatus,
   PruneMap as PruneMapBody,
@@ -320,6 +376,8 @@ const prune = usePrune({
     dimensions: () => apiGet<PruneDimensions>(`${base()}/prune/dimensions`),
     status: () => apiGet<PruneEngineStatus>(`${base()}/prune/status`),
     cancel: (jobId) => apiSend<{ cancelled: boolean }>("POST", `${base()}/prune/scans/${jobId}/cancel`, {}),
+    chunk: (planId, dimension, cx, cz) =>
+      apiGet<PruneChunkInfo>(`${base()}/prune/plans/${planId}/chunk?dimension=${encodeURIComponent(dimension)}&cx=${cx}&cz=${cz}`),
     apply: (planId, countdownSeconds) =>
       apiSend<UpgradeStarted>("POST", `${base()}/prune`, { planId, countdownSeconds }),
   },
@@ -393,7 +451,57 @@ const toolOptions = computed(() => [
   { label: t("prune.tool.select"), value: "select" as const },
   { label: t("prune.tool.deselect"), value: "deselect" as const },
   { label: t("prune.tool.zone"), value: "zone" as const },
+  { label: t("prune.tool.inspect"), value: "inspect" as const },
 ]);
+
+// ── Inspector and build protection ────────────────────────────────────────
+
+const buildProtected = computed(() => prune.params.value.buildProtection !== "off");
+
+function setBuildProtection(on: boolean): void {
+  prune.params.value = { ...prune.params.value, buildProtection: on ? "likely" : "off" };
+}
+
+const inspectedAt = computed(() => {
+  const open = prune.inspected.value;
+  return open && open.dimension === currentDimension.value ? { cx: open.cx, cz: open.cz } : null;
+});
+
+function onInspect(at: { cx: number; cz: number }): void {
+  void prune.inspect(currentDimension.value, at.cx, at.cz);
+}
+
+const structureNames = computed(() => {
+  const info = prune.inspected.value?.info;
+  if (!info) return [];
+  return [...new Set([...(info.structureStarts ?? []), ...(info.structureReferences ?? [])])].map((n) => n.replace("minecraft:", ""));
+});
+
+const INSPECT_CLASS: Record<number, MessageKey> = {
+  [CELL.DELETE]: "prune.cell.delete",
+  [CELL.ACTIVE]: "prune.cell.active",
+  [CELL.PROTECTED]: "prune.cell.protected",
+  [CELL.BUFFER]: "prune.cell.buffer",
+  [CELL.UNREADABLE]: "prune.cell.unreadable",
+  [CELL.UNCERTAIN]: "prune.cell.uncertain",
+  [CELL.MANUAL_SOFT]: "prune.cell.manualSoft",
+  [CELL.MANUAL_HARD]: "prune.cell.manualHard",
+};
+
+/** The class the map shows for the open chunk, as words. */
+const inspectedClass = computed(() => {
+  const open = prune.inspected.value;
+  const map = currentMap.value;
+  if (!open || !map) return "";
+  const region = map.regions.find((r) => r.rx === Math.floor(open.cx / 32) && r.rz === Math.floor(open.cz / 32));
+  const cell = region?.cell[(open.cx & 31) + (open.cz & 31) * 32];
+  return cell ? t(INSPECT_CLASS[cell] ?? "prune.cell.empty") : "";
+});
+
+function protectionText(p: { kind: string; name?: string }): string {
+  if (p.kind === "zone") return t("prune.inspect.zone", { name: p.name || "?" });
+  return t(p.kind === "spawn" ? "prune.inspect.spawn" : "prune.inspect.player");
+}
 
 // ── Selection by hand ─────────────────────────────────────────────────────
 
@@ -497,6 +605,7 @@ const legend = [
   { cell: CELL.PROTECTED, role: "info", label: "prune.cell.protected" as MessageKey },
   { cell: CELL.BUFFER, role: "pending", label: "prune.cell.buffer" as MessageKey },
   { cell: CELL.UNREADABLE, role: "degraded", label: "prune.cell.unreadable" as MessageKey },
+  { cell: CELL.UNCERTAIN, role: "unknown", label: "prune.cell.uncertain" as MessageKey },
   { cell: CELL.MANUAL_SOFT, role: "offline", label: "prune.cell.manualSoft" as MessageKey },
   { cell: CELL.MANUAL_HARD, role: "offline", label: "prune.cell.manualHard" as MessageKey },
 ];
@@ -727,6 +836,25 @@ onBeforeUnmount(() => {
   display: grid;
   gap: var(--space-2);
 }
+.pv-inspector {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.pv-inspector-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.pv-facts {
+  margin: 0;
+  padding-left: var(--space-4);
+  display: grid;
+  gap: var(--space-1);
+}
 .pv-check {
   display: inline-flex;
   align-items: center;
@@ -752,4 +880,5 @@ onBeforeUnmount(() => {
 .pv-swatch.is-info { background: var(--st-info); }
 .pv-swatch.is-pending { background: var(--st-pending); }
 .pv-swatch.is-degraded { background: var(--st-degraded); }
+.pv-swatch.is-unknown { background: var(--st-unknown); }
 </style>

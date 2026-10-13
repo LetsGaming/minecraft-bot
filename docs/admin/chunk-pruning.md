@@ -24,6 +24,17 @@ Region, entities and poi data are removed together, so no entity or point of int
 is left behind. The setup suite's [chunk-pruning.md](https://github.com/LetsGaming/minecraft-server-setup/blob/main/docs/chunk-pruning.md)
 has the details of the engine.
 
+## Chunks that look built
+
+Time in use is not proof that nobody built somewhere: a quick build, or work done with an editor,
+leaves little. So a chunk the rules would delete is kept as **looks built** (grey on the map) when
+it holds chests, barrels, signs, furnaces, beds, redstone parts or modded block entities that no
+structure explains. Villages, mineshafts, ruins and dungeons are recognised and do not count.
+The check is a hint and can be wrong both ways, which is why it only ever keeps a chunk. Untick
+**Keep chunks that look built** to prune by time alone. The **Inspect** tool shows, for any chunk,
+what it holds and exactly which rule keeps or deletes it. Only chunks from Minecraft 1.18 and
+newer carry the data it reads.
+
 ## Using it
 
 1. **Pick the dimensions.** If the world has more than one, tick the ones to scan. Only

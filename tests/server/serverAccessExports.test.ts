@@ -68,6 +68,7 @@ const PUBLIC_RUNTIME_EXPORTS = [
   "getHealth",
   "getList",
   "getModCompat",
+  "getPruneChunk",
   "getPruneDimensions",
   "getPruneMap",
   "getPruneScan",

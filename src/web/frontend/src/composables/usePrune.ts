@@ -1,5 +1,6 @@
 import { computed, ref } from "vue";
 import type {
+  PruneChunkInfo,
   PruneDimensions,
   PruneEngineStatus,
   PruneScanProgress,
@@ -34,6 +35,8 @@ export const CELL = {
   MANUAL_SOFT: 6,
   /** Chosen by hand over a hard protection (needs the override). */
   MANUAL_HARD: 7,
+  /** The rules would delete it, but it holds block entities no structure explains. */
+  UNCERTAIN: 8,
 } as const;
 
 export interface PruneApi {
@@ -48,6 +51,7 @@ export interface PruneApi {
   dimensions?(): Promise<PruneDimensions>;
   status?(): Promise<PruneEngineStatus>;
   cancel?(jobId: string): Promise<{ cancelled: boolean }>;
+  chunk?(planId: string, dimension: string, cx: number, cz: number): Promise<PruneChunkInfo>;
 }
 
 export interface PageVisibility {
@@ -84,6 +88,7 @@ export const emptyParams = (): PruneParams => ({
   bufferChunks: 2,
   zones: [],
   dimensions: null,
+  buildProtection: "likely",
 });
 
 /** One chunk cell decoded from a map region. */
@@ -146,6 +151,8 @@ export function usePrune(options: UsePruneOptions) {
   const dimensions = ref<PruneDimensions["dimensions"]>([]);
   const progress = ref<PruneScanProgress | null>(null);
   const cancelling = ref(false);
+  /** The chunk shown in the inspector, with what the setup suite read from it. */
+  const inspected = ref<{ dimension: string; cx: number; cz: number; info: PruneChunkInfo | null; loading: boolean } | null>(null);
   const unfinishedApply = ref<PruneEngineStatus["unfinishedApply"] | null>(null);
   const loadingSettings = ref(false);
   const savingSettings = ref(false);
@@ -272,6 +279,26 @@ export function usePrune(options: UsePruneOptions) {
     params.value = { ...params.value, selection };
   }
 
+  async function inspect(dimension: string, cx: number, cz: number): Promise<void> {
+    const plan = summary.value?.id;
+    if (!plan || !options.api.chunk) return;
+    const mine = generation;
+    inspected.value = { dimension, cx, cz, info: null, loading: true };
+    try {
+      const info = await options.api.chunk(plan, dimension, cx, cz);
+      if (mine !== generation || inspected.value?.cx !== cx || inspected.value?.cz !== cz) return;
+      inspected.value = { dimension, cx, cz, info, loading: false };
+    } catch (err) {
+      if (mine !== generation) return;
+      inspected.value = null;
+      options.onError(messageOf(err, "Could not read that chunk."));
+    }
+  }
+
+  function clearInspection(): void {
+    inspected.value = null;
+  }
+
   async function cancelScan(): Promise<void> {
     if (!jobId || !scanning.value || cancelling.value || !options.api.cancel) return;
     cancelling.value = true;
@@ -318,6 +345,7 @@ export function usePrune(options: UsePruneOptions) {
     const mine = generation;
     clearTimer();
     scanning.value = true;
+    inspected.value = null;
     progress.value = null;
     cancelling.value = false;
     summary.value = null;
@@ -413,6 +441,7 @@ export function usePrune(options: UsePruneOptions) {
     supported.value = null;
     progress.value = null;
     cancelling.value = false;
+    inspected.value = null;
     dimensions.value = [];
     unfinishedApply.value = null;
     params.value = emptyParams();
@@ -446,6 +475,9 @@ export function usePrune(options: UsePruneOptions) {
     progress,
     cancelling,
     cancelScan,
+    inspected,
+    inspect,
+    clearInspection,
     unfinishedApply,
     loadDimensions,
     loadStatus,

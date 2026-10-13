@@ -21,6 +21,7 @@ import {
   getPruneSettings,
   setPruneSettings,
   getPruneMap,
+  getPruneChunk,
   startPrune,
 } from "@mcbot/core/utils/server/serverAccess.js";
 import { ApiError } from "@mcbot/core/utils/server/access/apiClient.js";
@@ -35,6 +36,8 @@ import { busyKind } from "./upgrades.js";
 import {
   IdParams,
   PruneApplyBody,
+  PruneChunkQuery,
+  PrunePlanParams,
   PruneMapParams,
   PruneParamsBody,
   PruneScanParams,
@@ -210,6 +213,27 @@ export function registerPruneRoutes(app: FastifyInstance): void {
       }
       if (!job) throw new NotFound("Unknown or expired scan.");
       return job;
+    },
+  );
+
+  api.get(
+    "/api/servers/:id/prune/plans/:planId/chunk",
+    {
+      schema: { params: PrunePlanParams, querystring: PruneChunkQuery },
+      config: { capability: "server:update", scope: "server", param: "id" },
+    },
+    async (req) => {
+      const server = requireServer(req.params.id);
+      await requireSupport(req.params.id, server.config);
+      const { dimension, cx, cz } = req.query;
+      let info;
+      try {
+        info = await getPruneChunk(server.config, req.params.planId, dimension, cx, cz);
+      } catch (err) {
+        return failed("Prune chunk read", req.params.id, err);
+      }
+      if (!info) throw new NotFound("That scan has expired. Scan again.");
+      return info;
     },
   );
 

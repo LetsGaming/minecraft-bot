@@ -39,6 +39,7 @@ const {
   getPruneSettingsMock,
   setPruneSettingsMock,
   getPruneMapMock,
+  getPruneChunkMock,
   startPruneMock,
   recordAdminActionMock,
 } = vi.hoisted(() => ({
@@ -51,6 +52,7 @@ const {
   getPruneSettingsMock: vi.fn(),
   setPruneSettingsMock: vi.fn(),
   getPruneMapMock: vi.fn(),
+  getPruneChunkMock: vi.fn(),
   startPruneMock: vi.fn(),
   recordAdminActionMock: vi.fn(async () => {}),
 }));
@@ -72,6 +74,7 @@ vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
   getPruneSettings: getPruneSettingsMock,
   setPruneSettings: setPruneSettingsMock,
   getPruneMap: getPruneMapMock,
+  getPruneChunk: getPruneChunkMock,
   startPrune: startPruneMock,
   detectCapabilities: vi.fn(async () => ({ scripts: {}, backups: true, restore: true, modManifest: true, variablesFile: true })),
   getRemoteManifest: vi.fn(async () => null),
@@ -172,6 +175,7 @@ beforeEach(() => {
   getPruneSettingsMock.mockResolvedValue(PARAMS);
   setPruneSettingsMock.mockImplementation(async (_cfg: unknown, p: object) => ({ ...PARAMS, ...p }));
   getPruneMapMock.mockResolvedValue({ dimension: "overworld", regions: {} });
+  getPruneChunkMock.mockResolvedValue({ chunk: { dimension: "overworld", cx: 1, cz: 2, rx: 0, rz: 0, slot: 65 }, thresholdMinutes: 5, present: true });
   getPruneDimensionsMock.mockResolvedValue({ dimensions: [{ id: "overworld", regions: 4 }] });
   getPruneStatusMock.mockResolvedValue({ engine: "builtin", version: 1 });
   cancelPruneScanMock.mockResolvedValue(true);
@@ -184,6 +188,7 @@ describe("capability and server scope", () => {
     expect((await app.inject(req("GET", READER, "/prune/settings"))).statusCode).toBe(403);
     expect((await app.inject(req("GET", READER, "/prune/dimensions"))).statusCode).toBe(403);
     expect((await app.inject(req("GET", READER, "/prune/status"))).statusCode).toBe(403);
+    expect((await app.inject(req("GET", READER, `/prune/plans/${PLAN}/chunk?dimension=overworld&cx=1&cz=2`))).statusCode).toBe(403);
     expect((await app.inject(req("POST", READER, `/prune/scans/${JOB}/cancel`, {}))).statusCode).toBe(403);
     expect((await app.inject(req("PUT", READER, "/prune/settings", {}))).statusCode).toBe(403);
     expect((await app.inject(req("POST", READER, "/prune/scans", {}))).statusCode).toBe(403);
@@ -288,6 +293,37 @@ describe("dimensions, status and cancel", () => {
     invalidateWhere(() => true);
     expect((await app.inject(req("GET", UPDATER, "/prune/status"))).statusCode).toBe(501);
   });
+});
+
+describe("chunk inspection", () => {
+  const route = (q: string) => `/prune/plans/${PLAN}/chunk?${q}`;
+
+  it("returns one chunk, passing the coordinates through", async () => {
+    const app = buildServer();
+    const res = await app.inject(req("GET", UPDATER, route("dimension=overworld&cx=-3&cz=4")));
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ present: true });
+    expect(getPruneChunkMock).toHaveBeenCalledWith(expect.anything(), PLAN, "overworld", -3, 4);
+  });
+
+  it("404s an expired plan and hides wrapper errors", async () => {
+    getPruneChunkMock.mockResolvedValue(null);
+    const app = buildServer();
+    expect((await app.inject(req("GET", UPDATER, route("dimension=overworld&cx=1&cz=2")))).statusCode).toBe(404);
+    getPruneChunkMock.mockRejectedValue(new Error("/home/mc/secret failed"));
+    const res = await app.inject(req("GET", UPDATER, route("dimension=overworld&cx=1&cz=2")));
+    expect(res.statusCode).toBe(502);
+    expect(res.body).not.toContain("secret");
+  });
+
+  it.each(["cx=1&cz=2", "dimension=overworld&cx=a&cz=2", "dimension=Over%20World&cx=1&cz=2", "dimension=overworld&cx=1.5&cz=2", "dimension=overworld&cx=99999999&cz=2"])(
+    "400s %s",
+    async (q) => {
+      const app = buildServer();
+      expect((await app.inject(req("GET", UPDATER, route(q)))).statusCode).toBe(400);
+      expect(getPruneChunkMock).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe("maps", () => {

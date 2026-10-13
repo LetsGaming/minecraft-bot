@@ -29,6 +29,8 @@ project follows [Semantic Versioning](https://semver.org/).
 
 - **A map you can move around, and choose chunks on by hand.** The Prune chunks map now fills the page instead of being sized to the whole world (a large world no longer needs hundreds of megabytes of canvas): scroll to zoom, drag to move, pinch on touch screens, arrow keys, plus and minus and 0 (fit). Select rectangles (Alt unselects) to delete chunks the rules would keep, with undo and redo (Ctrl+Z, Ctrl+Y), a count of what is chosen, and an option to also override protected areas (asked to confirm). Unreadable chunks are never deleted. Hovering a chunk shows its class and the time it was in use. The summary and the confirmation split the total into found by the rules, chosen by hand over a rule and chosen over a protected area. Needs a wrapper and setup suite with manual selection.
 
+- **Keep chunks that look built, and look inside a chunk.** Unused chunks that hold chests, signs, beds, furnaces or modded blocks that no village, mineshaft or dungeon explains are kept as "looks built" (grey on the map, a column in the summary, an option to turn it off). The new Inspect tool opens any chunk: whether the plan deletes it and why, how long it was in use, its size on disk, its block entities and structures, and which protected area holds it. Needs a wrapper and setup suite with build protection.
+
 ### Fixed
 
 - The streak leaderboard no longer prints the English "day(s)" in German.

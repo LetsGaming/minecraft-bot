@@ -24,6 +24,7 @@ export const CELL_ROLE: Readonly<Record<number, string>> = {
   [CELL.PROTECTED]: "info",
   [CELL.BUFFER]: "pending",
   [CELL.UNREADABLE]: "degraded",
+  [CELL.UNCERTAIN]: "unknown",
   // Chosen by hand: the same colour as a deletion; the map marks them apart.
   [CELL.MANUAL_SOFT]: "offline",
   [CELL.MANUAL_HARD]: "offline",

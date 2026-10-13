@@ -336,3 +336,51 @@ describe("dimensions, progress and cancel", () => {
     expect(broken.onError).not.toHaveBeenCalled();
   });
 });
+
+describe("inspecting a chunk", () => {
+  const INFO = { chunk: { dimension: "overworld", cx: 3, cz: -2, rx: 0, rz: -1, slot: 931 }, thresholdMinutes: 5, present: true, readable: true };
+
+  it("reads the chunk of the shown plan and keeps the answer for that chunk only", async () => {
+    const chunk = vi.fn(async () => INFO);
+    const { prune } = setup({ chunk });
+    await prune.scan();
+    await prune.inspect("overworld", 3, -2);
+    expect(chunk).toHaveBeenCalledWith(SUMMARY.id, "overworld", 3, -2);
+    expect(prune.inspected.value).toMatchObject({ cx: 3, cz: -2, loading: false, info: { present: true } });
+    prune.clearInspection();
+    expect(prune.inspected.value).toBeNull();
+  });
+
+  it("drops a slow answer for a chunk the user has moved on from", async () => {
+    let release: (v: unknown) => void = () => undefined;
+    const chunk = vi.fn()
+      .mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }))
+      .mockResolvedValueOnce({ ...INFO, chunk: { ...INFO.chunk, cx: 9 } });
+    const { prune } = setup({ chunk });
+    await prune.scan();
+    const first = prune.inspect("overworld", 3, -2);
+    await prune.inspect("overworld", 9, -2);
+    release(INFO);
+    await first;
+    expect(prune.inspected.value).toMatchObject({ cx: 9 });
+  });
+
+  it("does nothing without a scan, and a new scan closes the inspector", async () => {
+    const chunk = vi.fn(async () => INFO);
+    const { prune } = setup({ chunk });
+    await prune.inspect("overworld", 0, 0);
+    expect(chunk).not.toHaveBeenCalled();
+    await prune.scan();
+    await prune.inspect("overworld", 0, 0);
+    await prune.scan();
+    expect(prune.inspected.value).toBeNull();
+  });
+
+  it("reports a failed read and closes the inspector", async () => {
+    const { prune, onError } = setup({ chunk: vi.fn(async () => { throw new Error("gone"); }) });
+    await prune.scan();
+    await prune.inspect("overworld", 0, 0);
+    expect(onError).toHaveBeenCalledWith("gone");
+    expect(prune.inspected.value).toBeNull();
+  });
+});

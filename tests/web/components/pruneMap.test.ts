@@ -192,3 +192,23 @@ describe("PruneMap", () => {
     wrapper.unmount();
   });
 });
+
+describe("PruneMap inspect tool", () => {
+  it("a click inspects the chunk under it, and a drag moves the view instead", () => {
+    const { wrapper } = mountMap({ tool: "inspect" });
+    const el = wrapper.get(".pm-over").element as HTMLCanvasElement;
+    el.setPointerCapture = vi.fn();
+    const at = (type: string, x: number, y: number) =>
+      Object.assign(new Event(type, { bubbles: true }), { pointerId: 1, clientX: x, clientY: y, button: 0, altKey: false });
+    el.dispatchEvent(at("pointerdown", 300, 200));
+    el.dispatchEvent(at("pointerup", 301, 201));
+    expect(wrapper.emitted("inspect")).toHaveLength(1);
+    expect(wrapper.emitted("inspect")![0]![0]).toMatchObject({ cx: expect.any(Number), cz: expect.any(Number) });
+
+    el.dispatchEvent(at("pointerdown", 300, 200));
+    el.dispatchEvent(at("pointermove", 340, 230));
+    el.dispatchEvent(at("pointerup", 340, 230));
+    expect(wrapper.emitted("inspect")).toHaveLength(1);
+    wrapper.unmount();
+  });
+});

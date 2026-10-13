@@ -56,7 +56,7 @@ import {
 import type { SelectionModel } from "../composables/pruneSelection";
 import { t } from "../i18n";
 
-export type MapTool = "pan" | "select" | "deselect" | "zone";
+export type MapTool = "pan" | "select" | "deselect" | "zone" | "inspect";
 
 const props = withDefaults(
   defineProps<{
@@ -70,6 +70,8 @@ const props = withDefaults(
     selectionVersion: number;
     label: string;
     height?: string;
+    /** The chunk open in the inspector, ringed on the map. */
+    inspected?: { cx: number; cz: number } | null;
   }>(),
   { height: "min(70vh, 34rem)" },
 );
@@ -80,6 +82,7 @@ const emit = defineEmits<{
   camera: [info: { zoom: number; cx: number; cz: number }];
   undo: [];
   redo: [];
+  inspect: [at: { cx: number; cz: number }];
 }>();
 
 const host = ref<HTMLDivElement | null>(null);
@@ -326,6 +329,20 @@ function drawOverlay(): void {
     ctx.setLineDash([]);
   }
 
+  const open = props.inspected;
+  if (open) {
+    const a = worldToScreen(cam, size, open.cx, open.cz);
+    const px = Math.max(cam.zoom, 4);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = th.surface;
+    ctx.strokeRect(a.sx - 2, a.sz - 2, px + 4, px + 4);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = th.text;
+    ctx.setLineDash([5, 3]);
+    ctx.strokeRect(a.sx - 2, a.sz - 2, px + 4, px + 4);
+    ctx.setLineDash([]);
+  }
+
   const h = hover.value;
   if (h && !drag) {
     const a = worldToScreen(cam, size, h.cx, h.cz);
@@ -436,6 +453,7 @@ defineExpose({ fit, zoomIn: () => zoomBy(1.5), zoomOut: () => zoomBy(1 / 1.5), c
 
 type Drag =
   | { kind: "pan"; x: number; y: number }
+  | { kind: "click"; x: number; y: number; at: { cx: number; cz: number } }
   | { kind: "rect"; from: { cx: number; cz: number }; to: { cx: number; cz: number }; mode: "add" | "remove" | "zone" }
   | { kind: "pinch"; distance: number };
 
@@ -446,7 +464,7 @@ const spaceHeld = ref(false);
 const cursorClass = computed(() => ({
   "is-pan": props.tool === "pan" || spaceHeld.value,
   "is-grabbing": drag?.kind === "pan",
-  "is-draw": (props.tool !== "pan" && !spaceHeld.value),
+  "is-draw": props.tool !== "pan" && !spaceHeld.value,
 }));
 
 function local(ev: PointerEvent | WheelEvent): { x: number; y: number } {
@@ -484,6 +502,11 @@ function onDown(ev: PointerEvent): void {
     drag = { kind: "pan", x: p.x, y: p.y };
     return;
   }
+  if (props.tool === "inspect" && ev.button === 0) {
+    // A click inspects; a drag still moves the view.
+    drag = { kind: "click", x: p.x, y: p.y, at: chunkAt(camera.value, size, p.x, p.y) };
+    return;
+  }
   if (ev.button !== 0) return;
   const at = chunkAt(camera.value, size, p.x, p.y);
   const mode = props.tool === "zone" ? "zone" : props.tool === "deselect" || ev.altKey ? "remove" : "add";
@@ -503,6 +526,9 @@ function onMove(ev: PointerEvent): void {
     drag.distance = distance;
     requestDraw();
     return;
+  }
+  if (drag?.kind === "click" && Math.hypot(p.x - drag.x, p.y - drag.y) > 4) {
+    drag = { kind: "pan", x: drag.x, y: drag.y };
   }
   if (drag?.kind === "pan") {
     camera.value = panBy(camera.value, p.x - drag.x, p.y - drag.y);
@@ -526,6 +552,7 @@ function onUp(ev: PointerEvent): void {
     return;
   }
   drag = null;
+  if (finished?.kind === "click") emit("inspect", finished.at);
   if (finished?.kind === "rect") {
     const rect = {
       x1: Math.min(finished.from.cx, finished.to.cx),
@@ -619,6 +646,7 @@ const CELL_LABEL: Record<number, string> = {
   [CELL.PROTECTED]: "prune.cell.protected",
   [CELL.BUFFER]: "prune.cell.buffer",
   [CELL.UNREADABLE]: "prune.cell.unreadable",
+  [CELL.UNCERTAIN]: "prune.cell.uncertain",
   [CELL.MANUAL_SOFT]: "prune.cell.manualSoft",
   [CELL.MANUAL_HARD]: "prune.cell.manualHard",
 };
@@ -674,6 +702,7 @@ watch(
 );
 watch(() => props.view, invalidateBase);
 watch(() => props.selectionVersion, invalidateSelection);
+watch(() => props.inspected, requestDraw);
 watch(() => [props.zones, props.showGrid, props.tool], requestDraw, { deep: true });
 </script>
 

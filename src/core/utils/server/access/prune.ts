@@ -2,6 +2,7 @@
 
 import type { ServerConfig } from "../../../types/index.js";
 import type {
+  PruneChunkInfo,
   PruneDimensions,
   PruneEngineStatus,
   PruneMap,
@@ -88,6 +89,21 @@ export async function getPruneMap(
   const res = await apiGetRaw(cfg, route, 60_000);
   if (res.status === 404) return null;
   return readApiJson<PruneMap>(res, route);
+}
+
+/** One chunk of a plan, read now: what it holds and why it is kept or deleted. Null once the plan expired. */
+export async function getPruneChunk(
+  cfg: ServerConfig,
+  planId: string,
+  dimension: string,
+  cx: number,
+  cz: number,
+): Promise<PruneChunkInfo | null> {
+  const query = `dimension=${encodeURIComponent(dimension)}&cx=${cx}&cz=${cz}`;
+  const route = `/prune/plans/${encodeURIComponent(planId)}/chunk?${query}`;
+  const res = await apiGetRaw(cfg, route, 30_000);
+  if (res.status === 404) return null;
+  return readApiJson<PruneChunkInfo>(res, route);
 }
 
 /**

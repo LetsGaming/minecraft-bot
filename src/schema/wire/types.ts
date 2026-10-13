@@ -620,6 +620,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/instances/{id}/prune/plans/{planId}/chunk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One chunk of a plan, in full
+         * @description Reads the chunk now and reports what it contains (block entities, structures), how long players were near it, how much space it takes, whether the plan deletes it and which protections cover it. For the map's inspector; the map itself stays light.
+         */
+        get: operations["getInstancesByIdPrunePlansByPlanIdChunk"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/instances/{id}/prune/plans/{planId}/map/{index}": {
         parameters: {
             query?: never;
@@ -1314,6 +1334,48 @@ export interface components {
         PruneCancelled: {
             cancelled: boolean;
         };
+        PruneChunkInfo: {
+            blockEntities?: {
+                count: number;
+                id: string;
+            }[];
+            bytes?: {
+                entities: number;
+                poi: number;
+                region: number;
+            };
+            chunk: {
+                cx: number;
+                cz: number;
+                dimension: string;
+                rx: number;
+                rz: number;
+                slot: number;
+            };
+            dataVersion?: number | null;
+            inhabitedMinutes?: number | null;
+            inhabitedTicks?: number | null;
+            lastUpdate?: number | null;
+            /** @description Whether this plan deletes the chunk. */
+            plannedForDeletion?: boolean;
+            /** @description Whether the world has this chunk at all. */
+            present: boolean;
+            protectedBy?: {
+                /** @enum {string} */
+                kind: "spawn" | "player" | "zone";
+                name?: string;
+            }[];
+            /** @description False when the chunk exists but cannot be read; it is then never deleted. */
+            readable?: boolean;
+            signals?: string[];
+            status?: string | null;
+            structureReferences?: string[];
+            structureStarts?: string[];
+            thresholdMinutes: number;
+            /** @description Block entities that no structure or spawner explains. */
+            unexplained?: boolean;
+            unreadableReason?: string;
+        };
         PruneDimensions: {
             dimensions: {
                 id: string;
@@ -1337,6 +1399,8 @@ export interface components {
             protected: number;
             regions: number;
             regionsEmptied: number;
+            /** @description Kept by build protection: the rules would delete them but they hold things a structure does not explain. */
+            uncertain?: number;
             unreadable: number;
         };
         PruneEngineStatus: {
@@ -1360,6 +1424,11 @@ export interface components {
         PruneParams: {
             /** @description Candidates this close to anything that stays are kept. */
             bufferChunks: number;
+            /**
+             * @description likely: keep chunks the rules would delete when they hold block entities no structure explains (chests, signs, furnaces, beds, redstone parts, modded blocks). off: ignore what chunks contain.
+             * @enum {string}
+             */
+            buildProtection?: "off" | "likely";
             /** @description Dimension ids to scan; null means every one found. */
             dimensions: string[] | null;
             /** @description Chunks around each player's last position that are never pruned. */
@@ -1374,6 +1443,8 @@ export interface components {
         };
         PruneParamsRequest: {
             bufferChunks?: number;
+            /** @enum {string} */
+            buildProtection?: "off" | "likely";
             dimensions?: string[] | null;
             playerRadiusChunks?: number;
             selection?: components["schemas"]["PruneSelection"];
@@ -3944,6 +4015,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PruneDimensions"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Status 501 */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getInstancesByIdPrunePlansByPlanIdChunk: {
+        parameters: {
+            query?: {
+                /** @description Chunk x coordinate. */
+                cx?: string;
+                /** @description Chunk z coordinate. */
+                cz?: string;
+                /** @description Dimension id from the summary. */
+                dimension?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Instance id from `GET /instances`. */
+                id: string;
+                /** @description Plan id from the scan summary. */
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PruneChunkInfo"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Missing or invalid API key */
