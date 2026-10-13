@@ -140,7 +140,7 @@ function theme(): Theme {
     surface: token("--surface") || "canvas",
     grid: css(toRgba(token("--border-strong"), [128, 128, 128, 255]), 0.6),
     zone: css(role("info")),
-    selection: toRgba(token("--accent"), [52, 197, 106, 255]),
+    selection: toRgba(token("--text"), [255, 255, 255, 255]),
     text: token("--text") || "canvastext",
     remove: css(role("offline")),
   };
