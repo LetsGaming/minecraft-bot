@@ -1325,8 +1325,15 @@ export interface components {
             buffer: number;
             bytes: number;
             chunks: number;
+            /** @description Everything that would go: what the rules found plus what was chosen by hand. */
             delete: number;
             id: string;
+            /** @description Chosen by hand but kept: unreadable, or protected without the override. */
+            manualBlocked?: number;
+            /** @description Chosen by hand over a hard protection; part of delete. */
+            manualHard?: number;
+            /** @description Chosen by hand over a soft rule (in use, buffer); part of delete. */
+            manualSoft?: number;
             protected: number;
             regions: number;
             regionsEmptied: number;
@@ -1357,6 +1364,7 @@ export interface components {
             dimensions: string[] | null;
             /** @description Chunks around each player's last position that are never pruned. */
             playerRadiusChunks: number;
+            selection?: components["schemas"]["PruneSelection"];
             /** @description Chunks around the world spawn that are never pruned. */
             spawnRadiusChunks: number;
             /** @description Chunks inhabited for less than this many minutes are candidates. */
@@ -1368,6 +1376,7 @@ export interface components {
             bufferChunks?: number;
             dimensions?: string[] | null;
             playerRadiusChunks?: number;
+            selection?: components["schemas"]["PruneSelection"];
             spawnRadiusChunks?: number;
             thresholdMinutes?: number;
             zones?: components["schemas"]["PruneZone"][];
@@ -1397,6 +1406,21 @@ export interface components {
         PruneScanStarted: {
             /** @description The scan to poll. */
             jobId: string;
+        };
+        PruneSelection: {
+            /** @description Also let the selection override spawn, player areas and drawn zones. */
+            allowProtected: boolean;
+            /** @description Rectangles in chunk coordinates, inclusive, applied in order: add chooses chunks, remove takes them out again. Chosen chunks are deleted even where a soft rule (in use, buffer) would keep them. Unreadable chunks are never deleted. */
+            ops: components["schemas"]["PruneSelectionOp"][];
+        };
+        PruneSelectionOp: {
+            dimension: string;
+            /** @enum {string} */
+            mode: "add" | "remove";
+            x1: number;
+            x2: number;
+            z1: number;
+            z2: number;
         };
         PruneSummary: {
             createdAt: string;

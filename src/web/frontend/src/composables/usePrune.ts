@@ -23,7 +23,18 @@ import type {
 export const PRUNE_POLL_MS = 1500;
 
 /** Cell classes in a plan map, as the setup suite writes them. */
-export const CELL = { EMPTY: 0, DELETE: 1, ACTIVE: 2, PROTECTED: 3, BUFFER: 4, UNREADABLE: 5 } as const;
+export const CELL = {
+  EMPTY: 0,
+  DELETE: 1,
+  ACTIVE: 2,
+  PROTECTED: 3,
+  BUFFER: 4,
+  UNREADABLE: 5,
+  /** Chosen by hand over a soft rule (in use, buffer). */
+  MANUAL_SOFT: 6,
+  /** Chosen by hand over a hard protection (needs the override). */
+  MANUAL_HARD: 7,
+} as const;
 
 export interface PruneApi {
   support(): Promise<{ supported: boolean }>;
@@ -158,7 +169,9 @@ export function usePrune(options: UsePruneOptions) {
   });
 
   const key = (p: PruneParams): string => JSON.stringify(p);
-  const dirty = computed(() => key(params.value) !== key(saved.value));
+  /** A manual selection belongs to one scan, not to the saved defaults. */
+  const settingsKey = (p: PruneParams): string => JSON.stringify({ ...p, selection: undefined });
+  const dirty = computed(() => settingsKey(params.value) !== settingsKey(saved.value));
   /** The summary describes the parameters now on screen. */
   const summaryCurrent = computed(() => summary.value !== null && scannedWith.value === key(params.value));
   const hasDeletions = computed(() => (summary.value?.totals.delete ?? 0) > 0);
@@ -254,6 +267,11 @@ export function usePrune(options: UsePruneOptions) {
     params.value = { ...params.value, dimensions: chosen.length === all.length ? null : chosen };
   }
 
+  /** The chunks chosen by hand, sent with the next scan; changing it makes the shown preview stale. */
+  function setSelection(selection: NonNullable<PruneParams["selection"]>): void {
+    params.value = { ...params.value, selection };
+  }
+
   async function cancelScan(): Promise<void> {
     if (!jobId || !scanning.value || cancelling.value || !options.api.cancel) return;
     cancelling.value = true;
@@ -281,8 +299,9 @@ export function usePrune(options: UsePruneOptions) {
   async function saveSettings(): Promise<boolean> {
     savingSettings.value = true;
     try {
-      const stored = await options.api.save(params.value);
-      params.value = structuredCloneParams(stored);
+      const selection = params.value.selection;
+      const stored = await options.api.save({ ...params.value, selection: undefined });
+      params.value = { ...structuredCloneParams(stored), ...(selection ? { selection } : {}) };
       saved.value = structuredCloneParams(stored);
       return true;
     } catch (err) {
@@ -423,6 +442,7 @@ export function usePrune(options: UsePruneOptions) {
     dimensions,
     selectedDimensions,
     setDimension,
+    setSelection,
     progress,
     cancelling,
     cancelScan,

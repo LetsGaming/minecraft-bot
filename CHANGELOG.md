@@ -25,6 +25,10 @@ project follows [Semantic Versioning](https://semver.org/).
 
 - **Prune chunks scans only what you choose.** The Prune chunks page lists the world's dimensions (from directory listings, no chunk is read) and scans, caches and prunes only the ticked ones. A running scan shows regions read, chunks per second and a time estimate and can be stopped. The page warns when an earlier delete never finished. Needs a wrapper with `chunk-prune` version 2 (older wrappers still scan everything).
 
+### Added
+
+- **A map you can move around, and choose chunks on by hand.** The Prune chunks map now fills the page instead of being sized to the whole world (a large world no longer needs hundreds of megabytes of canvas): scroll to zoom, drag to move, pinch on touch screens, arrow keys, plus and minus and 0 (fit). Select rectangles (Alt unselects) to delete chunks the rules would keep, with undo and redo (Ctrl+Z, Ctrl+Y), a count of what is chosen, and an option to also override protected areas (asked to confirm). Unreadable chunks are never deleted. Hovering a chunk shows its class and the time it was in use. The summary and the confirmation split the total into found by the rules, chosen by hand over a rule and chosen over a protected area. Needs a wrapper and setup suite with manual selection.
+
 ### Fixed
 
 - The streak leaderboard no longer prints the English "day(s)" in German.

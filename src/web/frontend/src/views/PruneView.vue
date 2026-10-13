@@ -154,6 +154,10 @@
             }) }}
           </p>
           <p class="pv-note">{{ t("prune.result.regions", { count: prune.summary.value.totals.regionsEmptied }) }}</p>
+          <p v-if="breakdown.soft + breakdown.hard > 0" class="pv-note">
+            {{ t("prune.apply.breakdown", { auto: breakdown.auto.toLocaleString(), soft: breakdown.soft.toLocaleString(), hard: breakdown.hard.toLocaleString() }) }}
+          </p>
+          <p v-if="breakdown.blocked > 0" class="pv-note">{{ t("prune.apply.blocked", { count: breakdown.blocked.toLocaleString() }) }}</p>
           <table class="pv-table">
             <thead>
               <tr>
@@ -163,6 +167,8 @@
                 <th scope="col">{{ t("prune.table.protected") }}</th>
                 <th scope="col">{{ t("prune.table.buffer") }}</th>
                 <th scope="col">{{ t("prune.table.unreadable") }}</th>
+                <th scope="col">{{ t("prune.table.manual") }}</th>
+                <th scope="col">{{ t("prune.table.blocked") }}</th>
                 <th scope="col">{{ t("prune.table.size") }}</th>
               </tr>
             </thead>
@@ -174,6 +180,8 @@
                 <td>{{ d.protected.toLocaleString() }}</td>
                 <td>{{ d.buffer.toLocaleString() }}</td>
                 <td>{{ d.unreadable.toLocaleString() }}</td>
+                <td>{{ ((d.manualSoft ?? 0) + (d.manualHard ?? 0)).toLocaleString() }}</td>
+                <td>{{ (d.manualBlocked ?? 0).toLocaleString() }}</td>
                 <td>{{ formatBytes(d.bytes) }}</td>
               </tr>
             </tbody>
@@ -185,27 +193,59 @@
           <div class="pv-controls">
             <SelectButton v-model="dimensionIndex" :options="dimensionOptions" option-label="label" option-value="value" :allow-empty="false" :aria-label="t('prune.table.dimension')" />
             <SelectButton v-model="view" :options="viewOptions" option-label="label" option-value="value" :allow-empty="false" :aria-label="t('prune.map.view')" />
-            <Select v-model="scale" :options="scaleOptions" option-label="label" option-value="value" :aria-label="t('prune.map.zoom')" />
+            <SelectButton v-model="tool" :options="toolOptions" option-label="label" option-value="value" :allow-empty="false" :aria-label="t('prune.tool.label')" />
+            <span class="pv-zoom">
+              <Button class="tap" icon="pi pi-search-minus" severity="secondary" text :aria-label="t('prune.map.zoomOut')" @click="mapRef?.zoomOut()" />
+              <Button class="tap" icon="pi pi-search-plus" severity="secondary" text :aria-label="t('prune.map.zoomIn')" @click="mapRef?.zoomIn()" />
+              <Button class="tap" icon="pi pi-expand" severity="secondary" text :aria-label="t('prune.map.fit')" @click="mapRef?.fit()" />
+              <span class="pv-note">{{ t("prune.map.zoomLevel", { zoom: zoomLabel }) }}</span>
+            </span>
             <label class="pv-check"><Checkbox v-model="showGrid" binary input-id="pv-grid" /> {{ t("prune.map.grid") }}</label>
-            <label class="pv-check"><Checkbox v-model="drawing" binary input-id="pv-draw" /> {{ t("prune.map.draw") }}</label>
           </div>
+          <p class="pv-note">{{ t("prune.map.keys") }}</p>
           <p v-if="prune.loadingMap.value" class="pv-note" role="status">
             <i class="pi pi-spin pi-spinner" aria-hidden="true" /> {{ t("prune.map.loading") }}
           </p>
           <PruneMap
             v-if="currentMap"
+            ref="mapRef"
             :map="currentMap"
             :zones="prune.params.value.zones"
             :view="view"
-            :scale="scale"
             :show-grid="showGrid"
-            :drawing="drawing"
+            :tool="tool"
+            :selection="selection"
+            :selection-version="selectionVersion"
             :label="t('prune.map.label', { dimension: currentDimension })"
             @zone="onDrawn"
+            @select="onSelect"
+            @camera="onCamera"
+            @undo="undoSelection"
+            @redo="redoSelection"
           />
           <ul class="pv-legend">
             <li v-for="item in legend" :key="item.cell"><span class="pv-swatch" :class="`is-${item.role}`" aria-hidden="true" /> {{ t(item.label) }}</li>
           </ul>
+          <p class="pv-note">{{ t("prune.legend.manual") }}</p>
+
+          <div class="pv-selection" role="group" :aria-label="t('prune.selection.heading')">
+            <h3>{{ t("prune.selection.heading") }}</h3>
+            <p class="pv-note">{{ t("prune.selection.help") }}</p>
+            <p class="pv-total" role="status">
+              {{ selectedCount > 0 ? t("prune.selection.count", { count: selectedCount.toLocaleString(), dimension: currentDimension }) : t("prune.selection.none", { dimension: currentDimension }) }}
+            </p>
+            <div class="pv-actions">
+              <Button class="tap" icon="pi pi-undo" :label="t('prune.selection.undo')" severity="secondary" outlined :disabled="!canUndo" @click="undoSelection" />
+              <Button class="tap" icon="pi pi-refresh" :label="t('prune.selection.redo')" severity="secondary" outlined :disabled="!canRedo" @click="redoSelection" />
+              <Button class="tap" icon="pi pi-times" :label="t('prune.selection.clear')" severity="secondary" outlined :disabled="selectionOpCount === 0" @click="clearSelection" />
+              <Button class="tap" icon="pi pi-search" :label="t('prune.selection.update')" :loading="prune.scanning.value" :disabled="prune.summaryCurrent.value" @click="prune.scan" />
+            </div>
+            <label class="pv-check">
+              <Checkbox :model-value="allowProtected" binary input-id="pv-allow-protected" @update:model-value="toggleAllowProtected" />
+              {{ t("prune.selection.allowProtected") }}
+            </label>
+            <p class="pv-note">{{ t("prune.selection.allowProtectedHelp") }}</p>
+          </div>
         </section>
 
         <section class="pv-card" aria-labelledby="pv-apply">
@@ -242,12 +282,13 @@ import SelectButton from "primevue/selectbutton";
 import { formatBytes } from "@mcbot/schema";
 import { apiGet, apiSend } from "../api";
 import { CELL, usePrune } from "../composables/usePrune";
+import { SelectionModel } from "../composables/pruneSelection";
 import { useServerUpgrade } from "../composables/useServerUpgrade";
 import { useConfirmAction } from "../composables/useConfirmAction";
 import ViewHeader from "../components/ui/ViewHeader.vue";
 import EmptyState from "../components/ui/EmptyState.vue";
 import InlineBanner from "../components/ui/InlineBanner.vue";
-import PruneMap from "../components/PruneMap.vue";
+import PruneMap, { type MapTool } from "../components/PruneMap.vue";
 import UpgradeRun from "../components/UpgradeRun.vue";
 import { t, type MessageKey } from "../i18n";
 import type {
@@ -330,16 +371,115 @@ function addZone(): void {
 
 function onDrawn(rect: { x1: number; z1: number; x2: number; z2: number }): void {
   prune.addZone({ name: t("prune.zones.drawn", { n: prune.params.value.zones.length + 1 }), dimension: currentDimension.value, ...rect });
-  drawing.value = false;
+  tool.value = "pan";
 }
 
 // ── Map ───────────────────────────────────────────────────────────────────
 
 const dimensionIndex = ref(0);
 const view = ref<"class" | "heat">("class");
-const scale = ref(4);
 const showGrid = ref(true);
-const drawing = ref(false);
+const tool = ref<MapTool>("pan");
+const mapRef = ref<{ fit(): void; zoomIn(): void; zoomOut(): void } | null>(null);
+const zoom = ref(1);
+const zoomLabel = computed(() => (zoom.value < 1 ? zoom.value.toFixed(2) : zoom.value.toFixed(1)));
+
+function onCamera(info: { zoom: number }): void {
+  zoom.value = info.zoom;
+}
+
+const toolOptions = computed(() => [
+  { label: t("prune.tool.pan"), value: "pan" as const },
+  { label: t("prune.tool.select"), value: "select" as const },
+  { label: t("prune.tool.deselect"), value: "deselect" as const },
+  { label: t("prune.tool.zone"), value: "zone" as const },
+]);
+
+// ── Selection by hand ─────────────────────────────────────────────────────
+
+const allowProtected = ref(false);
+const selectionVersion = ref(0);
+const selection = new SelectionModel((dimension) => {
+  const index = prune.summary.value?.dimensions.findIndex((d) => d.id === dimension) ?? -1;
+  return prune.maps.value[index]?.regions ?? [];
+});
+
+function syncSelection(): void {
+  selectionVersion.value++;
+  prune.setSelection({ ops: selection.ops, allowProtected: allowProtected.value });
+}
+
+function onSelect(rect: { mode: "add" | "remove"; x1: number; z1: number; x2: number; z2: number }): void {
+  if (!selection.apply([{ dimension: currentDimension.value, ...rect }])) error.value = t("prune.selection.full");
+  syncSelection();
+}
+
+function undoSelection(): void {
+  if (selection.undo()) syncSelection();
+}
+
+function redoSelection(): void {
+  if (selection.redo()) syncSelection();
+}
+
+function clearSelection(): void {
+  selection.clear();
+  syncSelection();
+}
+
+async function toggleAllowProtected(on: boolean): Promise<void> {
+  if (!on) {
+    allowProtected.value = false;
+    syncSelection();
+    return;
+  }
+  const answer = await confirmAction({
+    level: "irreversible",
+    tone: "danger",
+    header: t("prune.selection.allowProtectedConfirm"),
+    message: t("prune.selection.allowProtectedConfirmText"),
+    acceptLabel: t("prune.selection.allowProtectedAccept"),
+  });
+  allowProtected.value = answer === "confirm";
+  syncSelection();
+}
+
+// The reactive reads below are what makes the counts follow every change.
+const canUndo = computed(() => (selectionVersion.value, selection.canUndo));
+const canRedo = computed(() => (selectionVersion.value, selection.canRedo));
+const selectionOpCount = computed(() => (selectionVersion.value, selection.ops.length));
+
+/** Chosen chunks that exist on the map (a rectangle also covers empty cells). */
+const selectedCount = computed(() => {
+  selectionVersion.value;
+  const map = currentMap.value;
+  if (!map) return 0;
+  let n = 0;
+  selection.forEachRegion(currentDimension.value, (rx, rz, bits) => {
+    const region = map.regions.find((r) => r.rx === rx && r.rz === rz);
+    if (!region) return;
+    for (let z = 0; z < 32; z++) {
+      const row = bits[z]!;
+      if (row === 0) continue;
+      for (let x = 0; x < 32; x++) if (((row >>> x) & 1) === 1 && region.cell[z * 32 + x] !== CELL.EMPTY) n++;
+    }
+  });
+  return n;
+});
+
+const breakdown = computed(() => {
+  let soft = 0;
+  let hard = 0;
+  let blocked = 0;
+  let total = 0;
+  for (const d of prune.summary.value?.dimensions ?? []) {
+    soft += d.manualSoft ?? 0;
+    hard += d.manualHard ?? 0;
+    blocked += d.manualBlocked ?? 0;
+    total += d.delete;
+  }
+  return { auto: total - soft - hard, soft, hard, blocked };
+});
 
 const dimensionOptions = computed(() =>
   (prune.summary.value?.dimensions ?? []).map((d, i) => ({ label: d.id, value: i })),
@@ -348,7 +488,6 @@ const viewOptions = computed(() => [
   { label: t("prune.map.viewClass"), value: "class" as const },
   { label: t("prune.map.viewHeat"), value: "heat" as const },
 ]);
-const scaleOptions = computed(() => [1, 2, 4, 8].map((n) => ({ label: t("prune.map.scale", { n }), value: n })));
 const currentDimension = computed(() => prune.summary.value?.dimensions[dimensionIndex.value]?.id ?? "overworld");
 const currentMap = computed(() => prune.maps.value[dimensionIndex.value] ?? null);
 
@@ -358,6 +497,8 @@ const legend = [
   { cell: CELL.PROTECTED, role: "info", label: "prune.cell.protected" as MessageKey },
   { cell: CELL.BUFFER, role: "pending", label: "prune.cell.buffer" as MessageKey },
   { cell: CELL.UNREADABLE, role: "degraded", label: "prune.cell.unreadable" as MessageKey },
+  { cell: CELL.MANUAL_SOFT, role: "offline", label: "prune.cell.manualSoft" as MessageKey },
+  { cell: CELL.MANUAL_HARD, role: "offline", label: "prune.cell.manualHard" as MessageKey },
 ];
 
 watch(
@@ -366,6 +507,12 @@ watch(
     if (prune.summary.value) void prune.loadMap(dimensionIndex.value);
   },
 );
+
+// Selection bitsets follow the loaded maps: repaint them once a map (re)appears.
+watch(currentMap, () => {
+  selection.refresh();
+  selectionVersion.value++;
+});
 
 // ── Actions ───────────────────────────────────────────────────────────────
 
@@ -399,7 +546,9 @@ async function confirmApply(): Promise<void> {
       server: name,
       count: summary.totals.delete.toLocaleString(),
       size: formatBytes(summary.totals.bytes),
-    }),
+    }) + (breakdown.value.soft + breakdown.value.hard > 0
+      ? " " + t("prune.apply.breakdown", { auto: breakdown.value.auto.toLocaleString(), soft: breakdown.value.soft.toLocaleString(), hard: breakdown.value.hard.toLocaleString() })
+      : ""),
     acceptLabel: t("prune.confirm.accept", { server: name }),
     expected: name,
     facts: [
@@ -411,7 +560,10 @@ async function confirmApply(): Promise<void> {
   });
   if (answer !== "confirm") return;
   const jobId = await prune.apply(countdown.value);
-  if (jobId) await run.attach();
+  if (jobId) {
+    clearSelection();
+    await run.attach();
+  }
 }
 
 function clearRun(): void {
@@ -428,6 +580,9 @@ async function load(): Promise<void> {
 watch(server, () => {
   prune.reset();
   run.reset();
+  selection.clear();
+  allowProtected.value = false;
+  selectionVersion.value++;
   error.value = "";
   if (server.value) void load();
 }, { immediate: true });
@@ -562,6 +717,15 @@ onBeforeUnmount(() => {
 .pv-table th[scope="col"]:first-child,
 .pv-table th[scope="row"] {
   text-align: left;
+}
+.pv-zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.pv-selection {
+  display: grid;
+  gap: var(--space-2);
 }
 .pv-check {
   display: inline-flex;
