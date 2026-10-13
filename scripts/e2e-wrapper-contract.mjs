@@ -239,6 +239,34 @@ const INSTALLED_MODS = {
  * array for check-updates) and on the arguments it passes; the stubs print that
  * shape and move jars inside the scaffold the way the real ones do.
  */
+const PRUNE_STUB = String.raw`
+const fs = require("fs");
+const path = require("path");
+const args = process.argv.slice(2);
+const opt = (k) => { const a = args.find((x) => x.startsWith("--" + k + "=")); return a ? a.slice(k.length + 3) : undefined; };
+const out = (o) => process.stdout.write(JSON.stringify(o) + "\n");
+const file = path.resolve(__dirname, "..", "common", "prune-settings.stub.json");
+const DEFAULTS = { thresholdMinutes: 5, spawnRadiusChunks: 16, playerRadiusChunks: 8, bufferChunks: 2, zones: [], dimensions: null };
+const mapDir = path.resolve(__dirname, "..", "common", "prune");
+const ID = "0123456789abcdef";
+if (opt("settings") === "get") {
+  let saved = {};
+  try { saved = JSON.parse(fs.readFileSync(file, "utf8")); } catch {}
+  out({ ok: true, params: { ...DEFAULTS, ...saved } });
+} else if (opt("settings") === "set") {
+  const p = JSON.parse(opt("params") || "{}");
+  fs.writeFileSync(file, JSON.stringify(p));
+  out({ ok: true, params: { ...DEFAULTS, ...p } });
+} else if (args.includes("--scan")) {
+  fs.mkdirSync(mapDir, { recursive: true });
+  fs.writeFileSync(path.join(mapDir, ID + ".map.0.json"), JSON.stringify({ dimension: "overworld", regions: { "r.0.0": { cell: "AQ==", heat: "AA==" } } }));
+  out({ ok: true, id: ID, createdAt: "2026-10-12T00:00:00.000Z", params: DEFAULTS, warnings: [], totals: { chunks: 2, delete: 1, regions: 1, regionsEmptied: 0, bytes: 8192 }, dimensions: [{ id: "overworld", regions: 1, chunks: 2, delete: 1, active: 1, protected: 0, buffer: 0, unreadable: 0, regionsEmptied: 0, bytes: 8192 }] });
+} else {
+  out({ ok: false, code: "usage", error: "stub" });
+  process.exit(1);
+}
+`;
+
 const MOD_SCRIPT_STUBS = {
   "_stub.js": String.raw`
 const fs = require("fs");
@@ -469,6 +497,8 @@ function scaffold() {
       { mode: 0o755 },
     );
   }
+  fs.mkdirSync(path.join(scriptsDir, "world"), { recursive: true });
+  fs.writeFileSync(path.join(scriptsDir, "world", "prune-chunks.js"), PRUNE_STUB);
   fs.mkdirSync(path.join(scriptsDir, "update"), { recursive: true });
   for (const [rel, source] of Object.entries(MOD_SCRIPT_STUBS)) {
     fs.writeFileSync(path.join(scriptsDir, "update", rel), source);
@@ -1415,6 +1445,74 @@ console.log("\n── upgrade job and lifecycle events");
       jobText,
     );
   }
+}
+
+console.log("\n── chunk pruning");
+{
+  const PLAN = "0123456789abcdef";
+  const JOB_ABSENT = "00000000-0000-4000-8000-000000000000";
+  check("the bot sees the wrapper can prune chunks", (await serverAccess.supportsPrune(cfg)) === true);
+
+  const badParams = await raw("PUT", inst("/prune/settings"), { body: { thresholdMinutes: "x" } });
+  check("invalid settings are 400 { error }", badParams.status === 400 && isErrorBody(badParams), badParams.text);
+  const badScan = await raw("POST", inst("/prune/scans"), { body: { zones: 5 } });
+  check("invalid scan parameters are 400 { error }", badScan.status === 400 && isErrorBody(badScan), badScan.text);
+  const badMap = await raw("GET", inst("/prune/plans/zz/map/0"));
+  check("a malformed plan id is 400 { error }", badMap.status === 400 && isErrorBody(badMap), badMap.text);
+  const badApply = await raw("POST", inst("/operations/prune"), { body: { planId: "../../etc" } });
+  check("applying a malformed plan id is 400 { error }", badApply.status === 400 && isErrorBody(badApply), badApply.text);
+  eq("polling a scan the wrapper never had is null (404)", await serverAccess.getPruneScan(cfg, JOB_ABSENT), null);
+
+  if (sudoWorks) {
+    const defaults = await serverAccess.getPruneSettings(cfg);
+    eq("the saved settings default to the built-in ones", defaults.thresholdMinutes, 5);
+    const saved = await serverAccess.setPruneSettings(cfg, { thresholdMinutes: 9 });
+    eq("saving settings returns what was stored", saved.thresholdMinutes, 9);
+    eq("and reading them back agrees", (await serverAccess.getPruneSettings(cfg)).thresholdMinutes, 9);
+
+    const started = await serverAccess.startPruneScan(cfg);
+    check("starting a scan returns a uuid job id", /^[0-9a-f-]{36}$/.test(started.jobId), JSON.stringify(started));
+    let scan = null;
+    for (let i = 0; i < 100; i++) {
+      scan = await serverAccess.getPruneScan(cfg, started.jobId);
+      if (scan === null || scan.state !== "running") break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    check("the scan ends done with the plan summary", scan?.state === "done" && scan.result?.id === PLAN && scan.result.totals.delete === 1, JSON.stringify(scan));
+  } else {
+    expectUnrunnable("GET /prune/settings", "GET /instances/:id/prune/settings", await raw("GET", inst("/prune/settings")));
+    expectUnrunnable("PUT /prune/settings", "PUT /instances/:id/prune/settings", await raw("PUT", inst("/prune/settings"), { body: { thresholdMinutes: 9 } }));
+    const started = await serverAccess.startPruneScan(cfg);
+    let scan = null;
+    for (let i = 0; i < 100; i++) {
+      scan = await serverAccess.getPruneScan(cfg, started.jobId);
+      if (scan === null || scan.state !== "running") break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    check(
+      "without sudo the scan fails with a fixed code and nothing else reaches the client",
+      scan?.state === "failed" && scan.error === "failed" && !/sudo|[/]home|secret/.test(JSON.stringify(scan)),
+      JSON.stringify(scan),
+    );
+  }
+
+  const mapFile = path.join(paths.scriptsDir, "common", "prune", PLAN + ".map.0.json");
+  fs.mkdirSync(path.dirname(mapFile), { recursive: true });
+  fs.writeFileSync(mapFile, JSON.stringify({ dimension: "overworld", regions: { "r.0.0": { cell: "AQ==", heat: "AA==" } } }));
+  const map = await serverAccess.getPruneMap(cfg, PLAN, 0);
+  check("the map comes back as the stored dimension", map?.dimension === "overworld" && map.regions["r.0.0"]?.cell === "AQ==", JSON.stringify(map));
+  eq("a plan that is not there is null (404)", await serverAccess.getPruneMap(cfg, "ffffffffffffffff", 0), null);
+
+  // Applying is a job that stops the server, so only its shape is checked here.
+  const applied = await serverAccess.startPrune(cfg, PLAN, 0);
+  check("applying returns a uuid job id to follow through the upgrade routes", /^[0-9a-f-]{36}$/.test(applied.jobId), JSON.stringify(applied));
+  let job = null;
+  for (let i = 0; i < 100; i++) {
+    job = await serverAccess.getUpgrade(cfg, applied.jobId);
+    if (job === null || job.state !== "running") break;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  check("the job reports itself as a prune", job?.kind === "prune", JSON.stringify(job));
 }
 
 console.log("\n── restore: runs against the scaffold once the server is offline");
