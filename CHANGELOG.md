@@ -21,6 +21,10 @@ project follows [Semantic Versioning](https://semver.org/).
 - **Appearance page in the dashboard** (sysadmins): pick the color of every embed category and rarity tier, with a live Discord-style preview on dark and light backgrounds and a warning when a color is hard to see (`views/AppearanceView.vue`, `composables/useEmbedColors.ts`).
 - `embedColors` in `config.json` recolours any embed category or rarity tier (`#rrggbb`; `src/core/configValidation.ts`, `docs/admin/configuration.md`).
 
+### Changed
+
+- **Prune chunks scans only what you choose.** The Prune chunks page lists the world's dimensions (from directory listings, no chunk is read) and scans, caches and prunes only the ticked ones. A running scan shows regions read, chunks per second and a time estimate and can be stopped. The page warns when an earlier delete never finished. Needs a wrapper with `chunk-prune` version 2 (older wrappers still scan everything).
+
 ### Fixed
 
 - The streak leaderboard no longer prints the English "day(s)" in German.

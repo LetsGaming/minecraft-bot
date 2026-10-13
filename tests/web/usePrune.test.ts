@@ -255,3 +255,84 @@ describe("apply", () => {
     expect(prune.starting.value).toBe(false);
   });
 });
+
+describe("dimensions, progress and cancel", () => {
+  const DIMS = { dimensions: [{ id: "overworld", regions: 900 }, { id: "the_nether", regions: 40 }, { id: "the_end", regions: 5 }] };
+
+  it("treats no selection as every dimension and stores all of them as null", async () => {
+    const { prune } = setup({ dimensions: vi.fn(async () => DIMS) });
+    await prune.loadDimensions();
+    expect(prune.selectedDimensions.value).toEqual(["overworld", "the_nether", "the_end"]);
+
+    prune.setDimension("overworld", false);
+    prune.setDimension("the_end", false);
+    expect(prune.params.value.dimensions).toEqual(["the_nether"]);
+    expect(prune.selectedDimensions.value).toEqual(["the_nether"]);
+
+    prune.setDimension("overworld", true);
+    prune.setDimension("the_end", true);
+    expect(prune.params.value.dimensions).toBeNull();
+  });
+
+  it("never lets the last dimension be switched off", async () => {
+    const { prune } = setup({ dimensions: vi.fn(async () => DIMS) });
+    await prune.loadDimensions();
+    prune.setDimension("overworld", false);
+    prune.setDimension("the_nether", false);
+    prune.setDimension("the_end", false);
+    expect(prune.selectedDimensions.value).toEqual(["the_end"]);
+  });
+
+  it("sends the chosen dimensions with the scan and marks a changed choice as stale", async () => {
+    const { prune, api } = setup({ dimensions: vi.fn(async () => DIMS) });
+    await prune.loadDimensions();
+    prune.setDimension("overworld", false);
+    await prune.scan();
+    expect(api.scan).toHaveBeenCalledWith(expect.objectContaining({ dimensions: ["the_nether", "the_end"] }));
+    expect(prune.summaryCurrent.value).toBe(true);
+    prune.setDimension("overworld", true);
+    expect(prune.summaryCurrent.value).toBe(false);
+  });
+
+  it("shows the latest progress while scanning and clears it at the end", async () => {
+    const poll = vi
+      .fn()
+      .mockResolvedValueOnce({ jobId: "j1", state: "running", progress: { done: 2, total: 9, chunks: 2000, chunksPerSecond: 900, etaSeconds: 7 } })
+      .mockResolvedValueOnce({ jobId: "j1", state: "done", result: SUMMARY });
+    const { prune } = setup({ poll });
+    await prune.scan();
+    expect(prune.progress.value).toMatchObject({ done: 2, total: 9 });
+    await vi.advanceTimersByTimeAsync(PRUNE_POLL_MS);
+    expect(prune.progress.value).toBeNull();
+    expect(prune.scanning.value).toBe(false);
+  });
+
+  it("cancels a scan without reporting an error", async () => {
+    const cancel = vi.fn(async () => ({ cancelled: true }));
+    const poll = vi
+      .fn()
+      .mockResolvedValueOnce({ jobId: "j1", state: "running" })
+      .mockResolvedValueOnce({ jobId: "j1", state: "failed", error: "cancelled" });
+    const { prune, onError } = setup({ poll, cancel });
+    await prune.scan();
+    await prune.cancelScan();
+    expect(cancel).toHaveBeenCalledWith("j1");
+    expect(prune.cancelling.value).toBe(true);
+    await vi.advanceTimersByTimeAsync(PRUNE_POLL_MS);
+    expect(prune.scanning.value).toBe(false);
+    expect(prune.cancelling.value).toBe(false);
+    expect(onError).not.toHaveBeenCalled();
+    expect(prune.summary.value).toBeNull();
+  });
+
+  it("reports an unfinished delete from the engine status, and ignores a failed status call", async () => {
+    const status = vi.fn(async () => ({ engine: "builtin", version: 1, unfinishedApply: { state: "applying" as const, plan: "0123456789abcdef", startedAt: "2026-10-13T10:00:00Z" } }));
+    const { prune } = setup({ status });
+    await prune.loadStatus();
+    expect(prune.unfinishedApply.value).toMatchObject({ state: "applying" });
+    const broken = setup({ status: vi.fn(async () => { throw new Error("x"); }) });
+    await broken.prune.loadStatus();
+    expect(broken.prune.unfinishedApply.value).toBeNull();
+    expect(broken.onError).not.toHaveBeenCalled();
+  });
+});

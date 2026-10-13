@@ -2,6 +2,8 @@
 
 import type { ServerConfig } from "../../../types/index.js";
 import type {
+  PruneDimensions,
+  PruneEngineStatus,
   PruneMap,
   PruneParams,
   PruneParamsRequest,
@@ -9,7 +11,7 @@ import type {
   PruneScanStarted,
   UpgradeStarted,
 } from "@mcbot/schema/wire/index.js";
-import { apiGet, apiGetRaw, apiPost, apiPut, readApiJson } from "./apiClient.js";
+import { ApiError, apiGet, apiGetRaw, apiPost, apiPut, readApiJson } from "./apiClient.js";
 import { detectCapabilities } from "./capabilityProbe.js";
 import { getRemoteManifest } from "./manifest.js";
 
@@ -31,6 +33,27 @@ export async function startPruneScan(
   params?: PruneParamsRequest,
 ): Promise<PruneScanStarted> {
   return apiPost<PruneScanStarted>(cfg, "/prune/scans", params ?? {});
+}
+
+/** The world's dimensions and their region counts; no chunk is read. */
+export async function getPruneDimensions(cfg: ServerConfig): Promise<PruneDimensions> {
+  return apiGet<PruneDimensions>(cfg, "/prune/dimensions");
+}
+
+/** The engine version, and a note when an earlier delete never finished. */
+export async function getPruneStatus(cfg: ServerConfig): Promise<PruneEngineStatus> {
+  return apiGet<PruneEngineStatus>(cfg, "/prune/status");
+}
+
+/** Stop a running scan. False when there is no such running scan (404). */
+export async function cancelPruneScan(cfg: ServerConfig, jobId: string): Promise<boolean> {
+  try {
+    await apiPost<{ cancelled: boolean }>(cfg, `/prune/scans/${encodeURIComponent(jobId)}/cancel`, {});
+    return true;
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return false;
+    throw err;
+  }
 }
 
 /** A scan's progress and summary; null once the wrapper forgot it (404). */

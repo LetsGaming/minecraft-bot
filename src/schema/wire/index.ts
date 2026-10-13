@@ -54,6 +54,9 @@ export type PruneSummary = Wire["PruneSummary"];
 export type PruneDimensionSummary = Wire["PruneDimensionSummary"];
 export type PruneScanJob = Wire["PruneScanJob"];
 export type PruneScanStarted = Wire["PruneScanStarted"];
+export type PruneScanProgress = Wire["PruneScanProgress"];
+export type PruneDimensions = Wire["PruneDimensions"];
+export type PruneEngineStatus = Wire["PruneEngineStatus"];
 export type PruneMap = Wire["PruneMap"];
 
 /** A 404 answers `{ ok: false }` alone; the rest is the wrapper's body. */

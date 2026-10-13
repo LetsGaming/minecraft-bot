@@ -45,6 +45,24 @@
           </div>
         </div>
 
+        <InlineBanner v-if="prune.unfinishedApply.value" tone="danger" :title="t('prune.unfinished.title')">
+          {{ t("prune.unfinished.text", { when: prune.unfinishedApply.value.startedAt }) }}
+        </InlineBanner>
+
+        <fieldset v-if="prune.dimensions.value.length > 1" class="pv-dims">
+          <legend>{{ t("prune.dimensions.heading") }}</legend>
+          <p class="pv-note">{{ t("prune.dimensions.help") }}</p>
+          <label v-for="d in prune.dimensions.value" :key="d.id" class="pv-dim-option">
+            <input
+              type="checkbox"
+              :checked="prune.selectedDimensions.value.includes(d.id)"
+              :disabled="prune.scanning.value || (prune.selectedDimensions.value.length === 1 && prune.selectedDimensions.value.includes(d.id))"
+              @change="prune.setDimension(d.id, ($event.target as HTMLInputElement).checked)"
+            />
+            {{ t("prune.dimensions.option", { id: d.id, regions: d.regions.toLocaleString() }) }}
+          </label>
+        </fieldset>
+
         <h3>{{ t("prune.zones.heading") }}</h3>
         <p class="pv-note">{{ t("prune.zones.help") }}</p>
         <ul v-if="prune.params.value.zones.length" class="pv-zones">
@@ -90,7 +108,32 @@
             @click="saveSettings"
           />
         </div>
-        <p v-if="prune.scanning.value" class="pv-note" role="status">{{ t("prune.scan.running") }}</p>
+        <div v-if="prune.scanning.value" class="pv-progress" role="status">
+          <p class="pv-note">{{ t("prune.scan.running") }}</p>
+          <template v-if="prune.progress.value && prune.progress.value.total > 0">
+            <progress :max="prune.progress.value.total" :value="prune.progress.value.done" :aria-label="t('prune.scan.running')" />
+            <p class="pv-note">
+              {{ t("prune.scan.progress", {
+                done: prune.progress.value.done.toLocaleString(),
+                total: prune.progress.value.total.toLocaleString(),
+                chunks: prune.progress.value.chunks.toLocaleString(),
+                rate: prune.progress.value.chunksPerSecond.toLocaleString(),
+              }) }}
+              <template v-if="prune.progress.value.etaSeconds !== null">
+                {{ t("prune.scan.eta", { seconds: prune.progress.value.etaSeconds }) }}
+              </template>
+            </p>
+          </template>
+          <Button
+            class="tap"
+            icon="pi pi-stop"
+            :label="prune.cancelling.value ? t('prune.scan.cancelling') : t('prune.scan.cancel')"
+            severity="secondary"
+            outlined
+            :disabled="prune.cancelling.value"
+            @click="prune.cancelScan"
+          />
+        </div>
         <p class="pv-note">{{ t("prune.scan.approximate") }}</p>
       </section>
 
@@ -208,6 +251,8 @@ import PruneMap from "../components/PruneMap.vue";
 import UpgradeRun from "../components/UpgradeRun.vue";
 import { t, type MessageKey } from "../i18n";
 import type {
+  PruneDimensions,
+  PruneEngineStatus,
   PruneMap as PruneMapBody,
   PruneParams,
   PruneParamsRequest,
@@ -231,6 +276,9 @@ const prune = usePrune({
     scan: (p: PruneParamsRequest) => apiSend<{ jobId: string }>("POST", `${base()}/prune/scans`, p),
     poll: (jobId) => apiGet<PruneScanJob>(`${base()}/prune/scans/${jobId}`),
     map: (planId, index) => apiGet<PruneMapBody>(`${base()}/prune/plans/${planId}/map/${index}`),
+    dimensions: () => apiGet<PruneDimensions>(`${base()}/prune/dimensions`),
+    status: () => apiGet<PruneEngineStatus>(`${base()}/prune/status`),
+    cancel: (jobId) => apiSend<{ cancelled: boolean }>("POST", `${base()}/prune/scans/${jobId}/cancel`, {}),
     apply: (planId, countdownSeconds) =>
       apiSend<UpgradeStarted>("POST", `${base()}/prune`, { planId, countdownSeconds }),
   },
@@ -374,7 +422,7 @@ function clearRun(): void {
 async function load(): Promise<void> {
   await prune.loadSupport();
   if (!prune.supported.value) return;
-  await Promise.all([prune.loadSettings(), run.attach()]);
+  await Promise.all([prune.loadSettings(), prune.loadDimensions(), prune.loadStatus(), run.attach()]);
 }
 
 watch(server, () => {
@@ -431,6 +479,31 @@ onBeforeUnmount(() => {
 }
 .pv-label {
   font-weight: 600;
+}
+.pv-dims {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.pv-dims legend {
+  font-weight: 600;
+  padding: 0;
+}
+.pv-dim-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2.75rem;
+}
+.pv-progress {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+}
+.pv-progress progress {
+  width: min(100%, 28rem);
 }
 .pv-zones {
   list-style: none;

@@ -15,6 +15,9 @@ import {
   supportsPrune,
   startPruneScan,
   getPruneScan,
+  getPruneDimensions,
+  getPruneStatus,
+  cancelPruneScan,
   getPruneSettings,
   setPruneSettings,
   getPruneMap,
@@ -132,6 +135,61 @@ export function registerPruneRoutes(app: FastifyInstance): void {
           throw new HttpError(409, "A scan is already running. Wait for it to finish.");
         }
         return failed("Prune scan start", req.params.id, err);
+      }
+    },
+  );
+
+  api.get(
+    "/api/servers/:id/prune/dimensions",
+    {
+      schema: { params: IdParams },
+      config: { capability: "server:update", scope: "server", param: "id" },
+    },
+    async (req) => {
+      const server = requireServer(req.params.id);
+      await requireSupport(req.params.id, server.config);
+      try {
+        return await getPruneDimensions(server.config);
+      } catch (err) {
+        return failed("Prune dimensions", req.params.id, err);
+      }
+    },
+  );
+
+  api.get(
+    "/api/servers/:id/prune/status",
+    {
+      schema: { params: IdParams },
+      config: { capability: "server:update", scope: "server", param: "id" },
+    },
+    async (req) => {
+      const server = requireServer(req.params.id);
+      await requireSupport(req.params.id, server.config);
+      try {
+        return await getPruneStatus(server.config);
+      } catch (err) {
+        return failed("Prune status", req.params.id, err);
+      }
+    },
+  );
+
+  api.post(
+    "/api/servers/:id/prune/scans/:jobId/cancel",
+    {
+      schema: { params: PruneScanParams },
+      config: { capability: "server:update", scope: "server", param: "id" },
+    },
+    async (req) => {
+      const server = requireServer(req.params.id);
+      await requireSupport(req.params.id, server.config);
+      try {
+        if (!(await cancelPruneScan(server.config, req.params.jobId))) {
+          throw new NotFound("That scan is not running.");
+        }
+        return { cancelled: true };
+      } catch (err) {
+        if (err instanceof NotFound) throw err;
+        return failed("Prune scan cancel", req.params.id, err);
       }
     },
   );

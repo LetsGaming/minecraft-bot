@@ -33,6 +33,9 @@ const {
   supportsPruneMock,
   startPruneScanMock,
   getPruneScanMock,
+  getPruneDimensionsMock,
+  getPruneStatusMock,
+  cancelPruneScanMock,
   getPruneSettingsMock,
   setPruneSettingsMock,
   getPruneMapMock,
@@ -42,6 +45,9 @@ const {
   supportsPruneMock: vi.fn(),
   startPruneScanMock: vi.fn(),
   getPruneScanMock: vi.fn(),
+  getPruneDimensionsMock: vi.fn(),
+  getPruneStatusMock: vi.fn(),
+  cancelPruneScanMock: vi.fn(),
   getPruneSettingsMock: vi.fn(),
   setPruneSettingsMock: vi.fn(),
   getPruneMapMock: vi.fn(),
@@ -60,6 +66,9 @@ vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
   supportsPrune: supportsPruneMock,
   startPruneScan: startPruneScanMock,
   getPruneScan: getPruneScanMock,
+  getPruneDimensions: getPruneDimensionsMock,
+  getPruneStatus: getPruneStatusMock,
+  cancelPruneScan: cancelPruneScanMock,
   getPruneSettings: getPruneSettingsMock,
   setPruneSettings: setPruneSettingsMock,
   getPruneMap: getPruneMapMock,
@@ -163,6 +172,9 @@ beforeEach(() => {
   getPruneSettingsMock.mockResolvedValue(PARAMS);
   setPruneSettingsMock.mockImplementation(async (_cfg: unknown, p: object) => ({ ...PARAMS, ...p }));
   getPruneMapMock.mockResolvedValue({ dimension: "overworld", regions: {} });
+  getPruneDimensionsMock.mockResolvedValue({ dimensions: [{ id: "overworld", regions: 4 }] });
+  getPruneStatusMock.mockResolvedValue({ engine: "builtin", version: 1 });
+  cancelPruneScanMock.mockResolvedValue(true);
   startPruneMock.mockResolvedValue({ jobId: JOB });
 });
 
@@ -170,6 +182,9 @@ describe("capability and server scope", () => {
   it("every prune action needs server:update", async () => {
     const app = buildServer();
     expect((await app.inject(req("GET", READER, "/prune/settings"))).statusCode).toBe(403);
+    expect((await app.inject(req("GET", READER, "/prune/dimensions"))).statusCode).toBe(403);
+    expect((await app.inject(req("GET", READER, "/prune/status"))).statusCode).toBe(403);
+    expect((await app.inject(req("POST", READER, `/prune/scans/${JOB}/cancel`, {}))).statusCode).toBe(403);
     expect((await app.inject(req("PUT", READER, "/prune/settings", {}))).statusCode).toBe(403);
     expect((await app.inject(req("POST", READER, "/prune/scans", {}))).statusCode).toBe(403);
     expect((await app.inject(req("GET", READER, `/prune/scans/${JOB}`))).statusCode).toBe(403);
@@ -245,6 +260,33 @@ describe("settings and scans", () => {
     const res = await app.inject(req("POST", UPDATER, "/prune/scans", {}));
     expect(res.statusCode).toBe(502);
     expect(res.body).not.toContain("secret");
+  });
+});
+
+describe("dimensions, status and cancel", () => {
+  it("lists the dimensions and reports the engine status", async () => {
+    const app = buildServer();
+    expect((await app.inject(req("GET", UPDATER, "/prune/dimensions"))).json()).toEqual({ dimensions: [{ id: "overworld", regions: 4 }] });
+    expect((await app.inject(req("GET", UPDATER, "/prune/status"))).json()).toEqual({ engine: "builtin", version: 1 });
+  });
+
+  it("cancels a running scan and 404s one that is not running", async () => {
+    const app = buildServer();
+    expect((await app.inject(req("POST", UPDATER, `/prune/scans/${JOB}/cancel`, {}))).json()).toEqual({ cancelled: true });
+    expect(cancelPruneScanMock).toHaveBeenCalledWith(expect.anything(), JOB);
+    cancelPruneScanMock.mockResolvedValue(false);
+    expect((await app.inject(req("POST", UPDATER, `/prune/scans/${JOB}/cancel`, {}))).statusCode).toBe(404);
+  });
+
+  it("501s when the wrapper cannot prune, and hides wrapper errors", async () => {
+    getPruneDimensionsMock.mockRejectedValue(new Error("/home/mc/secret failed"));
+    const app = buildServer();
+    const res = await app.inject(req("GET", UPDATER, "/prune/dimensions"));
+    expect(res.statusCode).toBe(502);
+    expect(res.body).not.toContain("secret");
+    supportsPruneMock.mockResolvedValue(false);
+    invalidateWhere(() => true);
+    expect((await app.inject(req("GET", UPDATER, "/prune/status"))).statusCode).toBe(501);
   });
 });
 
