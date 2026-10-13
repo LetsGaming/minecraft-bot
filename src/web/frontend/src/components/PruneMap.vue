@@ -7,7 +7,7 @@
       tabindex="0"
       role="group"
       :aria-label="label"
-      aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight + - 0 Escape"
+      aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Space Enter PageUp PageDown + - 0 Escape"
       @keydown="onKey"
       @keyup="onKeyUp"
     >
@@ -25,7 +25,7 @@
         @contextmenu.prevent
       />
     </div>
-    <p class="pm-hover" role="status" aria-live="off">{{ hoverText }}</p>
+    <p class="pm-hover" role="status" :aria-live="cursor ? 'polite' : 'off'">{{ hoverText }}</p>
   </div>
 </template>
 
@@ -520,6 +520,7 @@ function lookup(cx: number, cz: number): { cell: number; heat: number } {
 }
 
 function updateHover(p: { x: number; y: number }): void {
+  cursor.value = null; // a pointer in use takes over from the keyboard cursor
   const { cx, cz } = chunkAt(camera.value, size, p.x, p.y);
   const prev = hover.value;
   if (prev && prev.cx === cx && prev.cz === cz) return;
@@ -613,7 +614,7 @@ function onCancel(ev: PointerEvent): void {
 }
 
 function onLeave(): void {
-  if (drag) return;
+  if (drag || cursor.value) return;
   hover.value = null;
   requestDraw();
 }
@@ -626,7 +627,34 @@ function onWheel(ev: WheelEvent): void {
   requestDraw();
 }
 
-const PAN_STEP = 64;
+
+/** The chunk the keyboard cursor is on, or null while the map is only used with a pointer. */
+const cursor = ref<{ cx: number; cz: number } | null>(null);
+
+function moveCursor(dx: number, dz: number): void {
+  const from = cursor.value ?? chunkAt(camera.value, size, size.width / 2, size.height / 2);
+  const to = { cx: from.cx + dx, cz: from.cz + dz };
+  cursor.value = to;
+  // Keep it on screen: pan just far enough to bring it back inside a small margin.
+  const a = worldToScreen(camera.value, size, to.cx, to.cz);
+  const margin = 24;
+  let moveX = 0;
+  let moveZ = 0;
+  if (a.sx < margin) moveX = margin - a.sx;
+  else if (a.sx + camera.value.zoom > size.width - margin) moveX = size.width - margin - (a.sx + camera.value.zoom);
+  if (a.sz < margin) moveZ = margin - a.sz;
+  else if (a.sz + camera.value.zoom > size.height - margin) moveZ = size.height - margin - (a.sz + camera.value.zoom);
+  if (moveX !== 0 || moveZ !== 0) camera.value = panBy(camera.value, moveX, moveZ);
+  hover.value = { ...to, ...lookup(to.cx, to.cz), selected: props.selection.has(props.map.dimension, to.cx, to.cz) };
+}
+
+/** Keyboard stand-in for a click: choose or unchoose the chunk under the cursor. */
+function toggleAtCursor(): void {
+  const at = cursor.value;
+  if (!at) return;
+  const mode = props.selection.has(props.map.dimension, at.cx, at.cz) ? "remove" : "add";
+  emit("select", { mode, x1: at.cx, z1: at.cz, x2: at.cx, z2: at.cz });
+}
 
 function onKey(ev: KeyboardEvent): void {
   if (ev.ctrlKey || ev.metaKey) {
@@ -637,19 +665,33 @@ function onKey(ev: KeyboardEvent): void {
     ev.preventDefault();
     return;
   }
+  // Arrows move a cursor from chunk to chunk (Shift jumps eight); the view follows it.
+  const step = ev.shiftKey ? 8 : 1;
   switch (ev.key) {
     case "ArrowLeft":
-      camera.value = panBy(camera.value, PAN_STEP, 0);
+      moveCursor(-step, 0);
       break;
     case "ArrowRight":
-      camera.value = panBy(camera.value, -PAN_STEP, 0);
+      moveCursor(step, 0);
       break;
     case "ArrowUp":
-      camera.value = panBy(camera.value, 0, PAN_STEP);
+      moveCursor(0, -step);
       break;
     case "ArrowDown":
-      camera.value = panBy(camera.value, 0, -PAN_STEP);
+      moveCursor(0, step);
       break;
+    case "PageUp":
+      camera.value = panBy(camera.value, 0, size.height * 0.8);
+      break;
+    case "PageDown":
+      camera.value = panBy(camera.value, 0, -size.height * 0.8);
+      break;
+    case "Enter": {
+      const at = cursor.value;
+      if (!at) return;
+      emit("inspect", at);
+      break;
+    }
     case "+":
     case "=":
       zoomBy(1.25);
@@ -662,10 +704,13 @@ function onKey(ev: KeyboardEvent): void {
       fit();
       break;
     case " ":
-      spaceHeld.value = true;
+      if (cursor.value) toggleAtCursor();
+      else spaceHeld.value = true;
       break;
     case "Escape":
       drag = null;
+      cursor.value = null;
+      hover.value = null;
       break;
     default:
       return;

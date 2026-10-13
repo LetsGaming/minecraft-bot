@@ -1302,7 +1302,7 @@ export const en = {
   "prune.map.zoomIn": "Zoom in",
   "prune.map.zoomOut": "Zoom out",
   "prune.map.fit": "Fit the whole world",
-  "prune.map.keys": "Drag to move, scroll to zoom. Keys: arrows move, plus and minus zoom, 0 fits, Ctrl+Z undoes.",
+  "prune.map.keys": "Drag to move, scroll to zoom. With the keyboard: arrows move a cursor from chunk to chunk (Shift jumps eight), Space chooses or unchooses the chunk, Enter inspects it, PageUp and PageDown scroll, plus and minus zoom, 0 fits the world, Ctrl+Z undoes.",
   "prune.tool.label": "Tool",
   "prune.tool.pan": "Move",
   "prune.tool.select": "Select",
