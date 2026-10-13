@@ -77,6 +77,15 @@ export function apiGet<T>(path: string): Promise<T> {
   return fetch(path, { credentials: "same-origin" }).then((r) => handle<T>(r));
 }
 
+/** A binary answer (an image); null when the thing does not exist (404). */
+export async function apiBlob(path: string): Promise<Blob | null> {
+  const res = await fetch(path, { credentials: "same-origin" });
+  if (res.status === 404) return null;
+  if (res.status === 401) throw new UnauthorizedError();
+  if (!res.ok) throw new ApiError(res.status, `Request failed (${res.status})`);
+  return res.blob();
+}
+
 export function apiSend<T>(
   method: "POST" | "PUT" | "DELETE",
   path: string,

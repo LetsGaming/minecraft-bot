@@ -24,6 +24,14 @@ Region, entities and poi data are removed together, so no entity or point of int
 is left behind. The setup suite's [chunk-pruning.md](https://github.com/LetsGaming/minecraft-server-setup/blob/main/docs/chunk-pruning.md)
 has the details of the engine.
 
+## Terrain view
+
+Switch the map to **Terrain** and zoom in (about 2.5 pixels per chunk or closer): each region is drawn from
+above, one pixel per block, with the class colours laid over it. It is a picture to orient by, not a
+renderer: no biome colours, water darker the deeper it is, and a hint of relief. A region is drawn on the host
+the first time it is looked at and kept (up to 500 MB) until the region changes, so the first look at a
+large area is slower than the next. Chunks from before 1.18 and chunks that cannot be read stay plain.
+
 ## Chunks that look built
 
 Time in use is not proof that nobody built somewhere: a quick build, or work done with an editor,

@@ -212,3 +212,50 @@ describe("PruneMap inspect tool", () => {
     wrapper.unmount();
   });
 });
+
+describe("PruneMap terrain view", () => {
+  const tile = () => ({ width: 512, height: 512, close: vi.fn() }) as unknown as ImageBitmap;
+
+  it("asks for the pictures of the regions in view, middle first, and draws them under the classes", async () => {
+    const loader = vi.fn(async (_rx: number, _rz: number) => tile());
+    const { wrapper, log } = mountMap({ view: "terrain", tileLoader: loader });
+    await nextTick();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(loader).toHaveBeenCalled();
+    const asked = loader.mock.calls.map(([rx, rz]) => `${rx},${rz}`).sort();
+    expect(asked).toEqual(["-1,0", "0,-1", "0,0"]);
+    // Three tiles and three class bitmaps went onto the canvas.
+    const draws = log.calls.filter((c) => c === "drawImage").length;
+    expect(draws).toBeGreaterThanOrEqual(6);
+    wrapper.unmount();
+  });
+
+  it("asks for nothing in the other views, and once zoomed far out", async () => {
+    const loader = vi.fn(async () => tile());
+    const { wrapper } = mountMap({ view: "class", tileLoader: loader });
+    await nextTick();
+    expect(loader).not.toHaveBeenCalled();
+    await wrapper.setProps({ view: "terrain" });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(loader).toHaveBeenCalled();
+    loader.mockClear();
+    for (let i = 0; i < 12; i++) await wrapper.get(".pm-host").trigger("keydown", { key: "-" });
+    await new Promise((r) => setTimeout(r, 0));
+    const zoomOut = wrapper.emitted("camera")!.at(-1)![0] as { zoom: number };
+    expect(zoomOut.zoom).toBeLessThan(2.5);
+    expect(loader).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it("treats a region without a picture as plain classes and does not ask again", async () => {
+    const loader = vi.fn(async () => null);
+    const { wrapper } = mountMap({ view: "terrain", tileLoader: loader });
+    await nextTick();
+    await new Promise((r) => setTimeout(r, 0));
+    const first = loader.mock.calls.length;
+    await wrapper.get(".pm-host").trigger("keydown", { key: "+" });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(loader.mock.calls.length).toBe(first);
+    wrapper.unmount();
+  });
+});

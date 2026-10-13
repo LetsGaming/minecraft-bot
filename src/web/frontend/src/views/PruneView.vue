@@ -212,6 +212,7 @@
             <label class="pv-check"><Checkbox v-model="showGrid" binary input-id="pv-grid" /> {{ t("prune.map.grid") }}</label>
           </div>
           <p class="pv-note">{{ t("prune.map.keys") }}</p>
+          <p v-if="view === 'terrain' && zoom < 2.5" class="pv-note" role="status">{{ t("prune.map.terrainHint") }}</p>
           <p v-if="prune.loadingMap.value" class="pv-note" role="status">
             <i class="pi pi-spin pi-spinner" aria-hidden="true" /> {{ t("prune.map.loading") }}
           </p>
@@ -226,6 +227,7 @@
             :selection="selection"
             :selection-version="selectionVersion"
             :inspected="inspectedAt"
+            :tile-loader="tileLoader"
             :label="t('prune.map.label', { dimension: currentDimension })"
             @inspect="onInspect"
             @zone="onDrawn"
@@ -335,7 +337,7 @@ import InputText from "primevue/inputtext";
 import Select from "primevue/select";
 import SelectButton from "primevue/selectbutton";
 import { formatBytes } from "@mcbot/schema";
-import { apiGet, apiSend } from "../api";
+import { apiBlob, apiGet, apiSend } from "../api";
 import { CELL, usePrune } from "../composables/usePrune";
 import { SelectionModel } from "../composables/pruneSelection";
 import { useServerUpgrade } from "../composables/useServerUpgrade";
@@ -428,7 +430,17 @@ function onDrawn(rect: { x1: number; z1: number; x2: number; z2: number }): void
 // ── Map ───────────────────────────────────────────────────────────────────
 
 const dimensionIndex = ref(0);
-const view = ref<"class" | "heat">("class");
+const view = ref<"class" | "heat" | "terrain">("class");
+
+/** Terrain pictures come from the dashboard backend one region at a time; a region without one is null. */
+const tileLoader = computed(() => {
+  const dimension = currentDimension.value;
+  const root = base();
+  return async (rx: number, rz: number): Promise<ImageBitmap | null> => {
+    const blob = await apiBlob(`${root}/prune/tiles/${encodeURIComponent(dimension)}/${rx}/${rz}`);
+    return blob ? createImageBitmap(blob) : null;
+  };
+});
 const showGrid = ref(true);
 const tool = ref<MapTool>("pan");
 const mapRef = ref<{ fit(): void; zoomIn(): void; zoomOut(): void } | null>(null);
@@ -588,6 +600,7 @@ const dimensionOptions = computed(() =>
 const viewOptions = computed(() => [
   { label: t("prune.map.viewClass"), value: "class" as const },
   { label: t("prune.map.viewHeat"), value: "heat" as const },
+  { label: t("prune.map.viewTerrain"), value: "terrain" as const },
 ]);
 const currentDimension = computed(() => prune.summary.value?.dimensions[dimensionIndex.value]?.id ?? "overworld");
 const currentMap = computed(() => prune.maps.value[dimensionIndex.value] ?? null);

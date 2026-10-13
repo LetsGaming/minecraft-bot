@@ -1296,6 +1296,8 @@ export const en = {
   "prune.cell.manualHard": "chosen by hand, over a protected area",
   "prune.map.used": "{minutes} min used",
   "prune.map.selected": "in your selection",
+  "prune.map.viewTerrain": "Terrain",
+  "prune.map.terrainHint": "Zoom in to see the terrain.",
   "prune.map.zoomLevel": "{zoom} px per chunk",
   "prune.map.zoomIn": "Zoom in",
   "prune.map.zoomOut": "Zoom out",

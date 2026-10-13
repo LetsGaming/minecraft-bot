@@ -31,6 +31,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
+import { createTileStore } from "../composables/pruneTiles";
 import type { PruneZone } from "@mcbot/schema/wire/index.js";
 import { CELL, type DecodedMap, type DecodedRegion } from "../composables/usePrune";
 import {
@@ -62,7 +63,9 @@ const props = withDefaults(
   defineProps<{
     map: DecodedMap;
     zones: PruneZone[];
-    view: "class" | "heat";
+    view: "class" | "heat" | "terrain";
+    /** Fetches the terrain picture of a region (null when it has none); needed for the terrain view. */
+    tileLoader?: (rx: number, rz: number) => Promise<ImageBitmap | null>;
     showGrid: boolean;
     tool: MapTool;
     selection: SelectionModel;
@@ -169,14 +172,43 @@ function canvasOf(pixels: Uint8ClampedArray): HTMLCanvasElement {
   return c;
 }
 
-function bitmapFor(r: { rx: number; rz: number } & DecodedRegion): HTMLCanvasElement {
-  const key = `${r.rx},${r.rz}`;
+/** Under this the terrain pictures would be a few pixels each; the classes alone are clearer. */
+const TERRAIN_MIN_ZOOM = 2.5;
+/** The classes over a picture are drawn this opaque. */
+const OVER_TERRAIN_OPACITY = 0.55;
+
+const terrainActive = (): boolean => props.view === "terrain" && !!props.tileLoader && camera.value.zoom >= TERRAIN_MIN_ZOOM;
+
+function bitmapFor(r: { rx: number; rz: number } & DecodedRegion, overTerrain = false): HTMLCanvasElement {
+  const key = `${r.rx},${r.rz}${overTerrain ? "t" : ""}`;
   let bmp = bitmaps.get(key);
   if (!bmp) {
-    bmp = canvasOf(buildRegionPixels(r.cell, r.heat, props.view, theme().palette));
+    const view = props.view === "heat" ? "heat" : "class";
+    bmp = canvasOf(buildRegionPixels(r.cell, r.heat, view, theme().palette, overTerrain ? OVER_TERRAIN_OPACITY : 1));
     bitmaps.set(key, bmp);
   }
   return bmp;
+}
+
+const tiles = createTileStore<ImageBitmap>({
+  load: (rx, rz) => (props.tileLoader ? props.tileLoader(rx, rz) : Promise.resolve(null)),
+  onChange: () => requestDraw(),
+});
+
+/** Ask for the pictures of the regions in view, middle first; none when the terrain is not on show. */
+function wantTiles(v: { rx0: number; rx1: number; rz0: number; rz1: number }): void {
+  if (!terrainActive()) {
+    tiles.want([]);
+    return;
+  }
+  const midX = camera.value.cx / 32;
+  const midZ = camera.value.cz / 32;
+  const wanted = [];
+  for (const r of regionIndex.value.values()) {
+    if (r.rx < v.rx0 || r.rx > v.rx1 || r.rz < v.rz0 || r.rz > v.rz1) continue;
+    wanted.push({ rx: r.rx, rz: r.rz, priority: Math.hypot(r.rx + 0.5 - midX, r.rz + 0.5 - midZ) });
+  }
+  tiles.want(wanted);
 }
 
 function invalidateBase(): void {
@@ -226,12 +258,20 @@ function drawBase(): void {
   const th = theme();
   ctx.fillStyle = th.surface;
   ctx.fillRect(0, 0, size.width, size.height);
-  ctx.imageSmoothingEnabled = camera.value.zoom < 1;
   const v = visibleRegions(camera.value, size);
+  const terrain = terrainActive();
+  wantTiles(v);
   for (const r of regionIndex.value.values()) {
     if (r.rx < v.rx0 || r.rx > v.rx1 || r.rz < v.rz0 || r.rz > v.rz1) continue;
     const { x, y, w, h } = regionRect(r.rx, r.rz);
-    ctx.drawImage(bitmapFor(r), x, y, w, h);
+    const picture = terrain ? tiles.get(r.rx, r.rz) : null;
+    if (picture && picture !== "none") {
+      // One pixel per block: crisp from one screen pixel per block up, smoothed when shrunk.
+      ctx.imageSmoothingEnabled = camera.value.zoom < 16;
+      ctx.drawImage(picture, x, y, w, h);
+    }
+    ctx.imageSmoothingEnabled = camera.value.zoom < 1;
+    ctx.drawImage(bitmapFor(r, !!picture && picture !== "none"), x, y, w, h);
   }
 }
 
@@ -685,6 +725,7 @@ onBeforeUnmount(() => {
   overCanvas.value?.removeEventListener("wheel", onWheel);
   observer?.disconnect();
   themeObserver?.disconnect();
+  tiles.reset();
   if (frame && typeof cancelAnimationFrame !== "undefined") cancelAnimationFrame(frame);
 });
 
@@ -695,12 +736,18 @@ watch(
     if (next.dimension !== lastDimension) {
       lastDimension = next.dimension;
       fitted = false;
+      tiles.reset();
       fit();
     }
     invalidateBase();
   },
 );
 watch(() => props.view, invalidateBase);
+// A different loader means another server or plan: the pictures held belong to the old one.
+watch(() => props.tileLoader, () => {
+  tiles.reset();
+  requestDraw();
+});
 watch(() => props.selectionVersion, invalidateSelection);
 watch(() => props.inspected, requestDraw);
 watch(() => [props.zones, props.showGrid, props.tool], requestDraw, { deep: true });

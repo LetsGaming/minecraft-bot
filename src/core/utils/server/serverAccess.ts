@@ -59,6 +59,7 @@ export {
   setPruneSettings,
   getPruneMap,
   getPruneChunk,
+  getPruneTile,
   startPrune,
 } from "./access/prune.js";
 export {
