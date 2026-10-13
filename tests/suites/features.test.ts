@@ -220,7 +220,9 @@ describe("processDailyReminders", () => {
     const { client, send } = makeClient();
 
     expect(await processDailyReminders(client, now)).toBe(1);
-    expect(send).toHaveBeenCalledWith(expect.stringContaining("/daily"));
+    expect(send).toHaveBeenCalledWith({
+      embeds: [expect.objectContaining({ data: expect.objectContaining({ description: expect.stringContaining("/daily") }) })],
+    });
 
     // The persisted record must carry lastReminderAt = now (dedupe)
     const saved = vi.mocked(saveClaimedStore).mock.calls[0]![0] as {
@@ -302,8 +304,12 @@ describe("processDailyReminders", () => {
 
     // One reminder per server — the same user can be due on both.
     expect(await processDailyReminders(client, now)).toBe(2);
-    expect(send).toHaveBeenCalledWith(expect.stringContaining("survival"));
-    expect(send).toHaveBeenCalledWith(expect.stringContaining("creative"));
+    expect(send).toHaveBeenCalledWith({
+      embeds: [expect.objectContaining({ data: expect.objectContaining({ description: expect.stringContaining("survival") }) })],
+    });
+    expect(send).toHaveBeenCalledWith({
+      embeds: [expect.objectContaining({ data: expect.objectContaining({ description: expect.stringContaining("creative") }) })],
+    });
   });
 });
 

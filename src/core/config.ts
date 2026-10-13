@@ -281,6 +281,7 @@ export function loadConfig(): BotConfig {
     leaderboardInterval:  raw.leaderboardInterval ?? "weekly",
     ...(raw.leaderboardPostTime ? { leaderboardPostTime: raw.leaderboardPostTime } : {}),
     ...(raw.leaderboardPostDay  ? { leaderboardPostDay:  raw.leaderboardPostDay }  : {}),
+    ...(raw.embedColors ? { embedColors: raw.embedColors } : {}),
     ...(raw.presence    ? { presence:    raw.presence }    : {}),
     ...(raw.deathCoords ? { deathCoords: raw.deathCoords } : {}),
     ...(raw.hostAlerts  ? { hostAlerts:  raw.hostAlerts }  : {}),

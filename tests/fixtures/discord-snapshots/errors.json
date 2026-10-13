@@ -14,7 +14,7 @@
         "embeds": [
           {
             "color": "#f87171",
-            "title": "Could not reach smp",
+            "title": "⛔ Could not reach smp",
             "description": "smp did not answer, so this is not available.\nTry again in a minute. If it keeps failing, tell a bot admin."
           }
         ]
@@ -34,7 +34,7 @@
         "embeds": [
           {
             "color": "#f87171",
-            "title": "smp ist nicht erreichbar",
+            "title": "⛔ smp ist nicht erreichbar",
             "description": "smp hat nicht geantwortet, deshalb ist das gerade nicht verfügbar.\nVersuch es in einer Minute noch einmal. Wenn es so bleibt, sag einem Bot-Admin Bescheid."
           }
         ]
@@ -56,7 +56,7 @@
         "embeds": [
           {
             "color": "#f87171",
-            "title": "smp had a problem",
+            "title": "⛔ smp had a problem",
             "description": "smp answered with an error, so this did not work.\nTry again in a minute. If it keeps failing, tell a bot admin."
           }
         ]
@@ -76,7 +76,7 @@
         "embeds": [
           {
             "color": "#f87171",
-            "title": "smp hatte ein Problem",
+            "title": "⛔ smp hatte ein Problem",
             "description": "smp hat mit einem Fehler geantwortet, deshalb hat das nicht geklappt.\nVersuch es in einer Minute noch einmal. Wenn es so bleibt, sag einem Bot-Admin Bescheid."
           }
         ]
@@ -98,7 +98,7 @@
         "embeds": [
           {
             "color": "#f87171",
-            "title": "Not allowed on smp",
+            "title": "⛔ Not allowed on smp",
             "description": "The bot is not allowed to do that on smp.\nTell a bot admin so the bot's access can be checked."
           }
         ]
@@ -118,7 +118,7 @@
         "embeds": [
           {
             "color": "#f87171",
-            "title": "Auf smp nicht erlaubt",
+            "title": "⛔ Auf smp nicht erlaubt",
             "description": "Der Bot darf das auf smp nicht.\nSag einem Bot-Admin Bescheid, damit der Zugriff des Bots geprüft wird."
           }
         ]
@@ -140,7 +140,7 @@
         "embeds": [
           {
             "color": "#f87171",
-            "title": "smp refused the request",
+            "title": "⛔ smp refused the request",
             "description": "smp refused the request, so this did not work.\nCheck what you entered and try again. If it keeps failing, tell a bot admin."
           }
         ]
@@ -160,7 +160,7 @@
         "embeds": [
           {
             "color": "#f87171",
-            "title": "smp hat die Anfrage abgelehnt",
+            "title": "⛔ smp hat die Anfrage abgelehnt",
             "description": "smp hat die Anfrage abgelehnt, deshalb hat das nicht geklappt.\nPrüf deine Eingabe und versuch es noch einmal. Wenn es so bleibt, sag einem Bot-Admin Bescheid."
           }
         ]
@@ -182,7 +182,7 @@
         "embeds": [
           {
             "color": "#f87171",
-            "title": "Command failed",
+            "title": "⛔ Command failed",
             "description": "Something went wrong and the command did not finish.\nTry again in a moment. If it keeps happening, tell a bot admin."
           }
         ]
@@ -202,7 +202,7 @@
         "embeds": [
           {
             "color": "#f87171",
-            "title": "Befehl fehlgeschlagen",
+            "title": "⛔ Befehl fehlgeschlagen",
             "description": "Etwas ist schiefgelaufen, der Befehl wurde nicht abgeschlossen.\nVersuch es gleich noch einmal. Wenn es so bleibt, sag einem Bot-Admin Bescheid."
           }
         ]

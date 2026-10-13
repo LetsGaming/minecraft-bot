@@ -1,5 +1,13 @@
 import { type APIEmbedField, type EmbedBuilder } from "discord.js";
-import { chunkLines, createEmbed, paginateFields, reservedLength } from "./embedUtils.js";
+import {
+  chunkLines,
+  createEmbed,
+  createEmbedWithThumbnail,
+  paginateFields,
+  reservedLength,
+} from "./embedUtils.js";
+import { playerAvatarUrl } from "../mcHeads.js";
+import { EmbedCategory } from "@mcbot/schema/embedCategories.js";
 import {
   humanizeKey,
   ticksToMs,
@@ -18,11 +26,15 @@ export function buildLeaderboardEmbed({
   title,
   description,
   footerText,
+  entries,
 }: LeaderboardData): EmbedBuilder {
-  return createEmbed({
+  const leader = entries[0]?.name;
+  return createEmbedWithThumbnail({
     title,
     description,
+    category: EmbedCategory.Leaderboard,
     footer: { text: footerText },
+    ...(leader ? { thumbnail: playerAvatarUrl(leader) } : {}),
   });
 }
 

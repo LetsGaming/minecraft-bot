@@ -12,7 +12,7 @@ import {
 } from "@mcbot/core/utils/stores/dailyStore.js";
 import { resolveServer } from "../../../utils/guild/guildRouter.js";
 import { createEmbed } from "../../../utils/embeds/embedUtils.js";
-import { EmbedColor } from "../../../utils/embeds/embedColors.js";
+import { EmbedCategory } from "@mcbot/schema/embedCategories.js";
 import { withErrorHandling } from "../../middleware.js";
 import { formatItemList } from "@mcbot/core/utils/minecraft/itemNames.js";
 import { t } from "@mcbot/core/utils/i18n.js";
@@ -56,7 +56,7 @@ export const execute = withErrorHandling(
         shown: recent.length,
         total: record.rewards.length,
       })}`,
-      color: EmbedColor.Info,
+      category: EmbedCategory.Reward,
     });
 
     await interaction.editReply({ embeds: [embed] });

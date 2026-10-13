@@ -17,6 +17,7 @@
  * working across restarts. data/whitelistApplications.json owns the
  * pending queue and the prompt-message bookkeeping.
  */
+import { EmbedCategory } from "@mcbot/schema/embedCategories.js";
 import { randomBytes } from "crypto";
 import {
   ActionRowBuilder,
@@ -175,7 +176,7 @@ export async function ensureApplicationPrompts(
             createEmbed({
               title: t("wlapp.promptTitle"),
               description: t("wlapp.promptBody"),
-              color: EmbedColor.Info,
+              category: EmbedCategory.Whitelist,
             }),
           ],
           components: [

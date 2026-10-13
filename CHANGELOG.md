@@ -6,6 +6,25 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### General
+
+- Discord messages get their own look per kind: joins, leaves, deaths, advancements, chat, milestones, rewards, leaderboards and whitelist prompts each have an icon and a colour instead of one shared grey or blue (`src/schema/embedCategories.ts`, `createEmbed` `category`).
+- Error embeds carry a ⛔ icon in the title.
+
+### Added
+
+- **Prune unused chunks from the dashboard.** The new Prune chunks page (capability `server:update`) scans a world for chunks nobody used (InhabitedTime below a threshold), shows a per-dimension summary and a map (decision or time used, region grid, protected zones you draw), and deletes them as a job that stops the server, backs it up and restores the backup if anything fails. Spawn, player areas, zones and a buffer are never deleted. The same scan can be ticked on the Upgrade page to prune before the first start of the new version under the upgrade's single backup. Needs wrapper 4.1 or newer and a setup suite with `world/prune-chunks.js` (`views/PruneView.vue`, `composables/usePrune.ts`, `web/backend/routes/prune.ts`, `docs/admin/chunk-pruning.md`).
+- **Upgrade a server's Minecraft version from the dashboard.** The new Upgrade page (capability `server:update`, typed confirmation) runs one supervised job on the host: warn players, save and stop, archive backup, install, start and watch. If the server does not come up, the mods without a build for the new version are disabled and it starts again; if that fails too, the job's own backup is restored. It needs wrapper 4.1 or newer and a setup suite with `update/upgrade.sh`. Discord shows one live message per upgrade in the downtime alert channel and downtime alerts stay quiet meanwhile (`web/backend/routes/upgrades.ts`, `views/UpgradeView.vue`, `logWatcher/watchers/monitors/upgradeMonitor.ts`, `docs/admin/server-upgrade.md`).
+- Wrapper features `operations` and `lifecycle-events` are expected by the startup report; on an older wrapper, stop, backup, restore and mod writes can still overlap, as before.
+- **A livelier `/daily`.** The claim shows your head, the reward with a rarity badge (common to legendary, from how rare the item is in the pool), a streak progress bar, the next milestone and the next claim time. Streak bonuses turn the message gold, a lost streak is called out, and the cooldown reply shows a time bar and the deadline that keeps your streak. Offline claims show the queue size (`daily/dailyEmbeds.ts`).
+- `/streak` shows a progress bar and a milestone track; `/daily-history` and the streak leaderboard use flame icons, the leaderboard shows the leader's head, and the daily reminder DM is an embed.
+- **Appearance page in the dashboard** (sysadmins): pick the color of every embed category and rarity tier, with a live Discord-style preview on dark and light backgrounds and a warning when a color is hard to see (`views/AppearanceView.vue`, `composables/useEmbedColors.ts`).
+- `embedColors` in `config.json` recolours any embed category or rarity tier (`#rrggbb`; `src/core/configValidation.ts`, `docs/admin/configuration.md`).
+
+### Fixed
+
+- The streak leaderboard no longer prints the English "day(s)" in German.
+
 ## [8.0.0] — 2026-10-12
 
 ### General

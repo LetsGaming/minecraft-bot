@@ -30,6 +30,13 @@ export interface ServerCapabilities {
   modManifest: boolean;
   /** {scriptDir}/common/variables.txt (config override source). */
   variablesFile: boolean;
+  /**
+   * {scriptDir}/update/upgrade.sh, the version upgrade job. Absent on a
+   * wrapper that predates it, which means "unknown", not "no".
+   */
+  upgrade?: boolean;
+  /** {scriptDir}/world/prune-chunks.js, chunk pruning. Absent means "unknown", not "no". */
+  prune?: boolean;
 }
 
 /** Conservative default: assume everything is available (legacy behaviour). */

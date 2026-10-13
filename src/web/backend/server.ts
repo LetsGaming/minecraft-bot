@@ -61,6 +61,8 @@ import { registerConsoleRoutes } from "./routes/console.js";
 import { registerBackupRoutes } from "./routes/backups.js";
 import { registerModConfigRoutes } from "./routes/modConfigs.js";
 import { registerModRoutes } from "./routes/mods.js";
+import { registerUpgradeRoutes } from "./routes/upgrades.js";
+import { registerPruneRoutes } from "./routes/prune.js";
 import { registerAnalyticsRoutes } from "./routes/analytics.js";
 import { registerSetupRoutes } from "./routes/setup.js";
 import { registerGuildConfigRoutes } from "./routes/guildConfig.js";
@@ -144,6 +146,8 @@ export function buildServer(): FastifyInstance {
     registerConsoleRoutes(api);    // live console: SSE relay + command input
     registerBackupRoutes(api);     // archive index, streamed download, restore
     registerModConfigRoutes(api);
+    registerUpgradeRoutes(api);
+    registerPruneRoutes(api);
     registerModRoutes(api);  // mod config editor: index, read, write, revert
     registerAnalyticsRoutes(api);  // uptime, activity, command usage — bot history
   });

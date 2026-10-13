@@ -23,9 +23,14 @@ import {
   isLinked,
   getLinkedAccount,
 } from "@mcbot/core/utils/stores/linkUtils.js";
-import { createInfoEmbed, createSuccessEmbed } from "../../../utils/embeds/embedUtils.js";
+import { createInfoEmbed } from "../../../utils/embeds/embedUtils.js";
+import {
+  buildClaimEmbed,
+  buildCooldownEmbed,
+  buildQueuedEmbed,
+  type GrantedRewards,
+} from "./dailyEmbeds.js";
 import { replyPrivate, withErrorHandling } from "../../middleware.js";
-import { clockTimestamp, relativeTimestamp } from "../../../utils/discordTime.js";
 import { CommandError } from "@mcbot/core/utils/error.js";
 import type {
   DailyRewardItem,
@@ -39,7 +44,6 @@ import {
   DAILY_COOLDOWN_MS,
 } from "@mcbot/core/utils/minecraft/rewards.js";
 import { resolveServer } from "../../../utils/guild/guildRouter.js";
-import { formatItemList, formatItemStack } from "@mcbot/core/utils/minecraft/itemNames.js";
 
 const claimLock = new Set<string>();
 
@@ -126,8 +130,10 @@ async function _execute(
   if (delta < DAILY_COOLDOWN_MS) {
     await replyPrivate(
       interaction,
-      createInfoEmbed(cooldownMsg(now + DAILY_COOLDOWN_MS - delta), {
-        title: t("daily.cooldownTitle"),
+      buildCooldownEmbed({
+        lastClaim: userData.lastClaim,
+        now,
+        currentStreak: userData.currentStreak,
       }),
     );
     return;
@@ -140,6 +146,9 @@ async function _execute(
     delta,
     deriveMaxStreak(pool.streakBonuses),
   );
+
+  // The previous streak, shown when this claim starts over after a miss.
+  const lostStreak = delta > 2 * DAILY_COOLDOWN_MS ? userData.currentStreak : 0;
 
   const mainReward = pick(pool.default);
 
@@ -208,9 +217,19 @@ async function _execute(
     await savePendingRewards(pendingStore);
     await persistClaim();
 
-    await interaction.editReply(
-      response(granted, currentStreak, now, t("daily.queued", { server: server.id })),
-    );
+    await interaction.editReply({
+      embeds: [
+        buildQueuedEmbed({
+          player: username,
+          server: server.id,
+          queued: list.length,
+          max: MAX_PENDING_PER_PLAYER,
+          currentStreak,
+          claimedAt: now,
+          rewards: grantedRewards,
+        }),
+      ],
+    });
     return;
   }
 
@@ -230,48 +249,17 @@ async function _execute(
   }
 
   await persistClaim();
-  await interaction.editReply(
-    response(granted, currentStreak, now),
-  );
-}
-
-/** When the next reward is ready, as Discord timestamps in each reader's zone. */
-function cooldownMsg(readyAt: number): string {
-  return t("daily.cooldown", {
-    relative: relativeTimestamp(readyAt),
-    time: clockTimestamp(readyAt),
+  await interaction.editReply({
+    embeds: [
+      buildClaimEmbed({
+        player: username,
+        granted,
+        pool,
+        currentStreak,
+        longestStreak,
+        lostStreak,
+        claimedAt: now,
+      }),
+    ],
   });
-}
-
-interface GrantedRewards {
-  main: DailyRewardItem;
-  randomBonus: DailyRewardItem | null;
-  streakBonus: DailyRewardItem[];
-  bonusStreak: number;
-}
-
-function response(
-  granted: GrantedRewards,
-  cs: number,
-  claimedAt: number,
-  note?: string,
-): { embeds: ReturnType<typeof createSuccessEmbed>[] } {
-  const lines: string[] = [t("daily.reward", { reward: formatItemStack(granted.main) })];
-  if (granted.randomBonus) {
-    lines.push(t("daily.randomBonus", { reward: formatItemStack(granted.randomBonus) }));
-  }
-  if (granted.streakBonus.length > 0) {
-    lines.push(
-      t("daily.bonus", { days: granted.bonusStreak, rewards: formatItemList(granted.streakBonus) }),
-    );
-  }
-  if (note) lines.push(note);
-
-  const embed = createSuccessEmbed(lines.join("\n"), {
-    title: t("daily.claimedTitle"),
-  }).addFields(
-    { name: t("daily.streakField"), value: t("streak.days", { count: cs }), inline: true },
-    { name: t("daily.nextField"), value: relativeTimestamp(claimedAt + DAILY_COOLDOWN_MS), inline: true },
-  );
-  return { embeds: [embed] };
 }

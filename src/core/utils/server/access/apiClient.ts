@@ -152,6 +152,27 @@ export async function apiPost<T>(
   return res.json() as Promise<T>; // pinned first-party contract (see apiGet)
 }
 
+export async function apiPut<T>(
+  cfg: ServerConfig,
+  route: string,
+  body: unknown,
+  timeoutMs = 30_000,
+): Promise<T> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (cfg.apiKey) headers["x-api-key"] = cfg.apiKey;
+  const res = await fetch(instanceUrl(cfg, route), {
+    method: "PUT",
+    headers,
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new ApiError(`PUT ${route}`, res.status, text);
+  }
+  return res.json() as Promise<T>; // pinned first-party contract (see apiGet)
+}
+
 export async function apiDelete<T>(
   cfg: ServerConfig,
   route: string,

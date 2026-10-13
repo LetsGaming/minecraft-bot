@@ -98,6 +98,10 @@ vi.mock("../../src/bot/logWatcher/watchers/schedulers/statusEmbed.js", () => ({
 vi.mock("../../src/bot/logWatcher/watchers/monitors/downtimeMonitor.js", () => ({
   startDowntimeMonitor: vi.fn(),
 }));
+vi.mock("../../src/bot/logWatcher/watchers/monitors/upgradeMonitor.js", () => ({
+  startUpgradeMonitor: vi.fn().mockReturnValue({ unref: vi.fn() }),
+}));
+
 vi.mock("../../src/bot/logWatcher/watchers/schedulers/channelPurge.js", () => ({
   startChannelPurge: vi.fn(),
 }));

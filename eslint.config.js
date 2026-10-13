@@ -148,6 +148,31 @@ export default [
     },
   },
   {
+    // Embeds get their colour from a status role or an embed category, never a
+    // literal, so the dashboard and Discord stay in step and an admin's colour
+    // override reaches every message. The builders that define the values are
+    // exempt.
+    files: ["src/bot/**/*.ts"],
+    ignores: ["src/bot/utils/embeds/embedColors.ts", "src/bot/utils/embeds/embedUtils.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "Property[key.name='color'][value.type='Literal'][value.raw=/^0x/i]",
+          message: "Use a category (createEmbed's `category`) or an EmbedColor role, not a colour literal.",
+        },
+        {
+          selector: "CallExpression[callee.property.name='setColor'] > Literal",
+          message: "Use a category or an EmbedColor role, not a colour literal.",
+        },
+        {
+          selector: "NewExpression[callee.name='EmbedBuilder']",
+          message: "Build embeds with createEmbed so limits, icons and colours are applied.",
+        },
+      ],
+    },
+  },
+  {
     ignores: [
       "**/dist/",
       "node_modules/",

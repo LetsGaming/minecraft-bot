@@ -19,9 +19,22 @@ live in the code linked here, not in this page.
 | A player event | `createPlayerEmbed`: the player's head and name as the author |
 | A confirmation | `createConfirmEmbed` and `createConfirmRow` in [`confirm.ts`](../../../src/bot/utils/embeds/confirm.ts) (below) |
 
-No naked `new EmbedBuilder()` and no colour literals.
+No naked `new EmbedBuilder()` and no colour literals (both are lint errors). Pass `category` to `createEmbed` to say what a message is about (below).
 
-## Colour is status
+## Colour is status, icon and hue are category
+
+Two layers. **Status roles** say how something is doing and drive server-state
+embeds, alerts and the dashboard chips. **Categories** say what a message is
+about and give it a title icon and a default hue of its own, so joins, deaths,
+advancements, rewards and leaderboards no longer all look grey or blue.
+`createEmbed` resolves the colour in this order: explicit `color`, then `state`,
+then `category` (with the admin override from `embedColors`), then Info. The
+category list, icons and defaults live in
+[`embedCategories.ts`](../../../src/schema/embedCategories.ts). Admins recolour
+categories and rarity tiers with `embedColors`; state is never carried by colour
+alone (icon and text stay).
+
+### Status roles
 
 `EmbedColor` in [`embedColors.ts`](../../../src/bot/utils/embeds/embedColors.ts)
 maps every colour to a status role of
@@ -37,16 +50,38 @@ use, so Discord and the dashboard cannot drift apart:
 | `Pending` | pending | Waiting for someone: confirmations, whitelist applications |
 | `Info` | info | Answers and running jobs (the default) |
 
+## Daily rewards
+
+The `/daily` family is the reference for a gamified reply
+([`dailyEmbeds.ts`](../../../src/bot/commands/connection/daily/dailyEmbeds.ts)):
+
+- **Claim** (public): player head and name as author, `reward` icon, the
+  headline reward in bold with its rarity badge, optional lucky-bonus and
+  milestone lines, a streak progress bar toward the next milestone, the next
+  milestone and the next claim time. The bar colour is the rarest tier rolled,
+  or the gold `milestone` colour when a streak bonus fired.
+- **Cooldown** and **queued** replies use the Pending colour. The cooldown shows
+  a time bar and the deadline that keeps the streak alive.
+- **Rarity** comes from `rarityOf` in
+  [`rewards.ts`](../../../src/core/utils/minecraft/rewards.ts): an item's share
+  of the pool weight (legendary up to 2 %, epic 7 %, rare 20 %, uncommon 45 %).
+  A pool with fewer than four distinct weights has no ladder; everything is
+  common. The badge is text, so colour is never the only signal.
+- Widgets (`progressBar`, `milestoneTrack`) live in
+  [`gameDisplay.ts`](../../../src/bot/utils/embeds/gameDisplay.ts).
+
 ## Titles, emoji, fields, footers, timestamps
 
 - **Title** names the object or the action, in sentence case: "Backups of smp",
   "Player banned", "smp is offline". "Command failed" is the fallback for an
   error without its own title, never the plan.
-- **Emoji**: the server state circle (`statusCircle`) is the only emoji a title
-  may carry. Others may appear inside a description.
+- **Emoji**: a title carries one icon: the server state circle (`statusCircle`)
+  on server-state embeds, otherwise the `category` icon. A title that already
+  starts with an emoji gets no second one. Field names may carry a small icon
+  (🔥 Streak). Descriptions may use emoji freely.
 - **Fields**: identity first, then measures, free text last.
-- **Footer**: empty by default. No "Requested by", no page number (the pager
-  shows it). A server id only where several servers share a channel (the event
+- **Footer**: empty by default, or one short tip line (the `/daily` streak
+  window). No "Requested by", no page number (the pager shows it). A server id only where several servers share a channel (the event
   broadcaster adds it when more than one server is configured).
 - **Timestamp**: only on live data (status, uptime, TPS, alerts). Times inside
   text are Discord timestamps (`relativeTimestamp`, `clockTimestamp` in

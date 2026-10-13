@@ -1,6 +1,6 @@
 import { type Client } from "discord.js";
+import { EmbedCategory } from "@mcbot/schema/embedCategories.js";
 import { createPlayerEmbed } from "../../../utils/embeds/embedUtils.js";
-import { EmbedColor } from "../../../utils/embeds/embedColors.js";
 import type { ILogWatcher } from "../../logWatcher.js";
 import { broadcastNotification, PLAYER_NAME } from "../notifyGuilds.js";
 import type { GuildConfigSource } from "../../../utils/guild/guildConfigs.js";
@@ -112,11 +112,11 @@ async function notify(
     logTag: "joinLeave",
     buildEmbed: () =>
       createPlayerEmbed(player, {
-        description: t(isJoin ? "joinLeave.joined" : "joinLeave.left", {
+        description: `${isJoin ? "📥" : "📤"} ${t(isJoin ? "joinLeave.joined" : "joinLeave.left", {
           player,
           server: serverId,
-        }),
-        color: EmbedColor.Neutral,
+        })}`,
+        category: EmbedCategory.Presence,
       }),
   });
 }

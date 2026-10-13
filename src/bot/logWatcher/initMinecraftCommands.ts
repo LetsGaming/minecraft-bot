@@ -43,6 +43,7 @@ import {
   reconcileStatusEmbed,
 } from "./watchers/schedulers/statusEmbed.js";
 import { startDowntimeMonitor } from "./watchers/monitors/downtimeMonitor.js";
+import { startUpgradeMonitor } from "./watchers/monitors/upgradeMonitor.js";
 import { startDailyReminderScheduler } from "./watchers/schedulers/dailyReminderScheduler.js";
 import { startChannelPurge } from "./watchers/schedulers/channelPurge.js";
 import { startHostResourcesMonitor } from "./watchers/monitors/hostResourcesMonitor.js";
@@ -240,6 +241,9 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
   // Pass the provider so reconciled server additions/removals are
   // monitored without restarting the timer.
   startDowntimeMonitor(getAllInstances, client, liveGuildConfigs);
+
+  // Live message for a server upgrade, and quiet downtime alerts while it runs.
+  startUpgradeMonitor(getAllInstances, client, liveGuildConfigs);
 
   // Disk-full early warning for local instances (hostAlerts config).
   startHostResourcesMonitor(getAllInstances, client, liveGuildConfigs);

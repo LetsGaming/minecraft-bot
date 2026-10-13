@@ -20,6 +20,8 @@ You host the bot and/or the Minecraft server.
 | Retiring the standalone server-manager panel | [admin/retiring-server-manager.md](admin/retiring-server-manager.md) |
 | Using the dashboard: pages, links, phones, backups, mods | [admin/dashboard.md](admin/dashboard.md) |
 | Dashboard access: capabilities and grants | [admin/capabilities.md](admin/capabilities.md) |
+| Upgrading a server's Minecraft version (dashboard) | [admin/server-upgrade.md](admin/server-upgrade.md) |
+| Pruning unused chunks (dashboard) | [admin/chunk-pruning.md](admin/chunk-pruning.md) |
 | Mod config editor: formats, depth, limits | [admin/mod-configs.md](admin/mod-configs.md) |
 | Getting in when the dashboard is down | [admin/emergency-access.md](admin/emergency-access.md) |
 | Admin permissions, whitelist, audit trail | [admin/permissions.md](admin/permissions.md) |

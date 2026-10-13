@@ -772,6 +772,14 @@ export interface RawBotConfig {
    * @title Leaderboard post day
    */
   leaderboardPostDay?: string;
+  /**
+   * Side-bar colour overrides for Discord embeds, as #rrggbb. Keys are embed
+   * categories (server, alert, reward, ...) and rarity tiers (rarity.rare, ...).
+   * Unset keys use the built-in defaults.
+   * @title Embed colors
+   * @effect Applied to the next embed the bot sends. No restart needed.
+   */
+  embedColors?: Record<string, string>;
   /** @title Bot presence */
   presence?: PresenceConfig;
   /** @title Death coordinates */
@@ -828,6 +836,7 @@ export interface BotConfig {
    *  reproduce the pre-existing drift-based behaviour exactly. */
   leaderboardPostTime?: string;
   leaderboardPostDay?: string;
+  embedColors?: Record<string, string>;
   presence?: PresenceConfig;
   deathCoords?: DeathCoordsConfig;
   hostAlerts?: HostAlertsConfig;

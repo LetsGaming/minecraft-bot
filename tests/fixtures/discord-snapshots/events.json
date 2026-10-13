@@ -7,12 +7,12 @@
       },
       "embeds": [
         {
-          "color": "#9aa1ac",
+          "color": "#5eead4",
           "author": {
             "name": "Nils_Builds",
             "icon_url": "https://mc-heads.net/avatar/Nils_Builds/64"
           },
-          "description": "Nils_Builds joined smp"
+          "description": "📥 Nils_Builds joined smp"
         }
       ]
     },
@@ -23,12 +23,12 @@
       },
       "embeds": [
         {
-          "color": "#9aa1ac",
+          "color": "#5eead4",
           "author": {
             "name": "Nils_Builds",
             "icon_url": "https://mc-heads.net/avatar/Nils_Builds/64"
           },
-          "description": "Nils_Builds ist smp beigetreten"
+          "description": "📥 Nils_Builds ist smp beigetreten"
         }
       ]
     }
@@ -41,12 +41,12 @@
       },
       "embeds": [
         {
-          "color": "#9aa1ac",
+          "color": "#5eead4",
           "author": {
             "name": "Nils_Builds",
             "icon_url": "https://mc-heads.net/avatar/Nils_Builds/64"
           },
-          "description": "Nils_Builds left smp"
+          "description": "📤 Nils_Builds left smp"
         }
       ]
     },
@@ -57,12 +57,12 @@
       },
       "embeds": [
         {
-          "color": "#9aa1ac",
+          "color": "#5eead4",
           "author": {
             "name": "Nils_Builds",
             "icon_url": "https://mc-heads.net/avatar/Nils_Builds/64"
           },
-          "description": "Nils_Builds hat smp verlassen"
+          "description": "📤 Nils_Builds hat smp verlassen"
         }
       ]
     }
@@ -75,12 +75,12 @@
       },
       "embeds": [
         {
-          "color": "#9aa1ac",
+          "color": "#94a3b8",
           "author": {
             "name": "creeperchen",
             "icon_url": "https://mc-heads.net/avatar/creeperchen/64"
           },
-          "description": "creeperchen was blown up by Creeper"
+          "description": "💀 creeperchen was blown up by Creeper"
         }
       ]
     },
@@ -91,12 +91,12 @@
       },
       "embeds": [
         {
-          "color": "#9aa1ac",
+          "color": "#94a3b8",
           "author": {
             "name": "creeperchen",
             "icon_url": "https://mc-heads.net/avatar/creeperchen/64"
           },
-          "description": "creeperchen was blown up by Creeper"
+          "description": "💀 creeperchen was blown up by Creeper"
         }
       ]
     }
@@ -109,12 +109,12 @@
       },
       "embeds": [
         {
-          "color": "#9aa1ac",
+          "color": "#fbbf24",
           "author": {
             "name": "ikarus_77",
             "icon_url": "https://mc-heads.net/avatar/ikarus_77/64"
           },
-          "description": "ikarus_77 made the advancement **Diamonds!**"
+          "description": "🏅 ikarus_77 made the advancement **Diamonds!**"
         }
       ]
     },
@@ -125,12 +125,12 @@
       },
       "embeds": [
         {
-          "color": "#9aa1ac",
+          "color": "#fbbf24",
           "author": {
             "name": "ikarus_77",
             "icon_url": "https://mc-heads.net/avatar/ikarus_77/64"
           },
-          "description": "ikarus_77 hat den Fortschritt **Diamonds!** erreicht"
+          "description": "🏅 ikarus_77 hat den Fortschritt **Diamonds!** erreicht"
         }
       ]
     }
@@ -143,12 +143,12 @@
       },
       "embeds": [
         {
-          "color": "#4ade80",
+          "color": "#ffd700",
           "author": {
             "name": "Marlene_B",
             "icon_url": "https://mc-heads.net/avatar/Marlene_B/64"
           },
-          "description": "Marlene_B completed the challenge **How Did We Get Here?**"
+          "description": "🎉 Marlene_B completed the challenge **How Did We Get Here?**"
         }
       ]
     },
@@ -159,12 +159,12 @@
       },
       "embeds": [
         {
-          "color": "#4ade80",
+          "color": "#ffd700",
           "author": {
             "name": "Marlene_B",
             "icon_url": "https://mc-heads.net/avatar/Marlene_B/64"
           },
-          "description": "Marlene_B hat die Herausforderung **How Did We Get Here?** abgeschlossen"
+          "description": "🎉 Marlene_B hat die Herausforderung **How Did We Get Here?** abgeschlossen"
         }
       ]
     },
@@ -175,8 +175,8 @@
       },
       "embeds": [
         {
-          "color": "#4ade80",
-          "title": "Challenge won!",
+          "color": "#ffd700",
+          "title": "🎉 Challenge won!",
           "description": "**Marlene_B** was first to earn **How Did We Get Here?**!\n🎁 Reward: a diamond block"
         }
       ]
@@ -188,8 +188,8 @@
       },
       "embeds": [
         {
-          "color": "#4ade80",
-          "title": "Challenge gewonnen!",
+          "color": "#ffd700",
+          "title": "🎉 Challenge gewonnen!",
           "description": "**Marlene_B** hat **How Did We Get Here?** als Erstes geschafft!\n🎁 Belohnung: a diamond block"
         }
       ]

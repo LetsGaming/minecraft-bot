@@ -108,9 +108,12 @@ import StatusView from "./views/StatusView.vue";
 import ConsoleView from "./views/ConsoleView.vue";
 import BackupsView from "./views/BackupsView.vue";
 import ModConfigView from "./views/ModConfigView.vue";
+import UpgradeView from "./views/UpgradeView.vue";
+import PruneView from "./views/PruneView.vue";
 import ModsView from "./views/ModsView.vue";
 import GuildsView from "./views/GuildsView.vue";
 import CommandsView from "./views/CommandsView.vue";
+import AppearanceView from "./views/AppearanceView.vue";
 import ConfigView from "./views/ConfigView.vue";
 import AuditView from "./views/AuditView.vue";
 import AnalyticsView from "./views/AnalyticsView.vue";
@@ -137,9 +140,12 @@ const VIEWS: Record<NavId, ViewEntry> = {
   servers: { component: markRaw(StatusView), props: ["activeServer"], keepMounted: true },
   backups: { component: markRaw(BackupsView), props: ["serverIds", "activeServer"] },
   mods: { component: markRaw(ModsView), props: ["activeServer"] },
+  upgrade: { component: markRaw(UpgradeView), props: ["activeServer"] },
+  prune: { component: markRaw(PruneView), props: ["activeServer"] },
   modconfig: { component: markRaw(ModConfigView), props: ["serverIds", "activeServer"] },
   config: { component: markRaw(ConfigView) },
   commands: { component: markRaw(CommandsView) },
+  appearance: { component: markRaw(AppearanceView) },
   guilds: { component: markRaw(GuildsView), props: ["sysadmin"] },
 };
 

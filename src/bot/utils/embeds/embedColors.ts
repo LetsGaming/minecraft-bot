@@ -1,4 +1,10 @@
 import { StatusRole, statusEmbedColor } from "@mcbot/schema/status.js";
+import {
+  defaultEmbedColor,
+  parseHexColor,
+  type EmbedColorKey,
+} from "@mcbot/schema/embedCategories.js";
+import { loadConfig } from "@mcbot/core/config.js";
 
 /**
  * Embed side-bar colours. Every semantic value is a status role from
@@ -21,3 +27,18 @@ export const EmbedColor = {
   /** Neutral answers and running jobs. */
   Info: statusEmbedColor(StatusRole.Info),
 } as const;
+
+/**
+ * Side-bar colour of a category or rarity tier: the admin's `embedColors`
+ * override when valid, else the built-in default. Read at send time, so a
+ * saved override shows up on the next embed without a restart.
+ */
+export function embedColorFor(key: EmbedColorKey): number {
+  try {
+    const override = parseHexColor(loadConfig().embedColors?.[key]);
+    if (override !== undefined) return override;
+  } catch {
+    // No loadable config (early boot, tests): defaults still work.
+  }
+  return defaultEmbedColor(key);
+}

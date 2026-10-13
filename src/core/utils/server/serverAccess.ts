@@ -41,6 +41,23 @@ export {
 } from "./access/mods.js";
 export { supportsModCompat, startModCompat, getModCompat } from "./access/modCompat.js";
 export {
+  supportsUpgrade,
+  supportsLifecycleEvents,
+  startUpgrade,
+  getUpgrade,
+  getCurrentUpgrade,
+  readLifecycleEvents,
+} from "./access/upgrade.js";
+export {
+  supportsPrune,
+  startPruneScan,
+  getPruneScan,
+  getPruneSettings,
+  setPruneSettings,
+  getPruneMap,
+  startPrune,
+} from "./access/prune.js";
+export {
   readBackups,
   indexBackupFiles,
   openBackupDownload,

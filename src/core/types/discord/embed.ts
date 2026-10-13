@@ -1,6 +1,7 @@
 // ── Embed utility types ───────────────────────────────────────────────────────
 
 import type { ServerState } from "@mcbot/schema/serverState.js";
+import type { EmbedCategory } from "@mcbot/schema/embedCategories.js";
 
 export interface EmbedOptions {
   title?: string;
@@ -13,6 +14,8 @@ export interface EmbedOptions {
   author?: { name: string; iconURL?: string };
   /** Server state: prefixes the title with its circle and sets the colour. */
   state?: ServerState;
+  /** What the message is about: puts its icon in front of the title and picks the colour (unless `color` or `state` is set). */
+  category?: EmbedCategory;
 }
 
 export interface EmbedWithThumbnailOptions extends EmbedOptions {

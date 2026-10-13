@@ -57,6 +57,28 @@ function getState(serverId: string): DowntimeState {
 }
 
 /**
+ * Keeps alerts quiet for a server while a long planned operation runs (a
+ * version upgrade), extending the window on every call without resetting what
+ * the monitor already counted. Unlike suppressAlerts it never lowers an
+ * existing window and does not log each time, since it is called every poll.
+ */
+export function holdAlerts(serverId: string, graceMs: number): void {
+  const state = getState(serverId);
+  const until = Date.now() + graceMs;
+  if (until <= state.suppressUntil) return;
+  if (state.suppressUntil <= Date.now()) {
+    // First hold of this operation: forget any half-counted outage.
+    state.consecutiveFailures = 0;
+    state.alerted = false;
+    state.downSince = undefined;
+    state.consecutiveUnreachable = 0;
+    state.wrapperAlerted = false;
+    state.crashLoopAlerted = false;
+  }
+  state.suppressUntil = until;
+}
+
+/**
  * Call this when an admin intentionally stops or restarts a server.
  * Suppresses downtime alerts for a grace period so the stop isn't flagged.
  */

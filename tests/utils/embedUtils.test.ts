@@ -149,8 +149,8 @@ describe("addFieldsBulk", () => {
 // ── createErrorEmbed ─────────────────────────────────────────────────────────
 
 describe("createErrorEmbed", () => {
-  it("falls back to a generic title without an emoji", () => {
-    expect(createErrorEmbed("broken").toJSON().title).toBe("Command failed");
+  it("falls back to a generic title with the error icon", () => {
+    expect(createErrorEmbed("broken").toJSON().title).toBe("⛔ Command failed");
   });
 
   it("renders problem then recovery and uses the given title", () => {
@@ -159,7 +159,7 @@ describe("createErrorEmbed", () => {
       problem: "smp did not answer.",
       recovery: "Try again in a minute.",
     }).toJSON();
-    expect(json.title).toBe("Could not reach smp");
+    expect(json.title).toBe("⛔ Could not reach smp");
     expect(json.description).toBe("smp did not answer.\nTry again in a minute.");
   });
 
@@ -399,5 +399,27 @@ describe("EmbedColor palette", () => {
     expect(EmbedColor.Neutral).toBe(STATUS_TABLE.unknown.embedColour);
     expect(EmbedColor.Pending).toBe(STATUS_TABLE.pending.embedColour);
     expect(EmbedColor.Info).toBe(STATUS_TABLE.info.embedColour);
+  });
+});
+
+describe("createEmbed category", () => {
+  it("prefixes the category icon and uses its default colour", () => {
+    const json = createEmbed({ title: "Moved", category: "presence" }).toJSON();
+    expect(json.title).toBe("👋 Moved");
+    expect(json.color).toBe(0x5eead4);
+  });
+
+  it("does not stack an icon on a title that already starts with an emoji", () => {
+    const json = createEmbed({ title: "🏆 Board", category: "leaderboard" }).toJSON();
+    expect(json.title).toBe("🏆 Board");
+  });
+
+  it("lets an explicit colour or a server state win over the category", () => {
+    expect(createEmbed({ title: "x", category: "reward", color: 0x123456 }).toJSON().color).toBe(0x123456);
+    expect(createEmbed({ title: "x", category: "reward", state: "online" as never }).toJSON().title).toContain("🟢");
+  });
+
+  it("leaves a title-less embed without an icon", () => {
+    expect(createEmbed({ description: "d", category: "death" }).toJSON().title).toBeUndefined();
   });
 });

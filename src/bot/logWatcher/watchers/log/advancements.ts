@@ -1,6 +1,6 @@
 import { type Client } from "discord.js";
+import { EmbedCategory, CATEGORY_STYLE } from "@mcbot/schema/embedCategories.js";
 import { createPlayerEmbed, createEmbed } from "../../../utils/embeds/embedUtils.js";
-import { EmbedColor } from "../../../utils/embeds/embedColors.js";
 import type { ILogWatcher } from "../../logWatcher.js";
 import { broadcastNotification, PLAYER_NAME } from "../notifyGuilds.js";
 import type { GuildConfigSource } from "../../../utils/guild/guildConfigs.js";
@@ -87,7 +87,7 @@ async function handleChallenge(
             player,
             advancement: active.advancement,
           }) + (reward ? `\n${t("challenge.rewardLine", { reward })}` : ""),
-        color: EmbedColor.Success,
+        category: EmbedCategory.Milestone,
         ...(withServerFooter ? { footer: { text: server.id } } : {}),
       }),
   });
@@ -139,11 +139,11 @@ export function registerAdvancementWatcher(
       logTag: "advancements",
       buildEmbed: (withServerFooter) =>
         createPlayerEmbed(player, {
-          description: t(isChallenge ? "advancement.challengeLine" : "advancement.madeLine", {
-            player,
-            advancement,
-          }),
-          color: isChallenge ? EmbedColor.Success : EmbedColor.Neutral,
+          description: `${CATEGORY_STYLE[isChallenge ? EmbedCategory.Milestone : EmbedCategory.Advancement].icon} ${t(
+            isChallenge ? "advancement.challengeLine" : "advancement.madeLine",
+            { player, advancement },
+          )}`,
+          category: isChallenge ? EmbedCategory.Milestone : EmbedCategory.Advancement,
           ...(withServerFooter ? { footer: { text: serverId } } : {}),
         }),
     });

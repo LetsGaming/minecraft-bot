@@ -43,6 +43,7 @@ const SAMPLES: Record<string, unknown> = {
   leaderboardInterval: "daily",
   leaderboardPostTime: "08:30",
   leaderboardPostDay: "monday",
+  embedColors: { reward: "#ff00aa" },
   presence: { enabled: true },
   deathCoords: { enabled: true },
   hostAlerts: { enabled: true },

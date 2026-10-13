@@ -21,8 +21,11 @@ export type NavId =
   | "backups"
   | "mods"
   | "modconfig"
+  | "upgrade"
+  | "prune"
   | "config"
   | "commands"
+  | "appearance"
   | "guilds";
 
 export type NavGate = GrantableCapability | "sysadmin" | "guild";
@@ -63,6 +66,8 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { id: "servers", labelKey: "nav.servers", icon: "pi pi-server", gate: "server:read", serverScoped: false, path: "/servers" },
       { id: "backups", labelKey: "nav.backups", icon: "pi pi-database", gate: "server:read", serverScoped: true, path: "/backups/:server?" },
       { id: "mods", labelKey: "nav.mods", icon: "pi pi-download", gate: "mods:read", serverScoped: true, path: "/mods/:server?" },
+      { id: "upgrade", labelKey: "nav.upgrade", icon: "pi pi-arrow-circle-up", gate: "server:update", serverScoped: true, path: "/upgrade/:server?" },
+      { id: "prune", labelKey: "nav.prune", icon: "pi pi-eraser", gate: "server:update", serverScoped: true, path: "/prune/:server?" },
       { id: "modconfig", labelKey: "nav.modconfig", icon: "pi pi-sliders-h", gate: "config:read", serverScoped: true, path: "/modconfig/:server?/:fileId?" },
     ],
   },
@@ -72,6 +77,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     items: [
       { id: "config", labelKey: "nav.config", icon: "pi pi-cog", gate: "sysadmin", serverScoped: false, path: "/config/:mode(raw)?" },
       { id: "commands", labelKey: "nav.commands", icon: "pi pi-bolt", gate: "sysadmin", serverScoped: false, path: "/commands" },
+      { id: "appearance", labelKey: "nav.appearance", icon: "pi pi-palette", gate: "sysadmin", serverScoped: false, path: "/appearance" },
       { id: "guilds", labelKey: "nav.guilds", icon: "pi pi-discord", gate: "guild", serverScoped: false, path: "/guilds/:guildId?" },
     ],
   },

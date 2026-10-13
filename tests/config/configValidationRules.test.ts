@@ -153,3 +153,25 @@ describe("structural errors stop the semantic pass", () => {
     expect(result.warnings.join(" ")).not.toContain("ghost");
   });
 });
+
+describe("embedColors", () => {
+  it("accepts strict hex values for known keys", () => {
+    const r = validateCandidateConfig({
+      ...base,
+      embedColors: { reward: "#ff00aa", "rarity.epic": "#A855F7" },
+    });
+    expect(r.valid).toBe(true);
+    expect(r.warnings.join("\n")).not.toContain("embedColors");
+  });
+
+  it("rejects values that are not #rrggbb", () => {
+    expect(errorsOf({ embedColors: { reward: "pink" } })).toContain("embedColors.reward");
+    expect(errorsOf({ embedColors: { death: "#abc" } })).toContain("embedColors.death");
+  });
+
+  it("warns about unknown keys instead of failing", () => {
+    const r = validateCandidateConfig({ ...base, embedColors: { nonsense: "#ffffff" } });
+    expect(r.valid).toBe(true);
+    expect(r.warnings.join("\n")).toContain("embedColors.nonsense");
+  });
+});
