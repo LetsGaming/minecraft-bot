@@ -24,6 +24,14 @@ Region, entities and poi data are removed together, so no entity or point of int
 is left behind. The setup suite's [chunk-pruning.md](https://github.com/LetsGaming/minecraft-server-setup/blob/main/docs/chunk-pruning.md)
 has the details of the engine.
 
+## Terrain view
+
+Switch the map to **Terrain** and zoom in (about 2.5 pixels per chunk or closer): each region is drawn from
+above, one pixel per block, with the class colours laid over it. It is a picture to orient by, not a
+renderer: no biome colours, water darker the deeper it is, and a hint of relief. A region is drawn on the host
+the first time it is looked at and kept (up to 500 MB) until the region changes, so the first look at a
+large area is slower than the next. Chunks from before 1.18 and chunks that cannot be read stay plain.
+
 ## Chunks that look built
 
 Time in use is not proof that nobody built somewhere: a quick build, or work done with an editor,
@@ -49,8 +57,9 @@ newer carry the data it reads.
    or one with different numbers, takes seconds (a 1 million chunk world: about 28 s the
    first time on a 4 core host, instead of 4.5 minutes).
 3. **Look around.** The map fills the page: scroll to zoom, drag to move (the Move tool, or
-   hold Space), pinch on a touch screen, or use the arrow keys, plus and minus, and 0 to fit
-   the whole world. Hovering a chunk says what it is and how long players were near it.
+   hold Space), pinch on a touch screen, or use the keyboard: focus the map, then the arrow keys
+   move a cursor from chunk to chunk (Shift jumps eight), Space chooses or unchooses that chunk, Enter inspects
+   it, PageUp and PageDown scroll, plus and minus zoom, and 0 fits the whole world. Hovering a chunk says what it is and how long players were near it.
 4. **Adjust.** Change the numbers or draw protected zones (the Protect tool), then scan
    again. A summary made with other settings is marked out of date and cannot be applied.
    **Save as default** keeps the settings for this server.

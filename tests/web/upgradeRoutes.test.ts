@@ -250,10 +250,12 @@ describe("polling", () => {
     expect((await app.inject(get(READER, `/${JOB}`))).statusCode).toBe(404);
   });
 
-  it("404s current when nothing has run, and rejects a malformed id or cursor", async () => {
+  it("answers current with no job when nothing has run, and rejects a malformed id or cursor", async () => {
     getCurrentUpgradeMock.mockResolvedValue(null);
     const app = buildServer();
-    expect((await app.inject(get(READER, "/current"))).statusCode).toBe(404);
+    const none = await app.inject(get(READER, "/current"));
+    expect(none.statusCode).toBe(200);
+    expect(none.json()).toEqual({ job: null });
     expect((await app.inject(get(READER, "/not-a-job"))).statusCode).toBe(400);
     expect((await app.inject(get(READER, `/${JOB}?since=x`))).statusCode).toBe(400);
   });
