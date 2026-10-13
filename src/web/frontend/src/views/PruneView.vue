@@ -59,15 +59,24 @@
         <fieldset v-if="prune.dimensions.value.length > 1" class="pv-dims">
           <legend>{{ t("prune.dimensions.heading") }}</legend>
           <p class="pv-note">{{ t("prune.dimensions.help") }}</p>
-          <label v-for="d in prune.dimensions.value" :key="d.id" class="pv-dim-option">
-            <input
-              type="checkbox"
-              :checked="prune.selectedDimensions.value.includes(d.id)"
-              :disabled="prune.scanning.value || (prune.selectedDimensions.value.length === 1 && prune.selectedDimensions.value.includes(d.id))"
-              @change="prune.setDimension(d.id, ($event.target as HTMLInputElement).checked)"
-            />
-            {{ t("prune.dimensions.option", { id: d.id, regions: d.regions.toLocaleString() }) }}
-          </label>
+          <SelectButton
+            :model-value="prune.selectedDimensions.value"
+            :options="scanDimensionOptions"
+            option-label="label"
+            option-value="value"
+            multiple
+            :allow-empty="false"
+            :disabled="prune.scanning.value"
+            :aria-label="t('prune.dimensions.heading')"
+            @update:model-value="prune.setDimensions"
+          >
+            <template #option="{ option }">
+              <span class="pv-dim-label">
+                <i :class="prune.selectedDimensions.value.includes(option.value) ? 'pi pi-check' : 'pi pi-minus'" aria-hidden="true" />
+                {{ option.label }}
+              </span>
+            </template>
+          </SelectButton>
         </fieldset>
 
         <h3>{{ t("prune.zones.heading") }}</h3>
@@ -594,6 +603,10 @@ const breakdown = computed(() => {
   return { auto: total - soft - hard, soft, hard, blocked };
 });
 
+const scanDimensionOptions = computed(() =>
+  prune.dimensions.value.map((d) => ({ label: t("prune.dimensions.option", { id: d.id, regions: d.regions.toLocaleString() }), value: d.id })),
+);
+
 const dimensionOptions = computed(() =>
   (prune.summary.value?.dimensions ?? []).map((d, i) => ({ label: d.id, value: i })),
 );
@@ -761,11 +774,13 @@ onBeforeUnmount(() => {
   font-weight: 600;
   padding: 0;
 }
-.pv-dim-option {
-  display: flex;
+.pv-dim-label {
+  display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  min-height: 2.75rem;
+}
+.pv-dim-label .pi {
+  font-size: 0.75rem;
 }
 .pv-progress {
   display: grid;

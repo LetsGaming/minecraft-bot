@@ -384,3 +384,25 @@ describe("inspecting a chunk", () => {
     expect(prune.inspected.value).toBeNull();
   });
 });
+
+describe("choosing dimensions together", () => {
+  const DIMS = { dimensions: [{ id: "overworld", regions: 900 }, { id: "the_nether", regions: 40 }, { id: "the_end", regions: 5 }] };
+
+  it("takes a whole choice at once, keeps the world's order, and stores all of them as null", async () => {
+    const { prune } = setup({ dimensions: vi.fn(async () => DIMS) });
+    await prune.loadDimensions();
+    prune.setDimensions(["the_end", "overworld"]);
+    expect(prune.params.value.dimensions).toEqual(["overworld", "the_end"]);
+    prune.setDimensions(["the_nether", "the_end", "overworld"]);
+    expect(prune.params.value.dimensions).toBeNull();
+  });
+
+  it("ignores an empty choice and unknown names", async () => {
+    const { prune } = setup({ dimensions: vi.fn(async () => DIMS) });
+    await prune.loadDimensions();
+    prune.setDimensions(["the_nether"]);
+    prune.setDimensions([]);
+    prune.setDimensions(["nowhere"]);
+    expect(prune.params.value.dimensions).toEqual(["the_nether"]);
+  });
+});
