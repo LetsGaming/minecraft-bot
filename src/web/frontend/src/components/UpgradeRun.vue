@@ -14,7 +14,7 @@
       :aria-valuenow="upgrade.stepsDone.value"
       :aria-label="t('upgrade.progressLabel')"
     >
-      <span class="ur-bar-fill" :style="{ width: `${(upgrade.stepsDone.value / steps) * 100}%` }" />
+      <span class="ur-bar-fill" :style="{ transform: `scaleX(${upgrade.stepsDone.value / steps})` }" />
     </div>
 
     <ol class="ur-phases">
@@ -159,8 +159,10 @@ const resultLines = computed<string[]>(() => {
 .ur-bar-fill {
   display: block;
   height: 100%;
+  width: 100%;
   background: var(--st-info, currentColor);
-  transition: width 0.4s ease;
+  transform-origin: left;
+  transition: transform 0.4s ease;
 }
 .ur-phases {
   list-style: none;
