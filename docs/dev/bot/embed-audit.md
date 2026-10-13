@@ -26,7 +26,11 @@ Server status and alert embeds (`statusEmbed`, `downtimeMonitor`,
 embeds, whitelist decisions, polls, notes, challenge admin views and generic
 info answers. They carry state or are plain answers, so they keep `EmbedColor`.
 
+## Enforced
+
+`npm run lint` rejects a numeric colour literal in `color:` or `setColor(...)`, and a
+`new EmbedBuilder()`, anywhere under `src/bot` except the two embed builders.
+
 ## Not done yet
 
-- A lint rule against colour literals and direct `EmbedColor` use.
 - Item icon thumbnails for rewards.

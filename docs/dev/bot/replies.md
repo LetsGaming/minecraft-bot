@@ -19,7 +19,7 @@ live in the code linked here, not in this page.
 | A player event | `createPlayerEmbed`: the player's head and name as the author |
 | A confirmation | `createConfirmEmbed` and `createConfirmRow` in [`confirm.ts`](../../../src/bot/utils/embeds/confirm.ts) (below) |
 
-No naked `new EmbedBuilder()` and no colour literals. Pass `category` to `createEmbed` to say what a message is about (below).
+No naked `new EmbedBuilder()` and no colour literals (both are lint errors). Pass `category` to `createEmbed` to say what a message is about (below).
 
 ## Colour is status, icon and hue are category
 
