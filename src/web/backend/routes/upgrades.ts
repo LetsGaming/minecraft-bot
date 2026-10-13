@@ -119,6 +119,9 @@ export function registerUpgradeRoutes(app: FastifyInstance): void {
             `The server is busy (${busyKind(err.message)}). Try again when it has finished.`,
           );
         }
+        if (err instanceof ApiError && err.status === 404 && req.body.prunePlan) {
+          throw new HttpError(409, "The stored prune plan is gone. Scan again, then start the upgrade.");
+        }
         log.error(
           "web",
           `Upgrade start failed ${logFields({ server: req.params.id, mcVersion: req.body.mcVersion, detail: errMsg(err) })}`,
