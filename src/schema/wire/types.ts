@@ -520,6 +520,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/instances/{id}/operations/prune": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete the chunks a scan found
+         * @description Runs in the background: players are warned, the server is stopped and backed up, the plan is applied (a fresh scan must still agree with at least 90 % of it), and the server is started. If the prune fails or the server does not come up, this job's own backup is restored. Poll it with `GET /operations/upgrade/:jobId`. Refused with 423 while anything else holds the instance.
+         */
+        post: operations["postInstancesByIdOperationsPrune"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/instances/{id}/operations/upgrade": {
         parameters: {
             query?: never;
@@ -573,6 +593,90 @@ export interface paths {
          */
         get: operations["getInstancesByIdOperationsUpgradeCurrent"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/instances/{id}/prune/plans/{planId}/map/{index}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The map of one dimension of a scan
+         * @description Per region, base64 bytes per chunk: its class (0 empty, 1 would be deleted, 2 busy, 3 protected, 4 buffer, 5 unreadable) and a heat level of its inhabited time. `index` is the dimension's position in the summary.
+         */
+        get: operations["getInstancesByIdPrunePlansByPlanIdMapByIndex"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/instances/{id}/prune/scans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Scan for unused chunks
+         * @description Reads every region file and stores a plan; changes nothing and is safe on a running server (the answer is approximate while chunks are being written). Without a body the saved settings are used. One scan runs at a time.
+         */
+        post: operations["postInstancesByIdPruneScans"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/instances/{id}/prune/scans/{jobId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Progress and result of a prune scan
+         * @description The summary appears once `state` is `done`. The last few scans are kept.
+         */
+        get: operations["getInstancesByIdPruneScansByJobId"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/instances/{id}/prune/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The saved chunk prune parameters
+         * @description What a scan uses when none are given. Defaults until saved.
+         */
+        get: operations["getInstancesByIdPruneSettings"];
+        /**
+         * Save the chunk prune parameters
+         * @description Values are clamped to their limits by the setup suite; the reply is what was stored.
+         */
+        put: operations["putInstancesByIdPruneSettings"];
         post?: never;
         delete?: never;
         options?: never;
@@ -802,6 +906,8 @@ export interface components {
         Capabilities: {
             backups: boolean;
             modManifest: boolean;
+            /** @description world/prune-chunks.js exists, so chunks can be pruned. */
+            prune: boolean;
             restore: boolean;
             scripts: {
                 backup: boolean;
@@ -1145,6 +1251,90 @@ export interface components {
             pid: number;
             rssBytes: number;
         };
+        PruneDimensionSummary: {
+            active: number;
+            buffer: number;
+            bytes: number;
+            chunks: number;
+            delete: number;
+            id: string;
+            protected: number;
+            regions: number;
+            regionsEmptied: number;
+            unreadable: number;
+        };
+        /** @description One dimension of a plan, for drawing the map. */
+        PruneMap: {
+            dimension: string;
+            /** @description Per region (r.X.Z): base64 cell classes and heat levels, 1024 bytes each. */
+            regions: {
+                [key: string]: unknown;
+            };
+        };
+        PruneParams: {
+            /** @description Candidates this close to anything that stays are kept. */
+            bufferChunks: number;
+            /** @description Dimension ids to scan; null means every one found. */
+            dimensions: string[] | null;
+            /** @description Chunks around each player's last position that are never pruned. */
+            playerRadiusChunks: number;
+            /** @description Chunks around the world spawn that are never pruned. */
+            spawnRadiusChunks: number;
+            /** @description Chunks inhabited for less than this many minutes are candidates. */
+            thresholdMinutes: number;
+            /** @description Protected rectangles, in chunk coordinates, inclusive. */
+            zones: components["schemas"]["PruneZone"][];
+        };
+        PruneParamsRequest: {
+            bufferChunks?: number;
+            dimensions?: string[] | null;
+            playerRadiusChunks?: number;
+            spawnRadiusChunks?: number;
+            thresholdMinutes?: number;
+            zones?: components["schemas"]["PruneZone"][];
+        };
+        PruneRequest: {
+            /** @description Warning before the stop; default 30, at most 600. */
+            countdownSeconds?: number;
+            /** @description A plan id from a finished scan. */
+            planId: string;
+        };
+        PruneScanJob: {
+            /** @description A fixed reason code when the scan failed. */
+            error?: string;
+            jobId: string;
+            result?: components["schemas"]["PruneSummary"];
+            /** @enum {string} */
+            state: "running" | "done" | "failed";
+        };
+        PruneScanStarted: {
+            /** @description The scan to poll. */
+            jobId: string;
+        };
+        PruneSummary: {
+            createdAt: string;
+            dimensions: components["schemas"]["PruneDimensionSummary"][];
+            /** @description The plan id; pass it to the prune to apply exactly this preview. */
+            id: string;
+            ok: boolean;
+            params: components["schemas"]["PruneParams"];
+            totals: {
+                bytes: number;
+                chunks: number;
+                delete: number;
+                regions: number;
+                regionsEmptied: number;
+            };
+            warnings: string[];
+        };
+        PruneZone: {
+            dimension: string;
+            name: string;
+            x1: number;
+            x2: number;
+            z1: number;
+            z2: number;
+        };
         RestoreRefused: {
             error: string;
             /** @enum {string} */
@@ -1189,6 +1379,8 @@ export interface components {
             /** @description Progress lines after `since`. */
             events: components["schemas"]["UpgradeEvent"][];
             jobId: string;
+            /** @enum {string} */
+            kind?: "upgrade" | "prune";
             mcVersion: string;
             /** @description Pass as `since` to get only newer events. */
             next: number;
@@ -1203,6 +1395,8 @@ export interface components {
             expectUnavailable?: string[];
             /** @description The Minecraft version to move to. */
             mcVersion: string;
+            /** @description A stored prune plan id to apply after the install, before the first start. */
+            prunePlan?: string;
         };
         UpgradeResult: {
             /** @description Name of the backup this job took. */
@@ -1212,12 +1406,16 @@ export interface components {
              * @enum {string}
              */
             branch?: "clean" | "mods_disabled";
+            /** @description Disk space the prune returned. */
+            bytesFreed?: number;
             /** @description Mods moved to mods/disabled/ to get the server up. */
             disabled?: string[];
             /** @description Mods running on a build made for an older version. */
             keptOnOldBuild?: string[];
             ok: boolean;
             previousVersionRunning?: boolean;
+            /** @description Chunks the job deleted. */
+            prunedChunks?: number;
             /** @description Why it failed: apply_failed, prune_failed, crash_loop, timeout, backup_failed, ... */
             reason?: string;
             rolledBack?: boolean;
@@ -3310,6 +3508,96 @@ export interface operations {
             };
         };
     };
+    postInstancesByIdOperationsPrune: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Instance id from `GET /instances`. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PruneRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpgradeStarted"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Locked: another operation holds the instance */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationBusy"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Status 501 */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     postInstancesByIdOperationsUpgrade: {
         parameters: {
             query?: never;
@@ -3517,6 +3805,369 @@ export interface operations {
             };
             /** @description Rate limited */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getInstancesByIdPrunePlansByPlanIdMapByIndex: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Instance id from `GET /instances`. */
+                id: string;
+                /** @description Dimension index. */
+                index: string;
+                /** @description Plan id from the scan summary. */
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PruneMap"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postInstancesByIdPruneScans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Instance id from `GET /instances`. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PruneParamsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PruneScanStarted"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Status 501 */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getInstancesByIdPruneScansByJobId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Instance id from `GET /instances`. */
+                id: string;
+                /** @description Job id from the start request. */
+                jobId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PruneScanJob"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getInstancesByIdPruneSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Instance id from `GET /instances`. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PruneParams"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Status 501 */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    putInstancesByIdPruneSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Instance id from `GET /instances`. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PruneParamsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PruneParams"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Status 501 */
+            501: {
                 headers: {
                     [name: string]: unknown;
                 };

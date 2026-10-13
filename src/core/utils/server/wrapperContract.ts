@@ -138,6 +138,11 @@ export const EXPECTED_WRAPPER_FEATURES: Record<string, ExpectedFeature> = {
       "that stop, backup, restore and mod writes never overlap: on an older " +
       "wrapper they can race each other",
   },
+  "chunk-prune": {
+    version: 1,
+    degrades:
+      "pruning unused chunks from the dashboard, alone or as a step of an upgrade",
+  },
   "lifecycle-events": {
     version: 1,
     degrades:

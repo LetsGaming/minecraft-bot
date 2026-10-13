@@ -753,4 +753,10 @@ export const de: Record<string, string> = {
   "upgrade.reason.start_failed": "der Server konnte nicht gestartet werden",
   "upgrade.reason.rollback_failed": "die Wiederherstellung ist fehlgeschlagen",
   "upgrade.reason.other": "ein Fehler",
+  "upgrade.pruned": "{chunks} ungenutzte Chunks gelöscht, {size} frei.",
+  "prune.title": "Ungenutzte Chunks auf {server} werden bereinigt",
+  "prune.titleDone": "Ungenutzte Chunks auf {server} bereinigt",
+  "prune.titleRolledBack": "Die Chunk-Bereinigung auf {server} ist fehlgeschlagen und wurde zurückgesetzt",
+  "prune.titleFailed": "Die Chunk-Bereinigung auf {server} wurde nicht abgeschlossen",
+  "upgrade.reason.prune_stale": "die Welt hat sich seit dem Scan geändert, der Plan galt nicht mehr",
 };

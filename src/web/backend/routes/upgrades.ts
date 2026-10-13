@@ -101,7 +101,7 @@ export function registerUpgradeRoutes(app: FastifyInstance): void {
         server: req.params.id,
         by: session.tag,
         byId: session.uid,
-        detail: req.body.mcVersion,
+        detail: req.body.prunePlan ? `${req.body.mcVersion} + prune ${req.body.prunePlan}` : req.body.mcVersion,
       });
       try {
         return await startUpgrade(server.config, {
@@ -110,6 +110,7 @@ export function registerUpgradeRoutes(app: FastifyInstance): void {
           ...(req.body.countdownSeconds !== undefined
             ? { countdownSeconds: req.body.countdownSeconds }
             : {}),
+          ...(req.body.prunePlan ? { prunePlan: req.body.prunePlan } : {}),
         });
       } catch (err) {
         if (err instanceof ApiError && err.status === 423) {

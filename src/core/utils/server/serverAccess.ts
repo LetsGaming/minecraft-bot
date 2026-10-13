@@ -49,6 +49,15 @@ export {
   readLifecycleEvents,
 } from "./access/upgrade.js";
 export {
+  supportsPrune,
+  startPruneScan,
+  getPruneScan,
+  getPruneSettings,
+  setPruneSettings,
+  getPruneMap,
+  startPrune,
+} from "./access/prune.js";
+export {
   readBackups,
   indexBackupFiles,
   openBackupDownload,

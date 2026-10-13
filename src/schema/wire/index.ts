@@ -47,6 +47,15 @@ export type UpgradeEvent = Wire["UpgradeJob"]["events"][number];
 export type UpgradeResult = NonNullable<Wire["UpgradeJob"]["result"]>;
 export type LifecycleEventsBody = Wire["LifecycleEvents"];
 
+export type PruneParams = Wire["PruneParams"];
+export type PruneParamsRequest = Wire["PruneParamsRequest"];
+export type PruneZone = Wire["PruneZone"];
+export type PruneSummary = Wire["PruneSummary"];
+export type PruneDimensionSummary = Wire["PruneDimensionSummary"];
+export type PruneScanJob = Wire["PruneScanJob"];
+export type PruneScanStarted = Wire["PruneScanStarted"];
+export type PruneMap = Wire["PruneMap"];
+
 /** A 404 answers `{ ok: false }` alone; the rest is the wrapper's body. */
 export type BackupDeleteResult = Pick<Wire["BackupFileDeleted"], "ok"> &
   Partial<Wire["BackupFileDeleted"]>;

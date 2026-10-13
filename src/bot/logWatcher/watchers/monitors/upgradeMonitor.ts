@@ -23,6 +23,7 @@ import { guildsWith, type GuildConfigSource } from "../../../utils/guild/guildCo
 import { createEmbed } from "../../../utils/embeds/embedUtils.js";
 import { EmbedColor, embedColorFor } from "../../../utils/embeds/embedColors.js";
 import { progressBar } from "../../../utils/embeds/gameDisplay.js";
+import { formatBytes } from "@mcbot/schema/format.js";
 import { holdAlerts } from "./downtimeMonitor.js";
 
 const POLL_INTERVAL_MS = 15_000;
@@ -34,6 +35,8 @@ const FRESH_RESULT_SECONDS = 10 * 60;
 
 /** The steps of a clean upgrade, in order; the progress bar counts these. */
 export const UPGRADE_PHASES = ["plan", "countdown", "stop", "backup", "apply", "start"] as const;
+/** The same for a prune-only job, which has no install. */
+export const PRUNE_PHASES = ["plan", "countdown", "stop", "backup", "prune", "start"] as const;
 
 const KNOWN_PHASES = new Set<string>([
   ...UPGRADE_PHASES,
@@ -50,6 +53,7 @@ const KNOWN_REASONS = new Set([
   "backup_failed",
   "apply_failed",
   "prune_failed",
+  "prune_stale",
   "crash_loop",
   "timeout",
   "start_failed",
@@ -109,6 +113,11 @@ function resultLines(job: UpgradeJob): string[] {
     const reason = r.reason && KNOWN_REASONS.has(r.reason) ? t(`upgrade.reason.${r.reason}`) : t("upgrade.reason.other");
     lines.push(t("upgrade.failedBefore", { reason }));
   }
+  if (typeof r.prunedChunks === "number") {
+    lines.push(
+      t("upgrade.pruned", { chunks: r.prunedChunks, size: formatBytes(r.bytesFreed ?? 0) }),
+    );
+  }
   if (typeof r.archive === "string") lines.push(t("upgrade.archive", { file: r.archive }));
   return lines;
 }
@@ -117,7 +126,9 @@ function resultLines(job: UpgradeJob): string[] {
 export function renderUpgrade(serverId: string, job: UpgradeJob): EmbedBuilder {
   const version = job.mcVersion || job.result?.target || "?";
   const views = phaseViews(job.events);
-  const doneCount = UPGRADE_PHASES.filter((p) =>
+  const prune = job.kind === "prune";
+  const steps = prune ? PRUNE_PHASES : UPGRADE_PHASES;
+  const doneCount = steps.filter((p) =>
     views.some((v) => v.phase === p && v.status === "done"),
   ).length;
 
@@ -130,14 +141,15 @@ export function renderUpgrade(serverId: string, job: UpgradeJob): EmbedBuilder {
   const ok = job.result?.ok === true;
   const clean = ok && (job.result?.disabled ?? []).length === 0;
 
-  let titleKey = "upgrade.title";
+  const base = prune ? "prune" : "upgrade";
+  let titleKey = `${base}.title`;
   let color: number = embedColorFor(EmbedCategory.Server);
   if (finished) {
     if (ok) {
-      titleKey = "upgrade.titleDone";
+      titleKey = `${base}.titleDone`;
       color = clean ? embedColorFor(EmbedCategory.Recovery) : EmbedColor.Warning;
     } else {
-      titleKey = job.result?.rolledBack ? "upgrade.titleRolledBack" : "upgrade.titleFailed";
+      titleKey = job.result?.rolledBack ? `${base}.titleRolledBack` : `${base}.titleFailed`;
       color = EmbedColor.Error;
     }
   }
@@ -145,7 +157,7 @@ export function renderUpgrade(serverId: string, job: UpgradeJob): EmbedBuilder {
   const body = [
     ...lines,
     ...(finished ? ["", ...resultLines(job)] : []),
-    ...(finished ? [] : ["", `${progressBar(doneCount, UPGRADE_PHASES.length, 10)} ${doneCount}/${UPGRADE_PHASES.length}`]),
+    ...(finished ? [] : ["", `${progressBar(doneCount, steps.length, 10)} ${doneCount}/${steps.length}`]),
   ].join("\n");
 
   return createEmbed({

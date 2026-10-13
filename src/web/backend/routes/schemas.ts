@@ -242,8 +242,52 @@ export const UpgradeStartBody = Type.Object({
     Type.Array(Type.String({ minLength: 1, maxLength: 96 }), { maxItems: 500 }),
   ),
   countdownSeconds: Type.Optional(Type.Integer({ minimum: 0, maximum: 600 })),
+  /** A stored prune plan to apply after the install, before the first start. */
+  prunePlan: Type.Optional(Type.String({ pattern: "^[a-f0-9]{16}$" })),
 });
 export type UpgradeStartBody = Static<typeof UpgradeStartBody>;
+
+const PruneZoneBody = Type.Object({
+  name: Type.String({ maxLength: 64 }),
+  dimension: Type.String({ pattern: "^[a-z0-9_.:-]{1,64}$" }),
+  x1: Type.Integer({ minimum: -2_000_000, maximum: 2_000_000 }),
+  z1: Type.Integer({ minimum: -2_000_000, maximum: 2_000_000 }),
+  x2: Type.Integer({ minimum: -2_000_000, maximum: 2_000_000 }),
+  z2: Type.Integer({ minimum: -2_000_000, maximum: 2_000_000 }),
+});
+
+/** Every field optional: what is missing comes from the saved settings or the defaults. */
+export const PruneParamsBody = Type.Object({
+  thresholdMinutes: Type.Optional(Type.Number({ minimum: 0, maximum: 1_000_000 })),
+  spawnRadiusChunks: Type.Optional(Type.Integer({ minimum: 0, maximum: 512 })),
+  playerRadiusChunks: Type.Optional(Type.Integer({ minimum: 0, maximum: 512 })),
+  bufferChunks: Type.Optional(Type.Integer({ minimum: 0, maximum: 32 })),
+  zones: Type.Optional(Type.Array(PruneZoneBody, { maxItems: 100 })),
+  dimensions: Type.Optional(
+    Type.Union([
+      Type.Null(),
+      Type.Array(Type.String({ pattern: "^[a-z0-9_.:-]{1,64}$" }), { maxItems: 32 }),
+    ]),
+  ),
+});
+export type PruneParamsBody = Static<typeof PruneParamsBody>;
+
+export const PruneApplyBody = Type.Object({
+  planId: Type.String({ pattern: "^[a-f0-9]{16}$" }),
+  countdownSeconds: Type.Optional(Type.Integer({ minimum: 0, maximum: 600 })),
+});
+export type PruneApplyBody = Static<typeof PruneApplyBody>;
+
+export const PruneScanParams = Type.Object({
+  id: Type.String(),
+  jobId: Type.String({ pattern: "^[a-f0-9-]{36}$" }),
+});
+
+export const PruneMapParams = Type.Object({
+  id: Type.String(),
+  planId: Type.String({ pattern: "^[a-f0-9]{16}$" }),
+  index: Type.String({ pattern: "^\\d{1,3}$" }),
+});
 
 export const UpgradeJobParams = Type.Object({
   id: Type.String(),

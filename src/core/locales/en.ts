@@ -761,4 +761,10 @@ export const en: Record<string, string> = {
   "upgrade.reason.start_failed": "the server could not be started",
   "upgrade.reason.rollback_failed": "the restore failed",
   "upgrade.reason.other": "an error",
+  "upgrade.pruned": "{chunks} unused chunks deleted, {size} freed.",
+  "prune.title": "Pruning unused chunks on {server}",
+  "prune.titleDone": "Unused chunks pruned on {server}",
+  "prune.titleRolledBack": "Chunk prune on {server} failed and was rolled back",
+  "prune.titleFailed": "Chunk prune on {server} did not finish",
+  "upgrade.reason.prune_stale": "the world changed since the scan, so the plan no longer held",
 };

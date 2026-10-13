@@ -240,3 +240,43 @@ describe("the monitor", () => {
     expect(send).not.toHaveBeenCalled();
   });
 });
+
+describe("a prune job", () => {
+  it("is titled and counted as a prune, and reports what it deleted", () => {
+    const running = text(
+      renderUpgrade("smp", job({ kind: "prune", mcVersion: "", events: [ev(1, "plan", "done"), ev(2, "prune", "running", "Deleting")] })),
+    );
+    expect(running).toContain("Pruning unused chunks on smp");
+    expect(running).toContain("1/6");
+
+    const done = text(
+      renderUpgrade(
+        "smp",
+        job({
+          kind: "prune",
+          mcVersion: "",
+          state: "done",
+          result: { ok: true, branch: "clean", prunedChunks: 4200, bytesFreed: 3 * 1024 * 1024 },
+        }),
+      ),
+    );
+    expect(done).toContain("Unused chunks pruned on smp");
+    expect(done).toContain("4200 unused chunks deleted");
+    expect(done).toContain("3 MB");
+  });
+
+  it("explains a plan that went stale", () => {
+    const out = text(
+      renderUpgrade("smp", job({ kind: "prune", state: "failed", result: { ok: false, rolledBack: true, reason: "prune_stale" } })),
+    );
+    expect(out).toContain("rolled back");
+  });
+
+  it("reports chunks pruned inside an upgrade too", () => {
+    const out = text(
+      renderUpgrade("smp", job({ state: "done", result: { ok: true, branch: "clean", prunedChunks: 10, bytesFreed: 2048 } })),
+    );
+    expect(out).toContain("10 unused chunks deleted");
+    expect(out).toContain("is now on 1.21.5");
+  });
+});

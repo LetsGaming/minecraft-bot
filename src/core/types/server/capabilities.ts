@@ -35,6 +35,8 @@ export interface ServerCapabilities {
    * wrapper that predates it, which means "unknown", not "no".
    */
   upgrade?: boolean;
+  /** {scriptDir}/world/prune-chunks.js, chunk pruning. Absent means "unknown", not "no". */
+  prune?: boolean;
 }
 
 /** Conservative default: assume everything is available (legacy behaviour). */
