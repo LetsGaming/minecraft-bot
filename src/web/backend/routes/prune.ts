@@ -15,9 +15,13 @@ import {
   supportsPrune,
   startPruneScan,
   getPruneScan,
+  getPruneDimensions,
+  getPruneStatus,
+  cancelPruneScan,
   getPruneSettings,
   setPruneSettings,
   getPruneMap,
+  getPruneChunk,
   startPrune,
 } from "@mcbot/core/utils/server/serverAccess.js";
 import { ApiError } from "@mcbot/core/utils/server/access/apiClient.js";
@@ -32,6 +36,8 @@ import { busyKind } from "./upgrades.js";
 import {
   IdParams,
   PruneApplyBody,
+  PruneChunkQuery,
+  PrunePlanParams,
   PruneMapParams,
   PruneParamsBody,
   PruneScanParams,
@@ -137,6 +143,61 @@ export function registerPruneRoutes(app: FastifyInstance): void {
   );
 
   api.get(
+    "/api/servers/:id/prune/dimensions",
+    {
+      schema: { params: IdParams },
+      config: { capability: "server:update", scope: "server", param: "id" },
+    },
+    async (req) => {
+      const server = requireServer(req.params.id);
+      await requireSupport(req.params.id, server.config);
+      try {
+        return await getPruneDimensions(server.config);
+      } catch (err) {
+        return failed("Prune dimensions", req.params.id, err);
+      }
+    },
+  );
+
+  api.get(
+    "/api/servers/:id/prune/status",
+    {
+      schema: { params: IdParams },
+      config: { capability: "server:update", scope: "server", param: "id" },
+    },
+    async (req) => {
+      const server = requireServer(req.params.id);
+      await requireSupport(req.params.id, server.config);
+      try {
+        return await getPruneStatus(server.config);
+      } catch (err) {
+        return failed("Prune status", req.params.id, err);
+      }
+    },
+  );
+
+  api.post(
+    "/api/servers/:id/prune/scans/:jobId/cancel",
+    {
+      schema: { params: PruneScanParams },
+      config: { capability: "server:update", scope: "server", param: "id" },
+    },
+    async (req) => {
+      const server = requireServer(req.params.id);
+      await requireSupport(req.params.id, server.config);
+      try {
+        if (!(await cancelPruneScan(server.config, req.params.jobId))) {
+          throw new NotFound("That scan is not running.");
+        }
+        return { cancelled: true };
+      } catch (err) {
+        if (err instanceof NotFound) throw err;
+        return failed("Prune scan cancel", req.params.id, err);
+      }
+    },
+  );
+
+  api.get(
     "/api/servers/:id/prune/scans/:jobId",
     {
       schema: { params: PruneScanParams },
@@ -152,6 +213,27 @@ export function registerPruneRoutes(app: FastifyInstance): void {
       }
       if (!job) throw new NotFound("Unknown or expired scan.");
       return job;
+    },
+  );
+
+  api.get(
+    "/api/servers/:id/prune/plans/:planId/chunk",
+    {
+      schema: { params: PrunePlanParams, querystring: PruneChunkQuery },
+      config: { capability: "server:update", scope: "server", param: "id" },
+    },
+    async (req) => {
+      const server = requireServer(req.params.id);
+      await requireSupport(req.params.id, server.config);
+      const { dimension, cx, cz } = req.query;
+      let info;
+      try {
+        info = await getPruneChunk(server.config, req.params.planId, dimension, cx, cz);
+      } catch (err) {
+        return failed("Prune chunk read", req.params.id, err);
+      }
+      if (!info) throw new NotFound("That scan has expired. Scan again.");
+      return info;
     },
   );
 

@@ -767,4 +767,5 @@ export const en: Record<string, string> = {
   "prune.titleRolledBack": "Chunk prune on {server} failed and was rolled back",
   "prune.titleFailed": "Chunk prune on {server} did not finish",
   "upgrade.reason.prune_stale": "the world changed since the scan, so the plan no longer held",
+  "upgrade.reason.prune_timeout": "the chunk prune ran out of time and was stopped",
 };

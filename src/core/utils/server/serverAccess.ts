@@ -52,9 +52,13 @@ export {
   supportsPrune,
   startPruneScan,
   getPruneScan,
+  getPruneDimensions,
+  getPruneStatus,
+  cancelPruneScan,
   getPruneSettings,
   setPruneSettings,
   getPruneMap,
+  getPruneChunk,
   startPrune,
 } from "./access/prune.js";
 export {

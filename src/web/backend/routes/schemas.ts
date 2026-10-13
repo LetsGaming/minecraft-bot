@@ -289,6 +289,17 @@ export const PruneMapParams = Type.Object({
   index: Type.String({ pattern: "^\\d{1,3}$" }),
 });
 
+export const PruneChunkQuery = Type.Object({
+  dimension: Type.String({ pattern: "^[a-z0-9_.:-]{1,64}$" }),
+  cx: Type.Integer({ minimum: -2_000_000, maximum: 2_000_000 }),
+  cz: Type.Integer({ minimum: -2_000_000, maximum: 2_000_000 }),
+});
+
+export const PrunePlanParams = Type.Object({
+  id: Type.String(),
+  planId: Type.String({ pattern: "^[a-f0-9]{16}$" }),
+});
+
 export const UpgradeJobParams = Type.Object({
   id: Type.String(),
   jobId: Type.String({ pattern: "^[a-f0-9-]{36}$" }),

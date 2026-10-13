@@ -54,6 +54,7 @@ const KNOWN_REASONS = new Set([
   "apply_failed",
   "prune_failed",
   "prune_stale",
+  "prune_timeout",
   "crash_loop",
   "timeout",
   "start_failed",

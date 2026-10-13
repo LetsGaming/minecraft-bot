@@ -1,5 +1,9 @@
 import { computed, ref } from "vue";
 import type {
+  PruneChunkInfo,
+  PruneDimensions,
+  PruneEngineStatus,
+  PruneScanProgress,
   PruneMap,
   PruneParams,
   PruneParamsRequest,
@@ -20,7 +24,20 @@ import type {
 export const PRUNE_POLL_MS = 1500;
 
 /** Cell classes in a plan map, as the setup suite writes them. */
-export const CELL = { EMPTY: 0, DELETE: 1, ACTIVE: 2, PROTECTED: 3, BUFFER: 4, UNREADABLE: 5 } as const;
+export const CELL = {
+  EMPTY: 0,
+  DELETE: 1,
+  ACTIVE: 2,
+  PROTECTED: 3,
+  BUFFER: 4,
+  UNREADABLE: 5,
+  /** Chosen by hand over a soft rule (in use, buffer). */
+  MANUAL_SOFT: 6,
+  /** Chosen by hand over a hard protection (needs the override). */
+  MANUAL_HARD: 7,
+  /** The rules would delete it, but it holds block entities no structure explains. */
+  UNCERTAIN: 8,
+} as const;
 
 export interface PruneApi {
   support(): Promise<{ supported: boolean }>;
@@ -30,6 +47,11 @@ export interface PruneApi {
   poll(jobId: string): Promise<PruneScanJob>;
   map(planId: string, index: number): Promise<PruneMap>;
   apply(planId: string, countdownSeconds: number): Promise<UpgradeStarted>;
+  /** Optional: a page that offers no dimension choice, progress or cancel can leave these out. */
+  dimensions?(): Promise<PruneDimensions>;
+  status?(): Promise<PruneEngineStatus>;
+  cancel?(jobId: string): Promise<{ cancelled: boolean }>;
+  chunk?(planId: string, dimension: string, cx: number, cz: number): Promise<PruneChunkInfo>;
 }
 
 export interface PageVisibility {
@@ -66,6 +88,7 @@ export const emptyParams = (): PruneParams => ({
   bufferChunks: 2,
   zones: [],
   dimensions: null,
+  buildProtection: "likely",
 });
 
 /** One chunk cell decoded from a map region. */
@@ -114,12 +137,23 @@ export function decodeMap(map: PruneMap): DecodedMap {
   return { dimension: map.dimension, regions, bounds };
 }
 
+/** The dimensions a scan is limited to, given the choice (null means all of them). */
+export function dimensionChoice(all: string[], selected: string[] | null): string[] {
+  return selected === null ? all : all.filter((id) => selected.includes(id));
+}
+
 export function usePrune(options: UsePruneOptions) {
   const visibility = options.visibility ?? browserVisibility;
 
   const supported = ref<boolean | null>(null);
   const params = ref<PruneParams>(emptyParams());
   const saved = ref<PruneParams>(emptyParams());
+  const dimensions = ref<PruneDimensions["dimensions"]>([]);
+  const progress = ref<PruneScanProgress | null>(null);
+  const cancelling = ref(false);
+  /** The chunk shown in the inspector, with what the setup suite read from it. */
+  const inspected = ref<{ dimension: string; cx: number; cz: number; info: PruneChunkInfo | null; loading: boolean } | null>(null);
+  const unfinishedApply = ref<PruneEngineStatus["unfinishedApply"] | null>(null);
   const loadingSettings = ref(false);
   const savingSettings = ref(false);
 
@@ -129,6 +163,8 @@ export function usePrune(options: UsePruneOptions) {
   const scannedWith = ref<string | null>(null);
   const maps = ref<Record<number, DecodedMap>>({});
   const loadingMap = ref(false);
+  /** Loads in flight by dimension index, so a second request for the same map joins the first. */
+  const mapLoads = new Map<number, Promise<DecodedMap | null>>();
   const starting = ref(false);
 
   let jobId: string | null = null;
@@ -140,7 +176,9 @@ export function usePrune(options: UsePruneOptions) {
   });
 
   const key = (p: PruneParams): string => JSON.stringify(p);
-  const dirty = computed(() => key(params.value) !== key(saved.value));
+  /** A manual selection belongs to one scan, not to the saved defaults. */
+  const settingsKey = (p: PruneParams): string => JSON.stringify({ ...p, selection: undefined });
+  const dirty = computed(() => settingsKey(params.value) !== settingsKey(saved.value));
   /** The summary describes the parameters now on screen. */
   const summaryCurrent = computed(() => summary.value !== null && scannedWith.value === key(params.value));
   const hasDeletions = computed(() => (summary.value?.totals.delete ?? 0) > 0);
@@ -167,15 +205,19 @@ export function usePrune(options: UsePruneOptions) {
       const next = await options.api.poll(jobId);
       if (mine !== generation) return;
       if (next.state === "running") {
+        progress.value = next.progress ?? progress.value;
         schedule();
         return;
       }
       scanning.value = false;
+      cancelling.value = false;
+      progress.value = null;
       jobId = null;
       if (next.state === "done" && next.result) {
         summary.value = next.result;
         maps.value = {};
-      } else {
+        dropMapLoads();
+      } else if (next.error !== "cancelled") {
         options.onError(next.error ? `The scan failed (${next.error}).` : "The scan failed.");
       }
     } catch (err) {
@@ -195,6 +237,79 @@ export function usePrune(options: UsePruneOptions) {
     }
   }
 
+  async function loadDimensions(): Promise<void> {
+    if (!options.api.dimensions) return;
+    try {
+      dimensions.value = (await options.api.dimensions()).dimensions;
+    } catch (err) {
+      options.onError(messageOf(err, "Could not list the dimensions."));
+    }
+  }
+
+  async function loadStatus(): Promise<void> {
+    if (!options.api.status) return;
+    try {
+      unfinishedApply.value = (await options.api.status()).unfinishedApply ?? null;
+    } catch {
+      // Advisory only: the page works without it.
+      unfinishedApply.value = null;
+    }
+  }
+
+  /** The dimensions the next scan will read. */
+  const selectedDimensions = computed(() =>
+    dimensionChoice(
+      dimensions.value.map((d) => d.id),
+      params.value.dimensions,
+    ),
+  );
+
+  /** Include or leave out one dimension; at least one stays, and all of them is stored as null. */
+  function setDimension(id: string, on: boolean): void {
+    const all = dimensions.value.map((d) => d.id);
+    const next = new Set(selectedDimensions.value);
+    if (on) next.add(id);
+    else if (next.size > 1) next.delete(id);
+    const chosen = all.filter((d) => next.has(d));
+    params.value = { ...params.value, dimensions: chosen.length === all.length ? null : chosen };
+  }
+
+  /** The chunks chosen by hand, sent with the next scan; changing it makes the shown preview stale. */
+  function setSelection(selection: NonNullable<PruneParams["selection"]>): void {
+    params.value = { ...params.value, selection };
+  }
+
+  async function inspect(dimension: string, cx: number, cz: number): Promise<void> {
+    const plan = summary.value?.id;
+    if (!plan || !options.api.chunk) return;
+    const mine = generation;
+    inspected.value = { dimension, cx, cz, info: null, loading: true };
+    try {
+      const info = await options.api.chunk(plan, dimension, cx, cz);
+      if (mine !== generation || inspected.value?.cx !== cx || inspected.value?.cz !== cz) return;
+      inspected.value = { dimension, cx, cz, info, loading: false };
+    } catch (err) {
+      if (mine !== generation) return;
+      inspected.value = null;
+      options.onError(messageOf(err, "Could not read that chunk."));
+    }
+  }
+
+  function clearInspection(): void {
+    inspected.value = null;
+  }
+
+  async function cancelScan(): Promise<void> {
+    if (!jobId || !scanning.value || cancelling.value || !options.api.cancel) return;
+    cancelling.value = true;
+    try {
+      await options.api.cancel(jobId);
+    } catch (err) {
+      cancelling.value = false;
+      options.onError(messageOf(err, "Could not stop the scan."));
+    }
+  }
+
   async function loadSettings(): Promise<void> {
     loadingSettings.value = true;
     try {
@@ -211,8 +326,9 @@ export function usePrune(options: UsePruneOptions) {
   async function saveSettings(): Promise<boolean> {
     savingSettings.value = true;
     try {
-      const stored = await options.api.save(params.value);
-      params.value = structuredCloneParams(stored);
+      const selection = params.value.selection;
+      const stored = await options.api.save({ ...params.value, selection: undefined });
+      params.value = { ...structuredCloneParams(stored), ...(selection ? { selection } : {}) };
       saved.value = structuredCloneParams(stored);
       return true;
     } catch (err) {
@@ -229,8 +345,12 @@ export function usePrune(options: UsePruneOptions) {
     const mine = generation;
     clearTimer();
     scanning.value = true;
+    inspected.value = null;
+    progress.value = null;
+    cancelling.value = false;
     summary.value = null;
     maps.value = {};
+        dropMapLoads();
     const used = key(params.value);
     try {
       const started = await options.api.scan(params.value);
@@ -247,21 +367,43 @@ export function usePrune(options: UsePruneOptions) {
     }
   }
 
-  async function loadMap(index: number): Promise<DecodedMap | null> {
-    if (maps.value[index]) return maps.value[index]!;
-    const plan = summary.value?.id;
-    if (!plan) return null;
-    loadingMap.value = true;
+  /** Forget loads that belong to a plan no longer shown; their results are discarded on arrival. */
+  function dropMapLoads(): void {
+    mapLoads.clear();
+    loadingMap.value = false;
+  }
+
+  async function fetchMap(plan: string, index: number, mine: number): Promise<DecodedMap | null> {
     try {
       const decoded = decodeMap(await options.api.map(plan, index));
+      // A newer scan or a reset replaced the plan while this was in flight.
+      if (mine !== generation) return null;
       maps.value = { ...maps.value, [index]: decoded };
       return decoded;
     } catch (err) {
-      options.onError(messageOf(err, "Could not load the map."));
+      if (mine === generation) options.onError(messageOf(err, "Could not load the map."));
       return null;
-    } finally {
-      loadingMap.value = false;
     }
+  }
+
+  function loadMap(index: number): Promise<DecodedMap | null> {
+    const cached = maps.value[index];
+    if (cached) return Promise.resolve(cached);
+    const plan = summary.value?.id;
+    if (!plan) return Promise.resolve(null);
+    const running = mapLoads.get(index);
+    if (running) return running;
+
+    const mine = generation;
+    loadingMap.value = true;
+    const load: Promise<DecodedMap | null> = fetchMap(plan, index, mine).finally(() => {
+      if (mapLoads.get(index) === load) {
+        mapLoads.delete(index);
+        loadingMap.value = mapLoads.size > 0;
+      }
+    });
+    mapLoads.set(index, load);
+    return load;
   }
 
   /** Start the delete for the shown summary. Returns the job id to follow, or null. */
@@ -295,7 +437,13 @@ export function usePrune(options: UsePruneOptions) {
     summary.value = null;
     scannedWith.value = null;
     maps.value = {};
+        dropMapLoads();
     supported.value = null;
+    progress.value = null;
+    cancelling.value = false;
+    inspected.value = null;
+    dimensions.value = [];
+    unfinishedApply.value = null;
     params.value = emptyParams();
     saved.value = emptyParams();
   }
@@ -320,6 +468,19 @@ export function usePrune(options: UsePruneOptions) {
     maps,
     loadingMap,
     starting,
+    dimensions,
+    selectedDimensions,
+    setDimension,
+    setSelection,
+    progress,
+    cancelling,
+    cancelScan,
+    inspected,
+    inspect,
+    clearInspection,
+    unfinishedApply,
+    loadDimensions,
+    loadStatus,
     loadSupport,
     loadSettings,
     saveSettings,
