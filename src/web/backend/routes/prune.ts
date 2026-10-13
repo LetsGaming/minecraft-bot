@@ -22,6 +22,7 @@ import {
   setPruneSettings,
   getPruneMap,
   getPruneChunk,
+  getPruneTile,
   startPrune,
 } from "@mcbot/core/utils/server/serverAccess.js";
 import { ApiError } from "@mcbot/core/utils/server/access/apiClient.js";
@@ -40,6 +41,7 @@ import {
   PrunePlanParams,
   PruneMapParams,
   PruneParamsBody,
+  PruneTileParams,
   PruneScanParams,
 } from "./schemas.js";
 
@@ -213,6 +215,32 @@ export function registerPruneRoutes(app: FastifyInstance): void {
       }
       if (!job) throw new NotFound("Unknown or expired scan.");
       return job;
+    },
+  );
+
+  api.get(
+    "/api/servers/:id/prune/tiles/:dimension/:rx/:rz",
+    {
+      schema: { params: PruneTileParams },
+      config: { capability: "server:update", scope: "server", param: "id" },
+    },
+    async (req, reply) => {
+      const server = requireServer(req.params.id);
+      await requireSupport(req.params.id, server.config);
+      const { dimension, rx, rz } = req.params;
+      let tile;
+      try {
+        tile = await getPruneTile(server.config, dimension, rx, rz);
+      } catch (err) {
+        return failed("Prune tile read", req.params.id, err);
+      }
+      if (!tile) throw new NotFound("That region does not exist.");
+      reply.header("cache-control", "private, max-age=0, must-revalidate");
+      if (tile.etag) {
+        reply.header("etag", tile.etag);
+        if (req.headers["if-none-match"] === tile.etag) return reply.status(304).send();
+      }
+      return reply.type("image/png").send(tile.png);
     },
   );
 

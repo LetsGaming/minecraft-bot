@@ -91,6 +91,21 @@ export async function getPruneMap(
   return readApiJson<PruneMap>(res, route);
 }
 
+/** A region drawn from above, as PNG bytes and the ETag that names the picture. Null when the region does not exist. */
+export async function getPruneTile(
+  cfg: ServerConfig,
+  dimension: string,
+  rx: number,
+  rz: number,
+): Promise<{ png: Buffer; etag: string } | null> {
+  const route = `/prune/tiles/${encodeURIComponent(dimension)}/${rx}/${rz}`;
+  // Drawing a region reads all of it; the wrapper allows itself 90 s.
+  const res = await apiGetRaw(cfg, route, 100_000);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new ApiError(route, res.status, (await res.text()).slice(0, 200));
+  return { png: Buffer.from(await res.arrayBuffer()), etag: res.headers.get("etag") ?? "" };
+}
+
 /** One chunk of a plan, read now: what it holds and why it is kept or deleted. Null once the plan expired. */
 export async function getPruneChunk(
   cfg: ServerConfig,

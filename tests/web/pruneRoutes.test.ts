@@ -40,6 +40,7 @@ const {
   setPruneSettingsMock,
   getPruneMapMock,
   getPruneChunkMock,
+  getPruneTileMock,
   startPruneMock,
   recordAdminActionMock,
 } = vi.hoisted(() => ({
@@ -53,6 +54,7 @@ const {
   setPruneSettingsMock: vi.fn(),
   getPruneMapMock: vi.fn(),
   getPruneChunkMock: vi.fn(),
+  getPruneTileMock: vi.fn(),
   startPruneMock: vi.fn(),
   recordAdminActionMock: vi.fn(async () => {}),
 }));
@@ -75,6 +77,7 @@ vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
   setPruneSettings: setPruneSettingsMock,
   getPruneMap: getPruneMapMock,
   getPruneChunk: getPruneChunkMock,
+  getPruneTile: getPruneTileMock,
   startPrune: startPruneMock,
   detectCapabilities: vi.fn(async () => ({ scripts: {}, backups: true, restore: true, modManifest: true, variablesFile: true })),
   getRemoteManifest: vi.fn(async () => null),
@@ -175,6 +178,7 @@ beforeEach(() => {
   getPruneSettingsMock.mockResolvedValue(PARAMS);
   setPruneSettingsMock.mockImplementation(async (_cfg: unknown, p: object) => ({ ...PARAMS, ...p }));
   getPruneMapMock.mockResolvedValue({ dimension: "overworld", regions: {} });
+  getPruneTileMock.mockResolvedValue({ png: Buffer.from([0x89, 0x50, 0x4e, 0x47]), etag: '"r.0.0.abc"' });
   getPruneChunkMock.mockResolvedValue({ chunk: { dimension: "overworld", cx: 1, cz: 2, rx: 0, rz: 0, slot: 65 }, thresholdMinutes: 5, present: true });
   getPruneDimensionsMock.mockResolvedValue({ dimensions: [{ id: "overworld", regions: 4 }] });
   getPruneStatusMock.mockResolvedValue({ engine: "builtin", version: 1 });
@@ -188,6 +192,7 @@ describe("capability and server scope", () => {
     expect((await app.inject(req("GET", READER, "/prune/settings"))).statusCode).toBe(403);
     expect((await app.inject(req("GET", READER, "/prune/dimensions"))).statusCode).toBe(403);
     expect((await app.inject(req("GET", READER, "/prune/status"))).statusCode).toBe(403);
+    expect((await app.inject(req("GET", READER, "/prune/tiles/overworld/0/0"))).statusCode).toBe(403);
     expect((await app.inject(req("GET", READER, `/prune/plans/${PLAN}/chunk?dimension=overworld&cx=1&cz=2`))).statusCode).toBe(403);
     expect((await app.inject(req("POST", READER, `/prune/scans/${JOB}/cancel`, {}))).statusCode).toBe(403);
     expect((await app.inject(req("PUT", READER, "/prune/settings", {}))).statusCode).toBe(403);
@@ -324,6 +329,35 @@ describe("chunk inspection", () => {
       expect(getPruneChunkMock).not.toHaveBeenCalled();
     },
   );
+});
+
+describe("terrain tiles", () => {
+  it("serves a tile as a PNG with its ETag, and 304s one the browser already has", async () => {
+    const app = buildServer();
+    const res = await app.inject(req("GET", UPDATER, "/prune/tiles/overworld/-1/2"));
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toBe("image/png");
+    expect(res.headers.etag).toBe('"r.0.0.abc"');
+    expect([...res.rawPayload]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+    expect(getPruneTileMock).toHaveBeenCalledWith(expect.anything(), "overworld", -1, 2);
+    const again = await app.inject({ ...req("GET", UPDATER, "/prune/tiles/overworld/-1/2"), headers: { cookie: cookieFor(UPDATER), "if-none-match": '"r.0.0.abc"' } });
+    expect(again.statusCode).toBe(304);
+  });
+
+  it("404s a region that does not exist, hides wrapper errors, and 400s a bad request", async () => {
+    const app = buildServer();
+    getPruneTileMock.mockResolvedValueOnce(null);
+    expect((await app.inject(req("GET", UPDATER, "/prune/tiles/overworld/0/0"))).statusCode).toBe(404);
+    getPruneTileMock.mockRejectedValueOnce(new Error("/home/mc/secret failed"));
+    const failed = await app.inject(req("GET", UPDATER, "/prune/tiles/overworld/0/0"));
+    expect(failed.statusCode).toBe(502);
+    expect(failed.body).not.toContain("secret");
+    getPruneTileMock.mockClear();
+    for (const bad of ["/prune/tiles/Over%20World/0/0", "/prune/tiles/overworld/x/0", "/prune/tiles/overworld/0/1.5", "/prune/tiles/overworld/999999/0"]) {
+      expect((await app.inject(req("GET", UPDATER, bad))).statusCode).toBe(400);
+    }
+    expect(getPruneTileMock).not.toHaveBeenCalled();
+  });
 });
 
 describe("maps", () => {

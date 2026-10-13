@@ -7,7 +7,7 @@
       tabindex="0"
       role="group"
       :aria-label="label"
-      aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight + - 0 Escape"
+      aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Space Enter PageUp PageDown + - 0 Escape"
       @keydown="onKey"
       @keyup="onKeyUp"
     >
@@ -25,12 +25,13 @@
         @contextmenu.prevent
       />
     </div>
-    <p class="pm-hover" role="status" aria-live="off">{{ hoverText }}</p>
+    <p class="pm-hover" role="status" :aria-live="cursor ? 'polite' : 'off'">{{ hoverText }}</p>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
+import { createTileStore } from "../composables/pruneTiles";
 import type { PruneZone } from "@mcbot/schema/wire/index.js";
 import { CELL, type DecodedMap, type DecodedRegion } from "../composables/usePrune";
 import {
@@ -62,7 +63,9 @@ const props = withDefaults(
   defineProps<{
     map: DecodedMap;
     zones: PruneZone[];
-    view: "class" | "heat";
+    view: "class" | "heat" | "terrain";
+    /** Fetches the terrain picture of a region (null when it has none); needed for the terrain view. */
+    tileLoader?: (rx: number, rz: number) => Promise<ImageBitmap | null>;
     showGrid: boolean;
     tool: MapTool;
     selection: SelectionModel;
@@ -169,14 +172,43 @@ function canvasOf(pixels: Uint8ClampedArray): HTMLCanvasElement {
   return c;
 }
 
-function bitmapFor(r: { rx: number; rz: number } & DecodedRegion): HTMLCanvasElement {
-  const key = `${r.rx},${r.rz}`;
+/** Under this the terrain pictures would be a few pixels each; the classes alone are clearer. */
+const TERRAIN_MIN_ZOOM = 2.5;
+/** The classes over a picture are drawn this opaque. */
+const OVER_TERRAIN_OPACITY = 0.55;
+
+const terrainActive = (): boolean => props.view === "terrain" && !!props.tileLoader && camera.value.zoom >= TERRAIN_MIN_ZOOM;
+
+function bitmapFor(r: { rx: number; rz: number } & DecodedRegion, overTerrain = false): HTMLCanvasElement {
+  const key = `${r.rx},${r.rz}${overTerrain ? "t" : ""}`;
   let bmp = bitmaps.get(key);
   if (!bmp) {
-    bmp = canvasOf(buildRegionPixels(r.cell, r.heat, props.view, theme().palette));
+    const view = props.view === "heat" ? "heat" : "class";
+    bmp = canvasOf(buildRegionPixels(r.cell, r.heat, view, theme().palette, overTerrain ? OVER_TERRAIN_OPACITY : 1));
     bitmaps.set(key, bmp);
   }
   return bmp;
+}
+
+const tiles = createTileStore<ImageBitmap>({
+  load: (rx, rz) => (props.tileLoader ? props.tileLoader(rx, rz) : Promise.resolve(null)),
+  onChange: () => requestDraw(),
+});
+
+/** Ask for the pictures of the regions in view, middle first; none when the terrain is not on show. */
+function wantTiles(v: { rx0: number; rx1: number; rz0: number; rz1: number }): void {
+  if (!terrainActive()) {
+    tiles.want([]);
+    return;
+  }
+  const midX = camera.value.cx / 32;
+  const midZ = camera.value.cz / 32;
+  const wanted = [];
+  for (const r of regionIndex.value.values()) {
+    if (r.rx < v.rx0 || r.rx > v.rx1 || r.rz < v.rz0 || r.rz > v.rz1) continue;
+    wanted.push({ rx: r.rx, rz: r.rz, priority: Math.hypot(r.rx + 0.5 - midX, r.rz + 0.5 - midZ) });
+  }
+  tiles.want(wanted);
 }
 
 function invalidateBase(): void {
@@ -226,12 +258,20 @@ function drawBase(): void {
   const th = theme();
   ctx.fillStyle = th.surface;
   ctx.fillRect(0, 0, size.width, size.height);
-  ctx.imageSmoothingEnabled = camera.value.zoom < 1;
   const v = visibleRegions(camera.value, size);
+  const terrain = terrainActive();
+  wantTiles(v);
   for (const r of regionIndex.value.values()) {
     if (r.rx < v.rx0 || r.rx > v.rx1 || r.rz < v.rz0 || r.rz > v.rz1) continue;
     const { x, y, w, h } = regionRect(r.rx, r.rz);
-    ctx.drawImage(bitmapFor(r), x, y, w, h);
+    const picture = terrain ? tiles.get(r.rx, r.rz) : null;
+    if (picture && picture !== "none") {
+      // One pixel per block: crisp from one screen pixel per block up, smoothed when shrunk.
+      ctx.imageSmoothingEnabled = camera.value.zoom < 16;
+      ctx.drawImage(picture, x, y, w, h);
+    }
+    ctx.imageSmoothingEnabled = camera.value.zoom < 1;
+    ctx.drawImage(bitmapFor(r, !!picture && picture !== "none"), x, y, w, h);
   }
 }
 
@@ -480,6 +520,7 @@ function lookup(cx: number, cz: number): { cell: number; heat: number } {
 }
 
 function updateHover(p: { x: number; y: number }): void {
+  cursor.value = null; // a pointer in use takes over from the keyboard cursor
   const { cx, cz } = chunkAt(camera.value, size, p.x, p.y);
   const prev = hover.value;
   if (prev && prev.cx === cx && prev.cz === cz) return;
@@ -573,7 +614,7 @@ function onCancel(ev: PointerEvent): void {
 }
 
 function onLeave(): void {
-  if (drag) return;
+  if (drag || cursor.value) return;
   hover.value = null;
   requestDraw();
 }
@@ -586,7 +627,34 @@ function onWheel(ev: WheelEvent): void {
   requestDraw();
 }
 
-const PAN_STEP = 64;
+
+/** The chunk the keyboard cursor is on, or null while the map is only used with a pointer. */
+const cursor = ref<{ cx: number; cz: number } | null>(null);
+
+function moveCursor(dx: number, dz: number): void {
+  const from = cursor.value ?? chunkAt(camera.value, size, size.width / 2, size.height / 2);
+  const to = { cx: from.cx + dx, cz: from.cz + dz };
+  cursor.value = to;
+  // Keep it on screen: pan just far enough to bring it back inside a small margin.
+  const a = worldToScreen(camera.value, size, to.cx, to.cz);
+  const margin = 24;
+  let moveX = 0;
+  let moveZ = 0;
+  if (a.sx < margin) moveX = margin - a.sx;
+  else if (a.sx + camera.value.zoom > size.width - margin) moveX = size.width - margin - (a.sx + camera.value.zoom);
+  if (a.sz < margin) moveZ = margin - a.sz;
+  else if (a.sz + camera.value.zoom > size.height - margin) moveZ = size.height - margin - (a.sz + camera.value.zoom);
+  if (moveX !== 0 || moveZ !== 0) camera.value = panBy(camera.value, moveX, moveZ);
+  hover.value = { ...to, ...lookup(to.cx, to.cz), selected: props.selection.has(props.map.dimension, to.cx, to.cz) };
+}
+
+/** Keyboard stand-in for a click: choose or unchoose the chunk under the cursor. */
+function toggleAtCursor(): void {
+  const at = cursor.value;
+  if (!at) return;
+  const mode = props.selection.has(props.map.dimension, at.cx, at.cz) ? "remove" : "add";
+  emit("select", { mode, x1: at.cx, z1: at.cz, x2: at.cx, z2: at.cz });
+}
 
 function onKey(ev: KeyboardEvent): void {
   if (ev.ctrlKey || ev.metaKey) {
@@ -597,19 +665,33 @@ function onKey(ev: KeyboardEvent): void {
     ev.preventDefault();
     return;
   }
+  // Arrows move a cursor from chunk to chunk (Shift jumps eight); the view follows it.
+  const step = ev.shiftKey ? 8 : 1;
   switch (ev.key) {
     case "ArrowLeft":
-      camera.value = panBy(camera.value, PAN_STEP, 0);
+      moveCursor(-step, 0);
       break;
     case "ArrowRight":
-      camera.value = panBy(camera.value, -PAN_STEP, 0);
+      moveCursor(step, 0);
       break;
     case "ArrowUp":
-      camera.value = panBy(camera.value, 0, PAN_STEP);
+      moveCursor(0, -step);
       break;
     case "ArrowDown":
-      camera.value = panBy(camera.value, 0, -PAN_STEP);
+      moveCursor(0, step);
       break;
+    case "PageUp":
+      camera.value = panBy(camera.value, 0, size.height * 0.8);
+      break;
+    case "PageDown":
+      camera.value = panBy(camera.value, 0, -size.height * 0.8);
+      break;
+    case "Enter": {
+      const at = cursor.value;
+      if (!at) return;
+      emit("inspect", at);
+      break;
+    }
     case "+":
     case "=":
       zoomBy(1.25);
@@ -622,10 +704,13 @@ function onKey(ev: KeyboardEvent): void {
       fit();
       break;
     case " ":
-      spaceHeld.value = true;
+      if (cursor.value) toggleAtCursor();
+      else spaceHeld.value = true;
       break;
     case "Escape":
       drag = null;
+      cursor.value = null;
+      hover.value = null;
       break;
     default:
       return;
@@ -685,6 +770,7 @@ onBeforeUnmount(() => {
   overCanvas.value?.removeEventListener("wheel", onWheel);
   observer?.disconnect();
   themeObserver?.disconnect();
+  tiles.reset();
   if (frame && typeof cancelAnimationFrame !== "undefined") cancelAnimationFrame(frame);
 });
 
@@ -695,12 +781,18 @@ watch(
     if (next.dimension !== lastDimension) {
       lastDimension = next.dimension;
       fitted = false;
+      tiles.reset();
       fit();
     }
     invalidateBase();
   },
 );
 watch(() => props.view, invalidateBase);
+// A different loader means another server or plan: the pictures held belong to the old one.
+watch(() => props.tileLoader, () => {
+  tiles.reset();
+  requestDraw();
+});
 watch(() => props.selectionVersion, invalidateSelection);
 watch(() => props.inspected, requestDraw);
 watch(() => [props.zones, props.showGrid, props.tool], requestDraw, { deep: true });

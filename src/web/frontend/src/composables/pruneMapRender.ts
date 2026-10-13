@@ -48,6 +48,8 @@ export function buildRegionPixels(
   heat: Uint8Array,
   view: "class" | "heat",
   palette: Palette,
+  /** Scales every pixel's opacity, so the classes can sit over a terrain picture. */
+  opacity = 1,
 ): Uint8ClampedArray {
   const out = new Uint8ClampedArray(32 * 32 * 4);
   for (let slot = 0; slot < 1024; slot++) {
@@ -63,7 +65,7 @@ export function buildRegionPixels(
     out[i] = rgba[0];
     out[i + 1] = rgba[1];
     out[i + 2] = rgba[2];
-    out[i + 3] = rgba[3];
+    out[i + 3] = Math.round(rgba[3] * opacity);
   }
   return out;
 }

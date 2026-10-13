@@ -212,3 +212,109 @@ describe("PruneMap inspect tool", () => {
     wrapper.unmount();
   });
 });
+
+describe("PruneMap terrain view", () => {
+  const tile = () => ({ width: 512, height: 512, close: vi.fn() }) as unknown as ImageBitmap;
+
+  it("asks for the pictures of the regions in view, middle first, and draws them under the classes", async () => {
+    const loader = vi.fn(async (_rx: number, _rz: number) => tile());
+    const { wrapper, log } = mountMap({ view: "terrain", tileLoader: loader });
+    await nextTick();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(loader).toHaveBeenCalled();
+    const asked = loader.mock.calls.map(([rx, rz]) => `${rx},${rz}`).sort();
+    expect(asked).toEqual(["-1,0", "0,-1", "0,0"]);
+    // Three tiles and three class bitmaps went onto the canvas.
+    const draws = log.calls.filter((c) => c === "drawImage").length;
+    expect(draws).toBeGreaterThanOrEqual(6);
+    wrapper.unmount();
+  });
+
+  it("asks for nothing in the other views, and once zoomed far out", async () => {
+    const loader = vi.fn(async () => tile());
+    const { wrapper } = mountMap({ view: "class", tileLoader: loader });
+    await nextTick();
+    expect(loader).not.toHaveBeenCalled();
+    await wrapper.setProps({ view: "terrain" });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(loader).toHaveBeenCalled();
+    loader.mockClear();
+    for (let i = 0; i < 12; i++) await wrapper.get(".pm-host").trigger("keydown", { key: "-" });
+    await new Promise((r) => setTimeout(r, 0));
+    const zoomOut = wrapper.emitted("camera")!.at(-1)![0] as { zoom: number };
+    expect(zoomOut.zoom).toBeLessThan(2.5);
+    expect(loader).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it("treats a region without a picture as plain classes and does not ask again", async () => {
+    const loader = vi.fn(async () => null);
+    const { wrapper } = mountMap({ view: "terrain", tileLoader: loader });
+    await nextTick();
+    await new Promise((r) => setTimeout(r, 0));
+    const first = loader.mock.calls.length;
+    await wrapper.get(".pm-host").trigger("keydown", { key: "+" });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(loader.mock.calls.length).toBe(first);
+    wrapper.unmount();
+  });
+});
+
+describe("PruneMap keyboard cursor", () => {
+  const key = (wrapper: ReturnType<typeof mountMap>["wrapper"], k: string, extra: Record<string, unknown> = {}) =>
+    wrapper.get(".pm-host").trigger("keydown", { key: k, ...extra });
+
+  it("arrows move a cursor chunk by chunk, Shift jumps eight, and the hover text follows", async () => {
+    const { wrapper } = mountMap();
+    await nextTick();
+    await key(wrapper, "ArrowRight");
+    const first = wrapper.get(".pm-hover").text();
+    expect(first).toMatch(/Chunk -?\d+, -?\d+/);
+    const at = (text: string) => text.match(/Chunk (-?\d+), (-?\d+)/)!.slice(1).map(Number) as [number, number];
+    const [x0, z0] = at(first);
+    await key(wrapper, "ArrowRight");
+    expect(at(wrapper.get(".pm-hover").text())).toEqual([x0 + 1, z0]);
+    await key(wrapper, "ArrowDown", { shiftKey: true });
+    expect(at(wrapper.get(".pm-hover").text())).toEqual([x0 + 1, z0 + 8]);
+    expect(wrapper.get(".pm-hover").attributes("aria-live")).toBe("polite");
+    wrapper.unmount();
+  });
+
+  it("Space chooses the chunk under the cursor and chooses it again to unchoose, Enter inspects it", async () => {
+    const { wrapper, selection } = mountMap({ tool: "select" });
+    await nextTick();
+    await key(wrapper, "ArrowRight");
+    await key(wrapper, " ");
+    const add = wrapper.emitted("select")!.at(-1)![0] as { mode: string; x1: number; z1: number; x2: number; z2: number };
+    expect(add.mode).toBe("add");
+    expect([add.x1, add.z1]).toEqual([add.x2, add.z2]);
+    selection.apply([{ dimension: "overworld", mode: "add", x1: add.x1, z1: add.z1, x2: add.x1, z2: add.z1 }]);
+    await key(wrapper, " ");
+    expect((wrapper.emitted("select")!.at(-1)![0] as { mode: string }).mode).toBe("remove");
+    await key(wrapper, "Enter");
+    expect(wrapper.emitted("inspect")![0]![0]).toEqual({ cx: add.x1, cz: add.z1 });
+    wrapper.unmount();
+  });
+
+  it("keeps the cursor on screen, and Escape drops it", async () => {
+    const { wrapper } = mountMap();
+    await nextTick();
+    const before = wrapper.emitted("camera")!.at(-1)![0] as { cx: number };
+    for (let i = 0; i < 80; i++) await key(wrapper, "ArrowRight", { shiftKey: true });
+    const after = wrapper.emitted("camera")!.at(-1)![0] as { cx: number };
+    expect(after.cx).toBeGreaterThan(before.cx + 100);
+    await key(wrapper, "Escape");
+    expect(wrapper.get(".pm-hover").attributes("aria-live")).toBe("off");
+    wrapper.unmount();
+  });
+
+  it("Enter does nothing without a cursor, and Space without one is only the pan modifier", async () => {
+    const { wrapper } = mountMap();
+    await nextTick();
+    await key(wrapper, "Enter");
+    await key(wrapper, " ");
+    expect(wrapper.emitted("inspect")).toBeUndefined();
+    expect(wrapper.emitted("select")).toBeUndefined();
+    wrapper.unmount();
+  });
+});

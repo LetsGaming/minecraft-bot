@@ -764,6 +764,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/instances/{id}/prune/tiles/{dimension}/{rx}/{rz}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A region drawn from above
+         * @description A 512 x 512 PNG, one pixel per block, of the region's terrain (no biome tint). Drawn when first asked for and cached by the region file's fingerprint, so an edited region gets a new picture. Chunks that cannot be read, or predate Minecraft 1.18, are transparent. At most two tiles are drawn at once per instance. Supports If-None-Match.
+         */
+        get: operations["getInstancesByIdPruneTilesByDimensionByRxByRz"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/instances/{id}/running": {
         parameters: {
             query?: never;
@@ -4593,6 +4613,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PruneEngineStatus"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Status 501 */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getInstancesByIdPruneTilesByDimensionByRxByRz: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag of a tile already held. */
+                "if-none-match"?: string;
+            };
+            path: {
+                /** @description Dimension id from the summary. */
+                dimension: string;
+                /** @description Instance id from `GET /instances`. */
+                id: string;
+                /** @description Region x coordinate. */
+                rx: string;
+                /** @description Region z coordinate. */
+                rz: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description OK */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Missing or invalid API key */

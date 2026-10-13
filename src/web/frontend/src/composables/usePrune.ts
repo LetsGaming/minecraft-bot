@@ -264,6 +264,14 @@ export function usePrune(options: UsePruneOptions) {
     ),
   );
 
+  /** Choose the dimensions to scan in one go; an empty choice is ignored, and all of them is stored as null. */
+  function setDimensions(ids: readonly string[]): void {
+    const all = dimensions.value.map((d) => d.id);
+    const chosen = all.filter((id) => ids.includes(id));
+    if (chosen.length === 0) return;
+    params.value = { ...params.value, dimensions: chosen.length === all.length ? null : chosen };
+  }
+
   /** Include or leave out one dimension; at least one stays, and all of them is stored as null. */
   function setDimension(id: string, on: boolean): void {
     const all = dimensions.value.map((d) => d.id);
@@ -471,6 +479,7 @@ export function usePrune(options: UsePruneOptions) {
     dimensions,
     selectedDimensions,
     setDimension,
+    setDimensions,
     setSelection,
     progress,
     cancelling,

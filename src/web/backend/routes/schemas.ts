@@ -295,6 +295,13 @@ export const PruneChunkQuery = Type.Object({
   cz: Type.Integer({ minimum: -2_000_000, maximum: 2_000_000 }),
 });
 
+export const PruneTileParams = Type.Object({
+  id: Type.String(),
+  dimension: Type.String({ pattern: "^[a-z0-9_.:-]{1,64}$" }),
+  rx: Type.Integer({ minimum: -100_000, maximum: 100_000 }),
+  rz: Type.Integer({ minimum: -100_000, maximum: 100_000 }),
+});
+
 export const PrunePlanParams = Type.Object({
   id: Type.String(),
   planId: Type.String({ pattern: "^[a-f0-9]{16}$" }),

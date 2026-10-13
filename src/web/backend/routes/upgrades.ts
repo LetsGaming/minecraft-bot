@@ -143,8 +143,9 @@ export function registerUpgradeRoutes(app: FastifyInstance): void {
         log.error("web", `Upgrade poll failed ${logFields({ server: req.params.id, detail: errMsg(err) })}`);
         throw new HttpError(502, OPERATION_FAILED);
       }
-      if (!job) throw new NotFound("No upgrade has run on this server.");
-      return job;
+      // "Nothing has run" is the normal state of a page that just opened, so it is an
+      // answer, not a 404 that every visit would print in the browser console.
+      return { job: job ?? null };
     },
   );
 

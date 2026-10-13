@@ -59,15 +59,24 @@
         <fieldset v-if="prune.dimensions.value.length > 1" class="pv-dims">
           <legend>{{ t("prune.dimensions.heading") }}</legend>
           <p class="pv-note">{{ t("prune.dimensions.help") }}</p>
-          <label v-for="d in prune.dimensions.value" :key="d.id" class="pv-dim-option">
-            <input
-              type="checkbox"
-              :checked="prune.selectedDimensions.value.includes(d.id)"
-              :disabled="prune.scanning.value || (prune.selectedDimensions.value.length === 1 && prune.selectedDimensions.value.includes(d.id))"
-              @change="prune.setDimension(d.id, ($event.target as HTMLInputElement).checked)"
-            />
-            {{ t("prune.dimensions.option", { id: d.id, regions: d.regions.toLocaleString() }) }}
-          </label>
+          <SelectButton
+            :model-value="prune.selectedDimensions.value"
+            :options="scanDimensionOptions"
+            option-label="label"
+            option-value="value"
+            multiple
+            :allow-empty="false"
+            :disabled="prune.scanning.value"
+            :aria-label="t('prune.dimensions.heading')"
+            @update:model-value="prune.setDimensions"
+          >
+            <template #option="{ option }">
+              <span class="pv-dim-label">
+                <i :class="prune.selectedDimensions.value.includes(option.value) ? 'pi pi-check' : 'pi pi-minus'" aria-hidden="true" />
+                {{ option.label }}
+              </span>
+            </template>
+          </SelectButton>
         </fieldset>
 
         <h3>{{ t("prune.zones.heading") }}</h3>
@@ -212,6 +221,7 @@
             <label class="pv-check"><Checkbox v-model="showGrid" binary input-id="pv-grid" /> {{ t("prune.map.grid") }}</label>
           </div>
           <p class="pv-note">{{ t("prune.map.keys") }}</p>
+          <p v-if="view === 'terrain' && zoom < 2.5" class="pv-note" role="status">{{ t("prune.map.terrainHint") }}</p>
           <p v-if="prune.loadingMap.value" class="pv-note" role="status">
             <i class="pi pi-spin pi-spinner" aria-hidden="true" /> {{ t("prune.map.loading") }}
           </p>
@@ -226,6 +236,7 @@
             :selection="selection"
             :selection-version="selectionVersion"
             :inspected="inspectedAt"
+            :tile-loader="tileLoader"
             :label="t('prune.map.label', { dimension: currentDimension })"
             @inspect="onInspect"
             @zone="onDrawn"
@@ -335,7 +346,7 @@ import InputText from "primevue/inputtext";
 import Select from "primevue/select";
 import SelectButton from "primevue/selectbutton";
 import { formatBytes } from "@mcbot/schema";
-import { apiGet, apiSend } from "../api";
+import { apiBlob, apiGet, apiSend } from "../api";
 import { CELL, usePrune } from "../composables/usePrune";
 import { SelectionModel } from "../composables/pruneSelection";
 import { useServerUpgrade } from "../composables/useServerUpgrade";
@@ -390,14 +401,7 @@ const run = useServerUpgrade({
     support: () => apiGet<{ supported: boolean }>(`${base()}/upgrade/support`),
     start: () => Promise.reject(new Error("The prune is started from this page.")),
     poll: (jobId, since) => apiGet<UpgradeJob>(`${base()}/upgrade/${jobId}?since=${since}`),
-    current: async (since) => {
-      try {
-        return await apiGet<UpgradeJob>(`${base()}/upgrade/current?since=${since}`);
-      } catch (err) {
-        if ((err as { status?: number }).status === 404) return null;
-        throw err;
-      }
-    },
+    current: async (since) => (await apiGet<{ job: UpgradeJob | null }>(`${base()}/upgrade/current?since=${since}`)).job,
   },
   onError: (message) => (error.value = message),
 });
@@ -435,7 +439,17 @@ function onDrawn(rect: { x1: number; z1: number; x2: number; z2: number }): void
 // ── Map ───────────────────────────────────────────────────────────────────
 
 const dimensionIndex = ref(0);
-const view = ref<"class" | "heat">("class");
+const view = ref<"class" | "heat" | "terrain">("class");
+
+/** Terrain pictures come from the dashboard backend one region at a time; a region without one is null. */
+const tileLoader = computed(() => {
+  const dimension = currentDimension.value;
+  const root = base();
+  return async (rx: number, rz: number): Promise<ImageBitmap | null> => {
+    const blob = await apiBlob(`${root}/prune/tiles/${encodeURIComponent(dimension)}/${rx}/${rz}`);
+    return blob ? createImageBitmap(blob) : null;
+  };
+});
 const showGrid = ref(true);
 const tool = ref<MapTool>("pan");
 const mapRef = ref<{ fit(): void; zoomIn(): void; zoomOut(): void } | null>(null);
@@ -589,12 +603,17 @@ const breakdown = computed(() => {
   return { auto: total - soft - hard, soft, hard, blocked };
 });
 
+const scanDimensionOptions = computed(() =>
+  prune.dimensions.value.map((d) => ({ label: t("prune.dimensions.option", { id: d.id, regions: d.regions.toLocaleString() }), value: d.id })),
+);
+
 const dimensionOptions = computed(() =>
   (prune.summary.value?.dimensions ?? []).map((d, i) => ({ label: d.id, value: i })),
 );
 const viewOptions = computed(() => [
   { label: t("prune.map.viewClass"), value: "class" as const },
   { label: t("prune.map.viewHeat"), value: "heat" as const },
+  { label: t("prune.map.viewTerrain"), value: "terrain" as const },
 ]);
 const currentDimension = computed(() => prune.summary.value?.dimensions[dimensionIndex.value]?.id ?? "overworld");
 const currentMap = computed(() => prune.maps.value[dimensionIndex.value] ?? null);
@@ -755,11 +774,13 @@ onBeforeUnmount(() => {
   font-weight: 600;
   padding: 0;
 }
-.pv-dim-option {
-  display: flex;
+.pv-dim-label {
+  display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  min-height: 2.75rem;
+}
+.pv-dim-label .pi {
+  font-size: 0.75rem;
 }
 .pv-progress {
   display: grid;

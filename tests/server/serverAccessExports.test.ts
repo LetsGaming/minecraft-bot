@@ -74,6 +74,7 @@ const PUBLIC_RUNTIME_EXPORTS = [
   "getPruneScan",
   "getPruneSettings",
   "getPruneStatus",
+  "getPruneTile",
   "getRemoteInfo",
   "getRemoteManifest",
   "getTps",
