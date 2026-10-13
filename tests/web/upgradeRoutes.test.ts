@@ -232,6 +232,14 @@ describe("POST /upgrade", () => {
     expect(res.json().message ?? res.json().error).toContain("backup");
   });
 
+  it("409s with a scan-again message when the stored prune plan is gone", async () => {
+    startUpgradeMock.mockRejectedValue(new ApiError("POST /operations/upgrade", 404, "{}"));
+    const app = buildServer();
+    const res = await app.inject(post(UPDATER, { mcVersion: "1.21.5", prunePlan: "0123456789abcdef" }));
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toContain("Scan again");
+  });
+
   it("hides wrapper error text behind a fixed message", async () => {
     startUpgradeMock.mockRejectedValue(new Error("/home/mc/secret failed"));
     const app = buildServer();

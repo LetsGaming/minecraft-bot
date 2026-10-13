@@ -174,8 +174,8 @@ function canvasOf(pixels: Uint8ClampedArray): HTMLCanvasElement {
 
 /** Under this the terrain pictures would be a few pixels each; the classes alone are clearer. */
 const TERRAIN_MIN_ZOOM = 2.5;
-/** The classes over a picture are drawn this opaque. */
-const OVER_TERRAIN_OPACITY = 0.55;
+/** The classes over a picture are drawn this opaque: low enough that the terrain stays recognisable. */
+const OVER_TERRAIN_OPACITY = 0.28;
 
 const terrainActive = (): boolean => props.view === "terrain" && !!props.tileLoader && camera.value.zoom >= TERRAIN_MIN_ZOOM;
 
