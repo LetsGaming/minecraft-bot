@@ -53,7 +53,7 @@ defineEmits<{ again: [] }>();
 const KNOWN_PHASES = new Set(["plan", "countdown", "stop", "backup", "apply", "prune", "start", "mods", "rollback", "abort"]);
 const KNOWN_REASONS = new Set([
   "plan_failed", "mods_changed", "stop_failed", "backup_failed", "apply_failed",
-  "prune_failed", "prune_stale", "crash_loop", "timeout", "start_failed", "rollback_failed",
+  "prune_failed", "prune_stale", "prune_timeout", "crash_loop", "timeout", "start_failed", "rollback_failed",
 ]);
 
 const prune = computed(() => props.upgrade.job.value?.kind === "prune");

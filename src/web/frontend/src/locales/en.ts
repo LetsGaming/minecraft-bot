@@ -1247,6 +1247,7 @@ export const en = {
   "upgrade.result.prunedClean": "The unused chunks were deleted and the server is running again.",
   "upgrade.result.pruned": "{chunks} unused chunks deleted, {size} freed.",
   "upgrade.reason.prune_stale": "the world changed since the scan, so the plan no longer held",
+  "upgrade.reason.prune_timeout": "the chunk prune ran out of time and was stopped",
   "upgrade.fact.prune": "Chunk prune",
   "upgrade.fact.pruneDetail": "{count} unused chunks ({size}) are deleted before the first start, so the new version generates them fresh.",
   "upgrade.prune.heading": "Prune unused chunks",

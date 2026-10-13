@@ -759,4 +759,5 @@ export const de: Record<string, string> = {
   "prune.titleRolledBack": "Die Chunk-Bereinigung auf {server} ist fehlgeschlagen und wurde zurückgesetzt",
   "prune.titleFailed": "Die Chunk-Bereinigung auf {server} wurde nicht abgeschlossen",
   "upgrade.reason.prune_stale": "die Welt hat sich seit dem Scan geändert, der Plan galt nicht mehr",
+  "upgrade.reason.prune_timeout": "die Chunk-Bereinigung hat ihre Zeit überschritten und wurde gestoppt",
 };
