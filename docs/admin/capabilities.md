@@ -39,7 +39,7 @@ editor lists them in.
 | `backup:restore` | restoring the world from an archive |
 | `backup:delete` | permanently deleting an archive |
 | `server:rollback` | rolling the world back |
-| `server:update` | upgrading the Minecraft version (stops the server, restarts it on the new version, restores the backup if it does not come up) |
+| `server:update` | upgrading the Minecraft version and [pruning unused chunks](chunk-pruning.md) (both stop the server, change the world and restore the backup if it does not come up) |
 
 Two are easy to get wrong:
 

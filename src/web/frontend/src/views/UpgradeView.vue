@@ -18,51 +18,7 @@
     </EmptyState>
 
     <template v-else>
-      <!-- A job is running, or the last one just ended. -->
-      <section v-if="upgrade.job.value" class="up-card" :aria-labelledby="'up-run'">
-        <div class="up-head">
-          <h2 id="up-run">
-            {{ t(runTitleKey, { server: activeServer, version: upgrade.job.value.mcVersion || resultTarget }) }}
-          </h2>
-          <StatusChip :state="runRole" :label="t(runChipKey)" :busy="upgrade.running.value" live />
-        </div>
-
-        <div
-          v-if="upgrade.running.value"
-          class="up-bar"
-          role="progressbar"
-          aria-valuemin="0"
-          :aria-valuemax="UPGRADE_STEPS.length"
-          :aria-valuenow="upgrade.stepsDone.value"
-          :aria-label="t('upgrade.progressLabel')"
-        >
-          <span class="up-bar-fill" :style="{ width: `${(upgrade.stepsDone.value / UPGRADE_STEPS.length) * 100}%` }" />
-        </div>
-
-        <ol class="up-phases">
-          <li v-for="row in upgrade.phases.value" :key="row.phase" :class="`is-${row.status}`">
-            <i :class="phaseIcon(row.status)" aria-hidden="true" />
-            <span class="up-phase-name">{{ phaseName(row.phase) }}</span>
-            <span v-if="row.status === 'running' && row.msg" class="up-phase-msg">{{ row.msg }}</span>
-          </li>
-        </ol>
-
-        <p v-if="upgrade.running.value" class="up-note">{{ t("upgrade.runningNote") }}</p>
-
-        <template v-if="upgrade.finished.value">
-          <ul class="up-result">
-            <li v-for="(line, i) in resultLines" :key="i">{{ line }}</li>
-          </ul>
-          <Button
-            class="tap"
-            :label="t('upgrade.again')"
-            icon="pi pi-refresh"
-            severity="secondary"
-            outlined
-            @click="clearFinished"
-          />
-        </template>
-      </section>
+      <UpgradeRun v-if="upgrade.job.value" :upgrade="upgrade" :server="activeServer" @again="clearFinished" />
 
       <template v-else>
         <section class="up-card" aria-labelledby="up-target">
@@ -134,6 +90,39 @@
           </template>
         </section>
 
+        <section v-if="prune.supported.value" class="up-card" aria-labelledby="up-prune">
+          <h2 id="up-prune">{{ t("upgrade.prune.heading") }}</h2>
+          <p class="up-note">{{ t("upgrade.prune.help") }}</p>
+          <label class="up-check">
+            <Checkbox v-model="includePrune" binary input-id="up-prune-on" />
+            {{ t("upgrade.prune.include") }}
+          </label>
+          <template v-if="includePrune">
+            <p class="up-note">{{ t("upgrade.prune.settings", { minutes: prune.params.value.thresholdMinutes, buffer: prune.params.value.bufferChunks }) }}</p>
+            <div class="up-row">
+              <Button
+                class="tap"
+                icon="pi pi-search"
+                :label="prune.summary.value ? t('prune.scan.again') : t('prune.scan.button')"
+                severity="secondary"
+                outlined
+                :loading="prune.scanning.value"
+                @click="prune.scan"
+              />
+              <Button class="tap" :label="t('upgrade.prune.tune')" icon="pi pi-sliders-h" severity="secondary" text @click="$emit('navigate', 'prune')" />
+            </div>
+            <p v-if="prune.summary.value && prune.summaryCurrent.value" class="up-ok">
+              {{ t("upgrade.prune.preview", {
+                delete: prune.summary.value.totals.delete.toLocaleString(),
+                chunks: prune.summary.value.totals.chunks.toLocaleString(),
+                size: formatBytes(prune.summary.value.totals.bytes),
+              }) }}
+            </p>
+            <p v-else class="up-warn">{{ t("upgrade.prune.needsScan") }}</p>
+            <p class="up-note">{{ t("prune.scan.approximate") }}</p>
+          </template>
+        </section>
+
         <section class="up-card" aria-labelledby="up-options">
           <h2 id="up-options">{{ t("upgrade.options.heading") }}</h2>
           <div class="up-field">
@@ -166,35 +155,42 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import Button from "primevue/button";
+import Checkbox from "primevue/checkbox";
 import InputText from "primevue/inputtext";
 import Select from "primevue/select";
-import { StatusRole } from "@mcbot/schema";
+import { StatusRole, formatBytes } from "@mcbot/schema";
 import { apiGet, apiSend } from "../api";
 import type { ModCompatJob, ModCompatMod } from "../api";
 import { useModCompat } from "../composables/useModCompat";
-import { UPGRADE_STEPS, useServerUpgrade } from "../composables/useServerUpgrade";
+import { useServerUpgrade } from "../composables/useServerUpgrade";
+import { usePrune } from "../composables/usePrune";
 import { useCapabilities } from "../composables/useCapabilities";
 import { useConfirmAction } from "../composables/useConfirmAction";
 import ViewHeader from "../components/ui/ViewHeader.vue";
 import EmptyState from "../components/ui/EmptyState.vue";
 import InlineBanner from "../components/ui/InlineBanner.vue";
 import StatusChip from "../components/ui/StatusChip.vue";
-import { t, type MessageKey } from "../i18n";
-import type { UpgradeJob, UpgradeRequest, UpgradeStarted } from "@mcbot/schema/wire/index.js";
+import UpgradeRun from "../components/UpgradeRun.vue";
+import { t } from "../i18n";
+import type {
+  PruneMap,
+  PruneParams,
+  PruneParamsRequest,
+  PruneScanJob,
+  UpgradeJob,
+  UpgradeRequest,
+  UpgradeStarted,
+} from "@mcbot/schema/wire/index.js";
 
 const props = defineProps<{ activeServer: string }>();
-
-const KNOWN_PHASES = new Set(["plan", "countdown", "stop", "backup", "apply", "prune", "start", "mods", "rollback", "abort"]);
-const KNOWN_REASONS = new Set([
-  "plan_failed", "mods_changed", "stop_failed", "backup_failed", "apply_failed",
-  "prune_failed", "crash_loop", "timeout", "start_failed", "rollback_failed",
-]);
+defineEmits<{ navigate: [id: string] }>();
 
 const { can } = useCapabilities();
 const confirmAction = useConfirmAction();
 
 const error = ref("");
 const countdown = ref(30);
+const includePrune = ref(false);
 
 const server = computed(() => props.activeServer);
 const base = (): string => `/api/servers/${encodeURIComponent(server.value)}`;
@@ -215,6 +211,20 @@ const upgrade = useServerUpgrade({
         throw err;
       }
     },
+  },
+  onError: (message) => (error.value = message),
+});
+
+/** Chunk pruning inside the upgrade: the same scan and saved settings as the Prune page. */
+const prune = usePrune({
+  api: {
+    support: () => apiGet<{ supported: boolean }>(`${base()}/prune/support`),
+    settings: () => apiGet<PruneParams>(`${base()}/prune/settings`),
+    save: (p: PruneParamsRequest) => apiSend<PruneParams>("PUT", `${base()}/prune/settings`, p),
+    scan: (p: PruneParamsRequest) => apiSend<{ jobId: string }>("POST", `${base()}/prune/scans`, p),
+    poll: (jobId) => apiGet<PruneScanJob>(`${base()}/prune/scans/${jobId}`),
+    map: (planId, index) => apiGet<PruneMap>(`${base()}/prune/plans/${planId}/map/${index}`),
+    apply: () => Promise.reject(new Error("The prune runs as part of the upgrade.")),
   },
   onError: (message) => (error.value = message),
 });
@@ -252,12 +262,18 @@ const attention = computed<ModCompatMod[]>(() =>
   (compat.job.value?.mods ?? []).filter((m) => m.availability !== "available"),
 );
 
+const pruneReady = computed(
+  () => !includePrune.value || (prune.summaryCurrent.value && prune.hasDeletions.value),
+);
+
 const canStart = computed(
   () =>
     compat.targetValid.value &&
     !upgrade.running.value &&
     !upgrade.starting.value &&
     !compat.checkingCompat.value &&
+    !prune.scanning.value &&
+    pruneReady.value &&
     (!canCheck.value || (compat.hasResult.value && !stale.value)),
 );
 
@@ -274,66 +290,6 @@ const checkProgress = computed(() => {
   return t("upgrade.check.progress", { done: Math.min(p.done + 1, p.total), total: p.total });
 });
 
-function phaseName(phase: string): string {
-  return KNOWN_PHASES.has(phase) ? t(`upgrade.phase.${phase}` as MessageKey) : phase;
-}
-
-function phaseIcon(statusName: string): string {
-  if (statusName === "done") return "pi pi-check-circle";
-  if (statusName === "error") return "pi pi-times-circle";
-  return "pi pi-spin pi-spinner";
-}
-
-const resultTarget = computed(() => upgrade.result.value?.target ?? "");
-
-const runTitleKey = computed<MessageKey>(() => {
-  if (upgrade.running.value) return "upgrade.run.title";
-  const r = upgrade.result.value;
-  if (r?.ok) return "upgrade.run.titleDone";
-  return r?.rolledBack ? "upgrade.run.titleRolledBack" : "upgrade.run.titleFailed";
-});
-
-const runRole = computed(() => {
-  if (upgrade.running.value) return StatusRole.Info;
-  const r = upgrade.result.value;
-  if (r?.ok) return (r.disabled ?? []).length > 0 ? StatusRole.Degraded : StatusRole.Applied;
-  return StatusRole.Offline;
-});
-
-const runChipKey = computed<MessageKey>(() => {
-  if (upgrade.running.value) return "upgrade.chip.running";
-  return upgrade.result.value?.ok ? "upgrade.chip.done" : "upgrade.chip.failed";
-});
-
-const resultLines = computed<string[]>(() => {
-  const j = upgrade.job.value;
-  const r = upgrade.result.value;
-  if (!j || j.state === "running") return [];
-  if (!r) return [t("upgrade.result.interrupted")];
-  const lines: string[] = [];
-  if (r.ok) {
-    const disabled = r.disabled ?? [];
-    lines.push(
-      disabled.length > 0
-        ? t("upgrade.result.disabled", { mods: disabled.join(", ") })
-        : t("upgrade.result.clean"),
-    );
-    const kept = r.keptOnOldBuild ?? [];
-    if (kept.length > 0) lines.push(t("upgrade.result.keptOld", { mods: kept.join(", ") }));
-  } else if (r.rolledBack) {
-    lines.push(r.previousVersionRunning === false ? t("upgrade.result.rolledBackDown") : t("upgrade.result.rolledBack"));
-  } else if (r.reason === "rollback_failed") {
-    lines.push(t("upgrade.result.rollbackFailed"));
-  } else {
-    const reason = r.reason && KNOWN_REASONS.has(r.reason)
-      ? t(`upgrade.reason.${r.reason}` as MessageKey)
-      : t("upgrade.reason.other");
-    lines.push(t("upgrade.result.failedBefore", { reason }));
-  }
-  if (typeof r.archive === "string") lines.push(t("upgrade.result.archive", { file: r.archive }));
-  return lines;
-});
-
 async function runCheck(): Promise<void> {
   error.value = "";
   await compat.check(false);
@@ -343,6 +299,22 @@ async function confirmStart(): Promise<void> {
   error.value = "";
   const name = server.value;
   const version = targetVersion.value;
+  const withPrune = includePrune.value && prune.summary.value !== null;
+  const facts = [
+    { term: t("upgrade.fact.steps"), detail: t("upgrade.fact.stepsDetail") },
+    { term: t("upgrade.fact.fallback"), detail: t("upgrade.fact.fallbackDetail") },
+    { term: t("upgrade.fact.downtime"), detail: t("upgrade.fact.downtimeDetail") },
+    { term: t("upgrade.fact.recover"), detail: t("upgrade.fact.recoverDetail") },
+  ];
+  if (withPrune && prune.summary.value) {
+    facts.splice(1, 0, {
+      term: t("upgrade.fact.prune"),
+      detail: t("upgrade.fact.pruneDetail", {
+        count: prune.summary.value.totals.delete.toLocaleString(),
+        size: formatBytes(prune.summary.value.totals.bytes),
+      }),
+    });
+  }
   const answer = await confirmAction({
     level: "irreversible",
     tone: "danger",
@@ -350,18 +322,14 @@ async function confirmStart(): Promise<void> {
     message: t("upgrade.confirm.message", { server: name, version }),
     acceptLabel: t("upgrade.confirm.accept", { server: name }),
     expected: name,
-    facts: [
-      { term: t("upgrade.fact.steps"), detail: t("upgrade.fact.stepsDetail") },
-      { term: t("upgrade.fact.fallback"), detail: t("upgrade.fact.fallbackDetail") },
-      { term: t("upgrade.fact.downtime"), detail: t("upgrade.fact.downtimeDetail") },
-      { term: t("upgrade.fact.recover"), detail: t("upgrade.fact.recoverDetail") },
-    ],
+    facts,
   });
   if (answer !== "confirm") return;
   await upgrade.start({
     mcVersion: version,
     ...(canCheck.value ? { expectUnavailable: attention.value.map((m) => m.slug) } : {}),
     countdownSeconds: countdown.value,
+    ...(withPrune && prune.summary.value ? { prunePlan: prune.summary.value.id } : {}),
   });
 }
 
@@ -371,17 +339,19 @@ function clearFinished(): void {
 }
 
 async function load(): Promise<void> {
-  await upgrade.loadSupport();
-  if (upgrade.supported.value) {
-    await upgrade.attach();
-    await loadInstalledVersion();
-    if (canCheck.value) await compat.loadVersions();
-  }
+  await Promise.all([upgrade.loadSupport(), prune.loadSupport()]);
+  if (!upgrade.supported.value) return;
+  await upgrade.attach();
+  if (prune.supported.value) await prune.loadSettings();
+  await loadInstalledVersion();
+  if (canCheck.value) await compat.loadVersions();
 }
 
 watch(server, () => {
   compat.reset();
   upgrade.reset();
+  prune.reset();
+  includePrune.value = false;
   error.value = "";
   // The shell fills the server in after the first render; never call with none.
   if (server.value) void load();
@@ -390,6 +360,7 @@ watch(server, () => {
 onBeforeUnmount(() => {
   compat.dispose();
   upgrade.dispose();
+  prune.dispose();
 });
 </script>
 
@@ -404,18 +375,10 @@ onBeforeUnmount(() => {
   padding: var(--space-4);
   border: 1px solid var(--border);
   border-radius: var(--radius-3, 8px);
-  background: var(--surface-1, transparent);
 }
 .up-card h2 {
   margin: 0;
   font-size: var(--text-xl);
-}
-.up-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
 }
 .up-note {
   margin: 0;
@@ -444,6 +407,11 @@ onBeforeUnmount(() => {
 .up-input {
   min-width: 14rem;
 }
+.up-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
 .up-mods {
   list-style: none;
   margin: 0;
@@ -461,51 +429,5 @@ onBeforeUnmount(() => {
 .up-mod-name {
   font-family: var(--font-mono);
   overflow-wrap: anywhere;
-}
-.up-bar {
-  height: 6px;
-  border-radius: 3px;
-  background: var(--border);
-  overflow: hidden;
-}
-.up-bar-fill {
-  display: block;
-  height: 100%;
-  background: var(--st-info, currentColor);
-  transition: width 0.4s ease;
-}
-.up-phases {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: var(--space-2);
-}
-.up-phases li {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-2);
-}
-.up-phases .is-done i {
-  color: var(--st-applied, inherit);
-}
-.up-phases .is-error i {
-  color: var(--st-offline, inherit);
-}
-.up-phase-msg {
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-}
-.up-result {
-  margin: 0;
-  padding-left: var(--space-4);
-  display: grid;
-  gap: var(--space-2);
-}
-@media (prefers-reduced-motion: reduce) {
-  .up-bar-fill {
-    transition: none;
-  }
 }
 </style>

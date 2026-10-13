@@ -109,6 +109,7 @@ import ConsoleView from "./views/ConsoleView.vue";
 import BackupsView from "./views/BackupsView.vue";
 import ModConfigView from "./views/ModConfigView.vue";
 import UpgradeView from "./views/UpgradeView.vue";
+import PruneView from "./views/PruneView.vue";
 import ModsView from "./views/ModsView.vue";
 import GuildsView from "./views/GuildsView.vue";
 import CommandsView from "./views/CommandsView.vue";
@@ -140,6 +141,7 @@ const VIEWS: Record<NavId, ViewEntry> = {
   backups: { component: markRaw(BackupsView), props: ["serverIds", "activeServer"] },
   mods: { component: markRaw(ModsView), props: ["activeServer"] },
   upgrade: { component: markRaw(UpgradeView), props: ["activeServer"] },
+  prune: { component: markRaw(PruneView), props: ["activeServer"] },
   modconfig: { component: markRaw(ModConfigView), props: ["serverIds", "activeServer"] },
   config: { component: markRaw(ConfigView) },
   commands: { component: markRaw(CommandsView) },

@@ -38,6 +38,13 @@ them as running on an older build; such a mod can still misbehave in game.
 - While the job runs, stop, restart, rollback, backup, restore and mod changes
   are refused with "busy" instead of racing it, from the dashboard and from SSH.
 
+## Pruning chunks with it
+
+Tick **Prune unused chunks** to delete unused chunks as part of the upgrade, so the new
+version generates them fresh. It needs a scan first, runs after the install and
+before the first start, and shares the upgrade's backup. See
+[chunk-pruning.md](chunk-pruning.md).
+
 ## Where to follow it
 
 The page shows the phases live and survives a reload. Discord shows one message

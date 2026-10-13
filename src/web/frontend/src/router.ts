@@ -22,6 +22,7 @@ export type NavId =
   | "mods"
   | "modconfig"
   | "upgrade"
+  | "prune"
   | "config"
   | "commands"
   | "appearance"
@@ -66,6 +67,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { id: "backups", labelKey: "nav.backups", icon: "pi pi-database", gate: "server:read", serverScoped: true, path: "/backups/:server?" },
       { id: "mods", labelKey: "nav.mods", icon: "pi pi-download", gate: "mods:read", serverScoped: true, path: "/mods/:server?" },
       { id: "upgrade", labelKey: "nav.upgrade", icon: "pi pi-arrow-circle-up", gate: "server:update", serverScoped: true, path: "/upgrade/:server?" },
+      { id: "prune", labelKey: "nav.prune", icon: "pi pi-eraser", gate: "server:update", serverScoped: true, path: "/prune/:server?" },
       { id: "modconfig", labelKey: "nav.modconfig", icon: "pi pi-sliders-h", gate: "config:read", serverScoped: true, path: "/modconfig/:server?/:fileId?" },
     ],
   },
