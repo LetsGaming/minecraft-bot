@@ -2,6 +2,12 @@ import { describe, it, expect } from "vitest";
 import { stripLogPrefix } from "../../src/core/utils/minecraft/playerUtils.js";
 
 describe("stripLogPrefix", () => {
+  it("drops the System chat marker Minecraft 26.3 adds", () => {
+    expect(stripLogPrefix("[21:29:09] [Server thread/INFO]: System chat: There are 2 of a max of 20 players online")).toBe(
+      "There are 2 of a max of 20 players online",
+    );
+  });
+
   it("returns empty string for empty input", () => {
     expect(stripLogPrefix("")).toBe("");
   });

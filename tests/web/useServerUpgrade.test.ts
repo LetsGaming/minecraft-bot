@@ -51,6 +51,11 @@ describe("phaseRows", () => {
     expect(phaseRows([ev(1, "stop", "error")])[0]!.status).toBe("error");
     expect(phaseRows([ev(1, "stop", "info")])[0]!.status).toBe("running");
   });
+
+  it("counts a step the job moved on from as done", () => {
+    const rows = phaseRows([ev(1, "countdown", "running"), ev(2, "stop", "running"), ev(3, "backup", "running")]);
+    expect(rows.map((r) => r.status)).toEqual(["done", "done", "running"]);
+  });
 });
 
 describe("support", () => {

@@ -9,8 +9,9 @@
  * `/say` line (`[Server] ...`) or an RCON echo cannot supply it.
  */
 
+// Minecraft 26.3 writes what the server sends as chat behind `System chat: `.
 const SERVER_THREAD_PREFIX =
-  /^\[[^\]\n]*\]\s*\[[^\]\n]*\bServer thread\/INFO\b[^\]\n]*\](?:\s*\[[^\]\n]*\])*:\s+/;
+  /^\[[^\]\n]*\]\s*\[[^\]\n]*\bServer thread\/INFO\b[^\]\n]*\](?:\s*\[[^\]\n]*\])*:\s+(?:System chat:\s+)?/;
 
 /** Message bodies of the server-emitted lines in a log tail, newest first. */
 export function serverLineBodies(tail: string): string[] {

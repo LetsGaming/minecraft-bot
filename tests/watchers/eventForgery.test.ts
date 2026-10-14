@@ -94,6 +94,11 @@ const CHAT_FORGERIES = [
   "[00:00:00] [Server thread/INFO]: <[AFK] Mallory> x: Victim died",
   // Player /say output ([name] payload on the Server thread):
   "[00:00:00] [Server thread/INFO]: [Mallory] x: Victim has made the advancement [Hax]",
+  // 26.3: player chat that imitates the new system marker, and /say behind it:
+  "[00:00:00] [Server thread/INFO]: <Mallory> System chat: Victim joined the game",
+  "[00:00:00] [Server thread/INFO]: <Mallory> System chat: Victim has made the advancement [Hax]",
+  "[00:00:00] [Server thread/INFO]: System chat: [Mallory] Victim joined the game",
+  "[00:00:00] [Server thread/INFO]: System chat: <Mallory> Victim died",
 ];
 
 describe("SEC-01 — chat lines cannot forge server events", () => {
@@ -163,6 +168,36 @@ describe("SEC-01 — legitimate server lines still match", () => {
     expect(
       STOP!.exec("[12:00:00] [Server thread/INFO]: Stopping server"),
     ).not.toBeNull();
+  });
+});
+
+describe("Minecraft 26.3 — server messages behind `System chat:`", () => {
+  // Real lines from a Fabric 26.3 server.
+  it("join and leave", () => {
+    expect(
+      JOIN!.exec("[18:43:18] [Server thread/INFO]: System chat: LetsGamingDE420 joined the game")?.[1],
+    ).toBe("LetsGamingDE420");
+    expect(
+      LEAVE!.exec("[21:14:07] [Server thread/INFO]: System chat: BangBoomBang19 left the game")?.[1],
+    ).toBe("BangBoomBang19");
+  });
+
+  it("death and advancement", () => {
+    expect(
+      DEATH!.exec("[09:07:38] [Server thread/INFO]: System chat: Mokkq fell from a high place")?.[1],
+    ).toBe("Mokkq");
+    expect(
+      ADV!.exec(
+        "[12:00:00] [Server thread/INFO]: System chat: Steve has made the advancement [Stone Age]",
+      )?.slice(1, 3),
+    ).toEqual(["Steve", "Stone Age"]);
+  });
+
+  it("start and stop, which 26.3 still logs without the marker", () => {
+    expect(
+      START!.exec('[18:34:15] [Server thread/INFO]: Done (0.820s)! For help, type "help"'),
+    ).not.toBeNull();
+    expect(STOP!.exec("[12:00:00] [Server thread/INFO]: Stopping server")).not.toBeNull();
   });
 });
 
