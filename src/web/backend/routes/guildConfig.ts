@@ -23,7 +23,11 @@ import { sessionFromRequest, isSysadmin, canManageGuild, guildScopeFresh } from 
 import { listBotGuilds, discordHttpError } from "../auth/discordRest.js";
 import { readConfigSchema } from "../config/configSchema.js";
 import { HttpError, Forbidden, Conflict, ValidationFailed, ServiceUnavailable } from "../errors.js";
-import type { RawBotConfig } from "@mcbot/core/types/index.js";
+import {
+  allowedServerIdsIn,
+  referencedServerIds,
+} from "@mcbot/core/utils/server/guildTargets.js";
+import type { RawBotConfig, GuildConfig } from "@mcbot/core/types/index.js";
 import { GUILD_FEATURE_KEYS } from "@mcbot/schema";
 import { IdParams, GuildConfigWriteBody, MutationResult } from "./schemas.js";
 
@@ -37,6 +41,59 @@ function enabledFeatures(block: Record<string, unknown> | undefined): string[] {
     if (k === "statusEmbed") return (v as { enabled?: boolean }).enabled === true;
     return true;
   });
+}
+
+/**
+ * Guild-block keys that decide WHO is a bot admin in the guild and WHICH
+ * servers it may reach. Those are tenant boundaries the operator draws, not
+ * guild settings: a Manage Guild holder who could edit them could grant
+ * themselves admin commands against any server (AUD-001).
+ */
+const SYSADMIN_ONLY_GUILD_KEYS = ["adminUsers", "allowedServers"] as const;
+
+/**
+ * Apply what a non-sysadmin may not change in their own guild block. Returns
+ * the block to write and the reasons the write is refused (empty when it may
+ * proceed).
+ *
+ * - The sysadmin-only keys keep their value on disk. A block that omits one
+ *   keeps it; a block that sends a different value is refused rather than
+ *   silently ignored, so the editor shows why the change didn't stick.
+ * - Every server the block references must exist, and must already be one
+ *   this guild may target under the current config. References widen a
+ *   guild's scope when `allowedServers` is unset, so adding one is a scope
+ *   change too. An unrestricted guild (single-tenant, or one that references
+ *   nothing) may use any configured server: nothing is widened there.
+ */
+function applyManagerLimits(
+  current: RawBotConfig,
+  guildId: string,
+  submitted: GuildConfig,
+): { block: GuildConfig; errors: string[] } {
+  const errors: string[] = [];
+  const before = (current.guilds ?? {})[guildId];
+  const block: GuildConfig = { ...submitted };
+  for (const key of SYSADMIN_ONLY_GUILD_KEYS) {
+    if (block[key] === undefined) {
+      if (before?.[key] !== undefined) block[key] = before[key];
+    } else if (JSON.stringify(block[key]) !== JSON.stringify(before?.[key])) {
+      errors.push(`guilds.${guildId}.${key} can only be changed by a bot admin.`);
+    }
+  }
+
+  const known = new Set(Object.keys(current.servers ?? {}));
+  const scope = allowedServerIdsIn(current.guilds, guildId);
+  for (const id of referencedServerIds(block)) {
+    if (!known.has(id)) {
+      errors.push(`guilds.${guildId} references unknown server "${id}".`);
+    } else if (scope && !scope.has(id)) {
+      errors.push(
+        `guilds.${guildId} references server "${id}", which this guild may ` +
+          `not use. Only a bot admin can give a guild access to another server.`,
+      );
+    }
+  }
+  return { block, errors };
 }
 
 export function registerGuildConfigRoutes(app: FastifyInstance): void {
@@ -142,6 +199,15 @@ export function registerGuildConfigRoutes(app: FastifyInstance): void {
         );
       }
 
+      // The request body is object-checked by the schema; its shape is
+      // GuildConfig's, which validateCandidate checks below.
+      let block = guildConfig as GuildConfig;
+      if (!isSysadmin(session)) {
+        const limited = applyManagerLimits(current, guildId, block);
+        if (limited.errors.length > 0) throw new ValidationFailed(limited.errors);
+        block = limited.block;
+      }
+
       // Splice the submitted block into the current config and validate the
       // whole thing as one candidate below. `guildConfig` is the request body
       // (object-checked by the schema); the merged object is RawBotConfig-shaped
@@ -150,7 +216,7 @@ export function registerGuildConfigRoutes(app: FastifyInstance): void {
         ...current,
         guilds: {
           ...(current.guilds ?? {}),
-          [guildId]: guildConfig as Record<string, unknown>,
+          [guildId]: block,
         },
       } as RawBotConfig;
 

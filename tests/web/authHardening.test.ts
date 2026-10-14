@@ -31,13 +31,15 @@ vi.mock("../../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../../src/web/backend/auth/discordRest.js", () => ({
-  listBotGuilds: vi.fn().mockResolvedValue([]),
+const discord = vi.hoisted(() => ({
+  listBotGuilds: vi.fn(),
 }));
+vi.mock("../../src/web/backend/auth/discordRest.js", () => discord);
 
 import { buildServer } from "../../src/web/backend/server.js";
 import {
   encodeSigned,
+  decodeSigned,
   SESSION_COOKIE,
   OAUTH_STATE_COOKIE,
   verifyState,
@@ -57,7 +59,8 @@ function stubDiscord(): void {
         ? { access_token: "tok" }
         : String(url).endsWith("/users/@me")
           ? { id: "444444444444444444", username: "someone", discriminator: "0" }
-          : [];
+          : // /users/@me/guilds: one guild the user manages.
+            [{ id: "222222222222222222", permissions: "32" }];
       return { ok: true, json: async () => body };
     }),
   );
@@ -65,6 +68,7 @@ function stubDiscord(): void {
 
 beforeEach(() => {
   mockConfig.webui = { enabled: true, port: 8130 };
+  discord.listBotGuilds.mockReset().mockResolvedValue([]);
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -127,6 +131,33 @@ describe("OAuth state binding", () => {
     expect(cookies.some((c) => c.startsWith(`${SESSION_COOKIE}=`))).toBe(true);
     expect(cookies.some((c) => c.startsWith(`${OAUTH_STATE_COOKIE}=;`) && c.includes("Max-Age=0"))).toBe(true);
     await app.close();
+  });
+});
+
+describe("guild scope at login", () => {
+  async function login(): Promise<{ guilds: string[] } | null> {
+    stubDiscord();
+    const app = buildServer();
+    const { state, nonce } = buildAuthorizeUrl();
+    const res = await app.inject({
+      method: "GET",
+      url: `/auth/callback?code=c&state=${state}`,
+      headers: { cookie: `${OAUTH_STATE_COOKIE}=${nonce}` },
+    });
+    await app.close();
+    const raw = setCookies(res).find((c) => c.startsWith(`${SESSION_COOKIE}=`));
+    const token = raw?.slice(SESSION_COOKIE.length + 1).split(";")[0];
+    return decodeSigned<{ guilds: string[] }>(token);
+  }
+
+  it("keeps the managed guilds the bot is in", async () => {
+    discord.listBotGuilds.mockResolvedValue([{ id: "222222222222222222" }]);
+    expect((await login())?.guilds).toEqual(["222222222222222222"]);
+  });
+
+  it("grants no guilds when the bot's guilds can't be listed (AUD-001)", async () => {
+    discord.listBotGuilds.mockRejectedValue(new Error("discord down"));
+    expect((await login())?.guilds).toEqual([]);
   });
 });
 

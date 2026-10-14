@@ -4,7 +4,8 @@ Two kinds of people use the dashboard, and they are separated by threat model
 rather than by rank.
 
 **Guild managers** administer a Discord server. Anyone with Manage Guild on a
-guild the bot is in can log in and edit that guild's config block. They see
+guild the bot is in can log in and edit that guild's config block, except
+its `adminUsers` and `allowedServers` and which servers it may use. They see
 nothing about the Minecraft host, ever. Nothing in this page applies to them.
 
 **Host users** reach the Minecraft server. That is everyone in the top-level
@@ -38,7 +39,7 @@ editor lists them in.
 | `mods:write` | installing, updating, disabling and removing mods |
 | `backup:restore` | restoring the world from an archive |
 | `backup:delete` | permanently deleting an archive |
-| `server:rollback` | rolling the world back |
+| `server:rollback` | rolling the world back (`server:control` alone does not cover it) |
 | `server:update` | upgrading the Minecraft version and [pruning unused chunks](chunk-pruning.md) (both stop the server, change the world and restore the backup if it does not come up) |
 
 Two are easy to get wrong:

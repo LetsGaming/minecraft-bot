@@ -30,8 +30,8 @@ import {
   listIntents,
   clearIntent,
 } from "@mcbot/core/utils/wrapper/deferredIntents.js";
-import { sessionFromRequest } from "../auth/auth.js";
-import { BadRequest, NotFound, Conflict, HttpError } from "../errors.js";
+import { sessionFromRequest, type Session } from "../auth/auth.js";
+import { BadRequest, NotFound, Conflict, Forbidden, HttpError } from "../errors.js";
 import { ServerActionParams, IdParams, LinesQuery, DryRunQuery } from "./schemas.js";
 import { isServerOperatorAction } from "@mcbot/schema/serverActions.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
@@ -46,6 +46,63 @@ function requireServer(id: string): NonNullable<ReturnType<typeof getServerInsta
   const server = getServerInstance(id);
   if (!server) throw new NotFound(`No server named "${id}" is configured.`);
   return server;
+}
+
+/**
+ * Run one operator script on a server, after the route has authorized it.
+ * Shared by the rollback route and the generic action route, which differ
+ * only in the capability they demand.
+ */
+async function runServerAction(
+  id: string,
+  action: string,
+  session: Session,
+): Promise<{ ok: boolean; exitCode: number | null; output: string; stderr: string }> {
+  const server = requireServer(id);
+  // Kept as a guard (not a schema enum) so the "unknown server" 404 still
+  // precedes the "unknown action" 400 — the order the API has always had.
+  if (!isServerOperatorAction(action)) {
+    throw new BadRequest(`unknown action "${action}"`);
+  }
+  // `action` is now a ServerScriptAction, so the capability lookup below
+  // needs no cast — the guard is what proves the key is real.
+  if (server.capabilities && !server.capabilities.scripts[action]) {
+    throw new Conflict(`server has no ${action} script (suite not installed?)`);
+  }
+
+  await recordAdminAction({
+    action: `${action} (dashboard)`,
+    server: id,
+    by: session.tag,
+    byId: session.uid,
+  });
+
+  try {
+    const result = await runScript(server.config, action);
+    // Granted: the operator got what they were asking for, so stop
+    // offering it back to them.
+    clearIntent(id, action);
+    return {
+      ok: result.exitCode === 0,
+      exitCode: result.exitCode,
+      output: result.output.slice(-4000),
+      stderr: result.stderr.slice(-4000),
+    };
+  } catch (err) {
+    // Remember the wish, never the act. A restart or rollback that fires
+    // by itself hours later kicks players nobody warned, or discards play
+    // nobody meant to lose. The dashboard will offer this back as a
+    // one-click retry once the wrapper answers, with a person present.
+    recordIntent({
+      serverId: id,
+      action,
+      attemptedAt: Date.now(),
+      byTag: session.tag,
+      reason: errMsg(err),
+    });
+    log.error("web", `Script ${action} on ${id} failed: ${errMsg(err)}`);
+    throw new HttpError(503, `The wrapper did not answer, so "${action}" did not run. It is offered again once the wrapper is back.`);
+  }
 }
 
 export function registerServerRoutes(app: FastifyInstance): void {
@@ -77,6 +134,19 @@ export function registerServerRoutes(app: FastifyInstance): void {
     },
   );
 
+  // A rollback replaces the world from a snapshot and cannot be undone, so it
+  // needs server:rollback, not server:control (AUD-003). The static segment
+  // outranks the `:action` route below, so a rollback can never reach the
+  // server:control rule.
+  api.post(
+    "/api/servers/:id/rollback",
+    {
+      schema: { params: IdParams },
+      config: { capability: "server:rollback", scope: "server", param: "id" },
+    },
+    async (req) => runServerAction(req.params.id, "rollback", sessionFromRequest(req)!),
+  );
+
   api.post(
     "/api/servers/:id/:action",
     {
@@ -85,52 +155,11 @@ export function registerServerRoutes(app: FastifyInstance): void {
     },
     async (req) => {
       const { id, action } = req.params;
-      const server = requireServer(id);
-      // Kept as a guard (not a schema enum) so the "unknown server" 404 still
-      // precedes the "unknown action" 400 — the order the API has always had.
-      if (!isServerOperatorAction(action)) {
-        throw new BadRequest(`unknown action "${action}"`);
+      // Defense in depth: the dedicated route above owns rollback.
+      if (action === "rollback") {
+        throw new Forbidden(`You don't have "server:rollback" on this server.`);
       }
-      // `action` is now a ServerScriptAction, so the capability lookup below
-      // needs no cast — the guard is what proves the key is real.
-      if (server.capabilities && !server.capabilities.scripts[action]) {
-        throw new Conflict(`server has no ${action} script (suite not installed?)`);
-      }
-
-      const session = sessionFromRequest(req)!;
-      await recordAdminAction({
-        action: `${action} (dashboard)`,
-        server: id,
-        by: session.tag,
-        byId: session.uid,
-      });
-
-      try {
-        const result = await runScript(server.config, action);
-        // Granted: the operator got what they were asking for, so stop
-        // offering it back to them.
-        clearIntent(id, action);
-        return {
-          ok: result.exitCode === 0,
-          exitCode: result.exitCode,
-          output: result.output.slice(-4000),
-          stderr: result.stderr.slice(-4000),
-        };
-      } catch (err) {
-        // Remember the wish, never the act. A restart or rollback that fires
-        // by itself hours later kicks players nobody warned, or discards play
-        // nobody meant to lose. The dashboard will offer this back as a
-        // one-click retry once the wrapper answers, with a person present.
-        recordIntent({
-          serverId: id,
-          action,
-          attemptedAt: Date.now(),
-          byTag: session.tag,
-          reason: errMsg(err),
-        });
-        log.error("web", `Script ${action} on ${id} failed: ${errMsg(err)}`);
-        throw new HttpError(503, `The wrapper did not answer, so "${action}" did not run. It is offered again once the wrapper is back.`);
-      }
+      return runServerAction(id, action, sessionFromRequest(req)!);
     },
   );
 
@@ -171,12 +200,31 @@ export function registerServerRoutes(app: FastifyInstance): void {
       const server = requireServer(req.params.id);
 
       // Same rule as /server prune-stats: a UUID is prunable when
-      // neither the whitelist nor the usercache can name it.
-      const [uuids, whitelist, usercache] = await Promise.all([
-        listStatsUuids(server.config),
-        readWhitelist(server.config).catch(() => []),
-        readUserCache(server.config).catch(() => []),
-      ]);
+      // neither the whitelist nor the usercache can name it. That rule turns
+      // "could not read the lists" into "every player is unknown", so a
+      // failed or empty read refuses instead of pruning (AUD-004).
+      let uuids: string[];
+      let whitelist: Awaited<ReturnType<typeof readWhitelist>>;
+      let usercache: Awaited<ReturnType<typeof readUserCache>>;
+      try {
+        [uuids, whitelist, usercache] = await Promise.all([
+          listStatsUuids(server.config),
+          readWhitelist(server.config),
+          readUserCache(server.config),
+        ]);
+      } catch (err) {
+        log.error("web", `prune-stats on ${req.params.id}: reading players failed: ${errMsg(err)}`);
+        throw new HttpError(
+          503,
+          "Could not read the whitelist or usercache, so nothing was pruned: without them every player's stats would look orphaned.",
+        );
+      }
+      if (!Array.isArray(whitelist)) whitelist = [];
+      if (whitelist.length === 0 && usercache.length === 0) {
+        throw new Conflict(
+          "The whitelist and usercache are both empty, so nothing was pruned: every player's stats would look orphaned.",
+        );
+      }
       const known = new Set(
         [...whitelist, ...usercache]
           .map((e) => (e.uuid ?? "").toLowerCase())

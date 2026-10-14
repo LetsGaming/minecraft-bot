@@ -60,7 +60,7 @@ Any command can be gated behind the admin check via command settings — globall
 The web dashboard logs in via Discord OAuth2. Who gets what depends on which of three things you are:
 
 - **A user ID in the global `adminUsers`** — a sysadmin. Every capability on every server, plus `config.json`.
-- **Someone with Manage Guild on a guild the bot is in** — the guild-manager side. You can edit that guild's config block and nothing else. You never see the Minecraft host.
+- **Someone with Manage Guild on a guild the bot is in** — the guild-manager side. You can edit that guild's config block and nothing else. You never see the Minecraft host. Inside the block, `adminUsers` and `allowedServers` are the operator's: a guild manager's save keeps them as they are, and may only point features at servers the guild can already use (see [`guildConfig.ts`](../../src/web/backend/routes/guildConfig.ts)).
 - **Someone listed in `webui.grants`** — exactly the capabilities granted to you, per server. This is how you hand out part of the host API without handing over all of it. See [capabilities.md](capabilities.md).
 
 Role entries cannot be resolved for dashboard login (that would require guild member lookups), so roles remain a Discord-side permission. Removing a user ID from `adminUsers` or from `webui.grants` locks them out immediately: both are re-read on every request, so revoking applies on the next click rather than at the next login.

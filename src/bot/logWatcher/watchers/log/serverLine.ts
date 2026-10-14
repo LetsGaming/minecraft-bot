@@ -31,8 +31,8 @@
  *    a `<>`-rejection that works everywhere.
  *
  * Chat-driven watchers (chatBridge, sleepWatcher, defineCommand) do NOT
- * use these helpers — they must keep matching chat and already anchor on
- * the `<name>` wrapper itself.
+ * use these helpers — they must keep matching chat, and anchor on the
+ * speaker's `<name>` wrapper through chatLine.ts instead.
  */
 import type { ILogWatcher, LogHandler } from "@mcbot/core/types/index.js";
 

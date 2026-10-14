@@ -11,6 +11,12 @@ project follows [Semantic Versioning](https://semver.org/).
 - Discord messages get their own look per kind: joins, leaves, deaths, advancements, chat, milestones, rewards, leaderboards and whitelist prompts each have an icon and a colour instead of one shared grey or blue (`src/schema/embedCategories.ts`, `createEmbed` `category`).
 - Error embeds carry a ⛔ icon in the title.
 
+### Security
+
+- **Guild managers can no longer make themselves bot admins or reach other servers.** In the dashboard, a guild manager's save keeps the guild's `adminUsers` and `allowedServers` as they are on disk (sending a different value is refused) and may only reference servers the guild can already use; an unknown server id is an error instead of a warning. Sysadmins edit these as before. If the bot's guild list can't be read from Discord at login, the session now gets no guilds instead of every guild the user manages (`web/backend/routes/guildConfig.ts`, `web/backend/routes/auth.ts`, `core/utils/server/guildTargets.ts`).
+- **Players can't impersonate each other in chat.** In-game `!commands`, the chat bridge and the sleep prompt now read the speaker only from the server's own `<name>` at the start of the chat line, so text like `x]: <Admin> !link 123` inside a message, a `/me` line, or Discord text relayed with `/say` no longer counts as another player speaking. That closed `adminOnly` commands, `!link`, `!vote` and `!waypoint` to spoofing, and bridge messages posted under someone else's name. The sleep prompt also ignores names that aren't valid player names (`logWatcher/watchers/log/chatLine.ts`, `defineCommand.ts`, `chatBridge.ts`, `sleepWatcher.ts`).
+- **Rolling a world back needs `server:rollback`.** The dashboard's rollback action required only `server:control`; it now requires the `server:rollback` capability, and the Roll back button is shown only to users who hold it. Grant `server:rollback` to anyone who should keep it (`web/backend/routes/servers.ts`, `views/StatusView.vue`).
+
 ### Added
 
 - **Prune unused chunks from the dashboard.** The new Prune chunks page (capability `server:update`) scans a world for chunks nobody used (InhabitedTime below a threshold), shows a per-dimension summary and a map (decision or time used, region grid, protected zones you draw), and deletes them as a job that stops the server, backs it up and restores the backup if anything fails. Spawn, player areas, zones and a buffer are never deleted. The same scan can be ticked on the Upgrade page to prune before the first start of the new version under the upgrade's single backup. Needs wrapper 4.1 or newer and a setup suite with `world/prune-chunks.js` (`views/PruneView.vue`, `composables/usePrune.ts`, `web/backend/routes/prune.ts`, `docs/admin/chunk-pruning.md`).
@@ -38,6 +44,8 @@ project follows [Semantic Versioning](https://semver.org/).
 - **Keep chunks that look built, and look inside a chunk.** Unused chunks that hold chests, signs, beds, furnaces or modded blocks that no village, mineshaft or dungeon explains are kept as "looks built" (grey on the map, a column in the summary, an option to turn it off). The new Inspect tool opens any chunk: whether the plan deletes it and why, how long it was in use, its size on disk, its block entities and structures, and which protected area holds it. Needs a wrapper and setup suite with build protection.
 
 ### Fixed
+
+- **Dashboard "prune stats" no longer deletes every player's stats when the player lists can't be read.** If the whitelist can't be read, or the whitelist and usercache are both empty, the prune is refused instead of treating every player as unknown (`web/backend/routes/servers.ts`).
 
 - The streak leaderboard no longer prints the English "day(s)" in German.
 - Prune chunks page: a map that finishes loading after a rescan no longer replaces the new one, and a second request for the same map joins the first (`composables/usePrune.ts`).

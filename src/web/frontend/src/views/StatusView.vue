@@ -281,13 +281,17 @@ export default defineComponent({
      * read creative.
      */
     function actionsFor(server: ServerStatus): readonly ServerOperatorAction[] {
-      if (!can("server:control", server.id)) return [];
+      // Rollback is irreversible and has its own capability; everything else
+      // rides on server:control.
+      const granted = SERVER_OPERATOR_ACTIONS.filter((a) =>
+        can(a === "rollback" ? "server:rollback" : "server:control", server.id),
+      );
       // Gated on what the wrapper advertised: a suite without rollback.sh
       // should not offer a Rollback button that 409s. A wrapper too old to
       // report features gets the full set.
       const scripts = server.features?.scripts;
-      if (!scripts) return SERVER_OPERATOR_ACTIONS;
-      return SERVER_OPERATOR_ACTIONS.filter((a) => scripts[a] !== false);
+      if (!scripts) return granted;
+      return granted.filter((a) => scripts[a] !== false);
     }
 
     return {

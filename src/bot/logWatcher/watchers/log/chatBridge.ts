@@ -18,8 +18,10 @@ import {
 import { errMsg } from "@mcbot/core/utils/error.js";
 import { announce } from "@mcbot/core/utils/minecraft/serverMessages.js";
 import { safeMentions } from "../../../utils/embeds/alertUtils.js";
+import { chatLineRegex } from "./chatLine.js";
 
-const CHAT_REGEX = /\[.+?\]: <(?:\[AFK\]\s*)?([^>]+)>\s+(.+)/;
+// Anchored on the speaker (AUD-002): see chatLine.ts.
+const CHAT_REGEX = chatLineRegex(String.raw`\s+(.+)`);
 
 // The bridge listens on messageCreate, so the slash-command limiter never
 // sees it — it needs its own bucket or any member could flood the game
