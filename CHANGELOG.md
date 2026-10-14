@@ -45,6 +45,8 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **A console command whose RCON reply went missing counts as sent, not as answered with nothing.** Wrappers with the W-005 fix report such a command as `via: "rcon"` with no result instead of running it again through screen; the bot now reads that as `sent` (`rcon-no-reply`) rather than a delivered empty reply (`src/core/utils/server/access/commands.ts`, `src/schema/commandOutcome.ts`).
+
 - **Dashboard "prune stats" no longer deletes every player's stats when the player lists can't be read.** If the whitelist can't be read, or the whitelist and usercache are both empty, the prune is refused instead of treating every player as unknown (`web/backend/routes/servers.ts`).
 
 - The streak leaderboard no longer prints the English "day(s)" in German.

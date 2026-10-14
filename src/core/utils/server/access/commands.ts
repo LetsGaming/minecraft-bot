@@ -37,6 +37,11 @@ function parseCommandReply(body: unknown): CommandOutcome {
       via: typeof rconError === "string" ? "rcon-fallback" : "screen",
     };
   }
+  // RCON took it but the reply never came back (wrapper W-005): sent, not
+  // delivered — an empty output here would read as a real, empty answer.
+  if (via === "rcon" && result === null) {
+    return { kind: "sent", via: "rcon-no-reply" };
+  }
   return { kind: "delivered", output: result ?? "" };
 }
 
