@@ -10,11 +10,12 @@
 #
 # Two legs, because two wrappers matter:
 #   default  the wrapper's default branch: what the next wrapper release will be.
-#   pinned   the wrapper commit the minecraft-server-setup submodule points at:
-#            what operators get when they update the suite.
-# A red pinned leg with a green default leg means the suite's pointer is behind
+#   pinned   the wrapper release minecraft-server-setup pins in
+#            api-server-release.json: what operators get when they update the
+#            suite.
+# A red pinned leg with a green default leg means the suite's pin is behind
 # the wrapper this bot needs. Bump the pin (minecraft-server-setup
-# docs/wrapper-submodule.md); the bot merges after that, not before.
+# docs/wrapper-release.md); the bot merges after that, not before.
 name: Wrapper contract
 
 on:
@@ -35,7 +36,7 @@ env:
   # The api-wrapper repo. Note the repo and the package are named differently:
   # the package is `mc-api-server`, the repo is `minecraft-server-api`.
   WRAPPER_REPO: LetsGaming/minecraft-server-api
-  # Holds the wrapper as a submodule at src/scripts/api-server.
+  # Pins the wrapper release it installs in api-server-release.json.
   SETUP_REPO: LetsGaming/minecraft-server-setup
 
 jobs:
@@ -53,8 +54,7 @@ jobs:
         with:
           path: bot
 
-      # The gitlink SHA the suite repo records for the wrapper submodule. The
-      # contents API reports a submodule path as { type: "submodule", sha }.
+      # The wrapper release the suite installs, from its api-server-release.json.
       - name: Resolve the wrapper ref
         id: wrapper
         env:
@@ -65,7 +65,11 @@ jobs:
           INPUT_REF: ${{ inputs.wrapper_ref }}
         run: |
           if [ "$LEG" = "pinned" ]; then
-            ref=$(gh api "repos/${SETUP_REPO}/contents/src/scripts/api-server" --jq .sha)
+            # The suite installs a wrapper release named in api-server-release.json
+            # (it used to be a submodule); the release is the tag v<version>.
+            version=$(gh api "repos/${SETUP_REPO}/contents/api-server-release.json" \
+              -H "Accept: application/vnd.github.raw" | jq -r .version)
+            ref="v${version}"
             echo "Suite pins ${WRAPPER_REPO}@${ref}"
           else
             ref="$INPUT_REF"
@@ -104,7 +108,7 @@ jobs:
         run: |
           # Land order matters and this is the job that notices when it was
           # wrong. The check runs this branch against the wrapper's default
-          # branch and against the commit the suite pins, so a bot change that
+          # branch and against the release the suite pins, so a bot change that
           # expects a new wrapper feature fails here until the wrapper's half
           # is merged (default leg) and the suite points at it (pinned leg).
           # Correct, but the raw output reads like a broken contract rather

@@ -72,8 +72,8 @@ The order is fixed by who depends on whom:
 1. Wrapper: change the route and its schema, regenerate `openapi.json`, extend
    its tests. Bump the feature version in its manifest if the shape changed in
    a way an older reader would misparse.
-2. minecraft-server-setup: bump the submodule pointer to that wrapper commit
-   (see that repo's `docs/wrapper-submodule.md`).
+2. minecraft-server-setup: once the wrapper release is tagged, bump the pin in
+   its `api-server-release.json` (see that repo's `docs/wrapper-release.md`).
 3. Bot: `wire:sync`, adapt callers, extend `scripts/e2e-wrapper-contract.mjs`
    (it fails on a manifest route with no case), raise
    `EXPECTED_WRAPPER_FEATURES` if the bot now needs the new version.
@@ -86,7 +86,7 @@ Lockstep releases are for the cases where that window is impractical; both pull
 requests then link each other and merge together.
 
 CI enforces the order: `contract.yml` runs the e2e against the wrapper's
-default branch and against the commit the suite pins, so a bot that is ahead of
+default branch and against the release the suite pins, so a bot that is ahead of
 either shows up as a red leg, and `release.yml` runs the same gate before it
 publishes anything. The release gate checks against the wrapper ref in the
 repository variable `WRAPPER_REF` (default `main`); set it to the wrapper tag a
