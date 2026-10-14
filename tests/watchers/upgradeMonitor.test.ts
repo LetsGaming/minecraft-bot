@@ -62,6 +62,39 @@ describe("phaseViews", () => {
     const views = phaseViews([ev(1, "apply", "running"), ev(2, "apply.mods", "done")]);
     expect(views[0]!.status).toBe("running");
   });
+
+  it("counts a step the job moved on from as done: the countdown and the stop only say they started", () => {
+    const views = phaseViews([
+      ev(1, "plan", "done"),
+      ev(2, "countdown", "running", "Players are warned, 30s"),
+      ev(3, "stop", "running", "Saving and stopping the server"),
+      ev(4, "backup", "running"),
+      ev(5, "backup", "done"),
+      ev(6, "prune", "running"),
+    ]);
+    expect(views.map((v) => [v.phase, v.status])).toEqual([
+      ["plan", "done"],
+      ["countdown", "done"],
+      ["stop", "done"],
+      ["backup", "done"],
+      ["prune", "running"],
+    ]);
+  });
+
+  it("keeps an error when the job goes on after it, and a step that runs again is running", () => {
+    const views = phaseViews([
+      ev(1, "start", "running"),
+      ev(2, "start", "error"),
+      ev(3, "mods", "running"),
+      ev(4, "mods", "done"),
+      ev(5, "start", "running"),
+    ]);
+    expect(views.map((v) => [v.phase, v.status])).toEqual([
+      ["start", "running"],
+      ["mods", "done"],
+    ]);
+    expect(phaseViews([ev(1, "start", "error"), ev(2, "rollback", "running")])[0]!.status).toBe("error");
+  });
 });
 
 describe("renderUpgrade", () => {
@@ -72,6 +105,26 @@ describe("renderUpgrade", () => {
     expect(out).toContain("✅");
     expect(out).toContain("⏳");
     expect(out).toContain("1/6");
+  });
+
+  it("ticks off the countdown and the stop once the job is past them", () => {
+    const out = text(
+      renderUpgrade(
+        "smp",
+        job({
+          events: [
+            ev(1, "plan", "done"),
+            ev(2, "countdown", "running", "Players are warned, 30s"),
+            ev(3, "stop", "running", "Saving and stopping the server"),
+            ev(4, "backup", "running", "Archive backup"),
+          ],
+        }),
+      ),
+    );
+    expect(out).not.toContain("Players are warned");
+    expect(out).not.toContain("Saving and stopping");
+    expect(out).toContain("Archive backup");
+    expect(out).toContain("3/6");
   });
 
   it("reports a clean success", () => {

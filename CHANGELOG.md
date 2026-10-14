@@ -53,6 +53,7 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Upgrade and prune progress no longer leaves "Warn players" and "Save and stop" on ⏳.** The setup suite only reports that these two steps started, so the Discord message and the dashboard showed them as still running after the job had finished. A step the job has moved past now counts as done (failures are always reported before the job moves on). The progress bar counts them too (`src/schema/upgradePhases.ts`, `logWatcher/watchers/monitors/upgradeMonitor.ts`, `composables/useServerUpgrade.ts`).
 - **Switching servers on the Backups page can't act on the previous server any more.** Switching while the list was still loading kept the old server's archives on screen under the new server's name, so delete, restore and download went to the old server. The newest request now wins, the old list is cleared at once, and an action on an archive that isn't in the current list does nothing (`composables/useBackups.ts`).
 - **Switching servers on the Console page no longer shows the previous server's stream.** A switch during the connection's first request left the old stream attached and open (`composables/useConsole.ts`).
 - **Two dashboard config saves at the same moment no longer undo each other.** Saves for two different guilds (or a save and a rollback) are made one at a time, each against the file as it is then (`core/utils/config/configService.ts` `withConfigWriteLock`, `web/backend/routes/{config,guildConfig}.ts`).

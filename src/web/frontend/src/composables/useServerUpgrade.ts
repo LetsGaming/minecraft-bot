@@ -1,5 +1,8 @@
 import { computed, ref } from "vue";
 import type { UpgradeEvent, UpgradeJob, UpgradeRequest, UpgradeStarted } from "@mcbot/schema/wire/index.js";
+import { phaseRows } from "@mcbot/schema/upgradePhases.js";
+
+export { phaseRows, type PhaseRow } from "@mcbot/schema/upgradePhases.js";
 
 /**
  * The Upgrade page's job state: start the wrapper's upgrade through the
@@ -55,27 +58,6 @@ const browserVisibility: PageVisibility = {
 
 function messageOf(err: unknown, fallback: string): string {
   return err instanceof Error && err.message ? err.message : fallback;
-}
-
-export interface PhaseRow {
-  phase: string;
-  status: "running" | "done" | "error";
-  msg: string;
-}
-
-/** The latest status of each top-level phase, in the order they first appeared. */
-export function phaseRows(events: readonly UpgradeEvent[]): PhaseRow[] {
-  const order: string[] = [];
-  const latest = new Map<string, PhaseRow>();
-  for (const e of events) {
-    const base = e.phase.split(".")[0]!;
-    if (!order.includes(base)) order.push(base);
-    // A sub-step (apply.jar) is progress inside its phase, never its completion.
-    const raw = e.phase.includes(".") ? "running" : e.status;
-    const status = raw === "done" ? "done" : raw === "error" ? "error" : "running";
-    latest.set(base, { phase: base, status, msg: e.msg });
-  }
-  return order.map((p) => latest.get(p)!);
 }
 
 export function useServerUpgrade(options: UseServerUpgradeOptions) {

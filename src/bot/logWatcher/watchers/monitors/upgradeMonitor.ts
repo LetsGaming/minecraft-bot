@@ -16,7 +16,7 @@ import {
   supportsUpgrade,
 } from "@mcbot/core/utils/server/serverAccess.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
-import type { UpgradeEvent, UpgradeJob } from "@mcbot/schema/wire/index.js";
+import type { UpgradeJob } from "@mcbot/schema/wire/index.js";
 import { EmbedCategory } from "@mcbot/schema/embedCategories.js";
 import { serverInScope } from "../../../utils/guild/guildRouter.js";
 import { guildsWith, type GuildConfigSource } from "../../../utils/guild/guildConfigs.js";
@@ -24,6 +24,7 @@ import { createEmbed } from "../../../utils/embeds/embedUtils.js";
 import { EmbedColor, embedColorFor } from "../../../utils/embeds/embedColors.js";
 import { progressBar } from "../../../utils/embeds/gameDisplay.js";
 import { formatBytes } from "@mcbot/schema/format.js";
+import { phaseRows } from "@mcbot/schema/upgradePhases.js";
 import { holdAlerts } from "./downtimeMonitor.js";
 
 const POLL_INTERVAL_MS = 15_000;
@@ -61,25 +62,8 @@ const KNOWN_REASONS = new Set([
   "rollback_failed",
 ]);
 
-interface PhaseView {
-  phase: string;
-  status: string;
-  msg: string;
-}
-
 /** The latest status of each top-level phase, in the order they first appeared. */
-export function phaseViews(events: readonly UpgradeEvent[]): PhaseView[] {
-  const order: string[] = [];
-  const latest = new Map<string, PhaseView>();
-  for (const e of events) {
-    const base = e.phase.split(".")[0]!;
-    if (!order.includes(base)) order.push(base);
-    // A sub-step (apply.jar) is progress inside its phase, never its completion.
-    const status = e.phase.includes(".") ? "running" : e.status;
-    latest.set(base, { phase: base, status, msg: e.msg });
-  }
-  return order.map((p) => latest.get(p)!);
-}
+export const phaseViews = phaseRows;
 
 function statusIcon(status: string): string {
   if (status === "done") return "✅";
