@@ -53,7 +53,9 @@ them and the bot generates its side:
    ```
 
    `wire:check` always verifies `types.ts` against the vendored file; with a
-   wrapper checkout it also verifies the vendored file against the wrapper's.
+   wrapper checkout it also verifies the vendored file against the wrapper's,
+   apart from `info.version`, so a wrapper release that only moves its version
+   number does not turn the bot's CI red.
 3. `src/schema/wire/index.ts` names the generated schemas the way the bot uses
    them. Where a newer wrapper feature added a field, the name declares it
    optional (`InstalledMod.enabled`), because the bot also talks to older

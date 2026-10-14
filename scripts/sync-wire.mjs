@@ -12,7 +12,9 @@
  * wire:check always verifies that types.ts is exactly what the vendored
  * openapi.json generates. With a wrapper dir it also verifies that the
  * vendored file is the wrapper's current one; CI passes the dir, a local run
- * without it checks the first half only.
+ * without it checks the first half only. That comparison ignores info.version:
+ * it is the wrapper's package version, which every release moves without the
+ * HTTP surface changing, and the types never contain it.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
@@ -46,6 +48,13 @@ function fail(message) {
   process.exit(1);
 }
 
+/** The document with info.version blanked, for comparing the HTTP surface. */
+function withoutVersion(specText) {
+  const spec = JSON.parse(specText);
+  if (spec.info) delete spec.info.version;
+  return JSON.stringify(spec);
+}
+
 function resolveWrapperSpec() {
   if (!wrapperDir) return null;
   const file = path.join(path.resolve(wrapperDir), "openapi.json");
@@ -69,7 +78,7 @@ if (check) {
   }
   const vendored = readNormalized(vendoredPath);
   const wrapperSpec = resolveWrapperSpec();
-  if (wrapperSpec !== null && wrapperSpec !== vendored) {
+  if (wrapperSpec !== null && withoutVersion(wrapperSpec) !== withoutVersion(vendored)) {
     fail(
       "src/schema/wire/openapi.json differs from the wrapper's openapi.json.\n" +
         "Run `npm run wire:sync -- <wrapper dir>` and commit the result.",
