@@ -271,3 +271,26 @@ describe("reconcileServers", () => {
     ).toHaveLength(1);
   });
 });
+
+describe("in-game commands loaded by a reload (AUD-021)", () => {
+  it("reach watchers that were wired before they loaded", async () => {
+    const { getGlobalWatchers } = await import("../../src/bot/logWatcher/logWatcher.js");
+    const globals: Array<{ regex: RegExp; handler: () => void }> = [];
+    vi.mocked(getGlobalWatchers).mockReturnValue(globals as never);
+
+    await reconcileServers(fakeClient, botCfg({ late: srvCfg("late") }));
+    const w = createdWatchers.find((x) => x.serverId === "late")!;
+    const before = w.register.mock.calls.length;
+
+    const entry = { regex: /!late/, handler: vi.fn() };
+    globals.push(entry);
+    await reconcileServers(fakeClient, botCfg({ late: srvCfg("late") }));
+
+    expect(w.register.mock.calls.length).toBe(before + 1);
+    expect(w.register).toHaveBeenLastCalledWith(entry.regex, entry.handler);
+
+    // A second reload does not register it again.
+    await reconcileServers(fakeClient, botCfg({ late: srvCfg("late") }));
+    expect(w.register.mock.calls.length).toBe(before + 1);
+  });
+});

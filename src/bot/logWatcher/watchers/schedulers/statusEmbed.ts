@@ -411,7 +411,7 @@ function buildStatusEmbed(
  * Send a new status embed or edit the existing pinned one.
  * Persists the message ID so the same message is edited on every cycle.
  */
-async function sendOrUpdateEmbed(
+export async function sendOrUpdateEmbed(
   textChannel: TextChannel,
   embed: EmbedBuilder,
   guildId: string,
@@ -425,7 +425,21 @@ async function sendOrUpdateEmbed(
       const msg = await textChannel.messages.fetch(messageId);
       await msg.edit({ embeds: [embed] });
       return;
-    } catch {
+    } catch (err) {
+      // AUD-023: only a message that is really gone gets a replacement. A
+      // 5xx or a rate limit used to post a new embed every time and leave
+      // the old one showing a stale status; a deleted channel was never
+      // re-provisioned until a reconnect.
+      const code = discordErrorCode(err);
+      if (code === UNKNOWN_CHANNEL || code === MISSING_ACCESS) {
+        channelRefCache.delete(guildId);
+        log.warn("status", `Status channel for guild ${guildId} is gone; it is set up again next cycle`);
+        return;
+      }
+      if (code !== UNKNOWN_MESSAGE) {
+        log.warn("status", `Could not update the status embed for guild ${guildId}: ${errMsg(err)}`);
+        return;
+      }
       log.info(
         "status",
         `Embed message missing for guild ${guildId}, sending a new one`,
@@ -441,11 +455,23 @@ async function sendOrUpdateEmbed(
     }
     log.info("status", `Sent status embed in guild ${guildId}`);
   } catch (err) {
+    const code = discordErrorCode(err);
+    if (code === UNKNOWN_CHANNEL || code === MISSING_ACCESS) channelRefCache.delete(guildId);
     log.error(
       "status",
       `Failed to send embed for guild ${guildId}: ${errMsg(err)}`,
     );
   }
+}
+
+/** Discord JSON error codes this pass tells apart. */
+const UNKNOWN_CHANNEL = 10003;
+const UNKNOWN_MESSAGE = 10008;
+const MISSING_ACCESS = 50001;
+
+function discordErrorCode(err: unknown): number | null {
+  const code = (err as { code?: unknown } | null)?.code;
+  return typeof code === "number" ? code : null;
 }
 
 /**

@@ -52,6 +52,7 @@ vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
   readUserCache: vi.fn().mockResolvedValue([]),
   readBackups: vi.fn(),
   runScript: vi.fn(),
+  getList: vi.fn().mockResolvedValue({ playerCount: "0", maxPlayers: "20", players: [] }),
   pingServer: vi.fn().mockResolvedValue(null),
 }));
 
@@ -451,6 +452,40 @@ describe("/server control command", () => {
     });
     await execute(interaction);
     expect(interaction.editReply).toHaveBeenCalledTimes(2); // progress + result
+  });
+
+  it("answers the stop prompt in time when the player list hangs or fails (AUD-020)", async () => {
+    const server = makeServer();
+    vi.mocked(resolveServer).mockReturnValue(server);
+    const embedOf = (i: { reply: ReturnType<typeof vi.fn> }) =>
+      (i.reply.mock.calls[0]![0] as { embeds: { _opts: { description: string } }[] })
+        .embeds[0]!._opts.description;
+    const ask = async () => {
+      const interaction = makeInteraction({
+        reply: vi.fn().mockResolvedValue(undefined),
+        options: {
+          getString: vi.fn().mockReturnValue(null),
+          getBoolean: vi.fn().mockReturnValue(null),
+          getSubcommand: vi.fn().mockReturnValue("stop"),
+        },
+      });
+      await execute(interaction);
+      return interaction as unknown as { reply: ReturnType<typeof vi.fn> };
+    };
+
+    vi.useFakeTimers();
+    try {
+      vi.mocked(serverAccess.getList).mockReturnValueOnce(new Promise(() => {}));
+      const pending = ask();
+      await vi.advanceTimersByTimeAsync(1_600);
+      const hung = await pending;
+      expect(embedOf(hung)).toMatch(/not available/);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    vi.mocked(serverAccess.getList).mockRejectedValueOnce(new Error("timeout"));
+    expect(embedOf(await ask())).toMatch(/not available/);
   });
 
   it("asks before stopping: an ephemeral confirm row, nothing run or audited yet", async () => {

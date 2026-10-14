@@ -45,6 +45,7 @@ vi.mock("../../src/core/config.js", async (importOriginal) => ({
 
 import {
   invalidateStatusChannelCache,
+  sendOrUpdateEmbed,
   startStatusEmbed,
   reconcileStatusEmbed,
 } from "../../src/bot/logWatcher/watchers/schedulers/statusEmbed.js";
@@ -76,5 +77,49 @@ describe("startStatusEmbed guild source", () => {
       g1: { statusEmbed: { enabled: true } },
     }) as never);
     expect(timer).toBeTruthy();
+  });
+});
+
+describe("sendOrUpdateEmbed (AUD-023)", () => {
+  const discordError = (code: number) => Object.assign(new Error(`code ${code}`), { code });
+  function channel(fetchError: unknown) {
+    const edit = vi.fn();
+    return {
+      send: vi.fn().mockResolvedValue({ id: "new" }),
+      messages: {
+        fetch: fetchError
+          ? vi.fn().mockRejectedValue(fetchError)
+          : vi.fn().mockResolvedValue({ edit }),
+      },
+      edit,
+    };
+  }
+  const state = () => ({ g1: { channelId: "c", messageId: "old" } }) as never;
+
+  it("edits the stored message", async () => {
+    const ch = channel(null);
+    await sendOrUpdateEmbed(ch as never, {} as never, "g1", state());
+    expect(ch.edit).toHaveBeenCalledOnce();
+    expect(ch.send).not.toHaveBeenCalled();
+  });
+
+  it("posts a new embed only when the old message is gone", async () => {
+    const gone = channel(discordError(10008));
+    await sendOrUpdateEmbed(gone as never, {} as never, "g1", state());
+    expect(gone.send).toHaveBeenCalledOnce();
+  });
+
+  it("does not post a duplicate on a transient error", async () => {
+    for (const err of [discordError(0), Object.assign(new Error("503"), { status: 503 })]) {
+      const ch = channel(err);
+      await sendOrUpdateEmbed(ch as never, {} as never, "g1", state());
+      expect(ch.send).not.toHaveBeenCalled();
+    }
+  });
+
+  it("does not post into a channel that no longer exists", async () => {
+    const ch = channel(discordError(10003));
+    await sendOrUpdateEmbed(ch as never, {} as never, "g1", state());
+    expect(ch.send).not.toHaveBeenCalled();
   });
 });
