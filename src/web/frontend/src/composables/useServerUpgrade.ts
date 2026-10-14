@@ -36,12 +36,60 @@ export interface PageVisibility {
   onVisible(cb: () => void): () => void;
 }
 
+/** Finished jobs the viewer has closed, so the page does not reopen them. */
+export interface DismissedJobs {
+  has(jobId: string): boolean;
+  add(jobId: string): void;
+}
+
 export interface UseServerUpgradeOptions {
   api: UpgradeApi;
   onError: (message: string) => void;
   visibility?: PageVisibility;
   /** Epoch seconds; injectable for tests. */
   nowSeconds?: () => number;
+  dismissed?: DismissedJobs;
+  /**
+   * Which finished jobs this page shows after a load: the Upgrade page its
+   * upgrades, the Prune page its deletes. Both go through the same routes; a
+   * running job of either kind is always shown, since it blocks a new one.
+   */
+  kind?: JobKind;
+}
+
+export type JobKind = NonNullable<UpgradeJob["kind"]>;
+
+/** Wrappers before prune-only jobs report no kind: those jobs are upgrades. */
+const kindOf = (j: UpgradeJob): JobKind => j.kind ?? "upgrade";
+
+const DISMISSED_KEY = "mcbot.upgrade.dismissed";
+const DISMISSED_KEEP = 20;
+
+/**
+ * Closed results, kept in this browser: a finished job is shown for a day after
+ * a page load, and without this the one just closed came straight back. Storage
+ * can be missing or blocked; the page then only remembers until it is reloaded.
+ */
+function browserDismissed(): DismissedJobs {
+  let ids: string[] = [];
+  try {
+    const raw = JSON.parse(localStorage.getItem(DISMISSED_KEY) ?? "[]") as unknown;
+    if (Array.isArray(raw)) ids = raw.filter((v): v is string => typeof v === "string");
+  } catch {
+    /* no storage: memory only */
+  }
+  return {
+    has: (jobId) => ids.includes(jobId),
+    add(jobId) {
+      if (ids.includes(jobId)) return;
+      ids = [...ids, jobId].slice(-DISMISSED_KEEP);
+      try {
+        localStorage.setItem(DISMISSED_KEY, JSON.stringify(ids));
+      } catch {
+        /* no storage: memory only */
+      }
+    },
+  };
 }
 
 const browserVisibility: PageVisibility = {
@@ -63,6 +111,7 @@ function messageOf(err: unknown, fallback: string): string {
 export function useServerUpgrade(options: UseServerUpgradeOptions) {
   const visibility = options.visibility ?? browserVisibility;
   const nowSeconds = options.nowSeconds ?? (() => Date.now() / 1000);
+  const dismissed = options.dismissed ?? browserDismissed();
 
   const supported = ref<boolean | null>(null);
   const starting = ref(false);
@@ -148,7 +197,10 @@ export function useServerUpgrade(options: UseServerUpgradeOptions) {
       if (mine !== generation || !found) return;
       const last = found.events.length > 0 ? found.events[found.events.length - 1]!.ts : 0;
       const recent = nowSeconds() - last < RECENT_RESULT_SECONDS;
-      if (found.state !== "running" && !recent) return;
+      if (found.state !== "running") {
+        if (!recent || dismissed.has(found.jobId)) return;
+        if (options.kind && kindOf(found) !== options.kind) return;
+      }
       events.value = [];
       cursor = 0;
       absorb(found);
@@ -202,6 +254,13 @@ export function useServerUpgrade(options: UseServerUpgradeOptions) {
     supported.value = null;
   }
 
+  /** Close a finished job's result for good: a later attach() does not bring it back. */
+  function dismiss(): void {
+    const closed = job.value;
+    if (closed && closed.state !== "running") dismissed.add(closed.jobId);
+    reset();
+  }
+
   function dispose(): void {
     disposed = true;
     reset();
@@ -222,6 +281,7 @@ export function useServerUpgrade(options: UseServerUpgradeOptions) {
     attach,
     start,
     reset,
+    dismiss,
     dispose,
   };
 }

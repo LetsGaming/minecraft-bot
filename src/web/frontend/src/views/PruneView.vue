@@ -430,7 +430,7 @@ const run = useServerUpgrade({
     poll: (jobId, since) => apiGet<UpgradeJob>(`${base()}/upgrade/${jobId}?since=${since}`),
     current: async (since) => (await apiGet<{ job: UpgradeJob | null }>(`${base()}/upgrade/current?since=${since}`)).job,
   },
-  onError: (message) => (error.value = message),
+  onError: (message) => (error.value = message),  kind: "prune",
 });
 
 // ── Zones ─────────────────────────────────────────────────────────────────
@@ -724,7 +724,7 @@ async function confirmApply(): Promise<void> {
 }
 
 function clearRun(): void {
-  run.reset();
+  run.dismiss();
   void load();
 }
 
