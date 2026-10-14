@@ -23,6 +23,7 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The startup report expects wrapper feature `chunk-prune` version 2, which the Prune chunks page already uses; a version 1 wrapper is reported as outdated (`src/core/utils/server/wrapperContract.ts`).
 - Prune: the classes drawn over the terrain picture are more transparent, so the terrain stays recognisable under the heat and decision colours (`components/PruneMap.vue`).
 - Starting an upgrade with a stored prune plan that no longer exists now says to scan again instead of a generic failure (`web/backend/routes/upgrades.ts`).
 

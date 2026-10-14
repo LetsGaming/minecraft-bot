@@ -139,7 +139,9 @@ export const EXPECTED_WRAPPER_FEATURES: Record<string, ExpectedFeature> = {
       "wrapper they can race each other",
   },
   "chunk-prune": {
-    version: 1,
+    // v2: scan progress and cancel, dimensions, terrain tiles and per-chunk
+    // inspection (getPruneDimensions, cancelPruneScan, getPruneTile, ...).
+    version: 2,
     degrades:
       "pruning unused chunks from the dashboard, alone or as a step of an upgrade",
   },
