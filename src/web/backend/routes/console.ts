@@ -26,7 +26,11 @@ import {
 } from "@mcbot/schema/consoleCommands.js";
 import { sessionFromRequest } from "../auth/auth.js";
 import { subscribe, type ConsoleEvent } from "../console/consoleHub.js";
-import { registerStream } from "../console/streamRegistry.js";
+import {
+  registerStream,
+  openStreamsForUser,
+  MAX_STREAMS_PER_USER,
+} from "../console/streamRegistry.js";
 import { BadRequest, Forbidden, NotFound, HttpError } from "../errors.js";
 import { IdParams, ConsoleCommandBody } from "./schemas.js";
 
@@ -62,6 +66,13 @@ export function registerConsoleRoutes(app: FastifyInstance): void {
     },
     async (req, reply) => {
       const server = requireServer(req.params.id);
+      const session = sessionFromRequest(req)!;
+      if (openStreamsForUser(session.uid) >= MAX_STREAMS_PER_USER) {
+        throw new HttpError(
+          429,
+          `You already have ${MAX_STREAMS_PER_USER} consoles open. Close one and try again.`,
+        );
+      }
 
       reply.raw.writeHead(200, {
         "Content-Type": "text/event-stream",
@@ -88,7 +99,6 @@ export function registerConsoleRoutes(app: FastifyInstance): void {
       }, 25_000);
 
       let cleaned = false;
-      const session = sessionFromRequest(req)!;
       const deregister = registerStream({
         serverId: server.config.id,
         session,

@@ -345,9 +345,12 @@ describe("buildStreakLeaderboard", () => {
       version: 2,
       servers: {
         smp: {
-          u1: { currentStreak: 5, longestStreak: 9, lastClaim: 0, bonusStreak: 0, rewards: [] },
-          u2: { currentStreak: 7, longestStreak: 7, lastClaim: 0, bonusStreak: 0, rewards: [] },
+          u1: { currentStreak: 5, longestStreak: 9, lastClaim: Date.now() - 3_600_000, bonusStreak: 0, rewards: [] },
+          u2: { currentStreak: 7, longestStreak: 7, lastClaim: Date.now() - 3_600_000, bonusStreak: 0, rewards: [] },
           u3: { currentStreak: 0, longestStreak: 0, lastClaim: 0, bonusStreak: 0, rewards: [] },
+          // Stopped claiming three days ago: the streak has lapsed even though
+          // the stored number was never reset.
+          u4: { currentStreak: 30, longestStreak: 30, lastClaim: Date.now() - 3 * 86_400_000, bonusStreak: 0, rewards: [] },
         },
       },
     });
@@ -363,7 +366,8 @@ describe("buildStreakLeaderboard", () => {
     expect(current.entries[0]!.value).toBe(7);
 
     const longest = await buildStreakLeaderboard("longest_streak", "smp");
-    expect(longest.entries[0]!.name).toBe("SteveMC");
-    expect(longest.entries[0]!.value).toBe(9);
+    expect(longest.entries[0]!.name).toBe("<@u4>");
+    expect(longest.entries[0]!.value).toBe(30);
+    expect(longest.entries[1]!.name).toBe("SteveMC");
   });
 });

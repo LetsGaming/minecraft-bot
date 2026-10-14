@@ -20,13 +20,14 @@ import type { SqlDatabase } from "./driver.js";
 import { mapRows, col } from "./rows.js";
 import { log } from "../utils/logger.js";
 
-interface Migration {
+export interface Migration {
   id: number;
   name: string;
   sql: string;
 }
 
-const MIGRATIONS: Migration[] = [
+/** Exported for upgrade-path tests, which replay a prefix of them. */
+export const MIGRATIONS: readonly Migration[] = [
   {
     id: 1,
     name: "initial: audit logs + account links",

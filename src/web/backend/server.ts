@@ -191,5 +191,15 @@ export async function startWebServer(): Promise<FastifyInstance> {
   const app = buildServer();
   await app.listen({ port, host });
   log.info("web", `Dashboard listening on http://${host}:${port}`);
+  if (!process.env.WEBUI_METRICS_TOKEN && !["127.0.0.1", "localhost", "::1"].includes(host)) {
+    // /metrics names every server and its player counts. Open is the
+    // documented default for loopback-only setups; on a wider bind it
+    // should be a choice someone made, not an accident.
+    log.warn(
+      "web",
+      "/metrics is readable without a token on a non-loopback address. " +
+        "Set WEBUI_METRICS_TOKEN, or make sure only your reverse proxy can reach this port.",
+    );
+  }
   return app;
 }

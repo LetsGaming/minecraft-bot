@@ -13,6 +13,7 @@ import {
   getServerClaims,
 } from "../stores/dailyStore.js";
 import { loadLinkedAccountsOrEmpty } from "../stores/linkUtils.js";
+import { liveStreak } from "./rewards.js";
 import type { LeaderboardData } from "../../types/index.js";
 
 import { t } from "@mcbot/core/utils/i18n.js";
@@ -46,7 +47,7 @@ export async function buildStreakLeaderboard(
       name: linked[discordId] ?? `<@${discordId}>`,
       value:
         statKey === "streak"
-          ? (data.currentStreak ?? 0)
+          ? liveStreak(data)
           : (data.longestStreak ?? 0),
     }))
     .filter((e) => e.value > 0)

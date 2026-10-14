@@ -40,6 +40,20 @@ interface StreakResult {
   longestStreak: number;
 }
 
+/**
+ * The streak as it stands now. The stored `currentStreak` only changes on a
+ * claim, so someone who stopped claiming kept showing their old streak on
+ * `/streak` and the leaderboard until they claimed again. Past the grace
+ * window (two cooldowns, the same rule calcStreak breaks it by) it is 0.
+ */
+export function liveStreak(
+  data: Pick<UserClaimData, "currentStreak" | "lastClaim">,
+  now = Date.now(),
+): number {
+  if (!data.lastClaim || now - data.lastClaim > 2 * DAILY_COOLDOWN_MS) return 0;
+  return data.currentStreak ?? 0;
+}
+
 export function calcStreak(
   {
     currentStreak,

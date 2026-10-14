@@ -249,12 +249,15 @@ describe("web routes", () => {
   });
 
   /**
-   * Route-table parity: every /api route must (a) still be registered — an
-   * unregistered /api path falls into the static not-found handler and
-   * returns 404, not 401 — and (b) sit behind a session gate (the sysadmin
-   * scope or the logged-in scope). Without a cookie, both return 401.
+   * Route-table parity for a representative sample of /api routes: each must
+   * (a) still be registered — an unregistered /api path falls into the static
+   * not-found handler and returns 404, not 401 — and (b) sit behind a session
+   * gate (the sysadmin scope or the logged-in scope). Without a cookie, both
+   * return 401. For the host scope, completeness is enforced elsewhere:
+   * buildServer() refuses to register a host-scope route that declares no
+   * capability (RBAC-03), including routes added later.
    */
-  it("registers the complete gated route table (auth parity)", async () => {
+  it("keeps a sample of the gated route table behind the session gate (auth parity)", async () => {
     const app = buildServer();
     const gated: Array<[string, string]> = [
       ["GET", "/api/status"],
