@@ -68,6 +68,7 @@ import { registerSetupRoutes } from "./routes/setup.js";
 import { registerGuildConfigRoutes } from "./routes/guildConfig.js";
 import { registerProbeRoutes } from "./status/metrics.js";
 import { registerStaticFrontend } from "./static.js";
+import { registerCsrfGuard } from "./csrf.js";
 
 export function buildServer(): FastifyInstance {
   const trustProxy = createTrustProxyFn(() => loadConfig().webui?.trustProxy);
@@ -115,6 +116,11 @@ export function buildServer(): FastifyInstance {
   // mutating /api/* (see rateLimit.ts). Runs before the auth gate so login
   // and write abuse is rejected early.
   registerRateLimiting(app);
+
+  // ── Cross-site writes (AUD-017) ── a mutating /api request from a browser
+  // must come from this origin; SameSite=Lax alone lets a sibling port or
+  // subdomain post with the user's cookie.
+  registerCsrfGuard(app);
 
   // ── Central error handler (QUAL-10) ── one place maps thrown failures to a
   // consistent response: typed HttpErrors render at their status; unexpected
