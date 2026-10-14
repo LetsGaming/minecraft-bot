@@ -22,7 +22,6 @@ import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { getServerInstance } from "@mcbot/core/utils/server/server.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
-import { getOnlinePlayers } from "@mcbot/core/utils/minecraft/playerUtils.js";
 import { CommandError, errMsg } from "@mcbot/core/utils/error.js";
 import { suppressAlerts } from "../../logWatcher/watchers/monitors/downtimeMonitor.js";
 import { log } from "@mcbot/core/utils/logger.js";
@@ -231,6 +230,9 @@ function codeBlock(text: string): string {
   return "```\n" + text + "\n```";
 }
 
+/** How long the confirmation waits for the player list before saying "unknown". */
+const PLAYER_LOOKUP_BUDGET_MS = 1_500;
+
 /** Stop and restart disconnect everyone, so they ask first, ephemerally. */
 async function askToConfirm(
   interaction: ChatInputCommandInteraction,
@@ -239,7 +241,18 @@ async function askToConfirm(
   const server = resolveServer(interaction);
   needScript(server, sub);
 
-  const players = await getOnlinePlayers(server).catch(() => null);
+  // AUD-020: the reply must go out within Discord's 3 s window, and this
+  // command is not deferred. A slow wrapper used to miss it ("application did
+  // not respond"), and getOnlinePlayers turned its failure into an empty
+  // list, so the prompt said "nobody online". The roster gets a short
+  // budget, and anything but an answer reads as "unknown".
+  const players = await Promise.race([
+    serverAccess
+      .getList(server.config)
+      .then((list) => list.players)
+      .catch(() => null),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), PLAYER_LOOKUP_BUDGET_MS)),
+  ]);
   const description =
     players === null
       ? t(`control.confirmBodyUnknown.${sub}`)

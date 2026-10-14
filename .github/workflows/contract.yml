@@ -10,11 +10,12 @@
 #
 # Two legs, because two wrappers matter:
 #   default  the wrapper's default branch: what the next wrapper release will be.
-#   pinned   the wrapper commit the minecraft-server-setup submodule points at:
-#            what operators get when they update the suite.
-# A red pinned leg with a green default leg means the suite's pointer is behind
+#   pinned   the wrapper release minecraft-server-setup pins in
+#            api-server-release.json: what operators get when they update the
+#            suite.
+# A red pinned leg with a green default leg means the suite's pin is behind
 # the wrapper this bot needs. Bump the pin (minecraft-server-setup
-# docs/wrapper-submodule.md); the bot merges after that, not before.
+# docs/wrapper-release.md); the bot merges after that, not before.
 name: Wrapper contract
 
 on:
@@ -28,11 +29,14 @@ on:
         required: false
         default: ""
 
+permissions:
+  contents: read
+
 env:
   # The api-wrapper repo. Note the repo and the package are named differently:
   # the package is `mc-api-server`, the repo is `minecraft-server-api`.
   WRAPPER_REPO: LetsGaming/minecraft-server-api
-  # Holds the wrapper as a submodule at src/scripts/api-server.
+  # Pins the wrapper release it installs in api-server-release.json.
   SETUP_REPO: LetsGaming/minecraft-server-setup
 
 jobs:
@@ -46,33 +50,40 @@ jobs:
         wrapper: [default, pinned]
     steps:
       - name: Check out the bot
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           path: bot
 
-      # The gitlink SHA the suite repo records for the wrapper submodule. The
-      # contents API reports a submodule path as { type: "submodule", sha }.
+      # The wrapper release the suite installs, from its api-server-release.json.
       - name: Resolve the wrapper ref
         id: wrapper
         env:
           GH_TOKEN: ${{ github.token }}
+          # Through env, not interpolated into the script (AUD-030): an input
+          # is text, and `${{ }}` would paste it into the shell as code.
+          LEG: ${{ matrix.wrapper }}
+          INPUT_REF: ${{ inputs.wrapper_ref }}
         run: |
-          if [ "${{ matrix.wrapper }}" = "pinned" ]; then
-            ref=$(gh api "repos/${SETUP_REPO}/contents/src/scripts/api-server" --jq .sha)
+          if [ "$LEG" = "pinned" ]; then
+            # The suite installs a wrapper release named in api-server-release.json
+            # (it used to be a submodule); the release is the tag v<version>.
+            version=$(gh api "repos/${SETUP_REPO}/contents/api-server-release.json" \
+              -H "Accept: application/vnd.github.raw" | jq -r .version)
+            ref="v${version}"
             echo "Suite pins ${WRAPPER_REPO}@${ref}"
           else
-            ref="${{ inputs.wrapper_ref }}"
+            ref="$INPUT_REF"
           fi
           echo "ref=${ref}" >> "$GITHUB_OUTPUT"
 
       - name: Check out the api-wrapper
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           repository: ${{ env.WRAPPER_REPO }}
           ref: ${{ steps.wrapper.outputs.ref }}
           path: api-wrapper
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           # The project runs on Node 24; engines allows >= 20.
           node-version: 24
@@ -97,7 +108,7 @@ jobs:
         run: |
           # Land order matters and this is the job that notices when it was
           # wrong. The check runs this branch against the wrapper's default
-          # branch and against the commit the suite pins, so a bot change that
+          # branch and against the release the suite pins, so a bot change that
           # expects a new wrapper feature fails here until the wrapper's half
           # is merged (default leg) and the suite points at it (pinned leg).
           # Correct, but the raw output reads like a broken contract rather

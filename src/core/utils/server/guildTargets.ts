@@ -17,7 +17,7 @@ function scopeToList(scope: string | string[] | undefined): string[] {
  * Derive the set of server IDs a guild's config references.
  * Used as the default allowed set when `allowedServers` is not explicit.
  */
-function referencedServerIds(guild: GuildConfig): Set<string> {
+export function referencedServerIds(guild: GuildConfig): Set<string> {
   const ids = new Set<string>();
   if (guild.defaultServer) ids.add(guild.defaultServer);
   for (const scope of [
@@ -52,8 +52,19 @@ function referencedServerIds(guild: GuildConfig): Set<string> {
 export function getAllowedServerIds(
   guildId: string | undefined,
 ): Set<string> | null {
-  const cfg = loadConfig();
-  const guilds = cfg.guilds ?? {};
+  return allowedServerIdsIn(loadConfig().guilds, guildId);
+}
+
+/**
+ * getAllowedServerIds over an explicit `guilds` map instead of the loaded
+ * config, so a candidate config (e.g. a dashboard write that hasn't landed
+ * yet) can be checked with exactly the rule the bot will apply to it.
+ */
+export function allowedServerIdsIn(
+  guildMap: Record<string, GuildConfig> | undefined,
+  guildId: string | undefined,
+): Set<string> | null {
+  const guilds = guildMap ?? {};
   if (Object.keys(guilds).length <= 1) return null; // single-tenant
 
   if (!guildId) return new Set(); // DM in a multi-guild deployment

@@ -17,6 +17,14 @@ export function wrapperUrl(cfg: ServerConfig, route: string): string {
 
 /** A route scoped to this instance; everything under /instances/:id. */
 export function instanceUrl(cfg: ServerConfig, route: string): string {
+  // AUD-024: encodeURIComponent leaves `.` and `..` alone and URL parsing
+  // then resolves them, so a mod slug of `..` turned `/mods/../update`
+  // into `/update`: a different wrapper route, reached with the mod
+  // route's method. No route of ours has such a segment on purpose.
+  const pathPart = route.split("?", 1)[0]!;
+  if (pathPart.split("/").some((segment) => segment === "." || segment === "..")) {
+    throw new Error(`Refusing a wrapper route with a dot segment: ${route}`);
+  }
   return wrapperUrl(cfg, `/instances/${cfg.id}${route}`);
 }
 
@@ -56,12 +64,25 @@ export class RateLimitedError extends Error {
 export class ApiError extends Error {
   readonly status: number;
   readonly route: string;
+  /** The wrapper's own explanation: its `{ error }` field, else the raw body (capped). */
+  readonly wrapperMessage: string;
   constructor(route: string, status: number, body: string) {
     super(`API ${route} → ${status}: ${body}`);
     this.name = "ApiError";
     this.route = route;
     this.status = status;
+    this.wrapperMessage = wrapperErrorOf(body);
   }
+}
+
+function wrapperErrorOf(body: string): string {
+  try {
+    const parsed = JSON.parse(body) as { error?: unknown };
+    if (typeof parsed.error === "string") return parsed.error.slice(0, 300);
+  } catch {
+    /* not JSON */
+  }
+  return body.slice(0, 300);
 }
 
 function parseRetryAfterMs(res: Response): number | null {

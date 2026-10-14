@@ -107,3 +107,14 @@ describe("runMigrations checksums", () => {
     db.close();
   });
 });
+
+describe("runMigrations downgrade guard (AUD-032)", () => {
+  it("refuses a database migrated by a newer build", () => {
+    const db = freshDb();
+    runMigrations(db);
+    db.prepare(
+      "INSERT INTO schema_migrations (id, name, applied_at, checksum) VALUES (?, ?, ?, ?)",
+    ).run(9999, "from the future", new Date().toISOString(), "x");
+    expect(() => runMigrations(db)).toThrow(/newer version/);
+  });
+});

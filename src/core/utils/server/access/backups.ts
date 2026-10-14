@@ -8,6 +8,7 @@ import type {
 } from "../../../types/index.js";
 import type { BackupDeleteResult } from "@mcbot/schema/wire/index.js";
 import { instanceUrl, apiGet, ApiError } from "./apiClient.js";
+import { ScriptStillRunningError } from "./scripts.js";
 
 /** Scan the backup directories for a server. */
 export async function readBackups(cfg: ServerConfig): Promise<BackupSummary> {
@@ -126,11 +127,20 @@ export async function restoreBackupFile(
   );
   const headers: Record<string, string> = {};
   if (cfg.apiKey) headers["x-api-key"] = cfg.apiKey;
-  const res = await fetch(url, {
-    method: "POST",
-    headers,
-    signal: AbortSignal.timeout(RESTORE_TIMEOUT_MS),
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers,
+      signal: AbortSignal.timeout(RESTORE_TIMEOUT_MS),
+    });
+  } catch (err) {
+    // We stopped waiting; the wrapper may well still be restoring (AUD-012).
+    if (err instanceof DOMException && err.name === "TimeoutError") {
+      throw new ScriptStillRunningError("restore", RESTORE_TIMEOUT_MS);
+    }
+    throw err;
+  }
   if (!res.ok) {
     const text = await res.text();
     throw new ApiError("POST /backups/restore", res.status, text);

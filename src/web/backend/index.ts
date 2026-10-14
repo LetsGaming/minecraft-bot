@@ -6,9 +6,11 @@
  */
 import { loadConfig } from "@mcbot/core/config.js";
 import { initServers } from "@mcbot/core/utils/server/server.js";
-import { getDb } from "@mcbot/core/db/index.js";
+import type { FastifyInstance } from "fastify";
+import { getDb, closeDb } from "@mcbot/core/db/index.js";
 import { startWebServer } from "./server.js";
 import { startLiveConfig } from "./config/liveConfig.js";
+import { closeAllConsoles } from "./console/consoleHub.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
@@ -74,7 +76,38 @@ try {
 
 startLiveConfig();
 
-startWebServer().catch((err: unknown) => {
-  log.error("web", `Failed to start: ${errMsg(err)}`);
-  process.exit(1);
-});
+let server: FastifyInstance | null = null;
+startWebServer()
+  .then((app) => {
+    server = app;
+  })
+  .catch((err: unknown) => {
+    log.error("web", `Failed to start: ${errMsg(err)}`);
+    process.exit(1);
+  });
+
+/**
+ * AUD-027: stop cleanly on `docker stop` / Ctrl+C. Without a handler, node
+ * as PID 1 ignores SIGTERM, Docker waits out its timeout and SIGKILLs, and
+ * the console upstreams, open responses and the SQLite handle are never
+ * closed. A shutdown that hangs (a stuck stream) still ends after a grace
+ * period.
+ */
+const SHUTDOWN_GRACE_MS = 8_000;
+let shuttingDown = false;
+async function shutdown(signal: string): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  log.info("web", `Received ${signal} — closing the dashboard`);
+  setTimeout(() => process.exit(0), SHUTDOWN_GRACE_MS).unref();
+  closeAllConsoles();
+  try {
+    await server?.close();
+  } catch (err) {
+    log.warn("web", `Closing the HTTP server failed: ${errMsg(err)}`);
+  }
+  closeDb();
+  process.exit(0);
+}
+process.on("SIGTERM", () => void shutdown("SIGTERM"));
+process.on("SIGINT", () => void shutdown("SIGINT"));

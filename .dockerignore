@@ -4,23 +4,22 @@ node_modules/
 **/dist/
 **/*.tsbuildinfo
 
-# Secrets and local config — never bake into an image
+# Secrets and local config — never bake into an image. Patterns here match
+# from the context root only, so the nested ones need **/ (AUD-026):
+# dev-up writes data/agent-<id>/config.json and bot.db, and a non-Docker
+# deployment keeps its live config in data/.
 .env
 .env.*
-config.json
+**/config.json
 config.template.json
+**/*.db
+**/*.db-*
 
-# Runtime data — provided via volumes
+# Runtime data — provided via volumes. data/ is an allow-list: only what the
+# image ships as defaults goes in.
 logs/
-data/linkedAccounts.json
-data/linkCodes.json
-data/claimedDaily.json
-data/whitelistAudit.json
-data/leaderboardSchedule.json
-data/statusMessages.json
-data/snapshots/
-data/bot.db*
-data/*.imported
+data/*
+!data/dailyRewards.json
 
 # Repo metadata and docs — not needed in the image
 .git/

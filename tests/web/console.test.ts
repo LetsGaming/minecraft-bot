@@ -76,6 +76,7 @@ vi.mock("../../src/core/utils/stores/adminAudit.js", () => ({
 }));
 
 vi.mock("../../src/core/utils/config/configService.js", () => ({
+  withConfigWriteLock: <T>(fn: () => Promise<T>) => fn(),
   readRawConfig: vi.fn(() => JSON.parse(JSON.stringify(mockConfig))),
   validateCandidate: vi.fn(() => ({ valid: true, errors: [], warnings: [] })),
   writeConfig: vi.fn(async () => ({ warnings: [], changed: true })),
@@ -195,6 +196,21 @@ describe("console command policy", () => {
   it("treats an empty command as not blocked", () => {
     // Emptiness is a 400 from the schema, not a policy decision.
     expect(isBlockedConsoleCommand("   ", ["stop"])).toBe(false);
+  });
+
+  it("sees through namespaced spellings (AUD-010)", () => {
+    expect(isBlockedConsoleCommand("minecraft:op Mallory")).toBe(true);
+    expect(isBlockedConsoleCommand("/Minecraft:STOP")).toBe(true);
+    expect(isBlockedConsoleCommand("bukkit:deop Steve")).toBe(true);
+    expect(isBlockedConsoleCommand("op", ["minecraft:op"])).toBe(true);
+    expect(isBlockedConsoleCommand("minecraft:list")).toBe(false);
+  });
+
+  it("checks what an execute chain runs (AUD-010)", () => {
+    expect(isBlockedConsoleCommand("execute as @a run op Mallory")).toBe(true);
+    expect(isBlockedConsoleCommand("execute run execute if entity @a run minecraft:stop")).toBe(true);
+    expect(isBlockedConsoleCommand("execute as @a run say hi")).toBe(false);
+    expect(isBlockedConsoleCommand("execute as @a at @s")).toBe(false);
   });
 });
 

@@ -16,7 +16,7 @@
  * the mod author wrote, losing them makes the file unreadable for exactly the
  * person this editor exists to serve.
  */
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
 import { getServerInstance } from "@mcbot/core/utils/server/server.js";
 import {
@@ -24,6 +24,7 @@ import {
   readConfigFile,
   writeConfigFile,
   revertConfigFile,
+  wrapperFeatureVersion,
 } from "@mcbot/core/utils/server/serverAccess.js";
 import {
   applyConfigEdits,
@@ -40,8 +41,8 @@ import {
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
-import { sessionFromRequest } from "../auth/auth.js";
-import { BadRequest, NotFound, HttpError } from "../errors.js";
+import { sessionFromRequest, isSysadmin } from "../auth/auth.js";
+import { BadRequest, Forbidden, NotFound, HttpError } from "../errors.js";
 import {
   IdParams,
   ConfigFileParams,
@@ -74,6 +75,7 @@ const ACCESS_STATUS: Record<ConfigAccessErrorKind, number> = {
   "precondition-required": 409,
   "rate-limited": 429,
   rejected: 400,
+  protected: 403,
 };
 
 /** Turn a wrapper refusal into an HTTP error carrying its explanation; other errors pass through. */
@@ -95,6 +97,38 @@ function requireFileId(fileId: string): string {
 }
 
 /**
+ * AUD-009: files that hold credentials (`rcon.password`, plugin tokens and
+ * database passwords) or decide who may join and command the server.
+ */
+function holdsSecrets(relPath: string): boolean {
+  return relPath === "server.properties" || relPath.startsWith("plugins/");
+}
+
+function requestIsSysadmin(req: FastifyRequest): boolean {
+  const session = sessionFromRequest(req);
+  return session !== null && isSysadmin(session);
+}
+
+/**
+ * May this request see and edit {@link holdsSecrets} files? A sysadmin
+ * always may. Anyone else only behind a wrapper with mod-configs v2, which
+ * redacts secret values on read and refuses changes to protected
+ * `server.properties` keys unless the bot passes `allowProtected` (which it
+ * does for sysadmins only). An older wrapper serves those files verbatim,
+ * so `config:read` would hand out the RCON password.
+ */
+async function mayTouchSecretFiles(
+  req: FastifyRequest,
+  server: NonNullable<ReturnType<typeof getServerInstance>>,
+): Promise<boolean> {
+  if (requestIsSysadmin(req)) return true;
+  return (await wrapperFeatureVersion(server.config, "mod-configs")) >= 2;
+}
+
+const SECRET_FILE_REFUSED =
+  "This file can hold passwords and access settings. Only a bot administrator can open it on this server.";
+
+/**
  * Hold a write until the wrapper is back.
  *
  * The base value for each key is taken from the cached copy of the file,
@@ -111,16 +145,40 @@ function queueFromCache(
   serverId: string,
   fileId: string,
   edits: ConfigEdit[],
+  etag: string,
   session: { uid: string; tag: string } | null,
+  maySecretFiles: boolean,
 ): { count: number; response: QueuedWriteResult } | null {
-  const cached = recall<{ file: { relPath: string }; text: string }>(
-    serverId,
-    `configFile:${fileId}`,
-    "queueing a write",
-  );
+  const cached = recall<{
+    file: { relPath: string; editable?: boolean };
+    text: string;
+    etag: string;
+  }>(serverId, `configFile:${fileId}`, "queueing a write");
   if (!cached) return null;
 
+  // AUD-013: the same checks a live save makes. An editor working from an
+  // older copy than the cached one would otherwise overwrite a newer change
+  // on flush without ever seeing a conflict.
+  if (cached.value.etag !== etag) {
+    throw new HttpError(
+      409,
+      "This file changed since you opened it. Reload and re-apply your changes.",
+    );
+  }
+  if (holdsSecrets(cached.value.file.relPath) && !maySecretFiles) {
+    throw new Forbidden(SECRET_FILE_REFUSED);
+  }
   const parsed = parseConfig(cached.value.file.relPath, cached.value.text);
+  if (parsed.warning || cached.value.file.editable === false) {
+    throw new BadRequest(parsed.warning ?? "This file is read-only in the editor.");
+  }
+  try {
+    applyConfigEdits(cached.value.file.relPath, cached.value.text, edits);
+  } catch (err) {
+    if (err instanceof ConfigEditError) throw new BadRequest(err.message);
+    throw err;
+  }
+
   const baseByKey = new Map(
     parsed.nodes.map((node) => [JSON.stringify(node.path), node.value] as const),
   );
@@ -175,7 +233,10 @@ export function registerModConfigRoutes(app: FastifyInstance): void {
           "configIndex",
           () => cached(`configIndex:${req.params.id}`, TTL_CONFIG_INDEX, () => indexConfigFiles(server.config)),
         );
-        return { files: value.files, truncated: value.truncated, stale };
+        const files = (await mayTouchSecretFiles(req, server))
+          ? value.files
+          : value.files.filter((f) => !holdsSecrets(f.relPath));
+        return { files, truncated: value.truncated, stale };
       } catch (err) {
         if (err instanceof ConfigAccessError) throw accessFailure(err);
         log.error("web", `Config index for ${req.params.id} failed: ${errMsg(err)}`);
@@ -209,6 +270,10 @@ export function registerModConfigRoutes(app: FastifyInstance): void {
         if (err instanceof ConfigAccessError) throw accessFailure(err);
         log.error("web", `Config read on ${req.params.id} failed: ${errMsg(err)}`);
         throw new HttpError(502, OPERATION_FAILED);
+      }
+
+      if (holdsSecrets(contents.file.relPath) && !(await mayTouchSecretFiles(req, server))) {
+        throw new Forbidden(SECRET_FILE_REFUSED);
       }
 
       // Parsed here, not in the wrapper. The schema comes out of the file's own
@@ -320,7 +385,14 @@ export function registerModConfigRoutes(app: FastifyInstance): void {
         // read fell back to cache), so refusing their edit outright would
         // mean showing someone data they are then forbidden to act on.
         if (err instanceof ConfigAccessError) throw accessFailure(err);
-        const queued = queueFromCache(req.params.id, fileId, edits, sessionFromRequest(req));
+        const queued = queueFromCache(
+          req.params.id,
+          fileId,
+          edits,
+          req.body.etag,
+          sessionFromRequest(req),
+          await mayTouchSecretFiles(req, server),
+        );
         if (queued) {
           log.warn(
             "web",
@@ -341,6 +413,10 @@ export function registerModConfigRoutes(app: FastifyInstance): void {
           409,
           "This file changed since you opened it. Reload and re-apply your changes.",
         );
+      }
+
+      if (holdsSecrets(current.file.relPath) && !(await mayTouchSecretFiles(req, server))) {
+        throw new Forbidden(SECRET_FILE_REFUSED);
       }
 
       const parsedNow = parseConfig(current.file.relPath, current.text);
@@ -373,6 +449,7 @@ export function registerModConfigRoutes(app: FastifyInstance): void {
           fileId,
           next,
           current.etag,
+          { allowProtected: requestIsSysadmin(req) },
         );
         if (!result.ok) {
           throw new HttpError(
@@ -407,6 +484,24 @@ export function registerModConfigRoutes(app: FastifyInstance): void {
       const server = requireServer(req.params.id);
       const fileId = requireFileId(req.params.fileId);
 
+      let current;
+      try {
+        current = await readConfigFile(server.config, fileId);
+      } catch (err) {
+        if (err instanceof ConfigAccessError) throw accessFailure(err);
+        log.error("web", `Config read on ${req.params.id} failed: ${errMsg(err)}`);
+        throw new HttpError(502, OPERATION_FAILED);
+      }
+      if (holdsSecrets(current.file.relPath) && !(await mayTouchSecretFiles(req, server))) {
+        throw new Forbidden(SECRET_FILE_REFUSED);
+      }
+      if (current.etag !== req.body.etag) {
+        throw new HttpError(
+          409,
+          "This file changed since you opened it. Reload before reverting.",
+        );
+      }
+
       const session = sessionFromRequest(req)!;
       await recordAdminAction({
         action: "mod config revert (dashboard)",
@@ -418,8 +513,23 @@ export function registerModConfigRoutes(app: FastifyInstance): void {
 
       try {
         forget(req.params.id, `configFile:${fileId}`);
-        return await revertConfigFile(server.config, fileId, req.body.snapshot);
+        invalidate(`configFile:${req.params.id}:${fileId}`);
+        const result = await revertConfigFile(
+          server.config,
+          fileId,
+          req.body.snapshot,
+          current.etag,
+          { allowProtected: requestIsSysadmin(req) },
+        );
+        if (!result.ok) {
+          throw new HttpError(
+            409,
+            "This file changed while reverting. Reload and try again.",
+          );
+        }
+        return { etag: result.etag };
       } catch (err) {
+        if (err instanceof HttpError) throw err;
         if (err instanceof ConfigAccessError) throw accessFailure(err);
         log.error("web", `Config revert on ${req.params.id} failed: ${errMsg(err)}`);
         throw new HttpError(502, OPERATION_FAILED);

@@ -70,6 +70,16 @@ describe("sendCommandOutcome", () => {
     });
   });
 
+  it("marks an RCON command whose reply went missing as sent, not delivered", async () => {
+    mockFetch.mockResolvedValueOnce(
+      reply(200, { result: null, via: "rcon", sent: true, rconError: "RCON timeout" }),
+    );
+    expect(await sendCommandOutcome(cfg, "/give Steve diamond")).toEqual({
+      kind: "sent",
+      via: "rcon-no-reply",
+    });
+  });
+
   it("reads an old wrapper's string result as delivered and null as sent", async () => {
     mockFetch.mockResolvedValueOnce(reply(200, { result: "ok" }));
     expect(await sendCommandOutcome(cfg, "list")).toEqual({

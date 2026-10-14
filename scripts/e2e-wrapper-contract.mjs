@@ -1246,8 +1246,12 @@ ${edited}`;
   check("a 100 KB config saves (per-route body limit)", bigWritten.ok === true, JSON.stringify(bigWritten));
   const tooBig = await serverAccess.writeConfigFile(cfg, file.id, "x".repeat(1024 * 1024 + 1), bigWritten.etag).catch((e) => e);
   check("a text over the cap is a typed too-large error", tooBig?.name === "ConfigAccessError" && tooBig.kind === "too-large", String(tooBig));
-  const reverted = await serverAccess.revertConfigFile(cfg, file.id, written.snapshot);
-  check("revert returns the etag of the restored content", typeof reverted.etag === "string", JSON.stringify(reverted));
+  // mod-configs v2: a revert names the version it replaces, like a write.
+  const revertNoMatch = await raw("POST", inst(`/configs/${file.id}/revert`), { body: { snapshot: written.snapshot } });
+  check("a revert without If-Match is 428 { error }", revertNoMatch.status === 428 && isErrorBody(revertNoMatch), revertNoMatch.text);
+  eq("a revert with a stale etag is a conflict", await serverAccess.revertConfigFile(cfg, file.id, written.snapshot, written.etag), { ok: false, conflict: true });
+  const reverted = await serverAccess.revertConfigFile(cfg, file.id, written.snapshot, bigWritten.etag);
+  check("revert returns the etag of the restored content", reverted.ok === true && typeof reverted.etag === "string", JSON.stringify(reverted));
   eq("revert restores the snapshotted text", (await serverAccess.readConfigFile(cfg, file.id)).text, CONFIG_TEXT);
 
   const noMatch = await raw("PUT", inst(`/configs/${file.id}`), { body: { text: "a = 1\n" } });
@@ -1258,7 +1262,7 @@ ${edited}`;
   check("an unknown config id is 404 { error }", unknownConfig.status === 404 && isErrorBody(unknownConfig), unknownConfig.text);
   const badConfig = await raw("GET", inst("/configs/short"));
   check("a malformed config id is 400 { error }", badConfig.status === 400 && isErrorBody(badConfig), badConfig.text);
-  const badSnapshot = await raw("POST", inst(`/configs/${file.id}/revert`), { body: { snapshot: "nope" } });
+  const badSnapshot = await raw("POST", inst(`/configs/${file.id}/revert`), { body: { snapshot: "nope" }, headers: { "if-match": "x" } });
   check("reverting to an unknown snapshot is 404 { error }", badSnapshot.status === 404 && isErrorBody(badSnapshot), badSnapshot.text);
   const noSnapshot = await raw("POST", inst(`/configs/${file.id}/revert`), { body: {} });
   check("reverting without a snapshot name is 400 { error }", noSnapshot.status === 400 && isErrorBody(noSnapshot), noSnapshot.text);

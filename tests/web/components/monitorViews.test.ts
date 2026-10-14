@@ -111,7 +111,16 @@ describe("StatusView", () => {
     expect(w.find(".job-block").exists()).toBe(false);
   });
 
+  it("offers Roll back only with server:rollback", async () => {
+    servers();
+    mountWith(StatusView, { activeServer: "smp" });
+    await settle();
+    expect(button("Restart")).toBeTruthy();
+    expect(() => button("Roll back")).toThrow();
+  });
+
   it("asks for the server name before a rollback", async () => {
+    setCapabilities({ "*": ["server:read", "server:control", "server:rollback"] });
     servers();
     mountWith(StatusView, { activeServer: "smp" });
     await settle();

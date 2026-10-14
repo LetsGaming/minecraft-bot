@@ -4,7 +4,7 @@
  * revoked or a server removed afterwards would keep delivering until the
  * browser closed the tab.
  */
-import type { Session } from "../auth/auth.js";
+import { currentSessionEpoch, type Session } from "../auth/auth.js";
 import { sessionHolds } from "../auth/capabilities.js";
 import type { ConsoleEvent } from "./consoleHub.js";
 
@@ -30,7 +30,13 @@ export function streamStillAllowed(
   serverId: string,
   now: number = Date.now(),
 ): boolean {
-  return session.exp > now && sessionHolds(session, "server:read", serverId);
+  return (
+    session.exp > now &&
+    // Bumping webui.sessionEpoch signs everyone out; an open stream is a
+    // session in use, so it ends too.
+    (session.ep ?? 0) === currentSessionEpoch() &&
+    sessionHolds(session, "server:read", serverId)
+  );
 }
 
 const REVOKED = {
@@ -54,6 +60,20 @@ export function registerStream(stream: OpenStream): () => void {
     clearInterval(timer);
     open.delete(stream);
   };
+}
+
+/**
+ * Streams one person may hold open at once. Each costs a wrapper upstream
+ * subscription and a socket; a few tabs are normal, a loop opening hundreds
+ * is not.
+ */
+export const MAX_STREAMS_PER_USER = 8;
+
+/** Open streams held by one user, across servers. */
+export function openStreamsForUser(uid: string): number {
+  let n = 0;
+  for (const stream of open) if (stream.session.uid === uid) n += 1;
+  return n;
 }
 
 export function openStreamCount(serverId?: string): number {

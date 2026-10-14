@@ -117,7 +117,7 @@ describe("setupDiscordToMc", () => {
 
     await client._trigger("messageCreate", fakeMsg as never);
     expect(server.send).toHaveBeenCalledWith(
-      expect.stringContaining("/say"),
+      expect.stringContaining("/tellraw @a"),
     );
   });
 

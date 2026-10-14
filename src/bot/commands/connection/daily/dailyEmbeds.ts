@@ -156,11 +156,13 @@ export function buildQueuedEmbed(opts: {
   currentStreak: number;
   claimedAt: number;
   rewards: readonly DailyRewardItem[];
+  /** Replaces the "you are offline" line, e.g. for items a give could not deliver. */
+  notice?: string;
 }): EmbedBuilder {
   return createPlayerEmbed(opts.player, {
     title: `📦 ${t("daily.queuedTitle")}`,
     description: [
-      t("daily.queued", { server: opts.server }),
+      opts.notice ?? t("daily.queued", { server: opts.server }),
       `📋 ${formatItemList(opts.rewards)}`,
       t("daily.queueSize", { count: opts.queued, max: opts.max }),
     ].join("\n"),

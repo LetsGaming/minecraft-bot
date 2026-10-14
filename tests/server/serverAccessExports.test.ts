@@ -55,6 +55,7 @@ const PUBLIC_RUNTIME_EXPORTS = [
   "applyModUpdates",
   "cancelPruneScan",
   "checkModUpdates",
+  "classifyScriptFailure",
   "compareContract",
   "contractIsClean",
   "deleteBackupFile",
@@ -118,6 +119,7 @@ const PUBLIC_RUNTIME_EXPORTS = [
   "updateMod",
   "verifyWrapperContract",
   "versionAtLeast",
+  "wrapperFeatureVersion",
   "writeConfigFile",
 ];
 

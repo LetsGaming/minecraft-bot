@@ -15,6 +15,7 @@ import {
   readRawConfig,
   validateCandidate,
   writeConfig,
+  withConfigWriteLock,
 } from "@mcbot/core/utils/config/configService.js";
 import { guildConfigHash } from "@mcbot/core/utils/config/guildConfigHash.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
@@ -23,7 +24,11 @@ import { sessionFromRequest, isSysadmin, canManageGuild, guildScopeFresh } from 
 import { listBotGuilds, discordHttpError } from "../auth/discordRest.js";
 import { readConfigSchema } from "../config/configSchema.js";
 import { HttpError, Forbidden, Conflict, ValidationFailed, ServiceUnavailable } from "../errors.js";
-import type { RawBotConfig } from "@mcbot/core/types/index.js";
+import {
+  allowedServerIdsIn,
+  referencedServerIds,
+} from "@mcbot/core/utils/server/guildTargets.js";
+import type { RawBotConfig, GuildConfig } from "@mcbot/core/types/index.js";
 import { GUILD_FEATURE_KEYS } from "@mcbot/schema";
 import { IdParams, GuildConfigWriteBody, MutationResult } from "./schemas.js";
 
@@ -37,6 +42,79 @@ function enabledFeatures(block: Record<string, unknown> | undefined): string[] {
     if (k === "statusEmbed") return (v as { enabled?: boolean }).enabled === true;
     return true;
   });
+}
+
+/**
+ * Guild-block keys that decide WHO is a bot admin in the guild and WHICH
+ * servers it may reach. Those are tenant boundaries the operator draws, not
+ * guild settings: a Manage Guild holder who could edit them could grant
+ * themselves admin commands against any server (AUD-001).
+ */
+const SYSADMIN_ONLY_GUILD_KEYS = ["adminUsers", "allowedServers"] as const;
+
+/**
+ * Apply what a non-sysadmin may not change in their own guild block. Returns
+ * the block to write and the reasons the write is refused (empty when it may
+ * proceed).
+ *
+ * - The sysadmin-only keys keep their value on disk. A block that omits one
+ *   keeps it; a block that sends a different value is refused rather than
+ *   silently ignored, so the editor shows why the change didn't stick.
+ * - Every server the block references must exist, and must already be one
+ *   this guild may target under the current config. References widen a
+ *   guild's scope when `allowedServers` is unset, so adding one is a scope
+ *   change too. An unrestricted guild (single-tenant, or one that references
+ *   nothing) may use any configured server: nothing is widened there.
+ */
+function applyManagerLimits(
+  current: RawBotConfig,
+  guildId: string,
+  submitted: GuildConfig,
+): { block: GuildConfig; errors: string[] } {
+  const errors: string[] = [];
+  const before = (current.guilds ?? {})[guildId];
+  const block: GuildConfig = { ...submitted };
+  for (const key of SYSADMIN_ONLY_GUILD_KEYS) {
+    if (block[key] === undefined) {
+      if (before?.[key] !== undefined) block[key] = before[key];
+    } else if (JSON.stringify(block[key]) !== JSON.stringify(before?.[key])) {
+      errors.push(`guilds.${guildId}.${key} can only be changed by a bot admin.`);
+    }
+  }
+
+  const known = new Set(Object.keys(current.servers ?? {}));
+  const scope = allowedServerIdsIn(current.guilds, guildId);
+  for (const id of referencedServerIds(block)) {
+    if (!known.has(id)) {
+      errors.push(`guilds.${guildId} references unknown server "${id}".`);
+    } else if (scope && !scope.has(id)) {
+      errors.push(
+        `guilds.${guildId} references server "${id}", which this guild may ` +
+          `not use. Only a bot admin can give a guild access to another server.`,
+      );
+    }
+  }
+  return { block, errors };
+}
+
+/**
+ * Validation output limited to one guild's block. When the config is
+ * invalid only elsewhere, the manager gets a plain explanation instead of
+ * someone else's errors.
+ */
+function scopedToGuild(
+  result: { valid: boolean; errors: string[]; warnings: string[] },
+  guildId: string,
+): { errors: string[]; warnings: string[] } {
+  const mine = (line: string): boolean => line.includes(`guilds.${guildId}.`) || line.includes(`guilds.${guildId} `);
+  const errors = result.errors.filter(mine);
+  return {
+    errors:
+      errors.length > 0 || result.valid
+        ? errors
+        : ["The bot's config has a problem outside this guild's settings. Ask a bot administrator to fix it."],
+    warnings: result.warnings.filter(mine),
+  };
 }
 
 export function registerGuildConfigRoutes(app: FastifyInstance): void {
@@ -126,64 +204,89 @@ export function registerGuildConfigRoutes(app: FastifyInstance): void {
 
       const { baseHash, guildConfig } = req.body;
 
-      // Build the new config from the current one on disk, replacing ONLY
-      // this guild's block. The manager can't touch other guilds, servers,
-      // or top-level settings; those are copied through untouched. Then
-      // the whole thing is validated as one.
-      const current = readRawConfig();
+      // The check and the write happen under one lock (AUD-014): saves for
+      // two different guilds must not both build from the same file.
+      return withConfigWriteLock(async () => {
+        // Build the new config from the current one on disk, replacing ONLY
+        // this guild's block. The manager can't touch other guilds, servers,
+        // or top-level settings; those are copied through untouched. Then
+        // the whole thing is validated as one.
+        const current = readRawConfig();
 
-      // Optimistic concurrency on this guild's own block: another save only
-      // conflicts when it touched the same guild.
-      const currentHash = guildConfigHash((current.guilds ?? {})[guildId]);
-      if (baseHash !== currentHash) {
-        throw new Conflict(
-          "This guild's config changed since you loaded it. Reload and re-apply.",
-          { currentHash },
-        );
-      }
+        // Optimistic concurrency on this guild's own block: another save only
+        // conflicts when it touched the same guild.
+        const currentHash = guildConfigHash((current.guilds ?? {})[guildId]);
+        if (baseHash !== currentHash) {
+          throw new Conflict(
+            "This guild's config changed since you loaded it. Reload and re-apply.",
+            { currentHash },
+          );
+        }
 
-      // Splice the submitted block into the current config and validate the
-      // whole thing as one candidate below. `guildConfig` is the request body
-      // (object-checked by the schema); the merged object is RawBotConfig-shaped
-      // by construction (spread of current + one guild key).
-      const merged: RawBotConfig = {
-        ...current,
-        guilds: {
-          ...(current.guilds ?? {}),
-          [guildId]: guildConfig as Record<string, unknown>,
-        },
-      } as RawBotConfig;
+        // The request body is object-checked by the schema; its shape is
+        // GuildConfig's, which validateCandidate checks below.
+        let block = guildConfig as GuildConfig;
+        if (!isSysadmin(session)) {
+          const limited = applyManagerLimits(current, guildId, block);
+          if (limited.errors.length > 0) throw new ValidationFailed(limited.errors);
+          block = limited.block;
+        }
 
-      const result = validateCandidate(merged);
-      if (!result.valid) {
-        throw new ValidationFailed(result.errors);
-      }
+        // Splice the submitted block into the current config and validate the
+        // whole thing as one candidate below. `guildConfig` is the request body
+        // (object-checked by the schema); the merged object is RawBotConfig-shaped
+        // by construction (spread of current + one guild key).
+        const merged: RawBotConfig = {
+          ...current,
+          guilds: {
+            ...(current.guilds ?? {}),
+            [guildId]: block,
+          },
+        } as RawBotConfig;
 
-      let changed = true;
-      try {
-        ({ changed } = await writeConfig(merged, {
-          byTag: session.tag,
-          byId: session.uid,
-          note: `guild config write (${guildId})`,
-        }));
-      } catch (err) {
-        // Surface the actionable write error (e.g. read-only config path),
-        // logged, mirroring the full-config PUT — not a generic 500.
-        const msg =
-          err instanceof Error ? err.message : "Failed to write guild config.";
-        log.error("web", `Guild config write failed: ${msg}`);
-        throw new HttpError(500, msg);
-      }
-      // Only audit an actual change — a Save with no edits is a no-op.
-      if (changed) {
-        await recordAdminAction({
-          action: "guild config write (dashboard)",
-          by: session.tag,
-          byId: session.uid,
-          guildId,
-        });
-      }
-      return { ok: true, changed, warnings: result.warnings };
+        const result = validateCandidate(merged);
+        // AUD-019: a guild manager sees what concerns their guild only, not
+        // other guilds' ids or every server id in the config.
+        const shown = isSysadmin(session)
+          ? result
+          : scopedToGuild(result, guildId);
+        if (!result.valid) {
+          throw new ValidationFailed(shown.errors);
+        }
+
+        let changed = true;
+        try {
+          ({ changed } = await writeConfig(merged, {
+            byTag: session.tag,
+            byId: session.uid,
+            note: `guild config write (${guildId})`,
+          }));
+        } catch (err) {
+          // Surface the actionable write error (e.g. read-only config path),
+          // logged, mirroring the full-config PUT — not a generic 500.
+          const msg =
+            err instanceof Error ? err.message : "Failed to write guild config.";
+          log.error("web", `Guild config write failed: ${msg}`);
+          // The message names the config file's path, which only a sysadmin
+          // may see (AUD-019).
+          throw new HttpError(
+            500,
+            isSysadmin(session)
+              ? msg
+              : "The config could not be saved. A bot administrator can find the reason in the dashboard log.",
+          );
+        }
+        // Only audit an actual change — a Save with no edits is a no-op.
+        if (changed) {
+          await recordAdminAction({
+            action: "guild config write (dashboard)",
+            by: session.tag,
+            byId: session.uid,
+            guildId,
+          });
+        }
+        return { ok: true, changed, warnings: shown.warnings };
+      });
     },
   );
 }

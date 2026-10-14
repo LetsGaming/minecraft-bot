@@ -91,6 +91,14 @@ export async function flushQueuedEdits(
       continue;
     }
 
+    // AUD-013: the same refusals a live save makes. A file that became
+    // read-only or unparseable since the edit was queued keeps its edits.
+    if (current.file.editable === false || parseConfig(current.file.relPath, current.text).warning) {
+      log.warn("web", `Flush skipped ${fileId} on ${serverId}: the file is read-only in the editor now`);
+      skipped += 1;
+      continue;
+    }
+
     const plan = planMerge(queued, valuesByKey(current.file.relPath, current.text));
     conflicts.push(...plan.conflicts);
 
@@ -112,7 +120,16 @@ export async function flushQueuedEdits(
       continue;
     }
 
-    const result = await writeConfigFile(server.config, fileId, next, current.etag);
+    // One refused file (too large, a protected key, the wrapper going away
+    // again) must not abort the rest of the flush (AUD-013).
+    let result;
+    try {
+      result = await writeConfigFile(server.config, fileId, next, current.etag);
+    } catch (err) {
+      log.warn("web", `Flush could not write ${fileId} on ${serverId}: ${errMsg(err)}`);
+      skipped += 1;
+      continue;
+    }
     if (!result.ok) {
       // Someone wrote between our read and our write. Nothing is lost.
       log.warn("web", `Flush lost the race on ${fileId}; edits stay queued.`);

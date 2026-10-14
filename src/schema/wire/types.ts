@@ -1059,10 +1059,15 @@ export interface components {
             snapshot: string;
         };
         ConfigRevertRequest: {
+            /** @description Allow changes to protected server.properties keys (RCON, online-mode, whitelist, permission levels, level-name, ports). Without it such a change is refused with 403. */
+            allowProtected?: boolean;
             /** @description A name from the file's `snapshots`. */
             snapshot: string;
         };
         ConfigWriteRequest: {
+            /** @description Allow changes to protected server.properties keys (RCON, online-mode, whitelist, permission levels, level-name, ports). Without it such a change is refused with 403. */
+            allowProtected?: boolean;
+            /** @description The new contents. Secret values come back redacted from a read; a redacted line sent back unchanged keeps its real value. */
             text: string;
         };
         DiskUsage: {
@@ -1879,6 +1884,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Locked: another operation holds the instance */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationBusy"];
+                };
+            };
             /** @description Rate limited */
             429: {
                 headers: {
@@ -1903,6 +1917,8 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description The ETag of the partial download being resumed. A Range is honoured only while it still names the same file; otherwise the whole file is sent. */
+                "if-range"?: string;
                 /** @description `bytes=start-[end]` or `bytes=-suffix`. */
                 range?: string;
             };
@@ -2038,6 +2054,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RestoreRefused"];
+                };
+            };
+            /** @description Locked: another operation holds the instance */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationBusy"];
                 };
             };
             /** @description Rate limited */
@@ -2399,6 +2424,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Status 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Not found */
             404: {
                 headers: {
@@ -2458,7 +2492,10 @@ export interface operations {
     postInstancesByIdConfigsByFileIdRevert: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The etag of the version being replaced. */
+                "if-match": string;
+            };
             path: {
                 /** @description Opaque id from the config index. */
                 fileId: string;
@@ -2500,8 +2537,35 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Status 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Precondition failed */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Precondition required */
+            428: {
                 headers: {
                     [name: string]: unknown;
                 };

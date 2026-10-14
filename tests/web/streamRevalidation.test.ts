@@ -14,7 +14,7 @@ const GRANTED = "222222222222222222";
 const state = vi.hoisted(() => ({
   cfg: {
     adminUsers: [] as string[],
-    webui: { grants: {} as Record<string, unknown> },
+    webui: { grants: {} as Record<string, unknown>, sessionEpoch: undefined as number | undefined },
   },
 }));
 
@@ -26,6 +26,7 @@ import {
   registerStream,
   closeRevokedStreams,
   openStreamCount,
+  openStreamsForUser,
   streamStillAllowed,
   REVALIDATE_INTERVAL_MS,
   type OpenStream,
@@ -47,7 +48,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   state.cfg = {
     adminUsers: [ADMIN],
-    webui: { grants: { [GRANTED]: { smp: ["server:read"] } } },
+    webui: { grants: { [GRANTED]: { smp: ["server:read"] } }, sessionEpoch: undefined },
   };
 });
 
@@ -92,5 +93,25 @@ describe("periodic stream revalidation", () => {
     stop();
     expect(openStreamCount()).toBe(0);
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe("sign-out and per-user limits", () => {
+  it("closes streams when webui.sessionEpoch is bumped", () => {
+    const { close } = watch(GRANTED);
+    state.cfg.webui.sessionEpoch = 1;
+    vi.advanceTimersByTime(REVALIDATE_INTERVAL_MS);
+    expect(close).toHaveBeenCalledWith(expect.objectContaining({ reason: "revoked" }));
+  });
+
+  it("counts a user's open streams", () => {
+    const a = watch(GRANTED);
+    const b = watch(GRANTED);
+    const c = watch(ADMIN);
+    expect(openStreamsForUser(GRANTED)).toBe(2);
+    a.stop();
+    b.stop();
+    c.stop();
+    expect(openStreamsForUser(GRANTED)).toBe(0);
   });
 });

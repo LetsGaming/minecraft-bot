@@ -166,10 +166,15 @@ export const EXPECTED_WRAPPER_FEATURES: Record<string, ExpectedFeature> = {
     degrades: "restoring a world from the dashboard",
   },
   "mod-configs": {
-    version: 1,
+    // v2: secrets are redacted on read, protected server.properties keys
+    // need allowProtected, and a revert names the version it replaces. On a
+    // v1 wrapper only sysadmins see server.properties and plugin configs
+    // (they would show the RCON password verbatim).
+    version: 2,
     degrades:
-      "the dashboard's mod config editor — mod settings can only be changed " +
-      "by editing files on the host",
+      "the dashboard's mod config editor — server.properties and plugin " +
+      "configs are shown to bot administrators only, and with v1 or no " +
+      "mod-configs at all, mod settings can only be changed on the host",
   },
   "rcon-command": {
     // v2: the reply names the channel (`via`, `sent`) and an undeliverable

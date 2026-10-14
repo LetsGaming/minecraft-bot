@@ -5,6 +5,7 @@ import {
   REST,
   Routes,
   MessageFlags,
+  type Interaction,
 } from "discord.js";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -319,7 +320,11 @@ void (async () => {
   // reconnect so stale TextChannel/VoiceChannel objects are not reused.
   client.on("shardResume", () => invalidateStatusChannelCache());
 
-  client.on("interactionCreate", async (interaction) => {
+  // AUD-008: an async listener's rejection is not caught by discord.js, and
+  // the process guard exits on any unhandled rejection. One slow
+  // autocomplete (an expired interaction makes respond() throw) must not
+  // take the bot down, so every rejection ends here.
+  const handleInteraction = async (interaction: Interaction): Promise<void> => {
     // ── Autocomplete ──
     if (interaction.isAutocomplete()) {
       const autocomplete = interaction;
@@ -362,7 +367,7 @@ void (async () => {
             filtered.slice(0, 25).map((n) => ({ name: n, value: n })),
           );
         } catch {
-          await autocomplete.respond([]);
+          await autocomplete.respond([]).catch(() => {});
         }
         return;
       }
@@ -486,7 +491,12 @@ void (async () => {
         recovery: t("common.unexpectedErrorRecovery", {}, guildId),
       });
     }
-  });
+  };
+  client.on("interactionCreate", (interaction) =>
+    handleInteraction(interaction).catch((err: unknown) => {
+      log.error("interaction", `Unhandled interaction failure: ${errMsg(err)}`);
+    }),
+  );
 
   if (DEV_NO_DISCORD) {
     log.warn(

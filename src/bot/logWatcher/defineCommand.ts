@@ -1,5 +1,6 @@
 import { recordCommandUsage } from "@mcbot/core/utils/commands/commandUsage.js";
 import { registerLogCommand } from "./logWatcher.js";
+import { chatLineRegex } from "./watchers/log/chatLine.js";
 import { resolveCommandPolicy } from "@mcbot/core/utils/commands/commandPolicy.js";
 import {
   loadLinkedAccountsOrEmpty,
@@ -124,9 +125,9 @@ export function defineCommand({
     })
     .join("");
 
-  const regex = new RegExp(
-    `\\[.+?\\]: <(?:\\[AFK\\]\\s*)?([^>]+)> !(${namePattern})${argsPattern}`,
-  );
+  // Anchored speaker prefix (AUD-002): the name is the server's own `<name>`
+  // wrapper, never a `]: <name>` a player typed later in the message.
+  const regex = chatLineRegex(` !(${namePattern})${argsPattern}`);
 
   const commandInfo: InGameCommandInfo = {
     command:

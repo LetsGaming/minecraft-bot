@@ -22,7 +22,7 @@ import {
 import { EmbedColor } from "../../utils/embeds/embedColors.js";
 import {
   loadClaimedStore,
-  saveClaimedStore,
+  updateClaimedStore,
   getServerClaims,
 } from "@mcbot/core/utils/stores/dailyStore.js";
 import { getServerIds } from "@mcbot/core/config.js";
@@ -113,24 +113,25 @@ export const execute = withErrorHandling(
       assertMayTargetServerId(interaction, to);
       if (from === to) throw new Error(t("dailyAdmin.samServer"));
 
-      const fromClaims = getServerClaims(store, from);
-      const record = fromClaims[user.id];
-      if (!record) {
-        throw new Error(
-          t("dailyAdmin.noRecord", { user: user.tag, server: from }),
-        );
-      }
+      await updateClaimedStore((current) => {
+        const fromClaims = getServerClaims(current, from);
+        const record = fromClaims[user.id];
+        if (!record) {
+          throw new Error(
+            t("dailyAdmin.noRecord", { user: user.tag, server: from }),
+          );
+        }
 
-      const toClaims = getServerClaims(store, to);
-      if (toClaims[user.id] && !overwrite) {
-        throw new Error(
-          t("dailyAdmin.targetExists", { user: user.tag, server: to }),
-        );
-      }
+        const toClaims = getServerClaims(current, to);
+        if (toClaims[user.id] && !overwrite) {
+          throw new Error(
+            t("dailyAdmin.targetExists", { user: user.tag, server: to }),
+          );
+        }
 
-      toClaims[user.id] = record;
-      delete fromClaims[user.id];
-      await saveClaimedStore(store);
+        toClaims[user.id] = record;
+        delete fromClaims[user.id];
+      });
 
       await recordAdminAction({
         action: "daily-move",
@@ -156,14 +157,15 @@ export const execute = withErrorHandling(
       if (explicit) assertKnownServer(explicit);
       const server = resolveServer(interaction).id;
 
-      const claims = getServerClaims(store, server);
-      if (!claims[user.id]) {
-        throw new Error(
-          t("dailyAdmin.noRecord", { user: user.tag, server }),
-        );
-      }
-      delete claims[user.id];
-      await saveClaimedStore(store);
+      await updateClaimedStore((current) => {
+        const claims = getServerClaims(current, server);
+        if (!claims[user.id]) {
+          throw new Error(
+            t("dailyAdmin.noRecord", { user: user.tag, server }),
+          );
+        }
+        delete claims[user.id];
+      });
 
       await recordAdminAction({
         action: "daily-reset",

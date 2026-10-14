@@ -92,10 +92,9 @@ WORKDIR /app
 #                  "gosu USER cmd" CLI; symlinked as su-exec so the entrypoint
 #                  script keeps working unchanged.
 # tzdata:          TZ env var / per-guild timezones resolve correctly.
-# gettext-base:    provides envsubst for config.template.json substitution.
 # ca-certificates: trusted roots for outbound HTTPS (Modrinth, Discord).
 RUN apt-get update \
- && apt-get install -y --no-install-recommends gosu tzdata gettext-base ca-certificates \
+ && apt-get install -y --no-install-recommends gosu tzdata ca-certificates \
  && ln -sf "$(command -v gosu)" /usr/local/bin/su-exec \
  && rm -rf /var/lib/apt/lists/*
 
@@ -111,6 +110,7 @@ COPY --from=builder /app/config.schema.json ./
 RUN mkdir -p logs data
 
 COPY docker-entrypoint.sh ./
+COPY scripts/render-config-template.mjs ./scripts/
 RUN chmod +x docker-entrypoint.sh
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
@@ -155,9 +155,11 @@ COPY --from=builder /app/src/schema/dist ./src/schema/dist
 COPY --from=builder /app/src/core/dist ./src/core/dist
 COPY --from=builder /app/src/bot/dist ./src/bot/dist
 
-# Health check: verify PID 1 (our node process after the exec chain) is alive.
-# start_period gives the bot time to log in to Discord before the first check.
+# Health check: the bot rewrites data/runtime.json every minute (the same
+# heartbeat the dashboard reads), so a hung event loop shows up as a stale
+# file. Checking that PID 1 was node passed for any bot, hung or not
+# (AUD-028). The 150 s limit is the dashboard's own STALE_AFTER_MS.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-  CMD grep -q node /proc/1/cmdline || exit 1
+  CMD node -e "const b=JSON.parse(require('fs').readFileSync('/app/data/runtime.json','utf8'));process.exit(Date.now()-b.at<150000?0:1)"
 
 CMD ["node", "--enable-source-maps", "src/bot/dist/index.js"]

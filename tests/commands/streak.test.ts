@@ -69,7 +69,7 @@ describe("streak execute", () => {
       version: 2,
       servers: {
         main: {
-          user1: { currentStreak: 7, longestStreak: 14, bonusStreak: 7 },
+          user1: { currentStreak: 7, longestStreak: 14, bonusStreak: 7, lastClaim: Date.now() - 3_600_000 },
         },
       },
     });
@@ -85,7 +85,7 @@ describe("streak execute", () => {
       version: 2,
       servers: {
         main: {
-          user1: { currentStreak: 5, longestStreak: 5, bonusStreak: 5 },
+          user1: { currentStreak: 5, longestStreak: 5, bonusStreak: 5, lastClaim: Date.now() - 3_600_000 },
         },
       },
     });
@@ -124,5 +124,16 @@ describe("streak execute", () => {
     expect(interaction.deferReply).toHaveBeenCalledWith(
       expect.objectContaining({ flags: expect.anything() }),
     );
+  });
+});
+
+describe("liveStreak", () => {
+  it("reads a lapsed streak as 0", async () => {
+    const { liveStreak, DAILY_COOLDOWN_MS } = await import("../../src/core/utils/minecraft/rewards.js");
+    const now = 10 * DAILY_COOLDOWN_MS;
+    expect(liveStreak({ currentStreak: 4, lastClaim: now - DAILY_COOLDOWN_MS }, now)).toBe(4);
+    expect(liveStreak({ currentStreak: 4, lastClaim: now - 2 * DAILY_COOLDOWN_MS }, now)).toBe(4);
+    expect(liveStreak({ currentStreak: 4, lastClaim: now - 2 * DAILY_COOLDOWN_MS - 1 }, now)).toBe(0);
+    expect(liveStreak({ currentStreak: 4, lastClaim: 0 }, now)).toBe(0);
   });
 });

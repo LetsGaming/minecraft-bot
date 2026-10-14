@@ -68,6 +68,7 @@ import { registerSetupRoutes } from "./routes/setup.js";
 import { registerGuildConfigRoutes } from "./routes/guildConfig.js";
 import { registerProbeRoutes } from "./status/metrics.js";
 import { registerStaticFrontend } from "./static.js";
+import { registerCsrfGuard } from "./csrf.js";
 
 export function buildServer(): FastifyInstance {
   const trustProxy = createTrustProxyFn(() => loadConfig().webui?.trustProxy);
@@ -115,6 +116,11 @@ export function buildServer(): FastifyInstance {
   // mutating /api/* (see rateLimit.ts). Runs before the auth gate so login
   // and write abuse is rejected early.
   registerRateLimiting(app);
+
+  // ── Cross-site writes (AUD-017) ── a mutating /api request from a browser
+  // must come from this origin; SameSite=Lax alone lets a sibling port or
+  // subdomain post with the user's cookie.
+  registerCsrfGuard(app);
 
   // ── Central error handler (QUAL-10) ── one place maps thrown failures to a
   // consistent response: typed HttpErrors render at their status; unexpected
@@ -185,5 +191,15 @@ export async function startWebServer(): Promise<FastifyInstance> {
   const app = buildServer();
   await app.listen({ port, host });
   log.info("web", `Dashboard listening on http://${host}:${port}`);
+  if (!process.env.WEBUI_METRICS_TOKEN && !["127.0.0.1", "localhost", "::1"].includes(host)) {
+    // /metrics names every server and its player counts. Open is the
+    // documented default for loopback-only setups; on a wider bind it
+    // should be a choice someone made, not an accident.
+    log.warn(
+      "web",
+      "/metrics is readable without a token on a non-loopback address. " +
+        "Set WEBUI_METRICS_TOKEN, or make sure only your reverse proxy can reach this port.",
+    );
+  }
   return app;
 }

@@ -12,7 +12,7 @@
  * conservative character set the sanitize contract enforces for player
  * names applies here.
  */
-import { kvGet, kvSet } from "../../db/kv.js";
+import { kvGet, kvMutate, kvSet } from "../../db/kv.js";
 import { loadConfig } from "../../config.js";
 
 export interface Waypoint {
@@ -97,4 +97,15 @@ export function getServerWaypoints(
 
 export async function saveWaypointStore(store: WaypointStore): Promise<void> {
   kvSet("waypoints", store);
+}
+
+/** Change the store in one transaction (AUD-005); see kvMutate. */
+export async function updateWaypointStore<T>(
+  fn: (store: WaypointStore) => T,
+): Promise<T> {
+  return kvMutate<WaypointStore, T>(
+    "waypoints",
+    (raw) => (isV1Store(raw) ? raw : { version: 1, servers: {} }),
+    fn,
+  );
 }

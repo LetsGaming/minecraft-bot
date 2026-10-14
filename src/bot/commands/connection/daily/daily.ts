@@ -8,9 +8,8 @@ import {
   rewardPoolForServer,
   loadClaimedStore,
   getServerClaims,
-  saveClaimedStore,
-  loadPendingRewards,
-  savePendingRewards,
+  updateClaimedStore,
+  updatePendingRewards,
   getServerPending,
   MAX_PENDING_PER_PLAYER,
 } from "@mcbot/core/utils/stores/dailyStore.js";
@@ -169,60 +168,85 @@ async function _execute(
   ];
   const granted: GrantedRewards = { main: mainReward, randomBonus, streakBonus, bonusStreak };
 
-  // Persisting the claim is shared between the online and offline paths;
-  // it must only run once delivery is confirmed (online) or queued
-  // (offline) — never before, so a failed give still allows a retry.
-  const persistClaim = async (): Promise<void> => {
-    // Cap the per-claim history so the file can't grow forever. Streaks
-    // live in their own counters, so trimming old records loses nothing.
-    const MAX_REWARD_HISTORY = 30;
+  // AUD-005: the claim is written inside one transaction against the store
+  // as it is now, not the copy loaded above. Saving that copy after the
+  // awaits in between wrote it over every other user's claim (and reminder
+  // flag) made in the meantime. Returns false when a claim landed for this
+  // user since we looked, in which case nothing is written.
+  const persistClaim = (): Promise<boolean> =>
+    updateClaimedStore((current) => {
+      // Cap the per-claim history so the file can't grow forever. Streaks
+      // live in their own counters, so trimming old records loses nothing.
+      const MAX_REWARD_HISTORY = 30;
+      const claims = getServerClaims(current, server.id);
+      const fresh = claims[userId] ?? userData;
+      if (fresh.lastClaim !== userData.lastClaim) return false;
 
-    claimed[userId] = {
-      // Spread first so optional fields (remind / lastReminderAt) survive
-      // the claim instead of being rebuilt away.
-      ...userData,
-      lastClaim: now,
-      currentStreak,
-      bonusStreak,
-      longestStreak,
-      rewards: [
-        ...userData.rewards,
-        {
-          date: now,
-          items: grantedRewards,
-          streak: currentStreak,
-        },
-      ].slice(-MAX_REWARD_HISTORY),
-    };
-    await saveClaimedStore(store);
-  };
+      claims[userId] = {
+        // Spread first so optional fields (remind / lastReminderAt) survive
+        // the claim instead of being rebuilt away.
+        ...fresh,
+        lastClaim: now,
+        currentStreak,
+        bonusStreak,
+        longestStreak,
+        rewards: [
+          ...fresh.rewards,
+          {
+            date: now,
+            items: grantedRewards,
+            streak: currentStreak,
+          },
+        ].slice(-MAX_REWARD_HISTORY),
+      };
+      return true;
+    });
+
+  const replyAlreadyClaimed = (): Promise<unknown> =>
+    replyPrivate(
+      interaction,
+      buildCooldownEmbed({ lastClaim: now, now, currentStreak }),
+    );
+
+  const key = username.toLowerCase();
+  const entry = { discordId: userId, items: grantedRewards, queuedAt: now };
 
   if (!online) {
     // Offline claim: consume the claim (streak preserved), queue the
     // rolled reward, and let the joinLeave watcher deliver it on the
     // next join. A full queue rejects WITHOUT consuming the cooldown.
-    const pendingStore = await loadPendingRewards();
-    const queue = getServerPending(pendingStore, server.id);
-    const key = username.toLowerCase();
-    const list = (queue[key] ??= []);
-
-    if (list.length >= MAX_PENDING_PER_PLAYER) {
+    const queued = await updatePendingRewards((pendingStore) => {
+      const list = (getServerPending(pendingStore, server.id)[key] ??= []);
+      if (list.length >= MAX_PENDING_PER_PLAYER) return null;
+      list.push(entry);
+      return list.length;
+    });
+    if (queued === null) {
       throw new CommandError({
         title: t("daily.queueFullTitle"),
         problem: t("daily.queueFull", { max: MAX_PENDING_PER_PLAYER }),
       });
     }
 
-    list.push({ discordId: userId, items: grantedRewards, queuedAt: now });
-    await savePendingRewards(pendingStore);
-    await persistClaim();
+    if (!(await persistClaim())) {
+      await updatePendingRewards((pendingStore) => {
+        const queue = getServerPending(pendingStore, server.id);
+        const list = queue[key]?.filter(
+          (e) => !(e.discordId === userId && e.queuedAt === now),
+        );
+        if (list && list.length > 0) queue[key] = list;
+        else delete queue[key];
+      });
+      await replyAlreadyClaimed();
+      return;
+    }
 
     await interaction.editReply({
       embeds: [
         buildQueuedEmbed({
           player: username,
           server: server.id,
-          queued: list.length,
+          queued,
           max: MAX_PENDING_PER_PLAYER,
           currentStreak,
           claimedAt: now,
@@ -233,22 +257,45 @@ async function _execute(
     return;
   }
 
-  // Reward delivery used to be fire-and-forget — RCON could drop
-  // between the online check and the give, or an invalid item ID could fail
-  // server-side, and the claim was consumed anyway. Verify delivery before
-  // persisting; on failure the cooldown is NOT written so the user can retry.
-  for (const reward of grantedRewards) {
-    const ok = await give(server, username, reward);
-    if (!ok) {
-      throw new CommandError({
-        title: t("daily.deliveryFailedTitle"),
-        problem: t("daily.deliveryFailed"),
-        recovery: t("common.retryLater"),
-      });
-    }
+  // AUD-022: the claim is written before anything is given. Giving first
+  // and writing the claim only after every item arrived meant that a
+  // failure on item 2 left item 1 delivered and the claim open, so a retry
+  // handed out item 1 again plus a fresh roll. Items that don't arrive now
+  // wait in the offline queue for the next join instead.
+  if (!(await persistClaim())) {
+    await replyAlreadyClaimed();
+    return;
   }
 
-  await persistClaim();
+  const undelivered: DailyRewardItem[] = [];
+  for (const reward of grantedRewards) {
+    if (!(await give(server, username, reward))) undelivered.push(reward);
+  }
+
+  if (undelivered.length > 0) {
+    const queued = await updatePendingRewards((pendingStore) => {
+      // Not capped: the claim is already used, so these items are owed.
+      const list = (getServerPending(pendingStore, server.id)[key] ??= []);
+      list.push({ ...entry, items: undelivered });
+      return list.length;
+    });
+    await interaction.editReply({
+      embeds: [
+        buildQueuedEmbed({
+          player: username,
+          server: server.id,
+          queued,
+          max: MAX_PENDING_PER_PLAYER,
+          currentStreak,
+          claimedAt: now,
+          rewards: undelivered,
+          notice: t("daily.partlyQueued", { server: server.id }),
+        }),
+      ],
+    });
+    return;
+  }
+
   await interaction.editReply({
     embeds: [
       buildClaimEmbed({

@@ -406,7 +406,7 @@ export function useModConfigs(ask: () => Promise<boolean> = () => Promise.resolv
       await apiSend(
         "POST",
         `/api/servers/${encodeURIComponent(serverId)}/configs/${encodeURIComponent(fileId)}/revert`,
-        { snapshot },
+        { snapshot, etag: current.value.etag },
       );
       await loadFile(fileId);
       return true;

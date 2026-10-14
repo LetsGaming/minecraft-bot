@@ -15,6 +15,7 @@ const READER = "555555555555555555"; // server:read on smp only
 const AUDITOR = "777777777777777777"; // audit:read on "*"
 const MANAGER = "888888888888888888"; // no grants, manages guild g1
 const STRANGER = "666666666666666666";
+const ROLLBACKER = "999999999999999999"; // server:rollback on smp only
 
 const mockConfig = {
   token: "real-bot-token",
@@ -29,6 +30,7 @@ const mockConfig = {
       [OPERATOR]: { "*": ["server:read", "server:control"] },
       [READER]: { smp: ["server:read"] },
       [AUDITOR]: { "*": ["audit:read"] },
+      [ROLLBACKER]: { smp: ["server:rollback"] },
     },
   },
 };
@@ -39,6 +41,7 @@ vi.mock("../../src/core/config.js", () => ({
 }));
 
 vi.mock("../../src/core/utils/config/configService.js", () => ({
+  withConfigWriteLock: <T>(fn: () => Promise<T>) => fn(),
   readRawConfig: vi.fn(() => JSON.parse(JSON.stringify(mockConfig))),
   validateCandidate: vi.fn(() => ({ valid: true, errors: [], warnings: [] })),
   writeConfig: vi.fn(async () => ({ warnings: [], changed: true })),
@@ -72,7 +75,12 @@ const access = vi.hoisted(() => ({
   readWhitelist: vi.fn(),
   readUserCache: vi.fn(),
 }));
-vi.mock("../../src/core/utils/server/serverAccess.js", () => access);
+vi.mock("../../src/core/utils/server/serverAccess.js", async () => ({
+  ...access,
+  // The real classifier: which failures count as "did not run" is the point.
+  classifyScriptFailure: (await import("../../src/core/utils/server/access/scripts.js"))
+    .classifyScriptFailure,
+}));
 
 const getUptimeStats = vi.fn();
 vi.mock("../../src/core/utils/stores/uptimeTracker.js", () => ({
@@ -276,12 +284,45 @@ describe("server action routes", () => {
     expect(listIntents("smp")).toEqual([]);
   });
 
+  it("reports a script still running instead of offering a retry (AUD-012)", async () => {
+    const { ScriptStillRunningError } = await import("../../src/core/utils/server/access/scripts.js");
+    access.runScript.mockRejectedValueOnce(new ScriptStillRunningError("backup", 600_000));
+    const res = await call("POST", "/api/servers/smp/backup");
+    expect(res.statusCode).toBe(504);
+    expect(res.json().error).toContain("still running");
+    expect(listIntents("smp")).toEqual([]);
+  });
+
+  it("passes a wrapper refusal through instead of offering a retry (AUD-012)", async () => {
+    const { ApiError } = await import("../../src/core/utils/server/access/apiClient.js");
+    access.runScript.mockRejectedValueOnce(
+      new ApiError("/scripts/run", 409, JSON.stringify({ error: "Another operation is running (backup)" })),
+    );
+    const res = await call("POST", "/api/servers/smp/restart");
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toContain("Another operation is running");
+    expect(listIntents("smp")).toEqual([]);
+  });
+
   it("only operators may trigger actions or dismiss pending ones", async () => {
     expect((await call("POST", "/api/servers/smp/restart", READER)).statusCode).toBe(403);
     expect((await call("DELETE", "/api/servers/smp/pending-actions/restart", READER)).statusCode).toBe(403);
     expect((await call("DELETE", "/api/servers/smp/pending-actions/restart", OPERATOR)).statusCode).toBe(200);
     expect((await call("GET", "/api/servers/creative/pending-actions", READER)).statusCode).toBe(403);
     expect((await call("POST", "/api/servers/smp/restart", STRANGER)).statusCode).toBe(403);
+  });
+
+  it("requires server:rollback, not server:control, for a rollback (AUD-003)", async () => {
+    access.runScript.mockResolvedValue({ exitCode: 0, output: "", stderr: "" });
+    expect((await call("POST", "/api/servers/smp/rollback", OPERATOR)).statusCode).toBe(403);
+    expect(access.runScript).not.toHaveBeenCalled();
+
+    const res = await call("POST", "/api/servers/smp/rollback", ROLLBACKER);
+    expect(res.statusCode).toBe(200);
+    expect(access.runScript).toHaveBeenCalledWith({ id: "smp" }, "rollback");
+    // The grant is per server, and buys no other action.
+    expect((await call("POST", "/api/servers/creative/rollback", ROLLBACKER)).statusCode).toBe(403);
+    expect((await call("POST", "/api/servers/smp/restart", ROLLBACKER)).statusCode).toBe(403);
   });
 });
 
@@ -342,11 +383,21 @@ describe("prune-stats route", () => {
     );
   });
 
-  it("treats unreadable whitelist and usercache as empty, so everything becomes prunable", async () => {
-    access.readWhitelist.mockRejectedValue(new Error("x"));
+  it("refuses to prune when the whitelist can't be read (AUD-004)", async () => {
+    access.readWhitelist.mockRejectedValue(new Error("secret /srv/path"));
     access.readUserCache.mockRejectedValue(new Error("x"));
-    const body = (await call("POST", "/api/servers/smp/prune-stats?dryRun=1")).json();
-    expect(body.prunable).toEqual(["AAA", "bbb", "ccc"]);
+    const res = await call("POST", "/api/servers/smp/prune-stats");
+    expect(res.statusCode).toBe(503);
+    expect(res.body).not.toContain("/srv/path");
+    expect(access.deleteStatsFile).not.toHaveBeenCalled();
+  });
+
+  it("refuses to prune when the whitelist and usercache are both empty", async () => {
+    access.readWhitelist.mockResolvedValue([]);
+    access.readUserCache.mockResolvedValue([]);
+    const res = await call("POST", "/api/servers/smp/prune-stats");
+    expect(res.statusCode).toBe(409);
+    expect(access.deleteStatsFile).not.toHaveBeenCalled();
   });
 
   it("is gated by server:control on the target server", async () => {

@@ -39,7 +39,7 @@ import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import {
   loadPollStore,
-  savePollStore,
+  updatePollStore,
   getOpenPollForServer,
   pollServerIds,
   tallyPoll,
@@ -294,8 +294,11 @@ export const execute = withErrorHandling(
     });
     poll.messageId = message.id;
 
-    store.polls.push(poll);
-    await savePollStore(store);
+    // Appended to the store as it is now (AUD-005): saving the copy
+    // loaded before the reply went out would drop votes cast meanwhile.
+    await updatePollStore((current) => {
+      current.polls.push(poll);
+    });
     armPoll(interaction.client, poll);
     attachCollectorToMessage(poll.id, message, poll.endsAt);
 

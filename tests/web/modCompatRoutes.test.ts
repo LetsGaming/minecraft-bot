@@ -124,6 +124,7 @@ vi.mock("../../src/core/utils/stores/adminAudit.js", () => ({
   recordAdminAction: vi.fn(async () => {}),
 }));
 vi.mock("../../src/core/utils/config/configService.js", () => ({
+  withConfigWriteLock: <T>(fn: () => Promise<T>) => fn(),
   readRawConfig: vi.fn(() => JSON.parse(JSON.stringify(mockConfig))),
   validateCandidate: vi.fn(() => ({ valid: true, errors: [], warnings: [] })),
   writeConfig: vi.fn(async () => ({ warnings: [], changed: true })),
@@ -549,5 +550,48 @@ describe("mod icons on installed and compat rows", () => {
     expect(finished.mods[0].iconUrl).toBe(proxied);
     expect(finished.mods[1]).not.toHaveProperty("iconUrl");
     expect(finished.partial).toEqual([]);
+  });
+});
+
+// ── mods:write authorization (audit: no route tests for it) ─────────────────
+
+describe("mod write routes need mods:write on that server", () => {
+  const WRITES: Array<{ method: "POST" | "DELETE"; url: string; payload?: unknown }> = [
+    { method: "POST", url: "/api/servers/smp/mods", payload: { slug: "sodium" } },
+    { method: "POST", url: "/api/servers/smp/mods/sodium/update", payload: {} },
+    { method: "POST", url: "/api/servers/smp/mods/sodium/disable", payload: {} },
+    { method: "POST", url: "/api/servers/smp/mods/sodium/enable", payload: {} },
+    { method: "DELETE", url: "/api/servers/smp/mods/sodium" },
+    { method: "POST", url: "/api/servers/smp/mods/updates", payload: {} },
+  ];
+
+  it("refuses readers, plain viewers and holders on another server", async () => {
+    const app = buildServer();
+    for (const who of [MODS_READER, PLAIN_READER, OTHER_SERVER_READER]) {
+      for (const route of WRITES) {
+        const res = await app.inject({
+          method: route.method,
+          url: route.url,
+          headers: { cookie: cookieFor(who), "content-type": "application/json" },
+          ...(route.payload !== undefined ? { payload: route.payload } : {}),
+        });
+        expect(res.statusCode, `${who} ${route.method} ${route.url}`).toBe(403);
+      }
+    }
+    await app.close();
+  });
+
+  it("lets a sysadmin past the gate", async () => {
+    const app = buildServer();
+    for (const route of WRITES) {
+      const res = await app.inject({
+        method: route.method,
+        url: route.url,
+        headers: { cookie: cookieFor(SYSADMIN), "content-type": "application/json" },
+        ...(route.payload !== undefined ? { payload: route.payload } : {}),
+      });
+      expect(res.statusCode, `${route.method} ${route.url}`).not.toBe(403);
+    }
+    await app.close();
   });
 });

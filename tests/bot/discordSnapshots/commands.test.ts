@@ -40,6 +40,11 @@ vi.mock("../../../src/core/utils/server/serverAccess.js", async (importOriginal)
   ...(await importOriginal<object>()),
   readBackups: vi.fn(),
   runScript: vi.fn(),
+  getList: vi.fn().mockResolvedValue({
+    playerCount: "3",
+    maxPlayers: "20",
+    players: ["Marlene_B", "TheRedstoneKid", "ikarus_77"],
+  }),
   pingServer: vi.fn().mockResolvedValue({ kind: "status", result: { version: "Fabric 1.21.1" } }),
 }));
 vi.mock("../../../src/core/utils/stores/uptimeTracker.js", async (importOriginal) => ({

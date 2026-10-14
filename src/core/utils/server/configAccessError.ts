@@ -10,7 +10,8 @@ export type ConfigAccessErrorKind =
   | "stale"
   | "precondition-required"
   | "rate-limited"
-  | "rejected";
+  | "rejected"
+  | "protected";
 
 export class ConfigAccessError extends Error {
   constructor(
@@ -54,6 +55,14 @@ export function configAccessErrorFor(
       );
     case 400:
       return new ConfigAccessError("rejected", `The wrapper rejected the request: ${wrapperMessage}`, status);
+    case 403:
+      // Wrapper mod-configs v2: a server.properties key that decides who may
+      // join or command the server changed without allowProtected.
+      return new ConfigAccessError(
+        "protected",
+        `Only a bot administrator can change this setting: ${wrapperMessage}`,
+        status,
+      );
     default:
       return null;
   }

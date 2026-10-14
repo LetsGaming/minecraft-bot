@@ -73,12 +73,16 @@ export function registerAuthRoutes(app: FastifyInstance): void {
       // with the guilds the bot is actually in — so the session only ever
       // grants control over guilds that both parties share. Sysadmin status
       // is derived from config per request, not stored here.
-      let guildIds = user.guildIds;
+      let guildIds: string[];
       try {
         const botGuilds = new Set((await listBotGuilds()).map((g) => g.id));
         guildIds = user.guildIds.filter((id) => botGuilds.has(id));
       } catch {
-        /* can't confirm bot guilds → keep the user's manageable set as-is */
+        // Can't confirm which guilds the bot shares → grant none. Keeping the
+        // user's whole manageable set would let them write a block for a guild
+        // the bot isn't in (AUD-001). Logging in again once Discord answers
+        // re-derives the real set.
+        guildIds = [];
       }
 
       setSessionCookie(reply, { id: user.id, tag: user.tag, guildIds });

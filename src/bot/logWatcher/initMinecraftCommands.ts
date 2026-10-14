@@ -74,6 +74,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 interface ServerHandles {
   watcher: RemoteLogWatcher;
   tpsMonitor: TpsMonitorHandle | null;
+  /** How many of the global (in-game command) watchers this watcher has. */
+  globalsWired: number;
 }
 
 const serverHandles = new Map<string, ServerHandles>();
@@ -91,6 +93,23 @@ async function initDeferredIngameCommands(): Promise<void> {
     } catch (err) {
       log.error("commands", `Failed to load !${name}: ${errMsg(err)}`);
     }
+  }
+  syncGlobalWatchers();
+}
+
+/**
+ * AUD-021: hand every running watcher the global watchers registered since
+ * it was wired. Watchers copy the global list when a server is wired, so a
+ * command loaded by a later config reload reached the global list only: the
+ * log said "loaded" and the command never answered until a restart.
+ */
+function syncGlobalWatchers(): void {
+  const globals = getGlobalWatchers();
+  for (const handles of serverHandles.values()) {
+    for (const { regex, handler } of globals.slice(handles.globalsWired)) {
+      handles.watcher.register(regex, handler);
+    }
+    handles.globalsWired = globals.length;
   }
 }
 
@@ -112,9 +131,11 @@ async function wireServer(
     log.warn(server.id, `Failed to warm player-UUID cache: ${errMsg(err)}`);
   });
 
-  for (const { regex, handler } of getGlobalWatchers()) {
+  const globals = getGlobalWatchers();
+  for (const { regex, handler } of globals) {
     watcher.register(regex, handler);
   }
+  const globalsWired = globals.length;
 
   registerChatBridge(watcher, client, guildConfigs, getServerIds);
   registerJoinLeaveWatcher(watcher, client, guildConfigs);
@@ -128,7 +149,7 @@ async function wireServer(
 
   const tpsMonitor = startTpsMonitor(server, client, guildConfigs);
 
-  serverHandles.set(server.id, { watcher, tpsMonitor });
+  serverHandles.set(server.id, { watcher, tpsMonitor, globalsWired });
 }
 
 function unwireServer(serverId: string): void {

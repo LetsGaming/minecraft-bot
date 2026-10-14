@@ -32,8 +32,11 @@ export type CommandOutcome =
   /**
    * Written to the server's console with no reply channel, so success is
    * unverifiable. `rcon-fallback` means RCON was configured but failed.
+   * `rcon-no-reply` means RCON took the command but its reply went missing;
+   * the wrapper does not re-send it through screen, since it has most likely
+   * run already.
    */
-  | { kind: "sent"; via: "screen" | "rcon-fallback" }
+  | { kind: "sent"; via: "screen" | "rcon-fallback" | "rcon-no-reply" }
   | { kind: "unreachable"; reason: UnreachableReason; detail: string };
 
 /** The command is believed to have reached the server. */

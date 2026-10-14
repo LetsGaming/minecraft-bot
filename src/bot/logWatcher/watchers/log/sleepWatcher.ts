@@ -3,10 +3,13 @@ import { log } from "@mcbot/core/utils/logger.js";
 import type { ILogWatcher } from "../../logWatcher.js";
 import { wasAccepted } from "@mcbot/schema/commandOutcome.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
+import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
+import { chatLineRegex } from "./chatLine.js";
 
 // Matches in-game chat: [timestamp] [server thread/INFO]: <PlayerName> Liege wie
-// Captures (1) the player name, (2) the raw message text
-const SLEEP_TRIGGER_REGEX = /\[.+?\].*: <(?:\[AFK\]\s*)?([^>]+)>\s+(.*)/;
+// Captures (1) the player name, (2) the raw message text. Anchored on the
+// speaker (AUD-002): see chatLine.ts.
+const SLEEP_TRIGGER_REGEX = chatLineRegex(String.raw`\s+(.*)`);
 
 // ── Cooldown ──────────────────────────────────────────────────────────────────
 
@@ -447,6 +450,10 @@ export function registerSleepWatcher(logWatcher: ILogWatcher): void {
 
       const capsMode = isSleepTrigger(rawMessage);
       if (capsMode === null) return;
+
+      // The name goes into `/data get entity` and a `name=!…` selector, so
+      // it must be a real player name, not a selector or extra arguments.
+      if (!isValidMcName(triggerPlayer)) return;
 
       // ── Cooldown check ──────────────────────────────────────────────────────
       const serverId = server.id;

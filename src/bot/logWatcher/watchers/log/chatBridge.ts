@@ -1,4 +1,4 @@
-import { type Client, type Webhook } from "discord.js";
+import { type Client, type Message, type Webhook } from "discord.js";
 import { EmbedCategory } from "@mcbot/schema/embedCategories.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { createPlayerEmbed } from "../../../utils/embeds/embedUtils.js";
@@ -6,7 +6,7 @@ import { playerAvatarUrl } from "../../../utils/mcHeads.js";
 import type { ILogWatcher } from "../../logWatcher.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 import type { GuildConfig, GuildChatBridgeConfig } from "@mcbot/core/types/index.js";
-import { sanitizeForConsole } from "@mcbot/core/utils/sanitize.js";
+import { sanitizeForComponent } from "@mcbot/core/utils/sanitize.js";
 import {
   createRateLimiter,
   bridgeLimiterSettings,
@@ -16,10 +16,12 @@ import {
   type GuildConfigSource,
 } from "../../../utils/guild/guildConfigs.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
-import { announce } from "@mcbot/core/utils/minecraft/serverMessages.js";
+import { tellraw } from "@mcbot/core/utils/minecraft/serverMessages.js";
 import { safeMentions } from "../../../utils/embeds/alertUtils.js";
+import { chatLineRegex } from "./chatLine.js";
 
-const CHAT_REGEX = /\[.+?\]: <(?:\[AFK\]\s*)?([^>]+)>\s+(.+)/;
+// Anchored on the speaker (AUD-002): see chatLine.ts.
+const CHAT_REGEX = chatLineRegex(String.raw`\s+(.+)`);
 
 // The bridge listens on messageCreate, so the slash-command limiter never
 // sees it — it needs its own bucket or any member could flood the game
@@ -351,13 +353,25 @@ async function deliver(
   if (bridge.useWebhook) {
     const hook = await bridgeWebhook(client, bridge.channelId);
     if (hook) {
-      await hook.send({
-        username: player.slice(0, 80),
-        avatarURL: playerAvatarUrl(player),
-        content: message.slice(0, 2000),
-        allowedMentions: safeMentions("none"),
-      });
-      return;
+      // AUD-015: a webhook send that fails falls through to the embed form.
+      // Discord refuses some usernames ("discord", "clyde") outright; a
+      // deleted webhook (10015 / 404) is evicted so the next line resolves
+      // a fresh one instead of failing until a reload.
+      try {
+        await hook.send({
+          username: player.slice(0, 80),
+          avatarURL: playerAvatarUrl(player),
+          content: message.slice(0, 2000),
+          allowedMentions: safeMentions("none"),
+        });
+        return;
+      } catch (err) {
+        if (isUnknownWebhook(err)) webhookCache.delete(bridge.channelId);
+        log.warn(
+          "chatBridge",
+          `Webhook send failed in channel ${bridge.channelId} (sending as embed): ${errMsg(err)}`,
+        );
+      }
     }
   }
 
@@ -375,6 +389,12 @@ async function deliver(
   });
 }
 
+/** Discord's "Unknown Webhook": the webhook was deleted behind our back. */
+function isUnknownWebhook(err: unknown): boolean {
+  const e = err as { code?: unknown; status?: unknown } | null;
+  return e?.code === 10015 || e?.status === 404;
+}
+
 /**
  * Set up Discord → Minecraft bridges. The message's channel identifies the
  * one server it is bound to — replies always land where the conversation
@@ -386,7 +406,7 @@ export function setupDiscordToMc(
   getServerInstance: (id: string | undefined) => ServerInstance | null,
   allServerIds: ServerIdSource = [],
 ): void {
-  client.on("messageCreate", async (msg) => {
+  const relay = async (msg: Message): Promise<void> => {
     if (msg.author.bot) return;
     const guildId = msg.guild?.id;
     if (!guildId) return;
@@ -414,12 +434,28 @@ export function setupDiscordToMc(
     // Strip control characters (incl. \r\n, which could inject extra
     // commands via the screen fallback) and cap lengths — printable
     // Unicode stays so umlauts and emoji survive the bridge.
-    const { name: safeName, message: safeContent } = sanitizeForConsole(
+    const { name: safeName, message: safeContent } = sanitizeForComponent(
       msg.author.displayName,
       msg.content,
     );
-    if (!(await announce(server, `[${safeName}] ${safeContent}`))) {
+    // AUD-002: tellraw, not /say. A /say line lands in the server log as
+    // `[Server] [name] text`, where text a Discord user typed (`x]: <Admin>`)
+    // could pose as a player to the log watchers; /say also expands
+    // selectors like @a. A text component is shown verbatim and not logged.
+    const relayed = [
+      "",
+      { text: `[${safeName}] `, color: "aqua" },
+      { text: safeContent },
+    ];
+    if (!(await tellraw(server, "@a", relayed))) {
       msg.react("⚠️").catch(() => {});
     }
-  });
+  };
+  // AUD-008: a rejection from an async listener would reach the process
+  // guard and exit the bot.
+  client.on("messageCreate", (msg) =>
+    relay(msg).catch((err: unknown) => {
+      log.error("chatBridge", `Discord → MC relay failed: ${errMsg(err)}`);
+    }),
+  );
 }

@@ -94,6 +94,7 @@ export const en: Record<string, string> = {
   "report.noChannel": "Reports are not set up for this server yet. Please contact an admin directly.",
   // ── daily delivery queue ──
   "daily.queueFull": "{max} rewards are already waiting for you in game. Join the server and collect them before claiming the next one.",
+  "daily.partlyQueued": "Not everything could be handed over on **{server}** right now. The rest is queued and delivered the next time you join. Your claim is used and your streak is safe.",
   "daily.queued": "You are offline on **{server}** right now, so the reward is queued and delivered the next time you join. Your streak is safe.",
   "daily.delivered": "📦 Delivered {count|# queued daily reward|# queued daily rewards}: {items}. Enjoy!",
   // ── sessions ──
@@ -555,7 +556,6 @@ export const en: Record<string, string> = {
   "daily.linkRequired": "Link your Minecraft account first.",
   "daily.linkError": "The linked Minecraft account could not be found.",
   "daily.dataError": "No daily rewards are set up for this server.",
-  "daily.deliveryFailed": "The reward could not be delivered. Your claim was not used up.",
   "daily.cooldown": "The next reward is ready {relative} (at {time}).",
   "daily.reward": "Reward: {reward}",
   "daily.bonus": "{days}-day streak bonus: {rewards}",
@@ -634,7 +634,6 @@ export const en: Record<string, string> = {
   "daily.linkErrorRecovery": "Check it with /linkstatus, or link again with /link.",
   "daily.dataErrorRecovery": "Tell a bot admin.",
   "daily.queueFullTitle": "Rewards waiting in game",
-  "daily.deliveryFailedTitle": "Reward not delivered",
   "daily.cooldownTitle": "Already claimed",
   "daily.claimedTitle": "Daily reward claimed",
   "daily.streakField": "Streak",

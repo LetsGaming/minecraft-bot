@@ -30,6 +30,7 @@ vi.mock("../../src/core/config.js", () => ({
 }));
 
 vi.mock("../../src/core/utils/config/configService.js", () => ({
+  withConfigWriteLock: <T>(fn: () => Promise<T>) => fn(),
   readRawConfig: vi.fn(() => JSON.parse(JSON.stringify(mockConfig))),
   validateCandidate: vi.fn(() => ({ valid: true, errors: [], warnings: ["w1"] })),
   writeConfig: vi.fn(async () => ({ warnings: [], changed: true })),
@@ -248,12 +249,15 @@ describe("web routes", () => {
   });
 
   /**
-   * Route-table parity: every /api route must (a) still be registered — an
-   * unregistered /api path falls into the static not-found handler and
-   * returns 404, not 401 — and (b) sit behind a session gate (the sysadmin
-   * scope or the logged-in scope). Without a cookie, both return 401.
+   * Route-table parity for a representative sample of /api routes: each must
+   * (a) still be registered — an unregistered /api path falls into the static
+   * not-found handler and returns 404, not 401 — and (b) sit behind a session
+   * gate (the sysadmin scope or the logged-in scope). Without a cookie, both
+   * return 401. For the host scope, completeness is enforced elsewhere:
+   * buildServer() refuses to register a host-scope route that declares no
+   * capability (RBAC-03), including routes added later.
    */
-  it("registers the complete gated route table (auth parity)", async () => {
+  it("keeps a sample of the gated route table behind the session gate (auth parity)", async () => {
     const app = buildServer();
     const gated: Array<[string, string]> = [
       ["GET", "/api/status"],
@@ -652,6 +656,139 @@ describe("guild-scope freshness on writes (SEC-03)", () => {
 
   it("does not require freshness for a sysadmin", async () => {
     expect((await put(adminCookie())).statusCode).toBe(200);
+  });
+});
+
+describe("guild-manager write limits (AUD-001)", () => {
+  const G1 = "222222222222222222";
+  const G2 = "999999999999999999";
+  function mgr(guilds: string[] = [G1]): string {
+    return (
+      `${SESSION_COOKIE}=` +
+      encodeSigned({
+        uid: "444444444444444444",
+        tag: "mgr",
+        guilds,
+        exp: Date.now() + 60_000,
+        gexp: Date.now() + 60_000,
+      })
+    );
+  }
+  async function put(
+    cookie: string,
+    guildConfig: Record<string, unknown>,
+    raw: Record<string, unknown> = mockConfig,
+    guildId = G1,
+  ) {
+    const { readRawConfig } = await import("../../src/core/utils/config/configService.js");
+    // Every read in the request sees the same on-disk config.
+    vi.mocked(readRawConfig).mockImplementation(
+      () => JSON.parse(JSON.stringify(raw)) as RawBotConfig,
+    );
+    const app = buildServer();
+    const res = await app.inject({
+      method: "PUT",
+      url: `/api/guilds/${guildId}/config`,
+      headers: { cookie, "content-type": "application/json" },
+      payload: {
+        baseHash: guildConfigHash((raw.guilds as Record<string, unknown>)[guildId]),
+        guildConfig,
+      },
+    });
+    await app.close();
+    vi.mocked(readRawConfig).mockImplementation(
+      () => JSON.parse(JSON.stringify(mockConfig)) as RawBotConfig,
+    );
+    return res;
+  }
+  async function written(): Promise<RawBotConfig | undefined> {
+    const { writeConfig } = await import("../../src/core/utils/config/configService.js");
+    return vi.mocked(writeConfig).mock.calls[0]?.[0] as RawBotConfig | undefined;
+  }
+
+  it("refuses a manager's change to adminUsers or allowedServers", async () => {
+    for (const block of [
+      { adminUsers: ["444444444444444444"] },
+      { adminUsers: ["333333333333333333"], allowedServers: ["smp"] },
+    ]) {
+      const res = await put(mgr(), block);
+      expect(res.statusCode).toBe(422);
+      expect(res.json().errors.join(" ")).toMatch(/only be changed by a bot admin/);
+    }
+    expect(await written()).toBeUndefined();
+  });
+
+  it("keeps the on-disk adminUsers when a manager's block omits it", async () => {
+    const res = await put(mgr(), { language: "de" });
+    expect(res.statusCode).toBe(200);
+    expect((await written())?.guilds?.[G1]).toEqual({
+      language: "de",
+      adminUsers: ["333333333333333333"],
+    });
+  });
+
+  it("shows a manager only their own guild's validation output (AUD-019)", async () => {
+    const { validateCandidate } = await import("../../src/core/utils/config/configService.js");
+    vi.mocked(validateCandidate).mockReturnValueOnce({
+      valid: false,
+      errors: [`guilds.${G1}.language "xx" is not a known language`, `guilds.${G2}.defaultServer references unknown server "secret"`],
+      warnings: [],
+    });
+    const res = await put(mgr(), { language: "xx" });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().errors).toEqual([`guilds.${G1}.language "xx" is not a known language`]);
+
+    vi.mocked(validateCandidate).mockReturnValueOnce({
+      valid: false,
+      errors: [`servers.hidden.apiUrl: required`],
+      warnings: [],
+    });
+    const other = await put(mgr(), { language: "de" });
+    expect(other.json().errors.join(" ")).not.toContain("hidden");
+    expect(other.json().errors.join(" ")).toMatch(/outside this guild/);
+  });
+
+  it("keeps the config path out of a manager's write error (AUD-019)", async () => {
+    const { writeConfig } = await import("../../src/core/utils/config/configService.js");
+    vi.mocked(writeConfig).mockRejectedValueOnce(new Error("Failed to write config to /srv/bot/data/config.json: EACCES"));
+    const res = await put(mgr(), { language: "de" });
+    expect(res.statusCode).toBe(500);
+    expect(res.body).not.toContain("/srv/bot");
+  });
+
+  it("lets a sysadmin change adminUsers", async () => {
+    const res = await put(adminCookie(), { adminUsers: ["555555555555555555"] });
+    expect(res.statusCode).toBe(200);
+    expect((await written())?.guilds?.[G1]?.adminUsers).toEqual(["555555555555555555"]);
+  });
+
+  it("refuses a reference to an unknown server", async () => {
+    const res = await put(mgr(), { adminUsers: ["333333333333333333"], defaultServer: "nope" });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().errors.join(" ")).toMatch(/unknown server "nope"/);
+  });
+
+  it("refuses a reference that widens the guild's server scope in a multi-guild deployment", async () => {
+    const multi = {
+      ...mockConfig,
+      servers: { smp: {}, creative: {} },
+      guilds: {
+        [G1]: { allowedServers: ["smp"] },
+        [G2]: { defaultServer: "creative" },
+      },
+    };
+    const widen = await put(mgr(), { allowedServers: ["smp"], chatBridge: { channelId: "1", server: "creative" } }, multi);
+    expect(widen.statusCode).toBe(422);
+    expect(widen.json().errors.join(" ")).toMatch(/"creative", which this guild may not use/);
+
+    const inScope = await put(mgr(), { allowedServers: ["smp"], defaultServer: "smp" }, multi);
+    expect(inScope.statusCode).toBe(200);
+
+    // A guild with no block yet may reach nothing in a multi-guild deployment,
+    // so its manager can't pick a server for it either.
+    const fresh = { ...multi, guilds: { [G2]: { defaultServer: "creative" }, other: { defaultServer: "smp" } } };
+    const res = await put(mgr(), { defaultServer: "smp" }, fresh);
+    expect(res.statusCode).toBe(422);
   });
 });
 

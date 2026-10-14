@@ -1030,6 +1030,7 @@ export const en = {
   "backups.purposeAfter": "Restoring replaces the server files and needs {server} stopped first.",
   "backups.noServers": "No servers you can view.",
   "backups.action.retry": "Retry",
+  "backups.switchedServer": "The server changed while this was open, so nothing was done. Pick the archive again from the list.",
   "backups.action.tryAgain": "Try again",
   "backups.action.dismiss": "Dismiss",
   "backups.action.openServers": "Open Servers",

@@ -31,6 +31,14 @@ export function parseArgs(argv) {
         break;
     }
   }
+  // The id becomes a directory name that dev-up and dev-down delete
+  // recursively (data/agent-<id>/, logs/agent-<id>/). `x/../../..` would
+  // point that delete outside data/ (AUD-031), so only plain names pass.
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(out.id)) {
+    throw new Error(
+      `--id must be letters, digits, "-" or "_" (at most 64, starting with a letter or digit); got "${out.id}"`,
+    );
+  }
   if (!["bot", "web", "both"].includes(out.only)) {
     throw new Error(`--only must be "bot", "web", or "both" (got "${out.only}")`);
   }

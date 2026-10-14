@@ -100,8 +100,10 @@ export function withTransaction<T>(fn: () => T): T {
   if (inTransaction) {
     throw new Error("withTransaction: nested transactions are not supported");
   }
-  inTransaction = true;
+  // BEGIN first: if it fails (SQLITE_BUSY past busy_timeout) the flag must
+  // stay clear, or every later transaction would refuse to start (AUD-006).
   db.exec("BEGIN IMMEDIATE");
+  inTransaction = true;
   try {
     const result = fn();
     db.exec("COMMIT");
@@ -116,6 +118,11 @@ export function withTransaction<T>(fn: () => T): T {
   } finally {
     inTransaction = false;
   }
+}
+
+/** Close the database on shutdown, so the WAL is checkpointed and released. */
+export function closeDb(): void {
+  closeDbForTesting();
 }
 
 /**

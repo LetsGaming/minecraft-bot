@@ -44,6 +44,22 @@ export function sanitizeForConsole(
 }
 
 /**
+ * Sanitize a display name + message pair for a JSON text component
+ * (`/tellraw`). Same control-character stripping and caps as
+ * sanitizeForConsole, but quotes stay as typed: JSON.stringify escapes them,
+ * and escaping here too would show the backslashes in game.
+ */
+export function sanitizeForComponent(
+  name: string,
+  message: string,
+): SanitizedConsoleInput {
+  return {
+    name: stripControlChars(name).slice(0, MAX_NAME_LENGTH),
+    message: stripControlChars(message).slice(0, MAX_MESSAGE_LENGTH),
+  };
+}
+
+/**
  * Validate a Minecraft username before interpolating it into a console
  * command or a Mojang API URL.
  *
