@@ -120,6 +120,11 @@ export function withTransaction<T>(fn: () => T): T {
   }
 }
 
+/** Close the database on shutdown, so the WAL is checkpointed and released. */
+export function closeDb(): void {
+  closeDbForTesting();
+}
+
 /**
  * Close and forget the singleton. Tests use this (with MCBOT_DB_PATH set
  * to ":memory:" or a temp file) to get a fresh database per suite.

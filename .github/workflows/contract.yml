@@ -28,6 +28,9 @@ on:
         required: false
         default: ""
 
+permissions:
+  contents: read
+
 env:
   # The api-wrapper repo. Note the repo and the package are named differently:
   # the package is `mc-api-server`, the repo is `minecraft-server-api`.
@@ -46,7 +49,7 @@ jobs:
         wrapper: [default, pinned]
     steps:
       - name: Check out the bot
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           path: bot
 
@@ -56,23 +59,27 @@ jobs:
         id: wrapper
         env:
           GH_TOKEN: ${{ github.token }}
+          # Through env, not interpolated into the script (AUD-030): an input
+          # is text, and `${{ }}` would paste it into the shell as code.
+          LEG: ${{ matrix.wrapper }}
+          INPUT_REF: ${{ inputs.wrapper_ref }}
         run: |
-          if [ "${{ matrix.wrapper }}" = "pinned" ]; then
+          if [ "$LEG" = "pinned" ]; then
             ref=$(gh api "repos/${SETUP_REPO}/contents/src/scripts/api-server" --jq .sha)
             echo "Suite pins ${WRAPPER_REPO}@${ref}"
           else
-            ref="${{ inputs.wrapper_ref }}"
+            ref="$INPUT_REF"
           fi
           echo "ref=${ref}" >> "$GITHUB_OUTPUT"
 
       - name: Check out the api-wrapper
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           repository: ${{ env.WRAPPER_REPO }}
           ref: ${{ steps.wrapper.outputs.ref }}
           path: api-wrapper
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           # The project runs on Node 24; engines allows >= 20.
           node-version: 24

@@ -167,6 +167,10 @@ async function main() {
   });
 
   const session = { id, only, dataDir, logDir, startedAt: new Date().toISOString() };
+  // Written again after every spawn, before its health check: a check that
+  // fails exits right away, and dev-down can only stop the processes this
+  // file names (AUD-031).
+  const saveSession = () => fs.writeFileSync(sessionFile, JSON.stringify(session, null, 2));
 
   if (wantsBot) {
     log(`starting bot${realDiscord ? "" : " (MCBOT_DEV_NO_DISCORD=1 — no real Discord login)"}...`);
@@ -176,6 +180,8 @@ async function main() {
       env,
       logFile: botLog,
     });
+    session.botPid = bot.pid;
+    saveSession();
     // No HTTP endpoint to poll (it's a Discord client, and dev mode never connects to Discord
     // either) — the only signal available is whether the process survived its own startup.
     await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -184,7 +190,6 @@ async function main() {
       process.exit(1);
     }
     log(`bot running (pid ${bot.pid}) — logs: ${botLog}`);
-    session.botPid = bot.pid;
   }
 
   if (wantsWeb) {
@@ -195,13 +200,14 @@ async function main() {
       env,
       logFile: backendLog,
     });
+    session.backendPid = backend.pid;
+    saveSession();
     const backendReady = await waitForHttp(`http://localhost:${backendPort}/healthz`, 20000);
     if (!backendReady) {
       log(`backend did not respond within 20s — check ${backendLog}`);
       process.exit(1);
     }
     log("backend ready");
-    session.backendPid = backend.pid;
 
     log(`starting frontend on :${vitePort}`);
     const viteLog = path.join(logDir, "vite.out.log");
@@ -210,12 +216,13 @@ async function main() {
       ["run", "dev:frontend", "--workspace=@mcbot/web", "--", "--port", String(vitePort), "--strictPort"],
       { cwd: repoRoot, env, logFile: viteLog },
     );
+    session.vitePid = vite.pid;
+    saveSession();
     const viteReady = await waitForHttp(`http://localhost:${vitePort}/`, 20000);
     if (!viteReady) log(`frontend did not respond within 20s — check ${viteLog}`);
-    session.vitePid = vite.pid;
   }
 
-  fs.writeFileSync(sessionFile, JSON.stringify(session, null, 2));
+  saveSession();
 
   console.log("");
   log("ready.");

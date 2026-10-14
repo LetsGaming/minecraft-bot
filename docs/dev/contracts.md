@@ -88,7 +88,10 @@ requests then link each other and merge together.
 CI enforces the order: `contract.yml` runs the e2e against the wrapper's
 default branch and against the commit the suite pins, so a bot that is ahead of
 either shows up as a red leg, and `release.yml` runs the same gate before it
-publishes anything.
+publishes anything. The release gate checks against the wrapper ref in the
+repository variable `WRAPPER_REF` (default `main`); set it to the wrapper tag a
+release is meant to work with. The gate job has a read-only token; only the
+publish job that follows it can write the release and the image.
 
 ## When something becomes a contract
 

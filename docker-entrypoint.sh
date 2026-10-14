@@ -27,7 +27,7 @@ chown -R node:node /app/logs /app/data
 # manages. Priority on first run:
 #   1. $CONFIG_PATH already exists (persisted / dashboard-written) → use it
 #   2. a static config.json is mounted at /app/config.json → copy it in
-#   3. /app/config.template.json is present → envsubst env vars → $CONFIG_PATH
+#   3. /app/config.template.json is present → fill ${VARS} from env → $CONFIG_PATH
 #   4. none of the above → print a clear error and exit
 if [ -f "$CONFIG_PATH" ]; then
   : # already seeded / dashboard-managed — leave it untouched
@@ -37,9 +37,10 @@ elif [ -f /app/config.json ]; then
   echo "INFO: config seeded."
 elif [ -f /app/config.template.json ]; then
   echo "INFO: Generating $CONFIG_PATH from config.template.json ..."
-  # Run as node so the redirect writes into the node-owned volume. envsubst and
-  # $MCBOT_CONFIG_PATH are inherited from the (exported) environment.
-  su-exec node sh -c 'envsubst < /app/config.template.json > "$MCBOT_CONFIG_PATH"'
+  # Run as node so the file is written into the node-owned volume. Only
+  # ${UPPER_CASE} placeholders are filled, JSON-escaped (unlike envsubst, which
+  # also blanked "$schema" and broke on a value containing a quote).
+  su-exec node node /app/scripts/render-config-template.mjs /app/config.template.json "$CONFIG_PATH"
   echo "INFO: config generated."
 else
   echo ""
