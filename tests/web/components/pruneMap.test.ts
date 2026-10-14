@@ -247,6 +247,35 @@ describe("PruneMap terrain view", () => {
     wrapper.unmount();
   });
 
+  it("with the colours hidden, draws only the pictures, and brings the colours back", async () => {
+    const loader = vi.fn(async (_rx: number, _rz: number) => tile());
+    const { wrapper, log } = mountMap({ view: "terrain", tileLoader: loader });
+    await nextTick();
+    await new Promise((r) => setTimeout(r, 0));
+    const draws = () => log.calls.filter((c) => c === "drawImage").length;
+
+    log.calls.length = 0;
+    await wrapper.setProps({ showOverlay: false });
+    expect(draws()).toBe(3);
+
+    log.calls.length = 0;
+    await wrapper.setProps({ showOverlay: true });
+    expect(draws()).toBe(6);
+    wrapper.unmount();
+  });
+
+  it("keeps the colours of a region without a picture when they are hidden", async () => {
+    const loader = vi.fn(async (rx: number, _rz: number) => (rx === 0 ? tile() : null));
+    const { wrapper, log } = mountMap({ view: "terrain", tileLoader: loader });
+    await nextTick();
+    await new Promise((r) => setTimeout(r, 0));
+    log.calls.length = 0;
+    await wrapper.setProps({ showOverlay: false });
+    // Two pictures (0,0 and 0,-1) and the classes of -1,0, which has none.
+    expect(log.calls.filter((c) => c === "drawImage").length).toBe(3);
+    wrapper.unmount();
+  });
+
   it("treats a region without a picture as plain classes and does not ask again", async () => {
     const loader = vi.fn(async () => null);
     const { wrapper } = mountMap({ view: "terrain", tileLoader: loader });

@@ -27,7 +27,9 @@ has the details of the engine.
 ## Terrain view
 
 Switch the map to **Terrain** and zoom in (about 2.5 pixels per chunk or closer): each region is drawn from
-above, one pixel per block, with the class colours laid over it. It is a picture to orient by, not a
+above, one pixel per block, with the class colours laid over it. Untick **Chunk colours** to see the bare
+terrain; your selection, protected zones and the grid stay, and hovering a chunk still names its class.
+It is a picture to orient by, not a
 renderer: no biome colours, water darker the deeper it is, and a hint of relief. A region is drawn on the host
 the first time it is looked at and kept (up to 500 MB) until the region changes, so the first look at a
 large area is slower than the next. Chunks from before 1.18 and chunks that cannot be read stay plain.

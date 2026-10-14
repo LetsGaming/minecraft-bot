@@ -66,6 +66,8 @@ const props = withDefaults(
     view: "class" | "heat" | "terrain";
     /** Fetches the terrain picture of a region (null when it has none); needed for the terrain view. */
     tileLoader?: (rx: number, rz: number) => Promise<ImageBitmap | null>;
+    /** Lay the class colours over a terrain picture; off shows the bare terrain where there is one. */
+    showOverlay?: boolean;
     showGrid: boolean;
     tool: MapTool;
     selection: SelectionModel;
@@ -76,7 +78,7 @@ const props = withDefaults(
     /** The chunk open in the inspector, ringed on the map. */
     inspected?: { cx: number; cz: number } | null;
   }>(),
-  { height: "min(70vh, 34rem)" },
+  { height: "min(70vh, 34rem)", showOverlay: true },
 );
 
 const emit = defineEmits<{
@@ -265,13 +267,16 @@ function drawBase(): void {
     if (r.rx < v.rx0 || r.rx > v.rx1 || r.rz < v.rz0 || r.rz > v.rz1) continue;
     const { x, y, w, h } = regionRect(r.rx, r.rz);
     const picture = terrain ? tiles.get(r.rx, r.rz) : null;
-    if (picture && picture !== "none") {
+    const hasPicture = !!picture && picture !== "none";
+    if (hasPicture) {
       // One pixel per block: crisp from one screen pixel per block up, smoothed when shrunk.
       ctx.imageSmoothingEnabled = camera.value.zoom < 16;
       ctx.drawImage(picture, x, y, w, h);
+      // Hidden colours only bare a region that has a picture; elsewhere the map would go blank.
+      if (!props.showOverlay) continue;
     }
     ctx.imageSmoothingEnabled = camera.value.zoom < 1;
-    ctx.drawImage(bitmapFor(r, !!picture && picture !== "none"), x, y, w, h);
+    ctx.drawImage(bitmapFor(r, hasPicture), x, y, w, h);
   }
 }
 
@@ -795,7 +800,7 @@ watch(() => props.tileLoader, () => {
 });
 watch(() => props.selectionVersion, invalidateSelection);
 watch(() => props.inspected, requestDraw);
-watch(() => [props.zones, props.showGrid, props.tool], requestDraw, { deep: true });
+watch(() => [props.zones, props.showGrid, props.showOverlay, props.tool], requestDraw, { deep: true });
 </script>
 
 <style scoped>
