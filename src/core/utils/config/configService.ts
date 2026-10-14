@@ -65,6 +65,21 @@ export function validateCandidate(
 }
 
 /**
+ * AUD-014: one config.json write at a time in this process. A dashboard
+ * save reads the file, checks its base hash, merges and writes; two saves
+ * for different guilds that interleaved across the write's awaits each
+ * built from the same `current`, and the second rename reverted the first
+ * guild's change without a 409. Callers run the whole read → check → merge
+ * → write inside this lock.
+ */
+let writeChain: Promise<unknown> = Promise.resolve();
+export function withConfigWriteLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = writeChain.then(fn, fn);
+  writeChain = run.catch(() => undefined);
+  return run;
+}
+
+/**
  * Validate and atomically write a new config.json.
  *
  * The file is always written with the current configVersion.

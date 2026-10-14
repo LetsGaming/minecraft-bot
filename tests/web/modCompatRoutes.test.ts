@@ -124,6 +124,7 @@ vi.mock("../../src/core/utils/stores/adminAudit.js", () => ({
   recordAdminAction: vi.fn(async () => {}),
 }));
 vi.mock("../../src/core/utils/config/configService.js", () => ({
+  withConfigWriteLock: <T>(fn: () => Promise<T>) => fn(),
   readRawConfig: vi.fn(() => JSON.parse(JSON.stringify(mockConfig))),
   validateCandidate: vi.fn(() => ({ valid: true, errors: [], warnings: [] })),
   writeConfig: vi.fn(async () => ({ warnings: [], changed: true })),

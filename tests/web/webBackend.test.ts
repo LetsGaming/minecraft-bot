@@ -30,6 +30,7 @@ vi.mock("../../src/core/config.js", () => ({
 }));
 
 vi.mock("../../src/core/utils/config/configService.js", () => ({
+  withConfigWriteLock: <T>(fn: () => Promise<T>) => fn(),
   readRawConfig: vi.fn(() => JSON.parse(JSON.stringify(mockConfig))),
   validateCandidate: vi.fn(() => ({ valid: true, errors: [], warnings: ["w1"] })),
   writeConfig: vi.fn(async () => ({ warnings: [], changed: true })),
@@ -721,6 +722,35 @@ describe("guild-manager write limits (AUD-001)", () => {
       language: "de",
       adminUsers: ["333333333333333333"],
     });
+  });
+
+  it("shows a manager only their own guild's validation output (AUD-019)", async () => {
+    const { validateCandidate } = await import("../../src/core/utils/config/configService.js");
+    vi.mocked(validateCandidate).mockReturnValueOnce({
+      valid: false,
+      errors: [`guilds.${G1}.language "xx" is not a known language`, `guilds.${G2}.defaultServer references unknown server "secret"`],
+      warnings: [],
+    });
+    const res = await put(mgr(), { language: "xx" });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().errors).toEqual([`guilds.${G1}.language "xx" is not a known language`]);
+
+    vi.mocked(validateCandidate).mockReturnValueOnce({
+      valid: false,
+      errors: [`servers.hidden.apiUrl: required`],
+      warnings: [],
+    });
+    const other = await put(mgr(), { language: "de" });
+    expect(other.json().errors.join(" ")).not.toContain("hidden");
+    expect(other.json().errors.join(" ")).toMatch(/outside this guild/);
+  });
+
+  it("keeps the config path out of a manager's write error (AUD-019)", async () => {
+    const { writeConfig } = await import("../../src/core/utils/config/configService.js");
+    vi.mocked(writeConfig).mockRejectedValueOnce(new Error("Failed to write config to /srv/bot/data/config.json: EACCES"));
+    const res = await put(mgr(), { language: "de" });
+    expect(res.statusCode).toBe(500);
+    expect(res.body).not.toContain("/srv/bot");
   });
 
   it("lets a sysadmin change adminUsers", async () => {

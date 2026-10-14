@@ -15,6 +15,7 @@ import {
   readRawConfig,
   validateCandidate,
   writeConfig,
+  withConfigWriteLock,
 } from "@mcbot/core/utils/config/configService.js";
 import { guildConfigHash } from "@mcbot/core/utils/config/guildConfigHash.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
@@ -94,6 +95,26 @@ function applyManagerLimits(
     }
   }
   return { block, errors };
+}
+
+/**
+ * Validation output limited to one guild's block. When the config is
+ * invalid only elsewhere, the manager gets a plain explanation instead of
+ * someone else's errors.
+ */
+function scopedToGuild(
+  result: { valid: boolean; errors: string[]; warnings: string[] },
+  guildId: string,
+): { errors: string[]; warnings: string[] } {
+  const mine = (line: string): boolean => line.includes(`guilds.${guildId}.`) || line.includes(`guilds.${guildId} `);
+  const errors = result.errors.filter(mine);
+  return {
+    errors:
+      errors.length > 0 || result.valid
+        ? errors
+        : ["The bot's config has a problem outside this guild's settings. Ask a bot administrator to fix it."],
+    warnings: result.warnings.filter(mine),
+  };
 }
 
 export function registerGuildConfigRoutes(app: FastifyInstance): void {
@@ -183,73 +204,89 @@ export function registerGuildConfigRoutes(app: FastifyInstance): void {
 
       const { baseHash, guildConfig } = req.body;
 
-      // Build the new config from the current one on disk, replacing ONLY
-      // this guild's block. The manager can't touch other guilds, servers,
-      // or top-level settings; those are copied through untouched. Then
-      // the whole thing is validated as one.
-      const current = readRawConfig();
+      // The check and the write happen under one lock (AUD-014): saves for
+      // two different guilds must not both build from the same file.
+      return withConfigWriteLock(async () => {
+        // Build the new config from the current one on disk, replacing ONLY
+        // this guild's block. The manager can't touch other guilds, servers,
+        // or top-level settings; those are copied through untouched. Then
+        // the whole thing is validated as one.
+        const current = readRawConfig();
 
-      // Optimistic concurrency on this guild's own block: another save only
-      // conflicts when it touched the same guild.
-      const currentHash = guildConfigHash((current.guilds ?? {})[guildId]);
-      if (baseHash !== currentHash) {
-        throw new Conflict(
-          "This guild's config changed since you loaded it. Reload and re-apply.",
-          { currentHash },
-        );
-      }
+        // Optimistic concurrency on this guild's own block: another save only
+        // conflicts when it touched the same guild.
+        const currentHash = guildConfigHash((current.guilds ?? {})[guildId]);
+        if (baseHash !== currentHash) {
+          throw new Conflict(
+            "This guild's config changed since you loaded it. Reload and re-apply.",
+            { currentHash },
+          );
+        }
 
-      // The request body is object-checked by the schema; its shape is
-      // GuildConfig's, which validateCandidate checks below.
-      let block = guildConfig as GuildConfig;
-      if (!isSysadmin(session)) {
-        const limited = applyManagerLimits(current, guildId, block);
-        if (limited.errors.length > 0) throw new ValidationFailed(limited.errors);
-        block = limited.block;
-      }
+        // The request body is object-checked by the schema; its shape is
+        // GuildConfig's, which validateCandidate checks below.
+        let block = guildConfig as GuildConfig;
+        if (!isSysadmin(session)) {
+          const limited = applyManagerLimits(current, guildId, block);
+          if (limited.errors.length > 0) throw new ValidationFailed(limited.errors);
+          block = limited.block;
+        }
 
-      // Splice the submitted block into the current config and validate the
-      // whole thing as one candidate below. `guildConfig` is the request body
-      // (object-checked by the schema); the merged object is RawBotConfig-shaped
-      // by construction (spread of current + one guild key).
-      const merged: RawBotConfig = {
-        ...current,
-        guilds: {
-          ...(current.guilds ?? {}),
-          [guildId]: block,
-        },
-      } as RawBotConfig;
+        // Splice the submitted block into the current config and validate the
+        // whole thing as one candidate below. `guildConfig` is the request body
+        // (object-checked by the schema); the merged object is RawBotConfig-shaped
+        // by construction (spread of current + one guild key).
+        const merged: RawBotConfig = {
+          ...current,
+          guilds: {
+            ...(current.guilds ?? {}),
+            [guildId]: block,
+          },
+        } as RawBotConfig;
 
-      const result = validateCandidate(merged);
-      if (!result.valid) {
-        throw new ValidationFailed(result.errors);
-      }
+        const result = validateCandidate(merged);
+        // AUD-019: a guild manager sees what concerns their guild only, not
+        // other guilds' ids or every server id in the config.
+        const shown = isSysadmin(session)
+          ? result
+          : scopedToGuild(result, guildId);
+        if (!result.valid) {
+          throw new ValidationFailed(shown.errors);
+        }
 
-      let changed = true;
-      try {
-        ({ changed } = await writeConfig(merged, {
-          byTag: session.tag,
-          byId: session.uid,
-          note: `guild config write (${guildId})`,
-        }));
-      } catch (err) {
-        // Surface the actionable write error (e.g. read-only config path),
-        // logged, mirroring the full-config PUT — not a generic 500.
-        const msg =
-          err instanceof Error ? err.message : "Failed to write guild config.";
-        log.error("web", `Guild config write failed: ${msg}`);
-        throw new HttpError(500, msg);
-      }
-      // Only audit an actual change — a Save with no edits is a no-op.
-      if (changed) {
-        await recordAdminAction({
-          action: "guild config write (dashboard)",
-          by: session.tag,
-          byId: session.uid,
-          guildId,
-        });
-      }
-      return { ok: true, changed, warnings: result.warnings };
+        let changed = true;
+        try {
+          ({ changed } = await writeConfig(merged, {
+            byTag: session.tag,
+            byId: session.uid,
+            note: `guild config write (${guildId})`,
+          }));
+        } catch (err) {
+          // Surface the actionable write error (e.g. read-only config path),
+          // logged, mirroring the full-config PUT — not a generic 500.
+          const msg =
+            err instanceof Error ? err.message : "Failed to write guild config.";
+          log.error("web", `Guild config write failed: ${msg}`);
+          // The message names the config file's path, which only a sysadmin
+          // may see (AUD-019).
+          throw new HttpError(
+            500,
+            isSysadmin(session)
+              ? msg
+              : "The config could not be saved. A bot administrator can find the reason in the dashboard log.",
+          );
+        }
+        // Only audit an actual change — a Save with no edits is a no-op.
+        if (changed) {
+          await recordAdminAction({
+            action: "guild config write (dashboard)",
+            by: session.tag,
+            byId: session.uid,
+            guildId,
+          });
+        }
+        return { ok: true, changed, warnings: shown.warnings };
+      });
     },
   );
 }

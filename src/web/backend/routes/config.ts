@@ -15,6 +15,7 @@ import {
   readRawConfig,
   validateCandidate,
   writeConfig,
+  withConfigWriteLock,
   configFileHash,
 } from "@mcbot/core/utils/config/configService.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
@@ -179,56 +180,59 @@ export function registerConfigRoutes(app: FastifyInstance): void {
     async (req) => {
       const { baseHash, config } = req.body;
 
-      // Optimistic concurrency: the edit must be based on the config that
-      // is on disk right now. Two dashboard admins — or an admin racing
-      // the bot's own /config command — get a 409 instead of a silent
-      // last-write-wins clobber.
-      const currentHash = configFileHash();
-      if (baseHash !== currentHash) {
-        throw new Conflict(
-          "config.json changed since you loaded it (another admin, the " +
-            "bot, or a hand edit). Reload the config and re-apply your changes.",
-          { currentHash },
-        );
-      }
+      // The check and the write happen under one lock (AUD-014).
+      return withConfigWriteLock(async () => {
+        // Optimistic concurrency: the edit must be based on the config that
+        // is on disk right now. Two dashboard admins — or an admin racing
+        // the bot's own /config command — get a 409 instead of a silent
+        // last-write-wins clobber.
+        const currentHash = configFileHash();
+        if (baseHash !== currentHash) {
+          throw new Conflict(
+            "config.json changed since you loaded it (another admin, the " +
+              "bot, or a hand edit). Reload the config and re-apply your changes.",
+            { currentHash },
+          );
+        }
 
-      const current = readRawConfig();
-      // `config` is the request body's config object (shape-checked by the
-      // route schema as an object). validateCandidate(merged) below is the deep
-      // gate that rejects a malformed config before anything is written.
-      const merged = mergeSecretPlaceholders(config as RawBotConfig, current);
+        const current = readRawConfig();
+        // `config` is the request body's config object (shape-checked by the
+        // route schema as an object). validateCandidate(merged) below is the deep
+        // gate that rejects a malformed config before anything is written.
+        const merged = mergeSecretPlaceholders(config as RawBotConfig, current);
 
-      const result = validateCandidate(merged);
-      if (!result.valid) {
-        throw new ValidationFailed(result.errors);
-      }
+        const result = validateCandidate(merged);
+        if (!result.valid) {
+          throw new ValidationFailed(result.errors);
+        }
 
-      const session = sessionFromRequest(req)!;
-      let changed = true;
-      try {
-        ({ changed } = await writeConfig(merged, {
-          byTag: session.tag,
-          byId: session.uid,
-          note: "config write (dashboard)",
-        }));
-      } catch (err) {
-        // writeConfig raises an actionable, operator-facing message (e.g. a
-        // read-only/non-owned config path). Log it and surface it to the
-        // sysadmin editing config rather than falling through to a generic 500.
-        const msg = err instanceof Error ? err.message : "Failed to write config.";
-        log.error("web", `Config write failed: ${msg}`);
-        throw new HttpError(500, msg);
-      }
-      // Only record an audit entry when something actually changed — a Save with
-      // no edits is a no-op, not an auditable action.
-      if (changed) {
-        await recordAdminAction({
-          action: "config write (dashboard)",
-          by: session.tag,
-          byId: session.uid,
-        });
-      }
-      return { ok: true, changed, warnings: result.warnings };
+        const session = sessionFromRequest(req)!;
+        let changed = true;
+        try {
+          ({ changed } = await writeConfig(merged, {
+            byTag: session.tag,
+            byId: session.uid,
+            note: "config write (dashboard)",
+          }));
+        } catch (err) {
+          // writeConfig raises an actionable, operator-facing message (e.g. a
+          // read-only/non-owned config path). Log it and surface it to the
+          // sysadmin editing config rather than falling through to a generic 500.
+          const msg = err instanceof Error ? err.message : "Failed to write config.";
+          log.error("web", `Config write failed: ${msg}`);
+          throw new HttpError(500, msg);
+        }
+        // Only record an audit entry when something actually changed — a Save with
+        // no edits is a no-op, not an auditable action.
+        if (changed) {
+          await recordAdminAction({
+            action: "config write (dashboard)",
+            by: session.tag,
+            byId: session.uid,
+          });
+        }
+        return { ok: true, changed, warnings: result.warnings };
+      });
     },
   );
 
@@ -287,27 +291,29 @@ export function registerConfigRoutes(app: FastifyInstance): void {
         );
       }
 
-      const session = sessionFromRequest(req)!;
-      let changed = true;
-      try {
-        ({ changed } = await writeConfig(candidate, {
-          byTag: session.tag,
-          byId: session.uid,
-          note: `rollback to #${id}`,
-        }));
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "Rollback failed.";
-        log.error("web", `Config rollback failed: ${msg}`);
-        throw new HttpError(500, msg);
-      }
-      if (changed) {
-        await recordAdminAction({
-          action: `config rollback to #${id} (dashboard)`,
-          by: session.tag,
-          byId: session.uid,
-        });
-      }
-      return { ok: true, changed, warnings: result.warnings };
+      return withConfigWriteLock(async () => {
+        const session = sessionFromRequest(req)!;
+        let changed = true;
+        try {
+          ({ changed } = await writeConfig(candidate, {
+            byTag: session.tag,
+            byId: session.uid,
+            note: `rollback to #${id}`,
+          }));
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Rollback failed.";
+          log.error("web", `Config rollback failed: ${msg}`);
+          throw new HttpError(500, msg);
+        }
+        if (changed) {
+          await recordAdminAction({
+            action: `config rollback to #${id} (dashboard)`,
+            by: session.tag,
+            byId: session.uid,
+          });
+        }
+        return { ok: true, changed, warnings: result.warnings };
+      });
     },
   );
 }

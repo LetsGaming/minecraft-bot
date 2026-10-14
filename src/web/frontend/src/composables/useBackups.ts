@@ -2,6 +2,7 @@ import { ref, computed } from "vue";
 import { ApiError, apiGet, apiSend } from "../api";
 import type { StaleInfo } from "@mcbot/schema/contract.js";
 import { errorMessage } from "../utils/errorMessage";
+import { t } from "../i18n";
 import type { BackupFileInfo, BackupSummaryResponse } from "../api";
 
 /**
@@ -64,9 +65,27 @@ export function useBackups() {
 
   const hasMore = computed(() => cursor.value !== null);
 
+  /**
+   * AUD-011: bumped by every list request, so only the newest answer lands.
+   * Returning early while a request was in flight dropped a server switch:
+   * the header said B while the list, and every delete, restore or download
+   * built from it, still pointed at A.
+   */
+  let generation = 0;
+
   async function load(id: string, append = false): Promise<void> {
-    if (loading.value) return;
-    if (id !== serverId) initialLoad.value = true;
+    // "Load more" on the same server waits for the page in flight; anything
+    // else (a switch, a refresh) supersedes it.
+    if (append && loading.value && id === serverId) return;
+    const mine = ++generation;
+    if (id !== serverId) {
+      // Nothing of the old server may stay on screen to be acted on.
+      initialLoad.value = true;
+      files.value = [];
+      cursor.value = null;
+      total.value = 0;
+      summary.value = null;
+    }
     serverId = id;
     loading.value = true;
     error.value = "";
@@ -84,17 +103,21 @@ export function useBackups() {
         `/api/servers/${encodeURIComponent(id)}/backups/files?${params.toString()}`,
       );
 
+      if (mine !== generation) return;
       files.value = append ? [...files.value, ...res.files] : res.files;
       cursor.value = res.nextCursor;
       total.value = res.total;
       stale.value = res.stale ?? null;
     } catch (err) {
+      if (mine !== generation) return;
       error.value = errorMessage(err);
       errorStatus.value = err instanceof ApiError ? err.status : null;
       if (!append) files.value = [];
     } finally {
-      loading.value = false;
-      initialLoad.value = false;
+      if (mine === generation) {
+        loading.value = false;
+        initialLoad.value = false;
+      }
     }
   }
 
@@ -106,10 +129,12 @@ export function useBackups() {
   async function loadSummary(id: string): Promise<void> {
     summaryError.value = "";
     try {
-      summary.value = await apiGet<BackupSummaryResponse>(
+      const res = await apiGet<BackupSummaryResponse>(
         `/api/servers/${encodeURIComponent(id)}/backups/summary`,
       );
+      if (id === serverId) summary.value = res;
     } catch (err) {
+      if (id !== serverId) return;
       summary.value = null;
       summaryError.value = errorMessage(err);
     }
@@ -124,7 +149,13 @@ export function useBackups() {
    * the backend forwards, and can resume. Pulling it into JS memory first
    * would defeat every one of those.
    */
+  /** Is this archive one of the current server's, as listed now? (AUD-011) */
+  function listed(fileId: string): boolean {
+    return files.value.some((f) => f.id === fileId);
+  }
+
   function download(fileId: string): void {
+    if (!listed(fileId)) return;
     window.location.href =
       `/api/servers/${encodeURIComponent(serverId)}` +
       `/backups/files/${encodeURIComponent(fileId)}/download`;
@@ -144,6 +175,11 @@ export function useBackups() {
   }
 
   async function restore(file: BackupFileInfo): Promise<ScriptOutcome> {
+    // A confirmation opened before a server switch must not land on the
+    // server switched to.
+    if (!listed(file.id)) {
+      return { ok: false, exitCode: null, output: "", error: t("backups.switchedServer") };
+    }
     try {
       const res = await apiSend<ScriptResponse>(
         "POST",
@@ -164,6 +200,7 @@ export function useBackups() {
    * cursor/total this composable holds still need a fresh first page.
    */
   async function remove(file: BackupFileInfo): Promise<ActionOutcome> {
+    if (!listed(file.id)) return { ok: false, error: t("backups.switchedServer") };
     try {
       await apiSend<{ ok: boolean }>(
         "DELETE",

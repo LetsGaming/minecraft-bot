@@ -63,6 +63,13 @@ export function useConsole() {
   let source: EventSource | null = null;
   let serverId = "";
   let nextId = 0;
+  /**
+   * AUD-018: bumped by every open() and close(). An open() still awaiting
+   * its policy when the user switched servers must not attach its stream:
+   * it would write server A's lines into the console labelled B and leave
+   * a connection nobody closes.
+   */
+  let generation = 0;
 
   function push(text: string): void {
     lines.value.push({ id: nextId++, text });
@@ -88,6 +95,7 @@ export function useConsole() {
 
   async function open(id: string): Promise<void> {
     close();
+    const mine = generation;
     serverId = id;
     lines.value = [];
     error.value = "";
@@ -98,8 +106,10 @@ export function useConsole() {
       const policy = await apiGet<{ blockedCommands: string[] }>(
         `/api/servers/${encodeURIComponent(id)}/console/policy`,
       );
+      if (mine !== generation) return;
       blockedCommands.value = policy.blockedCommands;
     } catch {
+      if (mine !== generation) return;
       // A missing policy must not stop the stream: the backend enforces the
       // list regardless, so the only loss is the greyed-out hint.
       blockedCommands.value = [];
@@ -146,6 +156,7 @@ export function useConsole() {
   }
 
   function close(): void {
+    generation += 1;
     source?.close();
     source = null;
     connected.value = false;

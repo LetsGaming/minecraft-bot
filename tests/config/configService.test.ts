@@ -178,3 +178,23 @@ describe("applyConfig", () => {
     expect(result.config).toBe(fresh);
   });
 });
+
+describe("withConfigWriteLock (AUD-014)", () => {
+  it("runs writers one after another, even when one fails", async () => {
+    const { withConfigWriteLock } = await import("../../src/core/utils/config/configService.js");
+    const order: string[] = [];
+    const slow = withConfigWriteLock(async () => {
+      order.push("a:start");
+      await new Promise((r) => setTimeout(r, 20));
+      order.push("a:end");
+      throw new Error("a failed");
+    });
+    const fast = withConfigWriteLock(async () => {
+      order.push("b");
+      return 2;
+    });
+    await expect(slow).rejects.toThrow("a failed");
+    await expect(fast).resolves.toBe(2);
+    expect(order).toEqual(["a:start", "a:end", "b"]);
+  });
+});
