@@ -189,14 +189,20 @@ export const MutationResult = Type.Object({
 export type MutationResult = Static<typeof MutationResult>;
 
 // ── Mods tab (install / update / remove + Modrinth browse) ──────────────────
+
+/** The wrapper's own slug rule: starts with a letter or digit, so never `.` or `..` (AUD-024). */
+const MOD_SLUG_PATTERN = "^[a-zA-Z0-9][\\w.!@$()+'\"`-]{0,95}$";
+
+/** A dimension id, never a bare `.` or `..` path segment (AUD-024). */
+const DIMENSION_PATTERN = "^(?!\\.{1,2}$)[a-z0-9_.:-]{1,64}$";
 export const ModSlugParams = Type.Object({
   id: Type.String(),
-  slug: Type.String({ minLength: 1, maxLength: 96 }),
+  slug: Type.String({ minLength: 1, maxLength: 96, pattern: MOD_SLUG_PATTERN }),
 });
 export type ModSlugParams = Static<typeof ModSlugParams>;
 
 export const ModAddBody = Type.Object({
-  slug: Type.String({ minLength: 1, maxLength: 96 }),
+  slug: Type.String({ minLength: 1, maxLength: 96, pattern: MOD_SLUG_PATTERN }),
   mcVersion: Type.Optional(Type.String({ maxLength: 20 })),
   modLoader: Type.Optional(Type.String({ maxLength: 20 })),
   versionId: Type.Optional(Type.String({ maxLength: 32 })),
@@ -251,7 +257,7 @@ export type UpgradeStartBody = Static<typeof UpgradeStartBody>;
 
 const PruneZoneBody = Type.Object({
   name: Type.String({ maxLength: 64 }),
-  dimension: Type.String({ pattern: "^[a-z0-9_.:-]{1,64}$" }),
+  dimension: Type.String({ pattern: DIMENSION_PATTERN }),
   x1: Type.Integer({ minimum: -2_000_000, maximum: 2_000_000 }),
   z1: Type.Integer({ minimum: -2_000_000, maximum: 2_000_000 }),
   x2: Type.Integer({ minimum: -2_000_000, maximum: 2_000_000 }),
@@ -268,7 +274,7 @@ export const PruneParamsBody = Type.Object({
   dimensions: Type.Optional(
     Type.Union([
       Type.Null(),
-      Type.Array(Type.String({ pattern: "^[a-z0-9_.:-]{1,64}$" }), { maxItems: 32 }),
+      Type.Array(Type.String({ pattern: DIMENSION_PATTERN }), { maxItems: 32 }),
     ]),
   ),
 });
@@ -292,14 +298,14 @@ export const PruneMapParams = Type.Object({
 });
 
 export const PruneChunkQuery = Type.Object({
-  dimension: Type.String({ pattern: "^[a-z0-9_.:-]{1,64}$" }),
+  dimension: Type.String({ pattern: DIMENSION_PATTERN }),
   cx: Type.Integer({ minimum: -2_000_000, maximum: 2_000_000 }),
   cz: Type.Integer({ minimum: -2_000_000, maximum: 2_000_000 }),
 });
 
 export const PruneTileParams = Type.Object({
   id: Type.String(),
-  dimension: Type.String({ pattern: "^[a-z0-9_.:-]{1,64}$" }),
+  dimension: Type.String({ pattern: DIMENSION_PATTERN }),
   rx: Type.Integer({ minimum: -100_000, maximum: 100_000 }),
   rz: Type.Integer({ minimum: -100_000, maximum: 100_000 }),
 });

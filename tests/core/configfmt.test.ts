@@ -314,3 +314,23 @@ describe("humanizeKey", () => {
     expect(humanizeKey("view-distance")).toBe("View distance");
   });
 });
+
+describe("edit values are checked against the setting's kind (AUD-025)", () => {
+  const toml = `[general]\n\tenabled = true\n\tcount = 4\n\tname = "x"\n\tlist = ["a", "b"]\n`;
+  const edit = (path: string[], value: unknown) =>
+    applyConfigEdits("config/mod.toml", toml, [{ path, value }]);
+
+  it("refuses a value of the wrong kind", () => {
+    expect(() => edit(["general", "enabled"], "false")).toThrow(/true or false/);
+    expect(() => edit(["general", "count"], "")).toThrow(/number/);
+    expect(() => edit(["general", "count"], Number.NaN)).toThrow(/number/);
+    expect(() => edit(["general", "list"], "a")).toThrow(/list of text/);
+    expect(() => edit(["general", "name"], { a: 1 })).toThrow(/text value/);
+  });
+
+  it("accepts values of the right kind", () => {
+    expect(edit(["general", "enabled"], false)).toContain("enabled = false");
+    expect(edit(["general", "count"], 9)).toContain("count = 9");
+    expect(edit(["general", "list"], ["c"])).toContain('list = ["c"]');
+  });
+});

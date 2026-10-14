@@ -123,6 +123,7 @@ export function applyConfigEdits(
         `${dotted(edit.path)} uses a layout this editor cannot rewrite safely.`,
       );
     }
+    checkValueKind(node, edit.value);
     return { node, value: edit.value };
   });
 
@@ -147,8 +148,64 @@ export function applyConfigEdits(
       );
     }
   }
+  // AUD-025: what the file says now must be what was asked for. A literal
+  // writer that coerced a value (the string "false" written as `true`, a
+  // non-list emptying a list) would otherwise save something else silently.
+  for (const { node, value } of resolved) {
+    const now = after.nodes.find((n) => samePath(n.path, node.path));
+    if (!now || !sameValue(now.value, value)) {
+      throw new ConfigEditError(
+        `${dotted(node.path)} would not be saved as entered, refusing to write.`,
+      );
+    }
+  }
   return out;
 }
+
+/**
+ * AUD-025: the value has to be of the setting's kind. The literal writers
+ * trust their input, so a wrong type (a client bug or a hand-made request)
+ * was spliced in as something else.
+ */
+function checkValueKind(node: ConfigNode, value: unknown): void {
+  const ok = (() => {
+    switch (node.kind) {
+      case "string":
+        return typeof value === "string";
+      case "number":
+        return typeof value === "number" && Number.isFinite(value);
+      case "boolean":
+        return typeof value === "boolean";
+      case "stringList":
+        return Array.isArray(value) && value.every((v) => typeof v === "string");
+      case "numberList":
+        return (
+          Array.isArray(value) &&
+          value.every((v) => typeof v === "number" && Number.isFinite(v))
+        );
+      default:
+        return (
+          typeof value === "string" ||
+          typeof value === "boolean" ||
+          (typeof value === "number" && Number.isFinite(value))
+        );
+    }
+  })();
+  if (!ok) {
+    throw new ConfigEditError(
+      `${dotted(node.path)} expects a ${KIND_NAMES[node.kind]}.`,
+    );
+  }
+}
+
+const KIND_NAMES: Record<ConfigValueKind, string> = {
+  string: "text value",
+  number: "number",
+  boolean: "true or false value",
+  stringList: "list of text values",
+  numberList: "list of numbers",
+  unknown: "single value",
+};
 
 // ── Schema derivation ────────────────────────────────────────────────────────
 

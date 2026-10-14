@@ -17,6 +17,14 @@ export function wrapperUrl(cfg: ServerConfig, route: string): string {
 
 /** A route scoped to this instance; everything under /instances/:id. */
 export function instanceUrl(cfg: ServerConfig, route: string): string {
+  // AUD-024: encodeURIComponent leaves `.` and `..` alone and URL parsing
+  // then resolves them, so a mod slug of `..` turned `/mods/../update`
+  // into `/update`: a different wrapper route, reached with the mod
+  // route's method. No route of ours has such a segment on purpose.
+  const pathPart = route.split("?", 1)[0]!;
+  if (pathPart.split("/").some((segment) => segment === "." || segment === "..")) {
+    throw new Error(`Refusing a wrapper route with a dot segment: ${route}`);
+  }
   return wrapperUrl(cfg, `/instances/${cfg.id}${route}`);
 }
 
