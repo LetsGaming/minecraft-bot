@@ -257,10 +257,40 @@ if (opt("settings") === "get") {
   const p = JSON.parse(opt("params") || "{}");
   fs.writeFileSync(file, JSON.stringify(p));
   out({ ok: true, params: { ...DEFAULTS, ...p } });
+} else if (args.includes("--dimensions")) {
+  out({ ok: true, dimensions: [{ id: "overworld", regions: 1 }] });
+} else if (args.includes("--status")) {
+  out({ ok: true, engine: "stub", version: 1 });
+} else if (args.includes("--inspect")) {
+  if (opt("plan") !== ID) {
+    out({ ok: false, code: "plan_missing", error: "stub" });
+    process.exit(1);
+  }
+  const cx = Number(opt("cx"));
+  const cz = Number(opt("cz"));
+  out({ ok: true, chunk: { dimension: opt("dimension"), cx, cz, rx: cx >> 5, rz: cz >> 5, slot: (cx & 31) + (cz & 31) * 32 }, thresholdMinutes: 5, present: true, plannedForDeletion: true });
+} else if (args.includes("--tile")) {
+  if (opt("rx") !== "0" || opt("rz") !== "0") {
+    out({ ok: false, code: "no_region", error: "stub" });
+    process.exit(1);
+  }
+  const rel = opt("dimension") + "/r.0.0.00000000000000aa.png";
+  const tile = path.join(mapDir, "tiles", ...rel.split("/"));
+  fs.mkdirSync(path.dirname(tile), { recursive: true });
+  fs.writeFileSync(tile, Buffer.from("89504e470d0a1a0a", "hex"));
+  out({ ok: true, tile: rel });
 } else if (args.includes("--scan")) {
+  const params = args.includes("--params-stdin") ? JSON.parse(fs.readFileSync(0, "utf8") || "{}") : {};
+  // A scan asked for this threshold runs until it is cancelled.
+  if (params.thresholdMinutes === 999) setInterval(() => {}, 1000);
+  else {
   fs.mkdirSync(mapDir, { recursive: true });
+  // The wrapper refuses to apply a plan whose .plan.json is gone, so the scan
+  // leaves one behind as the real script does.
+  fs.writeFileSync(path.join(mapDir, ID + ".plan.json"), JSON.stringify({ id: ID }));
   fs.writeFileSync(path.join(mapDir, ID + ".map.0.json"), JSON.stringify({ dimension: "overworld", regions: { "r.0.0": { cell: "AQ==", heat: "AA==" } } }));
   out({ ok: true, id: ID, createdAt: "2026-10-12T00:00:00.000Z", params: DEFAULTS, warnings: [], totals: { chunks: 2, delete: 1, regions: 1, regionsEmptied: 0, bytes: 8192 }, dimensions: [{ id: "overworld", regions: 1, chunks: 2, delete: 1, active: 1, protected: 0, buffer: 0, unreadable: 0, regionsEmptied: 0, bytes: 8192 }] });
+  }
 } else {
   out({ ok: false, code: "usage", error: "stub" });
   process.exit(1);
@@ -1249,15 +1279,15 @@ console.log("\n── mod management");
 
   const badSlug = await raw("POST", inst("/mods"), { body: { slug: "bad slug!" } });
   check("installing with an invalid slug is 400 { error }", badSlug.status === 400 && isErrorBody(badSlug), badSlug.text);
-  const badRemove = await raw("DELETE", inst("/mods/bad!slug"));
+  const badRemove = await raw("DELETE", inst("/mods/-bad"));
   check("removing an invalid slug is 400 { error }", badRemove.status === 400 && isErrorBody(badRemove), badRemove.text);
   const badCheck = await raw("GET", inst("/mods/updates?mcVersion=%20bad"));
   check("checking updates with an invalid mcVersion is 400 { error }", badCheck.status === 400 && isErrorBody(badCheck), badCheck.text);
   const badApply = await raw("POST", inst("/mods/updates"), { body: { mcVersion: "no good" } });
   check("applying updates with an invalid mcVersion is 400 { error }", badApply.status === 400 && isErrorBody(badApply), badApply.text);
-  const badUpdate = await raw("POST", inst("/mods/bad!slug/update"));
+  const badUpdate = await raw("POST", inst("/mods/-bad/update"));
   check("updating an invalid slug is 400 { error }", badUpdate.status === 400 && isErrorBody(badUpdate), badUpdate.text);
-  const badToggle = await raw("POST", inst("/mods/bad!slug/disable"));
+  const badToggle = await raw("POST", inst("/mods/-bad/disable"));
   check("disabling an invalid slug is 400 { error }", badToggle.status === 400 && isErrorBody(badToggle), badToggle.text);
 
   if (sudoWorks) {
@@ -1479,7 +1509,41 @@ console.log("\n── chunk pruning");
       await new Promise((r) => setTimeout(r, 200));
     }
     check("the scan ends done with the plan summary", scan?.state === "done" && scan.result?.id === PLAN && scan.result.totals.delete === 1, JSON.stringify(scan));
+
+    const dims = await serverAccess.getPruneDimensions(cfg);
+    check("the dimensions come back with their region counts", dims.dimensions?.[0]?.id === "overworld" && dims.dimensions[0].regions === 1, JSON.stringify(dims));
+    const status = await serverAccess.getPruneStatus(cfg);
+    check("the engine status names the engine and its version", status.engine === "stub" && status.version === 1, JSON.stringify(status));
+    const chunk = await serverAccess.getPruneChunk(cfg, PLAN, "overworld", 1, 2);
+    check("inspecting a chunk of the plan returns what it holds", chunk?.chunk?.cx === 1 && chunk.chunk.cz === 2 && chunk.present === true, JSON.stringify(chunk));
+    eq("inspecting a chunk of a plan that is gone is null (404)", await serverAccess.getPruneChunk(cfg, "ffffffffffffffff", "overworld", 1, 2), null);
+    const tile = await serverAccess.getPruneTile(cfg, "overworld", 0, 0);
+    check("a region tile arrives as PNG bytes with an ETag", tile?.png.subarray(0, 4).toString("hex") === "89504e47" && tile.etag.length > 2, JSON.stringify(tile && { etag: tile.etag, bytes: tile.png.length }));
+    eq("a region that does not exist has no tile (404)", await serverAccess.getPruneTile(cfg, "overworld", 5, 5), null);
+
+    const slow = await serverAccess.startPruneScan(cfg, { thresholdMinutes: 999 });
+    eq("a running scan can be cancelled", await serverAccess.cancelPruneScan(cfg, slow.jobId), true);
+    let stopped = null;
+    for (let i = 0; i < 100; i++) {
+      stopped = await serverAccess.getPruneScan(cfg, slow.jobId);
+      if (stopped === null || stopped.state !== "running") break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    check("the cancelled scan ends failed with the code cancelled", stopped?.state === "failed" && stopped.error === "cancelled", JSON.stringify(stopped));
+    eq("cancelling it again is false (404)", await serverAccess.cancelPruneScan(cfg, slow.jobId), false);
   } else {
+    // Each of these runs the prune script, so only the refusal is reachable here.
+    for (const [key, route] of [
+      ["GET /instances/:id/prune/dimensions", "/prune/dimensions"],
+      ["GET /instances/:id/prune/status", "/prune/status"],
+      ["GET /instances/:id/prune/plans/:planId/chunk", `/prune/plans/${PLAN}/chunk?dimension=overworld&cx=1&cz=2`],
+      ["GET /instances/:id/prune/tiles/:dimension/:rx/:rz", "/prune/tiles/overworld/0/0"],
+    ]) {
+      await raw("GET", inst(route));
+      unverified.push(key);
+    }
+    eq("cancelling a scan that is not running is false (404)", await serverAccess.cancelPruneScan(cfg, JOB_ABSENT), false);
+    unverified.push("POST /instances/:id/prune/scans/:jobId/cancel");
     expectUnrunnable("GET /prune/settings", "GET /instances/:id/prune/settings", await raw("GET", inst("/prune/settings")));
     expectUnrunnable("PUT /prune/settings", "PUT /instances/:id/prune/settings", await raw("PUT", inst("/prune/settings"), { body: { thresholdMinutes: 9 } }));
     const started = await serverAccess.startPruneScan(cfg);
