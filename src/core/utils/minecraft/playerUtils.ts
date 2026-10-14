@@ -9,8 +9,15 @@ import type {
 
 const LOOKAHEAD_LINES = 5;
 
-/** Strip the `[HH:MM:SS] [Server thread/INFO]: ` prefix from a log line. */
+/**
+ * Strip the `[HH:MM:SS] [Server thread/INFO]: ` prefix from a log line, and the
+ * `System chat: ` marker Minecraft 26.3 adds behind it.
+ */
 export function stripLogPrefix(line: string): string {
+  return stripTags(line).replace(/^System chat:\s+/, "");
+}
+
+function stripTags(line: string): string {
   if (!line) return "";
   const sep = "]: ";
   let idx = line.lastIndexOf(sep);

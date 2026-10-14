@@ -40,10 +40,14 @@ import type { ILogWatcher, LogHandler } from "@mcbot/core/types/index.js";
  * Prefix a server-emitted event line must carry:
  *   [HH:MM:SS] [Server thread/INFO]: …
  *   [HH:MM:SS] [Server thread/INFO] [minecraft/MinecraftServer]: …   (Forge)
+ *   [HH:MM:SS] [Server thread/INFO]: System chat: …                   (26.3+)
  * Anchored at line start; no `.*` — the event body starts right after
- * the first colon that follows the bracketed tags.
+ * the first colon that follows the bracketed tags, or right after the
+ * `System chat: ` marker Minecraft 26.3 puts before every message the
+ * server itself sends (joins, leaves, deaths, advancements). Player chat
+ * never carries that marker, so it adds nothing a player can type.
  */
-export const SERVER_LINE_PREFIX = String.raw`^\[[^\]]*\]\s*\[[^\]]*\bServer thread/INFO\b[^\]]*\](?:\s*\[[^\]]*\])*:\s+`;
+export const SERVER_LINE_PREFIX = String.raw`^\[[^\]]*\]\s*\[[^\]]*\bServer thread/INFO\b[^\]]*\](?:\s*\[[^\]]*\])*:\s+(?:System chat:\s+)?`;
 
 /** Build a watcher regex for a server-emitted event body. */
 export function serverEventRegex(body: string, flags?: string): RegExp {
