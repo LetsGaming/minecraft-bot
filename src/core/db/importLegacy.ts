@@ -93,6 +93,27 @@ function tableEmpty(db: SqlDatabase, table: string): boolean {
   return row.n === 0;
 }
 
+/**
+ * Insert one legacy row, or warn and skip it (AUD-032). One malformed row
+ * (a link without a Discord id, two whitelist keys that collide once
+ * lowercased) used to roll back that whole import and fail startup for both
+ * processes, every time, until someone edited the file by hand.
+ */
+function insertOrSkip(
+  ins: ReturnType<SqlDatabase["prepare"]>,
+  file: string,
+  key: string,
+  ...params: unknown[]
+): boolean {
+  try {
+    ins.run(...(params as never[]));
+    return true;
+  } catch (err) {
+    log.warn("db", `Legacy ${file}: skipped entry ${key} (${errMsg(err)})`);
+    return false;
+  }
+}
+
 interface AdminAuditFile {
   entries?: AdminAuditEntry[];
 }
@@ -108,8 +129,12 @@ export function importLegacyJson(db: SqlDatabase): void {
           `INSERT INTO admin_audit (at, action, server, by_tag, by_id, guild_id, detail)
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
         );
-        for (const e of adminRaw.entries) {
-          ins.run(
+        for (const [i, e] of adminRaw.entries.entries()) {
+          if (!e || typeof e !== "object") continue;
+          insertOrSkip(
+            ins,
+            "adminAudit.json",
+            `#${i}`,
             e.at ?? "",
             e.action ?? "",
             e.server ?? null,
@@ -144,7 +169,10 @@ export function importLegacyJson(db: SqlDatabase): void {
         let n = 0;
         for (const [key, e] of Object.entries(wlRaw)) {
           if (!e || typeof e !== "object") continue;
-          ins.run(
+          const ok = insertOrSkip(
+            ins,
+            "whitelistAudit.json",
+            key,
             key.toLowerCase(),
             e.username ?? null,
             e.uuid ?? null,
@@ -157,7 +185,7 @@ export function importLegacyJson(db: SqlDatabase): void {
             e.removedAt ?? null,
             e.removedFromServer ?? null,
           );
-          n++;
+          if (ok) n++;
         }
         log.info("db", `Imported ${n} whitelistAudit entries`);
       }
@@ -181,8 +209,7 @@ export function importLegacyJson(db: SqlDatabase): void {
         let n = 0;
         for (const [discordId, mcName] of Object.entries(linksRaw)) {
           if (typeof mcName !== "string") continue;
-          ins.run(discordId, mcName);
-          n++;
+          if (insertOrSkip(ins, "linkedAccounts.json", discordId, discordId, mcName)) n++;
         }
         log.info("db", `Imported ${n} linked accounts`);
       }
@@ -207,7 +234,15 @@ export function importLegacyJson(db: SqlDatabase): void {
         for (const [code, entry] of Object.entries(codesRaw)) {
           if (!entry || typeof entry !== "object") continue;
           if (typeof entry.expires !== "number" || entry.expires <= now) continue;
-          ins.run(code, entry.discordId, entry.expires, entry.confirmed ? 1 : 0);
+          insertOrSkip(
+            ins,
+            "linkCodes.json",
+            code,
+            code,
+            entry.discordId ?? null,
+            entry.expires,
+            entry.confirmed ? 1 : 0,
+          );
         }
       }
       db.exec("COMMIT");

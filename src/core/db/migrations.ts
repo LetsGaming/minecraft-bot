@@ -245,31 +245,48 @@ function checksum(sql: string): string {
 }
 
 export function runMigrations(db: SqlDatabase): void {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS schema_migrations (
-      id         INTEGER PRIMARY KEY,
-      name       TEXT NOT NULL,
-      applied_at TEXT NOT NULL
-    )
-  `);
-
-  // Databases created before checksums were tracked have no such column,
-  // and SQLite has no ADD COLUMN IF NOT EXISTS — probe, then add once.
-  const columns = mapRows(db.prepare("PRAGMA table_info(schema_migrations)"), (row) =>
-    col.text(row, "name"),
-  );
-  if (!columns.includes("checksum")) {
-    db.exec("ALTER TABLE schema_migrations ADD COLUMN checksum TEXT");
-  }
-
+  // Everything, the bootstrap included, under one write lock (AUD-032): the
+  // bot and the dashboard open the same file at start, and with the probe
+  // outside the transaction both could see no checksum column and the
+  // second ALTER failed with "duplicate column", crashing that process.
   db.exec("BEGIN IMMEDIATE");
   try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        id         INTEGER PRIMARY KEY,
+        name       TEXT NOT NULL,
+        applied_at TEXT NOT NULL
+      )
+    `);
+
+    // Databases created before checksums were tracked have no such column,
+    // and SQLite has no ADD COLUMN IF NOT EXISTS — probe, then add once.
+    const columns = mapRows(db.prepare("PRAGMA table_info(schema_migrations)"), (row) =>
+      col.text(row, "name"),
+    );
+    if (!columns.includes("checksum")) {
+      db.exec("ALTER TABLE schema_migrations ADD COLUMN checksum TEXT");
+    }
+
     const applied = new Map(
       mapRows(
         db.prepare("SELECT id, checksum FROM schema_migrations"),
         (row) => [col.int(row, "id"), col.textOrNull(row, "checksum")] as const,
       ),
     );
+
+    // A migration this build does not know means a newer version has run on
+    // this database. Its schema may not be what this code expects, so refuse
+    // instead of reading and writing it blind.
+    const known = Math.max(...MIGRATIONS.map((m) => m.id));
+    const newest = Math.max(0, ...applied.keys());
+    if (newest > known) {
+      throw new Error(
+        `This database was upgraded by a newer version of the bot (migration ` +
+          `${newest}; this build knows up to ${known}). Run that version or ` +
+          `newer, or restore a backup of data/bot.db from before the upgrade.`,
+      );
+    }
 
     for (const m of MIGRATIONS) {
       const sum = checksum(m.sql);

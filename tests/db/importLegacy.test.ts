@@ -118,6 +118,22 @@ describe("importLegacyJson", () => {
     expect(exists("linkCodes.json.imported")).toBe(true);
   });
 
+  it("skips rows the database refuses instead of failing startup (AUD-032)", () => {
+    // Two keys that collide once lowercased, and a link code without an owner.
+    legacy("whitelistAudit.json", {
+      Steve: { username: "Steve", addedBy: "A" },
+      steve: { username: "steve", addedBy: "B" },
+    });
+    legacy("linkCodes.json", {
+      orphan: { expires: Date.now() + 60_000 },
+      live: { discordId: "1", expires: Date.now() + 60_000 },
+    });
+    expect(rows("SELECT * FROM whitelist_audit")).toHaveLength(1);
+    expect(rows("SELECT code FROM link_codes")).toEqual([{ code: "live" }]);
+    expect(exists("whitelistAudit.json.imported")).toBe(true);
+    expect(vi.mocked(log.warn)).toHaveBeenCalledWith("db", expect.stringContaining("skipped entry"));
+  });
+
   it("stores versioned blobs verbatim in kv_store and retires the file", () => {
     legacy("polls.json", { version: 1, polls: [] });
     legacy("challenges.json", { anything: [1, 2, 3] });
