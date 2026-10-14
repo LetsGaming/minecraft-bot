@@ -9,7 +9,7 @@
  * "no ban database of its own" boundary. Every mutation is audited by the
  * /note command via recordAdminAction.
  */
-import { kvGet, kvSet } from "../../db/kv.js";
+import { kvGet, kvMutate, kvSet } from "../../db/kv.js";
 
 /** Keep the newest N notes per player — moderation memory, not a ledger. */
 export const MAX_NOTES_PER_PLAYER = 25;
@@ -52,6 +52,17 @@ export async function loadNotesStore(): Promise<PlayerNotesStore> {
 
 export async function saveNotesStore(store: PlayerNotesStore): Promise<void> {
   kvSet("playerNotes", store);
+}
+
+/** Change the store in one transaction (AUD-005); see kvMutate. */
+export async function updateNotesStore<T>(
+  fn: (store: PlayerNotesStore) => T,
+): Promise<T> {
+  return kvMutate<PlayerNotesStore, T>(
+    "playerNotes",
+    (raw) => (isV1Store(raw) ? raw : { version: 1, players: {} }),
+    fn,
+  );
 }
 
 export function addNote(

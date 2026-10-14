@@ -21,7 +21,8 @@
 import { defineCommand } from "../../defineCommand.js";
 import {
   loadWaypointStore,
-  saveWaypointStore,
+  updateWaypointStore,
+  type Waypoint,
   getServerWaypoints,
   isValidWaypointName,
   isValidWaypointCategory,
@@ -84,26 +85,9 @@ async function setWaypoint(
   }
   const dimension = dimensionResult.value;
 
-  const store = await loadWaypointStore();
-  const waypoints = getServerWaypoints(store, server.id);
   const key = name.toLowerCase();
-  const existing = waypoints[key];
-
-  if (existing && existing.author.toLowerCase() !== username.toLowerCase()) {
-    await msg(
-      server,
-      username,
-      t("waypoint.taken", { name: existing.name, author: existing.author }),
-    );
-    return;
-  }
   const cap = waypointCap();
-  if (!existing && Object.keys(waypoints).length >= cap) {
-    await msg(server, username, t("waypoint.limitReached", { max: cap }));
-    return;
-  }
-
-  waypoints[key] = {
+  const wp: Waypoint = {
     name,
     dimension,
     x: Math.floor(coords.x),
@@ -113,9 +97,33 @@ async function setWaypoint(
     createdAt: Date.now(),
     ...(category ? { category: category.toLowerCase() } : {}),
   };
-  await saveWaypointStore(store);
+  // Checked and written in one transaction (AUD-005).
+  const result = await updateWaypointStore((store) => {
+    const waypoints = getServerWaypoints(store, server.id);
+    const existing = waypoints[key];
+    if (existing && existing.author.toLowerCase() !== username.toLowerCase()) {
+      return { kind: "taken", existing } as const;
+    }
+    if (!existing && Object.keys(waypoints).length >= cap) {
+      return { kind: "full" } as const;
+    }
+    waypoints[key] = wp;
+    return { kind: "saved" } as const;
+  });
 
-  const wp = waypoints[key];
+  if (result.kind === "taken") {
+    await msg(
+      server,
+      username,
+      t("waypoint.taken", { name: result.existing.name, author: result.existing.author }),
+    );
+    return;
+  }
+  if (result.kind === "full") {
+    await msg(server, username, t("waypoint.limitReached", { max: cap }));
+    return;
+  }
+
   await tellraw(server, username, {
     text: t("waypoint.saved", { name, x: wp.x, y: wp.y, z: wp.z }),
     color: "green",
@@ -146,8 +154,12 @@ async function deleteWaypoint(
     return;
   }
 
-  delete waypoints[key];
-  await saveWaypointStore(store);
+  // Removed in a transaction against the current store: the admin check
+  // above awaited, and saving the copy loaded before it would undo any
+  // waypoint set in the meantime (AUD-005).
+  await updateWaypointStore((current) => {
+    delete getServerWaypoints(current, server.id)[key];
+  });
   await msg(
     server,
     username,

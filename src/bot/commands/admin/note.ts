@@ -20,7 +20,7 @@ import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { formatDatetime } from "@mcbot/core/utils/time.js";
 import {
   loadNotesStore,
-  saveNotesStore,
+  updateNotesStore,
   addNote,
   removeNote,
   getNotesByUuid,
@@ -152,13 +152,18 @@ export const execute = withErrorHandling(
         .slice(0, MAX_NOTE_LENGTH);
       if (!text) throw new Error(t("note.emptyText"));
 
-      addNote(store, resolved.uuid, resolved.name, {
-        text,
-        author: interaction.user.tag,
-        authorId: interaction.user.id,
-        createdAt: formatDatetime(),
-      });
-      await saveNotesStore(store);
+      // Written against the current store: resolveNotes awaited a name
+      // lookup, and saving the copy loaded before it could drop a note
+      // another admin added meanwhile (AUD-005).
+      const uuid = resolved.uuid;
+      await updateNotesStore((current) =>
+        addNote(current, uuid, resolved.name, {
+          text,
+          author: interaction.user.tag,
+          authorId: interaction.user.id,
+          createdAt: formatDatetime(),
+        }),
+      );
 
       await recordAdminAction({
         action: "note add",
@@ -183,10 +188,13 @@ export const execute = withErrorHandling(
 
     if (sub === "remove") {
       const index = interaction.options.getInteger("index", true);
-      if (!resolved.uuid || !removeNote(store, resolved.uuid, index)) {
+      const uuid = resolved.uuid;
+      const removed =
+        uuid !== "" &&
+        (await updateNotesStore((current) => removeNote(current, uuid, index)));
+      if (!removed) {
         throw new Error(t("note.badIndex", { player: resolved.name }));
       }
-      await saveNotesStore(store);
 
       await recordAdminAction({
         action: "note remove",

@@ -5,6 +5,7 @@
 import { describe, it, expect } from "vitest";
 import {
   sanitizeForConsole,
+  sanitizeForComponent,
   stripControlChars,
   isValidMcName,
 } from "../../src/core/utils/sanitize.js";
@@ -75,5 +76,12 @@ describe("isValidMcName", () => {
   it("rejects empty and over-long names", () => {
     expect(isValidMcName("")).toBe(false);
     expect(isValidMcName("x".repeat(18))).toBe(false);
+  });
+});
+
+describe("sanitizeForComponent", () => {
+  it("strips control characters but leaves quotes for JSON to escape", () => {
+    const out = sanitizeForComponent("Bo\nb", 'say "hi"\r\n/op me');
+    expect(out).toEqual({ name: "Bob", message: 'say "hi"/op me' });
   });
 });

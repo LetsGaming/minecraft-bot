@@ -9,7 +9,7 @@ These run in the background, no user interaction needed. Each one is activated b
 Two-way bridge between a Discord channel and **exactly one** server. The binding applies in both directions, so a channel never mixes conversations from different servers: replies always land on the server the conversation came from. Multi-server guilds use one channel per server (array form); see [configuration.md](configuration.md#chat-bridges-one-channel--one-server) for the config shapes and validation rules.
 
 - Minecraft → Discord: player chat from the bound server appears in the channel as an embed with the player's head avatar. Messages starting with `!` (in-game commands) are not bridged.
-- Discord → Minecraft: messages in the channel are forwarded to the bound server as `[DiscordName] message` via `/say`. Names are capped at 32 characters, messages at 160, and Unicode control characters are stripped so nothing can be smuggled into the server console. Printable Unicode (umlauts, accents, emoji) is forwarded unchanged.
+- Discord → Minecraft: messages in the channel are forwarded to the bound server as `[DiscordName] message` via `/tellraw` (shown as typed: no selector expansion, and the text never lands in the server log where it could pass for player chat). Names are capped at 32 characters, messages at 160, and Unicode control characters are stripped so nothing can be smuggled into the server console. Printable Unicode (umlauts, accents, emoji) is forwarded unchanged.
 
 Bot messages are ignored to prevent loops. A per-user rate limit (8 messages / 10 s) stops console flooding; over-limit messages get a ⏳ reaction instead of being forwarded.
 

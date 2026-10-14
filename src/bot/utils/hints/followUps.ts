@@ -44,7 +44,7 @@ import {
 import {
   loadClaimedStore,
   getServerClaims,
-  saveClaimedStore,
+  updateClaimedStore,
 } from "@mcbot/core/utils/stores/dailyStore.js";
 import {
   loadWatchStore,
@@ -144,19 +144,19 @@ export const HINTS: FollowUpHint[] = [
       return getServerClaims(store, serverId)[userId]?.remind !== true;
     },
     apply: async ({ userId, serverId }) => {
-      const store = await loadClaimedStore();
-      const claimed = getServerClaims(store, serverId);
-      const existing = claimed[userId];
-      claimed[userId] = {
-        lastClaim: existing?.lastClaim ?? 0,
-        currentStreak: existing?.currentStreak ?? 0,
-        bonusStreak: existing?.bonusStreak ?? 0,
-        longestStreak: existing?.longestStreak ?? 0,
-        rewards: existing?.rewards ?? [],
-        ...existing,
-        remind: true,
-      };
-      await saveClaimedStore(store);
+      await updateClaimedStore((store) => {
+        const claimed = getServerClaims(store, serverId);
+        const existing = claimed[userId];
+        claimed[userId] = {
+          lastClaim: existing?.lastClaim ?? 0,
+          currentStreak: existing?.currentStreak ?? 0,
+          bonusStreak: existing?.bonusStreak ?? 0,
+          longestStreak: existing?.longestStreak ?? 0,
+          rewards: existing?.rewards ?? [],
+          ...existing,
+          remind: true,
+        };
+      });
     },
   },
   {

@@ -12,8 +12,7 @@ import {
   getActiveChallenge,
 } from "@mcbot/core/utils/stores/challengeStore.js";
 import {
-  loadPendingRewards,
-  savePendingRewards,
+  updatePendingRewards,
   getServerPending,
 } from "@mcbot/core/utils/stores/dailyStore.js";
 import { give } from "@mcbot/core/utils/minecraft/rewards.js";
@@ -104,14 +103,14 @@ async function handleChallenge(
     const item = { item: active.item, amount: active.amount ?? 1 };
     const ok = await give(server, player, item);
     if (!ok) {
-      const pending = await loadPendingRewards();
-      const queue = getServerPending(pending, server.id);
-      (queue[player.toLowerCase()] ??= []).push({
-        discordId: "",
-        items: [item],
-        queuedAt: Date.now(),
+      await updatePendingRewards((pending) => {
+        const queue = getServerPending(pending, server.id);
+        (queue[player.toLowerCase()] ??= []).push({
+          discordId: "",
+          items: [item],
+          queuedAt: Date.now(),
+        });
       });
-      await savePendingRewards(pending);
       log.warn(
         "challenges",
         `Bonus give for ${player} not confirmed — queued for next join`,

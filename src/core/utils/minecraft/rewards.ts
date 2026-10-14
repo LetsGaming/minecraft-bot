@@ -12,7 +12,7 @@
  */
 import {
   loadPendingRewards,
-  savePendingRewards,
+  updatePendingRewards,
   getServerPending,
 } from "../stores/dailyStore.js";
 import type { ServerInstance } from "../server/server.js";
@@ -152,11 +152,22 @@ export async function deliverPendingRewards(
   server: ServerInstance,
   player: string,
 ): Promise<number> {
-  const store = await loadPendingRewards();
-  const queue = getServerPending(store, server.id);
+  // AUD-005: take the entries out in one transaction before giving
+  // anything, so two joins close together can't both deliver them, and put
+  // back only what failed. Holding a loaded copy across the gives used to
+  // write it back over entries queued (or delivered) in the meantime.
   const key = player.toLowerCase();
-  const list = queue[key];
-  if (!list || list.length === 0) return 0;
+  // Most joins have nothing queued: a plain read keeps them off the write lock.
+  const peek = await loadPendingRewards();
+  if (!peek.servers[server.id]?.[key]?.length) return 0;
+
+  const list = await updatePendingRewards((store) => {
+    const queue = getServerPending(store, server.id);
+    const taken = queue[key] ?? [];
+    delete queue[key];
+    return taken;
+  });
+  if (list.length === 0) return 0;
 
   const delivered: DailyRewardItem[] = [];
   const remaining: typeof list = [];
@@ -172,9 +183,13 @@ export async function deliverPendingRewards(
     }
   }
 
-  if (remaining.length > 0) queue[key] = remaining;
-  else delete queue[key];
-  await savePendingRewards(store);
+  if (remaining.length > 0) {
+    await updatePendingRewards((store) => {
+      const queue = getServerPending(store, server.id);
+      // Ahead of anything queued while we were giving: these are older.
+      queue[key] = [...remaining, ...(queue[key] ?? [])];
+    });
+  }
 
   if (delivered.length > 0) {
     await tellraw(server, player, {

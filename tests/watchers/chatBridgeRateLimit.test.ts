@@ -130,3 +130,38 @@ describe("Discord→MC bridge rate limiting", () => {
     }
   });
 });
+
+describe("Discord→MC bridge listener (AUD-008)", () => {
+  it("swallows a failing relay instead of rejecting", async () => {
+    vi.resetModules();
+    const { setupDiscordToMc } = await import(
+      "../../src/bot/logWatcher/watchers/log/chatBridge.js"
+    );
+    const client = makeClient();
+    const server = { send: vi.fn().mockRejectedValue(new Error("boom")) };
+    setupDiscordToMc(client as never, guildConfigs, () => server as never);
+    await expect(
+      client._trigger("messageCreate", makeMsg("u1") as never),
+    ).resolves.toBeUndefined();
+  });
+});
+
+describe("Discord→MC relay command (AUD-002)", () => {
+  it("relays through tellraw, so message text never reaches the log as chat", async () => {
+    vi.resetModules();
+    const { setupDiscordToMc } = await import(
+      "../../src/bot/logWatcher/watchers/log/chatBridge.js"
+    );
+    const client = makeClient();
+    const server = { send: vi.fn().mockResolvedValue(DELIVERED) };
+    setupDiscordToMc(client as never, guildConfigs, () => server as never);
+    await client._trigger(
+      "messageCreate",
+      makeMsg("u1", 'x]: <Admin> !link 1 "q" @a') as never,
+    );
+    const cmd = server.send.mock.calls[0]![0] as string;
+    expect(cmd.startsWith("/tellraw @a ")).toBe(true);
+    const component = JSON.parse(cmd.slice("/tellraw @a ".length));
+    expect(component[2]).toEqual({ text: 'x]: <Admin> !link 1 "q" @a' });
+  });
+});

@@ -232,3 +232,48 @@ describe("deliverPendingRewards", () => {
     expect(getServerPending(after, "smp")["alice"]).toBeUndefined();
   });
 });
+
+describe("deliverPendingRewards under concurrency (AUD-005)", () => {
+  it("delivers a queue once when two joins overlap", async () => {
+    kvSet(
+      "pendingRewards",
+      pendingStore({
+        smp: { alice: [{ discordId: "1", queuedAt: 1, items: [{ item: "diamond", amount: 1 }] }] },
+      }),
+    );
+    const server = fakeServer({ diamond: "Gave 1 [Diamond] to Alice" });
+    const [a, b] = await Promise.all([
+      deliverPendingRewards(server, "Alice"),
+      deliverPendingRewards(server, "Alice"),
+    ]);
+    expect(a + b).toBe(1);
+  });
+
+  it("keeps entries queued for other players while a delivery runs", async () => {
+    kvSet(
+      "pendingRewards",
+      pendingStore({
+        smp: { alice: [{ discordId: "1", queuedAt: 1, items: [{ item: "cursed_item", amount: 1 }] }] },
+      }),
+    );
+    const server = fakeServer({ cursed_item: "Unknown item" });
+    const { updatePendingRewards } = await import(
+      "../../src/core/utils/stores/dailyStore.js"
+    );
+    // Bob's claim lands while Alice's give is in flight.
+    server.send.mockImplementationOnce(async () => {
+      await updatePendingRewards((s) => {
+        (getServerPending(s, "smp")["bob"] ??= []).push({
+          discordId: "2",
+          queuedAt: 2,
+          items: [{ item: "bread", amount: 1 }],
+        });
+      });
+      return { kind: "delivered", output: "Unknown item" };
+    });
+    await deliverPendingRewards(server, "Alice");
+    const after = getServerPending(await loadPendingRewards(), "smp");
+    expect(after["bob"]).toHaveLength(1);
+    expect(after["alice"]).toHaveLength(1);
+  });
+});

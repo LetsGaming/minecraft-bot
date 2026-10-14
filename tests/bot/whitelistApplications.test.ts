@@ -374,6 +374,34 @@ describe("decision buttons", () => {
     expect(dmSend).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps an application submitted while the approval ran (AUD-005)", async () => {
+    const app = seedApp();
+    performWhitelistAdd.mockImplementation(async () => {
+      seedApp({ id: "other123", userId: "u2", mcName: "Alex", createdAt: 2000 });
+      return { name: "Steve" };
+    });
+    await handle(buttonInteraction(`wlapp:approve:${app.id}`));
+    const apps = store().applications;
+    expect(apps.map((a) => [a.id, a.status])).toEqual([
+      ["abcd1234", "approved"],
+      ["other123", "pending"],
+    ]);
+  });
+
+  it("answers stale when another admin decided during the approval (AUD-005)", async () => {
+    const app = seedApp();
+    performWhitelistAdd.mockImplementation(async () => {
+      const cur = store();
+      cur.applications[0]!.status = "denied";
+      kvSet("whitelistApplications", cur);
+      return { name: "Steve" };
+    });
+    const i = buttonInteraction(`wlapp:approve:${app.id}`);
+    await handle(i);
+    expect(store().applications[0]!.status).toBe("denied");
+    expect(recordAdminAction).not.toHaveBeenCalled();
+  });
+
   it("denies without whitelisting", async () => {
     const app = seedApp();
     const i = buttonInteraction(`wlapp:deny:${app.id}`);

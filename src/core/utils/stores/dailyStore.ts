@@ -13,7 +13,7 @@
 import path from "path";
 import { loadJson } from "../jsonStore.js";
 import { getRootDir } from "../paths.js";
-import { kvGet, kvSet } from "../../db/kv.js";
+import { kvGet, kvSet, kvUpdate } from "../../db/kv.js";
 import { log } from "../logger.js";
 import type {
   DailyRewardsConfig,
@@ -176,6 +176,26 @@ export async function saveClaimedStore(
   kvSet("claimedDaily", store);
 }
 
+/**
+ * AUD-005: change the claim store in one transaction. `fn` gets the store
+ * as it is on disk right now, mutates only what it means to change, and
+ * its return value is handed back. Use this instead of load → await → save,
+ * which writes a stale snapshot over every change made during the await
+ * (another user's claim, a reminder flag).
+ */
+export async function updateClaimedStore<T>(
+  fn: (store: ClaimedDailyStore) => T,
+): Promise<T> {
+  await loadClaimedStore(); // runs the one-time v1 → v2 migration first
+  let out!: T;
+  kvUpdate<unknown>("claimedDaily", (raw) => {
+    const store: ClaimedDailyStore = isV2Store(raw) ? raw : { version: 2, servers: {} };
+    out = fn(store);
+    return store;
+  });
+  return out;
+}
+
 // ── Offline-claim delivery queue ──────────────────────────────────────────
 //
 // /daily used to reject offline claims outright, which broke streaks for
@@ -227,6 +247,19 @@ export async function savePendingRewards(
   store: PendingRewardsStore,
 ): Promise<void> {
   kvSet("pendingRewards", store);
+}
+
+/** AUD-005: change the pending-rewards queue in one transaction; see updateClaimedStore. */
+export async function updatePendingRewards<T>(
+  fn: (store: PendingRewardsStore) => T,
+): Promise<T> {
+  let out!: T;
+  kvUpdate<unknown>("pendingRewards", (raw) => {
+    const store: PendingRewardsStore = isPendingV1(raw) ? raw : { version: 1, servers: {} };
+    out = fn(store);
+    return store;
+  });
+  return out;
 }
 
 /** Pending entries for one server; created lazily so callers can mutate. */

@@ -34,7 +34,7 @@ import {
   type ButtonInteraction,
   type ModalSubmitInteraction,
 } from "discord.js";
-import { kvGet, kvSet } from "@mcbot/core/db/kv.js";
+import { kvGet, kvUpdate } from "@mcbot/core/db/kv.js";
 import { loadConfig, getServerIds } from "@mcbot/core/config.js";
 import { getServerInstance } from "@mcbot/core/utils/server/server.js";
 import {
@@ -104,17 +104,33 @@ async function loadStore(): Promise<ApplicationStore> {
   };
 }
 
-async function saveStore(store: ApplicationStore): Promise<void> {
-  // Trim decided history; pending applications always survive.
-  const pending = store.applications.filter((a) => a.status === "pending");
-  const decided = store.applications
-    .filter((a) => a.status !== "pending")
-    .sort((a, b) => (a.decidedAt ?? 0) - (b.decidedAt ?? 0))
-    .slice(-MAX_DECIDED_APPLICATIONS);
-  store.applications = [...decided, ...pending].sort(
-    (a, b) => a.createdAt - b.createdAt,
-  );
-  kvSet("whitelistApplications", store);
+/**
+ * AUD-005: change the store in one transaction against what is on disk
+ * now. Every caller awaits Discord between deciding and writing; saving a
+ * copy loaded before those awaits wrote it over applications submitted or
+ * decided in the meantime (an approved one could go back to pending).
+ */
+async function updateStore<T>(fn: (store: ApplicationStore) => T): Promise<T> {
+  let out!: T;
+  kvUpdate<Partial<ApplicationStore>>("whitelistApplications", (raw) => {
+    const store: ApplicationStore = {
+      version: 1,
+      prompts: raw?.prompts ?? {},
+      applications: raw?.applications ?? [],
+    };
+    out = fn(store);
+    // Trim decided history; pending applications always survive.
+    const pending = store.applications.filter((a) => a.status === "pending");
+    const decided = store.applications
+      .filter((a) => a.status !== "pending")
+      .sort((a, b) => (a.decidedAt ?? 0) - (b.decidedAt ?? 0))
+      .slice(-MAX_DECIDED_APPLICATIONS);
+    store.applications = [...decided, ...pending].sort(
+      (a, b) => a.createdAt - b.createdAt,
+    );
+    return store;
+  });
+  return out;
 }
 
 /** The server IDs this guild's applications may target. */
@@ -143,7 +159,7 @@ export async function ensureApplicationPrompts(
   guildConfigs: GuildConfigSource,
 ): Promise<void> {
   const store = await loadStore();
-  let dirty = false;
+  const posted: ApplicationStore["prompts"] = {};
 
   for (const [guildId, gcfg] of Object.entries(
     resolveGuildConfigs(guildConfigs),
@@ -189,18 +205,21 @@ export async function ensureApplicationPrompts(
           ],
         }),
       );
-      store.prompts[guildId] = {
+      posted[guildId] = {
         channelId: cfg.channelId,
         messageId: message.id,
       };
-      dirty = true;
       log.info("wlapp", `Posted application prompt for guild ${guildId}`);
     } catch (err) {
       log.warn("wlapp", `Prompt setup failed for guild ${guildId}: ${errMsg(err)}`);
     }
   }
 
-  if (dirty) await saveStore(store);
+  if (Object.keys(posted).length > 0) {
+    await updateStore((current) => {
+      Object.assign(current.prompts, posted);
+    });
+  }
 }
 
 // ── Interaction routing ───────────────────────────────────────────────────
@@ -333,14 +352,14 @@ async function handleModalSubmit(
       return;
     }
 
-    const store = await loadStore();
-    const pendingMine = store.applications.filter(
-      (a) =>
-        a.status === "pending" &&
-        a.guildId === guildId &&
-        a.userId === interaction.user.id,
-    );
-    if (pendingMine.length >= MAX_PENDING_PER_USER) {
+    const pendingCount = (store: ApplicationStore): number =>
+      store.applications.filter(
+        (a) =>
+          a.status === "pending" &&
+          a.guildId === guildId &&
+          a.userId === interaction.user.id,
+      ).length;
+    if (pendingCount(await loadStore()) >= MAX_PENDING_PER_USER) {
       await interaction.editReply({ content: t("wlapp.alreadyPending") });
       return;
     }
@@ -382,8 +401,16 @@ async function handleModalSubmit(
       ...roleMention(cfg.mentionRole),
     });
 
-    store.applications.push(app);
-    await saveStore(store);
+    const accepted = await updateStore((current) => {
+      // Re-checked here: a second submit may have landed during the post.
+      if (pendingCount(current) >= MAX_PENDING_PER_USER) return false;
+      current.applications.push(app);
+      return true;
+    });
+    if (!accepted) {
+      await interaction.editReply({ content: t("wlapp.alreadyPending") });
+      return;
+    }
 
     await interaction.editReply({
       content: t("wlapp.submitted", { name: mcName, server: serverId }),
@@ -487,7 +514,20 @@ async function handleDecisionButton(
 
     app.decidedBy = interaction.user.tag;
     app.decidedAt = Date.now();
-    await saveStore(store);
+    const recorded = await updateStore((current) => {
+      const target = current.applications.find((a) => a.id === app.id);
+      // Decided by another admin while this one was whitelisting.
+      if (!target || target.status !== "pending") return false;
+      Object.assign(target, app);
+      return true;
+    });
+    if (!recorded) {
+      await interaction.followUp({
+        content: t("wlapp.stale"),
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
 
     await recordAdminAction({
       action: approve ? "wlapp approve" : "wlapp deny",

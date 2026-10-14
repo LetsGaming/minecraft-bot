@@ -90,6 +90,7 @@ export const de: Record<string, string> = {
   "report.noChannel": "Meldungen sind für diesen Server noch nicht eingerichtet. Wende dich bitte direkt an einen Admin.",
   // ── daily delivery queue ──
   "daily.queueFull": "Im Spiel warten schon {max} Belohnungen auf dich. Betritt den Server und hol sie ab, bevor du die nächste anforderst.",
+  "daily.partlyQueued": "Auf **{server}** konnte gerade nicht alles übergeben werden. Der Rest ist vorgemerkt und kommt beim nächsten Betreten an. Die Belohnung ist eingelöst, deine Serie bleibt erhalten.",
   "daily.queued": "Du bist auf **{server}** gerade offline. Die Belohnung ist vorgemerkt und kommt beim nächsten Betreten an. Deine Serie bleibt erhalten.",
   "daily.delivered": "📦 {count|# vorgemerkte Daily-Belohnung|# vorgemerkte Daily-Belohnungen} geliefert: {items}. Viel Spaß!",
   // ── sessions ──
@@ -547,7 +548,6 @@ export const de: Record<string, string> = {
   "daily.linkRequired": "Verknüpfe zuerst deinen Minecraft-Account.",
   "daily.linkError": "Der verknüpfte Minecraft-Account wurde nicht gefunden.",
   "daily.dataError": "Für diesen Server sind keine Daily-Belohnungen eingerichtet.",
-  "daily.deliveryFailed": "Die Belohnung konnte nicht zugestellt werden. Dein Abholversuch wurde nicht verbraucht.",
   "daily.cooldown": "Die nächste Belohnung gibt es {relative} (um {time}).",
   "daily.reward": "Belohnung: {reward}",
   "daily.bonus": "Bonus für {days} Tage Serie: {rewards}",
@@ -626,7 +626,6 @@ export const de: Record<string, string> = {
   "daily.linkErrorRecovery": "Prüfe ihn mit /linkstatus oder verknüpfe ihn neu mit /link.",
   "daily.dataErrorRecovery": "Sag einem Bot-Admin Bescheid.",
   "daily.queueFullTitle": "Belohnungen warten im Spiel",
-  "daily.deliveryFailedTitle": "Belohnung nicht zugestellt",
   "daily.cooldownTitle": "Schon abgeholt",
   "daily.claimedTitle": "Tägliche Belohnung abgeholt",
   "daily.streakField": "Serie",

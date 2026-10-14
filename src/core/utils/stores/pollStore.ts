@@ -15,7 +15,7 @@
  * linkUtils, so nobody votes twice across platforms — the dedupe the
  * plan calls for. Re-voting overwrites (changing your mind is allowed).
  */
-import { kvGet, kvSet } from "../../db/kv.js";
+import { kvGet, kvMutate, kvSet } from "../../db/kv.js";
 
 /** Closed-poll history kept per store (open polls are never trimmed). */
 export const MAX_CLOSED_POLLS = 50;
@@ -67,14 +67,33 @@ export async function loadPollStore(): Promise<PollStore> {
   return { version: 1, polls: [] };
 }
 
-export async function savePollStore(store: PollStore): Promise<void> {
+function trimPolls(store: PollStore): void {
   // Trim closed history; open polls always survive.
   const open = store.polls.filter((p) => p.status === "open");
   const closed = store.polls
     .filter((p) => p.status === "closed")
     .slice(-MAX_CLOSED_POLLS);
   store.polls = [...closed, ...open].sort((a, b) => a.createdAt - b.createdAt);
+}
+
+export async function savePollStore(store: PollStore): Promise<void> {
+  trimPolls(store);
   kvSet("polls", store);
+}
+
+/** Change the store in one transaction (AUD-005); see kvMutate. */
+export async function updatePollStore<T>(
+  fn: (store: PollStore) => T,
+): Promise<T> {
+  return kvMutate<PollStore, T>(
+    "polls",
+    (raw) => (isV1Store(raw) ? raw : { version: 1, polls: [] }),
+    (store) => {
+      const out = fn(store);
+      trimPolls(store);
+      return out;
+    },
+  );
 }
 
 export function getPollById(store: PollStore, id: string): Poll | null {

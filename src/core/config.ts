@@ -303,8 +303,16 @@ export function loadConfig(): BotConfig {
  * Returns the freshly loaded config.
  */
 export function reloadConfig(): BotConfig {
+  // AUD-007: keep the old config cached until the new one has loaded, so a
+  // malformed save leaves the running process on its last good config.
+  const previous = _config;
   _config = null;
-  return loadConfig();
+  try {
+    return loadConfig();
+  } catch (err) {
+    _config = previous;
+    throw err;
+  }
 }
 
 // ── Config file watcher ───────────────────────────────────────────────────

@@ -38,19 +38,30 @@ vi.mock("../../src/core/utils/stores/linkUtils.js", async () => {
     loadLinkedAccountsOrEmpty: vi.fn().mockResolvedValue({}),
   };
 });
-vi.mock("../../src/core/utils/stores/dailyStore.js", () => ({
-  loadClaimedStore: vi
+vi.mock("../../src/core/utils/stores/dailyStore.js", () => {
+  const loadClaimedStore = vi
     .fn()
-    .mockResolvedValue({ version: 2, servers: {} }),
-  // Real lazy-map semantics so command code can mutate the store.
-  getServerClaims: vi.fn(
-    (
-      store: { servers: Record<string, Record<string, unknown>> },
-      serverId: string,
-    ) => (store.servers[serverId] ??= {}),
-  ),
-  saveClaimedStore: vi.fn().mockResolvedValue(undefined),
-}));
+    .mockResolvedValue({ version: 2, servers: {} });
+  const saveClaimedStore = vi.fn().mockResolvedValue(undefined);
+  return {
+    loadClaimedStore,
+    // Real lazy-map semantics so command code can mutate the store.
+    getServerClaims: vi.fn(
+      (
+        store: { servers: Record<string, Record<string, unknown>> },
+        serverId: string,
+      ) => (store.servers[serverId] ??= {}),
+    ),
+    saveClaimedStore,
+    // The transactional update, modelled as load → fn → save.
+    updateClaimedStore: vi.fn(async (fn: (s: unknown) => unknown) => {
+      const store = await loadClaimedStore();
+      const out = fn(store);
+      await saveClaimedStore(store);
+      return out;
+    }),
+  };
+});
 
 // reminder.ts resolves the target server and checks the instance count
 // for its reply suffix.

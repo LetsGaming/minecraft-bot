@@ -129,3 +129,40 @@ describe("saveClaimedStore", () => {
     expect(kvGet("claimedDaily")).toEqual(store);
   });
 });
+
+describe("updateClaimedStore (AUD-005)", () => {
+  it("applies each change to the current store, not a stale copy", async () => {
+    const { loadClaimedStore, updateClaimedStore, getServerClaims } = await import(
+      "../../src/core/utils/stores/dailyStore.js"
+    );
+    kvSet("claimedDaily", { version: 2, servers: {} });
+    const stale = await loadClaimedStore();
+    await updateClaimedStore((s) => {
+      getServerClaims(s, "survival")["a"] = {
+        lastClaim: 1, currentStreak: 1, bonusStreak: 1, longestStreak: 1, rewards: [],
+      };
+    });
+    await updateClaimedStore((s) => {
+      getServerClaims(s, "survival")["b"] = {
+        lastClaim: 2, currentStreak: 1, bonusStreak: 1, longestStreak: 1, rewards: [],
+      };
+    });
+    const claims = getServerClaims(await loadClaimedStore(), "survival");
+    expect(Object.keys(claims).sort()).toEqual(["a", "b"]);
+    expect(stale.servers).toEqual({});
+  });
+
+  it("writes nothing when fn throws", async () => {
+    const { loadClaimedStore, updateClaimedStore } = await import(
+      "../../src/core/utils/stores/dailyStore.js"
+    );
+    kvSet("claimedDaily", { version: 2, servers: {} });
+    await expect(
+      updateClaimedStore((s) => {
+        s.servers["x"] = {};
+        throw new Error("nope");
+      }),
+    ).rejects.toThrow("nope");
+    expect((await loadClaimedStore()).servers).toEqual({});
+  });
+});

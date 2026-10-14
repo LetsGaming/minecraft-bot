@@ -632,17 +632,20 @@ describe("deferred replies", () => {
     expect(embedOf(interaction.followUp.mock.calls[0]![0]).title).toBe("⛔ Rewards waiting in game");
   });
 
-  it("answers a failed delivery with an error only the claimer sees", async () => {
+  it("uses the claim and queues what a failed give did not deliver (AUD-022)", async () => {
     const { execute, interaction } = await setup({
       online: true,
       send: { kind: "unreachable", reason: "timeout", detail: "x" },
     });
     await execute(interaction as never);
-    expect(interaction.editReply).not.toHaveBeenCalled();
-    expect(interaction.followUp).toHaveBeenCalledWith(
-      expect.objectContaining({ flags: 64 }),
-    );
-    expect(embedOf(interaction.followUp.mock.calls[0]![0]).title).toBe("⛔ Reward not delivered");
+    // A retry would hand out whatever did arrive a second time, so the
+    // claim is used and the rest waits for the next join instead.
+    expect(embedOf(interaction.editReply.mock.calls[0]![0]).title).toBe("📦 Reward queued");
+    const { kvGet } = await import("../../src/core/db/kv.js");
+    const pending = kvGet<{ servers: Record<string, Record<string, unknown[]>> }>("pendingRewards");
+    expect(pending?.servers["main"]?.["steve"]).toHaveLength(1);
+    const claimed = kvGet<{ servers: Record<string, Record<string, { lastClaim: number }>> }>("claimedDaily");
+    expect(claimed?.servers["main"]?.["user-1"]?.lastClaim).toBeGreaterThan(0);
   });
 
   it("answers an unresolvable server ephemerally", async () => {

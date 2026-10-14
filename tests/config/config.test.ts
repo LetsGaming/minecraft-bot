@@ -115,6 +115,13 @@ describe("loadConfig", () => {
     expect(cfg2.token).toBe("test.bot.token.12345"); // still original
   });
 
+  it("keeps the last good config when a reload fails (AUD-007)", () => {
+    const before = loadConfig();
+    writeFileSync(path.join(TEST_ROOT, "config.json"), "INVALID JSON !!!{{{");
+    expect(() => reloadConfig()).toThrow("Failed to load config.json");
+    expect(loadConfig()).toBe(before);
+  });
+
   it("throws when config.json contains invalid JSON", () => {
     writeFileSync(path.join(TEST_ROOT, "config.json"), "INVALID JSON !!!{{{");
     expect(() => reloadConfig()).toThrow("Failed to load config.json");

@@ -42,3 +42,24 @@ export function kvUpdate<T>(key: string, fn: (current: T | null) => T): T {
     return next;
   });
 }
+
+/**
+ * kvUpdate for a store with a typed shape (AUD-005): `normalize` turns the
+ * stored value (or null) into the store, `fn` mutates it in place and its
+ * return value is handed back. The point is that `fn` sees the row as it
+ * is inside the transaction — callers that await between deciding and
+ * writing must do the writing here, never by saving a copy loaded earlier.
+ */
+export function kvMutate<S, T>(
+  key: string,
+  normalize: (raw: unknown) => S,
+  fn: (store: S) => T,
+): T {
+  let out!: T;
+  kvUpdate<unknown>(key, (raw) => {
+    const store = normalize(raw);
+    out = fn(store);
+    return store;
+  });
+  return out;
+}

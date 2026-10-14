@@ -5,9 +5,8 @@
  */
 import { SlashCommandBuilder } from "discord.js";
 import {
-  loadClaimedStore,
   getServerClaims,
-  saveClaimedStore,
+  updateClaimedStore,
 } from "@mcbot/core/utils/stores/dailyStore.js";
 import { withErrorHandling } from "../../middleware.js";
 import { resolveServer } from "../../../utils/guild/guildRouter.js";
@@ -37,22 +36,22 @@ export const execute = withErrorHandling(
 
     // Reminders are per server, like the claims they announce.
     const server = resolveServer(interaction);
-    const store = await loadClaimedStore();
-    const claimed = getServerClaims(store, server.id);
-    const existing = claimed[userId];
+    await updateClaimedStore((store) => {
+      const claimed = getServerClaims(store, server.id);
+      const existing = claimed[userId];
 
-    claimed[userId] = {
-      // Users who never claimed get a zeroed record carrying just the
-      // flag; the scheduler only DMs once a real claim exists.
-      lastClaim: existing?.lastClaim ?? 0,
-      currentStreak: existing?.currentStreak ?? 0,
-      bonusStreak: existing?.bonusStreak ?? 0,
-      longestStreak: existing?.longestStreak ?? 0,
-      rewards: existing?.rewards ?? [],
-      ...existing,
-      remind: enabled,
-    };
-    await saveClaimedStore(store);
+      claimed[userId] = {
+        // Users who never claimed get a zeroed record carrying just the
+        // flag; the scheduler only DMs once a real claim exists.
+        lastClaim: existing?.lastClaim ?? 0,
+        currentStreak: existing?.currentStreak ?? 0,
+        bonusStreak: existing?.bonusStreak ?? 0,
+        longestStreak: existing?.longestStreak ?? 0,
+        rewards: existing?.rewards ?? [],
+        ...existing,
+        remind: enabled,
+      };
+    });
 
     const suffix =
       getAllInstances().length > 1 ? ` (Server: **${server.id}**)` : "";

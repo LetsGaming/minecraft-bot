@@ -8,7 +8,8 @@
 import { defineCommand } from "../../defineCommand.js";
 import {
   loadPollStore,
-  savePollStore,
+  updatePollStore,
+  getPollById,
   getOpenPollForServer,
   voterKeyForMc,
 } from "@mcbot/core/utils/stores/pollStore.js";
@@ -37,8 +38,18 @@ const cmd = defineCommand({
     }
 
     const linked = await loadLinkedAccountsOrEmpty();
-    poll.votes[voterKeyForMc(username, linked)] = idx;
-    await savePollStore(store);
+    // The vote goes into the poll as stored now: the copy above is stale
+    // after the await, and saving it would drop votes cast meanwhile (AUD-005).
+    const counted = await updatePollStore((current) => {
+      const live = getPollById(current, poll.id);
+      if (!live || live.status !== "open") return false;
+      live.votes[voterKeyForMc(username, linked)] = idx;
+      return true;
+    });
+    if (!counted) {
+      await whisper(server, username, t("poll.noneInGame"));
+      return;
+    }
 
     await tellraw(server, username, {
         text: t("poll.voted", { option: poll.options[idx]! }),

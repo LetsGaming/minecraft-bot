@@ -6,12 +6,23 @@ vi.mock("../../src/core/config.js", async (importOriginal) => ({
   getServerIds: vi.fn(),
 }));
 
-vi.mock("../../src/core/utils/stores/dailyStore.js", () => ({
-  loadClaimedStore: vi.fn(),
-  saveClaimedStore: vi.fn().mockResolvedValue(undefined),
-  getServerClaims: (store: { servers: Record<string, Record<string, unknown>> }, id: string) =>
-    (store.servers[id] ??= {}),
-}));
+vi.mock("../../src/core/utils/stores/dailyStore.js", () => {
+  const loadClaimedStore = vi.fn();
+  const saveClaimedStore = vi.fn().mockResolvedValue(undefined);
+  return {
+    loadClaimedStore,
+    saveClaimedStore,
+    // The transactional update, modelled as load → fn → save.
+    updateClaimedStore: vi.fn(async (fn: (s: unknown) => unknown) => {
+      const store = await loadClaimedStore();
+      const out = fn(store);
+      await saveClaimedStore(store);
+      return out;
+    }),
+    getServerClaims: (store: { servers: Record<string, Record<string, unknown>> }, id: string) =>
+      (store.servers[id] ??= {}),
+  };
+});
 
 vi.mock("../../src/core/utils/stores/adminAudit.js", () => ({
   recordAdminAction: vi.fn().mockResolvedValue(undefined),

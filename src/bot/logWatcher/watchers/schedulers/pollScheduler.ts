@@ -25,7 +25,7 @@ import {
 import {
   pollServerIds,
   loadPollStore,
-  savePollStore,
+  updatePollStore,
   getPollById,
   tallyPoll,
   voterKeyForDiscord,
@@ -111,22 +111,29 @@ export function attachCollectorToMessage(
   collector.on("collect", async (interaction: ButtonInteraction) => {
     try {
       const idx = Number(interaction.customId.split(":")[2]);
-      const store = await loadPollStore();
-      const poll = getPollById(store, pollId);
+      // Read and written in one transaction (AUD-005), so two clicks at
+      // once can't each save a copy without the other's vote.
+      const result = await updatePollStore((store) => {
+        const poll = getPollById(store, pollId);
+        if (!poll || poll.status !== "open" || Date.now() >= poll.endsAt) {
+          return "closed" as const;
+        }
+        if (!Number.isInteger(idx) || idx < 0 || idx >= poll.options.length) {
+          return "invalid" as const;
+        }
+        poll.votes[voterKeyForDiscord(interaction.user.id)] = idx;
+        return poll;
+      });
 
-      if (!poll || poll.status !== "open" || Date.now() >= poll.endsAt) {
+      if (result === "closed") {
         await interaction.reply({
           content: t("poll.closedReply"),
           flags: MessageFlags.Ephemeral,
         });
         return;
       }
-      if (!Number.isInteger(idx) || idx < 0 || idx >= poll.options.length) {
-        return;
-      }
-
-      poll.votes[voterKeyForDiscord(interaction.user.id)] = idx;
-      await savePollStore(store);
+      if (result === "invalid") return;
+      const poll = result;
 
       await interaction.reply({
         content: t("poll.voted", { option: poll.options[idx]! }),
@@ -153,12 +160,13 @@ function buildResultLines(poll: Poll): { lines: string[]; total: number } {
 
 /** Close a poll and announce results in both directions. Idempotent. */
 export async function closePoll(client: Client, pollId: string): Promise<void> {
-  const store = await loadPollStore();
-  const poll = getPollById(store, pollId);
-  if (!poll || poll.status === "closed") return;
-
-  poll.status = "closed";
-  await savePollStore(store);
+  const poll = await updatePollStore((store) => {
+    const found = getPollById(store, pollId);
+    if (!found || found.status === "closed") return null;
+    found.status = "closed";
+    return found;
+  });
+  if (!poll) return;
 
   const timer = closeTimers.get(pollId);
   if (timer) clearTimeout(timer);
