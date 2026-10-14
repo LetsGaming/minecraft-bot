@@ -77,6 +77,8 @@ export type ModConfigWriteBody = Static<typeof ModConfigWriteBody>;
 
 export const ModConfigRevertBody = Type.Object({
   snapshot: Type.String({ minLength: 1, maxLength: 64 }),
+  /** The version on screen when the revert was asked for; a newer file is a conflict. */
+  etag: Type.String({ minLength: 1 }),
 });
 export type ModConfigRevertBody = Static<typeof ModConfigRevertBody>;
 

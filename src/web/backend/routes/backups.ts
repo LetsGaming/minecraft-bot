@@ -22,11 +22,13 @@ import {
   openBackupDownload,
   restoreBackupFile,
   deleteBackupFile,
+  classifyScriptFailure,
 } from "@mcbot/core/utils/server/serverAccess.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { readThrough, forget } from "@mcbot/core/utils/wrapper/lastKnown.js";
 import { recordIntent } from "@mcbot/core/utils/wrapper/deferredIntents.js";
+import { scriptFailureError } from "./scriptFailure.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 import { sessionFromRequest } from "../auth/auth.js";
 import { BadRequest, NotFound, HttpError } from "../errors.js";
@@ -216,6 +218,9 @@ export function registerBackupRoutes(app: FastifyInstance): void {
           stderr: result.stderr.slice(-4000),
         };
       } catch (err) {
+        log.error("web", `Restore on ${req.params.id} failed: ${errMsg(err)}`);
+        const failure = classifyScriptFailure(err);
+        if (failure.kind !== "unreachable") throw scriptFailureError("restore", failure);
         // A restore is the most destructive thing here, so it is the last
         // thing that should ever replay unattended: a restore queued at 14:00
         // and applied at 17:00 discards three hours of play nobody agreed to
@@ -228,8 +233,10 @@ export function registerBackupRoutes(app: FastifyInstance): void {
           byTag: sessionFromRequest(req)!.tag,
           reason: errMsg(err),
         });
-        log.error("web", `Restore on ${req.params.id} failed: ${errMsg(err)}`);
-        throw new HttpError(502, OPERATION_FAILED);
+        throw new HttpError(
+          503,
+          "The wrapper did not answer, so the restore did not run. It is offered again once the wrapper is back.",
+        );
       }
     },
   );

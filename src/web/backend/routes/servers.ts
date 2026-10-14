@@ -16,6 +16,7 @@ import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
 import { getServerInstance } from "@mcbot/core/utils/server/server.js";
 import {
   runScript,
+  classifyScriptFailure,
   tailLog,
   listStatsUuids,
   deleteStatsFile,
@@ -23,6 +24,7 @@ import {
   readUserCache,
 } from "@mcbot/core/utils/server/serverAccess.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
+import { scriptFailureError } from "./scriptFailure.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { readThrough } from "@mcbot/core/utils/wrapper/lastKnown.js";
 import {
@@ -89,6 +91,9 @@ async function runServerAction(
       stderr: result.stderr.slice(-4000),
     };
   } catch (err) {
+    log.error("web", `Script ${action} on ${id} failed: ${errMsg(err)}`);
+    const failure = classifyScriptFailure(err);
+    if (failure.kind !== "unreachable") throw scriptFailureError(action, failure);
     // Remember the wish, never the act. A restart or rollback that fires
     // by itself hours later kicks players nobody warned, or discards play
     // nobody meant to lose. The dashboard will offer this back as a
@@ -100,7 +105,6 @@ async function runServerAction(
       byTag: session.tag,
       reason: errMsg(err),
     });
-    log.error("web", `Script ${action} on ${id} failed: ${errMsg(err)}`);
     throw new HttpError(503, `The wrapper did not answer, so "${action}" did not run. It is offered again once the wrapper is back.`);
   }
 }

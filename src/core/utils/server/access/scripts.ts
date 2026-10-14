@@ -2,7 +2,7 @@
 
 import { scriptTimeoutMs } from "../wrapperContract.js";
 import type { ServerConfig, ScriptResult } from "../../../types/index.js";
-import { apiPost } from "./apiClient.js";
+import { apiPost, ApiError, RateLimitedError } from "./apiClient.js";
 import { advertisedScriptTimeouts, wrapperKey } from "./manifest.js";
 
 /** Margin added to a script's ceiling so the wrapper's own timeout reply arrives first. */
@@ -50,4 +50,33 @@ export class ScriptStillRunningError extends Error {
     );
     this.name = "ScriptStillRunningError";
   }
+}
+
+/**
+ * What a failed script call means for the person who asked (AUD-012).
+ *
+ * - `still-running`: we stopped waiting, the host may still be doing it.
+ *   Offering a retry would start it a second time.
+ * - `refused`: the wrapper answered and said no (busy with another
+ *   operation, bad request, its own error). It did not run as asked, but the
+ *   wrapper is there, so this is not something to offer again later.
+ * - `unreachable`: the wrapper did not answer at all, so it did not run.
+ */
+export type ScriptFailure =
+  | { kind: "still-running" }
+  | { kind: "refused"; status: number; message: string }
+  | { kind: "unreachable" };
+
+export function classifyScriptFailure(err: unknown): ScriptFailure {
+  if (err instanceof ScriptStillRunningError) return { kind: "still-running" };
+  if (err instanceof DOMException && err.name === "TimeoutError") {
+    return { kind: "still-running" };
+  }
+  if (err instanceof RateLimitedError) {
+    return { kind: "refused", status: 429, message: "rate limited" };
+  }
+  if (err instanceof ApiError) {
+    return { kind: "refused", status: err.status, message: err.wrapperMessage };
+  }
+  return { kind: "unreachable" };
 }

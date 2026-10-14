@@ -61,7 +61,9 @@ vi.mock("../../src/core/config.js", () => ({
   getServerIds: vi.fn(() => ["smp"]),
 }));
 
-vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
+vi.mock("../../src/core/utils/server/serverAccess.js", async () => ({
+  classifyScriptFailure: (await import("../../src/core/utils/server/access/scripts.js"))
+    .classifyScriptFailure,
   detectCapabilities: detectCapabilitiesMock,
   getRemoteManifest: getRemoteManifestMock,
   readBackups: readBackupsMock,
@@ -605,7 +607,7 @@ describe("POST .../backups/files/:fileId/restore", () => {
       url: `/api/servers/smp/backups/files/${FILE_ID}/restore`,
       headers: { cookie: cookieFor(RESTORER) },
     });
-    expect(res.statusCode).toBe(502);
+    expect(res.statusCode).toBe(503);
     // A restore that failed halfway is exactly when someone asks what ran.
     expect(recordAdminActionMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: "backup restore (dashboard)" }),

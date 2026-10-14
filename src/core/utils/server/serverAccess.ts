@@ -19,7 +19,7 @@ export {
 export { sendCommandOutcome } from "./access/commands.js";
 export { getRemoteInfo, versionAtLeast } from "./access/host.js";
 export type { RemoteInfo } from "./access/host.js";
-export { getRemoteManifest, verifyWrapperContract } from "./access/manifest.js";
+export { getRemoteManifest, verifyWrapperContract, wrapperFeatureVersion } from "./access/manifest.js";
 export { readWhitelist, readUserCache } from "./access/players.js";
 export {
   readLevelName,
@@ -81,7 +81,8 @@ export type {
   ConfigFileInfo,
 } from "./access/configFiles.js";
 export { detectCapabilities } from "./access/capabilityProbe.js";
-export { runScript, ScriptStillRunningError } from "./access/scripts.js";
+export { runScript, ScriptStillRunningError, classifyScriptFailure } from "./access/scripts.js";
+export type { ScriptFailure } from "./access/scripts.js";
 export { tailLog, logStreamUrl, openLogStream } from "./access/logs.js";
 export type { LogStreamHandlers } from "./access/logs.js";
 

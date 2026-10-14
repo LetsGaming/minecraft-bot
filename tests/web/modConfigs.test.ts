@@ -43,7 +43,9 @@ const {
   detectCapabilitiesMock,
   getRemoteManifestMock,
   recordAdminActionMock,
+  wrapperFeatureVersionMock,
 } = vi.hoisted(() => ({
+  wrapperFeatureVersionMock: vi.fn(async () => 2),
   indexConfigFilesMock: vi.fn(),
   readConfigFileMock: vi.fn(),
   writeConfigFileMock: vi.fn(),
@@ -65,6 +67,7 @@ vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
   readConfigFile: readConfigFileMock,
   writeConfigFile: writeConfigFileMock,
   revertConfigFile: revertConfigFileMock,
+  wrapperFeatureVersion: wrapperFeatureVersionMock,
   sendCommand: vi.fn(),
   openLogStream: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
   runScript: vi.fn(),
@@ -201,7 +204,8 @@ beforeEach(() => {
     snapshots: ["2026-08-02T09-00-00-000Z"],
   });
   writeConfigFileMock.mockResolvedValue({ ok: true, etag: "etag-2", snapshot: "snap-1" });
-  revertConfigFileMock.mockResolvedValue({ etag: "etag-0" });
+  revertConfigFileMock.mockResolvedValue({ ok: true, etag: "etag-0" });
+  wrapperFeatureVersionMock.mockResolvedValue(2);
   detectCapabilitiesMock.mockResolvedValue({
     scripts: { start: true, stop: true, restart: true, rollback: true, backup: true, status: true },
     backups: true,
@@ -375,14 +379,14 @@ describe("POST .../configs/:fileId/revert", () => {
     const denied = await app.inject({
       method: "POST", url: `/api/servers/smp/configs/${FILE_ID}/revert`,
       headers: { cookie: cookieFor(READER_CFG), "content-type": "application/json" },
-      payload: { snapshot: "2026-08-02T09-00-00-000Z" },
+      payload: { snapshot: "2026-08-02T09-00-00-000Z", etag: "etag-1" },
     });
     expect(denied.statusCode).toBe(403);
 
     const ok = await app.inject({
       method: "POST", url: `/api/servers/smp/configs/${FILE_ID}/revert`,
       headers: { cookie: cookieFor(EDITOR), "content-type": "application/json" },
-      payload: { snapshot: "2026-08-02T09-00-00-000Z" },
+      payload: { snapshot: "2026-08-02T09-00-00-000Z", etag: "etag-1" },
     });
     expect(ok.statusCode).toBe(200);
     expect(recordAdminActionMock).toHaveBeenCalledWith(
@@ -486,5 +490,139 @@ describe("nested and unsupported config files", () => {
     const res = await buildServer().inject(get(READER_CFG));
     expect(res.statusCode).toBe(413);
     expect(res.json().error).toContain("bigger than 1 MB");
+  });
+});
+
+// ── AUD-009: secret-bearing files, protected keys, revert precondition ─────
+
+describe("server.properties and plugin configs (AUD-009)", () => {
+  const PROPS_ID = "B".repeat(22);
+  beforeEach(() => {
+    indexConfigFilesMock.mockResolvedValue({
+      files: [
+        { id: FILE_ID, relPath: "config/jei-client.toml", modId: "jei",
+          format: "toml", editable: true, tooLarge: false, sizeBytes: 120, mtimeMs: 1 },
+        { id: PROPS_ID, relPath: "server.properties", modId: "minecraft",
+          format: "properties", editable: true, tooLarge: false, sizeBytes: 50, mtimeMs: 1 },
+        { id: "C".repeat(22), relPath: "plugins/DiscordSRV/config.yml", modId: "DiscordSRV",
+          format: "yaml", editable: true, tooLarge: false, sizeBytes: 50, mtimeMs: 1 },
+      ],
+      truncated: false,
+    });
+    readConfigFileMock.mockResolvedValue({
+      text: "motd=hi\nrcon.password=secret\n",
+      etag: "etag-p",
+      file: { id: PROPS_ID, relPath: "server.properties", modId: "minecraft",
+              format: "properties", sizeBytes: 30, mtimeMs: 1 },
+      snapshots: [],
+    });
+  });
+
+  const list = (who: string) =>
+    buildServer().inject({ method: "GET", url: "/api/servers/smp/configs", headers: { cookie: cookieFor(who) } });
+
+  it("hides them from non-sysadmins behind a wrapper that does not redact", async () => {
+    wrapperFeatureVersionMock.mockResolvedValue(1);
+    const ids = (await list(READER_CFG)).json().files.map((f: { relPath: string }) => f.relPath);
+    expect(ids).toEqual(["config/jei-client.toml"]);
+    const read = await buildServer().inject({
+      method: "GET", url: `/api/servers/smp/configs/${PROPS_ID}`, headers: { cookie: cookieFor(READER_CFG) },
+    });
+    expect(read.statusCode).toBe(403);
+    expect(read.body).not.toContain("secret");
+  });
+
+  it("lists them for sysadmins, and for everyone behind a redacting wrapper", async () => {
+    wrapperFeatureVersionMock.mockResolvedValue(1);
+    expect((await list(SYSADMIN)).json().files).toHaveLength(3);
+    wrapperFeatureVersionMock.mockResolvedValue(2);
+    expect((await list(READER_CFG)).json().files).toHaveLength(3);
+  });
+
+  it("sends allowProtected for sysadmins only", async () => {
+    const save = (who: string) =>
+      buildServer().inject({
+        method: "PUT", url: `/api/servers/smp/configs/${PROPS_ID}`,
+        headers: { cookie: cookieFor(who), "content-type": "application/json" },
+        payload: { etag: "etag-p", edits: [{ path: ["motd"], value: "hello" }] },
+      });
+    await save(EDITOR);
+    expect(writeConfigFileMock.mock.calls.at(-1)![4]).toEqual({ allowProtected: false });
+    await save(SYSADMIN);
+    expect(writeConfigFileMock.mock.calls.at(-1)![4]).toEqual({ allowProtected: true });
+  });
+
+  it("explains a protected-key refusal from the wrapper", async () => {
+    writeConfigFileMock.mockRejectedValueOnce(
+      new ConfigAccessError("protected", "Only a bot administrator can change this setting: rcon.password", 403),
+    );
+    const res = await buildServer().inject({
+      method: "PUT", url: `/api/servers/smp/configs/${PROPS_ID}`,
+      headers: { cookie: cookieFor(EDITOR), "content-type": "application/json" },
+      payload: { etag: "etag-p", edits: [{ path: ["motd"], value: "x" }] },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toContain("rcon.password");
+  });
+});
+
+describe("revert precondition", () => {
+  it("refuses a revert opened against an older version", async () => {
+    const res = await buildServer().inject({
+      method: "POST", url: `/api/servers/smp/configs/${FILE_ID}/revert`,
+      headers: { cookie: cookieFor(EDITOR), "content-type": "application/json" },
+      payload: { snapshot: "2026-08-02T09-00-00-000Z", etag: "etag-old" },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(revertConfigFileMock).not.toHaveBeenCalled();
+  });
+
+  it("passes the current etag to the wrapper", async () => {
+    await buildServer().inject({
+      method: "POST", url: `/api/servers/smp/configs/${FILE_ID}/revert`,
+      headers: { cookie: cookieFor(EDITOR), "content-type": "application/json" },
+      payload: { snapshot: "2026-08-02T09-00-00-000Z", etag: "etag-1" },
+    });
+    expect(revertConfigFileMock.mock.calls[0]![3]).toBe("etag-1");
+  });
+});
+
+describe("queued edits while the wrapper is away (AUD-013)", () => {
+  const get = (uid: string) => ({
+    method: "GET" as const,
+    url: `/api/servers/smp/configs/${FILE_ID}`,
+    headers: { cookie: cookieFor(uid) },
+  });
+  async function primeCacheThenGoDown(): Promise<ReturnType<typeof buildServer>> {
+    const app = buildServer();
+    // A read remembers the file, as the editor's own load would.
+    expect((await app.inject(get(EDITOR))).statusCode).toBe(200);
+    readConfigFileMock.mockRejectedValue(new Error("connect ECONNREFUSED"));
+    return app;
+  }
+  const put = (etag: string, edits: unknown) => ({
+    method: "PUT" as const,
+    url: `/api/servers/smp/configs/${FILE_ID}`,
+    headers: { cookie: cookieFor(EDITOR), "content-type": "application/json" },
+    payload: { etag, edits },
+  });
+
+  it("refuses to queue an edit made against an older copy", async () => {
+    const app = await primeCacheThenGoDown();
+    const res = await app.inject(put("etag-older", [{ path: ["general", "maxSpawnCount"], value: 3 }]));
+    expect(res.statusCode).toBe(409);
+  });
+
+  it("queues an edit made against the cached copy", async () => {
+    const app = await primeCacheThenGoDown();
+    const res = await app.inject(put("etag-1", [{ path: ["general", "maxSpawnCount"], value: 3 }]));
+    expect(res.statusCode).toBe(200);
+    expect(res.json().queued).toBe(true);
+  });
+
+  it("refuses to queue an edit that would not apply", async () => {
+    const app = await primeCacheThenGoDown();
+    const res = await app.inject(put("etag-1", [{ path: ["no", "such", "key"], value: 3 }]));
+    expect(res.statusCode).toBe(400);
   });
 });

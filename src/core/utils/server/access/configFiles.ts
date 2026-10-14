@@ -3,7 +3,7 @@
 import type { ServerConfig } from "../../../types/index.js";
 import { ConfigAccessError, configAccessErrorFor } from "../configAccessError.js";
 import type { ConfigFileInfo, WireSchemas } from "@mcbot/schema/wire/index.js";
-import { instanceUrl, apiGetRaw, apiGet, apiPost, ApiError } from "./apiClient.js";
+import { instanceUrl, apiGetRaw, apiGet, ApiError } from "./apiClient.js";
 
 export type { ConfigFileInfo };
 
@@ -75,6 +75,17 @@ export async function readConfigFile(
   };
 }
 
+/** What the wrapper puts in place of a secret value it will not show (mod-configs v2). */
+export const REDACTED_SECRET = "<redacted by mc-api-server>";
+
+export interface ConfigWriteOptions {
+  /**
+   * Let a write change `server.properties` keys the wrapper protects (RCON,
+   * online-mode, whitelist, op level, …). Sent for bot sysadmins only.
+   */
+  allowProtected?: boolean;
+}
+
 /**
  * Write a config file back.
  *
@@ -89,32 +100,18 @@ export async function writeConfigFile(
   fileId: string,
   text: string,
   etag: string,
+  options: ConfigWriteOptions = {},
 ): Promise<
   { ok: true; etag: string; snapshot: string } | { ok: false; conflict: true }
 > {
-  const headers: Record<string, string> = {
-    "content-type": "application/json",
-    "if-match": etag,
-  };
-  if (cfg.apiKey) headers["x-api-key"] = cfg.apiKey;
-
-  const res = await fetch(
-    instanceUrl(cfg, `/configs/${encodeURIComponent(fileId)}`),
-    {
-      method: "PUT",
-      headers,
-      body: JSON.stringify({ text }),
-      signal: AbortSignal.timeout(CONFIG_WRITE_TIMEOUT_MS),
-    },
+  const res = await sendConfigWrite(
+    cfg,
+    "PUT",
+    `/configs/${encodeURIComponent(fileId)}`,
+    etag,
+    { text, ...(options.allowProtected ? { allowProtected: true } : {}) },
   );
   if (res.status === 412) return { ok: false, conflict: true };
-  if (res.status === 429) {
-    throw new ConfigAccessError(
-      "rate-limited",
-      "The server's API is rate limiting requests. Wait a moment and save again.",
-      429,
-    );
-  }
   if (!res.ok) await throwConfigFailure(res, "PUT /configs", "write");
   const body = (await res.json()) as { etag: string; snapshot: string };
   return { ok: true, ...body };
@@ -122,14 +119,55 @@ export async function writeConfigFile(
 
 const CONFIG_WRITE_TIMEOUT_MS = 30_000;
 
+async function sendConfigWrite(
+  cfg: ServerConfig,
+  method: "PUT" | "POST",
+  route: string,
+  etag: string,
+  body: Record<string, unknown>,
+): Promise<Response> {
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    "if-match": etag,
+  };
+  if (cfg.apiKey) headers["x-api-key"] = cfg.apiKey;
+
+  const res = await fetch(instanceUrl(cfg, route), {
+    method,
+    headers,
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(CONFIG_WRITE_TIMEOUT_MS),
+  });
+  if (res.status === 429) {
+    throw new ConfigAccessError(
+      "rate-limited",
+      "The server's API is rate limiting requests. Wait a moment and save again.",
+      429,
+    );
+  }
+  return res;
+}
+
+/**
+ * Restore a snapshot. Like a write, it names the version it replaces
+ * (wrapper mod-configs v2 refuses a revert without one), so reverting a
+ * file the game has rewritten since it was opened is a conflict, not a
+ * silent overwrite.
+ */
 export async function revertConfigFile(
   cfg: ServerConfig,
   fileId: string,
   snapshot: string,
-): Promise<{ etag: string }> {
-  return apiPost<{ etag: string }>(
-    cfg,
-    `/configs/${encodeURIComponent(fileId)}/revert`,
-    { snapshot },
-  );
+  etag: string,
+  options: ConfigWriteOptions = {},
+): Promise<{ ok: true; etag: string } | { ok: false; conflict: true }> {
+  const route = `/configs/${encodeURIComponent(fileId)}/revert`;
+  const res = await sendConfigWrite(cfg, "POST", route, etag, {
+    snapshot,
+    ...(options.allowProtected ? { allowProtected: true } : {}),
+  });
+  if (res.status === 412) return { ok: false, conflict: true };
+  if (!res.ok) await throwConfigFailure(res, `POST ${route}`, "write");
+  const body = (await res.json()) as { etag: string };
+  return { ok: true, etag: body.etag };
 }

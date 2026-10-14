@@ -8,6 +8,7 @@ import {
   type WrapperManifest,
 } from "../wrapperContract.js";
 import { log } from "../../logger.js";
+import { cached } from "../../cache.js";
 import type { ServerConfig } from "../../../types/index.js";
 import { wrapperUrl } from "./apiClient.js";
 import { getRemoteInfo, versionAtLeast } from "./host.js";
@@ -49,6 +50,30 @@ export async function getRemoteManifest(
     return manifest;
   } catch {
     return null;
+  }
+}
+
+const MANIFEST_TTL_MS = 5 * 60_000;
+
+/**
+ * The version of one wrapper feature, or 0 when the wrapper does not
+ * advertise it (or can't be asked right now). A manifest is cached for a few
+ * minutes; a failed fetch is not, so a wrapper that comes back is seen on
+ * the next call.
+ */
+export async function wrapperFeatureVersion(
+  cfg: ServerConfig,
+  feature: string,
+): Promise<number> {
+  try {
+    const manifest = await cached(`manifest:${wrapperKey(cfg)}`, MANIFEST_TTL_MS, async () => {
+      const m = await getRemoteManifest(cfg);
+      if (!m) throw new Error("no manifest");
+      return m;
+    });
+    return manifest.features[feature]?.version ?? 0;
+  } catch {
+    return 0;
   }
 }
 

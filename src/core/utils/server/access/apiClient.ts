@@ -56,12 +56,25 @@ export class RateLimitedError extends Error {
 export class ApiError extends Error {
   readonly status: number;
   readonly route: string;
+  /** The wrapper's own explanation: its `{ error }` field, else the raw body (capped). */
+  readonly wrapperMessage: string;
   constructor(route: string, status: number, body: string) {
     super(`API ${route} → ${status}: ${body}`);
     this.name = "ApiError";
     this.route = route;
     this.status = status;
+    this.wrapperMessage = wrapperErrorOf(body);
   }
+}
+
+function wrapperErrorOf(body: string): string {
+  try {
+    const parsed = JSON.parse(body) as { error?: unknown };
+    if (typeof parsed.error === "string") return parsed.error.slice(0, 300);
+  } catch {
+    /* not JSON */
+  }
+  return body.slice(0, 300);
 }
 
 function parseRetryAfterMs(res: Response): number | null {

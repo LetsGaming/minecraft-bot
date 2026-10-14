@@ -196,6 +196,21 @@ describe("console command policy", () => {
     // Emptiness is a 400 from the schema, not a policy decision.
     expect(isBlockedConsoleCommand("   ", ["stop"])).toBe(false);
   });
+
+  it("sees through namespaced spellings (AUD-010)", () => {
+    expect(isBlockedConsoleCommand("minecraft:op Mallory")).toBe(true);
+    expect(isBlockedConsoleCommand("/Minecraft:STOP")).toBe(true);
+    expect(isBlockedConsoleCommand("bukkit:deop Steve")).toBe(true);
+    expect(isBlockedConsoleCommand("op", ["minecraft:op"])).toBe(true);
+    expect(isBlockedConsoleCommand("minecraft:list")).toBe(false);
+  });
+
+  it("checks what an execute chain runs (AUD-010)", () => {
+    expect(isBlockedConsoleCommand("execute as @a run op Mallory")).toBe(true);
+    expect(isBlockedConsoleCommand("execute run execute if entity @a run minecraft:stop")).toBe(true);
+    expect(isBlockedConsoleCommand("execute as @a run say hi")).toBe(false);
+    expect(isBlockedConsoleCommand("execute as @a at @s")).toBe(false);
+  });
 });
 
 // ── DSH-01: the fan-out hub ─────────────────────────────────────────────────

@@ -15,6 +15,13 @@ It walks eight levels below a root, so `config/xaero/minimap/profiles/a/settings
 
 Files are grouped under the first folder below the root (`config/xaero/...` belongs to `xaero`), and flat files such as `config/jei-client.toml` under the name before the first dash or dot.
 
+## Passwords and access settings
+
+`server.properties` and plugin configs can hold credentials (`rcon.password`, a bot token, a database password) and settings that decide who may join or command the server (`online-mode`, `white-list`, `enable-rcon`, `op-permission-level`). What the editor does with them depends on the wrapper's `mod-configs` version (shown in the startup report):
+
+- **Version 2:** values of keys that look like credentials are shown as `<redacted by mc-api-server>`. Leave that value as it is and the real one is kept on save; type a new value to replace it. Protected `server.properties` keys (RCON, query, `online-mode`, whitelist, op and function permission levels, `enforce-secure-profile`, `level-name`, `server-ip`, `server-port`, `management-server*`) can only be changed by bot administrators (top-level `adminUsers`); anyone else gets an explanation instead of a save. A revert names the version it replaces, like a save does.
+- **Version 1:** the wrapper shows these files unredacted, so only bot administrators see `server.properties` and `plugins/` in the editor. Everyone else with `config:read` sees mod configs only.
+
 ## Limits
 
 | Limit | Value | What you see |

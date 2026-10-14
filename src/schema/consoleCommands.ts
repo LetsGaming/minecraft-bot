@@ -39,9 +39,36 @@ export function normalizeConsoleCommand(raw: string): string {
   return raw.trim().replace(/^\/+/, "").toLowerCase();
 }
 
-/** The first word of a normalized command: what a deny entry names. */
+/**
+ * The first word of a normalized command: what a deny entry names. A
+ * namespace comes off (AUD-010): vanilla and Bukkit both accept
+ * `minecraft:op` / `bukkit:stop` as the same command as `op` / `stop`, so
+ * an entry of `op` has to cover them.
+ */
 export function consoleCommandVerb(raw: string): string {
-  return normalizeConsoleCommand(raw).split(/\s+/, 1)[0] ?? "";
+  const word = normalizeConsoleCommand(raw).split(/\s+/, 1)[0] ?? "";
+  return word.slice(word.lastIndexOf(":") + 1);
+}
+
+/**
+ * Every command `raw` would run: itself, and for `execute … run <cmd>` the
+ * command after `run`, recursively (`execute as @a run execute run op me`).
+ */
+export function consoleCommandVerbs(raw: string): string[] {
+  const verbs: string[] = [];
+  let rest = normalizeConsoleCommand(raw);
+  // Bounded: each pass consumes at least the `run` keyword.
+  for (let depth = 0; depth < 32 && rest; depth++) {
+    const verb = consoleCommandVerb(rest);
+    if (!verb) break;
+    verbs.push(verb);
+    if (verb !== "execute") break;
+    const words = rest.split(/\s+/);
+    const at = words.indexOf("run");
+    if (at < 0) break;
+    rest = words.slice(at + 1).join(" ");
+  }
+  return verbs;
 }
 
 /**
@@ -52,12 +79,19 @@ export function consoleCommandVerb(raw: string): string {
  * blocked a plugin's `stopwatch` — surprising in a way that gets the deny-list
  * disabled rather than corrected. Entries are normalised too, so a deny-list
  * written as `["/stop", "OP"]` behaves the same as `["stop", "op"]`.
+ *
+ * Every command the line would run is checked: the verb with any
+ * `namespace:` removed, and what follows `run` in an `execute` chain
+ * (AUD-010). It is still a deny-list: a plugin that runs commands for its
+ * caller (`sudo`, a scripting plugin) can reach a blocked command, so it
+ * guards against mistakes and casual escalation, not a determined holder of
+ * `server:console`.
  */
 export function isBlockedConsoleCommand(
   raw: string,
   denyList: readonly string[] = DEFAULT_BLOCKED_COMMANDS,
 ): boolean {
-  const verb = consoleCommandVerb(raw);
-  if (!verb) return false;
-  return denyList.some((entry) => consoleCommandVerb(entry) === verb);
+  const blocked = new Set(denyList.map((entry) => consoleCommandVerb(entry)));
+  blocked.delete("");
+  return consoleCommandVerbs(raw).some((verb) => blocked.has(verb));
 }

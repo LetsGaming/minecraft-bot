@@ -74,7 +74,12 @@ const access = vi.hoisted(() => ({
   readWhitelist: vi.fn(),
   readUserCache: vi.fn(),
 }));
-vi.mock("../../src/core/utils/server/serverAccess.js", () => access);
+vi.mock("../../src/core/utils/server/serverAccess.js", async () => ({
+  ...access,
+  // The real classifier: which failures count as "did not run" is the point.
+  classifyScriptFailure: (await import("../../src/core/utils/server/access/scripts.js"))
+    .classifyScriptFailure,
+}));
 
 const getUptimeStats = vi.fn();
 vi.mock("../../src/core/utils/stores/uptimeTracker.js", () => ({
@@ -275,6 +280,26 @@ describe("server action routes", () => {
     expect((await call("GET", "/api/servers/smp/pending-actions", READER)).json().intents).toHaveLength(1);
 
     await call("POST", "/api/servers/smp/restart");
+    expect(listIntents("smp")).toEqual([]);
+  });
+
+  it("reports a script still running instead of offering a retry (AUD-012)", async () => {
+    const { ScriptStillRunningError } = await import("../../src/core/utils/server/access/scripts.js");
+    access.runScript.mockRejectedValueOnce(new ScriptStillRunningError("backup", 600_000));
+    const res = await call("POST", "/api/servers/smp/backup");
+    expect(res.statusCode).toBe(504);
+    expect(res.json().error).toContain("still running");
+    expect(listIntents("smp")).toEqual([]);
+  });
+
+  it("passes a wrapper refusal through instead of offering a retry (AUD-012)", async () => {
+    const { ApiError } = await import("../../src/core/utils/server/access/apiClient.js");
+    access.runScript.mockRejectedValueOnce(
+      new ApiError("/scripts/run", 409, JSON.stringify({ error: "Another operation is running (backup)" })),
+    );
+    const res = await call("POST", "/api/servers/smp/restart");
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toContain("Another operation is running");
     expect(listIntents("smp")).toEqual([]);
   });
 
