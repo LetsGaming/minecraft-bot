@@ -75,9 +75,6 @@ export async function readConfigFile(
   };
 }
 
-/** What the wrapper puts in place of a secret value it will not show (mod-configs v2). */
-export const REDACTED_SECRET = "<redacted by mc-api-server>";
-
 export interface ConfigWriteOptions {
   /**
    * Let a write change `server.properties` keys the wrapper protects (RCON,
