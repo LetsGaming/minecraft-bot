@@ -1382,6 +1382,7 @@ export const en = {
   "prune.map.scale": "{n} px per chunk",
   "prune.map.grid": "Region grid",
   "prune.map.overlay": "Chunk colours",
+  "prune.map.overlayValue": "{percent} %",
   "prune.map.draw": "Draw a protected zone",
   "prune.map.loading": "Loading the map",
   "prune.map.label": "Map of {dimension}: which chunks would be deleted, kept or protected",

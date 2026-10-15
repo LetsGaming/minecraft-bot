@@ -37,7 +37,7 @@ project follows [Semantic Versioning](https://semver.org/).
 
 - The startup report expects wrapper feature `chunk-prune` version 2, which the Prune chunks page already uses; a version 1 wrapper is reported as outdated (`src/core/utils/server/wrapperContract.ts`).
 - Prune: the classes drawn over the terrain picture are more transparent, so the terrain stays recognisable under the heat and decision colours (`components/PruneMap.vue`).
-- Prune: a **Chunk colours** checkbox in the terrain view hides the colours over the terrain picture, so only the terrain, your selection, protected zones and the grid are drawn; regions without a picture keep their colours (`components/PruneMap.vue`, `views/PruneView.vue`).
+- Prune: a **Chunk colours** slider in the terrain view (0–100 %, default 30 %) sets how strongly the colours cover the terrain picture; at 0 % only the terrain, your selection, protected zones and the grid are drawn. Regions without a picture keep their colours (`components/PruneMap.vue`, `views/PruneView.vue`).
 - Prune: the page is laid out around the map. Once a scan has run, the map takes the full window height beside a sidebar with the selection, the delete button, the chunk inspector and the legend; the scan settings and the per-dimension table fold away below it (open them to change or read them). The number fields in the settings no longer overlap their neighbours (`views/PruneView.vue`).
 - Starting an upgrade with a stored prune plan that no longer exists now says to scan again instead of a generic failure (`web/backend/routes/upgrades.ts`).
 
