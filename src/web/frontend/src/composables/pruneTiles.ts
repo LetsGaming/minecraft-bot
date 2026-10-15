@@ -18,6 +18,9 @@ export interface WantedRegion {
 
 const keyOf = (rx: number, rz: number): string => `${rx},${rz}`;
 
+/** Waits before the second, third and fourth try of a tile whose fetch failed. */
+export const RETRY_DELAYS_MS = [1_000, 4_000, 15_000] as const;
+
 export function createTileStore<T extends TileImage>(options: {
   load: TileLoader<T>;
   /** Called when a tile arrives (or turns out to be absent), so the map can redraw. */
@@ -26,14 +29,21 @@ export function createTileStore<T extends TileImage>(options: {
   concurrency?: number;
   /** Tiles kept; past this the ones furthest from what is wanted are released. */
   maxTiles?: number;
-  /** Called with an error that is not "no such tile"; the region is then not retried until reset. */
+  /** Called once a region has failed every attempt; it is then left without a picture until reset. */
   onError?: (rx: number, rz: number, err: unknown) => void;
+  /** Waits before each retry of a failed fetch; one attempt more than there are entries. */
+  retryDelaysMs?: readonly number[];
 }) {
   const concurrency = options.concurrency ?? 3;
   const maxTiles = options.maxTiles ?? 160;
+  const retryDelays = options.retryDelaysMs ?? RETRY_DELAYS_MS;
 
   const done = new Map<string, T | "none">();
   const inFlight = new Set<string>();
+  /** Regions whose fetch failed: how often, and not before when to ask again. */
+  const failed = new Map<string, { count: number; retryAt: number }>();
+  const timers = new Set<ReturnType<typeof setTimeout>>();
+  const waiting = (key: string): boolean => (failed.get(key)?.retryAt ?? 0) > Date.now();
   let queue: Array<WantedRegion & { key: string }> = [];
   let generation = 0;
 
@@ -51,12 +61,28 @@ export function createTileStore<T extends TileImage>(options: {
               image?.close?.();
               return;
             }
+            failed.delete(next.key);
             done.set(next.key, image ?? "none");
           },
           (err: unknown) => {
             if (mine !== generation) return;
-            done.set(next.key, "none");
-            options.onError?.(next.rx, next.rz, err);
+            // A busy wrapper, a proxy timeout or a dropped connection is not "this region has no
+            // picture": try again a few times before the region is left plain.
+            const count = (failed.get(next.key)?.count ?? 0) + 1;
+            const delay = retryDelays[count - 1];
+            if (delay === undefined) {
+              failed.delete(next.key);
+              done.set(next.key, "none");
+              options.onError?.(next.rx, next.rz, err);
+              return;
+            }
+            failed.set(next.key, { count, retryAt: Date.now() + delay });
+            // The redraw that follows asks for the regions in view again, this one included.
+            const timer = setTimeout(() => {
+              timers.delete(timer);
+              if (mine === generation) options.onChange();
+            }, delay);
+            timers.add(timer);
           },
         )
         .finally(() => {
@@ -90,7 +116,7 @@ export function createTileStore<T extends TileImage>(options: {
       const wanted = new Set(regions.map((r) => keyOf(r.rx, r.rz)));
       queue = regions
         .map((r) => ({ ...r, key: keyOf(r.rx, r.rz) }))
-        .filter((r) => !done.has(r.key) && !inFlight.has(r.key))
+        .filter((r) => !done.has(r.key) && !inFlight.has(r.key) && !waiting(r.key))
         .sort((a, b) => a.priority - b.priority);
       release(wanted);
       pump();
@@ -103,6 +129,9 @@ export function createTileStore<T extends TileImage>(options: {
       inFlight.clear();
       for (const value of done.values()) if (value !== "none") value.close?.();
       done.clear();
+      failed.clear();
+      for (const timer of timers) clearTimeout(timer);
+      timers.clear();
     },
 
     get loading(): number {

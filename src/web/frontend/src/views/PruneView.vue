@@ -99,7 +99,11 @@
                 <span class="pv-note">{{ t("prune.map.zoomLevel", { zoom: zoomLabel }) }}</span>
               </span>
               <label class="pv-check"><Checkbox v-model="showGrid" binary input-id="pv-grid" /> {{ t("prune.map.grid") }}</label>
-              <label v-if="view === 'terrain'" class="pv-check"><Checkbox v-model="showOverlay" binary input-id="pv-overlay" /> {{ t("prune.map.overlay") }}</label>
+              <span v-if="view === 'terrain'" class="pv-opacity">
+                <span id="pv-overlay-label">{{ t("prune.map.overlay") }}</span>
+                <Slider v-model="overlayPercent" :min="0" :max="100" :step="5" class="pv-opacity-slider" aria-labelledby="pv-overlay-label" />
+                <span class="pv-note">{{ t("prune.map.overlayValue", { percent: overlayPercent }) }}</span>
+              </span>
               <span v-if="view === 'terrain' && zoom < 2.5" class="pv-note" role="status">{{ t("prune.map.terrainHint") }}</span>
               <span v-if="prune.loadingMap.value" class="pv-note" role="status">
                 <i class="pi pi-spin pi-spinner" aria-hidden="true" /> {{ t("prune.map.loading") }}
@@ -112,7 +116,7 @@
               :zones="prune.params.value.zones"
               :view="view"
               :show-grid="showGrid"
-              :show-overlay="showOverlay"
+              :overlay-opacity="overlayPercent / 100"
               :tool="tool"
               :selection="selection"
               :selection-version="selectionVersion"
@@ -372,6 +376,7 @@ import InputNumber from "primevue/inputnumber";
 import InputText from "primevue/inputtext";
 import Select from "primevue/select";
 import SelectButton from "primevue/selectbutton";
+import Slider from "primevue/slider";
 import { formatBytes } from "@mcbot/schema";
 import { apiBlob, apiGet, apiSend } from "../api";
 import { CELL, usePrune } from "../composables/usePrune";
@@ -382,6 +387,7 @@ import ViewHeader from "../components/ui/ViewHeader.vue";
 import EmptyState from "../components/ui/EmptyState.vue";
 import InlineBanner from "../components/ui/InlineBanner.vue";
 import PruneMap, { type MapTool } from "../components/PruneMap.vue";
+import { OVER_TERRAIN_OPACITY } from "../composables/pruneMapRender";
 import UpgradeRun from "../components/UpgradeRun.vue";
 import { t, type MessageKey } from "../i18n";
 import type {
@@ -478,8 +484,8 @@ const tileLoader = computed(() => {
   };
 });
 const showGrid = ref(true);
-/** The class colours over the terrain view; off leaves the bare terrain. */
-const showOverlay = ref(true);
+/** How strongly the class colours cover the terrain view, in percent; 0 leaves the bare terrain. */
+const overlayPercent = ref(Math.round(OVER_TERRAIN_OPACITY * 100));
 const tool = ref<MapTool>("pan");
 const mapRef = ref<{ fit(): void; zoomIn(): void; zoomOut(): void } | null>(null);
 const zoom = ref(1);
@@ -881,6 +887,16 @@ onBeforeUnmount(() => {
 .pv-table th[scope="col"]:first-child,
 .pv-table th[scope="row"] {
   text-align: left;
+}
+.pv-opacity {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.pv-opacity-slider {
+  width: 8rem;
+  /* The handle overhangs the track's ends; keep it off the label and the value. */
+  margin-inline: var(--space-2);
 }
 .pv-zoom {
   display: inline-flex;

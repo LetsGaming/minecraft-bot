@@ -30,6 +30,12 @@ export const CELL_ROLE: Readonly<Record<number, string>> = {
   [CELL.MANUAL_HARD]: "offline",
 };
 
+/**
+ * Default opacity of the classes over a terrain picture: low enough that the terrain stays
+ * recognisable. The Prune page's slider moves in steps of 5 %, so this sits on one.
+ */
+export const OVER_TERRAIN_OPACITY = 0.3;
+
 /** A chunk chosen by hand, over a soft rule or over a hard protection. */
 export const isManualCell = (cell: number): boolean => cell === CELL.MANUAL_SOFT || cell === CELL.MANUAL_HARD;
 

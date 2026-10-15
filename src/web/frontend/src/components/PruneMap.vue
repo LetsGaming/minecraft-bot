@@ -47,6 +47,7 @@ import {
 } from "../composables/pruneCamera";
 import {
   CELL_ROLE,
+  OVER_TERRAIN_OPACITY,
   buildRegionPixels,
   buildSelectionPixels,
   heatMinutes,
@@ -66,8 +67,8 @@ const props = withDefaults(
     view: "class" | "heat" | "terrain";
     /** Fetches the terrain picture of a region (null when it has none); needed for the terrain view. */
     tileLoader?: (rx: number, rz: number) => Promise<ImageBitmap | null>;
-    /** Lay the class colours over a terrain picture; off shows the bare terrain where there is one. */
-    showOverlay?: boolean;
+    /** How opaque the class colours are over a terrain picture, 0 to 1; 0 shows the bare terrain. */
+    overlayOpacity?: number;
     showGrid: boolean;
     tool: MapTool;
     selection: SelectionModel;
@@ -78,7 +79,7 @@ const props = withDefaults(
     /** The chunk open in the inspector, ringed on the map. */
     inspected?: { cx: number; cz: number } | null;
   }>(),
-  { height: "min(70vh, 34rem)", showOverlay: true },
+  { height: "min(70vh, 34rem)", overlayOpacity: OVER_TERRAIN_OPACITY },
 );
 
 const emit = defineEmits<{
@@ -176,17 +177,16 @@ function canvasOf(pixels: Uint8ClampedArray): HTMLCanvasElement {
 
 /** Under this the terrain pictures would be a few pixels each; the classes alone are clearer. */
 const TERRAIN_MIN_ZOOM = 2.5;
-/** The classes over a picture are drawn this opaque: low enough that the terrain stays recognisable. */
-const OVER_TERRAIN_OPACITY = 0.28;
 
 const terrainActive = (): boolean => props.view === "terrain" && !!props.tileLoader && camera.value.zoom >= TERRAIN_MIN_ZOOM;
 
 function bitmapFor(r: { rx: number; rz: number } & DecodedRegion, overTerrain = false): HTMLCanvasElement {
-  const key = `${r.rx},${r.rz}${overTerrain ? "t" : ""}`;
+  const opacity = overTerrain ? props.overlayOpacity : 1;
+  const key = `${r.rx},${r.rz}@${opacity}`;
   let bmp = bitmaps.get(key);
   if (!bmp) {
     const view = props.view === "heat" ? "heat" : "class";
-    bmp = canvasOf(buildRegionPixels(r.cell, r.heat, view, theme().palette, overTerrain ? OVER_TERRAIN_OPACITY : 1));
+    bmp = canvasOf(buildRegionPixels(r.cell, r.heat, view, theme().palette, opacity));
     bitmaps.set(key, bmp);
   }
   return bmp;
@@ -195,6 +195,8 @@ function bitmapFor(r: { rx: number; rz: number } & DecodedRegion, overTerrain = 
 const tiles = createTileStore<ImageBitmap>({
   load: (rx, rz) => (props.tileLoader ? props.tileLoader(rx, rz) : Promise.resolve(null)),
   onChange: () => requestDraw(),
+  // Left plain after the retries; say why somewhere an admin can find it.
+  onError: (rx, rz, err) => console.warn(`Terrain picture of region ${rx}, ${rz} could not be loaded:`, err),
 });
 
 /** Ask for the pictures of the regions in view, middle first; none when the terrain is not on show. */
@@ -272,8 +274,8 @@ function drawBase(): void {
       // One pixel per block: crisp from one screen pixel per block up, smoothed when shrunk.
       ctx.imageSmoothingEnabled = camera.value.zoom < 16;
       ctx.drawImage(picture, x, y, w, h);
-      // Hidden colours only bare a region that has a picture; elsewhere the map would go blank.
-      if (!props.showOverlay) continue;
+      // Fading the colours out only bares a region that has a picture; elsewhere the map would go blank.
+      if (props.overlayOpacity <= 0) continue;
     }
     ctx.imageSmoothingEnabled = camera.value.zoom < 1;
     ctx.drawImage(bitmapFor(r, hasPicture), x, y, w, h);
@@ -800,7 +802,9 @@ watch(() => props.tileLoader, () => {
 });
 watch(() => props.selectionVersion, invalidateSelection);
 watch(() => props.inspected, requestDraw);
-watch(() => [props.zones, props.showGrid, props.showOverlay, props.tool], requestDraw, { deep: true });
+watch(() => [props.zones, props.showGrid, props.tool], requestDraw, { deep: true });
+// Bitmaps are kept per opacity; drop the old ones so a slider drag does not pile them up.
+watch(() => props.overlayOpacity, invalidateBase);
 </script>
 
 <style scoped>
