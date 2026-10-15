@@ -56,13 +56,62 @@ describe("createTileStore", () => {
       throw new Error("502");
     });
     const onError = vi.fn();
-    const broken = createTileStore({ load: failing, onChange: () => undefined, onError });
+    const broken = createTileStore({ load: failing, onChange: () => undefined, onError, retryDelaysMs: [] });
     broken.want([at(3, 3)]);
     await flush();
     broken.want([at(3, 3)]);
     expect(failing).toHaveBeenCalledTimes(1);
     expect(onError).toHaveBeenCalledWith(3, 3, expect.any(Error));
     expect(broken.get(3, 3)).toBe("none");
+  });
+
+  it("retries a failed fetch after a wait, and gives up only after the last retry", async () => {
+    vi.useFakeTimers();
+    try {
+      let calls = 0;
+      const flaky = vi.fn(async () => {
+        calls++;
+        if (calls < 3) throw new Error("504 from the proxy");
+        return image("late");
+      });
+      const onChange = vi.fn();
+      const onError = vi.fn();
+      const store = createTileStore({ load: flaky, onChange, onError, retryDelaysMs: [100, 200] });
+      // The map asks again on every redraw; onChange is what triggers one.
+      const redraw = () => store.want([at(0, 0)]);
+      redraw();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(store.get(0, 0)).toBeNull(); // failed once, not given up
+      redraw(); // too early: still waiting out the first delay
+      expect(flaky).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(100);
+      expect(onChange).toHaveBeenCalled();
+      redraw();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(flaky).toHaveBeenCalledTimes(2);
+
+      await vi.advanceTimersByTimeAsync(200);
+      redraw();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(flaky).toHaveBeenCalledTimes(3);
+      expect((store.get(0, 0) as { name: string }).name).toBe("late");
+      expect(onError).not.toHaveBeenCalled();
+
+      const dead = vi.fn(async () => {
+        throw new Error("down");
+      });
+      const gone = createTileStore({ load: dead, onChange: () => undefined, onError, retryDelaysMs: [50] });
+      gone.want([at(1, 1)]);
+      await vi.advanceTimersByTimeAsync(50);
+      gone.want([at(1, 1)]);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(dead).toHaveBeenCalledTimes(2);
+      expect(gone.get(1, 1)).toBe("none");
+      expect(onError).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("drops regions that are no longer wanted before they start", async () => {

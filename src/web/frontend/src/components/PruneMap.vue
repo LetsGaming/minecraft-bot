@@ -195,6 +195,8 @@ function bitmapFor(r: { rx: number; rz: number } & DecodedRegion, overTerrain = 
 const tiles = createTileStore<ImageBitmap>({
   load: (rx, rz) => (props.tileLoader ? props.tileLoader(rx, rz) : Promise.resolve(null)),
   onChange: () => requestDraw(),
+  // Left plain after the retries; say why somewhere an admin can find it.
+  onError: (rx, rz, err) => console.warn(`Terrain picture of region ${rx}, ${rz} could not be loaded:`, err),
 });
 
 /** Ask for the pictures of the regions in view, middle first; none when the terrain is not on show. */
