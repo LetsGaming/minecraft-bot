@@ -17,7 +17,7 @@ function job(partial: Partial<UpgradeJob> = {}): UpgradeJob {
   return { jobId: "j1", state: "running", mcVersion: "1.21.5", events: [], next: 0, ...partial } as UpgradeJob;
 }
 
-function setup(overrides: Partial<UpgradeApi> = {}, visibility?: PageVisibility) {
+function setup(overrides: Partial<UpgradeApi> = {}, visibility?: PageVisibility, kind?: "upgrade" | "prune") {
   const api: UpgradeApi = {
     support: vi.fn(async () => ({ supported: true })),
     start: vi.fn(async () => ({ jobId: "j1" })),
@@ -26,7 +26,9 @@ function setup(overrides: Partial<UpgradeApi> = {}, visibility?: PageVisibility)
     ...overrides,
   };
   const onError = vi.fn();
-  const upgrade = useServerUpgrade({ api, onError, visibility, nowSeconds: () => NOW });
+  const closed = new Set<string>();
+  const dismissed = { has: (id: string) => closed.has(id), add: (id: string) => void closed.add(id) };
+  const upgrade = useServerUpgrade({ api, onError, visibility, nowSeconds: () => NOW, dismissed, kind });
   return { api, onError, upgrade };
 }
 
@@ -196,6 +198,46 @@ describe("attach after a page load", () => {
     });
     await old.upgrade.attach();
     expect(old.upgrade.job.value).toBeNull();
+  });
+
+  it("does not reopen a result the viewer closed, but shows the next job and any running one", async () => {
+    let latest = job({ state: "done", result: { ok: true }, events: [ev(1, "start", "done")], next: 1 });
+    const { upgrade } = setup({ current: vi.fn(async () => latest) });
+    await upgrade.attach();
+    expect(upgrade.finished.value).toBe(true);
+
+    upgrade.dismiss();
+    await upgrade.attach();
+    expect(upgrade.job.value).toBeNull();
+
+    latest = job({ jobId: "j2", state: "done", result: { ok: true }, events: [ev(1, "start", "done")], next: 1 });
+    await upgrade.attach();
+    expect(upgrade.job.value?.jobId).toBe("j2");
+
+    latest = job({ jobId: "j2", state: "running", events: [ev(1, "plan", "done")], next: 1 });
+    upgrade.dismiss(); // a running job is never remembered as closed
+    await upgrade.attach();
+    expect(upgrade.running.value).toBe(true);
+  });
+
+  it("each page shows only its own kind of finished job, and a running job of either kind", async () => {
+    const finishedUpgrade = job({ state: "done", result: { ok: true }, events: [ev(1, "start", "done")], next: 1 });
+    const prunePage = setup({ current: vi.fn(async () => finishedUpgrade) }, undefined, "prune");
+    await prunePage.upgrade.attach();
+    expect(prunePage.upgrade.job.value).toBeNull();
+
+    const upgradePage = setup({ current: vi.fn(async () => finishedUpgrade) }, undefined, "upgrade");
+    await upgradePage.upgrade.attach();
+    expect(upgradePage.upgrade.finished.value).toBe(true);
+
+    const finishedPrune = job({ kind: "prune", state: "done", result: { ok: true }, events: [ev(1, "start", "done")], next: 1 });
+    const upgradeAfterPrune = setup({ current: vi.fn(async () => finishedPrune) }, undefined, "upgrade");
+    await upgradeAfterPrune.upgrade.attach();
+    expect(upgradeAfterPrune.upgrade.job.value).toBeNull();
+
+    const runningUpgrade = setup({ current: vi.fn(async () => job({ events: [ev(1, "plan", "done")], next: 1 })) }, undefined, "prune");
+    await runningUpgrade.upgrade.attach();
+    expect(runningUpgrade.upgrade.running.value).toBe(true);
   });
 
   it("does nothing when there has been no upgrade", async () => {

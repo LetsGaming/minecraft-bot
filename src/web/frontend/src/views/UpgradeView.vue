@@ -205,7 +205,7 @@ const upgrade = useServerUpgrade({
     poll: (jobId, since) => apiGet<UpgradeJob>(`${base()}/upgrade/${jobId}?since=${since}`),
     current: async (since) => (await apiGet<{ job: UpgradeJob | null }>(`${base()}/upgrade/current?since=${since}`)).job,
   },
-  onError: (message) => (error.value = message),
+  onError: (message) => (error.value = message),  kind: "upgrade",
 });
 
 /** Chunk pruning inside the upgrade: the same scan and saved settings as the Prune page. */
@@ -327,7 +327,7 @@ async function confirmStart(): Promise<void> {
 }
 
 function clearFinished(): void {
-  upgrade.reset();
+  upgrade.dismiss();
   void load();
 }
 
