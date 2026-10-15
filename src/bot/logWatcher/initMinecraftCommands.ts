@@ -63,7 +63,6 @@ import { reconcileRestartSchedules } from "./watchers/schedulers/restartSchedule
 import { startMilestoneWatcher } from "./watchers/monitors/milestoneWatcher.js";
 import { ensureApplicationPrompts } from "../interactions/whitelistApplications.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
-import { loadKnownPlayers } from "@mcbot/core/utils/minecraft/whitelist.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -120,16 +119,6 @@ async function wireServer(
 ): Promise<void> {
   // Every instance streams its log over the wrapper's SSE endpoint.
   const watcher = new RemoteLogWatcher(server);
-
-  // Warm the name→UUID cache mcHeads.ts reads synchronously, so the very
-  // first chat/join avatar after a restart already resolves by UUID
-  // instead of falling back to a name lookup (which mc-heads silently
-  // renders as Steve/Alex for a renamed or Bedrock account). Otherwise
-  // nothing populates this cache until some other feature happens to call
-  // loadKnownPlayers() for this server.
-  loadKnownPlayers(false, server).catch((err) => {
-    log.warn(server.id, `Failed to warm player-UUID cache: ${errMsg(err)}`);
-  });
 
   const globals = getGlobalWatchers();
   for (const { regex, handler } of globals) {
