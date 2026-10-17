@@ -4,6 +4,9 @@
       <caption class="sr-only">{{ caption }}</caption>
       <thead>
         <tr>
+          <th v-if="$slots['select-head']" scope="col" class="rt-select">
+            <slot name="select-head" />
+          </th>
           <th
             v-for="col in columns"
             :key="col.key"
@@ -24,6 +27,9 @@
           :class="['rt-row', { busy: isBusy(row) }]"
           :aria-busy="isBusy(row) ? 'true' : undefined"
         >
+          <td v-if="$slots.select" class="rt-select">
+            <slot name="select" :row="row" :index="index" />
+          </td>
           <component
             :is="col.primary ? 'th' : 'td'"
             v-for="col in columns"
@@ -127,6 +133,7 @@ th.align-end, td.align-end { text-align: end; }
 .rt-num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .rt-row.busy > * { background: var(--surface-raised); }
 .rt-row.busy > :first-child { box-shadow: inset 3px 0 0 var(--st-info); }
+.rt-select { width: 1%; }
 .rt-actions { white-space: nowrap; }
 .rt-actions :deep(> *) { vertical-align: middle; }
 

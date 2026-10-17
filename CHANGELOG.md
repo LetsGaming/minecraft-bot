@@ -10,6 +10,7 @@ project follows [Semantic Versioning](https://semver.org/).
 
 - Discord messages get their own look per kind: joins, leaves, deaths, advancements, chat, milestones, rewards, leaderboards and whitelist prompts each have an icon and a colour instead of one shared grey or blue (`src/schema/embedCategories.ts`, `createEmbed` `category`).
 - Error embeds carry a ⛔ icon in the title.
+- **The dashboard's Mods page is laid out like the new mockup.** A summary strip shows how many mods are installed, the compatible Minecraft version and loader, and how many changes wait for a restart, next to an Add mods button. The installed table has a status filter, name sorting, 15-per-page paging, a checkbox column with bulk Disable and Remove, and an outlined Remove button. Mods changed on the page raise a sticky "Restart required" bar, and Restart server is available in the header and in that bar to users with `server:control`; a successful restart clears the pending count. Modrinth results show the environment as a tag (`views/ModsView.vue`, `components/ui/ResponsiveTable.vue` select slots, `composables/useServerActions.ts` now resolves whether the action succeeded).
 
 ### Security
 

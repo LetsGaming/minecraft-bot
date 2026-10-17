@@ -99,11 +99,12 @@ export function useServerActions(afterAction: () => Promise<unknown>) {
     jobs.value = { ...jobs.value, [serverId]: job };
   }
 
-  async function runAction(server: ServerStatus, action: ServerOperatorAction): Promise<void> {
+  /** Resolves true when the script ran and succeeded; false when declined, already running, or failed. */
+  async function runAction(server: ServerStatus, action: ServerOperatorAction): Promise<boolean> {
     const id = server.id;
-    if (isRunning(id)) return;
+    if (isRunning(id)) return false;
     const options = confirmOptions(server, action);
-    if (options && (await confirmAction(options)) !== "confirm") return;
+    if (options && (await confirmAction(options)) !== "confirm") return false;
 
     const startedAt = Date.now();
     setJob(id, {
@@ -114,11 +115,13 @@ export function useServerActions(afterAction: () => Promise<unknown>) {
       output: "",
       note: t("servers.job.runningNote"),
     });
+    let succeeded = false;
     try {
       const res = await apiSend<ScriptResponse>(
         "POST",
         `/api/servers/${encodeURIComponent(id)}/${action}`,
       );
+      succeeded = res.ok;
       if (res.ok) {
         dismiss(id);
         toast.add({
@@ -148,6 +151,7 @@ export function useServerActions(afterAction: () => Promise<unknown>) {
       });
     }
     await afterAction();
+    return succeeded;
   }
 
   return { jobs, isRunning, runAction, dismiss };

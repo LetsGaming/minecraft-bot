@@ -2,22 +2,57 @@
   <div class="mods-view">
     <ViewHeader :title="t('mods.title')" :server="serverId" :server-state="serverRole">
       <template v-if="serverId" #subtitle>{{ lede }}</template>
-      <template v-if="serverId && canWrite" #actions>
+      <template v-if="serverId && canRestart" #actions>
         <Button
           class="tap"
-          icon="pi pi-search"
-          :label="t('mods.addFromModrinth')"
+          icon="pi pi-refresh"
+          :label="t('mods.restart')"
           severity="secondary"
           outlined
-          @click="focusCatalog"
+          :disabled="!serverStatus || serverActions.isRunning(serverId)"
+          :loading="serverActions.isRunning(serverId)"
+          @click="restartServer"
         />
       </template>
     </ViewHeader>
 
     <EmptyState v-if="!serverId" icon="pi pi-server">{{ t("mods.noServer") }}</EmptyState>
 
-    <div v-else class="mods-layout">
+    <div v-else class="mods-layout" :class="{ 'has-pending': pendingCount > 0 }">
       <div class="mods-main">
+        <section class="summary" :aria-label="t('mods.summary.label')">
+          <div class="stat">
+            <span class="stat-icon" aria-hidden="true"><i class="pi pi-box" /></span>
+            <span class="stat-text">
+              <strong class="stat-n">{{ inst.mods.value.length }}</strong>
+              <span class="stat-l">{{ t("mods.summary.installed", { count: inst.mods.value.length }) }}</span>
+            </span>
+          </div>
+          <div class="stat">
+            <span class="stat-icon ok" aria-hidden="true"><i class="pi pi-check-circle" /></span>
+            <span class="stat-text">
+              <strong class="stat-n">{{ t("mods.summary.compatible") }}</strong>
+              <span class="stat-l">{{ compatibleWith }}</span>
+            </span>
+          </div>
+          <div class="stat">
+            <span :class="['stat-icon', pendingCount > 0 ? 'pending' : 'ok']" aria-hidden="true">
+              <i :class="pendingCount > 0 ? 'pi pi-clock' : 'pi pi-check'" />
+            </span>
+            <span class="stat-text">
+              <strong class="stat-n">{{ t("mods.summary.pending", { count: pendingCount }) }}</strong>
+              <span class="stat-l">{{ pendingCount > 0 ? t("mods.summary.needsRestart") : t("mods.summary.nothingPending") }}</span>
+            </span>
+          </div>
+          <Button
+            v-if="canWrite"
+            class="tap summary-add"
+            icon="pi pi-plus"
+            :label="t('mods.summary.add')"
+            @click="focusCatalog"
+          />
+        </section>
+
         <section
           class="card"
           aria-labelledby="mods-installed-h"
@@ -359,28 +394,85 @@
                     :placeholder="t('mods.installed.searchPlaceholder', { count: inst.mods.value.length })"
                   />
                 </span>
-                <button
-                  v-if="inst.updateCount.value > 0"
-                  type="button"
-                  :class="['chip', 'tap', { on: onlyUpdates }]"
-                  :aria-pressed="onlyUpdates"
-                  @click="onlyUpdates = !onlyUpdates"
-                >
-                  {{ t("mods.installed.onlyUpdates") }} <span class="chip-n">{{ inst.updateCount.value }}</span>
-                </button>
+                <Select
+                  v-model="statusFilter"
+                  class="tap filter-select"
+                  :options="statusOptions"
+                  option-label="label"
+                  option-value="value"
+                  :aria-label="t('mods.installed.filterStatus')"
+                />
+                <Select
+                  v-model="installedSort"
+                  class="tap filter-select"
+                  :options="installedSortOptions"
+                  option-label="label"
+                  option-value="value"
+                  :aria-label="t('mods.installed.sortLabel')"
+                />
+              </div>
+
+              <div v-if="canWrite && selected.size > 0" class="bulk" role="group" :aria-label="t('mods.bulk.label')">
+                <span class="bulk-count" aria-live="polite">{{ t("mods.bulk.selected", { count: selected.size }) }}</span>
+                <span class="cluster">
+                  <Button
+                    class="tap"
+                    :label="t('mods.installed.disable')"
+                    size="small"
+                    severity="secondary"
+                    outlined
+                    :disabled="bulkRunning"
+                    @click="bulkDisable"
+                  />
+                  <Button
+                    class="tap"
+                    :label="t('mods.installed.remove')"
+                    icon="pi pi-trash"
+                    size="small"
+                    severity="danger"
+                    outlined
+                    :disabled="bulkRunning"
+                    @click="bulkRemove"
+                  />
+                  <Button
+                    class="tap"
+                    :label="t('mods.bulk.clear')"
+                    size="small"
+                    severity="secondary"
+                    text
+                    :disabled="bulkRunning"
+                    @click="selected.clear()"
+                  />
+                </span>
               </div>
 
               <ResponsiveTable
                 stack-below="narrow"
-                v-if="visibleInstalled.length"
+                v-if="pagedInstalled.length"
                 :columns="installedColumns"
-                :rows="visibleInstalled"
+                :rows="pagedInstalled"
                 :caption="t('mods.installed.caption', { server: serverId })"
                 :row-key="(m: InstalledMod) => m.slug"
                 :busy="(m: InstalledMod) => inst.isBusy(m.slug)"
                 :actions-label="t('mods.installed.actions')"
                 :actions-label-visible="false"
               >
+                <template v-if="canWrite" #select-head>
+                  <Checkbox
+                    binary
+                    :model-value="allPageSelected"
+                    :aria-label="t('mods.bulk.selectPage')"
+                    @update:model-value="togglePage"
+                  />
+                </template>
+                <template v-if="canWrite" #select="{ row }">
+                  <Checkbox
+                    binary
+                    :model-value="selected.has(row.slug)"
+                    :aria-label="t('mods.bulk.selectNamed', { name: nameOf(row) })"
+                    @update:model-value="toggleSelected(row.slug)"
+                  />
+                </template>
                 <template #cell-mod="{ row }">
                   <span :class="['modcell', { off: row.enabled === false }]">
                     <ModIcon :name="nameOf(row)" :slug="row.slug" :src="row.iconUrl" :size="36" decorative />
@@ -437,9 +529,10 @@
                       v-if="canWrite"
                       class="tap"
                       :label="t('mods.installed.remove')"
+                      icon="pi pi-trash"
                       size="small"
                       severity="danger"
-                      text
+                      outlined
                       :aria-label="t('mods.installed.removeNamed', { name: nameOf(row) })"
                       :disabled="inst.isLocked(row.slug)"
                       @click="confirmRemove(row)"
@@ -450,9 +543,25 @@
               <p v-else class="none-in-filter small dim">{{ t("mods.installed.noMatch") }}</p>
 
               <div class="foot">
-                <span class="foot-count">
-                  {{ t("mods.installed.showing", { shown: visibleInstalled.length, total: inst.mods.value.length }) }}
+                <span class="foot-count" aria-live="polite">
+                  {{ t("mods.installed.showingRange", { from: pageFrom, to: pageTo, total: visibleInstalled.length }) }}
                 </span>
+                <nav v-if="installedPages > 1" class="pager" :aria-label="t('mods.installed.pagination')">
+                  <button type="button" class="pg tap" :disabled="installedPage === 1" :aria-label="t('mods.catalog.previousPage')" @click="installedPage--">
+                    <i class="pi pi-angle-left" aria-hidden="true" />
+                  </button>
+                  <button
+                    v-for="n in installedPages"
+                    :key="n"
+                    type="button"
+                    :class="['pg', 'tap', { on: n === installedPage }]"
+                    :aria-current="n === installedPage ? 'page' : undefined"
+                    @click="installedPage = n"
+                  >{{ n }}</button>
+                  <button type="button" class="pg tap" :disabled="installedPage === installedPages" :aria-label="t('mods.catalog.nextPage')" @click="installedPage++">
+                    <i class="pi pi-angle-right" aria-hidden="true" />
+                  </button>
+                </nav>
               </div>
             </template>
           </template>
@@ -465,6 +574,7 @@
             <h2 id="mods-catalog-h">{{ t("mods.catalog.title") }}</h2>
             <span class="card-meta">{{ catalogMeta }}</span>
           </div>
+          <p class="catalog-lede">{{ t("mods.catalog.lede") }}</p>
           <div class="toolbar catalog-tools">
             <span class="search">
               <i class="pi pi-search" aria-hidden="true" />
@@ -541,7 +651,7 @@
                     </div>
                     <p class="cat-desc">{{ hit.description }}</p>
                     <div class="cat-meta">
-                      <span>{{ t(ENVIRONMENT_LABEL[hit.environment] ?? ENVIRONMENT_LABEL.unknown) }}</span>
+                      <span class="tag">{{ t(ENVIRONMENT_LABEL[hit.environment] ?? ENVIRONMENT_LABEL.unknown) }}</span>
                       <span>{{ t("mods.catalog.downloads", { count: compact(hit.downloads) }) }}</span>
                     </div>
                   </div>
@@ -621,42 +731,58 @@
             </ul>
             <div class="foot">
               <span class="foot-count">{{ t("mods.catalog.results", { count: total.toLocaleString("en") }) }}</span>
-              <span v-if="total > PAGE" class="cluster">
-                <Button
-                  class="tap"
-                  :label="t('mods.catalog.previous')"
-                  :aria-label="t('mods.catalog.previousPage')"
-                  size="small"
-                  severity="secondary"
-                  outlined
-                  :disabled="offset === 0 || searching"
-                  @click="prevPage"
-                />
-                <span class="foot-count" aria-live="polite">{{ t("mods.catalog.page", { page, pages: totalPages }) }}</span>
-                <Button
-                  class="tap"
-                  :label="t('mods.catalog.next')"
-                  :aria-label="t('mods.catalog.nextPage')"
-                  size="small"
-                  severity="secondary"
-                  outlined
-                  :disabled="offset + PAGE >= total || searching"
-                  @click="nextPage"
-                />
-              </span>
+              <nav v-if="total > PAGE" class="pager" :aria-label="t('mods.catalog.pagination')">
+                <button type="button" class="pg tap" :disabled="page === 1 || searching" :aria-label="t('mods.catalog.previousPage')" @click="prevPage">
+                  <i class="pi pi-angle-left" aria-hidden="true" />
+                </button>
+                <template v-for="(item, i) in pageItems" :key="`${item}-${i}`">
+                  <span v-if="item === 'gap'" class="pg-gap" aria-hidden="true">…</span>
+                  <button
+                    v-else
+                    type="button"
+                    :class="['pg', 'tap', { on: item === page }]"
+                    :disabled="searching"
+                    :aria-current="item === page ? 'page' : undefined"
+                    :aria-label="t('mods.catalog.pageNumber', { page: item })"
+                    @click="goToPage(item)"
+                  >{{ item }}</button>
+                </template>
+                <button type="button" class="pg tap" :disabled="page >= totalPages || searching" :aria-label="t('mods.catalog.nextPage')" @click="nextPage">
+                  <i class="pi pi-angle-right" aria-hidden="true" />
+                </button>
+              </nav>
             </div>
           </template>
         </section>
       </div>
     </div>
+
+    <div v-if="serverId && pendingCount > 0" class="pending-bar" role="status">
+      <span class="stat-icon pending" aria-hidden="true"><i class="pi pi-clock" /></span>
+      <span class="pending-text">
+        <strong>{{ t("mods.summary.pending", { count: pendingCount }) }}</strong>
+        <span class="small dim">{{ t("mods.pendingBar.note", { server: serverId }) }}</span>
+      </span>
+      <span class="pending-warn"><i class="pi pi-exclamation-triangle" aria-hidden="true" /> {{ t("mods.pendingBar.required") }}</span>
+      <Button
+        v-if="canRestart"
+        class="tap pending-restart"
+        icon="pi pi-refresh"
+        :label="t('mods.restart')"
+        :disabled="!serverStatus || serverActions.isRunning(serverId)"
+        :loading="serverActions.isRunning(serverId)"
+        @click="restartServer"
+      />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from "vue";
+import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } from "vue";
 import Button from "primevue/button";
 import Select from "primevue/select";
 import InputText from "primevue/inputtext";
+import Checkbox from "primevue/checkbox";
 import { useToast } from "primevue/usetoast";
 import { SERVER_STATE_ROLE, StatusRole, type StatusInput } from "@mcbot/schema";
 import { t, type MessageKey } from "../i18n";
@@ -670,6 +796,7 @@ import { useCapabilities } from "../composables/useCapabilities";
 import { useConfirmAction } from "../composables/useConfirmAction";
 import { useRowBusy } from "../composables/useRowBusy";
 import { useServerStatus } from "../composables/useServerStatus";
+import { useServerActions } from "../composables/useServerActions";
 import ViewHeader from "../components/ui/ViewHeader.vue";
 import EmptyState from "../components/ui/EmptyState.vue";
 import InlineError from "../components/ui/InlineError.vue";
@@ -704,6 +831,7 @@ interface CheckRow {
 }
 
 const PAGE = 20;
+const INSTALLED_PAGE = 15;
 const VERSIONS_SHOWN = 12;
 const BLOCKER_ICONS = 6;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -730,6 +858,18 @@ const { can } = useCapabilities();
 const confirmAction = useConfirmAction();
 const toast = useToast();
 const canWrite = computed(() => can("mods:write", props.activeServer));
+const canRestart = computed(() => can("server:control", props.activeServer));
+const serverActions = useServerActions(() => status.refresh());
+
+/** Mods changed since this page loaded; the running server only picks them up on a restart. */
+const pendingCount = computed(() => inst.changedSinceLoad.size);
+
+async function restartServer(): Promise<void> {
+  const server = serverStatus.value;
+  if (!server) return;
+  const restarted = await serverActions.runAction(server, "restart");
+  if (restarted && props.activeServer === server.id) inst.changedSinceLoad.clear();
+}
 
 const checkError = ref("");
 const compat = useModCompat({
@@ -765,10 +905,38 @@ const lede = computed(() => {
   return playersOnline.value > 0 ? `${base} ${t("mods.ledePlayers", { count: playersOnline.value })}` : base;
 });
 
+const compatibleWith = computed(() => {
+  const list = inst.installed.value;
+  if (!list?.gameVersion) return t("mods.summary.versionUnknown");
+  return list.modLoader
+    ? t("mods.summary.withLoader", { version: list.gameVersion, loader: capitalise(list.modLoader) })
+    : t("mods.summary.with", { version: list.gameVersion });
+});
+
 // ── Installed list ────────────────────────────────────────────────────────
 
+type StatusFilter = "all" | "enabled" | "disabled" | "updates";
+type InstalledSort = "name-asc" | "name-desc";
+
 const installedQuery = ref("");
-const onlyUpdates = ref(false);
+const statusFilter = ref<StatusFilter>("all");
+const installedSort = ref<InstalledSort>("name-asc");
+const installedPage = ref(1);
+const selected = reactive(new Set<string>());
+const bulkRunning = ref(false);
+
+const statusOptions = computed<Array<{ value: StatusFilter; label: string }>>(() => [
+  { value: "all", label: t("mods.installed.statusAll") },
+  { value: "enabled", label: t("mods.installed.statusEnabled") },
+  { value: "disabled", label: t("mods.installed.statusDisabled") },
+  ...(inst.updateCount.value > 0
+    ? [{ value: "updates" as const, label: `${t("mods.installed.onlyUpdates")} (${inst.updateCount.value})` }]
+    : []),
+]);
+const installedSortOptions = computed<Array<{ value: InstalledSort; label: string }>>(() => [
+  { value: "name-asc", label: t("mods.installed.sortNameAsc") },
+  { value: "name-desc", label: t("mods.installed.sortNameDesc") },
+]);
 
 const installedColumns = computed<ResponsiveColumn[]>(() => [
   { key: "mod", label: t("mods.installed.colMod"), primary: true },
@@ -786,8 +954,11 @@ const installedMeta = computed(() => {
 
 const visibleInstalled = computed(() => {
   const q = installedQuery.value.trim().toLowerCase();
-  return inst.mods.value.filter((m) => {
-    if (onlyUpdates.value && !inst.hasUpdate(m.slug)) return false;
+  const filter = statusFilter.value;
+  const list = inst.mods.value.filter((m) => {
+    if (filter === "updates" && !inst.hasUpdate(m.slug)) return false;
+    if (filter === "enabled" && m.enabled === false) return false;
+    if (filter === "disabled" && m.enabled !== false) return false;
     if (!q) return true;
     return (
       m.slug.toLowerCase().includes(q) ||
@@ -795,11 +966,95 @@ const visibleInstalled = computed(() => {
       nameOf(m).toLowerCase().includes(q)
     );
   });
+  const dir = installedSort.value === "name-asc" ? 1 : -1;
+  return list.sort((a, b) => dir * nameOf(a).localeCompare(nameOf(b)));
 });
 
-watch(inst.updateCount, (n) => {
-  if (n === 0) onlyUpdates.value = false;
+const installedPages = computed(() => Math.max(1, Math.ceil(visibleInstalled.value.length / INSTALLED_PAGE)));
+const pagedInstalled = computed(() => {
+  const start = (installedPage.value - 1) * INSTALLED_PAGE;
+  return visibleInstalled.value.slice(start, start + INSTALLED_PAGE);
 });
+const pageFrom = computed(() => (visibleInstalled.value.length === 0 ? 0 : (installedPage.value - 1) * INSTALLED_PAGE + 1));
+const pageTo = computed(() => (installedPage.value - 1) * INSTALLED_PAGE + pagedInstalled.value.length);
+
+watch(inst.updateCount, (n) => {
+  if (n === 0 && statusFilter.value === "updates") statusFilter.value = "all";
+});
+watch([installedQuery, statusFilter, installedSort], () => {
+  installedPage.value = 1;
+});
+watch(installedPages, (pages) => {
+  if (installedPage.value > pages) installedPage.value = pages;
+});
+watch(inst.mods, (list) => {
+  const slugs = new Set(list.map((m) => m.slug));
+  for (const slug of [...selected]) if (!slugs.has(slug)) selected.delete(slug);
+});
+
+const allPageSelected = computed(
+  () => pagedInstalled.value.length > 0 && pagedInstalled.value.every((m) => selected.has(m.slug)),
+);
+
+function toggleSelected(slug: string): void {
+  if (selected.has(slug)) selected.delete(slug);
+  else selected.add(slug);
+}
+
+function togglePage(): void {
+  const select = !allPageSelected.value;
+  for (const m of pagedInstalled.value) {
+    if (select) selected.add(m.slug);
+    else selected.delete(m.slug);
+  }
+}
+
+async function bulkDisable(): Promise<void> {
+  if (bulkRunning.value) return;
+  bulkRunning.value = true;
+  try {
+    for (const m of inst.mods.value.filter((x) => selected.has(x.slug) && x.enabled !== false)) {
+      const outcome = await inst.runRow(m.slug, "disable", t(BUSY_LABEL.disable));
+      report("disable", nameOf(m), outcome);
+      if (outcome.ok) selected.delete(m.slug);
+    }
+  } finally {
+    bulkRunning.value = false;
+  }
+}
+
+async function bulkRemove(): Promise<void> {
+  if (bulkRunning.value) return;
+  const targets = inst.mods.value.filter((m) => selected.has(m.slug));
+  if (targets.length === 0) return;
+  const server = props.activeServer;
+  const count = targets.length;
+  const result = await confirmAction({
+    level: "disruptive",
+    levelLabel: t("mods.remove.level"),
+    tone: "danger",
+    header: t("mods.bulk.removeHeader", { count, server }),
+    message: t("mods.bulk.removeMessage", { count }),
+    acceptLabel: t("mods.bulk.removeAccept", { count }),
+    cancelLabel: t("mods.bulk.removeCancel"),
+    facts: [
+      { term: t("mods.remove.factFile"), detail: targets.map((m) => nameOf(m)).join(", ") },
+      { term: t("mods.remove.factRecover"), detail: t("mods.bulk.removeRecover") },
+    ],
+  });
+  if (result !== "confirm" || props.activeServer !== server) return;
+  bulkRunning.value = true;
+  try {
+    for (const m of targets) {
+      const outcome = await inst.runRow(m.slug, "remove", t(BUSY_LABEL.remove));
+      report("remove", nameOf(m), outcome);
+      if (outcome.ok) selected.delete(m.slug);
+    }
+    void runSearch();
+  } finally {
+    bulkRunning.value = false;
+  }
+}
 
 const loadErrorDetail = computed(() => {
   const err = inst.loadError.value;
@@ -1120,6 +1375,28 @@ const offset = ref(0);
 const page = computed(() => Math.floor(offset.value / PAGE) + 1);
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE)));
 
+/** First page, last page and a window around the current one, with gaps between. */
+const pageItems = computed<Array<number | "gap">>(() => {
+  const last = totalPages.value;
+  const wanted = new Set([1, last]);
+  for (let n = page.value - 1; n <= page.value + 1; n++) if (n > 1 && n < last) wanted.add(n);
+  const items: Array<number | "gap"> = [];
+  let prev = 0;
+  for (const n of [...wanted].sort((a, b) => a - b)) {
+    if (n - prev === 2) items.push(prev + 1);
+    else if (n - prev > 2) items.push("gap");
+    items.push(n);
+    prev = n;
+  }
+  return items;
+});
+
+function goToPage(n: number): void {
+  if (n === page.value) return;
+  offset.value = (n - 1) * PAGE;
+  void runSearch();
+}
+
 const openSlug = ref<string | null>(null);
 const detail = ref<ModProjectDetail | null>(null);
 const loadingDetail = ref(false);
@@ -1317,7 +1594,8 @@ watch(
     compat.selected.value = "";
     inst.reset();
     installedQuery.value = "";
-    onlyUpdates.value = false;
+    statusFilter.value = "all";
+    selected.clear();
     openSlug.value = null;
     searched.value = false;
     results.value = [];
@@ -1336,8 +1614,100 @@ onBeforeUnmount(() => {
 .mods-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-5); align-items: start; }
 .mods-main, .mods-catalog { display: grid; gap: var(--space-4); min-width: 0; align-content: start; }
 @container (min-width: 1100px) {
-  .mods-layout { grid-template-columns: minmax(0, 1fr) minmax(340px, 400px); }
+  .mods-layout { grid-template-columns: minmax(0, 1fr) minmax(380px, 460px); }
 }
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-surface);
+  background: var(--surface-nav);
+}
+.stat { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.stat + .stat { padding-inline-start: var(--space-5); border-inline-start: 1px solid var(--border); }
+.stat-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-surface);
+  background: var(--surface-raised);
+  color: var(--accent);
+  font-size: var(--text-lg);
+}
+.stat-icon.ok { background: var(--accent-tint); color: var(--st-online); }
+.stat-icon.pending { background: var(--st-degraded-bg); color: var(--st-degraded); }
+.stat-text { display: grid; min-width: 0; line-height: var(--leading-tight); }
+.stat-n { font-size: var(--text-lg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat-l { color: var(--text-dim); font-size: var(--text-sm); }
+.summary-add { margin-inline-start: auto; }
+@container (max-width: 760px) {
+  .stat + .stat { padding-inline-start: 0; border-inline-start: 0; }
+  .summary-add { margin-inline-start: 0; width: 100%; }
+}
+
+.filter-select { min-width: 160px; }
+.bulk {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-control);
+  background: var(--accent-tint);
+}
+.bulk-count { font-size: var(--text-sm); font-weight: 600; }
+
+.pager { display: inline-flex; flex-wrap: wrap; gap: var(--space-1); }
+.pg {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.pg:hover:not(:disabled) { background: var(--surface); border-color: var(--border-hover); }
+.pg.on { background: var(--accent-tint); border-color: var(--accent); }
+.pg:disabled { opacity: 0.45; cursor: default; }
+.pg.on:disabled { opacity: 1; }
+.pg-gap { display: inline-flex; align-items: center; padding: 0 var(--space-1); color: var(--text-dim); }
+
+.catalog-lede { margin: calc(-1 * var(--space-2)) 0 var(--space-3); color: var(--text-dim); font-size: var(--text-sm); }
+
+.has-pending { padding-bottom: var(--space-2); }
+.pending-bar {
+  position: sticky;
+  bottom: var(--space-3);
+  z-index: var(--z-sticky);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-surface);
+  background: var(--surface-nav);
+  box-shadow: var(--shadow-overlay);
+}
+.pending-text { display: grid; flex: 1 1 240px; min-width: 0; }
+.pending-warn { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--st-degraded); font-size: var(--text-sm); }
+.pending-restart { margin-inline-start: auto; }
 @container (min-width: 1900px) {
   .mods-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 900px); }
   .cat { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
