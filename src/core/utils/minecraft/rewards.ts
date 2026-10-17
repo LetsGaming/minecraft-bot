@@ -26,6 +26,7 @@ import type {
 } from "../../types/index.js";
 import { t } from "../i18n.js";
 import { RewardRarity, REWARD_RARITIES } from "@mcbot/schema/embedCategories.js";
+import { rarityOf, milestoneDays } from "@mcbot/schema/dailyRewards.js";
 import { log } from "../logger.js";
 
 /** One claim per 24h; a gap of more than two cooldowns breaks the streak. */
@@ -217,36 +218,8 @@ export async function deliverPendingRewards(
   return delivered.length;
 }
 
-/**
- * Share of the pool's total weight at or below which an item counts as that
- * rarity. Checked from rarest to most common.
- */
-const RARITY_MAX_SHARE: ReadonlyArray<readonly [RewardRarity, number]> = [
-  [RewardRarity.Legendary, 0.02],
-  [RewardRarity.Epic, 0.07],
-  [RewardRarity.Rare, 0.2],
-  [RewardRarity.Uncommon, 0.45],
-];
-
-/** Pools with fewer distinct weights than this carry no rarity signal. */
-const MIN_DISTINCT_WEIGHTS_FOR_RARITY = 4;
-
-/**
- * How rare an item is within its pool, from its share of the total weight.
- * A pool whose weights barely differ (for example all equal) has no real
- * rarity ladder, so every item in it is common.
- */
-export function rarityOf(item: DailyRewardItem, pool: readonly DailyRewardItem[]): RewardRarity {
-  const weights = pool.map((p) => p.weight ?? 1);
-  if (new Set(weights).size < MIN_DISTINCT_WEIGHTS_FOR_RARITY) return RewardRarity.Common;
-  const total = weights.reduce((a, b) => a + b, 0);
-  if (total <= 0) return RewardRarity.Common;
-  const share = (item.weight ?? 1) / total;
-  for (const [rarity, max] of RARITY_MAX_SHARE) {
-    if (share <= max) return rarity;
-  }
-  return RewardRarity.Common;
-}
+// Rarity and the milestone list are shared with the dashboard's editor.
+export { rarityOf, milestoneDays };
 
 /** The rarest of a set of tiers, in the order common < ... < legendary. */
 export function rarest(tiers: readonly RewardRarity[]): RewardRarity {
@@ -254,14 +227,6 @@ export function rarest(tiers: readonly RewardRarity[]): RewardRarity {
     (best, tier) => (REWARD_RARITIES.indexOf(tier) > REWARD_RARITIES.indexOf(best) ? tier : best),
     RewardRarity.Common,
   );
-}
-
-/** The streak days that carry a bonus, ascending. */
-export function milestoneDays(streakBonuses: RewardPool["streakBonuses"]): number[] {
-  return Object.keys(streakBonuses ?? {})
-    .map((k) => parseInt(k, 10))
-    .filter((n) => !isNaN(n) && n > 0)
-    .sort((a, b) => a - b);
 }
 
 /** The first bonus after `bonusStreak`, or null when none is left in this cycle. */

@@ -1,5 +1,6 @@
 /**
- * Single owner of daily-reward persistence (rewards config + claim data);
+ * Single owner of daily-reward persistence (claim data, plus the rewards
+ * config re-exported from rewardsConfig.ts);
  * commands never touch loadJson/saveJson for these files directly.
  *
  * Claims are stored per server:
@@ -10,81 +11,18 @@
  * servers. Old flat files (one userId→claim map) are migrated on first
  * load — everything moves under the first configured server.
  */
-import path from "path";
-import { loadJson } from "../jsonStore.js";
-import { getRootDir } from "../paths.js";
 import { kvGet, kvSet, kvUpdate } from "../../db/kv.js";
 import { log } from "../logger.js";
-import type {
-  DailyRewardsConfig,
-  DailyRewardItem,
-  RewardPool,
-  UserClaimData,
-} from "../../types/index.js";
+import type { DailyRewardItem, UserClaimData } from "../../types/index.js";
 
-function isEmptyOverride(raw: unknown): boolean {
-  return (
-    typeof raw !== "object" ||
-    raw === null ||
-    Object.keys(raw).length === 0
-  );
-}
-
-/** The pool one server draws from: its override, else the default pool. */
-export interface ResolvedRewardPool {
-  default: DailyRewardItem[];
-  streakBonuses?: Record<string, DailyRewardItem[]>;
-  bonusChance?: number;
-}
-
-/**
- * Resolve the effective reward pool for a server. An override — either the
- * dedicated `dailyRewards_<serverId>.json` file (preferred, see
- * loadServerRewardsOverride) or a `servers.<id>` entry inside the shared
- * dailyRewards.json (legacy, kept for back-compat) — wins field-by-field;
- * missing fields fall back to the top-level pool, so a server can override
- * just the items and inherit the streak bonuses (or vice versa). When both
- * are present, the dedicated file wins field-by-field over the inline entry.
- */
-export function rewardPoolForServer(
-  cfg: DailyRewardsConfig,
-  serverId: string,
-  fileOverride?: RewardPool,
-): ResolvedRewardPool {
-  const inline = cfg.servers?.[serverId];
-  const items =
-    (fileOverride?.default && fileOverride.default.length > 0
-      ? fileOverride.default
-      : undefined) ??
-    (inline?.default && inline.default.length > 0 ? inline.default : undefined) ??
-    (cfg.default ?? []);
-  const streakBonuses =
-    fileOverride?.streakBonuses ?? inline?.streakBonuses ?? cfg.streakBonuses;
-  const bonusChance =
-    fileOverride?.bonusChance ?? inline?.bonusChance ?? cfg.bonusChance;
-  return {
-    default: items,
-    ...(streakBonuses ? { streakBonuses } : {}),
-    ...(bonusChance !== undefined ? { bonusChance } : {}),
-  };
-}
-
-// dailyRewards.json stays a JSON file on purpose: it is the one store in
-// this module an admin edits by hand (the ownership rule in
-// docs/dev/data-storage.md). Claims and the pending queue are
-// machine-written and live in kv_store.
-const REWARDS_PATH = path.resolve(getRootDir(), "data", "dailyRewards.json");
-
-/**
- * Path for a server's dedicated override file, parallel to the git-tracked
- * dailyRewards.json (dailyRewards_<serverId>.json). Keeping overrides in
- * their own untracked file — instead of a `servers.<id>` entry inside the
- * shared file — means adjusting one server's economy never touches the
- * tracked default and so never merge-conflicts with it.
- */
-function serverRewardsOverridePath(serverId: string): string {
-  return path.resolve(getRootDir(), "data", `dailyRewards_${serverId}.json`);
-}
+// The reward documents themselves (shared pool, per-server overrides) live
+// in rewardsConfig.ts; re-exported here so callers keep one import.
+export {
+  loadDailyRewardsConfig,
+  loadServerRewardsOverride,
+  rewardPoolForServer,
+  type ResolvedRewardPool,
+} from "./rewardsConfig.js";
 
 export type ClaimedDailyMap = Record<string, UserClaimData>;
 
@@ -94,30 +32,8 @@ export interface ClaimedDailyStore {
   servers: Record<string, ClaimedDailyMap>;
 }
 
-// Load errors are deliberately not swallowed here: turning a corrupt file
-// into {} would wipe everyone's streaks on the next save. loadJson already
-// recovers from .bak; if even that fails, the command should fail loudly.
-
-export async function loadDailyRewardsConfig(): Promise<DailyRewardsConfig> {
-  // dailyRewards.json is an operator-authored config file bundled with the
-  // deployment; loadJson returns unknown, and we assert the config shape here.
-  // (Kept as a cast rather than a full parse: it's first-party config, and
-  // loadJson already recovers a corrupt file from its .bak — see above.)
-  return (await loadJson(REWARDS_PATH)) as DailyRewardsConfig;
-}
-
-/**
- * Load a server's dedicated reward override, if one exists. loadJson
- * returns `{}` for a missing file, which we normalize to `undefined` so
- * callers (rewardPoolForServer) can tell "no override" apart from "override
- * present but empty".
- */
-export async function loadServerRewardsOverride(
-  serverId: string,
-): Promise<RewardPool | undefined> {
-  const raw = await loadJson(serverRewardsOverridePath(serverId));
-  return isEmptyOverride(raw) ? undefined : (raw as RewardPool);
-}
+// Load errors are deliberately not swallowed here: turning a corrupt store
+// into {} would wipe everyone's streaks on the next save.
 
 function isV2Store(raw: unknown): raw is ClaimedDailyStore {
   return (

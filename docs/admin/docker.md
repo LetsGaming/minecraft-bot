@@ -99,7 +99,7 @@ docker compose cp bot:/app/data/linkedAccounts.json .  # single file
 docker volume inspect minecraft-bot_bot_data           # find the volume on disk
 ```
 
-`dailyRewards.json` ships with the image and is seeded into the volume on first start. After that, edit the copy in the volume; the image default never overwrites an existing file.
+`dailyRewards.defaults.json` ships with the image and is copied into the volume on every start, so it follows image updates. The bot creates the editable `dailyRewards.json` from it the first time it is needed; after that, edit the copy in the volume or use the dashboard's Daily rewards page. Updates never overwrite it (see [daily-rewards.md](daily-rewards.md)).
 
 ## Upgrading
 

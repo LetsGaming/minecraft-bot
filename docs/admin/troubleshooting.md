@@ -79,7 +79,7 @@ Snapshots are taken hourly starting from bot startup. Right after installation t
 
 ## Daily reward "Daily rewards data unavailable"
 
-`data/dailyRewards.json` is missing or invalid JSON. See [daily-rewards.md](daily-rewards.md). In Docker, check that the volume seeding ran (`docker compose exec bot cat /app/data/dailyRewards.json`).
+`data/dailyRewards.json` is invalid JSON, or has no valid item left in its pool (the log lists the entries it skipped). It is created from `data/dailyRewards.defaults.json` when missing, so deleting it starts over from the defaults. See [daily-rewards.md](daily-rewards.md). In Docker, check that the defaults were copied into the volume (`docker compose exec bot ls /app/data/`).
 
 ## A `data/*.json` file is corrupt
 

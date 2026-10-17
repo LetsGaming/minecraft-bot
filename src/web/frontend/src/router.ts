@@ -21,6 +21,7 @@ export type NavId =
   | "backups"
   | "mods"
   | "modconfig"
+  | "rewards"
   | "upgrade"
   | "prune"
   | "config"
@@ -69,6 +70,9 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { id: "upgrade", labelKey: "nav.upgrade", icon: "pi pi-arrow-circle-up", gate: "server:update", serverScoped: true, path: "/upgrade/:server?" },
       { id: "prune", labelKey: "nav.prune", icon: "pi pi-eraser", gate: "server:update", serverScoped: true, path: "/prune/:server?" },
       { id: "modconfig", labelKey: "nav.modconfig", icon: "pi pi-sliders-h", gate: "config:read", serverScoped: true, path: "/modconfig/:server?/:fileId?" },
+      // Not server scoped: no server in the URL is the shared pool, which is
+      // a scope of its own rather than a server to fill in.
+      { id: "rewards", labelKey: "nav.rewards", icon: "pi pi-gift", gate: "config:read", serverScoped: false, path: "/rewards/:server?" },
     ],
   },
   {

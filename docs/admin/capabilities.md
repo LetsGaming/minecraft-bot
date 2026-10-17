@@ -31,10 +31,10 @@ editor lists them in.
 | `audit:read` | the admin audit log |
 | `server:control` | start, stop, restart, back up |
 | `backup:create` | reserved for future separation from `server:control` |
-| `config:read` | viewing mod config files (`server.properties` and plugin configs only with secrets redacted, see [mod-configs.md](mod-configs.md#passwords-and-access-settings)) |
+| `config:read` | viewing mod config files (`server.properties` and plugin configs only with secrets redacted, see [mod-configs.md](mod-configs.md#passwords-and-access-settings)) and the server's [daily rewards](daily-rewards.md#editing-in-the-dashboard); under `"*"` also the shared reward pool |
 | `server:console` | **sending** console commands |
 | `backup:download` | downloading an archive |
-| `config:write` | editing mod config files; protected `server.properties` keys stay with bot administrators |
+| `config:write` | editing mod config files (protected `server.properties` keys stay with bot administrators) and the server's daily-reward override; under `"*"` also the shared reward pool every server uses |
 | `mods:read` | the Mods page's lists, search and the [version check](../user/mods-version-check.md) |
 | `mods:write` | installing, updating, disabling and removing mods |
 | `backup:restore` | restoring the world from an archive |

@@ -330,3 +330,13 @@ export const ModUpdatesQuery = Type.Object({
   refresh: Type.Optional(Type.String()),
 });
 export type ModUpdatesQuery = Static<typeof ModUpdatesQuery>;
+
+// ── Daily rewards ───────────────────────────────────────────────────────────
+
+/** A reward document save. The pool's contents are checked by parseRewardPool
+ *  (@mcbot/schema/dailyRewards.ts), the validator the bot loads it with. */
+export const RewardsWriteBody = Type.Object({
+  baseHash: Type.String({ maxLength: 128 }),
+  pool: AnyObject,
+});
+export type RewardsWriteBody = Static<typeof RewardsWriteBody>;

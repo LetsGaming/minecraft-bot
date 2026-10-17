@@ -1,7 +1,7 @@
 node_modules/
 config.json
 data/*
-!data/dailyRewards.json
+!data/dailyRewards.defaults.json
 logs/
 **/dist/
 *.tsbuildinfo

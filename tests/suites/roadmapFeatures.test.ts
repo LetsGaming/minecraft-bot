@@ -134,45 +134,36 @@ describe("rewardPoolForServer", () => {
   const cfg: DailyRewardsConfig = {
     default: [{ item: "stone", amount: 1 }],
     streakBonuses: { "7": [{ item: "diamond", amount: 1 }] },
-    servers: {
-      creative: { default: [{ item: "glass", amount: 64 }] },
-      hardcore: {
-        default: [{ item: "totem", amount: 1 }],
-        streakBonuses: { "3": [{ item: "gapple", amount: 1 }] },
-      },
-    },
   };
 
-  it("falls back to the top-level pool without an override", () => {
-    const pool = rewardPoolForServer(cfg, "smp");
+  it("falls back to the shared pool without an override", () => {
+    const pool = rewardPoolForServer(cfg);
     expect(pool.default[0]!.item).toBe("stone");
     expect(pool.streakBonuses?.["7"]).toBeDefined();
   });
 
   it("overrides field-by-field", () => {
-    const creative = rewardPoolForServer(cfg, "creative");
+    const creative = rewardPoolForServer(cfg, { default: [{ item: "glass", amount: 64 }] });
     expect(creative.default[0]!.item).toBe("glass");
     // items overridden, bonuses inherited
     expect(creative.streakBonuses?.["7"]).toBeDefined();
 
-    const hardcore = rewardPoolForServer(cfg, "hardcore");
+    const hardcore = rewardPoolForServer(cfg, {
+      default: [{ item: "totem", amount: 1 }],
+      streakBonuses: { "3": [{ item: "gapple", amount: 1 }] },
+    });
     expect(hardcore.streakBonuses?.["3"]).toBeDefined();
     expect(hardcore.streakBonuses?.["7"]).toBeUndefined();
   });
 
-  it("a dedicated file override wins field-by-field over the inline servers.<id> entry", () => {
-    const fileOverride = { default: [{ item: "netherite_ingot", amount: 1 }] };
-    const creative = rewardPoolForServer(cfg, "creative", fileOverride);
-    expect(creative.default[0]!.item).toBe("netherite_ingot");
-    // streakBonuses still inherited from the top-level pool
-    expect(creative.streakBonuses?.["7"]).toBeDefined();
-  });
-
-  it("a file override applies even without any inline servers.<id> entry", () => {
-    const fileOverride = { bonusChance: 42 };
-    const pool = rewardPoolForServer(cfg, "smp", fileOverride);
+  it("an override with only a bonus chance keeps the shared items", () => {
+    const pool = rewardPoolForServer(cfg, { bonusChance: 42 });
     expect(pool.bonusChance).toBe(42);
     expect(pool.default[0]!.item).toBe("stone");
+  });
+
+  it("an empty override item list counts as inherited", () => {
+    expect(rewardPoolForServer(cfg, { default: [] }).default[0]!.item).toBe("stone");
   });
 });
 

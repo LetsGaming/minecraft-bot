@@ -64,10 +64,19 @@ fi
 # ── Data seeding (as node) ────────────────────────────────────────────────────
 #
 # Named volumes start empty on first creation. Copy any static data files that
-# ship with the image (e.g. dailyRewards.json) into the volume if not present.
+# ship with the image into the volume if not present. `*.defaults.json` files
+# (e.g. dailyRewards.defaults.json) are the image's own reference copies, never
+# edited in place, so they are refreshed on every start to follow image updates;
+# the bot creates the editable dailyRewards.json from it on first use.
 for src in /app/image-data/*; do
   [ -f "$src" ] || continue
   dest="/app/data/$(basename "$src")"
+  case "$(basename "$src")" in
+    *.defaults.json)
+      su-exec node cp "$src" "$dest"
+      continue
+      ;;
+  esac
   if [ ! -f "$dest" ]; then
     su-exec node cp "$src" "$dest"
     echo "INFO: Seeded $(basename "$dest") from image defaults."

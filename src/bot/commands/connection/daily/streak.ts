@@ -96,5 +96,5 @@ async function getPool(serverId: string): Promise<RewardPool> {
     loadDailyRewardsConfig(),
     loadServerRewardsOverride(serverId),
   ]);
-  return rewardPoolForServer(dailyRewards, serverId, rewardsOverride);
+  return rewardPoolForServer(dailyRewards, rewardsOverride);
 }

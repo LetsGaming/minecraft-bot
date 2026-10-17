@@ -1,35 +1,13 @@
 // ── Daily reward types ────────────────────────────────────────────────────────
 
-export interface DailyRewardItem {
-  item: string;
-  amount: number;
-  weight?: number;
-}
+import type { DailyRewardItem, RewardPool } from "@mcbot/schema/dailyRewards.js";
 
-/** One reward pool: a weighted item list + optional streak milestones. */
-export interface RewardPool {
-  default?: DailyRewardItem[];
-  // Each milestone awards an array of items (multi-item bonuses).
-  streakBonuses?: Record<string, DailyRewardItem[]>;
-  /** The chance (0-100) to grant a bonus reward on any given claim. */
-  bonusChance?: number;
-}
+// The pool shape is shared with the dashboard (@mcbot/schema/dailyRewards.ts).
+export type { DailyRewardItem, RewardPool };
 
-export interface DailyRewardsConfig {
+/** The shared dailyRewards.json: a pool whose item list is always present. */
+export interface DailyRewardsConfig extends RewardPool {
   default: DailyRewardItem[];
-  // Each milestone awards an array of items (multi-item bonuses).
-  streakBonuses?: Record<string, DailyRewardItem[]>;
-  /**
-   * The chance (0-100) to grant a bonus reward on any given claim.
-   */
-  bonusChance?: number;
-  /**
-   * Optional per-server pool overrides. A server listed here uses its own
-   * item list and/or streak bonuses; anything it omits falls back to the
-   * top-level pool, so economies can differ per server without
-   * duplicating the whole file.
-   */
-  servers?: Record<string, RewardPool>;
 }
 
 export interface UserClaimData {

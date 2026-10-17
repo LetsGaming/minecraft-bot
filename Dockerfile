@@ -98,7 +98,7 @@ RUN apt-get update \
  && ln -sf "$(command -v gosu)" /usr/local/bin/su-exec \
  && rm -rf /var/lib/apt/lists/*
 
-# Static data shipped with the image (dailyRewards.json etc.).
+# Static data shipped with the image (dailyRewards.defaults.json etc.).
 # A separate copy is kept in /app/image-data so the entrypoint can seed
 # /app/data on first run when the volume is empty.
 COPY data/ ./data/
