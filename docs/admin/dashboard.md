@@ -20,6 +20,7 @@ The sidebar groups the pages:
 | | Backups | `#/backups/<server>` |
 | | Mods | `#/mods/<server>` |
 | | Mod config | `#/modconfig/<server>/<file>` |
+| | Daily rewards | `#/rewards` (shared pool), `#/rewards/<server>` |
 | Admin | Config | `#/config`, `#/config/raw` |
 | | Commands | `#/commands` |
 | | Guilds | `#/guilds/<guild id>` |
@@ -36,6 +37,7 @@ of the address too:
 - Mods: the version check and the result filter,
   `#/mods/<server>?check=1.21.4&filter=blockers` (`blockers` or `ready`)
 - Mod config: the open file, `#/modconfig/<server>/<file>`
+- Daily rewards: the shared pool or one server's override, `#/rewards/<server>` (see [daily-rewards.md](daily-rewards.md#editing-in-the-dashboard)). This page has its own picker, so it does not follow the sidebar's server picker
 - Config: the filter, `#/config?q=tps`, and the Raw JSON tab, `#/config/raw`
 - Guilds: the open guild, `#/guilds/<guild id>`
 
@@ -99,7 +101,7 @@ described in [mods-version-check.md](../user/mods-version-check.md).
 
 ## Editors
 
-Config, Mod config, Commands and the guild settings dialog share one edit bar:
+Config, Mod config, Daily rewards, Commands and the guild settings dialog share one edit bar:
 it says what is unsaved, wrong, conflicting or saving, and otherwise whether
 the bot has applied the saved file. "Review changes" lists every change as was
 and now. Secrets (the bot token, API keys) are password fields: they stay empty

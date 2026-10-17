@@ -146,6 +146,8 @@ async function main() {
     ...process.env,
     MCBOT_CONFIG_PATH: configPath,
     MCBOT_DB_PATH: dbPath,
+    // The editable daily-reward files (shared pool, per-server overrides).
+    MCBOT_REWARDS_DIR: dataDir,
     WEBUI_SESSION_SECRET: randomBytes(32).toString("hex"),
   };
   if (!realDiscord) env.MCBOT_DEV_NO_DISCORD = "1";

@@ -107,7 +107,7 @@ async function _execute(
     loadClaimedStore(),
   ]);
   const claimed = getServerClaims(store, server.id);
-  const pool = rewardPoolForServer(rewardsCfg, server.id, rewardsOverride);
+  const pool = rewardPoolForServer(rewardsCfg, rewardsOverride);
 
   if (!pool.default.length) {
     throw new CommandError({

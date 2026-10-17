@@ -73,12 +73,20 @@ export async function loadJson(file: string): Promise<unknown> {
   }
 }
 
-/** Write a JSON store atomically, keeping a last-known-good `.bak` beside it. */
-export async function saveJson(file: string, data: unknown): Promise<void> {
+/**
+ * Write a JSON store atomically, keeping a last-known-good `.bak` beside it.
+ * `serialize` lets a hand-edited file keep a layout people can read (one
+ * reward per line rather than five).
+ */
+export async function saveJson(
+  file: string,
+  data: unknown,
+  serialize: (data: unknown) => string = (d) => JSON.stringify(d, null, 2),
+): Promise<void> {
   const prev = writeLocks.get(file) ?? Promise.resolve();
   const next = prev.then(async () => {
     await ensureDir(file);
-    const json = JSON.stringify(data, null, 2);
+    const json = serialize(data);
 
     // Write-then-rename: an interrupted in-place write leaves a truncated
     // file, while rename(2) is atomic — readers see old or new, never half.

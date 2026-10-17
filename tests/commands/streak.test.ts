@@ -90,7 +90,10 @@ describe("streak execute", () => {
       },
     });
     vi.mocked(loadJson).mockResolvedValue({
-      streakBonuses: { "7": "bonus_item", "14": "better_bonus" },
+      streakBonuses: {
+        "7": [{ item: "bonus_item", amount: 1 }],
+        "14": [{ item: "better_bonus", amount: 1 }],
+      },
     });
 
     const interaction = makeInteraction();
@@ -109,7 +112,10 @@ describe("streak execute", () => {
       },
     });
     vi.mocked(loadJson).mockResolvedValue({
-      streakBonuses: { "7": "item1", "14": "item2" },
+      streakBonuses: {
+        "7": [{ item: "item1", amount: 1 }],
+        "14": [{ item: "item2", amount: 1 }],
+      },
     });
 
     const interaction = makeInteraction();

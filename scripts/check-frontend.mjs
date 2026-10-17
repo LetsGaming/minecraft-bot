@@ -29,6 +29,9 @@ const IMPORT = /(?:\bfrom\s*|\bimport\s*\(?\s*)(["'])([^"'\n]+)\1/g;
 /** Frontend files whose template text goes through t(); grow this as views migrate. */
 const TRANSLATED = new Set([
   "App.vue",
+  "components/rewards/ItemPicker.vue",
+  "components/rewards/OverrideToggle.vue",
+  "views/RewardsView.vue",
   "components/SetupWizard.vue",
   "components/ui/AppShell.vue",
   "components/ui/EditBar.vue",

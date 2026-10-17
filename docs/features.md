@@ -51,7 +51,8 @@ never block the link itself.
 **Daily rewards.** Linked players claim daily in-game item rewards with `/daily`,
 including streak bonuses. Claiming while offline queues the reward for the next
 join instead of breaking the streak. The reward pool is defined in
-[`dailyRewards.json`](admin/daily-rewards.md).
+[`dailyRewards.json`](admin/daily-rewards.md), editable from the dashboard's Daily
+rewards page (items picked by name, chances in percent, per-server overrides).
 
 ## Whitelisting
 

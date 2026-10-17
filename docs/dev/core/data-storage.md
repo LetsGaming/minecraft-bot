@@ -31,7 +31,7 @@ Built on better-sqlite3 behind a small driver seam (`src/core/db/driver.ts`); `M
 
 | File | Written by | Content |
 |---|---|---|
-| `dailyRewards.json` | admin (by hand) | Reward pool and streak bonuses; read-only for the bot — hand-edited, which is exactly why it stays JSON |
+| `dailyRewards.json`, `dailyRewards_<serverId>.json` | admin (by hand or the dashboard's Daily rewards page) | Shared reward pool and per-server overrides; read-only for the bot. Hand-editable, which is exactly why it stays JSON. Created from the git-tracked `dailyRewards.defaults.json`, which is never written. Writes go through `core/utils/stores/rewardsConfig.ts` (hash-checked, validated, one reward per line) |
 | `runtime.json` | bot heartbeat | Liveness beacon the dashboard reads. A process contract file, not a store: it must stay readable with `cat` when everything else is broken |
 | `commandManifest.json` | bot at startup | Discovered commands for the dashboard's policy editor. Regenerated every boot — a handoff artifact, not state |
 

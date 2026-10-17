@@ -108,6 +108,7 @@ import StatusView from "./views/StatusView.vue";
 import ConsoleView from "./views/ConsoleView.vue";
 import BackupsView from "./views/BackupsView.vue";
 import ModConfigView from "./views/ModConfigView.vue";
+import RewardsView from "./views/RewardsView.vue";
 import UpgradeView from "./views/UpgradeView.vue";
 import PruneView from "./views/PruneView.vue";
 import ModsView from "./views/ModsView.vue";
@@ -143,6 +144,7 @@ const VIEWS: Record<NavId, ViewEntry> = {
   upgrade: { component: markRaw(UpgradeView), props: ["activeServer"] },
   prune: { component: markRaw(PruneView), props: ["activeServer"] },
   modconfig: { component: markRaw(ModConfigView), props: ["serverIds", "activeServer"] },
+  rewards: { component: markRaw(RewardsView), props: ["serverIds"] },
   config: { component: markRaw(ConfigView) },
   commands: { component: markRaw(CommandsView) },
   appearance: { component: markRaw(AppearanceView) },
@@ -371,6 +373,8 @@ export default defineComponent({
         out.filter = queryText(query.filter);
       } else if (id === "modconfig") {
         out.fileId = queryText(params.fileId);
+      } else if (id === "rewards") {
+        out.server = queryText(params.server);
       } else if (id === "config") {
         out.raw = params.mode === "raw";
         out.q = queryText(query.q);

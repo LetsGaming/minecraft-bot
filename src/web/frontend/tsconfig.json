@@ -11,6 +11,7 @@
     "noUnusedLocals": true,
     "skipLibCheck": true,
     "noEmit": true,
+    "resolveJsonModule": true,
     "jsx": "preserve",
     "types": [
       "vite/client"

@@ -25,6 +25,8 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Edit daily rewards in the dashboard.** The new Daily rewards page (under Manage) edits the shared pool and each server's override: search items by name instead of typing ids (vanilla list bundled, any modded id accepted), set chances in percent or as weights (weights stay what is stored; a percent edit changes only that item's weight), see each item's rarity tier and "1 in N claims", edit streak milestones and the bonus chance. On a server, a switch per section chooses between the shared value and the server's own. `config:read`/`config:write` on a server cover its override; the shared pool needs them under `"*"`. Saves are validated, hash-checked against concurrent edits, audited, and reach the next `/daily` without a restart (`views/RewardsView.vue`, `composables/useDailyRewards.ts`, `web/backend/routes/rewards.ts`, `core/utils/stores/rewardsConfig.ts`, `src/schema/dailyRewards.ts`, `docs/admin/daily-rewards.md`).
+
 - **Prune unused chunks from the dashboard.** The new Prune chunks page (capability `server:update`) scans a world for chunks nobody used (InhabitedTime below a threshold), shows a per-dimension summary and a map (decision or time used, region grid, protected zones you draw), and deletes them as a job that stops the server, backs it up and restores the backup if anything fails. Spawn, player areas, zones and a buffer are never deleted. The same scan can be ticked on the Upgrade page to prune before the first start of the new version under the upgrade's single backup. Needs wrapper 4.1 or newer and a setup suite with `world/prune-chunks.js` (`views/PruneView.vue`, `composables/usePrune.ts`, `web/backend/routes/prune.ts`, `docs/admin/chunk-pruning.md`).
 - **Upgrade a server's Minecraft version from the dashboard.** The new Upgrade page (capability `server:update`, typed confirmation) runs one supervised job on the host: warn players, save and stop, archive backup, install, start and watch. If the server does not come up, the mods without a build for the new version are disabled and it starts again; if that fails too, the job's own backup is restored. It needs wrapper 4.1 or newer and a setup suite with `update/upgrade.sh`. Discord shows one live message per upgrade in the downtime alert channel and downtime alerts stay quiet meanwhile (`web/backend/routes/upgrades.ts`, `views/UpgradeView.vue`, `logWatcher/watchers/monitors/upgradeMonitor.ts`, `docs/admin/server-upgrade.md`).
 - Wrapper features `operations` and `lifecycle-events` are expected by the startup report; on an older wrapper, stop, backup, restore and mod writes can still overlap, as before.
@@ -35,6 +37,8 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **The shipped reward pool moved to `data/dailyRewards.defaults.json`.** `data/dailyRewards.json` is no longer tracked in git: it is created from the defaults on first use and then belongs to you, so editing it never conflicts with an update again. **If you edited `data/dailyRewards.json` on a git install**, `git pull` stops on it: copy it aside, `git checkout -- data/dailyRewards.json`, pull, and copy it back. Docker copies the defaults file into the volume on every start; an existing `dailyRewards.json` is kept (`docker-entrypoint.sh`, `.gitignore`).
+- Reward files are now checked when read: invalid entries (an id with spaces, amount 0 or above 6400, a weight of 0 or less, an empty milestone) are skipped and logged once instead of failing at `/give` time.
 - The startup report expects wrapper feature `chunk-prune` version 2, which the Prune chunks page already uses; a version 1 wrapper is reported as outdated (`src/core/utils/server/wrapperContract.ts`).
 - Prune: the classes drawn over the terrain picture are more transparent, so the terrain stays recognisable under the heat and decision colours (`components/PruneMap.vue`).
 - Prune: a **Chunk colours** slider in the terrain view (0–100 %, default 30 %) sets how strongly the colours cover the terrain picture; at 0 % only the terrain, your selection, protected zones and the grid are drawn. Regions without a picture keep their colours (`components/PruneMap.vue`, `views/PruneView.vue`).
@@ -42,6 +46,10 @@ project follows [Semantic Versioning](https://semver.org/).
 - Starting an upgrade with a stored prune plan that no longer exists now says to scan again instead of a generic failure (`web/backend/routes/upgrades.ts`).
 
 - **Prune chunks scans only what you choose.** The Prune chunks page lists the world's dimensions (from directory listings, no chunk is read) and scans, caches and prunes only the ticked ones. A running scan shows regions read, chunks per second and a time estimate and can be stopped. The page warns when an earlier delete never finished. Needs a wrapper with `chunk-prune` version 2 (older wrappers still scan everything).
+
+### Removed
+
+- **The `servers.<id>` block inside `dailyRewards.json` is no longer read.** Per-server pools live only in `data/dailyRewards_<serverId>.json` (same contents). A leftover block is ignored with a warning in the log and listed as a problem in the dashboard.
 
 ### Added
 
