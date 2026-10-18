@@ -142,7 +142,10 @@ export function nextTimeOfDayEpoch(
 
   const candidateFor = (dayOffset: number): number => {
     const naive = Date.UTC(year, month - 1, day + dayOffset, hour, minute, 0);
-    return naive + getTzOffsetMs(naive, tz);
+    // The offset sampled at the naive instant is wrong within one offset of a
+    // DST transition; sampling again at the first result corrects it.
+    const first = naive + getTzOffsetMs(naive, tz);
+    return naive + getTzOffsetMs(first, tz);
   };
 
   const today = candidateFor(0);
