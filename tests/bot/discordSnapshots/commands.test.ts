@@ -120,13 +120,15 @@ function fakeServer(id = "smp", state = "online", wrapper: "up" | "unreachable" 
       modManifest: true,
       variablesFile: true,
     },
-    supportsTps: true,
     getTps: vi.fn().mockResolvedValue({ tps1m: 19.8 }),
     getHealth: vi.fn().mockResolvedValue(health(state, wrapper)),
     getList: vi.fn().mockResolvedValue({
-      playerCount: "3",
-      maxPlayers: "20",
-      players: ["Marlene_B", "TheRedstoneKid", "ikarus_77"],
+      ok: true,
+      value: {
+        playerCount: "3",
+        maxPlayers: "20",
+        players: ["Marlene_B", "TheRedstoneKid", "ikarus_77"],
+      },
     }),
   };
 }

@@ -531,7 +531,9 @@ describe("downtime alert details", () => {
     const server = {
       id,
       getHealth: vi.fn(async () => health(up ? "online" : "offline")),
-      getList: vi.fn().mockResolvedValue({ playerCount: "5", maxPlayers: "20", players: [] }),
+      getList: vi
+        .fn()
+        .mockResolvedValue({ ok: true, value: { playerCount: "5", maxPlayers: "20", players: [] } }),
     };
     return { server, goDown: () => (up = false) };
   }

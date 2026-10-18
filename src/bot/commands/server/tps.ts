@@ -15,9 +15,6 @@ export const data = new SlashCommandBuilder()
 
 export const execute = withErrorHandling(async (interaction) => {
   const server = resolveServer(interaction);
-  if (!server.supportsTps)
-    throw new Error(t("tps.unsupported"));
-
   const tps = await server.getTps();
   if (!tps) throw new Error(t("tps.unavailable"));
 

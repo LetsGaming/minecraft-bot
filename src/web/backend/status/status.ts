@@ -8,6 +8,7 @@
 import { getServerInstance } from "@mcbot/core/utils/server/server.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 import { getHostResources } from "@mcbot/core/utils/server/hostResources.js";
+import { parsePlayerCounts } from "@mcbot/core/utils/minecraft/playerCounts.js";
 import {
   getRemoteManifest,
   detectCapabilities,
@@ -51,7 +52,7 @@ function cachedTps(server: ServerInstance): ReturnType<ServerInstance["getTps"]>
 function cachedHostResources(
   server: ServerInstance,
 ): ReturnType<typeof getHostResources> {
-  return cached(`status:info:${server.id}`, HOST_INFO_TTL_MS, () => getHostResources(server));
+  return cached(`status:info:${server.id}`, HOST_INFO_TTL_MS, () => getHostResources(server.config));
 }
 
 export async function collectStatus(serverId: string): Promise<ServerStatus> {
@@ -106,25 +107,19 @@ export async function collectStatus(serverId: string): Promise<ServerStatus> {
   // state instead of pretending to numbers.
   if (!canQueryServer(health)) return withLastKnownEnrichment(serverId, base);
 
-  try {
-    const list = await cachedList(server);
-    const online = parseInt(String(list.playerCount), 10);
-    const max = parseInt(String(list.maxPlayers), 10);
-    // `getList()` answers `{ playerCount: "0", maxPlayers: "?" }` when its own
-    // call failed, so an unparseable max is the tell that this is the sentinel
-    // rather than a real reading. Writing it through would replace a good
-    // ping-derived roster with a confident, invented "0 players".
-    if (Number.isFinite(online) && Number.isFinite(max)) {
-      base.players = {
-        online,
-        max,
-        names: list.players ?? [],
-        // The wrapper reads the real roster over RCON — not a sample.
-        sampled: false,
-      };
-    }
-  } catch {
-    return withLastKnownEnrichment(serverId, base);
+  const list = await cachedList(server);
+  if (!list.ok) return withLastKnownEnrichment(serverId, base);
+  const { online, max } = parsePlayerCounts(list.value);
+  // A count that cannot be read keeps the ping-derived roster instead of
+  // replacing it with an invented one.
+  if (online !== null && max !== null) {
+    base.players = {
+      online,
+      max,
+      names: list.value.players ?? [],
+      // The wrapper reads the real roster over RCON, not a sample.
+      sampled: false,
+    };
   }
 
   try {

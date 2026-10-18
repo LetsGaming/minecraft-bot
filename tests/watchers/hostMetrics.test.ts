@@ -7,7 +7,11 @@
  * "0 online" for servers people were playing on.
  */
 import { describe, it, expect } from "vitest";
-import { normaliseDisk } from "../../src/core/utils/server/hostResources.js";
+import {
+  normaliseDisk,
+  normaliseMachine,
+  normaliseProcess,
+} from "../../src/core/utils/server/hostResources.js";
 
 describe("normaliseDisk — reading both wrapper generations", () => {
   it("reads the v2 shape, keeping the directory size and mount point", () => {
@@ -88,6 +92,37 @@ describe("normaliseDisk — reading both wrapper generations", () => {
         usedPercent: 20,
         availableBytes: 1,
         totalBytes: 2,
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("normaliseProcess and normaliseMachine", () => {
+  it("accept complete blocks", () => {
+    const proc = { pid: 42, cpuPercent: 3.5, rssBytes: 2048 };
+    expect(normaliseProcess(proc)).toEqual(proc);
+    const machine = {
+      cpuPercent: 10,
+      cpuCount: 8,
+      memTotalBytes: 100,
+      memUsedBytes: 40,
+      uptimeSeconds: 5,
+    };
+    expect(normaliseMachine(machine)).toEqual(machine);
+  });
+
+  it("drop a block with a missing or non-finite figure instead of rendering it", () => {
+    expect(normaliseProcess(null)).toBeNull();
+    expect(normaliseProcess({ pid: 42, cpuPercent: "3", rssBytes: 1 })).toBeNull();
+    expect(normaliseProcess({ pid: 42, cpuPercent: 1 })).toBeNull();
+    expect(normaliseMachine({ cpuPercent: 1, cpuCount: 8 })).toBeNull();
+    expect(
+      normaliseMachine({
+        cpuPercent: Infinity,
+        cpuCount: 8,
+        memTotalBytes: 1,
+        memUsedBytes: 1,
+        uptimeSeconds: 1,
       }),
     ).toBeNull();
   });

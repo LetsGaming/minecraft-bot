@@ -176,19 +176,15 @@ describe("ServerInstance.getList()", () => {
       players: ["Steve", "Alex"],
     });
     expect(await inst.getList()).toEqual({
-      playerCount: "2",
-      maxPlayers: "20",
-      players: ["Steve", "Alex"],
+      ok: true,
+      value: { playerCount: "2", maxPlayers: "20", players: ["Steve", "Alex"] },
     });
   });
 
-  it("degrades to an empty list rather than throwing", async () => {
+  it("reports a failure instead of inventing an empty server", async () => {
     getListFn.mockRejectedValue(new Error("wrapper down"));
-    expect(await inst.getList()).toEqual({
-      playerCount: "0",
-      maxPlayers: "?",
-      players: [],
-    });
+    expect(await inst.getList()).toEqual({ ok: false, reason: "unreachable" });
+    expect(getListFn).toHaveBeenCalledTimes(2);
   });
 
   it("retries once after a transient failure instead of reporting empty", async () => {
@@ -200,11 +196,27 @@ describe("ServerInstance.getList()", () => {
         players: ["Steve"],
       });
     expect(await inst.getList()).toEqual({
-      playerCount: "1",
-      maxPlayers: "20",
-      players: ["Steve"],
+      ok: true,
+      value: { playerCount: "1", maxPlayers: "20", players: ["Steve"] },
     });
     expect(getListFn).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("ServerInstance.listIfQueryable()", () => {
+  it("asks for the list only when health says the server can be queried", async () => {
+    getHealthFn.mockResolvedValue({ state: "online", wrapper: "up" });
+    getListFn.mockResolvedValue({ playerCount: "1", maxPlayers: "20", players: ["Steve"] });
+    expect(await inst.listIfQueryable()).toMatchObject({ ok: true });
+    expect(getListFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails without asking when the server is unresponsive or the wrapper is down", async () => {
+    getHealthFn.mockResolvedValue({ state: "unresponsive", wrapper: "up" });
+    expect(await inst.listIfQueryable()).toEqual({ ok: false, reason: "unreachable" });
+    getHealthFn.mockResolvedValue({ state: "online", wrapper: "unreachable" });
+    expect(await inst.listIfQueryable()).toEqual({ ok: false, reason: "unreachable" });
+    expect(getListFn).not.toHaveBeenCalled();
   });
 });
 

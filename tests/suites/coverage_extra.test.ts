@@ -136,11 +136,9 @@ describe("ServerInstance methods", () => {
     send: (cmd: string) => Promise<{ kind: string }>;
     getSeed: () => Promise<{ ok: boolean }>;
     getList: () => Promise<{
-      playerCount: string;
-      maxPlayers: string;
-      players: string[];
+      ok: boolean;
+      value?: { playerCount: string; maxPlayers: string; players: string[] };
     }>;
-    supportsTps: boolean;
     getTps: () => Promise<unknown>;
   };
 
@@ -179,8 +177,11 @@ describe("ServerInstance methods", () => {
   it("getList() delegates to serverAccess.getList", async () => {
     const inst = new ServerInstance(remoteCfg);
     const list = await inst.getList();
-    expect(list).toHaveProperty("playerCount");
-    expect(list).toHaveProperty("players");
+    expect(list.ok).toBe(true);
+    if (list.ok) {
+      expect(list.value).toHaveProperty("playerCount");
+      expect(list.value).toHaveProperty("players");
+    }
   });
 
   it("getSeed() returns null on first call when screen sendCommand fails", async () => {
@@ -224,7 +225,6 @@ describe("startTpsMonitor — fires warning when TPS drops", () => {
   it("returns timer for RCON-capable server", () => {
     const server = {
       id: "srv",
-      supportsTps: true,
       getTps: vi.fn().mockResolvedValue({ tps1m: 8 }), // below threshold
     } as never;
 

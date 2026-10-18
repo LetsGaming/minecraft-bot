@@ -18,7 +18,7 @@
 import { getDb, withTransaction } from "../../db/index.js";
 import { mapRows, col } from "../../db/rows.js";
 import { log } from "../logger.js";
-import { canQueryServer } from "@mcbot/schema/serverState.js";
+import { parsePlayerCounts } from "../minecraft/playerCounts.js";
 import { localHourOfDay, UTC } from "../time.js";
 import type { ServerInstance } from "../server/server.js";
 import { errMsg } from "../error.js";
@@ -143,15 +143,14 @@ export function startPlayerCountSampler(
       const last = lastSampleAt.get(server.id) ?? 0;
       if (Date.now() - last < FRESH_SAMPLE_MS) continue;
       try {
-        // Queryable, not merely up. A server that is unresponsive — or one
-        // that is fine but whose wrapper is down — answers getList() with
-        // zeros, and a zero here is indistinguishable from a genuinely empty
-        // server. Sampling either would draw the incident as a player exodus
-        // on the activity chart. Skipping leaves a gap, which is honest.
-        if (!canQueryServer(await server.getHealth())) continue;
-        const list = await server.getList();
-        const online = parseInt(String(list.playerCount), 10) || 0;
-        await recordPlayerCountSample(server.id, online);
+        // Queryable, not merely up: an unresponsive server, or one whose
+        // wrapper is down, would otherwise be sampled as empty and drawn as a
+        // player exodus on the activity chart. Skipping leaves a gap, which
+        // is honest.
+        const list = await server.listIfQueryable();
+        if (!list.ok) continue;
+        const online = parsePlayerCounts(list.value).online;
+        if (online !== null) await recordPlayerCountSample(server.id, online);
       } catch (err) {
         log.warn("activity", `Sample failed for ${server.id}: ${errMsg(err)}`);
       }

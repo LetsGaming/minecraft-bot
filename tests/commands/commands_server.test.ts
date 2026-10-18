@@ -92,12 +92,10 @@ function makeServer(id = "survival", overrides: Record<string, unknown> = {}) {
     getList: vi
       .fn()
       .mockResolvedValue({
-        playerCount: "2",
-        maxPlayers: "20",
-        players: ["Alice", "Bob"],
+        ok: true,
+        value: { playerCount: "2", maxPlayers: "20", players: ["Alice", "Bob"] },
       }),
     getTps: vi.fn().mockResolvedValue({ tps1m: 20, tps5m: 20, tps15m: 20 }),
-    supportsTps: true,
     getSeed: vi.fn().mockResolvedValue({ ok: true, value: "123456789" }),
     send: vi.fn().mockResolvedValue({ kind: "delivered", output: "" }),
     ...overrides,
@@ -236,12 +234,6 @@ describe("/tps command", () => {
     const interaction = makeInteraction();
     await execute(interaction);
     expect(interaction.editReply).toHaveBeenCalled();
-  });
-
-  it("throws when TPS is not supported", async () => {
-    const server = makeServer("srv", { supportsTps: false });
-    vi.mocked(resolveServer).mockReturnValue(server);
-    await expect(execute(makeInteraction())).rejects.toThrow("RCON");
   });
 
   it("throws when getTps returns null", async () => {

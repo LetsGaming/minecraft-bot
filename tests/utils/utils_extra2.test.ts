@@ -225,13 +225,28 @@ describe("playerUtils", () => {
       getList: vi
         .fn()
         .mockResolvedValue({
-          playerCount: "3",
-          maxPlayers: "20",
-          players: ["A"],
+          ok: true,
+          value: { playerCount: "3", maxPlayers: "20", players: ["A"] },
         }),
     } as never;
     const count = await getPlayerCount(server);
     expect((count as { playerCount: string }).playerCount).toBe("3");
+  });
+
+  it("getPlayerCount reports unknown counts when the list could not be read", async () => {
+    const server = {
+      id: "srv",
+      getList: vi.fn().mockResolvedValue({ ok: false, reason: "unreachable" }),
+    } as never;
+    expect(await getPlayerCount(server)).toEqual({ playerCount: "?", maxPlayers: "?" });
+  });
+
+  it("getOnlinePlayers is empty when the list could not be read", async () => {
+    const server = {
+      id: "srv",
+      getList: vi.fn().mockResolvedValue({ ok: false, reason: "unreachable" }),
+    } as never;
+    expect(await getOnlinePlayers(server)).toEqual([]);
   });
 
   it("getOnlinePlayers uses server.getList when server is provided", async () => {
@@ -240,9 +255,8 @@ describe("playerUtils", () => {
       getList: vi
         .fn()
         .mockResolvedValue({
-          playerCount: "2",
-          maxPlayers: "20",
-          players: ["A", "B"],
+          ok: true,
+          value: { playerCount: "2", maxPlayers: "20", players: ["A", "B"] },
         }),
     } as never;
     const players = await getOnlinePlayers(server);

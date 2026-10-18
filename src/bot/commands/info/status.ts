@@ -49,7 +49,6 @@ async function withinBudget<T>(work: Promise<T>): Promise<T | null> {
 }
 
 async function readTps(server: ServerInstance): Promise<string | null> {
-  if (!server.supportsTps) return null;
   const tps = await withinBudget(server.getTps());
   if (!tps) return null;
   return tps.tps1m.toLocaleString(resolveLanguage(), {
@@ -128,12 +127,19 @@ export const execute = withErrorHandling(async (interaction) => {
     return;
   }
 
-  const [{ playerCount, maxPlayers, players }, tps, onlineFor, version] = await Promise.all([
+  const [list, tps, onlineFor, version] = await Promise.all([
     server.getList(),
     readTps(server),
     readOnlineFor(server),
     readVersion(server),
   ]);
+  const { playerCount, maxPlayers, players } = list.ok
+    ? list.value
+    : {
+        playerCount: String(health.players?.online ?? "?"),
+        maxPlayers: String(health.players?.max ?? "?"),
+        players: [] as string[],
+      };
   const embed = createEmbed({
     title: t("status.title", { server: server.id, label: display.label }),
     state: health.state,
@@ -166,7 +172,7 @@ export const execute = withErrorHandling(async (interaction) => {
   // Remote instances get these via the wrapper /info extension later;
   // any failure here must never break the status reply.
   try {
-    const host = await getHostResources(server);
+    const host = await getHostResources(server.config);
     if (host) {
       const lines: string[] = [];
 

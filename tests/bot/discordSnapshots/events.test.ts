@@ -86,7 +86,9 @@ describe("Discord snapshots: event notifications", () => {
       id: "smp",
       getLastDeathLocation: vi.fn().mockResolvedValue({ ok: false }),
       getSeed: vi.fn().mockResolvedValue({ ok: false }),
-      getList: vi.fn().mockResolvedValue({ playerCount: "1", maxPlayers: "20", players: [] }),
+      getList: vi
+        .fn()
+        .mockResolvedValue({ ok: true, value: { playerCount: "1", maxPlayers: "20", players: [] } }),
     };
     const watcher = {
       server,

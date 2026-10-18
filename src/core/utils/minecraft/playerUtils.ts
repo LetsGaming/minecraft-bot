@@ -56,24 +56,26 @@ export async function getPlayerNames(
   return players.map((p) => p.name);
 }
 
-/**
- * Get player count — uses RCON/API when available, falls back to log parsing.
- */
+/** Player count, or "?" for both figures when the wrapper could not be asked. */
 export async function getPlayerCount(
   server: ServerInstance,
 ): Promise<PlayerCount> {
   const list = await server.getList();
-  return { playerCount: list.playerCount, maxPlayers: list.maxPlayers };
+  return list.ok
+    ? { playerCount: list.value.playerCount, maxPlayers: list.value.maxPlayers }
+    : { playerCount: "?", maxPlayers: "?" };
 }
 
 /**
- * Get online players — uses RCON/API when available, falls back to log parsing.
+ * Online players. When the wrapper could not be asked this is an empty list,
+ * which callers read as "nobody to find": the safe side for the one caller
+ * that branches on it (a reward goes out the offline way).
  */
 export async function getOnlinePlayers(
   server: ServerInstance,
 ): Promise<string[]> {
   const list = await server.getList();
-  return list.players;
+  return list.ok ? list.value.players : [];
 }
 
 /**

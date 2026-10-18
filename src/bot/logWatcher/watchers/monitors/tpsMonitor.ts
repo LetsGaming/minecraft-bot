@@ -39,11 +39,6 @@ export function startTpsMonitor(
   client: Client,
   guildConfigs: GuildConfigSource,
 ): TpsMonitorHandle | null {
-  if (!serverInstance.supportsTps) {
-    log.info(serverInstance.id, "TPS monitoring skipped (requires RCON)");
-    return null;
-  }
-
   let timer: ReturnType<typeof setTimeout> | null = null;
   let stopped = false;
 
