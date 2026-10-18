@@ -12,7 +12,7 @@
  * conservative character set the sanitize contract enforces for player
  * names applies here.
  */
-import { kvGet, kvMutate, kvSet } from "../../db/kv.js";
+import { versionedStore } from "./versionedStore.js";
 import { loadConfig } from "../../config.js";
 
 export interface Waypoint {
@@ -71,20 +71,14 @@ export function isValidWaypointCategory(category: string): boolean {
   return WAYPOINT_CATEGORY_REGEX.test(category);
 }
 
-function isV1Store(raw: unknown): raw is WaypointStore {
-  return (
-    typeof raw === "object" &&
-    raw !== null &&
-    (raw as { version?: unknown }).version === 1 &&
-    typeof (raw as { servers?: unknown }).servers === "object" &&
-    (raw as { servers?: unknown }).servers !== null
-  );
-}
+const waypointDoc = versionedStore<WaypointStore>(
+  "waypoints",
+  { version: 1, container: "servers" },
+  () => ({ version: 1, servers: {} }),
+);
 
 export async function loadWaypointStore(): Promise<WaypointStore> {
-  const raw = kvGet<unknown>("waypoints");
-  if (isV1Store(raw)) return raw;
-  return { version: 1, servers: {} };
+  return waypointDoc.load();
 }
 
 /** Waypoints for one server; creates the map lazily so callers can mutate. */
@@ -96,16 +90,12 @@ export function getServerWaypoints(
 }
 
 export async function saveWaypointStore(store: WaypointStore): Promise<void> {
-  kvSet("waypoints", store);
+  waypointDoc.save(store);
 }
 
-/** Change the store in one transaction (AUD-005); see kvMutate. */
+/** Change the store in one transaction; see versionedStore. */
 export async function updateWaypointStore<T>(
   fn: (store: WaypointStore) => T,
 ): Promise<T> {
-  return kvMutate<WaypointStore, T>(
-    "waypoints",
-    (raw) => (isV1Store(raw) ? raw : { version: 1, servers: {} }),
-    fn,
-  );
+  return waypointDoc.update(fn);
 }

@@ -15,7 +15,7 @@
  * linkUtils, so nobody votes twice across platforms — the dedupe the
  * plan calls for. Re-voting overwrites (changing your mind is allowed).
  */
-import { kvGet, kvMutate, kvSet } from "../../db/kv.js";
+import { versionedStore } from "./versionedStore.js";
 
 /** Closed-poll history kept per store (open polls are never trimmed). */
 export const MAX_CLOSED_POLLS = 50;
@@ -52,19 +52,14 @@ export interface PollStore {
   polls: Poll[];
 }
 
-function isV1Store(raw: unknown): raw is PollStore {
-  return (
-    typeof raw === "object" &&
-    raw !== null &&
-    (raw as { version?: unknown }).version === 1 &&
-    Array.isArray((raw as { polls?: unknown }).polls)
-  );
-}
+const pollDoc = versionedStore<PollStore>(
+  "polls",
+  { version: 1, container: "polls", kind: "array" },
+  () => ({ version: 1, polls: [] }),
+);
 
 export async function loadPollStore(): Promise<PollStore> {
-  const raw = kvGet<unknown>("polls");
-  if (isV1Store(raw)) return raw;
-  return { version: 1, polls: [] };
+  return pollDoc.load();
 }
 
 function trimPolls(store: PollStore): void {
@@ -78,22 +73,18 @@ function trimPolls(store: PollStore): void {
 
 export async function savePollStore(store: PollStore): Promise<void> {
   trimPolls(store);
-  kvSet("polls", store);
+  pollDoc.save(store);
 }
 
-/** Change the store in one transaction (AUD-005); see kvMutate. */
+/** Change the store in one transaction; see versionedStore. */
 export async function updatePollStore<T>(
   fn: (store: PollStore) => T,
 ): Promise<T> {
-  return kvMutate<PollStore, T>(
-    "polls",
-    (raw) => (isV1Store(raw) ? raw : { version: 1, polls: [] }),
-    (store) => {
-      const out = fn(store);
-      trimPolls(store);
-      return out;
-    },
-  );
+  return pollDoc.update((store) => {
+    const out = fn(store);
+    trimPolls(store);
+    return out;
+  });
 }
 
 export function getPollById(store: PollStore, id: string): Poll | null {
