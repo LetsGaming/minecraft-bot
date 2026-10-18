@@ -1,6 +1,6 @@
 // ── Backup types ─────────────────────────────────────────────────────────────
 
-export interface BackupDirInfo {
+export interface BackupDirSummary {
   dir: string;
   count: number;
   latestFile: string;
@@ -9,7 +9,7 @@ export interface BackupDirInfo {
 }
 
 export interface BackupSummary {
-  dirs: BackupDirInfo[];
+  dirs: BackupDirSummary[];
   totalBytes: number;
 }
 

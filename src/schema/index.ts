@@ -52,6 +52,7 @@ export type {
   PruneMap,
   BackupDeleteResult,
   RemoteHostInfo,
+  PlayerList,
 } from "./wire/index.js";
 // Runtime values (the leaderboard-interval contract) alongside the stat
 // shapes, so the scheduler and the snapshot retention policy size periods
@@ -101,3 +102,5 @@ export * from "./upgradePhases.js";
 export * from "./thresholds.js";
 
 export * from "./language.js";
+
+export * from "./region.js";

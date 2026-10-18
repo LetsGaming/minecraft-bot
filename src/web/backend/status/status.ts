@@ -65,7 +65,6 @@ export async function collectStatus(serverId: string): Promise<ServerStatus> {
     rcon: health.rcon,
     wrapper: health.wrapper,
     source: health.source,
-    online: health.state === ServerState.Online,
     // A direct ping supplies counts even with the wrapper down, so take
     // whatever the answering channel managed to give us. When none could,
     // this stays null: "we don't know" and "nobody is online" are different
@@ -294,7 +293,6 @@ export function unknownStatus(serverId: string): ServerStatus {
     rcon: RconState.Unknown,
     wrapper: WrapperState.Unreachable,
     source: HealthSource.None,
-    online: false,
     players: { online: 0, max: 0, names: [], sampled: false },
     tps: null,
     features: null,

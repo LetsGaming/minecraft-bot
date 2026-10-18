@@ -7,6 +7,7 @@
  * This module must stay isomorphic: types only, no Node imports.
  */
 
+import type { ApiErrorBody } from "./apiErrors.js";
 import type { BackupFileIndexBody, BackupSummaryBody } from "./wire/index.js";
 import type {
   ServerState,
@@ -85,15 +86,6 @@ export interface ServerStatus {
   wrapper: WrapperState;
   /** Which channel established `state` — the wrapper, or a direct ping. */
   source: HealthSource;
-  /**
-   * Legacy convenience: `state === "online"` exactly, kept so a dashboard
-   * build older than `state` keeps working.
-   *
-   * Do NOT use this for "is the server up". It excludes `unresponsive`, which
-   * is up, so anything gating on it disagrees with the bot. Call
-   * `stateIsUp(state)` — the same predicate the bot uses.
-   */
-  online: boolean;
   /**
    * Null when no channel could establish a roster, which is not the same fact
    * as an empty server. It used to be flattened to `{ online: 0, max: 0 }`,
@@ -195,9 +187,7 @@ export interface ConfigWriteRequest {
   config: unknown;
 }
 
-export interface ConfigWriteConflict {
-  error: "conflict";
-  message: string;
-  /** The hash of the config currently on disk — reload and re-apply. */
+export interface ConfigWriteConflict extends ApiErrorBody {
+  /** The hash of the config currently on disk. Reload and re-apply. */
   currentHash: string;
 }

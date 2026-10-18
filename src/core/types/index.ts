@@ -126,7 +126,7 @@ export type {
 } from "./stores/scheduler.js";
 
 export type {
-  BackupDirInfo,
+  BackupDirSummary,
   BackupSummary,
   BackupFileInfo,
   BackupFileIndex,
