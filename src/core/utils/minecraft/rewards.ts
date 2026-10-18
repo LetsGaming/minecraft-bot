@@ -28,9 +28,13 @@ import { t } from "../i18n.js";
 import { RewardRarity, REWARD_RARITIES } from "@mcbot/schema/embedCategories.js";
 import { rarityOf, milestoneDays } from "@mcbot/schema/dailyRewards.js";
 import { log } from "../logger.js";
+import { MS } from "@mcbot/schema/time.js";
 
-/** One claim per 24h; a gap of more than two cooldowns breaks the streak. */
-export const DAILY_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+/** One claim per 24h. */
+export const DAILY_COOLDOWN_MS = MS.day;
+
+/** A gap of more than this since the last claim (two cooldowns) breaks the streak. */
+export const STREAK_GRACE_MS = 2 * DAILY_COOLDOWN_MS;
 
 /** Streak cycle length when the config defines no streakBonuses. */
 export const DEFAULT_MAX_STREAK = 35;
@@ -51,7 +55,7 @@ export function liveStreak(
   data: Pick<UserClaimData, "currentStreak" | "lastClaim">,
   now = Date.now(),
 ): number {
-  if (!data.lastClaim || now - data.lastClaim > 2 * DAILY_COOLDOWN_MS) return 0;
+  if (!data.lastClaim || now - data.lastClaim > STREAK_GRACE_MS) return 0;
   return data.currentStreak ?? 0;
 }
 
@@ -64,7 +68,7 @@ export function calcStreak(
   delta: number,
   cycleMax: number = DEFAULT_MAX_STREAK,
 ): StreakResult {
-  const broken = delta > 2 * DAILY_COOLDOWN_MS;
+  const broken = delta > STREAK_GRACE_MS;
   const cs = broken ? 1 : currentStreak + 1;
 
   let bs: number;
@@ -256,6 +260,6 @@ export function liveBonusStreak(
   data: Pick<UserClaimData, "bonusStreak" | "lastClaim">,
   now = Date.now(),
 ): number {
-  if (!data.lastClaim || now - data.lastClaim > 2 * DAILY_COOLDOWN_MS) return 0;
+  if (!data.lastClaim || now - data.lastClaim > STREAK_GRACE_MS) return 0;
   return data.bonusStreak ?? 0;
 }

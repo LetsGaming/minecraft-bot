@@ -66,6 +66,8 @@ export * from "./discord.js";
 // Runtime values (formatBytes), shared by the bot embeds and the dashboard —
 // the two had drifting copies before.
 export * from "./format.js";
+// Millisecond unit lengths (MS), shared by core duration parsing and the dashboard.
+export * from "./time.js";
 export * from "./serverActions.js";
 // Runtime values (the capability contract), shared by the dashboard's route
 // declarations, its authorization gate, and the frontend that renders from

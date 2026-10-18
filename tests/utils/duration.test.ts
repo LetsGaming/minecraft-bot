@@ -72,4 +72,41 @@ describe("formatSpan", () => {
     expect(formatSpan(500)).toBe("0 s");
     expect(formatSpan(Number.NaN)).toBe("0 s");
   });
+
+  it("honours maxUnits and stops at the first gap", async () => {
+    const { formatSpan, MS } = await import("../../src/core/utils/duration.js");
+    expect(formatSpan(MS.day + MS.hour + MS.minute, 3)).toBe("1 d 1 h 1 min");
+    expect(formatSpan(MS.day + MS.hour + MS.minute, 1)).toBe("1 d");
+    expect(formatSpan(40 * MS.day)).toBe("40 d");
+    expect(formatSpan(Infinity)).toBe("0 s");
+  });
+});
+
+describe("shared unit table", () => {
+  it("formatDuration keeps non-adjacent units, skips weeks, and prints year/month", async () => {
+    const { formatDuration, MS } = await import("../../src/core/utils/duration.js");
+    expect(formatDuration(2 * MS.day + 5 * MS.minute)).toBe("2d 5m");
+    expect(formatDuration(8 * MS.day)).toBe("8d");
+    expect(formatDuration(MS.year + MS.month + MS.day)).toBe("1y 1mo");
+    expect(formatDuration(90 * MS.second)).toBe("1m 30s");
+  });
+
+  it("formatDuration guards non-finite input", async () => {
+    const { formatDuration } = await import("../../src/core/utils/duration.js");
+    expect(formatDuration(Number.NaN)).toBe("0s");
+    expect(formatDuration(Infinity)).toBe("0s");
+  });
+
+  it("parses every suffix, including weeks, and tells mo from m", async () => {
+    const { parseDuration, MS } = await import("../../src/core/utils/duration.js");
+    expect(parseDuration("1w")).toBe(MS.week);
+    expect(parseDuration("1mo")).toBe(MS.month);
+    expect(parseDuration("1m")).toBe(MS.minute);
+  });
+
+  it("re-exports the schema MS table", async () => {
+    const core = await import("../../src/core/utils/duration.js");
+    const schema = await import("@mcbot/schema/time.js");
+    expect(core.MS).toBe(schema.MS);
+  });
 });
