@@ -11,9 +11,9 @@ A message written in the chat-bridge channel of one Discord server is also poste
 | Topic | Decision |
 |---|---|
 | Who relays to whom | Opt-in relay group. Bridges relay to each other only when they name the same `relayGroup` and are bound to the same Minecraft server. Groups never span Minecraft servers. |
-| Sender name | The linked Minecraft name if the user ran `/link`, otherwise a censored version of the Discord display name (section 6). No avatar, no Discord id. |
+| Sender name | The linked Minecraft name if the user ran `/link`, otherwise a censored version of the Discord display name plus a 4-character tag so speakers can be told apart (section 6). No avatar, no Discord id. |
 | Source | Every relayed message carries the source label of its guild, set by that guild's admin. |
-| Notice and opt-out | Each bridged channel gets a pinned notice that messages are forwarded. Each user can opt out of being relayed. |
+| Notice and opt-out | Each bridged channel gets a pinned notice that messages are forwarded. Each user can opt out of being relayed, per guild. |
 | Default for everything else | The most private option (section 5). |
 
 ## 3. What the rules require
@@ -70,7 +70,7 @@ Censoring:
 - Keep the first character and replace the rest with a fixed-length mask, for example `S***`. The mask length is fixed so the name length does not leak.
 - Strip control and format characters first (reuse the `sanitizeForComponent` approach in `sanitize.ts`).
 - Strip any trailing `[...]` or `(...)` from the original name so a user cannot imitate a source label.
-- Optional disambiguator (open question 1): append a short tag such as `#4f2`, derived with HMAC-SHA256 over the user id with a secret that is local to the relay group, truncated to 3 hex characters. It lets readers tell two speakers apart without exposing anything that can be reversed or linked outside the group.
+- Disambiguator for unlinked users: append a short tag such as `#a4f2`, derived with HMAC-SHA256 over the user id with a secret that is local to the relay group, truncated to 4 hex characters. It lets readers tell two speakers apart without exposing anything that can be reversed or linked outside the group. With 4 characters (65,536 values) two users in a busy channel start colliding at roughly 300 distinct speakers. The tag is stable, so it does not rotate. Linked users show their Minecraft name and need no tag, because it is already unique.
 
 The final webhook username is `<name> [<label>]`, at most 80 characters. If Discord rejects the username, fall back to the embed path, as `deliver` already does for the Minecraft direction.
 
@@ -83,7 +83,7 @@ Flow for a message in bridge channel A (group G, server S):
 2. Skip if the author opted out or is on a blocklist. The author gets a quiet marker (reaction) so they know it stayed local.
 3. Build the relay payload with the privacy transforms from section 5 and the name from section 6.
 4. Send to every other bridge in group G through `enqueueSend` (ordered per channel).
-5. Send to Minecraft as today. The in-game prefix uses the same identity as the relay, so the censoring cannot be bypassed by reading chat in game (open question 2).
+5. Send to Minecraft as today. The in-game prefix uses the same identity as the relay, so the censoring cannot be bypassed by reading chat in game.
 
 Rules:
 - No chaining: a relayed post is a bot message, so the target channel's listener ignores it.
@@ -114,7 +114,7 @@ Validation (`src/core/configValidation.ts`):
 
 Other surfaces:
 - Dashboard guild wizard: the relay group field and label, with a plain-language description.
-- `/bridge optout` and `/bridge optin` (user commands). Store: a small key in `kv` through a new store using `kvMutate`; it holds only Discord ids of users who opted out.
+- `/bridge optout` and `/bridge optin` (user commands). The opt-out is per guild: the command applies to the guild where it is run. Store: a small key in `kv` through a new store using `kvMutate`; it holds only (guild id, Discord id) pairs of users who opted out.
 - Pinned notice in each bridged channel, posted once and tracked by message id so it can be refreshed.
 - Locale keys under a new `bridge.*` namespace in `en.ts` and `de.ts`, including the notice text.
 - Docs: `docs/user/chat-bridge.md` (what users see, the opt-out, what linking implies), `docs/admin/configuration.md`, `docs/admin/setup.md` (permissions), and an update to the "Cross-server network chat" entry in `docs/ROADMAP.md`, which currently says it is deferred and must be an explicit opt-in block.
@@ -123,7 +123,7 @@ Other surfaces:
 
 - The operator of the bot decides the legal basis for forwarding messages between communities (for example consent through the notice, or legitimate interest) and informs members.
 - Members can ask for deletion. Deleting the source message deletes the copies within the sync window. Beyond that, copies in other guilds are outside what the bot can remove.
-- Privacy of the third-party avatar host: Minecraft-originated messages still use the player head from `mc-heads.net`, which receives the player name. Offer a switch to turn heads off (open question 3).
+- Third-party avatar host: Minecraft-originated messages keep using the player head from `mc-heads.net`, which receives the player name. There is no switch for this, so the user docs should say so.
 
 ## 11. Risks
 
@@ -155,7 +155,9 @@ Tests: transform unit tests (mentions, emoji, names with brackets, long names, n
 
 ## 13. Open questions
 
-1. Disambiguator: add the short `#xxx` tag after the censored name (more readable conversations), or leave names as `S***` only (more private)? Recommendation: add the tag.
-2. In-game prefix: apply the same censored identity to the `[Name]` shown to players on the Minecraft server? Recommendation: yes, otherwise the censoring only protects Discord readers.
-3. Avatar switch: add a config option to turn off player heads for Minecraft-originated messages in relay groups, to avoid sending names to `mc-heads.net`? Recommendation: yes, default on for relay groups.
-4. Opt-out default scope: global per user, or per guild? Recommendation: global per user, simpler to explain.
+1. Decided: unlinked users get a stable 4-character tag after the censored name (section 6). A user-chosen relay nickname and a rotating tag were considered and left out.
+2. Decided: the in-game `[Name]` prefix uses the same relay identity, so the censoring also holds for players on the Minecraft server.
+3. Decided: no switch for player heads. Minecraft-originated messages keep using the head from `mc-heads.net`, as today.
+4. Decided: the opt-out is per guild. A user opts out in one Discord server and stays relayed in others.
+
+No open questions remain.
