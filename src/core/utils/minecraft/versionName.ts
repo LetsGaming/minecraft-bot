@@ -40,8 +40,11 @@ export interface VersionInfo {
   raw: string;
 }
 
-/** A dotted release number: 1.21, 1.21.4, 1.7.10. */
-const MC_VERSION = /\b(1\.\d{1,2}(?:\.\d{1,2})?)\b/;
+/**
+ * A dotted release number: 1.21, 1.21.4, 1.7.10, or year-based 26.1, 26.1.2.
+ * The lookbehind keeps "26.1.2" from being read as "1.2".
+ */
+const MC_VERSION = /(?<![\d.])((?:1|2\d)\.\d{1,2}(?:\.\d{1,2})?)(?!\.?\d)/;
 
 export function parseVersionName(raw: string | null): VersionInfo {
   if (!raw) return { minecraftVersion: null, loader: null, raw: "" };
