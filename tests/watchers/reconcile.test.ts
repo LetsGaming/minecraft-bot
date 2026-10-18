@@ -138,7 +138,6 @@ function botCfg(servers: Record<string, ServerConfig>): BotConfig {
     guilds: {},
     adminUsers: [],
     commands: {},
-    leaderboard: {},
     tpsWarningThreshold: 15,
     tpsPollIntervalMs: 60_000,
     leaderboardInterval: "daily",

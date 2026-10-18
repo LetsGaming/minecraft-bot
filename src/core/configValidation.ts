@@ -22,7 +22,7 @@ import {
   guildServerScopes,
   scopeToList,
 } from "./utils/server/guildScopes.js";
-import { checkAgainstSchema } from "./configSchemaCheck.js";
+import { checkAgainstSchema, type SchemaIssue } from "./configSchemaCheck.js";
 import { CURRENT_CONFIG_VERSION } from "./configMigrations.js";
 import type {
   GuildConfig,
@@ -153,11 +153,24 @@ export interface ConfigValidationResult {
 const usable = <T>(v: T | undefined): v is T =>
   v !== undefined && v !== null && !Array.isArray(v) && typeof v === "object";
 
-/** Schema enum failure on a notifications.events entry — downgraded. */
-const UNKNOWN_EVENT_ERROR = /\.notifications\.events\.\d+: must be one of/;
-
-/** Schema enum failure on a guild language, downgraded to a locale warning. */
-const UNKNOWN_LANGUAGE_ERROR = /^ {2}- guilds\.[^.]+\.language: must be one of/;
+/**
+ * A schema enum failure that is forward-compatibility rather than a broken
+ * config: an unrecognised `guilds.<id>.notifications.events[n]` or
+ * `guilds.<id>.language` (a file written for a newer bot). The semantic pass
+ * warns about these by name.
+ */
+function isForwardCompatEnum(issue: SchemaIssue): boolean {
+  if (issue.keyword !== "enum") return false;
+  const [root, , field, sub, index] = issue.path;
+  if (root !== "guilds") return false;
+  if (issue.path.length === 3) return field === "language";
+  return (
+    issue.path.length === 5 &&
+    field === "notifications" &&
+    sub === "events" &&
+    /^\d+$/.test(index ?? "")
+  );
+}
 
 interface Findings {
   errors: string[];
@@ -535,10 +548,10 @@ export function validateCandidateConfig(
   // An unrecognised notification event is forward-compatibility, not a
   // broken config: a file written for a newer bot must still boot. The
   // semantic pass below warns about it by name instead.
-  const errors: string[] = structural.errors.filter(
-    (line) => !UNKNOWN_EVENT_ERROR.test(line) && !UNKNOWN_LANGUAGE_ERROR.test(line),
-  );
-  const warnings: string[] = [...structural.warnings];
+  const errors: string[] = structural.errors
+    .filter((issue) => !isForwardCompatEnum(issue))
+    .map((issue) => issue.line);
+  const warnings: string[] = structural.warnings.map((issue) => issue.line);
 
   if (structural.unavailable) {
     warnings.push(

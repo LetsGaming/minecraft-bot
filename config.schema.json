@@ -65,10 +65,6 @@
           },
           "title": "Command overrides"
         },
-        "leaderboard": {
-          "type": "object",
-          "additionalProperties": {}
-        },
         "tpsWarningThreshold": {
           "type": "number",
           "description": "TPS below this triggers an alert (default 15).",
@@ -149,7 +145,7 @@
               "$ref": "#/definitions/PositiveNumber"
             }
           },
-          "description": "Milestone announcement thresholds per leaderboard stat key, in the stat's NATIVE unit (playtime = ticks, distances = cm, counters = counts). First activation seeds silently; see milestoneWatcher.",
+          "description": "Milestone announcement thresholds per leaderboard stat key, in the stat's NATIVE unit (playtime = ticks, distances = cm, counters = counts). First activation seeds silently.",
           "title": "Milestones"
         },
         "webui": {
@@ -223,7 +219,8 @@
           "type": "object",
           "additionalProperties": {
             "$ref": "#/definitions/CommandOverrideConfig"
-          }
+          },
+          "description": "Per-server command overrides for IN-GAME !commands, merged field-by-field over the global `commands` block (see CommandOverrideConfig). Slash commands scope per guild instead."
         }
       },
       "additionalProperties": false
@@ -244,7 +241,7 @@
               "boolean"
             ]
           },
-          "description": "Arbitrary per-command settings (see COMMAND_OPTIONS for which commands expose what, and the dashboard's Commands tab for editing them). Stored as simple scalars, e.g. `{ url: \"https://map.example.com\" }` for /map."
+          "description": "Arbitrary per-command settings (the dashboard's Commands tab lists which commands expose what). Stored as simple scalars, e.g. `{ url: \"https://map.example.com\" }` for /map."
         },
         "adminOnly": {
           "type": "boolean",
@@ -252,7 +249,7 @@
         }
       },
       "additionalProperties": false,
-      "description": "Per-command settings, resolvable at three scopes: globally (`commands`), per guild (`guilds.<id>.commands`, slash commands), and per server (`servers.<id>.commands`, in-game !commands). Resolution is FIELD-BY-FIELD: a scope override only changes the fields it sets and inherits the rest, so future fields added here automatically get the same scoped fallback (see common/utils/commandPolicy.ts)."
+      "description": "Per-command settings, resolvable at three scopes: globally (`commands`), per guild (`guilds.<id>.commands`, slash commands), and per server (`servers.<id>.commands`, in-game !commands). Resolution is FIELD-BY-FIELD: a scope override only changes the fields it sets and inherits the rest, so future fields added here automatically get the same scoped fallback."
     },
     "GuildConfig": {
       "type": "object",
@@ -358,7 +355,7 @@
           "items": {
             "$ref": "#/definitions/NotificationEvent"
           },
-          "description": "Which events to post. Omit to receive the default set (the dispatcher treats an absent list as DEFAULT_NOTIFICATION_EVENTS); an explicit empty list receives nothing."
+          "description": "Which events to post. Omit to receive the default set of events; an explicit empty list receives nothing."
         },
         "server": {
           "$ref": "#/definitions/ServerScope",
@@ -431,11 +428,11 @@
           "items": {
             "type": "string"
           },
-          "description": "Which categories the scheduled post includes (one embed per entry). Any LEADERBOARD_STATS key plus \"streak\" / \"longest_streak\"; default [\"playtime\", \"mined\"] — the pre-configurable behaviour."
+          "description": "Which categories the scheduled post includes (one embed per entry). Any `/leaderboard` stat key plus \"streak\" / \"longest_streak\"; default [\"playtime\", \"mined\"] — the pre-configurable behaviour."
         },
         "postTime": {
           "type": "string",
-          "description": "Wall-clock anchor, \"HH:MM\" in the guild's timezone (see core/utils/config/timezones.ts's guildTimeZone). Unset here AND on the global default keeps the legacy behaviour: post whenever a full interval has elapsed since the last post, with no fixed time or day."
+          "description": "Wall-clock anchor, \"HH:MM\" in the guild's timezone (the global `timezone`, or UTC). Unset here AND on the global default keeps the legacy behaviour: post whenever a full interval has elapsed since the last post, with no fixed time or day."
         },
         "postDay": {
           "type": "string",
@@ -603,11 +600,13 @@
       "properties": {
         "diskWarnPercent": {
           "type": "number",
+          "description": "Alert (once, with hysteresis) when a monitored path's disk usage reaches this percentage. Default 90; alerts go to each guild's downtimeAlerts channel. Set to 0 to disable.",
           "minimum": 0,
           "maximum": 100
         },
         "backupMaxAgeHours": {
           "type": "number",
+          "description": "Alert when the NEWEST backup of a server is older than this many hours (stale backups are the failure nobody notices until it matters). Off by default; alerts go to each guild's downtimeAlerts channel and clear automatically when a fresh backup appears. Only servers whose capability probe found the suite backup layout are checked.",
           "minimum": 0
         }
       },
@@ -699,7 +698,8 @@
           "description": "IANA timezone the times in this block are written in.\n\nServer-scoped rather than guild-scoped on purpose: a 04:00 restart belongs to the machine's operator, and when two guilds watch one server there is no guild answer to give. Falls back to the global `timezone`, then UTC."
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "description": "Per-server schedule entries, keyed by server ID at the top level."
     },
     "ServerRestartSchedule": {
       "type": "object",

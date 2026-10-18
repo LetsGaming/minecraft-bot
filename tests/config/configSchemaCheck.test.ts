@@ -20,6 +20,43 @@ import { validateCandidateConfig } from "../../src/core/config.js";
 const srv = { apiUrl: "http://127.0.0.1:3030", apiKey: "k" };
 const base = { token: "t", clientId: "c", servers: { a: srv } };
 
+function check(candidate: unknown) {
+  const result = checkAgainstSchema(candidate);
+  return {
+    ...result,
+    errors: result.errors.map((e) => e.line),
+    warnings: result.warnings.map((w) => w.line),
+  };
+}
+
+describe("structured issues", () => {
+  it("carries path, keyword and params next to the rendered line", () => {
+    const { errors } = checkAgainstSchema({
+      ...base,
+      guilds: { "1": { language: "xx" } },
+    });
+    const issue = errors.find((e) => e.keyword === "enum");
+    expect(issue?.path).toEqual(["guilds", "1", "language"]);
+    expect(issue?.params).toHaveProperty("allowedValues");
+    expect(issue?.line).toContain("guilds.1.language: must be one of");
+  });
+
+  it("reports unknown keys as warnings with the key in the path", () => {
+    const { warnings } = checkAgainstSchema({ ...base, leaderboard: {} });
+    expect(warnings.map((w) => w.path)).toContainEqual(["leaderboard"]);
+  });
+
+  it("emits one line for a union that failed on type alone", () => {
+    const { errors } = checkAgainstSchema({
+      ...base,
+      guilds: { "1": { notifications: { channelId: "c", server: 5 } } },
+    });
+    const lines = errors.filter((e) => e.path.join(".") === "guilds.1.notifications.server");
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.line).toMatch(/must be string or array|must be array or string/);
+  });
+});
+
 describe("formatInstancePath", () => {
   it("renders the root and nested paths", () => {
     expect(formatInstancePath("")).toBe("config root");
@@ -35,18 +72,18 @@ describe("formatInstancePath", () => {
 
 describe("checkAgainstSchema", () => {
   it("accepts a minimal valid config", () => {
-    const result = checkAgainstSchema(base);
+    const result = check(base);
     expect(result.errors).toEqual([]);
     expect(result.unavailable).toBe(false);
   });
 
   it("reports missing required fields by name", () => {
-    const result = checkAgainstSchema({ token: "t", servers: { a: srv } });
+    const result = check({ token: "t", servers: { a: srv } });
     expect(result.errors.join("\n")).toContain("clientId: required");
   });
 
   it("reports a wrong type by name", () => {
-    const result = checkAgainstSchema({ ...base, tpsWarningThreshold: "15" });
+    const result = check({ ...base, tpsWarningThreshold: "15" });
     expect(result.errors.join("\n")).toContain("tpsWarningThreshold");
     expect(result.errors.join("\n")).toContain("number");
   });
@@ -55,26 +92,26 @@ describe("checkAgainstSchema", () => {
     // These were hand-written `if` checks before; the annotations on
     // RawBotConfig put them in the generated schema instead.
     expect(
-      checkAgainstSchema({ ...base, tpsWarningThreshold: 0 }).errors.join("\n"),
+      check({ ...base, tpsWarningThreshold: 0 }).errors.join("\n"),
     ).toContain("tpsWarningThreshold");
     expect(
-      checkAgainstSchema({ ...base, tpsPollIntervalMs: 500 }).errors.join("\n"),
+      check({ ...base, tpsPollIntervalMs: 500 }).errors.join("\n"),
     ).toContain("tpsPollIntervalMs");
     expect(
-      checkAgainstSchema({
+      check({
         ...base,
         hostAlerts: { diskWarnPercent: 150 },
       }).errors.join("\n"),
     ).toContain("diskWarnPercent");
     expect(
-      checkAgainstSchema({ ...base, limits: { slashWindowMs: 10 } }).errors.join(
+      check({ ...base, limits: { slashWindowMs: 10 } }).errors.join(
         "\n",
       ),
     ).toContain("slashWindowMs");
   });
 
   it("reports nested paths, not just the top-level block", () => {
-    const result = checkAgainstSchema({
+    const result = check({
       ...base,
       guilds: { "1": { notifications: { channelId: 5 } } },
     });
@@ -84,13 +121,13 @@ describe("checkAgainstSchema", () => {
   });
 
   it("warns about unknown keys instead of refusing to boot", () => {
-    const result = checkAgainstSchema({ ...base, futureOption: true });
+    const result = check({ ...base, futureOption: true });
     expect(result.errors).toEqual([]);
     expect(result.warnings.join("\n")).toContain("futureOption");
   });
 
   it("ignores the editor's $schema key entirely", () => {
-    const result = checkAgainstSchema({ ...base, $schema: "./x.json" });
+    const result = check({ ...base, $schema: "./x.json" });
     expect(result.errors).toEqual([]);
     expect(result.warnings.join("\n")).not.toContain("$schema");
   });

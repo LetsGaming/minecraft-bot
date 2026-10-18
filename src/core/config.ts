@@ -32,6 +32,17 @@ import {
   type MigrationResult,
 } from "./configMigrations.js";
 
+/** Values a loaded config falls back to when the file leaves a setting out. */
+export const CONFIG_DEFAULTS = {
+  language: "en",
+  tpsWarningThreshold: DEFAULT_TPS_ALERT_THRESHOLD,
+  tpsPollIntervalMs: 60_000,
+  leaderboardInterval: "weekly",
+} as const satisfies Pick<
+  BotConfig,
+  "language" | "tpsWarningThreshold" | "tpsPollIntervalMs" | "leaderboardInterval"
+>;
+
 const PROJECT_ROOT = getRootDir();
 // The active config.json. Overridable via MCBOT_CONFIG_PATH so a deployment
 // can point it at a writable, process-owned location — in Docker that is the
@@ -89,34 +100,11 @@ export function getConfigPath(): string {
 }
 
 
+// apiUrl and apiKey are present because validateRawConfig ran before this.
 function resolveServerConfig(
   raw: RawServerConfig & { id: string },
 ): ServerConfig {
-  // Nothing to derive: since 5.0.0 an instance is a wrapper URL and a key.
-  // This used to walk the setup suite's directory layout to find scriptDir,
-  // then parse {scriptDir}/common/variables.txt for SERVER_PATH, USER,
-  // RCON_* and friends — a second implementation of what the wrapper's own
-  // parseVars.ts does, against a file on a machine the bot may not even
-  // share. The wrapper reads it now, and reports what it found.
-  return {
-    id: raw.id,
-    apiUrl: raw.apiUrl!,
-    apiKey: raw.apiKey!,
-    ...(raw.allowInsecureHttp !== undefined
-      ? { allowInsecureHttp: raw.allowInsecureHttp }
-      : {}),
-    // Direct-ping overrides. All optional: the defaults (apiUrl's host, the
-    // wrapper-reported game port) are right for a normal single-host setup.
-    ...(raw.pingHost ? { pingHost: raw.pingHost } : {}),
-    ...(raw.pingPort !== undefined ? { pingPort: raw.pingPort } : {}),
-    ...(raw.disableDirectPing !== undefined
-      ? { disableDirectPing: raw.disableDirectPing }
-      : {}),
-    // Player-facing identity: how to join, and what to install first.
-    ...(raw.publicAddress ? { publicAddress: raw.publicAddress } : {}),
-    ...(raw.modpack ? { modpack: raw.modpack } : {}),
-    ...(raw.commands ? { commands: raw.commands } : {}),
-  };
+  return { ...raw, apiUrl: raw.apiUrl!, apiKey: raw.apiKey! };
 }
 
 /** ENV_VAR-safe form of a server id: "smp-1" -> "SMP_1". */
@@ -273,33 +261,15 @@ export function loadConfig(): BotConfig {
   };
 
   _config = Object.freeze({
-    configVersion:        raw.configVersion,
-    token:                raw.token,
-    clientId:             raw.clientId,
+    ...raw,
     servers,
     guilds,
-    adminUsers:           raw.adminUsers          ?? [],
-    // Locale for user-visible strings; anything but "de" → "en"
-    language:             isLanguage(raw.language) ? raw.language : "en",
-    commands:             raw.commands            ?? {},
-    leaderboard:          raw.leaderboard         ?? {},
-    tpsWarningThreshold:  raw.tpsWarningThreshold ?? DEFAULT_TPS_ALERT_THRESHOLD,
-    tpsPollIntervalMs:    raw.tpsPollIntervalMs   ?? 60_000,
-    leaderboardInterval:  raw.leaderboardInterval ?? "weekly",
-    ...(raw.leaderboardPostTime ? { leaderboardPostTime: raw.leaderboardPostTime } : {}),
-    ...(raw.leaderboardPostDay  ? { leaderboardPostDay:  raw.leaderboardPostDay }  : {}),
-    ...(raw.embedColors ? { embedColors: raw.embedColors } : {}),
-    ...(raw.presence    ? { presence:    raw.presence }    : {}),
-    ...(raw.deathCoords ? { deathCoords: raw.deathCoords } : {}),
-    ...(raw.hostAlerts  ? { hostAlerts:  raw.hostAlerts }  : {}),
-    ...(raw.waypoints   ? { waypoints:   raw.waypoints }   : {}),
-    ...(raw.limits      ? { limits:      raw.limits }      : {}),
-    ...(raw.updateNotifier ? { updateNotifier: raw.updateNotifier } : {}),
-    ...(raw.schedules   ? { schedules:   raw.schedules }   : {}),
-    ...(raw.milestones  ? { milestones:  raw.milestones }  : {}),
-    ...(raw.webui       ? { webui:       raw.webui }       : {}),
-    ...(raw.timezone       ? { timezone:       raw.timezone }       : {}),
-    ...(raw.featureNudges  ? { featureNudges:  raw.featureNudges }  : {}),
+    adminUsers: raw.adminUsers ?? [],
+    language: isLanguage(raw.language) ? raw.language : CONFIG_DEFAULTS.language,
+    commands: raw.commands ?? {},
+    tpsWarningThreshold: raw.tpsWarningThreshold ?? CONFIG_DEFAULTS.tpsWarningThreshold,
+    tpsPollIntervalMs: raw.tpsPollIntervalMs ?? CONFIG_DEFAULTS.tpsPollIntervalMs,
+    leaderboardInterval: raw.leaderboardInterval ?? CONFIG_DEFAULTS.leaderboardInterval,
   });
 
   return _config;
