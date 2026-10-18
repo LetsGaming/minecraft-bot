@@ -312,7 +312,7 @@ import ToggleSwitch from "primevue/toggleswitch";
 import Select from "primevue/select";
 import { useToast } from "primevue/usetoast";
 import { useConfirm } from "primevue/useconfirm";
-import type { EditConflict } from "../composables/useModConfigs";
+import type { EditConflict } from "../composables/useEditableDocument";
 import { useModConfigs, type ConfigField } from "../composables/useModConfigs";
 import { discardPrompt } from "../composables/useDiscardPrompt";
 import { useCapabilities } from "../composables/useCapabilities";

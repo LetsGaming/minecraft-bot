@@ -5,7 +5,11 @@ import { FEATURE_ICON, featureHint, featureLabel } from "../utils/guildFeatures"
 import { useToast } from "primevue/usetoast";
 import { DEFAULT_NOTIFICATION_EVENTS, type GuildFeatureKey } from "@mcbot/schema";
 import { apiGet, apiSend, isConflict, validationErrors } from "../api";
-import type { SetupGuild, SetupChannel, SetupRole } from "../api";
+import type { SetupChannel, SetupRole } from "../api";
+import { useGuilds } from "./useGuilds";
+import { useMyGuilds } from "./useMyGuilds";
+import { latest } from "./useLoader";
+import { fetchServerNames } from "./useSchemaRefs";
 import { t } from "../i18n";
 
 export type FeatureInput =
@@ -188,8 +192,10 @@ export function useGuildSetup(
   const toast = useToast();
 
   // step 0: guild + server selection
-  const guilds = ref<SetupGuild[]>([]);
-  const configuredGuildIds = ref<string[]>([]);
+  const knownGuilds = useGuilds();
+  const myGuilds = useMyGuilds();
+  const guilds = computed(() => [...knownGuilds.guilds.value].sort((a, b) => a.name.localeCompare(b.name)));
+  const configuredGuildIds = computed(() => myGuilds.guilds.value.filter((g) => g.configured).map((g) => g.id));
   const configuredServers = ref<string[]>([]);
   const guildId = ref("");
   const defaultServer = ref<string | null>(null);
@@ -245,23 +251,13 @@ export function useGuildSetup(
     guildError.value = "";
     guildFailure.value = null;
     try {
-      const [guildsRes, myGuildsRes] = await Promise.all([
-        apiGet<{ guilds: SetupGuild[] }>("/api/setup/guilds"),
-        apiGet<{ guilds: { id: string; configured: boolean }[] }>("/api/guilds"),
-      ]);
-      guilds.value = guildsRes.guilds.sort((a, b) => a.name.localeCompare(b.name));
-      configuredGuildIds.value = myGuildsRes.guilds
-        .filter((g) => g.configured)
-        .map((g) => g.id);
+      await Promise.all([knownGuilds.load(true), myGuilds.load(true)]);
+      const failed = knownGuilds.error.value ? knownGuilds : myGuilds.error.value ? myGuilds : null;
+      if (failed) throw failed.cause.value ?? new Error(failed.error.value);
       // The server picker (and thus the server list) is sysadmin-only;
       // guild managers get no information about the Minecraft servers.
       if (toValue(getSysadmin)) {
-        try {
-          const srv = await apiGet<{ servers: string[] }>("/api/setup/servers");
-          configuredServers.value = srv.servers;
-        } catch {
-          configuredServers.value = [];
-        }
+        configuredServers.value = await fetchServerNames();
       } else {
         configuredServers.value = [];
       }
@@ -319,28 +315,35 @@ export function useGuildSetup(
     }
   }
 
+  const channelLoads = latest();
+
+  /**
+   * The guild picked at the time of the call owns the answer: a response that
+   * arrives after the pick changed is dropped, so one guild's channel ids are
+   * never cached as another's.
+   */
   async function loadChannelsRoles(): Promise<void> {
-    if (channelsForGuild.value === guildId.value && channels.value.length) return;
+    const id = guildId.value;
+    if (channelsForGuild.value === id && channels.value.length) return;
+    const isCurrent = channelLoads.begin();
     loadingChannels.value = true;
     channelError.value = "";
     channelFailure.value = null;
     try {
       const [ch, rl] = await Promise.all([
-        apiGet<{ channels: SetupChannel[] }>(
-          `/api/setup/guilds/${encodeURIComponent(guildId.value)}/channels`,
-        ),
-        apiGet<{ roles: SetupRole[] }>(
-          `/api/setup/guilds/${encodeURIComponent(guildId.value)}/roles`,
-        ),
+        apiGet<{ channels: SetupChannel[] }>(`/api/setup/guilds/${encodeURIComponent(id)}/channels`),
+        apiGet<{ roles: SetupRole[] }>(`/api/setup/guilds/${encodeURIComponent(id)}/roles`),
       ]);
+      if (!isCurrent() || guildId.value !== id) return;
       channels.value = ch.channels;
       roles.value = rl.roles.filter((r) => r.assignable);
-      channelsForGuild.value = guildId.value;
+      channelsForGuild.value = id;
     } catch (err) {
+      if (!isCurrent()) return;
       channelError.value = errorMessage(err);
       channelFailure.value = err;
     } finally {
-      loadingChannels.value = false;
+      if (isCurrent()) loadingChannels.value = false;
     }
   }
 

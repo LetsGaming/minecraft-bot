@@ -1,15 +1,20 @@
-import {
-  computed,
-  getCurrentInstance,
-  onBeforeUnmount,
-  ref,
-  shallowRef,
-  type Ref,
-} from "vue";
+import { computed, ref, shallowRef, type Ref } from "vue";
 import { isConflict, validationErrors } from "../api";
 import { errorMessage } from "../utils/errorMessage";
 import { registerDirtySource } from "./useUnsavedGuard";
-import type { EditConflict } from "./useModConfigs";
+import { latest } from "./useLoader";
+
+/** A queued or drafted edit whose key moved on the server while it waited. */
+export interface EditConflict {
+  keyPath: string[];
+  queued: unknown;
+  base: unknown;
+  current: unknown;
+  queuedAt: number;
+  byTag: string | null;
+  /** Which file it belongs to. Present on preview results. */
+  fileId?: string;
+}
 
 /**
  * Editing one server-held JSON document without losing anyone's work.
@@ -150,10 +155,7 @@ export function useEditableDocument<T extends object, M = unknown>(
     return dirtySet.value.has(key);
   }
 
-  if (options.guard !== false) {
-    const unregister = registerDirtySource(() => dirty.value);
-    if (getCurrentInstance()) onBeforeUnmount(unregister);
-  }
+  if (options.guard !== false) registerDirtySource(() => dirty.value);
 
   function adopt(read: LoadedDocument<T, M>): void {
     baseline.value = clone(read.doc);
@@ -164,23 +166,35 @@ export function useEditableDocument<T extends object, M = unknown>(
     stale.value = false;
   }
 
-  /** Read the document. Replaces the draft, so callers confirm first when dirty. */
+  const loads = latest();
+
+  /**
+   * Read the document. Replaces the draft, so callers confirm first when
+   * dirty. Only the newest read is adopted: an older answer that lands late
+   * resolves false and changes nothing.
+   */
   async function load(): Promise<boolean> {
+    const current = loads.begin();
     loading.value = true;
     loadError.value = "";
     try {
-      adopt(await source.load());
+      const read = await source.load();
+      if (!current()) return false;
+      adopt(read);
       return true;
     } catch (err) {
+      if (!current()) return false;
       loadError.value = errorMessage(err);
       return false;
     } finally {
-      loading.value = false;
+      if (current()) loading.value = false;
     }
   }
 
   /** Forget the document entirely (switching to a different one). */
   function reset(): void {
+    loads.cancel();
+    loading.value = false;
     baseline.value = null;
     draft.value = null;
     token.value = "";

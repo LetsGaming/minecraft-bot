@@ -9,6 +9,7 @@ import type {
   ModUpdateCheck,
 } from "../api";
 import { useRowBusy } from "./useRowBusy";
+import { latest } from "./useLoader";
 
 export type RowAction = "update" | "remove" | "disable" | "enable";
 
@@ -22,7 +23,8 @@ export interface InstalledModsApi {
   applyUpdates(): Promise<ModApplyResult>;
 }
 
-export interface LoadFailure {
+/** A failed request as the Mods view shows it: the message and, when the server answered, its status. */
+export interface RequestFailure {
   message: string;
   status: number | null;
 }
@@ -35,7 +37,7 @@ export interface RowOutcome {
   changed: number;
 }
 
-function failureOf(err: unknown): LoadFailure {
+function failureOf(err: unknown): RequestFailure {
   return {
     message: err instanceof Error && err.message ? err.message : "",
     status: err instanceof ApiError ? err.status : null,
@@ -51,7 +53,7 @@ function failureOf(err: unknown): LoadFailure {
 export function useInstalledMods(api: InstalledModsApi) {
   const installed = ref<InstalledMods | null>(null);
   const loading = ref(false);
-  const loadError = ref<LoadFailure | null>(null);
+  const loadError = ref<RequestFailure | null>(null);
 
   const updates = ref<Map<string, string>>(new Map());
   const checkingUpdates = ref(false);
@@ -71,15 +73,21 @@ export function useInstalledMods(api: InstalledModsApi) {
     return updates.value.has(slug);
   }
 
+  const loads = latest();
+
+  /** Only the newest read is adopted, so a slow answer for a server left behind cannot replace the new list. */
   async function load(): Promise<void> {
+    const current = loads.begin();
     loading.value = true;
     try {
-      installed.value = await api.fetchInstalled();
+      const res = await api.fetchInstalled();
+      if (!current()) return;
+      installed.value = res;
       loadError.value = null;
     } catch (err) {
-      if (!(err instanceof UnauthorizedError)) loadError.value = failureOf(err);
+      if (current() && !(err instanceof UnauthorizedError)) loadError.value = failureOf(err);
     } finally {
-      loading.value = false;
+      if (current()) loading.value = false;
     }
   }
 
@@ -164,6 +172,8 @@ export function useInstalledMods(api: InstalledModsApi) {
 
   /** A server switch: forget the old server's list, errors and markers. */
   function reset(): void {
+    loads.cancel();
+    loading.value = false;
     installed.value = null;
     loadError.value = null;
     updates.value = new Map();

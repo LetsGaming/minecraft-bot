@@ -30,7 +30,7 @@ export function discordFailureKind(err: unknown): DiscordFailureKind {
   }
 }
 
-export interface FailureCopy {
+export interface DiscordFailureCopy {
   title: string;
   recovery: string;
   /** The request's status and message, for whoever fixes it. */
@@ -48,7 +48,7 @@ export function describeDiscordFailure(
   err: unknown,
   sysadmin: boolean,
   fallback: { title: string; recovery: string },
-): FailureCopy {
+): DiscordFailureCopy {
   const detail = err instanceof ApiError ? `HTTP ${err.status}: ${err.message}` : errorMessage(err);
   const kind = discordFailureKind(err);
   if (kind === "token-missing" || kind === "token-rejected") {

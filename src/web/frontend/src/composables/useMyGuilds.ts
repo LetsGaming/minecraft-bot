@@ -1,8 +1,8 @@
-import { ref, shallowRef } from "vue";
+import { computed } from "vue";
 import { errorMessage } from "../utils/errorMessage";
-import { loadFailure, type LoadFailure } from "../utils/loadFailure";
 import { useToast } from "primevue/usetoast";
 import { apiGet } from "../api";
+import { useLoader } from "./useLoader";
 
 export interface MyGuildRow {
   id: string;
@@ -18,39 +18,26 @@ export interface MyGuildRow {
  */
 export function useMyGuilds() {
   const toast = useToast();
-  const guilds = ref<MyGuildRow[]>([]);
-  const loading = ref(true);
-  /** False until the first answer, success or failure, has arrived. */
-  const loaded = ref(false);
-  /** The last load's failure, kept so a view can say why in place; null after a good load. */
-  const error = shallowRef<unknown>(null);
-  const failure = ref<LoadFailure | null>(null);
+  const loader = useLoader(
+    async () => (await apiGet<{ guilds: MyGuildRow[] }>("/api/guilds")).guilds,
+    { keepDataOnError: true },
+  );
+  const guilds = computed<MyGuildRow[]>(() => loader.data.value ?? []);
+  /** True until the first answer, so a view shows its spinner rather than an empty list. */
+  const loading = computed(() => loader.loading.value || !loader.loaded.value);
 
   /** `silent` skips the toast, for views that show `error` inline or not at all. */
   async function load(silent = false): Promise<void> {
-    loading.value = true;
-    error.value = null;
-    failure.value = null;
-    try {
-      const res = await apiGet<{ guilds: MyGuildRow[] }>("/api/guilds");
-      guilds.value = res.guilds;
-      error.value = null;
-    } catch (err) {
-      error.value = err;
-      failure.value = loadFailure(err);
-      if (!silent) {
-        toast.add({
-          severity: "error",
-          summary: "Failed to load guilds",
-          detail: errorMessage(err),
-          life: 4000,
-        });
-      }
-    } finally {
-      loading.value = false;
-      loaded.value = true;
+    const ok = await loader.load();
+    if (!ok && !silent && loader.error.value) {
+      toast.add({
+        severity: "error",
+        summary: "Failed to load guilds",
+        detail: errorMessage(loader.error.value),
+        life: 4000,
+      });
     }
   }
 
-  return { guilds, loading, loaded, error, failure, load };
+  return { guilds, loading, loaded: loader.loaded, error: loader.error, cause: loader.cause, failure: loader.failure, load };
 }

@@ -1,4 +1,4 @@
-import { computed, getCurrentInstance, onBeforeUnmount, ref } from "vue";
+import { computed, ref } from "vue";
 import { errorMessage } from "../utils/errorMessage";
 import { isRecord } from "../utils/isRecord";
 import { groupErrors } from "../utils/fieldErrors";
@@ -62,8 +62,7 @@ export function useConfig() {
   });
   const dirty = computed(() => editor.dirty.value || rawDirty.value);
 
-  const unregisterRaw = registerDirtySource(() => rawDirty.value);
-  if (getCurrentInstance()) onBeforeUnmount(unregisterRaw);
+  registerDirtySource(() => rawDirty.value);
 
   function syncRawFromDraft(): void {
     rawText.value = JSON.stringify(editor.draft.value ?? {}, null, 2);

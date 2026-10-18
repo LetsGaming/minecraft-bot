@@ -1,12 +1,14 @@
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { errorMessage } from "../utils/errorMessage";
-import { loadFailure, type LoadFailure } from "../utils/loadFailure";
 import { useToast } from "primevue/usetoast";
 import { apiGet, apiSend } from "../api";
 import { absoluteStamp } from "../utils/time";
 import { humaniseIds } from "../utils/humaniseIds";
 import { t } from "../i18n";
 import { useConfirmAction } from "./useConfirmAction";
+import { useLoader } from "./useLoader";
+
+const DEFAULT_RETENTION_DAYS = 3;
 
 export interface ConfigHistoryEntry {
   id: number;
@@ -25,34 +27,16 @@ export function useConfigHistory(knownGuildName: (id: string) => string | undefi
   const toast = useToast();
   const confirmAction = useConfirmAction();
 
-  const entries = ref<ConfigHistoryEntry[]>([]);
-  const retentionDays = ref(3);
-  const loading = ref(false);
-  /** False until the first answer, success or failure, has arrived. */
-  const loaded = ref(false);
-  const error = ref("");
-  const failure = ref<LoadFailure | null>(null);
+  const loader = useLoader(() =>
+    apiGet<{ retentionDays: number; entries: ConfigHistoryEntry[] }>("/api/config/history"),
+  );
+  const entries = computed<ConfigHistoryEntry[]>(() => loader.data.value?.entries ?? []);
+  const retentionDays = computed(() => loader.data.value?.retentionDays ?? DEFAULT_RETENTION_DAYS);
+  const { loading, loaded, error, failure } = loader;
   const busyId = ref<number | null>(null);
 
   async function load(): Promise<void> {
-    loading.value = true;
-    error.value = "";
-    failure.value = null;
-    try {
-      const res = await apiGet<{
-        retentionDays: number;
-        entries: ConfigHistoryEntry[];
-      }>("/api/config/history");
-      entries.value = res.entries;
-      retentionDays.value = res.retentionDays;
-    } catch (err) {
-      entries.value = [];
-      error.value = errorMessage(err);
-      failure.value = loadFailure(err);
-    } finally {
-      loading.value = false;
-      loaded.value = true;
-    }
+    await loader.load();
   }
 
   function changeName(entry: ConfigHistoryEntry): string {

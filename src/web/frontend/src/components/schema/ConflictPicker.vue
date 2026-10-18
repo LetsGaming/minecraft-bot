@@ -61,7 +61,7 @@
 import Button from "primevue/button";
 import { relativeAge, timestampTitle } from "../../utils/time";
 import { t } from "../../i18n";
-import type { EditConflict } from "../../composables/useModConfigs";
+import type { EditConflict } from "../../composables/useEditableDocument";
 
 /**
  * Settling fields that changed underneath the user.

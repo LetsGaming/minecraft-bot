@@ -79,7 +79,7 @@
           @first-problem="goToFirstProblem"
         >
           <template v-if="!statusForbidden" #status>
-            <StatusChip :state="applyState ?? 'unknown'" :label="applyView.label" />
+            <ConfigStatusChip :status="applyStatus" />
             <span class="cv-hint">{{ applyView.hint }}</span>
           </template>
         </EditBar>

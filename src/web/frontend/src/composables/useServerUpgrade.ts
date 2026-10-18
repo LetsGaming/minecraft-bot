@@ -1,5 +1,6 @@
 import { computed, ref } from "vue";
 import type { UpgradeEvent, UpgradeJob, UpgradeRequest, UpgradeStarted } from "@mcbot/schema/wire/index.js";
+import { safeStorage } from "../utils/safeStorage";
 import { phaseRows } from "@mcbot/schema/upgradePhases.js";
 
 export { phaseRows, type PhaseRow } from "@mcbot/schema/upgradePhases.js";
@@ -73,7 +74,7 @@ const DISMISSED_KEEP = 20;
 function browserDismissed(): DismissedJobs {
   let ids: string[] = [];
   try {
-    const raw = JSON.parse(localStorage.getItem(DISMISSED_KEY) ?? "[]") as unknown;
+    const raw = JSON.parse(safeStorage.get(DISMISSED_KEY) ?? "[]") as unknown;
     if (Array.isArray(raw)) ids = raw.filter((v): v is string => typeof v === "string");
   } catch {
     /* no storage: memory only */
@@ -83,11 +84,7 @@ function browserDismissed(): DismissedJobs {
     add(jobId) {
       if (ids.includes(jobId)) return;
       ids = [...ids, jobId].slice(-DISMISSED_KEEP);
-      try {
-        localStorage.setItem(DISMISSED_KEY, JSON.stringify(ids));
-      } catch {
-        /* no storage: memory only */
-      }
+      safeStorage.set(DISMISSED_KEY, JSON.stringify(ids));
     },
   };
 }

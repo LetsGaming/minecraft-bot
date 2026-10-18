@@ -6,6 +6,8 @@
  * The router's `beforeEach` (router.ts) and in-view switches call
  * `confirmLeave` below; `beforeunload` covers the browser itself.
  */
+import { getCurrentScope, onScopeDispose } from "vue";
+
 type DirtySource = () => boolean;
 
 const sources = new Set<DirtySource>();
@@ -31,14 +33,20 @@ function releaseListener(): void {
   listening = false;
 }
 
-/** Register an editor's dirty state; returns the function that unregisters it. */
+/**
+ * Register an editor's dirty state; returns the function that unregisters it.
+ * Called inside a component or effect scope, it also unregisters when that
+ * scope is disposed.
+ */
 export function registerDirtySource(source: DirtySource): () => void {
   sources.add(source);
   ensureListener();
-  return () => {
+  const unregister = (): void => {
     sources.delete(source);
     releaseListener();
   };
+  if (getCurrentScope()) onScopeDispose(unregister);
+  return unregister;
 }
 
 export function hasUnsavedChanges(): boolean {

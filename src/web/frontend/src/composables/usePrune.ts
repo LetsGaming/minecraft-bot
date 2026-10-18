@@ -1,4 +1,5 @@
 import { computed, ref } from "vue";
+import { latest } from "./useLoader";
 import type {
   PruneChunkInfo,
   PruneDimensions,
@@ -167,6 +168,8 @@ export function usePrune(options: UsePruneOptions) {
   const mapLoads = new Map<number, Promise<DecodedMap | null>>();
   const starting = ref(false);
 
+  const inspections = latest();
+
   let jobId: string | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let generation = 0;
@@ -291,19 +294,21 @@ export function usePrune(options: UsePruneOptions) {
     const plan = summary.value?.id;
     if (!plan || !options.api.chunk) return;
     const mine = generation;
+    const isLatest = inspections.begin();
     inspected.value = { dimension, cx, cz, info: null, loading: true };
     try {
       const info = await options.api.chunk(plan, dimension, cx, cz);
-      if (mine !== generation || inspected.value?.cx !== cx || inspected.value?.cz !== cz) return;
+      if (mine !== generation || !isLatest()) return;
       inspected.value = { dimension, cx, cz, info, loading: false };
     } catch (err) {
-      if (mine !== generation) return;
+      if (mine !== generation || !isLatest()) return;
       inspected.value = null;
       options.onError(messageOf(err, "Could not read that chunk."));
     }
   }
 
   function clearInspection(): void {
+    inspections.cancel();
     inspected.value = null;
   }
 

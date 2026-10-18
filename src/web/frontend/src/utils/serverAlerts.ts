@@ -81,9 +81,8 @@ export function serverAlerts(s: ServerStatus): Alert[] {
 }
 
 /** Fleet view: the bot heartbeat plus every server's alerts. */
-export function fleetAlerts(servers: ServerStatus[], botAlive: boolean): Alert[] {
-  const heartbeat: Alert[] = botAlive
-    ? []
-    : [{ kind: "botDown", level: "danger", text: t("overview.alert.botDown") }];
+export function fleetAlerts(servers: ServerStatus[], botAlive: boolean | null): Alert[] {
+  const heartbeat: Alert[] =
+    botAlive === false ? [{ kind: "botDown", level: "danger", text: t("overview.alert.botDown") }] : [];
   return [...heartbeat, ...servers.flatMap(serverAlerts)];
 }
