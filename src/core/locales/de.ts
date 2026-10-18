@@ -283,6 +283,8 @@ export const de: Record<string, string> = {
   "schedule.warn": "**{server}** startet in **{minutes} min** neu (um {time}).",
   "schedule.doneTitle": "{server} planmäßig neu gestartet",
   "schedule.done": "**{server}**: der geplante Neustart wurde ausgelöst.",
+  "restart.failedTitle": "Geplanter Neustart von {server} fehlgeschlagen",
+  "restart.failed": "**{server}**: der geplante Neustart wurde nicht abgeschlossen. Prüfe den Server und starte ihn manuell neu.",
 
   // ── /daily-history ──
   "dailyHistory.title": "Deine Daily-Abholungen auf {server}",
