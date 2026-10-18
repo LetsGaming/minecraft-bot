@@ -20,6 +20,7 @@ import {
   planMerge,
   dropEdits,
   type EditConflict,
+  type MergePlan,
   type QueuedEdit,
 } from "../stores/queuedEdits.js";
 import { recordAdminAction } from "../stores/adminAudit.js";
@@ -41,10 +42,43 @@ export interface FlushResult {
   skipped: number;
 }
 
-/** Current on-disk values, keyed the same way a queued edit's path is. */
-function valuesByKey(relPath: string, text: string): Map<string, unknown> {
-  const parsed = parseConfig(relPath, text);
-  return new Map(parsed.nodes.map((n) => [JSON.stringify(n.path), n.value] as const));
+type ConfigRead = Awaited<ReturnType<typeof readConfigFile>>;
+
+/** What a flush or a preview may do with one file's queued edits. */
+type FilePlan =
+  | { kind: "unreadable"; error: unknown }
+  | { kind: "readOnly" }
+  | { kind: "ready"; current: ConfigRead; plan: MergePlan; etag: ConfigRead["etag"] };
+
+/**
+ * Read one file and decide what its queued edits would do: the single gate
+ * both the flush and the preview go through, so they cannot disagree.
+ *
+ * The same refusals a live save makes apply: a file that became read-only or
+ * unparseable since the edit was queued keeps its edits.
+ */
+async function planFile(
+  server: NonNullable<ReturnType<typeof getServerInstance>>,
+  fileId: string,
+  queued: readonly QueuedEdit[],
+): Promise<FilePlan> {
+  let current: ConfigRead;
+  try {
+    current = await readConfigFile(server.config, fileId);
+  } catch (error) {
+    return { kind: "unreadable", error };
+  }
+
+  let parsed: ReturnType<typeof parseConfig>;
+  try {
+    parsed = parseConfig(current.file.relPath, current.text);
+  } catch (error) {
+    return { kind: "unreadable", error };
+  }
+  if (current.file.editable === false || parsed.warning) return { kind: "readOnly" };
+
+  const values = new Map(parsed.nodes.map((n) => [JSON.stringify(n.path), n.value] as const));
+  return { kind: "ready", current, plan: planMerge(queued, values), etag: current.etag };
 }
 
 function groupByFile(edits: QueuedEdit[]): Map<string, QueuedEdit[]> {
@@ -81,25 +115,20 @@ export async function flushQueuedEdits(
   let skipped = 0;
 
   for (const [fileId, queued] of byFile) {
-    let current;
-    try {
-      current = await readConfigFile(server.config, fileId);
-    } catch (err) {
+    const filePlan = await planFile(server, fileId, queued);
+    if (filePlan.kind === "unreadable") {
       // Still unreachable, or this one file is gone. Leave the edits queued.
-      log.warn("web", `Flush skipped ${fileId} on ${serverId}: ${errMsg(err)}`);
+      log.warn("web", `Flush skipped ${fileId} on ${serverId}: ${errMsg(filePlan.error)}`);
       skipped += 1;
       continue;
     }
-
-    // AUD-013: the same refusals a live save makes. A file that became
-    // read-only or unparseable since the edit was queued keeps its edits.
-    if (current.file.editable === false || parseConfig(current.file.relPath, current.text).warning) {
+    if (filePlan.kind === "readOnly") {
       log.warn("web", `Flush skipped ${fileId} on ${serverId}: the file is read-only in the editor now`);
       skipped += 1;
       continue;
     }
 
-    const plan = planMerge(queued, valuesByKey(current.file.relPath, current.text));
+    const { current, plan, etag } = filePlan;
     conflicts.push(...plan.conflicts);
 
     // Edits the disk already satisfies are done, not pending. Dropping them
@@ -124,7 +153,7 @@ export async function flushQueuedEdits(
     // again) must not abort the rest of the flush (AUD-013).
     let result;
     try {
-      result = await writeConfigFile(server.config, fileId, next, current.etag);
+      result = await writeConfigFile(server.config, fileId, next, etag);
     } catch (err) {
       log.warn("web", `Flush could not write ${fileId} on ${serverId}: ${errMsg(err)}`);
       skipped += 1;
@@ -141,13 +170,19 @@ export async function flushQueuedEdits(
     dropEdits(plan.apply.map((e) => e.id));
     forget(serverId, `configFile:${fileId}`);
 
-    await recordAdminAction({
-      action: "mod config edit (queued, applied)",
-      server: serverId,
-      by: author.tag,
-      byId: author.uid,
-      detail: `${current.file.relPath}: ${edits.length} queued key(s)`,
-    });
+    // The write already happened; a failing audit line must not skip the
+    // remaining files or the cache invalidation below.
+    try {
+      await recordAdminAction({
+        action: "mod config edit (queued, applied)",
+        server: serverId,
+        by: author.tag,
+        byId: author.uid,
+        detail: `${current.file.relPath}: ${edits.length} queued key(s)`,
+      });
+    } catch (err) {
+      log.warn("web", `Could not audit the flush of ${fileId} on ${serverId}: ${errMsg(err)}`);
+    }
   }
 
   forget(serverId, "configIndex");
@@ -164,26 +199,34 @@ export async function flushQueuedEdits(
  */
 export async function previewQueuedEdits(
   serverId: string,
-): Promise<{ conflicts: EditConflict[]; ready: number; unreadable: number }> {
+): Promise<{
+  conflicts: EditConflict[];
+  ready: number;
+  unreadable: number;
+  /** Queued edits in files the editor now treats as read-only; a flush skips them. */
+  readOnly: number;
+}> {
   const server = getServerInstance(serverId);
-  if (!server) return { conflicts: [], ready: 0, unreadable: 0 };
+  if (!server) return { conflicts: [], ready: 0, unreadable: 0, readOnly: 0 };
 
   const conflicts: EditConflict[] = [];
   let ready = 0;
   let unreadable = 0;
+  let readOnly = 0;
 
   for (const [fileId, queued] of groupByFile(pendingForServer(serverId))) {
-    try {
-      const current = await readConfigFile(server.config, fileId);
-      const plan = planMerge(queued, valuesByKey(current.file.relPath, current.text));
-      conflicts.push(...plan.conflicts);
-      ready += plan.apply.length;
-    } catch {
+    const filePlan = await planFile(server, fileId, queued);
+    if (filePlan.kind === "unreadable") {
       // Cannot say anything about this file yet; the wrapper is still away.
       unreadable += queued.length;
+    } else if (filePlan.kind === "readOnly") {
+      readOnly += queued.length;
+    } else {
+      conflicts.push(...filePlan.plan.conflicts);
+      ready += filePlan.plan.apply.length;
     }
   }
-  return { conflicts, ready, unreadable };
+  return { conflicts, ready, unreadable, readOnly };
 }
 
 // ── Auto-flush ──────────────────────────────────────────────────────────────
