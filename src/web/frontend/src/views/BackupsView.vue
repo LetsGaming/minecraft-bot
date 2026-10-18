@@ -691,8 +691,6 @@ export default defineComponent({
   .layout { grid-template-columns: minmax(0, 1700px) minmax(260px, 380px); }
 }
 
-.card-meta { color: var(--text-dim); font-size: var(--text-sm); flex: 1 1 auto; }
-.cluster { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 
 .filters { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-3); }
 

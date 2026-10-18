@@ -281,7 +281,6 @@ export default defineComponent({
 
 <style scoped>
 .audit-view { min-width: 0; }
-.card-meta { flex: 1 1 auto; color: var(--text-dim); font-size: var(--text-sm); }
 .filter { flex: 0 1 280px; min-width: min(220px, 100%); }
 .filter :deep(.p-iconfield) { width: 100%; }
 .filter-input { width: 100%; }

@@ -134,7 +134,7 @@ import InlineError from "../components/ui/InlineError.vue";
 import { GUILD_FEATURE_KEYS, type GuildFeatureKey } from "@mcbot/schema";
 import { useGuilds } from "../composables/useGuilds";
 import { useMyGuilds } from "../composables/useMyGuilds";
-import { describeDiscordFailure, type FailureCopy } from "../utils/discordFailure";
+import { describeDiscordFailure, type DiscordFailureCopy } from "../utils/discordFailure";
 import { FEATURE_ICON, featureHint, featureLabel } from "../utils/guildFeatures";
 import { t } from "../i18n";
 
@@ -172,7 +172,7 @@ export default defineComponent({
     ready(): boolean {
       return this.loadedOnce && !this.loadError;
     },
-    failure(): FailureCopy | null {
+    failure(): DiscordFailureCopy | null {
       if (!this.loadError) return null;
       return describeDiscordFailure(this.loadError, this.sysadmin, {
         title: t("guilds.loadFailed"),

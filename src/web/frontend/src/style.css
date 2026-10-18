@@ -86,6 +86,8 @@ a { color: var(--mc-accent); }
   margin-bottom: var(--space-3);
 }
 .card-head h2 { margin: 0; font-size: var(--text-xl); font-weight: 600; }
+.card-meta { flex: 1 1 auto; color: var(--text-dim); font-size: var(--text-sm); }
+.cluster { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .stack-gap { display: flex; flex-direction: column; gap: var(--space-4); }
 .note { margin: 0; color: var(--text-dim); font-size: var(--text-sm); }
 .foot {
