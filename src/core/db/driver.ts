@@ -51,6 +51,16 @@ export function selectedDriver(): SqliteDriver {
   return process.env.MCBOT_SQLITE_DRIVER === "node" ? "node" : "better-sqlite3";
 }
 
+/** True when the native module itself could not be found or loaded. */
+function isNativeLoadError(err: unknown): boolean {
+  const code = (err as NodeJS.ErrnoException | undefined)?.code;
+  if (code === "MODULE_NOT_FOUND" || code === "ERR_DLOPEN_FAILED") return true;
+  const msg = err instanceof Error ? err.message : String(err);
+  return /bindings file|NODE_MODULE_VERSION|dlopen|invalid ELF header|not a valid Win32 application/i.test(
+    msg,
+  );
+}
+
 export function openDatabase(path: string): SqlDatabase {
   if (selectedDriver() === "node") {
     const { DatabaseSync } = require("node:sqlite") as {
@@ -70,6 +80,9 @@ export function openDatabase(path: string): SqlDatabase {
     return new BetterSqlite3(path);
   } catch (err) {
     const msg = err instanceof Error ? err.message.split("\n")[0] : String(err);
+    if (!isNativeLoadError(err)) {
+      throw new Error(`Could not open the database at "${path}": ${msg}`);
+    }
     throw new Error(
       `better-sqlite3 failed to load (${msg}). ` +
         `Run "npm rebuild better-sqlite3" (needs python3/make/g++ on Alpine), ` +

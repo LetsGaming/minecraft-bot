@@ -50,7 +50,24 @@ export function getDb(): SqlDatabase {
 
   const dbPath = getDbPath();
   const db = openDatabase(dbPath);
+  try {
+    initialize(db, dbPath);
+  } catch (err) {
+    // Without this the handle leaks and a retry opens a second connection.
+    try {
+      db.close();
+    } catch {
+      /* already closed */
+    }
+    throw err;
+  }
 
+  _db = db;
+  if (dbPath !== ":memory:") log.info("db", `SQLite store ready (${dbPath})`);
+  return _db;
+}
+
+function initialize(db: SqlDatabase, dbPath: string): void {
   // WAL: multi-process safe, readers don't block the writer.
   db.exec("PRAGMA journal_mode = WAL");
   // NORMAL is durable enough under WAL (fsync on checkpoint) and much faster.
@@ -67,7 +84,7 @@ export function getDb(): SqlDatabase {
   // takes an exclusive lock and rewrites the whole file, so it is opt-in
   // rather than automatic: an operator runs it during a maintenance
   // window, e.g. `MCBOT_VACUUM_ON_START=1 docker compose restart bot`.
-  if (dbPath !== ":memory:" && process.env.MCBOT_VACUUM_ON_START) {
+  if (dbPath !== ":memory:" && process.env.MCBOT_VACUUM_ON_START === "1") {
     log.info("db", "MCBOT_VACUUM_ON_START set — running VACUUM…");
     db.exec("VACUUM");
     log.info("db", "VACUUM complete");
@@ -80,10 +97,6 @@ export function getDb(): SqlDatabase {
   if (dbPath !== ":memory:") {
     importLegacyJson(db);
   }
-
-  _db = db;
-  if (dbPath !== ":memory:") log.info("db", `SQLite store ready (${dbPath})`);
-  return _db;
 }
 
 /**
@@ -122,6 +135,13 @@ export function withTransaction<T>(fn: () => T): T {
 
 /** Close the database on shutdown, so the WAL is checkpointed and released. */
 export function closeDb(): void {
+  if (_db) {
+    try {
+      _db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+    } catch {
+      /* busy or already closed: close() below still releases the handle */
+    }
+  }
   closeDbForTesting();
 }
 

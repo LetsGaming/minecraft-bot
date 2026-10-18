@@ -35,7 +35,7 @@ import {
   replyError,
 } from "./commands/middleware.js";
 import { initServers, getAllInstances } from "@mcbot/core/utils/server/server.js";
-import { getDb } from "@mcbot/core/db/index.js";
+import { closeDb, getDb } from "@mcbot/core/db/index.js";
 import {
   capabilityCommandSkips,
   capabilitySummary,
@@ -529,6 +529,7 @@ async function shutdown(signal: string): Promise<void> {
   } catch (err) {
     log.error("bot", `Failed to flush uptime history on shutdown: ${errMsg(err)}`);
   }
+  closeDb();
   process.exit(0);
 }
 
