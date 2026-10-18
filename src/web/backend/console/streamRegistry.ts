@@ -4,6 +4,7 @@
  * revoked or a server removed afterwards would keep delivering until the
  * browser closed the tab.
  */
+import { MS } from "@mcbot/schema";
 import { currentSessionEpoch, type Session } from "../auth/auth.js";
 import { sessionHolds } from "../auth/capabilities.js";
 import type { ConsoleEvent } from "./consoleHub.js";
@@ -18,7 +19,7 @@ export interface OpenStream {
 const open = new Set<OpenStream>();
 
 /** How often each open stream re-checks its viewer, reload event or not. */
-export const REVALIDATE_INTERVAL_MS = 30_000;
+export const REVALIDATE_INTERVAL_MS = 30 * MS.second;
 
 /**
  * Does this viewer still pass the checks the route made on connect, against

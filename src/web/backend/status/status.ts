@@ -5,6 +5,7 @@
  *
  * Split out of server.ts in the QUAL-01 refactor (2026-07 audit).
  */
+import { MS } from "@mcbot/schema";
 import { getServerInstance } from "@mcbot/core/utils/server/server.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 import { getHostResources } from "@mcbot/core/utils/server/hostResources.js";
@@ -32,9 +33,9 @@ import { cached, invalidatePrefix } from "@mcbot/core/utils/cache.js";
 // the wrapper for the same server's health several times a second. Short
 // TTLs — well under any poll interval that matters, well above the noise of
 // two requests arriving milliseconds apart — collapse that into one call.
-const HEALTH_LIST_TTL_MS = 10_000;
-const TPS_TTL_MS = 15_000;
-const HOST_INFO_TTL_MS = 60_000;
+const HEALTH_LIST_TTL_MS = 10 * MS.second;
+const TPS_TTL_MS = 15 * MS.second;
+const HOST_INFO_TTL_MS = MS.minute;
 
 function cachedHealth(server: ServerInstance): ReturnType<ServerInstance["getHealth"]> {
   return cached(`status:health:${server.id}`, HEALTH_LIST_TTL_MS, () => server.getHealth());
@@ -236,7 +237,7 @@ function withLastKnownEnrichment(serverId: string, base: ServerStatus): ServerSt
  * changes when the wrapper or the suite is redeployed.
  */
 const featureCache = new Map<string, { at: number; value: ServerStatus["features"] }>();
-const FEATURE_TTL_MS = 5 * 60_000;
+const FEATURE_TTL_MS = 5 * MS.minute;
 
 /**
  * Forget what the wrapper said it can do.

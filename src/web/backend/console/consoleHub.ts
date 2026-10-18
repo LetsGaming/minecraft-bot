@@ -18,6 +18,7 @@
  * Lifetime: the upstream opens on the first subscriber and closes when the last
  * one leaves, so an idle dashboard holds no wrapper connections at all.
  */
+import { MS } from "@mcbot/schema";
 import type { ServerConfig } from "@mcbot/core/types/index.js";
 import { openLogStream, tailLog } from "@mcbot/core/utils/server/serverAccess.js";
 import type { SseLineStream } from "@mcbot/core/utils/sseLineStream.js";
@@ -50,7 +51,7 @@ export type ConsoleSubscriber = (event: ConsoleEvent) => void;
 const BACKLOG_LINES = 100;
 
 /** Cap on the priming fetch, so a slow wrapper cannot hold the stream shut. */
-const PRIME_TIMEOUT_MS = 8_000;
+const PRIME_TIMEOUT_MS = 8 * MS.second;
 
 interface Channel {
   stream: SseLineStream;

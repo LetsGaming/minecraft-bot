@@ -4,6 +4,7 @@
  * the config file and the data dir (including the SQLite store); the
  * heartbeat file tells this process whether the bot is alive.
  */
+import { MS } from "@mcbot/schema";
 import { loadConfig } from "@mcbot/core/config.js";
 import { initServers } from "@mcbot/core/utils/server/server.js";
 import type { FastifyInstance } from "fastify";
@@ -93,7 +94,7 @@ startWebServer()
  * closed. A shutdown that hangs (a stuck stream) still ends after a grace
  * period.
  */
-const SHUTDOWN_GRACE_MS = 8_000;
+const SHUTDOWN_GRACE_MS = 8 * MS.second;
 let shuttingDown = false;
 async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return;

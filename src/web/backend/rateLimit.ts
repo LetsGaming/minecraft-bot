@@ -15,6 +15,7 @@
  * (see docker-compose.yml), so an in-process limiter is the right scope;
  * req.ip honors X-Forwarded-For only for the proxies named in webui.trustProxy.
  */
+import { MS } from "@mcbot/schema";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   createRateLimiter,
@@ -34,13 +35,13 @@ export function registerRateLimiting(app: FastifyInstance): void {
   // callback (three outbound Discord calls each) can't be hammered. Config
   // edits and server actions arrive in small human bursts, so a per-user write
   // budget well above normal use still stops scripted abuse.
-  const authLimiter = createRateLimiter({ capacity: 10, windowMs: 60_000, maxBuckets: MAX_BUCKETS });
-  const apiWriteLimiter = createRateLimiter({ capacity: 30, windowMs: 60_000, maxBuckets: MAX_BUCKETS });
+  const authLimiter = createRateLimiter({ capacity: 10, windowMs: MS.minute, maxBuckets: MAX_BUCKETS });
+  const apiWriteLimiter = createRateLimiter({ capacity: 30, windowMs: MS.minute, maxBuckets: MAX_BUCKETS });
   // Coarse per-address ceiling in front of the per-user buckets: many identities
   // from one source, or one identity replayed from many sources, cannot multiply
   // the budget past it. Several times the per-user limit so a shared proxy
   // address still serves a handful of real users.
-  const ipCeilingLimiter = createRateLimiter({ capacity: 150, windowMs: 60_000, maxBuckets: MAX_BUCKETS });
+  const ipCeilingLimiter = createRateLimiter({ capacity: 150, windowMs: MS.minute, maxBuckets: MAX_BUCKETS });
 
   interface Target {
     /** Checked first; every request from one address draws from it. */
