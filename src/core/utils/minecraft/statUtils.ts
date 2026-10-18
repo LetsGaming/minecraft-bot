@@ -149,7 +149,7 @@ export async function buildLeaderboard(
   const srv = server;
   const allStats = await loadAllStats(srv);
   // Whitelist + usercache, so boards fill on servers without a whitelist.
-  const players = await loadKnownPlayers(false, srv);
+  const players = await loadKnownPlayers(srv);
 
   const uuidToName: Record<string, string> = {};
   for (const p of players) uuidToName[p.uuid] = p.name;

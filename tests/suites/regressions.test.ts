@@ -190,7 +190,7 @@ describe("loadKnownPlayers", () => {
       { name: "Casey", uuid: "u1" },
     ] as never);
 
-    const known = await loadKnownPlayers(false, makeServer());
+    const known = await loadKnownPlayers(makeServer());
     expect(known).toEqual([{ name: "Casey", uuid: "u1" }]);
   });
 
@@ -204,7 +204,7 @@ describe("loadKnownPlayers", () => {
       { name: "Casey", uuid: "u2" },
     ] as never);
 
-    const known = await loadKnownPlayers(false, makeServer());
+    const known = await loadKnownPlayers(makeServer());
     expect(known.map((p) => p.name)).toEqual(["Alice", "Casey"]);
   });
 
@@ -218,7 +218,7 @@ describe("loadKnownPlayers", () => {
       { name: "Zed", uuid: "u3" },
     ] as never);
 
-    const known = await loadKnownPlayers(false, makeServer());
+    const known = await loadKnownPlayers(makeServer());
     expect(known.map((p) => p.name)).toEqual(["Zed", "NewName"]);
   });
 
@@ -228,12 +228,12 @@ describe("loadKnownPlayers", () => {
     vi.mocked(serverAccess.readUserCache).mockResolvedValue([] as never);
     const srv = makeServer();
 
-    await loadKnownPlayers(false, srv);
-    await loadKnownPlayers(false, srv); // served from cache
+    await loadKnownPlayers(srv);
+    await loadKnownPlayers(srv); // served from cache
     expect(serverAccess.readUserCache).toHaveBeenCalledTimes(1);
 
     invalidateWhitelistCache(srv.id);
-    await loadKnownPlayers(false, srv);
+    await loadKnownPlayers(srv);
     expect(serverAccess.readUserCache).toHaveBeenCalledTimes(2);
   });
 });

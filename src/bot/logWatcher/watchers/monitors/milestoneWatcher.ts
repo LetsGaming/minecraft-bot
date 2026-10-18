@@ -84,7 +84,7 @@ async function runPass(client: Client): Promise<void> {
     let names: Record<string, string>;
     try {
       allStats = await loadAllStats(server);
-      const players = await loadKnownPlayers(false, server);
+      const players = await loadKnownPlayers(server);
       names = Object.fromEntries(players.map((p) => [p.uuid, p.name]));
     } catch (err) {
       log.warn("milestones", `Stats unavailable for ${server.id}: ${errMsg(err)}`);

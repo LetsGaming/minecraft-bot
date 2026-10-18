@@ -133,7 +133,7 @@ export const execute = withErrorHandling(async (interaction) => {
 
   const [allStats, known, sessionStore] = await Promise.all([
     loadAllStats(server),
-    loadKnownPlayers(false, server),
+    loadKnownPlayers(server),
     loadSessionStore(),
   ]);
 

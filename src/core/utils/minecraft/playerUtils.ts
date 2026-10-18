@@ -43,7 +43,7 @@ export async function findPlayer(
   playerName: string,
   server: ServerInstance,
 ): Promise<WhitelistEntry | null> {
-  const players = await loadKnownPlayers(false, server);
+  const players = await loadKnownPlayers(server);
   const lower = playerName.toLowerCase();
   return players.find((p) => p.name.toLowerCase() === lower) ?? null;
 }
@@ -52,7 +52,7 @@ export async function findPlayer(
 export async function getPlayerNames(
   server: ServerInstance,
 ): Promise<string[]> {
-  const players = await loadKnownPlayers(false, server);
+  const players = await loadKnownPlayers(server);
   return players.map((p) => p.name);
 }
 
