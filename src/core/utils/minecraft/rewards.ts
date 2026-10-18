@@ -185,25 +185,34 @@ export async function deliverPendingRewards(
   if (list.length === 0) return 0;
 
   const delivered: DailyRewardItem[] = [];
-  const remaining: typeof list = [];
+  const work = list.map((entry) => ({
+    entry,
+    todo: [...entry.items],
+    failed: [] as DailyRewardItem[],
+  }));
 
-  for (const entry of list) {
-    const undelivered: DailyRewardItem[] = [];
-    for (const item of entry.items) {
-      if (await give(server, player, item)) delivered.push(item);
-      else undelivered.push(item);
+  try {
+    for (const w of work) {
+      while (w.todo.length > 0) {
+        const item = w.todo[0]!;
+        if (await give(server, player, item)) delivered.push(item);
+        else w.failed.push(item);
+        w.todo.shift();
+      }
     }
-    if (undelivered.length > 0) {
-      remaining.push({ ...entry, items: undelivered });
+  } finally {
+    // If give throws, the item in flight and everything not yet attempted
+    // stay in `todo` and are re-queued with the failed ones.
+    const remaining = work
+      .map((w) => ({ ...w.entry, items: [...w.failed, ...w.todo] }))
+      .filter((e) => e.items.length > 0);
+    if (remaining.length > 0) {
+      await updatePendingRewards((store) => {
+        const queue = getServerPending(store, server.id);
+        // Ahead of anything queued while we were giving: these are older.
+        queue[key] = [...remaining, ...(queue[key] ?? [])];
+      });
     }
-  }
-
-  if (remaining.length > 0) {
-    await updatePendingRewards((store) => {
-      const queue = getServerPending(store, server.id);
-      // Ahead of anything queued while we were giving: these are older.
-      queue[key] = [...remaining, ...(queue[key] ?? [])];
-    });
   }
 
   if (delivered.length > 0) {
