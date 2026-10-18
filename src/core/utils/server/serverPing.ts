@@ -273,12 +273,12 @@ export function pingMinecraftServer(
     });
 
     socket.once("timeout", () => {
-      // Connected but silent is a different fact from never connecting: one
-      // says a process is listening, the other says nothing is.
+      // A pre-connect timeout (filtered port, slow host) is not evidence that
+      // nothing is listening, so it must not read as a refusal.
       finish(
         connected
           ? { kind: "connected" }
-          : { kind: "refused", reason: "connect timed out" },
+          : { kind: "error", reason: "connect timed out" },
       );
     });
 
@@ -298,11 +298,12 @@ export function pingMinecraftServer(
 
     socket.once("close", () => {
       // The server hung up before answering — treat as connected-but-silent
-      // when the TCP handshake had completed, otherwise as a refusal.
+      // when the TCP handshake had completed, otherwise as an error (real
+      // refusals arrive through the error event with an errno code).
       finish(
         connected
           ? { kind: "connected" }
-          : { kind: "refused", reason: "closed before reply" },
+          : { kind: "error", reason: "closed before connect" },
       );
     });
 

@@ -10,7 +10,7 @@
  * servers misbehave — accepting and never answering, hanging up mid-reply,
  * refusing outright.
  */
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import net from "net";
 import type { AddressInfo } from "net";
 
@@ -240,6 +240,31 @@ describe("pingMinecraftServer", () => {
 
     const outcome = await pingMinecraftServer("127.0.0.1", port, 2_000);
     expect(outcome.kind).toBe("refused");
+  });
+
+  it("says 'error', not 'refused', when the connect times out", async () => {
+    const spy = vi.spyOn(net.Socket.prototype, "connect").mockImplementation(function (this: net.Socket) {
+      return this;
+    });
+    try {
+      const outcome = await pingMinecraftServer("127.0.0.1", 9, 50);
+      expect(outcome.kind).toBe("error");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("says 'error', not 'refused', when the socket closes before connecting", async () => {
+    const spy = vi.spyOn(net.Socket.prototype, "connect").mockImplementation(function (this: net.Socket) {
+      queueMicrotask(() => this.destroy());
+      return this;
+    });
+    try {
+      const outcome = await pingMinecraftServer("127.0.0.1", 9, 2_000);
+      expect(outcome.kind).toBe("error");
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("says 'error' for a peer that is not speaking the protocol", async () => {
