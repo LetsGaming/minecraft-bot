@@ -87,11 +87,24 @@ function retireLegacy(file: string): void {
   }
 }
 
-function tableEmpty(db: SqlDatabase, table: string): boolean {
-  const row = db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as {
-    n: number;
-  };
-  return row.n === 0;
+/**
+ * The tables a legacy file can import into. The name is interpolated into SQL,
+ * so it is a closed set, not a string.
+ */
+type ImportTable =
+  | "admin_audit"
+  | "whitelist_audit"
+  | "linked_accounts"
+  | "link_codes"
+  | "uptime_checks"
+  | "player_count_hours";
+
+function tableEmpty(db: SqlDatabase, table: ImportTable): boolean {
+  const count = mapRow(
+    db.prepare(`SELECT COUNT(*) AS n FROM ${table}`),
+    (r) => col.int(r, "n"),
+  );
+  return count === 0;
 }
 
 /**
@@ -128,7 +141,7 @@ interface AdminAuditFile {
 function importOnce(
   db: SqlDatabase,
   file: string,
-  table: string,
+  table: ImportTable,
   run: () => void,
 ): void {
   let imported = false;
