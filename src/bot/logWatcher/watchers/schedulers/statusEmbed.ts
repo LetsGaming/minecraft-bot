@@ -10,6 +10,7 @@ import { getAllInstances } from "@mcbot/core/utils/server/server.js";
 import { getAllowedServerIds } from "../../../utils/guild/guildRouter.js";
 import { kvGet, kvSet } from "@mcbot/core/db/kv.js";
 import { recordPlayerCountSample } from "@mcbot/core/utils/stores/playerCountHistory.js";
+import { parsePlayerCounts } from "@mcbot/core/utils/minecraft/playerCounts.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { createEmbed } from "../../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../../utils/embeds/embedColors.js";
@@ -268,12 +269,11 @@ async function buildServerField(
 
   try {
     const list = await server.getList();
-    const online = parseInt(String(list.playerCount), 10);
-    const max = parseInt(String(list.maxPlayers), 10);
+    const { online, max } = parsePlayerCounts(list);
     // NaN means the wrapper answered in a shape we do not understand —
     // keep the health figure rather than overwriting it with zero.
-    if (Number.isFinite(online)) counts.online = online;
-    if (Number.isFinite(max)) counts.max = max;
+    if (online !== null) counts.online = online;
+    if (max !== null) counts.max = max;
     const players: string[] = list.players ?? [];
 
     statusLine =

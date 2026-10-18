@@ -6,8 +6,10 @@ import {
   logContractReport,
   parseManifest,
   type WrapperManifest,
+  type WrapperFeatureName,
 } from "../wrapperContract.js";
 import { log } from "../../logger.js";
+import { errMsg } from "../../error.js";
 import { cached } from "../../cache.js";
 import type { ServerConfig } from "../../../types/index.js";
 import { wrapperUrl } from "./apiClient.js";
@@ -63,7 +65,7 @@ const MANIFEST_TTL_MS = 5 * 60_000;
  */
 export async function wrapperFeatureVersion(
   cfg: ServerConfig,
-  feature: string,
+  feature: WrapperFeatureName,
 ): Promise<number> {
   try {
     const manifest = await cached(`manifest:${wrapperKey(cfg)}`, MANIFEST_TTL_MS, async () => {
@@ -72,7 +74,8 @@ export async function wrapperFeatureVersion(
       return m;
     });
     return manifest.features[feature]?.version ?? 0;
-  } catch {
+  } catch (err) {
+    log.debug(cfg.id, `wrapper manifest unavailable, treating "${feature}" as unsupported: ${errMsg(err)}`);
     return 0;
   }
 }

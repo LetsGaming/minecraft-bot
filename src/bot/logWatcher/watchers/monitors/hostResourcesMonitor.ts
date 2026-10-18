@@ -36,7 +36,7 @@ import { errMsg } from "@mcbot/core/utils/error.js";
 
 const CHECK_INTERVAL_MS = 5 * 60 * 1000; // disks fill slowly
 const HYSTERESIS_PERCENT = 5;
-export const DEFAULT_DISK_WARN_PERCENT = DEFAULT_DISK_ALERT_PERCENT;
+export const DEFAULT_DISK_WARN_PERCENT: number = DEFAULT_DISK_ALERT_PERCENT;
 
 /** serverId:path → currently in alert state */
 const alertState = new Map<string, boolean>();

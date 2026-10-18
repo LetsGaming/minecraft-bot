@@ -261,11 +261,7 @@
           "type": "string"
         },
         "language": {
-          "type": "string",
-          "enum": [
-            "en",
-            "de"
-          ],
+          "$ref": "#/definitions/Language",
           "description": "Locale for user-visible bot strings in THIS guild (\"en\" | \"de\"). Falls back to the global `language` when unset. Applies to slash command replies and per-guild notifications; in-game (!command) strings and DMs follow the global language, since a server instance can serve several guilds."
         },
         "timezone": {
@@ -343,6 +339,13 @@
         }
       },
       "additionalProperties": false
+    },
+    "Language": {
+      "type": "string",
+      "enum": [
+        "en",
+        "de"
+      ]
     },
     "GuildNotificationConfig": {
       "type": "object",

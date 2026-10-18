@@ -43,7 +43,7 @@ export const MAX_DURATION_MS = 10 * MS.year;
 
 // Longer suffixes first so "mo" wins over "m".
 const SEGMENT = new RegExp(
-  `(\d+(?:\.\d+)?)(${[...UNITS]
+  String.raw`(\d+(?:\.\d+)?)(${[...UNITS]
     .sort((a, b) => b.suffix.length - a.suffix.length)
     .map((u) => u.suffix)
     .join("|")})`,

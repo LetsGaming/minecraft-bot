@@ -56,7 +56,7 @@ export interface ExpectedFeature {
  * it — `degrades` says what the operator loses, which is the thing worth
  * printing.
  */
-export const EXPECTED_WRAPPER_FEATURES: Record<string, ExpectedFeature> = {
+export const EXPECTED_WRAPPER_FEATURES = {
   "server-state": {
     version: 1,
     degrades: "status, /players, /tps — the server appears permanently offline",
@@ -192,7 +192,10 @@ export const EXPECTED_WRAPPER_FEATURES: Record<string, ExpectedFeature> = {
     degrades: "/server start, stop, restart, and backup",
   },
   "logs-tail": { version: 1, degrades: "/logs and the console relay" },
-};
+} as const satisfies Record<string, ExpectedFeature>;
+
+/** The names of the features the bot expects from a wrapper. */
+export type WrapperFeatureName = keyof typeof EXPECTED_WRAPPER_FEATURES;
 
 export interface WrapperManifest {
   wrapper: string;
@@ -333,7 +336,7 @@ export function compareContract(manifest: WrapperManifest): ContractReport {
   }
 
   for (const [name, spec] of Object.entries(manifest.features)) {
-    if (!EXPECTED_WRAPPER_FEATURES[name]) {
+    if (!(name in EXPECTED_WRAPPER_FEATURES)) {
       report.unused.push({ name, summary: spec.summary });
     }
   }
