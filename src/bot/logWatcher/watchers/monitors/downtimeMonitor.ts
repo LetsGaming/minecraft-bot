@@ -13,8 +13,7 @@ import { alertMention, type AlertLevel } from "../../../utils/embeds/alertUtils.
 import { fireWatches } from "../watchFirer.js";
 import { t, runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
 import {
-  loadSessionStore,
-  saveSessionStore,
+  updateSessionStore,
   closeAllOpenSessions,
 } from "@mcbot/core/utils/stores/sessionStore.js";
 import {
@@ -339,22 +338,22 @@ async function checkServer(
       // Waiting for the alert threshold keeps a single RCON blip from
       // wrongly ending everyone's sessions. Fire-and-forget: session
       // bookkeeping must never delay or break the alert itself.
-      void (async () => {
-        const sessions = await loadSessionStore();
-        const closed = closeAllOpenSessions(sessions, server.id);
+      try {
+        const closed = updateSessionStore((sessions) =>
+          closeAllOpenSessions(sessions, server.id),
+        );
         if (closed > 0) {
-          await saveSessionStore(sessions);
           log.info(
             "sessions",
             `Closed ${closed} open session(s) on ${server.id} (crash detected)`,
           );
         }
-      })().catch((err: unknown) => {
+      } catch (err) {
         log.warn(
           "sessions",
           `Failed to close sessions for ${server.id}: ${errMsg(err)}`,
         );
-      });
+      }
 
       const before: AlertLevel = state.crashLoopAlerted ? "critical" : "ok";
       const { lastUpAt, lastKnownPlayers, stopRequestedAt } = state;

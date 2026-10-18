@@ -17,8 +17,11 @@ import { createSuccessEmbed, createEmbed } from "../../utils/embeds/embedUtils.j
 import { EmbedColor } from "../../utils/embeds/embedColors.js";
 import {
   loadWatchStore,
-  saveWatchStore,
+  updateWatchStore,
+  addWatch,
   newWatchId,
+  type Watch,
+  type AddWatchResult,
   MAX_WATCHES_PER_USER,
 } from "@mcbot/core/utils/stores/watchStore.js";
 import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
@@ -71,6 +74,14 @@ export const data = new SlashCommandBuilder()
       ),
   );
 
+function subscribe(watch: Watch): void {
+  const result: AddWatchResult = addWatch(watch);
+  if (result.status === "limit") {
+    throw new Error(t("watch.limit", { max: MAX_WATCHES_PER_USER }));
+  }
+  if (result.status === "duplicate") throw new Error(t("watch.duplicate"));
+}
+
 export const execute = withErrorHandling(
   async (interaction) => {
     const sub = interaction.options.getSubcommand();
@@ -98,10 +109,15 @@ export const execute = withErrorHandling(
 
     if (sub === "remove") {
       const id = interaction.options.getString("id", true).trim();
-      const watch = mine.find((w) => w.id === id);
-      if (!watch) throw new Error(t("watch.notFound", { id }));
-      store.watches = store.watches.filter((w) => w !== watch);
-      await saveWatchStore(store);
+      const removed = updateWatchStore((current) => {
+        const index = current.watches.findIndex(
+          (w) => w.id === id && w.userId === interaction.user.id,
+        );
+        if (index < 0) return false;
+        current.watches.splice(index, 1);
+        return true;
+      });
+      if (!removed) throw new Error(t("watch.notFound", { id }));
       await interaction.editReply({
         embeds: [createSuccessEmbed(t("watch.removed", { id }), { title: t("watch.removedTitle") })],
       });
@@ -119,26 +135,14 @@ export const execute = withErrorHandling(
       if (!isValidMcName(player)) {
         throw new Error(t("common.invalidUsername", { username: player }));
       }
-      const lower = player.toLowerCase();
-      if (
-        mine.some(
-          (w) =>
-            w.kind === "player" &&
-            w.serverId === server.id &&
-            w.player === lower,
-        )
-      ) {
-        throw new Error(t("watch.duplicate"));
-      }
-      store.watches.push({
+      subscribe({
         id: newWatchId(),
         userId: interaction.user.id,
         kind: "player",
         serverId: server.id,
-        player: lower,
+        player: player.toLowerCase(),
         createdAt: Date.now(),
       });
-      await saveWatchStore(store);
       await interaction.editReply({
         embeds: [
           createSuccessEmbed(t("watch.playerArmed", { player, server: server.id }), {
@@ -150,17 +154,13 @@ export const execute = withErrorHandling(
     }
 
     // server
-    if (mine.some((w) => w.kind === "server" && w.serverId === server.id)) {
-      throw new Error(t("watch.duplicate"));
-    }
-    store.watches.push({
+    subscribe({
       id: newWatchId(),
       userId: interaction.user.id,
       kind: "server",
       serverId: server.id,
       createdAt: Date.now(),
     });
-    await saveWatchStore(store);
     await interaction.editReply({
       embeds: [
         createSuccessEmbed(t("watch.serverArmed", { server: server.id }), {
