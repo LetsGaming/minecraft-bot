@@ -1,6 +1,6 @@
 /**
  * Discord OAuth2 login flow + the session probe — the only routes that
- * live OUTSIDE the requireAdminSession gate (they are how you get a
+ * live OUTSIDE the capability and session gates (they are how you get a
  * session in the first place). The crypto and cookie mechanics stay in
  * ../auth.ts; this module is just the route wiring. Split out of
  * server.ts in the QUAL-01 refactor (2026-07 audit).
@@ -21,13 +21,12 @@ import {
   setOAuthStateCookie,
   clearOAuthStateCookie,
   isSysadmin,
-  sessionFromRequest,
+  currentSession,
   setSessionCookie,
   clearSessionCookie,
 } from "../auth/auth.js";
 import { capabilityMap } from "../auth/capabilities.js";
 import { listBotGuilds } from "../auth/discordRest.js";
-import { Unauthorized } from "../errors.js";
 import { OAuthCallbackQuery } from "./schemas.js";
 import { DISCORD_OAUTH_AUTHORIZE_URL } from "@mcbot/schema";
 
@@ -96,8 +95,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
   });
 
   api.get("/api/me", async (req) => {
-    const session = sessionFromRequest(req);
-    if (!session) throw new Unauthorized("Not signed in.");
+    const session = currentSession(req);
     // The frontend uses `sysadmin` to decide which tabs to show, and
     // `guildCount` to tell a guild manager whether they have anything to
     // configure at all.
@@ -122,8 +120,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
   // are never hardcoded in the frontend. Session-gated like the rest of
   // /api — you must be a dashboard admin to see it.
   api.get("/api/invite", async (req) => {
-    const session = sessionFromRequest(req);
-    if (!session) throw new Unauthorized("Not signed in.");
+    currentSession(req);
     const cfg = loadConfig();
     const clientId = cfg.webui?.clientId ?? cfg.clientId;
     const params = new URLSearchParams({

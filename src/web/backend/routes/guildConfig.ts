@@ -20,7 +20,7 @@ import {
 import { guildConfigHash } from "@mcbot/core/utils/config/guildConfigHash.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { log } from "@mcbot/core/utils/logger.js";
-import { sessionFromRequest, isSysadmin, canManageGuild, guildScopeFresh } from "../auth/auth.js";
+import { currentSession, isSysadmin, canManageGuild, guildScopeFresh } from "../auth/auth.js";
 import { listBotGuilds, discordHttpError } from "../auth/discordRest.js";
 import { readConfigSchema } from "../config/configSchema.js";
 import { HttpError, Forbidden, Conflict, ValidationFailed, ServiceUnavailable } from "../errors.js";
@@ -127,7 +127,7 @@ export function registerGuildConfigRoutes(app: FastifyInstance): void {
    * every guild the bot is in; managers see only the ones they manage.
    */
   api.get("/api/guilds", async (req) => {
-    const session = sessionFromRequest(req)!;
+    const session = currentSession(req);
     let botGuildIds: string[];
     try {
       botGuildIds = (await listBotGuilds()).map((g) => g.id);
@@ -172,7 +172,7 @@ export function registerGuildConfigRoutes(app: FastifyInstance): void {
     "/api/guilds/:id/config",
     { schema: { params: IdParams } },
     async (req) => {
-      const session = sessionFromRequest(req)!;
+      const session = currentSession(req);
       if (!canManageGuild(session, req.params.id)) {
         throw new Forbidden("You don't manage that guild.");
       }
@@ -187,7 +187,7 @@ export function registerGuildConfigRoutes(app: FastifyInstance): void {
     "/api/guilds/:id/config",
     { schema: { params: IdParams, body: GuildConfigWriteBody, response: { 200: MutationResult } } },
     async (req) => {
-      const session = sessionFromRequest(req)!;
+      const session = currentSession(req);
       const guildId = req.params.id;
       if (!canManageGuild(session, guildId)) {
         throw new Forbidden("You don't manage that guild.");

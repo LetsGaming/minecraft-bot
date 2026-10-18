@@ -31,6 +31,8 @@ import {
 } from "@mcbot/schema";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { isSnowflake } from "@mcbot/schema/discord.js";
+import { MS } from "@mcbot/schema/time.js";
+import { Unauthorized } from "../errors.js";
 
 // Dev-only auth bypass. MCBOT_DEV_NO_AUTH=1 skips Discord OAuth entirely and
 // treats every request as this fixed sysadmin, for local/agent dev sessions
@@ -48,14 +50,15 @@ const DEV_SESSION: Session = {
 
 export const SESSION_COOKIE = "mcbot_session";
 export const OAUTH_STATE_COOKIE = "mcbot_oauth_state";
-const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const STATE_TTL_MS = 10 * 60 * 1000;
+const SESSION_TTL_MS = MS.week;
+const STATE_TTL_MS = 10 * MS.minute;
+const DISCORD_FETCH_TIMEOUT_MS = 10 * MS.second;
 // Guild-manager permissions are captured at login and can't be re-derived
 // mid-session (the OAuth token isn't stored). Trust that captured scope for
 // writes only this long, so a demoted manager loses config-write access
 // within the window instead of for the full session TTL (SEC-03). Sysadmin
 // status is re-derived per request from config, so sysadmins are unaffected.
-const GUILD_SCOPE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
+const GUILD_SCOPE_TTL_MS = 2 * MS.hour;
 
 export interface Session {
   uid: string;
@@ -327,7 +330,7 @@ function cookieAttributes(maxAgeSeconds: number): string {
 export function setOAuthStateCookie(reply: FastifyReply, nonce: string): void {
   reply.header(
     "set-cookie",
-    `${OAUTH_STATE_COOKIE}=${nonce}; ${cookieAttributes(Math.floor(STATE_TTL_MS / 1000))}`,
+    `${OAUTH_STATE_COOKIE}=${nonce}; ${cookieAttributes(Math.floor(STATE_TTL_MS / MS.second))}`,
   );
 }
 
@@ -353,7 +356,7 @@ export async function exchangeCode(
       code,
       redirect_uri: redirectUri(),
     }),
-    signal: AbortSignal.timeout(10_000),
+    signal: AbortSignal.timeout(DISCORD_FETCH_TIMEOUT_MS),
   });
   if (!tokenRes.ok) return null;
   const tokenBody: unknown = await tokenRes.json();
@@ -365,7 +368,7 @@ export async function exchangeCode(
 
   const meRes = await fetch(DISCORD_USER_URL, {
     headers: { authorization: `Bearer ${accessToken}` },
-    signal: AbortSignal.timeout(10_000),
+    signal: AbortSignal.timeout(DISCORD_FETCH_TIMEOUT_MS),
   });
   if (!meRes.ok) return null;
   const meBody: unknown = await meRes.json();
@@ -387,7 +390,7 @@ export async function exchangeCode(
   try {
     const gRes = await fetch(DISCORD_USER_GUILDS_URL, {
       headers: { authorization: `Bearer ${accessToken}` },
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(DISCORD_FETCH_TIMEOUT_MS),
     });
     if (gRes.ok) {
       const list = parseDiscordGuilds(await gRes.json());
@@ -443,7 +446,7 @@ export function setSessionCookie(reply: FastifyReply, user: {
   reply.header(
     "set-cookie",
     `${SESSION_COOKIE}=${encodeSigned(session)}; Path=/; HttpOnly; SameSite=Lax` +
-      `; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}${secure}`,
+      `; Max-Age=${Math.floor(SESSION_TTL_MS / MS.second)}${secure}`,
   );
 }
 
@@ -454,18 +457,18 @@ export function clearSessionCookie(reply: FastifyReply): void {
   );
 }
 
-/** onRequest gate: every /api route requires a valid (any) logged-in session. */
-export async function requireSession(
-  req: FastifyRequest,
-  reply: FastifyReply,
-): Promise<void> {
+export const NOT_SIGNED_IN = "You're not signed in. Log in with Discord to continue.";
+
+/** The request's session, or a 401 for a handler that must have one. */
+export function currentSession(req: FastifyRequest): Session {
   const session = sessionFromRequest(req);
-  if (!session) {
-    await reply.code(401).send({
-      error: "You're not signed in. Log in with Discord to continue.",
-    });
-    return;
-  }
+  if (!session) throw new Unauthorized(NOT_SIGNED_IN);
+  return session;
+}
+
+/** onRequest gate: every /api route requires a valid (any) logged-in session. */
+export async function requireSession(req: FastifyRequest): Promise<void> {
+  currentSession(req);
 }
 
 // requireSysadmin lived here until the host API moved to per-route

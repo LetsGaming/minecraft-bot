@@ -39,14 +39,15 @@ import { loadConfig } from "@mcbot/core/config.js";
 import {
   ALL_SERVERS,
   GRANTABLE_CAPABILITIES,
+  hasCapability,
   isCapability,
   resolveCapabilities,
   type Capability,
   type CapabilityGrants,
   type GrantableCapability,
 } from "@mcbot/schema/capabilities.js";
-import { Unauthorized, Forbidden } from "../errors.js";
-import { isSysadmin, sessionFromRequest, type Session } from "./auth.js";
+import { Forbidden } from "../errors.js";
+import { currentSession, isSysadmin, type Session } from "./auth.js";
 
 /**
  * How a route's capability is checked.
@@ -112,13 +113,10 @@ export function sessionHolds(
   capability: Capability,
   serverId?: string,
 ): boolean {
-  if (isSysadmin(session)) return true;
   // A non-grantable capability (bot:config) is reachable only by the
-  // short-circuit above; everyone else is denied regardless of the file.
-  if (!(ALL_GRANTABLE as ReadonlySet<string>).has(capability)) return false;
-  return resolveCapabilities(grants(), session.uid, serverId).has(
-    capability as GrantableCapability,
-  );
+  // sysadmin short-circuit; hasCapability denies it for everyone else.
+  if (isSysadmin(session)) return true;
+  return hasCapability(grants(), session.uid, capability, serverId);
 }
 
 /**
@@ -164,12 +162,7 @@ function ruleFromRequest(req: FastifyRequest): CapabilityRule | null {
  * (backend-apis.md: one error handler over typed failures).
  */
 export async function capabilityGate(req: FastifyRequest): Promise<void> {
-  const session = sessionFromRequest(req);
-  if (!session) {
-    throw new Unauthorized(
-      "You're not signed in. Log in with Discord to continue.",
-    );
-  }
+  const session = currentSession(req);
 
   const rule = ruleFromRequest(req);
   if (!rule) {

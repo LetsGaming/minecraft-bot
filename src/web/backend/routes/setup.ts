@@ -23,14 +23,14 @@ import {
   listGuildRoles,
   discordHttpError,
 } from "../auth/discordRest.js";
-import { sessionFromRequest, isSysadmin, canManageGuild } from "../auth/auth.js";
+import { currentSession, isSysadmin, canManageGuild, type Session } from "../auth/auth.js";
 import { visibleServerIds } from "../auth/capabilities.js";
 import { Forbidden } from "../errors.js";
 import { IdParams } from "./schemas.js";
 
 /** The 403 a guild-scoped route throws when the caller doesn't manage it. */
-function assertManages(session: ReturnType<typeof sessionFromRequest>, guildId: string): void {
-  if (!canManageGuild(session!, guildId)) {
+function assertManages(session: Session, guildId: string): void {
+  if (!canManageGuild(session, guildId)) {
     throw new Forbidden("You don't manage that guild.");
   }
 }
@@ -42,7 +42,7 @@ export function registerSetupRoutes(app: FastifyInstance): void {
   // is in; everyone else only the guilds they manage. This is what feeds
   // guild names/icons and the setup wizard's picker.
   api.get("/api/setup/guilds", async (req) => {
-    const session = sessionFromRequest(req)!;
+    const session = currentSession(req);
     try {
       const all = await listBotGuilds();
       const guilds = isSysadmin(session)
@@ -59,7 +59,7 @@ export function registerSetupRoutes(app: FastifyInstance): void {
     "/api/setup/guilds/:id/channels",
     { schema: { params: IdParams } },
     async (req) => {
-      assertManages(sessionFromRequest(req), req.params.id);
+      assertManages(currentSession(req), req.params.id);
       try {
         return { channels: await listGuildChannels(req.params.id) };
       } catch (err) {
@@ -73,7 +73,7 @@ export function registerSetupRoutes(app: FastifyInstance): void {
     "/api/setup/guilds/:id/roles",
     { schema: { params: IdParams } },
     async (req) => {
-      assertManages(sessionFromRequest(req), req.params.id);
+      assertManages(currentSession(req), req.params.id);
       try {
         return { roles: await listGuildRoles(req.params.id) };
       } catch (err) {
@@ -92,7 +92,7 @@ export function registerSetupRoutes(app: FastifyInstance): void {
   // capabilities still gets an empty list, which is the old behaviour for
   // everyone it was actually protecting against.
   api.get("/api/setup/servers", async (req) => {
-    const session = sessionFromRequest(req)!;
+    const session = currentSession(req);
     const cfg = readRawConfig();
     const servers = visibleServerIds(session, Object.keys(cfg.servers ?? {}));
     // Still a 403 for a caller with no host access at all, rather than an
