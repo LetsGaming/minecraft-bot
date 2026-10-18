@@ -16,7 +16,7 @@
  * re-ban of the same name on the same server should replace the pending
  * release rather than stack a second one.
  */
-import { kvGet, kvUpdate } from "../../db/kv.js";
+import { versionedStore } from "./versionedStore.js";
 
 export interface TempBan {
   /** Name as typed, for display and the /pardon we will issue. */
@@ -37,29 +37,18 @@ export interface TempBanStore {
   bans: Record<string, TempBan>;
 }
 
-const KEY = "tempBans";
-
 export function tempBanKey(serverId: string, player: string): string {
   return `${serverId}:${player.toLowerCase()}`;
 }
 
-function emptyStore(): TempBanStore {
-  return { version: 1, bans: {} };
-}
-
-function isV1Store(raw: unknown): raw is TempBanStore {
-  return (
-    typeof raw === "object" &&
-    raw !== null &&
-    (raw as { version?: unknown }).version === 1 &&
-    typeof (raw as { bans?: unknown }).bans === "object" &&
-    (raw as { bans?: unknown }).bans !== null
-  );
-}
+const banDoc = versionedStore<TempBanStore>(
+  "tempBans",
+  { version: 1, container: "bans" },
+  () => ({ version: 1, bans: {} }),
+);
 
 export async function loadTempBanStore(): Promise<TempBanStore> {
-  const raw = kvGet<unknown>(KEY);
-  return isV1Store(raw) ? raw : emptyStore();
+  return banDoc.load();
 }
 
 /**
@@ -67,10 +56,8 @@ export async function loadTempBanStore(): Promise<TempBanStore> {
  * player+server. Atomic, so a re-ban racing the expiry sweep can't lose.
  */
 export async function putTempBan(ban: TempBan): Promise<void> {
-  kvUpdate<TempBanStore>(KEY, (current) => {
-    const store = isV1Store(current) ? current : emptyStore();
+  banDoc.update((store) => {
     store.bans[tempBanKey(ban.serverId, ban.player)] = ban;
-    return store;
   });
 }
 
@@ -79,15 +66,12 @@ export async function removeTempBan(
   serverId: string,
   player: string,
 ): Promise<boolean> {
-  let existed = false;
-  kvUpdate<TempBanStore>(KEY, (current) => {
-    const store = isV1Store(current) ? current : emptyStore();
+  return banDoc.update((store) => {
     const key = tempBanKey(serverId, player);
-    existed = key in store.bans;
+    const existed = key in store.bans;
     delete store.bans[key];
-    return store;
+    return existed;
   });
-  return existed;
 }
 
 export function listTempBans(store: TempBanStore): TempBan[] {

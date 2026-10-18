@@ -7,8 +7,7 @@ import { broadcastNotification } from "../notifyGuilds.js";
 import type { GuildConfigSource } from "../../../utils/guild/guildConfigs.js";
 import { serverEventRegex, registerServerEvent } from "./serverLine.js";
 import {
-  loadSessionStore,
-  saveSessionStore,
+  updateSessionStore,
   closeAllOpenSessions,
 } from "@mcbot/core/utils/stores/sessionStore.js";
 import { log } from "@mcbot/core/utils/logger.js";
@@ -34,10 +33,10 @@ const startTimes = new Map<string, Date>();
  */
 async function closeSessions(serverId: string): Promise<void> {
   try {
-    const store = await loadSessionStore();
-    const closed = closeAllOpenSessions(store, serverId);
+    const closed = updateSessionStore((store) =>
+      closeAllOpenSessions(store, serverId),
+    );
     if (closed > 0) {
-      await saveSessionStore(store);
       log.info(
         "sessions",
         `Closed ${closed} open session(s) on ${serverId} (server stop)`,

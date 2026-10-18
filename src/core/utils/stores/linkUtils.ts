@@ -4,10 +4,9 @@
  *
  * Two API layers:
  *
- *   Legacy map API (loadLinkedAccounts/saveLinkedAccounts/…) — kept so the
+ *   Map API (loadLinkedAccounts/loadLinkCodes): read views kept so the
  *   many readers (profile, whois, deaths, defineCommand, streak
- *   leaderboard, …) stay untouched. save* replaces the whole table in one
- *   transaction, matching the old file semantics.
+ *   leaderboard, …) stay untouched.
  *
  *   Atomic operations (issueLinkCode/confirmLinkCode/unlinkAccount) — what
  *   the three writers now use. Each wraps its whole read-modify-write in
@@ -16,12 +15,13 @@
  *   clobber each other; documented as F3 in the 4.0 rework).
  */
 import { getDb, withTransaction } from "../../db/index.js";
-import { mapRows, col } from "../../db/rows.js";
+import { mapRow, mapRows, col } from "../../db/rows.js";
+import { MS } from "@mcbot/schema/time.js";
 import type { LinkCodesMap, LinkedAccountsMap } from "../../types/index.js";
 import { errMsg } from "../error.js";
 import { log } from "../logger.js";
 
-export const LINK_CODE_TTL_MS = 5 * 60 * 1000;
+export const LINK_CODE_TTL_MS = 5 * MS.minute;
 
 /**
  * The link map, or an empty one if the read fails.
@@ -63,7 +63,7 @@ export function findDiscordIdByMcName(
   );
 }
 
-// ── Legacy map API (readers + whole-map writers) ──────────────────────────
+// ── Map API (readers) ─────────────────────────────────────────────────────
 
 export async function loadLinkedAccounts(): Promise<LinkedAccountsMap> {
   const rows = mapRows(
@@ -76,21 +76,6 @@ export async function loadLinkedAccounts(): Promise<LinkedAccountsMap> {
   const map: LinkedAccountsMap = {};
   for (const r of rows) map[r.discord_id] = r.mc_name;
   return map;
-}
-
-export async function saveLinkedAccounts(
-  map: LinkedAccountsMap,
-): Promise<void> {
-  withTransaction(() => {
-    const db = getDb();
-    db.exec("DELETE FROM linked_accounts");
-    const ins = db.prepare(
-      "INSERT INTO linked_accounts (discord_id, mc_name) VALUES (?, ?)",
-    );
-    for (const [discordId, mcName] of Object.entries(map)) {
-      ins.run(discordId, mcName);
-    }
-  });
 }
 
 export async function loadLinkCodes(): Promise<LinkCodesMap> {
@@ -135,10 +120,11 @@ export async function isLinked(userId: string): Promise<boolean> {
 }
 
 export async function getLinkedAccount(userId: string): Promise<string | null> {
-  const row = getDb()
-    .prepare("SELECT mc_name FROM linked_accounts WHERE discord_id = ?")
-    .get(userId) as { mc_name: string } | undefined;
-  return row?.mc_name ?? null;
+  return mapRow(
+    getDb().prepare("SELECT mc_name FROM linked_accounts WHERE discord_id = ?"),
+    (r) => col.text(r, "mc_name"),
+    userId,
+  );
 }
 
 // ── Atomic link operations ────────────────────────────────────────────────
@@ -218,13 +204,17 @@ export async function confirmLinkCode(
 ): Promise<ConfirmLinkResult> {
   return withTransaction(() => {
     const db = getDb();
-    const entry = db
-      .prepare(
+    const entry = mapRow(
+      db.prepare(
         "SELECT discord_id, expires, confirmed FROM link_codes WHERE code = ?",
-      )
-      .get(code) as
-      | { discord_id: string; expires: number; confirmed: number }
-      | undefined;
+      ),
+      (r) => ({
+        discord_id: col.text(r, "discord_id"),
+        expires: col.int(r, "expires"),
+        confirmed: col.int(r, "confirmed"),
+      }),
+      code,
+    );
 
     if (!entry) return { status: "unknown-code" } as const;
 
@@ -235,20 +225,25 @@ export async function confirmLinkCode(
       return { status: "expired", discordId: entry.discord_id } as const;
     }
 
-    const owner = db
-      .prepare(
+    const owner = mapRow(
+      db.prepare(
         `SELECT discord_id FROM linked_accounts
          WHERE mc_name = ? COLLATE NOCASE AND discord_id != ?`,
-      )
-      .get(username, entry.discord_id) as { discord_id: string } | undefined;
+      ),
+      (r) => col.text(r, "discord_id"),
+      username,
+      entry.discord_id,
+    );
     if (owner) {
       return { status: "name-taken", discordId: entry.discord_id } as const;
     }
 
-    const current = db
-      .prepare("SELECT mc_name FROM linked_accounts WHERE discord_id = ?")
-      .get(entry.discord_id) as { mc_name: string } | undefined;
-    if (current && current.mc_name.toLowerCase() !== username.toLowerCase()) {
+    const current = mapRow(
+      db.prepare("SELECT mc_name FROM linked_accounts WHERE discord_id = ?"),
+      (r) => col.text(r, "mc_name"),
+      entry.discord_id,
+    );
+    if (current !== null && current.toLowerCase() !== username.toLowerCase()) {
       // Never rebind an existing link: /unlink first.
       return { status: "already-used" } as const;
     }

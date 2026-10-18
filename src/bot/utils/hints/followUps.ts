@@ -48,7 +48,7 @@ import {
 } from "@mcbot/core/utils/stores/dailyStore.js";
 import {
   loadWatchStore,
-  saveWatchStore,
+  addWatch,
   newWatchId,
 } from "@mcbot/core/utils/stores/watchStore.js";
 import {
@@ -182,16 +182,15 @@ export const HINTS: FollowUpHint[] = [
         (w) => w.userId === userId && w.kind === "server" && w.serverId === serverId,
       );
     },
-    apply: async ({ userId, serverId }) => {
-      const store = await loadWatchStore();
-      store.watches.push({
+    apply: ({ userId, serverId }) => {
+      addWatch({
         id: newWatchId(),
         userId,
         kind: "server",
         serverId,
         createdAt: Date.now(),
       });
-      await saveWatchStore(store);
+      return Promise.resolve();
     },
   },
   {

@@ -6,15 +6,11 @@ import { broadcastNotification, PLAYER_NAME } from "../notifyGuilds.js";
 import type { GuildConfigSource } from "../../../utils/guild/guildConfigs.js";
 import { serverEventRegex, registerServerEvent } from "./serverLine.js";
 import {
-  loadChallengeStore,
-  saveChallengeStore,
+  updateChallengeStore,
   expireStale,
   getActiveChallenge,
 } from "@mcbot/core/utils/stores/challengeStore.js";
-import {
-  updatePendingRewards,
-  getServerPending,
-} from "@mcbot/core/utils/stores/dailyStore.js";
+import { enqueuePending } from "@mcbot/core/utils/stores/dailyStore.js";
 import { give } from "@mcbot/core/utils/minecraft/rewards.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { t } from "@mcbot/core/utils/i18n.js";
@@ -48,22 +44,21 @@ async function handleChallenge(
   player: string,
   advancement: string,
 ): Promise<void> {
-  const store = await loadChallengeStore();
-  const changed = expireStale(store, server.id);
-  const active = getActiveChallenge(store, server.id);
-
-  if (
-    !active ||
-    active.advancement.toLowerCase() !== advancement.toLowerCase()
-  ) {
-    if (changed) await saveChallengeStore(store);
-    return;
-  }
-
-  active.status = "won";
-  active.wonBy = player;
-  active.wonAt = Date.now();
-  await saveChallengeStore(store);
+  const active = updateChallengeStore((store) => {
+    expireStale(store, server.id);
+    const current = getActiveChallenge(store, server.id);
+    if (
+      !current ||
+      current.advancement.toLowerCase() !== advancement.toLowerCase()
+    ) {
+      return null;
+    }
+    current.status = "won";
+    current.wonBy = player;
+    current.wonAt = Date.now();
+    return current;
+  });
+  if (!active) return;
 
   await recordAdminAction({
     action: "challenge won",
@@ -103,13 +98,10 @@ async function handleChallenge(
     const item = { item: active.item, amount: active.amount ?? 1 };
     const ok = await give(server, player, item);
     if (!ok) {
-      await updatePendingRewards((pending) => {
-        const queue = getServerPending(pending, server.id);
-        (queue[player.toLowerCase()] ??= []).push({
-          discordId: "",
-          items: [item],
-          queuedAt: Date.now(),
-        });
+      await enqueuePending(server.id, player, {
+        discordId: "",
+        items: [item],
+        queuedAt: Date.now(),
       });
       log.warn(
         "challenges",

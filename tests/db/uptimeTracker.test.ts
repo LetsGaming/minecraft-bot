@@ -224,3 +224,103 @@ describe("getUptimeStats — rangeHours", () => {
     expect(stats.checks30d.total).toBe(1);
   });
 });
+
+// ── retention, windows and the current streak ──────────────────────────────
+
+describe("recordCheck retention", () => {
+  const DAY = 24 * 3_600_000;
+
+  function insertAt(sid: string, t: number, up: number): void {
+    getDb()
+      .prepare("INSERT INTO uptime_checks (server_id, t, up) VALUES (?, ?, ?)")
+      .run(sid, t, up);
+  }
+  const countFor = (sid: string): number =>
+    (
+      getDb()
+        .prepare("SELECT COUNT(*) AS n FROM uptime_checks WHERE server_id = ?")
+        .get(sid) as { n: number }
+    ).n;
+
+  it("deletes checks older than 30 days by timestamp and keeps the rest", async () => {
+    const sid = nextServerId();
+    const other = nextServerId();
+    insertAt(sid, Date.now() - 31 * DAY, 1);
+    insertAt(sid, Date.now() - 29 * DAY, 1);
+    insertAt(other, Date.now() - 40 * DAY, 1);
+    await recordCheck(sid, true);
+    expect(countFor(sid)).toBe(2);
+    expect(countFor(other)).toBe(1);
+  });
+
+  it("keeps every check inside the window regardless of how many there are", async () => {
+    const sid = nextServerId();
+    const base = Date.now() - 20 * DAY;
+    getDb().exec("BEGIN");
+    for (let n = 0; n < 5_000; n++) insertAt(sid, base + n * 1_000, 1);
+    getDb().exec("COMMIT");
+    await recordCheck(sid, true);
+    expect(countFor(sid)).toBe(5_001);
+  });
+});
+
+describe("getUptimeStats windows", () => {
+  const HOUR = 3_600_000;
+  function insert(sid: string, ageHours: number, up: number): void {
+    getDb()
+      .prepare("INSERT INTO uptime_checks (server_id, t, up) VALUES (?, ?, ?)")
+      .run(sid, Date.now() - ageHours * HOUR, up);
+  }
+
+  it("splits checks into the 24 h, 7 d and 30 d windows", async () => {
+    const sid = nextServerId();
+    insert(sid, 2, 1); // all windows
+    insert(sid, 48, 0); // 7 d and 30 d
+    insert(sid, 24 * 10, 1); // 30 d only
+    insert(sid, 24 * 40, 1); // outside every window
+    const stats = await getUptimeStats(sid);
+    expect(stats.checks24h).toEqual({ total: 1, online: 1 });
+    expect(stats.checks7d).toEqual({ total: 2, online: 1 });
+    expect(stats.checks30d).toEqual({ total: 3, online: 2 });
+    expect(stats.pct7d).toBe(50);
+  });
+
+  it("measures the current state from the start of the current run", async () => {
+    const sid = nextServerId();
+    insert(sid, 10, 1);
+    insert(sid, 8, 0);
+    insert(sid, 6, 0);
+    insert(sid, 1, 0);
+    const offline = await getUptimeStats(sid);
+    expect(offline.currentState).toBe("offline");
+    expect(offline.currentStateDuration).toBeGreaterThanOrEqual(8 * HOUR);
+    expect(offline.currentStateDuration).toBeLessThan(8 * HOUR + 60_000);
+
+    const sid2 = nextServerId();
+    insert(sid2, 10, 0);
+    insert(sid2, 5, 1);
+    insert(sid2, 3, 1);
+    const online = await getUptimeStats(sid2);
+    expect(online.currentState).toBe("online");
+    expect(online.currentStateDuration).toBeGreaterThanOrEqual(5 * HOUR);
+    expect(online.currentStateDuration).toBeLessThan(5 * HOUR + 60_000);
+  });
+
+  it("measures a history that never changed state from its first check", async () => {
+    const sid = nextServerId();
+    insert(sid, 30, 1);
+    insert(sid, 2, 1);
+    const stats = await getUptimeStats(sid);
+    expect(stats.currentStateDuration).toBeGreaterThanOrEqual(30 * HOUR);
+  });
+
+  it("draws the sparkline from the last 24 hours only", async () => {
+    const sid = nextServerId();
+    insert(sid, 100, 0);
+    insert(sid, 0.2, 1);
+    const stats = await getUptimeStats(sid);
+    expect(stats.sparkline24h).toHaveLength(24);
+    expect(stats.sparkline24h.endsWith("█")).toBe(true);
+    expect(stats.sparkline24h.slice(0, 23)).toBe("·".repeat(23));
+  });
+});

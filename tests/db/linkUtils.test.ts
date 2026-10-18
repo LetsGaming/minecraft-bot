@@ -13,12 +13,11 @@ vi.mock("../../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-import { closeDbForTesting } from "../../src/core/db/index.js";
+import { closeDbForTesting, getDb } from "../../src/core/db/index.js";
 import {
   isLinked,
   getLinkedAccount,
   loadLinkedAccounts,
-  saveLinkedAccounts,
   loadLinkCodes,
   saveLinkCodes,
   issueLinkCode,
@@ -31,19 +30,20 @@ beforeEach(() => {
   closeDbForTesting();
 });
 
-describe("legacy map API", () => {
+function seedLinks(map: Record<string, string>): void {
+  const insert = getDb().prepare(
+    "INSERT INTO linked_accounts (discord_id, mc_name) VALUES (?, ?)",
+  );
+  for (const [discordId, mcName] of Object.entries(map)) insert.run(discordId, mcName);
+}
+
+describe("map API", () => {
   it("round-trips linked accounts through the table", async () => {
-    await saveLinkedAccounts({ user1: "Steve", user2: "Alex" });
+    seedLinks({ user1: "Steve", user2: "Alex" });
     expect(await loadLinkedAccounts()).toEqual({
       user1: "Steve",
       user2: "Alex",
     });
-  });
-
-  it("saveLinkedAccounts replaces the whole table (old file semantics)", async () => {
-    await saveLinkedAccounts({ user1: "Steve" });
-    await saveLinkedAccounts({ user2: "Alex" });
-    expect(await loadLinkedAccounts()).toEqual({ user2: "Alex" });
   });
 
   it("round-trips link codes with expiry and confirmed flag", async () => {
@@ -68,7 +68,7 @@ describe("isLinked / getLinkedAccount", () => {
   });
 
   it("returns the Minecraft username when linked", async () => {
-    await saveLinkedAccounts({ discord123: "Notch" });
+    seedLinks({ discord123: "Notch" });
     expect(await isLinked("discord123")).toBe(true);
     expect(await getLinkedAccount("discord123")).toBe("Notch");
   });
@@ -102,7 +102,7 @@ describe("issueLinkCode", () => {
   });
 
   it("reports already-linked from linked_accounts, not code leftovers", async () => {
-    await saveLinkedAccounts({ u1: "Steve" });
+    seedLinks({ u1: "Steve" });
     const res = await issueLinkCode("u1", "CCCC3333");
     expect(res).toEqual({ status: "already-linked" });
     // Regression for the old flow: after unlink the user must be able to
@@ -139,7 +139,7 @@ describe("confirmLinkCode", () => {
   });
 
   it("rejects a username already owned by another Discord account (case-insensitive)", async () => {
-    await saveLinkedAccounts({ owner: "SteveMC" });
+    seedLinks({ owner: "SteveMC" });
     await issueLinkCode("intruder", "BBBB2222");
     const res = await confirmLinkCode("BBBB2222", "stevemc");
     expect(res).toEqual({ status: "name-taken", discordId: "intruder" });
@@ -155,7 +155,7 @@ describe("confirmLinkCode", () => {
   });
 
   it("never rebinds an already linked Discord account to another name", async () => {
-    await saveLinkedAccounts({ u1: "Steve" });
+    seedLinks({ u1: "Steve" });
     await saveLinkCodes({
       REBIND11: { discordId: "u1", expires: Date.now() + 60_000, confirmed: false },
     });
@@ -164,7 +164,7 @@ describe("confirmLinkCode", () => {
   });
 
   it("lets the same account relink its own username", async () => {
-    await saveLinkedAccounts({ u1: "Steve" });
+    seedLinks({ u1: "Steve" });
     await saveLinkCodes({
       RELINK11: { discordId: "u1", expires: Date.now() + 60_000, confirmed: false },
     });
@@ -175,7 +175,7 @@ describe("confirmLinkCode", () => {
 
 describe("unlinkAccount", () => {
   it("removes an existing link and reports true", async () => {
-    await saveLinkedAccounts({ u1: "Steve" });
+    seedLinks({ u1: "Steve" });
     expect(await unlinkAccount("u1")).toBe(true);
     expect(await getLinkedAccount("u1")).toBeNull();
   });

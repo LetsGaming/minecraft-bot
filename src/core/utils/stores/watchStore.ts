@@ -14,8 +14,7 @@
  *     "serverId", "player"?, "createdAt" }] }
  */
 import { randomBytes } from "crypto";
-import { kvGet, kvSet } from "../../db/kv.js";
-import { withTransaction } from "../../db/index.js";
+import { versionedStore } from "./versionedStore.js";
 
 /** Per-user cap so the file (and one user's DM burst) stays bounded. */
 export const MAX_WATCHES_PER_USER = 10;
@@ -37,23 +36,51 @@ export interface WatchStore {
   watches: Watch[];
 }
 
-function isV1Store(raw: unknown): raw is WatchStore {
+const watchDoc = versionedStore<WatchStore>(
+  "watches",
+  { version: 1, container: "watches", kind: "array" },
+  () => ({ version: 1, watches: [] }),
+);
+
+/** Read-only snapshot. To change watches use updateWatchStore or addWatch. */
+export async function loadWatchStore(): Promise<WatchStore> {
+  return watchDoc.load();
+}
+
+/** Change the watches in one transaction; see versionedStore. */
+export function updateWatchStore<T>(fn: (store: WatchStore) => T): T {
+  return watchDoc.update(fn);
+}
+
+export type AddWatchResult =
+  | { status: "added"; watch: Watch }
+  | { status: "duplicate"; watch: Watch }
+  | { status: "limit" };
+
+/** Same target (kind, server and, for player watches, name) for the same user. */
+export function sameWatchTarget(a: Watch, b: Watch): boolean {
   return (
-    typeof raw === "object" &&
-    raw !== null &&
-    (raw as { version?: unknown }).version === 1 &&
-    Array.isArray((raw as { watches?: unknown }).watches)
+    a.userId === b.userId &&
+    a.kind === b.kind &&
+    a.serverId === b.serverId &&
+    (a.kind === "server" || a.player === b.player)
   );
 }
 
-export async function loadWatchStore(): Promise<WatchStore> {
-  const raw = kvGet<unknown>("watches");
-  if (isV1Store(raw)) return raw;
-  return { version: 1, watches: [] };
-}
-
-export async function saveWatchStore(store: WatchStore): Promise<void> {
-  kvSet("watches", store);
+/**
+ * Add a watch under the /watch rules, atomically: a user at
+ * MAX_WATCHES_PER_USER is refused, and a duplicate target returns the
+ * existing watch.
+ */
+export function addWatch(watch: Watch): AddWatchResult {
+  return watchDoc.update((store) => {
+    const owned = store.watches.filter((w) => w.userId === watch.userId);
+    if (owned.length >= MAX_WATCHES_PER_USER) return { status: "limit" } as const;
+    const existing = owned.find((w) => sameWatchTarget(w, watch));
+    if (existing) return { status: "duplicate", watch: existing } as const;
+    store.watches.push(watch);
+    return { status: "added", watch } as const;
+  });
 }
 
 export function newWatchId(): string {
@@ -71,27 +98,20 @@ export async function takeMatchingWatches(event: {
 }): Promise<Watch[]> {
   const lowerPlayer = event.player?.toLowerCase();
   const matched: Watch[] = [];
+  const isHit = (watch: Watch): boolean =>
+    watch.kind === event.kind &&
+    watch.serverId === event.serverId &&
+    (watch.kind === "server" || watch.player === lowerPlayer);
+
+  // Joins are frequent and almost never match: skip the write transaction.
+  if (!watchDoc.load().watches.some(isHit)) return matched;
 
   // Atomic take: match + remove hold the write lock together, so two
-  // concurrent events can never DM the same one-shot watch twice. A miss
-  // writes nothing (same contract as the file era).
-  withTransaction(() => {
-    const raw = kvGet<unknown>("watches");
-    const store = isV1Store(raw)
-      ? raw
-      : { version: 1 as const, watches: [] as Watch[] };
+  // concurrent events can never DM the same one-shot watch twice.
+  watchDoc.update((store) => {
     const rest: Watch[] = [];
-    for (const watch of store.watches) {
-      const hit =
-        watch.kind === event.kind &&
-        watch.serverId === event.serverId &&
-        (watch.kind === "server" || watch.player === lowerPlayer);
-      (hit ? matched : rest).push(watch);
-    }
-    if (matched.length > 0) {
-      store.watches = rest;
-      kvSet("watches", store);
-    }
+    for (const watch of store.watches) (isHit(watch) ? matched : rest).push(watch);
+    store.watches = rest;
   });
   return matched;
 }

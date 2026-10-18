@@ -21,8 +21,13 @@ import { errMsg } from "./error.js";
 const jsonCache = new Map<string, JsonCacheEntry>();
 const writeLocks = new Map<string, Promise<void>>();
 
-function isEnoent(err: unknown): boolean {
+export function isEnoent(err: unknown): boolean {
   return err instanceof Error && "code" in err && err.code === "ENOENT";
+}
+
+/** The last-known-good copy kept beside `file`. */
+function backupPath(file: string): string {
+  return `${file}.bak`;
 }
 
 /**
@@ -53,7 +58,7 @@ export async function loadJson(file: string): Promise<unknown> {
     );
 
     try {
-      const raw = await fsPromises.readFile(`${file}.bak`, "utf-8");
+      const raw = await fsPromises.readFile(backupPath(file), "utf-8");
       const data: unknown = JSON.parse(raw);
       log.warn(
         "storage",
@@ -100,9 +105,9 @@ export async function saveJson(
     // Last-known-good copy for loadJson's recovery path, same tmp+rename
     // dance. Best-effort — a failed backup must not fail the save.
     try {
-      const bakTmp = `${file}.bak.tmp`;
+      const bakTmp = `${backupPath(file)}.tmp`;
       await fsPromises.writeFile(bakTmp, json);
-      await fsPromises.rename(bakTmp, `${file}.bak`);
+      await fsPromises.rename(bakTmp, backupPath(file));
     } catch (bakErr) {
       const reason = errMsg(bakErr);
       log.warn(
@@ -110,6 +115,24 @@ export async function saveJson(
         `Could not write backup for ${path.basename(file)}: ${reason}`,
       );
     }
+  });
+  writeLocks.set(
+    file,
+    next.catch(() => {}),
+  );
+  return next;
+}
+
+/**
+ * Delete a JSON store and its backup, so loadJson cannot resurrect the file
+ * from the `.bak`. Missing files are fine.
+ */
+export async function removeJson(file: string): Promise<void> {
+  const prev = writeLocks.get(file) ?? Promise.resolve();
+  const next = prev.then(async () => {
+    jsonCache.delete(file);
+    await fsPromises.rm(file, { force: true });
+    await fsPromises.rm(backupPath(file), { force: true });
   });
   writeLocks.set(
     file,

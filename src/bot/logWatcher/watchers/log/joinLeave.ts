@@ -6,8 +6,7 @@ import { broadcastNotification, PLAYER_NAME } from "../notifyGuilds.js";
 import type { GuildConfigSource } from "../../../utils/guild/guildConfigs.js";
 import { serverEventRegex, registerServerEvent } from "./serverLine.js";
 import {
-  loadSessionStore,
-  saveSessionStore,
+  updateSessionStore,
   openSession,
   closeSession,
 } from "@mcbot/core/utils/stores/sessionStore.js";
@@ -43,10 +42,10 @@ async function recordSession(
   event: "join" | "leave",
 ): Promise<void> {
   try {
-    const store = await loadSessionStore();
-    if (event === "join") openSession(store, serverId, player);
-    else closeSession(store, serverId, player);
-    await saveSessionStore(store);
+    updateSessionStore((store) => {
+      if (event === "join") openSession(store, serverId, player);
+      else closeSession(store, serverId, player);
+    });
   } catch (err) {
     log.warn("sessions", `Failed to record ${event} for ${player}: ${errMsg(err)}`);
   }
