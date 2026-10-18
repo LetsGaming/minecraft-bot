@@ -3,6 +3,7 @@ import { apiGet, apiSend } from "../api";
 import { latest } from "./useLoader";
 import { usePolledJob } from "./usePolledJob";
 import { errorMessage } from "../utils/errorMessage";
+import { t } from "../i18n";
 import type { PageVisibility } from "../utils/pageVisibility";
 
 export type { PageVisibility } from "../utils/pageVisibility";
@@ -196,13 +197,13 @@ export function usePrune(options: UsePruneOptions) {
         maps.value = {};
         dropMapLoads();
       } else if (next.error !== "cancelled") {
-        options.onError(next.error ? `The scan failed (${next.error}).` : "The scan failed.");
+        options.onError(next.error ? t("prune.error.scanFailedWith", { reason: next.error }) : t("prune.error.scanFailed"));
       }
     },
     onError: (err) => {
       scanning.value = false;
       jobId = null;
-      options.onError(errorMessage(err, "Could not read the scan."));
+      options.onError(errorMessage(err, t("prune.error.scanRead")));
     },
   });
 
@@ -219,7 +220,7 @@ export function usePrune(options: UsePruneOptions) {
       supported.value = (await options.api.support()).supported;
     } catch (err) {
       supported.value = false;
-      options.onError(errorMessage(err, "Could not check whether this server can prune chunks."));
+      options.onError(errorMessage(err, t("prune.error.supportCheck")));
     }
   }
 
@@ -228,7 +229,7 @@ export function usePrune(options: UsePruneOptions) {
     try {
       dimensions.value = (await options.api.dimensions()).dimensions;
     } catch (err) {
-      options.onError(errorMessage(err, "Could not list the dimensions."));
+      options.onError(errorMessage(err, t("prune.error.dimensions")));
     }
   }
 
@@ -286,7 +287,7 @@ export function usePrune(options: UsePruneOptions) {
     } catch (err) {
       if (mine !== generation || !isLatest()) return;
       inspected.value = null;
-      options.onError(errorMessage(err, "Could not read that chunk."));
+      options.onError(errorMessage(err, t("prune.error.chunk")));
     }
   }
 
@@ -302,7 +303,7 @@ export function usePrune(options: UsePruneOptions) {
       await options.api.cancel(jobId);
     } catch (err) {
       cancelling.value = false;
-      options.onError(errorMessage(err, "Could not stop the scan."));
+      options.onError(errorMessage(err, t("prune.error.stop")));
     }
   }
 
@@ -313,7 +314,7 @@ export function usePrune(options: UsePruneOptions) {
       params.value = structuredCloneParams(loaded);
       saved.value = structuredCloneParams(loaded);
     } catch (err) {
-      options.onError(errorMessage(err, "Could not load the saved settings."));
+      options.onError(errorMessage(err, t("prune.error.settingsLoad")));
     } finally {
       loadingSettings.value = false;
     }
@@ -328,7 +329,7 @@ export function usePrune(options: UsePruneOptions) {
       saved.value = structuredCloneParams(stored);
       return true;
     } catch (err) {
-      options.onError(errorMessage(err, "Could not save the settings."));
+      options.onError(errorMessage(err, t("prune.error.settingsSave")));
       return false;
     } finally {
       savingSettings.value = false;
@@ -358,7 +359,7 @@ export function usePrune(options: UsePruneOptions) {
       if (mine !== generation) return;
       scanning.value = false;
       jobId = null;
-      options.onError(errorMessage(err, "Could not start the scan."));
+      options.onError(errorMessage(err, t("prune.error.scanStart")));
     }
   }
 
@@ -376,7 +377,7 @@ export function usePrune(options: UsePruneOptions) {
       maps.value = { ...maps.value, [index]: decoded };
       return decoded;
     } catch (err) {
-      if (mine === generation) options.onError(errorMessage(err, "Could not load the map."));
+      if (mine === generation) options.onError(errorMessage(err, t("prune.error.map")));
       return null;
     }
   }
@@ -409,7 +410,7 @@ export function usePrune(options: UsePruneOptions) {
     try {
       return (await options.api.apply(plan, countdownSeconds)).jobId;
     } catch (err) {
-      options.onError(errorMessage(err, "Could not start the prune."));
+      options.onError(errorMessage(err, t("prune.error.start")));
       return null;
     } finally {
       starting.value = false;

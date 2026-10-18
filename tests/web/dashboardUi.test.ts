@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { logLevel, lineMatches } from "../../src/web/frontend/src/utils/logLine.js";
 import { disambiguateLabels } from "../../src/web/frontend/src/utils/fieldLabels.js";
-import { mergeDisks, tierLabel } from "../../src/web/frontend/src/utils/format.js";
+import { mergeDisks } from "../../src/web/frontend/src/utils/format.js";
 import { humaniseIds } from "../../src/web/frontend/src/utils/humaniseIds.js";
 import { isActionApplicable } from "../../src/schema/serverActions.js";
 import { playersLabel } from "../../src/web/frontend/src/utils/format.js";
@@ -94,16 +94,6 @@ describe("mergeDisks", () => {
       { path: "/mnt/backups", usedBytes: 900_000, totalBytes: 2_000_000, usedPercent: 45 },
     ]);
     expect(merged).toHaveLength(2);
-  });
-});
-
-describe("tierLabel", () => {
-  it("names the retention tier instead of echoing its storage path", () => {
-    expect(tierLabel("hourly")).toBe("Hourly");
-    expect(tierLabel("archives/daily")).toBe("Daily");
-    expect(tierLabel("archives/update")).toBe("Pre-update");
-    // An unknown tier is still shown, just tidied.
-    expect(tierLabel("archives/preflight")).toBe("Preflight");
   });
 });
 

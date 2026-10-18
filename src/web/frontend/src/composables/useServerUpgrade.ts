@@ -4,6 +4,7 @@ import { MS } from "@mcbot/schema";
 import { apiGet, apiSend } from "../api";
 import { safeStorage } from "../utils/safeStorage";
 import { errorMessage } from "../utils/errorMessage";
+import { t } from "../i18n";
 import type { PageVisibility } from "../utils/pageVisibility";
 import { usePolledJob } from "./usePolledJob";
 
@@ -119,7 +120,7 @@ export function useServerUpgrade(options: UseServerUpgradeOptions) {
       jobId = null;
     },
     onError: (err) => {
-      options.onError(errorMessage(err, "Could not read the upgrade's progress."));
+      options.onError(errorMessage(err, t("upgrade.error.progress")));
     },
   });
 
@@ -145,7 +146,7 @@ export function useServerUpgrade(options: UseServerUpgradeOptions) {
       supported.value = (await options.api.support()).supported;
     } catch (err) {
       supported.value = false;
-      options.onError(errorMessage(err, "Could not check whether this server can upgrade."));
+      options.onError(errorMessage(err, t("upgrade.error.support")));
     }
   }
 
@@ -171,7 +172,7 @@ export function useServerUpgrade(options: UseServerUpgradeOptions) {
       }
     } catch (err) {
       if (mine !== generation) return;
-      options.onError(errorMessage(err, "Could not read the last upgrade."));
+      options.onError(errorMessage(err, t("upgrade.error.last")));
     }
   }
 
@@ -197,7 +198,7 @@ export function useServerUpgrade(options: UseServerUpgradeOptions) {
       void poller.start();
       return true;
     } catch (err) {
-      options.onError(errorMessage(err, "Could not start the upgrade."));
+      options.onError(errorMessage(err, t("upgrade.error.start")));
       return false;
     } finally {
       starting.value = false;

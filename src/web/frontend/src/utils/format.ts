@@ -119,34 +119,6 @@ export function diskSeverity(usedPercent: number): "good" | "mid" | "bad" {
   }
 }
 
-/**
- * A backup tier as a person would say it.
- *
- * The wrapper names tiers by where it files them (`hourly`,
- * `archives/daily`, `archives/update`), and the table printed those paths
- * verbatim, so the retention tier arrived as a storage detail with a slash
- * in it.
- */
-export function tierLabel(tier: string): string {
-  const leaf = tier.split("/").pop() ?? tier;
-  switch (leaf.toLowerCase()) {
-    case "hourly":
-      return "Hourly";
-    case "daily":
-      return "Daily";
-    case "weekly":
-      return "Weekly";
-    case "monthly":
-      return "Monthly";
-    case "update":
-      return "Pre-update";
-    case "manual":
-      return "Manual";
-    default:
-      return leaf.charAt(0).toUpperCase() + leaf.slice(1);
-  }
-}
-
 // ── Server state presentation ───────────────────────────────────────────────
 // One mapping for the chip and the copy, because several components render
 // this. A healthy server behind an unreachable API wrapper was once labelled

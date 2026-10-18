@@ -1,6 +1,7 @@
 import { computed, ref, shallowRef, type Ref } from "vue";
 import { isConflict, validationErrors } from "../api";
 import { errorMessage } from "../utils/errorMessage";
+import { t } from "../i18n";
 import { registerDirtySource } from "./useUnsavedGuard";
 import { latest } from "./useLoader";
 
@@ -279,11 +280,11 @@ export function useEditableDocument<T extends object, M = unknown>(
   async function save(): Promise<boolean> {
     if (!ready.value || saving.value) return false;
     if (stale.value) {
-      saveError.value = "Reload before saving again: the last save went through but the page could not re-read it.";
+      saveError.value = t("editor.saveStale");
       return false;
     }
     if (conflicts.value.length > 0) {
-      saveError.value = "Resolve the conflicting fields first.";
+      saveError.value = t("editor.saveResolveFirst");
       return false;
     }
     if (!dirty.value) return false;
@@ -305,16 +306,16 @@ export function useEditableDocument<T extends object, M = unknown>(
           mergeRemote(await source.load());
           saveError.value =
             conflicts.value.length > 0
-              ? "Someone else changed some of the same fields. Your edits are kept; choose which value to keep."
-              : "The configuration changed since you loaded it. Your edits were kept on top of the latest version; review and save again.";
+              ? t("editor.saveConflictFields")
+              : t("editor.saveConflictMerged");
         } catch (loadErr) {
-          saveError.value = `The configuration changed since you loaded it, and the latest version could not be loaded (${errorMessage(loadErr)}). Your edits are kept.`;
+          saveError.value = t("editor.saveConflictReloadFailed", { message: errorMessage(loadErr) });
         }
       } else {
         const list = validationErrors(err);
         if (list.length > 0) {
           fieldErrors.value = list;
-          saveError.value = "The server rejected the changes.";
+          saveError.value = t("editor.saveRejected");
         } else {
           saveError.value = errorMessage(err);
         }

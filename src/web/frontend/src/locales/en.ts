@@ -1526,6 +1526,43 @@ export const en = {
 
   "invite.failed": "Invite failed",
   "guilds.loadFailedToast": "Failed to load guilds",
+
+  "editor.saveStale": "Reload before saving again: the last save went through but the page could not re-read it.",
+  "editor.saveResolveFirst": "Resolve the conflicting fields first.",
+  "editor.saveConflictFields": "Someone else changed some of the same fields. Your edits are kept; choose which value to keep.",
+  "editor.saveConflictMerged": "The configuration changed since you loaded it. Your edits were kept on top of the latest version; review and save again.",
+  "editor.saveConflictReloadFailed": "The configuration changed since you loaded it, and the latest version could not be loaded ({message}). Your edits are kept.",
+  "editor.saveRejected": "The server rejected the changes.",
+
+  "mods.compat.failed": "The compatibility check failed.",
+  "mods.compat.readFailed": "Could not read the compatibility check.",
+  "mods.compat.startFailed": "Could not start the compatibility check.",
+  "mods.compat.versionsFailed": "Could not load Minecraft versions.",
+  "mods.compat.versionInvalid": "Enter a Minecraft version such as 1.21.5.",
+  "mods.compat.starting": "Starting the check",
+  "mods.compat.checking": "Checking {done} of {total}",
+  "mods.compat.summary": "{available} ready, {unavailable} missing, {unknown} unknown",
+  "mods.installed.updateCheckFailed": "failed",
+
+  "prune.error.scanFailedWith": "The scan failed ({reason}).",
+  "prune.error.scanFailed": "The scan failed.",
+  "prune.error.scanRead": "Could not read the scan.",
+  "prune.error.supportCheck": "Could not check whether this server can prune chunks.",
+  "prune.error.dimensions": "Could not list the dimensions.",
+  "prune.error.chunk": "Could not read that chunk.",
+  "prune.error.stop": "Could not stop the scan.",
+  "prune.error.settingsLoad": "Could not load the saved settings.",
+  "prune.error.settingsSave": "Could not save the settings.",
+  "prune.error.scanStart": "Could not start the scan.",
+  "prune.error.map": "Could not load the map.",
+  "prune.error.start": "Could not start the prune.",
+
+  "upgrade.error.progress": "Could not read the upgrade's progress.",
+  "upgrade.error.support": "Could not check whether this server can upgrade.",
+  "upgrade.error.last": "Could not read the last upgrade.",
+  "upgrade.error.start": "Could not start the upgrade.",
+
+  "modconfig.sectionGeneral": "General",
 } as const;
 
 export type EnglishKey = keyof typeof en;

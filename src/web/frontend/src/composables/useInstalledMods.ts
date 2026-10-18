@@ -9,6 +9,7 @@ import type {
   ModUpdateCheck,
 } from "../api";
 import { errorMessage } from "../utils/errorMessage";
+import { t } from "../i18n";
 import { useRowBusy } from "./useRowBusy";
 import { latest } from "./useLoader";
 
@@ -103,7 +104,7 @@ export function useInstalledMods(api: InstalledModsApi) {
       updates.value = next;
       updatesError.value = "";
     } catch (err) {
-      if (!(err instanceof UnauthorizedError)) updatesError.value = failureOf(err).message || "failed";
+      if (!(err instanceof UnauthorizedError)) updatesError.value = failureOf(err).message || t("mods.installed.updateCheckFailed");
     } finally {
       checkingUpdates.value = false;
     }

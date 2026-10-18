@@ -1,6 +1,7 @@
 import { computed, ref } from "vue";
 import type { ModCompatJob, ModCompatMod } from "../api";
 import { errorMessage } from "../utils/errorMessage";
+import { t } from "../i18n";
 import type { PageVisibility } from "../utils/pageVisibility";
 import { usePolledJob } from "./usePolledJob";
 
@@ -64,13 +65,13 @@ export function useModCompat(options: UseModCompatOptions) {
       checkingCompat.value = false;
       jobId = null;
       if (next.state === "failed") {
-        options.onError(next.error ?? "The compatibility check failed.");
+        options.onError(next.error ?? t("mods.compat.failed"));
       }
     },
     onError: (err) => {
       checkingCompat.value = false;
       jobId = null;
-      options.onError(errorMessage(err, "Could not read the compatibility check."));
+      options.onError(errorMessage(err, t("mods.compat.readFailed")));
     },
   });
 
@@ -90,8 +91,8 @@ export function useModCompat(options: UseModCompatOptions) {
   const progressText = computed(() => {
     const p = job.value?.progress;
     if (!checkingCompat.value) return "";
-    if (!p || p.total === 0) return "Starting the check";
-    return `Checking ${Math.min(p.done + 1, p.total)} of ${p.total}`;
+    if (!p || p.total === 0) return t("mods.compat.starting");
+    return t("mods.compat.checking", { done: Math.min(p.done + 1, p.total), total: p.total });
   });
 
   /** Final answer when done, otherwise whatever has arrived so far. */
@@ -119,7 +120,7 @@ export function useModCompat(options: UseModCompatOptions) {
   const summaryText = computed(() => {
     const s = summary.value;
     if (!s) return "";
-    return `${s.available} ready, ${s.unavailable} missing, ${s.unknown} unknown`;
+    return t("mods.compat.summary", { available: s.available, unavailable: s.unavailable, unknown: s.unknown });
   });
 
   const failed = computed(() => job.value?.state === "failed");
@@ -132,7 +133,7 @@ export function useModCompat(options: UseModCompatOptions) {
       releases.value = (await options.api.versions()).versions;
     } catch (err) {
       releases.value = [];
-      options.onError(errorMessage(err, "Could not load Minecraft versions."));
+      options.onError(errorMessage(err, t("mods.compat.versionsFailed")));
     } finally {
       loadingVersions.value = false;
     }
@@ -144,7 +145,7 @@ export function useModCompat(options: UseModCompatOptions) {
     if (checkingCompat.value) return;
     const version = targetVersion.value;
     if (!MC_VERSION_RE.test(version)) {
-      options.onError("Enter a Minecraft version such as 1.21.5.");
+      options.onError(t("mods.compat.versionInvalid"));
       return;
     }
     generation++;
@@ -163,7 +164,7 @@ export function useModCompat(options: UseModCompatOptions) {
       if (mine !== generation) return;
       checkingCompat.value = false;
       jobId = null;
-      options.onError(errorMessage(err, "Could not start the compatibility check."));
+      options.onError(errorMessage(err, t("mods.compat.startFailed")));
     }
   }
 
