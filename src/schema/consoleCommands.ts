@@ -51,23 +51,25 @@ export function consoleCommandVerb(raw: string): string {
 }
 
 /**
- * Every command `raw` would run: itself, and for `execute … run <cmd>` the
- * command after `run`, recursively (`execute as @a run execute run op me`).
+ * Every command `raw` would run: itself, and for `execute ... run <cmd>` or
+ * `return run <cmd>` the command after each `run` token
+ * (`execute as @a run execute run op me`).
  */
 export function consoleCommandVerbs(raw: string): string[] {
-  const verbs: string[] = [];
-  let rest = normalizeConsoleCommand(raw);
-  // Bounded: each pass consumes at least the `run` keyword.
-  for (let depth = 0; depth < 32 && rest; depth++) {
-    const verb = consoleCommandVerb(rest);
-    if (!verb) break;
-    verbs.push(verb);
-    if (verb !== "execute") break;
-    const words = rest.split(/\s+/);
-    const at = words.indexOf("run");
-    if (at < 0) break;
-    rest = words.slice(at + 1).join(" ");
-  }
+  const text = normalizeConsoleCommand(raw);
+  const first = consoleCommandVerb(text);
+  if (!first) return [];
+  const verbs = [first];
+  if (first !== "execute" && first !== "return") return verbs;
+  // Every `run` token is a candidate: a selector or score may itself be named
+  // `run`, so only the first one cannot be trusted to start the nested command.
+  // Scanning each one flat also covers nested execute/return chains.
+  const words = text.split(/\s+/);
+  words.forEach((word, i) => {
+    if (word !== "run") return;
+    const verb = consoleCommandVerb(words.slice(i + 1).join(" "));
+    if (verb) verbs.push(verb);
+  });
   return verbs;
 }
 
