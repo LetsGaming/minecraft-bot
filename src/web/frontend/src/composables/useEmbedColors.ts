@@ -9,10 +9,8 @@ import {
   contrastRatio,
   defaultEmbedColor,
   DISCORD_EMBED_BACKGROUND,
-  EMBED_CATEGORIES,
   MIN_BAR_CONTRAST,
   parseHexColor,
-  REWARD_RARITIES,
   type EmbedColorKey,
 } from "@mcbot/schema/embedCategories.js";
 import { t } from "../i18n";
@@ -29,11 +27,6 @@ const colorUnits: DocUnits<ColorsDoc> = {
     else doc.embedColors[key] = String(value);
   },
 };
-
-export const COLOR_KEYS: readonly EmbedColorKey[] = [
-  ...EMBED_CATEGORIES,
-  ...REWARD_RARITIES.map((r): EmbedColorKey => `rarity.${r}`),
-];
 
 /** Editing the `embedColors` override map of config.json. */
 export function useEmbedColors() {

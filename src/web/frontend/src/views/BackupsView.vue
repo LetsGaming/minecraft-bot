@@ -257,7 +257,7 @@ import Button from "primevue/button";
 import { useNotify } from "../composables/useNotify";
 import { backupTierLabel, formatBytes, MS, ServerState, StatusRole, SERVER_STATE_ROLE } from "@mcbot/schema";
 import { absoluteStamp, relativeAge, timestampTitle } from "../utils/time";
-import { useBackups, type ScriptOutcome } from "../composables/useBackups";
+import { PAGE_SIZE, useBackups, type ScriptOutcome } from "../composables/useBackups";
 import { useCapabilities } from "../composables/useCapabilities";
 import { useConfirmAction } from "../composables/useConfirmAction";
 import { useRowBusy } from "../composables/useRowBusy";
@@ -275,7 +275,6 @@ import { t } from "../i18n";
 
 type NeedKey = "create" | "restore" | "delete";
 
-const PAGE_SIZE = 50;
 const ARCHIVE_EXT = /\.(tar\.(zst|gz|xz|bz2)|tgz|zip)$/i;
 
 interface Job {
