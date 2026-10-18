@@ -46,10 +46,17 @@ async function isPlayerSleeping(
   const outcome = await server.send(`/data get entity ${player} SleepTimer`);
   if (outcome.kind === "unreachable") return null;
   if (outcome.kind === "sent") return false;
-  // Output looks like: "… has the following entity data: 87s"
-  const match = outcome.output.match(/(\d+)s/);
-  if (!match) return false;
-  return parseInt(match[1]!, 10) > 0;
+  return parseSleepTimer(outcome.output) > 0;
+}
+
+/**
+ * Reads `... has the following entity data: 87s`. Anchored on the value after
+ * the colon so digits followed by `s` inside a player name (`xX_99s_Xx`) are
+ * not read as the timer.
+ */
+export function parseSleepTimer(output: string): number {
+  const match = output.match(/:\s*(\d+)s\s*$/);
+  return match ? parseInt(match[1]!, 10) : 0;
 }
 
 // ── Caps detection ────────────────────────────────────────────────────────────
@@ -384,9 +391,14 @@ function buildTitlePair(capsMode: CapsMode, trigger: string): TitlePair {
 
 // ── Night check ───────────────────────────────────────────────────────────────
 
-// Minecraft daytime ticks: 0 = 6:00, 6000 = 12:00, 12542 = sunset, 23459 = sunrise
+// Beds can be used from tick 12542 to 23459 inclusive. The daytime counter
+// wraps at 24000, so the window never crosses the wrap.
 const NIGHT_START = 12542;
 const NIGHT_END = 23459;
+
+export function isNightTick(tick: number): boolean {
+  return tick >= NIGHT_START && tick <= NIGHT_END;
+}
 
 /**
  * Whether the server is currently night time. `/time query daytime` returns
@@ -402,8 +414,7 @@ async function isNight(server: ServerInstance): Promise<boolean | null> {
   const match = outcome.output.match(/\d+/);
   if (!match) return true;
   const tick = parseInt(match[0], 10);
-  // Night wraps around midnight: ticks >= NIGHT_START OR <= NIGHT_END
-  return tick >= NIGHT_START || tick <= NIGHT_END;
+  return isNightTick(tick);
 }
 
 // ── Title sender ──────────────────────────────────────────────────────────────
@@ -412,9 +423,6 @@ async function isNight(server: ServerInstance): Promise<boolean | null> {
  * Sends a /title to every non-sleeping player via the NBT selector
  * `nbt={SleepTimer:0s}`, which matches players whose SleepTimer is 0
  * (i.e. awake). Excludes the trigger player with `name=!<trigger>`.
- *
- * Falls back to targeting all online players (`@a`) if the server
- * does not support NBT selectors (e.g. Bedrock / Paper with NBT disabled).
  */
 async function sendTitleToAwake(
   server: ServerInstance,
