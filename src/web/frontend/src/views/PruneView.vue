@@ -386,7 +386,9 @@ import { useConfirmAction } from "../composables/useConfirmAction";
 import ViewHeader from "../components/ui/ViewHeader.vue";
 import EmptyState from "../components/ui/EmptyState.vue";
 import InlineBanner from "../components/ui/InlineBanner.vue";
-import PruneMap, { type MapTool } from "../components/PruneMap.vue";
+import PruneMap from "../components/PruneMap.vue";
+import type { MapTool } from "../composables/usePruneMapInput";
+import { regionKey, regionOf, slotOf } from "../composables/pruneRegion";
 import { OVER_TERRAIN_OPACITY } from "../composables/pruneMapRender";
 import UpgradeRun from "../components/UpgradeRun.vue";
 import { t, type MessageKey } from "../i18n";
@@ -511,13 +513,17 @@ const INSPECT_CLASS: Record<number, MessageKey> = {
   [CELL.MANUAL_HARD]: "prune.cell.manualHard",
 };
 
+/** The cell grid of each region of the current map, by region key. */
+const mapCells = computed(
+  () => new Map((currentMap.value?.regions ?? []).map((r) => [regionKey(r.rx, r.rz), r.cell] as const)),
+);
+
 /** The class the map shows for the open chunk, as words. */
 const inspectedClass = computed(() => {
   const open = prune.inspected.value;
   const map = currentMap.value;
   if (!open || !map) return "";
-  const region = map.regions.find((r) => r.rx === Math.floor(open.cx / 32) && r.rz === Math.floor(open.cz / 32));
-  const cell = region?.cell[(open.cx & 31) + (open.cz & 31) * 32];
+  const cell = mapCells.value.get(regionKey(regionOf(open.cx), regionOf(open.cz)))?.[slotOf(open.cx, open.cz)];
   return cell ? t(INSPECT_CLASS[cell] ?? "prune.cell.empty") : "";
 });
 
@@ -541,7 +547,10 @@ function syncSelection(): void {
 }
 
 function onSelect(rect: { mode: "add" | "remove"; x1: number; z1: number; x2: number; z2: number }): void {
-  if (!selection.apply([{ dimension: currentDimension.value, ...rect }])) error.value = t("prune.selection.full");
+  if (!selection.apply([{ dimension: currentDimension.value, ...rect }])) {
+    error.value = t("prune.selection.full");
+    return;
+  }
   syncSelection();
 }
 
@@ -583,19 +592,12 @@ const selectionOpCount = computed(() => (selectionVersion.value, selection.ops.l
 /** Chosen chunks that exist on the map (a rectangle also covers empty cells). */
 const selectedCount = computed(() => {
   selectionVersion.value;
-  const map = currentMap.value;
-  if (!map) return 0;
-  let n = 0;
-  selection.forEachRegion(currentDimension.value, (rx, rz, bits) => {
-    const region = map.regions.find((r) => r.rx === rx && r.rz === rz);
-    if (!region) return;
-    for (let z = 0; z < 32; z++) {
-      const row = bits[z]!;
-      if (row === 0) continue;
-      for (let x = 0; x < 32; x++) if (((row >>> x) & 1) === 1 && region.cell[z * 32 + x] !== CELL.EMPTY) n++;
-    }
+  if (!currentMap.value) return 0;
+  const cells = mapCells.value;
+  return selection.count(currentDimension.value, (rx, rz, slot) => {
+    const cell = cells.get(regionKey(rx, rz));
+    return !!cell && cell[slot] !== CELL.EMPTY;
   });
-  return n;
 });
 
 const breakdown = computed(() => {

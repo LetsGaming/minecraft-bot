@@ -112,8 +112,8 @@ function decode(base64: string): Uint8Array {
   return out;
 }
 
-/** Region key r.X.Z to its coordinates, or null for anything else. */
-export function parseRegionKey(key: string): { rx: number; rz: number } | null {
+/** A map region's file name (r.X.Z) to its coordinates, or null for anything else. */
+export function parseRegionFile(key: string): { rx: number; rz: number } | null {
   const m = /^r\.(-?\d+)\.(-?\d+)$/.exec(key);
   return m ? { rx: Number(m[1]), rz: Number(m[2]) } : null;
 }
@@ -129,7 +129,7 @@ export function decodeMap(map: PruneMap): DecodedMap {
   const regions: DecodedMap["regions"] = [];
   let bounds: DecodedMap["bounds"] = null;
   for (const [key, value] of Object.entries(map.regions)) {
-    const pos = parseRegionKey(key);
+    const pos = parseRegionFile(key);
     const v = value as { cell?: string; heat?: string };
     if (!pos || typeof v.cell !== "string" || typeof v.heat !== "string") continue;
     regions.push({ ...pos, cell: decode(v.cell), heat: decode(v.heat) });
