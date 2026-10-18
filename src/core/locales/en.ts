@@ -427,6 +427,7 @@ export const en: Record<string, string> = {
   "link.notLinked": "Your Discord account is not linked to a Minecraft account. Run /link to link one.",
   "link.status": "Your Discord account is linked to `{account}`.",
   "link.unlinked": "Your Discord account is no longer linked to a Minecraft account.",
+  "link.codeUsed": "That link code has already been used. Run /link in Discord for a new one.",
   // ── /help, /map, /chunkbase, /seed ──
   "help.title": "Commands",
   "help.required": "**(required)**",

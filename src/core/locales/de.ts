@@ -419,6 +419,7 @@ export const de: Record<string, string> = {
   "link.notLinked": "Dein Discord-Konto ist mit keinem Minecraft-Account verknüpft. Mit /link verknüpfst du einen.",
   "link.status": "Dein Discord-Konto ist mit `{account}` verknüpft.",
   "link.unlinked": "Dein Discord-Konto ist nicht mehr mit einem Minecraft-Account verknüpft.",
+  "link.codeUsed": "Dieser Link-Code wurde bereits verwendet. Nutze /link in Discord für einen neuen.",
   // ── /help, /map, /chunkbase, /seed ──
   "help.title": "Befehle",
   "help.required": "**(erforderlich)**",

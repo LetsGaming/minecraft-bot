@@ -20,6 +20,11 @@ vi.mock("../../src/bot/utils/guild/linkedRole.js", () => ({
   syncLinkedRole: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("../../src/core/utils/minecraft/serverMessages.js", () => ({
+  whisper: vi.fn().mockResolvedValue(undefined),
+  tellraw: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("../../src/bot/logWatcher/logWatcher.js", () => ({
   registerLogCommand: vi.fn(),
 }));
@@ -29,6 +34,7 @@ vi.mock("../../src/core/utils/logger.js", () => ({
 }));
 
 import { confirmLinkCode } from "../../src/core/utils/stores/linkUtils.js";
+import { whisper } from "../../src/core/utils/minecraft/serverMessages.js";
 import { syncLinkedRole } from "../../src/bot/utils/guild/linkedRole.js";
 
 // ── Code generation ────────────────────────────────────────────────────────
@@ -139,6 +145,23 @@ describe("logWatcher link handler", () => {
     expect(syncLinkedRole).not.toHaveBeenCalled();
     expect(send).toHaveBeenCalledWith(
       expect.stringContaining("different Discord account"),
+    );
+  });
+
+  it("whispers the sender when the code was already used", async () => {
+    vi.mocked(confirmLinkCode).mockResolvedValue({ status: "already-used" });
+    const handler = await loadHandler();
+    const { client, send } = makeClient("discord-1");
+    const server = { id: "main" };
+
+    await handler("Mallory", { code: "USED1111" }, client as never, server as never);
+
+    expect(syncLinkedRole).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+    expect(whisper).toHaveBeenCalledWith(
+      server,
+      "Mallory",
+      expect.stringContaining("already been used"),
     );
   });
 

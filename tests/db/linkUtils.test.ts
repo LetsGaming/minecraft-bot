@@ -146,6 +146,23 @@ describe("confirmLinkCode", () => {
     expect(await getLinkedAccount("intruder")).toBeNull();
   });
 
+  it("rejects a code that was already confirmed and keeps the first link", async () => {
+    await issueLinkCode("u1", "ONCE1111");
+    expect((await confirmLinkCode("ONCE1111", "Steve")).status).toBe("linked");
+    const replay = await confirmLinkCode("ONCE1111", "Mallory");
+    expect(replay).toEqual({ status: "already-used" });
+    expect(await getLinkedAccount("u1")).toBe("Steve");
+  });
+
+  it("never rebinds an already linked Discord account to another name", async () => {
+    await saveLinkedAccounts({ u1: "Steve" });
+    await saveLinkCodes({
+      REBIND11: { discordId: "u1", expires: Date.now() + 60_000, confirmed: false },
+    });
+    expect(await confirmLinkCode("REBIND11", "Alex")).toEqual({ status: "already-used" });
+    expect(await getLinkedAccount("u1")).toBe("Steve");
+  });
+
   it("lets the same account relink its own username", async () => {
     await saveLinkedAccounts({ u1: "Steve" });
     await saveLinkCodes({

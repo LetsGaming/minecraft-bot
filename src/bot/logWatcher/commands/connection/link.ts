@@ -3,6 +3,8 @@ import { confirmLinkCode } from "@mcbot/core/utils/stores/linkUtils.js";
 import { syncLinkedRole } from "../../../utils/guild/linkedRole.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
+import { t } from "@mcbot/core/utils/i18n.js";
+import { whisper } from "@mcbot/core/utils/minecraft/serverMessages.js";
 
 // Rate-limit per-player !link attempts to prevent brute-forcing codes.
 // Tracks the timestamp of the last attempt per Minecraft username.
@@ -13,7 +15,7 @@ const cmd = defineCommand({
   name: "link",
   description: "Link your Minecraft account to Discord using a code",
   args: ["code"],
-  handler: async (username, { code }, client) => {
+  handler: async (username, { code }, client, server) => {
     if (!code) return;
 
     // Rate-limit: reject if the same player tried within the cooldown window
@@ -35,6 +37,12 @@ const cmd = defineCommand({
       },
     );
     if (!result || result.status === "unknown-code") return;
+
+    if (result.status === "already-used") {
+      log.warn("link", `Rejected reuse of a link code by ${username}`);
+      await whisper(server, username, t("link.codeUsed"));
+      return;
+    }
 
     const user = client.users.cache.get(result.discordId);
 

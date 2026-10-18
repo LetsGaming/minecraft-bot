@@ -201,6 +201,7 @@ export async function issueLinkCode(
 export type ConfirmLinkResult =
   | { status: "linked"; discordId: string }
   | { status: "unknown-code" }
+  | { status: "already-used" }
   | { status: "expired"; discordId: string }
   | { status: "name-taken"; discordId: string };
 
@@ -227,6 +228,8 @@ export async function confirmLinkCode(
 
     if (!entry) return { status: "unknown-code" } as const;
 
+    if (entry.confirmed) return { status: "already-used" } as const;
+
     if (Date.now() > entry.expires) {
       db.prepare("DELETE FROM link_codes WHERE code = ?").run(code);
       return { status: "expired", discordId: entry.discord_id } as const;
@@ -242,9 +245,15 @@ export async function confirmLinkCode(
       return { status: "name-taken", discordId: entry.discord_id } as const;
     }
 
+    const current = db
+      .prepare("SELECT mc_name FROM linked_accounts WHERE discord_id = ?")
+      .get(entry.discord_id) as { mc_name: string } | undefined;
+    if (current && current.mc_name.toLowerCase() !== username.toLowerCase()) {
+      // Never rebind an existing link: /unlink first.
+      return { status: "already-used" } as const;
+    }
     db.prepare(
-      `INSERT INTO linked_accounts (discord_id, mc_name) VALUES (?, ?)
-       ON CONFLICT(discord_id) DO UPDATE SET mc_name = excluded.mc_name`,
+      "INSERT OR REPLACE INTO linked_accounts (discord_id, mc_name) VALUES (?, ?)",
     ).run(entry.discord_id, username);
     db.prepare("UPDATE link_codes SET confirmed = 1 WHERE code = ?").run(code);
 
