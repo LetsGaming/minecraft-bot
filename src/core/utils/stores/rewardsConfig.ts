@@ -21,7 +21,7 @@ import {
   type RewardPool,
   type RewardPoolField,
 } from "@mcbot/schema/dailyRewards.js";
-import { loadJson, saveJson } from "../jsonStore.js";
+import { isEnoent, loadJson, removeJson, saveJson } from "../jsonStore.js";
 import { getRootDir } from "../paths.js";
 import { log } from "../logger.js";
 import { errMsg } from "../error.js";
@@ -51,10 +51,6 @@ export function sharedRewardsPath(): string {
 
 export function serverRewardsPath(serverId: string): string {
   return path.join(editableDir(), `dailyRewards_${serverId}.json`);
-}
-
-function isEnoent(err: unknown): boolean {
-  return err instanceof Error && "code" in err && err.code === "ENOENT";
 }
 
 /**
@@ -135,7 +131,7 @@ export function rewardPoolForServer(
   cfg: DailyRewardsConfig,
   override?: RewardPool,
 ): ResolvedRewardPool {
-  const items = override?.default && override.default.length > 0 ? override.default : cfg.default ?? [];
+  const items = override?.default && override.default.length > 0 ? override.default : cfg.default;
   const streakBonuses = override?.streakBonuses ?? cfg.streakBonuses;
   const bonusChance = override?.bonusChance ?? cfg.bonusChance;
   return {
@@ -284,9 +280,7 @@ async function writeChecked(
   }
 
   if (scope.kind === "server" && Object.keys(pool).length === 0) {
-    for (const f of [file, `${file}.bak`]) {
-      await fsPromises.rm(f, { force: true });
-    }
+    await removeJson(file);
     return ABSENT;
   }
 
