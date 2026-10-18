@@ -1,8 +1,8 @@
 /**
- * Runtime heartbeat — how the dashboard (a separate process) knows the
- * bot is alive. The bot overwrites data/runtime.json roughly once a
- * minute; the web backend reads it and treats a stale timestamp
- * (> STALE_AFTER_MS) as "bot down", which the UI shows as a banner.
+ * Runtime heartbeat: how the dashboard (a separate process) knows the
+ * bot is alive. The bot overwrites data/runtime.json once per
+ * HEARTBEAT_INTERVAL_MS; the web backend reads it and treats a stale
+ * timestamp (> STALE_AFTER_MS) as "bot down", which the UI shows as a banner.
  * File-based on purpose: both processes already share the data dir, and
  * a socket would add a failure mode for one boolean.
  */
@@ -12,12 +12,13 @@ import { getLoadedConfigRevision } from "../../config.js";
 import { getRootDir } from "../paths.js";
 import { log } from "../logger.js";
 import { errMsg } from "../error.js";
+import { MS } from "@mcbot/schema/time.js";
 
 const RUNTIME_PATH = path.resolve(getRootDir(), "data", "runtime.json");
 
-export const HEARTBEAT_INTERVAL_MS = 60_000;
+export const HEARTBEAT_INTERVAL_MS = MS.minute;
 /** 2.5 intervals of grace before the dashboard calls the bot down. */
-export const STALE_AFTER_MS = 150_000;
+export const STALE_AFTER_MS = HEARTBEAT_INTERVAL_MS * 2.5;
 
 export interface RuntimeHeartbeat {
   /** Last beat (epoch ms). */
@@ -40,6 +41,7 @@ export interface AppliedConfigReport {
 
 let applied: AppliedConfigReport | null = null;
 let beatNow: (() => void) | null = null;
+let timer: ReturnType<typeof setInterval> | null = null;
 
 /**
  * Record the config revision the bot is now running with and publish it at
@@ -64,8 +66,9 @@ export function beginConfigApply(): (restartRequired: string[]) => void {
   };
 }
 
-/** Start beating. Called once by the bot process. */
+/** Start beating. Called once by the bot process; a second call is ignored. */
 export function startRuntimeHeartbeat(version: string): void {
+  if (timer) return;
   const startedAt = Date.now();
   const beat = (): void => {
     saveJson(RUNTIME_PATH, {
@@ -80,7 +83,15 @@ export function startRuntimeHeartbeat(version: string): void {
   };
   beatNow = beat;
   beat();
-  setInterval(beat, HEARTBEAT_INTERVAL_MS).unref();
+  timer = setInterval(beat, HEARTBEAT_INTERVAL_MS);
+  timer.unref();
+}
+
+/** Stop beating. The next start begins a fresh run. */
+export function stopRuntimeHeartbeat(): void {
+  if (timer) clearInterval(timer);
+  timer = null;
+  beatNow = null;
 }
 
 function isAppliedReport(value: unknown): value is AppliedConfigReport {

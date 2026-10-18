@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("../../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -16,9 +16,12 @@ vi.mock("../../src/core/config.js", () => ({
   getLoadedConfigRevision: () => ({ hash: "loaded-hash", loadedAt: 1 }),
 }));
 
+import * as jsonStore from "../../src/core/utils/jsonStore.js";
 import { computeConfigStatus } from "../../src/core/utils/config/configApplyStatus.js";
 import {
+  HEARTBEAT_INTERVAL_MS,
   STALE_AFTER_MS,
+  stopRuntimeHeartbeat,
   noteConfigApplied,
   beginConfigApply,
   startRuntimeHeartbeat,
@@ -73,6 +76,38 @@ describe("computeConfigStatus", () => {
 describe("applied revision in the heartbeat", () => {
   beforeEach(() => {
     saved.last = null;
+  });
+  afterEach(() => {
+    stopRuntimeHeartbeat();
+  });
+
+  it("allows 2.5 intervals of grace before the bot counts as down", () => {
+    expect(STALE_AFTER_MS).toBe(HEARTBEAT_INTERVAL_MS * 2.5);
+  });
+
+  it("ignores a second start while one is running", () => {
+    vi.useFakeTimers();
+    const { saveJson } = vi.mocked(jsonStore);
+    saveJson.mockClear();
+    startRuntimeHeartbeat("7");
+    startRuntimeHeartbeat("7");
+    expect(saveJson).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(HEARTBEAT_INTERVAL_MS);
+    expect(saveJson).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
+  it("can start again after a stop", () => {
+    vi.useFakeTimers();
+    const { saveJson } = vi.mocked(jsonStore);
+    startRuntimeHeartbeat("7");
+    stopRuntimeHeartbeat();
+    saveJson.mockClear();
+    vi.advanceTimersByTime(HEARTBEAT_INTERVAL_MS * 3);
+    expect(saveJson).not.toHaveBeenCalled();
+    startRuntimeHeartbeat("7");
+    expect(saveJson).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
   });
 
   it("publishes immediately when the bot reports an applied config", () => {
