@@ -29,7 +29,7 @@ import { errMsg } from "@mcbot/core/utils/error.js";
 // chat line must never forge an advancement (the challenge path pays
 // out a real item bonus through give()).
 const ADV_REGEX = serverEventRegex(
-  String.raw`(${PLAYER_NAME}) has (?:made the advancement|completed the challenge|reached the goal) \[(.+?)\]`,
+  String.raw`(${PLAYER_NAME}) has (made the advancement|completed the challenge|reached the goal) \[(.+)\]\s*$`,
 );
 
 /**
@@ -127,10 +127,10 @@ export function registerAdvancementWatcher(
   const serverId = logWatcher.server.id;
 
   registerServerEvent(logWatcher, ADV_REGEX, async (match) => {
-    const [, player, advancement] = match;
-    if (!player || !advancement) return;
+    const [, player, verb, advancement] = match;
+    if (!player || !verb || !advancement) return;
 
-    const isChallenge = match[0].includes("completed the challenge");
+    const isChallenge = verb === "completed the challenge";
 
     await broadcastNotification(client, guildConfigs, {
       serverId,

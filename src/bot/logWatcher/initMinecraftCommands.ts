@@ -1,6 +1,6 @@
 import path from "path";
 import { fileURLToPath } from "url";
-import { getCommandFiles, categoryOf } from "../utils/commands/loadCommandFiles.js";
+import { getCommandFiles, categoryOf, importCommandModule } from "../utils/commands/loadCommandFiles.js";
 import { getGlobalWatchers } from "./logWatcher.js";
 import { RemoteLogWatcher } from "./RemoteLogWatcher.js";
 import {
@@ -191,8 +191,8 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
 
       // Dynamically imported module — shape unknown at compile time. Assert the
       // expected surface, then validate `init` is callable below before use.
-      const mod = (await import(
-        path.resolve(file)
+      const mod = (await importCommandModule(
+        file,
       )) as Partial<InGameCommandResult> & {
         init?: () => void | Promise<void>;
       };

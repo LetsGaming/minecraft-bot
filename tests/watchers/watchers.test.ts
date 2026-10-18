@@ -425,7 +425,7 @@ describe("advancements watcher — regex patterns", () => {
     );
     expect(match).not.toBeNull();
     expect(match![1]).toBe("Steve");
-    expect(match![2]).toBe("A Furious Cocktail");
+    expect(match![3]).toBe("A Furious Cocktail");
   });
 
   it("ADV regex matches 'completed the challenge'", () => {
@@ -437,7 +437,7 @@ describe("advancements watcher — regex patterns", () => {
     );
     expect(match).not.toBeNull();
     expect(match![1]).toBe("Alex");
-    expect(match![2]).toBe("How Did We Get Here?");
+    expect(match![3]).toBe("How Did We Get Here?");
   });
 
   it("ADV regex matches 'reached the goal'", () => {

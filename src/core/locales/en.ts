@@ -288,6 +288,8 @@ export const en: Record<string, string> = {
   "schedule.warn": "**{server}** restarts in **{minutes} min** (at {time}).",
   "schedule.doneTitle": "{server} restarted as scheduled",
   "schedule.done": "**{server}**: the scheduled restart was triggered.",
+  "restart.failedTitle": "Scheduled restart of {server} failed",
+  "restart.failed": "**{server}**: the scheduled restart did not complete. Check the server and restart it manually.",
 
   // ── /daily-history ──
   "dailyHistory.title": "Your daily claims on {server}",

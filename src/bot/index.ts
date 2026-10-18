@@ -20,7 +20,7 @@ import {
 import { t, runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
 import { recordCommandUsage } from "@mcbot/core/utils/commands/commandUsage.js";
 import { registerManifestCommands } from "@mcbot/core/utils/commands/commandManifest.js";
-import { getCommandFiles, categoryOf } from "./utils/commands/loadCommandFiles.js";
+import { getCommandFiles, categoryOf, importCommandModule, assertCommandsLoaded } from "./utils/commands/loadCommandFiles.js";
 
 /** Slash commands discovered at load, for the dashboard manifest. */
 const manifestSlash: Array<{
@@ -233,7 +233,7 @@ async function loadCommands(): Promise<void> {
       // Command modules are loaded dynamically, so their shape isn't known at
       // compile time: import as Partial<BotCommand> and validate the required
       // members (data + execute) below before the module is used.
-      const cmd = (await import(path.resolve(file))) as Partial<BotCommand>;
+      const cmd = (await importCommandModule(file)) as Partial<BotCommand>;
       if (!cmd.data || !cmd.execute) continue;
       const name = cmd.data.name;
       // Collect for the dashboard manifest BEFORE any skip, so disabled
@@ -270,6 +270,8 @@ async function loadCommands(): Promise<void> {
     }
   }
 
+  assertCommandsLoaded(knownCommands.size, commandsRoot);
+
   syncCommands();
 
   // Dashboard manifest: the web process cannot discover commands itself.
@@ -293,7 +295,12 @@ async function registerGlobalCommands(): Promise<void> {
 // ── Main ──
 
 void (async () => {
-  await loadCommands();
+  try {
+    await loadCommands();
+  } catch (err) {
+    log.error("commands", `Startup aborted: ${errMsg(err)}`);
+    process.exit(1);
+  }
   if (!DEV_NO_DISCORD) await registerGlobalCommands();
 
   // Attach commands to client for help command access

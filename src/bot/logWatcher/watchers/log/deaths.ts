@@ -58,6 +58,15 @@ const DEATH_PHRASES = [
   "didn't want to live",
   "was frozen",
   "was skewered",
+  "froze to death",
+  "was struck by lightning",
+  "went up in flames",
+  "was burned",
+  "was burnt",
+  "discovered the floor was lava",
+  "was roasted in dragon's breath",
+  "was smashed",
+  "left the confines of this world",
 ] as const;
 
 // SEC-01: anchored on the server thread tag via serverEventRegex — a

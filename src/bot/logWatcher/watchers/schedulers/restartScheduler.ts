@@ -134,6 +134,7 @@ async function performRestart(
 ): Promise<void> {
   const server = getServerInstance(serverId);
   if (!server) return;
+  let ok = false;
 
   if (server.capabilities && !server.capabilities.scripts.restart) {
     log.warn(
@@ -154,7 +155,8 @@ async function performRestart(
 
   try {
     const result = await runScript(server.config, "restart");
-    if (result.exitCode !== 0) {
+    ok = result.exitCode === 0;
+    if (!ok) {
       log.error(
         "schedule",
         `${serverId}: restart script exited ${result.exitCode}: ${result.stderr.slice(0, 300)}`,
@@ -169,9 +171,13 @@ async function performRestart(
     event: "scheduledRestart",
     buildEmbed: () =>
       createEmbed({
-        title: t("schedule.doneTitle", { server: serverId }),
-        description: t("schedule.done", { server: serverId }),
-        category: EmbedCategory.Recovery,
+        title: ok
+          ? t("schedule.doneTitle", { server: serverId })
+          : t("restart.failedTitle", { server: serverId }),
+        description: ok
+          ? t("schedule.done", { server: serverId })
+          : t("restart.failed", { server: serverId }),
+        category: ok ? EmbedCategory.Recovery : EmbedCategory.Error,
       }),
     logTag: "schedule",
   });
@@ -222,8 +228,10 @@ function armServer(
           log.error("schedule", `${serverId}: restart run failed: ${errMsg(err)}`);
         })
         .finally(() => {
-          // Wall-clock rescheduling after each run — see module docs.
-          armServer(client, serverId, schedule);
+          // Re-read the schedule: it may have been edited or removed while
+          // this timer was pending.
+          const current = loadConfig().schedules?.[serverId]?.restart;
+          if (current) armServer(client, serverId, current);
         });
     }, runAt - Date.now()),
   );

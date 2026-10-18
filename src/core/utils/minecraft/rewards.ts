@@ -247,3 +247,15 @@ export function nextMilestone(
   if (day === undefined) return null;
   return { day, items: streakBonuses?.[String(day)] ?? [] };
 }
+
+/**
+ * The bonus streak as `/streak` should show it: past the same grace window
+ * `liveStreak` uses (two cooldowns), the stored value is stale and reads as 0.
+ */
+export function liveBonusStreak(
+  data: Pick<UserClaimData, "bonusStreak" | "lastClaim">,
+  now = Date.now(),
+): number {
+  if (!data.lastClaim || now - data.lastClaim > 2 * DAILY_COOLDOWN_MS) return 0;
+  return data.bonusStreak ?? 0;
+}
