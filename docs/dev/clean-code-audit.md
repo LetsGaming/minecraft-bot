@@ -669,3 +669,12 @@ This pass read in full: every frontend composable and `web/frontend/src/utils`, 
 ## 5. Conclusion
 
 The highest-leverage work is three seams: one wrapper fetch path (CC-001, which also absorbs CC-019), `kvMutate` for the remaining whole-document stores (CC-004, with CC-026 and CC-028 removing the invitation to regress), and one shared helper set for backend routes (CC-007, CC-006, CC-020, CC-021). `getList` semantics (CC-002) and the guild scope list (CC-003) are small changes with outsized safety benefit. On the frontend, the `ModsView` split (CC-008) and the shared CSS and feedback helpers (CC-009, CC-010, CC-022) pay off most. Two items from the `core/utils` pass should be handled before any refactoring: the link-code replay (CC-038) and the empty `allowedServers` fail-open (CC-039) are behaviour bugs, each fixable in a few lines with a regression test. After them, the shared helper seams that recur across the pass are `tryLoadConfig`, `MS` for every duration, and one quote-aware scanner for the config adapters (CC-054, CC-050, CC-051). `core/utils/**`, the frontend composables, `src/bot`, `src/schema` and `core/db` are now covered by full reads. Three more items should go ahead of any refactoring: the Windows command import (CC-067), the `/console tail` length (CC-068) and the permanent-ban/temp-ban interaction (CC-071), each a small fix with a test. The shared helper seams that recur across all three passes are a latest-wins loader and one polling helper in the frontend (CC-073, CC-074), one `tryLoadConfig` and `MS` everywhere (CC-054, CC-050, CC-081), and one admin-permission leaf module in the bot (CC-077). The principal remaining limitation is the frontend views and components, which were looked at only where a finding touched them.
+
+## 6. Planned feature: cross-server chat relay
+
+Not an audit finding. A feature extension, planned while the findings above are being fixed. Full plan: `docs/dev/cross-server-relay.md`.
+
+- A message in one guild's chat-bridge channel is relayed to the other guilds' bridge channels that share the same Minecraft server and the same opt-in `relayGroup`.
+- Sender name: the linked Minecraft name, otherwise a censored Discord display name. No avatar, no Discord id, mentions and emoji rewritten to plain text, attachments replaced by placeholders.
+- Consent: a pinned notice per channel and a per-user opt-out. Edit and delete sync uses an in-memory map only.
+- Built after this wave merges, because it touches `chatBridge.ts` and the shared per-channel send queue.

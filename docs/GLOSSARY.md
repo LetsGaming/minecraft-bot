@@ -18,4 +18,7 @@ Terms specific to this project that are easy to misread.
 | Manual selection | Chunks chosen by hand in the prune map: an ordered list of add/remove rectangles sent as `selection` with the scan parameters. It overrides soft rules (in use, buffer), and hard protections only with `allowProtected`. Unreadable chunks are never deleted. Not saved as a default. |
 | Soft rule / hard protection | Soft: a chunk is in use or inside the buffer; a manual selection may override it. Hard: spawn, player areas and drawn zones; held unless `allowProtected`. |
 | Service user | The unprivileged Linux user the API wrapper runs as when `API_SERVER.SERVICE_USER` is set (`service_user.sh`): ACL grants on the instance files and a generated sudoers file naming exact scripts. |
+| Relay group | A name set as `relayGroup` on chat bridges. Bridges with the same group and the same Minecraft server relay Discord messages to each other. Never spans Minecraft servers. Planned, see `docs/dev/cross-server-relay.md`. |
+| Source label | The short guild name shown next to a relayed sender, set by the guild's admin. It tells readers which Discord server a message came from. |
+| Relay identity | The name shown for a relayed Discord user: the linked Minecraft name, otherwise a censored Discord display name. Never an avatar or a Discord id. |
 | Terrain tile | A 512 x 512 PNG of one region seen from above, drawn by the setup suite (`prune-chunks.js --tile`) and cached under `common/prune/tiles/` by the region file's fingerprint. Shown under the prune map's classes in the Terrain view. |
