@@ -13,11 +13,18 @@ import {
   NOTIFICATION_EVENTS,
   isNotificationEvent,
   REMOVED_LOCAL_SERVER_FIELDS,
+  LANGUAGES,
+  isLanguage,
 } from "@mcbot/schema";
+import { apiKeyEnvVar } from "./config.js";
+import {
+  bridgesOf,
+  guildServerScopes,
+  scopeToList,
+} from "./utils/server/guildScopes.js";
 import { checkAgainstSchema } from "./configSchemaCheck.js";
 import { CURRENT_CONFIG_VERSION } from "./configMigrations.js";
 import type {
-  GuildChatBridgeConfig,
   GuildConfig,
   RawBotConfig,
 } from "./types/index.js";
@@ -146,24 +153,11 @@ export interface ConfigValidationResult {
 const usable = <T>(v: T | undefined): v is T =>
   v !== undefined && v !== null && !Array.isArray(v) && typeof v === "object";
 
-/** Feature `server` fields accept a single ID or a list of them. */
-function scopeRefs(
-  field: string,
-  scope: string | string[] | undefined,
-): Array<[string, string]> {
-  if (typeof scope === "string") return [[field, scope]];
-  if (Array.isArray(scope)) return scope.map((id): [string, string] => [field, id]);
-  return [];
-}
-
 /** Schema enum failure on a notifications.events entry — downgraded. */
 const UNKNOWN_EVENT_ERROR = /\.notifications\.events\.\d+: must be one of/;
 
 /** Schema enum failure on a guild language, downgraded to a locale warning. */
 const UNKNOWN_LANGUAGE_ERROR = /^ {2}- guilds\.[^.]+\.language: must be one of/;
-
-const hasScope = (scope: string | string[] | undefined): boolean =>
-  typeof scope === "string" || (Array.isArray(scope) && scope.length > 0);
 
 interface Findings {
   errors: string[];
@@ -247,9 +241,7 @@ function checkServers({ raw, errors, warnings }: SectionContext): void {
     } else if (typeof srv.apiKey !== "string" || srv.apiKey.trim() === "") {
       errors.push(
         `  - servers.${id}.apiKey: required — the wrapper's shared secret. ` +
-          `Set it here, or supply API_KEY_${id
-            .toUpperCase()
-            .replace(/[^A-Z0-9]/g, "_")} / API_KEY in the environment.`,
+          `Set it here, or supply ${apiKeyEnvVar(id)} / API_KEY in the environment.`,
       );
     }
 
@@ -264,11 +256,6 @@ function checkServers({ raw, errors, warnings }: SectionContext): void {
   }
 }
 
-function bridgesOf(guild: GuildConfig): GuildChatBridgeConfig[] {
-  if (Array.isArray(guild.chatBridge)) return guild.chatBridge;
-  return guild.chatBridge ? [guild.chatBridge] : [];
-}
-
 function checkGuildLocale(
   gid: string,
   guild: GuildConfig,
@@ -276,11 +263,11 @@ function checkGuildLocale(
 ): void {
   if (
     typeof guild.language === "string" &&
-    !["en", "de"].includes(guild.language)
+    !isLanguage(guild.language)
   ) {
     warnings.push(
       `guilds.${gid}.language "${guild.language}" is not a known ` +
-        `locale (en, de) — the global language will be used`,
+        `locale (${LANGUAGES.join(", ")}) — the global language will be used`,
     );
   }
 }
@@ -366,22 +353,18 @@ function checkGuildServerRefs(
   { warnings, knownServers }: SectionContext,
 ): void {
   if (!knownServers) return;
-  const refs: Array<[string, string]> = [
-    ...scopeRefs("defaultServer", guild.defaultServer),
-    ...bridgesOf(guild).flatMap((b) => scopeRefs("chatBridge.server", b?.server)),
-    ...scopeRefs("notifications.server", guild.notifications?.server),
-    ...scopeRefs("leaderboard.server", guild.leaderboard?.server),
-    ...scopeRefs("tpsAlerts.server", guild.tpsAlerts?.server),
-    ...scopeRefs("downtimeAlerts.server", guild.downtimeAlerts?.server),
-    ...scopeRefs("reports.server", guild.reports?.server),
-    ...scopeRefs("allowedServers", guild.allowedServers),
+  const scopes = [
+    ...guildServerScopes(guild),
+    { field: "allowedServers", ids: scopeToList(guild.allowedServers) },
   ];
-  for (const [field, ref] of refs) {
-    if (ref && !knownServers.has(ref)) {
-      warnings.push(
-        `guilds.${gid}.${field} references unknown server "${ref}" ` +
-          `(configured servers: ${[...knownServers].join(", ")})`,
-      );
+  for (const { field, ids } of scopes) {
+    for (const ref of ids) {
+      if (ref && !knownServers.has(ref)) {
+        warnings.push(
+          `guilds.${gid}.${field} references unknown server "${ref}" ` +
+            `(configured servers: ${[...knownServers].join(", ")})`,
+        );
+      }
     }
   }
 }
@@ -432,14 +415,7 @@ function checkTenantIsolation(
   { warnings }: Findings,
 ): void {
   if (guildCount <= 1) return;
-  const derived =
-    hasScope(guild.defaultServer) ||
-    bridgesOf(guild).some((b) => hasScope(b?.server)) ||
-    hasScope(guild.notifications?.server) ||
-    hasScope(guild.leaderboard?.server) ||
-    hasScope(guild.tpsAlerts?.server) ||
-    hasScope(guild.downtimeAlerts?.server) ||
-    hasScope(guild.reports?.server);
+  const derived = guildServerScopes(guild).some((s) => s.ids.length > 0);
   if (guild.allowedServers?.length === 0 && !guild.defaultServer) {
     warnings.push(
       `guilds.${gid}: allowedServers is empty and no defaultServer is set: ` +

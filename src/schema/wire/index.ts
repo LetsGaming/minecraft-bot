@@ -19,6 +19,7 @@ export type ScriptResult = Wire["ScriptResult"];
 export type BackupFileInfo = Wire["BackupFileInfo"];
 export type BackupFileIndexBody = Wire["BackupFileIndex"];
 export type BackupDirInfo = Wire["BackupDirInfo"];
+export type PlayerList = Wire["PlayerList"];
 export type BackupSummaryBody = Wire["BackupSummary"];
 export type ConfigFileInfo = Wire["ConfigFileInfo"];
 

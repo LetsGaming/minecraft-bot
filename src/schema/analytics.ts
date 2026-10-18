@@ -13,16 +13,27 @@ import type { LeaderboardEntry } from "./stats.js";
 
 const DAY_HOURS = 24;
 
+/**
+ * How long each analytics section's store keeps data, in days. The stores
+ * prune with these values and the route clamps to them, so they cannot drift.
+ */
+export const ANALYTICS_RETENTION_DAYS = {
+  /** player_count_hours: hourly buckets. */
+  activity: 14,
+  /** uptime_checks: one-minute checks. */
+  uptime: 30,
+  /** Snapshots are kept for the longest leaderboard period plus two days. */
+  leaderboard: 32,
+  /** command_usage. */
+  commands: 90,
+} as const;
+
 /** Longest range, in hours, each analytics section can answer. */
 export const ANALYTICS_CAP_HOURS = {
-  /** player_count_hours keeps 14 days of hourly buckets. */
-  activity: 14 * DAY_HOURS,
-  /** uptime_checks keeps about 30 days of one-minute checks. */
-  uptime: 30 * DAY_HOURS,
-  /** Snapshots are kept for the longest leaderboard period plus two days. */
-  leaderboard: 32 * DAY_HOURS,
-  /** command_usage keeps 90 days. */
-  commands: 90 * DAY_HOURS,
+  activity: ANALYTICS_RETENTION_DAYS.activity * DAY_HOURS,
+  uptime: ANALYTICS_RETENTION_DAYS.uptime * DAY_HOURS,
+  leaderboard: ANALYTICS_RETENTION_DAYS.leaderboard * DAY_HOURS,
+  commands: ANALYTICS_RETENTION_DAYS.commands * DAY_HOURS,
 } as const;
 
 export type AnalyticsSection = keyof typeof ANALYTICS_CAP_HOURS;

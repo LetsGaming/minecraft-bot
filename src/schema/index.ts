@@ -52,6 +52,7 @@ export type {
   PruneMap,
   BackupDeleteResult,
   RemoteHostInfo,
+  PlayerList,
 } from "./wire/index.js";
 // Runtime values (the leaderboard-interval contract) alongside the stat
 // shapes, so the scheduler and the snapshot retention policy size periods
@@ -66,6 +67,8 @@ export * from "./discord.js";
 // Runtime values (formatBytes), shared by the bot embeds and the dashboard —
 // the two had drifting copies before.
 export * from "./format.js";
+// Millisecond unit lengths (MS), shared by core duration parsing and the dashboard.
+export * from "./time.js";
 export * from "./serverActions.js";
 // Runtime values (the capability contract), shared by the dashboard's route
 // declarations, its authorization gate, and the frontend that renders from
@@ -92,3 +95,12 @@ export * from "./configStatus.js";
 // shared glossary), read by the dashboard's chips and the bot's embed colours.
 export * from "./status.js";
 export * from "./glossary.js";
+
+// Upgrade and prune job phases and failure reasons, with type guards.
+export * from "./upgradePhases.js";
+
+export * from "./thresholds.js";
+
+export * from "./language.js";
+
+export * from "./region.js";

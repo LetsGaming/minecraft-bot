@@ -19,6 +19,8 @@ export type {
   ApiUrlValidation,
   ConfigValidationResult,
 } from "./configValidation.js";
+import { DEFAULT_TPS_ALERT_THRESHOLD } from "@mcbot/schema/thresholds.js";
+import { isLanguage } from "@mcbot/schema/language.js";
 import { errMsg } from "./utils/error.js";
 import {
   SECRET_FILE_MODE,
@@ -117,6 +119,16 @@ function resolveServerConfig(
   };
 }
 
+/** ENV_VAR-safe form of a server id: "smp-1" -> "SMP_1". */
+function envSuffix(id: string): string {
+  return id.toUpperCase().replace(/[^A-Z0-9]/g, "_");
+}
+
+/** Name of the environment variable that overrides one server's apiKey. */
+export function apiKeyEnvVar(id: string): string {
+  return `API_KEY_${envSuffix(id)}`;
+}
+
 /**
  * Apply DISCORD_TOKEN / DISCORD_CLIENT_ID / RCON_PASSWORD[_<SERVER>] over the
  * on-disk config, enabling Docker/K8s secrets injection without touching
@@ -128,11 +140,6 @@ function resolveServerConfig(
  * be in place before the required-field check runs — validating first would
  * reject the very value the override was about to fill in (BUG-01).
  */
-/** ENV_VAR-safe form of a server id: "smp-1" -> "SMP_1". */
-function envSuffix(id: string): string {
-  return id.toUpperCase().replace(/[^A-Z0-9]/g, "_");
-}
-
 function applyEnvOverrides(raw: RawBotConfig): void {
   if (process.env.DISCORD_TOKEN)     raw.token    = process.env.DISCORD_TOKEN;
   if (process.env.DISCORD_CLIENT_ID) raw.clientId = process.env.DISCORD_CLIENT_ID;
@@ -141,7 +148,7 @@ function applyEnvOverrides(raw: RawBotConfig): void {
       // API_KEY_<ID> beats API_KEY, matching the shape RCON_PASSWORD_<ID>
       // had before 5.0.0 — the bot no longer speaks RCON, so the wrapper's
       // key is the only per-server secret it holds.
-      const specific = `API_KEY_${envSuffix(id)}`;
+      const specific = apiKeyEnvVar(id);
       if (process.env[specific]) srv.apiKey = process.env[specific];
       else if (process.env.API_KEY) srv.apiKey = process.env.API_KEY;
     }
@@ -273,10 +280,10 @@ export function loadConfig(): BotConfig {
     guilds,
     adminUsers:           raw.adminUsers          ?? [],
     // Locale for user-visible strings; anything but "de" → "en"
-    language:             raw.language === "de" ? "de" : "en",
+    language:             isLanguage(raw.language) ? raw.language : "en",
     commands:             raw.commands            ?? {},
     leaderboard:          raw.leaderboard         ?? {},
-    tpsWarningThreshold:  raw.tpsWarningThreshold ?? 15,
+    tpsWarningThreshold:  raw.tpsWarningThreshold ?? DEFAULT_TPS_ALERT_THRESHOLD,
     tpsPollIntervalMs:    raw.tpsPollIntervalMs   ?? 60_000,
     leaderboardInterval:  raw.leaderboardInterval ?? "weekly",
     ...(raw.leaderboardPostTime ? { leaderboardPostTime: raw.leaderboardPostTime } : {}),
@@ -312,6 +319,37 @@ export function reloadConfig(): BotConfig {
   } catch (err) {
     _config = previous;
     throw err;
+  }
+}
+
+export type ConfigLoadResult =
+  | { ok: true; config: BotConfig }
+  | { ok: false; error: string; failOpen: boolean };
+
+let _lastLoadFailure: string | null = null;
+
+/**
+ * loadConfig() for callers that must keep running when the config cannot be
+ * read. The caller states which way a failure resolves: `"open"` (carry on as
+ * if nothing was restricted) or `"closed"` (refuse). The result carries that
+ * as `failOpen`, so the decision is visible at the call site instead of
+ * hiding in an empty catch.
+ *
+ * A failure is logged once; the same failure repeating stays quiet until a
+ * load succeeds or the message changes.
+ */
+export function tryLoadConfig(opts: { onError: "open" | "closed" }): ConfigLoadResult {
+  try {
+    const config = loadConfig();
+    _lastLoadFailure = null;
+    return { ok: true, config };
+  } catch (err) {
+    const error = errMsg(err);
+    if (error !== _lastLoadFailure) {
+      _lastLoadFailure = error;
+      log.warn("config", `Config could not be loaded (failing ${opts.onError}): ${error}`);
+    }
+    return { ok: false, error, failOpen: opts.onError === "open" };
   }
 }
 

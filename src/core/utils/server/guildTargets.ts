@@ -7,11 +7,7 @@ import { loadConfig } from "../../config.js";
 import type { GuildConfig } from "../../types/index.js";
 
 import { t } from "@mcbot/core/utils/i18n.js";
-function scopeToList(scope: string | string[] | undefined): string[] {
-  if (typeof scope === "string") return [scope];
-  if (Array.isArray(scope)) return scope;
-  return [];
-}
+import { guildServerScopes } from "./guildScopes.js";
 
 /**
  * Derive the set of server IDs a guild's config references.
@@ -19,23 +15,8 @@ function scopeToList(scope: string | string[] | undefined): string[] {
  */
 export function referencedServerIds(guild: GuildConfig): Set<string> {
   const ids = new Set<string>();
-  if (guild.defaultServer) ids.add(guild.defaultServer);
-  for (const scope of [
-    guild.notifications?.server,
-    guild.leaderboard?.server,
-    guild.tpsAlerts?.server,
-    guild.downtimeAlerts?.server,
-    guild.reports?.server,
-  ]) {
-    for (const id of scopeToList(scope)) ids.add(id);
-  }
-  const bridges = Array.isArray(guild.chatBridge)
-    ? guild.chatBridge
-    : guild.chatBridge
-      ? [guild.chatBridge]
-      : [];
-  for (const bridge of bridges) {
-    if (bridge.server) ids.add(bridge.server);
+  for (const scope of guildServerScopes(guild)) {
+    for (const id of scope.ids) ids.add(id);
   }
   return ids;
 }

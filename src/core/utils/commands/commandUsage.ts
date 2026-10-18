@@ -25,9 +25,10 @@ import { getDb } from "../../db/index.js";
 import { mapRows, col } from "../../db/rows.js";
 import { log } from "../logger.js";
 import { errMsg } from "../error.js";
+import { ANALYTICS_RETENTION_DAYS } from "@mcbot/schema/analytics.js";
 
 /** How far back usage is kept. Long enough to show a monthly pattern. */
-export const USAGE_RETENTION_DAYS = 90;
+export const USAGE_RETENTION_DAYS = ANALYTICS_RETENTION_DAYS.commands;
 
 /** Default window for "recently used" questions. */
 export const USAGE_WINDOW_DAYS = 30;

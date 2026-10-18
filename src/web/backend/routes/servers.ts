@@ -35,7 +35,7 @@ import {
 import { sessionFromRequest, type Session } from "../auth/auth.js";
 import { BadRequest, NotFound, Conflict, Forbidden, HttpError } from "../errors.js";
 import { ServerActionParams, IdParams, LinesQuery, DryRunQuery } from "./schemas.js";
-import { isServerOperatorAction } from "@mcbot/schema/serverActions.js";
+import { isServerOperatorAction, capabilityForServerAction } from "@mcbot/schema/serverActions.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
 /** The generic message returned when a server-side operation fails: SEC-04
@@ -159,9 +159,13 @@ export function registerServerRoutes(app: FastifyInstance): void {
     },
     async (req) => {
       const { id, action } = req.params;
-      // Defense in depth: the dedicated route above owns rollback.
-      if (action === "rollback") {
-        throw new Forbidden(`You don't have "server:rollback" on this server.`);
+      // Defense in depth: actions with a capability of their own (rollback)
+      // are served by their dedicated route above.
+      if (isServerOperatorAction(action)) {
+        const needed = capabilityForServerAction(action);
+        if (needed !== "server:control") {
+          throw new Forbidden(`You don't have "${needed}" on this server.`);
+        }
       }
       return runServerAction(id, action, sessionFromRequest(req)!);
     },

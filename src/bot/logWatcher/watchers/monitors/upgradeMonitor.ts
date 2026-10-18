@@ -24,7 +24,13 @@ import { createEmbed } from "../../../utils/embeds/embedUtils.js";
 import { EmbedColor, embedColorFor } from "../../../utils/embeds/embedColors.js";
 import { progressBar } from "../../../utils/embeds/gameDisplay.js";
 import { formatBytes } from "@mcbot/schema/format.js";
-import { phaseRows } from "@mcbot/schema/upgradePhases.js";
+import {
+  phaseRows,
+  isJobPhase,
+  isJobFailureReason,
+  UPGRADE_PHASES,
+  PRUNE_PHASES,
+} from "@mcbot/schema/upgradePhases.js";
 import { holdAlerts } from "./downtimeMonitor.js";
 
 const POLL_INTERVAL_MS = 15_000;
@@ -34,33 +40,7 @@ const ALERT_HOLD_MS = 10 * 60_000;
 /** A job that finished longer ago than this is history, not news. */
 const FRESH_RESULT_SECONDS = 10 * 60;
 
-/** The steps of a clean upgrade, in order; the progress bar counts these. */
-export const UPGRADE_PHASES = ["plan", "countdown", "stop", "backup", "apply", "start"] as const;
-/** The same for a prune-only job, which has no install. */
-export const PRUNE_PHASES = ["plan", "countdown", "stop", "backup", "prune", "start"] as const;
-
-const KNOWN_PHASES = new Set<string>([
-  ...UPGRADE_PHASES,
-  "prune",
-  "mods",
-  "rollback",
-  "abort",
-]);
-
-const KNOWN_REASONS = new Set([
-  "plan_failed",
-  "mods_changed",
-  "stop_failed",
-  "backup_failed",
-  "apply_failed",
-  "prune_failed",
-  "prune_stale",
-  "prune_timeout",
-  "crash_loop",
-  "timeout",
-  "start_failed",
-  "rollback_failed",
-]);
+export { UPGRADE_PHASES, PRUNE_PHASES };
 
 /** The latest status of each top-level phase, in the order they first appeared. */
 export const phaseViews = phaseRows;
@@ -72,7 +52,7 @@ function statusIcon(status: string): string {
 }
 
 function phaseName(phase: string): string {
-  return KNOWN_PHASES.has(phase) ? t(`upgrade.phase.${phase}`) : phase;
+  return isJobPhase(phase) ? t(`upgrade.phase.${phase}`) : phase;
 }
 
 function resultLines(job: UpgradeJob): string[] {
@@ -95,7 +75,7 @@ function resultLines(job: UpgradeJob): string[] {
   } else if (r.reason === "rollback_failed") {
     lines.push(t("upgrade.rollbackFailed"));
   } else {
-    const reason = r.reason && KNOWN_REASONS.has(r.reason) ? t(`upgrade.reason.${r.reason}`) : t("upgrade.reason.other");
+    const reason = isJobFailureReason(r.reason) ? t(`upgrade.reason.${r.reason}`) : t("upgrade.reason.other");
     lines.push(t("upgrade.failedBefore", { reason }));
   }
   if (typeof r.prunedChunks === "number") {
