@@ -307,9 +307,6 @@ export default defineComponent({
 
 .gv-foot { margin-top: var(--space-3); padding-top: var(--space-2); border-top: 1px solid var(--border); }
 
-@media (pointer: coarse), (max-width: 760px) {
-  .tap { min-height: var(--touch-min); }
-}
 @media (max-width: 760px) {
   .gv-actions { width: 100%; }
   .gv-actions > * { flex: 1 1 auto; }

@@ -186,7 +186,4 @@ export default defineComponent({
 @media (max-width: 760px) {
   .group { margin: var(--space-2) 0; padding: var(--space-2) var(--space-1) var(--space-3); }
 }
-@media (pointer: coarse), (max-width: 760px) {
-  .tap { min-height: var(--touch-min); }
-}
 </style>

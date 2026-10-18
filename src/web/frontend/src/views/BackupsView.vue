@@ -664,7 +664,6 @@ export default defineComponent({
 
 <style scoped>
 .backups-view { container-type: inline-size; min-width: 0; }
-.stack-gap { display: flex; flex-direction: column; gap: var(--space-4); }
 .stack-gap :deep(.stale-banner) { margin-bottom: 0; }
 
 .metrics {
@@ -692,44 +691,10 @@ export default defineComponent({
   .layout { grid-template-columns: minmax(0, 1700px) minmax(260px, 380px); }
 }
 
-.card {
-  min-width: 0;
-  padding: var(--space-4);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-surface);
-  background: var(--surface-nav);
-}
-.card-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2) var(--space-3);
-  margin-bottom: var(--space-3);
-}
-.card-head h2 { margin: 0; font-size: var(--text-xl); font-weight: 600; }
 .card-meta { color: var(--text-dim); font-size: var(--text-sm); flex: 1 1 auto; }
 .cluster { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 
 .filters { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-3); }
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 30px;
-  padding: 0 var(--space-3);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-full);
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  font-size: var(--text-sm);
-  cursor: pointer;
-  transition: background-color var(--dur-fast), border-color var(--dur-fast);
-}
-.chip:hover { border-color: var(--border-hover); background: var(--surface); }
-.chip.on { background: var(--accent-tint); border-color: var(--accent); }
-.chip-n { color: var(--text-dim); font-variant-numeric: tabular-nums; }
-.chip.on .chip-n { color: var(--text); }
 
 .file-name { font-size: var(--text-xs); overflow-wrap: anywhere; }
 .tag {
@@ -752,15 +717,6 @@ export default defineComponent({
 .skeleton { display: flex; flex-direction: column; gap: var(--space-2); }
 .sk-row { height: 36px; border-radius: var(--radius-control); background: var(--surface-raised); opacity: 0.6; }
 
-.foot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  padding-top: var(--space-3);
-}
-.foot-count { color: var(--text-dim); font-size: var(--text-sm); }
 
 .latest { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .latest li {
@@ -774,19 +730,4 @@ export default defineComponent({
 .latest-top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .latest-count, .latest-when { color: var(--text-dim); font-size: var(--text-sm); }
 
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-  border: 0;
-}
-@media (pointer: coarse), (max-width: 760px) {
-  .tap { min-height: var(--touch-min); }
-  .chip.tap { min-height: var(--touch-min); }
-}
 </style>

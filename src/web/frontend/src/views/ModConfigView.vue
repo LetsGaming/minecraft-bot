@@ -642,6 +642,6 @@ export default defineComponent({
 }
 .mc-reset:disabled { color: var(--text-dim); cursor: default; }
 @media (pointer: coarse), (max-width: 760px) {
-  .tap, .mc-file, .mc-mod, .mc-section-head, .mc-reset { min-height: var(--touch-min); }
+  .mc-file, .mc-mod, .mc-section-head, .mc-reset { min-height: var(--touch-min); }
 }
 </style>

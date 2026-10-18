@@ -512,6 +512,6 @@ export default defineComponent({
   .step-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 @media (pointer: coarse), (max-width: 760px) {
-  .tap, .w-full { min-height: var(--touch-min); }
+  .w-full { min-height: var(--touch-min); }
 }
 </style>

@@ -281,28 +281,10 @@ export default defineComponent({
 
 <style scoped>
 .audit-view { min-width: 0; }
-.stack-gap { display: flex; flex-direction: column; gap: var(--space-4); }
-.card {
-  min-width: 0;
-  padding: var(--space-4);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-surface);
-  background: var(--surface-nav);
-}
-.card-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2) var(--space-3);
-  margin-bottom: var(--space-3);
-}
-.card-head h2 { margin: 0; font-size: var(--text-xl); font-weight: 600; }
 .card-meta { flex: 1 1 auto; color: var(--text-dim); font-size: var(--text-sm); }
 .filter { flex: 0 1 280px; min-width: min(220px, 100%); }
 .filter :deep(.p-iconfield) { width: 100%; }
 .filter-input { width: 100%; }
-.note { margin: 0; color: var(--text-dim); font-size: var(--text-sm); }
-.dim { color: var(--text-dim); }
 .when { color: var(--text-dim); font-family: var(--font-mono); font-size: var(--text-xs); white-space: nowrap; }
 .action-tag {
   display: inline-block;
@@ -317,7 +299,6 @@ export default defineComponent({
 .audit-table :deep(.col-actions) { width: 140px; }
 
 @media (pointer: coarse), (max-width: 760px) {
-  .tap { min-height: var(--touch-min); }
   .filter-input { min-height: var(--touch-min); }
   .audit-table :deep(.p-paginator button),
   .audit-table :deep(.p-paginator .p-select) { min-width: var(--touch-min); min-height: var(--touch-min); }

@@ -609,6 +609,6 @@ export default defineComponent({
 .cv-raw-status { margin: 0; color: var(--text-dim); font-size: var(--text-sm); }
 .cv-raw-status.bad { color: var(--danger); }
 @media (pointer: coarse), (max-width: 760px) {
-  .tap, .cv-tab, .cv-groupnav button { min-height: var(--touch-min); }
+  .cv-tab, .cv-groupnav button { min-height: var(--touch-min); }
 }
 </style>

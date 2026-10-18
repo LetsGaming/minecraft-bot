@@ -750,7 +750,4 @@ export default defineComponent({
   .rw-table .rw-item { grid-column: 1 / -1; }
   .rw-table .num { text-align: left; }
 }
-@media (pointer: coarse), (max-width: 760px) {
-  .tap { min-height: var(--touch-min); }
-}
 </style>

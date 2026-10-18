@@ -172,6 +172,6 @@ const saveText = computed(() => {
   .docked .eb-actions > * { flex: 1 1 auto; }
 }
 @media (pointer: coarse), (max-width: 760px) {
-  .tap, .eb-link { min-height: var(--touch-min); }
+  .eb-link { min-height: var(--touch-min); }
 }
 </style>

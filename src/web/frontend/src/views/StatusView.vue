@@ -429,7 +429,6 @@ export default defineComponent({
 
 <style scoped>
 .servers-view { min-width: 0; }
-.stack-gap { display: flex; flex-direction: column; gap: var(--space-4); }
 
 .cards {
   display: grid;
@@ -438,19 +437,14 @@ export default defineComponent({
   align-items: start;
 }
 .card {
-  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  padding: var(--space-4);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-surface);
-  background: var(--surface-nav);
   transition: border-color var(--dur-fast);
 }
 .card.focused { border-color: var(--accent); }
 
-.card-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.card-head { margin-bottom: 0; }
 .card-title { margin: 0; margin-right: auto; font-size: var(--text-xl); font-weight: 600; overflow-wrap: anywhere; }
 
 .card-body { display: flex; flex-direction: column; gap: var(--space-2); }
@@ -458,7 +452,6 @@ export default defineComponent({
 .players-count { font-size: var(--text-3xl); font-weight: 600; line-height: var(--leading-tight); font-variant-numeric: tabular-nums; }
 .players-max { color: var(--text-dim); font-variant-numeric: tabular-nums; }
 .players-label { margin-left: var(--space-2); color: var(--text-dim); font-size: var(--text-sm); }
-.note { margin: 0; color: var(--text-dim); font-size: var(--text-sm); }
 .wrapper-note { color: var(--st-degraded); }
 .names { display: flex; flex-direction: column; gap: var(--space-2); }
 .names-note { margin: 0; color: var(--text-dim); font-size: var(--text-xs); }
@@ -509,7 +502,6 @@ export default defineComponent({
 .sk-card { height: 260px; border-radius: var(--radius-surface); background: var(--surface-nav); border: 1px solid var(--border); }
 
 @media (pointer: coarse), (max-width: 760px) {
-  .tap { min-height: var(--touch-min); }
   .intent .tap.p-button-icon-only { min-width: var(--touch-min); }
 }
 </style>

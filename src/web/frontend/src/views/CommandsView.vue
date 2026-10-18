@@ -674,7 +674,6 @@ export default defineComponent({
   .cmd-grid.list .cmd-controls { flex-direction: column; }
 }
 @media (pointer: coarse), (max-width: 760px) {
-  .tap,
   .cmd-filters :deep(.p-togglebutton),
   .cmd-ctl :deep(.p-togglebutton),
   .commands-view :deep(.p-accordionheader),

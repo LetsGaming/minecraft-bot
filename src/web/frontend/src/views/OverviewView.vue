@@ -304,7 +304,6 @@ export default defineComponent({
 
 <style scoped>
 .overview-view { min-width: 0; }
-.stack-gap { display: flex; flex-direction: column; gap: var(--space-4); }
 
 .tiles {
   display: grid;
@@ -355,7 +354,6 @@ export default defineComponent({
 .panel-title { margin: 0; font-size: var(--text-lg); font-weight: 600; }
 .panel-error { margin: var(--space-3) 0 var(--space-1); }
 .pad { padding: var(--space-3) 0; margin: 0; }
-.note { color: var(--text-dim); font-size: var(--text-sm); }
 
 .rows { list-style: none; margin: 0; padding: var(--space-1) 0; display: flex; flex-direction: column; gap: 2px; }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); padding: var(--space-2) 0; min-width: 0; }
@@ -376,7 +374,4 @@ export default defineComponent({
   font-size: var(--text-xs);
 }
 
-@media (pointer: coarse), (max-width: 760px) {
-  .tap { min-height: var(--touch-min); }
-}
 </style>

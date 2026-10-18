@@ -216,7 +216,7 @@
             <code v-if="keyText" class="section-key">{{ keyText }}</code>
             <span v-if="text.description" class="section-desc">{{ text.description }}</span>
           </span>
-          <span :class="['chip', 'chip-' + sectionInfo.chip]">{{ chipLabel }}</span>
+          <span :class="['sf-chip', 'sf-chip-' + sectionInfo.chip]">{{ chipLabel }}</span>
         </button>
         <button
           type="button"
@@ -674,7 +674,7 @@ export default defineComponent({
   color: var(--accent);
   border: 1px solid var(--accent-border);
 }
-.chip {
+.sf-chip {
   flex: none;
   font-size: var(--text-xs);
   font-weight: 500;
@@ -683,8 +683,8 @@ export default defineComponent({
   background: var(--surface-raised);
   color: var(--text-dim);
 }
-.chip-on { background: var(--st-online-bg); color: var(--st-online); }
-.chip-configured { background: var(--accent-tint); color: var(--accent); }
+.sf-chip-on { background: var(--st-online-bg); color: var(--st-online); }
+.sf-chip-configured { background: var(--accent-tint); color: var(--accent); }
 .section-body { border-top: 1px solid var(--border); padding: var(--space-1) 0 var(--space-2); }
 .section-body > .sf-json { margin: var(--space-3) var(--space-4); width: calc(100% - 2 * var(--space-4)); }
 @media (max-width: 760px) {
