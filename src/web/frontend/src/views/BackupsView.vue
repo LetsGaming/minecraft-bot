@@ -255,7 +255,7 @@
 import { defineComponent, nextTick } from "vue";
 import Button from "primevue/button";
 import { useNotify } from "../composables/useNotify";
-import { backupTierLabel, formatBytes, ServerState, StatusRole, SERVER_STATE_ROLE } from "@mcbot/schema";
+import { backupTierLabel, formatBytes, MS, ServerState, StatusRole, SERVER_STATE_ROLE } from "@mcbot/schema";
 import { absoluteStamp, relativeAge, timestampTitle } from "../utils/time";
 import { useBackups, type ScriptOutcome } from "../composables/useBackups";
 import { useCapabilities } from "../composables/useCapabilities";
@@ -541,7 +541,7 @@ export default defineComponent({
       await this.reload();
       if (outcome.ok) {
         this.job = null;
-        const fresh = this.files.find((f) => f.mtimeMs >= startedAt - 1000);
+        const fresh = this.files.find((f) => f.mtimeMs >= startedAt - MS.second);
         if (fresh) this.newIds = [fresh.id];
         this.notify.ok(
           t("backups.create.done"),

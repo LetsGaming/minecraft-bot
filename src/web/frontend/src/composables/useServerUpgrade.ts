@@ -1,5 +1,6 @@
 import { computed, ref } from "vue";
 import type { UpgradeEvent, UpgradeJob, UpgradeRequest, UpgradeStarted } from "@mcbot/schema/wire/index.js";
+import { MS } from "@mcbot/schema";
 import { apiGet, apiSend } from "../api";
 import { safeStorage } from "../utils/safeStorage";
 import { errorMessage } from "../utils/errorMessage";
@@ -7,7 +8,7 @@ import type { PageVisibility } from "../utils/pageVisibility";
 import { usePolledJob } from "./usePolledJob";
 
 export type { PageVisibility } from "../utils/pageVisibility";
-import { phaseRows } from "@mcbot/schema/upgradePhases.js";
+import { PRUNE_PHASES, UPGRADE_PHASES, phaseRows } from "@mcbot/schema/upgradePhases.js";
 
 export { phaseRows, type PhaseRow } from "@mcbot/schema/upgradePhases.js";
 
@@ -22,13 +23,7 @@ export { phaseRows, type PhaseRow } from "@mcbot/schema/upgradePhases.js";
 export const UPGRADE_POLL_MS = 2000;
 
 /** A finished upgrade older than this is not shown as "the last upgrade". */
-export const RECENT_RESULT_SECONDS = 24 * 3600;
-
-/** The steps of a clean upgrade, in order. */
-export const UPGRADE_STEPS = ["plan", "countdown", "stop", "backup", "apply", "start"] as const;
-
-/** A prune-only job has no install: its fifth step is the prune. */
-export const PRUNE_STEPS = ["plan", "countdown", "stop", "backup", "prune", "start"] as const;
+export const RECENT_RESULT_SECONDS = MS.day / MS.second;
 
 export interface UpgradeApi {
   support(): Promise<{ supported: boolean }>;
@@ -102,7 +97,7 @@ function browserDismissed(): DismissedJobs {
 }
 
 export function useServerUpgrade(options: UseServerUpgradeOptions) {
-  const nowSeconds = options.nowSeconds ?? (() => Date.now() / 1000);
+  const nowSeconds = options.nowSeconds ?? (() => Date.now() / MS.second);
   const dismissed = options.dismissed ?? browserDismissed();
 
   const supported = ref<boolean | null>(null);
@@ -134,7 +129,7 @@ export function useServerUpgrade(options: UseServerUpgradeOptions) {
   const phases = computed(() => phaseRows(events.value));
   const stepsDone = computed(
     () =>
-      (job.value?.kind === "prune" ? PRUNE_STEPS : UPGRADE_STEPS).filter((s) =>
+      (job.value?.kind === "prune" ? PRUNE_PHASES : UPGRADE_PHASES).filter((s) =>
         phases.value.some((p) => p.phase === s && p.status === "done"),
       ).length,
   );

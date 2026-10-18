@@ -3,6 +3,7 @@
  * summary) and StatusView (the per-server card) read off the same logic
  * instead of each hand-rolling their own subset.
  */
+import { DEFAULT_TPS_ALERT_THRESHOLD, classifyDiskUsage } from "@mcbot/schema";
 import { ServerState, WrapperState, type ServerStatus } from "../api";
 import { t } from "../i18n";
 import { diskLabel, stateLabel } from "./format";
@@ -57,7 +58,7 @@ export function serverAlerts(s: ServerStatus): Alert[] {
     return out;
   }
 
-  if (s.tps !== null && s.tps < 15) {
+  if (s.tps !== null && s.tps < DEFAULT_TPS_ALERT_THRESHOLD) {
     out.push({
       kind: "lowTps",
       level: "warn",
@@ -65,7 +66,7 @@ export function serverAlerts(s: ServerStatus): Alert[] {
     });
   }
   for (const disk of s.host?.disks ?? []) {
-    if (disk.usedPercent >= 90) {
+    if (classifyDiskUsage(disk.usedPercent) === "critical") {
       out.push({
         kind: "diskFull",
         level: "warn",

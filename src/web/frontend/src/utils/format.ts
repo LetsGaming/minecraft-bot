@@ -1,4 +1,4 @@
-import { StatusRole } from "@mcbot/schema";
+import { StatusRole, classifyDiskUsage, classifyTps } from "@mcbot/schema";
 import { ServerState, WrapperState } from "../api";
 import type { ServerStatus } from "../api";
 import { t, type MessageKey } from "../i18n";
@@ -47,9 +47,14 @@ export function playersLabel(
 
 /** TPS as a status role, so the chip reads like every other health signal. */
 export function tpsRole(tps: number): StatusRole {
-  if (tps >= 18) return StatusRole.Online;
-  if (tps >= 12) return StatusRole.Degraded;
-  return StatusRole.Offline;
+  switch (classifyTps(tps)) {
+    case "ok":
+      return StatusRole.Online;
+    case "warn":
+      return StatusRole.Degraded;
+    default:
+      return StatusRole.Offline;
+  }
 }
 
 /** A disk as the status payload reports it, plus the paths that resolved to it. */
@@ -104,9 +109,14 @@ export function mergeDisks(
 
 /** Fullness → a severity, so a meter warns at the same point the alert list does. */
 export function diskSeverity(usedPercent: number): "good" | "mid" | "bad" {
-  if (usedPercent >= 90) return "bad";
-  if (usedPercent >= 75) return "mid";
-  return "good";
+  switch (classifyDiskUsage(usedPercent)) {
+    case "critical":
+      return "bad";
+    case "warn":
+      return "mid";
+    default:
+      return "good";
+  }
 }
 
 /**

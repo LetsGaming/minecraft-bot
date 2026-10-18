@@ -39,8 +39,8 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import Button from "primevue/button";
-import { StatusRole, formatBytes } from "@mcbot/schema";
-import { UPGRADE_STEPS, type useServerUpgrade } from "../composables/useServerUpgrade";
+import { StatusRole, UPGRADE_PHASES, formatBytes, isJobFailureReason, isJobPhase } from "@mcbot/schema";
+import type { useServerUpgrade } from "../composables/useServerUpgrade";
 import StatusChip from "./ui/StatusChip.vue";
 import { t, type MessageKey } from "../i18n";
 
@@ -50,15 +50,10 @@ const props = defineProps<{
 }>();
 defineEmits<{ again: [] }>();
 
-const KNOWN_PHASES = new Set(["plan", "countdown", "stop", "backup", "apply", "prune", "start", "mods", "rollback", "abort"]);
-const KNOWN_REASONS = new Set([
-  "plan_failed", "mods_changed", "stop_failed", "backup_failed", "apply_failed",
-  "prune_failed", "prune_stale", "prune_timeout", "crash_loop", "timeout", "start_failed", "rollback_failed",
-]);
 
 const prune = computed(() => props.upgrade.job.value?.kind === "prune");
 /** A prune-only job has no install; its sixth step is the prune. */
-const steps = computed(() => UPGRADE_STEPS.length);
+const steps = computed(() => UPGRADE_PHASES.length);
 const result = computed(() => props.upgrade.result.value);
 
 const title = computed(() => {
@@ -86,7 +81,7 @@ const chipKey = computed<MessageKey>(() => {
 });
 
 function phaseName(phase: string): string {
-  return KNOWN_PHASES.has(phase) ? t(`upgrade.phase.${phase}` as MessageKey) : phase;
+  return isJobPhase(phase) ? t(`upgrade.phase.${phase}` as MessageKey) : phase;
 }
 
 function phaseIcon(status: string): string {
@@ -118,7 +113,7 @@ const resultLines = computed<string[]>(() => {
     lines.push(t("upgrade.result.rollbackFailed"));
   } else {
     const reason =
-      r.reason && KNOWN_REASONS.has(r.reason)
+      r.reason && isJobFailureReason(r.reason)
         ? t(`upgrade.reason.${r.reason}` as MessageKey)
         : t("upgrade.reason.other");
     lines.push(t("upgrade.result.failedBefore", { reason }));
