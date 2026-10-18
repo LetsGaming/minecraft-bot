@@ -8,6 +8,7 @@
  * `[time] [Server thread/INFO]: ` prefix, so a chat line (`<name> ...`), a
  * `/say` line (`[Server] ...`) or an RCON echo cannot supply it.
  */
+import { isValidMcName } from "../sanitize.js";
 
 // Minecraft 26.3 writes what the server sends as chat behind `System chat: `.
 const SERVER_THREAD_PREFIX =
@@ -46,7 +47,10 @@ export function isSignedInt64(value: string): boolean {
 
 /** Answer line of `data get entity <player> <path>`: the payload after the colon. */
 export function entityDataPattern(player: string): RegExp {
-  const name = player.replace(/[^A-Za-z0-9_]/g, "");
+  // An invalid name matches nothing instead of being silently altered into
+  // some other player's name.
+  if (!isValidMcName(player)) return /(?!)/;
+  const name = player.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(`^${name} has the following entity data: (.*)$`, "i");
 }
 
