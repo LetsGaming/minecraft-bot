@@ -17,6 +17,7 @@
  */
 import { readdirSync, statSync } from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 /**
  * Every compiled command module under `dir`, recursively.
@@ -52,4 +53,21 @@ export function categoryOf(root: string, file: string): string {
   const rel = path.relative(root, file);
   const parts = rel.split(path.sep);
   return parts.length > 1 ? parts[0]! : "";
+}
+
+/**
+ * Import a command module by file path. Dynamic `import()` takes a URL, so a
+ * raw Windows path such as `C:\bot\x.js` is read as a `c:` scheme and fails.
+ */
+export function importCommandModule(file: string): Promise<unknown> {
+  return import(pathToFileURL(path.resolve(file)).href);
+}
+
+/** Startup guard: a bot that registered no slash commands is misconfigured, not idle. */
+export function assertCommandsLoaded(count: number, root: string): void {
+  if (count === 0) {
+    throw new Error(
+      `No slash commands loaded from ${root}. Check that the project is built (npm run build) and the commands directory exists.`,
+    );
+  }
 }

@@ -21,7 +21,8 @@ vi.mock("../../src/core/utils/commands/commandPolicy.js", () => ({
   resolveCommandPolicy: vi.fn(),
 }));
 
-vi.mock("../../src/bot/utils/commands/loadCommandFiles.js", () => ({
+vi.mock("../../src/bot/utils/commands/loadCommandFiles.js", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   getCommandFiles: () => [
     path.resolve(__dirname, "../fixtures/ingameCommands/info/alpha.ts"),
     path.resolve(__dirname, "../fixtures/ingameCommands/general/beta.ts"),
