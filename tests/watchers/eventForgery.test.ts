@@ -116,8 +116,8 @@ describe("SEC-01 — legitimate server lines still match", () => {
     expect(
       ADV!.exec(
         "[12:00:00] [Server thread/INFO]: Steve has made the advancement [Stone Age]",
-      )?.slice(1, 3),
-    ).toEqual(["Steve", "Stone Age"]);
+      )?.slice(1, 4),
+    ).toEqual(["Steve", "made the advancement", "Stone Age"]);
     expect(
       ADV!.exec(
         "[12:00:00] [Server thread/INFO]: Alex has completed the challenge [How Did We Get Here?]",
@@ -189,8 +189,8 @@ describe("Minecraft 26.3 — server messages behind `System chat:`", () => {
     expect(
       ADV!.exec(
         "[12:00:00] [Server thread/INFO]: System chat: Steve has made the advancement [Stone Age]",
-      )?.slice(1, 3),
-    ).toEqual(["Steve", "Stone Age"]);
+      )?.slice(1, 4),
+    ).toEqual(["Steve", "made the advancement", "Stone Age"]);
   });
 
   it("start and stop, which 26.3 still logs without the marker", () => {
