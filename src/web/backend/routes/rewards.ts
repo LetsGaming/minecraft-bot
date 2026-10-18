@@ -15,7 +15,6 @@
  */
 import type { FastifyInstance } from "fastify";
 import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
-import { getServerInstance } from "@mcbot/core/utils/server/server.js";
 import {
   readRewardsDocument,
   readShippedDefaults,
@@ -23,7 +22,6 @@ import {
   RewardsWriteError,
   type RewardsScope,
 } from "@mcbot/core/utils/stores/rewardsConfig.js";
-import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 import type {
@@ -31,13 +29,9 @@ import type {
   ServerRewardsResponse,
   SharedRewardsResponse,
 } from "@mcbot/schema/dailyRewards.js";
-import { sessionFromRequest } from "../auth/auth.js";
-import { Conflict, HttpError, NotFound, ValidationFailed } from "../errors.js";
+import { Conflict, HttpError, ValidationFailed } from "../errors.js";
 import { IdParams, RewardsWriteBody } from "./schemas.js";
-
-function requireServer(id: string): void {
-  if (!getServerInstance(id)) throw new NotFound(`No server named "${id}" is configured.`);
-}
+import { auditedAction, requireServer } from "./support.js";
 
 /** "12 items, 13 streak days, bonus 5 %" — what the saved document holds, for the audit log. */
 function describePool(pool: RewardPool): string {
@@ -61,7 +55,7 @@ async function write(
       throw new ValidationFailed(err.errors);
     }
     log.error("web", `Rewards write failed: ${errMsg(err)}`);
-    throw new HttpError(500, "Could not write the reward file, see the bot logs for details.");
+    throw new HttpError(500, "Could not write the reward file. Check the dashboard (web) logs for details.");
   }
 }
 
@@ -85,11 +79,8 @@ export function registerRewardsRoutes(app: FastifyInstance): void {
     },
     async (req) => {
       const result = await write({ kind: "shared" }, req.body.pool, req.body.baseHash);
-      const session = sessionFromRequest(req)!;
-      await recordAdminAction({
-        action: "daily rewards edit (dashboard)",
-        by: session.tag,
-        byId: session.uid,
+      await auditedAction(req, {
+        action: "daily rewards edit",
         detail: `shared pool: ${describePool(req.body.pool as RewardPool)}`,
       });
       return result;
@@ -125,12 +116,9 @@ export function registerRewardsRoutes(app: FastifyInstance): void {
         req.body.pool,
         req.body.baseHash,
       );
-      const session = sessionFromRequest(req)!;
-      await recordAdminAction({
-        action: "daily rewards edit (dashboard)",
+      await auditedAction(req, {
+        action: "daily rewards edit",
         server: req.params.id,
-        by: session.tag,
-        byId: session.uid,
         detail: `override: ${describePool(req.body.pool as RewardPool)}`,
       });
       return result;

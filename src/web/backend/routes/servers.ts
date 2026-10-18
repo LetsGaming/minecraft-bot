@@ -1,8 +1,7 @@
 /**
  * Phase 3 — server operations: script actions (start/stop/restart/
  * backup), log tail, and stats pruning. Registered inside the
- * requireAdminSession-gated scope (see server.ts). Split out of
- * server.ts in the QUAL-01 refactor (2026-07 audit).
+ * capability-gated host scope (see server.ts).
  *
  * Params/query are validated + typed from the shared schemas; the domain
  * guards (server exists, action allowed, wrapper capability present) throw
@@ -13,7 +12,6 @@
  */
 import type { FastifyInstance } from "fastify";
 import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
-import { getServerInstance } from "@mcbot/core/utils/server/server.js";
 import {
   runScript,
   classifyScriptFailure,
@@ -23,8 +21,7 @@ import {
   readWhitelist,
   readUserCache,
 } from "@mcbot/core/utils/server/serverAccess.js";
-import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
-import { scriptFailureError } from "./scriptFailure.js";
+import { scriptFailureError, scriptResultBody, type ScriptResultBody } from "./scriptFailure.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { readThrough } from "@mcbot/core/utils/wrapper/lastKnown.js";
 import {
@@ -32,23 +29,16 @@ import {
   listIntents,
   clearIntent,
 } from "@mcbot/core/utils/wrapper/deferredIntents.js";
-import { sessionFromRequest, type Session } from "../auth/auth.js";
-import { BadRequest, NotFound, Conflict, Forbidden, HttpError } from "../errors.js";
+import { currentSession, type Session } from "../auth/auth.js";
+import { BadRequest, Conflict, Forbidden, HttpError } from "../errors.js";
 import { ServerActionParams, IdParams, LinesQuery, DryRunQuery } from "./schemas.js";
+import { clampIntParam, flagParam } from "./query.js";
+import { auditAction, requireServer, wrapperCall } from "./support.js";
 import { isServerOperatorAction, capabilityForServerAction } from "@mcbot/schema/serverActions.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
-/** The generic message returned when a server-side operation fails: SEC-04
- *  keeps absolute paths and sudo/stderr fragments out of the browser. */
-const OPERATION_FAILED = "The operation failed unexpectedly — see the bot logs for details.";
-
-/** Resolve a configured server or throw the shared 404 — the one place the
- *  "no such server" contract lives, instead of repeating it per route. */
-function requireServer(id: string): NonNullable<ReturnType<typeof getServerInstance>> {
-  const server = getServerInstance(id);
-  if (!server) throw new NotFound(`No server named "${id}" is configured.`);
-  return server;
-}
+const DEFAULT_LOG_LINES = 50;
+const MAX_LOG_LINES = 500;
 
 /**
  * Run one operator script on a server, after the route has authorized it.
@@ -59,7 +49,7 @@ async function runServerAction(
   id: string,
   action: string,
   session: Session,
-): Promise<{ ok: boolean; exitCode: number | null; output: string; stderr: string }> {
+): Promise<ScriptResultBody> {
   const server = requireServer(id);
   // Kept as a guard (not a schema enum) so the "unknown server" 404 still
   // precedes the "unknown action" 400 — the order the API has always had.
@@ -72,24 +62,14 @@ async function runServerAction(
     throw new Conflict(`server has no ${action} script (suite not installed?)`);
   }
 
-  await recordAdminAction({
-    action: `${action} (dashboard)`,
-    server: id,
-    by: session.tag,
-    byId: session.uid,
-  });
+  await auditAction(session, { action, server: id });
 
   try {
     const result = await runScript(server.config, action);
     // Granted: the operator got what they were asking for, so stop
     // offering it back to them.
     clearIntent(id, action);
-    return {
-      ok: result.exitCode === 0,
-      exitCode: result.exitCode,
-      output: result.output.slice(-4000),
-      stderr: result.stderr.slice(-4000),
-    };
+    return scriptResultBody(result);
   } catch (err) {
     log.error("web", `Script ${action} on ${id} failed: ${errMsg(err)}`);
     const failure = classifyScriptFailure(err);
@@ -148,7 +128,7 @@ export function registerServerRoutes(app: FastifyInstance): void {
       schema: { params: IdParams },
       config: { capability: "server:rollback", scope: "server", param: "id" },
     },
-    async (req) => runServerAction(req.params.id, "rollback", sessionFromRequest(req)!),
+    async (req) => runServerAction(req.params.id, "rollback", currentSession(req)),
   );
 
   api.post(
@@ -167,7 +147,7 @@ export function registerServerRoutes(app: FastifyInstance): void {
           throw new Forbidden(`You don't have "${needed}" on this server.`);
         }
       }
-      return runServerAction(id, action, sessionFromRequest(req)!);
+      return runServerAction(id, action, currentSession(req));
     },
   );
 
@@ -179,19 +159,18 @@ export function registerServerRoutes(app: FastifyInstance): void {
     },
     async (req) => {
       const server = requireServer(req.params.id);
-      const n = Math.min(Math.max(parseInt(req.query.lines ?? "50", 10) || 50, 1), 500);
-      try {
-        // The last log we managed to read is the single most useful thing to
-        // show when the wrapper stops answering: it very often contains the
-        // reason it stopped answering.
-        const { value, stale } = await readThrough(req.params.id, "logTail", () =>
-          tailLog(server.config, n),
-        );
-        return { lines: value.split("\n").filter(Boolean), stale };
-      } catch (err) {
-        log.error("web", `Log tail for ${req.params.id} failed: ${errMsg(err)}`);
-        throw new HttpError(500, OPERATION_FAILED);
-      }
+      const n = clampIntParam(req.query.lines, {
+        def: DEFAULT_LOG_LINES,
+        min: 1,
+        max: MAX_LOG_LINES,
+      });
+      // The last log we managed to read is the single most useful thing to
+      // show when the wrapper stops answering: it very often contains the
+      // reason it stopped answering.
+      const { value, stale } = await wrapperCall("Log tail", { server: req.params.id }, () =>
+        readThrough(req.params.id, "logTail", () => tailLog(server.config, n)),
+      );
+      return { lines: value.split("\n").filter(Boolean), stale };
     },
   );
 
@@ -240,21 +219,18 @@ export function registerServerRoutes(app: FastifyInstance): void {
       );
       const prunable = uuids.filter((u) => !known.has(u.toLowerCase()));
 
-      const { dryRun } = req.query;
-      if (dryRun === "1" || dryRun === "true") {
+      if (flagParam(req.query.dryRun)) {
         return { dryRun: true, prunable };
       }
 
-      const session = sessionFromRequest(req)!;
+      const session = currentSession(req);
       let deleted = 0;
       for (const uuid of prunable) {
         if (await deleteStatsFile(server.config, uuid)) deleted += 1;
       }
-      await recordAdminAction({
-        action: "prune-stats (dashboard)",
+      await auditAction(session, {
+        action: "prune-stats",
         server: req.params.id,
-        by: session.tag,
-        byId: session.uid,
         detail: `${deleted} stats file(s) deleted`,
       });
       return { dryRun: false, deleted, prunable };

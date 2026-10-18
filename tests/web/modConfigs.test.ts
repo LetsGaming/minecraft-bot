@@ -586,6 +586,34 @@ describe("revert precondition", () => {
     });
     expect(revertConfigFileMock.mock.calls[0]![3]).toBe("etag-1");
   });
+
+  describe("cache invalidation", () => {
+    const index = { method: "GET" as const, url: "/api/servers/smp/configs", headers: { cookie: cookieFor(EDITOR) } };
+    const revert = {
+      method: "POST" as const, url: `/api/servers/smp/configs/${FILE_ID}/revert`,
+      headers: { cookie: cookieFor(EDITOR), "content-type": "application/json" },
+      payload: { snapshot: "2026-08-02T09-00-00-000Z", etag: "etag-1" },
+    };
+
+    it("drops the cached listing as well as the file once the revert succeeded", async () => {
+      const app = buildServer();
+      await app.inject(index);
+      await app.inject(index);
+      expect(indexConfigFilesMock).toHaveBeenCalledTimes(1);
+      expect((await app.inject(revert)).statusCode).toBe(200);
+      await app.inject(index);
+      expect(indexConfigFilesMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("keeps the cached listing when the revert did not happen", async () => {
+      const app = buildServer();
+      await app.inject(index);
+      revertConfigFileMock.mockResolvedValue({ ok: false, conflict: true });
+      expect((await app.inject(revert)).statusCode).toBe(409);
+      await app.inject(index);
+      expect(indexConfigFilesMock).toHaveBeenCalledTimes(1);
+    });
+  });
 });
 
 describe("queued edits while the wrapper is away (AUD-013)", () => {

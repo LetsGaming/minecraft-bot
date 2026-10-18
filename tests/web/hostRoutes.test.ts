@@ -333,7 +333,7 @@ describe("log route", () => {
     expect(access.tailLog).toHaveBeenCalledWith({ id: "smp" }, 500);
 
     await call("GET", "/api/servers/smp/log?lines=0");
-    expect(access.tailLog).toHaveBeenLastCalledWith({ id: "smp" }, 50);
+    expect(access.tailLog).toHaveBeenLastCalledWith({ id: "smp" }, 1);
     await call("GET", "/api/servers/smp/log");
     expect(access.tailLog).toHaveBeenLastCalledWith({ id: "smp" }, 50);
   });
@@ -349,10 +349,11 @@ describe("log route", () => {
     });
   });
 
-  it("returns a fixed 500 message when there is nothing to fall back to", async () => {
+  it("returns a fixed 502 message when there is nothing to fall back to", async () => {
     access.tailLog.mockRejectedValue(new Error("secret /srv/path"));
     const res = await call("GET", "/api/servers/smp/log");
-    expect(res.statusCode).toBe(500);
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toMatchObject({ code: "BAD_GATEWAY" });
     expect(res.body).not.toContain("/srv/path");
   });
 });

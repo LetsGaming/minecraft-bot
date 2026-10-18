@@ -15,7 +15,6 @@
 import { Readable } from "stream";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
-import { getServerInstance } from "@mcbot/core/utils/server/server.js";
 import {
   readBackups,
   indexBackupFiles,
@@ -24,22 +23,26 @@ import {
   deleteBackupFile,
   classifyScriptFailure,
 } from "@mcbot/core/utils/server/serverAccess.js";
-import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { readThrough, forget } from "@mcbot/core/utils/wrapper/lastKnown.js";
 import { recordIntent } from "@mcbot/core/utils/wrapper/deferredIntents.js";
-import { scriptFailureError } from "./scriptFailure.js";
+import { scriptFailureError, scriptResultBody } from "./scriptFailure.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
-import { sessionFromRequest } from "../auth/auth.js";
-import { BadRequest, NotFound, HttpError } from "../errors.js";
+import { BadGateway, HttpError, NotFound } from "../errors.js";
 import { IdParams, BackupFileParams, BackupIndexQuery } from "./schemas.js";
+import { clampIntParam } from "./query.js";
+import {
+  OPERATION_FAILED,
+  auditedAction,
+  requireFileId,
+  requireServer,
+  wrapperCall,
+} from "./support.js";
 import type { BackupSummaryBody } from "@mcbot/schema/wire/index.js";
 
-const OPERATION_FAILED =
-  "The operation failed unexpectedly — see the bot logs for details.";
-
-/** Ids are 22 base64url chars, produced by the wrapper's index. */
-const FILE_ID_RE = /^[A-Za-z0-9_-]{22}$/;
+const BACKUP_ID_LABEL = "backup";
+const DEFAULT_PAGE_SIZE = 50;
+const MAX_PAGE_SIZE = 200;
 
 /** Headers worth passing straight through from the wrapper's response. */
 const FORWARDED_HEADERS = [
@@ -49,17 +52,6 @@ const FORWARDED_HEADERS = [
   "content-range",
   "accept-ranges",
 ] as const;
-
-function requireServer(id: string): NonNullable<ReturnType<typeof getServerInstance>> {
-  const server = getServerInstance(id);
-  if (!server) throw new NotFound(`No server named "${id}" is configured.`);
-  return server;
-}
-
-function requireFileId(fileId: string): string {
-  if (!FILE_ID_RE.test(fileId)) throw new BadRequest("Invalid backup id.");
-  return fileId;
-}
 
 export function registerBackupRoutes(app: FastifyInstance): void {
   const api = app.withTypeProvider<TypeBoxTypeProvider>();
@@ -74,12 +66,15 @@ export function registerBackupRoutes(app: FastifyInstance): void {
     },
     async (req) => {
       const server = requireServer(req.params.id);
-      const limit = parseInt(req.query.limit ?? "50", 10);
       const opts = {
         ...(req.query.cursor ? { cursor: req.query.cursor } : {}),
-        limit: Number.isNaN(limit) ? 50 : Math.min(Math.max(limit, 1), 200),
+        limit: clampIntParam(req.query.limit, {
+          def: DEFAULT_PAGE_SIZE,
+          min: 1,
+          max: MAX_PAGE_SIZE,
+        }),
       };
-      try {
+      return wrapperCall("Backup index", { server: req.params.id }, async () => {
         // Only the first page is remembered. A cursor points into a listing
         // that no longer exists once the wrapper is gone, so replaying one
         // from cache would hand back a page that never joins up.
@@ -90,10 +85,7 @@ export function registerBackupRoutes(app: FastifyInstance): void {
           () => indexBackupFiles(server.config, opts),
         );
         return { ...value, stale };
-      } catch (err) {
-        log.error("web", `Backup index for ${req.params.id} failed: ${errMsg(err)}`);
-        throw new HttpError(502, OPERATION_FAILED);
-      }
+      });
     },
   );
 
@@ -107,7 +99,7 @@ export function registerBackupRoutes(app: FastifyInstance): void {
     },
     async (req) => {
       const server = requireServer(req.params.id);
-      try {
+      return wrapperCall("Backup summary", { server: req.params.id }, async () => {
         const { value, stale } = await readThrough(
           req.params.id,
           "backupSummary",
@@ -126,10 +118,7 @@ export function registerBackupRoutes(app: FastifyInstance): void {
           },
         );
         return { ...value, stale };
-      } catch (err) {
-        log.error("web", `Backup summary for ${req.params.id} failed: ${errMsg(err)}`);
-        throw new HttpError(502, OPERATION_FAILED);
-      }
+      });
     },
   );
 
@@ -141,28 +130,21 @@ export function registerBackupRoutes(app: FastifyInstance): void {
     },
     async (req, reply): Promise<FastifyReply> => {
       const server = requireServer(req.params.id);
-      const fileId = requireFileId(req.params.fileId);
+      const fileId = requireFileId(req.params.fileId, BACKUP_ID_LABEL);
 
-      const session = sessionFromRequest(req)!;
       // Audited: a download is the whole world leaving the host, which is the
       // one backup operation that leaves no trace on the server itself.
-      await recordAdminAction({
-        action: "backup download (dashboard)",
+      await auditedAction(req, {
+        action: "backup download",
         server: req.params.id,
-        by: session.tag,
-        byId: session.uid,
         detail: fileId,
       });
 
-      let upstream: Response;
-      try {
-        // Range is forwarded verbatim so a browser resuming an interrupted
-        // download reaches the wrapper with its request intact.
-        upstream = await openBackupDownload(server.config, fileId, req.headers.range);
-      } catch (err) {
-        log.error("web", `Backup download for ${req.params.id} failed: ${errMsg(err)}`);
-        throw new HttpError(502, OPERATION_FAILED);
-      }
+      // Range is forwarded verbatim so a browser resuming an interrupted
+      // download reaches the wrapper with its request intact.
+      const upstream = await wrapperCall("Backup download", { server: req.params.id }, () =>
+        openBackupDownload(server.config, fileId, req.headers.range),
+      );
 
       if (upstream.status === 404) throw new NotFound("Backup not found.");
       if (!upstream.ok && upstream.status !== 206) {
@@ -171,7 +153,7 @@ export function registerBackupRoutes(app: FastifyInstance): void {
         void upstream.body?.cancel();
         return reply.status(upstream.status).send({ error: "Download failed." });
       }
-      if (!upstream.body) throw new HttpError(502, OPERATION_FAILED);
+      if (!upstream.body) throw new BadGateway(OPERATION_FAILED);
 
       for (const header of FORWARDED_HEADERS) {
         const value = upstream.headers.get(header);
@@ -196,27 +178,18 @@ export function registerBackupRoutes(app: FastifyInstance): void {
     },
     async (req) => {
       const server = requireServer(req.params.id);
-      const fileId = requireFileId(req.params.fileId);
+      const fileId = requireFileId(req.params.fileId, BACKUP_ID_LABEL);
 
-      const session = sessionFromRequest(req)!;
       // Recorded before it runs. What was attempted is the interesting fact,
       // and a restore that fails halfway is exactly when someone will ask.
-      await recordAdminAction({
-        action: "backup restore (dashboard)",
+      const session = await auditedAction(req, {
+        action: "backup restore",
         server: req.params.id,
-        by: session.tag,
-        byId: session.uid,
         detail: fileId,
       });
 
       try {
-        const result = await restoreBackupFile(server.config, fileId);
-        return {
-          ok: result.exitCode === 0,
-          exitCode: result.exitCode,
-          output: result.output.slice(-4000),
-          stderr: result.stderr.slice(-4000),
-        };
+        return scriptResultBody(await restoreBackupFile(server.config, fileId));
       } catch (err) {
         log.error("web", `Restore on ${req.params.id} failed: ${errMsg(err)}`);
         const failure = classifyScriptFailure(err);
@@ -230,7 +203,7 @@ export function registerBackupRoutes(app: FastifyInstance): void {
           action: "restore",
           target: fileId,
           attemptedAt: Date.now(),
-          byTag: sessionFromRequest(req)!.tag,
+          byTag: session.tag,
           reason: errMsg(err),
         });
         throw new HttpError(
@@ -249,35 +222,28 @@ export function registerBackupRoutes(app: FastifyInstance): void {
     },
     async (req) => {
       const server = requireServer(req.params.id);
-      const fileId = requireFileId(req.params.fileId);
+      const fileId = requireFileId(req.params.fileId, BACKUP_ID_LABEL);
 
-      const session = sessionFromRequest(req)!;
-      // Recorded before it runs, same as restore — what was attempted is
+      // Recorded before it runs, same as restore: what was attempted is
       // the fact someone will come looking for.
-      await recordAdminAction({
-        action: "backup delete (dashboard)",
+      await auditedAction(req, {
+        action: "backup delete",
         server: req.params.id,
-        by: session.tag,
-        byId: session.uid,
         detail: fileId,
       });
 
-      try {
+      // Deliberately NOT recordIntent(), unlike restore above. A replayed
+      // restore just re-applies an old backup; a replayed delete could
+      // destroy an archive after rotation has already removed the ones
+      // around it: the deferred version is strictly worse than the
+      // failure it would be standing in for.
+      return wrapperCall("Backup delete", { server: req.params.id }, async () => {
         const result = await deleteBackupFile(server.config, fileId);
         if (!result.ok) throw new NotFound("Backup not found.");
         forget(req.params.id, "backupIndex");
         forget(req.params.id, "backupSummary");
         return { ok: true, name: result.name ?? null };
-      } catch (err) {
-        if (err instanceof NotFound) throw err;
-        // Deliberately NOT recordIntent(), unlike restore above. A replayed
-        // restore just re-applies an old backup; a replayed delete could
-        // destroy an archive after rotation has already removed the ones
-        // around it — the deferred version is strictly worse than the
-        // failure it would be standing in for.
-        log.error("web", `Backup delete on ${req.params.id} failed: ${errMsg(err)}`);
-        throw new HttpError(502, OPERATION_FAILED);
-      }
+      });
     },
   );
 }

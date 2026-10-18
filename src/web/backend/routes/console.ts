@@ -16,34 +16,30 @@
 import type { FastifyInstance } from "fastify";
 import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
 import { loadConfig } from "@mcbot/core/config.js";
-import { getServerInstance } from "@mcbot/core/utils/server/server.js";
-import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
+import { MS } from "@mcbot/schema";
 import { stripControlChars } from "@mcbot/core/utils/sanitize.js";
 import {
   DEFAULT_BLOCKED_COMMANDS,
   MAX_CONSOLE_COMMAND_LENGTH,
   isBlockedConsoleCommand,
 } from "@mcbot/schema/consoleCommands.js";
-import { sessionFromRequest } from "../auth/auth.js";
+import { currentSession } from "../auth/auth.js";
 import { subscribe, type ConsoleEvent } from "../console/consoleHub.js";
 import {
   registerStream,
   openStreamsForUser,
   MAX_STREAMS_PER_USER,
 } from "../console/streamRegistry.js";
-import { BadRequest, Forbidden, NotFound, HttpError } from "../errors.js";
+import { BadGateway, BadRequest, Forbidden, HttpError } from "../errors.js";
 import { IdParams, ConsoleCommandBody } from "./schemas.js";
+import { auditedAction, requireServer } from "./support.js";
 
-/** Same contract as servers.ts: an internal failure says nothing specific. */
 const COMMAND_FAILED =
-  "The command couldn't be delivered — the wrapper isn't answering. " +
+  "The command couldn't be delivered: the wrapper isn't answering. " +
   "Console commands run in the moment, so this one wasn't queued; try again once the server is reachable.";
 
-function requireServer(id: string): NonNullable<ReturnType<typeof getServerInstance>> {
-  const server = getServerInstance(id);
-  if (!server) throw new NotFound(`No server named "${id}" is configured.`);
-  return server;
-}
+const KEEP_ALIVE_INTERVAL_MS = 25 * MS.second;
+const AUDIT_DETAIL_MAX = 200;
 
 /** The operator's deny-list, or the defaults when none is configured. */
 function denyList(): readonly string[] {
@@ -66,7 +62,7 @@ export function registerConsoleRoutes(app: FastifyInstance): void {
     },
     async (req, reply) => {
       const server = requireServer(req.params.id);
-      const session = sessionFromRequest(req)!;
+      const session = currentSession(req);
       if (openStreamsForUser(session.uid) >= MAX_STREAMS_PER_USER) {
         throw new HttpError(
           429,
@@ -96,7 +92,7 @@ export function registerConsoleRoutes(app: FastifyInstance): void {
       // never sees them.
       const heartbeat = setInterval(() => {
         if (!reply.raw.writableEnded) reply.raw.write(": keep-alive\n\n");
-      }, 25_000);
+      }, KEEP_ALIVE_INTERVAL_MS);
 
       let cleaned = false;
       const deregister = registerStream({
@@ -153,19 +149,16 @@ export function registerConsoleRoutes(app: FastifyInstance): void {
         );
       }
 
-      const session = sessionFromRequest(req)!;
       // Audited before it runs, and audited even if it then fails: what was
       // attempted is the interesting fact.
-      await recordAdminAction({
-        action: "console (dashboard)",
+      await auditedAction(req, {
+        action: "console",
         server: req.params.id,
-        by: session.tag,
-        byId: session.uid,
-        detail: command.slice(0, 200),
+        detail: command.slice(0, AUDIT_DETAIL_MAX),
       });
 
       const outcome = await server.send(command);
-      if (outcome.kind === "unreachable") throw new HttpError(502, COMMAND_FAILED);
+      if (outcome.kind === "unreachable") throw new BadGateway(COMMAND_FAILED);
       return {
         ok: true,
         kind: outcome.kind,

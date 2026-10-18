@@ -122,7 +122,7 @@ import { encodeSigned, SESSION_COOKIE } from "../../src/web/backend/auth/auth.js
 import { buildServer } from "../../src/web/backend/server.js";
 import { invalidateWhere } from "../../src/core/utils/cache.js";
 import { ApiError } from "../../src/core/utils/server/access/apiClient.js";
-import { busyKind } from "../../src/web/backend/routes/upgrades.js";
+import { busyKind } from "../../src/web/backend/routes/busy.js";
 
 const JOB = "6f1c2d3e-4a5b-4c6d-8e7f-0a1b2c3d4e5f";
 const VIEW = { jobId: JOB, state: "running", mcVersion: "1.21.5", events: [], next: 0 };

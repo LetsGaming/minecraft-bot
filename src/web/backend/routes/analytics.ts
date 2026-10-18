@@ -20,6 +20,7 @@
  * is exactly when someone wants to know how long the server has been down.
  */
 import type { FastifyInstance } from "fastify";
+import { MS } from "@mcbot/schema";
 import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
 import {
   ANALYTICS_CAP_HOURS,
@@ -29,7 +30,6 @@ import {
   type PlayersResponse,
   type ServerAnalyticsResponse,
 } from "@mcbot/schema/analytics.js";
-import { getServerInstance } from "@mcbot/core/utils/server/server.js";
 import { getUptimeStats } from "@mcbot/core/utils/stores/uptimeTracker.js";
 import {
   loadPlayerCountSeries,
@@ -48,27 +48,20 @@ import { usageByCommandSince } from "@mcbot/core/utils/commands/commandUsage.js"
 import { log } from "@mcbot/core/utils/logger.js";
 import { readThrough } from "@mcbot/core/utils/wrapper/lastKnown.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
-import { NotFound, BadRequest, HttpError } from "../errors.js";
+import { BadRequest, BadGateway, HttpError } from "../errors.js";
 import { IdParams, LeaderboardQuery, AnalyticsRangeQuery } from "./schemas.js";
-
-const HOUR_MS = 3_600_000;
+import { clampIntParam, intParam } from "./query.js";
+import { requireServer } from "./support.js";
 
 const ACTIVITY_HOURS_DEFAULT = ANALYTICS_CAP_HOURS.activity;
-const COMMAND_HOURS_DEFAULT = 24 * 30;
+const COMMAND_HOURS_DEFAULT = 30 * 24;
 /** Sessions are not retained by age, so the players range only needs an upper bound. */
 const PLAYERS_HOURS_MAX = ANALYTICS_CAP_HOURS.commands;
 
 const CAPS: AnalyticsCaps = { ...ANALYTICS_CAP_HOURS };
 
-function parseHours(raw: string | undefined): number | null {
-  const n = parseInt(raw ?? "", 10);
-  return Number.isFinite(n) ? n : null;
-}
-
 function clampHours(raw: string | undefined, def: number, max: number): number {
-  const n = parseHours(raw);
-  if (n === null) return def;
-  return Math.min(Math.max(n, 1), max);
+  return clampIntParam(raw, { def, min: 1, max });
 }
 
 function formatRange(hours: number): string {
@@ -86,9 +79,7 @@ export function registerAnalyticsRoutes(app: FastifyInstance): void {
     },
     async (req): Promise<ServerAnalyticsResponse> => {
       const serverId = req.params.id;
-      if (!getServerInstance(serverId)) {
-        throw new NotFound(`No server named "${serverId}" is configured.`);
-      }
+      requireServer(serverId);
 
       try {
         const requested = clampHours(
@@ -101,7 +92,7 @@ export function registerAnalyticsRoutes(app: FastifyInstance): void {
           rangeHours: Math.min(requested, CAPS.uptime),
         });
 
-        const since = Date.now() - hours * HOUR_MS;
+        const since = Date.now() - hours * MS.hour;
         const series = loadPlayerCountSeries(serverId, since);
 
         return {
@@ -145,9 +136,7 @@ export function registerAnalyticsRoutes(app: FastifyInstance): void {
     },
     async (req): Promise<PlayersResponse> => {
       const serverId = req.params.id;
-      if (!getServerInstance(serverId)) {
-        throw new NotFound(`No server named "${serverId}" is configured.`);
-      }
+      requireServer(serverId);
       try {
         const hours = clampHours(
           req.query.hours,
@@ -157,7 +146,7 @@ export function registerAnalyticsRoutes(app: FastifyInstance): void {
         const store = await loadSessionStore();
         const entries = Object.values(store.servers[serverId] ?? {});
         const now = Date.now();
-        const since = now - hours * HOUR_MS;
+        const since = now - hours * MS.hour;
 
         const players: PlayersResponse["players"] = [];
         for (const entry of entries) {
@@ -209,19 +198,14 @@ export function registerAnalyticsRoutes(app: FastifyInstance): void {
       config: { capability: "server:read", scope: "server", param: "id" },
     },
     async (req): Promise<LeaderboardResponse> => {
-      const server = getServerInstance(req.params.id);
-      if (!server) {
-        throw new NotFound(`No server named "${req.params.id}" is configured.`);
-      }
+      const server = requireServer(req.params.id);
       const statKey = req.query.stat ?? "playtime";
       if (!LEADERBOARD_STATS[statKey]) {
         throw new BadRequest(`Unknown stat "${statKey}".`);
       }
-      const requested = parseHours(req.query.hours);
+      const requested = intParam(req.query.hours);
       const rangeHours =
-        requested === null
-          ? null
-          : Math.min(Math.max(requested, 1), CAPS.leaderboard);
+        requested === null ? null : Math.min(Math.max(requested, 1), CAPS.leaderboard);
       try {
         // Stats live in the world folder, so this is the one analytics panel
         // an outage can take out. Player stats move slowly enough that an
@@ -234,7 +218,7 @@ export function registerAnalyticsRoutes(app: FastifyInstance): void {
               const board = await buildLeaderboard(statKey, { limit: 25, server });
               return { board, baselineAt: null, historyShorterThanRange: false };
             }
-            const target = Date.now() - rangeHours * HOUR_MS;
+            const target = Date.now() - rangeHours * MS.hour;
             const snapshot = await getSnapshotClosestTo(server.id, target);
             const board = await buildLeaderboard(statKey, {
               limit: 25,
@@ -271,7 +255,7 @@ export function registerAnalyticsRoutes(app: FastifyInstance): void {
         // Stats come off the server's world folder through the wrapper, so
         // this is the one analytics route that can fail on an outage.
         log.warn("web", `Leaderboard ${statKey} on ${req.params.id}: ${errMsg(err)}`);
-        throw new HttpError(502, "Could not read player stats from the server.");
+        throw new BadGateway("Could not read player stats from the server.");
       }
     },
   );
@@ -290,7 +274,7 @@ export function registerAnalyticsRoutes(app: FastifyInstance): void {
         COMMAND_HOURS_DEFAULT,
         CAPS.commands,
       );
-      const since = Date.now() - hours * HOUR_MS;
+      const since = Date.now() - hours * MS.hour;
       try {
         const commands = usageByCommandSince(since).map((r) => ({
           command: r.command,
