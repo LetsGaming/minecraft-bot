@@ -43,3 +43,26 @@ export function scriptFailureError(
     `The server reported an error while running "${action}"; it may have stopped part way. Check the server before trying again.`,
   );
 }
+
+/** How much of a script's output reaches the browser: the end, where the outcome is. */
+const RESULT_TAIL_CHARS = 4000;
+
+export interface ScriptResultBody {
+  ok: boolean;
+  exitCode: number | null;
+  output: string;
+  stderr: string;
+}
+
+export function scriptResultBody(result: {
+  exitCode: number | null;
+  output: string;
+  stderr: string;
+}): ScriptResultBody {
+  return {
+    ok: result.exitCode === 0,
+    exitCode: result.exitCode,
+    output: result.output.slice(-RESULT_TAIL_CHARS),
+    stderr: result.stderr.slice(-RESULT_TAIL_CHARS),
+  };
+}

@@ -26,6 +26,15 @@ import { MAX_CONSOLE_COMMAND_LENGTH } from "@mcbot/schema/consoleCommands.js";
  *  is configService.validateCandidate. */
 const AnyObject = Type.Object({}, { additionalProperties: true });
 
+/** Ids are 22 base64url chars, produced by the wrapper's index (config files, backup archives). */
+export const FILE_ID_RE = /^[A-Za-z0-9_-]{22}$/;
+
+/** A stored prune plan id. */
+const PLAN_ID_PATTERN = "^[a-f0-9]{16}$";
+
+/** A wrapper job id (a UUID). */
+const JOB_ID_PATTERN = "^[a-f0-9-]{36}$";
+
 // ── Params ──────────────────────────────────────────────────────────────────
 
 export const ServerIdParams = Type.Object({ serverId: Type.String() });
@@ -63,15 +72,15 @@ export type ConfigReadQuery = Static<typeof ConfigReadQuery>;
  * The client never posts a whole file: the server re-reads the current text
  * and splices these in, so the writer's guards stay meaningful.
  */
+export const ConfigEditBody = Type.Object({
+  path: ConfigKeyPath,
+  value: Type.Unknown(),
+});
+export type ConfigEditBody = Static<typeof ConfigEditBody>;
+
 export const ModConfigWriteBody = Type.Object({
   etag: Type.String({ minLength: 1 }),
-  edits: Type.Array(
-    Type.Object({
-      path: ConfigKeyPath,
-      value: Type.Unknown(),
-    }),
-    { minItems: 1, maxItems: 500 },
-  ),
+  edits: Type.Array(ConfigEditBody, { minItems: 1, maxItems: 500 }),
 });
 export type ModConfigWriteBody = Static<typeof ModConfigWriteBody>;
 
@@ -239,7 +248,7 @@ export type ModCompatBody = Static<typeof ModCompatBody>;
 
 export const ModCompatJobParams = Type.Object({
   id: Type.String(),
-  jobId: Type.String({ pattern: "^[a-f0-9-]{36}$" }),
+  jobId: Type.String({ pattern: JOB_ID_PATTERN }),
 });
 export type ModCompatJobParams = Static<typeof ModCompatJobParams>;
 
@@ -251,7 +260,7 @@ export const UpgradeStartBody = Type.Object({
   ),
   countdownSeconds: Type.Optional(Type.Integer({ minimum: 0, maximum: 600 })),
   /** A stored prune plan to apply after the install, before the first start. */
-  prunePlan: Type.Optional(Type.String({ pattern: "^[a-f0-9]{16}$" })),
+  prunePlan: Type.Optional(Type.String({ pattern: PLAN_ID_PATTERN })),
 });
 export type UpgradeStartBody = Static<typeof UpgradeStartBody>;
 
@@ -281,19 +290,19 @@ export const PruneParamsBody = Type.Object({
 export type PruneParamsBody = Static<typeof PruneParamsBody>;
 
 export const PruneApplyBody = Type.Object({
-  planId: Type.String({ pattern: "^[a-f0-9]{16}$" }),
+  planId: Type.String({ pattern: PLAN_ID_PATTERN }),
   countdownSeconds: Type.Optional(Type.Integer({ minimum: 0, maximum: 600 })),
 });
 export type PruneApplyBody = Static<typeof PruneApplyBody>;
 
 export const PruneScanParams = Type.Object({
   id: Type.String(),
-  jobId: Type.String({ pattern: "^[a-f0-9-]{36}$" }),
+  jobId: Type.String({ pattern: JOB_ID_PATTERN }),
 });
 
 export const PruneMapParams = Type.Object({
   id: Type.String(),
-  planId: Type.String({ pattern: "^[a-f0-9]{16}$" }),
+  planId: Type.String({ pattern: PLAN_ID_PATTERN }),
   index: Type.String({ pattern: "^\\d{1,3}$" }),
 });
 
@@ -312,12 +321,12 @@ export const PruneTileParams = Type.Object({
 
 export const PrunePlanParams = Type.Object({
   id: Type.String(),
-  planId: Type.String({ pattern: "^[a-f0-9]{16}$" }),
+  planId: Type.String({ pattern: PLAN_ID_PATTERN }),
 });
 
 export const UpgradeJobParams = Type.Object({
   id: Type.String(),
-  jobId: Type.String({ pattern: "^[a-f0-9-]{36}$" }),
+  jobId: Type.String({ pattern: JOB_ID_PATTERN }),
 });
 export type UpgradeJobParams = Static<typeof UpgradeJobParams>;
 
