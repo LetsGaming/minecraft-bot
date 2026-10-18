@@ -36,10 +36,11 @@ export type ModEnvironment = "server" | "client" | "both" | "optional" | "unknow
  *
  *   both      required on both sides — the normal server+client mod
  *   server    server-required, client-unsupported — a pure server mod
- *   client    client-required, server-unsupported — filtered out by default,
- *             because it does nothing on a server
- *   optional  needed on one side, optional on the other — safe to install,
+ *   client    server-unsupported with a client that supports it; filtered
+ *             out by default, because it does nothing on a server
+ *   optional  needed on one side, optional on the other; safe to install,
  *             clients may or may not want it
+ *   unknown   either side missing or unsupported on both
  */
 export function deriveEnvironment(
   clientSide: string,
@@ -47,10 +48,11 @@ export function deriveEnvironment(
 ): ModEnvironment {
   const c = clientSide || "unknown";
   const sv = serverSide || "unknown";
+  if (c === "unknown" || sv === "unknown") return "unknown";
   if (c === "required" && sv === "required") return "both";
   if (sv === "required" && c === "unsupported") return "server";
-  if (c === "required" && sv === "unsupported") return "client";
   if (sv === "unsupported" && c === "unsupported") return "unknown";
+  if (sv === "unsupported") return "client";
   return "optional";
 }
 
