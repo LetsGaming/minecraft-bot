@@ -29,7 +29,10 @@ import {
   putTempBan,
   removeTempBan,
 } from "../../src/core/utils/stores/tempBanStore.js";
-import { armTempBan } from "../../src/bot/logWatcher/watchers/schedulers/tempBanScheduler.js";
+import {
+  armTempBan,
+  cancelTempBanTimer,
+} from "../../src/bot/logWatcher/watchers/schedulers/tempBanScheduler.js";
 import { execute as ban } from "../../src/bot/commands/moderation/ban.js";
 import { execute as kick } from "../../src/bot/commands/moderation/kick.js";
 import { execute as pardon } from "../../src/bot/commands/moderation/pardon.js";
@@ -80,6 +83,20 @@ describe("moderation commands", () => {
     await ban(interaction({ player: "Steve", duration: "1h" }));
     expect(putTempBan).toHaveBeenCalledOnce();
     expect(armTempBan).toHaveBeenCalledOnce();
+  });
+
+  it("a permanent /ban clears a pending timed ban for the same player", async () => {
+    useServer(vi.fn().mockResolvedValue(DELIVERED));
+    await ban(interaction({ player: "Steve", duration: "1h" }));
+    await ban(interaction({ player: "Steve" }));
+    expect(cancelTempBanTimer).toHaveBeenCalledWith("survival", "Steve");
+    expect(removeTempBan).toHaveBeenCalledWith("survival", "Steve");
+  });
+
+  it("a timed /ban does not clear the stored timed ban", async () => {
+    useServer(vi.fn().mockResolvedValue(DELIVERED));
+    await ban(interaction({ player: "Steve", duration: "1h" }));
+    expect(removeTempBan).not.toHaveBeenCalled();
   });
 
   it("/kick sends the console command, records the audit entry and replies", async () => {

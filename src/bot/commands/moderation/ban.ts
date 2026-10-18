@@ -28,9 +28,13 @@ import {
 } from "@mcbot/core/utils/duration.js";
 import {
   putTempBan,
+  removeTempBan,
   type TempBan,
 } from "@mcbot/core/utils/stores/tempBanStore.js";
-import { armTempBan } from "../../logWatcher/watchers/schedulers/tempBanScheduler.js";
+import {
+  armTempBan,
+  cancelTempBanTimer,
+} from "../../logWatcher/watchers/schedulers/tempBanScheduler.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import {
   requireAccepted,
@@ -108,6 +112,9 @@ export const execute = withErrorHandling(
       };
       await putTempBan(ban);
       armTempBan(interaction.client, ban);
+    } else {
+      cancelTempBanTimer(server.id, player);
+      await removeTempBan(server.id, player);
     }
 
     await recordAdminAction({
