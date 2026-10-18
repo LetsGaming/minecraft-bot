@@ -1,7 +1,6 @@
 /**
  * Phase 2 — schema-driven config editing plus the Commands view payload.
- * Registered inside the requireAdminSession-gated scope (see server.ts).
- * Split out of server.ts in the QUAL-01 refactor (2026-07 audit).
+ * Registered inside the capability-gated host scope (see server.ts).
  *
  * Write bodies are validated at the boundary from the shared TypeBox schema
  * (envelope only — the config's deep shape is validateCandidate's job), and
@@ -18,26 +17,21 @@ import {
   withConfigWriteLock,
   configFileHash,
 } from "@mcbot/core/utils/config/configService.js";
-import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import {
   listConfigHistory,
   getConfigSnapshot,
   RETENTION_DAYS as CONFIG_HISTORY_RETENTION_DAYS,
 } from "@mcbot/core/utils/config/configHistory.js";
 import { log } from "@mcbot/core/utils/logger.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 import { readRuntimeHeartbeat } from "@mcbot/core/utils/server/runtimeHeartbeat.js";
 import {
   computeConfigStatus,
   readConfigRevision,
 } from "@mcbot/core/utils/config/configApplyStatus.js";
 import { readCommandManifest } from "@mcbot/core/utils/commands/commandManifest.js";
-import { resolveCommandPolicy } from "@mcbot/core/utils/commands/commandPolicy.js";
-import {
-  usageByCommand,
-  USAGE_WINDOW_DAYS,
-} from "@mcbot/core/utils/commands/commandUsage.js";
-import { COMMAND_OPTIONS } from "@mcbot/schema";
-import { sessionFromRequest } from "../auth/auth.js";
+import { buildCommandsView } from "@mcbot/core/utils/commands/commandsView.js";
+import { currentSession, type Session } from "../auth/auth.js";
 import {
   HttpError,
   BadRequest,
@@ -51,6 +45,7 @@ import { toSafeConfig, mergeSecretPlaceholders } from "../config/safeConfig.js";
 import type { RawBotConfig } from "@mcbot/core/types/index.js";
 import { ConfigWriteBody, IdParams, MutationResult } from "./schemas.js";
 import type { CapabilityRule } from "../auth/capabilities.js";
+import { auditAction } from "./support.js";
 
 /**
  * Every route in this file reads or writes config.json, which carries the
@@ -62,6 +57,34 @@ const BOT_CONFIG = {
   capability: "bot:config",
   scope: "global",
 } as const satisfies CapabilityRule;
+
+/**
+ * Write a validated config under the caller's name. The audit entry is only
+ * recorded when something changed: a Save with no edits is a no-op, not an
+ * auditable action. `writeConfig` raises an actionable, operator-facing
+ * message (e.g. a read-only or non-owned config path), which is surfaced to
+ * the sysadmin editing config rather than falling through to a generic 500.
+ */
+async function applyConfigWrite(
+  candidate: RawBotConfig,
+  session: Session,
+  entry: { note: string; audit: string; warnings: string[] },
+): Promise<{ ok: true; changed: boolean; warnings: string[] }> {
+  let changed: boolean;
+  try {
+    ({ changed } = await writeConfig(candidate, {
+      byTag: session.tag,
+      byId: session.uid,
+      note: entry.note,
+    }));
+  } catch (err) {
+    const msg = errMsg(err);
+    log.error("web", `${entry.note} failed: ${msg}`);
+    throw new HttpError(500, msg);
+  }
+  if (changed) await auditAction(session, { action: entry.audit });
+  return { ok: true, changed, warnings: entry.warnings };
+}
 
 export function registerConfigRoutes(app: FastifyInstance): void {
   const api = app.withTypeProvider<TypeBoxTypeProvider>();
@@ -98,67 +121,7 @@ export function registerConfigRoutes(app: FastifyInstance): void {
     // Hashed before the read: a write landing in between leaves the token
     // older than the content, which only ever makes a later save conflict.
     const hash = configFileHash();
-    const raw = readRawConfig();
-    const guildIds = Object.keys(raw.guilds ?? {});
-    const serverIds = Object.keys(raw.servers ?? {});
-
-    const effective = (
-      name: string,
-    ): Record<string, { enabled: boolean; adminOnly: boolean }> => {
-      const out: Record<string, { enabled: boolean; adminOnly: boolean }> = {
-        global: resolveCommandPolicy(name),
-      };
-      for (const gid of guildIds) {
-        out[`guild:${gid}`] = resolveCommandPolicy(name, { guildId: gid });
-      }
-      for (const sid of serverIds) {
-        out[`server:${sid}`] = resolveCommandPolicy(name, { serverId: sid });
-      }
-      return out;
-    };
-
-    // Usage rides along on the command list rather than getting a page of
-    // its own: "what does this command do", "is it on", and "does anyone
-    // use it" are one question asked three ways, and the answer to the
-    // third is what makes the first two actionable — an unused command is
-    // either badly advertised or worth deleting, and the operator needs
-    // both other columns to tell which.
-    const usage = usageByCommand(USAGE_WINDOW_DAYS);
-    const usageByName: Record<
-      string,
-      { count: number; users: number; lastUsedAt: number | null }
-    > = {};
-    for (const row of usage) {
-      const existing = usageByName[row.command];
-      usageByName[row.command] = {
-        count: (existing?.count ?? 0) + row.count,
-        users: Math.max(existing?.users ?? 0, row.users),
-        lastUsedAt: Math.max(existing?.lastUsedAt ?? 0, row.lastUsedAt ?? 0) || null,
-      };
-    }
-
-    return {
-      hash,
-      manifest,
-      usage: { windowDays: USAGE_WINDOW_DAYS, byCommand: usageByName },
-      scopes: { guildIds, serverIds },
-      commandOptions: COMMAND_OPTIONS,
-      overrides: {
-        global: raw.commands ?? {},
-        guilds: Object.fromEntries(
-          guildIds.map((gid) => [gid, raw.guilds?.[gid]?.commands ?? {}]),
-        ),
-        servers: Object.fromEntries(
-          serverIds.map((sid) => [sid, raw.servers?.[sid]?.commands ?? {}]),
-        ),
-      },
-      effective: Object.fromEntries(
-        [...manifest.slash, ...manifest.ingame].map((c) => [
-          c.name,
-          effective(c.name),
-        ]),
-      ),
-    };
+    return buildCommandsView({ manifest, raw: readRawConfig(), hash });
   });
 
   api.get("/api/config/schema", { config: BOT_CONFIG }, async () => {
@@ -206,32 +169,11 @@ export function registerConfigRoutes(app: FastifyInstance): void {
           throw new ValidationFailed(result.errors);
         }
 
-        const session = sessionFromRequest(req)!;
-        let changed = true;
-        try {
-          ({ changed } = await writeConfig(merged, {
-            byTag: session.tag,
-            byId: session.uid,
-            note: "config write (dashboard)",
-          }));
-        } catch (err) {
-          // writeConfig raises an actionable, operator-facing message (e.g. a
-          // read-only/non-owned config path). Log it and surface it to the
-          // sysadmin editing config rather than falling through to a generic 500.
-          const msg = err instanceof Error ? err.message : "Failed to write config.";
-          log.error("web", `Config write failed: ${msg}`);
-          throw new HttpError(500, msg);
-        }
-        // Only record an audit entry when something actually changed — a Save with
-        // no edits is a no-op, not an auditable action.
-        if (changed) {
-          await recordAdminAction({
-            action: "config write (dashboard)",
-            by: session.tag,
-            byId: session.uid,
-          });
-        }
-        return { ok: true, changed, warnings: result.warnings };
+        return applyConfigWrite(merged, currentSession(req), {
+          note: "config write (dashboard)",
+          audit: "config write",
+          warnings: result.warnings,
+        });
       });
     },
   );
@@ -292,27 +234,11 @@ export function registerConfigRoutes(app: FastifyInstance): void {
       }
 
       return withConfigWriteLock(async () => {
-        const session = sessionFromRequest(req)!;
-        let changed = true;
-        try {
-          ({ changed } = await writeConfig(candidate, {
-            byTag: session.tag,
-            byId: session.uid,
-            note: `rollback to #${id}`,
-          }));
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : "Rollback failed.";
-          log.error("web", `Config rollback failed: ${msg}`);
-          throw new HttpError(500, msg);
-        }
-        if (changed) {
-          await recordAdminAction({
-            action: `config rollback to #${id} (dashboard)`,
-            by: session.tag,
-            byId: session.uid,
-          });
-        }
-        return { ok: true, changed, warnings: result.warnings };
+        return applyConfigWrite(candidate, currentSession(req), {
+          note: `rollback to #${id}`,
+          audit: `config rollback to #${id}`,
+          warnings: result.warnings,
+        });
       });
     },
   );
