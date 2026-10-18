@@ -143,6 +143,23 @@ describe("command manifest", () => {
     expect(read?.slash).toHaveLength(2);
   });
 
+  it("registering a kind again replaces its commands", async () => {
+    registerManifestCommands("slash", [{ name: "gone", description: "g" }]);
+    registerManifestCommands("slash", [{ name: "kept", description: "k" }]);
+    await flushCommandManifest();
+    const written = vi.mocked(saveJson).mock.calls.at(-1)![1] as { slash: Array<{ name: string }> };
+    expect(written.slash.map((c) => c.name)).toEqual(["kept"]);
+  });
+
+  it("readCommandManifest drops malformed entries", async () => {
+    vi.mocked(loadJson).mockResolvedValue({
+      slash: [{ name: "ok", description: "d" }, { description: "no name" }, 5],
+      ingame: [],
+    } as never);
+    const read = await readCommandManifest();
+    expect(read?.slash).toEqual([{ name: "ok", description: "d" }]);
+  });
+
   it("readCommandManifest returns null when the bot never wrote one", async () => {
     vi.mocked(loadJson).mockRejectedValue(new Error("missing"));
     expect(await readCommandManifest()).toBeNull();

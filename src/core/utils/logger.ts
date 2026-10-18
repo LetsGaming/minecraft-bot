@@ -86,12 +86,48 @@ function initFileLogging() {
   }
 }
 
-initFileLogging();
+/**
+ * Open the file sink on the first line that is actually logged, so merely
+ * importing this module (every test does) never touches the logs directory.
+ */
+let initialized = false;
+function ensureInitialized(): void {
+  if (initialized) return;
+  initialized = true;
+  initFileLogging();
+  // Surface the fallback once, so it lands in the same stdout stream Docker
+  // captures.
+  if (fileLoggingDisabledReason) {
+    process.stdout.write(
+      `[${timestamp()}] [WARN] [logger] File logging unavailable ` +
+        `(${fileLoggingDisabledReason}). Logging to stdout only. Check that ` +
+        "the logs/ directory is writable by the runtime user.\n",
+    );
+  }
+}
+
+/** One log argument as text: Errors with their cause, objects without throwing on cycles. */
+function formatArg(arg: unknown): string {
+  if (arg instanceof Error) return errMsg(arg);
+  if (typeof arg !== "object" || arg === null) return String(arg);
+  const seen = new WeakSet<object>();
+  try {
+    return JSON.stringify(arg, (_key, value: unknown) => {
+      if (value instanceof Error) return errMsg(value);
+      if (typeof value === "object" && value !== null) {
+        if (seen.has(value)) return "[Circular]";
+        seen.add(value);
+      }
+      return typeof value === "bigint" ? value.toString() : value;
+    });
+  } catch {
+    return Object.prototype.toString.call(arg);
+  }
+}
 
 function write(level: string, tag: string, ...args: unknown[]): void {
-  const msg = args
-    .map((a) => (typeof a === "object" ? JSON.stringify(a) : String(a)))
-    .join(" ");
+  ensureInitialized();
+  const msg = args.map(formatArg).join(" ");
   const line = `[${timestamp()}] [${level}] [${tag}] ${msg}`;
   process.stdout.write(line + "\n");
   if (stream) {
@@ -107,16 +143,6 @@ function write(level: string, tag: string, ...args: unknown[]): void {
       }
     }
   }
-}
-
-// Surface the fallback once, after the log functions exist, so it lands
-// in the same stdout stream Docker captures.
-if (fileLoggingDisabledReason) {
-  process.stdout.write(
-    `[${timestamp()}] [WARN] [logger] File logging unavailable ` +
-      `(${fileLoggingDisabledReason}). Logging to stdout only — check that ` +
-      "the logs/ directory is writable by the runtime user.\n",
-  );
 }
 
 export const log = {
