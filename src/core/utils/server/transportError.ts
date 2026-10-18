@@ -48,25 +48,20 @@ function field(err: unknown, key: "name" | "code" | "message"): string | undefin
   return typeof value === "string" ? value : undefined;
 }
 
+/** Whether `err`, or anything in its `cause` chain, is a timeout: an abort signal firing or undici's own connect, headers or body timeout. */
+export function isTimeoutError(err: unknown): boolean {
+  return causeChain(err).some(
+    (e) => field(e, "name") === "TimeoutError" || TIMEOUT_CODES.has(field(e, "code") ?? ""),
+  );
+}
+
 /** The transport failure behind `err`, or null when it is some other error. */
 export function classifyTransportError(err: unknown): TransportFailure | null {
   const chain = causeChain(err);
-  if (
-    chain.some(
-      (e) => e instanceof RateLimitedError || (e instanceof ApiError && e.status === 429),
-    )
-  ) {
-    return "rate-limited";
-  }
+  if (chain.some((e) => e instanceof RateLimitedError)) return "rate-limited";
   if (chain.some((e) => e instanceof BreakerOpenError)) return "breaker-open";
   if (chain.some((e) => e instanceof ApiError && e.status >= 500)) return "wrapper-error";
-  if (
-    chain.some(
-      (e) => field(e, "name") === "TimeoutError" || TIMEOUT_CODES.has(field(e, "code") ?? ""),
-    )
-  ) {
-    return "timeout";
-  }
+  if (isTimeoutError(err)) return "timeout";
   if (
     chain.some(
       (e) =>

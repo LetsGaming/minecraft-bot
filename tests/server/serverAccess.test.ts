@@ -221,10 +221,18 @@ describe("listStatsUuids", () => {
 // ── deleteStatsFile ───────────────────────────────────────────────────────
 
 describe("deleteStatsFile", () => {
-  it("returns false for remote (deletion not supported via API)", async () => {
-    // By design, remote stats deletion is not supported through the API
-    const result = await deleteStatsFile(remoteCfg, "11111111-2222-3333-4444-555555555555");
-    expect(result).toBe(false);
+  const uuid = "11111111-2222-3333-4444-555555555555";
+
+  it.each([404, 405])("returns false on a wrapper that answers %i (no such route)", async (status) => {
+    mockFetch.mockResolvedValueOnce(new Response("nope", { status }));
+    expect(await deleteStatsFile(remoteCfg, uuid)).toBe(false);
+  });
+
+  it("propagates a real failure instead of reporting 'not deleted'", async () => {
+    mockFetch.mockResolvedValueOnce(new Response('{"error":"disk"}', { status: 500 }));
+    await expect(deleteStatsFile(remoteCfg, uuid)).rejects.toThrow(/500/);
+    mockFetch.mockRejectedValueOnce(new Error("ECONNREFUSED"));
+    await expect(deleteStatsFile(remoteCfg, uuid)).rejects.toThrow("ECONNREFUSED");
   });
 
 });

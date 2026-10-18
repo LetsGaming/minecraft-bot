@@ -535,6 +535,11 @@ traffic. Console commands joined the breaker later (see "Console commands
 return a CommandOutcome"), because a down wrapper otherwise cost every in-game
 command its full timeout.
 
+Since then every wrapper request, whatever its method, goes through the breaker via
+`wrapperFetch` in `access/apiClient.ts`: a flaky window no longer lets scripts, mod mutations and
+restore each pay a full timeout. A 502 (a script or screen failing behind a healthy wrapper) is
+excluded from the count like a 429, so a failing script cannot open the breaker for reads.
+
 A 429 is excluded from the breaker on purpose: the wrapper answered and
 declined the request on its own terms, which is proof it is reachable and
 healthy, not evidence of an outage. It surfaces as `RateLimitedError`,

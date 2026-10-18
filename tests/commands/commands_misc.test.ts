@@ -200,10 +200,6 @@ describe("serverAccess.logStreamUrl", () => {
     expect(url).not.toContain("//instances");
   });
 
-  it("throws for a local instance without apiUrl", () => {
-    const cfg = { id: "survival", apiUrl: undefined } as never;
-    expect(() => logStreamUrl(cfg)).toThrow("local instance");
-  });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

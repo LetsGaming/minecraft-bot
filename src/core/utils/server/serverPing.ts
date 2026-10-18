@@ -1,5 +1,5 @@
 /**
- * Minecraft Server List Ping — asking the game server itself, with no wrapper
+ * Minecraft Server List Ping; asking the game server itself, with no wrapper
  * in between.
  *
  * Why this exists: every other channel in this bot goes through the API
@@ -12,8 +12,8 @@
  * This is the same handshake a vanilla client performs to draw a row in the
  * server list (protocol 1.7+, `next state = 1`). It needs no authentication,
  * no plugin, and no cooperation from anything but the server itself, and it
- * returns the live player count, the maximum, and — when the server publishes
- * one — a sample of names.
+ * returns the live player count, the maximum, and; when the server publishes
+ * one; a sample of names.
  *
  * Two limits worth knowing, because callers must not over-read the result:
  *
@@ -22,12 +22,13 @@
  *     roster. The counts are exact; the names are best-effort.
  *   - Netty's IO threads answer this, so a status reply proves the server
  *     process is alive and serving connections. It does not prove the main
- *     game thread is healthy — that is what RCON responsiveness is for.
+ *     game thread is healthy; that is what RCON responsiveness is for.
  *
  * The module is pure protocol: no config, no Discord, no game knowledge, and
  * no dependency on the wrapper. Callers pass a host and port.
  */
 import net from "net";
+import { MS } from "@mcbot/schema/time.js";
 import { errMsg } from "../error.js";
 
 /** Default `server-port` in server.properties. */
@@ -37,7 +38,7 @@ export const DEFAULT_MINECRAFT_PORT = 25565;
 const HANDSHAKE_PROTOCOL_VERSION = -1;
 
 /** Status is served off the IO threads, so this can be tight. */
-export const DEFAULT_PING_TIMEOUT_MS = 3_000;
+export const DEFAULT_PING_TIMEOUT_MS = 3 * MS.second;
 
 /**
  * Refuse to buffer more than this. A status response carrying a favicon is
@@ -60,7 +61,7 @@ export interface ServerPingResult {
 }
 
 /**
- * The outcome of one ping, as a value rather than an exception — the caller's
+ * The outcome of one ping, as a value rather than an exception; the caller's
  * whole job is to distinguish these, so throwing would flatten exactly the
  * information it needs.
  */
@@ -69,8 +70,8 @@ export type PingOutcome =
   | { kind: "status"; result: ServerPingResult }
   /**
    * TCP connected but no status came back inside the budget. Something is
-   * listening on that port — a server with `enable-status=false`, one still
-   * starting, or a proxy — so this is evidence of life, not of health.
+   * listening on that port; a server with `enable-status=false`, one still
+   * starting, or a proxy; so this is evidence of life, not of health.
    */
   | { kind: "connected" }
   /** Actively refused, or no route. The strongest evidence of "not running". */
@@ -103,7 +104,7 @@ export interface VarIntRead {
 
 /**
  * Read a VarInt at `offset`. Returns null when the buffer does not yet hold a
- * complete one — the caller is streaming and should wait for more bytes.
+ * complete one; the caller is streaming and should wait for more bytes.
  * Throws only for a VarInt that cannot be valid at any length.
  */
 export function readVarInt(buf: Buffer, offset = 0): VarIntRead | null {
@@ -133,7 +134,7 @@ function frame(body: Buffer): Buffer {
 /**
  * The two packets a status ping consists of, sent back to back.
  *
- * Exported so the encoding can be tested without a socket — this is the part
+ * Exported so the encoding can be tested without a socket; this is the part
  * that is easy to get subtly wrong and impossible to notice, because a
  * malformed handshake looks exactly like an unreachable server.
  */
@@ -219,7 +220,7 @@ export function parseStatusResponse(
 // ── The ping ──────────────────────────────────────────────────────────────
 
 /**
- * Ping a Minecraft server. Never throws — every failure is a PingOutcome,
+ * Ping a Minecraft server. Never throws; every failure is a PingOutcome,
  * because "refused" and "connected but silent" mean different things to the
  * caller and an exception would collapse them.
  */
@@ -259,7 +260,7 @@ export function pingMinecraftServer(
       }
       try {
         const status = parseStatusResponse(buffer);
-        if (!status) return; // keep reading — the packet is incomplete
+        if (!status) return; // keep reading; the packet is incomplete
         finish({
           kind: "status",
           result: { ...status, latencyMs: Date.now() - startedAt },
@@ -297,7 +298,7 @@ export function pingMinecraftServer(
     });
 
     socket.once("close", () => {
-      // The server hung up before answering — treat as connected-but-silent
+      // The server hung up before answering; treat as connected-but-silent
       // when the TCP handshake had completed, otherwise as an error (real
       // refusals arrive through the error event with an errno code).
       finish(

@@ -132,6 +132,15 @@ describe("sendCommandOutcome", () => {
     expect(await sendCommandOutcome(cfg, "x")).toMatchObject({ reason: "timeout" });
   });
 
+  it("classifies undici's headers timeout inside 'fetch failed' as a timeout too", async () => {
+    mockFetch.mockRejectedValueOnce(
+      new TypeError("fetch failed", {
+        cause: Object.assign(new Error("headers"), { code: "UND_ERR_HEADERS_TIMEOUT" }),
+      }),
+    );
+    expect(await sendCommandOutcome(cfg, "x")).toMatchObject({ reason: "timeout" });
+  });
+
   it("opens the breaker after repeated transport failures and then fails fast", async () => {
     for (let i = 0; i < 5; i++) {
       mockFetch.mockRejectedValueOnce(new TypeError("fetch failed"));
