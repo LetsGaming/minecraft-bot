@@ -168,6 +168,7 @@ export function useConsole() {
   async function send(): Promise<boolean> {
     if (!canSend.value) return false;
     const text = command.value.trim();
+    const mine = generation;
     sending.value = true;
     error.value = "";
     try {
@@ -176,16 +177,20 @@ export function useConsole() {
         `/api/servers/${encodeURIComponent(serverId)}/command`,
         { command: text },
       );
+      // The console moved to another server while this was in flight: the command still went
+      // where it was typed, but its echo and the input belong to the new console now.
+      if (mine !== generation) return true;
       // Echo locally so the input feels like a terminal. The log stream will
       // carry the server's own record of it a moment later; a command with no
       // RCON output would otherwise vanish without a trace.
       push(`> ${text}`);
       if (res.kind === "sent") push(t("console.sentNoOutput"));
       else if (res.output) push(res.output);
-      command.value = "";
+      // Keep anything typed while the request was in flight.
+      if (command.value.trim() === text) command.value = "";
       return true;
     } catch (err) {
-      error.value = errorMessage(err);
+      if (mine === generation) error.value = errorMessage(err);
       return false;
     } finally {
       sending.value = false;

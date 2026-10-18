@@ -1563,6 +1563,9 @@ export const en = {
   "upgrade.error.start": "Could not start the upgrade.",
 
   "modconfig.sectionGeneral": "General",
+
+  "commands.savedSkipped": "Saved, but some overrides were not written",
+  "commands.savedSkippedDetail": "The configuration has no entry for: {scopes}.",
 } as const;
 
 export type EnglishKey = keyof typeof en;
