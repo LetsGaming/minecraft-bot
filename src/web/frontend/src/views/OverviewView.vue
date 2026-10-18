@@ -160,6 +160,7 @@ import { useServerStatus } from "../composables/useServerStatus";
 import { useGuilds } from "../composables/useGuilds";
 import { useMyGuilds } from "../composables/useMyGuilds";
 import { useAudit } from "../composables/useAudit";
+import { usePolling } from "../composables/usePolling";
 import { serverRole, serverRoleLabel, stateExplanation } from "../utils/format";
 import { fleetAlerts, type Alert } from "../utils/serverAlerts";
 import { failureCopy, signIn, type FailureCopy } from "../utils/loadFailure";
@@ -185,6 +186,7 @@ export default defineComponent({
     const { guildName, load: loadGuildNames } = useGuilds();
     const myGuilds = useMyGuilds();
     const audit = useAudit();
+    usePolling(() => status.refresh(), REFRESH_MS);
     return {
       servers: status.servers,
       botAlive: status.botAlive,
@@ -212,11 +214,6 @@ export default defineComponent({
       relativeAge,
       timestampTitle,
       t,
-    };
-  },
-  data() {
-    return {
-      timer: 0 as ReturnType<typeof setInterval> | 0,
     };
   },
   computed: {
@@ -273,12 +270,8 @@ export default defineComponent({
       });
     },
   },
-  async mounted() {
-    await this.refreshAll();
-    this.timer = setInterval(() => void this.refresh(), REFRESH_MS);
-  },
-  unmounted() {
-    if (this.timer) clearInterval(this.timer);
+  mounted() {
+    void this.refreshAll();
   },
   methods: {
     async refreshAll(): Promise<void> {

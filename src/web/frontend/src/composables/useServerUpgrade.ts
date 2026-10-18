@@ -1,6 +1,11 @@
 import { computed, ref } from "vue";
 import type { UpgradeEvent, UpgradeJob, UpgradeRequest, UpgradeStarted } from "@mcbot/schema/wire/index.js";
 import { safeStorage } from "../utils/safeStorage";
+import { errorMessage } from "../utils/errorMessage";
+import type { PageVisibility } from "../utils/pageVisibility";
+import { usePolledJob } from "./usePolledJob";
+
+export type { PageVisibility } from "../utils/pageVisibility";
 import { phaseRows } from "@mcbot/schema/upgradePhases.js";
 
 export { phaseRows, type PhaseRow } from "@mcbot/schema/upgradePhases.js";
@@ -30,11 +35,6 @@ export interface UpgradeApi {
   poll(jobId: string, since: number): Promise<UpgradeJob>;
   /** The running or latest job; null when there has been none. */
   current(since: number): Promise<UpgradeJob | null>;
-}
-
-export interface PageVisibility {
-  isHidden(): boolean;
-  onVisible(cb: () => void): () => void;
 }
 
 /** Finished jobs the viewer has closed, so the page does not reopen them. */
@@ -89,24 +89,7 @@ function browserDismissed(): DismissedJobs {
   };
 }
 
-const browserVisibility: PageVisibility = {
-  isHidden: () => typeof document !== "undefined" && document.hidden,
-  onVisible(cb) {
-    if (typeof document === "undefined") return () => undefined;
-    const handler = () => {
-      if (!document.hidden) cb();
-    };
-    document.addEventListener("visibilitychange", handler);
-    return () => document.removeEventListener("visibilitychange", handler);
-  },
-};
-
-function messageOf(err: unknown, fallback: string): string {
-  return err instanceof Error && err.message ? err.message : fallback;
-}
-
 export function useServerUpgrade(options: UseServerUpgradeOptions) {
-  const visibility = options.visibility ?? browserVisibility;
   const nowSeconds = options.nowSeconds ?? (() => Date.now() / 1000);
   const dismissed = options.dismissed ?? browserDismissed();
 
@@ -117,11 +100,20 @@ export function useServerUpgrade(options: UseServerUpgradeOptions) {
 
   let jobId: string | null = null;
   let cursor = 0;
-  let timer: ReturnType<typeof setTimeout> | undefined;
   let generation = 0;
-  let disposed = false;
-  const stopWatching = visibility.onVisible(() => {
-    if (jobId && timer === undefined && running.value) schedule();
+
+  const poller = usePolledJob<UpgradeJob>({
+    intervalMs: UPGRADE_POLL_MS,
+    visibility: options.visibility,
+    poll: () => options.api.poll(jobId as string, cursor),
+    onUpdate: (next) => absorb(next),
+    isDone: (next) => next.state !== "running",
+    onDone: () => {
+      jobId = null;
+    },
+    onError: (err) => {
+      options.onError(errorMessage(err, "Could not read the upgrade's progress."));
+    },
   });
 
   const running = computed(() => job.value?.state === "running");
@@ -135,45 +127,10 @@ export function useServerUpgrade(options: UseServerUpgradeOptions) {
       ).length,
   );
 
-  function clearTimer(): void {
-    if (timer !== undefined) clearTimeout(timer);
-    timer = undefined;
-  }
-
-  function schedule(): void {
-    clearTimer();
-    if (disposed || visibility.isHidden()) return;
-    const mine = generation;
-    timer = setTimeout(() => {
-      timer = undefined;
-      if (visibility.isHidden()) return;
-      void tick(mine);
-    }, UPGRADE_POLL_MS);
-  }
-
   function absorb(next: UpgradeJob): void {
     if (next.events.length > 0) events.value = [...events.value, ...next.events];
     cursor = next.next;
     job.value = next;
-  }
-
-  async function tick(mine: number): Promise<void> {
-    if (mine !== generation || !jobId) return;
-    try {
-      const next = await options.api.poll(jobId, cursor);
-      if (mine !== generation) return;
-      absorb(next);
-      if (next.state === "running") {
-        schedule();
-        return;
-      }
-      jobId = null;
-    } catch (err) {
-      if (mine !== generation) return;
-      // One missed poll is not the end of the job; the wrapper may be restarting.
-      options.onError(messageOf(err, "Could not read the upgrade's progress."));
-      schedule();
-    }
   }
 
   async function loadSupport(): Promise<void> {
@@ -181,7 +138,7 @@ export function useServerUpgrade(options: UseServerUpgradeOptions) {
       supported.value = (await options.api.support()).supported;
     } catch (err) {
       supported.value = false;
-      options.onError(messageOf(err, "Could not check whether this server can upgrade."));
+      options.onError(errorMessage(err, "Could not check whether this server can upgrade."));
     }
   }
 
@@ -203,11 +160,11 @@ export function useServerUpgrade(options: UseServerUpgradeOptions) {
       absorb(found);
       if (found.state === "running") {
         jobId = found.jobId;
-        schedule();
+        void poller.start();
       }
     } catch (err) {
       if (mine !== generation) return;
-      options.onError(messageOf(err, "Could not read the last upgrade."));
+      options.onError(errorMessage(err, "Could not read the last upgrade."));
     }
   }
 
@@ -215,7 +172,7 @@ export function useServerUpgrade(options: UseServerUpgradeOptions) {
     if (starting.value || running.value) return false;
     generation++;
     const mine = generation;
-    clearTimer();
+    poller.stop();
     starting.value = true;
     try {
       const started = await options.api.start(request);
@@ -230,10 +187,10 @@ export function useServerUpgrade(options: UseServerUpgradeOptions) {
         events: [],
         next: 0,
       };
-      schedule();
+      void poller.start();
       return true;
     } catch (err) {
-      options.onError(messageOf(err, "Could not start the upgrade."));
+      options.onError(errorMessage(err, "Could not start the upgrade."));
       return false;
     } finally {
       starting.value = false;
@@ -243,7 +200,7 @@ export function useServerUpgrade(options: UseServerUpgradeOptions) {
   /** Forget the job: a server switch. */
   function reset(): void {
     generation++;
-    clearTimer();
+    poller.stop();
     jobId = null;
     cursor = 0;
     job.value = null;
@@ -259,9 +216,8 @@ export function useServerUpgrade(options: UseServerUpgradeOptions) {
   }
 
   function dispose(): void {
-    disposed = true;
     reset();
-    stopWatching();
+    poller.dispose();
   }
 
   return {

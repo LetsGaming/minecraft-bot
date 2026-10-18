@@ -198,7 +198,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent } from "vue";
+import { defineComponent, ref } from "vue";
 import Button from "primevue/button";
 import {
   formatBytes,
@@ -212,6 +212,7 @@ import {
 } from "../utils/format";
 import {
   SERVER_OPERATOR_ACTIONS,
+  capabilityForServerAction,
   isActionApplicable,
   type ServerOperatorAction,
 } from "@mcbot/schema/serverActions.js";
@@ -224,6 +225,7 @@ import { failureCopy, signIn, type FailureCopy } from "../utils/loadFailure";
 import { useServerStatus } from "../composables/useServerStatus";
 import { useServerActions } from "../composables/useServerActions";
 import { useCapabilities } from "../composables/useCapabilities";
+import { usePolling } from "../composables/usePolling";
 import { t } from "../i18n";
 import ViewHeader from "../components/ui/ViewHeader.vue";
 import StatusChip from "../components/ui/StatusChip.vue";
@@ -283,9 +285,7 @@ export default defineComponent({
     function actionsFor(server: ServerStatus): readonly ServerOperatorAction[] {
       // Rollback is irreversible and has its own capability; everything else
       // rides on server:control.
-      const granted = SERVER_OPERATOR_ACTIONS.filter((a) =>
-        can(a === "rollback" ? "server:rollback" : "server:control", server.id),
-      );
+      const granted = SERVER_OPERATOR_ACTIONS.filter((a) => can(capabilityForServerAction(a), server.id));
       // Gated on what the wrapper advertised: a suite without rollback.sh
       // should not offer a Rollback button that 409s. A wrapper too old to
       // report features gets the full set.
@@ -294,7 +294,42 @@ export default defineComponent({
       return granted.filter((a) => scripts[a] !== false);
     }
 
+    const pendingIntents = ref<Record<string, PendingIntent[]>>({});
+
+    /**
+     * Poll alongside status. Intents expire server-side, so a stale list here
+     * corrects itself rather than offering a retry nobody still wants. Only
+     * servers this user can act on are asked, and a failed read keeps the
+     * last known list for that server.
+     */
+    async function loadIntents(): Promise<void> {
+      const asked = status.servers.value.filter((server) => actionsFor(server).length > 0);
+      const results = await Promise.all(
+        asked.map(async (server) => {
+          try {
+            const res = await apiGet<{ intents: PendingIntent[] }>(
+              `/api/servers/${encodeURIComponent(server.id)}/pending-actions`,
+            );
+            return [server.id, res.intents] as const;
+          } catch {
+            return [server.id, pendingIntents.value[server.id] ?? []] as const;
+          }
+        }),
+      );
+      pendingIntents.value = Object.fromEntries(results);
+    }
+
+    async function refreshAll(): Promise<void> {
+      await refresh();
+      await loadIntents();
+    }
+
+    const polling = usePolling(refreshAll, REFRESH_MS, { immediate: true });
+
     return {
+      pendingIntents,
+      loadIntents,
+      refreshAll: polling.tick,
       servers: status.servers,
       refreshing: status.loading,
       loaded: status.loaded,
@@ -308,12 +343,6 @@ export default defineComponent({
       serverRole, serverRoleLabel, stateExplanation, wrapperNote,
       t,
       ACTION_ICON,
-    };
-  },
-  data() {
-    return {
-      timer: 0 as ReturnType<typeof setInterval> | 0,
-      pendingIntents: {} as Record<string, PendingIntent[]>,
     };
   },
   computed: {
@@ -331,18 +360,7 @@ export default defineComponent({
       });
     },
   },
-  async mounted() {
-    await this.refreshAll();
-    this.timer = setInterval(() => void this.refreshAll(), REFRESH_MS);
-  },
-  unmounted() {
-    if (this.timer) clearInterval(this.timer);
-  },
   methods: {
-    async refreshAll(): Promise<void> {
-      await this.refresh();
-      await this.loadIntents();
-    },
     onRetry(): void {
       if (this.failure === "signedOut") {
         signIn();
@@ -355,25 +373,6 @@ export default defineComponent({
     },
     cardAlerts(server: ServerStatus): Alert[] {
       return serverAlerts(server).filter((a) => CARD_ALERT_KINDS.has(a.kind));
-    },
-    /**
-     * Poll alongside status. Intents expire server-side, so a stale list here
-     * corrects itself rather than offering a retry nobody still wants.
-     */
-    async loadIntents(): Promise<void> {
-      const results = await Promise.all(
-        this.servers.map(async (server) => {
-          try {
-            const res = await apiGet<{ intents: PendingIntent[] }>(
-              `/api/servers/${encodeURIComponent(server.id)}/pending-actions`,
-            );
-            return [server.id, res.intents] as const;
-          } catch {
-            return [server.id, []] as const;
-          }
-        }),
-      );
-      this.pendingIntents = Object.fromEntries(results);
     },
     async dismissIntent(serverId: string, action: string): Promise<void> {
       try {

@@ -8,6 +8,7 @@ import {
   type UpgradeApi,
   type PageVisibility,
 } from "../../src/web/frontend/src/composables/useServerUpgrade.js";
+import { DEFAULT_POLL_RETRIES } from "../../src/web/frontend/src/composables/usePolledJob.js";
 import type { UpgradeJob } from "../../src/schema/wire/index.js";
 
 const NOW = 1_800_000_000;
@@ -124,10 +125,20 @@ describe("starting and following a job", () => {
     const { upgrade, onError } = setup({ poll });
     await upgrade.start({ mcVersion: "1.21.5" });
     await vi.advanceTimersByTimeAsync(UPGRADE_POLL_MS);
-    expect(onError).toHaveBeenCalledWith("wrapper restarting");
+    expect(onError).not.toHaveBeenCalled();
     expect(upgrade.running.value).toBe(true);
     await vi.advanceTimersByTimeAsync(UPGRADE_POLL_MS);
     expect(upgrade.finished.value).toBe(true);
+  });
+
+  it("stops polling and reports once when every poll keeps failing", async () => {
+    const poll = vi.fn().mockRejectedValue(new Error("gone"));
+    const { upgrade, onError } = setup({ poll });
+    await upgrade.start({ mcVersion: "1.21.5" });
+    await vi.advanceTimersByTimeAsync(UPGRADE_POLL_MS * (DEFAULT_POLL_RETRIES + 3));
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith("gone");
+    expect(poll).toHaveBeenCalledTimes(DEFAULT_POLL_RETRIES + 1);
   });
 
   it("does not poll while the tab is hidden and resumes when it returns", async () => {
