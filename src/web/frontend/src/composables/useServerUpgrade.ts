@@ -1,5 +1,6 @@
 import { computed, ref } from "vue";
 import type { UpgradeEvent, UpgradeJob, UpgradeRequest, UpgradeStarted } from "@mcbot/schema/wire/index.js";
+import { apiGet, apiSend } from "../api";
 import { safeStorage } from "../utils/safeStorage";
 import { errorMessage } from "../utils/errorMessage";
 import type { PageVisibility } from "../utils/pageVisibility";
@@ -35,6 +36,17 @@ export interface UpgradeApi {
   poll(jobId: string, since: number): Promise<UpgradeJob>;
   /** The running or latest job; null when there has been none. */
   current(since: number): Promise<UpgradeJob | null>;
+}
+
+/** The upgrade routes of one server. The prune page follows its delete through the same routes and overrides `start`. */
+export function useUpgradeApi(server: () => string): UpgradeApi {
+  const base = (): string => `/api/servers/${encodeURIComponent(server())}/upgrade`;
+  return {
+    support: () => apiGet<{ supported: boolean }>(`${base()}/support`),
+    start: (body) => apiSend<UpgradeStarted>("POST", base(), body),
+    poll: (jobId, since) => apiGet<UpgradeJob>(`${base()}/${encodeURIComponent(jobId)}?since=${since}`),
+    current: async (since) => (await apiGet<{ job: UpgradeJob | null }>(`${base()}/current?since=${since}`)).job,
+  };
 }
 
 /** Finished jobs the viewer has closed, so the page does not reopen them. */

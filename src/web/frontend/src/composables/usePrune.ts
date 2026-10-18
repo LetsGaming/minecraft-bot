@@ -1,4 +1,5 @@
 import { computed, ref } from "vue";
+import { apiGet, apiSend } from "../api";
 import { latest } from "./useLoader";
 import { usePolledJob } from "./usePolledJob";
 import { errorMessage } from "../utils/errorMessage";
@@ -58,6 +59,28 @@ export interface PruneApi {
   status?(): Promise<PruneEngineStatus>;
   cancel?(jobId: string): Promise<{ cancelled: boolean }>;
   chunk?(planId: string, dimension: string, cx: number, cz: number): Promise<PruneChunkInfo>;
+}
+
+/** The prune routes of one server, as the page consumes them. A page that does not offer a call overrides it. */
+export function usePruneApi(server: () => string): PruneApi {
+  const base = (): string => `/api/servers/${encodeURIComponent(server())}/prune`;
+  return {
+    support: () => apiGet<{ supported: boolean }>(`${base()}/support`),
+    settings: () => apiGet<PruneParams>(`${base()}/settings`),
+    save: (p) => apiSend<PruneParams>("PUT", `${base()}/settings`, p),
+    scan: (p) => apiSend<{ jobId: string }>("POST", `${base()}/scans`, p),
+    poll: (jobId) => apiGet<PruneScanJob>(`${base()}/scans/${encodeURIComponent(jobId)}`),
+    map: (planId, index) => apiGet<PruneMap>(`${base()}/plans/${encodeURIComponent(planId)}/map/${index}`),
+    dimensions: () => apiGet<PruneDimensions>(`${base()}/dimensions`),
+    status: () => apiGet<PruneEngineStatus>(`${base()}/status`),
+    cancel: (jobId) => apiSend<{ cancelled: boolean }>("POST", `${base()}/scans/${encodeURIComponent(jobId)}/cancel`, {}),
+    chunk: (planId, dimension, cx, cz) =>
+      apiGet<PruneChunkInfo>(
+        `${base()}/plans/${encodeURIComponent(planId)}/chunk?dimension=${encodeURIComponent(dimension)}&cx=${cx}&cz=${cz}`,
+      ),
+    apply: (planId, countdownSeconds) =>
+      apiSend<UpgradeStarted>("POST", `/api/servers/${encodeURIComponent(server())}/prune`, { planId, countdownSeconds }),
+  };
 }
 
 export interface UsePruneOptions {

@@ -378,10 +378,10 @@ import Select from "primevue/select";
 import SelectButton from "primevue/selectbutton";
 import Slider from "primevue/slider";
 import { formatBytes } from "@mcbot/schema";
-import { apiBlob, apiGet, apiSend } from "../api";
-import { CELL, usePrune } from "../composables/usePrune";
+import { apiBlob } from "../api";
+import { CELL, usePrune, usePruneApi } from "../composables/usePrune";
 import { SelectionModel } from "../composables/pruneSelection";
-import { useServerUpgrade } from "../composables/useServerUpgrade";
+import { useServerUpgrade, useUpgradeApi } from "../composables/useServerUpgrade";
 import { useConfirmAction } from "../composables/useConfirmAction";
 import ViewHeader from "../components/ui/ViewHeader.vue";
 import EmptyState from "../components/ui/EmptyState.vue";
@@ -390,17 +390,6 @@ import PruneMap, { type MapTool } from "../components/PruneMap.vue";
 import { OVER_TERRAIN_OPACITY } from "../composables/pruneMapRender";
 import UpgradeRun from "../components/UpgradeRun.vue";
 import { t, type MessageKey } from "../i18n";
-import type {
-  PruneChunkInfo,
-  PruneDimensions,
-  PruneEngineStatus,
-  PruneMap as PruneMapBody,
-  PruneParams,
-  PruneParamsRequest,
-  PruneScanJob,
-  UpgradeJob,
-  UpgradeStarted,
-} from "@mcbot/schema/wire/index.js";
 
 const props = defineProps<{ activeServer: string }>();
 
@@ -410,33 +399,18 @@ const server = computed(() => props.activeServer);
 const base = (): string => `/api/servers/${encodeURIComponent(server.value)}`;
 
 const prune = usePrune({
-  api: {
-    support: () => apiGet<{ supported: boolean }>(`${base()}/prune/support`),
-    settings: () => apiGet<PruneParams>(`${base()}/prune/settings`),
-    save: (p: PruneParamsRequest) => apiSend<PruneParams>("PUT", `${base()}/prune/settings`, p),
-    scan: (p: PruneParamsRequest) => apiSend<{ jobId: string }>("POST", `${base()}/prune/scans`, p),
-    poll: (jobId) => apiGet<PruneScanJob>(`${base()}/prune/scans/${jobId}`),
-    map: (planId, index) => apiGet<PruneMapBody>(`${base()}/prune/plans/${planId}/map/${index}`),
-    dimensions: () => apiGet<PruneDimensions>(`${base()}/prune/dimensions`),
-    status: () => apiGet<PruneEngineStatus>(`${base()}/prune/status`),
-    cancel: (jobId) => apiSend<{ cancelled: boolean }>("POST", `${base()}/prune/scans/${jobId}/cancel`, {}),
-    chunk: (planId, dimension, cx, cz) =>
-      apiGet<PruneChunkInfo>(`${base()}/prune/plans/${planId}/chunk?dimension=${encodeURIComponent(dimension)}&cx=${cx}&cz=${cz}`),
-    apply: (planId, countdownSeconds) =>
-      apiSend<UpgradeStarted>("POST", `${base()}/prune`, { planId, countdownSeconds }),
-  },
+  api: usePruneApi(() => server.value),
   onError: (message) => (error.value = message),
 });
 
 /** The delete is an upgrade-style job: followed through the same routes. */
 const run = useServerUpgrade({
   api: {
-    support: () => apiGet<{ supported: boolean }>(`${base()}/upgrade/support`),
+    ...useUpgradeApi(() => server.value),
     start: () => Promise.reject(new Error("The prune is started from this page.")),
-    poll: (jobId, since) => apiGet<UpgradeJob>(`${base()}/upgrade/${jobId}?since=${since}`),
-    current: async (since) => (await apiGet<{ job: UpgradeJob | null }>(`${base()}/upgrade/current?since=${since}`)).job,
   },
-  onError: (message) => (error.value = message),  kind: "prune",
+  onError: (message) => (error.value = message),
+  kind: "prune",
 });
 
 // ── Zones ─────────────────────────────────────────────────────────────────
