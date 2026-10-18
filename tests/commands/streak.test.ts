@@ -107,7 +107,7 @@ describe("streak execute", () => {
       version: 2,
       servers: {
         main: {
-          user1: { currentStreak: 100, longestStreak: 100, bonusStreak: 100 },
+          user1: { currentStreak: 100, longestStreak: 100, bonusStreak: 100, lastClaim: Date.now() - 3_600_000 },
         },
       },
     });
@@ -121,6 +121,26 @@ describe("streak execute", () => {
     const interaction = makeInteraction();
     await execute(interaction);
     expect(repliedText(interaction)).toContain("None");
+  });
+
+  it("does not show a stale bonus streak next to a lapsed live streak", async () => {
+    kvSet("claimedDaily", {
+      version: 2,
+      servers: {
+        main: {
+          user1: { currentStreak: 5, longestStreak: 5, bonusStreak: 5, lastClaim: Date.now() - 5 * 86_400_000 },
+        },
+      },
+    });
+    vi.mocked(loadJson).mockResolvedValue({
+      streakBonuses: { "7": [{ item: "item1", amount: 1 }] },
+    });
+
+    const interaction = makeInteraction();
+    await execute(interaction);
+    const text = repliedText(interaction);
+    expect(text).toContain("0/7");
+    expect(text).not.toContain("5/7");
   });
 
   it("defers reply as ephemeral", async () => {
@@ -141,5 +161,16 @@ describe("liveStreak", () => {
     expect(liveStreak({ currentStreak: 4, lastClaim: now - 2 * DAILY_COOLDOWN_MS }, now)).toBe(4);
     expect(liveStreak({ currentStreak: 4, lastClaim: now - 2 * DAILY_COOLDOWN_MS - 1 }, now)).toBe(0);
     expect(liveStreak({ currentStreak: 4, lastClaim: 0 }, now)).toBe(0);
+  });
+});
+
+describe("liveBonusStreak", () => {
+  it("applies the same two-cooldown grace as liveStreak", async () => {
+    const { liveBonusStreak, DAILY_COOLDOWN_MS } = await import("../../src/core/utils/minecraft/rewards.js");
+    const now = 1_000_000_000_000;
+    expect(liveBonusStreak({ bonusStreak: 4, lastClaim: now - DAILY_COOLDOWN_MS }, now)).toBe(4);
+    expect(liveBonusStreak({ bonusStreak: 4, lastClaim: now - 2 * DAILY_COOLDOWN_MS }, now)).toBe(4);
+    expect(liveBonusStreak({ bonusStreak: 4, lastClaim: now - 2 * DAILY_COOLDOWN_MS - 1 }, now)).toBe(0);
+    expect(liveBonusStreak({ bonusStreak: 4, lastClaim: 0 }, now)).toBe(0);
   });
 });
