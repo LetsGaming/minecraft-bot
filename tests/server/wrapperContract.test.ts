@@ -118,10 +118,16 @@ describe("scriptTimeoutsMs", () => {
     expect(parseManifest({ ...goodManifest(), scriptTimeoutsMs: { stop: v } })).not.toBeNull();
   });
 
-  it("ignores unknown actions, prototype keys and non-object tables", () => {
-    const polluted = JSON.parse('{"__proto__": 99999, "constructor": 99999, "evil": 99999, "stop": 60000}');
+  it("keeps an action the bot has no fallback for, so a new wrapper action gets its ceiling", () => {
+    expect(advertise({ prune: 120_000, stop: 60_000 })).toEqual({ prune: 120_000, stop: 60_000 });
+  });
+
+  it("ignores prototype keys, malformed names and non-object tables", () => {
+    const polluted = JSON.parse(
+      '{"__proto__": 99999, "constructor": 99999, "has space": 99999, "stop": 60000}',
+    );
     expect(advertise(polluted)).toEqual({ stop: 60_000 });
-    expect(({} as Record<string, unknown>).evil).toBeUndefined();
+    expect(({} as Record<string, unknown>).constructor).toBe(Object);
     expect(advertise([1, 2])).toBeUndefined();
     expect(advertise("x")).toBeUndefined();
   });
@@ -130,7 +136,9 @@ describe("scriptTimeoutsMs", () => {
     const many: Record<string, number> = {};
     for (let i = 0; i < 1000; i++) many[`k${i}`] = 10_000;
     many.stop = 60_000;
-    expect(advertise(many)).toBeUndefined();
+    const parsed = advertise(many);
+    expect(Object.keys(parsed ?? {}).length).toBeLessThanOrEqual(64);
+    expect(parsed).not.toHaveProperty("stop");
   });
 
   it("leaves the field absent on wrappers that predate it", () => {

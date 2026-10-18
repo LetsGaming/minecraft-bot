@@ -118,7 +118,7 @@ export function startHostResourcesMonitor(
  * per-path alerts are the best that can be done with what it says.
  */
 async function collectUsages(server: ServerInstance): Promise<DiskUsage[]> {
-  const host = await getHostResources(server);
+  const host = await getHostResources(server.config);
   const disks = host?.disks ?? [];
 
   const seen = new Set<string>();

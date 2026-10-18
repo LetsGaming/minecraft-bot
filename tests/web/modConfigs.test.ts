@@ -95,7 +95,7 @@ vi.mock("../../src/core/utils/server/server.js", () => ({
             source: "wrapper",
             players: { online: 0, max: 20, names: [], sampled: false },
           }),
-          getList: async () => ({ playerCount: 0, maxPlayers: 20, players: [] }),
+          getList: async () => ({ ok: true, value: { playerCount: 0, maxPlayers: 20, players: [] } }),
           getTps: async () => null,
         }
       : null,

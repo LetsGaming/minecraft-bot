@@ -308,14 +308,8 @@ describe("startTpsMonitor", () => {
       await import("../../src/bot/logWatcher/watchers/monitors/tpsMonitor.js"));
   });
 
-  it("returns null when server does not support TPS", () => {
-    const server = { id: "main", supportsTps: false } as never;
-    const result = startTpsMonitor(server, null as never, {});
-    expect(result).toBeNull();
-  });
-
   it("returns a timer when server supports TPS", () => {
-    const server = { id: "main", supportsTps: true, getTps: vi.fn() } as never;
+    const server = { id: "main", getTps: vi.fn() } as never;
     const timer = startTpsMonitor(server, null as never, {});
     expect(timer).toBeTruthy();
     timer!.stop();

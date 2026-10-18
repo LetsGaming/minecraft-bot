@@ -247,12 +247,10 @@ async function buildServerField(
     };
   }
 
-  if (server.supportsTps) {
-    try {
-      tps = await server.getTps();
-    } catch {
-      /* TPS unavailable this cycle */
-    }
+  try {
+    tps = await server.getTps();
+  } catch {
+    /* TPS unavailable this cycle */
   }
 
   let statusLine = `${display.emoji} ${display.label}`;
@@ -267,26 +265,19 @@ async function buildServerField(
     counts.max = health.players.max;
   }
 
-  try {
-    const list = await server.getList();
-    const { online, max } = parsePlayerCounts(list);
-    // NaN means the wrapper answered in a shape we do not understand —
-    // keep the health figure rather than overwriting it with zero.
+  const list = await server.getList();
+  if (list.ok) {
+    const { online, max } = parsePlayerCounts(list.value);
+    // A count we cannot read keeps the health figure rather than overwriting it with zero.
     if (online !== null) counts.online = online;
     if (max !== null) counts.max = max;
-    const players: string[] = list.players ?? [];
 
     statusLine =
       `${display.emoji} ${display.label}, ${t("state.playerCount", { ...counts })}` +
       buildTpsLine(tps) +
-      buildPlayerListLine(players);
-  } catch (err) {
-    // Silent until now: a /list that always threw looked like an empty
-    // server forever, with nothing in the log to say otherwise.
-    log.debug(
-      "status",
-      `${server.id}: /list failed, using health counts: ${errMsg(err)}`,
-    );
+      buildPlayerListLine(list.value.players ?? []);
+  } else {
+    log.debug("status", `${server.id}: /list failed, using health counts`);
     statusLine =
       `${display.emoji} ${display.label}, ${t("state.playerCount", { ...counts })}` +
       buildTpsLine(tps);

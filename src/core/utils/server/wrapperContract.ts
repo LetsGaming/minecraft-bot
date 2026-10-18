@@ -2,7 +2,7 @@
  * What this bot expects of a remote instance's API wrapper, and the
  * startup report that says where the two disagree.
  *
- * The problem this solves: every wrapper call degrades on its own — a 404
+ * The problem this solves: every wrapper call degrades on its own; a 404
  * on `/usercache` quietly becomes "no usercache names", a 404 on
  * `/capabilities` quietly becomes "assume everything works". Individually
  * that is the right behaviour; collectively it means an outdated wrapper
@@ -20,17 +20,18 @@
  */
 import { log } from "../logger.js";
 import { isRecord } from "../objects.js";
+import { MS } from "@mcbot/schema/time.js";
 
 /**
  * The oldest wrapper this bot can use, for the pre-manifest fallback only.
  *
  * 3.0.0 is the release that added `/info` (the version handshake itself),
- * `/usercache`, and the capabilities contract — the endpoints this bot
+ * `/usercache`, and the capabilities contract; the endpoints this bot
  * treats as its baseline. Nothing below 3.0.0 answers `/info` at all, so
  * this is a floor on the *fallback* path, not a live comparison: any
  * wrapper that reports a version is already at or above it.
  *
- * (It read 1.2.0 until 2026-07 — the version the bot *predicted* `/info`
+ * (It read 1.2.0 until 2026-07; the version the bot *predicted* `/info`
  * would land in. The wrapper shipped it two majors later, which left the
  * comparison permanently unreachable and the constant asserting something
  * untrue. The manifest replaces the mechanism; this stays for old wrappers.)
@@ -43,7 +44,7 @@ export const SUPPORTED_MANIFEST_VERSION = 1;
 export interface ExpectedFeature {
   /** The feature contract version this bot implements. */
   version: number;
-  /** What is lost without it — shown verbatim in the startup report. */
+  /** What is lost without it; shown verbatim in the startup report. */
   degrades: string;
 }
 
@@ -53,16 +54,16 @@ export interface ExpectedFeature {
  * FEATURES const. A name only ever appears here after it exists there.
  *
  * Every entry is optional in the sense that the bot still starts without
- * it — `degrades` says what the operator loses, which is the thing worth
+ * it; `degrades` says what the operator loses, which is the thing worth
  * printing.
  */
 export const EXPECTED_WRAPPER_FEATURES = {
   "server-state": {
     version: 1,
-    degrades: "status, /players, /tps — the server appears permanently offline",
+    degrades: "status, /players, /tps; the server appears permanently offline",
   },
   "server-health": {
-    // v2: restartCount + unitFailed — a systemd crash loop (see
+    // v2: restartCount + unitFailed; a systemd crash loop (see
     // create_service.sh in minecraft-server-setup) is otherwise invisible:
     // a 60s poll can catch the server briefly up between restarts and never
     // trip the downtime alert at all. A v1 wrapper's health just lacks
@@ -70,7 +71,7 @@ export const EXPECTED_WRAPPER_FEATURES = {
     // before this existed.
     version: 2,
     degrades:
-      "telling a stopped server from a merely loaded one — a lag spike is " +
+      "telling a stopped server from a merely loaded one; a lag spike is " +
       "reported as downtime, and the wrapper being unreachable looks the " +
       "same; on a v1 wrapper a crash loop looks like ordinary downtime " +
       "instead of being called out as one",
@@ -81,8 +82,8 @@ export const EXPECTED_WRAPPER_FEATURES = {
   },
   "host-info": {
     // v2: whole-machine CPU/RAM, a sampled (not lifetime-average) process
-    // CPU, and per-directory disk sizes. The bot still reads a v1 wrapper —
-    // normaliseDisk lifts the old shape — it just shows less.
+    // CPU, and per-directory disk sizes. The bot still reads a v1 wrapper , 
+    // normaliseDisk lifts the old shape; it just shows less.
     version: 2,
     degrades:
       "whole-machine CPU/RAM and per-directory sizes in the status embed; " +
@@ -94,7 +95,7 @@ export const EXPECTED_WRAPPER_FEATURES = {
   },
   capabilities: {
     version: 1,
-    degrades: "suite feature gating — /backup and /mods stay enabled and may fail at use",
+    degrades: "suite feature gating; /backup and /mods stay enabled and may fail at use",
   },
   "stats-read": {
     version: 1,
@@ -107,7 +108,7 @@ export const EXPECTED_WRAPPER_FEATURES = {
   },
   "stats-delete": {
     version: 1,
-    degrades: "/server prune-stats — it reports 0 deletions",
+    degrades: "/server prune-stats; it reports 0 deletions",
   },
   whitelist: {
     version: 1,
@@ -116,7 +117,7 @@ export const EXPECTED_WRAPPER_FEATURES = {
   mods: { version: 1, degrades: "/mods" },
   "mod-management": {
     // v2: disable/enable a mod without uninstalling it. A v1 wrapper has no
-    // `enabled` field or disable/enable routes — the bot treats every mod as
+    // `enabled` field or disable/enable routes; the bot treats every mod as
     // enabled and hides the toggle's effect, same "reads the old shape, just
     // shows less" pattern as host-info v1→v2.
     version: 2,
@@ -155,10 +156,10 @@ export const EXPECTED_WRAPPER_FEATURES = {
   "backup-files": {
     // v2: delete an archive from the dashboard (see status.ts's backupDelete
     // gate and serverAccess.deleteBackupFile). A v1 wrapper still serves
-    // list/download fine — only the delete button degrades.
+    // list/download fine; only the delete button degrades.
     version: 2,
     degrades:
-      "the dashboard backup panel's delete button — archives can still be " +
+      "the dashboard backup panel's delete button; archives can still be " +
       "listed and downloaded, they just cannot be removed from the dashboard",
   },
   "backup-restore": {
@@ -172,7 +173,7 @@ export const EXPECTED_WRAPPER_FEATURES = {
     // (they would show the RCON password verbatim).
     version: 2,
     degrades:
-      "the dashboard's mod config editor — server.properties and plugin " +
+      "the dashboard's mod config editor; server.properties and plugin " +
       "configs are shown to bot administrators only, and with v1 or no " +
       "mod-configs at all, mod settings can only be changed on the host",
   },
@@ -212,16 +213,16 @@ export interface WrapperManifest {
  * mirror the wrapper's own table so the bot never gives up before it does.
  */
 export const FALLBACK_SCRIPT_TIMEOUTS_MS: Readonly<Record<string, number>> = {
-  start: 30_000,
-  stop: 240_000,
-  restart: 420_000,
-  rollback: 300_000,
-  backup: 600_000,
-  status: 15_000,
+  start: 30 * MS.second,
+  stop: 4 * MS.minute,
+  restart: 7 * MS.minute,
+  rollback: 5 * MS.minute,
+  backup: 10 * MS.minute,
+  status: 15 * MS.second,
 };
 
 /** Ceiling for an action neither the wrapper nor the fallback table names. */
-export const DEFAULT_SCRIPT_TIMEOUT_MS = 120_000;
+export const DEFAULT_SCRIPT_TIMEOUT_MS = 2 * MS.minute;
 
 /** How long the bot waits for a script action: the wrapper's ceiling, else the fallback. */
 export function scriptTimeoutMs(
@@ -234,9 +235,10 @@ export function scriptTimeoutMs(
 }
 
 /** Bounds applied to every advertised script ceiling; the manifest is remote input. */
-export const MIN_ADVERTISED_SCRIPT_TIMEOUT_MS = 5_000;
-export const MAX_ADVERTISED_SCRIPT_TIMEOUT_MS = 15 * 60_000;
+export const MIN_ADVERTISED_SCRIPT_TIMEOUT_MS = 5 * MS.second;
+export const MAX_ADVERTISED_SCRIPT_TIMEOUT_MS = 15 * MS.minute;
 const MAX_SCRIPT_TIMEOUT_KEYS = 64;
+const SCRIPT_ACTION_NAME = /^[a-z][a-z0-9_-]{0,31}$/i;
 
 function parseScriptTimeouts(raw: unknown): Record<string, number> | null {
   if (!isRecord(raw) || Array.isArray(raw)) return null;
@@ -244,7 +246,7 @@ function parseScriptTimeouts(raw: unknown): Record<string, number> | null {
   let seen = 0;
   for (const action of Object.keys(raw)) {
     if (++seen > MAX_SCRIPT_TIMEOUT_KEYS) break;
-    if (!Object.hasOwn(FALLBACK_SCRIPT_TIMEOUTS_MS, action)) continue;
+    if (!SCRIPT_ACTION_NAME.test(action) || action in Object.prototype) continue;
     const ms = raw[action];
     if (typeof ms !== "number" || !Number.isInteger(ms) || ms <= 0) continue;
     out[action] = Math.min(
@@ -356,7 +358,7 @@ export function compareContract(manifest: WrapperManifest): ContractReport {
  *                       actively reads. A shape the bot parses may have moved
  *                       under it. Blocking.
  *   unused              the wrapper serves something the bot has never heard
- *                       of. Nothing calls it, so nothing can break — and this
+ *                       of. Nothing calls it, so nothing can break; and this
  *                       is exactly the state after an additive wrapper release,
  *                       which lands FIRST by design. Not blocking.
  *
@@ -386,7 +388,7 @@ export function contractIsClean(report: ContractReport): boolean {
  * the wording is testable without capturing a logger.
  *
  * Each line names the fix, because "wrapper 3.0.0 is old" is not something
- * an operator can act on at 2am — "update the wrapper, you are losing the
+ * an operator can act on at 2am; "update the wrapper, you are losing the
  * chat bridge" is.
  */
 export function describeContract(
@@ -398,20 +400,20 @@ export function describeContract(
 
   for (const f of report.missing) {
     lines.push(
-      `wrapper ${manifest.wrapper} does not provide "${f.name}" — ` +
+      `wrapper ${manifest.wrapper} does not provide "${f.name}"; ` +
         `${f.degrades}. Update the wrapper on the server host.`,
     );
   }
   for (const f of report.outdated) {
     lines.push(
       `wrapper ${manifest.wrapper} provides "${f.name}" v${f.have}, ` +
-        `this bot expects v${f.want} — ${f.degrades}. Update the wrapper.`,
+        `this bot expects v${f.want}; ${f.degrades}. Update the wrapper.`,
     );
   }
   for (const f of report.ahead) {
     lines.push(
       `wrapper ${manifest.wrapper} provides "${f.name}" v${f.have}, ` +
-        `newer than the v${f.want} bot ${botVersion} implements — ` +
+        `newer than the v${f.want} bot ${botVersion} implements; ` +
         `that feature may misbehave until the bot is updated.`,
     );
   }
@@ -419,7 +421,7 @@ export function describeContract(
     const names = report.unused.map((f) => f.name).join(", ");
     lines.push(
       `wrapper ${manifest.wrapper} offers features bot ${botVersion} does ` +
-        `not use yet: ${names}. Nothing is broken — additive wrapper features ` +
+        `not use yet: ${names}. Nothing is broken; additive wrapper features ` +
         `land before the bot half. Update the bot to pick them up.`,
     );
   }
@@ -437,7 +439,7 @@ export function logContractReport(
     log.warn(
       serverId,
       `API wrapper publishes a v${manifest.manifest} manifest; this bot ` +
-        `reads v${SUPPORTED_MANIFEST_VERSION}. Reading what it can — ` +
+        `reads v${SUPPORTED_MANIFEST_VERSION}. Reading what it can; ` +
         `update the bot if remote features misbehave.`,
     );
   }

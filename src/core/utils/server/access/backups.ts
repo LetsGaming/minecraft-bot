@@ -7,8 +7,10 @@ import type {
   ScriptResult,
 } from "../../../types/index.js";
 import type { BackupDeleteResult } from "@mcbot/schema/wire/index.js";
-import { instanceUrl, apiGet, ApiError } from "./apiClient.js";
+import { apiGet, readApiJson, requestLabel, wrapperFetch } from "./apiClient.js";
 import { ScriptStillRunningError } from "./scripts.js";
+import { isTimeoutError } from "../transportError.js";
+import { WRAPPER_TIMEOUTS_MS } from "./wrapperTimeouts.js";
 
 /** Scan the backup directories for a server. */
 export async function readBackups(cfg: ServerConfig): Promise<BackupSummary> {
@@ -53,29 +55,6 @@ export async function indexBackupFiles(
   );
 }
 
-const BACKUP_DOWNLOAD_HEADERS_TIMEOUT_MS = 30_000;
-const BACKUP_DELETE_TIMEOUT_MS = 30_000;
-/** The wrapper's restore ceiling (600 s) plus a margin for its own error reply. */
-const RESTORE_TIMEOUT_MS = 630_000;
-
-/** Resolve once the response headers arrive; the body is left unbounded. */
-async function fetchUntilHeaders(
-  url: string,
-  init: RequestInit,
-  headersTimeoutMs: number,
-): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(
-    () => controller.abort(new DOMException("The operation timed out.", "TimeoutError")),
-    headersTimeoutMs,
-  );
-  try {
-    return await fetch(url, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 /**
  * Open a backup download and hand back the live response.
  *
@@ -95,14 +74,11 @@ export async function openBackupDownload(
   fileId: string,
   range?: string,
 ): Promise<Response> {
-  const headers: Record<string, string> = {};
-  if (cfg.apiKey) headers["x-api-key"] = cfg.apiKey;
-  if (range) headers["range"] = range;
-  return fetchUntilHeaders(
-    instanceUrl(cfg, `/backups/files/${encodeURIComponent(fileId)}/download`),
-    { headers },
-    BACKUP_DOWNLOAD_HEADERS_TIMEOUT_MS,
-  );
+  return wrapperFetch(cfg, `/backups/files/${encodeURIComponent(fileId)}/download`, {
+    timeoutMs: WRAPPER_TIMEOUTS_MS.backupDownloadHeaders,
+    headersTimeoutOnly: true,
+    ...(range ? { headers: { range } } : {}),
+  });
 }
 
 /**
@@ -121,31 +97,16 @@ export async function restoreBackupFile(
   cfg: ServerConfig,
   fileId: string,
 ): Promise<ScriptResult> {
-  const url = instanceUrl(
-    cfg,
-    `/backups/files/${encodeURIComponent(fileId)}/restore`,
-  );
-  const headers: Record<string, string> = {};
-  if (cfg.apiKey) headers["x-api-key"] = cfg.apiKey;
+  const route = `/backups/files/${encodeURIComponent(fileId)}/restore`;
   let res: Response;
   try {
-    res = await fetch(url, {
-      method: "POST",
-      headers,
-      signal: AbortSignal.timeout(RESTORE_TIMEOUT_MS),
-    });
+    res = await wrapperFetch(cfg, route, { method: "POST", timeoutMs: WRAPPER_TIMEOUTS_MS.restore });
   } catch (err) {
-    // We stopped waiting; the wrapper may well still be restoring (AUD-012).
-    if (err instanceof DOMException && err.name === "TimeoutError") {
-      throw new ScriptStillRunningError("restore", RESTORE_TIMEOUT_MS);
-    }
+    // We stopped waiting; the wrapper may well still be restoring.
+    if (isTimeoutError(err)) throw new ScriptStillRunningError("restore", WRAPPER_TIMEOUTS_MS.restore);
     throw err;
   }
-  if (!res.ok) {
-    const text = await res.text();
-    throw new ApiError("POST /backups/restore", res.status, text);
-  }
-  return res.json() as Promise<ScriptResult>;
+  return readApiJson<ScriptResult>(res, requestLabel("POST", route));
 }
 
 /**
@@ -159,18 +120,11 @@ export async function deleteBackupFile(
   cfg: ServerConfig,
   fileId: string,
 ): Promise<BackupDeleteResult> {
-  const url = instanceUrl(cfg, `/backups/files/${encodeURIComponent(fileId)}`);
-  const headers: Record<string, string> = {};
-  if (cfg.apiKey) headers["x-api-key"] = cfg.apiKey;
-  const res = await fetch(url, {
+  const route = `/backups/files/${encodeURIComponent(fileId)}`;
+  const res = await wrapperFetch(cfg, route, {
     method: "DELETE",
-    headers,
-    signal: AbortSignal.timeout(BACKUP_DELETE_TIMEOUT_MS),
+    timeoutMs: WRAPPER_TIMEOUTS_MS.mutate,
   });
   if (res.status === 404) return { ok: false };
-  if (!res.ok) {
-    const text = await res.text();
-    throw new ApiError("DELETE /backups/files", res.status, text);
-  }
-  return res.json() as Promise<BackupDeleteResult>;
+  return readApiJson<BackupDeleteResult>(res, requestLabel("DELETE", route));
 }

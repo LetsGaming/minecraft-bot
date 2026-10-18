@@ -51,7 +51,7 @@ describe("classifyTransportError", () => {
   });
 
   it("reads a 429 answer from a write as a rate limit", () => {
-    expect(classifyTransportError(new ApiError("POST /mods", 429, "slow down"))).toBe("rate-limited");
+    expect(classifyTransportError(new RateLimitedError("POST /mods", null))).toBe("rate-limited");
     expect(classifyWrapperRejection(new ApiError("POST /mods", 429, "slow down"))).toBeNull();
   });
 

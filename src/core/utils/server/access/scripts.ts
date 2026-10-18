@@ -3,15 +3,16 @@
 import { scriptTimeoutMs } from "../wrapperContract.js";
 import type { ServerConfig, ScriptResult } from "../../../types/index.js";
 import { apiPost, ApiError, RateLimitedError } from "./apiClient.js";
-import { advertisedScriptTimeouts, wrapperKey } from "./manifest.js";
+import { getAdvertisedScriptTimeouts } from "./manifest.js";
+import { isTimeoutError } from "../transportError.js";
+import { MS } from "@mcbot/schema/time.js";
 
 /** Margin added to a script's ceiling so the wrapper's own timeout reply arrives first. */
-const SCRIPT_TIMEOUT_MARGIN_MS = 15_000;
+const SCRIPT_TIMEOUT_MARGIN_MS = 15 * MS.second;
 
 /**
- * Run a named server management script (start / stop / restart / backup / status).
- * On remote instances this POSTs to the API wrapper; locally it spawns the script
- * exactly as before.
+ * Run a named server management script (start / stop / restart / backup / status)
+ * through the API wrapper.
  */
 export async function runScript(
   cfg: ServerConfig,
@@ -19,7 +20,7 @@ export async function runScript(
   args: string[] = [],
 ): Promise<ScriptResult> {
   const waitMs =
-    scriptTimeoutMs(action, advertisedScriptTimeouts.get(wrapperKey(cfg))) +
+    scriptTimeoutMs(action, getAdvertisedScriptTimeouts(cfg)) +
     SCRIPT_TIMEOUT_MARGIN_MS;
   try {
     return await apiPost<ScriptResult>(
@@ -29,7 +30,7 @@ export async function runScript(
       waitMs,
     );
   } catch (err) {
-    if (err instanceof DOMException && err.name === "TimeoutError") {
+    if (isTimeoutError(err)) {
       throw new ScriptStillRunningError(action, waitMs);
     }
     throw err;
@@ -46,14 +47,14 @@ export class ScriptStillRunningError extends Error {
     readonly waitedMs: number,
   ) {
     super(
-      `Script '${action}' did not finish within ${Math.round(waitedMs / 1000)}s; it may still be running`,
+      `Script '${action}' did not finish within ${Math.round(waitedMs / MS.second)}s; it may still be running`,
     );
     this.name = "ScriptStillRunningError";
   }
 }
 
 /**
- * What a failed script call means for the person who asked (AUD-012).
+ * What a failed script call means for the person who asked.
  *
  * - `still-running`: we stopped waiting, the host may still be doing it.
  *   Offering a retry would start it a second time.
@@ -69,9 +70,7 @@ export type ScriptFailure =
 
 export function classifyScriptFailure(err: unknown): ScriptFailure {
   if (err instanceof ScriptStillRunningError) return { kind: "still-running" };
-  if (err instanceof DOMException && err.name === "TimeoutError") {
-    return { kind: "still-running" };
-  }
+  if (isTimeoutError(err)) return { kind: "still-running" };
   if (err instanceof RateLimitedError) {
     return { kind: "refused", status: 429, message: "rate limited" };
   }

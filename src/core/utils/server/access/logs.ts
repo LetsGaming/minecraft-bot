@@ -2,11 +2,11 @@
 
 import { SseLineStream } from "../../sseLineStream.js";
 import type { ServerConfig } from "../../../types/index.js";
-import { apiGet } from "./apiClient.js";
+import { apiGet, instanceUrl, wrapperAuthHeaders } from "./apiClient.js";
 
 /**
  * Return the last N lines of the server's latest.log.
- * Used as a fallback for seed/coord parsing and screen-mode getList.
+ * Used to read a console command's answer back out of the log.
  */
 export async function tailLog(cfg: ServerConfig, lines = 10): Promise<string> {
   const { output } = await apiGet<{ output: string }>(
@@ -16,11 +16,9 @@ export async function tailLog(cfg: ServerConfig, lines = 10): Promise<string> {
   return output;
 }
 
-/** Returns the SSE endpoint URL for a remote instance's log stream. */
+/** The SSE endpoint URL of an instance's log stream. */
 export function logStreamUrl(cfg: ServerConfig): string {
-  if (!cfg.apiUrl)
-    throw new Error(`logStreamUrl called on local instance '${cfg.id}'`);
-  return `${cfg.apiUrl.replace(/\/$/, "")}/instances/${cfg.id}/logs/stream`;
+  return instanceUrl(cfg, "/logs/stream");
 }
 
 /** What a caller of openLogStream cares about. */
@@ -47,12 +45,9 @@ export function openLogStream(
   cfg: ServerConfig,
   handlers: LogStreamHandlers,
 ): SseLineStream {
-  const headers: Record<string, string> = {};
-  if (cfg.apiKey) headers["x-api-key"] = cfg.apiKey;
-
   return new SseLineStream({
     url: logStreamUrl(cfg),
-    headers,
+    headers: wrapperAuthHeaders(cfg),
     scope: cfg.id,
     onData: (payload) => {
       try {

@@ -27,6 +27,7 @@ import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 import type { ServerHealth } from "@mcbot/schema/serverState.js";
 import type { DowntimeState, GuildConfig } from "@mcbot/core/types/index.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
+import { parsePlayerCounts } from "@mcbot/core/utils/minecraft/playerCounts.js";
 import { formatSpan } from "@mcbot/core/utils/duration.js";
 
 const CHECK_INTERVAL_MS = 60 * 1000;
@@ -109,12 +110,8 @@ export function noteServerStopping(serverId: string): void {
 /** Players online right now, for the alert if the server goes down next. */
 async function countPlayers(server: ServerInstance, health: ServerHealth): Promise<number | undefined> {
   if (health.players) return health.players.online;
-  try {
-    const online = parseInt(String((await server.getList()).playerCount), 10);
-    return Number.isFinite(online) ? online : undefined;
-  } catch {
-    return undefined;
-  }
+  const list = await server.getList();
+  return list.ok ? (parsePlayerCounts(list.value).online ?? undefined) : undefined;
 }
 
 /**

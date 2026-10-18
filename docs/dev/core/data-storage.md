@@ -68,8 +68,8 @@ compose with `wrapper/lastKnown.ts`'s `readThrough`/`recall` for a stale
 value served specifically *on error*. See
 [decisions.md](../decisions.md#coreutilscachets-gained-single-flight-and-stale-while-revalidate-it-stays-a-freshness-cache-not-a-fallback-cache)
 for why the two stay separate. A per-server circuit breaker
-(`server/circuitBreaker.ts`) sits in front of wrapper reads and console
-commands, independent of both caches; see decisions.md for that split too.
+(`server/circuitBreaker.ts`) sits in front of every wrapper request,
+independent of both caches; see decisions.md for that split too.
 
 ## Where player stats live on disk
 

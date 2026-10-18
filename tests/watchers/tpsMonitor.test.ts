@@ -26,7 +26,6 @@ import { startTpsMonitor } from "../../src/bot/logWatcher/watchers/monitors/tpsM
 function srv(id: string, tps: unknown) {
   return {
     id,
-    supportsTps: true,
     getTps: vi.fn().mockResolvedValue(tps),
   } as never;
 }
@@ -55,12 +54,6 @@ beforeEach(async () => {
   } as never);
 });
 afterEach(() => vi.useRealTimers());
-
-it("returns null when supportsTps is false", () => {
-  expect(
-    startTpsMonitor({ id: "s", supportsTps: false } as never, client(), {}),
-  ).toBeNull();
-});
 
 it("sends a warning embed when TPS drops below threshold (Paper 3-value)", async () => {
   const send = vi.fn().mockResolvedValue(undefined);
@@ -150,7 +143,6 @@ it("skips guild when tpsAlert.server targets a different server", async () => {
 it("does not crash when getTps() throws", async () => {
   const s = {
     id: "e",
-    supportsTps: true,
     getTps: vi.fn().mockRejectedValue(new Error("RCON")),
   } as never;
   const t = startTpsMonitor(s, client(), guild());

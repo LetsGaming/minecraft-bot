@@ -12,9 +12,20 @@ import type {
   PruneScanStarted,
   UpgradeStarted,
 } from "@mcbot/schema/wire/index.js";
-import { ApiError, apiGet, apiGetRaw, apiPost, apiPut, readApiJson } from "./apiClient.js";
+import {
+  apiErrorFrom,
+  apiGet,
+  apiGetOrNull,
+  apiGetRaw,
+  apiPost,
+  apiPut,
+  readApiJson,
+  requestLabel,
+  wrapperFetch,
+} from "./apiClient.js";
 import { detectCapabilities } from "./capabilityProbe.js";
-import { getRemoteManifest } from "./manifest.js";
+import { featureAtLeast } from "./manifest.js";
+import { WRAPPER_TIMEOUTS_MS } from "./wrapperTimeouts.js";
 
 /**
  * Whether this wrapper can prune chunks: it advertises the feature and its
@@ -22,8 +33,7 @@ import { getRemoteManifest } from "./manifest.js";
  * or is unreachable, answers false so the dashboard hides the control.
  */
 export async function supportsPrune(cfg: ServerConfig): Promise<boolean> {
-  const manifest = await getRemoteManifest(cfg);
-  if ((manifest?.features?.["chunk-prune"]?.version ?? 0) < 1) return false;
+  if (!(await featureAtLeast(cfg, "chunk-prune", 1))) return false;
   const caps = await detectCapabilities(cfg);
   return caps.prune !== false;
 }
@@ -48,21 +58,20 @@ export async function getPruneStatus(cfg: ServerConfig): Promise<PruneEngineStat
 
 /** Stop a running scan. False when there is no such running scan (404). */
 export async function cancelPruneScan(cfg: ServerConfig, jobId: string): Promise<boolean> {
-  try {
-    await apiPost<{ cancelled: boolean }>(cfg, `/prune/scans/${encodeURIComponent(jobId)}/cancel`, {});
-    return true;
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 404) return false;
-    throw err;
-  }
+  const route = `/prune/scans/${encodeURIComponent(jobId)}/cancel`;
+  const res = await wrapperFetch(cfg, route, {
+    method: "POST",
+    body: {},
+    timeoutMs: WRAPPER_TIMEOUTS_MS.mutate,
+  });
+  if (res.status === 404) return false;
+  await readApiJson<{ cancelled: boolean }>(res, requestLabel("POST", route));
+  return true;
 }
 
 /** A scan's progress and summary; null once the wrapper forgot it (404). */
 export async function getPruneScan(cfg: ServerConfig, jobId: string): Promise<PruneScanJob | null> {
-  const route = `/prune/scans/${encodeURIComponent(jobId)}`;
-  const res = await apiGetRaw(cfg, route);
-  if (res.status === 404) return null;
-  return readApiJson<PruneScanJob>(res, route);
+  return apiGetOrNull<PruneScanJob>(cfg, `/prune/scans/${encodeURIComponent(jobId)}`);
 }
 
 export async function getPruneSettings(cfg: ServerConfig): Promise<PruneParams> {
@@ -86,9 +95,7 @@ export async function getPruneMap(
   dimensionIndex: number,
 ): Promise<PruneMap | null> {
   const route = `/prune/plans/${encodeURIComponent(planId)}/map/${dimensionIndex}`;
-  const res = await apiGetRaw(cfg, route, 60_000);
-  if (res.status === 404) return null;
-  return readApiJson<PruneMap>(res, route);
+  return apiGetOrNull<PruneMap>(cfg, route, WRAPPER_TIMEOUTS_MS.pruneMap);
 }
 
 /** A region drawn from above, as PNG bytes and the ETag that names the picture. Null when the region does not exist. */
@@ -99,10 +106,9 @@ export async function getPruneTile(
   rz: number,
 ): Promise<{ png: Buffer; etag: string } | null> {
   const route = `/prune/tiles/${encodeURIComponent(dimension)}/${rx}/${rz}`;
-  // Drawing a region reads all of it; the wrapper allows itself 90 s.
-  const res = await apiGetRaw(cfg, route, 100_000);
+  const res = await apiGetRaw(cfg, route, WRAPPER_TIMEOUTS_MS.pruneTile);
   if (res.status === 404) return null;
-  if (!res.ok) throw new ApiError(route, res.status, (await res.text()).slice(0, 200));
+  if (!res.ok) throw await apiErrorFrom(res, route);
   return { png: Buffer.from(await res.arrayBuffer()), etag: res.headers.get("etag") ?? "" };
 }
 
@@ -116,9 +122,7 @@ export async function getPruneChunk(
 ): Promise<PruneChunkInfo | null> {
   const query = `dimension=${encodeURIComponent(dimension)}&cx=${cx}&cz=${cz}`;
   const route = `/prune/plans/${encodeURIComponent(planId)}/chunk?${query}`;
-  const res = await apiGetRaw(cfg, route, 30_000);
-  if (res.status === 404) return null;
-  return readApiJson<PruneChunkInfo>(res, route);
+  return apiGetOrNull<PruneChunkInfo>(cfg, route, WRAPPER_TIMEOUTS_MS.pruneChunk);
 }
 
 /**

@@ -3,7 +3,16 @@
 import type { ServerConfig } from "../../../types/index.js";
 import { ConfigAccessError, configAccessErrorFor } from "../configAccessError.js";
 import type { ConfigFileInfo, WireSchemas } from "@mcbot/schema/wire/index.js";
-import { instanceUrl, apiGetRaw, apiGet, ApiError } from "./apiClient.js";
+import {
+  ApiError,
+  RateLimitedError,
+  apiGet,
+  apiGetRaw,
+  requestLabel,
+  wrapperErrorMessage,
+  wrapperFetch,
+} from "./apiClient.js";
+import { WRAPPER_TIMEOUTS_MS } from "./wrapperTimeouts.js";
 
 export type { ConfigFileInfo };
 
@@ -15,24 +24,13 @@ export interface ConfigIndexResult {
   truncated: boolean;
 }
 
-async function wrapperErrorText(res: Response): Promise<string> {
-  const text = await res.text();
-  try {
-    const parsed = JSON.parse(text) as { error?: unknown };
-    if (typeof parsed.error === "string") return parsed.error;
-  } catch {
-    /* not JSON */
-  }
-  return text.slice(0, 200);
-}
-
 /** Throw a typed error for statuses the editor can explain; otherwise a plain one. */
 async function throwConfigFailure(
   res: Response,
   route: string,
   action: "read" | "write",
 ): Promise<never> {
-  const message = await wrapperErrorText(res);
+  const message = wrapperErrorMessage(await res.text(), 200);
   throw (
     configAccessErrorFor(res.status, action, message) ??
     new ApiError(route, res.status, message)
@@ -101,20 +99,16 @@ export async function writeConfigFile(
 ): Promise<
   { ok: true; etag: string; snapshot: string } | { ok: false; conflict: true }
 > {
-  const res = await sendConfigWrite(
-    cfg,
-    "PUT",
-    `/configs/${encodeURIComponent(fileId)}`,
-    etag,
-    { text, ...(options.allowProtected ? { allowProtected: true } : {}) },
-  );
+  const route = `/configs/${encodeURIComponent(fileId)}`;
+  const res = await sendConfigWrite(cfg, "PUT", route, etag, {
+    text,
+    ...(options.allowProtected ? { allowProtected: true } : {}),
+  });
   if (res.status === 412) return { ok: false, conflict: true };
-  if (!res.ok) await throwConfigFailure(res, "PUT /configs", "write");
+  if (!res.ok) await throwConfigFailure(res, requestLabel("PUT", route), "write");
   const body = (await res.json()) as { etag: string; snapshot: string };
   return { ok: true, ...body };
 }
-
-const CONFIG_WRITE_TIMEOUT_MS = 30_000;
 
 async function sendConfigWrite(
   cfg: ServerConfig,
@@ -123,26 +117,23 @@ async function sendConfigWrite(
   etag: string,
   body: Record<string, unknown>,
 ): Promise<Response> {
-  const headers: Record<string, string> = {
-    "content-type": "application/json",
-    "if-match": etag,
-  };
-  if (cfg.apiKey) headers["x-api-key"] = cfg.apiKey;
-
-  const res = await fetch(instanceUrl(cfg, route), {
-    method,
-    headers,
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(CONFIG_WRITE_TIMEOUT_MS),
-  });
-  if (res.status === 429) {
-    throw new ConfigAccessError(
-      "rate-limited",
-      "The server's API is rate limiting requests. Wait a moment and save again.",
-      429,
-    );
+  try {
+    return await wrapperFetch(cfg, route, {
+      method,
+      body,
+      timeoutMs: WRAPPER_TIMEOUTS_MS.mutate,
+      headers: { "if-match": etag },
+    });
+  } catch (err) {
+    if (err instanceof RateLimitedError) {
+      throw new ConfigAccessError(
+        "rate-limited",
+        "The server's API is rate limiting requests. Wait a moment and save again.",
+        429,
+      );
+    }
+    throw err;
   }
-  return res;
 }
 
 /**
@@ -164,7 +155,7 @@ export async function revertConfigFile(
     ...(options.allowProtected ? { allowProtected: true } : {}),
   });
   if (res.status === 412) return { ok: false, conflict: true };
-  if (!res.ok) await throwConfigFailure(res, `POST ${route}`, "write");
+  if (!res.ok) await throwConfigFailure(res, requestLabel("POST", route), "write");
   const body = (await res.json()) as { etag: string };
   return { ok: true, etag: body.etag };
 }

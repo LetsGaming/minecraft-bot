@@ -36,9 +36,8 @@ Two functions do not simply assert-and-decode:
   could deliver) is `unreachable` with reason `screen-failed`. A v1 wrapper
   answers `{ result }` only; a string is read as `delivered` and `null` as
   `sent`. Transport failures, timeouts, 429 and an open circuit breaker are
-  `unreachable` too. It is the only write that goes through the circuit breaker:
-  a down wrapper fails an in-game command at once, while scripts, mod mutations
-  and restore still reach the wrapper on every attempt.
+  `unreachable` too. Like every wrapper request it goes through the circuit
+  breaker, so a down wrapper fails an in-game command at once.
 
 Three functions deliberately bypass the `apiGet` decode path, because JSON in
 memory is the wrong shape for what they carry:
@@ -101,10 +100,13 @@ Commands do not reach the registry directly — they go through
   script that outlives the wait throws `ScriptStillRunningError`, which callers
   report as "still running", not as a failure.
 - The per-server circuit breaker (`circuitBreaker.ts`) opens after 5
-  consecutive failures, fails fast for 15 s, then lets one probe through. A 429
-  is the wrapper rate limiting, not failing: it never counts toward the breaker
-  and surfaces as `RateLimitedError`. Reads and `sendCommandOutcome` use the
-  breaker; scripts, mod mutations and restore do not.
+  consecutive failures, fails fast for 15 s, then lets one probe through. Every
+  request goes through `wrapperFetch` in `access/apiClient.ts`, which owns the
+  API key header, the timeout (`WRAPPER_TIMEOUTS_MS`) and the breaker
+  accounting for every method. Transport failures, timeouts and 5xx answers
+  other than 502 count as failures. A 502 is a script or screen failing behind a
+  healthy wrapper, and a 429 is the wrapper rate limiting; neither counts. A 429
+  surfaces as `RateLimitedError`, an open breaker as `BreakerOpenError`.
 
 ## Capabilities
 

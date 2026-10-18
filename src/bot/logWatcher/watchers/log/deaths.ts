@@ -134,8 +134,9 @@ async function wasKilledByPlayer(
 
   try {
     const list = await server.getList();
-    return (list.players ?? []).some(
-      (name: string) => name.toLowerCase() === killer.toLowerCase(),
+    return (
+      list.ok &&
+      list.value.players.some((name: string) => name.toLowerCase() === killer.toLowerCase())
     );
   } catch {
     return false;

@@ -14,15 +14,7 @@ import { DEFAULT_MINECRAFT_PORT, pingMinecraftServer, type PingOutcome } from ".
 import type { ServerConfig, TpsResult } from "../../../types/index.js";
 import type { WireSchemas } from "@mcbot/schema/wire/index.js";
 import { apiGetRaw, readApiJson, apiGet } from "./apiClient.js";
-
-/**
- * Health gets a tighter budget than everything else. It is polled on a loop
- * and its whole purpose is to answer quickly enough to be worth asking; and
- * the wrapper's own probes are bounded well below this, so anything slower is
- * the network or a wedged wrapper, which is precisely the `unreachable` case
- * we want to report rather than wait out.
- */
-const HEALTH_TIMEOUT_MS = 5_000;
+import { WRAPPER_TIMEOUTS_MS } from "./wrapperTimeouts.js";
 
 /** The wrapper's `/health` body. `restartCount` and `unitFailed` are absent on a v1 wrapper. */
 type WrapperHealth = Omit<WireSchemas["InstanceHealth"], "restartCount" | "unitFailed"> &
@@ -31,9 +23,8 @@ type WrapperHealth = Omit<WireSchemas["InstanceHealth"], "restartCount" | "unitF
 /**
  * Narrow a `/health` body instead of casting it.
  *
- * Every other wrapper response is cast, because the version gate pins the
- * contract. This one is different: its `state` flows straight into alerting
- * and UI branches, so a wrapper that answered `"Online"`, `"up"`, or a state
+ * Most wrapper responses are cast to their type. This one is different: its
+ * `state` flows straight into alerting and UI branches, so a wrapper that answered `"Online"`, `"up"`, or a state
  * added in a later version would silently fall through every comparison and
  * land wherever the last `else` happens to point. Unrecognised input becomes
  * an explicit failure to parse, which the caller reports honestly.
@@ -270,7 +261,7 @@ export async function getHealth(cfg: ServerConfig): Promise<ServerHealth> {
  */
 async function wrapperHealth(cfg: ServerConfig): Promise<ServerHealth | null> {
   try {
-    const res = await apiGetRaw(cfg, "/health", HEALTH_TIMEOUT_MS);
+    const res = await apiGetRaw(cfg, "/health", WRAPPER_TIMEOUTS_MS.health);
 
     if (res.status === 404) {
       // Pre-`server-health` wrapper. /running is all it has, and on those
@@ -305,10 +296,8 @@ async function wrapperHealth(cfg: ServerConfig): Promise<ServerHealth | null> {
 }
 
 /**
- * Legacy boolean liveness.
- *
- * Kept for the wrapper-contract e2e check and for callers that genuinely only
- * need up/not-up. Anything that reports state to a human should use
+ * Boolean liveness, for the wrapper-contract e2e check and callers that
+ * genuinely only need up/not-up. Anything that reports state to a human should use
  * getHealth(); this cannot distinguish a stopped server from an unreachable
  * wrapper, which is exactly the confusion users see.
  */

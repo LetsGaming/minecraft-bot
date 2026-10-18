@@ -2,8 +2,8 @@
 
 import type { ServerConfig } from "../../../types/index.js";
 import type { ModCompatJob, ModCompatStarted } from "@mcbot/schema/wire/index.js";
-import { apiGetRaw, readApiJson, apiPost } from "./apiClient.js";
-import { getRemoteManifest } from "./manifest.js";
+import { apiGetOrNull, apiPost } from "./apiClient.js";
+import { featureAtLeast } from "./manifest.js";
 
 /**
  * Whether this wrapper can run the background compatibility check. A
@@ -11,8 +11,7 @@ import { getRemoteManifest } from "./manifest.js";
  * dashboard hides the control and keeps the per-installed-version check.
  */
 export async function supportsModCompat(cfg: ServerConfig): Promise<boolean> {
-  const manifest = await getRemoteManifest(cfg);
-  return (manifest?.features?.["mod-compat"]?.version ?? 0) >= 1;
+  return featureAtLeast(cfg, "mod-compat", 1);
 }
 
 /**
@@ -36,8 +35,5 @@ export async function getModCompat(
   cfg: ServerConfig,
   jobId: string,
 ): Promise<ModCompatJob | null> {
-  const route = `/mods/compat/${encodeURIComponent(jobId)}`;
-  const res = await apiGetRaw(cfg, route);
-  if (res.status === 404) return null;
-  return readApiJson<ModCompatJob>(res, route);
+  return apiGetOrNull<ModCompatJob>(cfg, `/mods/compat/${encodeURIComponent(jobId)}`);
 }

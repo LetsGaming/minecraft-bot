@@ -12,42 +12,45 @@ import { log } from "../../logger.js";
 import { errMsg } from "../../error.js";
 import { cached } from "../../cache.js";
 import type { ServerConfig } from "../../../types/index.js";
-import { wrapperUrl } from "./apiClient.js";
+import { wrapperFetch } from "./apiClient.js";
+import { MS } from "@mcbot/schema/time.js";
 import { getRemoteInfo, versionAtLeast } from "./host.js";
-
-export const advertisedScriptTimeouts = new Map<string, Record<string, number>>();
 
 export function wrapperKey(cfg: ServerConfig): string {
   return `${cfg.apiUrl}#${cfg.id}`;
 }
 
+const advertisedScriptTimeouts = new Map<string, Record<string, number>>();
+
+/** The script ceilings this wrapper last advertised in its manifest, if any. */
+export function getAdvertisedScriptTimeouts(cfg: ServerConfig): Record<string, number> | undefined {
+  return advertisedScriptTimeouts.get(wrapperKey(cfg));
+}
+
+/** Drop what a wrapper advertised, e.g. when its server is removed or re-pointed. */
+export function forgetAdvertisedScriptTimeouts(cfg: ServerConfig): void {
+  advertisedScriptTimeouts.delete(wrapperKey(cfg));
+}
+
 /**
- * Fetch the wrapper's feature manifest, or null when it predates the
+ * Fetch the wrapper's feature manifest, uncached, or null when it predates the
  * endpoint (404), is unreachable, or answers something unparseable.
  *
- * Deliberately not `apiGet<WrapperManifest>`: every other wrapper
- * response is cast to its type because the version gate pins the
- * contract, but this endpoint *is* the gate. Trusting its shape would
- * assume what it exists to establish, so it goes through parseManifest.
+ * Deliberately not `apiGet<WrapperManifest>`: this endpoint is what tells the
+ * bot which contract the wrapper speaks, so trusting its shape would assume
+ * what it exists to establish. It goes through parseManifest.
  */
 export async function getRemoteManifest(
   cfg: ServerConfig,
 ): Promise<WrapperManifest | null> {
-  if (!cfg.apiUrl) return null;
-  const headers: Record<string, string> = {};
-  if (cfg.apiKey) headers["x-api-key"] = cfg.apiKey;
   try {
-    const res = await fetch(wrapperUrl(cfg, "/manifest"), {
-      headers,
-      signal: AbortSignal.timeout(8_000),
-    });
+    const res = await wrapperFetch(cfg, "/manifest", { scope: "wrapper" });
     if (!res.ok) return null; // 404 on wrappers that predate the endpoint
     const manifest = parseManifest(await res.json());
     if (manifest?.scriptTimeoutsMs) {
-      advertisedScriptTimeouts.set(
-        wrapperKey(cfg),
-        manifest.scriptTimeoutsMs,
-      );
+      advertisedScriptTimeouts.set(wrapperKey(cfg), manifest.scriptTimeoutsMs);
+    } else {
+      forgetAdvertisedScriptTimeouts(cfg);
     }
     return manifest;
   } catch {
@@ -55,7 +58,7 @@ export async function getRemoteManifest(
   }
 }
 
-const MANIFEST_TTL_MS = 5 * 60_000;
+const MANIFEST_TTL_MS = 5 * MS.minute;
 
 /**
  * The version of one wrapper feature, or 0 when the wrapper does not
@@ -80,6 +83,15 @@ export async function wrapperFeatureVersion(
   }
 }
 
+/** Whether the wrapper advertises `feature` at `minVersion` or newer. False when it does not, or cannot be asked. */
+export async function featureAtLeast(
+  cfg: ServerConfig,
+  feature: WrapperFeatureName,
+  minVersion: number,
+): Promise<boolean> {
+  return (await wrapperFeatureVersion(cfg, feature)) >= minVersion;
+}
+
 /**
  * Report, at startup, where a remote instance's wrapper and this bot
  * disagree about what exists. Never throws; a mismatched wrapper
@@ -93,8 +105,6 @@ export async function verifyWrapperContract(
   cfg: ServerConfig,
   botVersion: string,
 ): Promise<void> {
-  if (!cfg.apiUrl) return;
-
   const manifest = await getRemoteManifest(cfg);
   if (manifest) {
     logContractReport(cfg.id, manifest, compareContract(manifest), botVersion);

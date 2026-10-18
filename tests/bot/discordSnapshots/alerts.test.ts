@@ -77,7 +77,9 @@ describe("Discord snapshots: downtime alerts", () => {
     const server = {
       id: "smp",
       getHealth: vi.fn().mockResolvedValue(health("online")),
-      getList: vi.fn().mockResolvedValue({ playerCount: "3", maxPlayers: "20", players: [] }),
+      getList: vi
+        .fn()
+        .mockResolvedValue({ ok: true, value: { playerCount: "3", maxPlayers: "20", players: [] } }),
     };
 
     const timer = startDowntimeMonitor([server as never], client, guilds);
