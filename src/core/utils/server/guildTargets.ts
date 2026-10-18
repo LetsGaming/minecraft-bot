@@ -71,14 +71,16 @@ export function allowedServerIdsIn(
   const guild = guilds[guildId];
   if (!guild) return new Set(); // unconfigured guild in a multi-guild deployment
 
-  const allowed = guild.allowedServers
+  const explicit = guild.allowedServers !== undefined;
+  const allowed = explicit
     ? new Set(guild.allowedServers)
     : referencedServerIds(guild);
   // The guild's own default must always be reachable, even if the operator
   // set an explicit allowedServers list that forgot to repeat it.
   if (guild.defaultServer) allowed.add(guild.defaultServer);
 
-  if (allowed.size === 0) return null; // guild references nothing (legacy)
+  // An explicit empty list denies; only an unset one falls back to legacy.
+  if (allowed.size === 0 && !explicit) return null;
   return allowed;
 }
 

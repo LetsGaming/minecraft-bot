@@ -40,6 +40,27 @@ describe("guild language", () => {
   });
 });
 
+describe("empty allowedServers", () => {
+  it("warns that a multi-guild guild with an empty list can target nothing", () => {
+    const r = validateCandidateConfig({
+      ...base,
+      guilds: { "1": { allowedServers: [] }, "2": { defaultServer: "a" } },
+    });
+    expect(r.warnings.join("\n")).toContain("guilds.1: allowedServers is empty");
+  });
+
+  it("does not warn when the guild still has a default server", () => {
+    const r = validateCandidateConfig({
+      ...base,
+      guilds: {
+        "1": { allowedServers: [], defaultServer: "a" },
+        "2": { defaultServer: "a" },
+      },
+    });
+    expect(r.warnings.join("\n")).not.toContain("allowedServers is empty");
+  });
+});
+
 describe("waypoints.maxPerServer", () => {
   it.each([0, -1, 1.5])("rejects %s", (maxPerServer) => {
     expect(errorsOf({ waypoints: { maxPerServer } })).toContain(

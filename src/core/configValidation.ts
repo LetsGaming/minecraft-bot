@@ -440,6 +440,12 @@ function checkTenantIsolation(
     hasScope(guild.tpsAlerts?.server) ||
     hasScope(guild.downtimeAlerts?.server) ||
     hasScope(guild.reports?.server);
+  if (guild.allowedServers?.length === 0 && !guild.defaultServer) {
+    warnings.push(
+      `guilds.${gid}: allowedServers is empty and no defaultServer is set: ` +
+        `this guild can target no server at all.`,
+    );
+  }
   if (!guild.allowedServers && !derived) {
     warnings.push(
       `guilds.${gid}: no allowedServers/defaultServer set — commands ` +
