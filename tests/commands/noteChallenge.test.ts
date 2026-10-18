@@ -53,7 +53,7 @@ import {
 } from "../../src/core/utils/stores/noteStore.js";
 import {
   loadChallengeStore,
-  saveChallengeStore,
+  updateChallengeStore,
   addChallenge,
   MAX_CHALLENGE_HISTORY,
   type Challenge,
@@ -238,10 +238,10 @@ function challenge(overrides: Partial<Challenge> = {}): Challenge {
     ...overrides,
   };
 }
-async function seedChallenge(...list: Challenge[]) {
-  const store = await loadChallengeStore();
-  for (const c of list) addChallenge(store, "smp", c);
-  await saveChallengeStore(store);
+function seedChallenge(...list: Challenge[]) {
+  updateChallengeStore((store) => {
+    for (const c of list) addChallenge(store, "smp", c);
+  });
 }
 async function challenges(): Promise<Challenge[]> {
   return (await loadChallengeStore()).servers["smp"] ?? [];

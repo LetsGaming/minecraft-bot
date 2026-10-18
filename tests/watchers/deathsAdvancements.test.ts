@@ -16,8 +16,7 @@ vi.mock("../../src/core/utils/minecraft/eventTips.js", () => ({
   deliverEventTip: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../../src/core/utils/stores/challengeStore.js", () => ({
-  loadChallengeStore: vi.fn().mockResolvedValue({}),
-  saveChallengeStore: vi.fn().mockResolvedValue(undefined),
+  updateChallengeStore: vi.fn((fn: (store: object) => unknown) => fn({})),
   expireStale: vi.fn().mockReturnValue(false),
   getActiveChallenge: vi.fn().mockReturnValue(null),
 }));

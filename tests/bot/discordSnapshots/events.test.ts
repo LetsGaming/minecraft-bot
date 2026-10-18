@@ -22,8 +22,7 @@ vi.mock("../../../src/core/utils/server/server.js", async (importOriginal) => ({
 }));
 vi.mock("../../../src/core/utils/stores/sessionStore.js", async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  loadSessionStore: vi.fn().mockResolvedValue({}),
-  saveSessionStore: vi.fn().mockResolvedValue(undefined),
+  updateSessionStore: vi.fn((fn: (store: object) => unknown) => fn({})),
   openSession: vi.fn(),
   closeSession: vi.fn(),
 }));
@@ -42,8 +41,7 @@ vi.mock("../../../src/core/utils/minecraft/eventTips.js", () => ({
 }));
 vi.mock("../../../src/bot/logWatcher/watchers/watchFirer.js", () => ({ fireWatches: vi.fn() }));
 vi.mock("../../../src/core/utils/stores/challengeStore.js", () => ({
-  loadChallengeStore: vi.fn().mockResolvedValue({}),
-  saveChallengeStore: vi.fn().mockResolvedValue(undefined),
+  updateChallengeStore: vi.fn((fn: (store: object) => unknown) => fn({})),
   expireStale: vi.fn().mockReturnValue(false),
   getActiveChallenge: vi.fn(() => ({
     advancement: "How Did We Get Here?",

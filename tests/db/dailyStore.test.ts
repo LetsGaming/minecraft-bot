@@ -32,7 +32,15 @@ import { log } from "../../src/core/utils/logger.js";
 import {
   loadClaimedStore,
   getServerClaims,
-  saveClaimedStore,
+  enqueuePending,
+  removePending,
+  takePending,
+  requeuePending,
+  hasPending,
+  loadPendingRewards,
+  getServerPending,
+  updatePendingRewards,
+  MAX_PENDING_PER_PLAYER,
 } from "../../src/core/utils/stores/dailyStore.js";
 
 const record = (lastClaim: number) => ({
@@ -122,14 +130,6 @@ describe("getServerClaims", () => {
   });
 });
 
-describe("saveClaimedStore", () => {
-  it('writes the whole store to kv_store["claimedDaily"]', async () => {
-    const store = { version: 2 as const, servers: {} };
-    await saveClaimedStore(store);
-    expect(kvGet("claimedDaily")).toEqual(store);
-  });
-});
-
 describe("updateClaimedStore (AUD-005)", () => {
   it("applies each change to the current store, not a stale copy", async () => {
     const { loadClaimedStore, updateClaimedStore, getServerClaims } = await import(
@@ -164,5 +164,92 @@ describe("updateClaimedStore (AUD-005)", () => {
       }),
     ).rejects.toThrow("nope");
     expect((await loadClaimedStore()).servers).toEqual({});
+  });
+});
+
+describe("pending reward queue helpers", () => {
+  const entry = (queuedAt: number, discordId = "u1") => ({
+    discordId,
+    items: [{ item: "diamond", amount: 1 }],
+    queuedAt,
+  });
+
+  it("enqueues under the lowercased player name and reports the queue length", async () => {
+    expect(await enqueuePending("smp", "Steve", entry(1))).toBe(1);
+    expect(await enqueuePending("smp", "STEVE", entry(2))).toBe(2);
+    const queue = getServerPending(await loadPendingRewards(), "smp");
+    expect(queue["steve"]).toHaveLength(2);
+    expect(kvGet("pendingRewards")).toEqual({
+      version: 1,
+      servers: { smp: { steve: [entry(1), entry(2)] } },
+    });
+  });
+
+  it("refuses past the cap without writing", async () => {
+    for (let n = 0; n < MAX_PENDING_PER_PLAYER; n++) {
+      await enqueuePending("smp", "steve", entry(n), { cap: MAX_PENDING_PER_PLAYER });
+    }
+    expect(
+      await enqueuePending("smp", "steve", entry(99), { cap: MAX_PENDING_PER_PLAYER }),
+    ).toBeNull();
+    expect(getServerPending(await loadPendingRewards(), "smp")["steve"]).toHaveLength(
+      MAX_PENDING_PER_PLAYER,
+    );
+  });
+
+  it("removes selected entries and drops the key once the queue is empty", async () => {
+    await enqueuePending("smp", "steve", entry(1, "u1"));
+    await enqueuePending("smp", "steve", entry(2, "u2"));
+    await removePending("smp", "Steve", (e) => e.discordId === "u1");
+    expect(getServerPending(await loadPendingRewards(), "smp")["steve"]).toEqual([
+      entry(2, "u2"),
+    ]);
+    await removePending("smp", "steve", () => true);
+    expect(getServerPending(await loadPendingRewards(), "smp")["steve"]).toBeUndefined();
+  });
+
+  it("takes everything out in one step and requeues ahead of newer entries", async () => {
+    await enqueuePending("smp", "steve", entry(1));
+    await enqueuePending("smp", "steve", entry(2));
+    const taken = await takePending("smp", "STEVE");
+    expect(taken.map((e) => e.queuedAt)).toEqual([1, 2]);
+    expect(await hasPending("smp", "steve")).toBe(false);
+    expect(await takePending("smp", "steve")).toEqual([]);
+
+    await enqueuePending("smp", "steve", entry(3));
+    await requeuePending("smp", "steve", taken);
+    expect(
+      getServerPending(await loadPendingRewards(), "smp")["steve"]!.map((e) => e.queuedAt),
+    ).toEqual([1, 2, 3]);
+    expect(await hasPending("smp", "Steve")).toBe(true);
+  });
+
+  it("concurrent enqueues do not lose entries", async () => {
+    await Promise.all(
+      Array.from({ length: 20 }, (_, n) => enqueuePending("smp", "steve", entry(n))),
+    );
+    expect(await takePending("smp", "steve")).toHaveLength(20);
+  });
+
+  it.each(["__proto__", "constructor", "toString", "hasOwnProperty"])(
+    "treats the player name %s as an ordinary key",
+    async (name) => {
+      expect(await enqueuePending("smp", name, entry(1))).toBe(1);
+      expect(await hasPending("smp", name)).toBe(true);
+      expect(await hasPending("smp", "someoneelse")).toBe(false);
+      // A reload from JSON keeps the entry reachable under the same key.
+      const persisted = kvGet("pendingRewards");
+      kvSet("pendingRewards", JSON.parse(JSON.stringify(persisted)));
+      expect(await takePending("smp", name)).toEqual([entry(1)]);
+      expect(({} as Record<string, unknown>)["queuedAt"]).toBeUndefined();
+    },
+  );
+
+  it("updatePendingRewards still sees the stored queue", async () => {
+    await enqueuePending("smp", "alex", entry(1));
+    const length = await updatePendingRewards(
+      (store) => getServerPending(store, "smp")["alex"]!.length,
+    );
+    expect(length).toBe(1);
   });
 });

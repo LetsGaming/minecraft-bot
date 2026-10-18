@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { saveJson, loadJson } from "../../src/core/utils/jsonStore.js";
+import { saveJson, loadJson, removeJson, isEnoent } from "../../src/core/utils/jsonStore.js";
 import { promises as fs } from "fs";
 import path from "path";
 import os from "os";
@@ -152,5 +152,47 @@ describe("loadJson corruption handling", () => {
     await saveJson(tmpFile, { ...recovered, repaired: true });
     const raw = await fs.readFile(tmpFile, "utf-8");
     expect(JSON.parse(raw)).toEqual({ value: "good", repaired: true });
+  });
+});
+
+describe("removeJson", () => {
+  let tmpFile: string;
+
+  beforeEach(() => {
+    tmpFile = path.join(os.tmpdir(), `minecraft-bot-remove-${Date.now()}-${Math.random()}.json`);
+  });
+
+  afterEach(async () => {
+    await fs.rm(tmpFile, { force: true });
+    await fs.rm(`${tmpFile}.bak`, { force: true });
+  });
+
+  it("deletes the file and its backup so loadJson cannot resurrect it", async () => {
+    await saveJson(tmpFile, { value: 1 });
+    await saveJson(tmpFile, { value: 2 });
+    await removeJson(tmpFile);
+    await expect(fs.access(tmpFile)).rejects.toThrow();
+    await expect(fs.access(`${tmpFile}.bak`)).rejects.toThrow();
+    expect(await loadJson(tmpFile)).toEqual({});
+  });
+
+  it("drops the cached copy", async () => {
+    await saveJson(tmpFile, { cached: true });
+    await loadJson(tmpFile);
+    await removeJson(tmpFile);
+    expect(await loadJson(tmpFile)).toEqual({});
+  });
+
+  it("is fine when nothing exists", async () => {
+    await expect(removeJson(tmpFile)).resolves.toBeUndefined();
+  });
+});
+
+describe("isEnoent", () => {
+  it("recognises a missing-file error and nothing else", async () => {
+    const missing = await fs.readFile(path.join(os.tmpdir(), "no-such-file-xyz.json")).catch((e) => e);
+    expect(isEnoent(missing)).toBe(true);
+    expect(isEnoent(new Error("other"))).toBe(false);
+    expect(isEnoent("ENOENT")).toBe(false);
   });
 });
