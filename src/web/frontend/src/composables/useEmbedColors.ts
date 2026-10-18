@@ -1,5 +1,5 @@
 import { computed } from "vue";
-import { useToast } from "primevue/usetoast";
+import { useNotify } from "./useNotify";
 import { apiGet, apiSend } from "../api";
 import type { ConfigResponse } from "../api";
 import { isRecord } from "../utils/isRecord";
@@ -37,7 +37,7 @@ export const COLOR_KEYS: readonly EmbedColorKey[] = [
 
 /** Editing the `embedColors` override map of config.json. */
 export function useEmbedColors() {
-  const toast = useToast();
+  const notify = useNotify();
 
   const editor = useEditableDocument<ColorsDoc>(
     {
@@ -117,12 +117,7 @@ export function useEmbedColors() {
   async function save(): Promise<boolean> {
     const ok = await editor.save();
     if (ok) {
-      toast.add({
-        severity: "success",
-        summary: t("appearance.savedToast"),
-        detail: t("appearance.savedToastDetail"),
-        life: 3000,
-      });
+      notify.ok(t("appearance.savedToast"), t("appearance.savedToastDetail"));
     }
     return ok;
   }

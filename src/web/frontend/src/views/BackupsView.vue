@@ -254,7 +254,7 @@
 <script lang="ts">
 import { defineComponent, nextTick } from "vue";
 import Button from "primevue/button";
-import { useToast } from "primevue/usetoast";
+import { useNotify } from "../composables/useNotify";
 import { backupTierLabel, formatBytes, ServerState, StatusRole, SERVER_STATE_ROLE } from "@mcbot/schema";
 import { absoluteStamp, relativeAge, timestampTitle } from "../utils/time";
 import { useBackups, type ScriptOutcome } from "../composables/useBackups";
@@ -328,7 +328,7 @@ export default defineComponent({
       statusServers: status.servers,
       refreshStatus: status.refresh,
       confirmAction: useConfirmAction(),
-      toast: useToast(),
+      notify: useNotify(),
       t,
       formatBytes,
       backupTierLabel,
@@ -543,14 +543,12 @@ export default defineComponent({
         this.job = null;
         const fresh = this.files.find((f) => f.mtimeMs >= startedAt - 1000);
         if (fresh) this.newIds = [fresh.id];
-        this.toast.add({
-          severity: "success",
-          summary: t("backups.create.done"),
-          detail: fresh
+        this.notify.ok(
+          t("backups.create.done"),
+          fresh
             ? t("backups.create.doneDetail", { name: this.stem(fresh.name), size: formatBytes(fresh.sizeBytes) })
             : t("backups.create.doneNoFile"),
-          life: 5000,
-        });
+        );
         return;
       }
       this.job = {
@@ -657,12 +655,8 @@ export default defineComponent({
       });
       if (result !== "confirm") return;
       const outcome = await this.runRow(file.id, () => this.remove(file), { label: t("backups.delete.busy") });
-      this.toast.add({
-        severity: outcome.ok ? "success" : "error",
-        summary: outcome.ok ? t("backups.delete.done") : t("backups.delete.failed"),
-        detail: outcome.ok ? this.stem(file.name) : outcome.error,
-        life: outcome.ok ? 4000 : 6000,
-      });
+      if (outcome.ok) this.notify.ok(t("backups.delete.done"), this.stem(file.name));
+      else this.notify.fail(t("backups.delete.failed"), outcome.error);
     },
   },
 });

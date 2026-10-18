@@ -392,7 +392,7 @@ import InputText from "primevue/inputtext";
 import Select from "primevue/select";
 import SelectButton from "primevue/selectbutton";
 import { useConfirm } from "primevue/useconfirm";
-import { useToast } from "primevue/usetoast";
+import { useNotify } from "../composables/useNotify";
 import {
   MAX_REWARD_AMOUNT,
   MAX_SHARE_PERCENT,
@@ -456,7 +456,7 @@ export default defineComponent({
       ...useDailyRewards(),
       ...useCapabilities(),
       ask: discardPrompt(confirm),
-      toast: useToast(),
+      notify: useNotify(),
       t,
       weightOf,
       MAX_REWARD_AMOUNT,
@@ -666,12 +666,7 @@ export default defineComponent({
     async onSave(): Promise<void> {
       const ok = await this.save();
       if (ok) {
-        this.toast.add({
-          severity: "success",
-          summary: t("rewards.savedToast"),
-          detail: t("rewards.savedToastDetail"),
-          life: 4000,
-        });
+        this.notify.ok(t("rewards.savedToast"), t("rewards.savedToastDetail"));
       }
     },
   },

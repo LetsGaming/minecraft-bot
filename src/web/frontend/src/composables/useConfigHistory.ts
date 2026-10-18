@@ -1,6 +1,5 @@
 import { computed, ref } from "vue";
-import { errorMessage } from "../utils/errorMessage";
-import { useToast } from "primevue/usetoast";
+import { useNotify } from "./useNotify";
 import { apiGet, apiSend } from "../api";
 import { absoluteStamp } from "../utils/time";
 import { humaniseIds } from "../utils/humaniseIds";
@@ -24,7 +23,7 @@ export interface ConfigHistoryEntry {
  * rolled back in turn; the confirm says so.
  */
 export function useConfigHistory(knownGuildName: (id: string) => string | undefined = () => undefined) {
-  const toast = useToast();
+  const notify = useNotify();
   const confirmAction = useConfirmAction();
 
   const loader = useLoader(() =>
@@ -68,20 +67,11 @@ export function useConfigHistory(knownGuildName: (id: string) => string | undefi
         {},
       );
       const noChange = res.changed === false;
-      toast.add({
-        severity: noChange ? "info" : "success",
-        summary: noChange ? t("audit.rollback.unchanged") : t("audit.rollback.done"),
-        detail: noChange ? t("audit.rollback.unchangedDetail") : t("audit.rollback.doneDetail"),
-        life: 5000,
-      });
+      if (noChange) notify.info(t("audit.rollback.unchanged"), t("audit.rollback.unchangedDetail"));
+      else notify.ok(t("audit.rollback.done"), t("audit.rollback.doneDetail"));
       await load();
     } catch (err) {
-      toast.add({
-        severity: "error",
-        summary: t("audit.rollback.failed"),
-        detail: errorMessage(err),
-        life: 6000,
-      });
+      notify.fail(t("audit.rollback.failed"), err);
     } finally {
       busyId.value = null;
     }

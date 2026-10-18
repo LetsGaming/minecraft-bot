@@ -1,5 +1,5 @@
 import { ref } from "vue";
-import { useToast } from "primevue/usetoast";
+import { useNotify } from "./useNotify";
 import {
   isDisruptiveServerAction,
   isIrreversibleServerAction,
@@ -81,7 +81,7 @@ export function confirmOptions(
  * its exit code and output until it is dismissed or retried.
  */
 export function useServerActions(afterAction: () => Promise<unknown>) {
-  const toast = useToast();
+  const notify = useNotify();
   const confirmAction = useConfirmAction();
   const jobs = ref<Record<string, ServerActionJob>>({});
 
@@ -124,12 +124,7 @@ export function useServerActions(afterAction: () => Promise<unknown>) {
       succeeded = res.ok;
       if (res.ok) {
         dismiss(id);
-        toast.add({
-          severity: "success",
-          summary: t(`servers.done.${action}`, { server: id }),
-          detail: t(`servers.doneDetail.${action}`, { server: id }),
-          life: 5000,
-        });
+        notify.ok(t(`servers.done.${action}`, { server: id }), t(`servers.doneDetail.${action}`, { server: id }));
       } else {
         setJob(id, {
           action,

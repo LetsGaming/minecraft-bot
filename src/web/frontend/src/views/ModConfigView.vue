@@ -310,7 +310,7 @@ import InputText from "primevue/inputtext";
 import InputNumber from "primevue/inputnumber";
 import ToggleSwitch from "primevue/toggleswitch";
 import Select from "primevue/select";
-import { useToast } from "primevue/usetoast";
+import { useNotify } from "../composables/useNotify";
 import { useConfirm } from "primevue/useconfirm";
 import type { EditConflict } from "../composables/useEditableDocument";
 import { useModConfigs, type ConfigField } from "../composables/useModConfigs";
@@ -354,7 +354,7 @@ export default defineComponent({
     return {
       ...useModConfigs(discardPrompt(confirm, t("modconfig.leaveFile"))),
       ...useCapabilities(),
-      toast: useToast(),
+      notify: useNotify(),
       t,
       fieldDomId,
     };
@@ -444,18 +444,9 @@ export default defineComponent({
       this.resolving = payload.conflict.keyPath.join(".");
       try {
         await this.resolveConflict(payload.conflict, payload.choice);
-        this.toast.add({
-          severity: "success",
-          summary: payload.choice === "queued" ? t("modconfig.resolvedMine") : t("modconfig.resolvedDisk"),
-          life: 4000,
-        });
+        this.notify.ok(payload.choice === "queued" ? t("modconfig.resolvedMine") : t("modconfig.resolvedDisk"));
       } catch (err) {
-        this.toast.add({
-          severity: "error",
-          summary: t("modconfig.resolveFailed"),
-          detail: err instanceof Error ? err.message : String(err),
-          life: 6000,
-        });
+        this.notify.fail(t("modconfig.resolveFailed"), err);
       } finally {
         this.resolving = "";
       }
@@ -466,23 +457,17 @@ export default defineComponent({
       try {
         const res = await this.flushQueue();
         const conflicts = res.conflicts.length;
-        this.toast.add({
-          severity: conflicts > 0 ? "warn" : "success",
-          summary:
-            conflicts > 0
-              ? t("modconfig.flushPartial", { applied: res.applied, count: conflicts })
-              : t("modconfig.flushDone", { count: res.applied }),
-          detail: conflicts > 0 ? t("modconfig.flushPartialDetail") : t("modconfig.restartToApply"),
-          life: 8000,
-        });
+        if (conflicts > 0) {
+          this.notify.warn(
+            t("modconfig.flushPartial", { applied: res.applied, count: conflicts }),
+            t("modconfig.flushPartialDetail"),
+          );
+        } else {
+          this.notify.ok(t("modconfig.flushDone", { count: res.applied }), t("modconfig.restartToApply"));
+        }
         if (this.current) await this.openFile(this.current.file.id);
       } catch (err) {
-        this.toast.add({
-          severity: "error",
-          summary: t("modconfig.flushFailed"),
-          detail: err instanceof Error ? err.message : String(err),
-          life: 8000,
-        });
+        this.notify.fail(t("modconfig.flushFailed"), err);
       } finally {
         this.flushing = false;
       }
@@ -536,15 +521,11 @@ export default defineComponent({
       const changes = this.changeCount;
       const ok = await this.save();
       if (ok && this.queued) {
-        this.toast.add({ severity: "info", summary: t("modconfig.queuedToast"), detail: t("modconfig.queuedToastDetail"), life: 8000 });
+        this.notify.info(t("modconfig.queuedToast"), t("modconfig.queuedToastDetail"));
         return;
       }
-      this.toast.add({
-        severity: ok ? "success" : "error",
-        summary: ok ? t("modconfig.savedToast", { count: changes }) : t("modconfig.saveFailed"),
-        detail: ok ? t("modconfig.restartToApply") : this.error,
-        life: ok ? 6000 : 8000,
-      });
+      if (ok) this.notify.ok(t("modconfig.savedToast", { count: changes }), t("modconfig.restartToApply"));
+      else this.notify.fail(t("modconfig.saveFailed"), this.error);
     },
     async onReviewSave(): Promise<void> {
       this.reviewOpen = false;
@@ -554,12 +535,8 @@ export default defineComponent({
       if (!(await this.confirmDiscard())) return;
       const ok = await this.revert(snapshot);
       this.showHistory = false;
-      this.toast.add({
-        severity: ok ? "success" : "error",
-        summary: ok ? t("modconfig.reverted") : t("modconfig.revertFailed"),
-        detail: ok ? this.formatStamp(snapshot) : this.error,
-        life: 5000,
-      });
+      if (ok) this.notify.ok(t("modconfig.reverted"), this.formatStamp(snapshot));
+      else this.notify.fail(t("modconfig.revertFailed"), this.error);
     },
   },
 });

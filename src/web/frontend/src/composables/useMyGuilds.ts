@@ -1,6 +1,6 @@
 import { computed } from "vue";
-import { errorMessage } from "../utils/errorMessage";
-import { useToast } from "primevue/usetoast";
+import { useNotify } from "./useNotify";
+import { t } from "../i18n";
 import { apiGet } from "../api";
 import { useLoader } from "./useLoader";
 
@@ -17,7 +17,7 @@ export interface MyGuildRow {
  * authorization-scoped list of what the user can act on.
  */
 export function useMyGuilds() {
-  const toast = useToast();
+  const notify = useNotify();
   const loader = useLoader(
     async () => (await apiGet<{ guilds: MyGuildRow[] }>("/api/guilds")).guilds,
     { keepDataOnError: true },
@@ -30,12 +30,7 @@ export function useMyGuilds() {
   async function load(silent = false): Promise<void> {
     const ok = await loader.load();
     if (!ok && !silent && loader.error.value) {
-      toast.add({
-        severity: "error",
-        summary: "Failed to load guilds",
-        detail: errorMessage(loader.error.value),
-        life: 4000,
-      });
+      notify.fail(t("guilds.loadFailedToast"), loader.error.value);
     }
   }
 

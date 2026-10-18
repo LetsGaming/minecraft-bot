@@ -1,6 +1,6 @@
 import { computed, ref } from "vue";
 import { isRecord } from "../utils/isRecord";
-import { useToast } from "primevue/usetoast";
+import { useNotify } from "./useNotify";
 import { ApiError, apiGet, apiSend } from "../api";
 import type { ConfigResponse } from "../api";
 import { useEditableDocument, type DocUnits } from "./useEditableDocument";
@@ -103,7 +103,7 @@ const emptyDoc = (): OverrideDoc => ({ global: {}, guilds: {}, servers: {} });
  * conflict handling come from useEditableDocument.
  */
 export function useCommands() {
-  const toast = useToast();
+  const notify = useNotify();
 
   const scope = ref("global");
   /** HTTP status of the last failed load; 0 when the last load worked or never reached the server. */
@@ -285,12 +285,7 @@ export function useCommands() {
   async function save(): Promise<boolean> {
     const ok = await editor.save();
     if (ok) {
-      toast.add({
-        severity: "success",
-        summary: t("commands.savedToast"),
-        detail: t("commands.savedToastDetail"),
-        life: 3000,
-      });
+      notify.ok(t("commands.savedToast"), t("commands.savedToastDetail"));
     }
     return ok;
   }

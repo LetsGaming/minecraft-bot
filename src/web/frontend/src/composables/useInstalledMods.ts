@@ -8,6 +8,7 @@ import type {
   ModToggleResult,
   ModUpdateCheck,
 } from "../api";
+import { errorMessage } from "../utils/errorMessage";
 import { useRowBusy } from "./useRowBusy";
 import { latest } from "./useLoader";
 
@@ -39,7 +40,7 @@ export interface RowOutcome {
 
 function failureOf(err: unknown): RequestFailure {
   return {
-    message: err instanceof Error && err.message ? err.message : "",
+    message: errorMessage(err, ""),
     status: err instanceof ApiError ? err.status : null,
   };
 }

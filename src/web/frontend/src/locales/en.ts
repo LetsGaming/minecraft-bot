@@ -1523,6 +1523,9 @@ export const en = {
   "prune.fact.whatDetail": "Generated chunks only. Spawn, player areas, zones and a buffer stay, and so does anything unreadable.",
   "prune.fact.fallbackDetail": "The backup this job takes is restored if the delete fails or the server does not come up.",
   "prune.fact.recoverDetail": "Only through that backup. Deleted chunks cannot be brought back one by one.",
+
+  "invite.failed": "Invite failed",
+  "guilds.loadFailedToast": "Failed to load guilds",
 } as const;
 
 export type EnglishKey = keyof typeof en;

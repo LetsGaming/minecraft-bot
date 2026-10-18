@@ -2,7 +2,7 @@ import { computed, ref, shallowRef, toValue } from "vue";
 import { errorMessage } from "../utils/errorMessage";
 import { isRecord } from "../utils/isRecord";
 import { FEATURE_ICON, featureHint, featureLabel } from "../utils/guildFeatures";
-import { useToast } from "primevue/usetoast";
+import { useNotify } from "./useNotify";
 import { DEFAULT_NOTIFICATION_EVENTS, type GuildFeatureKey } from "@mcbot/schema";
 import { apiGet, apiSend, isConflict, validationErrors } from "../api";
 import type { SetupChannel, SetupRole } from "../api";
@@ -189,7 +189,7 @@ export function useGuildSetup(
   getSysadmin: () => boolean,
   getInitialGuildId: () => string,
 ) {
-  const toast = useToast();
+  const notify = useNotify();
 
   // step 0: guild + server selection
   const knownGuilds = useGuilds();
@@ -368,12 +368,7 @@ export function useGuildSetup(
         guildConfig: buildGuildBlock(existingGuildBlock.value, model.value, defaultServer.value),
       });
       const name = guilds.value.find((g) => g.id === guildId.value)?.name ?? guildId.value;
-      toast.add({
-        severity: "success",
-        summary: t("wizard.writtenToast"),
-        detail: t("wizard.writtenToastDetail", { name }),
-        life: 4000,
-      });
+      notify.ok(t("wizard.writtenToast"), t("wizard.writtenToastDetail", { name }));
       return true;
     } catch (err) {
       if (isConflict(err)) {

@@ -783,11 +783,11 @@ import Button from "primevue/button";
 import Select from "primevue/select";
 import InputText from "primevue/inputtext";
 import Checkbox from "primevue/checkbox";
-import { useToast } from "primevue/usetoast";
+import { useNotify } from "../composables/useNotify";
+import { apiErrorText } from "../utils/errorMessage";
 import { SERVER_STATE_ROLE, StatusRole, type StatusInput } from "@mcbot/schema";
 import { t, type MessageKey } from "../i18n";
 import { absoluteStamp, relativeAge } from "../utils/time";
-import { ApiError } from "../api";
 import type { InstalledMod, ModCompatMod, ModProjectDetail, ModSearchHit, ModVersion } from "../api";
 import { useMods, ENVIRONMENT_LABEL } from "../composables/useMods";
 import { useModCompat, type CompatFilter } from "../composables/useModCompat";
@@ -856,7 +856,7 @@ const installs = useRowBusy<string>();
 const status = useServerStatus();
 const { can } = useCapabilities();
 const confirmAction = useConfirmAction();
-const toast = useToast();
+const toast = useNotify();
 const canWrite = computed(() => can("mods:write", props.activeServer));
 const canRestart = computed(() => can("server:control", props.activeServer));
 const serverActions = useServerActions(() => status.refresh());
@@ -1085,12 +1085,8 @@ function statusOf(m: InstalledMod): { state: StatusInput; label: string; busy?: 
 }
 
 function notify(ok: boolean, summary: string, detail: string): void {
-  toast.add({
-    severity: ok ? "success" : "error",
-    summary,
-    detail,
-    life: ok ? 4000 : 7000,
-  });
+  if (ok) toast.ok(summary, detail);
+  else toast.fail(summary, detail);
 }
 
 const FAILED: Record<RowAction, MessageKey> = {
@@ -1311,9 +1307,9 @@ async function copyBlockers(): Promise<void> {
   const lines = blockerRows.value.map((r) => `${nameOf(r)} (${t(CHIP[r.availability].label)})`);
   try {
     await navigator.clipboard.writeText(lines.join("\n"));
-    toast.add({ severity: "success", summary: t("mods.check.copied"), life: 3000 });
+    toast.ok(t("mods.check.copied"));
   } catch {
-    toast.add({ severity: "warn", summary: t("mods.check.copyFailed"), life: 6000 });
+    toast.warn(t("mods.check.copyFailed"));
   }
 }
 
@@ -1443,11 +1439,6 @@ function versionMeta(v: ModVersion): string {
   return parts.join(", ");
 }
 
-function errorText(err: unknown, fallback: string): string {
-  if (err instanceof ApiError) return `${err.status}: ${err.message}`;
-  return err instanceof Error && err.message ? err.message : fallback;
-}
-
 async function focusCatalog(): Promise<void> {
   await nextTick();
   const el = catalogSearch.value?.$el;
@@ -1506,7 +1497,7 @@ async function runSearch(): Promise<void> {
     if (mine !== searchSeq) return;
     results.value = [];
     total.value = 0;
-    searchError.value = errorText(err, "no response");
+    searchError.value = apiErrorText(err, "no response");
   } finally {
     if (mine === searchSeq) {
       searching.value = false;
@@ -1523,7 +1514,7 @@ async function loadDetail(hit: ModSearchHit): Promise<void> {
     const next = await mods.catalog(hit.slug);
     if (openSlug.value === hit.slug) detail.value = next;
   } catch (err) {
-    if (openSlug.value === hit.slug) detailError.value = errorText(err, "no response");
+    if (openSlug.value === hit.slug) detailError.value = apiErrorText(err, "no response");
   } finally {
     loadingDetail.value = false;
   }
@@ -1567,7 +1558,7 @@ async function install(hit: ModSearchHit, v?: ModVersion): Promise<void> {
           await Promise.all([inst.load(), inst.refreshUpdates(true), runSearch()]);
         }
       } catch (err) {
-        notify(false, t("mods.toast.installFailed"), `${name}: ${errorText(err, t("mods.toast.noDetail"))}`);
+        notify(false, t("mods.toast.installFailed"), `${name}: ${apiErrorText(err, t("mods.toast.noDetail"))}`);
       }
     },
     { label: t("mods.busy.install") },
