@@ -63,7 +63,7 @@ isolation point, not just a convenience. See
 [architecture.md](../architecture.md#server-resolution).
 
 **Anything user-typed that reaches a console gets sanitized.**
-`sanitizeForConsole`/`stripControlChars` from core, every time, no exceptions.
+`stripControlChars`/`sanitizeForComponent` from core, or `consoleCommand()`, every time, no exceptions.
 A newline in a chat message is a second console command.
 
 **User-visible strings go through `t()`.** Guild locale for slash commands

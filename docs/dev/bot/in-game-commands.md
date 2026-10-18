@@ -76,7 +76,7 @@ without a restart.
 ## The rule that matters
 
 **Anything a player typed that goes back to the console gets sanitized first.**
-`sanitizeForConsole` / `stripControlChars`, and names through `isValidMcName`.
+`stripControlChars` / `sanitizeForComponent`, names through `isValidMcName`, or the whole command through `consoleCommand()`.
 The handler above interpolates `username` into `/msg` — that is a console
 command, and a name containing a newline would be a second one. There is one
 sanitizer in `core/utils/sanitize.ts`; use it, don't rewrite it.

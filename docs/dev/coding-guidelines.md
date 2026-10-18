@@ -44,7 +44,7 @@ Colours come from `EmbedColor` in `bot/utils/embeds/embedColors.ts` — never a 
 
 Never build shell command strings. Use `execSafe(cmd, args)` from `core/shell/execCommand.ts` or the helpers in `serverAccess.ts`; both pass argument arrays to `execFile`/`spawn` with no shell, so user-controlled strings cannot inject metacharacters.
 
-Anything sent to the Minecraft console that contains user input goes through `core/utils/sanitize.ts` — `sanitizeForConsole`/`stripControlChars`, and names through `isValidMcName`. That module is the single tested implementation; never hand-roll a second copy. A `\n` in a chat message is a second console command.
+Anything sent to the Minecraft console that contains user input goes through `core/utils/sanitize.ts` (`stripControlChars`, `sanitizeForComponent` for tellraw text, `isValidMcName` for names), or is built with `consoleCommand()` in `core/utils/minecraft/serverMessages.ts`, which applies those checks to every argument. Those are the single tested implementations; never hand-roll a second copy. A `\n` in a chat message is a second console command.
 
 ### 7. One server resolver
 
