@@ -52,6 +52,7 @@ import {
   type JsonSchemaNode,
   type Definitions,
 } from "./schemaField.js";
+import { anyValueProp } from "./anyValueProp.js";
 import { SchemaFormKey } from "../../composables/useSchemaForm.js";
 import { t } from "../../i18n.js";
 
@@ -73,7 +74,7 @@ export default defineComponent({
       required: false,
       default: undefined,
     },
-    modelValue: { type: null as unknown as PropType<unknown>, required: false },
+    modelValue: anyValueProp,
     path: { type: Array as PropType<string[]>, required: false, default: () => [] },
     keyPath: { type: Array as PropType<string[]>, required: false, default: () => [] },
   },

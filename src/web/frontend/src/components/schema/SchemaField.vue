@@ -316,6 +316,7 @@ import {
   type Definitions,
   type FieldKind,
 } from "./schemaField.js";
+import { anyValueProp } from "./anyValueProp.js";
 import { fieldText, sameValue } from "./formIndex.js";
 import { isFeatureNew } from "../../composables/useSeenFeatures.js";
 import { SchemaRefsKey, type RefOption } from "../../composables/useSchemaRefs.js";
@@ -340,7 +341,7 @@ export default defineComponent({
   props: {
     name: { type: String, required: true },
     schema: { type: Object as PropType<unknown>, required: true },
-    modelValue: { type: null as unknown as PropType<unknown>, required: false },
+    modelValue: anyValueProp,
     /** The schema's `definitions`, threaded down so `$ref`s resolve at every depth. */
     definitions: {
       type: Object as PropType<Definitions>,

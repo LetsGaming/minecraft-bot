@@ -91,12 +91,14 @@ function stable(value: unknown): string {
   ) ?? "undefined";
 }
 
-export function topLevelUnits<T extends Record<string, unknown>>(): DocUnits<T> {
+/** The default units: a document's top-level keys. */
+export function topLevelUnits<T extends object>(): DocUnits<T> {
   return {
-    read: (doc) => ({ ...doc }),
+    read: (doc) => ({ ...(doc as Record<string, unknown>) }),
     write: (doc, key, value) => {
-      if (value === undefined) delete (doc as Record<string, unknown>)[key];
-      else (doc as Record<string, unknown>)[key] = value;
+      const record = doc as Record<string, unknown>;
+      if (value === undefined) delete record[key];
+      else record[key] = value;
     },
   };
 }
@@ -105,8 +107,7 @@ export function useEditableDocument<T extends object, M = unknown>(
   source: EditableSource<T, M>,
   options: EditableOptions<T> = {},
 ) {
-  const units: DocUnits<T> =
-    options.units ?? (topLevelUnits<Record<string, unknown>>() as unknown as DocUnits<T>);
+  const units: DocUnits<T> = options.units ?? topLevelUnits<T>();
 
   const baseline = shallowRef<T | null>(null);
   const draft = ref<T | null>(null) as Ref<T | null>;

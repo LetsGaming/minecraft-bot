@@ -85,7 +85,8 @@ export const SchemaScopeKey: InjectionKey<SchemaScopeResolver> =
 const POSTABLE_CHANNEL_TYPES = new Set([0, 5, 15]);
 
 /** Frozen so a consumer cannot mutate the shared empty into something else. */
-const NO_OPTIONS = Object.freeze([]) as unknown as RefOption[];
+const NO_OPTIONS: RefOption[] = [];
+Object.freeze(NO_OPTIONS);
 
 interface GuildEntry {
   channels: RefOption[];
