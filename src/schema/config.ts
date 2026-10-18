@@ -2,6 +2,7 @@
 
 import type { LeaderboardInterval } from "./stats.js";
 import type { NotificationEvent } from "./notifications.js";
+import type { Language } from "./language.js";
 import type { CapabilityGrants } from "./capabilities.js";
 
 /**
@@ -345,7 +346,7 @@ export interface GuildConfig {
    * strings and DMs follow the global language, since a server instance
    * can serve several guilds.
    */
-  language?: "en" | "de";
+  language?: Language;
   /**
    * IANA timezone for THIS guild's wall-clock features — the nightly
    * channel purge, "busiest hour" in /activity, and anything else that
@@ -826,7 +827,7 @@ export interface BotConfig {
   /** May contain Discord user IDs and/or role IDs. */
   adminUsers: string[];
   /** Locale for user-visible bot strings. */
-  language: "en" | "de";
+  language: Language;
   commands: Record<string, CommandOverrideConfig>;
   leaderboard: Record<string, unknown>;
   tpsWarningThreshold: number;

@@ -22,8 +22,9 @@ import { canQueryServer } from "@mcbot/schema/serverState.js";
 import { localHourOfDay, UTC } from "../time.js";
 import type { ServerInstance } from "../server/server.js";
 import { errMsg } from "../error.js";
+import { ANALYTICS_CAP_HOURS } from "@mcbot/schema/analytics.js";
 
-export const RETENTION_HOURS = 14 * 24;
+export const RETENTION_HOURS = ANALYTICS_CAP_HOURS.activity;
 const SAMPLER_INTERVAL_MS = 5 * 60_000;
 /** The standalone sampler stands down while other samples are fresher. */
 const FRESH_SAMPLE_MS = 4 * 60_000;

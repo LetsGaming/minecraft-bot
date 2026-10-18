@@ -19,6 +19,8 @@ export type {
   ApiUrlValidation,
   ConfigValidationResult,
 } from "./configValidation.js";
+import { DEFAULT_TPS_ALERT_THRESHOLD } from "@mcbot/schema/thresholds.js";
+import { isLanguage } from "@mcbot/schema/language.js";
 import { errMsg } from "./utils/error.js";
 import {
   SECRET_FILE_MODE,
@@ -273,10 +275,10 @@ export function loadConfig(): BotConfig {
     guilds,
     adminUsers:           raw.adminUsers          ?? [],
     // Locale for user-visible strings; anything but "de" → "en"
-    language:             raw.language === "de" ? "de" : "en",
+    language:             isLanguage(raw.language) ? raw.language : "en",
     commands:             raw.commands            ?? {},
     leaderboard:          raw.leaderboard         ?? {},
-    tpsWarningThreshold:  raw.tpsWarningThreshold ?? 15,
+    tpsWarningThreshold:  raw.tpsWarningThreshold ?? DEFAULT_TPS_ALERT_THRESHOLD,
     tpsPollIntervalMs:    raw.tpsPollIntervalMs   ?? 60_000,
     leaderboardInterval:  raw.leaderboardInterval ?? "weekly",
     ...(raw.leaderboardPostTime ? { leaderboardPostTime: raw.leaderboardPostTime } : {}),

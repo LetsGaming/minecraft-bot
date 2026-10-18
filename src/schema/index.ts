@@ -94,3 +94,10 @@ export * from "./configStatus.js";
 // shared glossary), read by the dashboard's chips and the bot's embed colours.
 export * from "./status.js";
 export * from "./glossary.js";
+
+// Upgrade and prune job phases and failure reasons, with type guards.
+export * from "./upgradePhases.js";
+
+export * from "./thresholds.js";
+
+export * from "./language.js";

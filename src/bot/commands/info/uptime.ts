@@ -12,7 +12,7 @@ import {
   resolveServer,
   getAllowedServerIds,
 } from "../../utils/guild/guildRouter.js";
-import { ALL_SERVERS } from "../../utils/guild/serverOptions.js";
+import { ALL_SERVERS_OPTION } from "../../utils/guild/serverOptions.js";
 import { getUptimeStats } from "@mcbot/core/utils/stores/uptimeTracker.js";
 import { withErrorHandling } from "../middleware.js";
 
@@ -41,7 +41,7 @@ export const data = new SlashCommandBuilder()
     o
       .setName("server")
       .setDescription(
-        `Server instance, or "${ALL_SERVERS}" for an overview of every server`,
+        `Server instance, or "${ALL_SERVERS_OPTION}" for an overview of every server`,
       )
       .setAutocomplete(true),
   );
@@ -49,7 +49,7 @@ export const data = new SlashCommandBuilder()
 export const execute = withErrorHandling(async (interaction) => {
   const requested = interaction.options.getString("server");
   const wantsOverview =
-    requested === ALL_SERVERS && !getServerInstance(ALL_SERVERS);
+    requested === ALL_SERVERS_OPTION && !getServerInstance(ALL_SERVERS_OPTION);
 
   if (!wantsOverview) {
     const server = resolveServer(interaction);

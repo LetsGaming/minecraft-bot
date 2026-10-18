@@ -13,6 +13,8 @@ import {
   NOTIFICATION_EVENTS,
   isNotificationEvent,
   REMOVED_LOCAL_SERVER_FIELDS,
+  LANGUAGES,
+  isLanguage,
 } from "@mcbot/schema";
 import { checkAgainstSchema } from "./configSchemaCheck.js";
 import { CURRENT_CONFIG_VERSION } from "./configMigrations.js";
@@ -276,11 +278,11 @@ function checkGuildLocale(
 ): void {
   if (
     typeof guild.language === "string" &&
-    !["en", "de"].includes(guild.language)
+    !isLanguage(guild.language)
   ) {
     warnings.push(
       `guilds.${gid}.language "${guild.language}" is not a known ` +
-        `locale (en, de) — the global language will be used`,
+        `locale (${LANGUAGES.join(", ")}) — the global language will be used`,
     );
   }
 }

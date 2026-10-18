@@ -26,6 +26,7 @@ import { readBackups } from "@mcbot/core/utils/server/serverAccess.js";
 import {
   getHostResources,
 } from "@mcbot/core/utils/server/hostResources.js";
+import { DEFAULT_DISK_ALERT_PERCENT } from "@mcbot/schema/thresholds.js";
 import type { DiskUsage } from "@mcbot/core/utils/server/hostResources.js";
 import { t, runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
 import { alertMention, type AlertLevel } from "../../../utils/embeds/alertUtils.js";
@@ -35,7 +36,7 @@ import { errMsg } from "@mcbot/core/utils/error.js";
 
 const CHECK_INTERVAL_MS = 5 * 60 * 1000; // disks fill slowly
 const HYSTERESIS_PERCENT = 5;
-export const DEFAULT_DISK_WARN_PERCENT = 90;
+export const DEFAULT_DISK_WARN_PERCENT = DEFAULT_DISK_ALERT_PERCENT;
 
 /** serverId:path → currently in alert state */
 const alertState = new Map<string, boolean>();

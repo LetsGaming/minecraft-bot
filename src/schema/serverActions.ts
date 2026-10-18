@@ -73,6 +73,16 @@ export function isIrreversibleServerAction(value: string): boolean {
   return (IRREVERSIBLE_SERVER_ACTIONS as readonly string[]).includes(value);
 }
 
+/**
+ * The user capability an operator action needs: irreversible actions have a
+ * capability of their own, everything else rides on server:control.
+ */
+export function capabilityForServerAction(
+  action: ServerOperatorAction,
+): "server:rollback" | "server:control" {
+  return isIrreversibleServerAction(action) ? "server:rollback" : "server:control";
+}
+
 /** Does this action interrupt players, warranting a confirm step? */
 export function isDisruptiveServerAction(value: string): boolean {
   return (DISRUPTIVE_SERVER_ACTIONS as readonly string[]).includes(value);

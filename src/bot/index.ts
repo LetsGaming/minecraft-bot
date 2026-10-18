@@ -42,7 +42,7 @@ import {
 } from "@mcbot/core/utils/server/capabilities.js";
 import { migrateLegacySnapshots } from "@mcbot/core/utils/minecraft/snapshotUtils.js";
 import { tryResolveServer } from "./utils/guild/guildRouter.js";
-import { ALL_SERVERS } from "./utils/guild/serverOptions.js";
+import { ALL_SERVERS_OPTION } from "./utils/guild/serverOptions.js";
 import {
   initMinecraftCommands,
   reconcileServers,
@@ -353,9 +353,9 @@ void (async () => {
         const choices = ids.slice(0, 25).map((id) => ({ name: id, value: id }));
         if (
           autocomplete.commandName === "uptime" &&
-          ALL_SERVERS.startsWith(String(focused.value).toLowerCase())
+          ALL_SERVERS_OPTION.startsWith(String(focused.value).toLowerCase())
         ) {
-          choices.unshift({ name: "all (overview)", value: ALL_SERVERS });
+          choices.unshift({ name: "all (overview)", value: ALL_SERVERS_OPTION });
         }
         await autocomplete.respond(choices.slice(0, 25));
         return;
