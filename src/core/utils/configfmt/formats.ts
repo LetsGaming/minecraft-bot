@@ -13,7 +13,7 @@ import {
   type Node as JsonNode,
   type ParseError,
 } from "jsonc-parser";
-import { CommentBlock, markDuplicates, scanLines } from "./lines.js";
+import { CommentBlock, markDuplicates, numberLiteral, scanLines } from "./lines.js";
 import type {
   ConfigFormat,
   ConfigNode,
@@ -96,7 +96,7 @@ export const propertiesFormat: ConfigFormat = {
         continue;
       }
       if (trimmed.startsWith("#") || trimmed.startsWith("!")) {
-        comments.add(trimmed.replace(/^[#!]+\s?/, ""));
+        comments.addLine(trimmed, "#!");
         continue;
       }
 
@@ -141,6 +141,7 @@ export const propertiesFormat: ConfigFormat = {
               : unescapeProperty(continued),
         comments: comments.take(),
         valueSpan: [valueStart, valueStart + value.length],
+        ...(kind === "number" && !value.includes(".") ? { integer: true } : {}),
         ...(joined ? { readOnly: true } : {}),
       });
     }
@@ -154,8 +155,11 @@ export const propertiesFormat: ConfigFormat = {
    * of `"Hello"` instead of `Hello`. Backslashes and line breaks are escaped
    * so a value can never turn into a second line.
    */
-  literal(value: unknown, kind: ConfigValueKind): string {
+  literal(value: unknown, kind: ConfigValueKind, node?: ConfigNode): string {
     if (kind === "boolean") return value ? "true" : "false";
+    if (kind === "number") {
+      return numberLiteral(value, { integer: node?.integer === true });
+    }
     if (Array.isArray(value)) return value.map((v) => escapeProperty(String(v))).join(",");
     return escapeProperty(String(value ?? ""));
   },
@@ -183,12 +187,12 @@ function jsonKind(node: JsonNode): ConfigValueKind {
   }
 }
 
-function walkJson(node: JsonNode, path: string[], out: ConfigNode[]): void {
+function walkJson(node: JsonNode, path: string[], out: ConfigNode[], text: string): void {
   if (node.type === "object") {
     for (const prop of node.children ?? []) {
       const [keyNode, valueNode] = prop.children ?? [];
       if (!keyNode || !valueNode) continue;
-      walkJson(valueNode, [...path, String(keyNode.value)], out);
+      walkJson(valueNode, [...path, String(keyNode.value)], out, text);
     }
     return;
   }
@@ -198,7 +202,7 @@ function walkJson(node: JsonNode, path: string[], out: ConfigNode[]): void {
     const kind = jsonKind(node);
     if (kind === "unknown") {
       for (const [i, child] of (node.children ?? []).entries()) {
-        walkJson(child, [...path, String(i)], out);
+        walkJson(child, [...path, String(i)], out, text);
       }
       return;
     }
@@ -216,6 +220,9 @@ function walkJson(node: JsonNode, path: string[], out: ConfigNode[]): void {
     // is exactly why those files fall back to inferred labels in the UI.
     comments: [],
     valueSpan: [node.offset, node.offset + node.length],
+    ...(node.type === "number" && !/[.eE]/.test(text.slice(node.offset, node.offset + node.length))
+      ? { integer: true }
+      : {}),
   });
 }
 
@@ -232,14 +239,20 @@ export const jsonFormat: ConfigFormat = {
     if (!tree) return { nodes: [], warning: "File is not valid JSON." };
 
     const nodes: ConfigNode[] = [];
-    walkJson(tree, [], nodes);
+    walkJson(tree, [], nodes, text);
 
+    // Duplicate keys are ambiguous: an edit would change the first occurrence
+    // while most consumers use the last.
+    const marked = markDuplicates(nodes);
     return errors.length > 0
-      ? { nodes, warning: `Parsed with ${errors.length} recoverable error(s).` }
-      : { nodes };
+      ? { nodes: marked, warning: `Parsed with ${errors.length} recoverable error(s).` }
+      : { nodes: marked };
   },
 
-  literal(value: unknown): string {
+  literal(value: unknown, kind: ConfigValueKind, node?: ConfigNode): string {
+    if (kind === "number") {
+      return numberLiteral(value, { integer: node?.integer === true });
+    }
     return JSON.stringify(value);
   },
 };
