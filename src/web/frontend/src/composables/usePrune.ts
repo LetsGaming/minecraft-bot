@@ -1,4 +1,12 @@
 import { computed, ref } from "vue";
+import { apiGet, apiSend } from "../api";
+import { latest } from "./useLoader";
+import { usePolledJob } from "./usePolledJob";
+import { errorMessage } from "../utils/errorMessage";
+import { t } from "../i18n";
+import type { PageVisibility } from "../utils/pageVisibility";
+
+export type { PageVisibility } from "../utils/pageVisibility";
 import type {
   PruneChunkInfo,
   PruneDimensions,
@@ -54,31 +62,32 @@ export interface PruneApi {
   chunk?(planId: string, dimension: string, cx: number, cz: number): Promise<PruneChunkInfo>;
 }
 
-export interface PageVisibility {
-  isHidden(): boolean;
-  onVisible(cb: () => void): () => void;
+/** The prune routes of one server, as the page consumes them. A page that does not offer a call overrides it. */
+export function usePruneApi(server: () => string): PruneApi {
+  const base = (): string => `/api/servers/${encodeURIComponent(server())}/prune`;
+  return {
+    support: () => apiGet<{ supported: boolean }>(`${base()}/support`),
+    settings: () => apiGet<PruneParams>(`${base()}/settings`),
+    save: (p) => apiSend<PruneParams>("PUT", `${base()}/settings`, p),
+    scan: (p) => apiSend<{ jobId: string }>("POST", `${base()}/scans`, p),
+    poll: (jobId) => apiGet<PruneScanJob>(`${base()}/scans/${encodeURIComponent(jobId)}`),
+    map: (planId, index) => apiGet<PruneMap>(`${base()}/plans/${encodeURIComponent(planId)}/map/${index}`),
+    dimensions: () => apiGet<PruneDimensions>(`${base()}/dimensions`),
+    status: () => apiGet<PruneEngineStatus>(`${base()}/status`),
+    cancel: (jobId) => apiSend<{ cancelled: boolean }>("POST", `${base()}/scans/${encodeURIComponent(jobId)}/cancel`, {}),
+    chunk: (planId, dimension, cx, cz) =>
+      apiGet<PruneChunkInfo>(
+        `${base()}/plans/${encodeURIComponent(planId)}/chunk?dimension=${encodeURIComponent(dimension)}&cx=${cx}&cz=${cz}`,
+      ),
+    apply: (planId, countdownSeconds) =>
+      apiSend<UpgradeStarted>("POST", `/api/servers/${encodeURIComponent(server())}/prune`, { planId, countdownSeconds }),
+  };
 }
 
 export interface UsePruneOptions {
   api: PruneApi;
   onError: (message: string) => void;
   visibility?: PageVisibility;
-}
-
-const browserVisibility: PageVisibility = {
-  isHidden: () => typeof document !== "undefined" && document.hidden,
-  onVisible(cb) {
-    if (typeof document === "undefined") return () => undefined;
-    const handler = () => {
-      if (!document.hidden) cb();
-    };
-    document.addEventListener("visibilitychange", handler);
-    return () => document.removeEventListener("visibilitychange", handler);
-  },
-};
-
-function messageOf(err: unknown, fallback: string): string {
-  return err instanceof Error && err.message ? err.message : fallback;
 }
 
 export const emptyParams = (): PruneParams => ({
@@ -104,8 +113,8 @@ function decode(base64: string): Uint8Array {
   return out;
 }
 
-/** Region key r.X.Z to its coordinates, or null for anything else. */
-export function parseRegionKey(key: string): { rx: number; rz: number } | null {
+/** A map region's file name (r.X.Z) to its coordinates, or null for anything else. */
+export function parseRegionFile(key: string): { rx: number; rz: number } | null {
   const m = /^r\.(-?\d+)\.(-?\d+)$/.exec(key);
   return m ? { rx: Number(m[1]), rz: Number(m[2]) } : null;
 }
@@ -121,7 +130,7 @@ export function decodeMap(map: PruneMap): DecodedMap {
   const regions: DecodedMap["regions"] = [];
   let bounds: DecodedMap["bounds"] = null;
   for (const [key, value] of Object.entries(map.regions)) {
-    const pos = parseRegionKey(key);
+    const pos = parseRegionFile(key);
     const v = value as { cell?: string; heat?: string };
     if (!pos || typeof v.cell !== "string" || typeof v.heat !== "string") continue;
     regions.push({ ...pos, cell: decode(v.cell), heat: decode(v.heat) });
@@ -143,8 +152,6 @@ export function dimensionChoice(all: string[], selected: string[] | null): strin
 }
 
 export function usePrune(options: UsePruneOptions) {
-  const visibility = options.visibility ?? browserVisibility;
-
   const supported = ref<boolean | null>(null);
   const params = ref<PruneParams>(emptyParams());
   const saved = ref<PruneParams>(emptyParams());
@@ -167,12 +174,37 @@ export function usePrune(options: UsePruneOptions) {
   const mapLoads = new Map<number, Promise<DecodedMap | null>>();
   const starting = ref(false);
 
+  const inspections = latest();
+
   let jobId: string | null = null;
-  let timer: ReturnType<typeof setTimeout> | undefined;
   let generation = 0;
-  let disposed = false;
-  const stopWatching = visibility.onVisible(() => {
-    if (jobId && scanning.value && timer === undefined) schedule();
+
+  const poller = usePolledJob<PruneScanJob>({
+    intervalMs: PRUNE_POLL_MS,
+    visibility: options.visibility,
+    poll: () => options.api.poll(jobId as string),
+    onUpdate: (next) => {
+      if (next.state === "running") progress.value = next.progress ?? progress.value;
+    },
+    isDone: (next) => next.state !== "running",
+    onDone: (next) => {
+      scanning.value = false;
+      cancelling.value = false;
+      progress.value = null;
+      jobId = null;
+      if (next.state === "done" && next.result) {
+        summary.value = next.result;
+        maps.value = {};
+        dropMapLoads();
+      } else if (next.error !== "cancelled") {
+        options.onError(next.error ? t("prune.error.scanFailedWith", { reason: next.error }) : t("prune.error.scanFailed"));
+      }
+    },
+    onError: (err) => {
+      scanning.value = false;
+      jobId = null;
+      options.onError(errorMessage(err, t("prune.error.scanRead")));
+    },
   });
 
   const key = (p: PruneParams): string => JSON.stringify(p);
@@ -183,57 +215,12 @@ export function usePrune(options: UsePruneOptions) {
   const summaryCurrent = computed(() => summary.value !== null && scannedWith.value === key(params.value));
   const hasDeletions = computed(() => (summary.value?.totals.delete ?? 0) > 0);
 
-  function clearTimer(): void {
-    if (timer !== undefined) clearTimeout(timer);
-    timer = undefined;
-  }
-
-  function schedule(): void {
-    clearTimer();
-    if (disposed || visibility.isHidden()) return;
-    const mine = generation;
-    timer = setTimeout(() => {
-      timer = undefined;
-      if (visibility.isHidden()) return;
-      void tick(mine);
-    }, PRUNE_POLL_MS);
-  }
-
-  async function tick(mine: number): Promise<void> {
-    if (mine !== generation || !jobId) return;
-    try {
-      const next = await options.api.poll(jobId);
-      if (mine !== generation) return;
-      if (next.state === "running") {
-        progress.value = next.progress ?? progress.value;
-        schedule();
-        return;
-      }
-      scanning.value = false;
-      cancelling.value = false;
-      progress.value = null;
-      jobId = null;
-      if (next.state === "done" && next.result) {
-        summary.value = next.result;
-        maps.value = {};
-        dropMapLoads();
-      } else if (next.error !== "cancelled") {
-        options.onError(next.error ? `The scan failed (${next.error}).` : "The scan failed.");
-      }
-    } catch (err) {
-      if (mine !== generation) return;
-      scanning.value = false;
-      jobId = null;
-      options.onError(messageOf(err, "Could not read the scan."));
-    }
-  }
-
   async function loadSupport(): Promise<void> {
     try {
       supported.value = (await options.api.support()).supported;
     } catch (err) {
       supported.value = false;
-      options.onError(messageOf(err, "Could not check whether this server can prune chunks."));
+      options.onError(errorMessage(err, t("prune.error.supportCheck")));
     }
   }
 
@@ -242,7 +229,7 @@ export function usePrune(options: UsePruneOptions) {
     try {
       dimensions.value = (await options.api.dimensions()).dimensions;
     } catch (err) {
-      options.onError(messageOf(err, "Could not list the dimensions."));
+      options.onError(errorMessage(err, t("prune.error.dimensions")));
     }
   }
 
@@ -291,19 +278,21 @@ export function usePrune(options: UsePruneOptions) {
     const plan = summary.value?.id;
     if (!plan || !options.api.chunk) return;
     const mine = generation;
+    const isLatest = inspections.begin();
     inspected.value = { dimension, cx, cz, info: null, loading: true };
     try {
       const info = await options.api.chunk(plan, dimension, cx, cz);
-      if (mine !== generation || inspected.value?.cx !== cx || inspected.value?.cz !== cz) return;
+      if (mine !== generation || !isLatest()) return;
       inspected.value = { dimension, cx, cz, info, loading: false };
     } catch (err) {
-      if (mine !== generation) return;
+      if (mine !== generation || !isLatest()) return;
       inspected.value = null;
-      options.onError(messageOf(err, "Could not read that chunk."));
+      options.onError(errorMessage(err, t("prune.error.chunk")));
     }
   }
 
   function clearInspection(): void {
+    inspections.cancel();
     inspected.value = null;
   }
 
@@ -314,7 +303,7 @@ export function usePrune(options: UsePruneOptions) {
       await options.api.cancel(jobId);
     } catch (err) {
       cancelling.value = false;
-      options.onError(messageOf(err, "Could not stop the scan."));
+      options.onError(errorMessage(err, t("prune.error.stop")));
     }
   }
 
@@ -325,7 +314,7 @@ export function usePrune(options: UsePruneOptions) {
       params.value = structuredCloneParams(loaded);
       saved.value = structuredCloneParams(loaded);
     } catch (err) {
-      options.onError(messageOf(err, "Could not load the saved settings."));
+      options.onError(errorMessage(err, t("prune.error.settingsLoad")));
     } finally {
       loadingSettings.value = false;
     }
@@ -340,7 +329,7 @@ export function usePrune(options: UsePruneOptions) {
       saved.value = structuredCloneParams(stored);
       return true;
     } catch (err) {
-      options.onError(messageOf(err, "Could not save the settings."));
+      options.onError(errorMessage(err, t("prune.error.settingsSave")));
       return false;
     } finally {
       savingSettings.value = false;
@@ -351,27 +340,26 @@ export function usePrune(options: UsePruneOptions) {
     if (scanning.value) return;
     generation++;
     const mine = generation;
-    clearTimer();
+    poller.stop();
     scanning.value = true;
     inspected.value = null;
     progress.value = null;
     cancelling.value = false;
     summary.value = null;
     maps.value = {};
-        dropMapLoads();
+    dropMapLoads();
     const used = key(params.value);
     try {
       const started = await options.api.scan(params.value);
       if (mine !== generation) return;
       jobId = started.jobId;
       scannedWith.value = used;
-      await tick(mine);
-      if (mine === generation && !scanning.value && summary.value) scannedWith.value = used;
+      await poller.start({ immediate: true });
     } catch (err) {
       if (mine !== generation) return;
       scanning.value = false;
       jobId = null;
-      options.onError(messageOf(err, "Could not start the scan."));
+      options.onError(errorMessage(err, t("prune.error.scanStart")));
     }
   }
 
@@ -389,7 +377,7 @@ export function usePrune(options: UsePruneOptions) {
       maps.value = { ...maps.value, [index]: decoded };
       return decoded;
     } catch (err) {
-      if (mine === generation) options.onError(messageOf(err, "Could not load the map."));
+      if (mine === generation) options.onError(errorMessage(err, t("prune.error.map")));
       return null;
     }
   }
@@ -422,7 +410,7 @@ export function usePrune(options: UsePruneOptions) {
     try {
       return (await options.api.apply(plan, countdownSeconds)).jobId;
     } catch (err) {
-      options.onError(messageOf(err, "Could not start the prune."));
+      options.onError(errorMessage(err, t("prune.error.start")));
       return null;
     } finally {
       starting.value = false;
@@ -439,13 +427,13 @@ export function usePrune(options: UsePruneOptions) {
 
   function reset(): void {
     generation++;
-    clearTimer();
+    poller.stop();
     jobId = null;
     scanning.value = false;
     summary.value = null;
     scannedWith.value = null;
     maps.value = {};
-        dropMapLoads();
+    dropMapLoads();
     supported.value = null;
     progress.value = null;
     cancelling.value = false;
@@ -457,9 +445,8 @@ export function usePrune(options: UsePruneOptions) {
   }
 
   function dispose(): void {
-    disposed = true;
     reset();
-    stopWatching();
+    poller.dispose();
   }
 
   return {

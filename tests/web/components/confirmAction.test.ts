@@ -8,7 +8,6 @@ import {
   type ConfirmActionOptions,
   type ConfirmResult,
 } from "../../../src/web/frontend/src/composables/useConfirmAction";
-import { useTypedConfirm } from "../../../src/web/frontend/src/composables/useTypedConfirm";
 import { useRowBusy } from "../../../src/web/frontend/src/composables/useRowBusy";
 import { uiGlobal, settle } from "./mountUi";
 
@@ -22,11 +21,9 @@ afterEach(() => {
 
 function host() {
   let confirmAction!: ReturnType<typeof useConfirmAction>;
-  let confirmTyped!: ReturnType<typeof useTypedConfirm>;
   const Host = defineComponent({
     setup() {
       confirmAction = useConfirmAction();
-      confirmTyped = useTypedConfirm();
       return () => h("div", [h("button", { id: "opener" }, "Restore"), h(TypedConfirmDialog)]);
     },
   });
@@ -37,12 +34,6 @@ function host() {
     async open(options: ConfirmActionOptions): Promise<{ result: Promise<ConfirmResult> }> {
       opener.focus();
       const result = confirmAction(options);
-      await settle();
-      return { result };
-    },
-    async openTyped(): Promise<{ result: Promise<boolean> }> {
-      opener.focus();
-      const result = confirmTyped({ header: "Confirm rollback", message: "m", expected: "smp", acceptLabel: "Rollback" });
       await settle();
       return { result };
     },
@@ -131,15 +122,6 @@ describe("useConfirmAction on the shared dialog", () => {
     expect(button("Stop").disabled).toBe(false);
     button("Stop").click();
     expect(await result).toBe("confirm");
-  });
-
-  it("still serves the old typed confirm", async () => {
-    const ui = host();
-    const { result } = await ui.openTyped();
-    expect(document.activeElement?.id).toBe("typed-confirm");
-    await type("smp");
-    button("Rollback").click();
-    expect(await result).toBe(true);
   });
 
   it("refuses an irreversible confirm with nothing to type", () => {

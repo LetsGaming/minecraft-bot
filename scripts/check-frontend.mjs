@@ -62,6 +62,11 @@ const TRANSLATED = new Set([
   "views/ModsView.vue",
   "views/OverviewView.vue",
   "views/StatusView.vue",
+  "components/mods/InstalledModsPanel.vue",
+  "components/mods/ModCatalog.vue",
+  "components/mods/ModCell.vue",
+  "components/mods/ModCompatCheck.vue",
+  "components/mods/PagerNav.vue",
 ]);
 const TEXT_ATTRS = /(?<![:@\w.-])(label|title|placeholder|aria-label|alt|header|subtitle|summary|message)="([^"]*)"/g;
 const HAS_LETTER = /\p{L}/u;

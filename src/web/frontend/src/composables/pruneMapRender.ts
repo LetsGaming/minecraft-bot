@@ -4,7 +4,9 @@
  * only parses the theme's colours, calls these, and draws the result.
  */
 
+import { REGION_CHUNKS } from "@mcbot/schema";
 import { CELL } from "./usePrune";
+import { REGION_CELLS } from "./pruneRegion";
 
 export type Rgba = readonly [number, number, number, number];
 
@@ -46,7 +48,7 @@ export function heatMinutes(heat: number): number {
 }
 
 /**
- * RGBA pixels of one region, one pixel per chunk, row by row (index = z * 32 + x).
+ * RGBA pixels of one region, one pixel per chunk, row by row (index = z * REGION_CHUNKS + x).
  * Empty cells stay transparent so the surface shows through.
  */
 export function buildRegionPixels(
@@ -57,8 +59,8 @@ export function buildRegionPixels(
   /** Scales every pixel's opacity, so the classes can sit over a terrain picture. */
   opacity = 1,
 ): Uint8ClampedArray {
-  const out = new Uint8ClampedArray(32 * 32 * 4);
-  for (let slot = 0; slot < 1024; slot++) {
+  const out = new Uint8ClampedArray(REGION_CELLS * 4);
+  for (let slot = 0; slot < REGION_CELLS; slot++) {
     const c = cell[slot]!;
     if (c === CELL.EMPTY) continue;
     let rgba: Rgba;
@@ -78,13 +80,13 @@ export function buildRegionPixels(
 
 /** Pixels of a selection bitset (32 row masks), in one colour; unselected chunks are transparent. */
 export function buildSelectionPixels(bits: Uint32Array, colour: Rgba): Uint8ClampedArray {
-  const out = new Uint8ClampedArray(32 * 32 * 4);
-  for (let z = 0; z < 32; z++) {
+  const out = new Uint8ClampedArray(REGION_CELLS * 4);
+  for (let z = 0; z < REGION_CHUNKS; z++) {
     const row = bits[z]!;
     if (row === 0) continue;
-    for (let x = 0; x < 32; x++) {
+    for (let x = 0; x < REGION_CHUNKS; x++) {
       if (((row >>> x) & 1) === 0) continue;
-      const i = (z * 32 + x) * 4;
+      const i = (z * REGION_CHUNKS + x) * 4;
       out[i] = colour[0];
       out[i + 1] = colour[1];
       out[i + 2] = colour[2];

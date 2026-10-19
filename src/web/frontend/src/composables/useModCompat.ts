@@ -1,5 +1,11 @@
 import { computed, ref } from "vue";
 import type { ModCompatJob, ModCompatMod } from "../api";
+import { errorMessage } from "../utils/errorMessage";
+import { t } from "../i18n";
+import type { PageVisibility } from "../utils/pageVisibility";
+import { usePolledJob } from "./usePolledJob";
+
+export type { PageVisibility } from "../utils/pageVisibility";
 
 /**
  * The Mods tab's "check another Minecraft version" state.
@@ -23,12 +29,6 @@ export interface ModCompatApi {
   versions(): Promise<{ versions: string[] }>;
 }
 
-export interface PageVisibility {
-  isHidden(): boolean;
-  /** Calls `cb` whenever the page becomes visible. Returns the unsubscribe. */
-  onVisible(cb: () => void): () => void;
-}
-
 export interface UseModCompatOptions {
   api: ModCompatApi;
   /** The version the server runs now; listed first in the picker. */
@@ -37,25 +37,7 @@ export interface UseModCompatOptions {
   visibility?: PageVisibility;
 }
 
-const browserVisibility: PageVisibility = {
-  isHidden: () => typeof document !== "undefined" && document.hidden,
-  onVisible(cb) {
-    if (typeof document === "undefined") return () => undefined;
-    const handler = () => {
-      if (!document.hidden) cb();
-    };
-    document.addEventListener("visibilitychange", handler);
-    return () => document.removeEventListener("visibilitychange", handler);
-  },
-};
-
-function messageOf(err: unknown, fallback: string): string {
-  return err instanceof Error && err.message ? err.message : fallback;
-}
-
 export function useModCompat(options: UseModCompatOptions) {
-  const visibility = options.visibility ?? browserVisibility;
-
   const releases = ref<string[]>([]);
   const loadingVersions = ref(false);
   const selected = ref("");
@@ -69,11 +51,28 @@ export function useModCompat(options: UseModCompatOptions) {
   const filter = ref<CompatFilter>("all");
 
   let jobId: string | null = null;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  let disposed = false;
   let generation = 0;
-  const stopWatching = visibility.onVisible(() => {
-    if (jobId && checkingCompat.value && timer === undefined) schedule();
+
+  const poller = usePolledJob<ModCompatJob>({
+    intervalMs: POLL_INTERVAL_MS,
+    visibility: options.visibility,
+    poll: () => options.api.poll(jobId as string),
+    onUpdate: (next) => {
+      job.value = next;
+    },
+    isDone: (next) => next.state !== "running",
+    onDone: (next) => {
+      checkingCompat.value = false;
+      jobId = null;
+      if (next.state === "failed") {
+        options.onError(next.error ?? t("mods.compat.failed"));
+      }
+    },
+    onError: (err) => {
+      checkingCompat.value = false;
+      jobId = null;
+      options.onError(errorMessage(err, t("mods.compat.readFailed")));
+    },
   });
 
   /** The installed version first, then releases newest first, without repeats. */
@@ -92,8 +91,8 @@ export function useModCompat(options: UseModCompatOptions) {
   const progressText = computed(() => {
     const p = job.value?.progress;
     if (!checkingCompat.value) return "";
-    if (!p || p.total === 0) return "Starting the check";
-    return `Checking ${Math.min(p.done + 1, p.total)} of ${p.total}`;
+    if (!p || p.total === 0) return t("mods.compat.starting");
+    return t("mods.compat.checking", { done: Math.min(p.done + 1, p.total), total: p.total });
   });
 
   /** Final answer when done, otherwise whatever has arrived so far. */
@@ -121,51 +120,12 @@ export function useModCompat(options: UseModCompatOptions) {
   const summaryText = computed(() => {
     const s = summary.value;
     if (!s) return "";
-    return `${s.available} ready, ${s.unavailable} missing, ${s.unknown} unknown`;
+    return t("mods.compat.summary", { available: s.available, unavailable: s.unavailable, unknown: s.unknown });
   });
 
   const failed = computed(() => job.value?.state === "failed");
   const hasResult = computed(() => job.value?.state === "done");
   const emptyResult = computed(() => hasResult.value && (job.value?.summary?.total ?? 0) === 0);
-
-  function clearTimer(): void {
-    if (timer !== undefined) clearTimeout(timer);
-    timer = undefined;
-  }
-
-  function schedule(): void {
-    clearTimer();
-    if (disposed || visibility.isHidden()) return;
-    const mine = generation;
-    timer = setTimeout(() => {
-      timer = undefined;
-      if (visibility.isHidden()) return;
-      void tick(mine);
-    }, POLL_INTERVAL_MS);
-  }
-
-  async function tick(mine: number): Promise<void> {
-    if (mine !== generation || !jobId) return;
-    try {
-      const next = await options.api.poll(jobId);
-      if (mine !== generation) return;
-      job.value = next;
-      if (next.state === "running") {
-        schedule();
-        return;
-      }
-      checkingCompat.value = false;
-      jobId = null;
-      if (next.state === "failed") {
-        options.onError(next.error ?? "The compatibility check failed.");
-      }
-    } catch (err) {
-      if (mine !== generation) return;
-      checkingCompat.value = false;
-      jobId = null;
-      options.onError(messageOf(err, "Could not read the compatibility check."));
-    }
-  }
 
   async function loadVersions(): Promise<void> {
     loadingVersions.value = true;
@@ -173,7 +133,7 @@ export function useModCompat(options: UseModCompatOptions) {
       releases.value = (await options.api.versions()).versions;
     } catch (err) {
       releases.value = [];
-      options.onError(messageOf(err, "Could not load Minecraft versions."));
+      options.onError(errorMessage(err, t("mods.compat.versionsFailed")));
     } finally {
       loadingVersions.value = false;
     }
@@ -185,12 +145,12 @@ export function useModCompat(options: UseModCompatOptions) {
     if (checkingCompat.value) return;
     const version = targetVersion.value;
     if (!MC_VERSION_RE.test(version)) {
-      options.onError("Enter a Minecraft version such as 1.21.5.");
+      options.onError(t("mods.compat.versionInvalid"));
       return;
     }
     generation++;
     const mine = generation;
-    clearTimer();
+    poller.stop();
     checkingCompat.value = true;
     stale.value = false;
     job.value = null;
@@ -199,12 +159,12 @@ export function useModCompat(options: UseModCompatOptions) {
       const started = await options.api.start(version, refresh);
       if (mine !== generation) return;
       jobId = started.jobId;
-      await tick(mine);
+      await poller.start({ immediate: true });
     } catch (err) {
       if (mine !== generation) return;
       checkingCompat.value = false;
       jobId = null;
-      options.onError(messageOf(err, "Could not start the compatibility check."));
+      options.onError(errorMessage(err, t("mods.compat.startFailed")));
     }
   }
 
@@ -216,7 +176,7 @@ export function useModCompat(options: UseModCompatOptions) {
   /** Forget the job: a server switch or a hidden control. */
   function reset(): void {
     generation++;
-    clearTimer();
+    poller.stop();
     jobId = null;
     checkingCompat.value = false;
     job.value = null;
@@ -226,9 +186,8 @@ export function useModCompat(options: UseModCompatOptions) {
   }
 
   function dispose(): void {
-    disposed = true;
     reset();
-    stopWatching();
+    poller.dispose();
   }
 
   return {

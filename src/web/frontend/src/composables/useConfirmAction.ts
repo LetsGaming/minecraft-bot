@@ -49,8 +49,8 @@ const DEFAULT_TONE: Record<ConfirmLevel, ConfirmTone> = {
 
 /**
  * One confirm for every level, drawn by the shared TypedConfirmDialog host.
- * Each dialog states target, consequence and recovery; the typed level is the
- * one `useTypedConfirm` has always offered.
+ * Each dialog states target, consequence and recovery. Without a `cancelLabel`
+ * the dialog shows its own translated Cancel.
  */
 export function useConfirmAction() {
   const confirm = useConfirm();
@@ -84,7 +84,7 @@ export function useConfirmAction() {
         header: options.header,
         message: options.message,
         acceptLabel: options.acceptLabel,
-        rejectLabel: options.cancelLabel ?? "Cancel",
+        rejectLabel: options.cancelLabel,
         accept: () => settle("confirm"),
         reject: () => settle("cancel"),
         onHide: () => settle("cancel"),

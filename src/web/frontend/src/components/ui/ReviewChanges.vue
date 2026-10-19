@@ -87,7 +87,4 @@ function show(value: unknown): string {
 .rv-values dd { margin: 0; min-width: 0; font-family: var(--font-mono); overflow-wrap: anywhere; }
 .rv-values del { color: var(--danger); text-decoration-thickness: 1px; }
 .rv-values ins { color: var(--st-online); text-decoration: none; }
-@media (pointer: coarse), (max-width: 760px) {
-  .tap { min-height: var(--touch-min); }
-}
 </style>

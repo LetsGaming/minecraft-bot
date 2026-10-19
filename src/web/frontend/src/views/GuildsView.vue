@@ -134,7 +134,7 @@ import InlineError from "../components/ui/InlineError.vue";
 import { GUILD_FEATURE_KEYS, type GuildFeatureKey } from "@mcbot/schema";
 import { useGuilds } from "../composables/useGuilds";
 import { useMyGuilds } from "../composables/useMyGuilds";
-import { describeDiscordFailure, type FailureCopy } from "../utils/discordFailure";
+import { describeDiscordFailure, type DiscordFailureCopy } from "../utils/discordFailure";
 import { FEATURE_ICON, featureHint, featureLabel } from "../utils/guildFeatures";
 import { t } from "../i18n";
 
@@ -172,7 +172,7 @@ export default defineComponent({
     ready(): boolean {
       return this.loadedOnce && !this.loadError;
     },
-    failure(): FailureCopy | null {
+    failure(): DiscordFailureCopy | null {
       if (!this.loadError) return null;
       return describeDiscordFailure(this.loadError, this.sysadmin, {
         title: t("guilds.loadFailed"),
@@ -307,9 +307,6 @@ export default defineComponent({
 
 .gv-foot { margin-top: var(--space-3); padding-top: var(--space-2); border-top: 1px solid var(--border); }
 
-@media (pointer: coarse), (max-width: 760px) {
-  .tap { min-height: var(--touch-min); }
-}
 @media (max-width: 760px) {
   .gv-actions { width: 100%; }
   .gv-actions > * { flex: 1 1 auto; }

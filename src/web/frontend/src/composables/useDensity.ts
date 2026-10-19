@@ -1,4 +1,5 @@
 import { ref, readonly } from "vue";
+import { safeStorage } from "../utils/safeStorage";
 
 export const DENSITIES = ["comfortable", "compact"] as const;
 export type Density = (typeof DENSITIES)[number];
@@ -13,20 +14,8 @@ export function isDensity(value: unknown): value is Density {
 }
 
 function readStored(): Density {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return isDensity(raw) ? raw : DEFAULT_DENSITY;
-  } catch {
-    return DEFAULT_DENSITY;
-  }
-}
-
-function writeStored(value: Density): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, value);
-  } catch {
-    /* storage disabled: the choice lasts for this page load only. */
-  }
+  const raw = safeStorage.get(STORAGE_KEY);
+  return isDensity(raw) ? raw : DEFAULT_DENSITY;
 }
 
 function applyToDocument(value: Density): void {
@@ -43,7 +32,7 @@ export function initDensity(): void {
 export function useDensity() {
   function setDensity(value: Density): void {
     current.value = value;
-    writeStored(value);
+    safeStorage.set(STORAGE_KEY, value);
     applyToDocument(value);
   }
 

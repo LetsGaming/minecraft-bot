@@ -16,7 +16,8 @@ import type { BackupFileInfo, BackupSummaryResponse } from "../api";
  * outcome to the caller, so a failed delete never replaces a list that loaded.
  */
 
-const PAGE_SIZE = 50;
+/** Files per request; the view uses it to size the "load more" button. */
+export const PAGE_SIZE = 50;
 
 /** What a script run reported: exit code and the tail of its output. */
 export interface ScriptOutcome {

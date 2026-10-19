@@ -1,15 +1,21 @@
-import {
-  computed,
-  getCurrentInstance,
-  onBeforeUnmount,
-  ref,
-  shallowRef,
-  type Ref,
-} from "vue";
+import { computed, ref, shallowRef, type Ref } from "vue";
 import { isConflict, validationErrors } from "../api";
 import { errorMessage } from "../utils/errorMessage";
+import { t } from "../i18n";
 import { registerDirtySource } from "./useUnsavedGuard";
-import type { EditConflict } from "./useModConfigs";
+import { latest } from "./useLoader";
+
+/** A queued or drafted edit whose key moved on the server while it waited. */
+export interface EditConflict {
+  keyPath: string[];
+  queued: unknown;
+  base: unknown;
+  current: unknown;
+  queuedAt: number;
+  byTag: string | null;
+  /** Which file it belongs to. Present on preview results. */
+  fileId?: string;
+}
 
 /**
  * Editing one server-held JSON document without losing anyone's work.
@@ -85,12 +91,14 @@ function stable(value: unknown): string {
   ) ?? "undefined";
 }
 
-export function topLevelUnits<T extends Record<string, unknown>>(): DocUnits<T> {
+/** The default units: a document's top-level keys. */
+export function topLevelUnits<T extends object>(): DocUnits<T> {
   return {
-    read: (doc) => ({ ...doc }),
+    read: (doc) => ({ ...(doc as Record<string, unknown>) }),
     write: (doc, key, value) => {
-      if (value === undefined) delete (doc as Record<string, unknown>)[key];
-      else (doc as Record<string, unknown>)[key] = value;
+      const record = doc as Record<string, unknown>;
+      if (value === undefined) delete record[key];
+      else record[key] = value;
     },
   };
 }
@@ -99,8 +107,7 @@ export function useEditableDocument<T extends object, M = unknown>(
   source: EditableSource<T, M>,
   options: EditableOptions<T> = {},
 ) {
-  const units: DocUnits<T> =
-    options.units ?? (topLevelUnits<Record<string, unknown>>() as unknown as DocUnits<T>);
+  const units: DocUnits<T> = options.units ?? topLevelUnits<T>();
 
   const baseline = shallowRef<T | null>(null);
   const draft = ref<T | null>(null) as Ref<T | null>;
@@ -150,10 +157,7 @@ export function useEditableDocument<T extends object, M = unknown>(
     return dirtySet.value.has(key);
   }
 
-  if (options.guard !== false) {
-    const unregister = registerDirtySource(() => dirty.value);
-    if (getCurrentInstance()) onBeforeUnmount(unregister);
-  }
+  if (options.guard !== false) registerDirtySource(() => dirty.value);
 
   function adopt(read: LoadedDocument<T, M>): void {
     baseline.value = clone(read.doc);
@@ -164,23 +168,35 @@ export function useEditableDocument<T extends object, M = unknown>(
     stale.value = false;
   }
 
-  /** Read the document. Replaces the draft, so callers confirm first when dirty. */
+  const loads = latest();
+
+  /**
+   * Read the document. Replaces the draft, so callers confirm first when
+   * dirty. Only the newest read is adopted: an older answer that lands late
+   * resolves false and changes nothing.
+   */
   async function load(): Promise<boolean> {
+    const current = loads.begin();
     loading.value = true;
     loadError.value = "";
     try {
-      adopt(await source.load());
+      const read = await source.load();
+      if (!current()) return false;
+      adopt(read);
       return true;
     } catch (err) {
+      if (!current()) return false;
       loadError.value = errorMessage(err);
       return false;
     } finally {
-      loading.value = false;
+      if (current()) loading.value = false;
     }
   }
 
   /** Forget the document entirely (switching to a different one). */
   function reset(): void {
+    loads.cancel();
+    loading.value = false;
     baseline.value = null;
     draft.value = null;
     token.value = "";
@@ -265,11 +281,11 @@ export function useEditableDocument<T extends object, M = unknown>(
   async function save(): Promise<boolean> {
     if (!ready.value || saving.value) return false;
     if (stale.value) {
-      saveError.value = "Reload before saving again: the last save went through but the page could not re-read it.";
+      saveError.value = t("editor.saveStale");
       return false;
     }
     if (conflicts.value.length > 0) {
-      saveError.value = "Resolve the conflicting fields first.";
+      saveError.value = t("editor.saveResolveFirst");
       return false;
     }
     if (!dirty.value) return false;
@@ -291,16 +307,16 @@ export function useEditableDocument<T extends object, M = unknown>(
           mergeRemote(await source.load());
           saveError.value =
             conflicts.value.length > 0
-              ? "Someone else changed some of the same fields. Your edits are kept; choose which value to keep."
-              : "The configuration changed since you loaded it. Your edits were kept on top of the latest version; review and save again.";
+              ? t("editor.saveConflictFields")
+              : t("editor.saveConflictMerged");
         } catch (loadErr) {
-          saveError.value = `The configuration changed since you loaded it, and the latest version could not be loaded (${errorMessage(loadErr)}). Your edits are kept.`;
+          saveError.value = t("editor.saveConflictReloadFailed", { message: errorMessage(loadErr) });
         }
       } else {
         const list = validationErrors(err);
         if (list.length > 0) {
           fieldErrors.value = list;
-          saveError.value = "The server rejected the changes.";
+          saveError.value = t("editor.saveRejected");
         } else {
           saveError.value = errorMessage(err);
         }

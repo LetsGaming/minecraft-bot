@@ -37,7 +37,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
-import { StatusRole } from "@mcbot/schema";
+import { MS, StatusRole } from "@mcbot/schema";
 import { formatDuration } from "@mcbot/core/utils/duration.js";
 import StatusChip from "./StatusChip.vue";
 import { t } from "../../i18n";
@@ -93,7 +93,7 @@ watch(
     stopTimer();
     if (state === "running") {
       now.value = Date.now();
-      timer = setInterval(() => (now.value = Date.now()), 1000);
+      timer = setInterval(() => (now.value = Date.now()), MS.second);
     }
   },
   { immediate: true },
@@ -103,8 +103,8 @@ onBeforeUnmount(stopTimer);
 const statusText = computed(() => {
   if (props.state === "running") {
     if (!props.startedAt) return t("ui.job.running");
-    const seconds = Math.max(0, Math.floor((now.value - props.startedAt) / 1000));
-    return t("ui.job.runningFor", { duration: formatDuration(seconds * 1000) });
+    const seconds = Math.max(0, Math.floor((now.value - props.startedAt) / MS.second));
+    return t("ui.job.runningFor", { duration: formatDuration(seconds * MS.second) });
   }
   if (props.exitCode !== undefined && props.exitCode !== null) {
     return t("ui.job.exitCode", { code: props.exitCode });

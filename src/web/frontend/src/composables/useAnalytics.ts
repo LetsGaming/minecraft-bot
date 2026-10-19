@@ -17,6 +17,7 @@ import { apiGet } from "../api";
 import { errorMessage } from "../utils/errorMessage";
 import { loadFailure, type LoadFailure } from "../utils/loadFailure";
 import { t } from "../i18n";
+import { latest } from "./useLoader";
 
 /**
  * The bot's own history, for the dashboard.
@@ -108,16 +109,22 @@ export function useAnalytics() {
    * must not blank the other: a server that has never been polled still has
    * meaningful command numbers, and vice versa.
    */
-  async function load(serverId: string, hours = 24 * 14): Promise<void> {
+  const loads = latest();
+  const boardLoads = latest();
+
+  async function load(serverId: string, hours: number): Promise<void> {
+    const isCurrent = loads.begin();
     loading.value = true;
     error.value = "";
     failure.value = null;
+    caps.value = null;
     const base = `/api/servers/${encodeURIComponent(serverId)}`;
     const [server, usage, playerList] = await Promise.allSettled([
       apiGet<ServerAnalyticsResponse>(`${base}/analytics?hours=${hours}`),
       apiGet<CommandUsageResponse>(`/api/analytics/commands?hours=${hours}`),
       apiGet<PlayersResponse>(`${base}/analytics/players?hours=${hours}`),
     ]);
+    if (!isCurrent()) return;
 
     if (server.status === "fulfilled") {
       uptime.value = server.value.uptime;
@@ -161,6 +168,7 @@ export function useAnalytics() {
 
   /** Load one stat board. Separate from `load` because the picker re-runs it. */
   async function loadBoard(serverId: string, stat: string, hours: number): Promise<void> {
+    const isCurrent = boardLoads.begin();
     boardLoading.value = true;
     boardError.value = "";
     boardFailure.value = null;
@@ -168,6 +176,7 @@ export function useAnalytics() {
       const res = await apiGet<LeaderboardResponse>(
         `/api/servers/${encodeURIComponent(serverId)}/analytics/leaderboard?stat=${encodeURIComponent(stat)}&hours=${hours}`,
       );
+      if (!isCurrent()) return;
       board.value = res.entries;
       boardTitle.value = res.title;
       boardRangeHours.value = res.rangeHours;
@@ -176,11 +185,12 @@ export function useAnalytics() {
       availableStats.value = res.available;
       caps.value = res.caps;
     } catch (err) {
+      if (!isCurrent()) return;
       board.value = [];
       boardError.value = errorMessage(err);
       boardFailure.value = loadFailure(err);
     } finally {
-      boardLoading.value = false;
+      if (isCurrent()) boardLoading.value = false;
     }
   }
 

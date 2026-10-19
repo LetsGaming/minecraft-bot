@@ -159,11 +159,11 @@ import Checkbox from "primevue/checkbox";
 import InputText from "primevue/inputtext";
 import Select from "primevue/select";
 import { StatusRole, formatBytes } from "@mcbot/schema";
-import { apiGet, apiSend } from "../api";
-import type { ModCompatJob, ModCompatMod } from "../api";
+import type { ModCompatMod } from "../api";
+import { useMods } from "../composables/useMods";
 import { useModCompat } from "../composables/useModCompat";
-import { useServerUpgrade } from "../composables/useServerUpgrade";
-import { usePrune } from "../composables/usePrune";
+import { useServerUpgrade, useUpgradeApi } from "../composables/useServerUpgrade";
+import { usePrune, usePruneApi } from "../composables/usePrune";
 import { useCapabilities } from "../composables/useCapabilities";
 import { useConfirmAction } from "../composables/useConfirmAction";
 import ViewHeader from "../components/ui/ViewHeader.vue";
@@ -172,15 +172,6 @@ import InlineBanner from "../components/ui/InlineBanner.vue";
 import StatusChip from "../components/ui/StatusChip.vue";
 import UpgradeRun from "../components/UpgradeRun.vue";
 import { t } from "../i18n";
-import type {
-  PruneMap,
-  PruneParams,
-  PruneParamsRequest,
-  PruneScanJob,
-  UpgradeJob,
-  UpgradeRequest,
-  UpgradeStarted,
-} from "@mcbot/schema/wire/index.js";
 
 const props = defineProps<{ activeServer: string }>();
 defineEmits<{ navigate: [id: string] }>();
@@ -193,35 +184,26 @@ const countdown = ref(30);
 const includePrune = ref(false);
 
 const server = computed(() => props.activeServer);
-const base = (): string => `/api/servers/${encodeURIComponent(server.value)}`;
 
 /** The compatibility check needs the mods:read the Mods page uses; without it the check is skipped. */
 const canCheck = computed(() => can("mods:read", server.value));
 
 const upgrade = useServerUpgrade({
-  api: {
-    support: () => apiGet<{ supported: boolean }>(`${base()}/upgrade/support`),
-    start: (body: UpgradeRequest) => apiSend<UpgradeStarted>("POST", `${base()}/upgrade`, body),
-    poll: (jobId, since) => apiGet<UpgradeJob>(`${base()}/upgrade/${jobId}?since=${since}`),
-    current: async (since) => (await apiGet<{ job: UpgradeJob | null }>(`${base()}/upgrade/current?since=${since}`)).job,
-  },
-  onError: (message) => (error.value = message),  kind: "upgrade",
+  api: useUpgradeApi(() => server.value),
+  onError: (message) => (error.value = message),
+  kind: "upgrade",
 });
 
 /** Chunk pruning inside the upgrade: the same scan and saved settings as the Prune page. */
 const prune = usePrune({
   api: {
-    support: () => apiGet<{ supported: boolean }>(`${base()}/prune/support`),
-    settings: () => apiGet<PruneParams>(`${base()}/prune/settings`),
-    save: (p: PruneParamsRequest) => apiSend<PruneParams>("PUT", `${base()}/prune/settings`, p),
-    scan: (p: PruneParamsRequest) => apiSend<{ jobId: string }>("POST", `${base()}/prune/scans`, p),
-    poll: (jobId) => apiGet<PruneScanJob>(`${base()}/prune/scans/${jobId}`),
-    map: (planId, index) => apiGet<PruneMap>(`${base()}/prune/plans/${planId}/map/${index}`),
+    ...usePruneApi(() => server.value),
     apply: () => Promise.reject(new Error("The prune runs as part of the upgrade.")),
   },
   onError: (message) => (error.value = message),
 });
 
+const mods = useMods(() => server.value);
 const installedVersion = ref<string | null>(null);
 
 /** The version the server runs now, from the mod manifest; only readable with mods:read. */
@@ -229,20 +211,14 @@ async function loadInstalledVersion(): Promise<void> {
   installedVersion.value = null;
   if (!canCheck.value) return;
   try {
-    const installed = await apiGet<{ gameVersion?: string | null }>(`${base()}/mods/installed`);
-    installedVersion.value = installed.gameVersion ?? null;
+    installedVersion.value = (await mods.fetchInstalled()).gameVersion ?? null;
   } catch {
     /* the picker still works without it */
   }
 }
 
 const compat = useModCompat({
-  api: {
-    start: (mcVersion, refresh) =>
-      apiSend<{ jobId: string }>("POST", `${base()}/mods/compat`, { mcVersion, ...(refresh ? { refresh: true } : {}) }),
-    poll: (jobId) => apiGet<ModCompatJob>(`${base()}/mods/compat/${jobId}`),
-    versions: () => apiGet<{ versions: string[] }>(`${base()}/mods/compat/versions`),
-  },
+  api: { start: mods.compatStart, poll: mods.compatPoll, versions: mods.compatVersions },
   installedVersion: () => installedVersion.value,
   onError: (message) => (error.value = message),
 });

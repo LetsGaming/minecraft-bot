@@ -1,5 +1,5 @@
 import { computed } from "vue";
-import { useToast } from "primevue/usetoast";
+import { useNotify } from "./useNotify";
 import { apiGet, apiSend } from "../api";
 import type { ConfigResponse } from "../api";
 import { isRecord } from "../utils/isRecord";
@@ -9,10 +9,8 @@ import {
   contrastRatio,
   defaultEmbedColor,
   DISCORD_EMBED_BACKGROUND,
-  EMBED_CATEGORIES,
   MIN_BAR_CONTRAST,
   parseHexColor,
-  REWARD_RARITIES,
   type EmbedColorKey,
 } from "@mcbot/schema/embedCategories.js";
 import { t } from "../i18n";
@@ -30,14 +28,9 @@ const colorUnits: DocUnits<ColorsDoc> = {
   },
 };
 
-export const COLOR_KEYS: readonly EmbedColorKey[] = [
-  ...EMBED_CATEGORIES,
-  ...REWARD_RARITIES.map((r): EmbedColorKey => `rarity.${r}`),
-];
-
 /** Editing the `embedColors` override map of config.json. */
 export function useEmbedColors() {
-  const toast = useToast();
+  const notify = useNotify();
 
   const editor = useEditableDocument<ColorsDoc>(
     {
@@ -117,12 +110,7 @@ export function useEmbedColors() {
   async function save(): Promise<boolean> {
     const ok = await editor.save();
     if (ok) {
-      toast.add({
-        severity: "success",
-        summary: t("appearance.savedToast"),
-        detail: t("appearance.savedToastDetail"),
-        life: 3000,
-      });
+      notify.ok(t("appearance.savedToast"), t("appearance.savedToastDetail"));
     }
     return ok;
   }

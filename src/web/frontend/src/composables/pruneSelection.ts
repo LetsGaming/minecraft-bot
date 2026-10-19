@@ -10,31 +10,25 @@
  * costs nothing.
  */
 
-export interface RegionRef {
-  rx: number;
-  rz: number;
-}
+import { REGION_CHUNKS, REGION_MASK } from "@mcbot/schema";
+import { parseRegionKey, regionKey, regionOf, slotOf, type Rect, type RegionRef } from "./pruneRegion";
 
-export interface SelectionOp {
+export type { RegionRef, Rect } from "./pruneRegion";
+
+export interface SelectionOp extends Rect {
   dimension: string;
   mode: "add" | "remove";
-  x1: number;
-  z1: number;
-  x2: number;
-  z2: number;
 }
 
 /** What the setup suite accepts in one request. */
 export const MAX_SELECTION_OPS = 2500;
 
-type Bits = Uint32Array; // 32 rows, one 32 bit mask per row (bit x = chunk x)
-
-const regionKey = (rx: number, rz: number): string => `${rx},${rz}`;
+type Bits = Uint32Array; // one 32 bit mask per row of a region (bit x = chunk x)
 
 /** Mask with bits xa..xb (inclusive, 0..31) set. */
 function rowMask(xa: number, xb: number): number {
   const width = xb - xa + 1;
-  return width >= 32 ? 0xffffffff : ((0xffffffff >>> (32 - width)) << xa) >>> 0;
+  return width >= REGION_CHUNKS ? 0xffffffff : ((0xffffffff >>> (REGION_CHUNKS - width)) << xa) >>> 0;
 }
 
 function popcount(v: number): number {
@@ -70,17 +64,23 @@ export class SelectionModel {
     return this.undone.length > 0;
   }
 
-  /** Apply one gesture. Returns false, changing nothing, when the list would outgrow the cap. */
+  /**
+   * Apply one gesture. When the list would outgrow the cap it is compacted
+   * first, which drops the undo history; if even the compacted list does not
+   * fit, nothing at all changes and this returns false.
+   */
   apply(ops: SelectionOp[]): boolean {
     if (ops.length === 0) return true;
-    if (this.opCount() + ops.length > this.maxOps) {
-      this.compact();
-      if (this.opCount() + ops.length > this.maxOps) return false;
-    }
     const normal = ops.map(normalise);
+    if (this.opCount() + normal.length > this.maxOps) {
+      const compacted = this.compactedOps();
+      if (compacted.length + normal.length > this.maxOps) return false;
+      this.commands = compacted.length > 0 ? [compacted] : [];
+      this.rebuild();
+    }
     this.commands.push(normal);
     this.undone = [];
-    for (const op of normal) this.paint(op);
+    this.paintAll(normal);
     return true;
   }
 
@@ -96,7 +96,7 @@ export class SelectionModel {
     const next = this.undone.pop();
     if (!next) return false;
     this.commands.push(next);
-    for (const op of next) this.paint(op);
+    this.paintAll(next);
     return true;
   }
 
@@ -113,28 +113,38 @@ export class SelectionModel {
 
   /** Is the chunk chosen? */
   has(dimension: string, cx: number, cz: number): boolean {
-    const bits = this.bitsets.get(dimension)?.get(regionKey(Math.floor(cx / 32), Math.floor(cz / 32)));
+    const bits = this.bitsets.get(dimension)?.get(regionKey(regionOf(cx), regionOf(cz)));
     if (!bits) return false;
-    return ((bits[cz & 31]! >>> (cx & 31)) & 1) === 1;
-  }
-
-  /** The bitset of one region, or undefined when nothing in it is chosen. */
-  regionBits(dimension: string, rx: number, rz: number): Bits | undefined {
-    return this.bitsets.get(dimension)?.get(regionKey(rx, rz));
+    return ((bits[cz & REGION_MASK]! >>> (cx & REGION_MASK)) & 1) === 1;
   }
 
   /** Visit every region that has at least one chosen chunk. */
   forEachRegion(dimension: string, visit: (rx: number, rz: number, bits: Bits) => void): void {
     for (const [key, bits] of this.bitsets.get(dimension) ?? []) {
-      const [rx, rz] = key.split(",").map(Number) as [number, number];
-      visit(rx, rz, bits);
+      const at = parseRegionKey(key);
+      if (at) visit(at.rx, at.rz, bits);
     }
   }
 
-  /** Chosen chunks in a dimension (on regions that exist; chunks without data in them count too). */
-  count(dimension: string): number {
+  /**
+   * Chosen chunks in a dimension, on regions the map has. `include` narrows the
+   * count to chunks it accepts (the page uses it to skip cells with no data).
+   */
+  count(dimension: string, include?: (rx: number, rz: number, slot: number) => boolean): number {
     let n = 0;
-    for (const bits of this.bitsets.get(dimension)?.values() ?? []) for (const row of bits) n += popcount(row);
+    this.forEachRegion(dimension, (rx, rz, bits) => {
+      if (!include) {
+        for (const row of bits) n += popcount(row);
+        return;
+      }
+      for (let z = 0; z < REGION_CHUNKS; z++) {
+        const row = bits[z]!;
+        if (row === 0) continue;
+        for (let x = 0; x < REGION_CHUNKS; x++) {
+          if (((row >>> x) & 1) === 1 && include(rx, rz, slotOf(x, z))) n++;
+        }
+      }
+    });
     return n;
   }
 
@@ -143,18 +153,42 @@ export class SelectionModel {
    * long editing session does not run into the cap. History before it is dropped.
    */
   compact(): void {
-    const merged: SelectionOp[] = [];
-    for (const [dimension, regions] of this.bitsets) {
-      const rects: Array<{ x1: number; z1: number; x2: number; z2: number }> = [];
-      for (const [key, bits] of regions) {
-        const [rx, rz] = key.split(",").map(Number) as [number, number];
-        rects.push(...rectsOfRegion(rx, rz, bits));
-      }
-      for (const r of mergeRects(rects)) merged.push({ dimension, mode: "add", ...r });
-    }
+    const merged = this.compactedOps();
     this.commands = merged.length > 0 ? [merged] : [];
     this.undone = [];
     this.rebuild();
+  }
+
+  /**
+   * The compacted list, without applying it. A dimension whose map is loaded is
+   * rewritten from its bitsets; a dimension with no regions loaded cannot be
+   * merged (nothing was painted for it), so its operations are kept as they are.
+   */
+  private compactedOps(): SelectionOp[] {
+    const kept: SelectionOp[] = [];
+    const loaded = new Map<string, boolean>();
+    const unloaded = new Set<string>();
+    for (const op of this.commands.flat()) {
+      let isLoaded = loaded.get(op.dimension);
+      if (isLoaded === undefined) {
+        isLoaded = this.regionsOf(op.dimension).length > 0;
+        loaded.set(op.dimension, isLoaded);
+      }
+      if (isLoaded) continue;
+      unloaded.add(op.dimension);
+      kept.push(op);
+    }
+    const merged: SelectionOp[] = [];
+    for (const [dimension, regions] of this.bitsets) {
+      if (unloaded.has(dimension)) continue;
+      const rects: Rect[] = [];
+      for (const [key, bits] of regions) {
+        const at = parseRegionKey(key);
+        if (at) rects.push(...rectsOfRegion(at.rx, at.rz, bits));
+      }
+      for (const r of mergeRects(rects)) merged.push({ dimension, mode: "add", ...r });
+    }
+    return [...kept, ...merged];
   }
 
   private opCount(): number {
@@ -165,32 +199,81 @@ export class SelectionModel {
 
   private rebuild(): void {
     this.bitsets.clear();
-    for (const command of this.commands) for (const op of command) this.paint(op);
+    this.paintAll(this.commands.flat());
   }
 
-  private paint(op: SelectionOp): void {
+  /** Paint operations in order, reading each dimension's regions from the map once. */
+  private paintAll(ops: readonly SelectionOp[]): void {
+    const index = new Map<string, Map<string, RegionRef>>();
+    for (const op of ops) {
+      let regions = index.get(op.dimension);
+      if (!regions) {
+        regions = new Map(this.regionsOf(op.dimension).map((r) => [regionKey(r.rx, r.rz), r]));
+        index.set(op.dimension, regions);
+      }
+      this.paint(op, regions);
+    }
+  }
+
+  private paint(op: SelectionOp, mapRegions: ReadonlyMap<string, RegionRef>): void {
     const set = op.mode === "add";
     let regions = this.bitsets.get(op.dimension);
-    // Only regions the map has can matter, so the cost follows the map, not the rectangle.
-    for (const { rx, rz } of this.regionsOf(op.dimension)) {
-      if (rx * 32 + 31 < op.x1 || rx * 32 > op.x2 || rz * 32 + 31 < op.z1 || rz * 32 > op.z2) continue;
+    // Only regions the map has can matter, so the cost follows the map, not the rectangle:
+    // walk whichever is smaller, the rectangle's regions or the map's.
+    const rx0 = regionOf(op.x1);
+    const rx1 = regionOf(op.x2);
+    const rz0 = regionOf(op.z1);
+    const rz1 = regionOf(op.z2);
+    const covered = (rx1 - rx0 + 1) * (rz1 - rz0 + 1);
+    const touched: Iterable<RegionRef> =
+      covered <= mapRegions.size ? regionsInRect(rx0, rx1, rz0, rz1, mapRegions) : intersecting(mapRegions, rx0, rx1, rz0, rz1);
+    for (const { rx, rz } of touched) {
       const key = regionKey(rx, rz);
       let bits = regions?.get(key);
       if (!bits) {
         if (!set) continue;
-        bits = new Uint32Array(32);
+        bits = new Uint32Array(REGION_CHUNKS);
         if (!regions) {
           regions = new Map();
           this.bitsets.set(op.dimension, regions);
         }
         regions.set(key, bits);
       }
-      const mask = rowMask(Math.max(op.x1, rx * 32) - rx * 32, Math.min(op.x2, rx * 32 + 31) - rx * 32);
-      const za = Math.max(op.z1, rz * 32) - rz * 32;
-      const zb = Math.min(op.z2, rz * 32 + 31) - rz * 32;
+      const baseX = rx * REGION_CHUNKS;
+      const baseZ = rz * REGION_CHUNKS;
+      const mask = rowMask(Math.max(op.x1, baseX) - baseX, Math.min(op.x2, baseX + REGION_MASK) - baseX);
+      const za = Math.max(op.z1, baseZ) - baseZ;
+      const zb = Math.min(op.z2, baseZ + REGION_MASK) - baseZ;
       for (let z = za; z <= zb; z++) bits[z] = set ? (bits[z]! | mask) >>> 0 : (bits[z]! & ~mask) >>> 0;
       if (!set && bits.every((row) => row === 0)) regions?.delete(key);
     }
+  }
+}
+
+function* regionsInRect(
+  rx0: number,
+  rx1: number,
+  rz0: number,
+  rz1: number,
+  mapRegions: ReadonlyMap<string, RegionRef>,
+): Generator<RegionRef> {
+  for (let rz = rz0; rz <= rz1; rz++) {
+    for (let rx = rx0; rx <= rx1; rx++) {
+      const hit = mapRegions.get(regionKey(rx, rz));
+      if (hit) yield hit;
+    }
+  }
+}
+
+function* intersecting(
+  mapRegions: ReadonlyMap<string, RegionRef>,
+  rx0: number,
+  rx1: number,
+  rz0: number,
+  rz1: number,
+): Generator<RegionRef> {
+  for (const r of mapRegions.values()) {
+    if (r.rx >= rx0 && r.rx <= rx1 && r.rz >= rz0 && r.rz <= rz1) yield r;
   }
 }
 
@@ -206,26 +289,28 @@ function normalise(op: SelectionOp): SelectionOp {
 }
 
 /** Rectangles covering one region's bits: equal adjacent rows stack, each row's runs split. */
-function rectsOfRegion(rx: number, rz: number, bits: Bits): Array<{ x1: number; z1: number; x2: number; z2: number }> {
-  const out: Array<{ x1: number; z1: number; x2: number; z2: number }> = [];
+function rectsOfRegion(rx: number, rz: number, bits: Bits): Rect[] {
+  const out: Rect[] = [];
+  const baseX = rx * REGION_CHUNKS;
+  const baseZ = rz * REGION_CHUNKS;
   let z = 0;
-  while (z < 32) {
+  while (z < REGION_CHUNKS) {
     const row = bits[z]!;
     if (row === 0) {
       z++;
       continue;
     }
     let end = z;
-    while (end + 1 < 32 && bits[end + 1] === row) end++;
+    while (end + 1 < REGION_CHUNKS && bits[end + 1] === row) end++;
     let x = 0;
-    while (x < 32) {
+    while (x < REGION_CHUNKS) {
       if (((row >>> x) & 1) === 0) {
         x++;
         continue;
       }
       let xe = x;
-      while (xe + 1 < 32 && ((row >>> (xe + 1)) & 1) === 1) xe++;
-      out.push({ x1: rx * 32 + x, z1: rz * 32 + z, x2: rx * 32 + xe, z2: rz * 32 + end });
+      while (xe + 1 < REGION_CHUNKS && ((row >>> (xe + 1)) & 1) === 1) xe++;
+      out.push({ x1: baseX + x, z1: baseZ + z, x2: baseX + xe, z2: baseZ + end });
       x = xe + 1;
     }
     z = end + 1;
@@ -234,7 +319,7 @@ function rectsOfRegion(rx: number, rz: number, bits: Bits): Array<{ x1: number; 
 }
 
 /** Join rectangles that touch along a whole edge, until nothing more joins. */
-function mergeRects(rects: Array<{ x1: number; z1: number; x2: number; z2: number }>) {
+function mergeRects(rects: Rect[]): Rect[] {
   let current = rects;
   for (let pass = 0; pass < 8; pass++) {
     let changed = false;
@@ -242,7 +327,7 @@ function mergeRects(rects: Array<{ x1: number; z1: number; x2: number; z2: numbe
       const sorted = [...current].sort((a, b) =>
         horizontal ? a.z1 - b.z1 || a.z2 - b.z2 || a.x1 - b.x1 : a.x1 - b.x1 || a.x2 - b.x2 || a.z1 - b.z1,
       );
-      const next: typeof current = [];
+      const next: Rect[] = [];
       for (const r of sorted) {
         const prev = next[next.length - 1];
         if (prev && horizontal && prev.z1 === r.z1 && prev.z2 === r.z2 && prev.x2 + 1 === r.x1) {

@@ -1,27 +1,32 @@
 <template>
-  <span v-if="!forbidden" v-tooltip.bottom="view.hint" class="cfg-chip">
-    <StatusChip
-      :state="status?.state ?? StatusRole.Unknown"
-      :label="view.label"
-      live
-    />
+  <span v-if="!hidden" v-tooltip.bottom="shown.hint" class="cfg-chip">
+    <StatusChip :state="current?.state ?? StatusRole.Unknown" :label="shown.label" live />
   </span>
 </template>
 
 <script setup lang="ts">
-import { watch, onMounted } from "vue";
-import { StatusRole } from "@mcbot/schema";
-import { useConfigStatus } from "../../composables/useConfigStatus";
+import { computed, watch, onMounted } from "vue";
+import { StatusRole, type ConfigStatusResponse } from "@mcbot/schema";
+import { describeStatus, useConfigStatus } from "../../composables/useConfigStatus";
 import StatusChip from "./StatusChip.vue";
 
 const props = defineProps<{
   /** Change this after a save to re-check straight away. */
   refreshKey?: number;
+  /** A status the parent already tracks. When given (even null), the chip does not poll. */
+  status?: ConfigStatusResponse | null;
 }>();
 
-const { status, view, forbidden, start, refresh } = useConfigStatus();
-onMounted(start);
-watch(() => props.refreshKey, () => void refresh());
+const own = useConfigStatus();
+const controlled = computed(() => props.status !== undefined);
+const current = computed(() => (controlled.value ? props.status : own.status.value));
+const shown = computed(() => (controlled.value ? describeStatus(props.status ?? null) : own.view.value));
+const hidden = computed(() => !controlled.value && own.forbidden.value);
+
+onMounted(() => {
+  if (!controlled.value) own.start();
+});
+watch(() => props.refreshKey, () => void own.refresh());
 </script>
 
 <style scoped>

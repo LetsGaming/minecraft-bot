@@ -14,7 +14,7 @@ import {
 } from "../components/schema/formIndex";
 import { parseFieldError } from "../utils/fieldErrors";
 import { t } from "../i18n";
-import type { EditConflict } from "./useModConfigs";
+import type { EditConflict } from "./useEditableDocument";
 
 /**
  * What every field of a schema form asks its editor: is it shown, what was

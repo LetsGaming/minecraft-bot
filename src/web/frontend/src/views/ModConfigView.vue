@@ -303,19 +303,20 @@
   </div>
 </template>
 
-<script lang="ts">
-import { defineComponent } from "vue";
+<script setup lang="ts">
+import { computed, ref, watch } from "vue";
 import Button from "primevue/button";
 import InputText from "primevue/inputtext";
 import InputNumber from "primevue/inputnumber";
 import ToggleSwitch from "primevue/toggleswitch";
 import Select from "primevue/select";
-import { useToast } from "primevue/usetoast";
+import { useNotify } from "../composables/useNotify";
 import { useConfirm } from "primevue/useconfirm";
-import type { EditConflict } from "../composables/useModConfigs";
+import type { EditConflict } from "../composables/useEditableDocument";
 import { useModConfigs, type ConfigField } from "../composables/useModConfigs";
 import { discardPrompt } from "../composables/useDiscardPrompt";
 import { useCapabilities } from "../composables/useCapabilities";
+import { usePolling } from "../composables/usePolling";
 import { displayPath, pathKey } from "../utils/configTree";
 import { fieldDomId } from "../components/schema/formIndex";
 import ChipsInput from "../components/ui/ChipsInput.vue";
@@ -334,235 +335,246 @@ import type { EditorState } from "../components/ui/types";
 import { t } from "../i18n";
 
 const SHOWN_MAX = 80;
+/** Slower than the status view: the queue changes far less often than a live server does. */
+const QUEUE_POLL_MS = 15_000;
 
-export default defineComponent({
-  name: "ModConfigView",
-  components: {
-    Button, InputText, InputNumber, ToggleSwitch, Select, ChipsInput,
-    ViewHeader, StaleBanner, ConflictPicker, EmptyState, EditorShell, EditBar, FieldRow,
-    InlineBanner, InlineError, StatusChip, ReviewChanges,
-  },
-  props: {
-    serverIds: { type: Array as () => string[], default: () => [] },
-    activeServer: { type: String, default: "" },
+const props = withDefaults(
+  defineProps<{
+    serverIds?: string[];
+    activeServer?: string;
     /** The file the URL names; opened once the server's index is loaded. */
-    fileId: { type: String, default: "" },
-  },
-  emits: ["update-route"],
-  setup() {
-    const confirm = useConfirm();
-    return {
-      ...useModConfigs(discardPrompt(confirm, t("modconfig.leaveFile"))),
-      ...useCapabilities(),
-      toast: useToast(),
-      t,
-      fieldDomId,
-    };
-  },
-  data() {
-    return {
-      currentServer: "",
-      showHistory: false,
-      showSource: false,
-      flushing: false,
-      resolving: "",
-      reviewOpen: false,
-      queueTimer: 0 as ReturnType<typeof setInterval> | 0,
-    };
-  },
-  computed: {
-    canWrite(): boolean {
-      return this.can("config:write", this.currentServer);
-    },
-    readonlyReason(): string {
-      if (!this.canWrite) return t("modconfig.readonlyAccess");
-      if (this.current?.warning) return t("modconfig.readonlyWarning");
-      return t("modconfig.readonlyFile");
-    },
-    editorState(): EditorState {
-      if (!this.canWrite || (this.current && this.fileReadOnly)) return "readonly";
-      if (this.saving) return "saving";
-      if (this.dirty) return "dirty";
-      return "clean";
-    },
-    changeCount(): number {
-      return Object.keys(this.pending).length;
-    },
-    fieldsByKey(): Map<string, ConfigField> {
-      return new Map((this.current?.fields ?? []).map((field) => [pathKey(field.path), field]));
-    },
-    reviewItems(): ReviewItem[] {
-      return Object.entries(this.pending).map(([key, after]) => {
-        const field = this.fieldsByKey.get(key);
-        const path = JSON.parse(key) as string[];
-        return { key: this.pathLabel(path), before: field?.value, after };
-      });
-    },
-  },
-  mounted() {
-    // Auto-flush can apply queued edits from the status poll while this tab is
-    // open; without a poll here the banner would keep showing a count that was
-    // already written. Slower cadence than the status view, since the queue
-    // changes far less often than a live server does.
-    this.queueTimer = setInterval(() => {
-      if (this.currentServer) void this.refreshPending();
-    }, 15_000);
-  },
-  beforeUnmount() {
-    if (this.queueTimer) clearInterval(this.queueTimer);
-  },
-  watch: {
-    activeServer(id: string) {
-      if (id && id !== this.currentServer) void this.select(id, false);
-    },
-    fileId(id: string) {
-      if (id && this.currentServer && id !== this.current?.file.id) void this.openFromRoute(id);
-    },
-    "current.file.id"(id: string | undefined) {
-      if (id && id !== this.fileId) this.$emit("update-route", { params: { fileId: id } });
-    },
-    serverIds: {
-      immediate: true,
-      handler(ids: string[]) {
-        if (!this.currentServer && ids.length > 0) {
-          void this.select(
-            this.activeServer && ids.includes(this.activeServer) ? this.activeServer : ids[0]!,
-            false,
-          );
-        }
-      },
-    },
-  },
-  methods: {
-    pathKey,
-    shown(value: unknown): string {
-      if (value === undefined || value === null) return t("field.unsetValue");
-      const text = typeof value === "string" ? value : JSON.stringify(value);
-      return text.length > SHOWN_MAX ? `${text.slice(0, SHOWN_MAX)}…` : text;
-    },
-    async onResolve(payload: { conflict: EditConflict; choice: "queued" | "current" }): Promise<void> {
-      this.resolving = payload.conflict.keyPath.join(".");
-      try {
-        await this.resolveConflict(payload.conflict, payload.choice);
-        this.toast.add({
-          severity: "success",
-          summary: payload.choice === "queued" ? t("modconfig.resolvedMine") : t("modconfig.resolvedDisk"),
-          life: 4000,
-        });
-      } catch (err) {
-        this.toast.add({
-          severity: "error",
-          summary: t("modconfig.resolveFailed"),
-          detail: err instanceof Error ? err.message : String(err),
-          life: 6000,
-        });
-      } finally {
-        this.resolving = "";
-      }
-    },
-    /** Push everything held for this server, now that the wrapper answers. */
-    async applyQueued(): Promise<void> {
-      this.flushing = true;
-      try {
-        const res = await this.flushQueue();
-        const conflicts = res.conflicts.length;
-        this.toast.add({
-          severity: conflicts > 0 ? "warn" : "success",
-          summary:
-            conflicts > 0
-              ? t("modconfig.flushPartial", { applied: res.applied, count: conflicts })
-              : t("modconfig.flushDone", { count: res.applied }),
-          detail: conflicts > 0 ? t("modconfig.flushPartialDetail") : t("modconfig.restartToApply"),
-          life: 8000,
-        });
-        if (this.current) await this.openFile(this.current.file.id);
-      } catch (err) {
-        this.toast.add({
-          severity: "error",
-          summary: t("modconfig.flushFailed"),
-          detail: err instanceof Error ? err.message : String(err),
-          life: 8000,
-        });
-      } finally {
-        this.flushing = false;
-      }
-    },
-    /**
-     * `guarded` is false when the switch already passed the app-level guard
-     * (the router leave guard), so the same edits are not asked about twice.
-     */
-    async select(id: string, guarded = true): Promise<void> {
-      if (guarded && !(await this.confirmDiscard())) return;
-      this.currentServer = id;
-      this.showHistory = false;
-      this.showSource = false;
-      await Promise.all([this.loadFiles(id), this.refreshPending()]);
-      if (this.fileId) await this.openFile(this.fileId);
-    },
-    /** A file named by the URL; when the switch is refused the URL follows
-     *  the file that stays open. */
-    async openFromRoute(id: string): Promise<void> {
-      await this.openFile(id);
-      const open = this.current?.file.id;
-      if (open && open !== id) this.$emit("update-route", { params: { fileId: open } });
-    },
-    async retry(): Promise<void> {
-      if (this.current) await this.openFile(this.current.file.id);
-      else if (this.currentServer) await this.select(this.currentServer, false);
-    },
-    /** The file name, with its folder shown by the group above it. */
-    fileName(relPath: string, modId: string): string {
-      return displayPath(relPath, modId).split("/").pop() ?? relPath;
-    },
-    pathLabel(path: string[]): string {
-      return path.length === 0 ? t("modconfig.wholeFile") : path.join(".");
-    },
-    /** A field the adapter marks read-only stays locked whatever the user may do. */
-    isLocked(field: ConfigField): boolean {
-      return Boolean(field.readOnly);
-    },
-    async onViewSource(): Promise<void> {
-      await this.loadSource();
-      this.showSource = true;
-    },
-    formatStamp(stamp: string): string {
-      const iso = stamp.replace(
-        /^(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d+)Z$/,
-        "$1-$2-$3 $4:$5:$6",
-      );
-      return iso === stamp ? stamp : iso;
-    },
-    async onSave(): Promise<void> {
-      const changes = this.changeCount;
-      const ok = await this.save();
-      if (ok && this.queued) {
-        this.toast.add({ severity: "info", summary: t("modconfig.queuedToast"), detail: t("modconfig.queuedToastDetail"), life: 8000 });
-        return;
-      }
-      this.toast.add({
-        severity: ok ? "success" : "error",
-        summary: ok ? t("modconfig.savedToast", { count: changes }) : t("modconfig.saveFailed"),
-        detail: ok ? t("modconfig.restartToApply") : this.error,
-        life: ok ? 6000 : 8000,
-      });
-    },
-    async onReviewSave(): Promise<void> {
-      this.reviewOpen = false;
-      await this.onSave();
-    },
-    async onRevert(snapshot: string): Promise<void> {
-      if (!(await this.confirmDiscard())) return;
-      const ok = await this.revert(snapshot);
-      this.showHistory = false;
-      this.toast.add({
-        severity: ok ? "success" : "error",
-        summary: ok ? t("modconfig.reverted") : t("modconfig.revertFailed"),
-        detail: ok ? this.formatStamp(snapshot) : this.error,
-        life: 5000,
-      });
-    },
-  },
+    fileId?: string;
+  }>(),
+  { serverIds: () => [], activeServer: "", fileId: "" },
+);
+const emit = defineEmits<{
+  "update-route": [patch: { params?: Record<string, string | undefined> }];
+}>();
+
+const {
+  indexStale,
+  fileStale,
+  queued,
+  pendingCount,
+  conflicts,
+  refreshPending,
+  flushQueue,
+  resolveConflict,
+  files,
+  current,
+  loading,
+  saving,
+  error,
+  search,
+  pending,
+  dirty,
+  byMod,
+  visibleFields,
+  truncated,
+  filtering,
+  fileReadOnly,
+  shownSections,
+  hiddenFieldCount,
+  showMoreFields,
+  isOpen,
+  toggleOpen,
+  collapseGroups,
+  collapseSections,
+  loadSource,
+  loadFiles,
+  openFile,
+  confirmDiscard,
+  setValue,
+  setFromInput,
+  isDirty,
+  discard,
+  save,
+  revert,
+  stringValue,
+  numberValue,
+  boolValue,
+  listValue,
+} = useModConfigs(discardPrompt(useConfirm(), t("modconfig.leaveFile")));
+const { can } = useCapabilities();
+const notify = useNotify();
+
+const currentServer = ref("");
+const showHistory = ref(false);
+const showSource = ref(false);
+const flushing = ref(false);
+const resolving = ref("");
+const reviewOpen = ref(false);
+
+// Auto-flush can apply queued edits from the status poll while this tab is
+// open; without a poll here the banner would keep showing a count that was
+// already written.
+usePolling(() => (currentServer.value ? refreshPending() : undefined), QUEUE_POLL_MS);
+
+const canWrite = computed(() => can("config:write", currentServer.value));
+const readonlyReason = computed(() => {
+  if (!canWrite.value) return t("modconfig.readonlyAccess");
+  if (current.value?.warning) return t("modconfig.readonlyWarning");
+  return t("modconfig.readonlyFile");
 });
+const editorState = computed<EditorState>(() => {
+  if (!canWrite.value || (current.value && fileReadOnly.value)) return "readonly";
+  if (saving.value) return "saving";
+  if (dirty.value) return "dirty";
+  return "clean";
+});
+const changeCount = computed(() => Object.keys(pending.value).length);
+const fieldsByKey = computed(
+  () => new Map<string, ConfigField>((current.value?.fields ?? []).map((field) => [pathKey(field.path), field])),
+);
+const reviewItems = computed<ReviewItem[]>(() =>
+  Object.entries(pending.value).map(([key, after]) => {
+    const field = fieldsByKey.value.get(key);
+    const path = JSON.parse(key) as string[];
+    return { key: pathLabel(path), before: field?.value, after };
+  }),
+);
+
+watch(
+  () => props.activeServer,
+  (id) => {
+    if (id && id !== currentServer.value) void select(id, false);
+  },
+);
+watch(
+  () => props.fileId,
+  (id) => {
+    if (id && currentServer.value && id !== current.value?.file.id) void openFromRoute(id);
+  },
+);
+watch(
+  () => current.value?.file.id,
+  (id) => {
+    if (id && id !== props.fileId) emit("update-route", { params: { fileId: id } });
+  },
+);
+watch(
+  () => props.serverIds,
+  (ids) => {
+    if (!currentServer.value && ids.length > 0) {
+      void select(props.activeServer && ids.includes(props.activeServer) ? props.activeServer : ids[0]!, false);
+    }
+  },
+  { immediate: true },
+);
+
+function shown(value: unknown): string {
+  if (value === undefined || value === null) return t("field.unsetValue");
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  return text.length > SHOWN_MAX ? `${text.slice(0, SHOWN_MAX)}…` : text;
+}
+
+async function onResolve(payload: { conflict: EditConflict; choice: "queued" | "current" }): Promise<void> {
+  resolving.value = payload.conflict.keyPath.join(".");
+  try {
+    await resolveConflict(payload.conflict, payload.choice);
+    notify.ok(payload.choice === "queued" ? t("modconfig.resolvedMine") : t("modconfig.resolvedDisk"));
+  } catch (err) {
+    notify.fail(t("modconfig.resolveFailed"), err);
+  } finally {
+    resolving.value = "";
+  }
+}
+
+/** Push everything held for this server, now that the wrapper answers. */
+async function applyQueued(): Promise<void> {
+  flushing.value = true;
+  try {
+    const res = await flushQueue();
+    const unresolved = res.conflicts.length;
+    if (unresolved > 0) {
+      notify.warn(
+        t("modconfig.flushPartial", { applied: res.applied, count: unresolved }),
+        t("modconfig.flushPartialDetail"),
+      );
+    } else {
+      notify.ok(t("modconfig.flushDone", { count: res.applied }), t("modconfig.restartToApply"));
+    }
+    if (current.value) await openFile(current.value.file.id);
+  } catch (err) {
+    notify.fail(t("modconfig.flushFailed"), err);
+  } finally {
+    flushing.value = false;
+  }
+}
+
+/**
+ * `guarded` is false when the switch already passed the app-level guard
+ * (the router leave guard), so the same edits are not asked about twice.
+ */
+async function select(id: string, guarded = true): Promise<void> {
+  if (guarded && !(await confirmDiscard())) return;
+  currentServer.value = id;
+  showHistory.value = false;
+  showSource.value = false;
+  await Promise.all([loadFiles(id), refreshPending()]);
+  if (props.fileId) await openFile(props.fileId);
+}
+
+/** A file named by the URL; when the switch is refused the URL follows
+ *  the file that stays open. */
+async function openFromRoute(id: string): Promise<void> {
+  await openFile(id);
+  const open = current.value?.file.id;
+  if (open && open !== id) emit("update-route", { params: { fileId: open } });
+}
+
+async function retry(): Promise<void> {
+  if (current.value) await openFile(current.value.file.id);
+  else if (currentServer.value) await select(currentServer.value, false);
+}
+
+/** The file name, with its folder shown by the group above it. */
+function fileName(relPath: string, modId: string): string {
+  return displayPath(relPath, modId).split("/").pop() ?? relPath;
+}
+
+function pathLabel(path: string[]): string {
+  return path.length === 0 ? t("modconfig.wholeFile") : path.join(".");
+}
+
+/** A field the adapter marks read-only stays locked whatever the user may do. */
+function isLocked(field: ConfigField): boolean {
+  return Boolean(field.readOnly);
+}
+
+async function onViewSource(): Promise<void> {
+  await loadSource();
+  showSource.value = true;
+}
+
+function formatStamp(stamp: string): string {
+  const iso = stamp.replace(/^(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d+)Z$/, "$1-$2-$3 $4:$5:$6");
+  return iso === stamp ? stamp : iso;
+}
+
+async function onSave(): Promise<void> {
+  const changes = changeCount.value;
+  const ok = await save();
+  if (ok && queued.value) {
+    notify.info(t("modconfig.queuedToast"), t("modconfig.queuedToastDetail"));
+    return;
+  }
+  if (ok) notify.ok(t("modconfig.savedToast", { count: changes }), t("modconfig.restartToApply"));
+  else notify.fail(t("modconfig.saveFailed"), error.value);
+}
+
+async function onReviewSave(): Promise<void> {
+  reviewOpen.value = false;
+  await onSave();
+}
+
+async function onRevert(snapshot: string): Promise<void> {
+  if (!(await confirmDiscard())) return;
+  const ok = await revert(snapshot);
+  showHistory.value = false;
+  if (ok) notify.ok(t("modconfig.reverted"), formatStamp(snapshot));
+  else notify.fail(t("modconfig.revertFailed"), error.value);
+}
 </script>
 
 <style scoped>
@@ -665,6 +677,6 @@ export default defineComponent({
 }
 .mc-reset:disabled { color: var(--text-dim); cursor: default; }
 @media (pointer: coarse), (max-width: 760px) {
-  .tap, .mc-file, .mc-mod, .mc-section-head, .mc-reset { min-height: var(--touch-min); }
+  .mc-file, .mc-mod, .mc-section-head, .mc-reset { min-height: var(--touch-min); }
 }
 </style>

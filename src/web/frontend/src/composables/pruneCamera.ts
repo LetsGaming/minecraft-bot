@@ -5,6 +5,9 @@
  * negative coordinates right (-0.5 is chunk -1, not 0).
  */
 
+import { REGION_CHUNKS, REGION_MASK } from "@mcbot/schema";
+import { regionOf } from "./pruneRegion";
+
 export interface Camera {
   /** Centre of the view, in chunk coordinates. */
   cx: number;
@@ -69,15 +72,17 @@ export function fitBounds(bounds: ChunkBounds, view: ViewSize, margin = 0.95): C
 export function visibleRegions(cam: Camera, view: ViewSize): { rx0: number; rx1: number; rz0: number; rz1: number } {
   const a = screenToWorld(cam, view, 0, 0);
   const b = screenToWorld(cam, view, view.width, view.height);
-  return {
-    rx0: Math.floor(Math.floor(a.x) / 32),
-    rx1: Math.floor(Math.floor(b.x) / 32),
-    rz0: Math.floor(Math.floor(a.z) / 32),
-    rz1: Math.floor(Math.floor(b.z) / 32),
-  };
+  return { rx0: regionOf(a.x), rx1: regionOf(b.x), rz0: regionOf(a.z), rz1: regionOf(b.z) };
 }
 
 /** Chunk bounds of a set of regions (inclusive), or null when there are none. */
 export function regionBoundsToChunks(b: { minX: number; minZ: number; maxX: number; maxZ: number } | null): ChunkBounds | null {
-  return b ? { minX: b.minX * 32, minZ: b.minZ * 32, maxX: b.maxX * 32 + 31, maxZ: b.maxZ * 32 + 31 } : null;
+  return b
+    ? {
+        minX: b.minX * REGION_CHUNKS,
+        minZ: b.minZ * REGION_CHUNKS,
+        maxX: b.maxX * REGION_CHUNKS + REGION_MASK,
+        maxZ: b.maxZ * REGION_CHUNKS + REGION_MASK,
+      }
+    : null;
 }

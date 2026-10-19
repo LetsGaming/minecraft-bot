@@ -1,6 +1,6 @@
 import { ref } from "vue";
-import { errorMessage } from "../utils/errorMessage";
-import { useToast } from "primevue/usetoast";
+import { useNotify } from "./useNotify";
+import { t } from "../i18n";
 import { apiGet } from "../api";
 import type { InviteResponse } from "../api";
 
@@ -10,7 +10,7 @@ import type { InviteResponse } from "../api";
  * handling live in one place.
  */
 export function useInvite() {
-  const toast = useToast();
+  const notify = useNotify();
   const inviting = ref(false);
 
   async function invite(): Promise<void> {
@@ -19,12 +19,7 @@ export function useInvite() {
       const res = await apiGet<InviteResponse>("/api/invite");
       window.open(res.url, "_blank", "noopener");
     } catch (err) {
-      toast.add({
-        severity: "error",
-        summary: "Invite failed",
-        detail: errorMessage(err),
-        life: 4000,
-      });
+      notify.fail(t("invite.failed"), err);
     } finally {
       inviting.value = false;
     }

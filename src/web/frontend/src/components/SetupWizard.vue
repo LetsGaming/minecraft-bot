@@ -293,7 +293,7 @@ import ToggleSwitch from "primevue/toggleswitch";
 import Button from "primevue/button";
 import InlineError from "./ui/InlineError.vue";
 import { useGuildSetup, FEATURES, type FeatureDesc } from "../composables/useGuildSetup";
-import { describeDiscordFailure, type FailureCopy } from "../utils/discordFailure";
+import { describeDiscordFailure, type DiscordFailureCopy } from "../utils/discordFailure";
 import { t } from "../i18n";
 
 export default defineComponent({
@@ -343,13 +343,13 @@ export default defineComponent({
     enabledFeatures(): FeatureDesc[] {
       return this.features.filter((f) => this.model[f.key].enabled);
     },
-    guildFailureCopy(): FailureCopy {
+    guildFailureCopy(): DiscordFailureCopy {
       return describeDiscordFailure(this.guildFailure, this.sysadmin, {
         title: t("guilds.loadFailed"),
         recovery: t("guilds.loadFailedRecovery"),
       });
     },
-    channelFailureCopy(): FailureCopy {
+    channelFailureCopy(): DiscordFailureCopy {
       return describeDiscordFailure(this.channelFailure, this.sysadmin, {
         title: t("wizard.channelsFailed"),
         recovery: t("wizard.seedFailedFix"),
@@ -512,6 +512,6 @@ export default defineComponent({
   .step-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 @media (pointer: coarse), (max-width: 760px) {
-  .tap, .w-full { min-height: var(--touch-min); }
+  .w-full { min-height: var(--touch-min); }
 }
 </style>

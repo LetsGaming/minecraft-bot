@@ -65,6 +65,27 @@ describe("createTileStore", () => {
     expect(broken.get(3, 3)).toBe("none");
   });
 
+  it("an old fetch that settles after a reset does not disturb the newer fetch of the same region", async () => {
+    const { load, pending } = manual();
+    const store = createTileStore({ load, onChange: () => undefined });
+    store.want([at(0, 0)]);
+    store.reset();
+    store.want([at(0, 0)]);
+    expect(pending).toHaveLength(2);
+    const stale = image("stale");
+    pending[0]!.resolve(stale);
+    await flush();
+    expect(stale.close).toHaveBeenCalled();
+    expect(store.loading).toBe(1);
+    store.want([at(0, 0)]);
+    expect(pending).toHaveLength(2);
+    const fresh = image("fresh");
+    pending[1]!.resolve(fresh);
+    await flush();
+    expect(store.get(0, 0)).toBe(fresh);
+    expect(fresh.close).not.toHaveBeenCalled();
+  });
+
   it("retries a failed fetch after a wait, and gives up only after the last retry", async () => {
     vi.useFakeTimers();
     try {
