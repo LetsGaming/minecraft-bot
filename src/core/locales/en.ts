@@ -23,7 +23,6 @@ export const en: Record<string, string> = {
   "info.vanillaJoin": "None. A vanilla client can join.",
   // ── common ──
   "common.serverNotFound": "That server does not exist. Pick one from the suggestions.",
-  "common.noPermission": "This command is for bot admins only. Ask a bot admin if you need it.",
   "common.invalidUsername": "**{username}** is not a valid Minecraft username.",
 
   // ── whois ──
@@ -188,7 +187,6 @@ export const en: Record<string, string> = {
   "challenge.cancelled": "Cancelled the challenge **{advancement}**.",
 
   // ── polls ──
-  "poll.alreadyActive":
     'A poll is already open: "{question}". Close it before starting a new one.',
   "poll.noneActive": "No open poll on **{server}**.",
   "poll.noneInGame": "There is no open poll right now.",
@@ -559,7 +557,6 @@ export const en: Record<string, string> = {
   "backup.title": "Backups of {server}",
   "backup.summary": "{count|# backup|# backups}, {total} in total. The newest was made {age}.",
   "backup.entry": "{count|# backup|# backups}\nLatest {age}, {size}",
-  "tps.unsupported": "TPS monitoring requires RCON or an API wrapper.",
   "tps.unavailable": "Could not read the TPS. Check /status to see if the server is up.",
   "tps.title": "TPS of {server}",
   "tps.tickTiming": "Tick Timing",
@@ -567,7 +564,6 @@ export const en: Record<string, string> = {
 
   // ── /server control, whitelist ──
   "control.noOutput": "No output",
-  "control.exitCode": "Exited with code {code}",
   "control.failed": "The script ended with exit code {code}.",
   "control.pruneNoWhitelist": "Whitelist is empty or could not be loaded. Refusing to prune, since that would delete every player's stats.",
   "control.pruneNone": "No orphaned stats files on **{server}**, nothing to prune.",
@@ -589,7 +585,6 @@ export const en: Record<string, string> = {
   "daily.linkRequired": "Link your Minecraft account first.",
   "daily.dataError": "No daily rewards are set up for this server.",
   "daily.cooldown": "The next reward is ready {relative} (at {time}).",
-  "daily.reward": "Reward: {reward}",
   "daily.bonus": "{days}-day streak bonus: {rewards}",
   "daily.randomBonus": "Lucky bonus: {reward}",
   // ── server events, leaderboard, console relay ──

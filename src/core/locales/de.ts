@@ -17,7 +17,6 @@ export const de: Record<string, string> = {
   "info.vanillaJoin": "Keine. Ein Vanilla-Client kann beitreten.",
   // ── common ──
   "common.serverNotFound": "Diesen Server gibt es nicht. Nimm einen aus den Vorschlägen.",
-  "common.noPermission": "Dieser Befehl ist nur für Bot-Admins. Frag einen Bot-Admin, wenn du ihn brauchst.",
   "common.invalidUsername":
     "**{username}** ist kein gültiger Minecraft-Benutzername.",
 
@@ -184,7 +183,6 @@ export const de: Record<string, string> = {
   "challenge.cancelled": "Challenge **{advancement}** abgebrochen.",
 
   // ── polls ──
-  "poll.alreadyActive":
     'Es läuft bereits eine Umfrage: "{question}". Schließe sie, bevor du eine neue startest.',
   "poll.noneActive": "Keine offene Umfrage auf **{server}**.",
   "poll.noneInGame": "Gerade läuft keine Umfrage.",
@@ -551,7 +549,6 @@ export const de: Record<string, string> = {
   "backup.title": "Backups von {server}",
   "backup.summary": "{count|# Backup|# Backups}, zusammen {total}. Das neueste wurde {age} erstellt.",
   "backup.entry": "{count|# Backup|# Backups}\nNeuestes {age}, {size}",
-  "tps.unsupported": "Für das TPS-Monitoring braucht es RCON oder einen API-Wrapper.",
   "tps.unavailable": "Die TPS konnten nicht gelesen werden. Prüfe mit /status, ob der Server läuft.",
   "tps.title": "TPS von {server}",
   "tps.tickTiming": "Tick-Timing",
@@ -559,7 +556,6 @@ export const de: Record<string, string> = {
 
   // ── /server control, whitelist ──
   "control.noOutput": "Keine Ausgabe",
-  "control.exitCode": "Beendet mit Exit-Code {code}",
   "control.failed": "Das Skript endete mit Exit-Code {code}.",
   "control.pruneNoWhitelist": "Die Whitelist ist leer oder konnte nicht geladen werden. Das Aufräumen wird abgebrochen, weil sonst die Statistiken aller Spieler gelöscht würden.",
   "control.pruneNone": "Keine verwaisten Statistikdateien auf **{server}**, es gibt nichts aufzuräumen.",
@@ -581,7 +577,6 @@ export const de: Record<string, string> = {
   "daily.linkRequired": "Verknüpfe zuerst deinen Minecraft-Account.",
   "daily.dataError": "Für diesen Server sind keine Daily-Belohnungen eingerichtet.",
   "daily.cooldown": "Die nächste Belohnung gibt es {relative} (um {time}).",
-  "daily.reward": "Belohnung: {reward}",
   "daily.bonus": "Bonus für {days} Tage Serie: {rewards}",
   "daily.randomBonus": "Glücksbonus: {reward}",
   // ── server events, leaderboard, console relay ──
