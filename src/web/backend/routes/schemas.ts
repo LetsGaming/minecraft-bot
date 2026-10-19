@@ -55,7 +55,7 @@ export type ConfigFileParams = Static<typeof ConfigFileParams>;
  * document that is itself the value (a JSON file holding a bare array), and a
  * segment may be empty because JSON allows an empty key.
  */
-export const ConfigKeyPath = Type.Array(Type.String({ maxLength: 512 }), {
+const ConfigKeyPath = Type.Array(Type.String({ maxLength: 512 }), {
   minItems: 0,
   maxItems: 32,
 });
@@ -238,7 +238,7 @@ export const ModIconQuery = Type.Object({ url: Type.String({ maxLength: 512 }) }
 export type ModIconQuery = Static<typeof ModIconQuery>;
 
 /** Same shape the wrapper accepts for a Minecraft version (letters, digits, `.`, `_`, `-`). */
-export const MC_VERSION_PATTERN = "^[A-Za-z0-9_.-]{1,20}$";
+const MC_VERSION_PATTERN = "^[A-Za-z0-9_.-]{1,20}$";
 
 export const ModCompatBody = Type.Object({
   mcVersion: Type.String({ pattern: MC_VERSION_PATTERN, maxLength: 20 }),

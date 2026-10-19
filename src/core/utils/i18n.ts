@@ -122,11 +122,3 @@ export function pluralCategory(count: number, lang: Language): Intl.LDMLPluralRu
   return rules.select(count);
 }
 
-/** Picks the singular or plural form for `count` in the effective language. */
-export function plural(
-  count: number,
-  forms: { one: string; other: string },
-  guildId?: string,
-): string {
-  return pluralCategory(count, resolveLanguage(guildId)) === "one" ? forms.one : forms.other;
-}

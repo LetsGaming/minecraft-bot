@@ -358,6 +358,7 @@ const PROJECT_KEY = /^[A-Za-z0-9_.-]{1,64}$/;
 const iconCache = new Map<string, { expires: number; iconUrl: string | null }>();
 const iconInflight = new Map<string, Promise<void>>();
 
+/** Test seam: forget every cached icon lookup. */
 export function clearProjectIconCache(): void {
   iconCache.clear();
   iconInflight.clear();

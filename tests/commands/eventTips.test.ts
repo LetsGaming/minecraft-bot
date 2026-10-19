@@ -172,16 +172,14 @@ describe("the registry", () => {
   });
 
   it("only advertises in-game commands that exist in game", () => {
-    // A tip declaring surface "ingame" for a Discord-only command would
-    // tell players to type something the server has never heard of.
+    // A tip for a Discord-only command would tell players to type
+    // something the server has never heard of.
     const inGameCommands = new Set([
       "chunkbase", "commands", "deathpos", "link", "netherportal",
       "playerhead", "report", "seed", "slime", "vote", "waypoint", "waypoints",
     ]);
     for (const tip of EVENT_TIPS) {
-      if (tip.surface === "ingame") {
-        expect(inGameCommands.has(tip.advertises)).toBe(true);
-      }
+      expect(inGameCommands.has(tip.advertises)).toBe(true);
     }
   });
 });

@@ -43,13 +43,6 @@ export interface EventTip {
   id: string;
   event: GameEvent;
   /**
-   * Where the advertised command is typed. Both are whispered in game —
-   * that is where the player is standing when the event fires — but the
-   * distinction is worth recording, because a tip about a slash command
-   * has to explain that Discord is involved and an in-game one does not.
-   */
-  surface: "ingame" | "slash";
-  /**
    * The command this tip points at. Checked against command policy before
    * the tip is shown, so a disabled command is never advertised.
    */
@@ -66,7 +59,6 @@ export const EVENT_TIPS: EventTip[] = [
   {
     id: "deathpos",
     event: "death",
-    surface: "ingame",
     advertises: "deathpos",
     textKey: "deathpos.hint",
   },
@@ -77,7 +69,6 @@ export const EVENT_TIPS: EventTip[] = [
     // spending one of their deathpos mentions on it.
     id: "report-pvp",
     event: "death-by-player",
-    surface: "ingame",
     advertises: "report",
     textKey: "report.hint",
   },

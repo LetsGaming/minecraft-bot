@@ -79,6 +79,7 @@ export function recordFailure(serverId: string, now: number = Date.now()): void 
   }
 }
 
+/** Test seam: the breaker's current state for a server. */
 export function getBreakerState(serverId: string): State {
   return getOrCreate(serverId).state;
 }

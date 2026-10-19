@@ -37,7 +37,7 @@ function dropServerCaches(serverId: string): void {
 }
 
 /** Close open console streams whose session no longer holds server:read. */
-export function revalidateOpenStreams(): number {
+function revalidateOpenStreams(): number {
   return closeRevokedStreams(streamStillAllowed);
 }
 

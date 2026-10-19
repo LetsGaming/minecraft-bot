@@ -119,7 +119,7 @@ function sessionSecret(): string {
   return secret;
 }
 
-export function clientSecret(): string {
+function clientSecret(): string {
   const secret = process.env.WEBUI_CLIENT_SECRET;
   if (!secret) {
     throw new Error(
@@ -244,7 +244,7 @@ function parseDiscordGuilds(
   });
 }
 
-export function manageableGuildIds(
+function manageableGuildIds(
   guilds: Array<{ id: string; owner?: boolean; permissions?: string }>,
 ): string[] {
   const out: string[] = [];
@@ -267,7 +267,7 @@ export function manageableGuildIds(
 
 // ── OAuth2 endpoints ──────────────────────────────────────────────────────
 
-export function oauthClientId(): string {
+function oauthClientId(): string {
   const cfg = loadConfig();
   return cfg.webui?.clientId ?? cfg.clientId;
 }
@@ -285,7 +285,7 @@ export function publicBaseUrl(): string {
   return url.replace(/\/$/, "");
 }
 
-export function redirectUri(): string {
+function redirectUri(): string {
   return `${publicBaseUrl()}/auth/callback`;
 }
 

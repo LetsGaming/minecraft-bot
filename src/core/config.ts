@@ -372,7 +372,7 @@ export function watchConfig(
   arm(false);
 }
 
-/** Stop watching and drop any pending reload (shutdown and tests). */
+/** Test seam: stop watching and drop any pending reload. */
 export function stopWatchingConfig(): void {
   _watcher?.close();
   _watcher = null;
