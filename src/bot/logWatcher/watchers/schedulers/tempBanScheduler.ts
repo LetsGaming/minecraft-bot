@@ -23,7 +23,7 @@ import { getServerInstance } from "@mcbot/core/utils/server/server.js";
 import {
   loadLinkedAccountsOrEmpty,
   findDiscordIdByMcName,
-} from "@mcbot/core/utils/stores/linkUtils.js";
+} from "@mcbot/core/utils/stores/linkStore.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import type { Client } from "discord.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";

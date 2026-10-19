@@ -12,7 +12,7 @@ const links = vi.hoisted(() => ({
   loadLinkedAccountsOrEmpty: vi.fn(),
   findDiscordIdByMcName: vi.fn(),
 }));
-vi.mock("../../src/core/utils/stores/linkUtils.js", () => links);
+vi.mock("../../src/core/utils/stores/linkStore.js", () => links);
 
 import {
   getMemberRoleIds,

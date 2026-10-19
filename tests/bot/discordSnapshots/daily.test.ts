@@ -27,7 +27,7 @@ vi.mock("../../../src/bot/utils/guild/guildRouter.js", () => ({
 vi.mock("../../../src/bot/utils/hints/followUps.js", () => ({
   attachFollowUpHint: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock("../../../src/core/utils/stores/linkUtils.js", () => ({
+vi.mock("../../../src/core/utils/stores/linkStore.js", () => ({
   isLinked: vi.fn(),
   getLinkedAccount: vi.fn(),
 }));
@@ -68,7 +68,7 @@ vi.mock("../../../src/core/utils/stores/dailyStore.js", async (importOriginal) =
 }));
 
 import { closeDbForTesting } from "../../../src/core/db/index.js";
-import { getLinkedAccount } from "../../../src/core/utils/stores/linkUtils.js";
+import { getLinkedAccount } from "../../../src/core/utils/stores/linkStore.js";
 import { getOnlinePlayers } from "../../../src/core/utils/minecraft/playerUtils.js";
 
 beforeAll(() => {

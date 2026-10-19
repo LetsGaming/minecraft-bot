@@ -15,7 +15,7 @@ import { loadConfig } from "@mcbot/core/config.js";
 import {
   loadLinkedAccountsOrEmpty,
   findDiscordIdByMcName,
-} from "@mcbot/core/utils/stores/linkUtils.js";
+} from "@mcbot/core/utils/stores/linkStore.js";
 import { buildChunkbaseUrl } from "@mcbot/core/utils/minecraft/chunkbaseUrl.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { log } from "@mcbot/core/utils/logger.js";

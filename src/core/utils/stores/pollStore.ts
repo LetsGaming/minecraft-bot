@@ -12,7 +12,7 @@
  *   "m:<lower name>"  in-game !vote from an UNLINKED player
  *
  * In-game votes from linked players resolve to their `d:` key via
- * linkUtils, so nobody votes twice across platforms — the dedupe the
+ * linkStore, so nobody votes twice across platforms — the dedupe the
  * plan calls for. Re-voting overwrites (changing your mind is allowed).
  */
 import { versionedStore } from "./versionedStore.js";

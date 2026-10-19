@@ -41,7 +41,7 @@ import {
   isLinked,
   findDiscordIdByMcName,
   loadLinkedAccountsOrEmpty,
-} from "../stores/linkUtils.js";
+} from "../stores/linkStore.js";
 import { loadClaimedStore, getServerClaims } from "../stores/dailyStore.js";
 import { isAdvertisable, ledgerAllows, whisperAndRecord } from "./eventTips.js";
 import { tryLoadConfig } from "../config/configAccess.js";

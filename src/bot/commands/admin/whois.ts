@@ -11,7 +11,7 @@ import { getAuditEntry } from "@mcbot/core/utils/stores/whitelistAudit.js";
 import {
   loadLinkedAccountsOrEmpty,
   findDiscordIdByMcName,
-} from "@mcbot/core/utils/stores/linkUtils.js";
+} from "@mcbot/core/utils/stores/linkStore.js";
 import { requireMcName } from "../shared/mcName.js";
 import {
   loadSessionStore,

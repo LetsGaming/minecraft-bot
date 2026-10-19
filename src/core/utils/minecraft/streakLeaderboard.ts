@@ -12,7 +12,7 @@ import {
   loadClaimedStore,
   getServerClaims,
 } from "../stores/dailyStore.js";
-import { loadLinkedAccountsOrEmpty } from "../stores/linkUtils.js";
+import { loadLinkedAccountsOrEmpty } from "../stores/linkStore.js";
 import { liveStreak } from "./rewards.js";
 import { formatRankLine } from "./statUtils.js";
 import type { LeaderboardData } from "../../types/index.js";

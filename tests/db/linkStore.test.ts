@@ -1,5 +1,5 @@
 /**
- * linkUtils.test.ts — SQLite-backed link store.
+ * linkStore.test.ts — SQLite-backed link store.
  *
  * Legacy map API (loadLinkedAccounts & co.) plus the atomic operations
  * (issueLinkCode / confirmLinkCode / unlinkAccount) that closed the
@@ -24,7 +24,7 @@ import {
   confirmLinkCode,
   unlinkAccount,
   findDiscordIdByMcName,
-} from "../../src/core/utils/stores/linkUtils.js";
+} from "../../src/core/utils/stores/linkStore.js";
 
 beforeEach(() => {
   closeDbForTesting();

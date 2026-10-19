@@ -12,8 +12,6 @@ vi.mock("../../src/core/utils/logger.js", () => ({
 vi.mock("../../src/bot/commands/middleware.js", () => ({
   withErrorHandling: (fn: unknown) => fn,
   requireServerAdmin: (fn: unknown) => fn,
-  isServerAdmin: vi.fn().mockReturnValue(true),
-  getMemberRoleIds: vi.fn().mockReturnValue([]),
   replyDenied: vi.fn(),
   replyError: vi.fn(),
   errorContentOf: vi.fn((err: Error) => ({ problem: err.message })),

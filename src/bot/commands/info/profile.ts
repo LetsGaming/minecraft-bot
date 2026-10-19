@@ -15,7 +15,7 @@ import { assertMcName } from "../shared/mcName.js";
 import {
   loadLinkedAccountsOrEmpty,
   findDiscordIdByMcName,
-} from "@mcbot/core/utils/stores/linkUtils.js";
+} from "@mcbot/core/utils/stores/linkStore.js";
 import { getAuditEntry } from "@mcbot/core/utils/stores/whitelistAudit.js";
 import {
   loadSessionStore,

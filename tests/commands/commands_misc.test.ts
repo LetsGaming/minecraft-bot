@@ -31,7 +31,7 @@ vi.mock("../../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../../src/core/utils/stores/linkUtils.js", () => ({
+vi.mock("../../src/core/utils/stores/linkStore.js", () => ({
   getLinkedAccount: vi.fn().mockResolvedValue(null),
   loadLinkedAccounts: vi.fn().mockResolvedValue({}),
   loadLinkCodes: vi.fn().mockResolvedValue({}),
@@ -57,7 +57,7 @@ vi.mock("../../src/core/utils/time.js", () => ({
 }));
 
 import { resolveServer } from "../../src/bot/utils/guild/guildRouter.js";
-import { getLinkedAccount } from "../../src/core/utils/stores/linkUtils.js";
+import { getLinkedAccount } from "../../src/core/utils/stores/linkStore.js";
 import { getModList } from "../../src/core/utils/minecraft/modUtils.js";
 
 const fakeServer = {

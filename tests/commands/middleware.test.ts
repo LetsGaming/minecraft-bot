@@ -19,7 +19,6 @@ vi.mock("../../src/core/utils/logger.js", () => ({
 
 import { loadConfig } from "../../src/core/config.js";
 import {
-  isServerAdmin,
   requireServerAdmin,
   withErrorHandling,
 } from "../../src/bot/commands/middleware.js";
@@ -53,99 +52,6 @@ function makeInteraction(
 
 beforeEach(() => {
   vi.clearAllMocks();
-});
-
-// ── isServerAdmin ──────────────────────────────────────────────────────────
-
-describe("isServerAdmin", () => {
-  it("returns true when the user ID is in adminUsers", () => {
-    vi.mocked(loadConfig).mockReturnValue({
-      adminUsers: ["admin1", "admin2"],
-    } as ReturnType<typeof loadConfig>);
-    expect(isServerAdmin("admin1")).toBe(true);
-  });
-
-  it("returns true for the second admin in the list", () => {
-    vi.mocked(loadConfig).mockReturnValue({
-      adminUsers: ["admin1", "admin2"],
-    } as ReturnType<typeof loadConfig>);
-    expect(isServerAdmin("admin2")).toBe(true);
-  });
-
-  it("returns false when the user ID is not in adminUsers", () => {
-    vi.mocked(loadConfig).mockReturnValue({
-      adminUsers: ["admin1"],
-    } as ReturnType<typeof loadConfig>);
-    expect(isServerAdmin("notanadmin")).toBe(false);
-  });
-
-  it("returns false when adminUsers is an empty array", () => {
-    vi.mocked(loadConfig).mockReturnValue({ adminUsers: [] } as ReturnType<
-      typeof loadConfig
-    >);
-    expect(isServerAdmin("anyone")).toBe(false);
-  });
-
-  it("accepts a user carrying an admin role ID", async () => {
-    vi.mocked(loadConfig).mockReturnValue({
-      adminUsers: ["admin1", "role-mod-123"],
-    } as never);
-    const { isServerAdmin } = await import("../../src/bot/commands/middleware.js");
-    expect(isServerAdmin("someuser", ["role-other", "role-mod-123"])).toBe(
-      true,
-    );
-    expect(isServerAdmin("someuser", ["role-other"])).toBe(false);
-  });
-
-  // ── Per-guild admin scoping ──────────────────────────────────────
-
-  it("accepts a per-guild admin only within their own guild", () => {
-    vi.mocked(loadConfig).mockReturnValue({
-      adminUsers: [],
-      guilds: {
-        guildA: { adminUsers: ["alice"] },
-        guildB: { adminUsers: ["bob"] },
-      },
-    } as never);
-    expect(isServerAdmin("alice", [], "guildA")).toBe(true);
-    expect(isServerAdmin("alice", [], "guildB")).toBe(false);
-    expect(isServerAdmin("alice", [])).toBe(false); // DM: no guild scope
-  });
-
-  it("matches per-guild admin role IDs", () => {
-    vi.mocked(loadConfig).mockReturnValue({
-      adminUsers: [],
-      guilds: { guildA: { adminUsers: ["role-guildA-mod"] } },
-    } as never);
-    expect(isServerAdmin("member", ["role-guildA-mod"], "guildA")).toBe(true);
-    expect(isServerAdmin("member", ["role-guildA-mod"], "guildB")).toBe(false);
-  });
-
-  it("global adminUsers remain valid in every guild", () => {
-    vi.mocked(loadConfig).mockReturnValue({
-      adminUsers: ["operator"],
-      guilds: { guildA: { adminUsers: ["alice"] } },
-    } as never);
-    expect(isServerAdmin("operator", [], "guildA")).toBe(true);
-    expect(isServerAdmin("operator", [], "guildB")).toBe(true);
-    expect(isServerAdmin("operator", [])).toBe(true);
-  });
-
-  it("getMemberRoleIds handles cached and raw member shapes", async () => {
-    const { getMemberRoleIds } = await import("../../src/bot/commands/middleware.js");
-    // Raw API shape: roles is a string array
-    expect(
-      getMemberRoleIds({ member: { roles: ["r1", "r2"] } } as never),
-    ).toEqual(["r1", "r2"]);
-    // Cached shape: roles.cache is a Map
-    expect(
-      getMemberRoleIds({
-        member: { roles: { cache: new Map([["r3", {}]]) } },
-      } as never),
-    ).toEqual(["r3"]);
-    // No member (DM)
-    expect(getMemberRoleIds({} as never)).toEqual([]);
-  });
 });
 
 // ── requireServerAdmin ─────────────────────────────────────────────────────

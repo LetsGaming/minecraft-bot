@@ -1,5 +1,5 @@
 import { defineCommand } from "../../defineCommand.js";
-import { confirmLinkCode } from "@mcbot/core/utils/stores/linkUtils.js";
+import { confirmLinkCode } from "@mcbot/core/utils/stores/linkStore.js";
 import { syncLinkedRole } from "../../../utils/guild/linkedRole.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { errMsg } from "@mcbot/core/utils/error.js";

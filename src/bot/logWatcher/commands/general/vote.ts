@@ -13,7 +13,7 @@ import {
   getOpenPollForServer,
   voterKeyForMc,
 } from "@mcbot/core/utils/stores/pollStore.js";
-import { loadLinkedAccountsOrEmpty } from "@mcbot/core/utils/stores/linkUtils.js";
+import { loadLinkedAccountsOrEmpty } from "@mcbot/core/utils/stores/linkStore.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { tellraw, whisper } from "@mcbot/core/utils/minecraft/serverMessages.js";
 

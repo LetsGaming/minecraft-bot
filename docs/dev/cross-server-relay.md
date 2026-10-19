@@ -62,7 +62,7 @@ Not allowed, or deliberately not done:
 ## 6. Sender identity
 
 Rule, in this order:
-1. If the author has a linked account (`getLinkedAccount` in `linkUtils.ts`), use the Minecraft name.
+1. If the author has a linked account (`getLinkedAccount` in `linkStore.ts`), use the Minecraft name.
 2. Otherwise use a censored form of the Discord display name.
 
 Censoring:

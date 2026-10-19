@@ -23,10 +23,10 @@ vi.mock("../../src/core/utils/stores/whitelistAudit.js", () => ({
 }));
 
 const loadLinked = vi.fn();
-vi.mock("../../src/core/utils/stores/linkUtils.js", async () => {
+vi.mock("../../src/core/utils/stores/linkStore.js", async () => {
   const actual = await vi.importActual<
-    typeof import("../../src/core/utils/stores/linkUtils.js")
-  >("../../src/core/utils/stores/linkUtils.js");
+    typeof import("../../src/core/utils/stores/linkStore.js")
+  >("../../src/core/utils/stores/linkStore.js");
   return {
     ...actual,
     loadLinkedAccountsOrEmpty: () => loadLinked() as unknown,

@@ -36,7 +36,7 @@ anything new should go. The subdirectories are grouped by purpose, the same way
 |---|---|---|
 | `minecraft/` | statUtils, snapshotUtils, streakLeaderboard, playerUtils, whitelist, mojang, modUtils, slimeChunk, chunkbaseUrl | Reads or interprets the Minecraft world and its players |
 | `server/` | server, serverAccess, capabilities, hostResources, runtimeHeartbeat | The server instance, its host, and how we reach them |
-| `stores/` | adminAudit, linkUtils, dailyStore, pollStore, sessionStore, noteStore, watchStore, waypointStore, challengeStore, uptimeTracker, playerCountHistory, whitelistAudit | Owns a table or a `kv_store` key. One owner per key, no exceptions |
+| `stores/` | adminAudit, linkStore, dailyStore, pollStore, sessionStore, noteStore, watchStore, waypointStore, challengeStore, uptimeTracker, playerCountHistory, whitelistAudit | Owns a table or a `kv_store` key. One owner per key, no exceptions |
 | `config/` | configService, configDiff, configHistory | Reading, writing, diffing, and rolling back config |
 | `commands/` | commandManifest, commandPolicy | What commands exist and whether they're enabled |
 

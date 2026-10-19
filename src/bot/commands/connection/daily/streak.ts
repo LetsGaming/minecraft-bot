@@ -9,7 +9,7 @@ import {
 import { resolveServer } from "../../../utils/guild/guildRouter.js";
 import { createPlayerEmbed } from "../../../utils/embeds/embedUtils.js";
 import { milestoneTrack, progressBar } from "../../../utils/embeds/gameDisplay.js";
-import { getLinkedAccount } from "@mcbot/core/utils/stores/linkUtils.js";
+import { getLinkedAccount } from "@mcbot/core/utils/stores/linkStore.js";
 import { liveStreak, liveBonusStreak, milestoneDays, nextMilestone } from "@mcbot/core/utils/minecraft/rewards.js";
 import { EmbedCategory } from "@mcbot/schema/embedCategories.js";
 import { withErrorHandling } from "../../middleware.js";

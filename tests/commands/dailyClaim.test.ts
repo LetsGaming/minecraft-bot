@@ -5,7 +5,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-vi.mock("../../src/core/utils/stores/linkUtils.js", () => ({
+vi.mock("../../src/core/utils/stores/linkStore.js", () => ({
   isLinked: vi.fn(),
   getLinkedAccount: vi.fn(),
 }));
@@ -32,7 +32,7 @@ vi.mock("../../src/core/utils/stores/rewardsConfig.js", async (importOriginal) =
 
 import { kvGet, kvSet } from "../../src/core/db/kv.js";
 import { closeDbForTesting } from "../../src/core/db/index.js";
-import { getLinkedAccount } from "../../src/core/utils/stores/linkUtils.js";
+import { getLinkedAccount } from "../../src/core/utils/stores/linkStore.js";
 import { getOnlinePlayers } from "../../src/core/utils/minecraft/playerUtils.js";
 import {
   loadPendingRewards,

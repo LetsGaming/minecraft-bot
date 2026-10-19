@@ -16,7 +16,7 @@ import {
   MAX_PENDING_PER_PLAYER,
   type ResolvedRewardPool,
 } from "../stores/dailyStore.js";
-import { getLinkedAccount } from "../stores/linkUtils.js";
+import { getLinkedAccount } from "../stores/linkStore.js";
 import type { ServerInstance } from "../server/server.js";
 import type { DailyRewardItem, UserClaimData } from "../../types/index.js";
 import { getOnlinePlayers, isPlayerOnline } from "./playerUtils.js";

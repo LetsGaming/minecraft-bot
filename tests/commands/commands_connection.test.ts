@@ -6,7 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── Shared mocks ──────────────────────────────────────────────────────────
-vi.mock("../../src/core/utils/stores/linkUtils.js", () => ({
+vi.mock("../../src/core/utils/stores/linkStore.js", () => ({
   LINK_CODE_TTL_MS: 5 * 60 * 1000,
   loadLinkedAccounts: vi.fn().mockResolvedValue({}),
   saveLinkedAccounts: vi.fn().mockResolvedValue(undefined),
@@ -83,7 +83,6 @@ vi.mock("../../src/core/config.js", () => ({
 vi.mock("../../src/bot/commands/middleware.js", () => ({
   withErrorHandling: vi.fn((fn) => fn),
   requireServerAdmin: vi.fn((fn) => fn),
-  isServerAdmin: vi.fn().mockReturnValue(true),
 }));
 
 vi.mock("../../src/core/utils/stores/uptimeTracker.js", () => ({
@@ -97,7 +96,7 @@ import {
   getLinkedAccount,
   issueLinkCode,
   unlinkAccount,
-} from "../../src/core/utils/stores/linkUtils.js";
+} from "../../src/core/utils/stores/linkStore.js";
 import type { ChatInputCommandInteraction } from "discord.js";
 
 /** Text of the embed the command last answered with through editReply. */

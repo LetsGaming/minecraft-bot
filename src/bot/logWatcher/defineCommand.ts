@@ -2,11 +2,7 @@ import { recordCommandUsage } from "@mcbot/core/utils/commands/commandUsage.js";
 import { registerLogCommand } from "./logWatcher.js";
 import { chatLineRegex } from "./watchers/log/chatLine.js";
 import { resolveCommandPolicy } from "@mcbot/core/utils/commands/commandPolicy.js";
-import {
-  loadLinkedAccountsOrEmpty,
-  findDiscordIdByMcName,
-} from "@mcbot/core/utils/stores/linkUtils.js";
-import { isServerAdmin } from "../commands/middleware.js";
+import { isLinkedPlayerAdmin } from "../utils/guild/permissions.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { whisper } from "@mcbot/core/utils/minecraft/serverMessages.js";
 import { wasAccepted } from "@mcbot/schema/commandOutcome.js";
@@ -180,9 +176,7 @@ export function defineCommand({
           return;
         }
         if (policy.adminOnly) {
-          const linked = await loadLinkedAccountsOrEmpty();
-          const discordId = findDiscordIdByMcName(linked, username);
-          if (!discordId || !isServerAdmin(discordId)) {
+          if (!(await isLinkedPlayerAdmin(username))) {
             await whisper(
               server,
               username,

@@ -18,8 +18,6 @@ import { attachFollowUpHint } from "../utils/hints/followUps.js";
 import { resolveServer } from "../utils/guild/guildRouter.js";
 import { isInvokerAdmin } from "../utils/guild/permissions.js";
 
-export { isServerAdmin, getMemberRoleIds } from "../utils/guild/permissions.js";
-
 type CommandExecutor = (
   interaction: ChatInputCommandInteraction,
 ) => Promise<void>;

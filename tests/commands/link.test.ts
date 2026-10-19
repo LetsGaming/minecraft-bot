@@ -12,7 +12,7 @@ import { randomBytes } from "crypto";
 
 // ── Top-level mocks — must be at file scope for Vitest hoisting ───────────
 
-vi.mock("../../src/core/utils/stores/linkUtils.js", () => ({
+vi.mock("../../src/core/utils/stores/linkStore.js", () => ({
   confirmLinkCode: vi.fn(),
   loadLinkedAccountsOrEmpty: vi.fn().mockResolvedValue({}),
   findDiscordIdByMcName: vi.fn().mockReturnValue(null),
@@ -43,7 +43,7 @@ vi.mock("../../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-import { confirmLinkCode } from "../../src/core/utils/stores/linkUtils.js";
+import { confirmLinkCode } from "../../src/core/utils/stores/linkStore.js";
 import { whisper } from "../../src/core/utils/minecraft/serverMessages.js";
 import { syncLinkedRole } from "../../src/bot/utils/guild/linkedRole.js";
 

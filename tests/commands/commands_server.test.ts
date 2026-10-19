@@ -10,8 +10,6 @@ import { createErrorEmbed } from "../../src/bot/utils/embeds/embedUtils.js";
 vi.mock("../../src/bot/commands/middleware.js", () => ({
   withErrorHandling: vi.fn((fn) => fn),
   requireServerAdmin: vi.fn((fn) => fn),
-  isServerAdmin: vi.fn().mockReturnValue(true),
-  getMemberRoleIds: vi.fn().mockReturnValue([]),
   replyDenied: vi.fn(),
   replyError: vi.fn(),
   errorContentOf: vi.fn((err: Error) => ({ problem: err.message })),

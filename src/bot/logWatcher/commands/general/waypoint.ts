@@ -7,14 +7,13 @@
  *
  * Uses the greedy-arg form of defineCommand so one command carries the
  * subcommand syntax. Position and dimension come from the canonical
- * ServerInstance helpers (RCON-authoritative with the screen log-poll
- * fallback), storage goes through waypointStore (atomic saveJson).
+ * ServerInstance helpers, storage goes through waypointStore.
  *
  * Overwrite is restricted to the original author, everyone can read,
  * nobody can stomp someone else's point. Delete allows the author *or* a
  * server admin: a waypoint outlives its creator leaving the server, and
  * with author-only deletion the only way to remove one was to edit the
- * store by hand. Admin here is the same check `adminOnly` commands use ,
+ * store by hand. Admin here is the same check `adminOnly` commands use:
  * the player's linked Discord account against the global admin list.
  * `!waypoints` (separate command) lists everything.
  */
@@ -29,21 +28,10 @@ import {
   waypointCap,
 } from "@mcbot/core/utils/stores/waypointStore.js";
 import { t } from "@mcbot/core/utils/i18n.js";
-import {
-  loadLinkedAccountsOrEmpty,
-  findDiscordIdByMcName,
-} from "@mcbot/core/utils/stores/linkUtils.js";
-import { isServerAdmin } from "../../../commands/middleware.js";
+import { isLinkedPlayerAdmin } from "../../../utils/guild/permissions.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 import { queryFailureText } from "../../queryMessages.js";
 import { tellraw, whisper } from "@mcbot/core/utils/minecraft/serverMessages.js";
-
-/** Is this in-game player a bot admin? Requires a linked Discord account. */
-async function isAdminPlayer(username: string): Promise<boolean> {
-  const linked = await loadLinkedAccountsOrEmpty();
-  const discordId = findDiscordIdByMcName(linked, username);
-  return discordId !== null && isServerAdmin(discordId);
-}
 
 async function msg(
   server: ServerInstance,
@@ -145,7 +133,7 @@ async function deleteWaypoint(
     return;
   }
   const isAuthor = existing.author.toLowerCase() === username.toLowerCase();
-  if (!isAuthor && !(await isAdminPlayer(username))) {
+  if (!isAuthor && !(await isLinkedPlayerAdmin(username))) {
     await msg(
       server,
       username,

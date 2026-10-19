@@ -8,7 +8,7 @@ import { loadConfig } from "@mcbot/core/config.js";
 import {
   loadLinkedAccountsOrEmpty,
   findDiscordIdByMcName,
-} from "@mcbot/core/utils/stores/linkUtils.js";
+} from "@mcbot/core/utils/stores/linkStore.js";
 
 /**
  * Checks whether a Discord user is an admin.

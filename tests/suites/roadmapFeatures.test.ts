@@ -20,7 +20,7 @@ vi.mock("../../src/core/utils/minecraft/whitelist.js", () => ({
   loadKnownPlayers: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock("../../src/core/utils/stores/linkUtils.js", async (importOriginal) => ({
+vi.mock("../../src/core/utils/stores/linkStore.js", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   loadLinkedAccounts: vi.fn(async () => ({})),
   loadLinkedAccountsOrEmpty: vi.fn(async () => ({})),
@@ -346,7 +346,7 @@ describe("buildStreakLeaderboard", () => {
     vi.mocked(loadJson).mockResolvedValue({});
 
     const { loadLinkedAccountsOrEmpty } = await import(
-      "../../src/core/utils/stores/linkUtils.js"
+      "../../src/core/utils/stores/linkStore.js"
     );
     vi.mocked(loadLinkedAccountsOrEmpty).mockResolvedValue({ u1: "SteveMC" });
 

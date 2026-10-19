@@ -7,15 +7,14 @@ vi.mock("../../src/core/utils/logger.js", () => ({
 vi.mock("../../src/bot/logWatcher/logWatcher.js", () => ({
   registerLogCommand: vi.fn(),
 }));
-vi.mock("../../src/core/utils/stores/linkUtils.js", () => ({
+vi.mock("../../src/core/utils/stores/linkStore.js", () => ({
   loadLinkedAccountsOrEmpty: vi.fn().mockResolvedValue({}),
   findDiscordIdByMcName: vi.fn().mockReturnValue(null),
 }));
 vi.mock("../../src/core/utils/commands/commandUsage.js", () => ({
   recordCommandUsage: vi.fn(),
 }));
-vi.mock("../../src/bot/commands/middleware.js", () => ({
-  isServerAdmin: vi.fn().mockReturnValue(false),
+vi.mock("../../src/bot/utils/guild/permissions.js", () => ({\n  isLinkedPlayerAdmin: vi.fn().mockResolvedValue(false),
 }));
 vi.mock("../../src/core/utils/commands/commandPolicy.js", () => ({
   resolveCommandPolicy: vi.fn(),
