@@ -1,5 +1,5 @@
 /**
- * /info — what a player needs in order to join.
+ * /info: what a player needs in order to join.
  *
  * The one question members ask that the bot could not answer: the address,
  * the Minecraft version, the loader, and whatever they have to install first.
@@ -113,7 +113,7 @@ async function requiredModsSummary(
     return t("info.requiredCount", { count: String(required) }, guildId);
   } catch {
     // The mod list needs the wrapper. Its absence is not worth failing the
-    // whole command over — the address and version are still useful.
+    // whole command over, the address and version are still useful.
     return t("info.requiredUnknown", {}, guildId);
   }
 }

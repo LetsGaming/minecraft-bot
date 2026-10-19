@@ -1,5 +1,5 @@
 /**
- * /watch — one-shot personal notifications.
+ * /watch: one-shot personal notifications.
  *
  *   /watch server [server]          DM me when this server is back online
  *   /watch player player:<name>     DM me when this player joins
@@ -7,7 +7,7 @@
  *   /watch remove id:<id>           drop one
  *
  * Watches fire once and remove themselves (watchStore); the downtime
- * monitor and the join watcher do the firing. DMs must be open — the
+ * monitor and the join watcher do the firing. DMs must be open, the
  * reply says so, since a watch that can't deliver is worthless.
  */
 import { SlashCommandBuilder } from "discord.js";
@@ -24,7 +24,7 @@ import {
   type AddWatchResult,
   MAX_WATCHES_PER_USER,
 } from "@mcbot/core/utils/stores/watchStore.js";
-import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
+import { requireMcName } from "../shared/mcName.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 
 export const data = new SlashCommandBuilder()
@@ -131,10 +131,7 @@ export const execute = withErrorHandling(
     const server = resolveServer(interaction);
 
     if (sub === "player") {
-      const player = interaction.options.getString("player", true).trim();
-      if (!isValidMcName(player)) {
-        throw new Error(t("common.invalidUsername", { username: player }));
-      }
+      const player = requireMcName(interaction, "player");
       subscribe({
         id: newWatchId(),
         userId: interaction.user.id,

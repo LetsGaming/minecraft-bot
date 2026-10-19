@@ -20,6 +20,7 @@ import type {
 import { log } from "@mcbot/core/utils/logger.js";
 import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
+import { MS } from "@mcbot/schema/time.js";
 
 const cooldowns = new Map<string, number>();
 
@@ -51,14 +52,12 @@ function trackDelivery(
   });
 }
 
-// BUG-01: the map keys on `command:player` and used to grow without
-// bound (a slow leak on busy servers with churny player bases). An
-// entry stops mattering once it is older than the LARGEST cooldown any
-// command declared, so a periodic sweep with that horizon keeps the map
-// proportional to *recent* activity. The timer is unref()'d — it must
-// never keep the process (or the test runner) alive.
+// The map keys on `command:player`. An entry stops mattering once it is
+// older than the LARGEST cooldown any command declared, so a periodic sweep
+// with that horizon keeps the map proportional to recent activity. The timer
+// is unref()'d: it must never keep the process (or the test runner) alive.
 let maxCooldownMs = 0;
-const COOLDOWN_SWEEP_INTERVAL_MS = 10 * 60 * 1000;
+const COOLDOWN_SWEEP_INTERVAL_MS = 10 * MS.minute;
 
 /** Remove entries no cooldown check can ever consult again. */
 export function sweepCooldowns(now = Date.now()): number {
@@ -90,8 +89,8 @@ export function defineCommand({
   cooldown = 0,
   handler,
 }: InGameCommandDefinition): InGameCommandResult {
-  // BUG-01: the sweep horizon must cover the longest cooldown in play.
-  if (cooldown * 1000 > maxCooldownMs) maxCooldownMs = cooldown * 1000;
+  // The sweep horizon must cover the longest cooldown in play.
+  if (cooldown * MS.second > maxCooldownMs) maxCooldownMs = cooldown * MS.second;
 
   const allNames = [name, ...aliases].map((n) => n.replace(/^!/, ""));
   const escapedNames = allNames.map((n) =>
@@ -125,8 +124,8 @@ export function defineCommand({
     })
     .join("");
 
-  // Anchored speaker prefix (AUD-002): the name is the server's own `<name>`
-  // wrapper, never a `]: <name>` a player typed later in the message.
+  // Anchored speaker prefix: the name is the server's own `<name>` wrapper,
+  // never a `]: <name>` a player typed later in the message.
   const regex = chatLineRegex(` !(${namePattern})${argsPattern}`);
 
   const commandInfo: InGameCommandInfo = {
@@ -156,7 +155,7 @@ export function defineCommand({
         // path captured `<([^>]+)>` raw. A log line can't smuggle a
         // newline (lines are pre-split) so this wasn't exploitable, but
         // handlers interpolate the name into /msg, /tellraw and
-        // `/data get entity …` — enforce the same contract here for
+        // `/data get entity …`, enforce the same contract here for
         // parity and future-proofing.
         if (!isValidMcName(username)) {
           log.warn(
@@ -198,13 +197,13 @@ export function defineCommand({
         const previousStamp = cooldowns.get(cooldownKey);
         if (cooldown > 0) {
           const lastUsed = cooldowns.get(cooldownKey) ?? 0;
-          const elapsed = (Date.now() - lastUsed) / 1000;
+          const elapsed = (Date.now() - lastUsed) / MS.second;
           if (elapsed < cooldown) {
             const remaining = Math.ceil(cooldown - elapsed);
             await whisper(
               server,
               username,
-              `Please wait ${remaining}s before using !${name} again.`,
+              t("ingame.cooldown", { seconds: remaining, command: name }),
             );
             return;
           }
@@ -248,7 +247,7 @@ export function defineCommand({
             return;
           }
           // After the handler, so a command that threw is not counted.
-          // The Discord id may be absent — plenty of players use !commands
+          // The Discord id may be absent, plenty of players use !commands
           // without ever linking, and those uses still count for the
           // dashboard even though they cannot count for /help.
           recordCommandUsage({

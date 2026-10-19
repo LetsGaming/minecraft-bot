@@ -1,5 +1,5 @@
 /**
- * !vote <number> — in-game side of cross-platform polls.
+ * !vote <number>, in-game side of cross-platform polls.
  *
  * Votes land in the same store as the Discord buttons; linked players
  * resolve to their Discord voter key (pollStore.voterKeyForMc) so one
@@ -38,8 +38,7 @@ const cmd = defineCommand({
     }
 
     const linked = await loadLinkedAccountsOrEmpty();
-    // The vote goes into the poll as stored now: the copy above is stale
-    // after the await, and saving it would drop votes cast meanwhile (AUD-005).
+    // The vote goes into the poll as stored now: the copy above is stale after the await.
     const counted = await updatePollStore((current) => {
       const live = getPollById(current, poll.id);
       if (!live || live.status !== "open") return false;

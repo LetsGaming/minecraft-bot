@@ -7,6 +7,7 @@ import * as serverAccess from "@mcbot/core/utils/server/serverAccess.js";
 import { requireCapability } from "@mcbot/core/utils/server/capabilities.js";
 import { resolveLanguage, t } from "@mcbot/core/utils/i18n.js";
 import { backupTierLabel } from "@mcbot/schema/glossary.js";
+import { formatBytes } from "@mcbot/schema";
 
 export const data = new SlashCommandBuilder()
   .setName("backup")
@@ -39,7 +40,7 @@ export const execute = withErrorHandling(async (interaction) => {
     title,
     description: t("backup.summary", {
       count,
-      total: formatSize(totalBytes, language),
+      total: formatBytes(totalBytes),
       age: since(newest.latestMtime),
     }),
   });
@@ -50,7 +51,7 @@ export const execute = withErrorHandling(async (interaction) => {
       value: t("backup.entry", {
         count: b.count,
         age: since(b.latestMtime),
-        size: formatSize(b.latestSizeBytes, language),
+        size: formatBytes(b.latestSizeBytes),
       }),
       inline: true,
     });
@@ -63,14 +64,3 @@ function since(date: Date): string {
   return relativeTimestamp(date.getTime());
 }
 
-function formatSize(bytes: number, language: "en" | "de"): string {
-  const gb = bytes / 1073741824;
-  const [value, digits, unit]: [number, number, string] =
-    gb >= 1 ? [gb, 2, "GB"] : [bytes / 1048576, 1, "MB"];
-  const number = value.toLocaleString(language, {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-    useGrouping: false,
-  });
-  return `${number} ${unit}`;
-}

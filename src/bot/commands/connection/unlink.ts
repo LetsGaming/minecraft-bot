@@ -12,7 +12,7 @@ export const data = new SlashCommandBuilder()
 export const execute = withErrorHandling(
   async (interaction) => {
     const userId = interaction.user.id;
-    const removed = await unlinkAccount(userId).catch(() => false);
+    const removed = await unlinkAccount(userId);
     if (!removed) {
       await interaction.editReply({ embeds: [createInfoEmbed(t("link.notLinked"))] });
       return;

@@ -10,7 +10,7 @@ import {
 } from "@mcbot/core/utils/server/server.js";
 import {
   resolveServer,
-  getAllowedServerIds,
+  filterTargetableServerIds,
 } from "../../utils/guild/guildRouter.js";
 import { ALL_SERVERS_OPTION } from "../../utils/guild/serverOptions.js";
 import { getUptimeStats } from "@mcbot/core/utils/stores/uptimeTracker.js";
@@ -63,14 +63,12 @@ export const execute = withErrorHandling(async (interaction) => {
     return;
   }
 
-  // In multi-guild deployments the overview only includes servers this
-  // guild may target, so no cross-tenant uptime is disclosed.
-  const allowed = getAllowedServerIds(interaction.guild?.id);
-  const instances = getAllInstances().filter(
-    (inst) => !allowed || allowed.has(inst.id),
-  );
+  // The overview only includes servers the caller may target, so no
+  // cross-tenant uptime is disclosed.
+  const all = getAllInstances();
+  const visible = new Set(filterTargetableServerIds(interaction, all.map((inst) => inst.id)));
+  const instances = all.filter((inst) => visible.has(inst.id));
 
-  // Multi-server overview
   const embed = createEmbed({
     title: t("uptime.overviewTitle"),
     color: EmbedColor.Info,

@@ -17,7 +17,7 @@ vi.mock("../../src/bot/commands/middleware.js", () => ({
 const guildRouter = vi.hoisted(() => ({
   resolveServer: vi.fn(),
   assertMayTargetServerId: vi.fn(),
-  getAllowedServerIds: vi.fn(),
+  filterTargetableServerIds: vi.fn(),
 }));
 vi.mock("../../src/bot/utils/guild/guildRouter.js", () => guildRouter);
 
@@ -112,7 +112,9 @@ beforeEach(() => {
   guildRouter.assertMayTargetServerId
     .mockReset()
     .mockImplementation((_i: unknown, id: string) => ({ id }));
-  guildRouter.getAllowedServerIds.mockReset().mockReturnValue(undefined);
+  guildRouter.filterTargetableServerIds
+    .mockReset()
+    .mockImplementation((_i: unknown, ids: string[]) => ids);
   scheduler.closePoll.mockReset().mockResolvedValue(undefined);
   tellraw.mockReset().mockResolvedValue(true);
   recordAdminAction.mockReset().mockResolvedValue(undefined);
@@ -251,7 +253,7 @@ describe("/poll create", () => {
   });
 
   it("span: 'all' is limited to the servers the guild may see", async () => {
-    guildRouter.getAllowedServerIds.mockReturnValue(new Set(["smp", "creative"]));
+    guildRouter.filterTargetableServerIds.mockReturnValue(["smp", "creative"]);
     await run(interaction({ sub: "create", servers: "ALL" }));
     expect((await loadPollStore()).polls[0]!.serverIds).toEqual(["smp", "creative"]);
   });
@@ -280,6 +282,22 @@ describe("/poll create", () => {
     const poll = (await loadPollStore()).polls[0]!;
     expect(poll).not.toHaveProperty("serverIds");
     expect(poll.serverId).toBe("smp");
+  });
+
+  it("refuses and takes its reply back when another poll opened while the reply went out", async () => {
+    const i = Object.assign(interaction({ sub: "create" }), {
+      deleteReply: vi.fn().mockResolvedValue(undefined),
+    });
+    i.editReply.mockImplementation(async () => {
+      await seed(openPoll({ id: "won-the-race" }));
+      return { id: "msg-1" };
+    });
+
+    await expect(run(i)).rejects.toThrow();
+
+    expect((await loadPollStore()).polls.map((p) => p.id)).toEqual(["won-the-race"]);
+    expect(i.deleteReply).toHaveBeenCalled();
+    expect(scheduler.armPoll).not.toHaveBeenCalled();
   });
 
   it("uses a null guild id outside guilds", async () => {

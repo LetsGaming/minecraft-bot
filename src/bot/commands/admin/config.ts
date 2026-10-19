@@ -8,9 +8,13 @@ import {
 import { EmbedColor } from "../../utils/embeds/embedColors.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { log } from "@mcbot/core/utils/logger.js";
-import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
-
+import { auditAdminAction } from "../shared/audit.js";
+import { bridgesOf } from "@mcbot/core/utils/server/guildScopes.js";
+import type { GuildConfig } from "@mcbot/core/types/index.js";
+import { GUILD_FEATURE_KEYS } from "@mcbot/schema";
 import { t } from "@mcbot/core/utils/i18n.js";
+import { MS } from "@mcbot/schema/time.js";
+
 export const data = new SlashCommandBuilder()
   .setName("config")
   .setDescription("View or reload the bot configuration")
@@ -34,6 +38,20 @@ function hostOnly(apiUrl: string): string {
   }
 }
 
+/** A feature is on when its block is present; the status embed only when explicitly enabled. */
+function enabledFeatureLabels(guild: GuildConfig): string[] {
+  return GUILD_FEATURE_KEYS.flatMap((key) => {
+    const label = t(`config.feat.${key}`);
+    if (key === "chatBridge") {
+      const count = bridgesOf(guild).filter((b) => b?.channelId).length;
+      return count === 0 ? [] : [count === 1 ? label : `${label} ×${count}`];
+    }
+    if (guild[key] === undefined || guild[key] === null) return [];
+    if (key === "statusEmbed" && guild.statusEmbed?.enabled !== true) return [];
+    return [label];
+  });
+}
+
 export const execute = withErrorHandling(
   requireServerAdmin(async (interaction) => {
     const sub = interaction.options.getSubcommand();
@@ -47,11 +65,8 @@ export const execute = withErrorHandling(
       log.info("config", `Config reloaded by ${interaction.user.tag}`);
 
       // Config reload is an operator-level mutation.
-      await recordAdminAction({
+      await auditAdminAction(interaction, {
         action: "config reload",
-        by: interaction.user.tag,
-        byId: interaction.user.id,
-        guildId: interaction.guild?.id ?? null,
         detail:
           [
             added.length > 0 ? `added: ${added.join(",")}` : "",
@@ -124,23 +139,7 @@ export const execute = withErrorHandling(
     const guildLines = Object.entries(cfg.guilds)
       .filter(([guildId]) => guildId === currentGuildId)
       .map(([guildId, gcfg]) => {
-        const features: string[] = [];
-        if (gcfg.statusEmbed?.enabled === true)
-          features.push(t("config.featStatus"));
-        if (gcfg.notifications?.channelId)
-          features.push(t("config.featNotifications"));
-        const bridgeList = Array.isArray(gcfg.chatBridge)
-          ? gcfg.chatBridge
-          : gcfg.chatBridge
-            ? [gcfg.chatBridge]
-            : [];
-        const bridgeCount = bridgeList.filter((b) => b?.channelId).length;
-        if (bridgeCount === 1) features.push("chatBridge");
-        if (bridgeCount > 1) features.push(`chatBridge ×${bridgeCount}`);
-        if (gcfg.leaderboard?.channelId) features.push("leaderboard");
-        if (gcfg.downtimeAlerts?.channelId) features.push("downtime");
-        if (gcfg.tpsAlerts?.channelId) features.push("tpsAlerts");
-        if (gcfg.channelPurge?.channelId) features.push("purge");
+        const features = enabledFeatureLabels(gcfg);
         const defaultSrv = gcfg.defaultServer ? ` → ${gcfg.defaultServer}` : "";
         return `${guildId}${defaultSrv}\n  ${features.length > 0 ? features.join(", ") : t("config.noFeatures")}`;
       });
@@ -196,7 +195,7 @@ export const execute = withErrorHandling(
       },
       {
         name: t("config.fieldTpsInterval"),
-        value: `${cfg.tpsPollIntervalMs / 1000}s`,
+        value: `${cfg.tpsPollIntervalMs / MS.second}s`,
         inline: true,
       },
       {

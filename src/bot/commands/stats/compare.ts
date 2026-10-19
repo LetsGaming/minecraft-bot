@@ -1,6 +1,5 @@
 import { SlashCommandBuilder, type APIEmbedField } from "discord.js";
 import {
-  loadStats,
   flattenStats,
   filterStats,
   humanizeKey,
@@ -10,14 +9,13 @@ import {
 import {
   chunkLines,
   createEmbed,
-  createPaginationButtons,
-  handlePagination,
   createInfoEmbed,
   paginateFields,
   reservedLength,
 } from "../../utils/embeds/embedUtils.js";
 import { withErrorHandling } from "../middleware.js";
-import { noStatsYet, playerNotFound } from "./statErrors.js";
+import { replyPaged } from "../shared/paged.js";
+import { loadStatsOrFail, noStatsYet, playerNotFound } from "./statErrors.js";
 import { findPlayer } from "@mcbot/core/utils/minecraft/playerUtils.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
 import type { EmbedBuilder } from "discord.js";
@@ -66,8 +64,8 @@ export const execute = withErrorHandling(async (interaction) => {
   if (!player2Data) throw playerNotFound(player2);
 
   const [stats1, stats2] = await Promise.all([
-    loadStats(player1Data.uuid, server),
-    loadStats(player2Data.uuid, server),
+    loadStatsOrFail(player1Data.uuid, server),
+    loadStatsOrFail(player2Data.uuid, server),
   ]);
   if (!stats1) throw noStatsYet(player1);
   if (!stats2) throw noStatsYet(player2);
@@ -86,15 +84,7 @@ export const execute = withErrorHandling(async (interaction) => {
     return;
   }
 
-  if (embeds.length === 1) {
-    await interaction.editReply({ embeds });
-    return;
-  }
-  const message = await interaction.editReply({
-    embeds: [embeds[0]!],
-    components: [createPaginationButtons(0, embeds.length)],
-  });
-  await handlePagination(message, interaction, embeds);
+  await replyPaged(interaction, embeds);
 });
 
 interface ComparisonLine {

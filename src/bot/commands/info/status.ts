@@ -103,12 +103,11 @@ export const execute = withErrorHandling(async (interaction) => {
   const roundTrip = Date.now() - sent;
 
   // Only a responsive server can be asked for a player list. The other three
-  // states each need their own answer — "Offline", "up but not answering",
-  // and "we could not reach the API wrapper" are different facts, and this
-  // reply used to give all of them as "**Offline**".
+  // states each need their own answer, "Offline", "up but not answering",
+  // and "we could not reach the API wrapper" are different facts.
   if (!canQueryServer(health)) {
     // A direct ping can still supply counts with the wrapper down, so show
-    // them — "online, 4 players, controls unavailable" is the whole point.
+    // them, "online, 4 players, controls unavailable" is the whole point.
     const players = describePlayers(health);
     const offline = health.state === ServerState.Offline ? offlineLine(server) : null;
     const description = [players, display.hint, offline].filter(Boolean).join("\n");
@@ -176,7 +175,7 @@ export const execute = withErrorHandling(async (interaction) => {
     if (host) {
       const lines: string[] = [];
 
-      // Machine first, then the process inside it — the old embed showed
+      // Machine first, then the process inside it, the old embed showed
       // only the Java process under a heading that said "Host", which read
       // as the machine being at 90% when it was idle.
       if (host.machine) {
@@ -236,7 +235,7 @@ export const execute = withErrorHandling(async (interaction) => {
       }
     }
   } catch {
-    /* host metrics are additive — never fail the status */
+    /* host metrics are additive, never fail the status */
   }
 
   await interaction.editReply({ embeds: [embed] });

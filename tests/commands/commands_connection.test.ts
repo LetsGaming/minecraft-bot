@@ -233,6 +233,11 @@ describe("/unlink command", () => {
     expect(repliedText(interaction)).toContain("not linked");
   });
 
+  it("lets a store failure surface instead of claiming the account is not linked", async () => {
+    vi.mocked(unlinkAccount).mockRejectedValue(new Error("db locked"));
+    await expect(execute(makeInteraction() as never)).rejects.toThrow("db locked");
+  });
+
   it("unlinks the account and replies with success", async () => {
     vi.mocked(unlinkAccount).mockResolvedValue(true);
     const interaction = makeInteraction();

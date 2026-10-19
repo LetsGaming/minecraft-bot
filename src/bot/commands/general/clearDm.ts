@@ -1,8 +1,8 @@
 /**
- * /clear-dm — deletes the bot's own messages from the invoking user's DM.
+ * /clear-dm: deletes the bot's own messages from the invoking user's DM.
  *
  * Self-service only: it only ever touches the DM between the bot and
- * whoever ran the command, so no admin gate is needed — a user can only
+ * whoever ran the command, so no admin gate is needed, a user can only
  * ever clean up their own conversation with the bot.
  *
  * DM channels have no bulk-delete API (unlike guild text channels, see

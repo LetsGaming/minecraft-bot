@@ -138,7 +138,6 @@ describe("/note", () => {
     expect(recordAdminAction).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "note add",
-        server: null,
         detail: "Steve: griefed spawn",
       }),
     );

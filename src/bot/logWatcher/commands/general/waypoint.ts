@@ -1,5 +1,5 @@
 /**
- * !waypoint — community waypoints, in-game side.
+ * !waypoint, community waypoints, in-game side.
  *
  *   !waypoint <name>                  look up a waypoint
  *   !waypoint set <name> [category]   save your position (optional tag)
@@ -10,11 +10,11 @@
  * ServerInstance helpers (RCON-authoritative with the screen log-poll
  * fallback), storage goes through waypointStore (atomic saveJson).
  *
- * Overwrite is restricted to the original author — everyone can read,
+ * Overwrite is restricted to the original author, everyone can read,
  * nobody can stomp someone else's point. Delete allows the author *or* a
  * server admin: a waypoint outlives its creator leaving the server, and
  * with author-only deletion the only way to remove one was to edit the
- * store by hand. Admin here is the same check `adminOnly` commands use —
+ * store by hand. Admin here is the same check `adminOnly` commands use ,
  * the player's linked Discord account against the global admin list.
  * `!waypoints` (separate command) lists everything.
  */
@@ -97,7 +97,7 @@ async function setWaypoint(
     createdAt: Date.now(),
     ...(category ? { category: category.toLowerCase() } : {}),
   };
-  // Checked and written in one transaction (AUD-005).
+  // Checked and written in one transaction.
   const result = await updateWaypointStore((store) => {
     const waypoints = getServerWaypoints(store, server.id);
     const existing = waypoints[key];
@@ -154,9 +154,7 @@ async function deleteWaypoint(
     return;
   }
 
-  // Removed in a transaction against the current store: the admin check
-  // above awaited, and saving the copy loaded before it would undo any
-  // waypoint set in the meantime (AUD-005).
+  // Removed in a transaction against the current store: the admin check above awaited.
   await updateWaypointStore((current) => {
     delete getServerWaypoints(current, server.id)[key];
   });

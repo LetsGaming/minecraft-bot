@@ -1,5 +1,5 @@
 /**
- * !report <message> — in-game problem reports routed to Discord.
+ * !report <message>, in-game problem reports routed to Discord.
  *
  * Posts an embed (player head, server ID, timestamp, sanitized message)
  * to every guild that configured `reports.channelId` and whose report
@@ -7,7 +7,7 @@
  * The reporter gets a tellraw confirmation; if no guild is wired up for
  * this server they are told so instead of reporting into the void.
  *
- * First consumer of defineCommand's greedy last argument — report bodies
+ * First consumer of defineCommand's greedy last argument, report bodies
  * are free text, not single tokens. Aggressive per-player cooldown (120s)
  * keeps the channel spam-resistant.
  */

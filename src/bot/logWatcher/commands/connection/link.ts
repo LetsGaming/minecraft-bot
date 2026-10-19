@@ -6,27 +6,16 @@ import { errMsg } from "@mcbot/core/utils/error.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { whisper } from "@mcbot/core/utils/minecraft/serverMessages.js";
 
-// Rate-limit per-player !link attempts to prevent brute-forcing codes.
-// Tracks the timestamp of the last attempt per Minecraft username.
-const linkAttempts = new Map<string, number>();
-const LINK_ATTEMPT_COOLDOWN_MS = 3_000;
-
 const cmd = defineCommand({
   name: "link",
   description: "Link your Minecraft account to Discord using a code",
   args: ["code"],
+  // Also the brute-force limit for guessing codes.
+  cooldown: 3,
   handler: async (username, { code }, client, server) => {
     if (!code) return;
 
-    // Rate-limit: reject if the same player tried within the cooldown window
-    const lastAttempt = linkAttempts.get(username) ?? 0;
-    if (Date.now() - lastAttempt < LINK_ATTEMPT_COOLDOWN_MS) return;
-    linkAttempts.set(username, Date.now());
-
-    // The whole validate + ownership-check + link + confirm sequence is
-    // one SQLite transaction — the old module-level codes/linked mirror
-    // (with its saving/pendingSave machinery and its staleness against
-    // /link writes from the other flow) is gone.
+    // Validate, check ownership, link and confirm in one SQLite transaction.
     const result = await confirmLinkCode(code, username).catch(
       (err: unknown) => {
         log.error(
@@ -44,11 +33,15 @@ const cmd = defineCommand({
       return;
     }
 
-    const user = client.users.cache.get(result.discordId);
+    // Fetched rather than read from the cache, which is empty for a user the
+    // bot has not seen since it started.
+    const user = await client.users.fetch(result.discordId).catch(() => null);
+    const dm = (text: string): void => {
+      user?.send(text).catch(() => {});
+    };
 
     if (result.status === "expired") {
-      if (user)
-        user.send(`❌ Link code **${code}** has expired.`).catch(() => {});
+      dm(t("ingame.link.expired", { code }));
       return;
     }
 
@@ -57,28 +50,15 @@ const cmd = defineCommand({
         "link",
         `Rejected link of ${username}: already linked to another Discord account`,
       );
-      if (user)
-        user
-          .send(
-            `❌ **${username}** is already linked to a different Discord account. Ask an admin to unlink it first if this is your account.`,
-          )
-          .catch(() => {});
+      dm(t("ingame.link.nameTaken", { username }));
       return;
     }
 
-    // Auto-role on link (guilds.<id>.linkedRole). syncLinkedRole never
-    // throws — role failures are audited and must not fail the link.
+    // syncLinkedRole never throws: role failures are audited and must not
+    // fail the link.
     await syncLinkedRole(client, result.discordId, "add");
-    if (user)
-      user.send(`✅ Linked to Minecraft user **${username}**.`).catch(() => {});
+    dm(t("ingame.link.linked", { username }));
   },
 });
 
 export const { init, COMMAND_INFO, handler } = cmd;
-
-/**
- * Reset all in-memory state. Only for use in tests.
- */
-export function _resetStateForTesting(): void {
-  linkAttempts.clear();
-}

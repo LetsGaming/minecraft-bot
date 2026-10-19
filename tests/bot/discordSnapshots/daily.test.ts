@@ -29,7 +29,7 @@ vi.mock("../../../src/bot/utils/hints/followUps.js", () => ({
 }));
 vi.mock("../../../src/core/utils/stores/linkUtils.js", () => ({
   isLinked: vi.fn(),
-  getLinkedAccount: vi.fn().mockResolvedValue("ikarus_77"),
+  getLinkedAccount: vi.fn(),
 }));
 vi.mock("../../../src/core/utils/minecraft/playerUtils.js", async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -67,7 +67,8 @@ vi.mock("../../../src/core/utils/stores/dailyStore.js", async (importOriginal) =
   getServerPending: vi.fn(() => ({})),
 }));
 
-import { isLinked } from "../../../src/core/utils/stores/linkUtils.js";
+import { closeDbForTesting } from "../../../src/core/db/index.js";
+import { getLinkedAccount } from "../../../src/core/utils/stores/linkUtils.js";
 import { getOnlinePlayers } from "../../../src/core/utils/minecraft/playerUtils.js";
 
 beforeAll(() => {
@@ -81,34 +82,35 @@ describe("Discord snapshots: /daily", () => {
   it("claimed, queued, cooldown and not linked", async () => {
     const { execute } = await import("../../../src/bot/commands/connection/daily/daily.js");
     const run = async (language: Language) => {
+      closeDbForTesting();
       const { interaction, sent } = recordingInteraction(language, { commandName: "daily" });
       await execute(interaction as never);
       return sent;
     };
     const cases: Record<string, () => void> = {
       "claimed, online": () => {
-        vi.mocked(isLinked).mockResolvedValue(true);
+        vi.mocked(getLinkedAccount).mockResolvedValue("ikarus_77");
         vi.mocked(getOnlinePlayers).mockResolvedValue(["ikarus_77"]);
         claims.lastClaim = NOW - 25 * HOUR;
       },
       "claimed with a lucky bonus": () => {
-        vi.mocked(isLinked).mockResolvedValue(true);
+        vi.mocked(getLinkedAccount).mockResolvedValue("ikarus_77");
         vi.mocked(getOnlinePlayers).mockResolvedValue(["ikarus_77"]);
         claims.lastClaim = NOW - 25 * HOUR;
         claims.bonusChance = 100;
       },
       "claimed, offline so queued": () => {
         claims.bonusChance = 0;
-        vi.mocked(isLinked).mockResolvedValue(true);
+        vi.mocked(getLinkedAccount).mockResolvedValue("ikarus_77");
         vi.mocked(getOnlinePlayers).mockResolvedValue([]);
         claims.lastClaim = NOW - 25 * HOUR;
       },
       cooldown: () => {
-        vi.mocked(isLinked).mockResolvedValue(true);
+        vi.mocked(getLinkedAccount).mockResolvedValue("ikarus_77");
         claims.lastClaim = NOW - 9 * HOUR;
       },
       "not linked": () => {
-        vi.mocked(isLinked).mockResolvedValue(false);
+        vi.mocked(getLinkedAccount).mockResolvedValue(null);
       },
     };
     const out: Record<string, unknown> = {};

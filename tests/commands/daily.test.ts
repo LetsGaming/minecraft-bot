@@ -283,7 +283,7 @@ describe("claimLock — concurrent claim prevention", () => {
     const linkUtils = await import("../../src/core/utils/stores/linkUtils.js");
 
     // Fail fast after the lock check — we only care that neither user gets blocked.
-    vi.mocked(linkUtils.isLinked).mockResolvedValue(false);
+    vi.mocked(linkUtils.getLinkedAccount).mockResolvedValue(null);
 
     const { execute } =
       await import("../../src/bot/commands/connection/daily/daily.js");

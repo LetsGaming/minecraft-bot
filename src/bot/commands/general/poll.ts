@@ -1,5 +1,5 @@
 /**
- * /poll — cross-platform polls (admin).
+ * /poll: cross-platform polls (admin).
  *
  *   create   question + "options: A | B | C" + duration → posts a button
  *            embed in this channel and announces the poll in-game.
@@ -13,7 +13,7 @@
  * broadcasts tellraw to the whole server.
  *
  * Span mode: `servers:"smp, creative"` (or `servers:all`) runs ONE poll
- * across several instances — merged tally, announcements on each
+ * across several instances, merged tally, announcements on each
  * instance, `!vote` resolves it from any participant. The one-open-poll
  * invariant holds per participating server: creation fails while any
  * listed instance already has an open poll.
@@ -32,15 +32,16 @@ import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import {
   resolveServer,
   assertMayTargetServerId,
-  getAllowedServerIds,
+  filterTargetableServerIds,
 } from "../../utils/guild/guildRouter.js";
 import { getServerIds } from "@mcbot/core/config.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
-import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
+import { auditAdminAction } from "../shared/audit.js";
 import {
   loadPollStore,
   updatePollStore,
   getOpenPollForServer,
+  type PollStore,
   pollServerIds,
   tallyPoll,
   MAX_POLL_OPTIONS,
@@ -53,6 +54,7 @@ import {
   closePoll,
 } from "../../logWatcher/watchers/schedulers/pollScheduler.js";
 import { t } from "@mcbot/core/utils/i18n.js";
+import { MS } from "@mcbot/schema/time.js";
 import { tellraw } from "@mcbot/core/utils/minecraft/serverMessages.js";
 
 const DEFAULT_DURATION_HOURS = 24;
@@ -134,6 +136,28 @@ function parseOptions(raw: string): string[] {
     .filter(Boolean);
 }
 
+/** The first participating server that already has an open poll, with that poll. */
+function findOpenPoll(
+  store: PollStore,
+  serverIds: readonly string[],
+): { serverId: string; poll: Poll } | null {
+  for (const serverId of serverIds) {
+    const poll = getOpenPollForServer(store, serverId);
+    if (poll) return { serverId, poll };
+  }
+  return null;
+}
+
+function openPollError(serverId: string, poll: Poll): Error {
+  return new Error(t("poll.alreadyActiveOn", { server: serverId, question: poll.question }));
+}
+
+/** One open poll per participating server: a span poll may not overlap a running one. */
+function throwIfOpenPoll(store: PollStore, serverIds: readonly string[]): void {
+  const existing = findOpenPoll(store, serverIds);
+  if (existing) throw openPollError(existing.serverId, existing.poll);
+}
+
 function pollEmbed(poll: Poll) {
   const optionLines = poll.options.map((o, i) => `**${i + 1}.** ${o}`);
   return createEmbed({
@@ -161,10 +185,7 @@ function resolveParticipants(
 
   let ids: string[];
   if (raw.toLowerCase() === "all") {
-    // "all" means every server THIS guild can see — in a multi-guild
-    // deployment that is the guild's allowed set, never other tenants'.
-    const allowed = getAllowedServerIds(interaction.guild?.id);
-    ids = getServerIds().filter((id) => !allowed || allowed.has(id));
+    ids = filterTargetableServerIds(interaction, getServerIds());
   } else {
     ids = [...new Set(raw.split(/[\s,]+/).filter(Boolean))];
   }
@@ -187,7 +208,7 @@ export const execute = withErrorHandling(
       const counts = tallyPoll(open);
       const total = counts.reduce((a, b) => a + b, 0);
       const lines = open.options.map(
-        (o, i) => `**${i + 1}.** ${o} — ${counts[i]}`,
+        (o, i) => `**${i + 1}.** ${o}: ${counts[i]}`,
       );
       await interaction.editReply({
         embeds: [
@@ -205,12 +226,9 @@ export const execute = withErrorHandling(
     if (sub === "close") {
       if (!open) throw new Error(t("poll.noneActive", { server: server.id }));
       await closePoll(interaction.client, open.id);
-      await recordAdminAction({
+      await auditAdminAction(interaction, {
         action: "poll close",
         server: server.id,
-        by: interaction.user.tag,
-        byId: interaction.user.id,
-        guildId: interaction.guild?.id ?? null,
         detail: open.question.slice(0, 80),
       });
       await interaction.editReply({
@@ -231,19 +249,8 @@ export const execute = withErrorHandling(
     }
 
     const participants = resolveParticipants(interaction, server);
-    // One open poll per PARTICIPATING server — a span poll may not
-    // overlap any instance that already has one running.
-    for (const inst of participants) {
-      const existing = getOpenPollForServer(store, inst.id);
-      if (existing) {
-        throw new Error(
-          t("poll.alreadyActiveOn", {
-            server: inst.id,
-            question: existing.question,
-          }),
-        );
-      }
-    }
+    const participantIds = participants.map((p) => p.id);
+    throwIfOpenPoll(store, participantIds);
 
     const question = interaction.options.getString("question", true).trim();
     const options = parseOptions(interaction.options.getString("options", true));
@@ -261,7 +268,6 @@ export const execute = withErrorHandling(
     const duration =
       interaction.options.getInteger("duration") ?? DEFAULT_DURATION_HOURS;
 
-    const participantIds = participants.map((p) => p.id);
     const poll: Poll = {
       id: randomBytes(4).toString("hex"),
       question,
@@ -274,7 +280,7 @@ export const execute = withErrorHandling(
       createdBy: interaction.user.tag,
       createdById: interaction.user.id,
       createdAt: Date.now(),
-      endsAt: Date.now() + duration * 3_600_000,
+      endsAt: Date.now() + duration * MS.hour,
       votes: {},
       status: "open",
     };
@@ -294,24 +300,27 @@ export const execute = withErrorHandling(
     });
     poll.messageId = message.id;
 
-    // Appended to the store as it is now (AUD-005): saving the copy
-    // loaded before the reply went out would drop votes cast meanwhile.
-    await updatePollStore((current) => {
-      current.polls.push(poll);
+    // Checked again against the store as it is now: another admin may have
+    // opened a poll on a participating server while the reply was going out.
+    const raced = await updatePollStore((current) => {
+      const existing = findOpenPoll(current, participantIds);
+      if (!existing) current.polls.push(poll);
+      return existing;
     });
+    if (raced) {
+      await interaction.deleteReply().catch(() => undefined);
+      throw openPollError(raced.serverId, raced.poll);
+    }
     armPoll(interaction.client, poll);
     attachCollectorToMessage(poll.id, message, poll.endsAt);
 
-    await recordAdminAction({
+    await auditAdminAction(interaction, {
       action: "poll create",
       server: participantIds.join(","),
-      by: interaction.user.tag,
-      byId: interaction.user.id,
-      guildId: interaction.guild?.id ?? null,
       detail: question.slice(0, 80),
     });
 
-    // In-game announcement on every participating instance — a span
+    // In-game announcement on every participating instance, a span
     // poll that only tells one server about itself defeats the point.
     for (const inst of participants) {
       const reached = await tellraw(inst, "@a", {

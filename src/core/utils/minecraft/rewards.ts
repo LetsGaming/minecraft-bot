@@ -1,19 +1,11 @@
 /**
  * Daily-reward domain rules: streaks, the weighted pool draw, and getting
- * items into a player's inventory.
- *
- * These lived inside the `/daily` slash command, which meant two log
- * watchers (advancements, joinLeave) imported `give` and
- * `deliverPendingRewards` *from a Discord interaction handler* — a
- * watcher depending on a command, and the reward rules sitting on the
- * presentation side of the seam. Nothing here knows about Discord: the
- * command formats the embed, the watchers fire on log lines, and both
- * call these.
+ * items into a player's inventory. Nothing here knows about Discord.
  */
 import {
-  loadPendingRewards,
-  updatePendingRewards,
-  getServerPending,
+  hasPending,
+  takePending,
+  requeuePending,
 } from "../stores/dailyStore.js";
 import type { ServerInstance } from "../server/server.js";
 import { consoleCommand, tellraw } from "./serverMessages.js";
@@ -168,7 +160,7 @@ export async function give(
 }
 
 /**
- * Deliver queued offline claims for a player who just joined — called by
+ * Deliver queued offline claims for a player who just joined, called by
  * the joinLeave watcher. Entries are removed once ALL their items are
  * confirmed delivered; on partial failure the entry stays with only the
  * undelivered items, so the next join retries exactly what's missing
@@ -180,21 +172,12 @@ export async function deliverPendingRewards(
   server: ServerInstance,
   player: string,
 ): Promise<number> {
-  // AUD-005: take the entries out in one transaction before giving
-  // anything, so two joins close together can't both deliver them, and put
-  // back only what failed. Holding a loaded copy across the gives used to
-  // write it back over entries queued (or delivered) in the meantime.
-  const key = player.toLowerCase();
-  // Most joins have nothing queued: a plain read keeps them off the write lock.
-  const peek = await loadPendingRewards();
-  if (!peek.servers[server.id]?.[key]?.length) return 0;
+  // Taken in one transaction before giving anything, so two joins close
+  // together cannot both deliver them; only what failed is put back.
+  // Most joins have nothing queued: the plain read keeps them off the write lock.
+  if (!(await hasPending(server.id, player))) return 0;
 
-  const list = await updatePendingRewards((store) => {
-    const queue = getServerPending(store, server.id);
-    const taken = queue[key] ?? [];
-    delete queue[key];
-    return taken;
-  });
+  const list = await takePending(server.id, player);
   if (list.length === 0) return 0;
 
   const delivered: DailyRewardItem[] = [];
@@ -219,13 +202,7 @@ export async function deliverPendingRewards(
     const remaining = work
       .map((w) => ({ ...w.entry, items: [...w.failed, ...w.todo] }))
       .filter((e) => e.items.length > 0);
-    if (remaining.length > 0) {
-      await updatePendingRewards((store) => {
-        const queue = getServerPending(store, server.id);
-        // Ahead of anything queued while we were giving: these are older.
-        queue[key] = [...remaining, ...(queue[key] ?? [])];
-      });
-    }
+    await requeuePending(server.id, player, remaining);
   }
 
   if (delivered.length > 0) {

@@ -1,17 +1,17 @@
 /**
- * /profile — one player card from data the bot already keeps.
+ * /profile: one player card from data the bot already keeps.
  *
  * Pure presentation: player head, linked Discord account, whitelisted-by
  * (whitelist audit), playtime + last-seen (session store), and daily
  * streak (claim store, via the linked Discord user). No new stores, no
- * writes — everything here exists because some other feature tracked it.
+ * writes, everything here exists because some other feature tracked it.
  */
 import { SlashCommandBuilder, time as discordTime } from "discord.js";
 import { createPlayerEmbed } from "../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../utils/embeds/embedColors.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { withErrorHandling } from "../middleware.js";
-import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
+import { assertMcName } from "../shared/mcName.js";
 import {
   loadLinkedAccountsOrEmpty,
   findDiscordIdByMcName,
@@ -47,14 +47,10 @@ export const execute = withErrorHandling(async (interaction) => {
   const server = resolveServer(interaction);
   const linked = await loadLinkedAccountsOrEmpty();
 
-  let player = interaction.options.getString("player")?.trim();
-  if (!player) {
-    player = linked[interaction.user.id];
-    if (!player) throw new Error(t("profile.noPlayer"));
-  }
-  if (!isValidMcName(player)) {
-    throw new Error(t("common.invalidUsername", { username: player }));
-  }
+  const requested = interaction.options.getString("player")?.trim();
+  const own = linked[interaction.user.id];
+  if (!requested && !own) throw new Error(t("profile.noPlayer"));
+  const player = assertMcName(requested || own || "");
 
   // Reverse link lookup: which Discord account owns this MC name?
   const ownerId = findDiscordIdByMcName(linked, player);
@@ -81,7 +77,7 @@ export const execute = withErrorHandling(async (interaction) => {
       : t("profile.notLinked"),
   );
 
-  // An entry with removedBy means the player was later un-whitelisted —
+  // An entry with removedBy means the player was later un-whitelisted ,
   // showing "whitelisted by X" for them would be wrong, so skip it.
   if (audit?.addedBy && audit.addedAt && !audit.removedBy) {
     lines.push(

@@ -58,7 +58,7 @@ export function serverInScope(
  * Global admins (config.adminUsers) are exempt, they are the operator.
  */
 function assertGuildMayTarget(
-  interaction: ServerContextInteraction,
+  interaction: Pick<ServerContextInteraction, "guild" | "user">,
   server: ServerInstance,
 ): void {
   const allowed = getAllowedServerIds(interaction.guild?.id);
@@ -82,7 +82,7 @@ function assertGuildMayTarget(
  * unknown IDs and on IDs outside the guild's allowed set.
  */
 export function assertMayTargetServerId(
-  interaction: ServerContextInteraction,
+  interaction: Pick<ServerContextInteraction, "guild" | "user">,
   serverId: string,
 ): ServerInstance {
   const server = getServerInstance(serverId);

@@ -1,5 +1,5 @@
 /**
- * /challenge — advancement challenges (admin).
+ * /challenge: advancement challenges (admin).
  *
  *   start   advancement:<name in chat> [reward:<text>] [item:<id>]
  *           [amount:<n>] [duration:<hours>] [server:<id>]
@@ -17,7 +17,7 @@ import { createEmbed } from "../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../utils/embeds/embedColors.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
-import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
+import { auditAdminAction } from "../shared/audit.js";
 import { broadcastNotification } from "../../logWatcher/watchers/notifyGuilds.js";
 import { loadConfig } from "@mcbot/core/config.js";
 import {
@@ -29,6 +29,7 @@ import {
   type Challenge,
 } from "@mcbot/core/utils/stores/challengeStore.js";
 import { t } from "@mcbot/core/utils/i18n.js";
+import { MS } from "@mcbot/schema/time.js";
 import { tellraw } from "@mcbot/core/utils/minecraft/serverMessages.js";
 import { formatItemStack, itemDisplayName } from "@mcbot/core/utils/minecraft/itemNames.js";
 
@@ -173,12 +174,9 @@ export const execute = withErrorHandling(
       if (!active) {
         throw new Error(t("challenge.noneActive", { server: server.id }));
       }
-      await recordAdminAction({
+      await auditAdminAction(interaction, {
         action: "challenge cancel",
         server: server.id,
-        by: interaction.user.tag,
-        byId: interaction.user.id,
-        guildId: interaction.guild?.id ?? null,
         detail: active.advancement,
       });
       await interaction.editReply({
@@ -212,7 +210,7 @@ export const execute = withErrorHandling(
       startedBy: interaction.user.tag,
       startedById: interaction.user.id,
       startedAt: Date.now(),
-      ...(duration ? { endsAt: Date.now() + duration * 3_600_000 } : {}),
+      ...(duration ? { endsAt: Date.now() + duration * MS.hour } : {}),
       status: "active",
     };
     const existing = updateChallengeStore((store) => {
@@ -227,12 +225,9 @@ export const execute = withErrorHandling(
       );
     }
 
-    await recordAdminAction({
+    await auditAdminAction(interaction, {
       action: "challenge start",
       server: server.id,
-      by: interaction.user.tag,
-      byId: interaction.user.id,
-      guildId: interaction.guild?.id ?? null,
       detail: advancement,
     });
 

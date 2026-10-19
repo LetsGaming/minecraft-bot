@@ -1,6 +1,5 @@
 import { SlashCommandBuilder } from "discord.js";
 import {
-  loadStats,
   flattenStats,
   findPlayTimeStat,
   ticksToMs,
@@ -10,7 +9,7 @@ import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { createPlayerEmbed } from "../../utils/embeds/embedUtils.js";
 import { withErrorHandling } from "../middleware.js";
 import { CommandError } from "@mcbot/core/utils/error.js";
-import { noStatsYet, playerNotFound } from "./statErrors.js";
+import { loadStatsOrFail, noStatsYet, playerNotFound } from "./statErrors.js";
 
 import { formatSpan } from "@mcbot/core/utils/duration.js";
 import { t } from "@mcbot/core/utils/i18n.js";
@@ -35,7 +34,7 @@ export const execute = withErrorHandling(async (interaction) => {
   const player = await findPlayer(playerName, server);
   if (!player) throw playerNotFound(playerName);
 
-  const statsFile = await loadStats(player.uuid, server);
+  const statsFile = await loadStatsOrFail(player.uuid, server);
   if (!statsFile) throw noStatsYet(playerName);
 
   const totalPlaytime = findPlayTimeStat(flattenStats(statsFile));
