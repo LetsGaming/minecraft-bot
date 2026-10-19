@@ -34,6 +34,12 @@ async function freshConfigModule(): Promise<typeof import("../../src/core/config
   return import("../../src/core/config.js");
 }
 
+/** A fresh config access module on top of a fresh config module. */
+async function freshAccessModule(): Promise<typeof import("../../src/core/utils/config/configAccess.js")> {
+  vi.resetModules();
+  return import("../../src/core/utils/config/configAccess.js");
+}
+
 beforeEach(() => {
   mkdirSync(root, { recursive: true });
   copyFileSync(schemaPath, join(root, "config.schema.json"));
@@ -47,7 +53,7 @@ afterAll(() => {
 describe("tryLoadConfig", () => {
   it("returns the config on success", async () => {
     writeConfig(JSON.stringify(good));
-    const { tryLoadConfig } = await freshConfigModule();
+    const { tryLoadConfig } = await freshAccessModule();
     const r = tryLoadConfig({ onError: "closed" });
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.config.clientId).toBe(good.clientId);
@@ -55,14 +61,14 @@ describe("tryLoadConfig", () => {
 
   it("states the fail direction the caller asked for", async () => {
     writeConfig("{ not json");
-    const { tryLoadConfig } = await freshConfigModule();
+    const { tryLoadConfig } = await freshAccessModule();
     expect(tryLoadConfig({ onError: "open" })).toMatchObject({ ok: false, failOpen: true });
     expect(tryLoadConfig({ onError: "closed" })).toMatchObject({ ok: false, failOpen: false });
   });
 
   it("logs a repeating failure once and a different failure again", async () => {
     writeConfig("{ not json");
-    const { tryLoadConfig } = await freshConfigModule();
+    const { tryLoadConfig } = await freshAccessModule();
     tryLoadConfig({ onError: "open" });
     tryLoadConfig({ onError: "open" });
     const configWarnings = (): number =>
