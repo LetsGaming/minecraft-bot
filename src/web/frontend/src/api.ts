@@ -2,7 +2,7 @@
  * Thin fetch helpers — every call carries the session cookie, 401
  * surfaces as `unauthorized` so App.vue can show the login screen.
  */
-import { ApiErrorCode } from "@mcbot/schema";
+import { ApiErrorCode, type ApiErrorBody } from "@mcbot/schema";
 
 export class UnauthorizedError extends Error {
   constructor() {
@@ -52,7 +52,8 @@ async function handle<T>(res: Response): Promise<T> {
     let code: string | undefined;
     let parsed: unknown;
     try {
-      const body = await res.json();
+      // Older routes still answer with `message` or `detail` instead of `error`.
+      const body = (await res.json()) as Partial<ApiErrorBody> & { message?: string; detail?: string; errors?: unknown };
       parsed = body;
       // Prefer a human message; fall back to a validation list, then the body.
       detail =
