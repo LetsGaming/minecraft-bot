@@ -251,8 +251,8 @@
   </div>
 </template>
 
-<script lang="ts">
-import { defineComponent, nextTick } from "vue";
+<script setup lang="ts">
+import { computed, nextTick, ref, watch } from "vue";
 import Button from "primevue/button";
 import { useNotify } from "../composables/useNotify";
 import { backupTierLabel, formatBytes, MS, ServerState, StatusRole, SERVER_STATE_ROLE } from "@mcbot/schema";
@@ -270,7 +270,7 @@ import InlineError from "../components/ui/InlineError.vue";
 import JobBlock from "../components/ui/JobBlock.vue";
 import ResponsiveTable from "../components/ui/ResponsiveTable.vue";
 import type { ResponsiveColumn } from "../components/ui/types";
-import type { BackupDirInfo, BackupFileInfo, ServerStatus } from "../api";
+import type { BackupDirInfo, BackupFileInfo } from "../api";
 import { t } from "../i18n";
 
 type NeedKey = "create" | "restore" | "delete";
@@ -297,368 +297,341 @@ function tierLeaf(tier: string): string {
   return (tier.split("/").pop() ?? tier).toLowerCase();
 }
 
-export default defineComponent({
-  name: "BackupsView",
-  components: {
-    Button,
-    ViewHeader,
-    StaleBanner,
-    EmptyState,
-    InlineBanner,
-    InlineError,
-    JobBlock,
-    ResponsiveTable,
-  },
-  props: {
-    serverIds: { type: Array as () => string[], default: () => [] },
-    activeServer: { type: String, default: "" },
-  },
-  emits: ["navigate"],
-  setup() {
-    const status = useServerStatus();
-    const rowBusy = useRowBusy<string>();
-    return {
-      ...useBackups(),
-      ...useCapabilities(),
-      isBusy: rowBusy.isBusy,
-      isLocked: rowBusy.isLocked,
-      busyLabel: rowBusy.busyLabel,
-      runRow: rowBusy.run,
-      statusServers: status.servers,
-      refreshStatus: status.refresh,
-      confirmAction: useConfirmAction(),
-      notify: useNotify(),
-      t,
-      formatBytes,
-      backupTierLabel,
-      absoluteStamp,
-      relativeAge,
-      timestampTitle,
-    };
-  },
-  data() {
-    return {
-      current: "",
-      filter: "all",
-      job: null as Job | null,
-      newIds: [] as string[],
-      columns: [
-        { key: "name", label: t("backups.col.name"), primary: true },
-        { key: "tier", label: t("backups.col.tier") },
-        { key: "created", label: t("backups.col.created") },
-        { key: "size", label: t("backups.col.size"), align: "end", numeric: true },
-      ] as ResponsiveColumn[],
-    };
-  },
-  computed: {
-    serverStatus(): ServerStatus | null {
-      return this.statusServers.find((s) => s.id === this.current) ?? null;
-    },
-    serverRole(): StatusRole {
-      const state = this.serverStatus?.state;
-      return state ? SERVER_STATE_ROLE[state] : StatusRole.Unknown;
-    },
-    jobRunning(): boolean {
-      return this.job?.state === "running";
-    },
-    /** A wrapper that positively lacks the feature hides the control; unknown keeps it. */
-    createAvailable(): boolean {
-      return this.serverStatus?.features?.scripts?.backup !== false;
-    },
-    restoreAvailable(): boolean {
-      return this.serverStatus?.features?.restore !== false;
-    },
-    deleteAvailable(): boolean {
-      return this.serverStatus?.features?.backupDelete !== false;
-    },
-    canCreate(): boolean {
-      return this.can("server:control", this.current);
-    },
-    canRestore(): boolean {
-      return this.can("backup:restore", this.current);
-    },
-    canDelete(): boolean {
-      return this.can("backup:delete", this.current);
-    },
-    canDownload(): boolean {
-      return this.can("backup:download", this.current);
-    },
-    missingCaps(): NeedKey[] {
-      if (!this.current) return [];
-      const missing: NeedKey[] = [];
-      if (this.createAvailable && !this.canCreate) missing.push("create");
-      if (this.restoreAvailable && !this.canRestore) missing.push("restore");
-      if (this.deleteAvailable && !this.canDelete) missing.push("delete");
-      return missing;
-    },
-    readOnlyTitle(): string {
-      const offered = [this.createAvailable, this.restoreAvailable, this.deleteAvailable].filter(Boolean).length;
-      return this.missingCaps.length === offered ? t("backups.readOnly.all") : t("backups.readOnly.some");
-    },
-    readOnlyText(): string {
-      const parts = this.missingCaps.map((key) => t(`backups.readOnly.needs.${key}`));
-      if (parts.length === 0) return "";
-      const first = parts[0]!.charAt(0).toUpperCase() + parts[0]!.slice(1);
-      const rest = parts.slice(1);
-      const sentence =
-        rest.length === 0
-          ? first
-          : t("backups.readOnly.join", { list: [first, ...rest.slice(0, -1)].join(", "), last: rest[rest.length - 1]! });
-      return t("backups.readOnly.text", { needs: sentence });
-    },
-    staleAt(): string {
-      return this.stale ? absoluteStamp(this.stale.asOf) : "";
-    },
-    listMeta(): string {
-      if (this.stale) return t("backups.list.readAt", { at: this.staleAt });
-      let zone = "";
-      try {
-        zone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? "";
-      } catch {
-        zone = "";
-      }
-      return zone ? t("backups.list.zoneNamed", { zone }) : t("backups.list.zone");
-    },
-    metrics(): { count: number; bytes: number | null; newest: number | null } | null {
-      const dirs = this.summary?.dirs ?? [];
-      if (dirs.length === 0 && this.files.length === 0) return null;
-      const count = dirs.length ? dirs.reduce((sum, d) => sum + d.count, 0) : this.total;
-      const newestDir = dirs.reduce((max, d) => Math.max(max, d.latestMtimeMs), 0);
-      const newest = newestDir || this.files[0]?.mtimeMs || null;
-      return { count, bytes: this.summary ? this.summary.totalBytes : null, newest };
-    },
-    latest(): BackupDirInfo[] {
-      return [...(this.summary?.dirs ?? [])].sort((a, b) => b.latestMtimeMs - a.latestMtimeMs);
-    },
-    filterChips(): FilterChip[] {
-      const counts = new Map<string, FilterChip>();
-      const dirs = this.summary?.dirs ?? [];
-      if (dirs.length) {
-        for (const d of dirs) {
-          const key = tierLeaf(d.dir);
-          const chip = counts.get(key) ?? { key, label: backupTierLabel(d.dir), count: 0 };
-          chip.count += d.count;
-          counts.set(key, chip);
-        }
-      } else {
-        for (const f of this.files) {
-          const key = tierLeaf(f.tier);
-          const chip = counts.get(key) ?? { key, label: backupTierLabel(f.tier), count: 0 };
-          chip.count += 1;
-          counts.set(key, chip);
-        }
-      }
-      const all = this.metrics?.count ?? this.total;
-      return [{ key: "all", label: t("backups.filter.all"), count: all }, ...counts.values()];
-    },
-    visibleFiles(): BackupFileInfo[] {
-      if (this.filter === "all") return this.files;
-      return this.files.filter((f) => tierLeaf(f.tier) === this.filter);
-    },
-    nextPage(): number {
-      return Math.max(1, Math.min(PAGE_SIZE, this.total - this.files.length));
-    },
-    footText(): string {
-      if (this.stale) return t("backups.list.showingStale", { shown: this.files.length, total: this.total });
-      if (this.filter !== "all") {
-        const chip = this.filterChips.find((c) => c.key === this.filter);
-        return t("backups.list.showingTier", {
-          shown: this.visibleFiles.length,
-          total: chip?.count ?? this.visibleFiles.length,
-          tier: (chip?.label ?? "").toLowerCase(),
-        });
-      }
-      return t("backups.list.showing", { shown: this.files.length, total: this.total });
-    },
-    errorDetail(): string {
-      if (!this.current) return "";
-      const status = this.errorStatus ?? t("backups.error.noResponse");
-      return `GET /api/servers/${this.current}/backups/files -> ${status}`;
-    },
-  },
-  watch: {
-    activeServer(id: string) {
-      if (id && id !== this.current) void this.select(id);
-    },
-    serverIds: {
-      immediate: true,
-      handler(ids: string[]) {
-        if (!this.current && ids.length > 0) {
-          void this.select(
-            this.activeServer && ids.includes(this.activeServer)
-              ? this.activeServer
-              : ids[0]!,
-          );
-        }
-      },
-    },
-  },
-  methods: {
-    async select(id: string): Promise<void> {
-      this.current = id;
-      this.filter = "all";
-      this.newIds = [];
-      if (!this.jobRunning) this.job = null;
-      await Promise.all([this.load(id), this.loadSummary(id), this.refreshStatus()]);
-    },
-    async reload(): Promise<void> {
-      await Promise.all([this.load(this.current), this.loadSummary(this.current), this.refreshStatus()]);
-    },
-    stem(name: string): string {
-      return name.replace(ARCHIVE_EXT, "");
-    },
-    tierClass(tier: string): string {
-      const leaf = tierLeaf(tier);
-      if (leaf === "update") return "tag-pre";
-      if (leaf === "manual") return "tag-manual";
-      return "tag-tier";
-    },
-    /** The row that started the job loses its buttons, so focus moves to the job. */
-    async focusJob(): Promise<void> {
-      await nextTick();
-      const block = this.$refs.jobBlock as { $el?: HTMLElement } | undefined;
-      block?.$el?.focus?.();
-    },
-    openServers(): void {
-      this.$emit("navigate", "status");
-    },
-    async createBackup(): Promise<void> {
-      if (this.jobRunning) return;
-      const server = this.current;
-      const startedAt = Date.now();
-      this.job = {
-        kind: "create",
-        title: t("backups.create.runningTitle", { server }),
-        state: "running",
-        startedAt,
-        exitCode: undefined,
-        output: "",
-        note: t("backups.create.runningNote"),
-      };
-      const outcome = await this.create();
-      if (this.current !== server) return;
-      await this.reload();
-      if (outcome.ok) {
-        this.job = null;
-        const fresh = this.files.find((f) => f.mtimeMs >= startedAt - MS.second);
-        if (fresh) this.newIds = [fresh.id];
-        this.notify.ok(
-          t("backups.create.done"),
-          fresh
-            ? t("backups.create.doneDetail", { name: this.stem(fresh.name), size: formatBytes(fresh.sizeBytes) })
-            : t("backups.create.doneNoFile"),
-        );
-        return;
-      }
-      this.job = {
-        kind: "create",
-        title: t("backups.create.failedTitle", { server }),
-        state: "failed",
-        startedAt,
-        exitCode: outcome.exitCode,
-        output: outcome.output,
-        note: outcome.error
-          ? t("backups.create.requestFailed", { message: outcome.error })
-          : t("backups.create.failedNote"),
-      };
-    },
-    blockedReason(server: string): string {
-      const s = this.serverStatus;
-      if (s?.state === ServerState.Offline) return "";
-      if (s?.state === ServerState.Online) {
-        const players = s.players ? t("backups.restore.withPlayers", { count: s.players.online }) : "";
-        return t("backups.restore.blockedOnline", { server, players });
-      }
-      if (s?.state === ServerState.Unresponsive) return t("backups.restore.blockedUnresponsive", { server });
-      return t("backups.restore.blockedUnknown", { server });
-    },
-    async confirmRestore(file: BackupFileInfo): Promise<void> {
-      const server = this.current;
-      await this.refreshStatus();
-      const blocked = this.blockedReason(server);
-      const when = absoluteStamp(file.mtimeMs);
-      const result = await this.confirmAction({
-        level: "irreversible",
-        tone: "warn",
-        header: t("backups.restore.header", { server, file: this.stem(file.name) }),
-        message: t("backups.restore.message", { server, when }),
-        acceptLabel: t("backups.restore.accept", { server }),
-        expected: server,
-        blockedReason: blocked,
-        alternateLabel: blocked ? t("backups.restore.alternate", { server }) : "",
-        facts: blocked
-          ? [
-              { term: t("backups.fact.backup"), detail: `${file.name}, ${when}`, mono: true },
-              { term: t("backups.fact.effect"), detail: t("backups.restore.effect") },
-              { term: t("backups.fact.recover"), detail: t("backups.restore.noUndo") },
-            ]
-          : [
-              { term: t("backups.fact.server"), detail: t("backups.restore.serverStopped", { server }) },
-              { term: t("backups.fact.applies"), detail: t("backups.restore.applies") },
-              { term: t("backups.fact.recover"), detail: t("backups.restore.noUndo") },
-            ],
-      });
-      if (result === "alternate") {
-        this.openServers();
-        return;
-      }
-      if (result !== "confirm" || blocked) return;
-      await this.runRestore(server, file);
-    },
-    async runRestore(server: string, file: BackupFileInfo): Promise<void> {
-      const startedAt = Date.now();
-      this.job = {
-        kind: "restore",
-        title: t("backups.restore.runningTitle", { server, file: this.stem(file.name) }),
-        state: "running",
-        startedAt,
-        exitCode: undefined,
-        output: "",
-        note: t("backups.restore.runningNote"),
-      };
-      void this.focusJob();
-      const outcome: ScriptOutcome = await this.runRow(file.id, () => this.restore(file), {
-        label: t("backups.restore.busy"),
-        exclusive: true,
-      });
-      void this.refreshStatus();
-      this.job = {
-        kind: "restore",
-        title: outcome.ok ? t("backups.restore.doneTitle") : t("backups.restore.failedTitle"),
-        state: outcome.ok ? "done" : "failed",
-        startedAt,
-        exitCode: outcome.exitCode,
-        output: outcome.output,
-        note: this.restoreNote(server, outcome),
-      };
-    },
-    restoreNote(server: string, outcome: ScriptOutcome): string {
-      if (outcome.ok) return t("backups.restore.doneNote", { server });
-      if (outcome.error) return t("backups.restore.requestFailed", { server, message: outcome.error });
-      if (outcome.exitCode === 3) return t("backups.restore.refusedNote", { server });
-      return t("backups.restore.failedNote", { server });
-    },
-    async confirmDelete(file: BackupFileInfo): Promise<void> {
-      const result = await this.confirmAction({
-        level: "irreversible",
-        tone: "danger",
-        header: t("backups.delete.header", { file: this.stem(file.name) }),
-        message: t("backups.delete.message", { size: formatBytes(file.sizeBytes) }),
-        acceptLabel: t("backups.delete.accept"),
-        expected: t("backups.delete.word"),
-        facts: [
-          { term: t("backups.fact.created"), detail: absoluteStamp(file.mtimeMs) },
-          { term: t("backups.fact.applies"), detail: t("backups.delete.applies") },
-          { term: t("backups.fact.recover"), detail: t("backups.delete.recover") },
-        ],
-      });
-      if (result !== "confirm") return;
-      const outcome = await this.runRow(file.id, () => this.remove(file), { label: t("backups.delete.busy") });
-      if (outcome.ok) this.notify.ok(t("backups.delete.done"), this.stem(file.name));
-      else this.notify.fail(t("backups.delete.failed"), outcome.error);
-    },
-  },
+const props = withDefaults(defineProps<{ serverIds?: string[]; activeServer?: string }>(), {
+  serverIds: () => [],
+  activeServer: "",
 });
+const emit = defineEmits<{ navigate: [id: string] }>();
+
+const {
+  files,
+  total,
+  stale,
+  loading,
+  initialLoad,
+  error,
+  errorStatus,
+  hasMore,
+  summary,
+  load,
+  loadMore,
+  loadSummary,
+  download,
+  create,
+  restore,
+  remove,
+} = useBackups();
+const { can } = useCapabilities();
+const rowBusy = useRowBusy<string>();
+const { isBusy, isLocked, busyLabel } = rowBusy;
+const status = useServerStatus();
+const { servers: statusServers, refresh: refreshStatus } = status;
+const confirmAction = useConfirmAction();
+const notify = useNotify();
+
+const current = ref("");
+const filter = ref("all");
+const job = ref<Job | null>(null);
+const newIds = ref<string[]>([]);
+const jobBlock = ref<{ $el?: HTMLElement } | null>(null);
+const columns: ResponsiveColumn[] = [
+  { key: "name", label: t("backups.col.name"), primary: true },
+  { key: "tier", label: t("backups.col.tier") },
+  { key: "created", label: t("backups.col.created") },
+  { key: "size", label: t("backups.col.size"), align: "end", numeric: true },
+];
+
+const serverStatus = computed(() => statusServers.value.find((s) => s.id === current.value) ?? null);
+const serverRole = computed<StatusRole>(() => {
+  const state = serverStatus.value?.state;
+  return state ? SERVER_STATE_ROLE[state] : StatusRole.Unknown;
+});
+const jobRunning = computed(() => job.value?.state === "running");
+/** A wrapper that positively lacks the feature hides the control; unknown keeps it. */
+const createAvailable = computed(() => serverStatus.value?.features?.scripts?.backup !== false);
+const restoreAvailable = computed(() => serverStatus.value?.features?.restore !== false);
+const deleteAvailable = computed(() => serverStatus.value?.features?.backupDelete !== false);
+const canCreate = computed(() => can("server:control", current.value));
+const canRestore = computed(() => can("backup:restore", current.value));
+const canDelete = computed(() => can("backup:delete", current.value));
+const canDownload = computed(() => can("backup:download", current.value));
+
+const missingCaps = computed<NeedKey[]>(() => {
+  if (!current.value) return [];
+  const missing: NeedKey[] = [];
+  if (createAvailable.value && !canCreate.value) missing.push("create");
+  if (restoreAvailable.value && !canRestore.value) missing.push("restore");
+  if (deleteAvailable.value && !canDelete.value) missing.push("delete");
+  return missing;
+});
+const readOnlyTitle = computed(() => {
+  const offered = [createAvailable.value, restoreAvailable.value, deleteAvailable.value].filter(Boolean).length;
+  return missingCaps.value.length === offered ? t("backups.readOnly.all") : t("backups.readOnly.some");
+});
+const readOnlyText = computed(() => {
+  const parts = missingCaps.value.map((key) => t(`backups.readOnly.needs.${key}`));
+  if (parts.length === 0) return "";
+  const first = parts[0]!.charAt(0).toUpperCase() + parts[0]!.slice(1);
+  const rest = parts.slice(1);
+  const sentence =
+    rest.length === 0
+      ? first
+      : t("backups.readOnly.join", { list: [first, ...rest.slice(0, -1)].join(", "), last: rest[rest.length - 1]! });
+  return t("backups.readOnly.text", { needs: sentence });
+});
+const staleAt = computed(() => (stale.value ? absoluteStamp(stale.value.asOf) : ""));
+const listMeta = computed(() => {
+  if (stale.value) return t("backups.list.readAt", { at: staleAt.value });
+  let zone = "";
+  try {
+    zone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? "";
+  } catch {
+    zone = "";
+  }
+  return zone ? t("backups.list.zoneNamed", { zone }) : t("backups.list.zone");
+});
+const metrics = computed<{ count: number; bytes: number | null; newest: number | null } | null>(() => {
+  const dirs = summary.value?.dirs ?? [];
+  if (dirs.length === 0 && files.value.length === 0) return null;
+  const count = dirs.length ? dirs.reduce((sum, d) => sum + d.count, 0) : total.value;
+  const newestDir = dirs.reduce((max, d) => Math.max(max, d.latestMtimeMs), 0);
+  const newest = newestDir || files.value[0]?.mtimeMs || null;
+  return { count, bytes: summary.value ? summary.value.totalBytes : null, newest };
+});
+const latest = computed<BackupDirInfo[]>(() =>
+  [...(summary.value?.dirs ?? [])].sort((a, b) => b.latestMtimeMs - a.latestMtimeMs),
+);
+const filterChips = computed<FilterChip[]>(() => {
+  const counts = new Map<string, FilterChip>();
+  const dirs = summary.value?.dirs ?? [];
+  if (dirs.length) {
+    for (const d of dirs) {
+      const key = tierLeaf(d.dir);
+      const chip = counts.get(key) ?? { key, label: backupTierLabel(d.dir), count: 0 };
+      chip.count += d.count;
+      counts.set(key, chip);
+    }
+  } else {
+    for (const f of files.value) {
+      const key = tierLeaf(f.tier);
+      const chip = counts.get(key) ?? { key, label: backupTierLabel(f.tier), count: 0 };
+      chip.count += 1;
+      counts.set(key, chip);
+    }
+  }
+  const all = metrics.value?.count ?? total.value;
+  return [{ key: "all", label: t("backups.filter.all"), count: all }, ...counts.values()];
+});
+const visibleFiles = computed<BackupFileInfo[]>(() => {
+  if (filter.value === "all") return files.value;
+  return files.value.filter((f) => tierLeaf(f.tier) === filter.value);
+});
+const nextPage = computed(() => Math.max(1, Math.min(PAGE_SIZE, total.value - files.value.length)));
+const footText = computed(() => {
+  if (stale.value) return t("backups.list.showingStale", { shown: files.value.length, total: total.value });
+  if (filter.value !== "all") {
+    const chip = filterChips.value.find((c) => c.key === filter.value);
+    return t("backups.list.showingTier", {
+      shown: visibleFiles.value.length,
+      total: chip?.count ?? visibleFiles.value.length,
+      tier: (chip?.label ?? "").toLowerCase(),
+    });
+  }
+  return t("backups.list.showing", { shown: files.value.length, total: total.value });
+});
+const errorDetail = computed(() => {
+  if (!current.value) return "";
+  const code = errorStatus.value ?? t("backups.error.noResponse");
+  return `GET /api/servers/${current.value}/backups/files -> ${code}`;
+});
+
+watch(
+  () => props.activeServer,
+  (id) => {
+    if (id && id !== current.value) void select(id);
+  },
+);
+watch(
+  () => props.serverIds,
+  (ids) => {
+    if (!current.value && ids.length > 0) {
+      void select(props.activeServer && ids.includes(props.activeServer) ? props.activeServer : ids[0]!);
+    }
+  },
+  { immediate: true },
+);
+
+async function select(id: string): Promise<void> {
+  current.value = id;
+  filter.value = "all";
+  newIds.value = [];
+  if (!jobRunning.value) job.value = null;
+  await Promise.all([load(id), loadSummary(id), refreshStatus()]);
+}
+
+async function reload(): Promise<void> {
+  await Promise.all([load(current.value), loadSummary(current.value), refreshStatus()]);
+}
+
+function stem(name: string): string {
+  return name.replace(ARCHIVE_EXT, "");
+}
+
+function tierClass(tier: string): string {
+  const leaf = tierLeaf(tier);
+  if (leaf === "update") return "tag-pre";
+  if (leaf === "manual") return "tag-manual";
+  return "tag-tier";
+}
+
+/** The row that started the job loses its buttons, so focus moves to the job. */
+async function focusJob(): Promise<void> {
+  await nextTick();
+  jobBlock.value?.$el?.focus?.();
+}
+
+function openServers(): void {
+  emit("navigate", "status");
+}
+
+async function createBackup(): Promise<void> {
+  if (jobRunning.value) return;
+  const server = current.value;
+  const startedAt = Date.now();
+  job.value = {
+    kind: "create",
+    title: t("backups.create.runningTitle", { server }),
+    state: "running",
+    startedAt,
+    exitCode: undefined,
+    output: "",
+    note: t("backups.create.runningNote"),
+  };
+  const outcome = await create();
+  if (current.value !== server) return;
+  await reload();
+  if (outcome.ok) {
+    job.value = null;
+    const fresh = files.value.find((f) => f.mtimeMs >= startedAt - MS.second);
+    if (fresh) newIds.value = [fresh.id];
+    notify.ok(
+      t("backups.create.done"),
+      fresh
+        ? t("backups.create.doneDetail", { name: stem(fresh.name), size: formatBytes(fresh.sizeBytes) })
+        : t("backups.create.doneNoFile"),
+    );
+    return;
+  }
+  job.value = {
+    kind: "create",
+    title: t("backups.create.failedTitle", { server }),
+    state: "failed",
+    startedAt,
+    exitCode: outcome.exitCode,
+    output: outcome.output,
+    note: outcome.error ? t("backups.create.requestFailed", { message: outcome.error }) : t("backups.create.failedNote"),
+  };
+}
+
+function blockedReason(server: string): string {
+  const s = serverStatus.value;
+  if (s?.state === ServerState.Offline) return "";
+  if (s?.state === ServerState.Online) {
+    const players = s.players ? t("backups.restore.withPlayers", { count: s.players.online }) : "";
+    return t("backups.restore.blockedOnline", { server, players });
+  }
+  if (s?.state === ServerState.Unresponsive) return t("backups.restore.blockedUnresponsive", { server });
+  return t("backups.restore.blockedUnknown", { server });
+}
+
+async function confirmRestore(file: BackupFileInfo): Promise<void> {
+  const server = current.value;
+  await refreshStatus();
+  const blocked = blockedReason(server);
+  const when = absoluteStamp(file.mtimeMs);
+  const result = await confirmAction({
+    level: "irreversible",
+    tone: "warn",
+    header: t("backups.restore.header", { server, file: stem(file.name) }),
+    message: t("backups.restore.message", { server, when }),
+    acceptLabel: t("backups.restore.accept", { server }),
+    expected: server,
+    blockedReason: blocked,
+    alternateLabel: blocked ? t("backups.restore.alternate", { server }) : "",
+    facts: blocked
+      ? [
+          { term: t("backups.fact.backup"), detail: `${file.name}, ${when}`, mono: true },
+          { term: t("backups.fact.effect"), detail: t("backups.restore.effect") },
+          { term: t("backups.fact.recover"), detail: t("backups.restore.noUndo") },
+        ]
+      : [
+          { term: t("backups.fact.server"), detail: t("backups.restore.serverStopped", { server }) },
+          { term: t("backups.fact.applies"), detail: t("backups.restore.applies") },
+          { term: t("backups.fact.recover"), detail: t("backups.restore.noUndo") },
+        ],
+  });
+  if (result === "alternate") {
+    openServers();
+    return;
+  }
+  if (result !== "confirm" || blocked) return;
+  await runRestore(server, file);
+}
+
+function restoreNote(server: string, outcome: ScriptOutcome): string {
+  if (outcome.ok) return t("backups.restore.doneNote", { server });
+  if (outcome.error) return t("backups.restore.requestFailed", { server, message: outcome.error });
+  if (outcome.exitCode === 3) return t("backups.restore.refusedNote", { server });
+  return t("backups.restore.failedNote", { server });
+}
+
+async function runRestore(server: string, file: BackupFileInfo): Promise<void> {
+  const startedAt = Date.now();
+  job.value = {
+    kind: "restore",
+    title: t("backups.restore.runningTitle", { server, file: stem(file.name) }),
+    state: "running",
+    startedAt,
+    exitCode: undefined,
+    output: "",
+    note: t("backups.restore.runningNote"),
+  };
+  void focusJob();
+  const outcome: ScriptOutcome = await rowBusy.run(file.id, () => restore(file), {
+    label: t("backups.restore.busy"),
+    exclusive: true,
+  });
+  void refreshStatus();
+  job.value = {
+    kind: "restore",
+    title: outcome.ok ? t("backups.restore.doneTitle") : t("backups.restore.failedTitle"),
+    state: outcome.ok ? "done" : "failed",
+    startedAt,
+    exitCode: outcome.exitCode,
+    output: outcome.output,
+    note: restoreNote(server, outcome),
+  };
+}
+
+async function confirmDelete(file: BackupFileInfo): Promise<void> {
+  const result = await confirmAction({
+    level: "irreversible",
+    tone: "danger",
+    header: t("backups.delete.header", { file: stem(file.name) }),
+    message: t("backups.delete.message", { size: formatBytes(file.sizeBytes) }),
+    acceptLabel: t("backups.delete.accept"),
+    expected: t("backups.delete.word"),
+    facts: [
+      { term: t("backups.fact.created"), detail: absoluteStamp(file.mtimeMs) },
+      { term: t("backups.fact.applies"), detail: t("backups.delete.applies") },
+      { term: t("backups.fact.recover"), detail: t("backups.delete.recover") },
+    ],
+  });
+  if (result !== "confirm") return;
+  const outcome = await rowBusy.run(file.id, () => remove(file), { label: t("backups.delete.busy") });
+  if (outcome.ok) notify.ok(t("backups.delete.done"), stem(file.name));
+  else notify.fail(t("backups.delete.failed"), outcome.error);
+}
 </script>
 
 <style scoped>
