@@ -10,7 +10,7 @@ import {
 import { EmbedColor } from "../../utils/embeds/embedColors.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { log } from "@mcbot/core/utils/logger.js";
-import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
+import { auditAdminAction } from "../shared/audit.js";
 
 import { t } from "@mcbot/core/utils/i18n.js";
 export const data = new SlashCommandBuilder()
@@ -63,11 +63,8 @@ export const execute = withErrorHandling(
       log.info("config", `Config reloaded by ${interaction.user.tag}`);
 
       // Config reload is an operator-level mutation.
-      await recordAdminAction({
+      await auditAdminAction(interaction, {
         action: "config reload",
-        by: interaction.user.tag,
-        byId: interaction.user.id,
-        guildId: interaction.guild?.id ?? null,
         detail:
           [
             added.length > 0 ? `added: ${added.join(",")}` : "",

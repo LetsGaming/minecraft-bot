@@ -16,7 +16,7 @@ import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { createSuccessEmbed } from "../../utils/embeds/embedUtils.js";
 import { tailLog } from "@mcbot/core/utils/server/serverAccess.js";
-import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
+import { auditAdminAction } from "../shared/audit.js";
 import { loadConfig } from "@mcbot/core/config.js";
 import {
   setConsoleRelay,
@@ -108,12 +108,9 @@ export const execute = withErrorHandling(
     }
 
     await setConsoleRelay(interaction.guild.id, server.id, enable);
-    await recordAdminAction({
+    await auditAdminAction(interaction, {
       action: enable ? "console live on" : "console live off",
       server: server.id,
-      by: interaction.user.tag,
-      byId: interaction.user.id,
-      guildId: interaction.guild.id,
     });
 
     await interaction.editReply({

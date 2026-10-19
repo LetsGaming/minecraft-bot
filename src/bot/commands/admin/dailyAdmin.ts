@@ -31,7 +31,7 @@ import {
   filterTargetableServerIds,
   resolveServer,
 } from "../../utils/guild/guildRouter.js";
-import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
+import { auditAdminAction } from "../shared/audit.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { formatDatetime } from "@mcbot/core/utils/time.js";
 
@@ -133,12 +133,9 @@ export const execute = withErrorHandling(
         delete fromClaims[user.id];
       });
 
-      await recordAdminAction({
+      await auditAdminAction(interaction, {
         action: "daily-move",
         server: to,
-        by: interaction.user.tag,
-        byId: interaction.user.id,
-        guildId: interaction.guild?.id ?? null,
         detail: `${user.tag} (${user.id}): ${from} → ${to}`,
       });
 
@@ -167,12 +164,9 @@ export const execute = withErrorHandling(
         delete claims[user.id];
       });
 
-      await recordAdminAction({
+      await auditAdminAction(interaction, {
         action: "daily-reset",
         server,
-        by: interaction.user.tag,
-        byId: interaction.user.id,
-        guildId: interaction.guild?.id ?? null,
         detail: `${user.tag} (${user.id})`,
       });
 

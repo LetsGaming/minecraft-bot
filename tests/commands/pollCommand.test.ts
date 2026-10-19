@@ -17,7 +17,7 @@ vi.mock("../../src/bot/commands/middleware.js", () => ({
 const guildRouter = vi.hoisted(() => ({
   resolveServer: vi.fn(),
   assertMayTargetServerId: vi.fn(),
-  getAllowedServerIds: vi.fn(),
+  filterTargetableServerIds: vi.fn(),
 }));
 vi.mock("../../src/bot/utils/guild/guildRouter.js", () => guildRouter);
 
@@ -112,7 +112,9 @@ beforeEach(() => {
   guildRouter.assertMayTargetServerId
     .mockReset()
     .mockImplementation((_i: unknown, id: string) => ({ id }));
-  guildRouter.getAllowedServerIds.mockReset().mockReturnValue(undefined);
+  guildRouter.filterTargetableServerIds
+    .mockReset()
+    .mockImplementation((_i: unknown, ids: string[]) => ids);
   scheduler.closePoll.mockReset().mockResolvedValue(undefined);
   tellraw.mockReset().mockResolvedValue(true);
   recordAdminAction.mockReset().mockResolvedValue(undefined);
@@ -251,7 +253,7 @@ describe("/poll create", () => {
   });
 
   it("span: 'all' is limited to the servers the guild may see", async () => {
-    guildRouter.getAllowedServerIds.mockReturnValue(new Set(["smp", "creative"]));
+    guildRouter.filterTargetableServerIds.mockReturnValue(["smp", "creative"]);
     await run(interaction({ sub: "create", servers: "ALL" }));
     expect((await loadPollStore()).polls[0]!.serverIds).toEqual(["smp", "creative"]);
   });

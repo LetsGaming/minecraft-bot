@@ -5,13 +5,13 @@
  * is the full view (per-server session list + recent playtime), while
  * /whois shows a compact cross-server last-seen line.
  */
-import { formatDuration } from "@mcbot/core/utils/duration.js";
+import { formatSpan } from "@mcbot/core/utils/duration.js";
 import { SlashCommandBuilder } from "discord.js";
 import { formatLastSeen } from "../../utils/discordTime.js";
 import { createEmbed } from "../../utils/embeds/embedUtils.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { withErrorHandling } from "../middleware.js";
-import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
+import { requireMcName } from "../shared/mcName.js";
 import {
   loadSessionStore,
   getServerSessions,
@@ -37,10 +37,7 @@ export const data = new SlashCommandBuilder()
   );
 
 export const execute = withErrorHandling(async (interaction) => {
-  const playerName = interaction.options.getString("player", true);
-  if (!isValidMcName(playerName)) {
-    throw new Error(t("common.invalidUsername", { username: playerName }));
-  }
+  const playerName = requireMcName(interaction, "player");
 
   const server = resolveServer(interaction);
   const store = await loadSessionStore();
@@ -69,7 +66,7 @@ export const execute = withErrorHandling(async (interaction) => {
   embed.addFields({
     name: t("sessions.playtime"),
     value: t("sessions.playtimeValue", {
-      duration: formatDuration(totalPlaytimeMs(entry)),
+      duration: formatSpan(totalPlaytimeMs(entry)),
       count: entry.sessions.length,
     }),
     inline: false,
@@ -81,7 +78,7 @@ export const execute = withErrorHandling(async (interaction) => {
     if (s.leftAt === null) {
       return `${start} — ${t("sessions.stillOnline")}`;
     }
-    return `${start} — ${formatDuration(s.leftAt - s.joinedAt)}`;
+    return `${start} — ${formatSpan(s.leftAt - s.joinedAt)}`;
   });
   embed.addFields({
     name: t("sessions.recent", { count: recent.length }),

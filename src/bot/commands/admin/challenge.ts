@@ -17,7 +17,7 @@ import { createEmbed } from "../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../utils/embeds/embedColors.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
-import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
+import { auditAdminAction } from "../shared/audit.js";
 import { broadcastNotification } from "../../logWatcher/watchers/notifyGuilds.js";
 import { loadConfig } from "@mcbot/core/config.js";
 import {
@@ -173,12 +173,9 @@ export const execute = withErrorHandling(
       if (!active) {
         throw new Error(t("challenge.noneActive", { server: server.id }));
       }
-      await recordAdminAction({
+      await auditAdminAction(interaction, {
         action: "challenge cancel",
         server: server.id,
-        by: interaction.user.tag,
-        byId: interaction.user.id,
-        guildId: interaction.guild?.id ?? null,
         detail: active.advancement,
       });
       await interaction.editReply({
@@ -227,12 +224,9 @@ export const execute = withErrorHandling(
       );
     }
 
-    await recordAdminAction({
+    await auditAdminAction(interaction, {
       action: "challenge start",
       server: server.id,
-      by: interaction.user.tag,
-      byId: interaction.user.id,
-      guildId: interaction.guild?.id ?? null,
       detail: advancement,
     });
 

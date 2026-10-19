@@ -50,13 +50,10 @@ export interface ClaimRoll {
   items: DailyRewardItem[];
 }
 
-export const EMPTY_CLAIM: Readonly<UserClaimData> = {
-  lastClaim: 0,
-  currentStreak: 0,
-  bonusStreak: 0,
-  longestStreak: 0,
-  rewards: [],
-};
+/** The record of a user who has never claimed. */
+export function emptyClaim(): UserClaimData {
+  return { lastClaim: 0, currentStreak: 0, bonusStreak: 0, longestStreak: 0, rewards: [] };
+}
 
 /**
  * Roll one claim: advance the streak and draw the main reward, the optional
@@ -176,10 +173,7 @@ export async function claimDaily(
   const pool = rewardPoolForServer(rewardsCfg, rewardsOverride);
   if (!pool.default.length) return { kind: "no-rewards" };
 
-  const userData: UserClaimData = getServerClaims(store, server.id)[userId] ?? {
-    ...EMPTY_CLAIM,
-    rewards: [],
-  };
+  const userData: UserClaimData = getServerClaims(store, server.id)[userId] ?? emptyClaim();
   if (now - userData.lastClaim < DAILY_COOLDOWN_MS) {
     return {
       kind: "cooldown",

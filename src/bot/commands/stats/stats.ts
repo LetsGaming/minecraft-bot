@@ -1,25 +1,17 @@
-import {
-  SlashCommandBuilder,
-  type ChatInputCommandInteraction,
-  type EmbedBuilder,
-} from "discord.js";
+import { SlashCommandBuilder, type ChatInputCommandInteraction } from "discord.js";
 import { loadStats, flattenStats, filterStats } from "@mcbot/core/utils/minecraft/statUtils.js";
 import { getSnapshotForDailyDiff } from "@mcbot/core/utils/minecraft/snapshotUtils.js";
 import { buildStatsEmbeds } from "../../utils/embeds/statEmbeds.js";
 import { findPlayer } from "@mcbot/core/utils/minecraft/playerUtils.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { log } from "@mcbot/core/utils/logger.js";
-import {
-  createPaginationButtons,
-  handlePagination,
-} from "../../utils/embeds/embedUtils.js";
+import { replyPaged } from "../shared/paged.js";
 import { withErrorHandling } from "../middleware.js";
 import { noStatsYet, playerNotFound } from "./statErrors.js";
 import type { FlattenedStat } from "@mcbot/core/types/index.js";
 import { CommandError, errMsg } from "@mcbot/core/utils/error.js";
-
 import { t } from "@mcbot/core/utils/i18n.js";
-const DAY_MS = 24 * 60 * 60 * 1000;
+import { MS } from "@mcbot/schema/time.js";
 
 export const data = new SlashCommandBuilder()
   .setName("stats")
@@ -80,21 +72,6 @@ export const execute = withErrorHandling(async (interaction) => {
   }
 });
 
-async function replyPaged(
-  interaction: ChatInputCommandInteraction,
-  embeds: EmbedBuilder[],
-): Promise<void> {
-  if (embeds.length === 1) {
-    await interaction.editReply({ embeds });
-    return;
-  }
-  const message = await interaction.editReply({
-    embeds: [embeds[0]!],
-    components: [createPaginationButtons(0, embeds.length)],
-  });
-  await handlePagination(message, interaction, embeds);
-}
-
 /**
  * All-time stats, optionally filtered by category or stat id.
  */
@@ -145,7 +122,7 @@ async function runDaily(
   const statsFile = await loadStats(player.uuid, server);
   if (!statsFile) throw noStatsYet(playerName);
 
-  const snapshot = await getSnapshotForDailyDiff(server.id, Date.now() - DAY_MS);
+  const snapshot = await getSnapshotForDailyDiff(server.id, Date.now() - MS.day);
   if (!snapshot || !snapshot.flatStats) {
     throw new CommandError({
       title: t("stats.noSnapshotTitle"),
@@ -173,7 +150,7 @@ async function runDaily(
 
   // The baseline can be younger than 24 h right after a bot start; the label
   // says how old it really is.
-  const ageHours = (Date.now() - snapshot.timestamp) / (60 * 60 * 1000);
+  const ageHours = (Date.now() - snapshot.timestamp) / MS.hour;
   await replyPaged(
     interaction,
     buildStatsEmbeds(

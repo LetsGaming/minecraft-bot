@@ -10,7 +10,7 @@ import {
 } from "discord.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { invalidateWhitelistCache } from "@mcbot/core/utils/minecraft/whitelist.js";
-import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
+import { assertMcName, playerConsoleCommand } from "./mcName.js";
 import { createSuccessEmbed } from "../../utils/embeds/embedUtils.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { recordAdd } from "@mcbot/core/utils/stores/whitelistAudit.js";
@@ -59,22 +59,21 @@ export async function performWhitelistAdd(
   username: string,
   by: { tag: string; id: string },
 ): Promise<WhitelistAddResult> {
-  // Validate the username format before it reaches a console
-  // command or a Mojang API URL. Rejecting here also gives a clearer
-  // error than a failed Mojang lookup for garbage input.
-  if (!isValidMcName(username)) {
-    throw new Error(t("common.invalidUsername", { username }));
-  }
+  // Validated before the Mojang lookup: a clearer error than a failed
+  // lookup for garbage input, and the name is part of the lookup URL.
+  const name = assertMcName(username);
 
-  const profile = await fetchMojangProfile(username);
-  if (!profile) throw new Error(t("whitelist.notFound", { username }));
+  const profile = await fetchMojangProfile(name);
+  if (!profile) throw new Error(t("whitelist.notFound", { username: name }));
 
   // Use the canonical capitalization Mojang returns so the
   // whitelist entry matches the in-game name exactly.
-  const canonicalName = profile.name ?? username;
+  const canonicalName = profile.name ?? name;
 
   const verdict = requireAccepted(
-    await server.send(`/whitelist add ${canonicalName}`),
+    await server.send(
+      playerConsoleCommand(canonicalName, "/whitelist", { text: "add" }, { player: canonicalName }),
+    ),
     server.id,
     { refusal: /^That player does not exist/i },
   );

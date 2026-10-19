@@ -10,13 +10,12 @@ import {
 import {
   chunkLines,
   createEmbed,
-  createPaginationButtons,
-  handlePagination,
   createInfoEmbed,
   paginateFields,
   reservedLength,
 } from "../../utils/embeds/embedUtils.js";
 import { withErrorHandling } from "../middleware.js";
+import { replyPaged } from "../shared/paged.js";
 import { noStatsYet, playerNotFound } from "./statErrors.js";
 import { findPlayer } from "@mcbot/core/utils/minecraft/playerUtils.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
@@ -86,15 +85,7 @@ export const execute = withErrorHandling(async (interaction) => {
     return;
   }
 
-  if (embeds.length === 1) {
-    await interaction.editReply({ embeds });
-    return;
-  }
-  const message = await interaction.editReply({
-    embeds: [embeds[0]!],
-    components: [createPaginationButtons(0, embeds.length)],
-  });
-  await handlePagination(message, interaction, embeds);
+  await replyPaged(interaction, embeds);
 });
 
 interface ComparisonLine {

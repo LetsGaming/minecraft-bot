@@ -11,8 +11,6 @@ import { SlashCommandBuilder, type APIEmbedField } from "discord.js";
 import {
   chunkLines,
   createEmbed,
-  createPaginationButtons,
-  handlePagination,
   paginateFields,
   reservedLength,
 } from "../../utils/embeds/embedUtils.js";
@@ -20,6 +18,7 @@ import { getModList, type ModInfo, type ModList } from "@mcbot/core/utils/minecr
 import { loaderDisplayName } from "@mcbot/core/utils/minecraft/versionName.js";
 import { readThrough } from "@mcbot/core/utils/wrapper/lastKnown.js";
 import { withErrorHandling } from "../middleware.js";
+import { replyPaged } from "../shared/paged.js";
 import { relativeTimestamp } from "../../utils/discordTime.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { requireCapability } from "@mcbot/core/utils/server/capabilities.js";
@@ -95,9 +94,5 @@ export const execute = withErrorHandling(async (interaction) => {
     reserved: reservedLength({ title, description }),
   }).map((page) => createEmbed({ title, description }).addFields(page));
 
-  const message = await interaction.editReply({
-    embeds: [embeds[0]!],
-    components: embeds.length > 1 ? [createPaginationButtons(0, embeds.length)] : [],
-  });
-  if (embeds.length > 1) await handlePagination(message, interaction, embeds);
+  await replyPaged(interaction, embeds);
 });

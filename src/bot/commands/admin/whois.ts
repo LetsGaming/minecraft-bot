@@ -13,7 +13,7 @@ import {
   loadLinkedAccountsOrEmpty,
   findDiscordIdByMcName,
 } from "@mcbot/core/utils/stores/linkUtils.js";
-import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
+import { requireMcName } from "../shared/mcName.js";
 import {
   loadSessionStore,
   isOnlineNow,
@@ -91,11 +91,7 @@ export const data = new SlashCommandBuilder()
 
 export const execute = withErrorHandling(
   requireServerAdmin(async (interaction) => {
-    const username = interaction.options.getString("username", true);
-
-    if (!isValidMcName(username)) {
-      throw new Error(t("common.invalidUsername", { username }));
-    }
+    const username = requireMcName(interaction, "username");
 
     const [audit, linked, sessions, notesStore] = await Promise.all([
       getAuditEntry(username),

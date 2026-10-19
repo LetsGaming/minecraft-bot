@@ -15,7 +15,7 @@ vi.mock("../../src/core/utils/server/server.js", () => ({
 vi.mock("../../src/bot/utils/guild/guildRouter.js", () => ({
   resolveServer: vi.fn(),
   // Null = unrestricted (single-tenant), matching these scenarios.
-  getAllowedServerIds: vi.fn().mockReturnValue(null),
+  filterTargetableServerIds: vi.fn((_i: unknown, ids: string[]) => ids),
 }));
 
 vi.mock("../../src/core/utils/stores/uptimeTracker.js", () => ({
@@ -53,7 +53,7 @@ import {
 } from "../../src/core/utils/server/server.js";
 import {
   resolveServer,
-  getAllowedServerIds,
+  filterTargetableServerIds,
 } from "../../src/bot/utils/guild/guildRouter.js";
 import { getUptimeStats } from "../../src/core/utils/stores/uptimeTracker.js";
 import { execute } from "../../src/bot/commands/info/uptime.js";
@@ -187,7 +187,7 @@ describe("uptime execute — server:all overview", () => {
 
   it("only includes servers the guild may target", async () => {
     vi.mocked(getAllInstances).mockReturnValue([fakeServer, server2]);
-    vi.mocked(getAllowedServerIds).mockReturnValueOnce(new Set(["creative"]));
+    vi.mocked(filterTargetableServerIds).mockReturnValueOnce(["creative"]);
     await execute(makeInteraction("all"));
     expect(getUptimeStats).toHaveBeenCalledTimes(1);
     expect(getUptimeStats).toHaveBeenCalledWith("creative");

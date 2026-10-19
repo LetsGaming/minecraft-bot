@@ -5,7 +5,7 @@ import { createSuccessEmbed } from "../utils/embeds/embedUtils.js";
 import { withErrorHandling, requireServerAdmin } from "./middleware.js";
 import { recordRemove } from "@mcbot/core/utils/stores/whitelistAudit.js";
 import { invalidateWhitelistCache } from "@mcbot/core/utils/minecraft/whitelist.js";
-import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
+import { playerConsoleCommand, requireMcName } from "./shared/mcName.js";
 import {
   requireAccepted,
   withUnverifiedNote,
@@ -27,15 +27,11 @@ export const data = new SlashCommandBuilder()
 
 export const execute = withErrorHandling(
   requireServerAdmin(async (interaction) => {
-    const username = interaction.options.getString("username", true);
+    const username = requireMcName(interaction, "username");
     const server = resolveServer(interaction);
-    // Never interpolate a raw username into a console command.
-    if (!isValidMcName(username)) {
-      throw new Error(t("common.invalidUsername", { username }));
-    }
 
     const verdict = requireAccepted(
-      await server.send(`/whitelist remove ${username}`),
+      await server.send(playerConsoleCommand(username, "/whitelist", { text: "remove" }, { player: username })),
       server.id,
     );
     await recordRemove(

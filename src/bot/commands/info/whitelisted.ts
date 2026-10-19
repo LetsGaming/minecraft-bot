@@ -2,10 +2,9 @@ import { SlashCommandBuilder } from "discord.js";
 import {
   createEmbed,
   createInfoEmbed,
-  createPaginationButtons,
-  handlePagination,
 } from "../../utils/embeds/embedUtils.js";
 import { withErrorHandling } from "../middleware.js";
+import { pageBy, replyPaged } from "../shared/paged.js";
 import { loadWhitelist } from "@mcbot/core/utils/minecraft/whitelist.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { log } from "@mcbot/core/utils/logger.js";
@@ -40,15 +39,8 @@ export const execute = withErrorHandling(async (interaction) => {
   const usernames = players.map((p) => p.name).sort((a, b) => a.localeCompare(b));
   const title = t("whitelisted.title", { server: server.id });
   const total = t("whitelisted.total", { count: usernames.length });
-  const embeds = [];
-  for (let i = 0; i < usernames.length; i += NAMES_PER_PAGE) {
-    const names = usernames.slice(i, i + NAMES_PER_PAGE).join(", ");
-    embeds.push(createEmbed({ title, description: `${total}\n\n${names}` }));
-  }
-
-  const message = await interaction.editReply({
-    embeds: [embeds[0]!],
-    components: embeds.length > 1 ? [createPaginationButtons(0, embeds.length)] : [],
-  });
-  if (embeds.length > 1) await handlePagination(message, interaction, embeds);
+  const embeds = pageBy(usernames, NAMES_PER_PAGE).map((names) =>
+    createEmbed({ title, description: `${total}\n\n${names.join(", ")}` }),
+  );
+  await replyPaged(interaction, embeds);
 });

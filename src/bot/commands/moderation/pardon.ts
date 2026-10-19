@@ -10,8 +10,8 @@ import { SlashCommandBuilder } from "discord.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { createSuccessEmbed } from "../../utils/embeds/embedUtils.js";
-import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
-import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
+import { auditAdminAction } from "../shared/audit.js";
+import { playerConsoleCommand, requireMcName } from "../shared/mcName.js";
 import { removeTempBan } from "@mcbot/core/utils/stores/tempBanStore.js";
 import { cancelTempBanTimer } from "../../logWatcher/watchers/schedulers/tempBanScheduler.js";
 import { t } from "@mcbot/core/utils/i18n.js";
@@ -35,26 +35,20 @@ export const data = new SlashCommandBuilder()
 
 export const execute = withErrorHandling(
   requireServerAdmin(async (interaction) => {
-    const player = interaction.options.getString("player", true).trim();
-    if (!isValidMcName(player)) {
-      throw new Error(t("common.invalidUsername", { username: player }));
-    }
+    const player = requireMcName(interaction, "player");
     const server = resolveServer(interaction);
 
     const verdict = requireAccepted(
-      await server.send(`/pardon ${player}`),
+      await server.send(playerConsoleCommand(player, "/pardon", { player })),
       server.id,
     );
 
     cancelTempBanTimer(server.id, player);
     await removeTempBan(server.id, player);
 
-    await recordAdminAction({
+    await auditAdminAction(interaction, {
       action: "pardon",
       server: server.id,
-      by: interaction.user.tag,
-      byId: interaction.user.id,
-      guildId: interaction.guild?.id ?? null,
       detail: player,
     });
 

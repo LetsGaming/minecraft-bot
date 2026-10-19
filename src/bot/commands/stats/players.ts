@@ -7,14 +7,11 @@
  */
 import { SlashCommandBuilder } from "discord.js";
 import type { EmbedBuilder } from "discord.js";
-import {
-  createEmbed,
-  createPaginationButtons,
-  handlePagination,
-} from "../../utils/embeds/embedUtils.js";
+import { createEmbed } from "../../utils/embeds/embedUtils.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { formatLastSeen } from "../../utils/discordTime.js";
 import { withErrorHandling } from "../middleware.js";
+import { pageBy, replyPaged } from "../shared/paged.js";
 import {
   loadAllStats,
   flattenStats,
@@ -93,6 +90,10 @@ const SORT_LABEL_KEY: Record<RosterSort, string> = {
   name: "players.sortName",
 };
 
+function isRosterSort(value: string): value is RosterSort {
+  return Object.hasOwn(SORT_LABEL_KEY, value);
+}
+
 /** "3 online, 41 known. Sorted by playtime." */
 export function describeRoster(
   shown: RosterEntry[],
@@ -112,22 +113,18 @@ export function buildPages(
   serverId: string,
   summary: string,
 ): EmbedBuilder[] {
-  const pages: EmbedBuilder[] = [];
-  for (let i = 0; i < entries.length; i += PER_PAGE) {
-    const slice = entries.slice(i, i + PER_PAGE);
-    pages.push(
-      createEmbed({
-        title: t("players.title", { server: serverId }),
-        description: clamp(`${summary}\n\n${slice.map(describeEntry).join("\n")}`),
-      }),
-    );
-  }
-  return pages;
+  return pageBy(entries, PER_PAGE).map((slice) =>
+    createEmbed({
+      title: t("players.title", { server: serverId }),
+      description: clamp(`${summary}\n\n${slice.map(describeEntry).join("\n")}`),
+    }),
+  );
 }
 
 export const execute = withErrorHandling(async (interaction) => {
   const server = resolveServer(interaction);
-  const sort = (interaction.options.getString("sort") ?? "last-seen") as RosterSort;
+  const requestedSort = interaction.options.getString("sort");
+  const sort: RosterSort = requestedSort !== null && isRosterSort(requestedSort) ? requestedSort : "last-seen";
   const inactiveDays = interaction.options.getInteger("inactive");
   const includeUnknown = interaction.options.getBoolean("include_unknown") ?? false;
 
@@ -168,17 +165,8 @@ export const execute = withErrorHandling(async (interaction) => {
     return;
   }
 
-  const pages = buildPages(
-    roster,
-    server.id,
-    describeRoster(roster, knownCount, sort, inactiveDays),
+  await replyPaged(
+    interaction,
+    buildPages(roster, server.id, describeRoster(roster, knownCount, sort, inactiveDays)),
   );
-  const message = await interaction.editReply({
-    embeds: [pages[0]!],
-    components:
-      pages.length > 1 ? [createPaginationButtons(0, pages.length)] : [],
-  });
-  if (pages.length > 1) {
-    await handlePagination(message, interaction, pages);
-  }
 });

@@ -9,9 +9,9 @@ import { SlashCommandBuilder } from "discord.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { createSuccessEmbed } from "../../utils/embeds/embedUtils.js";
-import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
+import { auditAdminAction } from "../shared/audit.js";
+import { playerConsoleCommand, requireMcName } from "../shared/mcName.js";
 import {
-  isValidMcName,
   sanitizeReason,
   MAX_REASON_LENGTH,
 } from "@mcbot/core/utils/sanitize.js";
@@ -43,27 +43,21 @@ export const data = new SlashCommandBuilder()
 
 export const execute = withErrorHandling(
   requireServerAdmin(async (interaction) => {
-    const player = interaction.options.getString("player", true).trim();
-    if (!isValidMcName(player)) {
-      throw new Error(t("common.invalidUsername", { username: player }));
-    }
+    const player = requireMcName(interaction, "player");
     const reason = sanitizeReason(interaction.options.getString("reason"));
     const server = resolveServer(interaction);
 
     const verdict = requireAccepted(
       await server.send(
-        reason ? `/kick ${player} ${reason}` : `/kick ${player}`,
+        playerConsoleCommand(player, "/kick", { player }, ...(reason ? [{ text: reason }] : [])),
       ),
       server.id,
       { refusal: /^No player was found/i },
     );
 
-    await recordAdminAction({
+    await auditAdminAction(interaction, {
       action: "kick",
       server: server.id,
-      by: interaction.user.tag,
-      byId: interaction.user.id,
-      guildId: interaction.guild?.id ?? null,
       detail: reason ? `${player}: ${reason}` : player,
     });
 
