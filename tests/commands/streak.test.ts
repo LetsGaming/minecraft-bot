@@ -9,6 +9,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("../../src/core/utils/jsonStore.js", () => ({
   loadJson: vi.fn().mockResolvedValue({}),
   saveJson: vi.fn().mockResolvedValue(undefined),
+  removeJson: vi.fn().mockResolvedValue(undefined),
+  isEnoent: vi.fn().mockReturnValue(false),
 }));
 
 vi.mock("../../src/core/utils/paths.js", () => ({

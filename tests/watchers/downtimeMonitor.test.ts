@@ -95,6 +95,7 @@ function fakeServer(
 ) {
   return {
     id,
+    getList: NO_LIST,
     getHealth: vi.fn().mockImplementation(async () => {
       if (online instanceof Error) throw online;
       if (typeof online === "string") return health(online);
@@ -103,6 +104,9 @@ function fakeServer(
     }),
   } as never;
 }
+
+/** A player-list read that has nothing to report. */
+const NO_LIST = vi.fn().mockResolvedValue({ ok: false, error: "unavailable" });
 
 function fakeClient(send = vi.fn().mockResolvedValue(undefined)) {
   return { channels: { fetch: vi.fn().mockResolvedValue({ send }) } } as never;
@@ -176,7 +180,7 @@ describe("startDowntimeMonitor — online server", () => {
   it("sends a recovery embed after the server comes back online", async () => {
     const id = uid();
     const send = vi.fn().mockResolvedValue(undefined);
-    const srv = { id, getHealth: vi.fn().mockResolvedValue(health("offline")) } as never;
+    const srv = { id, getHealth: vi.fn().mockResolvedValue(health("offline")), getList: NO_LIST } as never;
     const timer = startDowntimeMonitor([srv], fakeClient(send), guildsFor());
 
     // Three offline ticks → downtime alert
@@ -516,7 +520,7 @@ describe("startDowntimeMonitor: mention policy", () => {
   async function downThenUp(mentionPolicy?: string) {
     const id = uid();
     const send = vi.fn().mockResolvedValue(undefined);
-    const srv = { id, getHealth: vi.fn().mockResolvedValue(health("offline")) } as never;
+    const srv = { id, getHealth: vi.fn().mockResolvedValue(health("offline")), getList: NO_LIST } as never;
     const timer = startDowntimeMonitor([srv], fakeClient(send), guildsWithRole(mentionPolicy));
     for (let i = 0; i < 3; i++) await vi.advanceTimersByTimeAsync(TICK);
     vi.mocked(srv.getHealth).mockResolvedValue(health("online"));

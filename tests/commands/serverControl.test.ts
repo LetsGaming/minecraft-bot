@@ -20,6 +20,10 @@ vi.mock("../../src/bot/utils/guild/guildRouter.js", () => ({
   resolveServer: vi.fn(),
   assertMayTargetServerId: vi.fn(),
 }));
+vi.mock("../../src/bot/utils/guild/permissions.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/bot/utils/guild/permissions.js")>()),
+  isInvokerAdmin: vi.fn().mockReturnValue(true),
+}));
 vi.mock("../../src/core/utils/stores/adminAudit.js", () => ({
   recordAdminAction: vi.fn().mockResolvedValue(undefined),
 }));

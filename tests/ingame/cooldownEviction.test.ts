@@ -20,7 +20,8 @@ vi.mock("../../src/core/utils/commands/commandPolicy.js", () => ({
 vi.mock("../../src/core/utils/stores/linkStore.js", () => ({
   loadLinkedAccounts: vi.fn().mockResolvedValue({}),
 }));
-vi.mock("../../src/bot/utils/guild/permissions.js", () => ({\n  isLinkedPlayerAdmin: vi.fn().mockResolvedValue(false),
+vi.mock("../../src/bot/utils/guild/permissions.js", () => ({
+  isLinkedPlayerAdmin: vi.fn().mockResolvedValue(false),
 }));
 
 import {

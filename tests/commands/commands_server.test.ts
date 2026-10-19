@@ -42,6 +42,10 @@ vi.mock("../../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+vi.mock("../../src/bot/utils/guild/permissions.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/bot/utils/guild/permissions.js")>()),
+  isInvokerAdmin: vi.fn().mockReturnValue(true),
+}));
 vi.mock("../../src/core/utils/stores/adminAudit.js", () => ({
   recordAdminAction: vi.fn().mockResolvedValue(undefined),
   loadAdminAudit: vi.fn().mockResolvedValue([]),

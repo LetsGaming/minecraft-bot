@@ -57,6 +57,7 @@ beforeEach(() => {
   mockFetch.mockReset();
   resetBreakersForTesting();
   invalidatePrefix("manifest:");
+  invalidatePrefix("capabilities:");
   forgetAdvertisedScriptTimeouts(cfg);
 });
 

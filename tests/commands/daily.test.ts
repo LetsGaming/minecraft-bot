@@ -42,6 +42,8 @@ function embedOf(payload: unknown): { title?: string; description?: string } {
 vi.mock("../../src/core/utils/jsonStore.js", () => ({
   loadJson: vi.fn(),
   saveJson: vi.fn(),
+  removeJson: vi.fn(),
+  isEnoent: vi.fn().mockReturnValue(false),
 }));
 
 vi.mock("../../src/core/utils/paths.js", () => ({
@@ -632,7 +634,7 @@ describe("deferred replies", () => {
     expect(embedOf(interaction.followUp.mock.calls[0]![0]).title).toBe("⛔ Rewards waiting in game");
   });
 
-  it("uses the claim and queues what a failed give did not deliver (AUD-022)", async () => {
+  it("uses the claim and queues what a failed give did not deliver", async () => {
     const { execute, interaction } = await setup({
       online: true,
       send: { kind: "unreachable", reason: "timeout", detail: "x" },

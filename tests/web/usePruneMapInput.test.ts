@@ -63,6 +63,7 @@ describe("usePruneMapInput", () => {
 
     const b = setup("zone");
     b.input.onDown(pointer(160, 160));
+    b.input.onMove(pointer(170, 170));
     b.input.onUp(pointer(170, 170));
     expect(b.events.onZone).toHaveBeenCalledWith({ x1: 0, z1: 0, x2: 1, z2: 1 });
     expect(b.events.onSelect).not.toHaveBeenCalled();

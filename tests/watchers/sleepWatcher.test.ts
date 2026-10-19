@@ -210,9 +210,8 @@ describe("handler — player not in bed", () => {
     const server = makeServer({ id: "rcon-error", sendCommandError: true });
 
     const match = regex.exec("[12:00:00] [INFO]: <Steve> liege wie")!;
-    await expect(
-      handler(match, null as unknown as Client, server),
-    ).resolves.toBeUndefined();
+    await handler(match, null as unknown as Client, server);
+    await expect(flushSendQueues()).resolves.toBeUndefined();
   });
 });
 

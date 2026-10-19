@@ -14,7 +14,8 @@ vi.mock("../../src/core/utils/stores/linkStore.js", () => ({
 vi.mock("../../src/core/utils/commands/commandUsage.js", () => ({
   recordCommandUsage: vi.fn(),
 }));
-vi.mock("../../src/bot/utils/guild/permissions.js", () => ({\n  isLinkedPlayerAdmin: vi.fn().mockResolvedValue(false),
+vi.mock("../../src/bot/utils/guild/permissions.js", () => ({
+  isLinkedPlayerAdmin: vi.fn().mockResolvedValue(false),
 }));
 vi.mock("../../src/core/utils/commands/commandPolicy.js", () => ({
   resolveCommandPolicy: vi.fn(),

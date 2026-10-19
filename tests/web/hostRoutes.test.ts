@@ -220,7 +220,8 @@ describe("monitoring routes", () => {
     expect(body.entries.map((e: { at: string }) => e.at)).toEqual(["599", "598"]);
 
     expect((await call("GET", "/api/audit?limit=99999")).json().entries).toHaveLength(500);
-    expect((await call("GET", "/api/audit?limit=0")).json().entries).toHaveLength(100);
+    expect((await call("GET", "/api/audit?limit=0")).json().entries).toHaveLength(1);
+    expect((await call("GET", "/api/audit?limit=abc")).json().entries).toHaveLength(100);
     expect((await call("GET", "/api/audit?limit=-5")).json().entries).toHaveLength(1);
   });
 
