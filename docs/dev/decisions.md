@@ -766,3 +766,19 @@ The typed confirm stays on PrimeVue's `ConfirmDialog` (its container slot gives 
 **Decision:** The Wave 2 changes are released as 8.0.0, not 7.1.0.
 
 **Why:** the owner made `"escalation"` the default alert mention policy (see above), which changes who gets paged for every guild that has a `mentionRole` and no `mentionPolicy`. A change existing configs notice without being edited is a breaking change, so the version is a major one. The changelog lists it under Breaking with the one-line opt-out (`"mentionPolicy": "always"`).
+
+---
+
+## An empty `allowedServers` list denies every server
+
+**Decision:** In a deployment with more than one guild, an explicit `allowedServers: []` on a guild means that guild may reach no server. Only an absent list falls back to the servers the guild's own settings reference. Config validation warns when a guild with an empty list and no `defaultServer` can target nothing.
+
+**Why:** the empty list used to be read as "unrestricted", so writing `[]` to lock a guild out did the opposite. Tenant isolation has to fail closed: an operator who writes an explicit empty list has said no, and the one case that must still work (a guild with a `defaultServer`) keeps working because the default is added to the allowed set before the check.
+
+---
+
+## Log handlers queue their sends and detach their tail work
+
+**Decision:** The handlers a server's log watcher dispatches (joins, deaths, advancements, server events, the sleep prompt) put their Discord sends on a per-channel ordered queue (`watchers/sendQueue.ts`) and run lookups, tips and DMs detached, instead of awaiting them on the watcher's dispatch queue.
+
+**Why:** the dispatch queue runs one handler at a time per server, so one slow Discord channel or wrapper call delayed chat bridge messages and in-game commands behind it. Ordering is kept per channel, a slow channel delays only itself, and a failed send is logged per channel instead of aborting the handler.
