@@ -17,6 +17,7 @@ import {
   tryResolveServer,
   getAllowedServerIds,
   serverInScope,
+  getGuildScopedServer,
 } from "../../src/bot/utils/guild/guildRouter.js";
 import type { BotConfig } from "../../src/core/types/index.js";
 import type { ChatInputCommandInteraction } from "discord.js";
@@ -343,5 +344,31 @@ describe("serverInScope", () => {
     });
     expect(serverInScope(undefined, "extra", "guild1")).toBe(true);
     expect(serverInScope(undefined, "survival", "guild1")).toBe(false);
+  });
+});
+
+describe("getGuildScopedServer", () => {
+  beforeEach(() => {
+    mockConfig({
+      guilds: {
+        a: { defaultServer: "main", allowedServers: ["main"] },
+        b: { defaultServer: "survival", allowedServers: ["survival"] },
+      },
+    });
+  });
+
+  it("returns the running server when the guild may target it", () => {
+    vi.mocked(getServerInstance).mockReturnValue(fakeServer);
+    expect(getGuildScopedServer("a", "main")).toBe(fakeServer);
+  });
+
+  it("returns null for a server hidden from the guild, without looking it up", () => {
+    expect(getGuildScopedServer("a", "survival")).toBeNull();
+    expect(getServerInstance).not.toHaveBeenCalled();
+  });
+
+  it("returns null for a server that is not running", () => {
+    vi.mocked(getServerInstance).mockReturnValue(null);
+    expect(getGuildScopedServer("a", "main")).toBeNull();
   });
 });

@@ -179,6 +179,19 @@ describe("requireServerAdmin", () => {
     );
     expect(execute).not.toHaveBeenCalled();
   });
+
+  it("is checked once, not again, when wrapped by withErrorHandling", async () => {
+    vi.mocked(loadConfig).mockReturnValue({
+      adminUsers: ["admin1"],
+    } as ReturnType<typeof loadConfig>);
+    const run = vi.fn().mockResolvedValue(undefined);
+    const wrapped = withErrorHandling(requireServerAdmin(run));
+
+    await wrapped(makeInteraction({ userId: "admin1" }));
+
+    expect(run).toHaveBeenCalledOnce();
+    expect(loadConfig).toHaveBeenCalledOnce();
+  });
 });
 
 // ── withErrorHandling ──────────────────────────────────────────────────────
