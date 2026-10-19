@@ -155,9 +155,9 @@ export default defineComponent({
   },
   emits: ["goto-config", "update-route"],
   setup() {
-    const { guilds: guildRows, loading, error, load: loadGuilds } = useMyGuilds();
+    const { guilds: guildRows, loading, cause, load: loadGuilds } = useMyGuilds();
     const { guildName, load: loadGuildNames } = useGuilds();
-    return { t, guildRows, loading, loadError: error, loadGuilds, guildName, loadGuildNames };
+    return { t, guildRows, loading, loadError: cause, loadGuilds, guildName, loadGuildNames };
   },
   data() {
     return {
