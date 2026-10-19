@@ -1,14 +1,17 @@
 import type { EmbedBuilder } from "discord.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import type { DailyRewardItem, RewardPool } from "@mcbot/core/types/index.js";
+import type { GrantedRewards } from "@mcbot/core/utils/minecraft/dailyClaim.js";
 import { formatItemList, formatItemStack } from "@mcbot/core/utils/minecraft/itemNames.js";
 import {
   DAILY_COOLDOWN_MS,
+  STREAK_GRACE_MS,
   deriveMaxStreak,
   nextMilestone,
   rarest,
   rarityOf,
 } from "@mcbot/core/utils/minecraft/rewards.js";
+import { MS } from "@mcbot/schema/time.js";
 import {
   CATEGORY_STYLE,
   RARITY_STYLE,
@@ -19,18 +22,6 @@ import { createEmbed, createPlayerEmbed } from "../../../utils/embeds/embedUtils
 import { EmbedColor, embedColorFor } from "../../../utils/embeds/embedColors.js";
 import { progressBar } from "../../../utils/embeds/gameDisplay.js";
 import { clockTimestamp, relativeTimestamp } from "../../../utils/discordTime.js";
-
-const HOUR_MS = 60 * 60 * 1000;
-
-/** A claim breaks the streak when the gap passes this many cooldowns. */
-const STREAK_GRACE_COOLDOWNS = 2;
-
-export interface GrantedRewards {
-  main: DailyRewardItem;
-  randomBonus: DailyRewardItem | null;
-  streakBonus: DailyRewardItem[];
-  bonusStreak: number;
-}
 
 export interface ClaimView {
   player: string;
@@ -130,7 +121,7 @@ export function buildCooldownEmbed(opts: {
   currentStreak: number;
 }): EmbedBuilder {
   const readyAt = opts.lastClaim + DAILY_COOLDOWN_MS;
-  const deadline = opts.lastClaim + STREAK_GRACE_COOLDOWNS * DAILY_COOLDOWN_MS;
+  const deadline = opts.lastClaim + STREAK_GRACE_MS;
   const lines = [
     t("daily.cooldown", { relative: relativeTimestamp(readyAt), time: clockTimestamp(readyAt) }),
     progressBar(opts.now - opts.lastClaim, DAILY_COOLDOWN_MS, 10),
@@ -182,5 +173,5 @@ export function buildQueuedEmbed(opts: {
 }
 
 function streakWindowHours(): number {
-  return Math.round((STREAK_GRACE_COOLDOWNS * DAILY_COOLDOWN_MS) / HOUR_MS);
+  return Math.round(STREAK_GRACE_MS / MS.hour);
 }
