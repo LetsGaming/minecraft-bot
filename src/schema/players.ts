@@ -12,8 +12,6 @@
  * Isomorphic: no Node imports.
  */
 
-import type { PlayerRow } from "./analytics.js";
-
 export const PLAYER_STATUS_FILTERS = ["all", "online", "quiet", "new"] as const;
 export type PlayerStatusFilter = (typeof PLAYER_STATUS_FILTERS)[number];
 
@@ -25,6 +23,17 @@ export const PLAYER_SORT_FIELDS = [
   "firstSeen",
 ] as const;
 export type PlayerSortField = (typeof PLAYER_SORT_FIELDS)[number];
+
+export interface PlayerRow {
+  name: string;
+  /** Playtime inside the requested window only. */
+  playtimeMs: number;
+  /** Sessions inside the window, out of the retained ones. */
+  sessions: number;
+  lastSeen: number | null;
+  online: boolean;
+  firstSeen: number | null;
+}
 
 export interface PlayerListResponse {
   players: PlayerRow[];

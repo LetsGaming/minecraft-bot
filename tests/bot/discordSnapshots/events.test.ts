@@ -24,8 +24,6 @@ vi.mock("../../../src/core/utils/stores/sessionStore.js", async (importOriginal)
   ...(await importOriginal<object>()),
   openSession: vi.fn(),
   closeSession: vi.fn().mockReturnValue(true),
-  openSession: vi.fn(),
-  closeSession: vi.fn(),
 }));
 vi.mock("../../../src/core/utils/minecraft/rewards.js", async (importOriginal) => ({
   ...(await importOriginal<object>()),

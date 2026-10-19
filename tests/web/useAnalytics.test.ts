@@ -9,7 +9,7 @@ vi.mock("../../src/web/frontend/src/api", async (importActual) => ({
 import {
   useAnalytics,
   bucketActivity,
-  clampNote,
+  coverageLabel,
   formatHours,
 } from "../../src/web/frontend/src/composables/useAnalytics.js";
 
@@ -21,9 +21,6 @@ function route(overrides: Record<string, unknown> = {}) {
       const v = overrides[path];
       if (v instanceof Error) throw v;
       return v;
-    }
-    if (path.includes("/analytics/players")) {
-      return { players: [], totalPlayers: 0, rangeHours: 72, historyDays: 365 };
     }
     if (path.includes("/analytics/leaderboard")) {
       return {
@@ -60,7 +57,6 @@ describe("useAnalytics", () => {
     const paths = apiGet.mock.calls.map((c) => c[0] as string).sort();
     expect(paths).toEqual([
       "/api/analytics/commands?hours=72",
-      "/api/servers/smp/analytics/players?hours=72",
       "/api/servers/smp/analytics?hours=72",
     ]);
   });
@@ -85,7 +81,6 @@ describe("useAnalytics", () => {
     expect(a.commands.value).toEqual([]);
     expect(a.error.value).toBe("");
     expect(a.usageFailure.value).toEqual({ error: "boom", kind: "failed" });
-    expect(a.playersFailure.value).toBeNull();
     expect(a.loading.value).toBe(false);
     expect(a.loaded.value).toBe(true);
   });
@@ -100,14 +95,17 @@ describe("useAnalytics", () => {
   });
 });
 
-describe("clampNote", () => {
-  it("is empty when the section covered the whole range", () => {
-    expect(clampNote(168, 168)).toBe("");
-    expect(clampNote(168, null)).toBe("");
+describe("coverageLabel", () => {
+  it("is empty until the section has answered", () => {
+    expect(coverageLabel(168, null)).toBe("");
   });
 
-  it("names the range actually shown when it was clamped", () => {
-    expect(clampNote(2400, 2160)).toContain("90d");
+  it("names the range the section covered", () => {
+    expect(coverageLabel(168, 168)).toBe("last 7d");
+  });
+
+  it("says when the section had less history than was asked for", () => {
+    expect(coverageLabel(2400, 2160)).toBe("last 90d, all that is kept");
   });
 
   it("formats whole days and odd hours", () => {

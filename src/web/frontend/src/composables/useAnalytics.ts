@@ -7,8 +7,6 @@ import type {
   CommandUsageRow,
   LeaderboardEntry,
   LeaderboardResponse,
-  PlayerRow,
-  PlayersResponse,
   ServerAnalyticsResponse,
   StatOption,
   UptimeStats,
@@ -38,7 +36,6 @@ export type {
   ActivityHour,
   BusyHour,
   CommandUsageRow,
-  PlayerRow,
   LeaderboardEntry,
   StatOption,
 };
@@ -82,12 +79,16 @@ export function bucketActivity(hours: ActivityHour[], bucket: "hour" | "day"): A
 export const HOURLY_CHART_MAX_HOURS = 14 * DAY_HOURS;
 
 /**
- * The sentence for a section that answered less than was asked, or "" when it
- * covered the whole range.
+ * What a panel covers, for its title: the range it actually answered, and
+ * when that is shorter than the range asked for, that it is all the history
+ * the bot keeps for that section. "" until the section has answered.
  */
-export function clampNote(requestedHours: number, appliedHours: number | null): string {
-  if (appliedHours === null || appliedHours >= requestedHours) return "";
-  return t("analytics.clampNote", { range: formatHours(appliedHours) });
+export function coverageLabel(requestedHours: number, appliedHours: number | null): string {
+  if (appliedHours === null) return "";
+  const range = formatHours(appliedHours);
+  return appliedHours >= requestedHours
+    ? t("analytics.covers", { range })
+    : t("analytics.coversClamped", { range });
 }
 
 /** One section's failed read: the message for the detail line and its kind. */
@@ -107,9 +108,6 @@ export function useAnalytics() {
   const busiest = ref<BusyHour[]>([]);
   const commands = ref<CommandUsageRow[]>([]);
   const commandsRangeHours = ref<number | null>(null);
-  const players = ref<PlayerRow[]>([]);
-  const playersRangeHours = ref<number | null>(null);
-  const historyDays = ref<number | null>(null);
   const board = ref<LeaderboardEntry[]>([]);
   const boardTitle = ref("");
   const boardRangeHours = ref<number | null>(null);
@@ -132,10 +130,9 @@ export function useAnalytics() {
   const error = ref("");
   const failure = ref<LoadFailure | null>(null);
   const usageFailure = ref<SectionFailure | null>(null);
-  const playersFailure = ref<SectionFailure | null>(null);
 
   /**
-   * Server history, players and command usage load independently.
+   * Server history and command usage load independently.
    *
    * Command usage is global and server history is per server, so one failing
    * must not blank the other: a server that has never been polled still has
@@ -151,10 +148,9 @@ export function useAnalytics() {
     failure.value = null;
     caps.value = null;
     const base = `/api/servers/${encodeURIComponent(serverId)}`;
-    const [server, usage, playerList] = await Promise.allSettled([
+    const [server, usage] = await Promise.allSettled([
       apiGet<ServerAnalyticsResponse>(`${base}/analytics?hours=${hours}`),
       apiGet<CommandUsageResponse>(`/api/analytics/commands?hours=${hours}`),
-      apiGet<PlayersResponse>(`${base}/analytics/players?hours=${hours}`),
     ]);
     if (!isCurrent()) return;
 
@@ -184,16 +180,6 @@ export function useAnalytics() {
       usageFailure.value = sectionFailure(usage.reason);
     }
 
-    if (playerList.status === "fulfilled") {
-      players.value = playerList.value.players;
-      playersRangeHours.value = playerList.value.rangeHours;
-      historyDays.value = playerList.value.historyDays;
-      playersFailure.value = null;
-    } else {
-      players.value = [];
-      playersRangeHours.value = null;
-      playersFailure.value = sectionFailure(playerList.reason);
-    }
     loading.value = false;
     loaded.value = true;
   }
@@ -228,9 +214,8 @@ export function useAnalytics() {
 
   return {
     uptime, activity, activityRangeHours, busiest, commands, commandsRangeHours,
-    players, playersRangeHours, historyDays,
     board, boardTitle, boardRangeHours, boardBaselineAt, boardHistoryShort,
     availableStats, caps, boardError, boardFailure, boardLoading,
-    loading, loaded, error, failure, usageFailure, playersFailure, load, loadBoard,
+    loading, loaded, error, failure, usageFailure, load, loadBoard,
   };
 }

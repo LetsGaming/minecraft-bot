@@ -102,25 +102,6 @@ export interface ServerAnalyticsResponse {
   caps: AnalyticsCaps;
 }
 
-export interface PlayerRow {
-  name: string;
-  /** Playtime inside the requested range only. */
-  playtimeMs: number;
-  /** Sessions inside the range, out of the retained ones (see historyDays). */
-  sessions: number;
-  lastSeen: number | null;
-  online: boolean;
-  firstSeen: number | null;
-}
-
-export interface PlayersResponse {
-  players: PlayerRow[];
-  totalPlayers: number;
-  rangeHours: number;
-  /** Sessions are kept this many days, so session counts and playtime cover at most that. */
-  historyDays: number;
-}
-
 export interface StatOption {
   key: string;
   label: string;

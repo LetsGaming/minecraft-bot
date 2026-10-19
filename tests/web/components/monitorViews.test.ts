@@ -181,10 +181,14 @@ describe("AuditView", () => {
 });
 
 describe("AnalyticsView", () => {
-  it("reads playtime as a span and explains an uptime with no checks", async () => {
-    const caps = { activity: 2160, uptime: 720, leaderboard: 768, commands: 2160, sessions: 8760 };
-    const none = { total: 0, online: 0 };
-    install((_m, url) => {
+  const caps = { activity: 2160, uptime: 720, leaderboard: 768, commands: 2160, sessions: 8760 };
+  const none = { total: 0, online: 0 };
+  const now = Date.now();
+
+  function routeAnalytics(extra: Route = () => undefined): Route {
+    return (method, url) => {
+      const hit = extra(method, url);
+      if (hit) return hit;
       if (url.startsWith("/api/servers/smp/analytics/leaderboard")) {
         return {
           body: {
@@ -200,8 +204,19 @@ describe("AnalyticsView", () => {
           },
         };
       }
-      if (url.startsWith("/api/servers/smp/analytics/players")) {
-        return { body: { players: [], totalPlayers: 0, rangeHours: 336, historyDays: 365 } };
+      if (url.startsWith("/api/servers/smp/players?")) {
+        return {
+          body: {
+            players: [
+              { name: "Alex", online: false, lastSeen: now - 3_600_000, firstSeen: now - 86_400_000, sessions: 2, playtimeMs: 3_600_000 },
+            ],
+            total: 1,
+            rangeHours: 336,
+            historyDays: 365,
+            limit: 20,
+            offset: 0,
+          },
+        };
       }
       if (url.startsWith("/api/analytics/commands")) return { status: 502, body: { error: "db gone" } };
       if (url.startsWith("/api/servers/smp/analytics")) {
@@ -213,20 +228,86 @@ describe("AnalyticsView", () => {
               currentState: "unknown", currentStateDuration: 0, sparkline24h: "",
               range: { rangeHours: 336, pct: null, checks: none },
             },
-            activity: { rangeHours: 336, hours: [], busiest: [] },
+            activity: {
+              rangeHours: 336,
+              hours: [{ at: now - 7_200_000, avg: 2, peak: 5, samples: 3 }],
+              busiest: [],
+            },
             caps,
           },
         };
       }
       return undefined;
-    });
+    };
+  }
+
+  it("opens on the Players tab: activity with its coverage, the board and the player list", async () => {
+    install(routeAnalytics());
     const w = mountWith(AnalyticsView, { serverIds: ["smp"], activeServer: "smp" });
-    await settle(60);
+    await settle(80);
+
     expect(w.find(".b-value").text()).toBe("12 h");
     expect(w.text()).not.toContain("0d 12h 0m 0s");
+    expect(w.text()).toContain("Players online");
+    expect(w.text()).toContain("last 14d");
+    expect(w.findAll(".bar-peak")).toHaveLength(1);
+    expect(w.text()).toContain("Alex");
+    expect(w.find("#an-uptime-h").exists()).toBe(false);
+    expect(w.find("#an-commands-h").exists()).toBe(false);
+  });
+
+  it("opens a player from the leaderboard and from the player list", async () => {
+    install(routeAnalytics());
+    const w = mountWith(AnalyticsView, { serverIds: ["smp"], activeServer: "smp" });
+    await settle(80);
+
+    await w.find(".b-name").trigger("click");
+    const view = w.findComponent(AnalyticsView);
+    expect(view.emitted("open-player")?.[0]).toEqual(["Steve"]);
+
+    const alex = w.findAll("button.link-btn").find((b) => b.text().includes("Alex"))!;
+    await alex.trigger("click");
+    expect(view.emitted("open-player")?.[1]).toEqual(["Alex"]);
+  });
+
+  it("asks the route to switch tabs", async () => {
+    install(routeAnalytics());
+    const w = mountWith(AnalyticsView, { serverIds: ["smp"], activeServer: "smp" });
+    await settle(80);
+    await w.find("#an-tab-server").trigger("click");
+    expect(w.findComponent(AnalyticsView).emitted("update-route")?.[0]).toEqual([{ params: { tab: "server" } }]);
+  });
+
+  it("shows uptime and command usage on the Server tab, explaining an uptime with no checks", async () => {
+    install(routeAnalytics());
+    const w = mountWith(AnalyticsView, { serverIds: ["smp"], activeServer: "smp", tab: "server" });
+    await settle(80);
+
     expect(w.text()).toContain("No health checks are recorded for smp yet.");
     expect(w.findAll(".u-pct")).toHaveLength(0);
     expect(w.text()).toContain("Command usage did not load");
     expect(w.text()).not.toContain("No command was used");
+    expect(w.find("#an-board-h").exists()).toBe(false);
+    expect(w.find("#an-activity-h").exists()).toBe(false);
+  });
+
+  it("draws one bar per day when the range is longer than two weeks", async () => {
+    const hours = Array.from({ length: 72 }, (_, i) => ({
+      at: Date.UTC(2026, 9, 1) + i * 3_600_000,
+      avg: 1,
+      peak: 2,
+      samples: 1,
+    }));
+    install(
+      routeAnalytics((_m, url) =>
+        url.startsWith("/api/servers/smp/analytics?")
+          ? { body: { uptime: null, activity: { rangeHours: 24 * 90, hours, busiest: [] }, caps } }
+          : undefined,
+      ),
+    );
+    const w = mountWith(AnalyticsView, { serverIds: ["smp"], activeServer: "smp" });
+    await settle(80);
+    expect(w.findAll(".bar")).toHaveLength(3);
+    expect(w.text()).toContain("One bar per day");
   });
 });

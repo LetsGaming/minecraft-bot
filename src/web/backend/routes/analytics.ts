@@ -27,7 +27,6 @@ import {
   type AnalyticsCaps,
   type CommandUsageResponse,
   type LeaderboardResponse,
-  type PlayersResponse,
   type ServerAnalyticsResponse,
 } from "@mcbot/schema/analytics.js";
 import { getUptimeStats } from "@mcbot/core/utils/stores/uptimeTracker.js";
@@ -35,10 +34,6 @@ import {
   loadPlayerCountSeries,
   busiestHours,
 } from "@mcbot/core/utils/stores/playerCountHistory.js";
-import {
-  listPlayerSummaries,
-  SESSION_RETENTION_DAYS,
-} from "@mcbot/core/utils/stores/sessionStore.js";
 import {
   LEADERBOARD_STATS,
   buildLeaderboard,
@@ -55,7 +50,6 @@ import { requireServer } from "./support.js";
 
 const ACTIVITY_HOURS_DEFAULT = ANALYTICS_CAP_HOURS.activity;
 const COMMAND_HOURS_DEFAULT = 30 * 24;
-const PLAYERS_HOURS_MAX = ANALYTICS_CAP_HOURS.sessions;
 
 const CAPS: AnalyticsCaps = { ...ANALYTICS_CAP_HOURS };
 
@@ -116,50 +110,6 @@ export function registerAnalyticsRoutes(app: FastifyInstance): void {
       } catch (err) {
         log.error("web", `Analytics for ${serverId} failed: ${errMsg(err)}`);
         throw new HttpError(500, "Could not read analytics history.");
-      }
-    },
-  );
-
-  /**
-   * Who plays, and how much, inside the range.
-   *
-   * Sessions are kept for SESSION_RETENTION_DAYS, so a range longer than that
-   * only covers the retained sessions.
-   */
-  api.get(
-    "/api/servers/:id/analytics/players",
-    {
-      schema: { params: IdParams, querystring: AnalyticsRangeQuery },
-      config: { capability: "server:read", scope: "server", param: "id" },
-    },
-    async (req): Promise<PlayersResponse> => {
-      const serverId = req.params.id;
-      requireServer(serverId);
-      try {
-        const hours = clampHours(
-          req.query.hours,
-          PLAYERS_HOURS_MAX,
-          PLAYERS_HOURS_MAX,
-        );
-        const now = Date.now();
-        const { rows, total } = listPlayerSummaries(serverId, {
-          sinceMs: now - hours * MS.hour,
-          now,
-          status: "all",
-          sort: "playtimeMs",
-          order: "desc",
-          limit: 200,
-        });
-
-        return {
-          players: rows,
-          totalPlayers: total,
-          rangeHours: hours,
-          historyDays: SESSION_RETENTION_DAYS,
-        };
-      } catch (err) {
-        log.error("web", `Player analytics for ${serverId} failed: ${errMsg(err)}`);
-        throw new HttpError(500, "Could not read session history.");
       }
     },
   );
