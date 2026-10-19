@@ -41,7 +41,6 @@ vi.mock("../../src/core/utils/logger.js", () => ({
 
 vi.mock("../../src/core/utils/time.js", () => ({
   nextMidnightEpoch: vi.fn().mockReturnValue(Date.now() + 3_600_000),
-  msUntilMidnight: vi.fn().mockReturnValue(3_600_000),
   formatDate: vi.fn(),
   formatDatetime: vi.fn().mockReturnValue("2025-01-01 00:00:00"),
   formatTime: vi.fn(),

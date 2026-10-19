@@ -10,7 +10,6 @@ vi.mock("../../src/core/utils/time.js", () => ({
   formatDate: vi.fn(),
   formatTime: vi.fn(),
   nextMidnightEpoch: vi.fn(),
-  msUntilMidnight: vi.fn(),
 }));
 
 vi.mock("../../src/core/utils/logger.js", () => ({

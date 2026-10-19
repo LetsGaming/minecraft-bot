@@ -79,7 +79,7 @@ Assert on what was sent: `expect(interaction.editReply).toHaveBeenCalledWith(exp
 ## What a good test for this repo looks like
 
 1. Arrange: temp dir or fake timers if state/time is involved, mocked server/interaction.
-2. Act: call the exported function (commands export `execute`; pure logic like `calcStreak`, `flattenStats`, `parseListOutput` is exported directly so it can be tested without Discord).
+2. Act: call the exported function (commands export `execute`; pure logic like `calcStreak`, `flattenStats` is exported directly so it can be tested without Discord).
 3. Assert on observable behavior: what was replied, what command was sent to the server, what was written to disk. Avoid asserting internals.
 
 When fixing a bug, write the failing test first and keep it as the regression guard. The existing B-xx fixes in the code each have one; follow that pattern.

@@ -160,14 +160,6 @@ export function nextMidnightEpoch(
   return nextTimeOfDayEpoch(0, 0, tz, fromMs);
 }
 
-/** Milliseconds until the next local midnight in `tz`. */
-export function msUntilMidnight(
-  tz: string = UTC,
-  fromMs: number = Date.now(),
-): number {
-  return nextMidnightEpoch(tz, fromMs) - fromMs;
-}
-
 /** Day of week in `tz` for an epoch, 0–6 with Sunday = 0. */
 export function localDayOfWeek(epochMs: number, tz: string = UTC): number {
   const name = new Intl.DateTimeFormat("en-US", {

@@ -52,7 +52,6 @@ vi.mock("../../src/core/utils/time.js", () => ({
   formatDate: vi.fn(),
   formatDatetime: vi.fn(),
   nextMidnightEpoch: vi.fn(),
-  msUntilMidnight: vi.fn(),
 }));
 
 import { resolveServer } from "../../src/bot/utils/guild/guildRouter.js";
