@@ -27,11 +27,6 @@ import {
 } from "@mcbot/schema";
 import { RETENTION_HOURS } from "../../src/core/utils/stores/playerCountHistory.js";
 import { USAGE_RETENTION_DAYS } from "../../src/core/utils/commands/commandUsage.js";
-import { DEFAULT_DISK_WARN_PERCENT, } from "../../src/bot/logWatcher/watchers/monitors/hostResourcesMonitor.js";
-import {
-  UPGRADE_PHASES as BOT_UPGRADE_PHASES,
-  PRUNE_PHASES as BOT_PRUNE_PHASES,
-} from "../../src/bot/logWatcher/watchers/monitors/upgradeMonitor.js";
 
 describe("MS", () => {
   it("is consistent arithmetic", () => {
@@ -61,7 +56,6 @@ describe("health levels", () => {
   it("keeps the alert defaults the monitors shipped with", () => {
     expect(DEFAULT_TPS_ALERT_THRESHOLD).toBe(15);
     expect(DEFAULT_DISK_ALERT_PERCENT).toBe(90);
-    expect(DEFAULT_DISK_WARN_PERCENT).toBe(DEFAULT_DISK_ALERT_PERCENT);
   });
 });
 
@@ -95,11 +89,6 @@ describe("job phases and reasons", () => {
   it("covers every step of both runs", () => {
     for (const p of [...UPGRADE_PHASES, ...PRUNE_PHASES]) expect(JOB_PHASES).toContain(p);
     expect(JOB_FAILURE_REASONS).toHaveLength(12);
-  });
-
-  it("is what the bot exports", () => {
-    expect(BOT_UPGRADE_PHASES).toBe(UPGRADE_PHASES);
-    expect(BOT_PRUNE_PHASES).toBe(PRUNE_PHASES);
   });
 });
 

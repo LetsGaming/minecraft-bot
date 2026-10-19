@@ -192,3 +192,15 @@ export function localHourOfDay(epochMs: number, tz: string = UTC): number {
     }).format(new Date(epochMs)),
   );
 }
+
+/** "SU".."SA", Sunday first: indexed by `localDayOfWeek`. */
+export const DAY_CODES = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"] as const;
+
+/** Parse "HH:MM" into { hour, minute }, or null when malformed. */
+export function parseScheduleTime(
+  time: string,
+): { hour: number; minute: number } | null {
+  const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(time.trim());
+  if (!m) return null;
+  return { hour: Number(m[1]), minute: Number(m[2]) };
+}

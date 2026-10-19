@@ -136,7 +136,7 @@ describe("suppressAlerts()", () => {
     suppressAlerts(id); // <-- suppress before failures
     for (let i = 0; i < 3; i++) await vi.advanceTimersByTimeAsync(TICK);
     expect(send).not.toHaveBeenCalled();
-    clearInterval(timer);
+    timer.stop();
   });
 
   it("resets the alerted flag so no duplicate alert fires after suppression", async () => {
@@ -153,7 +153,7 @@ describe("suppressAlerts()", () => {
     suppressAlerts(id);
     await vi.advanceTimersByTimeAsync(TICK);
     expect(send).toHaveBeenCalledTimes(1); // still 1
-    clearInterval(timer);
+    timer.stop();
   });
 });
 
@@ -170,7 +170,7 @@ describe("startDowntimeMonitor — online server", () => {
     );
     await vi.advanceTimersByTimeAsync(TICK);
     expect(vi.mocked(recordCheck)).toHaveBeenCalledWith(id, true);
-    clearInterval(timer);
+    timer.stop();
   });
 
   it("sends a recovery embed after the server comes back online", async () => {
@@ -188,7 +188,7 @@ describe("startDowntimeMonitor — online server", () => {
     await vi.advanceTimersByTimeAsync(TICK);
 
     expect(send).toHaveBeenCalledTimes(2);
-    clearInterval(timer);
+    timer.stop();
   });
 });
 
@@ -204,7 +204,7 @@ describe("startDowntimeMonitor — offline server", () => {
     );
     for (let i = 0; i < 2; i++) await vi.advanceTimersByTimeAsync(TICK);
     expect(send).not.toHaveBeenCalled();
-    clearInterval(timer);
+    timer.stop();
   });
 
   it("sends exactly one downtime alert on the 3rd consecutive failure", async () => {
@@ -216,7 +216,22 @@ describe("startDowntimeMonitor — offline server", () => {
     );
     for (let i = 0; i < 3; i++) await vi.advanceTimersByTimeAsync(TICK);
     expect(send).toHaveBeenCalledTimes(1);
-    clearInterval(timer);
+    timer.stop();
+  });
+
+  it("still alerts when recording the uptime sample throws", async () => {
+    const { recordCheck } = await import("../../src/core/utils/stores/uptimeTracker.js");
+    vi.mocked(recordCheck).mockRejectedValue(new Error("db locked"));
+    const send = vi.fn().mockResolvedValue(undefined);
+    const timer = startDowntimeMonitor(
+      [fakeServer(uid(), false)],
+      fakeClient(send),
+      guildsFor(),
+    );
+    for (let i = 0; i < 3; i++) await vi.advanceTimersByTimeAsync(TICK);
+    expect(send).toHaveBeenCalledTimes(1);
+    timer.stop();
+    vi.mocked(recordCheck).mockResolvedValue(undefined);
   });
 
   it("does NOT send duplicate alerts for a persistently offline server", async () => {
@@ -228,7 +243,7 @@ describe("startDowntimeMonitor — offline server", () => {
     );
     for (let i = 0; i < 8; i++) await vi.advanceTimersByTimeAsync(TICK);
     expect(send).toHaveBeenCalledTimes(1); // still just 1
-    clearInterval(timer);
+    timer.stop();
   });
 
   it("skips the alert when the guild monitors a different server", async () => {
@@ -241,7 +256,7 @@ describe("startDowntimeMonitor — offline server", () => {
     );
     for (let i = 0; i < 3; i++) await vi.advanceTimersByTimeAsync(TICK);
     expect(send).not.toHaveBeenCalled();
-    clearInterval(timer);
+    timer.stop();
   });
 
   it("handles getHealth() throwing without crashing the monitor", async () => {
@@ -251,7 +266,7 @@ describe("startDowntimeMonitor — offline server", () => {
       guildsFor(),
     );
     await vi.advanceTimersByTimeAsync(TICK); // must not throw
-    clearInterval(timer);
+    timer.stop();
   });
 });
 
@@ -272,7 +287,7 @@ describe("startDowntimeMonitor — the API wrapper is unreachable", () => {
     // Past the server threshold (3) but short of the wrapper one (5).
     for (let i = 0; i < 4; i++) await vi.advanceTimersByTimeAsync(TICK);
     expect(send).not.toHaveBeenCalled();
-    clearInterval(timer);
+    timer.stop();
   });
 
   it("records the server as UP — the ping established that", async () => {
@@ -288,7 +303,7 @@ describe("startDowntimeMonitor — the API wrapper is unreachable", () => {
     // The old code recorded `false` here, quietly poisoning uptime every time
     // the wrapper was restarted. It is not even a gap now — we know it is up.
     expect(vi.mocked(recordCheck)).toHaveBeenCalledWith(id, true);
-    clearInterval(timer);
+    timer.stop();
   });
 
   it("still raises its own alert — controls are gone even though players are fine", async () => {
@@ -303,7 +318,7 @@ describe("startDowntimeMonitor — the API wrapper is unreachable", () => {
     // …and does not repeat it while the wrapper stays down.
     for (let i = 0; i < 5; i++) await vi.advanceTimersByTimeAsync(TICK);
     expect(send).toHaveBeenCalledTimes(1);
-    clearInterval(timer);
+    timer.stop();
   });
 
   it("clears the wrapper alert as soon as the wrapper answers again", async () => {
@@ -323,7 +338,7 @@ describe("startDowntimeMonitor — the API wrapper is unreachable", () => {
     srv.getHealth.mockResolvedValue(health("online"));
     await vi.advanceTimersByTimeAsync(TICK);
     expect(send).toHaveBeenCalledTimes(2); // recovery notice
-    clearInterval(timer);
+    timer.stop();
   });
 });
 
@@ -341,7 +356,7 @@ describe("startDowntimeMonitor — nothing answered at all", () => {
     );
     for (let i = 0; i < 4; i++) await vi.advanceTimersByTimeAsync(TICK);
     expect(vi.mocked(recordCheck)).not.toHaveBeenCalled();
-    clearInterval(timer);
+    timer.stop();
   });
 
   it("never raises a server-down alert on an unknown state", async () => {
@@ -353,7 +368,7 @@ describe("startDowntimeMonitor — nothing answered at all", () => {
     );
     for (let i = 0; i < 4; i++) await vi.advanceTimersByTimeAsync(TICK);
     expect(send).not.toHaveBeenCalled();
-    clearInterval(timer);
+    timer.stop();
   });
 });
 
@@ -369,7 +384,7 @@ describe("startDowntimeMonitor — the server is loaded but running", () => {
     );
     for (let i = 0; i < 8; i++) await vi.advanceTimersByTimeAsync(TICK);
     expect(send).not.toHaveBeenCalled();
-    clearInterval(timer);
+    timer.stop();
   });
 
   it("records it as uptime — the process is up", async () => {
@@ -382,7 +397,7 @@ describe("startDowntimeMonitor — the server is loaded but running", () => {
     );
     await vi.advanceTimersByTimeAsync(TICK);
     expect(vi.mocked(recordCheck)).toHaveBeenCalledWith(id, true);
-    clearInterval(timer);
+    timer.stop();
   });
 });
 
@@ -398,7 +413,7 @@ describe("startDowntimeMonitor — systemd crash loop", () => {
     );
     await vi.advanceTimersByTimeAsync(TICK); // just 1 tick — not 3
     expect(send).toHaveBeenCalledTimes(1);
-    clearInterval(timer);
+    timer.stop();
   });
 
   it("does not repeat the crash-loop alert while still failed (only the independent 3-strikes downtime alert joins it once)", async () => {
@@ -413,7 +428,7 @@ describe("startDowntimeMonitor — systemd crash loop", () => {
     // both-correct alerts, neither repeating after that.
     for (let i = 0; i < 5; i++) await vi.advanceTimersByTimeAsync(TICK);
     expect(send).toHaveBeenCalledTimes(2);
-    clearInterval(timer);
+    timer.stop();
   });
 
   it("catches a loop that looks briefly online on the exact poll instant", async () => {
@@ -431,7 +446,7 @@ describe("startDowntimeMonitor — systemd crash loop", () => {
     const timer = startDowntimeMonitor([srv], fakeClient(send), guildsFor());
     await vi.advanceTimersByTimeAsync(TICK);
     expect(send).toHaveBeenCalledTimes(1);
-    clearInterval(timer);
+    timer.stop();
   });
 
   it("sends a recovery notice once unitFailed clears", async () => {
@@ -450,7 +465,7 @@ describe("startDowntimeMonitor — systemd crash loop", () => {
     srv.getHealth.mockResolvedValue(health("online", "up"));
     await vi.advanceTimersByTimeAsync(TICK);
     expect(send).toHaveBeenCalledTimes(2); // crash-loop recovery notice
-    clearInterval(timer);
+    timer.stop();
   });
 
   it("suppressAlerts() also silences a crash-loop alert during the grace period", async () => {
@@ -464,7 +479,7 @@ describe("startDowntimeMonitor — systemd crash loop", () => {
     suppressAlerts(id);
     for (let i = 0; i < 3; i++) await vi.advanceTimersByTimeAsync(TICK);
     expect(send).not.toHaveBeenCalled();
-    clearInterval(timer);
+    timer.stop();
   });
 });
 
@@ -479,7 +494,7 @@ describe("startDowntimeMonitor — no downtime alert guilds", () => {
     );
     await vi.advanceTimersByTimeAsync(TICK);
     expect(timer).toBeTruthy();
-    clearInterval(timer);
+    timer.stop();
   });
 });
 
@@ -506,7 +521,7 @@ describe("startDowntimeMonitor: mention policy", () => {
     for (let i = 0; i < 3; i++) await vi.advanceTimersByTimeAsync(TICK);
     vi.mocked(srv.getHealth).mockResolvedValue(health("online"));
     await vi.advanceTimersByTimeAsync(TICK);
-    clearInterval(timer);
+    timer.stop();
     return send.mock.calls.map(([payload]) => payload as { content?: string; allowedMentions: unknown });
   }
 
@@ -552,7 +567,7 @@ describe("downtime alert details", () => {
     await vi.advanceTimersByTimeAsync(TICK);
     goDown();
     for (let i = 0; i < 3; i++) await vi.advanceTimersByTimeAsync(TICK);
-    clearInterval(timer);
+    timer.stop();
     expect(downAlertDescription(id)).toContain("crash reports");
   });
 
@@ -564,7 +579,7 @@ describe("downtime alert details", () => {
     noteServerStopping(id);
     goDown();
     for (let i = 0; i < 3; i++) await vi.advanceTimersByTimeAsync(TICK);
-    clearInterval(timer);
+    timer.stop();
     expect(downAlertDescription(id)).toBeDefined();
     expect(downAlertDescription(id)).not.toContain("crash reports");
   });

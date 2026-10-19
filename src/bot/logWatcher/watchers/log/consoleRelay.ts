@@ -1,58 +1,33 @@
 /**
- * Console relay — opt-in live log tail into an admin-only Discord channel.
+ * Console relay: opt-in live log tail into an admin-only Discord channel.
  *
- * `/console live enable` flips a persisted per-guild+server switch
- * (data/consoleRelay.json); this watcher buffers every raw log line of a
+ * `/console live enable` flips a persisted per-guild+server switch (the
+ * console relay store); this watcher buffers every raw log line of a
  * relayed server and flushes batches into the guild's configured
  * `console.channelId`. Batching (one message per FLUSH_INTERVAL_MS, hard
  * byte cap per flush, drop counter beyond the buffer cap) keeps a busy
- * server from flooding the channel or the Discord rate limit — the
- * roadmap's stated condition for the live variant.
+ * server from flooding the channel or the Discord rate limit.
  */
 import { type Client } from "discord.js";
-import { kvGet, kvSet } from "@mcbot/core/db/kv.js";
-import { loadConfig } from "@mcbot/core/config.js";
-import { log } from "@mcbot/core/utils/logger.js";
+import {
+  loadConsoleRelayState,
+  setConsoleRelayEnabled,
+  type ConsoleRelayState,
+} from "@mcbot/core/utils/stores/consoleRelayStore.js";
 import type { ILogWatcher } from "../../logWatcher.js";
-import { errMsg } from "@mcbot/core/utils/error.js";
-
 import { t } from "@mcbot/core/utils/i18n.js";
-import { safeMentions } from "../../../utils/embeds/alertUtils.js";
-const FLUSH_INTERVAL_MS = 3_000;
+import { MS } from "@mcbot/schema";
+import { liveGuildConfigs } from "../../../utils/guild/guildConfigs.js";
+import { onServerRemoved } from "../../serverCleanup.js";
+import { guildTargets, sendToGuildChannels } from "../notifyGuilds.js";
+import { startPoller, type Poller } from "../poller.js";
+
+const FLUSH_INTERVAL_MS = 3 * MS.second;
 /** Discord message budget per flush (codeblock fences + margin < 2000). */
 const MAX_FLUSH_CHARS = 1_800;
 /** Buffered backlog cap per server; beyond this, lines are counted as dropped. */
 const MAX_BUFFER_CHARS = 8_000;
 const MAX_LINE_CHARS = 300;
-
-export interface ConsoleRelayState {
-  /** guildId → serverId → enabled */
-  guilds: Record<string, Record<string, boolean>>;
-}
-
-export async function loadConsoleRelayState(): Promise<ConsoleRelayState> {
-  const raw = kvGet<Partial<ConsoleRelayState>>("consoleRelay");
-  return { guilds: raw?.guilds ?? {} };
-}
-
-export async function saveConsoleRelayState(
-  state: ConsoleRelayState,
-): Promise<void> {
-  kvSet("consoleRelay", state);
-}
-
-/** Flip the relay for one guild+server; returns the new value. */
-export async function setConsoleRelay(
-  guildId: string,
-  serverId: string,
-  enabled: boolean,
-): Promise<void> {
-  const state = await loadConsoleRelayState();
-  const guild = (state.guilds[guildId] ??= {});
-  if (enabled) guild[serverId] = true;
-  else delete guild[serverId];
-  await saveConsoleRelayState(state);
-}
 
 interface ServerBuffer {
   lines: string[];
@@ -61,13 +36,35 @@ interface ServerBuffer {
 }
 
 const buffers = new Map<string, ServerBuffer>();
-let flushTimer: ReturnType<typeof setInterval> | null = null;
+let flushPoller: Poller | null = null;
+
+/**
+ * Whether any guild relays any server. Lines are only sanitized and buffered
+ * while this is true, so a deployment that never enabled the relay pays
+ * nothing per log line. Refreshed on every flush and on `setConsoleRelay`.
+ */
+let anyRelayEnabled = false;
+
+onServerRemoved((serverId) => {
+  buffers.delete(serverId);
+});
 
 /** Exposed for tests. */
 export function _resetConsoleRelayForTesting(): void {
   buffers.clear();
-  if (flushTimer) clearInterval(flushTimer);
-  flushTimer = null;
+  flushPoller?.stop();
+  flushPoller = null;
+  anyRelayEnabled = false;
+}
+
+function hasEnabledRelay(state: ConsoleRelayState): boolean {
+  return Object.values(state.guilds).some((servers) => Object.keys(servers).length > 0);
+}
+
+/** Turn the relay on or off for one guild and server. */
+export function setConsoleRelay(guildId: string, serverId: string, enabled: boolean): void {
+  setConsoleRelayEnabled(guildId, serverId, enabled);
+  anyRelayEnabled = hasEnabledRelay(loadConsoleRelayState());
 }
 
 function bufferFor(serverId: string): ServerBuffer {
@@ -89,26 +86,21 @@ export function sanitizeLogLine(line: string): string {
 }
 
 async function flush(client: Client): Promise<void> {
-  let state: ConsoleRelayState;
-  try {
-    state = await loadConsoleRelayState();
-  } catch {
-    return;
-  }
-  const guilds = loadConfig().guilds;
+  const state = loadConsoleRelayState();
+  anyRelayEnabled = hasEnabledRelay(state);
 
   for (const [serverId, buf] of buffers) {
     if (buf.lines.length === 0 && buf.dropped === 0) continue;
 
     // Which guilds relay this server right now?
-    const targets: string[] = [];
-    for (const [guildId, servers] of Object.entries(state.guilds)) {
-      if (!servers[serverId]) continue;
-      const channelId = guilds[guildId]?.console?.channelId;
-      if (channelId) targets.push(channelId);
-    }
-    if (targets.length === 0) {
-      // Nobody listening — clear so the buffer can't grow while disabled.
+    const pick = (
+      gcfg: { console?: { channelId?: string } },
+      guildId: string,
+    ): { channelId?: string } | undefined =>
+      state.guilds[guildId]?.[serverId] ? gcfg.console : undefined;
+
+    if (guildTargets(liveGuildConfigs, pick, serverId).length === 0) {
+      // Nobody listening: clear so the buffer can't grow while disabled.
       buf.lines = [];
       buf.chars = 0;
       buf.dropped = 0;
@@ -134,28 +126,30 @@ async function flush(client: Client): Promise<void> {
     if (!body && !droppedNote) continue;
 
     const content = "```" + `\n${droppedNote}${body}` + "```";
-    for (const channelId of targets) {
-      try {
-        const channel = await client.channels.fetch(channelId);
-        if (!channel || !("send" in channel)) continue;
-        await channel.send({ content, allowedMentions: safeMentions("none") });
-      } catch (err) {
-        log.warn("console", `Relay send failed for ${serverId}: ${errMsg(err)}`);
-      }
-    }
+    await sendToGuildChannels(client, liveGuildConfigs, {
+      pick,
+      serverId,
+      logTag: "console",
+      describe: `Relay send failed for ${serverId}`,
+      build: () => ({ content }),
+    });
   }
 }
 
 /**
  * Register the catch-all line collector for one server's watcher and
- * (once per process) the shared flush timer.
+ * (once per process) the shared flush poller. The poller never overlaps
+ * itself, so a slow Discord send cannot stack flushes.
  */
 export function registerConsoleRelay(
   logWatcher: ILogWatcher,
   client: Client,
   serverId: string,
 ): void {
-  logWatcher.register(/.+/, async (match) => {
+  anyRelayEnabled = hasEnabledRelay(loadConsoleRelayState());
+
+  logWatcher.register(/.+/, (match) => {
+    if (!anyRelayEnabled) return;
     const buf = bufferFor(serverId);
     const line = sanitizeLogLine(match[0] ?? "");
     if (!line) return;
@@ -167,11 +161,5 @@ export function registerConsoleRelay(
     buf.chars += line.length + 1;
   });
 
-  if (!flushTimer) {
-    flushTimer = setInterval(() => {
-      flush(client).catch((err: unknown) => {
-        log.warn("console", `Relay flush failed: ${errMsg(err)}`);
-      });
-    }, FLUSH_INTERVAL_MS);
-  }
+  flushPoller ??= startPoller("console", () => flush(client), FLUSH_INTERVAL_MS);
 }

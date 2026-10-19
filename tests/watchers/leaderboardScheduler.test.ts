@@ -65,16 +65,8 @@ import * as statUtils from "../../src/core/utils/minecraft/statUtils.js";
 import * as snapUtils from "../../src/core/utils/minecraft/snapshotUtils.js";
 import { log } from "../../src/core/utils/logger.js";
 
-function cleanup(r: unknown) {
-  if (r && typeof r === "object") {
-    const t = r as Record<string, ReturnType<typeof setInterval>>;
-    if ("postTimer" in t) {
-      clearInterval(t.postTimer);
-      clearInterval(t.snapshotTimer);
-      return;
-    }
-  }
-  clearInterval(r as ReturnType<typeof setInterval>);
+function cleanup(r: { stop(): void }) {
+  r.stop();
 }
 
 function fakeClient(send = vi.fn().mockResolvedValue(undefined)) {
@@ -333,11 +325,22 @@ describe("checkAndPost — anchored scheduling", () => {
 
 // ── no guilds configured ──────────────────────────────────────────────────
 
-it("returns only the snapshotTimer when no guild has a leaderboard channel", () => {
+it("stays armed when no guild has a leaderboard channel yet", () => {
   const r = startLeaderboardScheduler(fakeClient(), {});
-  // No postTimer should be created — result is the bare snapshotTimer
   expect(r).toBeTruthy();
-  clearInterval(r as ReturnType<typeof setInterval>);
+  cleanup(r);
+});
+
+it("warns once, not on every check, when the channel is missing", async () => {
+  const client = { channels: { fetch: vi.fn().mockResolvedValue(null) } } as never;
+  const r = startLeaderboardScheduler(client, {
+    g1: { leaderboard: { channelId: "missing-ch" } },
+  } as never);
+  await vi.advanceTimersByTimeAsync(TICK);
+  expect(
+    vi.mocked(log.warn).mock.calls.filter(([, msg]) => String(msg).includes("not found")),
+  ).toHaveLength(1);
+  cleanup(r);
 });
 
 // ── Live global schedule ───────────────────────────────────────────────────

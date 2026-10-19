@@ -30,10 +30,13 @@ import { getServerInstance } from "@mcbot/core/utils/server/server.js";
 import { runScript } from "@mcbot/core/utils/server/serverAccess.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import {
+  DAY_CODES,
+  parseScheduleTime,
   nextTimeOfDayEpoch,
   localDayOfWeek,
   formatTime,
 } from "@mcbot/core/utils/time.js";
+import { MS } from "@mcbot/schema";
 import { log } from "@mcbot/core/utils/logger.js";
 import { createEmbed } from "../../../utils/embeds/embedUtils.js";
 import { suppressAlerts } from "../monitors/downtimeMonitor.js";
@@ -47,16 +50,6 @@ import type {
 import { errMsg } from "@mcbot/core/utils/error.js";
 
 const DEFAULT_WARN_MINUTES = [15, 5, 1];
-const DAY_CODES = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"] as const;
-
-/** Parse "HH:MM" → { hour, minute }, or null when malformed. */
-export function parseScheduleTime(
-  time: string,
-): { hour: number; minute: number } | null {
-  const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(time.trim());
-  if (!m) return null;
-  return { hour: Number(m[1]), minute: Number(m[2]) };
-}
 
 /**
  * The next epoch at which this schedule fires: the next HH:MM in `tz` whose
@@ -208,7 +201,7 @@ function armServer(
     .sort((a, b) => b - a);
 
   for (const minutes of warnMinutes) {
-    const warnAt = runAt - minutes * 60_000;
+    const warnAt = runAt - minutes * MS.minute;
     if (warnAt <= Date.now()) continue;
     chain.push(
       setTimeout(() => {

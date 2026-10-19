@@ -1,7 +1,6 @@
 import { type APIEmbedField, type Client } from "discord.js";
 import { relativeTimestamp } from "../../../utils/discordTime.js";
 import { log } from "@mcbot/core/utils/logger.js";
-import { serverInScope } from "../../../utils/guild/guildRouter.js";
 import {
   guildsWith,
   type GuildConfigSource,
@@ -11,7 +10,7 @@ import { createEmbed } from "../../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../../utils/embeds/embedColors.js";
 import { alertMention, type AlertLevel } from "../../../utils/embeds/alertUtils.js";
 import { fireWatches } from "../watchFirer.js";
-import { t, runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
+import { t } from "@mcbot/core/utils/i18n.js";
 import {
   updateSessionStore,
   closeAllOpenSessions,
@@ -24,12 +23,16 @@ import {
 } from "@mcbot/schema/serverState.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 import type { ServerHealth } from "@mcbot/schema/serverState.js";
-import type { DowntimeState, GuildConfig } from "@mcbot/core/types/index.js";
+import type { DowntimeState } from "@mcbot/core/types/index.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 import { parsePlayerCounts } from "@mcbot/core/utils/minecraft/playerCounts.js";
 import { formatSpan } from "@mcbot/core/utils/duration.js";
+import { MS } from "@mcbot/schema";
+import { onServerRemoved } from "../../serverCleanup.js";
+import { sendToGuildChannels } from "../notifyGuilds.js";
+import { startPoller, type Poller } from "../poller.js";
 
-const CHECK_INTERVAL_MS = 60 * 1000;
+const CHECK_INTERVAL_MS = MS.minute;
 const FAILURES_BEFORE_ALERT = 3;
 /**
  * The wrapper gets a longer fuse than the server. Restarting it, redeploying
@@ -40,6 +43,10 @@ const FAILURES_BEFORE_ALERT = 3;
 const UNREACHABLE_BEFORE_ALERT = 5;
 
 const serverStates = new Map<string, DowntimeState>();
+
+onServerRemoved((serverId) => {
+  serverStates.delete(serverId);
+});
 
 function getState(serverId: string): DowntimeState {
   if (!serverStates.has(serverId)) {
@@ -56,6 +63,16 @@ function getState(serverId: string): DowntimeState {
   return serverStates.get(serverId)!;
 }
 
+/** Forget a half-counted outage: counters back to zero, no alert outstanding. */
+function resetOutage(state: DowntimeState): void {
+  state.consecutiveFailures = 0;
+  state.alerted = false;
+  state.downSince = undefined;
+  state.consecutiveUnreachable = 0;
+  state.wrapperAlerted = false;
+  state.crashLoopAlerted = false;
+}
+
 /**
  * Keeps alerts quiet for a server while a long planned operation runs (a
  * version upgrade), extending the window on every call without resetting what
@@ -68,12 +85,7 @@ export function holdAlerts(serverId: string, graceMs: number): void {
   if (until <= state.suppressUntil) return;
   if (state.suppressUntil <= Date.now()) {
     // First hold of this operation: forget any half-counted outage.
-    state.consecutiveFailures = 0;
-    state.alerted = false;
-    state.downSince = undefined;
-    state.consecutiveUnreachable = 0;
-    state.wrapperAlerted = false;
-    state.crashLoopAlerted = false;
+    resetOutage(state);
   }
   state.suppressUntil = until;
 }
@@ -84,20 +96,15 @@ export function holdAlerts(serverId: string, graceMs: number): void {
  */
 export function suppressAlerts(
   serverId: string,
-  graceMs = 5 * 60 * 1000,
+  graceMs = 5 * MS.minute,
 ): void {
   const state = getState(serverId);
   state.suppressUntil = Date.now() + graceMs;
-  state.consecutiveFailures = 0;
-  state.alerted = false;
-  state.downSince = undefined;
-  state.consecutiveUnreachable = 0;
-  state.wrapperAlerted = false;
-  state.crashLoopAlerted = false;
+  resetOutage(state);
   state.stopRequestedAt = Date.now();
   log.info(
     "downtime",
-    `Alerts suppressed for ${serverId} (${graceMs / 1000}s grace)`,
+    `Alerts suppressed for ${serverId} (${graceMs / MS.second}s grace)`,
   );
 }
 
@@ -125,41 +132,41 @@ export function startDowntimeMonitor(
   servers: ServerInstance[] | (() => ServerInstance[]),
   client: Client,
   guildConfigs: GuildConfigSource,
-): ReturnType<typeof setInterval> {
+): Poller {
   const getServers = typeof servers === "function" ? servers : () => servers;
+  const ctx: AlertContext = { client, guildConfigs };
 
   // Resolved per tick, not once: a guild whose downtimeAlerts block is
   // added on config reload has to start receiving alerts without a restart.
-  const alertGuilds = (): Array<[string, GuildConfig]> =>
-    guildsWith(guildConfigs, (cfg) => !!cfg.downtimeAlerts?.channelId);
+  const alertGuildCount = (): number =>
+    guildsWith(guildConfigs, (cfg) => !!cfg.downtimeAlerts?.channelId).length;
 
-  if (alertGuilds().length === 0) {
+  if (alertGuildCount() === 0) {
     log.info("downtime", "No downtime alert channels configured");
   }
 
-  const timer = setInterval(async () => {
-    const guildsWithAlerts = alertGuilds();
-    for (const server of getServers()) {
-      try {
-        await checkServer(server, client, guildsWithAlerts);
-      } catch (err) {
-        log.error("downtime", `Check error for ${server.id}: ${errMsg(err)}`);
+  const poller = startPoller(
+    "downtime",
+    async () => {
+      for (const server of getServers()) {
+        try {
+          await checkServer(server, ctx);
+        } catch (err) {
+          log.error("downtime", `Check error for ${server.id}: ${errMsg(err)}`);
+        }
       }
-    }
-  }, CHECK_INTERVAL_MS);
+    },
+    CHECK_INTERVAL_MS,
+  );
 
   log.info(
     "downtime",
-    `Monitor active for ${getServers().length} server(s), alerting ${alertGuilds().length} guild(s)`,
+    `Monitor active for ${getServers().length} server(s), alerting ${alertGuildCount()} guild(s)`,
   );
-  return timer;
+  return poller;
 }
 
-async function checkServer(
-  server: ServerInstance,
-  client: Client,
-  guildsWithAlerts: Array<[string, GuildConfig]>,
-): Promise<void> {
+async function checkServer(server: ServerInstance, ctx: AlertContext): Promise<void> {
   const state = getState(server.id);
   const now = Date.now();
 
@@ -201,7 +208,7 @@ async function checkServer(
       // Say what the server is doing in the same breath. An operator woken by
       // this needs to know whether players are affected before anything else.
       const failures = state.consecutiveUnreachable;
-      await alertGuilds(client, guildsWithAlerts, server.id, ["ok", "warning"], () => {
+      await alertGuilds(ctx, server.id, ["ok", "warning"], () => {
         const serverNote = stateIsKnown(health)
           ? t("downtime.apiDownServerKnown", {
               state: t(`state.${health.state}`),
@@ -226,7 +233,7 @@ async function checkServer(
   } else if (state.wrapperAlerted) {
     state.wrapperAlerted = false;
     state.consecutiveUnreachable = 0;
-    await alertGuilds(client, guildsWithAlerts, server.id, ["warning", "ok"], () => ({
+    await alertGuilds(ctx, server.id, ["warning", "ok"], () => ({
       title: t("downtime.apiUpTitle", { server: server.id }),
       description: t("downtime.apiUp", { server: server.id }),
       color: EmbedColor.Success,
@@ -246,7 +253,7 @@ async function checkServer(
     if (!state.crashLoopAlerted && now >= state.suppressUntil) {
       state.crashLoopAlerted = true;
       const before: AlertLevel = state.alerted ? "error" : "ok";
-      await alertGuilds(client, guildsWithAlerts, server.id, [before, "critical"], () => ({
+      await alertGuilds(ctx, server.id, [before, "critical"], () => ({
         title: t("downtime.crashLoopTitle", { server: server.id }),
         description: t("downtime.crashLoop", {
           server: server.id,
@@ -262,7 +269,7 @@ async function checkServer(
     }
   } else if (state.crashLoopAlerted) {
     state.crashLoopAlerted = false;
-    await alertGuilds(client, guildsWithAlerts, server.id, ["critical", "ok"], () => ({
+    await alertGuilds(ctx, server.id, ["critical", "ok"], () => ({
       title: t("downtime.crashLoopRecoveredTitle", { server: server.id }),
       description: t("downtime.crashLoopRecovered", { server: server.id }),
       color: EmbedColor.Success,
@@ -283,8 +290,13 @@ async function checkServer(
   // alerting is the right tool for that, not a downtime page.
   const isOnline = health.state !== ServerState.Offline;
 
-  // Record for uptime tracking (independent of alert logic)
-  await recordCheck(server.id, isOnline);
+  // Record for uptime tracking (independent of alert logic). A failed write
+  // must not skip the alert branch below.
+  try {
+    await recordCheck(server.id, isOnline);
+  } catch (err) {
+    log.warn("downtime", `Could not record the check for ${server.id}: ${errMsg(err)}`);
+  }
 
   if (isOnline) {
     const wasDown = state.alerted;
@@ -301,9 +313,9 @@ async function checkServer(
 
       // One-shot /watch subscribers get their recovery DM regardless of
       // any guild alert channel config.
-      fireWatches(client, { kind: "server", serverId: server.id });
+      fireWatches(ctx.client, { kind: "server", serverId: server.id });
 
-      await alertGuilds(client, guildsWithAlerts, server.id, ["error", "ok"], () => ({
+      await alertGuilds(ctx, server.id, ["error", "ok"], () => ({
         title: t("downtime.upTitle", { server: server.id }),
         description:
           downFor === null
@@ -359,7 +371,7 @@ async function checkServer(
       const crashed =
         lastUpAt !== undefined &&
         (stopRequestedAt === undefined || stopRequestedAt < lastUpAt - CHECK_INTERVAL_MS);
-      await alertGuilds(client, guildsWithAlerts, server.id, [before, "error"], () => {
+      await alertGuilds(ctx, server.id, [before, "error"], () => {
         const fields: APIEmbedField[] = [];
         if (lastUpAt !== undefined) {
           fields.push({ name: t("downtime.lastSeen"), value: relativeTimestamp(lastUpAt), inline: true });
@@ -393,56 +405,40 @@ interface Alert {
   fields?: APIEmbedField[];
 }
 
+interface AlertContext {
+  client: Client;
+  guildConfigs: GuildConfigSource;
+}
+
 /**
  * Fan one alert out to every guild that subscribed to this server. The text
  * is built inside each guild's locale context, and whether the role is
  * pinged follows the guild's mention policy for the change `levels`
  * describes (previous, next).
  */
-async function alertGuilds(
-  client: Client,
-  guildsWithAlerts: Array<[string, GuildConfig]>,
+function alertGuilds(
+  { client, guildConfigs }: AlertContext,
   serverId: string,
   levels: [AlertLevel, AlertLevel],
   buildAlert: () => Alert,
 ): Promise<void> {
-  for (const [guildId, gcfg] of guildsWithAlerts) {
-    const alertCfg = gcfg.downtimeAlerts;
-    if (!alertCfg?.channelId) continue;
-    if (!serverInScope(alertCfg.server, serverId, guildId)) continue;
-
-    await runWithGuildLocale(guildId, () =>
-      sendAlert(
-        client,
-        alertCfg.channelId!,
-        buildAlert(),
-        alertMention(alertCfg.mentionRole, alertCfg.mentionPolicy, ...levels),
-      ),
-    );
-  }
-}
-
-async function sendAlert(
-  client: Client,
-  channelId: string,
-  { title, description, state, color, fields }: Alert,
-  mention: ReturnType<typeof alertMention>,
-): Promise<void> {
-  try {
-    const channel = await client.channels.fetch(channelId);
-    if (!channel || !("send" in channel)) return;
-
-    const embed = createEmbed({
-      title,
-      description,
-      state,
-      color: color ?? (state ? undefined : EmbedColor.Info),
-      timestamp: true,
-    });
-    if (fields && fields.length > 0) embed.addFields(fields);
-
-    await channel.send({ embeds: [embed], ...mention });
-  } catch (err) {
-    log.error("downtime", `Failed to send alert: ${errMsg(err)}`);
-  }
+  return sendToGuildChannels(client, guildConfigs, {
+    pick: (gcfg) => gcfg.downtimeAlerts,
+    serverId,
+    logTag: "downtime",
+    describe: "Failed to send alert",
+    build: () => {
+      const { title, description, state, color, fields } = buildAlert();
+      const embed = createEmbed({
+        title,
+        description,
+        state,
+        color: color ?? (state ? undefined : EmbedColor.Info),
+        timestamp: true,
+      });
+      if (fields && fields.length > 0) embed.addFields(fields);
+      return { embeds: [embed] };
+    },
+    mention: (target) => alertMention(target.mentionRole, target.mentionPolicy, ...levels),
+  });
 }

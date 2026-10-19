@@ -1,7 +1,7 @@
 /**
  * statusEmbed.test.ts — invalidateStatusChannelCache (exported)
  */
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 
 vi.mock("../../src/core/utils/jsonStore.js", () => ({
   loadJson: vi.fn().mockResolvedValue({}),
@@ -43,6 +43,8 @@ vi.mock("../../src/core/config.js", async (importOriginal) => ({
   loadConfig: vi.fn().mockReturnValue({ presence: { enabled: false }, guilds: {} }),
 }));
 
+import { kvGet, kvSet } from "../../src/core/db/kv.js";
+import { closeDbForTesting } from "../../src/core/db/index.js";
 import {
   invalidateStatusChannelCache,
   sendOrUpdateEmbed,
@@ -94,32 +96,36 @@ describe("sendOrUpdateEmbed (AUD-023)", () => {
       edit,
     };
   }
-  const state = () => ({ g1: { channelId: "c", messageId: "old" } }) as never;
+  beforeEach(() => {
+    closeDbForTesting();
+    kvSet("statusMessages", { g1: { categoryId: "cat", textChannelId: "c", voiceChannelId: "v", messageId: "old" } });
+  });
 
   it("edits the stored message", async () => {
     const ch = channel(null);
-    await sendOrUpdateEmbed(ch as never, {} as never, "g1", state());
+    await sendOrUpdateEmbed(ch as never, {} as never, "g1");
     expect(ch.edit).toHaveBeenCalledOnce();
     expect(ch.send).not.toHaveBeenCalled();
   });
 
   it("posts a new embed only when the old message is gone", async () => {
     const gone = channel(discordError(10008));
-    await sendOrUpdateEmbed(gone as never, {} as never, "g1", state());
+    await sendOrUpdateEmbed(gone as never, {} as never, "g1");
     expect(gone.send).toHaveBeenCalledOnce();
+    expect(kvGet<Record<string, { messageId: string }>>("statusMessages")?.["g1"]?.messageId).toBe("new");
   });
 
   it("does not post a duplicate on a transient error", async () => {
     for (const err of [discordError(0), Object.assign(new Error("503"), { status: 503 })]) {
       const ch = channel(err);
-      await sendOrUpdateEmbed(ch as never, {} as never, "g1", state());
+      await sendOrUpdateEmbed(ch as never, {} as never, "g1");
       expect(ch.send).not.toHaveBeenCalled();
     }
   });
 
   it("does not post into a channel that no longer exists", async () => {
     const ch = channel(discordError(10003));
-    await sendOrUpdateEmbed(ch as never, {} as never, "g1", state());
+    await sendOrUpdateEmbed(ch as never, {} as never, "g1");
     expect(ch.send).not.toHaveBeenCalled();
   });
 });

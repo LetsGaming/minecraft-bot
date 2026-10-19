@@ -87,7 +87,7 @@ describe("Discord snapshots: downtime alerts", () => {
     for (let i = 0; i < 3; i++) await vi.advanceTimersByTimeAsync(TICK);
     server.getHealth.mockResolvedValue(health("online"));
     await vi.advanceTimersByTimeAsync(TICK);
-    clearInterval(timer);
+    timer.stop();
 
     await expect(stringify(sent)).toMatchFileSnapshot(fixturePath("downtime"));
   });

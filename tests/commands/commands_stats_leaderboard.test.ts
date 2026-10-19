@@ -248,42 +248,15 @@ describe("startLeaderboardScheduler", () => {
       await import("../../src/bot/logWatcher/watchers/schedulers/leaderboardScheduler.js"));
   });
 
-  it("returns a timer object (SchedulerTimers with snapshotTimer + postTimer)", () => {
-    const result = startLeaderboardScheduler(null as never, {});
-    // Returns either a single timer or a SchedulerTimers object
+  it("returns a handle that stops both pollers", () => {
+    const result = startLeaderboardScheduler(null as never, {}) as { stop(): void };
     expect(result).toBeTruthy();
-    // Clean up intervals
-    if (
-      result &&
-      typeof result === "object" &&
-      "snapshotTimer" in (result as object)
-    ) {
-      clearInterval(
-        (result as { snapshotTimer: ReturnType<typeof setInterval> })
-          .snapshotTimer,
-      );
-      clearInterval(
-        (result as { postTimer: ReturnType<typeof setInterval> }).postTimer,
-      );
-    } else {
-      clearInterval(result as ReturnType<typeof setInterval>);
-    }
+    result.stop();
   });
 
   it("does not throw when called with empty guild configs", () => {
     expect(() => {
-      const r = startLeaderboardScheduler(null as never, {});
-      if (r && typeof r === "object" && "snapshotTimer" in (r as object)) {
-        clearInterval(
-          (r as { snapshotTimer: ReturnType<typeof setInterval> })
-            .snapshotTimer,
-        );
-        clearInterval(
-          (r as { postTimer: ReturnType<typeof setInterval> }).postTimer,
-        );
-      } else {
-        clearInterval(r as ReturnType<typeof setInterval>);
-      }
+      (startLeaderboardScheduler(null as never, {}) as { stop(): void }).stop();
     }).not.toThrow();
   });
 });

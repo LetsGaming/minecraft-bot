@@ -1,26 +1,35 @@
-import { type Client } from "discord.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import type { ILogWatcher } from "../../logWatcher.js";
 import { wasAccepted } from "@mcbot/schema/commandOutcome.js";
+import { MS } from "@mcbot/schema";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
+import { consoleCommand } from "@mcbot/core/utils/minecraft/serverMessages.js";
+import { t } from "@mcbot/core/utils/i18n.js";
+import { onServerRemoved } from "../../serverCleanup.js";
+import { runDetached } from "../sendQueue.js";
 import { chatLineRegex } from "./chatLine.js";
 
 // Matches in-game chat: [timestamp] [server thread/INFO]: <PlayerName> Liege wie
 // Captures (1) the player name, (2) the raw message text. Anchored on the
-// speaker (AUD-002): see chatLine.ts.
+// speaker: see chatLine.ts.
 const SLEEP_TRIGGER_REGEX = chatLineRegex(String.raw`\s+(.*)`);
 
 // ── Cooldown ──────────────────────────────────────────────────────────────────
 
 /** Cooldown in milliseconds between sleep prompts (per server). */
-const COOLDOWN_MS = 10_000; // 10 seconds
+const COOLDOWN_MS = 10 * MS.second;
 
-/**
- * Keyed by server identity string (server.id or similar).
- * Stores the timestamp of the last fired sleep prompt.
- */
+/** Timestamp of the last fired sleep prompt, per server id. */
 const lastTriggerTime = new Map<string, number>();
+
+/** Servers with a prompt check running, so a second trigger cannot overlap it. */
+const inFlight = new Set<string>();
+
+onServerRemoved((serverId) => {
+  lastTriggerTime.delete(serverId);
+  inFlight.delete(serverId);
+});
 
 function isOnCooldown(serverId: string): boolean {
   const last = lastTriggerTime.get(serverId);
@@ -43,7 +52,9 @@ async function isPlayerSleeping(
   server: ServerInstance,
   player: string,
 ): Promise<boolean | null> {
-  const outcome = await server.send(`/data get entity ${player} SleepTimer`);
+  const outcome = await server.send(
+    consoleCommand("/data", { text: "get entity" }, { player }, { text: "SleepTimer" }),
+  );
   if (outcome.kind === "unreachable") return null;
   if (outcome.kind === "sent") return false;
   return parseSleepTimer(outcome.output) > 0;
@@ -76,316 +87,36 @@ function isSleepTrigger(message: string): CapsMode | null {
 }
 
 // ── Message pools ─────────────────────────────────────────────────────────────
-// %TRIGGER% = name of the player who wrote the message
-// Title = shown large in screen centre, Subtitle = smaller line below
+// The texts live in the locale tables as sleep.<mode>.<n>.title/subtitle with
+// a {player} placeholder for the player who wrote the message.
+// Title = shown large in screen centre, Subtitle = smaller line below.
 
 interface TitlePair {
   title: string;
   subtitle: string;
-  /** Minecraft color name for the title. Defaults to "white". */
-  titleColor?: string;
-  /** Minecraft color name for the subtitle. Defaults to "gray". */
-  subtitleColor?: string;
+  /** Minecraft color name for the title. */
+  titleColor: string;
+  /** Minecraft color name for the subtitle. */
+  subtitleColor: string;
 }
 
-const TITLES_LOWER: TitlePair[] = [
-  {
-    title: "schlafenszeit.",
-    subtitle: "%TRIGGER% hat's gesagt. du weißt was zu tun ist.",
-    titleColor: "gray",
-    subtitleColor: "dark_gray",
-  },
-  {
-    title: "okay ciao.",
-    subtitle: "log dich aus. das bett ist schon online.",
-    titleColor: "gray",
-    subtitleColor: "dark_gray",
-  },
-  {
-    title: "skill issue.",
-    subtitle: "nicht schlafen wollen ist halt auch nen skill issue.",
-    titleColor: "gray",
-    subtitleColor: "dark_gray",
-  },
-  {
-    title: "bett. jetzt.",
-    subtitle: "%TRIGGER% ist schon weg – nur du stehst noch rum.",
-    titleColor: "gray",
-    subtitleColor: "dark_gray",
-  },
-  {
-    title: "zzz...",
-    subtitle: "der server läuft durch. du solltest das nicht.",
-    titleColor: "gray",
-    subtitleColor: "dark_gray",
-  },
-  {
-    title: "game over.",
-    subtitle: "für heute reicht's. träumen ist das bessere dlc.",
-    titleColor: "gray",
-    subtitleColor: "dark_gray",
-  },
-  {
-    title: "low battery.",
-    subtitle: "dein fokus ist auf 1%. ab an die ladestation.",
-    titleColor: "gray",
-    subtitleColor: "dark_gray",
-  },
-  {
-    title: "nachtschicht beendet.",
-    subtitle: "%TRIGGER% hat feierabend gemacht. du jetzt auch.",
-    titleColor: "gray",
-    subtitleColor: "dark_gray",
-  },
-  {
-    title: "offline-modus.",
-    subtitle: "deine augen brauchen ein update. dauert ca. 8 stunden.",
-    titleColor: "gray",
-    subtitleColor: "dark_gray",
-  },
-  {
-    title: "ende gelände.",
-    subtitle: "wer jetzt noch wach ist, hat die kontrolle verloren.",
-    titleColor: "gray",
-    subtitleColor: "dark_gray",
-  },
-  {
-    title: "schicht ende.",
-    subtitle: "niemand hat nach deiner meinung gefragt. bett.",
-    titleColor: "gray",
-    subtitleColor: "dark_gray",
-  },
-  {
-    title: "klappe zu.",
-    subtitle: "%TRIGGER% hat den abend beendet. du bist noch da. warum.",
-    titleColor: "gray",
-    subtitleColor: "dark_gray",
-  },
-  {
-    title: "strom sparen.",
-    subtitle: "du bist das teuerste gerät was hier noch läuft.",
-    titleColor: "gray",
-    subtitleColor: "dark_gray",
-  },
-  {
-    title: "letzte warnung.",
-    subtitle: "nicht von %TRIGGER%. vom kalender.",
-    titleColor: "gray",
-    subtitleColor: "dark_gray",
-  },
-  {
-    title: "morgen. früh.",
-    subtitle: "du weißt selbst wie das endet. geh schlafen.",
-    titleColor: "gray",
-    subtitleColor: "dark_gray",
-  },
-];
+/** Number of titles per mode in the locale tables. */
+const POOL_SIZE = 15;
 
-const TITLES_NORMAL: TitlePair[] = [
-  {
-    title: "Schlafenszeit.",
-    subtitle: "%TRIGGER% hat's angestossen. Jetzt weisst du Bescheid.",
-    titleColor: "white",
-    subtitleColor: "yellow",
-  },
-  {
-    title: "Log dich aus.",
-    subtitle: "Das hier laeuft morgen noch. Du brauchst Schlaf.",
-    titleColor: "white",
-    subtitleColor: "yellow",
-  },
-  {
-    title: "Geh schlafen.",
-    subtitle: "Kein Drama. Einfach Bett.",
-    titleColor: "white",
-    subtitleColor: "yellow",
-  },
-  {
-    title: "Okay, Ciao.",
-    subtitle: "%TRIGGER% hat gesprochen. Das Bett wartet schon.",
-    titleColor: "white",
-    subtitleColor: "yellow",
-  },
-  {
-    title: "Touch Grass. Oder Kissen.",
-    subtitle: "Schlafen ist kein Bug. Ist ein Feature.",
-    titleColor: "white",
-    subtitleColor: "yellow",
-  },
-  {
-    title: "Ruhemodus aktiviert.",
-    subtitle: "Dein Körper braucht einen Neustart. Geh schlafen.",
-    titleColor: "white",
-    subtitleColor: "yellow",
-  },
-  {
-    title: "Morgen ist auch noch ein Tag.",
-    subtitle: "%TRIGGER% hat den Lead übernommen und schläft schon.",
-    titleColor: "white",
-    subtitleColor: "yellow",
-  },
-  {
-    title: "Zeit für die Horizontale.",
-    subtitle: "Sogar die beste Hardware braucht mal eine Pause.",
-    titleColor: "white",
-    subtitleColor: "yellow",
-  },
-  {
-    title: "Abflug ins Traumland.",
-    subtitle: "Keine Ausreden mehr. Klappe zu, Augen zu.",
-    titleColor: "white",
-    subtitleColor: "yellow",
-  },
-  {
-    title: "System-Check: Müde.",
-    subtitle: "%TRIGGER% empfiehlt: Matratzenhorchdienst antreten.",
-    titleColor: "white",
-    subtitleColor: "yellow",
-  },
-  {
-    title: "Schicht vorbei.",
-    subtitle: "Nicht verhandelbar. Morgen ist auch noch Minecraft.",
-    titleColor: "white",
-    subtitleColor: "yellow",
-  },
-  {
-    title: "Letzte Runde.",
-    subtitle: "War's. %TRIGGER% hat das Licht ausgemacht.",
-    titleColor: "white",
-    subtitleColor: "yellow",
-  },
-  {
-    title: "Bett > Bildschirm.",
-    subtitle: "Heute nicht. Komm morgen wieder.",
-    titleColor: "white",
-    subtitleColor: "yellow",
-  },
-  {
-    title: "Ausloggen.",
-    subtitle: "Kein Grund mehr hier zu sein. Ernst gemeint.",
-    titleColor: "white",
-    subtitleColor: "yellow",
-  },
-  {
-    title: "Nacht.",
-    subtitle:
-      "%TRIGGER% schläft bereits. Du bist das Endgegner des Schlafplans.",
-    titleColor: "white",
-    subtitleColor: "yellow",
-  },
-];
+const POOL_COLORS: Record<CapsMode, { title: string; subtitle: string }> = {
+  lower: { title: "gray", subtitle: "dark_gray" },
+  normal: { title: "white", subtitle: "yellow" },
+  allcaps: { title: "red", subtitle: "gold" },
+};
 
-const TITLES_ALLCAPS: TitlePair[] = [
-  {
-    title: "BRO. SCHLAFEN.",
-    subtitle: "%TRIGGER% HAT'S GESAGT. WAS WILLST DU NOCH HÖREN.",
-    titleColor: "red",
-    subtitleColor: "gold",
-  },
-  {
-    title: "LOG DICH AUS!!!",
-    subtitle: "DAS BETT WARTET. WIR WARTEN. ALLE WARTEN.",
-    titleColor: "red",
-    subtitleColor: "gold",
-  },
-  {
-    title: "SKILL ISSUE!!!",
-    subtitle: "%TRIGGER% SCHLAEFT SCHON. NUR DU NICHT. CLASSIC.",
-    titleColor: "red",
-    subtitleColor: "gold",
-  },
-  {
-    title: "BRO???",
-    subtitle: "DU SCHLAEFST NOCH NICHT?! WHAT IS WRONG WITH YOU.",
-    titleColor: "red",
-    subtitleColor: "gold",
-  },
-  {
-    title: "KEIN WIDERSPRUCH.",
-    subtitle: "%TRIGGER% HAT GESPROCHEN. INS BETT. JETZT. WIRKLICH.",
-    titleColor: "red",
-    subtitleColor: "gold",
-  },
-  {
-    title: "ABFAHRT!!!",
-    subtitle: "DER SCHLAFZUG VERLÄSST DEN BAHNHOF. LETZTER AUFRUF.",
-    titleColor: "red",
-    subtitleColor: "gold",
-  },
-  {
-    title: "REICHT JETZT!",
-    subtitle: "DU SIEHST AUS WIE EIN ZOMBIE. GEH SCHLAFEN.",
-    titleColor: "red",
-    subtitleColor: "gold",
-  },
-  {
-    title: "BETT. SOFORT.",
-    subtitle: "WENN %TRIGGER% GEHT, GEHST DU AUCH. DISZIPLIN!",
-    titleColor: "red",
-    subtitleColor: "gold",
-  },
-  {
-    title: "NOTFALL-STOPP!",
-    subtitle: "DEIN GEHIRN HAT SCHON LÄNGST DEN GEIST AUFGEGEBEN.",
-    titleColor: "red",
-    subtitleColor: "gold",
-  },
-  {
-    title: "GO TO SLEEP!!!",
-    subtitle: "KEINE WEITEREN FRAGEN. KEINE WEITEREN KICKS. BETT.",
-    titleColor: "red",
-    subtitleColor: "gold",
-  },
-  {
-    title: "ERNSTHAFT???",
-    subtitle: "%TRIGGER% LIEGT IM BETT. DU LIEST NOCH TITEL. BRUDER.",
-    titleColor: "red",
-    subtitleColor: "gold",
-  },
-  {
-    title: "AUSLOGGEN. JETZT.",
-    subtitle: "NICHT IN 5 MINUTEN. JETZT. DIESER MOMENT. HIER.",
-    titleColor: "red",
-    subtitleColor: "gold",
-  },
-  {
-    title: "LICHT AUS!!!",
-    subtitle: "WER JETZT NOCH SPIELT, ERKLÄRT SICH MORGEN SELBST.",
-    titleColor: "red",
-    subtitleColor: "gold",
-  },
-  {
-    title: "ICH SCHWÖRE...",
-    subtitle: "%TRIGGER% UND ICH SIND FERTIG MIT DIR. SCHLAFEN.",
-    titleColor: "red",
-    subtitleColor: "gold",
-  },
-  {
-    title: "KEINE CHANCE.",
-    subtitle: "DU KOMMST HIER NICHT LEBEND RAUS. OHNE SCHLAF.",
-    titleColor: "red",
-    subtitleColor: "gold",
-  },
-];
-
-function pickRandom<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)]!;
-}
-
-function buildTitlePair(capsMode: CapsMode, trigger: string): TitlePair {
-  const pool =
-    capsMode === "allcaps"
-      ? TITLES_ALLCAPS
-      : capsMode === "lower"
-        ? TITLES_LOWER
-        : TITLES_NORMAL;
-
-  const { title, subtitle, titleColor, subtitleColor } = pickRandom(pool);
+function buildTitlePair(capsMode: CapsMode, player: string): TitlePair {
+  const n = 1 + Math.floor(Math.random() * POOL_SIZE);
+  const key = `sleep.${capsMode}.${n}`;
   return {
-    title: title.replace(/%TRIGGER%/g, trigger),
-    subtitle: subtitle.replace(/%TRIGGER%/g, trigger),
-    titleColor,
-    subtitleColor,
+    title: t(`${key}.title`, { player }),
+    subtitle: t(`${key}.subtitle`, { player }),
+    titleColor: POOL_COLORS[capsMode].title,
+    subtitleColor: POOL_COLORS[capsMode].subtitle,
   };
 }
 
@@ -408,7 +139,7 @@ export function isNightTick(tick: number): boolean {
  * reached.
  */
 async function isNight(server: ServerInstance): Promise<boolean | null> {
-  const outcome = await server.send("/time query daytime");
+  const outcome = await server.send(consoleCommand("/time", { text: "query daytime" }));
   if (outcome.kind === "unreachable") return null;
   if (outcome.kind === "sent") return true;
   const match = outcome.output.match(/\d+/);
@@ -429,70 +160,67 @@ async function sendTitleToAwake(
   triggerPlayer: string,
   pair: TitlePair,
 ): Promise<void> {
-  // Target: all awake players except the one who triggered the message.
-  // SleepTimer:0s  → not in bed / not sleeping
-  const selector = `@a[nbt={SleepTimer:0s},name=!${triggerPlayer}]`;
+  const target = `@a[nbt={SleepTimer:0s},name=!${triggerPlayer}]`;
 
-  const titleJson = JSON.stringify({
-    text: pair.title,
-    color: pair.titleColor ?? "white",
-  });
-  const subtitleJson = JSON.stringify({
-    text: pair.subtitle,
-    color: pair.subtitleColor ?? "gray",
-  });
+  const titleJson = JSON.stringify({ text: pair.title, color: pair.titleColor });
+  const subtitleJson = JSON.stringify({ text: pair.subtitle, color: pair.subtitleColor });
 
-  const title = await server.send(`/title ${selector} title ${titleJson}`);
+  const title = await server.send(
+    consoleCommand("/title", { target }, { text: "title" }, { text: titleJson }),
+  );
   if (!wasAccepted(title)) return;
-  await server.send(`/title ${selector} subtitle ${subtitleJson}`);
+  await server.send(
+    consoleCommand("/title", { target }, { text: "subtitle" }, { text: subtitleJson }),
+  );
 }
 
 // ── Watcher registration ──────────────────────────────────────────────────────
 
+async function runSleepPrompt(
+  server: ServerInstance,
+  triggerPlayer: string,
+  capsMode: CapsMode,
+): Promise<void> {
+  // Only fire the prompt if the triggering player is actually in bed.
+  if ((await isPlayerSleeping(server, triggerPlayer)) !== true) return;
+
+  log.info("sleepWatcher", `${triggerPlayer} triggered sleep prompt (${capsMode})`);
+
+  if ((await isNight(server)) !== true) return;
+
+  markTriggered(server.id);
+  await sendTitleToAwake(server, triggerPlayer, buildTitlePair(capsMode, triggerPlayer));
+}
+
 export function registerSleepWatcher(logWatcher: ILogWatcher): void {
-  logWatcher.register(
-    SLEEP_TRIGGER_REGEX,
-    async (match, _client: Client, server: ServerInstance) => {
-      const [, triggerPlayer, rawMessage] = match;
-      if (!triggerPlayer || !rawMessage) return;
+  // The handler only decides whether to start the check: the server round
+  // trips run detached, because log handlers run one at a time and waiting
+  // here would stall every other watcher for this server.
+  logWatcher.register(SLEEP_TRIGGER_REGEX, (match, _client, server) => {
+    const [, triggerPlayer, rawMessage] = match;
+    if (!triggerPlayer || !rawMessage) return;
 
-      const capsMode = isSleepTrigger(rawMessage);
-      if (capsMode === null) return;
+    const capsMode = isSleepTrigger(rawMessage);
+    if (capsMode === null) return;
 
-      // The name goes into `/data get entity` and a `name=!…` selector, so
-      // it must be a real player name, not a selector or extra arguments.
-      if (!isValidMcName(triggerPlayer)) return;
+    // The name goes into `/data get entity` and a `name=!…` selector, so
+    // it must be a real player name, not a selector or extra arguments.
+    if (!isValidMcName(triggerPlayer)) return;
 
-      // ── Cooldown check ──────────────────────────────────────────────────────
-      const serverId = server.id;
-      if (isOnCooldown(serverId)) {
-        log.info(
-          "sleepWatcher",
-          `${triggerPlayer} triggered sleep prompt but cooldown is active – skipping.`,
-        );
-        return;
-      }
-
-      // ── Sleeping check ──────────────────────────────────────────────────────
-      // Only fire the prompt if the triggering player is actually in bed.
-      const triggerIsInBed = await isPlayerSleeping(server, triggerPlayer);
-      if (triggerIsInBed !== true) {
-        return;
-      }
-
+    const serverId = server.id;
+    if (isOnCooldown(serverId) || inFlight.has(serverId)) {
       log.info(
         "sleepWatcher",
-        `${triggerPlayer} triggered sleep prompt (${capsMode})`,
+        `${triggerPlayer} triggered sleep prompt but cooldown is active, skipping.`,
       );
+      return;
+    }
 
-      if ((await isNight(server)) !== true) {
-        return;
-      }
-
-      markTriggered(serverId);
-      const pair = buildTitlePair(capsMode, triggerPlayer);
-
-      await sendTitleToAwake(server, triggerPlayer, pair);
-    },
-  );
+    inFlight.add(serverId);
+    void runDetached("sleepWatcher", "Sleep prompt failed", () =>
+      runSleepPrompt(server, triggerPlayer, capsMode).finally(() => {
+        inFlight.delete(serverId);
+      }),
+    );
+  });
 }
