@@ -313,7 +313,7 @@ async function checkServer(server: ServerInstance, ctx: AlertContext): Promise<v
 
       // One-shot /watch subscribers get their recovery DM regardless of
       // any guild alert channel config.
-      fireWatches(client, { kind: "server", serverId: server.id });
+      fireWatches(ctx.client, { kind: "server", serverId: server.id });
 
       await alertGuilds(ctx, server.id, ["error", "ok"], () => ({
         title: t("downtime.upTitle", { server: server.id }),

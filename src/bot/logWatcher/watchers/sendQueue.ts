@@ -56,10 +56,12 @@ export function enqueueSend(
   return next;
 }
 
-/** Exposed for tests: drain every pending send, including ones queued while draining. */
+const detachedWork = new Set<Promise<void>>();
+
+/** Exposed for tests: drain every pending send and detached job, including ones queued while draining. */
 export async function flushSendQueues(): Promise<void> {
-  while (sendQueues.size > 0) {
-    await Promise.all([...sendQueues.values()]);
+  while (sendQueues.size > 0 || detachedWork.size > 0) {
+    await Promise.all([...sendQueues.values(), ...detachedWork]);
   }
 }
 
@@ -72,9 +74,14 @@ export function runDetached(
   describe: string,
   work: () => Promise<void>,
 ): Promise<void> {
-  return Promise.resolve()
+  const job: Promise<void> = Promise.resolve()
     .then(work)
     .catch((err: unknown) => {
       log.warn(tag, `${describe}: ${errMsg(err)}`);
+    })
+    .finally(() => {
+      detachedWork.delete(job);
     });
+  detachedWork.add(job);
+  return job;
 }

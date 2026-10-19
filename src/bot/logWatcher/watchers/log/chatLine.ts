@@ -1,5 +1,5 @@
 /**
- * AUD-002 — speaker authenticity for player chat lines.
+ * Speaker authenticity for player chat lines.
  *
  * The chat-driven watchers (chatBridge, sleepWatcher, defineCommand) used
  * the unanchored prefix `\[.+?\]: <name>`. The lazy `.+?` let the engine

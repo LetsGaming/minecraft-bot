@@ -1,14 +1,18 @@
 import {
-  ActivityType,
+  ChannelType,
   type Client,
   type TextChannel,
   type VoiceChannel,
   type EmbedBuilder,
 } from "discord.js";
-import { loadConfig } from "@mcbot/core/config.js";
+import { MS } from "@mcbot/schema";
+import { tryLoadConfig } from "@mcbot/core/utils/config/configAccess.js";
 import { getAllInstances } from "@mcbot/core/utils/server/server.js";
 import { getAllowedServerIds } from "../../../utils/guild/guildRouter.js";
-import { kvGet, kvSet } from "@mcbot/core/db/kv.js";
+import {
+  statusChannelsFor,
+  updateStatusMessages,
+} from "@mcbot/core/utils/stores/statusMessagesStore.js";
 import { recordPlayerCountSample } from "@mcbot/core/utils/stores/playerCountHistory.js";
 import { parsePlayerCounts } from "@mcbot/core/utils/minecraft/playerCounts.js";
 import { log } from "@mcbot/core/utils/logger.js";
@@ -17,9 +21,11 @@ import { EmbedColor } from "../../../utils/embeds/embedColors.js";
 import {
   describeHealth,
   describePlayers,
+  stateSeverity,
 } from "../../../utils/embeds/serverStateDisplay.js";
 import {
   canQueryServer,
+  ServerState,
   unknownHealth,
   type ServerHealth,
 } from "@mcbot/schema/serverState.js";
@@ -32,7 +38,6 @@ import {
 import type {
   GuildConfig,
   StatusChannelState,
-  StatusMessageState,
   TpsResult,
 } from "@mcbot/core/types/index.js";
 import {
@@ -41,12 +46,16 @@ import {
   type GuildConfigSource,
 } from "../../../utils/guild/guildConfigs.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
-
 import { t } from "@mcbot/core/utils/i18n.js";
+import { onServerRemoved } from "../../serverCleanup.js";
+import { startPoller, type Poller } from "../poller.js";
+import { isChannelGone, isUnknownMessage } from "../discordErrors.js";
+import { updateBotPresence, type PlayerCounts } from "./botPresence.js";
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const UPDATE_INTERVAL_MS = 60 * 1_000;
-const INITIAL_DELAY_MS = 5_000;
+const UPDATE_INTERVAL_MS = MS.minute;
+const INITIAL_DELAY_MS = 5 * MS.second;
 
 /**
  * Display names for the bot-managed Discord channels.
@@ -61,14 +70,20 @@ const buildVoiceChannelName = (online: number, max: number) =>
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface PlayerCounts {
-  online: number;
-  max: number;
-}
-
 interface StatusBuildResult {
   embed: EmbedBuilder;
   counts: PlayerCounts;
+}
+
+interface ServerFieldResult {
+  field: { name: string; value: string; inline: boolean };
+  counts: PlayerCounts;
+  /** Whether the server answered as running this pass. */
+  online?: boolean;
+  /** The server's state colour; the embed takes the worst one. */
+  color: number;
+  /** Higher is worse; see `stateSeverity`. */
+  severity: number;
 }
 
 /**
@@ -85,24 +100,22 @@ interface GuildChannelRefs {
 
 const channelRefCache = new Map<string, GuildChannelRefs>();
 
+/** Sentinel that forces the next pass to rename the counter channel. */
+const UNSET_COUNTS: PlayerCounts = { online: -1, max: -1 };
+
+// The counter channel sums over servers, so a removed server changes it.
+onServerRemoved(() => {
+  for (const refs of channelRefCache.values()) refs.lastCounts = UNSET_COUNTS;
+});
+
 /**
  * Clear the channel ref cache so the next update cycle re-fetches live
- * channel objects. Call this after a Discord reconnect — stale TextChannel /
+ * channel objects. Call this after a Discord reconnect: stale TextChannel /
  * VoiceChannel objects from before the disconnect can no longer be written to.
  */
 export function invalidateStatusChannelCache(): void {
   channelRefCache.clear();
   log.info("status", "Channel ref cache invalidated (reconnect)");
-}
-
-// ─── Persistence ──────────────────────────────────────────────────────────────
-
-async function loadState(): Promise<StatusMessageState> {
-  return kvGet<StatusMessageState>("statusMessages") ?? {};
-}
-
-async function saveState(state: StatusMessageState): Promise<void> {
-  kvSet("statusMessages", state);
 }
 
 // ─── Channel provisioning ─────────────────────────────────────────────────────
@@ -117,7 +130,6 @@ async function saveState(state: StatusMessageState): Promise<void> {
 async function provisionGuildChannels(
   client: Client,
   guildId: string,
-  state: StatusMessageState,
 ): Promise<{
   textChannel: TextChannel;
   voiceChannel: VoiceChannel;
@@ -130,15 +142,14 @@ async function provisionGuildChannels(
   }
 
   // Resolve channels from persisted state first to avoid unnecessary API calls
-  const stored = state[guildId];
+  const stored = statusChannelsFor(guildId);
   if (stored) {
-    const textChannel = guild.channels.cache.get(stored.textChannelId) as
-      | TextChannel
-      | undefined;
-    const voiceChannel = guild.channels.cache.get(stored.voiceChannelId) as
-      | VoiceChannel
-      | undefined;
-    if (textChannel && voiceChannel) {
+    const textChannel = guild.channels.cache.get(stored.textChannelId);
+    const voiceChannel = guild.channels.cache.get(stored.voiceChannelId);
+    if (
+      textChannel?.type === ChannelType.GuildText &&
+      voiceChannel?.type === ChannelType.GuildVoice
+    ) {
       return { textChannel, voiceChannel, stored };
     }
     log.info(
@@ -154,7 +165,7 @@ async function provisionGuildChannels(
       guild,
       category.id,
       STATUS_TEXT_CHANNEL_NAME,
-      "Live Minecraft server status — managed by the bot.",
+      "Live Minecraft server status (managed by the bot).",
     );
 
     const { channel: voiceChannel } = await ensureVoiceChannel(
@@ -169,8 +180,9 @@ async function provisionGuildChannels(
       messageId: stored?.messageId ?? "",
       voiceChannelId: voiceChannel.id,
     };
-    state[guildId] = newState;
-    await saveState(state);
+    updateStatusMessages((state) => {
+      state[guildId] = newState;
+    });
 
     log.info(
       "status",
@@ -208,7 +220,7 @@ async function buildServerField(
   let tps: TpsResult | null = null;
   const counts: PlayerCounts = { online: 0, max: 0 };
 
-  // Check health before TPS — running both in parallel on a cold RCON
+  // Check health before TPS: running both in parallel on a cold RCON
   // connection can poison the internal _hasTpsCommand cache permanently.
   let health: ServerHealth;
   try {
@@ -218,14 +230,13 @@ async function buildServerField(
   }
 
   const display = describeHealth(health);
-  const severity = severityOf(display.color);
 
   // Anything short of responsive gets its state and nothing else: no player
   // count, no TPS. Reporting "0/20 players" for a server that simply did not
   // answer is a fabricated number, and it read as an empty server.
   if (!canQueryServer(health)) {
     // Counts from a direct ping still count. A server whose wrapper is down
-    // is not a blank row — it has players on it.
+    // is not a blank row: it has players on it.
     if (health.players) {
       counts.online = health.players.online;
       counts.max = health.players.max;
@@ -243,7 +254,7 @@ async function buildServerField(
       counts,
       online: false,
       color: display.color,
-      severity,
+      severity: display.severity,
     };
   }
 
@@ -257,9 +268,7 @@ async function buildServerField(
 
   // Health already carries counts (from the wrapper, or from a direct ping
   // when the wrapper is down). Seed from it so a failed /list degrades to a
-  // slightly stale number instead of zero — this branch used to leave the
-  // counts at 0 while still reporting the server as up, which is where
-  // "0 online" came from for a server people were playing on.
+  // slightly stale number instead of zero.
   if (health.players) {
     counts.online = health.players.online;
     counts.max = health.players.max;
@@ -288,30 +297,8 @@ async function buildServerField(
     counts,
     online: true,
     color: display.color,
-    severity,
+    severity: display.severity,
   };
-}
-
-interface ServerFieldResult {
-  field: { name: string; value: string; inline: boolean };
-  counts: PlayerCounts;
-  /** Whether the server answered as running this pass. */
-  online?: boolean;
-  /** The server's state colour; the embed takes the worst one. */
-  color: number;
-  severity: number;
-}
-
-const SEVERITY_ORDER = [
-  EmbedColor.Online,
-  EmbedColor.Neutral,
-  EmbedColor.Warning,
-  EmbedColor.Error,
-];
-
-/** Higher is worse: online, unknown, needs a look, offline. */
-function severityOf(color: number): number {
-  return Math.max(0, SEVERITY_ORDER.indexOf(color));
 }
 
 /**
@@ -334,7 +321,7 @@ async function buildAllServerFields(): Promise<
     if (result.status === "fulfilled") {
       const value = result.value;
       map.set(instanceId, value);
-      // Feed the player-count history for free — this pass already paid
+      // Feed the player-count history for free: this pass already paid
       // for the query. Never let bookkeeping break the status update.
       if (value.online === true) {
         recordPlayerCountSample(instanceId, value.counts.online).catch(
@@ -351,7 +338,7 @@ async function buildAllServerFields(): Promise<
         counts: { online: 0, max: 0 },
         online: false,
         color: EmbedColor.Neutral,
-        severity: severityOf(EmbedColor.Neutral),
+        severity: stateSeverity(ServerState.Unknown),
       });
     }
   });
@@ -399,17 +386,15 @@ function buildStatusEmbed(
 // ─── Per-channel updates ──────────────────────────────────────────────────────
 
 /**
- * Send a new status embed or edit the existing pinned one.
+ * Send a new status embed or edit the existing one.
  * Persists the message ID so the same message is edited on every cycle.
  */
 export async function sendOrUpdateEmbed(
   textChannel: TextChannel,
   embed: EmbedBuilder,
   guildId: string,
-  state: StatusMessageState,
 ): Promise<void> {
-  const stored = state[guildId];
-  const messageId = stored?.messageId;
+  const messageId = statusChannelsFor(guildId)?.messageId;
 
   if (messageId) {
     try {
@@ -417,17 +402,15 @@ export async function sendOrUpdateEmbed(
       await msg.edit({ embeds: [embed] });
       return;
     } catch (err) {
-      // AUD-023: only a message that is really gone gets a replacement. A
-      // 5xx or a rate limit used to post a new embed every time and leave
-      // the old one showing a stale status; a deleted channel was never
-      // re-provisioned until a reconnect.
-      const code = discordErrorCode(err);
-      if (code === UNKNOWN_CHANNEL || code === MISSING_ACCESS) {
+      // Only a message that is really gone gets a replacement. A 5xx or a
+      // rate limit used to post a new embed every time and leave the old one
+      // showing a stale status; a deleted channel is re-provisioned next pass.
+      if (isChannelGone(err)) {
         channelRefCache.delete(guildId);
         log.warn("status", `Status channel for guild ${guildId} is gone; it is set up again next cycle`);
         return;
       }
-      if (code !== UNKNOWN_MESSAGE) {
+      if (!isUnknownMessage(err)) {
         log.warn("status", `Could not update the status embed for guild ${guildId}: ${errMsg(err)}`);
         return;
       }
@@ -440,29 +423,18 @@ export async function sendOrUpdateEmbed(
 
   try {
     const msg = await textChannel.send({ embeds: [embed] });
-    if (stored) {
-      stored.messageId = msg.id;
-      await saveState(state);
-    }
+    updateStatusMessages((state) => {
+      const entry = state[guildId];
+      if (entry) entry.messageId = msg.id;
+    });
     log.info("status", `Sent status embed in guild ${guildId}`);
   } catch (err) {
-    const code = discordErrorCode(err);
-    if (code === UNKNOWN_CHANNEL || code === MISSING_ACCESS) channelRefCache.delete(guildId);
+    if (isChannelGone(err)) channelRefCache.delete(guildId);
     log.error(
       "status",
       `Failed to send embed for guild ${guildId}: ${errMsg(err)}`,
     );
   }
-}
-
-/** Discord JSON error codes this pass tells apart. */
-const UNKNOWN_CHANNEL = 10003;
-const UNKNOWN_MESSAGE = 10008;
-const MISSING_ACCESS = 50001;
-
-function discordErrorCode(err: unknown): number | null {
-  const code = (err as { code?: unknown } | null)?.code;
-  return typeof code === "number" ? code : null;
 }
 
 /**
@@ -503,119 +475,25 @@ async function updatePlayerCountVoiceChannel(
 async function updateGuildStatus(
   client: Client,
   guildId: string,
-  state: StatusMessageState,
   { embed, counts }: StatusBuildResult,
 ): Promise<void> {
   // Use the cached channel references; provision on first call or after eviction
   let refs = channelRefCache.get(guildId);
 
   if (!refs) {
-    const provisioned = await provisionGuildChannels(client, guildId, state);
+    const provisioned = await provisionGuildChannels(client, guildId);
     if (!provisioned) return;
 
     refs = {
       textChannel: provisioned.textChannel,
       voiceChannel: provisioned.voiceChannel,
-      lastCounts: { online: -1, max: -1 }, // sentinel forces the first rename
+      lastCounts: UNSET_COUNTS,
     };
     channelRefCache.set(guildId, refs);
   }
 
-  await sendOrUpdateEmbed(refs.textChannel, embed, guildId, state);
+  await sendOrUpdateEmbed(refs.textChannel, embed, guildId);
   await updatePlayerCountVoiceChannel(refs.voiceChannel, guildId, counts, refs);
-}
-
-// ─── Bot presence ─────────────────────────────────────────────────────────────
-
-let presenceWasSet = false;
-
-/**
- * Bot presence with player count — "Playing 7 online @ SMP" in the member
- * list, without opening a channel. Rides the status pass's shared field
- * map, so presence never costs extra server round-trips.
- *
- * A multi-tenant process serves all guilds with a single presence, so
- * with no `presence.server` configured the counts aggregate across every
- * instance ("{server}" then reads "N servers"). Config is read fresh each
- * pass, so /config reload toggles it live; presence updates at the status
- * cadence (60s) stay well under Discord's limits.
- */
-export function updateBotPresence(
-  client: Client,
-  fieldMap: Map<string, ServerFieldResult>,
-): void {
-  let cfg: ReturnType<typeof loadConfig>["presence"];
-  try {
-    cfg = loadConfig().presence;
-  } catch {
-    return; // presence is additive — never break the status pass
-  }
-  if (!client.user) return;
-
-  if (!cfg?.enabled) {
-    // Toggled off at runtime: clear the stale activity once.
-    if (presenceWasSet) {
-      try {
-        client.user.setPresence({ activities: [] });
-      } catch {
-        /* best-effort */
-      }
-      presenceWasSet = false;
-    }
-    return;
-  }
-
-  let online = 0;
-  let max = 0;
-  let serverLabel: string;
-  let isDown = false;
-
-  if (cfg.server) {
-    const entry = fieldMap.get(cfg.server);
-    if (!entry) return; // unknown server — config validation already warned
-    online = entry.counts.online;
-    max = entry.counts.max;
-    serverLabel = cfg.server;
-    isDown = entry.online === false;
-  } else {
-    for (const e of fieldMap.values()) {
-      online += e.counts.online;
-      max += e.counts.max;
-    }
-    serverLabel =
-      fieldMap.size === 1
-        ? ([...fieldMap.keys()][0] ?? "server")
-        : `${fieldMap.size} servers`;
-    // Aggregate mode is only "down" when EVERY instance is down —
-    // "0 online" with one server up is truthful, "0 online" with the
-    // whole fleet unreachable is not.
-    isDown =
-      fieldMap.size > 0 &&
-      [...fieldMap.values()].every((e) => e.online === false);
-  }
-
-  // Down state: say so instead of pretending 0 players are online, and
-  // switch to idle so the member list reflects it at a glance.
-  const format = isDown
-    ? (cfg.downFormat ?? "⛔ {server} offline")
-    : (cfg.format ?? "{online} online @ {server}");
-  const name = format
-    .replaceAll("{online}", String(online))
-    .replaceAll("{max}", String(max))
-    .replaceAll("{server}", serverLabel);
-
-  try {
-    client.user.setPresence({
-      activities: [{ name, type: ActivityType.Playing }],
-      status: isDown ? "idle" : "online",
-    });
-    presenceWasSet = true;
-  } catch (err) {
-    log.warn(
-      "presence",
-      `Failed to set presence: ${errMsg(err)}`,
-    );
-  }
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -633,7 +511,7 @@ function enabledGuildIds(
  * One status pass: query every server once, update presence, then update
  * each enabled guild's embed + counter channel. Guild enablement is read
  * FRESH from config each pass, so `/config reload` can add or remove
- * statusEmbed guilds without restarting the timer.
+ * statusEmbed guilds without restarting the poller.
  */
 async function runStatusPass(
   client: Client,
@@ -652,28 +530,14 @@ async function runStatusPass(
 
   updateBotPresence(client, fieldMap);
 
-  const guildConfigs = resolveGuildConfigs(guildConfigSource);
-  const enabledGuilds = enabledGuildIds(guildConfigs);
+  const enabledGuilds = enabledGuildIds(resolveGuildConfigs(guildConfigSource));
 
   if (enabledGuilds.length === 0) return; // presence-only pass
 
-  let state: StatusMessageState;
-  try {
-    state = await loadState();
-  } catch (err) {
-    log.error(
-      "status",
-      `Failed to load state: ${errMsg(err)}`,
-    );
-    return;
-  }
-
-  // Sequential: avoids concurrent writes to shared in-memory state.
-  // Each guild gets its own embed (scoped to the servers it can see).
+  // Sequential: each guild gets its own embed (scoped to the servers it can see).
   for (const guildId of enabledGuilds) {
     try {
-      const statusResult = buildStatusEmbed(guildId, fieldMap);
-      await updateGuildStatus(client, guildId, state, statusResult);
+      await updateGuildStatus(client, guildId, buildStatusEmbed(guildId, fieldMap));
     } catch (err) {
       log.error(
         "status",
@@ -683,56 +547,60 @@ async function runStatusPass(
   }
 }
 
-/** The single status-pass timer for this process (presence rides it). */
-let statusTimer: ReturnType<typeof setInterval> | null = null;
+/** The single status-pass poller for this process (presence rides it). */
+let statusPoller: Poller | null = null;
+
+function presenceEnabled(): boolean {
+  const loaded = tryLoadConfig({ onError: "open" });
+  return loaded.ok && loaded.config.presence?.enabled === true;
+}
 
 /**
  * Start the status embed updater. Explicit opt-in per guild
- * (`statusEmbed.enabled: true`) — safer than a default, since the bot
+ * (`statusEmbed.enabled: true`), safer than a default, since the bot
  * creates channels. For every enabled guild it self-provisions a private
  * "📊 Server Status" category with a `#server-status` text channel (live
  * embed) and a `👥 Players: X / Y` voice channel as a read-only counter;
  * no channel IDs to configure.
  *
  * Presence rides this pass so it never costs extra server round-trips.
- * When BOTH features are off the timer does not start; reconcileStatusEmbed
+ * When BOTH features are off the poller does not start; reconcileStatusEmbed
  * arms (or disarms) it on config reload, so flipping presence or a guild's
  * statusEmbed no longer needs a restart.
  */
 export function startStatusEmbed(
   client: Client,
   guildConfigs: GuildConfigSource,
-): ReturnType<typeof setInterval> | null {
+): Poller | null {
   const enabledCount = enabledGuildIds(resolveGuildConfigs(guildConfigs)).length;
 
-  if (enabledCount === 0 && loadConfig().presence?.enabled !== true) {
+  if (enabledCount === 0 && !presenceEnabled()) {
     log.info(
       "status",
       "No guilds have statusEmbed enabled and presence is off, skipping",
     );
     return null;
   }
-  if (statusTimer) return statusTimer; // already armed (reload path)
+  if (statusPoller) return statusPoller; // already armed (reload path)
 
-  const update = (): void => {
-    void runStatusPass(client, guildConfigs);
-  };
-
-  setTimeout(update, INITIAL_DELAY_MS);
-  statusTimer = setInterval(update, UPDATE_INTERVAL_MS);
+  statusPoller = startPoller(
+    "status",
+    () => runStatusPass(client, guildConfigs),
+    UPDATE_INTERVAL_MS,
+    { initialDelayMs: INITIAL_DELAY_MS },
+  );
 
   log.info(
     "status",
     `Status embed active for ${enabledCount} guild(s)`,
   );
-  return statusTimer;
+  return statusPoller;
 }
 
 /**
- * Re-evaluate on config reload whether the status/presence timer should
+ * Re-evaluate on config reload whether the status/presence poller should
  * run, and arm or disarm it accordingly. Called by the reconcile path, so
- * "both off → presence on" (and the reverse) applies without a restart —
- * the follow-up the features batch deliberately cut from v1.
+ * "both off → presence on" (and the reverse) applies without a restart.
  */
 export function reconcileStatusEmbed(
   client: Client,
@@ -742,17 +610,17 @@ export function reconcileStatusEmbed(
     enabledGuildIds(freshConfig.guilds).length > 0 ||
     freshConfig.presence?.enabled === true;
 
-  if (wanted && !statusTimer) {
+  if (wanted && !statusPoller) {
     startStatusEmbed(client, liveGuildConfigs);
-    log.info("status", "Status/presence timer armed after config reload");
+    log.info("status", "Status/presence poller armed after config reload");
     return;
   }
 
-  if (!wanted && statusTimer) {
-    clearInterval(statusTimer);
-    statusTimer = null;
-    // Presence just turned off — clear the stale activity once.
+  if (!wanted && statusPoller) {
+    statusPoller.stop();
+    statusPoller = null;
+    // Presence just turned off: clear the stale activity once.
     updateBotPresence(client, new Map());
-    log.info("status", "Status/presence timer stopped after config reload");
+    log.info("status", "Status/presence poller stopped after config reload");
   }
 }

@@ -19,6 +19,8 @@ import {
 } from "discord.js";
 import { getAllInstances } from "@mcbot/core/utils/server/server.js";
 import { runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
+import { log } from "@mcbot/core/utils/logger.js";
+import { errMsg } from "@mcbot/core/utils/error.js";
 import type { GuildConfig } from "@mcbot/core/types/index.js";
 import {
   DEFAULT_NOTIFICATION_EVENTS,
@@ -62,12 +64,12 @@ export interface GuildTarget<T extends ChannelTarget> {
  */
 export function guildTargets<T extends ChannelTarget>(
   guildConfigs: GuildConfigSource,
-  pick: (gcfg: GuildConfig) => T | undefined,
+  pick: (gcfg: GuildConfig, guildId: string) => T | undefined,
   serverId: string,
 ): GuildTarget<T>[] {
   const targets: GuildTarget<T>[] = [];
   for (const [guildId, gcfg] of Object.entries(resolveGuildConfigs(guildConfigs))) {
-    const target = pick(gcfg);
+    const target = pick(gcfg, guildId);
     if (!target?.channelId) continue;
     if (!serverInScope(target.server, serverId, guildId)) continue;
     targets.push({ guildId, target: target as T & { channelId: string } });
@@ -77,7 +79,7 @@ export function guildTargets<T extends ChannelTarget>(
 
 export interface SendToGuildsOptions<T extends ChannelTarget> {
   /** The feature block to send to; undefined skips the guild. */
-  pick: (gcfg: GuildConfig) => T | undefined;
+  pick: (gcfg: GuildConfig, guildId: string) => T | undefined;
   /** Server the message originates from, for the scope filter. */
   serverId: string;
   /** Message factory, invoked inside the guild's locale context. */
@@ -137,28 +139,36 @@ export interface BroadcastOptions {
   logTag?: string;
 }
 
-export function broadcastNotification(
+/**
+ * Send an event embed to every subscribed guild. Never rejects, so log
+ * handlers can drop the returned promise instead of awaiting it.
+ */
+export async function broadcastNotification(
   client: Client,
   guildConfigs: GuildConfigSource,
   { serverId, event, buildEmbed, logTag = "notify" }: BroadcastOptions,
 ): Promise<void> {
-  // Footer shows the source server when more than one server exists,
-  // regardless of how many guilds are configured.
-  const withServerFooter = getAllInstances().length > 1;
+  try {
+    // Footer shows the source server when more than one server exists,
+    // regardless of how many guilds are configured.
+    const withServerFooter = getAllInstances().length > 1;
 
-  return sendToGuildChannels(client, guildConfigs, {
-    serverId,
-    logTag,
-    describe: "Failed",
-    // An absent events list means "the default set": a guild configured with
-    // only a channel (what the setup wizard used to write) still receives the
-    // common events instead of silently nothing. An explicit empty list is a
-    // deliberate opt-out and receives nothing.
-    pick: (gcfg) => {
-      const notif = gcfg.notifications;
-      const events = notif?.events ?? DEFAULT_NOTIFICATION_EVENTS;
-      return events.includes(event) ? notif : undefined;
-    },
-    build: () => ({ embeds: [buildEmbed(withServerFooter)] }),
-  });
+    await sendToGuildChannels(client, guildConfigs, {
+      serverId,
+      logTag,
+      describe: "Failed",
+      // An absent events list means "the default set": a guild configured with
+      // only a channel (what the setup wizard used to write) still receives the
+      // common events instead of silently nothing. An explicit empty list is a
+      // deliberate opt-out and receives nothing.
+      pick: (gcfg) => {
+        const notif = gcfg.notifications;
+        const events = notif?.events ?? DEFAULT_NOTIFICATION_EVENTS;
+        return events.includes(event) ? notif : undefined;
+      },
+      build: () => ({ embeds: [buildEmbed(withServerFooter)] }),
+    });
+  } catch (err) {
+    log.error(logTag, `Failed: ${errMsg(err)}`);
+  }
 }

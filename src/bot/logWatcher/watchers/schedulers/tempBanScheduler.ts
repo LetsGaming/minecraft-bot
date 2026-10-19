@@ -30,9 +30,11 @@ import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { scheduleAt, type LongTimer } from "@mcbot/core/utils/longTimer.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
+import { MS } from "@mcbot/schema";
+import { consoleCommand } from "@mcbot/core/utils/minecraft/serverMessages.js";
 
 /** How long to wait before retrying a pardon the server did not receive. */
-const PARDON_RETRY_MS = 60_000;
+const PARDON_RETRY_MS = MS.minute;
 
 const timers = new Map<string, LongTimer>();
 
@@ -110,7 +112,17 @@ export async function expireTempBan(
     return;
   }
 
-  const outcome = await server.send(`/pardon ${ban.player}`);
+  let command: string;
+  try {
+    command = consoleCommand("/pardon", { player: ban.player });
+  } catch (err) {
+    // A name the console would reject can never be pardoned: stop tracking it.
+    await removeTempBan(ban.serverId, ban.player);
+    log.warn("tempban", `Dropping expired ban for ${ban.player}: ${errMsg(err)}`);
+    return;
+  }
+
+  const outcome = await server.send(command);
   if (outcome.kind === "unreachable") {
     log.warn(
       "tempban",

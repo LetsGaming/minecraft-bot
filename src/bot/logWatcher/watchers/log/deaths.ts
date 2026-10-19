@@ -6,7 +6,9 @@ import { EmbedCategory, CATEGORY_STYLE } from "@mcbot/schema/embedCategories.js"
 import { type Client } from "discord.js";
 import { createPlayerEmbed } from "../../../utils/embeds/embedUtils.js";
 import type { ILogWatcher } from "../../logWatcher.js";
-import { broadcastNotification, PLAYER_NAME } from "../notifyGuilds.js";
+import { broadcastNotification } from "../notifyGuilds.js";
+import { runDetached } from "../sendQueue.js";
+import { PLAYER_NAME } from "@mcbot/core/utils/sanitize.js";
 import type { GuildConfigSource } from "../../../utils/guild/guildConfigs.js";
 import { serverEventRegex, registerServerEvent } from "./serverLine.js";
 import { loadConfig } from "@mcbot/core/config.js";
@@ -20,13 +22,10 @@ import { log } from "@mcbot/core/utils/logger.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
-// Use PLAYER_NAME (not \w+) so Bedrock players with "."-prefixed
-// names get death notifications too.
-// QUAL-03: the death-message openers live in a table instead of a
-// 30-branch inline alternation — one place to extend (or localize)
-// when Mojang adds messages. Order is significant only in that longer
-// phrases sharing a prefix must come before their prefix ("was blown
-// up" is fine after "blew up" since they don't share one).
+// PLAYER_NAME (not \w+) so Bedrock players with "."-prefixed names get
+// death notifications too. The death-message openers live in a table: one
+// place to extend when Mojang adds messages. Order is significant only in
+// that longer phrases sharing a prefix must come before their prefix.
 const DEATH_PHRASES = [
   "was slain",
   "was shot",
@@ -69,12 +68,14 @@ const DEATH_PHRASES = [
   "left the confines of this world",
 ] as const;
 
-// SEC-01: anchored on the server thread tag via serverEventRegex — a
-// chat message must not forge a death notification.
+// Anchored on the server thread tag via serverEventRegex: a chat message
+// must not forge a death notification.
 const DEATH_REGEX = serverEventRegex(
   String.raw`(${PLAYER_NAME})\s+(${DEATH_PHRASES.join("|")})(.*)$`,
   "i",
 );
+
+const KILLER_REGEX = new RegExp(String.raw`\bby\s+(${PLAYER_NAME})`, "u");
 
 /**
  * DM the linked Discord account with the death coordinates and a
@@ -129,7 +130,7 @@ async function wasKilledByPlayer(
   victim: string,
   rest: string,
 ): Promise<boolean> {
-  const killer = /\bby\s+([A-Za-z0-9_.]{1,17})/u.exec(rest)?.[1];
+  const killer = KILLER_REGEX.exec(rest)?.[1];
   if (!killer || killer.toLowerCase() === victim.toLowerCase()) return false;
 
   try {
@@ -143,6 +144,51 @@ async function wasKilledByPlayer(
   }
 }
 
+/**
+ * Everything after the Discord notification: the in-game tip and the optional
+ * death-coordinates DM. Runs detached from the log dispatch queue because it
+ * waits on several server round trips.
+ */
+async function followUp(
+  client: Client,
+  server: ServerInstance,
+  player: string,
+  rest: string,
+): Promise<void> {
+  // In game, and before the DM branch: the tips point at in-game
+  // commands, so gating them on a linked Discord account would have hidden
+  // them from exactly the players who have not linked yet. Whispered to
+  // whoever just died, linked or not.
+  //
+  // Whether this was PvP costs a player-list call, so it is only asked
+  // when the PvP tip could still be shown: otherwise every death on the
+  // server would pay for a tip that ran out weeks ago. If it has run out,
+  // "death" is the right event anyway: they still died somewhere.
+  const pvpTipPossible = await tipForEvent("death-by-player", {
+    player,
+    serverId: server.id,
+  });
+  const event =
+    pvpTipPossible && (await wasKilledByPlayer(server, player, rest))
+      ? "death-by-player"
+      : "death";
+  await deliverEventTip(server, event, player);
+
+  let dmLinked = false;
+  try {
+    dmLinked = loadConfig().deathCoords?.dmLinked === true;
+  } catch {
+    /* config unavailable: feature stays off */
+  }
+  if (dmLinked) {
+    try {
+      await dmDeathCoords(client, server, player);
+    } catch (err) {
+      log.warn("deaths", `Death-coords DM for ${player} failed: ${errMsg(err)}`);
+    }
+  }
+}
+
 export function registerDeathWatcher(
   logWatcher: ILogWatcher,
   client: Client,
@@ -150,13 +196,13 @@ export function registerDeathWatcher(
 ): void {
   const serverId = logWatcher.server.id;
 
-  registerServerEvent(logWatcher, DEATH_REGEX, async (match) => {
+  registerServerEvent(logWatcher, DEATH_REGEX, (match) => {
     const player = match[1]!;
     const verb = match[2]!;
     const rest = match[3] ?? "";
     const deathMessage = `${player} ${verb}${rest}`.trim();
 
-    await broadcastNotification(client, guildConfigs, {
+    void broadcastNotification(client, guildConfigs, {
       serverId,
       event: "death",
       logTag: "deaths",
@@ -168,37 +214,8 @@ export function registerDeathWatcher(
         }),
     });
 
-    // In game, and before the DM branch: the tips point at in-game
-    // commands, so gating them on a linked Discord account would have hidden
-    // them from exactly the players who have not linked yet. Whispered to
-    // whoever just died, linked or not.
-    //
-    // Whether this was PvP costs a player-list call, so it is only asked
-    // when the PvP tip could still be shown — otherwise every death on the
-    // server would pay for a tip that ran out weeks ago. If it has run out,
-    // "death" is the right event anyway: they still died somewhere.
-    const pvpTipPossible = await tipForEvent("death-by-player", {
-      player,
-      serverId,
-    });
-    const event =
-      pvpTipPossible && (await wasKilledByPlayer(logWatcher.server, player, rest))
-        ? "death-by-player"
-        : "death";
-    await deliverEventTip(logWatcher.server, event, player);
-
-    let dmLinked = false;
-    try {
-      dmLinked = loadConfig().deathCoords?.dmLinked === true;
-    } catch {
-      /* config unavailable — feature stays off */
-    }
-    if (dmLinked) {
-      try {
-        await dmDeathCoords(client, logWatcher.server, player);
-      } catch (err) {
-        log.warn("deaths", `Death-coords DM for ${player} failed: ${errMsg(err)}`);
-      }
-    }
+    void runDetached("deaths", `Follow-up for ${player} failed`, () =>
+      followUp(client, logWatcher.server, player, rest),
+    );
   });
 }

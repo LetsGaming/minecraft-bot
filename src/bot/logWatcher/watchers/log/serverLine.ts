@@ -1,5 +1,5 @@
 /**
- * SEC-01 — event authenticity for server-emitted log lines.
+ * Event authenticity for server-emitted log lines.
  *
  * Watchers that react to lines the *server* emits (join/leave, deaths,
  * advancements, start/stop) must never match a line a *player* typed.
