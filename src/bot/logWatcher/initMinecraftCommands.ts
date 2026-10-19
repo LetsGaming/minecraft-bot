@@ -1,6 +1,6 @@
 import path from "path";
 import { fileURLToPath } from "url";
-import { getCommandFiles, categoryOf, importCommandModule } from "../utils/commands/loadCommandFiles.js";
+import { discoverModules, manifestOf } from "../utils/commands/loadCommandFiles.js";
 import { getGlobalWatchers } from "./logWatcher.js";
 import { RemoteLogWatcher } from "./RemoteLogWatcher.js";
 import {
@@ -11,6 +11,9 @@ import {
   removeServerInstance,
 } from "@mcbot/core/utils/server/server.js";
 import { loadConfig, getServerIds } from "@mcbot/core/config.js";
+import { MS } from "@mcbot/schema/time.js";
+import { stableStringify } from "@mcbot/core/utils/config/stableStringify.js";
+import { forgetServer } from "./serverCleanup.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import type { Client } from "discord.js";
 import type {
@@ -134,23 +137,34 @@ async function wireServer(
   registerSleepWatcher(watcher);
   registerConsoleRelay(watcher, client, server.id);
 
-  await watcher.start(client);
-
-  const tpsMonitor = startTpsMonitor(server, client, guildConfigs);
+  let tpsMonitor: TpsMonitorHandle | null = null;
+  try {
+    await watcher.start(client);
+    tpsMonitor = startTpsMonitor(server, client, guildConfigs);
+  } catch (err) {
+    try {
+      watcher.stop();
+    } catch {
+      // nothing running to stop
+    }
+    throw err;
+  }
 
   serverHandles.set(server.id, { watcher, tpsMonitor, globalsWired });
 }
 
 function unwireServer(serverId: string): void {
   const handles = serverHandles.get(serverId);
-  if (!handles) return;
-  try {
-    handles.watcher.stop();
-  } catch {
-    // best-effort — a watcher that failed to start has nothing to stop
+  if (handles) {
+    try {
+      handles.watcher.stop();
+    } catch {
+      // best-effort: a watcher that failed to start has nothing to stop
+    }
+    handles.tpsMonitor?.stop();
+    serverHandles.delete(serverId);
   }
-  handles.tpsMonitor?.stop();
-  serverHandles.delete(serverId);
+  forgetServer(serverId);
 }
 
 export async function initMinecraftCommands(client: Client): Promise<void> {
@@ -161,64 +175,40 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
 
   // ── 1. Load in-game !command definitions (registers them globally) ──
   const commandsDir = path.join(__dirname, "commands");
-  const commandFiles = getCommandFiles(commandsDir);
-
-  const manifestIngame: Array<{
-    name: string;
-    description: string;
-    category?: string;
-  }> = [];
-  // A command's identity is its filename — it is what !name dispatches on and
-  // what the `commands` config block keys enablement by. Two files claiming
-  // the same one is always a bug, and registering both means the player gets
-  // every reply twice. The usual cause is stale build output: tsc leaves a
-  // renamed file's old .js in dist forever, so an incremental build after a
-  // move has the command in both places. Refuse the second either way.
-  const loaded = new Map<string, string>();
-  for (const file of commandFiles) {
-    try {
-      const name = path.basename(file, ".js");
-      const first = loaded.get(name);
-      if (first !== undefined) {
-        log.warn(
-          "commands",
-          `Ignoring duplicate in-game command !${name} from ${file} — already ` +
-            `loaded from ${first}. If one of those is stale build output, run ` +
-            `'npm run clean' and rebuild.`,
-        );
-        continue;
-      }
-
-      // Dynamically imported module — shape unknown at compile time. Assert the
-      // expected surface, then validate `init` is callable below before use.
-      const mod = (await importCommandModule(
-        file,
-      )) as Partial<InGameCommandResult> & {
-        init?: () => void | Promise<void>;
+  type InGameInit = () => void | Promise<void>;
+  // A command's identity is its filename: it is what !name dispatches on and
+  // what the `commands` config block keys enablement by.
+  const modules = await discoverModules<InGameInit>(
+    commandsDir,
+    "in-game",
+    (mod, file) => {
+      const { init, COMMAND_INFO } = mod as Partial<InGameCommandResult> & {
+        init?: InGameInit;
       };
-      if (typeof mod.init !== "function") continue;
-      loaded.set(name, file);
-      manifestIngame.push({
-        name,
-        description: mod.COMMAND_INFO?.description ?? "",
-        // Same folder-as-category rule the slash side uses, so both halves of
-        // the dashboard group by the same organisation.
-        category: categoryOf(commandsDir, file),
-      });
+      if (typeof init !== "function") return null;
+      return {
+        name: path.basename(file, ".js"),
+        description: COMMAND_INFO?.description ?? "",
+        value: init,
+      };
+    },
+  );
+  for (const { name, value: init } of modules) {
+    try {
       // Only skip when disabled in EVERY scope; per-server enablement is
       // enforced live at dispatch inside defineCommand.
       if (!commandEnabledAnywhere(name)) {
         log.info("commands", `Skipping disabled: !${name}`);
-        deferredIngame.set(name, { init: mod.init });
+        deferredIngame.set(name, { init });
         continue;
       }
-      await mod.init();
+      await init();
       log.info("commands", `Loaded !${name}`);
     } catch (err) {
-      log.error("commands", `Failed to load ${file}: ${errMsg(err)}`);
+      log.error("commands", `Failed to load !${name}: ${errMsg(err)}`);
     }
   }
-  registerManifestCommands("ingame", manifestIngame);
+  registerManifestCommands("ingame", manifestOf(modules));
   await flushCommandManifest();
 
   // ── 2. Create a LogWatcher for each server instance ──
@@ -265,10 +255,10 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
   startTempBanScheduler(client);
 
   // Usage rows past the retention window. Once at startup and once a day
-  // after — the table only grows by a few hundred rows a day, so this is
+  // after. The table only grows by a few hundred rows a day, so this is
   // housekeeping rather than anything time-critical.
   pruneCommandUsage();
-  setInterval(() => pruneCommandUsage(), 24 * 60 * 60 * 1000).unref();
+  setInterval(() => pruneCommandUsage(), MS.day).unref();
 
   // ── 8. Daily channel purge ──
   startChannelPurge(client, liveGuildConfigs);
@@ -303,6 +293,8 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
 export interface ReconcileResult {
   /** Server IDs added to the registry and fully wired (watchers + TPS). */
   added: string[];
+  /** Server IDs that are configured but could not be wired; they are not registered, so the next reload retries. */
+  failed: string[];
   /** Server IDs whose watchers were stopped and instances dropped. */
   removed: string[];
   /** Server IDs whose settings changed and whose instance and watchers were rebuilt from the new config. */
@@ -348,14 +340,14 @@ async function doReconcile(
   const registeredIds = new Set(registered.map((i) => i.id));
 
   const removed = [...registeredIds].filter((id) => !(id in configured));
-  const added = Object.keys(configured).filter(
+  const newIds = Object.keys(configured).filter(
     (id) => !registeredIds.has(id),
   );
   const differing = registered
     .filter(
       (inst) =>
         inst.id in configured &&
-        JSON.stringify(inst.config) !== JSON.stringify(configured[inst.id]),
+        stableStringify(inst.config) !== stableStringify(configured[inst.id]),
     )
     .map((inst) => inst.id);
 
@@ -381,51 +373,47 @@ async function doReconcile(
     }
   }
 
-  for (const id of added) {
+  const added: string[] = [];
+  const failed: string[] = [];
+  for (const id of newIds) {
     const inst = addServerInstance(configured[id]!);
     try {
       await wireServer(inst, client, liveGuildConfigs);
+      added.push(id);
       log.info("reconcile", `Server added and watchers started: ${id}`);
     } catch (err) {
+      // An unwired instance would answer commands but never feed the bridge
+      // or monitors; dropping it lets the next reload try again.
+      unwireServer(id);
+      removeServerInstance(id);
+      failed.push(id);
       log.error("reconcile", `Failed to wire added server ${id}: ${errMsg(err)}`);
     }
   }
 
   await initDeferredIngameCommands();
 
-  // Re-probe capabilities on every reload — the admin may have just
+  // Re-probe capabilities on every reload: the admin may have just
   // installed (or removed) the setup suite, and newly added servers
   // haven't been probed at all. Command *registration* stays as decided
   // at startup; per-invocation gates pick the new flags up immediately.
   await Promise.all(
-    getAllInstances().map(async (inst) => {
-      try {
-        await inst.probeCapabilities();
-      } catch (err) {
-        log.warn("reconcile", `Capability probe failed for ${inst.id}: ${errMsg(err)}`);
-      }
-    }),
+    getAllInstances().map((inst) =>
+      safe(`Capability probe for ${inst.id}`, () => inst.probeCapabilities()),
+    ),
   );
 
   // Presence / statusEmbed can be flipped by a reload: arm or disarm the
   // shared status timer so neither direction needs a restart.
-  try {
-    reconcileStatusEmbed(client, freshConfig);
-  } catch (err) {
-    log.warn("reconcile", `Status/presence reconcile failed: ${errMsg(err)}`);
-  }
+  await safe("Status/presence reconcile", () => reconcileStatusEmbed(client, freshConfig));
 
-  // Restart schedules are cheap to rebuild — clear + re-arm from the
+  // Restart schedules are cheap to rebuild: clear and re-arm from the
   // fresh config so schedule edits apply without a process restart.
-  try {
-    reconcileRestartSchedules(client, freshConfig);
-  } catch (err) {
-    log.warn("reconcile", `Restart-schedule reconcile failed: ${errMsg(err)}`);
-  }
+  await safe("Restart-schedule reconcile", () => reconcileRestartSchedules(client, freshConfig));
 
   // Guild blocks are re-read live by the watchers themselves, but a
   // newly added guild's bridge misconfiguration would otherwise only be
-  // reported at startup — surface it here instead. The webhook cache is
+  // reported at startup, so surface it here instead. The webhook cache is
   // dropped at the same time so a re-pointed bridge channel re-resolves.
   reportBridgeProblems(
     freshConfig.guilds,
@@ -435,9 +423,9 @@ async function doReconcile(
   invalidateWebhookCache();
 
   // New/changed whitelistApplications blocks get their prompt posted.
-  await ensureApplicationPrompts(client, liveGuildConfigs).catch((err) => {
-    log.warn("reconcile", `Application-prompt reconcile failed: ${errMsg(err)}`);
-  });
+  await safe("Application-prompt reconcile", () =>
+    ensureApplicationPrompts(client, liveGuildConfigs),
+  );
 
   if (changed.length > 0) {
     log.warn(
@@ -446,5 +434,14 @@ async function doReconcile(
     );
   }
 
-  return { added, removed, replaced, changed };
+  return { added, removed, replaced, changed, failed };
+}
+
+/** Run a reconcile step whose failure must not stop the rest of the reload. */
+async function safe(label: string, step: () => unknown): Promise<void> {
+  try {
+    await step();
+  } catch (err) {
+    log.warn("reconcile", `${label} failed: ${errMsg(err)}`);
+  }
 }

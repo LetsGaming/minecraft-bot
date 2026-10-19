@@ -1,8 +1,6 @@
 import { SlashCommandBuilder, codeBlock } from "discord.js";
-import { loadConfig, reloadConfig } from "@mcbot/core/config.js";
-import { beginConfigApply } from "@mcbot/core/utils/server/runtimeHeartbeat.js";
-import { summarizeConfigChanges } from "@mcbot/core/utils/config/configDiff.js";
-import { reconcileServers } from "../../logWatcher/initMinecraftCommands.js";
+import { loadConfig } from "@mcbot/core/config.js";
+import { applyConfig } from "../../utils/applyConfig.js";
 import {
   createEmbed,
   createSuccessEmbed,
@@ -41,24 +39,10 @@ export const execute = withErrorHandling(
     const sub = interaction.options.getSubcommand();
 
     if (sub === "reload") {
-      // Snapshot the previous (cached) config before the reload so guild
-      // and feature level edits can be summarized in the reply — the
-      // reconciler below only reports server additions/removals.
-      const before = loadConfig();
-      const cfg = reloadConfig();
-      const after = Object.keys(cfg.servers);
-      const settingChanges = summarizeConfigChanges(before, cfg);
-
-      // Apply server additions/removals to the running bot —
-      // create instances + watchers for added IDs, stop watchers and drop
-      // instances for removed ones, rebuild those whose settings changed.
       // Only a failed rebuild is reported as restart-required.
-      const reportApplied = beginConfigApply();
-      const { added, removed, replaced, changed } = await reconcileServers(
-        interaction.client,
-        cfg,
-      );
-      reportApplied(changed);
+      const { config: cfg, settingChanges, added, removed, replaced, changed, failed } =
+        await applyConfig(interaction.client);
+      const after = Object.keys(cfg.servers);
 
       log.info("config", `Config reloaded by ${interaction.user.tag}`);
 
@@ -74,6 +58,7 @@ export const execute = withErrorHandling(
             removed.length > 0 ? `removed: ${removed.join(",")}` : "",
             replaced.length > 0 ? `rebuilt: ${replaced.join(",")}` : "",
             changed.length > 0 ? `changed: ${changed.join(",")}` : "",
+            failed.length > 0 ? `failed: ${failed.join(",")}` : "",
           ]
             .filter(Boolean)
             .join("; ") || "no server changes",
@@ -91,6 +76,8 @@ export const execute = withErrorHandling(
         lines.push(t("config.removed", { list: removed.join(", ") }));
       if (replaced.length > 0)
         lines.push(t("config.rebuilt", { list: replaced.join(", ") }));
+      if (failed.length > 0)
+        lines.push(t("config.failed", { list: failed.join(", ") }));
       if (changed.length > 0) {
         lines.push(t("config.needsRestart", { list: changed.join(", ") }));
       }
@@ -107,7 +94,8 @@ export const execute = withErrorHandling(
         added.length === 0 &&
         removed.length === 0 &&
         replaced.length === 0 &&
-        changed.length === 0
+        changed.length === 0 &&
+        failed.length === 0
       ) {
         lines.push(t("config.noChanges"));
       }
