@@ -18,8 +18,6 @@ import {
   isLinked,
   getLinkedAccount,
   loadLinkedAccounts,
-  loadLinkCodes,
-  saveLinkCodes,
   issueLinkCode,
   confirmLinkCode,
   unlinkAccount,
@@ -37,6 +35,26 @@ function seedLinks(map: Record<string, string>): void {
   for (const [discordId, mcName] of Object.entries(map)) insert.run(discordId, mcName);
 }
 
+function saveLinkCodes(
+  codes: Record<string, { discordId: string; expires: number; confirmed: boolean }>,
+): void {
+  const insert = getDb().prepare(
+    "INSERT INTO link_codes (code, discord_id, expires, confirmed) VALUES (?, ?, ?, ?)",
+  );
+  for (const [code, e] of Object.entries(codes)) {
+    insert.run(code, e.discordId, e.expires, e.confirmed ? 1 : 0);
+  }
+}
+
+function loadLinkCodes(): Record<string, { discordId: string; confirmed: boolean }> {
+  const rows = getDb()
+    .prepare("SELECT code, discord_id, confirmed FROM link_codes")
+    .all() as { code: string; discord_id: string; confirmed: number }[];
+  return Object.fromEntries(
+    rows.map((r) => [r.code, { discordId: r.discord_id, confirmed: r.confirmed === 1 }]),
+  );
+}
+
 describe("map API", () => {
   it("round-trips linked accounts through the table", async () => {
     seedLinks({ user1: "Steve", user2: "Alex" });
@@ -44,20 +62,6 @@ describe("map API", () => {
       user1: "Steve",
       user2: "Alex",
     });
-  });
-
-  it("round-trips link codes with expiry and confirmed flag", async () => {
-    await saveLinkCodes({
-      CODE1: { discordId: "u1", expires: 9999, confirmed: false },
-      CODE2: { discordId: "u2", expires: 1234, confirmed: true },
-    });
-    const codes = await loadLinkCodes();
-    expect(codes.CODE1).toEqual({
-      discordId: "u1",
-      expires: 9999,
-      confirmed: false,
-    });
-    expect(codes.CODE2!.confirmed).toBe(true);
   });
 });
 
@@ -78,7 +82,7 @@ describe("issueLinkCode", () => {
   it("issues a fresh code for an unlinked user", async () => {
     const res = await issueLinkCode("u1", "AAAA1111");
     expect(res.status).toBe("issued");
-    const codes = await loadLinkCodes();
+    const codes = loadLinkCodes();
     expect(codes.AAAA1111!.discordId).toBe("u1");
     expect(codes.AAAA1111!.confirmed).toBe(false);
   });
@@ -87,16 +91,16 @@ describe("issueLinkCode", () => {
     await issueLinkCode("u1", "AAAA1111");
     const res = await issueLinkCode("u1", "BBBB2222");
     expect(res).toEqual({ status: "pending", code: "AAAA1111" });
-    expect(Object.keys(await loadLinkCodes())).toEqual(["AAAA1111"]);
+    expect(Object.keys(loadLinkCodes())).toEqual(["AAAA1111"]);
   });
 
   it("prunes an expired code and issues a new one", async () => {
-    await saveLinkCodes({
+    saveLinkCodes({
       OLD11111: { discordId: "u1", expires: Date.now() - 1, confirmed: false },
     });
     const res = await issueLinkCode("u1", "NEW22222");
     expect(res.status).toBe("issued");
-    const codes = await loadLinkCodes();
+    const codes = loadLinkCodes();
     expect(codes.OLD11111).toBeUndefined();
     expect(codes.NEW22222).toBeDefined();
   });
@@ -119,7 +123,7 @@ describe("confirmLinkCode", () => {
     const res = await confirmLinkCode("AAAA1111", "Steve");
     expect(res).toEqual({ status: "linked", discordId: "u1" });
     expect(await getLinkedAccount("u1")).toBe("Steve");
-    expect((await loadLinkCodes()).AAAA1111!.confirmed).toBe(true);
+    expect(loadLinkCodes().AAAA1111!.confirmed).toBe(true);
   });
 
   it("returns unknown-code for a code that was never issued", async () => {
@@ -129,12 +133,12 @@ describe("confirmLinkCode", () => {
   });
 
   it("rejects and deletes an expired code", async () => {
-    await saveLinkCodes({
+    saveLinkCodes({
       EXP11111: { discordId: "u9", expires: Date.now() - 1, confirmed: false },
     });
     const res = await confirmLinkCode("EXP11111", "Steve");
     expect(res).toEqual({ status: "expired", discordId: "u9" });
-    expect((await loadLinkCodes()).EXP11111).toBeUndefined();
+    expect(loadLinkCodes().EXP11111).toBeUndefined();
     expect(await getLinkedAccount("u9")).toBeNull();
   });
 
@@ -156,7 +160,7 @@ describe("confirmLinkCode", () => {
 
   it("never rebinds an already linked Discord account to another name", async () => {
     seedLinks({ u1: "Steve" });
-    await saveLinkCodes({
+    saveLinkCodes({
       REBIND11: { discordId: "u1", expires: Date.now() + 60_000, confirmed: false },
     });
     expect(await confirmLinkCode("REBIND11", "Alex")).toEqual({ status: "already-used" });
@@ -165,7 +169,7 @@ describe("confirmLinkCode", () => {
 
   it("lets the same account relink its own username", async () => {
     seedLinks({ u1: "Steve" });
-    await saveLinkCodes({
+    saveLinkCodes({
       RELINK11: { discordId: "u1", expires: Date.now() + 60_000, confirmed: false },
     });
     const res = await confirmLinkCode("RELINK11", "Steve");

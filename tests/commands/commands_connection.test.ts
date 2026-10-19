@@ -10,8 +10,6 @@ vi.mock("../../src/core/utils/stores/linkStore.js", () => ({
   LINK_CODE_TTL_MS: 5 * 60 * 1000,
   loadLinkedAccounts: vi.fn().mockResolvedValue({}),
   saveLinkedAccounts: vi.fn().mockResolvedValue(undefined),
-  loadLinkCodes: vi.fn().mockResolvedValue({}),
-  saveLinkCodes: vi.fn().mockResolvedValue(undefined),
   isLinked: vi.fn().mockResolvedValue(false),
   getLinkedAccount: vi.fn().mockResolvedValue(null),
   issueLinkCode: vi.fn(),
@@ -90,7 +88,6 @@ vi.mock("../../src/core/utils/stores/uptimeTracker.js", () => ({
 }));
 
 import {
-  loadLinkCodes,
   loadLinkedAccounts,
   saveLinkedAccounts,
   getLinkedAccount,

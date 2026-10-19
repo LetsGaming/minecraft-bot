@@ -45,7 +45,7 @@ vi.mock("../../src/core/utils/stores/adminAudit.js", () => ({
 import { execute } from "../../src/bot/commands/general/poll.js";
 import {
   loadPollStore,
-  savePollStore,
+  updatePollStore,
   type Poll,
 } from "../../src/core/utils/stores/pollStore.js";
 import { closeDbForTesting } from "../../src/core/db/index.js";
@@ -102,7 +102,9 @@ function openPoll(overrides: Partial<Poll> = {}): Poll {
   };
 }
 async function seed(...polls: Poll[]) {
-  await savePollStore({ version: 1, polls });
+  await updatePollStore((store) => {
+    store.polls = polls;
+  });
 }
 
 beforeEach(() => {

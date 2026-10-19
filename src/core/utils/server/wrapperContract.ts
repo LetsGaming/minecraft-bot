@@ -345,34 +345,6 @@ export function compareContract(manifest: WrapperManifest): ContractReport {
   return report;
 }
 
-/**
- * Does this report describe a disagreement, as opposed to a wrapper that is
- * simply further along?
- *
- * The four categories are not equally serious, and treating them as one thing
- * makes the normal release sequence look like a broken contract:
- *
- *   missing / outdated  the bot calls something the wrapper cannot serve.
- *                       A feature is degraded right now. Blocking.
- *   ahead               the wrapper changed the contract of a feature the bot
- *                       actively reads. A shape the bot parses may have moved
- *                       under it. Blocking.
- *   unused              the wrapper serves something the bot has never heard
- *                       of. Nothing calls it, so nothing can break; and this
- *                       is exactly the state after an additive wrapper release,
- *                       which lands FIRST by design. Not blocking.
- *
- * `contractIsClean` stays the "is there anything at all to say" question, used
- * for deciding whether to log. This is the "should something stop" question.
- */
-export function contractHasBlockingGaps(report: ContractReport): boolean {
-  return (
-    report.missing.length > 0 ||
-    report.outdated.length > 0 ||
-    report.ahead.length > 0
-  );
-}
-
 /** True when nothing about this wrapper is worth telling the operator. */
 export function contractIsClean(report: ContractReport): boolean {
   return (

@@ -34,7 +34,6 @@ vi.mock("../../src/core/utils/logger.js", () => ({
 vi.mock("../../src/core/utils/stores/linkStore.js", () => ({
   getLinkedAccount: vi.fn().mockResolvedValue(null),
   loadLinkedAccounts: vi.fn().mockResolvedValue({}),
-  loadLinkCodes: vi.fn().mockResolvedValue({}),
 }));
 
 vi.mock("../../src/core/utils/minecraft/playerUtils.js", () => ({

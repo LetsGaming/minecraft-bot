@@ -89,10 +89,6 @@ export function getServerWaypoints(
   return (store.servers[serverId] ??= {});
 }
 
-export async function saveWaypointStore(store: WaypointStore): Promise<void> {
-  waypointDoc.save(store);
-}
-
 /** Change the store in one transaction; see versionedStore. */
 export async function updateWaypointStore<T>(
   fn: (store: WaypointStore) => T,

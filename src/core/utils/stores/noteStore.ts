@@ -44,10 +44,6 @@ export async function loadNotesStore(): Promise<PlayerNotesStore> {
   return notesDoc.load();
 }
 
-export async function saveNotesStore(store: PlayerNotesStore): Promise<void> {
-  notesDoc.save(store);
-}
-
 /** Change the store in one transaction; see versionedStore. */
 export async function updateNotesStore<T>(
   fn: (store: PlayerNotesStore) => T,

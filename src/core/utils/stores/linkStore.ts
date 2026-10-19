@@ -4,9 +4,8 @@
  *
  * Two API layers:
  *
- *   Map API (loadLinkedAccounts/loadLinkCodes): read views kept so the
- *   many readers (profile, whois, deaths, defineCommand, streak
- *   leaderboard, …) stay untouched.
+ *   Map API (loadLinkedAccounts): a read view for the many readers
+ *   (profile, whois, deaths, defineCommand, streak leaderboard, ...).
  *
  *   Atomic operations (issueLinkCode/confirmLinkCode/unlinkAccount) — what
  *   the three writers now use. Each wraps its whole read-modify-write in
@@ -17,7 +16,7 @@
 import { getDb, withTransaction } from "../../db/index.js";
 import { mapRow, mapRows, col } from "../../db/rows.js";
 import { MS } from "@mcbot/schema/time.js";
-import type { LinkCodesMap, LinkedAccountsMap } from "../../types/index.js";
+import type { LinkedAccountsMap } from "../../types/index.js";
 import { errMsg } from "../error.js";
 import { log } from "../logger.js";
 
@@ -76,42 +75,6 @@ export async function loadLinkedAccounts(): Promise<LinkedAccountsMap> {
   const map: LinkedAccountsMap = {};
   for (const r of rows) map[r.discord_id] = r.mc_name;
   return map;
-}
-
-export async function loadLinkCodes(): Promise<LinkCodesMap> {
-  const rows = mapRows(
-    getDb().prepare(
-      "SELECT code, discord_id, expires, confirmed FROM link_codes",
-    ),
-    (r) => ({
-      code: col.text(r, "code"),
-      discord_id: col.text(r, "discord_id"),
-      expires: col.int(r, "expires"),
-      confirmed: col.int(r, "confirmed"),
-    }),
-  );
-  const map: LinkCodesMap = {};
-  for (const r of rows) {
-    map[r.code] = {
-      discordId: r.discord_id,
-      expires: r.expires,
-      confirmed: r.confirmed === 1,
-    };
-  }
-  return map;
-}
-
-export async function saveLinkCodes(codes: LinkCodesMap): Promise<void> {
-  withTransaction(() => {
-    const db = getDb();
-    db.exec("DELETE FROM link_codes");
-    const ins = db.prepare(
-      "INSERT INTO link_codes (code, discord_id, expires, confirmed) VALUES (?, ?, ?, ?)",
-    );
-    for (const [code, entry] of Object.entries(codes)) {
-      ins.run(code, entry.discordId, entry.expires, entry.confirmed ? 1 : 0);
-    }
-  });
 }
 
 export async function isLinked(userId: string): Promise<boolean> {

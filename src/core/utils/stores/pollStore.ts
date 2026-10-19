@@ -71,11 +71,6 @@ function trimPolls(store: PollStore): void {
   store.polls = [...closed, ...open].sort((a, b) => a.createdAt - b.createdAt);
 }
 
-export async function savePollStore(store: PollStore): Promise<void> {
-  trimPolls(store);
-  pollDoc.save(store);
-}
-
 /** Change the store in one transaction; see versionedStore. */
 export async function updatePollStore<T>(
   fn: (store: PollStore) => T,

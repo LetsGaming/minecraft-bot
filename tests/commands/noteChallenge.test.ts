@@ -47,8 +47,8 @@ import { execute as noteExecute } from "../../src/bot/commands/admin/note.js";
 import { execute as challengeExecute } from "../../src/bot/commands/admin/challenge.js";
 import {
   loadNotesStore,
+  updateNotesStore,
   addNote,
-  saveNotesStore,
   MAX_NOTES_PER_PLAYER,
 } from "../../src/core/utils/stores/noteStore.js";
 import {
@@ -103,16 +103,16 @@ beforeEach(() => {
 });
 
 async function seedNotes(count = 1, uuid = "uuid-1", name = "Steve") {
-  const store = await loadNotesStore();
-  for (let n = 1; n <= count; n++) {
-    addNote(store, uuid, name, {
-      text: `note ${n}`,
-      author: "mod#1",
-      authorId: "m1",
-      createdAt: "2026-01-01 10:00",
-    });
-  }
-  await saveNotesStore(store);
+  await updateNotesStore((store) => {
+    for (let n = 1; n <= count; n++) {
+      addNote(store, uuid, name, {
+        text: `note ${n}`,
+        author: "mod#1",
+        authorId: "m1",
+        createdAt: "2026-01-01 10:00",
+      });
+    }
+  });
 }
 
 describe("/note", () => {
