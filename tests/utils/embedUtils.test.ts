@@ -10,7 +10,6 @@ import {
   createPaginationButtons,
   createProgressEmbed,
   paginateFields,
-  paginateLines,
   chunkLines,
   truncate,
   EMBED_LIMITS,
@@ -216,18 +215,6 @@ describe("chunkLines", () => {
   it("cuts a single line that is longer than the limit", () => {
     const [chunk] = chunkLines(["z".repeat(2000)]);
     expect(chunk).toHaveLength(EMBED_LIMITS.fieldValue);
-  });
-});
-
-describe("paginateLines", () => {
-  it("respects the line count per page", () => {
-    const pages = paginateLines(Array.from({ length: 25 }, (_, i) => `line ${i}`), 10);
-    expect(pages).toHaveLength(3);
-    expect(pages[2]!.split("\n")).toHaveLength(5);
-  });
-
-  it("returns one empty page for no lines", () => {
-    expect(paginateLines([], 10)).toEqual([""]);
   });
 });
 

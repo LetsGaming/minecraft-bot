@@ -24,27 +24,6 @@ const DISK_LABEL: Record<DiskRole, MessageKey> = {
   other: "servers.disk.other",
 };
 
-/**
- * A raw disk path with a bare "4%" means nothing in a UI. Derive a role
- * label from the path so a metric reads "Backups disk 4% used"; callers
- * keep the full path available on hover.
- */
-export function diskLabel(path: string): string {
-  return t(DISK_LABEL[diskRole(path)]);
-}
-
-/**
- * Players as text, with "we don't know" kept distinct from "nobody".
- *
- * A null roster used to arrive here as 0/0 and render as a confident
- * "0 players online" during exactly the moments the interface had no idea.
- */
-export function playersLabel(
-  players: { online: number; max: number } | null,
-): string {
-  return players ? `${players.online}/${players.max}` : t("servers.playersUnknown");
-}
-
 /** TPS as a status role, so the chip reads like every other health signal. */
 export function tpsRole(tps: number): StatusRole {
   switch (classifyTps(tps)) {

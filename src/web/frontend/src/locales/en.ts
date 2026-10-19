@@ -893,7 +893,6 @@ export const en = {
   "servers.playersOnline": "players online",
   "servers.rosterUnknown": "The player count is not available right now.",
   "servers.playersSampled": "A sample of the players online. The server publishes only part of the list.",
-  "servers.playersUnknown": "not known",
   "servers.stateUnknown": "State unknown",
   "servers.wrapperDownChip": "Wrapper unreachable",
   "servers.wrapperNote": "The API wrapper is unreachable, so controls, logs and stats are unavailable. The server itself answered a direct ping.",

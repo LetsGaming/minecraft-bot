@@ -4,7 +4,6 @@ import { disambiguateLabels } from "../../src/web/frontend/src/utils/fieldLabels
 import { mergeDisks } from "../../src/web/frontend/src/utils/format.js";
 import { humaniseIds } from "../../src/web/frontend/src/utils/humaniseIds.js";
 import { isActionApplicable } from "../../src/schema/serverActions.js";
-import { playersLabel } from "../../src/web/frontend/src/utils/format.js";
 import { isPlayerOnline } from "../../src/core/utils/minecraft/playerUtils.js";
 import {
   stateIsUp,
@@ -173,14 +172,6 @@ describe("stateIsUp", () => {
     for (const state of Object.values(ServerState)) {
       expect(stateIsUp(state)).toBe(serverIsUp({ state } as ServerHealth));
     }
-  });
-});
-
-describe("playersLabel", () => {
-  it("distinguishes an empty server from an unknown one", () => {
-    expect(playersLabel({ online: 0, max: 20 })).toBe("0/20");
-    // Not "0/0": the interface has no idea, and should not claim nobody.
-    expect(playersLabel(null)).toBe("not known");
   });
 });
 

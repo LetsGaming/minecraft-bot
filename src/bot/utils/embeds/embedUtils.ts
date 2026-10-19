@@ -230,22 +230,6 @@ export function chunkLines(
 }
 
 /**
- * Splits lines into description pages: at most `maxLines` lines and
- * `maxChars` characters per page. Always returns at least one page.
- */
-export function paginateLines(
-  lines: readonly string[],
-  maxLines: number,
-  maxChars: number = EMBED_LIMITS.description,
-): string[] {
-  const pages: string[] = [];
-  for (let i = 0; i < lines.length; i += maxLines) {
-    pages.push(...chunkLines(lines.slice(i, i + maxLines), maxChars));
-  }
-  return pages.length > 0 ? pages : [""];
-}
-
-/**
  * Splits fields into pages that each fit one embed: at most `maxFields`
  * (and never more than 25) fields, and a character total that stays under
  * 6000 together with the embed's own title, description and footer
