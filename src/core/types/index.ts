@@ -53,6 +53,7 @@ export type {
 } from "@mcbot/schema/config.js";
 
 export type {
+  AutocompleteHandler,
   BotCommand,
   BotClient,
   InGameCommandDefinition,

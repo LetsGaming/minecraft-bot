@@ -1,6 +1,7 @@
 // ── Discord command types ─────────────────────────────────────────────────────
 
 import type {
+  AutocompleteInteraction,
   ChatInputCommandInteraction,
   Client,
   SlashCommandBuilder,
@@ -8,12 +9,17 @@ import type {
 } from "discord.js";
 import type { ServerInstance } from "../utils/server/server.js";
 
+/** Answers a command's autocomplete options. */
+export type AutocompleteHandler = (interaction: AutocompleteInteraction) => Promise<void>;
+
 export interface BotCommand {
   data:
     | SlashCommandBuilder
     | Omit<SlashCommandBuilder, "addSubcommand" | "addSubcommandGroup">
     | SlashCommandSubcommandsOnlyBuilder;
   execute: (interaction: ChatInputCommandInteraction) => Promise<void>;
+  /** Overrides the shared autocomplete for this command's options. */
+  autocomplete?: AutocompleteHandler;
 }
 
 /**

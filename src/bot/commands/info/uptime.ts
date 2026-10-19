@@ -15,6 +15,7 @@ import {
 import { ALL_SERVERS_OPTION } from "../../utils/guild/serverOptions.js";
 import { getUptimeStats } from "@mcbot/core/utils/stores/uptimeTracker.js";
 import { withErrorHandling } from "../middleware.js";
+import { optionAutocomplete, serverCompleter } from "../../utils/autocomplete.js";
 
 import { t } from "@mcbot/core/utils/i18n.js";
 function uptimeBar(pct: number | null, width = 10): string {
@@ -45,6 +46,10 @@ export const data = new SlashCommandBuilder()
       )
       .setAutocomplete(true),
   );
+
+export const autocomplete = optionAutocomplete({
+  server: serverCompleter({ includeAll: true }),
+});
 
 export const execute = withErrorHandling(async (interaction) => {
   const requested = interaction.options.getString("server");

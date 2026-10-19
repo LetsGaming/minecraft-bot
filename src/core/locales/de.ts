@@ -351,6 +351,7 @@ export const de: Record<string, string> = {
   "wlapp.modalServer": "Welcher Server?",
 
   // ── command policy ──
+  "autocomplete.allOverview": "alle (Übersicht)",
   "command.disabledHere": "`/{command}` ist auf diesem Discord-Server ausgeschaltet. Ein Bot-Admin kann den Befehl einschalten.",
   "command.adminOnlyInGame":
     "!{command} ist auf diesem Server nur für Admins (dein verknüpfter Discord-Account muss Bot-Admin sein).",
@@ -390,6 +391,7 @@ export const de: Record<string, string> = {
   "config.added": "+ Hinzugefügt (live): {list}",
   "config.removed": "- Entfernt (live): {list}",
   "config.rebuilt": "~ Neu aufgebaut (live): {list}",
+  "config.failed": "⚠ Konnte nicht gestartet werden: {list}. Log prüfen, dann erneut neu laden.",
   "config.needsRestart": "⚠ Geänderte Einstellungen an bestehenden Servern greifen erst nach einem Neustart: {list}",
   "config.moreChanges": "~ …und {count|# weitere Änderung|# weitere Änderungen}",
   "config.noChanges": "Keine Änderungen erkannt.",
