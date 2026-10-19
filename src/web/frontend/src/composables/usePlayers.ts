@@ -113,6 +113,20 @@ export function usePlayers() {
     }
   }
 
+  /** Each status filter has the order that answers its question. */
+  function applyStatusSort(): void {
+    if (status.value === "quiet") {
+      sort.value = "lastSeen";
+      order.value = -1;
+    } else if (status.value === "new") {
+      sort.value = "firstSeen";
+      order.value = -1;
+    } else {
+      sort.value = "playtimeMs";
+      order.value = -1;
+    }
+  }
+
   /** A filter or sort changed: back to the first page. */
   function refilter(serverId: string): Promise<void> {
     page.value = 1;
@@ -179,6 +193,6 @@ export function usePlayers() {
     q, status, quietDays, hours, sort, order, page, totalPages,
     list, listLoading, listLoaded, listFailure,
     detail, detailLoading, detailFailure,
-    loadList, refilter, onQueryInput, goToPage, loadDetail, closeDetail, reset,
+    loadList, refilter, applyStatusSort, onQueryInput, goToPage, loadDetail, closeDetail, reset,
   };
 }

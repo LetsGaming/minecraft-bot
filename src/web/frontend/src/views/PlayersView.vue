@@ -97,11 +97,12 @@
 
         <section class="panel" aria-labelledby="pl-daily-h">
           <h2 id="pl-daily-h">{{ t("players.daily") }}</h2>
-          <div v-if="dailyBars.length" class="days" role="img" :aria-label="t('players.dailyLabel', { count: dailyBars.length })">
+          <div v-if="dailyBars.length" class="days" role="img" :aria-label="t('players.dailyLabel', { count: dailyBars.filter((b) => b.playtimeMs > 0).length })">
             <div
               v-for="bar in dailyBars"
               :key="bar.day"
               class="day"
+              :data-played="bar.playtimeMs > 0 ? '' : undefined"
               :style="{ height: `${bar.height}%` }"
               :title="t('players.dayTitle', { day: bar.label, time: formatSpan(bar.playtimeMs) })"
             />
@@ -225,7 +226,7 @@
             :allowEmpty="false"
             size="small"
             :aria-labelledby="statusLabelId"
-            @update:modelValue="refilter(activeServer)"
+            @update:modelValue="onStatus"
           />
         </span>
       </div>
@@ -381,7 +382,7 @@ const {
   q, status, quietDays, hours, sort, order, page, totalPages,
   list, listLoading, listLoaded, listFailure,
   detail, detailLoading, detailFailure,
-  loadList, refilter, onQueryInput, goToPage, loadDetail, closeDetail, reset,
+  loadList, refilter, applyStatusSort, onQueryInput, goToPage, loadDetail, closeDetail, reset,
 } = usePlayers();
 
 const searchId = useId();
@@ -390,6 +391,8 @@ const quietId = useId();
 const rangeId = useId();
 const sortId = useId();
 const headFailed = ref(false);
+const DAY_MS = 86_400_000;
+const DAILY_DAYS = 90;
 
 const statusOptions = computed(() => [
   { value: "all", label: t("players.status.all") },
@@ -429,14 +432,22 @@ const emptyText = computed(() => {
   return t("players.empty.all", { range: formatHours(hours.value) });
 });
 
+/** The last 90 UTC days, play or not, so a player with two days of play shows two bars in a long quiet row instead of two wide blocks. */
 const dailyBars = computed(() => {
-  const days = detail.value?.activity.daily ?? [];
-  const peak = days.reduce((max, d) => Math.max(max, d.playtimeMs), 0);
-  return days.map((d) => ({
-    ...d,
-    height: peak > 0 ? Math.max(4, (d.playtimeMs / peak) * 100) : 4,
-    label: new Date(d.day).toISOString().slice(0, 10),
-  }));
+  const played = new Map((detail.value?.activity.daily ?? []).map((d) => [d.day, d.playtimeMs]));
+  if (played.size === 0) return [];
+  const today = Math.floor(Date.now() / DAY_MS) * DAY_MS;
+  const days = Array.from({ length: DAILY_DAYS }, (_, i) => today - (DAILY_DAYS - 1 - i) * DAY_MS);
+  const peak = Math.max(...days.map((d) => played.get(d) ?? 0));
+  return days.map((day) => {
+    const playtimeMs = played.get(day) ?? 0;
+    return {
+      day,
+      playtimeMs,
+      height: playtimeMs > 0 && peak > 0 ? Math.max(4, (playtimeMs / peak) * 100) : 1,
+      label: new Date(day).toISOString().slice(0, 10),
+    };
+  });
 });
 
 const listCopy = computed(() =>
@@ -459,6 +470,11 @@ const detailCopy = computed(() =>
     error: detailFailure.value?.error ?? "",
   }),
 );
+
+function onStatus(): void {
+  applyStatusSort();
+  void refilter(props.activeServer);
+}
 
 function toggleOrder(): void {
   order.value = order.value === 1 ? -1 : 1;
@@ -557,6 +573,7 @@ watch(
 
 .days { display: flex; align-items: flex-end; gap: 1px; height: 90px; padding: var(--space-1) 0; }
 .day { flex: 1; min-width: 2px; border-radius: 1px 1px 0 0; background: var(--accent); opacity: 0.85; }
+.day:not([data-played]) { background: var(--border-strong); opacity: 0.5; }
 .day:hover { opacity: 1; }
 
 .line { margin: 0 0 var(--space-2); display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); }

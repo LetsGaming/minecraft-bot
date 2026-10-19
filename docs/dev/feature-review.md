@@ -1,5 +1,7 @@
 # Feature and Improvement Opportunity Review
 
+> **Status (2026-10-19):** FO-002 (as a section of FO-004), FO-004, FO-005 and FO-006 are implemented on `feat/players-and-analytics` with the retention values suggested here (activity 90 days, sessions 365 days). FO-001 and FO-003 are still open. The text below is the review as written and is kept for the reasoning.
+
 Date: 2026-10-19. Against: v8.0.0 plus the merged Wave 4 clean-code PR (#33, main at f36fcf1).
 Scope: review only. Nothing in the project was changed except this file.
 

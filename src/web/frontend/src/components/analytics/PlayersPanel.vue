@@ -111,8 +111,8 @@ const props = defineProps<{ serverId: string; rangeHours: number }>();
 const emit = defineEmits<{ "open-player": [name: string]; "open-all": [] }>();
 
 const {
-  status, quietDays, hours, sort, order, list, listLoading, listLoaded, listFailure,
-  loadList, refilter, reset,
+  status, quietDays, hours, list, listLoading, listLoaded, listFailure,
+  loadList, refilter, applyStatusSort, reset,
 } = usePlayers();
 
 const quietId = useId();
@@ -154,18 +154,8 @@ const failureText = computed(() =>
   }),
 );
 
-/** Each filter has the order that answers its question. */
 function onStatus(): void {
-  if (status.value === "quiet") {
-    sort.value = "lastSeen";
-    order.value = -1;
-  } else if (status.value === "new") {
-    sort.value = "firstSeen";
-    order.value = -1;
-  } else {
-    sort.value = "playtimeMs";
-    order.value = -1;
-  }
+  applyStatusSort();
   void refilter(props.serverId);
 }
 
