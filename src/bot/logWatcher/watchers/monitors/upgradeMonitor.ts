@@ -38,7 +38,6 @@ import { onServerRemoved } from "../../serverCleanup.js";
 import { startPoller, type Poller } from "../poller.js";
 
 const POLL_INTERVAL_MS = 15 * MS.second;
-const SUPPORT_CACHE_MS = 5 * MS.minute;
 /** Downtime alerts stay quiet this long past the latest sign of life from the job. */
 const ALERT_HOLD_MS = 10 * MS.minute;
 /** A job that finished longer ago than this is history, not news. */
@@ -174,26 +173,19 @@ export function createUpgradeMonitor(
   deps: UpgradeMonitorDeps = realDeps,
 ) {
   const tracked = new Map<string, Tracked>();
-  const supportCache = new Map<string, { value: boolean; at: number }>();
 
   liveMonitors.add({
     forget(serverId) {
       tracked.delete(serverId);
-      supportCache.delete(serverId);
     },
   });
 
   async function supported(server: ServerInstance): Promise<boolean> {
-    const hit = supportCache.get(server.id);
-    if (hit && deps.now() - hit.at < SUPPORT_CACHE_MS) return hit.value;
-    let value = false;
     try {
-      value = await deps.supportsUpgrade(server.config);
+      return await deps.supportsUpgrade(server.config);
     } catch {
-      value = false;
+      return false;
     }
-    supportCache.set(server.id, { value, at: deps.now() });
-    return value;
   }
 
   async function publish(serverId: string, job: UpgradeJob, track: Tracked): Promise<void> {

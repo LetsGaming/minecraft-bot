@@ -41,7 +41,6 @@ import {
 } from "./schemas.js";
 
 const pruneProbe = capabilityProbe(
-  "prune",
   (cfg) => supportsPrune(cfg),
   "This server's API wrapper or setup suite cannot prune chunks. Update them.",
 );
@@ -57,7 +56,7 @@ export function registerPruneRoutes(app: FastifyInstance): void {
     },
     async (req) => {
       const server = requireServer(req.params.id);
-      return { supported: await pruneProbe.supported(req.params.id, server.config) };
+      return { supported: await pruneProbe.supported(server.config) };
     },
   );
 
@@ -69,7 +68,7 @@ export function registerPruneRoutes(app: FastifyInstance): void {
     },
     async (req) => {
       const server = requireServer(req.params.id);
-      await pruneProbe.requireSupport(req.params.id, server.config);
+      await pruneProbe.requireSupport(server.config);
       return wrapperCall("Prune settings read", { server: req.params.id }, () => getPruneSettings(server.config));
     },
   );
@@ -82,7 +81,7 @@ export function registerPruneRoutes(app: FastifyInstance): void {
     },
     async (req) => {
       const server = requireServer(req.params.id);
-      await pruneProbe.requireSupport(req.params.id, server.config);
+      await pruneProbe.requireSupport(server.config);
       return wrapperCall("Prune settings save", { server: req.params.id }, () =>
         setPruneSettings(server.config, req.body),
       );
@@ -97,7 +96,7 @@ export function registerPruneRoutes(app: FastifyInstance): void {
     },
     async (req) => {
       const server = requireServer(req.params.id);
-      await pruneProbe.requireSupport(req.params.id, server.config);
+      await pruneProbe.requireSupport(server.config);
       return wrapperCall("Prune scan start", { server: req.params.id }, () => startPruneScan(server.config, req.body), {
         translate: (err) =>
           err instanceof ApiError && err.status === 429
@@ -115,7 +114,7 @@ export function registerPruneRoutes(app: FastifyInstance): void {
     },
     async (req) => {
       const server = requireServer(req.params.id);
-      await pruneProbe.requireSupport(req.params.id, server.config);
+      await pruneProbe.requireSupport(server.config);
       return wrapperCall("Prune dimensions", { server: req.params.id }, () => getPruneDimensions(server.config));
     },
   );
@@ -128,7 +127,7 @@ export function registerPruneRoutes(app: FastifyInstance): void {
     },
     async (req) => {
       const server = requireServer(req.params.id);
-      await pruneProbe.requireSupport(req.params.id, server.config);
+      await pruneProbe.requireSupport(server.config);
       return wrapperCall("Prune status", { server: req.params.id }, () => getPruneStatus(server.config));
     },
   );
@@ -141,7 +140,7 @@ export function registerPruneRoutes(app: FastifyInstance): void {
     },
     async (req) => {
       const server = requireServer(req.params.id);
-      await pruneProbe.requireSupport(req.params.id, server.config);
+      await pruneProbe.requireSupport(server.config);
       return wrapperCall("Prune scan cancel", { server: req.params.id }, async () => {
         if (!(await cancelPruneScan(server.config, req.params.jobId))) {
           throw new NotFound("That scan is not running.");
@@ -175,7 +174,7 @@ export function registerPruneRoutes(app: FastifyInstance): void {
     },
     async (req, reply) => {
       const server = requireServer(req.params.id);
-      await pruneProbe.requireSupport(req.params.id, server.config);
+      await pruneProbe.requireSupport(server.config);
       const { dimension, rx, rz } = req.params;
       const tile = await wrapperCall("Prune tile read", { server: req.params.id }, () =>
         getPruneTile(server.config, dimension, rx, rz),
@@ -198,7 +197,7 @@ export function registerPruneRoutes(app: FastifyInstance): void {
     },
     async (req) => {
       const server = requireServer(req.params.id);
-      await pruneProbe.requireSupport(req.params.id, server.config);
+      await pruneProbe.requireSupport(server.config);
       const { dimension, cx, cz } = req.query;
       const info = await wrapperCall("Prune chunk read", { server: req.params.id }, () =>
         getPruneChunk(server.config, req.params.planId, dimension, cx, cz),
@@ -232,7 +231,7 @@ export function registerPruneRoutes(app: FastifyInstance): void {
     },
     async (req) => {
       const server = requireServer(req.params.id);
-      await pruneProbe.requireSupport(req.params.id, server.config);
+      await pruneProbe.requireSupport(server.config);
       // Recorded before it runs, like every irreversible action here.
       await auditedAction(req, {
         action: "chunk prune",

@@ -93,7 +93,6 @@ const MODRINTH_ICON_HOST = "cdn.modrinth.com";
 const ICON_UA = "LetsGaming/minecraft-bot dashboard (icon proxy)";
 
 const compatProbe = capabilityProbe(
-  "mods:compat",
   (cfg) => supportsModCompat(cfg),
   "This server's API wrapper cannot check another Minecraft version. Update the wrapper.",
 );
@@ -213,7 +212,7 @@ export function registerModRoutes(app: FastifyInstance): void {
     },
     async (req) => {
       const server = requireServer(req.params.id);
-      await compatProbe.requireSupport(req.params.id, server.config);
+      await compatProbe.requireSupport(server.config);
       const refresh = req.body.refresh === true;
       const session = currentSession(req);
       let reservation;
@@ -306,7 +305,7 @@ export function registerModRoutes(app: FastifyInstance): void {
         const { value, stale } = await loadInstalled(req.params.id, server.config);
         const [mods, compat] = await Promise.all([
           withIcons(req.params.id, value.mods),
-          compatProbe.supported(req.params.id, server.config),
+          compatProbe.supported(server.config),
         ]);
         return { ...value, mods, stale, compat };
       });

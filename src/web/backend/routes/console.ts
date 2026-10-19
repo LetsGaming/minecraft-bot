@@ -129,12 +129,10 @@ export function registerConsoleRoutes(app: FastifyInstance): void {
       const server = requireServer(req.params.id);
       const raw = req.body.command;
 
-      // stripControlChars, not sanitizeForConsole: that helper is for
-      // interpolating a name and message INTO a command (`/say [x] y`) and
-      // escapes double quotes, which would corrupt a legitimate `/tellraw`
-      // payload here. What must go either way is control characters — a
-      // newline would turn one input into two commands, which is the whole
-      // injection risk on this path.
+      // The command is passed through as typed, so a legitimate `/tellraw`
+      // payload keeps its quotes. Control characters must go: a newline would
+      // turn one input into two commands, which is the whole injection risk
+      // on this path.
       const command = stripControlChars(raw)
         .trim()
         .slice(0, MAX_CONSOLE_COMMAND_LENGTH);

@@ -23,7 +23,6 @@ import { capabilityProbe } from "./capabilityProbe.js";
 import { auditedAction, requireServer, wrapperCall } from "./support.js";
 
 const upgradeProbe = capabilityProbe(
-  "upgrade",
   (cfg) => supportsUpgrade(cfg),
   "This server's API wrapper or setup suite cannot upgrade the Minecraft version. Update them.",
 );
@@ -43,7 +42,7 @@ export function registerUpgradeRoutes(app: FastifyInstance): void {
     },
     async (req) => {
       const server = requireServer(req.params.id);
-      return { supported: await upgradeProbe.supported(req.params.id, server.config) };
+      return { supported: await upgradeProbe.supported(server.config) };
     },
   );
 
@@ -55,7 +54,7 @@ export function registerUpgradeRoutes(app: FastifyInstance): void {
     },
     async (req) => {
       const server = requireServer(req.params.id);
-      await upgradeProbe.requireSupport(req.params.id, server.config);
+      await upgradeProbe.requireSupport(server.config);
       // Recorded before it runs: what was attempted is the fact people ask
       // about afterwards, whether or not the job got as far as starting.
       await auditedAction(req, {

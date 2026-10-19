@@ -153,20 +153,19 @@ describe("busy mapping", () => {
 });
 
 describe("capabilityProbe", () => {
-  it("asks once per server inside the TTL and answers 501 when unsupported", async () => {
+  it("answers 501 when unsupported and passes when supported", async () => {
     const supports = vi.fn(async () => false);
-    const probe = capabilityProbe("test-feature", supports, "Cannot do it.");
+    const probe = capabilityProbe(supports, "Cannot do it.");
     const cfg = { id: "smp" } as never;
-    expect(await probe.supported("smp", cfg)).toBe(false);
-    await expect(probe.requireSupport("smp", cfg)).rejects.toMatchObject({
+    expect(await probe.supported(cfg)).toBe(false);
+    await expect(probe.requireSupport(cfg)).rejects.toMatchObject({
       statusCode: 501,
       message: "Cannot do it.",
     });
-    expect(supports).toHaveBeenCalledTimes(1);
 
     supports.mockResolvedValue(true);
-    expect(await probe.supported("other", cfg)).toBe(true);
-    await expect(probe.requireSupport("other", cfg)).resolves.toBeUndefined();
+    expect(await probe.supported(cfg)).toBe(true);
+    await expect(probe.requireSupport(cfg)).resolves.toBeUndefined();
   });
 });
 
