@@ -99,7 +99,7 @@ export const EXPECTED_WRAPPER_FEATURES = {
   },
   "stats-read": {
     version: 1,
-    degrades: "/stats, /leaderboard, /top, and the hourly snapshots behind period boards",
+    degrades: "/stats, /leaderboard, and the hourly snapshots behind period boards",
   },
   "stats-bulk": {
     version: 1,

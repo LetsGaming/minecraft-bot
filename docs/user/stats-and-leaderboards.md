@@ -29,7 +29,7 @@ Right after the bot is installed there is no baseline yet, so the command asks y
 
 ## Leaderboards
 
-`/leaderboard` (or `/top`, same thing) ranks the top 10 players. Pick a stat from the dropdown:
+`/leaderboard` ranks the top 10 players. Pick a stat from the dropdown:
 
 | Stat | Sorted |
 |---|---|

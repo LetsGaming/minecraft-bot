@@ -20,10 +20,10 @@ const choices = [
   })),
 ];
 
-/** The slash command definition shared by `/top` and `/leaderboard`. */
-export function buildLeaderboardData(name: string): SlashCommandOptionsOnlyBuilder {
+/** The `/leaderboard` slash command definition. */
+export function buildLeaderboardData(): SlashCommandOptionsOnlyBuilder {
   return new SlashCommandBuilder()
-    .setName(name)
+    .setName("leaderboard")
     .setDescription("Show top players by a stat")
     .addStringOption((o) =>
       o

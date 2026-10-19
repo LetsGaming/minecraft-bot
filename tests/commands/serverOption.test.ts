@@ -19,7 +19,6 @@ function serverOptions(options: OptionJson[]): OptionJson[] {
 const commands = {
   whitelisted: () => import("../../src/bot/commands/info/whitelisted.js"),
   stats: () => import("../../src/bot/commands/stats/stats.js"),
-  top: () => import("../../src/bot/commands/stats/top.js"),
   leaderboard: () => import("../../src/bot/commands/stats/leaderboard.js"),
   playtime: () => import("../../src/bot/commands/stats/playtime.js"),
   compare: () => import("../../src/bot/commands/stats/compare.js"),

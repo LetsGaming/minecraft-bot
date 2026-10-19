@@ -81,6 +81,7 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Removed
 
+- **`/top` is gone; use `/leaderboard`.** The two commands were the same command under two names. Discord drops `/top` the next time commands are registered. A `top` entry left in `commandOverrides` no longer matches anything and can be deleted (`commands/stats/top.ts`).
 - **The dashboard route `GET /api/servers/:id/analytics/players`.** The Players page's `GET /api/servers/:id/players` replaces it; nothing outside the dashboard used it.
 
 - **The `servers.<id>` block inside `dailyRewards.json` is no longer read.** Per-server pools live only in `data/dailyRewards_<serverId>.json` (same contents). A leftover block is ignored with a warning in the log and listed as a problem in the dashboard.

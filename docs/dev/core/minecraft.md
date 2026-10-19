@@ -30,7 +30,7 @@ the `stat:` option — category matches first, then individual stat names.
 
 ## Leaderboards
 
-`buildLeaderboard(statKey, opts)` is shared by `/leaderboard`, `/top`, and the
+`buildLeaderboard(statKey, opts)` is shared by `/leaderboard` and the
 scheduled poster. It returns plain data; the caller renders it. Pass a
 `baseline` and it subtracts, which is how a period board shows gains rather than
 all-time totals.
@@ -58,7 +58,7 @@ crafted: {
 },
 ```
 
-`/leaderboard` and `/top` pick it up automatically — their choice lists are
+`/leaderboard` picks it up automatically — its choice list is
 generated from this map — and hourly snapshots start recording it, so period
 boards work after one snapshot cycle. Nothing else to wire.
 

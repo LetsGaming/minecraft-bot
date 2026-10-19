@@ -115,8 +115,8 @@ export function registerAnalyticsRoutes(app: FastifyInstance): void {
   );
 
   /**
-   * A stat leaderboard, built by the same function `/leaderboard` and `/top`
-   * use, so a board in the dashboard and a board in Discord cannot rank the
+   * A stat leaderboard, built by the same function `/leaderboard`
+   * uses, so a board in the dashboard and a board in Discord cannot rank the
    * same players differently. With `hours` it is a delta against the snapshot
    * closest to the start of the range, like the scheduled boards.
    */
