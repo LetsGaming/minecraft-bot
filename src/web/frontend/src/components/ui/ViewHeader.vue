@@ -26,7 +26,6 @@ import {
   GLOSSARY,
   StatusRole,
   statusLabelKey,
-  type GlossaryKey,
   type StatusInput,
 } from "@mcbot/schema";
 import StatusChip from "./StatusChip.vue";
@@ -49,7 +48,7 @@ export default defineComponent({
   computed: {
     chipLabel(): string {
       if (this.serverLabel) return this.serverLabel;
-      const state = GLOSSARY[statusLabelKey(this.serverState) as GlossaryKey]?.en;
+      const state = GLOSSARY[statusLabelKey(this.serverState)]?.en;
       return state ? `${this.server}, ${state.toLowerCase()}` : this.server;
     },
   },

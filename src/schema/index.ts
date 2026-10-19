@@ -1,14 +1,25 @@
 /**
- * @mcbot/schema — isomorphic contracts shared by the bot, the web-ui
+ * @mcbot/schema: isomorphic contracts shared by the bot, the web-ui
  * backend, and the browser frontend.
  *
- *   config.ts    RawBotConfig and every config sub-shape (the source the
- *                JSON Schema is generated from — scripts/generate-schema.mjs)
- *   stats.ts     stat/leaderboard shapes referenced by the config types
- *   contract.ts  web API request/response DTOs
+ *   config.ts        RawBotConfig and every config sub-shape (the source the
+ *                    JSON Schema is generated from, scripts/generate-schema.mjs)
+ *   contract.ts      web API request/response DTOs
+ *   wire/            types generated from the wrapper's OpenAPI document
+ *   serverState.ts   ServerState and the health model
+ *   serverActions.ts the management scripts and who may run them
+ *   capabilities.ts  dashboard capabilities and grants
+ *   status.ts        status roles shared by dashboard chips and Discord embeds
+ *   glossary.ts      terms both front-ends name identically
+ *   thresholds.ts    TPS and disk health levels
+ *   time.ts          MS unit lengths
+ *   ...              the remaining modules are listed below, each with its role
+ *
+ * Modules imported by path rather than through this barrel: dailyRewards.ts,
+ * embedCategories.ts and the wire types behind wire/index.ts.
  *
  * Rule: nothing in this package may import Node built-ins or any
- * runtime-only dependency — the frontend bundles it.
+ * runtime-only dependency, the frontend bundles it.
  */
 export type * from "./config.js";
 // The runtime values in config.ts: the fields that configured local mode

@@ -1,5 +1,4 @@
 import { GLOSSARY, type GlossaryKey } from "@mcbot/schema/glossary.js";
-import { STATUS_TABLE, type StatusRole } from "@mcbot/schema/status.js";
 import { en, type EnglishKey } from "./locales/en";
 
 /**
@@ -48,9 +47,4 @@ const translate = createTranslator(
 
 export function t(key: MessageKey, vars?: MessageVars): string {
   return translate(key, vars);
-}
-
-/** The human label of a status role, as the bot's embeds name it too. */
-export function statusLabel(role: StatusRole): string {
-  return t(STATUS_TABLE[role].labelKey as GlossaryKey);
 }

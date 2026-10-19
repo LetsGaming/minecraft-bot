@@ -21,7 +21,8 @@
  * grants editor renders them:
  *   read        server:read, audit:read
  *   reversible  server:control, backup:create, config:read
- *   sensitive   server:console, backup:download, config:write
+ *   sensitive   server:console, backup:download, config:write,
+ *               mods:read, mods:write
  *   irreversible backup:restore, backup:delete, server:rollback, server:update
  *
  * `server:console` sits above `server:control` on purpose. One console command
@@ -175,28 +176,4 @@ export function hasCapability(
 ): boolean {
   if (!isGrantableCapability(capability)) return false;
   return resolveCapabilities(grants, userId, serverId).has(capability);
-}
-
-/**
- * Every server id named in a user's grants, excluding the wildcard.
- *
- * The frontend uses this to decide which servers to offer someone who is not a
- * sysadmin; `"*"` holders are resolved against the configured server list by
- * the caller, which is the only side that knows it.
- */
-export function grantedServerIds(
-  grants: CapabilityGrants | undefined,
-  userId: string,
-): string[] {
-  const perUser = grants?.[userId];
-  if (!perUser) return [];
-  return Object.keys(perUser).filter((id) => id !== ALL_SERVERS);
-}
-
-/** Does this user hold the wildcard block? */
-export function hasWildcardGrant(
-  grants: CapabilityGrants | undefined,
-  userId: string,
-): boolean {
-  return Array.isArray(grants?.[userId]?.[ALL_SERVERS]);
 }

@@ -14,7 +14,6 @@ import { computed } from "vue";
 import {
   GLOSSARY,
   statusDefinition,
-  type GlossaryKey,
   type StatusInput,
 } from "@mcbot/schema";
 
@@ -36,7 +35,7 @@ const props = withDefaults(
 
 const def = computed(() => statusDefinition(props.state));
 const text = computed(
-  () => props.label || GLOSSARY[def.value.labelKey as GlossaryKey]?.en || def.value.name,
+  () => props.label || GLOSSARY[def.value.labelKey]?.en || def.value.name,
 );
 </script>
 

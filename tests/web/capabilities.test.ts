@@ -15,8 +15,6 @@ import {
   isGrantableCapability,
   resolveCapabilities,
   hasCapability,
-  grantedServerIds,
-  hasWildcardGrant,
   type CapabilityGrants,
 } from "../../src/schema/capabilities.js";
 
@@ -153,23 +151,6 @@ describe("hasCapability", () => {
     // Sysadmins never reach this function: the web layer short-circuits them.
     expect(hasCapability(grants, ALICE, "bot:config", "survival")).toBe(false);
     expect(hasCapability(grants, ALICE, "bot:config")).toBe(false);
-  });
-});
-
-describe("grantedServerIds / hasWildcardGrant", () => {
-  it("lists named servers and excludes the wildcard", () => {
-    expect(grantedServerIds(grants, BOB).sort()).toEqual([
-      "creative",
-      "survival",
-    ]);
-    expect(grantedServerIds(grants, ALICE)).toEqual([]);
-  });
-
-  it("reports the wildcard separately", () => {
-    expect(hasWildcardGrant(grants, ALICE)).toBe(true);
-    expect(hasWildcardGrant(grants, BOB)).toBe(false);
-    expect(hasWildcardGrant(grants, CAROL)).toBe(false);
-    expect(hasWildcardGrant(undefined, ALICE)).toBe(false);
   });
 });
 

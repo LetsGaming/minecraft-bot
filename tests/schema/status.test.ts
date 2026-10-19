@@ -8,13 +8,10 @@ import {
   SERVER_STATE_ROLE,
   CONFIG_APPLY_STATE_ROLE,
   statusRole,
-  statusColor,
-  statusShape,
+  statusDefinition,
   statusEmbedColor,
   statusLabelKey,
   GLOSSARY,
-  glossaryText,
-  statusRoleGlossaryKey,
 } from "@mcbot/schema";
 
 describe("status table", () => {
@@ -32,7 +29,7 @@ describe("status table", () => {
   });
 
   it("gives every role its own shape", () => {
-    const shapes = STATUS_ROLES.map((r) => statusShape(r));
+    const shapes = STATUS_ROLES.map((r) => STATUS_TABLE[r].shape);
     expect(new Set(shapes).size).toBe(STATUS_ROLES.length);
   });
 
@@ -47,7 +44,7 @@ describe("status table", () => {
 
   it("has a glossary label for every role", () => {
     for (const role of STATUS_ROLES) {
-      expect(statusLabelKey(role)).toBe(statusRoleGlossaryKey(role));
+      expect(statusLabelKey(role)).toBe(`status.${role}`);
       expect(GLOSSARY).toHaveProperty(statusLabelKey(role));
     }
   });
@@ -74,8 +71,8 @@ describe("state mappings", () => {
   });
 
   it("resolves colours and shapes through the mapping", () => {
-    expect(statusColor(ServerState.Unresponsive)).toBe("#fbbf24");
-    expect(statusShape(ServerState.Unresponsive)).toBe("diamond");
+    expect(statusDefinition(ServerState.Unresponsive).colour).toBe("#fbbf24");
+    expect(statusDefinition(ServerState.Unresponsive).shape).toBe("diamond");
     expect(statusEmbedColor(ConfigApplyState.BotDown)).toBe(0xf87171);
   });
 
@@ -92,9 +89,9 @@ describe("glossary", () => {
     }
   });
 
-  it("looks terms up by language", () => {
-    expect(glossaryText("term.guild")).toBe("Guild");
-    expect(glossaryText("term.guild", "de")).toBe("Discord-Server");
+  it("names the guild differently per language", () => {
+    expect(GLOSSARY["term.guild"].en).toBe("Guild");
+    expect(GLOSSARY["term.guild"].de).toBe("Discord-Server");
   });
 });
 

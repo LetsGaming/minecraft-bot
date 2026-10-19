@@ -56,11 +56,6 @@ export function splitItem(item: string): { id: string; suffix: string } {
   return at < 0 ? { id: item, suffix: "" } : { id: item.slice(0, at), suffix: item.slice(at) };
 }
 
-/** `diamond` becomes `minecraft:diamond`; a namespaced id is left as it is. */
-export function namespacedId(id: string): string {
-  return id.includes(":") ? id : `minecraft:${id}`;
-}
-
 /** Why `item` is not a usable item string, or null when it is. */
 export function itemProblem(item: unknown): string | null {
   if (typeof item !== "string" || item.trim() === "") return "an item id is required";
@@ -117,7 +112,7 @@ function parseItems(
       errors.push(`${at}.amount: must be a whole number from 1 to ${MAX_REWARD_AMOUNT}`);
       return;
     }
-    const item: DailyRewardItem = { item: (entry.item as string).trim(), amount };
+    const item: DailyRewardItem = { item: entry.item as string, amount };
     if (weighted) {
       const weight = entry.weight ?? 1;
       if (typeof weight !== "number" || !Number.isFinite(weight) || weight <= 0) {

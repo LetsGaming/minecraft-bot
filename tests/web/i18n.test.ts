@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createTranslator, statusLabel, t } from "../../src/web/frontend/src/i18n.js";
+import { createTranslator, t } from "../../src/web/frontend/src/i18n.js";
 
 describe("dashboard t()", () => {
   it("reads shell copy and fills placeholders", () => {
@@ -9,7 +9,7 @@ describe("dashboard t()", () => {
 
   it("reads shared terms and status labels from the glossary", () => {
     expect(t("term.server")).toBe("Server");
-    expect(statusLabel("degraded")).toBe("Not responding");
+    expect(t("status.degraded")).toBe("Not responding");
   });
 
   it("picks the plural variant by count", () => {

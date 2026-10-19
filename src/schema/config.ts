@@ -804,6 +804,3 @@ export type BotConfig = Omit<
     guilds: Record<string, GuildConfig>;
     language: Language;
   };
-
-/** Variables.txt key-value map */
-export type VariablesMap = Record<string, string>;

@@ -2,11 +2,9 @@
 // The management scripts the setup suite installs, named once for every layer
 // that reasons about them: capability detection, the RCON/script runner, the
 // bot's /server subcommands, the dashboard's action route, and the Vue view's
-// confirm step. Each of those used to carry its own copy — as a `Set` of
-// literals, a `Record<string, …>`, or a bare `sub === "stop"` — which is how
-// the dashboard's list quietly drifted out of sync with the runner's.
+// confirm step.
 
-import { ServerState } from "./serverState.js";
+import { ServerState, stateIsUp } from "./serverState.js";
 
 /** Every management script the suite exposes. */
 export const SERVER_SCRIPT_ACTIONS = [
@@ -25,15 +23,12 @@ export type ServerScriptAction = (typeof SERVER_SCRIPT_ACTIONS)[number];
  * `status` is deliberately absent: it's a read, served by the status
  * endpoints, not a state change.
  */
-export const SERVER_OPERATOR_ACTIONS = [
-  "start",
-  "stop",
-  "restart",
-  "rollback",
-  "backup",
-] as const satisfies readonly ServerScriptAction[];
+export type ServerOperatorAction = Exclude<ServerScriptAction, "status">;
 
-export type ServerOperatorAction = (typeof SERVER_OPERATOR_ACTIONS)[number];
+export const SERVER_OPERATOR_ACTIONS: readonly ServerOperatorAction[] =
+  SERVER_SCRIPT_ACTIONS.filter(
+    (action): action is ServerOperatorAction => action !== "status",
+  );
 
 /** Type guard: may this string be run as an operator action? */
 export function isServerOperatorAction(
@@ -106,8 +101,7 @@ export function isActionApplicable(
   state: ServerState,
 ): boolean {
   if (state === ServerState.Unknown) return true;
-  const running =
-    state === ServerState.Online || state === ServerState.Unresponsive;
+  const running = stateIsUp(state);
   switch (action) {
     // Nothing to start when it is already up.
     case "start":

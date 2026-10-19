@@ -1,5 +1,6 @@
 import { ServerState } from "./serverState.js";
 import { ConfigApplyState } from "./configStatus.js";
+import type { GlossaryKey } from "./glossary.js";
 
 /**
  * The seven status roles the dashboard chips and the Discord embeds share.
@@ -40,7 +41,7 @@ export interface StatusDefinition {
   /** Discord embed colour, the same value as `colour`. */
   embedColour: number;
   /** Glossary key of the human label (see `glossary.ts`). */
-  labelKey: string;
+  labelKey: GlossaryKey;
 }
 
 export const STATUS_TABLE: Readonly<Record<StatusRole, StatusDefinition>> = {
@@ -139,20 +140,11 @@ export function statusDefinition(state: StatusInput): StatusDefinition {
   return STATUS_TABLE[statusRole(state)];
 }
 
-/** Foreground hex for the state. */
-export function statusColor(state: StatusInput): string {
-  return statusDefinition(state).colour;
-}
-
 /** Discord embed colour for the state. */
 export function statusEmbedColor(state: StatusInput): number {
   return statusDefinition(state).embedColour;
 }
 
-export function statusShape(state: StatusInput): StatusShape {
-  return statusDefinition(state).shape;
-}
-
-export function statusLabelKey(state: StatusInput): string {
+export function statusLabelKey(state: StatusInput): GlossaryKey {
   return statusDefinition(state).labelKey;
 }
