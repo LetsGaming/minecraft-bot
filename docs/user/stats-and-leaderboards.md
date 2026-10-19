@@ -52,10 +52,10 @@ The Analytics page has one range control (24h to 90d) that applies to every pane
 | Panel | History kept |
 |---|---|
 | Uptime | about 30 days (next to the fixed 24h, 7d and 30d figures, the selected range is shown) |
-| Players over time and busiest hours | 14 days |
+| Players over time and busiest hours | 90 days (longer ranges draw one bar per day) |
 | Leaderboard | 32 days |
 | Command usage | 90 days |
-| Players table | the last 20 sessions of each player |
+| Players table | 365 days of sessions |
 
 The leaderboard for a range is the stat gained in that range, measured against the nearest hourly or daily snapshot, like the scheduled boards. On a young bot the snapshots may not reach back far enough; the panel then says from when the numbers start (or that they are all-time totals when there is no snapshot yet). The players table only lists players with a session inside the range and counts only the time played inside it.
 

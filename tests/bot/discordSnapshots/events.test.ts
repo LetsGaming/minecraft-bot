@@ -22,7 +22,8 @@ vi.mock("../../../src/core/utils/server/server.js", async (importOriginal) => ({
 }));
 vi.mock("../../../src/core/utils/stores/sessionStore.js", async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  updateSessionStore: vi.fn((fn: (store: object) => unknown) => fn({})),
+  openSession: vi.fn(),
+  closeSession: vi.fn().mockReturnValue(true),
   openSession: vi.fn(),
   closeSession: vi.fn(),
 }));

@@ -19,13 +19,15 @@ const DAY_HOURS = 24;
  */
 export const ANALYTICS_RETENTION_DAYS = {
   /** player_count_hours: hourly buckets. */
-  activity: 14,
+  activity: 90,
   /** uptime_checks: one-minute checks. */
   uptime: 30,
   /** Snapshots are kept for the longest leaderboard period plus two days. */
   leaderboard: 32,
   /** command_usage. */
   commands: 90,
+  /** player_sessions: one row per join and leave. */
+  sessions: 365,
 } as const;
 
 /** Longest range, in hours, each analytics section can answer. */
@@ -34,6 +36,7 @@ export const ANALYTICS_CAP_HOURS = {
   uptime: ANALYTICS_RETENTION_DAYS.uptime * DAY_HOURS,
   leaderboard: ANALYTICS_RETENTION_DAYS.leaderboard * DAY_HOURS,
   commands: ANALYTICS_RETENTION_DAYS.commands * DAY_HOURS,
+  sessions: ANALYTICS_RETENTION_DAYS.sessions * DAY_HOURS,
 } as const;
 
 export type AnalyticsSection = keyof typeof ANALYTICS_CAP_HOURS;
@@ -103,7 +106,7 @@ export interface PlayerRow {
   name: string;
   /** Playtime inside the requested range only. */
   playtimeMs: number;
-  /** Sessions inside the range, out of the retained ones (see sessionsKeptPerPlayer). */
+  /** Sessions inside the range, out of the retained ones (see historyDays). */
   sessions: number;
   lastSeen: number | null;
   online: boolean;
@@ -114,8 +117,8 @@ export interface PlayersResponse {
   players: PlayerRow[];
   totalPlayers: number;
   rangeHours: number;
-  /** The bot keeps only this many sessions per player, so session counts and playtime cover at most those. */
-  sessionsKeptPerPlayer: number;
+  /** Sessions are kept this many days, so session counts and playtime cover at most that. */
+  historyDays: number;
 }
 
 export interface StatOption {

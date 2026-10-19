@@ -182,7 +182,7 @@ describe("AuditView", () => {
 
 describe("AnalyticsView", () => {
   it("reads playtime as a span and explains an uptime with no checks", async () => {
-    const caps = { activity: 336, uptime: 720, leaderboard: 768, commands: 2160 };
+    const caps = { activity: 2160, uptime: 720, leaderboard: 768, commands: 2160, sessions: 8760 };
     const none = { total: 0, online: 0 };
     install((_m, url) => {
       if (url.startsWith("/api/servers/smp/analytics/leaderboard")) {
@@ -201,7 +201,7 @@ describe("AnalyticsView", () => {
         };
       }
       if (url.startsWith("/api/servers/smp/analytics/players")) {
-        return { body: { players: [], totalPlayers: 0, rangeHours: 336, sessionsKeptPerPlayer: 20 } };
+        return { body: { players: [], totalPlayers: 0, rangeHours: 336, historyDays: 365 } };
       }
       if (url.startsWith("/api/analytics/commands")) return { status: 502, body: { error: "db gone" } };
       if (url.startsWith("/api/servers/smp/analytics")) {

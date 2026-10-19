@@ -82,9 +82,9 @@
            over two weeks is the whole point, and an embed could never show it. -->
       <section v-if="loaded && !failure" class="panel" aria-labelledby="an-activity-h">
         <h2 id="an-activity-h">{{ t("analytics.activity", { range: rangeLabel }) }}</h2>
-        <div v-if="activity.length" class="chart" role="img" :aria-label="chartLabel">
+        <div v-if="chartBars.length" class="chart" role="img" :aria-label="chartLabel">
           <div
-            v-for="hour in activity"
+            v-for="hour in chartBars"
             :key="hour.at"
             class="bar"
             :style="{ height: `${barHeight(hour.avg)}%` }"
@@ -283,8 +283,11 @@ import InlineError from "../components/ui/InlineError.vue";
 import SortControl from "../components/ui/SortControl.vue";
 import {
   useAnalytics,
+  bucketActivity,
   clampNote,
   formatHours,
+  HOURLY_CHART_MAX_HOURS,
+  type ActivityHour,
   type LeaderboardEntry,
 } from "../composables/useAnalytics";
 import { failureCopy, signIn, type FailureCopy, type LoadFailure } from "../utils/loadFailure";
@@ -412,7 +415,7 @@ export default defineComponent({
       return clampNote(this.rangeHours, this.commandsRangeHours);
     },
     playersNote(): string {
-      const kept = this.sessionsKeptPerPlayer;
+      const kept = this.historyDays;
       if (kept === null || this.players.length === 0) return "";
       return t("analytics.playersNote", { count: kept });
     },
@@ -435,11 +438,15 @@ export default defineComponent({
       return this.board.reduce((max, e) => Math.max(max, e.value), 0);
     },
     /** The tallest average in the window, so bars scale to the data shown. */
+    chartBars(): ActivityHour[] {
+      const range = this.activityRangeHours ?? this.rangeHours;
+      return bucketActivity(this.activity, range > HOURLY_CHART_MAX_HOURS ? "day" : "hour");
+    },
     peakAvg(): number {
-      return this.activity.reduce((max, h) => Math.max(max, h.avg), 0);
+      return this.chartBars.reduce((max, h) => Math.max(max, h.avg), 0);
     },
     chartLabel(): string {
-      return t("analytics.chartLabel", { count: this.activity.length, peak: this.peakAvg.toFixed(1) });
+      return t("analytics.chartLabel", { count: this.chartBars.length, peak: this.peakAvg.toFixed(1) });
     },
     rangeLabel(): string {
       return this.rangeOptions.find((o) => o.value === this.rangeHours)?.label ?? formatHours(this.rangeHours);

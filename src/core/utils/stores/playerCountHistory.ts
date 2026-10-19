@@ -9,8 +9,9 @@
  * 5-minute sampler that no-ops while fresh samples keep arriving from
  * elsewhere.
  *
- * Retention is RETENTION_HOURS buckets per server (14 days), enough for a
- * stable hour-of-day average without the table growing forever.
+ * Retention is RETENTION_HOURS buckets per server (ANALYTICS_RETENTION_DAYS.activity),
+ * enough for a stable hour-of-day average and a long trend without the table
+ * growing forever.
  */
 import { getDb, withTransaction } from "../../db/index.js";
 import { mapRows, col } from "../../db/rows.js";

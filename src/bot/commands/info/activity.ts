@@ -15,6 +15,10 @@ import {
 } from "@mcbot/core/utils/stores/playerCountHistory.js";
 import { guildTimeZone } from "@mcbot/core/utils/config/timezones.js";
 import { t } from "@mcbot/core/utils/i18n.js";
+import { MS } from "@mcbot/schema/time.js";
+
+/** The "busiest hours" average covers this many days; the locale strings say so. */
+const BUSIEST_WINDOW_DAYS = 14;
 
 export const data = new SlashCommandBuilder()
   .setName("activity")
@@ -36,7 +40,11 @@ export const execute = withErrorHandling(async (interaction) => {
   const { line, peak } = buildActivitySparkline(series, now, 24);
   // The asking guild's zone: "busiest hour" only means something local.
   const tz = guildTimeZone(interaction.guild?.id ?? null);
-  const busy = busiestHours(series, tz, 3);
+  const busy = busiestHours(
+    series.filter((b) => b.h >= now - BUSIEST_WINDOW_DAYS * MS.day),
+    tz,
+    3,
+  );
 
   const busyLines = busy.map((b) =>
     t("activity.busyLine", {

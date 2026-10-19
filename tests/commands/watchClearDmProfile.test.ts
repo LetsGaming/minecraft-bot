@@ -44,7 +44,7 @@ import {
   type Watch,
 } from "../../src/core/utils/stores/watchStore.js";
 import { kvSet } from "../../src/core/db/kv.js";
-import { closeDbForTesting } from "../../src/core/db/index.js";
+import { closeDbForTesting, getDb } from "../../src/core/db/index.js";
 import type { Client } from "discord.js";
 
 type Opts = Record<string, string | number | boolean | undefined>;
@@ -329,8 +329,17 @@ describe("/clear-dm", () => {
 });
 
 describe("/profile", () => {
-  function seedSessions(entry: object) {
-    kvSet("sessions", { version: 1, servers: { smp: { steve: entry } } });
+  function seedSessions(entry: {
+    name: string;
+    sessions: Array<{ joinedAt: number; leftAt: number | null }>;
+  }) {
+    const db = getDb();
+    db.prepare("DELETE FROM player_sessions").run();
+    const ins = db.prepare(
+      `INSERT INTO player_sessions (server_id, name_lower, name, joined_at, left_at)
+       VALUES ('smp', 'steve', ?, ?, ?)`,
+    );
+    for (const s of entry.sessions) ins.run(entry.name, s.joinedAt, s.leftAt);
   }
 
   it("falls back to the caller's linked account and fails when there is none", async () => {
@@ -361,8 +370,7 @@ describe("/profile", () => {
     getAuditEntry.mockResolvedValue({ addedBy: "Admin#1", addedAt: "2026-01-01 10:00" });
     seedSessions({
       name: "Steve",
-      lastSeen: 1_700_000_000_000,
-      sessions: [{ joinedAt: 0, leftAt: 3_600_000 }],
+      sessions: [{ joinedAt: 1_700_000_000_000 - 3_600_000, leftAt: 1_700_000_000_000 }],
     });
     kvSet("claimedDaily", {
       version: 2,
@@ -390,12 +398,12 @@ describe("/profile", () => {
   });
 
   it("shows online instead of last seen while a session is open", async () => {
-    seedSessions({ name: "Steve", lastSeen: 1_700_000_000_000, sessions: [{ joinedAt: 1000, leftAt: null }] });
+    seedSessions({ name: "Steve", sessions: [{ joinedAt: 1000, leftAt: null }] });
     const online = interaction(null, { player: "Steve" });
     await run(profileExecute, online);
     expect(embedText(online)).not.toContain("<t:");
 
-    seedSessions({ name: "Steve", lastSeen: 1_700_000_000_000, sessions: [{ joinedAt: 0, leftAt: 5 }] });
+    seedSessions({ name: "Steve", sessions: [{ joinedAt: 1_699_999_999_000, leftAt: 1_700_000_000_000 }] });
     const offline = interaction(null, { player: "Steve" });
     await run(profileExecute, offline);
     expect(embedText(offline)).toContain("<t:1700000000:R>");

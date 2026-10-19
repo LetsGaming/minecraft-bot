@@ -10,7 +10,7 @@ const NOW = 1_800_000_000_000;
 const mocks = vi.hoisted(() => ({
   getUptimeStats: vi.fn(),
   loadPlayerCountSeries: vi.fn(),
-  loadSessionStore: vi.fn(),
+  listPlayerSummaries: vi.fn(),
   buildLeaderboard: vi.fn(),
   usageByCommandSince: vi.fn(),
   getSnapshotClosestTo: vi.fn(),
@@ -31,7 +31,7 @@ vi.mock("../../src/core/utils/stores/playerCountHistory.js", async (orig) => ({
 }));
 vi.mock("../../src/core/utils/stores/sessionStore.js", async (orig) => ({
   ...(await orig<typeof import("../../src/core/utils/stores/sessionStore.js")>()),
-  loadSessionStore: mocks.loadSessionStore,
+  listPlayerSummaries: mocks.listPlayerSummaries,
 }));
 vi.mock("../../src/core/utils/minecraft/statUtils.js", () => ({
   LEADERBOARD_STATS: { playtime: { label: "Playtime" }, deaths: { label: "Deaths" } },
@@ -65,7 +65,7 @@ beforeEach(() => {
   clearLastKnown();
   mocks.getUptimeStats.mockResolvedValue({ pct24h: 100, currentState: "online" });
   mocks.loadPlayerCountSeries.mockReturnValue([]);
-  mocks.loadSessionStore.mockResolvedValue({ version: 1, servers: {} });
+  mocks.listPlayerSummaries.mockReturnValue({ rows: [], total: 0 });
   mocks.usageByCommandSince.mockReturnValue([]);
   mocks.getSnapshotClosestTo.mockResolvedValue(null);
   mocks.buildLeaderboard.mockResolvedValue({ title: "Board", entries: [] });
@@ -86,9 +86,9 @@ describe("GET /api/servers/:id/analytics", () => {
     expect(body.activity.hours).toEqual([{ at: NOW - 2 * HOUR, avg: 2, peak: 5, samples: 3 }]);
   });
 
-  it("clamps activity to 14 days but uptime to 30 days", async () => {
+  it("clamps activity to 90 days but uptime to 30 days", async () => {
     const body = (await get("/api/servers/smp/analytics?hours=9999")).json();
-    expect(body.activity.rangeHours).toBe(24 * 14);
+    expect(body.activity.rangeHours).toBe(24 * 90);
     expect(mocks.getUptimeStats).toHaveBeenCalledWith("smp", { rangeHours: 24 * 30 });
   });
 
@@ -96,73 +96,47 @@ describe("GET /api/servers/:id/analytics", () => {
     const body = (await get("/api/servers/smp/analytics?hours=72")).json();
     expect(mocks.getUptimeStats).toHaveBeenCalledWith("smp", { rangeHours: 72 });
     expect(body.caps).toEqual({
-      activity: 24 * 14,
+      activity: 24 * 90,
       uptime: 24 * 30,
       leaderboard: 24 * 32,
       commands: 24 * 90,
+      sessions: 24 * 365,
     });
   });
 });
 
 describe("GET /api/servers/:id/analytics/players", () => {
-  const store = {
-    version: 1,
-    servers: {
-      smp: {
-        a: {
-          name: "A",
-          lastSeen: NOW - 5 * HOUR,
-          sessions: [{ joinedAt: NOW - 6 * HOUR, leftAt: NOW - 5 * HOUR }],
-        },
-        b: { name: "B", lastSeen: null, sessions: [{ joinedAt: NOW - 3 * HOUR, leftAt: null }] },
-        old: {
-          name: "Old",
-          lastSeen: NOW - 100 * HOUR,
-          sessions: [{ joinedAt: NOW - 102 * HOUR, leftAt: NOW - 100 * HOUR }],
-        },
-      },
-    },
-  };
-
-  function names(body: { players: { name: string }[] }): string[] {
-    return body.players.map((p) => p.name);
-  }
-
-  it("lists every retained player by playtime, counting an open session up to now", async () => {
-    mocks.loadSessionStore.mockResolvedValue(store);
-    const body = (await get("/api/servers/smp/analytics/players")).json();
-    expect(body.totalPlayers).toBe(3);
-    expect(names(body)).toEqual(["B", "Old", "A"]);
-    expect(body.players.find((p: { name: string }) => p.name === "B")).toMatchObject({
-      playtimeMs: 3 * HOUR,
-      online: true,
-    });
-    expect(body.sessionsKeptPerPlayer).toBe(20);
+  const row = (name: string) => ({
+    name,
+    online: false,
+    lastSeen: NOW - HOUR,
+    firstSeen: NOW - 5 * HOUR,
+    sessions: 1,
+    playtimeMs: HOUR,
   });
 
-  it("drops players without a session overlapping the range", async () => {
-    mocks.loadSessionStore.mockResolvedValue(store);
+  it("returns the session store's summaries with the retention in days", async () => {
+    mocks.listPlayerSummaries.mockReturnValue({ rows: [row("A"), row("B")], total: 2 });
+    const body = (await get("/api/servers/smp/analytics/players")).json();
+    expect(body.totalPlayers).toBe(2);
+    expect(body.players.map((p: { name: string }) => p.name)).toEqual(["A", "B"]);
+    expect(body.historyDays).toBe(365);
+  });
+
+  it("asks for the requested window and reports the clamped range", async () => {
+    mocks.listPlayerSummaries.mockReturnValue({ rows: [], total: 0 });
     const body = (await get("/api/servers/smp/analytics/players?hours=24")).json();
     expect(body.rangeHours).toBe(24);
-    expect(names(body).sort()).toEqual(["A", "B"]);
-    expect(body.totalPlayers).toBe(2);
+    expect(mocks.listPlayerSummaries).toHaveBeenCalledWith(
+      "smp",
+      expect.objectContaining({ sinceMs: NOW - 24 * HOUR, status: "all" }),
+    );
   });
 
-  it("clips playtime to the window", async () => {
-    mocks.loadSessionStore.mockResolvedValue({
-      version: 1,
-      servers: {
-        smp: {
-          c: {
-            name: "C",
-            lastSeen: NOW - HOUR,
-            sessions: [{ joinedAt: NOW - 10 * HOUR, leftAt: NOW - HOUR }],
-          },
-        },
-      },
-    });
-    const body = (await get("/api/servers/smp/analytics/players?hours=4")).json();
-    expect(body.players[0]).toMatchObject({ name: "C", playtimeMs: 3 * HOUR, sessions: 1 });
+  it("clamps the range to the session retention", async () => {
+    mocks.listPlayerSummaries.mockReturnValue({ rows: [], total: 0 });
+    const body = (await get("/api/servers/smp/analytics/players?hours=999999")).json();
+    expect(body.rangeHours).toBe(24 * 365);
   });
 });
 

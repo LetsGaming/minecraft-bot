@@ -36,8 +36,8 @@ import {
   busiestHours,
 } from "@mcbot/core/utils/stores/playerCountHistory.js";
 import {
-  loadSessionStore,
-  MAX_SESSIONS_PER_PLAYER,
+  listPlayerSummaries,
+  SESSION_RETENTION_DAYS,
 } from "@mcbot/core/utils/stores/sessionStore.js";
 import {
   LEADERBOARD_STATS,
@@ -55,8 +55,7 @@ import { requireServer } from "./support.js";
 
 const ACTIVITY_HOURS_DEFAULT = ANALYTICS_CAP_HOURS.activity;
 const COMMAND_HOURS_DEFAULT = 30 * 24;
-/** Sessions are not retained by age, so the players range only needs an upper bound. */
-const PLAYERS_HOURS_MAX = ANALYTICS_CAP_HOURS.commands;
+const PLAYERS_HOURS_MAX = ANALYTICS_CAP_HOURS.sessions;
 
 const CAPS: AnalyticsCaps = { ...ANALYTICS_CAP_HOURS };
 
@@ -124,9 +123,8 @@ export function registerAnalyticsRoutes(app: FastifyInstance): void {
   /**
    * Who plays, and how much, inside the range.
    *
-   * Sessions are a ring buffer of the last MAX_SESSIONS_PER_PLAYER per player,
-   * so a very active player's early sessions inside a long range may already
-   * be gone: playtime and session counts cover the retained sessions only.
+   * Sessions are kept for SESSION_RETENTION_DAYS, so a range longer than that
+   * only covers the retained sessions.
    */
   api.get(
     "/api/servers/:id/analytics/players",
@@ -143,40 +141,21 @@ export function registerAnalyticsRoutes(app: FastifyInstance): void {
           PLAYERS_HOURS_MAX,
           PLAYERS_HOURS_MAX,
         );
-        const store = await loadSessionStore();
-        const entries = Object.values(store.servers[serverId] ?? {});
         const now = Date.now();
-        const since = now - hours * MS.hour;
-
-        const players: PlayersResponse["players"] = [];
-        for (const entry of entries) {
-          let playtimeMs = 0;
-          let sessions = 0;
-          for (const session of entry.sessions) {
-            // An open session counts up to now, so someone mid-session is not
-            // reported as having played less than they have.
-            const end = session.leftAt ?? now;
-            if (end <= since || session.joinedAt >= now) continue;
-            sessions++;
-            playtimeMs += end - Math.max(session.joinedAt, since);
-          }
-          if (sessions === 0) continue;
-          players.push({
-            name: entry.name,
-            playtimeMs,
-            sessions,
-            lastSeen: entry.lastSeen,
-            online: entry.sessions.some((session) => session.leftAt === null),
-            firstSeen: entry.sessions[0]?.joinedAt ?? null,
-          });
-        }
-        players.sort((a, b) => b.playtimeMs - a.playtimeMs);
+        const { rows, total } = listPlayerSummaries(serverId, {
+          sinceMs: now - hours * MS.hour,
+          now,
+          status: "all",
+          sort: "playtimeMs",
+          order: "desc",
+          limit: 200,
+        });
 
         return {
-          players,
-          totalPlayers: players.length,
+          players: rows,
+          totalPlayers: total,
           rangeHours: hours,
-          sessionsKeptPerPlayer: MAX_SESSIONS_PER_PLAYER,
+          historyDays: SESSION_RETENTION_DAYS,
         };
       } catch (err) {
         log.error("web", `Player analytics for ${serverId} failed: ${errMsg(err)}`);

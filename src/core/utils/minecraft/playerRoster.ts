@@ -4,8 +4,7 @@
  * No I/O, so the ordering rules are unit-testable.
  */
 import { MS } from "@mcbot/schema/time.js";
-import type { PlayerSessionEntry } from "../stores/sessionStore.js";
-import { isOnlineNow } from "../stores/sessionStore.js";
+import type { PlayerSummary } from "../stores/sessionStore.js";
 
 export type RosterSort = "last-seen" | "playtime" | "name";
 
@@ -25,8 +24,8 @@ export interface RosterInput {
   statsPlaytime: Record<string, number>;
   /** UUID to name pairs from the whitelist and usercache. */
   known: ReadonlyArray<{ uuid: string; name: string }>;
-  /** Session store entries for this server, keyed by lowercased name. */
-  sessions: Record<string, PlayerSessionEntry>;
+  /** Session summaries for this server, keyed by lowercased name. */
+  sessions: Record<string, PlayerSummary>;
 }
 
 const DAY_MS = MS.day;
@@ -67,13 +66,13 @@ export function buildRoster(input: RosterInput): RosterEntry[] {
 function fromParts(
   uuid: string | null,
   name: string,
-  session: PlayerSessionEntry | undefined,
+  session: PlayerSummary | undefined,
   playtimeTicks: number | null,
 ): RosterEntry {
   return {
     uuid,
     name: session?.name ?? name,
-    online: session ? isOnlineNow(session) : false,
+    online: session?.online ?? false,
     lastSeen: session?.lastSeen ?? null,
     playtimeTicks,
   };

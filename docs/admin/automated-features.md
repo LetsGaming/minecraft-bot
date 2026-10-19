@@ -112,7 +112,7 @@ With `whitelistApplications` configured (see [configuration.md](configuration.md
 
 ## Player-count sampling
 
-The status/presence pass records one player-count sample per server into `data/playerCounts.json` (hourly aggregates, 14-day retention) — this feeds `/activity` and the dashboard. Deployments that run neither the status embed nor presence get a standalone 5-minute sampler that stands down automatically while fresh samples arrive from elsewhere.
+The status/presence pass records one player-count sample per server into the `player_count_hours` table (hourly aggregates, 90-day retention) — this feeds `/activity` (which averages the last 14 days) and the dashboard. Deployments that run neither the status embed nor presence get a standalone 5-minute sampler that stands down automatically while fresh samples arrive from elsewhere.
 
 ## Runtime heartbeat
 

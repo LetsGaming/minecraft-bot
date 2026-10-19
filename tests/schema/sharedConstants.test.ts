@@ -69,7 +69,13 @@ describe("retention", () => {
   it("is what the stores prune with", () => {
     expect(RETENTION_HOURS).toBe(ANALYTICS_CAP_HOURS.activity);
     expect(USAGE_RETENTION_DAYS).toBe(ANALYTICS_RETENTION_DAYS.commands);
-    expect(ANALYTICS_CAP_HOURS).toEqual({ activity: 336, uptime: 720, leaderboard: 768, commands: 2160 });
+    expect(ANALYTICS_CAP_HOURS).toEqual({
+      activity: 2160,
+      uptime: 720,
+      leaderboard: 768,
+      commands: 2160,
+      sessions: 8760,
+    });
   });
 });
 

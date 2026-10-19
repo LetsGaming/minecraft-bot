@@ -5,7 +5,7 @@ import {
   sortRoster,
   type RosterEntry,
 } from "../../src/core/utils/minecraft/playerRoster.js";
-import type { PlayerSessionEntry } from "../../src/core/utils/stores/sessionStore.js";
+import type { PlayerSummary } from "../../src/core/utils/stores/sessionStore.js";
 
 const DAY = 86_400_000;
 const NOW = 1_700_000_000_000;
@@ -14,15 +14,14 @@ function session(
   name: string,
   lastSeen: number | null,
   open = false,
-): PlayerSessionEntry {
+): PlayerSummary {
   return {
     name,
+    online: open,
     lastSeen,
-    sessions: open
-      ? [{ joinedAt: NOW - 1000, leftAt: null }]
-      : lastSeen
-        ? [{ joinedAt: lastSeen - 1000, leftAt: lastSeen }]
-        : [],
+    firstSeen: lastSeen ? lastSeen - 1000 : open ? NOW - 1000 : null,
+    sessions: open || lastSeen ? 1 : 0,
+    playtimeMs: 0,
   };
 }
 

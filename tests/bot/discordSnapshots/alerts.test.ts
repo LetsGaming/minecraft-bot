@@ -22,7 +22,8 @@ vi.mock("../../../src/core/utils/stores/uptimeTracker.js", () => ({
 }));
 vi.mock("../../../src/core/utils/stores/sessionStore.js", async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  updateSessionStore: vi.fn((fn: (store: object) => unknown) => fn({})),
+  openSession: vi.fn(),
+  closeSession: vi.fn().mockReturnValue(true),
   closeAllOpenSessions: vi.fn().mockReturnValue(0),
 }));
 vi.mock("../../../src/bot/logWatcher/watchers/watchFirer.js", () => ({

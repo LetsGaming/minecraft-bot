@@ -140,7 +140,9 @@ describe("importLegacyJson", () => {
     legacy("sessions.json", "[1,2]");
     expect(kvGet("polls")).toEqual({ version: 1, polls: [] });
     expect(kvGet("challenges")).toEqual({ anything: [1, 2, 3] });
-    expect(kvGet("sessions")).toEqual([1, 2]);
+    // The sessions blob is then moved out of kv_store (nothing valid in it).
+    expect(kvGet("sessions")).toBeNull();
+    expect(kvGet("sessions.migrated")).toEqual([1, 2]);
     expect(exists("polls.json")).toBe(false);
     expect(exists("polls.json.imported")).toBe(true);
   });

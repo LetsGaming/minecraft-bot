@@ -53,6 +53,7 @@ import { startHostResourcesMonitor } from "./watchers/monitors/hostResourcesMoni
 import { startPollScheduler } from "./watchers/schedulers/pollScheduler.js";
 import { startTempBanScheduler } from "./watchers/schedulers/tempBanScheduler.js";
 import { pruneCommandUsage } from "@mcbot/core/utils/commands/commandUsage.js";
+import { pruneSessions } from "@mcbot/core/utils/stores/sessionStore.js";
 import { registerSleepWatcher } from "./watchers/log/sleepWatcher.js";
 import { registerConsoleRelay } from "./watchers/log/consoleRelay.js";
 import { startUpdateNotifier } from "./watchers/monitors/updateNotifier.js";
@@ -259,6 +260,17 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
   // housekeeping rather than anything time-critical.
   pruneCommandUsage();
   setInterval(() => pruneCommandUsage(), MS.day).unref();
+
+  // Player sessions past their retention window, on the same cadence.
+  const pruneOldSessions = (): void => {
+    try {
+      pruneSessions();
+    } catch (err) {
+      log.warn("sessions", `Session prune failed: ${errMsg(err)}`);
+    }
+  };
+  pruneOldSessions();
+  setInterval(pruneOldSessions, MS.day).unref();
 
   // ── 8. Daily channel purge ──
   startChannelPurge(client, liveGuildConfigs);

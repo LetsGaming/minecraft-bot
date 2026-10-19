@@ -8,11 +8,12 @@ vi.mock("../../src/web/frontend/src/api", async (importActual) => ({
 
 import {
   useAnalytics,
+  bucketActivity,
   clampNote,
   formatHours,
 } from "../../src/web/frontend/src/composables/useAnalytics.js";
 
-const caps = { activity: 336, uptime: 720, leaderboard: 768, commands: 2160 };
+const caps = { activity: 2160, uptime: 720, leaderboard: 768, commands: 2160, sessions: 8760 };
 
 function route(overrides: Record<string, unknown> = {}) {
   apiGet.mockImplementation(async (path: string) => {
@@ -22,7 +23,7 @@ function route(overrides: Record<string, unknown> = {}) {
       return v;
     }
     if (path.includes("/analytics/players")) {
-      return { players: [], totalPlayers: 0, rangeHours: 72, sessionsKeptPerPlayer: 20 };
+      return { players: [], totalPlayers: 0, rangeHours: 72, historyDays: 365 };
     }
     if (path.includes("/analytics/leaderboard")) {
       return {
@@ -106,11 +107,48 @@ describe("clampNote", () => {
   });
 
   it("names the range actually shown when it was clamped", () => {
-    expect(clampNote(720, 336)).toContain("14d");
+    expect(clampNote(2400, 2160)).toContain("90d");
   });
 
   it("formats whole days and odd hours", () => {
     expect(formatHours(48)).toBe("2d");
     expect(formatHours(30)).toBe("30h");
+  });
+});
+
+describe("bucketActivity", () => {
+  const H = 3_600_000;
+  const D = 24 * H;
+
+  it("returns hourly data unchanged", () => {
+    const hours = [{ at: 0, avg: 1, peak: 2, samples: 3 }];
+    expect(bucketActivity(hours, "hour")).toBe(hours);
+  });
+
+  it("collapses hours into UTC days, weighting the average by samples", () => {
+    const days = bucketActivity(
+      [
+        { at: 0, avg: 2, peak: 4, samples: 1 },
+        { at: H, avg: 8, peak: 9, samples: 3 },
+        { at: D + H, avg: 1, peak: 1, samples: 2 },
+      ],
+      "day",
+    );
+    expect(days).toEqual([
+      { at: 0, avg: (2 * 1 + 8 * 3) / 4, peak: 9, samples: 4 },
+      { at: D, avg: 1, peak: 1, samples: 2 },
+    ]);
+  });
+
+  it("keeps days in order and tolerates empty input", () => {
+    expect(bucketActivity([], "day")).toEqual([]);
+    const out = bucketActivity(
+      [
+        { at: 3 * D, avg: 1, peak: 1, samples: 1 },
+        { at: D, avg: 1, peak: 1, samples: 1 },
+      ],
+      "day",
+    );
+    expect(out.map((d) => d.at)).toEqual([D, 3 * D]);
   });
 });

@@ -49,6 +49,38 @@ export function formatHours(hours: number): string {
   return hours % DAY_HOURS === 0 ? `${hours / DAY_HOURS}d` : `${hours}h`;
 }
 
+const HOUR_MS = 3_600_000;
+const DAY_MS = 24 * HOUR_MS;
+
+/**
+ * Hourly buckets collapsed into days (UTC) so a 90-day range draws about
+ * ninety bars instead of two thousand. The day's average weights each hour by
+ * its sample count; the peak is the highest hourly peak.
+ */
+export function bucketActivity(hours: ActivityHour[], bucket: "hour" | "day"): ActivityHour[] {
+  if (bucket === "hour") return hours;
+  const days = new Map<number, { weighted: number; samples: number; peak: number }>();
+  for (const h of hours) {
+    const day = Math.floor(h.at / DAY_MS) * DAY_MS;
+    const entry = days.get(day) ?? { weighted: 0, samples: 0, peak: 0 };
+    entry.weighted += h.avg * h.samples;
+    entry.samples += h.samples;
+    entry.peak = Math.max(entry.peak, h.peak);
+    days.set(day, entry);
+  }
+  return [...days.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([at, e]) => ({
+      at,
+      avg: e.samples > 0 ? e.weighted / e.samples : 0,
+      peak: e.peak,
+      samples: e.samples,
+    }));
+}
+
+/** Ranges up to this many hours draw hourly bars; longer ones draw daily bars. */
+export const HOURLY_CHART_MAX_HOURS = 14 * DAY_HOURS;
+
 /**
  * The sentence for a section that answered less than was asked, or "" when it
  * covered the whole range.
@@ -77,7 +109,7 @@ export function useAnalytics() {
   const commandsRangeHours = ref<number | null>(null);
   const players = ref<PlayerRow[]>([]);
   const playersRangeHours = ref<number | null>(null);
-  const sessionsKeptPerPlayer = ref<number | null>(null);
+  const historyDays = ref<number | null>(null);
   const board = ref<LeaderboardEntry[]>([]);
   const boardTitle = ref("");
   const boardRangeHours = ref<number | null>(null);
@@ -155,7 +187,7 @@ export function useAnalytics() {
     if (playerList.status === "fulfilled") {
       players.value = playerList.value.players;
       playersRangeHours.value = playerList.value.rangeHours;
-      sessionsKeptPerPlayer.value = playerList.value.sessionsKeptPerPlayer;
+      historyDays.value = playerList.value.historyDays;
       playersFailure.value = null;
     } else {
       players.value = [];
@@ -196,7 +228,7 @@ export function useAnalytics() {
 
   return {
     uptime, activity, activityRangeHours, busiest, commands, commandsRangeHours,
-    players, playersRangeHours, sessionsKeptPerPlayer,
+    players, playersRangeHours, historyDays,
     board, boardTitle, boardRangeHours, boardBaselineAt, boardHistoryShort,
     availableStats, caps, boardError, boardFailure, boardLoading,
     loading, loaded, error, failure, usageFailure, playersFailure, load, loadBoard,
