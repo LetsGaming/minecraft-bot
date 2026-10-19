@@ -8,15 +8,17 @@
  *   - retained only for RETENTION_DAYS, pruned on every write.
  * ts is epoch-ms (timezone-independent pruning); `at` is the display string.
  */
+import { MS } from "@mcbot/schema/time.js";
 import zlib from "zlib";
 import { getDb, withTransaction } from "../../db/index.js";
-import { mapRows, col } from "../../db/rows.js";
+import { mapRow, mapRows, col } from "../../db/rows.js";
+import { blob } from "../blobColumn.js";
 import { formatDatetime } from "../time.js";
 import { log } from "../logger.js";
 import { errMsg } from "../error.js";
 
 export const RETENTION_DAYS = 3;
-const RETENTION_MS = RETENTION_DAYS * 24 * 60 * 60 * 1000;
+const RETENTION_MS = RETENTION_DAYS * MS.day;
 
 export interface ConfigHistoryEntry {
   id: number;
@@ -85,9 +87,11 @@ export function listConfigHistory(): ConfigHistoryEntry[] {
 
 /** The decompressed config JSON for a snapshot id, or null if it's gone. */
 export function getConfigSnapshot(id: number): string | null {
-  const row = getDb()
-    .prepare(`SELECT config_gz FROM config_history WHERE id = ?`)
-    .get(id) as { config_gz: Buffer | Uint8Array } | undefined;
-  if (!row) return null;
-  return zlib.gunzipSync(Buffer.from(row.config_gz)).toString("utf-8");
+  const gz = mapRow(
+    getDb().prepare(`SELECT config_gz FROM config_history WHERE id = ?`),
+    (r) => blob(r, "config_gz"),
+    id,
+  );
+  if (!gz) return null;
+  return zlib.gunzipSync(gz).toString("utf-8");
 }

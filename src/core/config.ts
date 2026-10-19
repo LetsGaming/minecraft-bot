@@ -21,6 +21,7 @@ export type {
 export { tryLoadConfig, type ConfigLoadResult } from "./utils/config/configAccess.js";
 import { DEFAULT_TPS_ALERT_THRESHOLD } from "@mcbot/schema/thresholds.js";
 import { isLanguage } from "@mcbot/schema/language.js";
+import { MS } from "@mcbot/schema/time.js";
 import { errMsg } from "./utils/error.js";
 import {
   SECRET_FILE_MODE,
@@ -36,7 +37,7 @@ import {
 export const CONFIG_DEFAULTS = {
   language: "en",
   tpsWarningThreshold: DEFAULT_TPS_ALERT_THRESHOLD,
-  tpsPollIntervalMs: 60_000,
+  tpsPollIntervalMs: MS.minute,
   leaderboardInterval: "weekly",
 } as const satisfies Pick<
   BotConfig,
@@ -298,7 +299,7 @@ let _reloadTimer: ReturnType<typeof setTimeout> | null = null;
 let _rearmTimer: ReturnType<typeof setTimeout> | null = null;
 
 const WATCH_DEBOUNCE_MS = 300;
-const WATCH_REARM_MS = 1_000;
+const WATCH_REARM_MS = MS.second;
 
 export interface WatchConfigOptions {
   debounceMs?: number;

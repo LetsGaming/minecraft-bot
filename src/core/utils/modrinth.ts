@@ -351,7 +351,7 @@ const ICON_TTL_MS = 6 * MS.hour;
 const ICON_MISS_TTL_MS = MS.hour;
 /** After a failed request the keys rest this long, so a polling view cannot hammer Modrinth. */
 const ICON_FAILURE_TTL_MS = MS.minute;
-const ICON_LOOKUP_TIMEOUT_MS = 4_000;
+const ICON_LOOKUP_TIMEOUT_MS = 4 * MS.second;
 const ICON_HOST = "cdn.modrinth.com";
 const PROJECT_KEY = /^[A-Za-z0-9_.-]{1,64}$/;
 

@@ -7,6 +7,7 @@
  * a changed upstream shape fails here at the boundary, not deep inside a command.
  */
 import { fetchJson } from "../http.js";
+import { MS } from "@mcbot/schema/time.js";
 import type { MojangProfile } from "../../types/index.js";
 import { isRecord } from "../objects.js";
 
@@ -14,7 +15,7 @@ const PROFILE_ENDPOINT =
   "https://api.mojang.com/users/profiles/minecraft";
 
 /** A hung third-party API must not stall a command or the poll loop. */
-const MOJANG_TIMEOUT_MS = 5_000;
+const MOJANG_TIMEOUT_MS = 5 * MS.second;
 
 /**
  * Narrow an unknown JSON body to a `MojangProfile`, or `null` if it doesn't

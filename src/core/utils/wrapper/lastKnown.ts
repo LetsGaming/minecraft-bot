@@ -32,6 +32,7 @@
  * waits), and that is a separate piece of work.
  */
 
+import { MS } from "@mcbot/schema/time.js";
 import type { StaleInfo } from "@mcbot/schema/contract.js";
 import { ConfigAccessError } from "../server/configAccessError.js";
 
@@ -44,7 +45,7 @@ import { ConfigAccessError } from "../server/configAccessError.js";
  * the real error, because at some point "last known" stops being information
  * and starts being archaeology.
  */
-const MAX_AGE_MS = 6 * 60 * 60 * 1000;
+const MAX_AGE_MS = 6 * MS.hour;
 
 interface Entry {
   value: unknown;
