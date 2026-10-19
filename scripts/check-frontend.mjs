@@ -61,6 +61,7 @@ const TRANSLATED = new Set([
   "views/ModConfigView.vue",
   "views/ModsView.vue",
   "views/OverviewView.vue",
+  "views/PlayersView.vue",
   "views/StatusView.vue",
   "components/mods/InstalledModsPanel.vue",
   "components/mods/ModCatalog.vue",

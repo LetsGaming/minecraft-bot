@@ -27,8 +27,8 @@ editor lists them in.
 
 | Capability | Grants |
 |---|---|
-| `server:read` | status, host metrics, the log tail, the console feed, the backup list |
-| `audit:read` | the admin audit log |
+| `server:read` | status, host metrics, the log tail, the console feed, the backup list, the Players page (session history, activity, stats) |
+| `audit:read` | the admin audit log, and on the Players page the linked Discord account, whitelist history, applications, temporary bans, notes and daily streak of a player |
 | `server:control` | start, stop, restart, back up |
 | `backup:create` | reserved for future separation from `server:control` |
 | `config:read` | viewing mod config files (`server.properties` and plugin configs only with secrets redacted, see [mod-configs.md](mod-configs.md#passwords-and-access-settings)) and the server's [daily rewards](daily-rewards.md#editing-in-the-dashboard); under `"*"` also the shared reward pool |
@@ -94,6 +94,12 @@ to spell the strings correctly.
 every server, so reading it needs the capability under `"*"`. Someone granted
 `audit:read` on `survival` alone gets a 403, on purpose: a grant on one server
 must not disclose what happened on another.
+
+**The Players page checks `audit:read` for the server being viewed.** Unlike the
+audit log, which spans every server and needs the grant under `"*"`, a player's
+account and moderation details are per server, so `audit:read` on `survival`
+reveals them for players on `survival` only. Without it the page still shows
+activity and stats, and says the rest is hidden.
 
 **Grants take effect immediately.** They are re-read on every request, so
 revoking someone applies on their next click. No restart, no waiting.

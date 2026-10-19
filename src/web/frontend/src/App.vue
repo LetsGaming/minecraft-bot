@@ -118,6 +118,7 @@ import AppearanceView from "./views/AppearanceView.vue";
 import ConfigView from "./views/ConfigView.vue";
 import AuditView from "./views/AuditView.vue";
 import AnalyticsView from "./views/AnalyticsView.vue";
+import PlayersView from "./views/PlayersView.vue";
 
 /** Props a view can receive, picked off one shared context per view. */
 interface AppViewContext {
@@ -136,6 +137,7 @@ interface ViewEntry {
 const VIEWS: Record<NavId, ViewEntry> = {
   overview: { component: markRaw(OverviewView) },
   analytics: { component: markRaw(AnalyticsView), props: ["serverIds", "activeServer"] },
+  players: { component: markRaw(PlayersView), props: ["serverIds", "activeServer"] },
   console: { component: markRaw(ConsoleView), props: ["serverIds", "activeServer"] },
   audit: { component: markRaw(AuditView) },
   servers: { component: markRaw(StatusView), props: ["activeServer"], keepMounted: true },
@@ -371,6 +373,8 @@ export default defineComponent({
       if (id === "mods") {
         out.check = queryText(query.check);
         out.filter = queryText(query.filter);
+      } else if (id === "players") {
+        out.player = queryText(params.player);
       } else if (id === "modconfig") {
         out.fileId = queryText(params.fileId);
       } else if (id === "rewards") {

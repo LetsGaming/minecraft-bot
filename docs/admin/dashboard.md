@@ -14,6 +14,7 @@ The sidebar groups the pages:
 |---|---|---|
 | Monitor | Overview | `#/overview` |
 | | Analytics | `#/analytics/<server>` |
+| | Players | `#/players/<server>`, `#/players/<server>/<player>` |
 | | Console | `#/console/<server>` |
 | | Audit log | `#/audit` |
 | Manage | Servers | `#/servers` |
@@ -36,6 +37,7 @@ of the address too:
 
 - Mods: the version check and the result filter,
   `#/mods/<server>?check=1.21.4&filter=blockers` (`blockers` or `ready`)
+- Players: the open player, `#/players/<server>/<player>`. The search, filters and sort are not part of the address
 - Mod config: the open file, `#/modconfig/<server>/<file>`
 - Daily rewards: the shared pool or one server's override, `#/rewards/<server>` (see [daily-rewards.md](daily-rewards.md#editing-in-the-dashboard)). This page has its own picker, so it does not follow the sidebar's server picker
 - Config: the filter, `#/config?q=tps`, and the Raw JSON tab, `#/config/raw`

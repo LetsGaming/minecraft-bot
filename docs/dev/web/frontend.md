@@ -17,7 +17,7 @@ src/web/frontend/src/
 ├── preset.ts       PrimeVue preset built from var(--...) references
 ├── style.css       Base layer and the legacy --mc-* aliases
 ├── api.ts          apiGet / apiSend / handle<T>; every request goes through here
-├── views/          One per nav entry (Overview, Servers, Console, Analytics, ...)
+├── views/          One per nav entry (Overview, Servers, Console, Analytics, Players, ...)
 ├── components/
 │   ├── ui/         Shared building blocks (AppShell, EditorShell, StatusChip, ...)
 │   ├── schema/     The config editor's field renderer (SchemaField and friends)

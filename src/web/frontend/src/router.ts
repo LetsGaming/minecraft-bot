@@ -15,6 +15,7 @@ import { confirmLeave } from "./composables/useUnsavedGuard";
 export type NavId =
   | "overview"
   | "analytics"
+  | "players"
   | "console"
   | "audit"
   | "servers"
@@ -56,6 +57,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     items: [
       { id: "overview", labelKey: "nav.overview", icon: "pi pi-th-large", gate: "server:read", serverScoped: false, path: "/overview" },
       { id: "analytics", labelKey: "nav.analytics", icon: "pi pi-chart-bar", gate: "server:read", serverScoped: true, path: "/analytics/:server?" },
+      { id: "players", labelKey: "nav.players", icon: "pi pi-users", gate: "server:read", serverScoped: true, path: "/players/:server?/:player?" },
       { id: "console", labelKey: "nav.console", icon: "pi pi-desktop", gate: "server:read", serverScoped: true, path: "/console/:server?" },
       { id: "audit", labelKey: "nav.audit", icon: "pi pi-history", gate: "audit:read", serverScoped: false, path: "/audit" },
     ],
