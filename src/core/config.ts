@@ -18,7 +18,6 @@ export type {
   ApiUrlValidation,
   ConfigValidationResult,
 } from "./configValidation.js";
-export { tryLoadConfig, type ConfigLoadResult } from "./utils/config/configAccess.js";
 import { DEFAULT_TPS_ALERT_THRESHOLD } from "@mcbot/schema/thresholds.js";
 import { isLanguage } from "@mcbot/schema/language.js";
 import { MS } from "@mcbot/schema/time.js";
