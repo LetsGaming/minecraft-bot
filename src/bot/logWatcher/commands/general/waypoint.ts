@@ -97,7 +97,7 @@ async function setWaypoint(
     createdAt: Date.now(),
     ...(category ? { category: category.toLowerCase() } : {}),
   };
-  // Checked and written in one transaction (AUD-005).
+  // Checked and written in one transaction.
   const result = await updateWaypointStore((store) => {
     const waypoints = getServerWaypoints(store, server.id);
     const existing = waypoints[key];
@@ -154,9 +154,7 @@ async function deleteWaypoint(
     return;
   }
 
-  // Removed in a transaction against the current store: the admin check
-  // above awaited, and saving the copy loaded before it would undo any
-  // waypoint set in the meantime (AUD-005).
+  // Removed in a transaction against the current store: the admin check above awaited.
   await updateWaypointStore((current) => {
     delete getServerWaypoints(current, server.id)[key];
   });

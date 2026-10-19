@@ -1,8 +1,7 @@
 /**
- * /whitelist and /verify were byte-identical duplicates. The shared
- * implementation now lives here; both command files re-export it with their
- * own command name. The two names are kept as intentional aliases (the docs
- * document them as such) so existing muscle memory keeps working.
+ * The shared implementation of /whitelist and /verify, which are intentional
+ * aliases (the docs document them as such). Both command files re-export it
+ * under their own command name.
  */
 import {
   SlashCommandBuilder,

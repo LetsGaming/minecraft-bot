@@ -1,6 +1,7 @@
 import { defineCommand } from "../../defineCommand.js";
 import { whisper } from "@mcbot/core/utils/minecraft/serverMessages.js";
 import { queryFailureText } from "../../queryMessages.js";
+import { t } from "@mcbot/core/utils/i18n.js";
 
 const cmd = defineCommand({
   name: "netherportal",
@@ -30,11 +31,11 @@ const cmd = defineCommand({
     const { x, z } = coords.value;
     let msg: string;
     if (dimension.value.includes("overworld")) {
-      msg = `Nether coords: X: ${Math.floor(x / 8)}, Z: ${Math.floor(z / 8)}`;
+      msg = t("ingame.netherportal.nether", { x: Math.floor(x / 8), z: Math.floor(z / 8) });
     } else if (dimension.value.includes("nether")) {
-      msg = `Overworld coords: X: ${Math.floor(x * 8)}, Z: ${Math.floor(z * 8)}`;
+      msg = t("ingame.netherportal.overworld", { x: Math.floor(x * 8), z: Math.floor(z * 8) });
     } else {
-      msg = "You must be in the Overworld or Nether.";
+      msg = t("ingame.netherportal.wrongDimension");
     }
     await whisper(server, username, msg);
   },

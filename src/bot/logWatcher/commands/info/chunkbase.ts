@@ -6,6 +6,7 @@ import {
 } from "@mcbot/core/utils/minecraft/tellrawLink.js";
 import { tellraw, whisper } from "@mcbot/core/utils/minecraft/serverMessages.js";
 import { queryFailureText } from "../../queryMessages.js";
+import { t } from "@mcbot/core/utils/i18n.js";
 
 const cmd = defineCommand({
   name: "chunkbase",
@@ -47,9 +48,9 @@ const cmd = defineCommand({
     const tellRaw = {
       text: "",
       extra: [
-        { text: "See your location on Chunkbase: ", color: "white" },
+        { text: t("ingame.chunkbase.prefix"), color: "white" },
         {
-          text: "[Click here]",
+          text: t("ingame.chunkbase.click"),
           color: "gold",
           underlined: true,
           ...openUrlClick(url, format),

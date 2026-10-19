@@ -1,15 +1,14 @@
 import { SlashCommandBuilder, type ChatInputCommandInteraction } from "discord.js";
-import { loadStats, flattenStats, filterStats } from "@mcbot/core/utils/minecraft/statUtils.js";
+import { flattenStats, filterStats } from "@mcbot/core/utils/minecraft/statUtils.js";
 import { getSnapshotForDailyDiff } from "@mcbot/core/utils/minecraft/snapshotUtils.js";
 import { buildStatsEmbeds } from "../../utils/embeds/statEmbeds.js";
 import { findPlayer } from "@mcbot/core/utils/minecraft/playerUtils.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
-import { log } from "@mcbot/core/utils/logger.js";
 import { replyPaged } from "../shared/paged.js";
 import { withErrorHandling } from "../middleware.js";
-import { noStatsYet, playerNotFound } from "./statErrors.js";
+import { loadStatsOrFail, noStatsYet, playerNotFound } from "./statErrors.js";
 import type { FlattenedStat } from "@mcbot/core/types/index.js";
-import { CommandError, errMsg } from "@mcbot/core/utils/error.js";
+import { CommandError } from "@mcbot/core/utils/error.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { MS } from "@mcbot/schema/time.js";
 
@@ -85,10 +84,7 @@ async function runPlayer(
   const player = await findPlayer(playerName, server);
   if (!player) throw playerNotFound(playerName);
 
-  const statsFile = await loadStats(player.uuid, server).catch((err: unknown) => {
-    log.error("stats", errMsg(err));
-    throw new CommandError({ problem: t("stats.failed"), recovery: t("common.retryLater") });
-  });
+  const statsFile = await loadStatsOrFail(player.uuid, server);
   if (!statsFile) throw noStatsYet(playerName);
 
   const flattened = filterStats(flattenStats(statsFile), filterStat);
@@ -119,7 +115,7 @@ async function runDaily(
   const player = await findPlayer(playerName, server);
   if (!player) throw playerNotFound(playerName);
 
-  const statsFile = await loadStats(player.uuid, server);
+  const statsFile = await loadStatsOrFail(player.uuid, server);
   if (!statsFile) throw noStatsYet(playerName);
 
   const snapshot = await getSnapshotForDailyDiff(server.id, Date.now() - MS.day);

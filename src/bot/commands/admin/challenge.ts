@@ -29,6 +29,7 @@ import {
   type Challenge,
 } from "@mcbot/core/utils/stores/challengeStore.js";
 import { t } from "@mcbot/core/utils/i18n.js";
+import { MS } from "@mcbot/schema/time.js";
 import { tellraw } from "@mcbot/core/utils/minecraft/serverMessages.js";
 import { formatItemStack, itemDisplayName } from "@mcbot/core/utils/minecraft/itemNames.js";
 
@@ -209,7 +210,7 @@ export const execute = withErrorHandling(
       startedBy: interaction.user.tag,
       startedById: interaction.user.id,
       startedAt: Date.now(),
-      ...(duration ? { endsAt: Date.now() + duration * 3_600_000 } : {}),
+      ...(duration ? { endsAt: Date.now() + duration * MS.hour } : {}),
       status: "active",
     };
     const existing = updateChallengeStore((store) => {

@@ -149,9 +149,7 @@ export const execute = withErrorHandling(
         .slice(0, MAX_NOTE_LENGTH);
       if (!text) throw new Error(t("note.emptyText"));
 
-      // Written against the current store: resolveNotes awaited a name
-      // lookup, and saving the copy loaded before it could drop a note
-      // another admin added meanwhile (AUD-005).
+      // Written against the current store: resolveNotes awaited a name lookup.
       const uuid = resolved.uuid;
       await updateNotesStore((current) =>
         addNote(current, uuid, resolved.name, {

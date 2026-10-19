@@ -109,6 +109,7 @@ export const execute = withErrorHandling(
         serverId: server.id,
         expiresAt,
         bannedAt: Date.now(),
+        by: interaction.user.tag,
         reason,
       };
       await putTempBan(ban);

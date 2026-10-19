@@ -1,6 +1,7 @@
 import { defineCommand } from "../../defineCommand.js";
 import { whisper } from "@mcbot/core/utils/minecraft/serverMessages.js";
 import { queryFailureText } from "../../queryMessages.js";
+import { t } from "@mcbot/core/utils/i18n.js";
 
 const cmd = defineCommand({
   name: "seed",
@@ -17,7 +18,7 @@ const cmd = defineCommand({
       );
       return;
     }
-    await whisper(server, username, `World seed: ${seed.value}`);
+    await whisper(server, username, t("ingame.seed.world", { seed: seed.value }));
   },
 });
 

@@ -7,8 +7,7 @@ import { withErrorHandling } from "../middleware.js";
 import { pageBy, replyPaged } from "../shared/paged.js";
 import { loadWhitelist } from "@mcbot/core/utils/minecraft/whitelist.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
-import { log } from "@mcbot/core/utils/logger.js";
-import { CommandError, errMsg } from "@mcbot/core/utils/error.js";
+import { loadOrFail } from "../shared/loadOrFail.js";
 
 import { t } from "@mcbot/core/utils/i18n.js";
 export const data = new SlashCommandBuilder()
@@ -24,10 +23,9 @@ const NAMES_PER_PAGE = 20;
 
 export const execute = withErrorHandling(async (interaction) => {
   const server = resolveServer(interaction);
-  const players = await loadWhitelist(false, server).catch((err: unknown) => {
-    log.error("whitelisted", errMsg(err));
-    throw new CommandError({ problem: t("whitelisted.readFailed"), recovery: t("common.retryLater") });
-  });
+  const players = await loadOrFail("whitelisted", t("whitelisted.readFailed"), () =>
+    loadWhitelist(false, server),
+  );
 
   if (!Array.isArray(players) || players.length === 0) {
     await interaction.editReply({

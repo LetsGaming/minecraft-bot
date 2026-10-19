@@ -104,8 +104,7 @@ export const execute = withErrorHandling(async (interaction) => {
 
   // Only a responsive server can be asked for a player list. The other three
   // states each need their own answer — "Offline", "up but not answering",
-  // and "we could not reach the API wrapper" are different facts, and this
-  // reply used to give all of them as "**Offline**".
+  // and "we could not reach the API wrapper" are different facts.
   if (!canQueryServer(health)) {
     // A direct ping can still supply counts with the wrapper down, so show
     // them — "online, 4 players, controls unavailable" is the whole point.

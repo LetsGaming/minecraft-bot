@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from "discord.js";
+import { SlashCommandBuilder, type SlashCommandOptionsOnlyBuilder } from "discord.js";
 import { LEADERBOARD_STATS, buildLeaderboard } from "@mcbot/core/utils/minecraft/statUtils.js";
 import {
   isStreakStatKey,
@@ -21,7 +21,7 @@ const choices = [
 ];
 
 /** The slash command definition shared by `/top` and `/leaderboard`. */
-export function buildLeaderboardData(name: string): SlashCommandBuilder {
+export function buildLeaderboardData(name: string): SlashCommandOptionsOnlyBuilder {
   return new SlashCommandBuilder()
     .setName(name)
     .setDescription("Show top players by a stat")
