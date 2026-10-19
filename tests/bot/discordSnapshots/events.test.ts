@@ -60,6 +60,7 @@ vi.mock("../../../src/core/utils/minecraft/serverMessages.js", async (importOrig
 import { registerJoinLeaveWatcher } from "../../../src/bot/logWatcher/watchers/log/joinLeave.js";
 import { registerDeathWatcher } from "../../../src/bot/logWatcher/watchers/log/deaths.js";
 import { registerAdvancementWatcher } from "../../../src/bot/logWatcher/watchers/log/advancements.js";
+import { flushSendQueues } from "../../../src/bot/logWatcher/watchers/sendQueue.js";
 
 beforeAll(() => {
   vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"], now: NOW });
@@ -119,6 +120,7 @@ describe("Discord snapshots: event notifications", () => {
         const match = line.match(regex);
         if (match) await handler(match, client, server);
       }
+      await flushSendQueues();
       out[event] = current;
     }
     await expect(stringify(out)).toMatchFileSnapshot(fixturePath("events"));

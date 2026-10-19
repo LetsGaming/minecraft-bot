@@ -22,3 +22,6 @@ Terms specific to this project that are easy to misread.
 | Source label | The short guild name shown next to a relayed sender, set by the guild's admin. It tells readers which Discord server a message came from. |
 | Relay identity | The name shown for a relayed Discord user: the linked Minecraft name, otherwise a censored Discord display name. Never an avatar or a Discord id. |
 | Terrain tile | A 512 x 512 PNG of one region seen from above, drawn by the setup suite (`prune-chunks.js --tile`) and cached under `common/prune/tiles/` by the region file's fingerprint. Shown under the prune map's classes in the Terrain view. |
+| Dispatch queue | The one-at-a-time queue a server's log watcher runs its handlers on (`RemoteLogWatcher`). A handler that waits on Discord or the server holds up every other watcher for that server, so handlers queue their sends and run tail work detached (`watchers/sendQueue.ts`). |
+| Send queue | A per-Discord-channel ordered queue (`watchers/sendQueue.ts`): sends to one channel keep their order, and a slow channel delays only itself. |
+| Poller | `startPoller` in `watchers/poller.ts`: a self re-arming timer that arms the next tick only after the previous one settled, logs a failed tick, and returns `{ stop }`. |

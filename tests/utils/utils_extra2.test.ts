@@ -301,6 +301,6 @@ describe("downtimeMonitor — state machine", () => {
     const guilds = { g1: { downtimeAlerts: { channelId: "ch1" } } } as never;
     const timer = startDowntimeMonitor([server], client, guilds);
     expect(timer).toBeTruthy();
-    clearInterval(timer);
+    timer.stop();
   });
 });

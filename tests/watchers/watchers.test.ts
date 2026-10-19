@@ -39,6 +39,7 @@ import {
 import { registerDeathWatcher } from "../../src/bot/logWatcher/watchers/log/deaths.js";
 import { registerServerEventWatcher } from "../../src/bot/logWatcher/watchers/log/serverEvents.js";
 import { registerAdvancementWatcher } from "../../src/bot/logWatcher/watchers/log/advancements.js";
+import { flushSendQueues } from "../../src/bot/logWatcher/watchers/sendQueue.js";
 import type { ILogWatcher } from "../../src/bot/logWatcher/logWatcher.js";
 import type { Client } from "discord.js";
 
@@ -155,6 +156,7 @@ describe("joinLeave watcher — handler invocation", () => {
     const line = "[12:00:00] [Server thread/INFO]: Steve joined the game";
     const match = joinRegex.exec(line)!;
     await watcher._handlers[0]!.handler(match, client, watcher.server);
+    await flushSendQueues();
 
     expect(channel.send).toHaveBeenCalledOnce();
   });
@@ -168,6 +170,7 @@ describe("joinLeave watcher — handler invocation", () => {
     const joinRegex = watcher._handlers[0]!.regex;
     const match = joinRegex.exec("[12:00:00] [Server thread/INFO]: Alice joined the game")!;
     await watcher._handlers[0]!.handler(match, client, watcher.server);
+    await flushSendQueues();
 
     expect(channel.send).not.toHaveBeenCalled();
   });
@@ -227,6 +230,7 @@ describe("chatBridge watcher — handler invocation", () => {
     const chatRegex = watcher._handlers[0]!.regex;
     const match = chatRegex.exec("[12:00:00] [Server thread/INFO]: <Steve> Hello world")!;
     await watcher._handlers[0]!.handler(match, client, watcher.server);
+    await flushSendQueues();
     // The handler queues the send and returns — deliberately, so a Discord
     // round-trip cannot stall the log-watcher dispatch loop. Drain it here.
     await flushBridgeQueues();
@@ -243,6 +247,7 @@ describe("chatBridge watcher — handler invocation", () => {
     const chatRegex = watcher._handlers[0]!.regex;
     const match = chatRegex.exec("[12:00:00] [Server thread/INFO]: <Steve> !coords")!;
     await watcher._handlers[0]!.handler(match, client, watcher.server);
+    await flushSendQueues();
 
     expect(channel.send).not.toHaveBeenCalled();
   });
@@ -256,6 +261,7 @@ describe("chatBridge watcher — handler invocation", () => {
     const chatRegex = watcher._handlers[0]!.regex;
     const match = chatRegex.exec("[12:00:00] [Server thread/INFO]: <Steve> Hello")!;
     await watcher._handlers[0]!.handler(match, client, watcher.server);
+    await flushSendQueues();
 
     expect(channel.send).not.toHaveBeenCalled();
   });
@@ -327,6 +333,7 @@ describe("deaths watcher — handler invocation", () => {
       "[12:00:00] [Server thread/INFO]: Steve was slain by Zombie",
     )!;
     await watcher._handlers[0]!.handler(match, client, watcher.server);
+    await flushSendQueues();
 
     expect(channel.send).toHaveBeenCalledOnce();
   });
@@ -382,6 +389,7 @@ describe("serverEvents watcher — handler invocation", () => {
     const startRegex = watcher._handlers[0]!.regex;
     const match = startRegex.exec("[12:00:00] [Server thread/INFO]: Done (1.0s)!")!;
     await watcher._handlers[0]!.handler(match, client, watcher.server);
+    await flushSendQueues();
 
     expect(channel.send).toHaveBeenCalledOnce();
   });
@@ -396,10 +404,12 @@ describe("serverEvents watcher — handler invocation", () => {
     const startRegex = watcher._handlers[0]!.regex;
     const startMatch = startRegex.exec("[12:00:00] [Server thread/INFO]: Done (1.0s)!")!;
     await watcher._handlers[0]!.handler(startMatch, client, watcher.server);
+    await flushSendQueues();
 
     const stopRegex = watcher._handlers[1]!.regex;
     const stopMatch = stopRegex.exec("[12:00:01] [Server thread/INFO]: Stopping server")!;
     await watcher._handlers[1]!.handler(stopMatch, client, watcher.server);
+    await flushSendQueues();
 
     expect(channel.send).toHaveBeenCalledTimes(2);
   });
@@ -486,6 +496,7 @@ describe("advancements watcher — handler invocation", () => {
       "[12:00:00] [Server thread/INFO]: Steve has made the advancement [Stone Age]",
     )!;
     await watcher._handlers[0]!.handler(match, client, watcher.server);
+    await flushSendQueues();
 
     expect(channel.send).toHaveBeenCalledOnce();
   });
@@ -503,6 +514,7 @@ describe("advancements watcher — handler invocation", () => {
       "[12:00:00] [Server thread/INFO]: Steve has made the advancement [Stone Age]",
     )!;
     await watcher._handlers[0]!.handler(match, client, watcher.server);
+    await flushSendQueues();
 
     expect(channel.send).not.toHaveBeenCalled();
   });
@@ -534,6 +546,7 @@ describe("notification server filter", () => {
       "[12:00:00] [Server thread/INFO]: Steve joined the game",
     )!;
     await watcher._handlers[0]!.handler(match, client, watcher.server);
+    await flushSendQueues();
 
     expect(channel.send).not.toHaveBeenCalled();
   });
@@ -549,6 +562,7 @@ describe("notification server filter", () => {
       "[12:00:00] [Server thread/INFO]: Steve joined the game",
     )!;
     await watcher._handlers[0]!.handler(match, client, watcher.server);
+    await flushSendQueues();
 
     expect(channel.send).toHaveBeenCalledOnce();
   });

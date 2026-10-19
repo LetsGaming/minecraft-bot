@@ -119,7 +119,7 @@ describe("hostResourcesMonitor disk alerts", () => {
 
     await vi.advanceTimersByTimeAsync(TICK * 2);
     expect(send).toHaveBeenCalledTimes(1);
-    clearInterval(timer);
+    timer.stop();
   });
 
   it("re-arms only after usage drops 5 points below the threshold, with an all-clear", async () => {
@@ -140,7 +140,7 @@ describe("hostResourcesMonitor disk alerts", () => {
     getHostResources.mockResolvedValue({ disks: [disk(90)] });
     await vi.advanceTimersByTimeAsync(TICK);
     expect(send).toHaveBeenCalledTimes(3);
-    clearInterval(timer);
+    timer.stop();
   });
 
   it("alerts once per filesystem when two monitored paths share a mount", async () => {
@@ -150,7 +150,7 @@ describe("hostResourcesMonitor disk alerts", () => {
     const { timer } = start();
     await vi.advanceTimersByTimeAsync(TICK);
     expect(send).toHaveBeenCalledTimes(1);
-    clearInterval(timer);
+    timer.stop();
   });
 
   it("alerts per path when the wrapper reports no mount point", async () => {
@@ -160,7 +160,7 @@ describe("hostResourcesMonitor disk alerts", () => {
     const { timer } = start();
     await vi.advanceTimersByTimeAsync(TICK);
     expect(send).toHaveBeenCalledTimes(2);
-    clearInterval(timer);
+    timer.stop();
   });
 
   it("does nothing when disk alerts and backup alerts are both off", async () => {
@@ -169,7 +169,7 @@ describe("hostResourcesMonitor disk alerts", () => {
     const { timer } = start();
     await vi.advanceTimersByTimeAsync(TICK);
     expect(getHostResources).not.toHaveBeenCalled();
-    clearInterval(timer);
+    timer.stop();
   });
 
   it("falls back to the default threshold when the config cannot be read", async () => {
@@ -178,7 +178,7 @@ describe("hostResourcesMonitor disk alerts", () => {
     const { timer } = start();
     await vi.advanceTimersByTimeAsync(TICK);
     expect(send).toHaveBeenCalledTimes(1);
-    clearInterval(timer);
+    timer.stop();
   });
 
   it("skips guilds whose alert channel is scoped to another server", async () => {
@@ -187,7 +187,7 @@ describe("hostResourcesMonitor disk alerts", () => {
     const { timer } = start();
     await vi.advanceTimersByTimeAsync(TICK);
     expect(send).not.toHaveBeenCalled();
-    clearInterval(timer);
+    timer.stop();
   });
 
   it("ignores guilds without a downtime alert channel and channels that cannot send", async () => {
@@ -195,13 +195,13 @@ describe("hostResourcesMonitor disk alerts", () => {
     const noChannel = start(makeClient(), [server()], { g1: {} });
     await vi.advanceTimersByTimeAsync(TICK);
     expect(noChannel.client.channels.fetch).not.toHaveBeenCalled();
-    clearInterval(noChannel.timer);
+    noChannel.timer.stop();
 
     _resetStateForTesting();
     const mute = start(makeClient({}), [server()], guilds);
     await vi.advanceTimersByTimeAsync(TICK);
     expect(send).not.toHaveBeenCalled();
-    clearInterval(mute.timer);
+    mute.timer.stop();
   });
 
   it("keeps checking other servers when one fails, and treats a missing host block as no disks", async () => {
@@ -213,7 +213,7 @@ describe("hostResourcesMonitor disk alerts", () => {
     await vi.advanceTimersByTimeAsync(TICK);
     expect(getHostResources).toHaveBeenCalledTimes(3);
     expect(send).toHaveBeenCalledTimes(1);
-    clearInterval(timer);
+    timer.stop();
   });
 
   it("reads the guild list per tick so a reload can add an alert target", async () => {
@@ -231,7 +231,7 @@ describe("hostResourcesMonitor disk alerts", () => {
     current = guilds;
     await vi.advanceTimersByTimeAsync(TICK);
     expect(send).toHaveBeenCalledTimes(1);
-    clearInterval(timer);
+    timer.stop();
   });
 });
 
@@ -255,7 +255,7 @@ describe("hostResourcesMonitor backup age", () => {
     readBackups.mockResolvedValue({ dirs: [{ latestMtime: hoursAgo(0.2) }] });
     await vi.advanceTimersByTimeAsync(TICK);
     expect(send).toHaveBeenCalledTimes(2);
-    clearInterval(timer);
+    timer.stop();
   });
 
   it("uses the newest of several backup directories", async () => {
@@ -265,7 +265,7 @@ describe("hostResourcesMonitor backup age", () => {
     const { timer } = start();
     await vi.advanceTimersByTimeAsync(TICK);
     expect(send).not.toHaveBeenCalled();
-    clearInterval(timer);
+    timer.stop();
   });
 
   it("skips servers without the backup layout, with no backups, or with an unreadable directory", async () => {
@@ -273,17 +273,17 @@ describe("hostResourcesMonitor backup age", () => {
     const noBackups = start(makeClient(), [server("smp", { backups: false })]);
     await vi.advanceTimersByTimeAsync(TICK);
     expect(readBackups).not.toHaveBeenCalled();
-    clearInterval(noBackups.timer);
+    noBackups.timer.stop();
 
     readBackups.mockResolvedValue({ dirs: [] });
     const empty = start();
     await vi.advanceTimersByTimeAsync(TICK);
-    clearInterval(empty.timer);
+    empty.timer.stop();
 
     readBackups.mockRejectedValue(new Error("EACCES"));
     const unreadable = start();
     await vi.advanceTimersByTimeAsync(TICK);
-    clearInterval(unreadable.timer);
+    unreadable.timer.stop();
     expect(send).not.toHaveBeenCalled();
   });
 
@@ -292,7 +292,7 @@ describe("hostResourcesMonitor backup age", () => {
     const { timer } = start(makeClient(), [server("smp", null)]);
     await vi.advanceTimersByTimeAsync(TICK);
     expect(send).toHaveBeenCalledTimes(1);
-    clearInterval(timer);
+    timer.stop();
   });
 });
 
@@ -306,7 +306,7 @@ describe("updateNotifier", () => {
   async function tick(client = makeClient()) {
     const timer = startUpdateNotifier(client as unknown as Client);
     await vi.advanceTimersByTimeAsync(INITIAL);
-    clearInterval(timer);
+    timer.stop();
     return client;
   }
 

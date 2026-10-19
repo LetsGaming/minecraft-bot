@@ -255,7 +255,7 @@ export function createUpgradeMonitor(
     // A job nobody here has seen. A running one is news; a finished one only
     // if it ended moments ago (the bot restarted mid-upgrade), not history.
     const lastTs = job.events.length > 0 ? job.events[job.events.length - 1]!.ts : 0;
-    const fresh = deps.now() / 1000 - lastTs < FRESH_RESULT_SECONDS;
+    const fresh = deps.now() / MS.second - lastTs < FRESH_RESULT_SECONDS;
     const alreadyDone = job.state !== "running" && !fresh;
     const track: Tracked = {
       jobId: job.jobId,

@@ -39,6 +39,7 @@ import { tellraw } from "@mcbot/core/utils/minecraft/serverMessages.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 import { MAX_TIMEOUT_MS } from "@mcbot/core/utils/longTimer.js";
+import { MS } from "@mcbot/schema";
 
 
 const closeTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -104,7 +105,7 @@ export function attachCollectorToMessage(
 ): void {
   const collector = message.createMessageComponentCollector({
     componentType: ComponentType.Button,
-    time: Math.min(Math.max(endsAt - Date.now(), 1_000), MAX_TIMEOUT_MS),
+    time: Math.min(Math.max(endsAt - Date.now(), MS.second), MAX_TIMEOUT_MS),
     filter: (i) => i.customId.startsWith(`poll:${pollId}:`),
   });
 

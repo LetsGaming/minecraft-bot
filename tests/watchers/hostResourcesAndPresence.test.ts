@@ -17,7 +17,7 @@ vi.mock("../../src/core/config.js", () => ({
 import { loadConfig } from "../../src/core/config.js";
 import { getHostResources } from "../../src/core/utils/server/hostResources.js";
 import { formatBytes } from "@mcbot/schema";
-import { updateBotPresence } from "../../src/bot/logWatcher/watchers/schedulers/statusEmbed.js";
+import { updateBotPresence } from "../../src/bot/logWatcher/watchers/schedulers/botPresence.js";
 import type { ServerInstance } from "../../src/core/utils/server/server.js";
 import type { Client } from "discord.js";
 

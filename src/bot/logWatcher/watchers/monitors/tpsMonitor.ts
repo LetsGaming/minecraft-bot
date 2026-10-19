@@ -151,7 +151,7 @@ export function startTpsMonitor(
   const { threshold, intervalMs } = readSettings();
   log.info(
     serverInstance.id,
-    `TPS monitoring active (threshold: ${threshold}, interval: ${intervalMs / 1000}s)`,
+    `TPS monitoring active (threshold: ${threshold}, interval: ${intervalMs / MS.second}s)`,
   );
   return poller;
 }

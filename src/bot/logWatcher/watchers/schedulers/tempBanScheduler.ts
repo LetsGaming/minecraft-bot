@@ -126,7 +126,7 @@ export async function expireTempBan(
   if (outcome.kind === "unreachable") {
     log.warn(
       "tempban",
-      `Pardon for ${ban.player} on ${ban.serverId} not delivered (${outcome.reason}); retrying in ${PARDON_RETRY_MS / 1000}s`,
+      `Pardon for ${ban.player} on ${ban.serverId} not delivered (${outcome.reason}); retrying in ${PARDON_RETRY_MS / MS.second}s`,
     );
     armTempBan(client, ban, Date.now() + PARDON_RETRY_MS);
     return;

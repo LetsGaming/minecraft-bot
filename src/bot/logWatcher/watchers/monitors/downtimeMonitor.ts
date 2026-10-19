@@ -104,7 +104,7 @@ export function suppressAlerts(
   state.stopRequestedAt = Date.now();
   log.info(
     "downtime",
-    `Alerts suppressed for ${serverId} (${graceMs / 1000}s grace)`,
+    `Alerts suppressed for ${serverId} (${graceMs / MS.second}s grace)`,
   );
 }
 

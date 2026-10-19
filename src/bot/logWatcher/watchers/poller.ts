@@ -1,5 +1,6 @@
 import { log } from "@mcbot/core/utils/logger.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
+import { MS } from "@mcbot/schema";
 
 export interface Poller {
   stop(): void;
@@ -13,7 +14,7 @@ export interface PollerOptions {
 }
 
 /** Interval used when a dynamic interval has never resolved successfully. */
-const FALLBACK_INTERVAL_MS = 60_000;
+const FALLBACK_INTERVAL_MS = MS.minute;
 
 /**
  * Run `fn` repeatedly. The next tick is armed only after the previous one has

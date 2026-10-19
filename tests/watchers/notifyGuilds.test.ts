@@ -27,7 +27,12 @@ vi.mock("../../src/bot/utils/guild/guildRouter.js", () => ({
 
 import type { Client } from "discord.js";
 import { DEFAULT_NOTIFICATION_EVENTS } from "@mcbot/schema";
-import { broadcastNotification } from "../../src/bot/logWatcher/watchers/notifyGuilds.js";
+import {
+  broadcastNotification,
+  sendToGuildChannels,
+} from "../../src/bot/logWatcher/watchers/notifyGuilds.js";
+import { roleMention } from "../../src/bot/utils/embeds/alertUtils.js";
+import { log } from "../../src/core/utils/logger.js";
 import type { GuildConfig } from "@mcbot/core/types/index.js";
 
 /** A Client whose channels.fetch always yields a channel with a spied send. */
@@ -97,5 +102,71 @@ describe("broadcastNotification — events filter (BUG-05)", () => {
   it("delivers nothing when no channel is configured", async () => {
     const guilds = { g1: { notifications: { events: ["join"] } } };
     expect(await deliver(guilds, "join")).toBe(0);
+  });
+});
+
+describe("sendToGuildChannels", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const alertGuilds = {
+    g1: { downtimeAlerts: { channelId: "c1", mentionRole: "role-1" } },
+    g2: { downtimeAlerts: {} },
+    g3: {},
+  } as Record<string, GuildConfig>;
+
+  it("sends to each guild with a channel, building per guild and pinging the guild's role", async () => {
+    const { client, send } = fakeClient();
+    const build = vi.fn(() => ({ embeds: [{} as never] }));
+    await sendToGuildChannels(client, alertGuilds, {
+      pick: (gcfg) => gcfg.downtimeAlerts,
+      serverId: "smp",
+      logTag: "test",
+      build,
+      mention: (target) => roleMention(target.mentionRole),
+    });
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(build).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0]![0]).toMatchObject({
+      content: "<@&role-1>",
+      allowedMentions: { parse: [], roles: ["role-1"] },
+    });
+  });
+
+  it("is silent when no mention is supplied", async () => {
+    const { client, send } = fakeClient();
+    await sendToGuildChannels(client, alertGuilds, {
+      pick: (gcfg) => gcfg.downtimeAlerts,
+      serverId: "smp",
+      logTag: "test",
+      build: () => ({ content: "hi" }),
+    });
+    expect(send.mock.calls[0]![0]).toEqual({ content: "hi", allowedMentions: { parse: [] } });
+  });
+
+  it("skips a channel that cannot take messages and logs a failing send without throwing", async () => {
+    const client = {
+      channels: { fetch: vi.fn().mockResolvedValue({ name: "voice" }) },
+    } as unknown as Client;
+    await expect(
+      sendToGuildChannels(client, alertGuilds, {
+        pick: (gcfg) => gcfg.downtimeAlerts,
+        serverId: "smp",
+        logTag: "test",
+        build: () => ({ content: "x" }),
+      }),
+    ).resolves.toBeUndefined();
+
+    const failing = {
+      channels: {
+        fetch: vi.fn().mockResolvedValue({ send: vi.fn().mockRejectedValue(new Error("403")) }),
+      },
+    } as unknown as Client;
+    await sendToGuildChannels(failing, alertGuilds, {
+      pick: (gcfg) => gcfg.downtimeAlerts,
+      serverId: "smp",
+      logTag: "test",
+      build: () => ({ content: "x" }),
+    });
+    expect(log.error).toHaveBeenCalledWith("test", expect.stringContaining("403"));
   });
 });

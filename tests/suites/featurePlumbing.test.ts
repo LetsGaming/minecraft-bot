@@ -187,8 +187,14 @@ describe("advancement watcher — challenge win", () => {
       },
     };
     registerAdvancementWatcher(logWatcher as never, {} as never, {});
+    const { flushSendQueues } = await import(
+      "../../src/bot/logWatcher/watchers/sendQueue.js"
+    );
     return {
-      run: (line: string) => handler(regex.exec(line)!),
+      run: async (line: string) => {
+        await handler(regex.exec(line)!);
+        await flushSendQueues();
+      },
       server: logWatcher.server,
       broadcastNotification,
       recordAdminAction: vi.mocked(recordAdminAction),
@@ -332,6 +338,10 @@ describe("advancement watcher — challenge win", () => {
     };
     registerAdvancementWatcher(logWatcher as never, {} as never, {});
     await handler(regex.exec(line("Alice", "Stone Age"))!);
+    const { flushSendQueues } = await import(
+      "../../src/bot/logWatcher/watchers/sendQueue.js"
+    );
+    await flushSendQueues();
 
     const pending = kvGet("pendingRewards") as {
       servers: Record<string, Record<string, Array<{ items: unknown[] }>>>;
