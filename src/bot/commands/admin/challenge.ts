@@ -1,5 +1,5 @@
 /**
- * /challenge — advancement challenges (admin).
+ * /challenge: advancement challenges (admin).
  *
  *   start   advancement:<name in chat> [reward:<text>] [item:<id>]
  *           [amount:<n>] [duration:<hours>] [server:<id>]
@@ -17,12 +17,11 @@ import { createEmbed } from "../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../utils/embeds/embedColors.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
-import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
+import { auditAdminAction } from "../shared/audit.js";
 import { broadcastNotification } from "../../logWatcher/watchers/notifyGuilds.js";
 import { loadConfig } from "@mcbot/core/config.js";
 import {
-  loadChallengeStore,
-  saveChallengeStore,
+  updateChallengeStore,
   expireStale,
   getActiveChallenge,
   getLatestChallenge,
@@ -30,6 +29,7 @@ import {
   type Challenge,
 } from "@mcbot/core/utils/stores/challengeStore.js";
 import { t } from "@mcbot/core/utils/i18n.js";
+import { MS } from "@mcbot/schema/time.js";
 import { tellraw } from "@mcbot/core/utils/minecraft/serverMessages.js";
 import { formatItemStack, itemDisplayName } from "@mcbot/core/utils/minecraft/itemNames.js";
 
@@ -148,14 +148,15 @@ export const execute = withErrorHandling(
   requireServerAdmin(async (interaction) => {
     const sub = interaction.options.getSubcommand();
     const server = resolveServer(interaction);
-    const store = await loadChallengeStore();
-    const expired = expireStale(store, server.id);
 
     if (sub === "status") {
-      if (expired) await saveChallengeStore(store);
-      const latest =
-        getActiveChallenge(store, server.id) ??
-        getLatestChallenge(store, server.id);
+      const latest = updateChallengeStore((store) => {
+        expireStale(store, server.id);
+        return (
+          getActiveChallenge(store, server.id) ??
+          getLatestChallenge(store, server.id)
+        );
+      });
       if (!latest) {
         throw new Error(t("challenge.noneYet", { server: server.id }));
       }
@@ -164,19 +165,18 @@ export const execute = withErrorHandling(
     }
 
     if (sub === "cancel") {
-      const active = getActiveChallenge(store, server.id);
+      const active = updateChallengeStore((store) => {
+        expireStale(store, server.id);
+        const current = getActiveChallenge(store, server.id);
+        if (current) current.status = "cancelled";
+        return current;
+      });
       if (!active) {
-        if (expired) await saveChallengeStore(store);
         throw new Error(t("challenge.noneActive", { server: server.id }));
       }
-      active.status = "cancelled";
-      await saveChallengeStore(store);
-      await recordAdminAction({
+      await auditAdminAction(interaction, {
         action: "challenge cancel",
         server: server.id,
-        by: interaction.user.tag,
-        byId: interaction.user.id,
-        guildId: interaction.guild?.id ?? null,
         detail: active.advancement,
       });
       await interaction.editReply({
@@ -194,14 +194,6 @@ export const execute = withErrorHandling(
     }
 
     // start
-    const existing = getActiveChallenge(store, server.id);
-    if (existing) {
-      if (expired) await saveChallengeStore(store);
-      throw new Error(
-        t("challenge.alreadyActive", { advancement: existing.advancement }),
-      );
-    }
-
     const advancement = interaction.options
       .getString("advancement", true)
       .trim();
@@ -218,18 +210,24 @@ export const execute = withErrorHandling(
       startedBy: interaction.user.tag,
       startedById: interaction.user.id,
       startedAt: Date.now(),
-      ...(duration ? { endsAt: Date.now() + duration * 3_600_000 } : {}),
+      ...(duration ? { endsAt: Date.now() + duration * MS.hour } : {}),
       status: "active",
     };
-    addChallenge(store, server.id, challenge);
-    await saveChallengeStore(store);
+    const existing = updateChallengeStore((store) => {
+      expireStale(store, server.id);
+      const active = getActiveChallenge(store, server.id);
+      if (!active) addChallenge(store, server.id, challenge);
+      return active;
+    });
+    if (existing) {
+      throw new Error(
+        t("challenge.alreadyActive", { advancement: existing.advancement }),
+      );
+    }
 
-    await recordAdminAction({
+    await auditAdminAction(interaction, {
       action: "challenge start",
       server: server.id,
-      by: interaction.user.tag,
-      byId: interaction.user.id,
-      guildId: interaction.guild?.id ?? null,
       detail: advancement,
     });
 

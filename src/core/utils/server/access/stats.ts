@@ -1,7 +1,9 @@
 /** Level name and per-player stats files. */
 
 import type { ServerConfig, MinecraftStatsFile } from "../../../types/index.js";
-import { apiGetRaw, readApiJson, apiGet, apiDelete } from "./apiClient.js";
+import { ApiError, apiGetOrNull, apiGet, apiDelete } from "./apiClient.js";
+import { log } from "../../logger.js";
+import { errMsg } from "../../error.js";
 
 /**
  * Defense-in-depth at the sink: every UUID used here currently comes from
@@ -32,17 +34,10 @@ export async function readStats(
 ): Promise<MinecraftStatsFile | null> {
   assertUuidFormat(uuid); // guard the path/route sink
   // A player with no stats file is a normal answer, not a failure: they have
-  // simply never played here, and the wrapper says 404. Letting that throw
-  // surfaced as "Failed to retrieve stats" (and an ERROR log) instead of the
-  // "Stats File Not Found" reply the caller already handles. A 500 still
-  // throws; "the read broke" must not look like "this player has none".
-  const res = await apiGetRaw(cfg, `/stats/${uuid}`);
-  if (res.status === 404) return null;
-  const { stats } = await readApiJson<{ stats: MinecraftStatsFile | null }>(
-    res,
-    `/stats/${uuid}`,
-  );
-  return stats;
+  // simply never played here, and the wrapper says 404. A 500 still throws;
+  // "the read broke" must not look like "this player has none".
+  const body = await apiGetOrNull<{ stats: MinecraftStatsFile | null }>(cfg, `/stats/${uuid}`);
+  return body?.stats ?? null;
 }
 
 /** List all UUIDs that have a stats file on this server. */
@@ -60,13 +55,8 @@ export async function listStatsUuids(cfg: ServerConfig): Promise<string[]> {
 export async function readAllStats(
   cfg: ServerConfig,
 ): Promise<Record<string, MinecraftStatsFile> | null> {
-  const res = await apiGetRaw(cfg, "/stats/bulk");
-  if (res.status === 404) return null;
-  const { stats } = await readApiJson<{ stats: Record<string, MinecraftStatsFile> }>(
-    res,
-    "/stats/bulk",
-  );
-  return stats;
+  const body = await apiGetOrNull<{ stats: Record<string, MinecraftStatsFile> }>(cfg, "/stats/bulk");
+  return body?.stats ?? null;
 }
 
 /** Delete a player's stats file via the wrapper. */
@@ -75,18 +65,20 @@ export async function deleteStatsFile(
   uuid: string,
 ): Promise<boolean> {
   assertUuidFormat(uuid); // guard the path/route sink
-  // The wrapper exposes DELETE /stats/:uuid so the
-  // admin-gated /server prune-stats works on remote instances too.
-  // Older wrappers without the route (or any transport error) degrade
-  // to "not deleted"; prune-stats then reports 0 deletions instead of
-  // failing the whole command.
+  // Wrappers without DELETE /stats/:uuid answer 404 or 405; that degrades to
+  // "not deleted" so prune-stats reports 0 deletions instead of failing the
+  // whole command. Anything else is a real failure and propagates.
   try {
     const { deleted } = await apiDelete<{ deleted: boolean }>(
       cfg,
       `/stats/${encodeURIComponent(uuid)}`,
     );
     return deleted === true;
-  } catch {
-    return false;
+  } catch (err) {
+    if (err instanceof ApiError && (err.status === 404 || err.status === 405)) {
+      log.debug(cfg.id, `stats delete not supported by this wrapper: ${errMsg(err)}`);
+      return false;
+    }
+    throw err;
   }
 }

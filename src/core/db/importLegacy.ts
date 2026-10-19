@@ -4,7 +4,7 @@
  * Runs at every startup (both processes) and is idempotent by
  * construction: each store imports only when its table is empty AND its
  * legacy file exists. The check and the inserts share one IMMEDIATE
- * transaction, so two processes booting at once serialize — the loser
+ * transaction, so two processes booting at once serialize, the loser
  * finds a non-empty table and skips.
  *
  * After a successful import the source file is renamed to
@@ -29,10 +29,10 @@ import { errMsg } from "../utils/error.js";
 
 // Deliberately NOT the public kv API (db/kv.ts): that module resolves the
 // connection through getDb(), and this importer runs INSIDE getDb() before
-// the singleton is assigned — importing it would re-enter initialization
+// the singleton is assigned, importing it would re-enter initialization
 // recursively. The importer only ever touches the handle it was given.
 function kvGetRaw(db: SqlDatabase, key: string): unknown {
-  // rows.ts (mapRow/col) is safe to use here — unlike db/kv.ts it doesn't
+  // rows.ts (mapRow/col) is safe to use here, unlike db/kv.ts it doesn't
   // resolve the connection through getDb(), so there's no re-entrancy.
   const value = mapRow(
     db.prepare("SELECT value FROM kv_store WHERE key = ?"),
@@ -67,10 +67,11 @@ function readLegacy(file: string): unknown | null {
   try {
     return JSON.parse(fs.readFileSync(p, "utf-8"));
   } catch (err) {
-    // A corrupt legacy file must not brick startup — but it also must
-    // not be silently skipped-and-renamed. Leave it in place and warn;
-    // the table stays empty until the operator restores or removes it.
-    log.warn("db", `Legacy ${file} is unreadable (${errMsg(err)}) — not imported`);
+    // A corrupt legacy file must not brick startup, but it also must
+    // not be silently skipped-and-renamed. Leave it in place and warn. It is
+    // retried on every start, but only imports while its table is still
+    // empty, so rows the bot writes meanwhile block a later repair.
+    log.warn("db", `Legacy ${file} is unreadable (${errMsg(err)}), not imported`);
     return null;
   }
 }
@@ -81,16 +82,29 @@ function retireLegacy(file: string): void {
     try {
       if (fs.existsSync(p)) fs.renameSync(p, `${p}.imported`);
     } catch {
-      /* best effort — a failed rename only risks a no-op re-check */
+      /* best effort, a failed rename only risks a no-op re-check */
     }
   }
 }
 
-function tableEmpty(db: SqlDatabase, table: string): boolean {
-  const row = db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as {
-    n: number;
-  };
-  return row.n === 0;
+/**
+ * The tables a legacy file can import into. The name is interpolated into SQL,
+ * so it is a closed set, not a string.
+ */
+type ImportTable =
+  | "admin_audit"
+  | "whitelist_audit"
+  | "linked_accounts"
+  | "link_codes"
+  | "uptime_checks"
+  | "player_count_hours";
+
+function tableEmpty(db: SqlDatabase, table: ImportTable): boolean {
+  const count = mapRow(
+    db.prepare(`SELECT COUNT(*) AS n FROM ${table}`),
+    (r) => col.int(r, "n"),
+  );
+  return count === 0;
 }
 
 /**
@@ -118,139 +132,144 @@ interface AdminAuditFile {
   entries?: AdminAuditEntry[];
 }
 
+/**
+ * Run one store's import inside an IMMEDIATE transaction and retire its file
+ * only when rows were really imported. A non-empty table means the bot already
+ * wrote rows of its own (or another process imported first), so the file is
+ * left in place with a warning instead of being renamed away unread.
+ */
+function importOnce(
+  db: SqlDatabase,
+  file: string,
+  table: ImportTable,
+  run: () => void,
+): void {
+  let imported = false;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (tableEmpty(db, table)) {
+      run();
+      imported = true;
+    }
+    db.exec("COMMIT");
+  } catch (err) {
+    try {
+      db.exec("ROLLBACK");
+    } catch {
+      /* the original error is the one worth reporting */
+    }
+    throw err;
+  }
+  if (imported) retireLegacy(file);
+  else
+    log.warn(
+      "db",
+      `Legacy ${file} not imported: table ${table} already has rows. File left in place.`,
+    );
+}
+
 export function importLegacyJson(db: SqlDatabase): void {
   // ── adminAudit.json → admin_audit ──
   const adminRaw = readLegacy("adminAudit.json") as AdminAuditFile | null;
   if (adminRaw && Array.isArray(adminRaw.entries)) {
-    db.exec("BEGIN IMMEDIATE");
-    try {
-      if (tableEmpty(db, "admin_audit")) {
-        const ins = db.prepare(
-          `INSERT INTO admin_audit (at, action, server, by_tag, by_id, guild_id, detail)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    const entries = adminRaw.entries;
+    importOnce(db, "adminAudit.json", "admin_audit", () => {
+      const ins = db.prepare(
+        `INSERT INTO admin_audit (at, action, server, by_tag, by_id, guild_id, detail)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      );
+      for (const [i, e] of entries.entries()) {
+        if (!e || typeof e !== "object") continue;
+        insertOrSkip(
+          ins,
+          "adminAudit.json",
+          `#${i}`,
+          e.at ?? "",
+          e.action ?? "",
+          e.server ?? null,
+          e.by ?? "",
+          e.byId ?? "",
+          e.guildId ?? null,
+          e.detail ?? null,
         );
-        for (const [i, e] of adminRaw.entries.entries()) {
-          if (!e || typeof e !== "object") continue;
-          insertOrSkip(
-            ins,
-            "adminAudit.json",
-            `#${i}`,
-            e.at ?? "",
-            e.action ?? "",
-            e.server ?? null,
-            e.by ?? "",
-            e.byId ?? "",
-            e.guildId ?? null,
-            e.detail ?? null,
-          );
-        }
-        log.info("db", `Imported ${adminRaw.entries.length} adminAudit entries`);
       }
-      db.exec("COMMIT");
-      retireLegacy("adminAudit.json");
-    } catch (err) {
-      db.exec("ROLLBACK");
-      throw err;
-    }
+      log.info("db", `Imported ${entries.length} adminAudit entries`);
+    });
   }
 
   // ── whitelistAudit.json → whitelist_audit ──
   const wlRaw = readLegacy("whitelistAudit.json") as WhitelistAuditMap | null;
   if (wlRaw && typeof wlRaw === "object") {
-    db.exec("BEGIN IMMEDIATE");
-    try {
-      if (tableEmpty(db, "whitelist_audit")) {
-        const ins = db.prepare(
-          `INSERT INTO whitelist_audit
-             (username_lower, username, uuid, added_by, added_by_id, added_at,
-              server, removed_by, removed_by_id, removed_at, removed_from_server)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    importOnce(db, "whitelistAudit.json", "whitelist_audit", () => {
+      const ins = db.prepare(
+        `INSERT INTO whitelist_audit
+           (username_lower, username, uuid, added_by, added_by_id, added_at,
+            server, removed_by, removed_by_id, removed_at, removed_from_server)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      );
+      let n = 0;
+      for (const [key, e] of Object.entries(wlRaw)) {
+        if (!e || typeof e !== "object") continue;
+        const ok = insertOrSkip(
+          ins,
+          "whitelistAudit.json",
+          key,
+          key.toLowerCase(),
+          e.username ?? null,
+          e.uuid ?? null,
+          e.addedBy ?? null,
+          e.addedById ?? null,
+          e.addedAt ?? null,
+          e.server ?? null,
+          e.removedBy ?? null,
+          e.removedById ?? null,
+          e.removedAt ?? null,
+          e.removedFromServer ?? null,
         );
-        let n = 0;
-        for (const [key, e] of Object.entries(wlRaw)) {
-          if (!e || typeof e !== "object") continue;
-          const ok = insertOrSkip(
-            ins,
-            "whitelistAudit.json",
-            key,
-            key.toLowerCase(),
-            e.username ?? null,
-            e.uuid ?? null,
-            e.addedBy ?? null,
-            e.addedById ?? null,
-            e.addedAt ?? null,
-            e.server ?? null,
-            e.removedBy ?? null,
-            e.removedById ?? null,
-            e.removedAt ?? null,
-            e.removedFromServer ?? null,
-          );
-          if (ok) n++;
-        }
-        log.info("db", `Imported ${n} whitelistAudit entries`);
+        if (ok) n++;
       }
-      db.exec("COMMIT");
-      retireLegacy("whitelistAudit.json");
-    } catch (err) {
-      db.exec("ROLLBACK");
-      throw err;
-    }
+      log.info("db", `Imported ${n} whitelistAudit entries`);
+    });
   }
 
   // ── linkedAccounts.json → linked_accounts ──
   const linksRaw = readLegacy("linkedAccounts.json") as LinkedAccountsMap | null;
   if (linksRaw && typeof linksRaw === "object") {
-    db.exec("BEGIN IMMEDIATE");
-    try {
-      if (tableEmpty(db, "linked_accounts")) {
-        const ins = db.prepare(
-          "INSERT INTO linked_accounts (discord_id, mc_name) VALUES (?, ?)",
-        );
-        let n = 0;
-        for (const [discordId, mcName] of Object.entries(linksRaw)) {
-          if (typeof mcName !== "string") continue;
-          if (insertOrSkip(ins, "linkedAccounts.json", discordId, discordId, mcName)) n++;
-        }
-        log.info("db", `Imported ${n} linked accounts`);
+    importOnce(db, "linkedAccounts.json", "linked_accounts", () => {
+      const ins = db.prepare(
+        "INSERT INTO linked_accounts (discord_id, mc_name) VALUES (?, ?)",
+      );
+      let n = 0;
+      for (const [discordId, mcName] of Object.entries(linksRaw)) {
+        if (typeof mcName !== "string") continue;
+        if (insertOrSkip(ins, "linkedAccounts.json", discordId, discordId, mcName)) n++;
       }
-      db.exec("COMMIT");
-      retireLegacy("linkedAccounts.json");
-    } catch (err) {
-      db.exec("ROLLBACK");
-      throw err;
-    }
+      log.info("db", `Imported ${n} linked accounts`);
+    });
   }
 
   // ── linkCodes.json → link_codes (skip already-expired codes) ──
   const codesRaw = readLegacy("linkCodes.json") as LinkCodesMap | null;
   if (codesRaw && typeof codesRaw === "object") {
-    db.exec("BEGIN IMMEDIATE");
-    try {
-      if (tableEmpty(db, "link_codes")) {
-        const ins = db.prepare(
-          "INSERT INTO link_codes (code, discord_id, expires, confirmed) VALUES (?, ?, ?, ?)",
+    importOnce(db, "linkCodes.json", "link_codes", () => {
+      const ins = db.prepare(
+        "INSERT INTO link_codes (code, discord_id, expires, confirmed) VALUES (?, ?, ?, ?)",
+      );
+      const now = Date.now();
+      for (const [code, entry] of Object.entries(codesRaw)) {
+        if (!entry || typeof entry !== "object") continue;
+        if (typeof entry.expires !== "number" || entry.expires <= now) continue;
+        insertOrSkip(
+          ins,
+          "linkCodes.json",
+          code,
+          code,
+          entry.discordId ?? null,
+          entry.expires,
+          entry.confirmed ? 1 : 0,
         );
-        const now = Date.now();
-        for (const [code, entry] of Object.entries(codesRaw)) {
-          if (!entry || typeof entry !== "object") continue;
-          if (typeof entry.expires !== "number" || entry.expires <= now) continue;
-          insertOrSkip(
-            ins,
-            "linkCodes.json",
-            code,
-            code,
-            entry.discordId ?? null,
-            entry.expires,
-            entry.confirmed ? 1 : 0,
-          );
-        }
       }
-      db.exec("COMMIT");
-      retireLegacy("linkCodes.json");
-    } catch (err) {
-      db.exec("ROLLBACK");
-      throw err;
-    }
+    });
   }
 
   // ── Versioned-blob stores → kv_store (key = filename stem) ──
@@ -278,18 +297,29 @@ export function importLegacyJson(db: SqlDatabase): void {
     const file = `${key}.json`;
     const raw = readLegacy(file);
     if (raw === null || typeof raw !== "object") continue;
+    let imported = false;
     db.exec("BEGIN IMMEDIATE");
     try {
       if (kvGetRaw(db, key) === null) {
         kvSetRaw(db, key, raw);
+        imported = true;
         log.info("db", `Imported ${file} into kv_store["${key}"]`);
       }
       db.exec("COMMIT");
-      retireLegacy(file);
     } catch (err) {
-      db.exec("ROLLBACK");
+      try {
+        db.exec("ROLLBACK");
+      } catch {
+        /* the original error is the one worth reporting */
+      }
       throw err;
     }
+    if (imported) retireLegacy(file);
+    else
+      log.warn(
+        "db",
+        `Legacy ${file} not imported: kv_store["${key}"] already exists. File left in place.`,
+      );
   }
 
   // ── uptimeHistory.json → uptime_checks ──
@@ -298,29 +328,21 @@ export function importLegacyJson(db: SqlDatabase): void {
     Array<{ t?: number; up?: number }>
   > | null;
   if (uptimeRaw && typeof uptimeRaw === "object") {
-    db.exec("BEGIN IMMEDIATE");
-    try {
-      if (tableEmpty(db, "uptime_checks")) {
-        const ins = db.prepare(
-          "INSERT INTO uptime_checks (server_id, t, up) VALUES (?, ?, ?)",
-        );
-        let n = 0;
-        for (const [serverId, entries] of Object.entries(uptimeRaw)) {
-          if (!Array.isArray(entries)) continue;
-          for (const e of entries) {
-            if (typeof e?.t !== "number") continue;
-            ins.run(serverId, e.t, e.up ? 1 : 0);
-            n++;
-          }
+    importOnce(db, "uptimeHistory.json", "uptime_checks", () => {
+      const ins = db.prepare(
+        "INSERT INTO uptime_checks (server_id, t, up) VALUES (?, ?, ?)",
+      );
+      let n = 0;
+      for (const [serverId, entries] of Object.entries(uptimeRaw)) {
+        if (!Array.isArray(entries)) continue;
+        for (const e of entries) {
+          if (typeof e?.t !== "number") continue;
+          ins.run(serverId, e.t, e.up ? 1 : 0);
+          n++;
         }
-        log.info("db", `Imported ${n} uptime checks`);
       }
-      db.exec("COMMIT");
-      retireLegacy("uptimeHistory.json");
-    } catch (err) {
-      db.exec("ROLLBACK");
-      throw err;
-    }
+      log.info("db", `Imported ${n} uptime checks`);
+    });
   }
 
   // ── playerCounts.json → player_count_hours ──
@@ -331,29 +353,22 @@ export function importLegacyJson(db: SqlDatabase): void {
     >;
   } | null;
   if (countsRaw && typeof countsRaw === "object" && countsRaw.servers) {
-    db.exec("BEGIN IMMEDIATE");
-    try {
-      if (tableEmpty(db, "player_count_hours")) {
-        const ins = db.prepare(
-          `INSERT OR IGNORE INTO player_count_hours
-             (server_id, h, sum, max, samples) VALUES (?, ?, ?, ?, ?)`,
-        );
-        let n = 0;
-        for (const [serverId, buckets] of Object.entries(countsRaw.servers)) {
-          if (!Array.isArray(buckets)) continue;
-          for (const b of buckets) {
-            if (typeof b?.h !== "number") continue;
-            ins.run(serverId, b.h, b.sum ?? 0, b.max ?? 0, b.samples ?? 0);
-            n++;
-          }
+    const servers = countsRaw.servers;
+    importOnce(db, "playerCounts.json", "player_count_hours", () => {
+      const ins = db.prepare(
+        `INSERT OR IGNORE INTO player_count_hours
+           (server_id, h, sum, max, samples) VALUES (?, ?, ?, ?, ?)`,
+      );
+      let n = 0;
+      for (const [serverId, buckets] of Object.entries(servers)) {
+        if (!Array.isArray(buckets)) continue;
+        for (const b of buckets) {
+          if (typeof b?.h !== "number") continue;
+          ins.run(serverId, b.h, b.sum ?? 0, b.max ?? 0, b.samples ?? 0);
+          n++;
         }
-        log.info("db", `Imported ${n} player-count hour buckets`);
       }
-      db.exec("COMMIT");
-      retireLegacy("playerCounts.json");
-    } catch (err) {
-      db.exec("ROLLBACK");
-      throw err;
-    }
+      log.info("db", `Imported ${n} player-count hour buckets`);
+    });
   }
 }

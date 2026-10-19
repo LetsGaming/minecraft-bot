@@ -12,10 +12,11 @@
  * module-level exports are the shared slash-command limiter.
  */
 
+import { MS } from "@mcbot/schema/time.js";
 import { loadConfig } from "../config.js";
 import { isRecord } from "./objects.js";
 
-const PRUNE_INTERVAL_MS = 5 * 60_000; // prune idle buckets every 5 minutes
+const PRUNE_INTERVAL_MS = 5 * MS.minute; // prune idle buckets
 
 interface Bucket {
   tokens: number;
@@ -48,7 +49,7 @@ function refill(bucket: Bucket, now: number, capacity: number, windowMs: number)
 
 function cooldownOf(bucket: Bucket | undefined, capacity: number, windowMs: number): number {
   if (!bucket || bucket.tokens >= 1) return 0;
-  return Math.ceil(((1 - bucket.tokens) / capacity) * (windowMs / 1000));
+  return Math.ceil(((1 - bucket.tokens) / capacity) * (windowMs / MS.second));
 }
 
 export function createRateLimiter(options: {
@@ -141,13 +142,13 @@ export function createRateLimiter(options: {
 
 /** Built-in caps; `limits` in config.json overrides them at startup. */
 export const DEFAULT_SLASH_CAPACITY = 5;
-export const DEFAULT_SLASH_WINDOW_MS = 30_000;
+export const DEFAULT_SLASH_WINDOW_MS = 30 * MS.second;
 export const DEFAULT_BRIDGE_CAPACITY = 8;
-export const DEFAULT_BRIDGE_WINDOW_MS = 10_000;
+export const DEFAULT_BRIDGE_WINDOW_MS = 10 * MS.second;
 
 /**
  * The configured `limits` block, read lazily so this module can load
- * before (or without) a valid config — tests and the schema generator do.
+ * before (or without) a valid config, tests and the schema generator do.
  * Limiter shape is fixed at first use; changing limits needs a restart
  * (buckets carry state, so live-resizing them would be lossy anyway).
  */
@@ -162,7 +163,7 @@ function configuredLimits(): {
     const cfgLimits = loadConfig().limits;
     if (isRecord(cfgLimits)) limits = cfgLimits;
   } catch {
-    /* config unavailable (isolated tests, schema generator) — defaults */
+    /* config unavailable (isolated tests, schema generator) defaults */
   }
   const num = (v: unknown, fallback: number, min: number): number =>
     typeof v === "number" && Number.isFinite(v) && v >= min ? v : fallback;

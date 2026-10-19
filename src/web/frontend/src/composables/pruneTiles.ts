@@ -6,6 +6,8 @@
  * it a function that returns an image (or null for a region without one).
  */
 
+import { regionKey } from "./pruneRegion";
+
 export type TileImage = { width: number; height: number; close?: () => void };
 export type TileLoader<T extends TileImage> = (rx: number, rz: number) => Promise<T | null>;
 
@@ -16,8 +18,6 @@ export interface WantedRegion {
   priority: number;
 }
 
-const keyOf = (rx: number, rz: number): string => `${rx},${rz}`;
-
 /** Waits before the second, third and fourth try of a tile whose fetch failed. */
 export const RETRY_DELAYS_MS = [1_000, 4_000, 15_000] as const;
 
@@ -27,7 +27,7 @@ export function createTileStore<T extends TileImage>(options: {
   onChange: () => void;
   /** Fetches in flight at once. */
   concurrency?: number;
-  /** Tiles kept; past this the ones furthest from what is wanted are released. */
+  /** Tiles kept; past this the oldest ones the view no longer wants are released. */
   maxTiles?: number;
   /** Called once a region has failed every attempt; it is then left without a picture until reset. */
   onError?: (rx: number, rz: number, err: unknown) => void;
@@ -62,6 +62,8 @@ export function createTileStore<T extends TileImage>(options: {
               return;
             }
             failed.delete(next.key);
+            const replaced = done.get(next.key);
+            if (replaced && replaced !== "none" && replaced !== image) replaced.close?.();
             done.set(next.key, image ?? "none");
           },
           (err: unknown) => {
@@ -86,11 +88,11 @@ export function createTileStore<T extends TileImage>(options: {
           },
         )
         .finally(() => {
+          // After a reset this key may already belong to a newer fetch of the same region.
+          if (mine !== generation) return;
           inFlight.delete(next.key);
-          if (mine === generation) {
-            options.onChange();
-            pump();
-          }
+          options.onChange();
+          pump();
         });
     }
   }
@@ -108,14 +110,14 @@ export function createTileStore<T extends TileImage>(options: {
   return {
     /** The tile if it has arrived, "none" if the region has no picture, null if not known yet. */
     get(rx: number, rz: number): T | "none" | null {
-      return done.get(keyOf(rx, rz)) ?? null;
+      return done.get(regionKey(rx, rz)) ?? null;
     },
 
     /** Say which regions the view wants now; ones no longer wanted stop waiting. */
     want(regions: readonly WantedRegion[]): void {
-      const wanted = new Set(regions.map((r) => keyOf(r.rx, r.rz)));
+      const wanted = new Set(regions.map((r) => regionKey(r.rx, r.rz)));
       queue = regions
-        .map((r) => ({ ...r, key: keyOf(r.rx, r.rz) }))
+        .map((r) => ({ ...r, key: regionKey(r.rx, r.rz) }))
         .filter((r) => !done.has(r.key) && !inFlight.has(r.key) && !waiting(r.key))
         .sort((a, b) => a.priority - b.priority);
       release(wanted);

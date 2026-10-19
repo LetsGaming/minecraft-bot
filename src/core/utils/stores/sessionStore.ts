@@ -1,14 +1,13 @@
 /**
- * Per-player session tracking — single owner of kv_store["sessions"].
+ * Per-player session tracking: single owner of kv_store["sessions"].
  *
  * Fed by the joinLeave watcher (join opens, leave closes) plus the server
  * lifecycle: a "Stopping server" event and a downtime-monitor offline
  * transition both close every open session, because a crash never emits
- * leave lines — without that, crashed sessions would stay open forever
- * (the critical edge this feature's plan calls out).
+ * leave lines. Without that, crashed sessions would stay open forever.
  *
  * Storage shape (per server, keyed by lowercased player name, ring buffer
- * of the last N sessions per player — same bounded-history pattern as the
+ * of the last N sessions per player, same bounded-history pattern as the
  * 30-claim daily history):
  *
  *   { "version": 1, "servers": { "<id>": { "<player>": {
@@ -17,8 +16,12 @@
  * A join while a session is already open means the leave was missed (bot
  * restart, dropped log lines). Such a stale session has no trustworthy
  * end, so it is discarded rather than closed with an invented timestamp.
+ *
+ * Player names are external input, so the maps have no prototype: a player
+ * called "__proto__" or "constructor" is an ordinary key.
  */
-import { kvGet, kvSet } from "../../db/kv.js";
+import { versionedStore } from "./versionedStore.js";
+import { createRecord, ownGet, ownSet, toRecord } from "./safeRecord.js";
 
 /** Keep the newest N sessions per player. */
 export const MAX_SESSIONS_PER_PLAYER = 20;
@@ -46,24 +49,27 @@ export interface SessionStore {
   servers: Record<string, ServerSessionsMap>;
 }
 
-function isV1Store(raw: unknown): raw is SessionStore {
-  return (
-    typeof raw === "object" &&
-    raw !== null &&
-    (raw as { version?: unknown }).version === 1 &&
-    typeof (raw as { servers?: unknown }).servers === "object" &&
-    (raw as { servers?: unknown }).servers !== null
-  );
-}
+const sessionDoc = versionedStore<SessionStore>(
+  "sessions",
+  { version: 1, container: "servers" },
+  () => ({ version: 1, servers: createRecord() }),
+  (doc) => {
+    doc.servers = toRecord(doc.servers);
+    for (const serverId of Object.keys(doc.servers)) {
+      doc.servers[serverId] = toRecord(doc.servers[serverId]!);
+    }
+    return doc;
+  },
+);
 
+/** Read-only snapshot. To change sessions use updateSessionStore. */
 export async function loadSessionStore(): Promise<SessionStore> {
-  const raw = kvGet<unknown>("sessions");
-  if (isV1Store(raw)) return raw;
-  return { version: 1, servers: {} };
+  return sessionDoc.load();
 }
 
-export async function saveSessionStore(store: SessionStore): Promise<void> {
-  kvSet("sessions", store);
+/** Change the sessions in one transaction; see versionedStore. */
+export function updateSessionStore<T>(fn: (store: SessionStore) => T): T {
+  return sessionDoc.update(fn);
 }
 
 /** Sessions for one server; creates the map lazily so callers can mutate. */
@@ -71,7 +77,12 @@ export function getServerSessions(
   store: SessionStore,
   serverId: string,
 ): ServerSessionsMap {
-  return (store.servers[serverId] ??= {});
+  let map = ownGet(store.servers, serverId);
+  if (!map) {
+    map = createRecord<PlayerSessionEntry>();
+    ownSet(store.servers, serverId, map);
+  }
+  return map;
 }
 
 function trim(entry: PlayerSessionEntry): void {
@@ -88,10 +99,14 @@ export function openSession(
 ): void {
   const players = getServerSessions(store, serverId);
   const key = player.toLowerCase();
-  const entry = (players[key] ??= { name: player, lastSeen: null, sessions: [] });
+  let entry = ownGet(players, key);
+  if (!entry) {
+    entry = { name: player, lastSeen: null, sessions: [] };
+    ownSet(players, key, entry);
+  }
   entry.name = player; // keep the most recent casing
 
-  // Discard stale opens (missed leave) — see module comment.
+  // Discard stale opens (missed leave); see module comment.
   entry.sessions = entry.sessions.filter((s) => s.leftAt !== null);
   entry.sessions.push({ joinedAt: at, leftAt: null });
   trim(entry);
@@ -104,7 +119,7 @@ export function closeSession(
   player: string,
   at: number = Date.now(),
 ): boolean {
-  const entry = getServerSessions(store, serverId)[player.toLowerCase()];
+  const entry = ownGet(getServerSessions(store, serverId), player.toLowerCase());
   const open = entry?.sessions.find((s) => s.leftAt === null);
   if (!entry || !open) return false;
   open.leftAt = at;
@@ -113,7 +128,7 @@ export function closeSession(
 }
 
 /**
- * Close every open session on a server — server stop, crash detected by
+ * Close every open session on a server: server stop, crash detected by
  * the downtime monitor, or any other "everyone just got disconnected"
  * moment. Returns how many sessions were closed.
  */

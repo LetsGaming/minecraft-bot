@@ -17,11 +17,11 @@ vi.mock("../../src/core/utils/commands/commandPolicy.js", () => ({
     .fn()
     .mockReturnValue({ enabled: true, adminOnly: false }),
 }));
-vi.mock("../../src/core/utils/stores/linkUtils.js", () => ({
+vi.mock("../../src/core/utils/stores/linkStore.js", () => ({
   loadLinkedAccounts: vi.fn().mockResolvedValue({}),
 }));
-vi.mock("../../src/bot/commands/middleware.js", () => ({
-  isServerAdmin: vi.fn().mockReturnValue(false),
+vi.mock("../../src/bot/utils/guild/permissions.js", () => ({
+  isLinkedPlayerAdmin: vi.fn().mockResolvedValue(false),
 }));
 
 import {

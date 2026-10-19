@@ -9,6 +9,13 @@ const SRC_GLOBS = [
   "src/web/frontend/**/*.ts",
 ];
 
+const QUERY_RESULT_CAST = {
+  selector:
+    "TSAsExpression[expression.type='CallExpression'][expression.callee.property.name=/^(get|all)$/][expression.callee.object.type='CallExpression'][expression.callee.object.callee.property.name='prepare']",
+  message:
+    "Query results are read through mapRow/mapRows with explicit col.* accessors (core/db/rows.ts), never cast.",
+};
+
 export default [
   {
     files: SRC_GLOBS,
@@ -148,6 +155,16 @@ export default [
     },
   },
   {
+    // A query result is typed by mapRow/mapRows and the col.* accessors, which
+    // throw on column drift; a cast compiles after a column is renamed. The
+    // bot block below repeats this selector because a later block replaces
+    // this rule's options for the files they share.
+    files: ["src/core/**/*.ts", "src/web/backend/**/*.ts"],
+    rules: {
+      "no-restricted-syntax": ["error", QUERY_RESULT_CAST],
+    },
+  },
+  {
     // Embeds get their colour from a status role or an embed category, never a
     // literal, so the dashboard and Discord stay in step and an admin's colour
     // override reaches every message. The builders that define the values are
@@ -157,6 +174,7 @@ export default [
     rules: {
       "no-restricted-syntax": [
         "error",
+        QUERY_RESULT_CAST,
         {
           selector: "Property[key.name='color'][value.type='Literal'][value.raw=/^0x/i]",
           message: "Use a category (createEmbed's `category`) or an EmbedColor role, not a colour literal.",

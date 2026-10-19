@@ -5,7 +5,7 @@
  * vanilla sends "1.21.4", Fabric sends "Fabric 1.21.4", Paper sends
  * "Paper 1.21.4", proxies send whatever they like, and a server with a
  * custom MOTD-style version sends marketing copy. There is no field that
- * says "the loader is Fabric" — it has to be read out of that string.
+ * says "the loader is Fabric", it has to be read out of that string.
  *
  * So this is best-effort by construction, and says so: an unrecognised
  * string yields a null loader and the raw text, rather than a guess. `/info`
@@ -40,8 +40,11 @@ export interface VersionInfo {
   raw: string;
 }
 
-/** A dotted release number: 1.21, 1.21.4, 1.7.10. */
-const MC_VERSION = /\b(1\.\d{1,2}(?:\.\d{1,2})?)\b/;
+/**
+ * A dotted release number: 1.21, 1.21.4, 1.7.10, or year-based 26.1, 26.1.2.
+ * The lookbehind keeps "26.1.2" from being read as "1.2".
+ */
+const MC_VERSION = /(?<![\d.])((?:1|2\d)\.\d{1,2}(?:\.\d{1,2})?)(?!\.?\d)/;
 
 export function parseVersionName(raw: string | null): VersionInfo {
   if (!raw) return { minecraftVersion: null, loader: null, raw: "" };

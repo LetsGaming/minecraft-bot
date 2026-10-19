@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import { EmbedBuilder } from "discord.js";
 import {
   createEmbed,
-  addFieldsBulk,
   createErrorEmbed,
   createSuccessEmbed,
   createInfoEmbed,
@@ -11,7 +10,6 @@ import {
   createPaginationButtons,
   createProgressEmbed,
   paginateFields,
-  paginateLines,
   chunkLines,
   truncate,
   EMBED_LIMITS,
@@ -114,35 +112,6 @@ describe("createEmbed", () => {
     expect(
       createEmbed({ description: "only desc" }).toJSON().title,
     ).toBeUndefined();
-  });
-});
-
-// ── addFieldsBulk ────────────────────────────────────────────────────────────
-
-describe("addFieldsBulk", () => {
-  it("adds provided fields to the embed", () => {
-    const embed = new EmbedBuilder();
-    addFieldsBulk(embed, [
-      { name: "Field A", value: "Value A" },
-      { name: "Field B", value: "Value B", inline: true },
-    ]);
-    const fields = embed.toJSON().fields ?? [];
-    expect(fields).toHaveLength(2);
-    expect(fields[0]?.name).toBe("Field A");
-    expect(fields[1]?.inline).toBe(true);
-  });
-
-  it("returns the embed unchanged when fields array is empty", () => {
-    const embed = new EmbedBuilder();
-    const result = addFieldsBulk(embed, []);
-    expect(result).toBe(embed);
-    expect(result.toJSON().fields ?? []).toHaveLength(0);
-  });
-
-  it("returns the embed unchanged when fields is omitted", () => {
-    const embed = new EmbedBuilder();
-    const result = addFieldsBulk(embed);
-    expect(result).toBe(embed);
   });
 });
 
@@ -249,18 +218,6 @@ describe("chunkLines", () => {
   });
 });
 
-describe("paginateLines", () => {
-  it("respects the line count per page", () => {
-    const pages = paginateLines(Array.from({ length: 25 }, (_, i) => `line ${i}`), 10);
-    expect(pages).toHaveLength(3);
-    expect(pages[2]!.split("\n")).toHaveLength(5);
-  });
-
-  it("returns one empty page for no lines", () => {
-    expect(paginateLines([], 10)).toEqual([""]);
-  });
-});
-
 describe("paginateFields", () => {
   const field = (i: number, size = 1000) => ({ name: `Field ${i}`, value: "v".repeat(size) });
 
@@ -335,7 +292,7 @@ describe("createPlayerEmbed", () => {
   });
 
   it("uses thumbnail mode when asThumbnail=true", () => {
-    const embed = createPlayerEmbed("Alex", { description: "Hi" }, true);
+    const embed = createPlayerEmbed("Alex", { description: "Hi", asThumbnail: true });
     const json = embed.toJSON();
     expect(json.thumbnail?.url).toContain("Alex");
     expect(json.author).toBeUndefined();

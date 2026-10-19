@@ -1,5 +1,5 @@
 /**
- * /activity — player-count history: a 24h sparkline plus the busiest
+ * /activity: player-count history: a 24h sparkline plus the busiest
  * local hours, from the per-hour series the status/downtime passes sample
  * anyway. Answers "when is the server busy" without opening Grafana.
  */

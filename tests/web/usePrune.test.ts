@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   usePrune,
   decodeMap,
-  parseRegionKey,
+  parseRegionFile,
   emptyParams,
   PRUNE_POLL_MS,
   CELL,
@@ -225,8 +225,8 @@ describe("maps", () => {
     } as never);
     expect(m.regions).toHaveLength(2);
     expect(m.bounds).toEqual({ minX: -1, minZ: 0, maxX: 3, maxZ: 2 });
-    expect(parseRegionKey("r.-4.7")).toEqual({ rx: -4, rz: 7 });
-    expect(parseRegionKey("r.1")).toBeNull();
+    expect(parseRegionFile("r.-4.7")).toEqual({ rx: -4, rz: 7 });
+    expect(parseRegionFile("r.1")).toBeNull();
   });
 });
 

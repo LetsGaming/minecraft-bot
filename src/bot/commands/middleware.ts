@@ -6,7 +6,6 @@ import {
 import { createEmbed, createErrorEmbed } from "../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../utils/embeds/embedColors.js";
 import { log } from "@mcbot/core/utils/logger.js";
-import { loadConfig } from "@mcbot/core/config.js";
 import { runWithGuildLocale, t } from "@mcbot/core/utils/i18n.js";
 import { CommandError, errMsg } from "@mcbot/core/utils/error.js";
 import {
@@ -17,85 +16,28 @@ import {
 import type { ErrorContent } from "@mcbot/core/types/index.js";
 import { attachFollowUpHint } from "../utils/hints/followUps.js";
 import { resolveServer } from "../utils/guild/guildRouter.js";
-
-/**
- * Checks whether a Discord user is an admin.
- *
- * Admin lists may contain user IDs and role IDs (both are snowflakes): a
- * user qualifies if their ID is listed or they carry a listed role.
- *
- * Two scopes exist: `config.adminUsers` is operator level and valid
- * everywhere; `config.guilds[guildId].adminUsers` only counts for commands
- * issued from that guild (and, via resolveServer, only against servers the
- * guild may target). In DMs only the global list applies.
- */
-export function isServerAdmin(
-  discordUserId: string,
-  memberRoleIds: readonly string[] = [],
-  guildId?: string,
-): boolean {
-  const cfg = loadConfig();
-  const matches = (list: readonly string[] | undefined): boolean =>
-    !!list &&
-    (list.includes(discordUserId) ||
-      memberRoleIds.some((roleId) => list.includes(roleId)));
-
-  if (matches(cfg.adminUsers)) return true;
-  if (guildId && matches(cfg.guilds?.[guildId]?.adminUsers)) return true;
-  return false;
-}
-
-/**
- * Extract the role IDs from an interaction's member, handling both the
- * cached GuildMember shape (roles.cache Map) and the raw API shape
- * (roles as a string array).
- *
- * Typed by the only field it reads, `member`, so any interaction that
- * carries one (chat command, button, autocomplete) can be passed directly.
- */
-export function getMemberRoleIds(
-  interaction: Pick<ChatInputCommandInteraction, "member">,
-): string[] {
-  const roles = interaction.member?.roles;
-  if (!roles) return [];
-  if (Array.isArray(roles)) return roles;
-  return [...roles.cache.keys()];
-}
-
-function invokerIsAdmin(interaction: RepliableInteraction): boolean {
-  return isServerAdmin(
-    interaction.user.id,
-    getMemberRoleIds(interaction),
-    interaction.guild?.id,
-  );
-}
+import { isInvokerAdmin } from "../utils/guild/permissions.js";
 
 type CommandExecutor = (
   interaction: ChatInputCommandInteraction,
 ) => Promise<void>;
 
-// Commands call withErrorHandling while this module may still be loading
-// (import cycle through the hint registry), so the marker comes from a
-// hoisted function rather than a module-level const.
-function adminGate(): symbol {
-  return Symbol.for("mcbot.adminGate");
-}
-
-type GatedExecutor = CommandExecutor & Record<symbol, true | undefined>;
+/** Gated executor to the one it wraps, so `withErrorHandling` checks the gate once. */
+const adminGated = new WeakMap<CommandExecutor, CommandExecutor>();
 
 /**
  * Gates a command behind bot-admin status. Inside `withErrorHandling` the
  * check runs before the reply is deferred, so a denial is never public.
  */
 export function requireServerAdmin(execute: CommandExecutor): CommandExecutor {
-  const gated = (async (interaction: ChatInputCommandInteraction) => {
-    if (!invokerIsAdmin(interaction)) {
+  const gated: CommandExecutor = async (interaction) => {
+    if (!isInvokerAdmin(interaction)) {
       await replyDenied(interaction);
       return;
     }
     return execute(interaction);
-  }) as GatedExecutor;
-  gated[adminGate()] = true;
+  };
+  adminGated.set(gated, execute);
   return gated;
 }
 
@@ -250,11 +192,12 @@ export function withErrorHandling(
   execute: CommandExecutor,
   { defer = true, ephemeral = false }: ErrorHandlingOptions = {},
 ): CommandExecutor {
-  const gated = (execute as GatedExecutor)[adminGate()] === true;
+  const inner = adminGated.get(execute);
+  const run = inner ?? execute;
   return async (interaction) => {
     const guildId = interaction.guild?.id;
     try {
-      if (gated && !invokerIsAdmin(interaction)) {
+      if (inner && !isInvokerAdmin(interaction)) {
         await runWithGuildLocale(guildId, () => replyDenied(interaction));
         return;
       }
@@ -265,7 +208,7 @@ export function withErrorHandling(
       }
       // Every t() call inside the command resolves this guild's language
       // (guilds.<id>.language, falling back to the global setting).
-      await runWithGuildLocale(guildId, () => execute(interaction));
+      await runWithGuildLocale(guildId, () => run(interaction));
 
       // Only a command that answered without throwing may carry a hint;
       // an errored command never advertises anything.

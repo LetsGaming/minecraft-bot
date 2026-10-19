@@ -4,30 +4,29 @@
  *
  * Two API layers:
  *
- *   Legacy map API (loadLinkedAccounts/saveLinkedAccounts/…) — kept so the
- *   many readers (profile, whois, deaths, defineCommand, streak
- *   leaderboard, …) stay untouched. save* replaces the whole table in one
- *   transaction, matching the old file semantics.
+ *   Map API (loadLinkedAccounts): a read view for the many readers
+ *   (profile, whois, deaths, defineCommand, streak leaderboard, ...).
  *
- *   Atomic operations (issueLinkCode/confirmLinkCode/unlinkAccount) — what
+ *   Atomic operations (issueLinkCode/confirmLinkCode/unlinkAccount) what
  *   the three writers now use. Each wraps its whole read-modify-write in
  *   one IMMEDIATE transaction, closing the lost-update race the old
  *   load/mutate/save pattern had (two concurrent /link completions could
  *   clobber each other; documented as F3 in the 4.0 rework).
  */
 import { getDb, withTransaction } from "../../db/index.js";
-import { mapRows, col } from "../../db/rows.js";
-import type { LinkCodesMap, LinkedAccountsMap } from "../../types/index.js";
+import { mapRow, mapRows, col } from "../../db/rows.js";
+import { MS } from "@mcbot/schema/time.js";
+import type { LinkedAccountsMap } from "../../types/index.js";
 import { errMsg } from "../error.js";
 import { log } from "../logger.js";
 
-export const LINK_CODE_TTL_MS = 5 * 60 * 1000;
+export const LINK_CODE_TTL_MS = 5 * MS.minute;
 
 /**
  * The link map, or an empty one if the read fails.
  *
- * Every reader of this map treats "no links" as a normal state — a
- * profile without a Discord account, a death without a DM — so a DB
+ * Every reader of this map treats "no links" as a normal state, a
+ * profile without a Discord account, a death without a DM, so a DB
  * error should degrade the feature, not throw through it. Seven callers
  * had each written the same `.catch(() => ({}))`, which meant seven
  * places silently swallowed a real database failure. Swallowing happens
@@ -46,7 +45,7 @@ export async function loadLinkedAccountsOrEmpty(): Promise<LinkedAccountsMap> {
  * Reverse lookup: which Discord account owns this Minecraft name?
  *
  * The map is keyed by Discord ID, so every reader that starts from a
- * player name has to scan it — case-insensitively, because the vanilla
+ * player name has to scan it, case-insensitively, because the vanilla
  * name casing a log line carries need not match what /link stored. That
  * scan existed as four hand-rolled copies (whois, profile, deaths,
  * defineCommand); this is the only one. Don't write a fifth.
@@ -63,7 +62,7 @@ export function findDiscordIdByMcName(
   );
 }
 
-// ── Legacy map API (readers + whole-map writers) ──────────────────────────
+// ── Map API (readers) ─────────────────────────────────────────────────────
 
 export async function loadLinkedAccounts(): Promise<LinkedAccountsMap> {
   const rows = mapRows(
@@ -78,67 +77,17 @@ export async function loadLinkedAccounts(): Promise<LinkedAccountsMap> {
   return map;
 }
 
-export async function saveLinkedAccounts(
-  map: LinkedAccountsMap,
-): Promise<void> {
-  withTransaction(() => {
-    const db = getDb();
-    db.exec("DELETE FROM linked_accounts");
-    const ins = db.prepare(
-      "INSERT INTO linked_accounts (discord_id, mc_name) VALUES (?, ?)",
-    );
-    for (const [discordId, mcName] of Object.entries(map)) {
-      ins.run(discordId, mcName);
-    }
-  });
-}
-
-export async function loadLinkCodes(): Promise<LinkCodesMap> {
-  const rows = mapRows(
-    getDb().prepare(
-      "SELECT code, discord_id, expires, confirmed FROM link_codes",
-    ),
-    (r) => ({
-      code: col.text(r, "code"),
-      discord_id: col.text(r, "discord_id"),
-      expires: col.int(r, "expires"),
-      confirmed: col.int(r, "confirmed"),
-    }),
-  );
-  const map: LinkCodesMap = {};
-  for (const r of rows) {
-    map[r.code] = {
-      discordId: r.discord_id,
-      expires: r.expires,
-      confirmed: r.confirmed === 1,
-    };
-  }
-  return map;
-}
-
-export async function saveLinkCodes(codes: LinkCodesMap): Promise<void> {
-  withTransaction(() => {
-    const db = getDb();
-    db.exec("DELETE FROM link_codes");
-    const ins = db.prepare(
-      "INSERT INTO link_codes (code, discord_id, expires, confirmed) VALUES (?, ?, ?, ?)",
-    );
-    for (const [code, entry] of Object.entries(codes)) {
-      ins.run(code, entry.discordId, entry.expires, entry.confirmed ? 1 : 0);
-    }
-  });
-}
-
 export async function isLinked(userId: string): Promise<boolean> {
   const linked = await getLinkedAccount(userId);
   return linked !== null;
 }
 
 export async function getLinkedAccount(userId: string): Promise<string | null> {
-  const row = getDb()
-    .prepare("SELECT mc_name FROM linked_accounts WHERE discord_id = ?")
-    .get(userId) as { mc_name: string } | undefined;
-  return row?.mc_name ?? null;
+  return mapRow(
+    getDb().prepare("SELECT mc_name FROM linked_accounts WHERE discord_id = ?"),
+    (r) => col.text(r, "mc_name"),
+    userId,
+  );
 }
 
 // ── Atomic link operations ────────────────────────────────────────────────
@@ -149,8 +98,8 @@ export type IssueLinkCodeResult =
   | { status: "already-linked" };
 
 /**
- * /link: issue a fresh code for this Discord user — unless they are
- * already linked (linked_accounts is the source of truth — the old JSON
+ * /link: issue a fresh code for this Discord user, unless they are
+ * already linked (linked_accounts is the source of truth, the old JSON
  * flow inferred this from leftover confirmed codes, which unlink never
  * cleaned, so an unlinked user could never relink) or a still-valid code
  * is already pending (return it). Expired codes for this user are pruned
@@ -201,14 +150,15 @@ export async function issueLinkCode(
 export type ConfirmLinkResult =
   | { status: "linked"; discordId: string }
   | { status: "unknown-code" }
+  | { status: "already-used" }
   | { status: "expired"; discordId: string }
   | { status: "name-taken"; discordId: string };
 
 /**
  * In-game `!link CODE`: validate the code, enforce the one-Minecraft-
- * account-one-Discord-account rule (case-insensitive — daily-reward
+ * account-one-Discord-account rule (case-insensitive, daily-reward
  * cooldowns are per Discord user, so a second link would double /daily
- * claims), write the link, and mark the code confirmed — all in one
+ * claims), write the link, and mark the code confirmed, all in one
  * transaction, so two players confirming simultaneously cannot interleave.
  */
 export async function confirmLinkCode(
@@ -217,34 +167,51 @@ export async function confirmLinkCode(
 ): Promise<ConfirmLinkResult> {
   return withTransaction(() => {
     const db = getDb();
-    const entry = db
-      .prepare(
+    const entry = mapRow(
+      db.prepare(
         "SELECT discord_id, expires, confirmed FROM link_codes WHERE code = ?",
-      )
-      .get(code) as
-      | { discord_id: string; expires: number; confirmed: number }
-      | undefined;
+      ),
+      (r) => ({
+        discord_id: col.text(r, "discord_id"),
+        expires: col.int(r, "expires"),
+        confirmed: col.int(r, "confirmed"),
+      }),
+      code,
+    );
 
     if (!entry) return { status: "unknown-code" } as const;
+
+    if (entry.confirmed) return { status: "already-used" } as const;
 
     if (Date.now() > entry.expires) {
       db.prepare("DELETE FROM link_codes WHERE code = ?").run(code);
       return { status: "expired", discordId: entry.discord_id } as const;
     }
 
-    const owner = db
-      .prepare(
+    const owner = mapRow(
+      db.prepare(
         `SELECT discord_id FROM linked_accounts
          WHERE mc_name = ? COLLATE NOCASE AND discord_id != ?`,
-      )
-      .get(username, entry.discord_id) as { discord_id: string } | undefined;
+      ),
+      (r) => col.text(r, "discord_id"),
+      username,
+      entry.discord_id,
+    );
     if (owner) {
       return { status: "name-taken", discordId: entry.discord_id } as const;
     }
 
+    const current = mapRow(
+      db.prepare("SELECT mc_name FROM linked_accounts WHERE discord_id = ?"),
+      (r) => col.text(r, "mc_name"),
+      entry.discord_id,
+    );
+    if (current !== null && current.toLowerCase() !== username.toLowerCase()) {
+      // Never rebind an existing link: /unlink first.
+      return { status: "already-used" } as const;
+    }
     db.prepare(
-      `INSERT INTO linked_accounts (discord_id, mc_name) VALUES (?, ?)
-       ON CONFLICT(discord_id) DO UPDATE SET mc_name = excluded.mc_name`,
+      "INSERT OR REPLACE INTO linked_accounts (discord_id, mc_name) VALUES (?, ?)",
     ).run(entry.discord_id, username);
     db.prepare("UPDATE link_codes SET confirmed = 1 WHERE code = ?").run(code);
 

@@ -129,7 +129,4 @@ function onEnter(): void {
 .ip-id { color: var(--text-dim); font-size: var(--text-xs); flex: none; }
 .ip-hint { grid-column: 1 / -1; margin: 0; font-size: var(--text-xs); color: var(--text-dim); }
 .ip-hint.warn { color: var(--st-degraded); }
-@media (pointer: coarse), (max-width: 760px) {
-  .tap { min-height: var(--touch-min); }
-}
 </style>

@@ -1,6 +1,6 @@
-import { ref } from "vue";
-import { errorMessage } from "../utils/errorMessage";
+import { computed, ref } from "vue";
 import { apiGet } from "../api";
+import { useLoader } from "./useLoader";
 import { t } from "../i18n";
 import type { SetupGuild } from "../api";
 
@@ -10,31 +10,36 @@ import type { SetupGuild } from "../api";
 // re-implement the fetch. Module-level state makes it a lightweight
 // singleton cache for the session; call load() to (re)populate.
 
-const guilds = ref<SetupGuild[]>([]);
+const loader = useLoader(async () => (await apiGet<{ guilds: SetupGuild[] }>("/api/setup/guilds")).guilds, {
+  keepDataOnError: true,
+});
+const guilds = computed<SetupGuild[]>(() => loader.data.value ?? []);
+/** True once a read has succeeded; a failed first read leaves it false so the next `load()` retries. */
 const loaded = ref(false);
-const loading = ref(false);
-const error = ref("");
+const loading = loader.loading;
+const error = loader.error;
+const cause = loader.cause;
+let inFlight: Promise<void> | null = null;
 
-async function load(force = false): Promise<void> {
-  if (loading.value) return;
-  if (loaded.value && !force) return;
-  loading.value = true;
-  error.value = "";
-  try {
-    const res = await apiGet<{ guilds: SetupGuild[] }>("/api/setup/guilds");
-    guilds.value = res.guilds;
-    loaded.value = true;
-  } catch (err) {
-    error.value = errorMessage(err);
-  } finally {
-    loading.value = false;
-  }
+/** Concurrent callers share one request, so awaiting `load()` always means the data is there. */
+function load(force = false): Promise<void> {
+  if (inFlight) return inFlight;
+  if (loaded.value && !force) return Promise.resolve();
+  inFlight = loader
+    .load()
+    .then((ok) => {
+      if (ok) loaded.value = true;
+    })
+    .finally(() => {
+      inFlight = null;
+    });
+  return inFlight;
 }
 
 /**
  * Human name for a guild ID. Falls back to a short, friendly label when
  * the name isn't known yet (list still loading, Discord unreachable, or
- * the bot was removed from that guild) — never a raw snowflake.
+ * the bot was removed from that guild) never a raw snowflake.
  */
 function guildName(id: string): string {
   const hit = guilds.value.find((g) => g.id === id);
@@ -59,5 +64,5 @@ function guildIcon(id: string): string | null {
 }
 
 export function useGuilds() {
-  return { guilds, loaded, loading, error, load, guildName, knownGuildName, guildIcon };
+  return { guilds, loaded, loading, error, cause, load, guildName, knownGuildName, guildIcon };
 }

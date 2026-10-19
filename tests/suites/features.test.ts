@@ -26,12 +26,12 @@ vi.mock("../../src/core/config.js", () => ({
 vi.mock("../../src/core/utils/stores/whitelistAudit.js", () => ({
   getAuditEntry: vi.fn(),
 }));
-vi.mock("../../src/core/utils/stores/linkUtils.js", async () => {
+vi.mock("../../src/core/utils/stores/linkStore.js", async () => {
   // Only the I/O is stubbed; findDiscordIdByMcName is a pure helper the
   // commands under test rely on, so keep the real one.
   const actual = await vi.importActual<
-    typeof import("../../src/core/utils/stores/linkUtils.js")
-  >("../../src/core/utils/stores/linkUtils.js");
+    typeof import("../../src/core/utils/stores/linkStore.js")
+  >("../../src/core/utils/stores/linkStore.js");
   return {
     ...actual,
     loadLinkedAccounts: vi.fn().mockResolvedValue({}),
@@ -76,7 +76,7 @@ import { t, runWithGuildLocale } from "../../src/core/utils/i18n.js";
 import { buildSparkline } from "../../src/core/utils/stores/uptimeTracker.js";
 import { processDailyReminders } from "../../src/bot/logWatcher/watchers/schedulers/dailyReminderScheduler.js";
 import { getAuditEntry } from "../../src/core/utils/stores/whitelistAudit.js";
-import { loadLinkedAccountsOrEmpty } from "../../src/core/utils/stores/linkUtils.js";
+import { loadLinkedAccountsOrEmpty } from "../../src/core/utils/stores/linkStore.js";
 import {
   loadClaimedStore,
   saveClaimedStore,

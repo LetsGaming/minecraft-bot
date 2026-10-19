@@ -1,7 +1,7 @@
 /**
  * Tests to cover remaining gaps:
  * - chatBridge.setupDiscordToMc (Discord → MC bridge logic)
- * - playerUtils: findPlayer, getPlayerNames, getPlayerCount, getOnlinePlayers
+ * - playerUtils: findPlayer, getPlayerNames, getOnlinePlayers
  * - tpsMonitor interval callback logic
  * - downtimeMonitor checkServer state machine
  */
@@ -32,11 +32,6 @@ vi.mock("../../src/core/utils/jsonStore.js", () => ({
 vi.mock("../../src/core/utils/paths.js", () => ({
   getRootDir: vi.fn().mockReturnValue("/tmp"),
 }));
-
-// playerUtils is the module under test here — getListOutput and
-// stripLogPrefix now live inside it (they used to sit in the utils.ts
-// grab-bag and were stubbed from outside). Nothing else in this file
-// depends on them, so the real implementations run.
 
 vi.mock("../../src/core/utils/minecraft/whitelist.js", () => ({
   loadWhitelist: vi.fn().mockResolvedValue([
@@ -189,14 +184,12 @@ describe("setupDiscordToMc", () => {
 describe("playerUtils", () => {
   let findPlayer: (name: string, server: never) => Promise<unknown>;
   let getPlayerNames: (server: never) => Promise<string[]>;
-  let getPlayerCount: (server?: never) => Promise<unknown>;
   let getOnlinePlayers: (server?: never) => Promise<string[]>;
 
   beforeEach(async () => {
     const mod = await import("../../src/core/utils/minecraft/playerUtils.js");
     findPlayer = mod.findPlayer;
     getPlayerNames = mod.getPlayerNames;
-    getPlayerCount = mod.getPlayerCount;
     getOnlinePlayers = mod.getOnlinePlayers;
     vi.clearAllMocks();
   });
@@ -219,19 +212,12 @@ describe("playerUtils", () => {
     expect(names).toContain("Alex");
   });
 
-  it("getPlayerCount uses server.getList when server is provided", async () => {
+  it("getOnlinePlayers is empty when the list could not be read", async () => {
     const server = {
       id: "srv",
-      getList: vi
-        .fn()
-        .mockResolvedValue({
-          playerCount: "3",
-          maxPlayers: "20",
-          players: ["A"],
-        }),
+      getList: vi.fn().mockResolvedValue({ ok: false, reason: "unreachable" }),
     } as never;
-    const count = await getPlayerCount(server);
-    expect((count as { playerCount: string }).playerCount).toBe("3");
+    expect(await getOnlinePlayers(server)).toEqual([]);
   });
 
   it("getOnlinePlayers uses server.getList when server is provided", async () => {
@@ -240,9 +226,8 @@ describe("playerUtils", () => {
       getList: vi
         .fn()
         .mockResolvedValue({
-          playerCount: "2",
-          maxPlayers: "20",
-          players: ["A", "B"],
+          ok: true,
+          value: { playerCount: "2", maxPlayers: "20", players: ["A", "B"] },
         }),
     } as never;
     const players = await getOnlinePlayers(server);
@@ -287,6 +272,6 @@ describe("downtimeMonitor — state machine", () => {
     const guilds = { g1: { downtimeAlerts: { channelId: "ch1" } } } as never;
     const timer = startDowntimeMonitor([server], client, guilds);
     expect(timer).toBeTruthy();
-    clearInterval(timer);
+    timer.stop();
   });
 });

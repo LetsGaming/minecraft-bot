@@ -1,20 +1,21 @@
 /**
  * Rate limiting for the dashboard HTTP surface, reusing the bot's token-bucket
- * limiter (core/utils/rateLimiter.ts) — the one shared utility, not a
+ * limiter (core/utils/rateLimiter.ts) the one shared utility, not a
  * per-route copy (backend-apis.md; SEC-02, 2026-07 audit).
  *
- * Scope — only the expensive/abusable surface is limited:
+ * Scope, only the expensive/abusable surface is limited:
  *   /auth/*            keyed by client IP. No session exists yet at login, and
  *                      the OAuth callback fans out to three Discord calls per
  *                      hit, so unauthenticated login/callback traffic is capped.
- *   mutating /api/*    (POST/PUT/PATCH/DELETE) keyed by the session uid — a
- *                      logged-in user — falling back to IP when unauthenticated.
+ *   mutating /api/*    (POST/PUT/PATCH/DELETE) keyed by the session uid, a
+ *                      logged-in user, falling back to IP when unauthenticated.
  *
  * Read-only GETs are left unlimited. Buckets self-prune. This is per-process:
  * the dashboard is a single instance bound to loopback behind a reverse proxy
  * (see docker-compose.yml), so an in-process limiter is the right scope;
  * req.ip honors X-Forwarded-For only for the proxies named in webui.trustProxy.
  */
+import { MS } from "@mcbot/schema";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   createRateLimiter,
@@ -27,20 +28,20 @@ const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 export function registerRateLimiting(app: FastifyInstance): void {
   // Limiters are created per server instance (not module-level) so their
-  // lifecycle matches the server's — in production one buildServer() means one
+  // lifecycle matches the server's, in production one buildServer() means one
   // set of buckets; in tests each instance starts fresh.
   //
   // Interactive login is rare per human; keep it generous but bounded so the
   // callback (three outbound Discord calls each) can't be hammered. Config
   // edits and server actions arrive in small human bursts, so a per-user write
   // budget well above normal use still stops scripted abuse.
-  const authLimiter = createRateLimiter({ capacity: 10, windowMs: 60_000, maxBuckets: MAX_BUCKETS });
-  const apiWriteLimiter = createRateLimiter({ capacity: 30, windowMs: 60_000, maxBuckets: MAX_BUCKETS });
+  const authLimiter = createRateLimiter({ capacity: 10, windowMs: MS.minute, maxBuckets: MAX_BUCKETS });
+  const apiWriteLimiter = createRateLimiter({ capacity: 30, windowMs: MS.minute, maxBuckets: MAX_BUCKETS });
   // Coarse per-address ceiling in front of the per-user buckets: many identities
   // from one source, or one identity replayed from many sources, cannot multiply
   // the budget past it. Several times the per-user limit so a shared proxy
   // address still serves a handful of real users.
-  const ipCeilingLimiter = createRateLimiter({ capacity: 150, windowMs: 60_000, maxBuckets: MAX_BUCKETS });
+  const ipCeilingLimiter = createRateLimiter({ capacity: 150, windowMs: MS.minute, maxBuckets: MAX_BUCKETS });
 
   interface Target {
     /** Checked first; every request from one address draws from it. */

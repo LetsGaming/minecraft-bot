@@ -10,8 +10,9 @@ the entry point's name tells you which group a file belongs in:
 | `monitors/` | a timer, and alerts when a condition holds | `start*Monitor(client, …)` |
 | `schedulers/` | a timer, and does the thing | `start*` / `reconcile*` |
 
-`notifyGuilds.ts` and `watchFirer.ts` sit at the root: both are called from more
-than one group and owned by none.
+`notifyGuilds.ts`, `watchFirer.ts`, `poller.ts`, `sendQueue.ts` and
+`discordErrors.ts` sit at the root: all are called from more than one group and
+owned by none.
 
 ## Log watchers
 
@@ -51,17 +52,33 @@ Conventions:
 - A handler that throws only kills its own invocation; the watcher logs and
   continues. Still catch Discord API errors yourself, so one unreachable channel
   does not spam the error log.
-- Anchor regexes on the log prefix (`/\[.+?\].*:\s+/`) so player chat quoting a
-  system message cannot trigger you.
-- Player-name captures use `[\w.]+`, not `\w+`, so Bedrock players with a `.`
-  prefix are matched. `notifyGuilds.ts` holds the canonical `PLAYER_NAME` regex —
-  use it rather than adding another copy.
+- Anchor regexes on the log prefix (`serverEventRegex` for server-emitted events,
+  `chatLineRegex` for chat) so player chat quoting a system message cannot
+  trigger you.
+- Player-name captures use `PLAYER_NAME` from `core/utils/sanitize.ts` (next to
+  `isValidMcName`), not `\w+`, so Bedrock players with a `.` prefix are matched.
+- Handlers run one at a time per server, so a handler must not wait on Discord or
+  on several server round trips. Queue sends (`broadcastNotification` and
+  `sendToGuildChannels` do) and run any other tail work with `runDetached`
+  from `sendQueue.ts`; both log failures instead of throwing.
+- A module that keeps per-server state registers `onServerRemoved(...)` from
+  `logWatcher/serverCleanup.ts` at load, so a removed and re-added server id
+  starts clean.
 
 ## Notifications
 
 Anything that announces an event to a guild goes through
 `broadcastNotification()` in `notifyGuilds.ts`. It is the single dispatch point,
 and it filters each event against the guild's `notifications.events` list.
+
+Alerts that go to another guild channel (downtime, TPS, disk, console relay) use
+`sendToGuildChannels()` from the same file: the caller names the guild config
+block (`pick`), a message factory built inside each guild's locale, and an
+optional mention policy. It applies the server scope, fetches the channel
+(`fetchSendable`) and sends through a per-channel ordered queue
+(`sendQueue.ts`), so one slow channel delays only itself. A feature that needs
+the sent message back (the upgrade monitor edits its post) uses `guildTargets()`
+for the same selection and sends itself.
 
 The event keys are a shared contract (`@mcbot/schema/notifications.js`), not a
 loose string. Adding a broadcastable event means adding its key there once; the
@@ -73,9 +90,12 @@ feature silently dead for every guild the setup wizard had configured.
 
 ## Scheduled tasks
 
-Export a `startX(client, guildConfigs)` that sets up its own
-`setInterval`/`setTimeout`, returns the timer, and is called once from
-`initMinecraftCommands.ts`.
+Export a `startX(client, guildConfigs)` that runs its work through
+`startPoller(name, fn, ms)` from `poller.ts`, returns the `{ stop }` handle, and is
+called once from `initMinecraftCommands.ts`. The poller arms the next tick only
+after the previous one settled, so ticks never overlap, and a tick that throws is
+logged instead of ending the loop. Pass a function as the interval to pick it
+fresh from the live config before each tick.
 
 For anything that must run at a wall-clock time, use `nextMidnightEpoch()` /
 `nextTimeOfDayEpoch()` from `core/utils/time.ts` and reschedule after each run

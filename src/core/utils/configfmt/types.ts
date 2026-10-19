@@ -67,6 +67,12 @@ export interface ConfigNode {
    * stay a float, a quote style), handed back to `literal` on edit.
    */
   hint?: string;
+  /**
+   * True for a number written without a fractional part. An edit to such a
+   * setting must stay a safe integer: writing `1.5` into a count would
+   * otherwise re-parse cleanly and be saved as entered.
+   */
+  integer?: boolean;
 }
 
 /** Stable identity of a path. Joining with a separator would collide. */
@@ -106,3 +112,12 @@ export interface ConfigFormat {
 
 /** Thrown when an edit cannot be applied safely. Never partially written. */
 export class ConfigEditError extends Error {}
+
+/** Messages shared by every adapter's `literal`, so the wording cannot drift. */
+export const EDIT_ERRORS = {
+  unsafeLayout: "This value has a layout the editor cannot rewrite safely.",
+  lineBreak: "A value cannot contain a line break.",
+  numberRequired: "A number is required.",
+  wholeNumber: "This setting needs a whole number.",
+  integerTooLarge: "This number is too large to be stored exactly.",
+} as const;

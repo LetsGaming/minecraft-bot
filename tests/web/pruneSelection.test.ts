@@ -112,7 +112,9 @@ describe("applying operations", () => {
     const m = model();
     m.apply([op(0, 0, 0, 0)]);
     m.apply([op(0, 0, 0, 0, "remove")]);
-    expect(m.regionBits(DIM, 0, 0)).toBeUndefined();
+    const regions: string[] = [];
+    m.forEachRegion(DIM, (rx, rz) => regions.push(`${rx},${rz}`));
+    expect(regions).toEqual([]);
   });
 });
 
@@ -215,6 +217,40 @@ describe("the operation list and its cap", () => {
     expect(spread.apply([op(0, 0, 0, 0), op(2, 2, 2, 2), op(4, 4, 4, 4)])).toBe(true);
     expect(spread.apply([op(6, 6, 6, 6)])).toBe(false);
     expect(spread.count(DIM)).toBe(3);
+  });
+
+  it("a refused gesture leaves the history and the selection exactly as they were", () => {
+    const m = model(3);
+    m.apply([op(0, 0, 0, 0)]);
+    m.apply([op(2, 2, 2, 2)]);
+    m.apply([op(4, 4, 4, 4)]);
+    expect(m.apply([op(6, 6, 6, 6)])).toBe(false);
+    expect(m.ops.length).toBe(3);
+    expect(m.count(DIM)).toBe(3);
+    expect(m.undo()).toBe(true);
+    expect(m.count(DIM)).toBe(2);
+    expect(m.redo()).toBe(true);
+    expect(m.count(DIM)).toBe(3);
+  });
+
+  it("compacting keeps the operations of a dimension whose map is not loaded", () => {
+    const loaded = new Set(["overworld"]);
+    const m = new SelectionModel((d) => (loaded.has(d) ? GRID : []), 4);
+    m.apply([op(0, 0, 0, 0, "add", "the_nether")]);
+    m.apply([op(0, 0, 0, 0)]);
+    m.apply([op(1, 0, 1, 0)]);
+    m.apply([op(2, 0, 2, 0)]);
+    expect(m.apply([op(3, 0, 3, 0)])).toBe(true);
+    expect(m.ops.filter((o) => o.dimension === "the_nether")).toEqual([op(0, 0, 0, 0, "add", "the_nether")]);
+    loaded.add("the_nether");
+    m.refresh();
+    expect(m.count("the_nether")).toBe(1);
+  });
+
+  it("counts only the chunks the caller accepts", () => {
+    const m = model();
+    m.apply([op(0, 0, 3, 0)]);
+    expect(m.count(DIM, (_rx, _rz, slot) => slot % 2 === 0)).toBe(2);
   });
 
   it("the cap matches what the setup suite accepts", () => {

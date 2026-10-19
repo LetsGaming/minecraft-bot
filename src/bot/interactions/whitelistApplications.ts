@@ -1,5 +1,5 @@
 /**
- * Whitelist applications — non-admins request access with a button, a
+ * Whitelist applications, non-admins request access with a button, a
  * modal collects their Minecraft name, admins approve or deny from a
  * queue channel. Approval takes the exact same path as /whitelist
  * (performWhitelistAdd: Mojang lookup, console add, audit, cache).
@@ -13,9 +13,9 @@
  *   }
  *
  * All components use stable customIds (wlapp:…) routed through the
- * global interactionCreate handler — NOT collectors — so buttons keep
- * working across restarts. data/whitelistApplications.json owns the
- * pending queue and the prompt-message bookkeeping.
+ * global interactionCreate handler, NOT collectors, so buttons keep
+ * working across restarts. The application queue and the prompt-message
+ * bookkeeping live in whitelistApplicationStore; this file is Discord I/O.
  */
 import { EmbedCategory } from "@mcbot/schema/embedCategories.js";
 import { randomBytes } from "crypto";
@@ -34,14 +34,13 @@ import {
   type ButtonInteraction,
   type ModalSubmitInteraction,
 } from "discord.js";
-import { kvGet, kvUpdate } from "@mcbot/core/db/kv.js";
 import { loadConfig, getServerIds } from "@mcbot/core/config.js";
-import { getServerInstance } from "@mcbot/core/utils/server/server.js";
 import {
   resolveDefaultServerId,
   visibleServerIdsForGuild,
 } from "@mcbot/core/utils/server/guildTargets.js";
-import { isServerAdmin, getMemberRoleIds } from "../commands/middleware.js";
+import { isInvokerAdmin } from "../utils/guild/permissions.js";
+import { getGuildScopedServer } from "../utils/guild/guildRouter.js";
 import { performWhitelistAdd } from "../commands/shared/whitelistAdd.js";
 import { createEmbed } from "../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../utils/embeds/embedColors.js";
@@ -51,10 +50,26 @@ import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
 import { t, runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import {
+  addPendingApplication,
+  claimWhitelistApplication,
+  countPendingApplications,
+  loadWhitelistApplications,
+  releaseWhitelistApplication,
+  removeWhitelistApplication,
+  settleWhitelistApplication,
+  updateWhitelistApplications,
+  type WhitelistApplication,
+} from "@mcbot/core/utils/stores/whitelistApplicationStore.js";
+import {
   resolveGuildConfigs,
   type GuildConfigSource,
 } from "../utils/guild/guildConfigs.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
+
+export type {
+  ApplicationStatus,
+  WhitelistApplication,
+} from "@mcbot/core/utils/stores/whitelistApplicationStore.js";
 
 const APPLY_ID = "wlapp:apply";
 const MODAL_ID = "wlapp:modal";
@@ -63,75 +78,6 @@ const DENY_PREFIX = "wlapp:deny:";
 
 /** Pending applications per user per guild (spam guard). */
 const MAX_PENDING_PER_USER = 1;
-
-/**
- * Decided-application history kept per store (pending applications are
- * never trimmed — they still need a working Approve/Deny button).
- * Storage audit: this array only ever grew via push(), so it was the
- * kv_store's one truly unbounded blob.
- */
-const MAX_DECIDED_APPLICATIONS = 200;
-
-export type ApplicationStatus = "pending" | "approved" | "denied";
-
-export interface WhitelistApplication {
-  id: string;
-  guildId: string;
-  userId: string;
-  userTag: string;
-  mcName: string;
-  note?: string;
-  serverId: string;
-  status: ApplicationStatus;
-  createdAt: number;
-  decidedBy?: string;
-  decidedAt?: number;
-}
-
-interface ApplicationStore {
-  version: 1;
-  /** guildId → the persistent Apply prompt message. */
-  prompts: Record<string, { channelId: string; messageId: string }>;
-  applications: WhitelistApplication[];
-}
-
-async function loadStore(): Promise<ApplicationStore> {
-  const raw = kvGet<Partial<ApplicationStore>>("whitelistApplications");
-  return {
-    version: 1,
-    prompts: raw?.prompts ?? {},
-    applications: raw?.applications ?? [],
-  };
-}
-
-/**
- * AUD-005: change the store in one transaction against what is on disk
- * now. Every caller awaits Discord between deciding and writing; saving a
- * copy loaded before those awaits wrote it over applications submitted or
- * decided in the meantime (an approved one could go back to pending).
- */
-async function updateStore<T>(fn: (store: ApplicationStore) => T): Promise<T> {
-  let out!: T;
-  kvUpdate<Partial<ApplicationStore>>("whitelistApplications", (raw) => {
-    const store: ApplicationStore = {
-      version: 1,
-      prompts: raw?.prompts ?? {},
-      applications: raw?.applications ?? [],
-    };
-    out = fn(store);
-    // Trim decided history; pending applications always survive.
-    const pending = store.applications.filter((a) => a.status === "pending");
-    const decided = store.applications
-      .filter((a) => a.status !== "pending")
-      .sort((a, b) => (a.decidedAt ?? 0) - (b.decidedAt ?? 0))
-      .slice(-MAX_DECIDED_APPLICATIONS);
-    store.applications = [...decided, ...pending].sort(
-      (a, b) => a.createdAt - b.createdAt,
-    );
-    return store;
-  });
-  return out;
-}
 
 /** The server IDs this guild's applications may target. */
 function visibleServerIds(guildId: string): string[] {
@@ -152,14 +98,14 @@ function defaultApplicationServer(guildId: string): string | null {
 /**
  * Ensure every configured guild has a live Apply prompt: reuse the
  * stored message when it still exists, repost otherwise. Called at init
- * and on config reload — idempotent by design.
+ * and on config reload, idempotent by design.
  */
 export async function ensureApplicationPrompts(
   client: Client,
   guildConfigs: GuildConfigSource,
 ): Promise<void> {
-  const store = await loadStore();
-  const posted: ApplicationStore["prompts"] = {};
+  const store = loadWhitelistApplications();
+  const posted: Record<string, { channelId: string; messageId: string }> = {};
 
   for (const [guildId, gcfg] of Object.entries(
     resolveGuildConfigs(guildConfigs),
@@ -175,7 +121,7 @@ export async function ensureApplicationPrompts(
           const msg = await channel.messages
             .fetch(existing.messageId)
             .catch(() => null);
-          if (msg) continue; // prompt alive — nothing to do
+          if (msg) continue; // prompt alive, nothing to do
         }
       } catch {
         /* fall through to repost */
@@ -216,7 +162,7 @@ export async function ensureApplicationPrompts(
   }
 
   if (Object.keys(posted).length > 0) {
-    await updateStore((current) => {
+    updateWhitelistApplications((current) => {
       Object.assign(current.prompts, posted);
     });
   }
@@ -277,7 +223,7 @@ async function handleApplyButton(
       );
 
     // Multi-server guild without a default: the applicant picks the
-    // target — better than bouncing them with a config error.
+    // target, better than bouncing them with a config error.
     if (gcfg && !defaultApplicationServer(guildId)) {
       const ids = visibleServerIds(guildId).slice(0, 25);
       modal.addLabelComponents(
@@ -332,7 +278,7 @@ async function handleModalSubmit(
     }
 
     // Server: the guild default when unambiguous, otherwise the modal's
-    // select. Re-validate against the visible set — customIds and modal
+    // select. Re-validate against the visible set, customIds and modal
     // payloads are client-controlled.
     let serverId = defaultApplicationServer(guildId);
     if (!serverId) {
@@ -352,14 +298,7 @@ async function handleModalSubmit(
       return;
     }
 
-    const pendingCount = (store: ApplicationStore): number =>
-      store.applications.filter(
-        (a) =>
-          a.status === "pending" &&
-          a.guildId === guildId &&
-          a.userId === interaction.user.id,
-      ).length;
-    if (pendingCount(await loadStore()) >= MAX_PENDING_PER_USER) {
+    if (countPendingApplications(guildId, interaction.user.id) >= MAX_PENDING_PER_USER) {
       await interaction.editReply({ content: t("wlapp.alreadyPending") });
       return;
     }
@@ -376,12 +315,19 @@ async function handleModalSubmit(
       createdAt: Date.now(),
     };
 
-    // Queue post first — an application nobody can see must not exist.
     const channel = await interaction.client.channels
       .fetch(adminChannelId)
       .catch(() => null);
     if (!channel || !("send" in channel)) {
       await interaction.editReply({ content: t("wlapp.queueBroken") });
+      return;
+    }
+
+    // The row goes in first (the limit is enforced in the same transaction),
+    // so a concurrent second submit never posts a queue message for an
+    // application that was not stored. A failed post takes the row back out.
+    if (!addPendingApplication(app, MAX_PENDING_PER_USER)) {
+      await interaction.editReply({ content: t("wlapp.alreadyPending") });
       return;
     }
 
@@ -395,21 +341,15 @@ async function handleModalSubmit(
         .setLabel(t("wlapp.denyButton"))
         .setStyle(ButtonStyle.Danger),
     );
-    await channel.send({
-      embeds: [buildQueueEmbed(app)],
-      components: [row],
-      ...roleMention(cfg.mentionRole),
-    });
-
-    const accepted = await updateStore((current) => {
-      // Re-checked here: a second submit may have landed during the post.
-      if (pendingCount(current) >= MAX_PENDING_PER_USER) return false;
-      current.applications.push(app);
-      return true;
-    });
-    if (!accepted) {
-      await interaction.editReply({ content: t("wlapp.alreadyPending") });
-      return;
+    try {
+      await channel.send({
+        embeds: [buildQueueEmbed(app)],
+        components: [row],
+        ...roleMention(cfg.mentionRole),
+      });
+    } catch (err) {
+      removeWhitelistApplication(app.id);
+      throw err;
     }
 
     await interaction.editReply({
@@ -448,14 +388,9 @@ async function handleDecisionButton(
   if (!guildId) return;
 
   await runWithGuildLocale(guildId, async () => {
-    // Buttons bypass the slash middleware — enforce the exact same
+    // Buttons bypass the slash middleware, so enforce the exact same
     // admin check here (queue channels can be misconfigured as public).
-    const allowed = isServerAdmin(
-      interaction.user.id,
-      getMemberRoleIds(interaction),
-      guildId,
-    );
-    if (!allowed) {
+    if (!isInvokerAdmin(interaction)) {
       await interaction.reply({
         content: t("wlapp.notAdmin"),
         flags: MessageFlags.Ephemeral,
@@ -470,21 +405,27 @@ async function handleDecisionButton(
 
     await interaction.deferUpdate();
 
-    const store = await loadStore();
-    const app = store.applications.find((a) => a.id === appId);
-    if (!app || app.status !== "pending") {
-      // Stale button (already decided, or the store was pruned).
-      await interaction.followUp({
+    const staleReply = (): Promise<unknown> =>
+      interaction.followUp({
         content: t("wlapp.stale"),
         flags: MessageFlags.Ephemeral,
       });
+
+    // Claim first: only the admin who wins the claim acts, so two admins can
+    // neither both whitelist nor approve and deny the same application.
+    const app = claimWhitelistApplication(appId, guildId, interaction.user.id);
+    if (!app) {
+      await staleReply();
       return;
     }
 
+    let mcName = app.mcName;
     let statusLine: string;
     if (approve) {
-      const server = getServerInstance(app.serverId);
+      // The stored server ID is re-checked against what the guild may target now.
+      const server = getGuildScopedServer(guildId, app.serverId);
       if (!server) {
+        releaseWhitelistApplication(app.id, interaction.user.id);
         await interaction.followUp({
           content: t("wlapp.serverGone", { server: app.serverId }),
           flags: MessageFlags.Ephemeral,
@@ -496,61 +437,53 @@ async function handleDecisionButton(
           tag: interaction.user.tag,
           id: interaction.user.id,
         });
-        app.mcName = added.name;
+        mcName = added.name;
       } catch (err) {
-        const msg = errMsg(err);
+        releaseWhitelistApplication(app.id, interaction.user.id);
         await interaction.followUp({
-          content: t("wlapp.approveFailed", { error: msg }),
+          content: t("wlapp.approveFailed", { error: errMsg(err) }),
           flags: MessageFlags.Ephemeral,
         });
         return;
       }
-      app.status = "approved";
       statusLine = t("wlapp.approvedBy", { by: interaction.user.tag });
     } else {
-      app.status = "denied";
       statusLine = t("wlapp.deniedBy", { by: interaction.user.tag });
     }
 
-    app.decidedBy = interaction.user.tag;
-    app.decidedAt = Date.now();
-    const recorded = await updateStore((current) => {
-      const target = current.applications.find((a) => a.id === app.id);
-      // Decided by another admin while this one was whitelisting.
-      if (!target || target.status !== "pending") return false;
-      Object.assign(target, app);
-      return true;
+    const decided = settleWhitelistApplication(app.id, interaction.user.id, {
+      status: approve ? "approved" : "denied",
+      mcName,
+      decidedBy: interaction.user.tag,
+      decidedAt: Date.now(),
     });
-    if (!recorded) {
-      await interaction.followUp({
-        content: t("wlapp.stale"),
-        flags: MessageFlags.Ephemeral,
-      });
+    if (!decided) {
+      await staleReply();
       return;
     }
 
     await recordAdminAction({
       action: approve ? "wlapp approve" : "wlapp deny",
-      server: app.serverId,
+      server: decided.serverId,
       by: interaction.user.tag,
       byId: interaction.user.id,
       guildId,
-      detail: `${app.mcName} (applicant ${app.userTag})`,
+      detail: `${decided.mcName} (applicant ${decided.userTag})`,
     });
 
     // Freeze the queue message: final embed, no buttons.
     await interaction.editReply({
-      embeds: [buildQueueEmbed(app, statusLine)],
+      embeds: [buildQueueEmbed(decided, statusLine)],
       components: [],
     });
 
     // Tell the applicant. Closed DMs are their choice, not an error.
     try {
-      const user = await interaction.client.users.fetch(app.userId);
+      const user = await interaction.client.users.fetch(decided.userId);
       await user.send(
         approve
-          ? t("wlapp.dmApproved", { name: app.mcName, server: app.serverId })
-          : t("wlapp.dmDenied", { name: app.mcName }),
+          ? t("wlapp.dmApproved", { name: decided.mcName, server: decided.serverId })
+          : t("wlapp.dmDenied", { name: decided.mcName }),
       );
     } catch {
       /* closed DMs */

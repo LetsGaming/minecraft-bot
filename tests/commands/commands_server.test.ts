@@ -10,8 +10,6 @@ import { createErrorEmbed } from "../../src/bot/utils/embeds/embedUtils.js";
 vi.mock("../../src/bot/commands/middleware.js", () => ({
   withErrorHandling: vi.fn((fn) => fn),
   requireServerAdmin: vi.fn((fn) => fn),
-  isServerAdmin: vi.fn().mockReturnValue(true),
-  getMemberRoleIds: vi.fn().mockReturnValue([]),
   replyDenied: vi.fn(),
   replyError: vi.fn(),
   errorContentOf: vi.fn((err: Error) => ({ problem: err.message })),
@@ -19,6 +17,7 @@ vi.mock("../../src/bot/commands/middleware.js", () => ({
 
 vi.mock("../../src/bot/utils/guild/guildRouter.js", () => ({
   resolveServer: vi.fn(),
+  assertMayTargetServerId: vi.fn(),
 }));
 
 vi.mock("../../src/bot/utils/embeds/embedUtils.js", async (importOriginal) => ({
@@ -43,6 +42,10 @@ vi.mock("../../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+vi.mock("../../src/bot/utils/guild/permissions.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/bot/utils/guild/permissions.js")>()),
+  isInvokerAdmin: vi.fn().mockReturnValue(true),
+}));
 vi.mock("../../src/core/utils/stores/adminAudit.js", () => ({
   recordAdminAction: vi.fn().mockResolvedValue(undefined),
   loadAdminAudit: vi.fn().mockResolvedValue([]),
@@ -60,7 +63,10 @@ vi.mock("../../src/bot/logWatcher/watchers/monitors/downtimeMonitor.js", () => (
   suppressAlerts: vi.fn(),
 }));
 
-import { resolveServer } from "../../src/bot/utils/guild/guildRouter.js";
+import {
+  assertMayTargetServerId,
+  resolveServer,
+} from "../../src/bot/utils/guild/guildRouter.js";
 import * as serverAccess from "../../src/core/utils/server/serverAccess.js";
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -92,12 +98,10 @@ function makeServer(id = "survival", overrides: Record<string, unknown> = {}) {
     getList: vi
       .fn()
       .mockResolvedValue({
-        playerCount: "2",
-        maxPlayers: "20",
-        players: ["Alice", "Bob"],
+        ok: true,
+        value: { playerCount: "2", maxPlayers: "20", players: ["Alice", "Bob"] },
       }),
     getTps: vi.fn().mockResolvedValue({ tps1m: 20, tps5m: 20, tps15m: 20 }),
-    supportsTps: true,
     getSeed: vi.fn().mockResolvedValue({ ok: true, value: "123456789" }),
     send: vi.fn().mockResolvedValue({ kind: "delivered", output: "" }),
     ...overrides,
@@ -236,12 +240,6 @@ describe("/tps command", () => {
     const interaction = makeInteraction();
     await execute(interaction);
     expect(interaction.editReply).toHaveBeenCalled();
-  });
-
-  it("throws when TPS is not supported", async () => {
-    const server = makeServer("srv", { supportsTps: false });
-    vi.mocked(resolveServer).mockReturnValue(server);
-    await expect(execute(makeInteraction())).rejects.toThrow("RCON");
   });
 
   it("throws when getTps returns null", async () => {
@@ -475,7 +473,7 @@ describe("/server control command", () => {
 
     vi.useFakeTimers();
     try {
-      vi.mocked(serverAccess.getList).mockReturnValueOnce(new Promise(() => {}));
+      server.getList.mockReturnValueOnce(new Promise(() => {}));
       const pending = ask();
       await vi.advanceTimersByTimeAsync(1_600);
       const hung = await pending;
@@ -484,7 +482,7 @@ describe("/server control command", () => {
       vi.useRealTimers();
     }
 
-    vi.mocked(serverAccess.getList).mockRejectedValueOnce(new Error("timeout"));
+    server.getList.mockResolvedValueOnce({ ok: false, reason: "unreachable" });
     expect(embedOf(await ask())).toMatch(/not available/);
   });
 
@@ -522,8 +520,7 @@ describe("/server control command", () => {
 
   it("stops after the confirm button: audit, alert suppression, public progress", async () => {
     const server = makeServer();
-    const serverModule = await import("../../src/core/utils/server/server.js");
-    vi.spyOn(serverModule, "getServerInstance").mockReturnValue(server as never);
+    vi.mocked(assertMayTargetServerId).mockReturnValue(server as never);
     vi.mocked(serverAccess.runScript).mockResolvedValue({
       exitCode: 0,
       output: "Server stopped",

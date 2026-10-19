@@ -14,7 +14,8 @@ vi.mock("../../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-import { runMigrations } from "../../src/core/db/migrations.js";
+import { createHash } from "node:crypto";
+import { MIGRATIONS, runMigrations } from "../../src/core/db/migrations.js";
 import { openDatabase, type SqlDatabase } from "../../src/core/db/driver.js";
 import { mapRows, mapRow, col } from "../../src/core/db/rows.js";
 
@@ -63,6 +64,25 @@ describe("runMigrations checksums", () => {
     );
 
     expect(() => runMigrations(db)).toThrow(/has changed since it was applied/);
+    db.close();
+  });
+
+  it("starts on a database whose checksums include comments, and upgrades them", () => {
+    const db = freshDb();
+    runMigrations(db);
+    const current = checksums(db);
+
+    for (const m of MIGRATIONS) {
+      const old = createHash("sha256")
+        .update(m.sql.replace(/\s+/g, " ").trim())
+        .digest("hex");
+      db.prepare("UPDATE schema_migrations SET checksum = ? WHERE id = ?").run(old, m.id);
+    }
+    // The fixture must really differ from the new scheme, or this proves nothing.
+    expect(checksums(db)).not.toEqual(current);
+
+    expect(() => runMigrations(db)).not.toThrow();
+    expect(checksums(db)).toEqual(current);
     db.close();
   });
 

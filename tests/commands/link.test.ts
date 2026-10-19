@@ -12,12 +12,27 @@ import { randomBytes } from "crypto";
 
 // ── Top-level mocks — must be at file scope for Vitest hoisting ───────────
 
-vi.mock("../../src/core/utils/stores/linkUtils.js", () => ({
+vi.mock("../../src/core/utils/stores/linkStore.js", () => ({
   confirmLinkCode: vi.fn(),
+  loadLinkedAccountsOrEmpty: vi.fn().mockResolvedValue({}),
+  findDiscordIdByMcName: vi.fn().mockReturnValue(null),
+}));
+
+vi.mock("../../src/core/utils/commands/commandPolicy.js", () => ({
+  resolveCommandPolicy: vi.fn().mockReturnValue({ enabled: true, adminOnly: false }),
+}));
+
+vi.mock("../../src/core/utils/commands/commandUsage.js", () => ({
+  recordCommandUsage: vi.fn(),
 }));
 
 vi.mock("../../src/bot/utils/guild/linkedRole.js", () => ({
   syncLinkedRole: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("../../src/core/utils/minecraft/serverMessages.js", () => ({
+  whisper: vi.fn().mockResolvedValue(undefined),
+  tellraw: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("../../src/bot/logWatcher/logWatcher.js", () => ({
@@ -28,7 +43,8 @@ vi.mock("../../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-import { confirmLinkCode } from "../../src/core/utils/stores/linkUtils.js";
+import { confirmLinkCode } from "../../src/core/utils/stores/linkStore.js";
+import { whisper } from "../../src/core/utils/minecraft/serverMessages.js";
 import { syncLinkedRole } from "../../src/bot/utils/guild/linkedRole.js";
 
 // ── Code generation ────────────────────────────────────────────────────────
@@ -62,11 +78,8 @@ describe("logWatcher link handler", () => {
     vi.clearAllMocks();
   });
 
-  afterEach(async () => {
+  afterEach(() => {
     vi.useRealTimers();
-    // Reset in-memory rate-limit state to prevent bleed between tests.
-    const mod = await import("../../src/bot/logWatcher/commands/connection/link.js");
-    mod._resetStateForTesting?.();
     vi.clearAllMocks();
   });
 
@@ -80,7 +93,7 @@ describe("logWatcher link handler", () => {
     const send = vi.fn().mockResolvedValue(undefined);
     return {
       client: {
-        users: { cache: new Map([[discordId, { send }]]) },
+        users: { fetch: vi.fn().mockResolvedValue({ id: discordId, send }) },
       },
       send,
     };
@@ -142,23 +155,69 @@ describe("logWatcher link handler", () => {
     );
   });
 
-  it("rate-limits repeated attempts from the same player", async () => {
-    vi.mocked(confirmLinkCode).mockResolvedValue({ status: "unknown-code" });
+  it("whispers the sender when the code was already used", async () => {
+    vi.mocked(confirmLinkCode).mockResolvedValue({ status: "already-used" });
     const handler = await loadHandler();
-    const { client } = makeClient("discord-1");
+    const { client, send } = makeClient("discord-1");
+    const server = { id: "main" };
 
-    await handler("Steve", { code: "AAAA1111" }, client as never, null as never);
-    await handler("Steve", { code: "BBBB2222" }, client as never, null as never);
+    await handler("Mallory", { code: "USED1111" }, client as never, server as never);
+
+    expect(syncLinkedRole).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+    expect(whisper).toHaveBeenCalledWith(
+      server,
+      "Mallory",
+      expect.stringContaining("already been used"),
+    );
+  });
+
+  it("rate-limits repeated attempts from the same player through the command cooldown", async () => {
+    vi.mocked(confirmLinkCode).mockResolvedValue({ status: "unknown-code" });
+    const { registerLogCommand } = await import("../../src/bot/logWatcher/logWatcher.js");
+    const mod = await import("../../src/bot/logWatcher/commands/connection/link.js");
+    mod.init();
+    const [regex, registered] = vi.mocked(registerLogCommand).mock.calls.at(-1)!;
+    const { client } = makeClient("discord-1");
+    const server = { id: "main", send: vi.fn().mockResolvedValue({ kind: "delivered", output: "" }) };
+    const say = (player: string, code: string) =>
+      registered(
+        (regex as RegExp).exec(`[12:00:00] [Server thread/INFO]: <${player}> !link ${code}`)!,
+        client as never,
+        server as never,
+      );
+
+    await say("Steve", "AAAA1111");
+    await say("Steve", "BBBB2222");
     expect(confirmLinkCode).toHaveBeenCalledTimes(1);
+    expect(whisper).toHaveBeenCalledWith(server, "Steve", expect.stringContaining("Please wait"));
 
     // A different player is not affected by Steve's cooldown.
-    await handler("Alex", { code: "CCCC3333" }, client as never, null as never);
+    await say("Alex", "CCCC3333");
     expect(confirmLinkCode).toHaveBeenCalledTimes(2);
 
     // After the cooldown window, Steve may try again.
     vi.advanceTimersByTime(3_100);
-    await handler("Steve", { code: "DDDD4444" }, client as never, null as never);
+    await say("Steve", "DDDD4444");
     expect(confirmLinkCode).toHaveBeenCalledTimes(3);
+  });
+
+  it("reaches the user through a fetch when the cache does not hold them", async () => {
+    vi.mocked(confirmLinkCode).mockResolvedValue({ status: "expired", discordId: "discord-5" });
+    const handler = await loadHandler();
+    const { client, send } = makeClient("discord-5");
+    await handler("Steve", { code: "EXPIRED1" }, client as never, null as never);
+    expect(client.users.fetch).toHaveBeenCalledWith("discord-5");
+    expect(send).toHaveBeenCalled();
+  });
+
+  it("still links when the user cannot be fetched", async () => {
+    vi.mocked(confirmLinkCode).mockResolvedValue({ status: "linked", discordId: "discord-6" });
+    const handler = await loadHandler();
+    const { client } = makeClient("discord-6");
+    client.users.fetch.mockRejectedValue(new Error("Unknown User"));
+    await handler("Steve", { code: "ABCD1234" }, client as never, null as never);
+    expect(syncLinkedRole).toHaveBeenCalledWith(client, "discord-6", "add");
   });
 
   it("survives a store failure without throwing", async () => {

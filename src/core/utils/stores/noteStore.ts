@@ -1,17 +1,17 @@
 /**
- * Admin notes on players — single owner of kv_store["playerNotes"].
+ * Admin notes on players, single owner of kv_store["playerNotes"].
  *
  * Keyed by Minecraft UUID so notes survive name changes (playerUtils
  * already resolves UUIDs from the whitelist/usercache); each entry keeps
  * the last known name for display and name-based fallback lookups.
  *
- * Deliberately thin — annotations only, which respects the roadmap's
+ * Deliberately thin, annotations only, which respects the roadmap's
  * "no ban database of its own" boundary. Every mutation is audited by the
  * /note command via recordAdminAction.
  */
-import { kvGet, kvMutate, kvSet } from "../../db/kv.js";
+import { versionedStore } from "./versionedStore.js";
 
-/** Keep the newest N notes per player — moderation memory, not a ledger. */
+/** Keep the newest N notes per player, moderation memory, not a ledger. */
 export const MAX_NOTES_PER_PLAYER = 25;
 
 export interface PlayerNote {
@@ -34,35 +34,21 @@ export interface PlayerNotesStore {
   players: Record<string, PlayerNotesEntry>;
 }
 
-function isV1Store(raw: unknown): raw is PlayerNotesStore {
-  return (
-    typeof raw === "object" &&
-    raw !== null &&
-    (raw as { version?: unknown }).version === 1 &&
-    typeof (raw as { players?: unknown }).players === "object" &&
-    (raw as { players?: unknown }).players !== null
-  );
-}
+const notesDoc = versionedStore<PlayerNotesStore>(
+  "playerNotes",
+  { version: 1, container: "players" },
+  () => ({ version: 1, players: {} }),
+);
 
 export async function loadNotesStore(): Promise<PlayerNotesStore> {
-  const raw = kvGet<unknown>("playerNotes");
-  if (isV1Store(raw)) return raw;
-  return { version: 1, players: {} };
+  return notesDoc.load();
 }
 
-export async function saveNotesStore(store: PlayerNotesStore): Promise<void> {
-  kvSet("playerNotes", store);
-}
-
-/** Change the store in one transaction (AUD-005); see kvMutate. */
+/** Change the store in one transaction; see versionedStore. */
 export async function updateNotesStore<T>(
   fn: (store: PlayerNotesStore) => T,
 ): Promise<T> {
-  return kvMutate<PlayerNotesStore, T>(
-    "playerNotes",
-    (raw) => (isV1Store(raw) ? raw : { version: 1, players: {} }),
-    fn,
-  );
+  return notesDoc.update(fn);
 }
 
 export function addNote(

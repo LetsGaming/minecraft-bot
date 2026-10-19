@@ -80,7 +80,7 @@ lives by feature under `src/core/utils/server/access/`. Callers keep importing
 
 | Module | Responsibility |
 |---|---|
-| `apiClient` | `apiGet`/`apiGetRaw`/`apiPost`/`apiDelete`, URL building, timeouts, circuit breaker wiring, `RateLimitedError` |
+| `apiClient` | `wrapperFetch` (API key, timeout, circuit breaker, 429) and the `apiGet`/`apiGetOrNull`/`apiGetRaw`/`apiPost`/`apiPut`/`apiDelete` wrappers over it, URL building, `ApiError`, `RateLimitedError` |
 | `health` | `getHealth` (wrapper first, direct ping as second opinion), `isRunning`, `getList`, `getTps`, game-port memory |
 | `commands` | `sendCommandOutcome` and its reply parsing |
 | `host` | wrapper `/info` (`getRemoteInfo`), `versionAtLeast` |

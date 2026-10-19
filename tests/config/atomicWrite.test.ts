@@ -7,6 +7,7 @@ import {
   existingFileMode,
   sweepStaleTemps,
   tempSiblingPath,
+  writeFileAtomic,
   writeFileAtomicSync,
 } from "../../src/core/utils/config/atomicWrite.js";
 
@@ -103,5 +104,64 @@ describe("writeFileAtomicSync", () => {
         sweepStaleTemps(path.join(dir, "nope", "config.json")),
       ).not.toThrow();
     });
+  });
+});
+
+describe("writeFileAtomic", () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "atomic-write-async-"));
+  });
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("replaces the file and leaves no temp file behind", async () => {
+    const target = path.join(dir, "config.json");
+    fs.writeFileSync(target, "old");
+    await writeFileAtomic(target, "new");
+    expect(fs.readFileSync(target, "utf8")).toBe("new");
+    expect(fs.readdirSync(dir)).toEqual(["config.json"]);
+  });
+
+  it("creates the file when it does not exist", async () => {
+    const target = path.join(dir, "fresh.json");
+    await writeFileAtomic(target, "{}");
+    expect(fs.readFileSync(target, "utf8")).toBe("{}");
+  });
+
+  it("runs the hook after the temp file is written and before the rename", async () => {
+    const target = path.join(dir, "config.json");
+    fs.writeFileSync(target, "old");
+    const seen: { target: string; names: string[] }[] = [];
+    await writeFileAtomic(target, "new", async () => {
+      seen.push({
+        target: fs.readFileSync(target, "utf8"),
+        names: fs.readdirSync(dir).sort(),
+      });
+    });
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.target).toBe("old");
+    expect(seen[0]!.names).toHaveLength(2);
+    expect(seen[0]!.names[0]).toBe("config.json");
+    expect(fs.readFileSync(target, "utf8")).toBe("new");
+  });
+
+  it("keeps the original and removes the temp file when the hook fails", async () => {
+    const target = path.join(dir, "config.json");
+    fs.writeFileSync(target, "old");
+    await expect(
+      writeFileAtomic(target, "new", () => Promise.reject(new Error("backup failed"))),
+    ).rejects.toThrow("backup failed");
+    expect(fs.readFileSync(target, "utf8")).toBe("old");
+    expect(fs.readdirSync(dir)).toEqual(["config.json"]);
+  });
+
+  it.skipIf(!posix)("keeps an existing restrictive mode", async () => {
+    const target = path.join(dir, "config.json");
+    fs.writeFileSync(target, "old");
+    fs.chmodSync(target, 0o600);
+    await writeFileAtomic(target, "new");
+    expect(modeOf(target)).toBe(0o600);
   });
 });

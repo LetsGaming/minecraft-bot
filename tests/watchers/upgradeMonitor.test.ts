@@ -240,6 +240,27 @@ describe("the monitor", () => {
     expect(JSON.stringify(edit.mock.calls[0])).toContain("is now on");
   });
 
+  it("posts a new message when the live one was deleted", async () => {
+    const m = monitor();
+    current = job();
+    await m.tick([server]);
+    edit.mockRejectedValueOnce(Object.assign(new Error("Unknown Message"), { code: 10008 }));
+    current = job({ events: [...job().events, ev(3, "stop", "done")], next: 3 });
+    await m.tick([server]);
+    expect(edit).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps editing after a transient edit failure", async () => {
+    const m = monitor();
+    current = job();
+    await m.tick([server]);
+    edit.mockRejectedValueOnce(Object.assign(new Error("503"), { status: 503 }));
+    current = job({ events: [...job().events, ev(3, "stop", "done")], next: 3 });
+    await m.tick([server]);
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
   it("does not announce a job that finished long ago", async () => {
     const m = monitor();
     current = job({

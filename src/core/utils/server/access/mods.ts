@@ -9,7 +9,8 @@ import type {
   ModToggleResult,
   ModUpdateCheck,
 } from "@mcbot/schema/wire/index.js";
-import { apiGet, apiPost, apiDelete } from "./apiClient.js";
+import { ApiError, apiGet, apiPost, apiDelete } from "./apiClient.js";
+import { WRAPPER_TIMEOUTS_MS } from "./wrapperTimeouts.js";
 
 export interface ModSlugs {
   slugs: string[];
@@ -29,7 +30,10 @@ export async function readModSlugs(cfg: ServerConfig): Promise<ModSlugs> {
     apiGet<{ slugs: string[]; mtimeMs: number }>(cfg, "/mods"),
     // Version and loader come only with the mod-management feature; without
     // it the plain slug list still answers /mods.
-    listInstalledMods(cfg).catch(() => null),
+    listInstalledMods(cfg).catch((err: unknown) => {
+      if (err instanceof ApiError && (err.status === 404 || err.status === 405)) return null;
+      throw err;
+    }),
   ]);
   return {
     slugs: list.slugs,
@@ -38,11 +42,6 @@ export async function readModSlugs(cfg: ServerConfig): Promise<ModSlugs> {
     modLoader: installed?.modLoader ?? null,
   };
 }
-
-//
-// The result types come from the wrapper's generated contract
-// (@mcbot/schema/wire). Casting the JSON asserts that contract, gated at
-// connect time by the feature handshake, the same basis as every apiGet above.
 
 /** The richer installed list (versions, loader, filenames) the Mods tab reads. */
 export async function listInstalledMods(cfg: ServerConfig): Promise<InstalledMods> {
@@ -60,7 +59,7 @@ export async function addMod(
     versionId?: string;
   },
 ): Promise<ModAddResult> {
-  return apiPost<ModAddResult>(cfg, "/mods", body, 130_000);
+  return apiPost<ModAddResult>(cfg, "/mods", body, WRAPPER_TIMEOUTS_MS.modDownload);
 }
 
 /** Remove an installed mod by slug. */
@@ -77,7 +76,7 @@ export async function checkModUpdates(
   mcVersion?: string,
 ): Promise<ModUpdateCheck> {
   const q = mcVersion ? `?mcVersion=${encodeURIComponent(mcVersion)}` : "";
-  return apiGet<ModUpdateCheck>(cfg, `/mods/updates${q}`, 130_000);
+  return apiGet<ModUpdateCheck>(cfg, `/mods/updates${q}`, WRAPPER_TIMEOUTS_MS.modDownload);
 }
 
 /** Apply all available updates. Long timeout: downloads every updated jar. */
@@ -89,7 +88,7 @@ export async function applyModUpdates(
     cfg,
     "/mods/updates",
     mcVersion ? { mcVersion } : {},
-    610_000,
+    WRAPPER_TIMEOUTS_MS.modApplyAll,
   );
 }
 
@@ -102,7 +101,7 @@ export async function updateMod(
     cfg,
     `/mods/${encodeURIComponent(slug)}/update`,
     {},
-    130_000,
+    WRAPPER_TIMEOUTS_MS.modDownload,
   );
 }
 

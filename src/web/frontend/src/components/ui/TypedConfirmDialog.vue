@@ -177,7 +177,4 @@ watch(body, (el) => {
   .tc-facts { grid-template-columns: minmax(0, 1fr); gap: 0 var(--space-4); }
   .tc-facts dd { margin-bottom: var(--space-2); }
 }
-@media (pointer: coarse), (max-width: 760px) {
-  .tap { min-height: var(--touch-min); }
-}
 </style>

@@ -121,7 +121,6 @@ describe("ServerInstance", () => {
     id: string;
     useRcon: boolean;
     config: never;
-    supportsTps: boolean;
   };
 
   beforeEach(async () => {
@@ -138,12 +137,6 @@ describe("ServerInstance", () => {
   it("constructs with correct id", () => {
     const inst = new ServerInstance(cfg);
     expect(inst.id).toBe("local");
-  });
-
-  it("supportsTps is true — the wrapper answers /tps for every instance", () => {
-    // This used to depend on how the server was reached: RCON yes, screen no.
-    // There is one way to reach a server now, and it has the route.
-    expect(new ServerInstance(cfg).supportsTps).toBe(true);
   });
 });
 

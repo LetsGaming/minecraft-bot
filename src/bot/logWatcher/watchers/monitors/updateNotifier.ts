@@ -1,5 +1,5 @@
 /**
- * Update notifier — a daily GitHub releases check.
+ * Update notifier, a daily GitHub releases check.
  *
  * Compares the newest release tag of the upstream repo with the running
  * version (package.json), logs when a newer one exists, and optionally
@@ -14,28 +14,26 @@ import { type Client } from "discord.js";
 import { loadConfig } from "@mcbot/core/config.js";
 import path from "path";
 import { getRootDir } from "@mcbot/core/utils/paths.js";
-import { kvGet, kvSet } from "@mcbot/core/db/kv.js";
+import {
+  lastNotifiedVersion,
+  recordNotifiedVersion,
+} from "@mcbot/core/utils/stores/updateNotifierStore.js";
 import { versionAtLeast } from "@mcbot/core/utils/server/serverAccess.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { isRecord } from "@mcbot/core/utils/objects.js";
 import { isSnowflake } from "@mcbot/schema/discord.js";
-import { errMsg } from "@mcbot/core/utils/error.js";
-
+import { MS } from "@mcbot/schema";
 import { t } from "@mcbot/core/utils/i18n.js";
-const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
-const INITIAL_DELAY_MS = 60_000;
+import { startPoller, type Poller } from "../poller.js";
 
-// The project's GitHub repo, in one place — the repo path was previously
-// baked into three separate URLs.
+const CHECK_INTERVAL_MS = MS.day;
+const INITIAL_DELAY_MS = MS.minute;
+
 const GITHUB_REPO = "LetsGaming/minecraft-bot";
 /** Human-facing releases page (shown to admins / logged). */
 const GITHUB_RELEASES_URL = `https://github.com/${GITHUB_REPO}/releases`;
 /** GitHub API endpoint for the latest release. */
 const GITHUB_LATEST_RELEASE_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
-
-interface NotifierState {
-  lastNotifiedVersion?: string;
-}
 
 /** The running bot version, read from package.json next to the data dir. */
 export function currentVersion(): string {
@@ -86,7 +84,7 @@ async function notifyAdmins(client: Client, latest: string): Promise<void> {
         }),
       );
     } catch {
-      // closed DMs or unknown user — a missed nudge is not an error
+      // closed DMs or unknown user, a missed nudge is not an error
     }
   }
 }
@@ -109,12 +107,11 @@ async function runCheck(client: Client): Promise<void> {
 
   if (cfg?.dmAdmins !== true) return;
 
-  const state = kvGet<NotifierState>("updateNotifier") ?? {};
-  if (state.lastNotifiedVersion === latest) return; // already pinged for this one
+  if (lastNotifiedVersion() === latest) return; // already pinged for this one
 
   await notifyAdmins(client, latest);
   try {
-    kvSet("updateNotifier", { lastNotifiedVersion: latest });
+    recordNotifiedVersion(latest);
   } catch {
     /* re-notifying after a failed save beats losing the nudge */
   }
@@ -124,17 +121,10 @@ async function runCheck(client: Client): Promise<void> {
  * Always armed: each check reads the live config and returns early while the
  * notifier is disabled, so enabling it later needs no restart.
  */
-export function startUpdateNotifier(
-  client: Client,
-): ReturnType<typeof setInterval> {
-  const tick = (): void => {
-    runCheck(client).catch((err: unknown) => {
-      log.warn("update", `Release check failed: ${errMsg(err)}`);
-    });
-  };
-
-  setTimeout(tick, INITIAL_DELAY_MS);
-  const timer = setInterval(tick, CHECK_INTERVAL_MS);
+export function startUpdateNotifier(client: Client): Poller {
+  const poller = startPoller("update", () => runCheck(client), CHECK_INTERVAL_MS, {
+    initialDelayMs: INITIAL_DELAY_MS,
+  });
   log.info("update", "Update notifier active (daily release check)");
-  return timer;
+  return poller;
 }

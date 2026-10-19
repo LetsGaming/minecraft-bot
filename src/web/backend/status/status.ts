@@ -1,13 +1,15 @@
 /**
  * Live per-server status collection (phase 1), shared by the /api/status
- * route and the Prometheus exposition — both must produce the same
+ * route and the Prometheus exposition, both must produce the same
  * numbers, so there is exactly one collector.
  *
  * Split out of server.ts in the QUAL-01 refactor (2026-07 audit).
  */
+import { MS } from "@mcbot/schema";
 import { getServerInstance } from "@mcbot/core/utils/server/server.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 import { getHostResources } from "@mcbot/core/utils/server/hostResources.js";
+import { parsePlayerCounts } from "@mcbot/core/utils/minecraft/playerCounts.js";
 import {
   getRemoteManifest,
   detectCapabilities,
@@ -25,16 +27,16 @@ import { remember, recall } from "@mcbot/core/utils/wrapper/lastKnown.js";
 import { cached, invalidatePrefix } from "@mcbot/core/utils/cache.js";
 
 // The dashboard polls /api/status on its own timer (StatusView, OverviewView
-// — each an independent poller, see useServerStatus.ts) and the Prometheus
+//, each an independent poller, see useServerStatus.ts) and the Prometheus
 // scrape runs the same collection again; none of that coordinates with the
 // others. These four wrapper calls used to run fresh on every single one of
 // those, so an open dashboard tab and a scrape interval could together ask
 // the wrapper for the same server's health several times a second. Short
-// TTLs — well under any poll interval that matters, well above the noise of
-// two requests arriving milliseconds apart — collapse that into one call.
-const HEALTH_LIST_TTL_MS = 10_000;
-const TPS_TTL_MS = 15_000;
-const HOST_INFO_TTL_MS = 60_000;
+// TTLs, well under any poll interval that matters, well above the noise of
+// two requests arriving milliseconds apart, collapse that into one call.
+const HEALTH_LIST_TTL_MS = 10 * MS.second;
+const TPS_TTL_MS = 15 * MS.second;
+const HOST_INFO_TTL_MS = MS.minute;
 
 function cachedHealth(server: ServerInstance): ReturnType<ServerInstance["getHealth"]> {
   return cached(`status:health:${server.id}`, HEALTH_LIST_TTL_MS, () => server.getHealth());
@@ -51,7 +53,7 @@ function cachedTps(server: ServerInstance): ReturnType<ServerInstance["getTps"]>
 function cachedHostResources(
   server: ServerInstance,
 ): ReturnType<typeof getHostResources> {
-  return cached(`status:info:${server.id}`, HOST_INFO_TTL_MS, () => getHostResources(server));
+  return cached(`status:info:${server.id}`, HOST_INFO_TTL_MS, () => getHostResources(server.config));
 }
 
 export async function collectStatus(serverId: string): Promise<ServerStatus> {
@@ -65,7 +67,6 @@ export async function collectStatus(serverId: string): Promise<ServerStatus> {
     rcon: health.rcon,
     wrapper: health.wrapper,
     source: health.source,
-    online: health.state === ServerState.Online,
     // A direct ping supplies counts even with the wrapper down, so take
     // whatever the answering channel managed to give us. When none could,
     // this stays null: "we don't know" and "nobody is online" are different
@@ -86,18 +87,18 @@ export async function collectStatus(serverId: string): Promise<ServerStatus> {
   // Probed before every early return below, because what the WRAPPER can do
   // is independent of whether the Minecraft server is running. Assigning this
   // further down meant a stopped or unresponsive server reported no features
-  // at all — so the Backups tab disappeared exactly when someone would want to
+  // at all, so the Backups tab disappeared exactly when someone would want to
   // restore one.
   base.features = await wrapperFeatures(server);
 
   // The status poll is the one thing that already watches every wrapper on a
   // timer, so it is where a "the wrapper came back" edge is cheapest to spot.
-  // Fires only on the transition, never on every healthy poll — see
+  // Fires only on the transition, never on every healthy poll, see
   // noteWrapperState.
   noteWrapperState(serverId, health.wrapper === WrapperState.Up);
 
   // Everything below goes through the wrapper. Without it, fall back to the
-  // last enrichment we managed — disks, TPS and host metrics simply vanished
+  // last enrichment we managed, disks, TPS and host metrics simply vanished
   // from the card during an outage, which is when someone is most likely
   // looking at it to work out whether the box itself is in trouble.
   if (health.wrapper !== WrapperState.Up) return withLastKnownEnrichment(serverId, base);
@@ -107,25 +108,19 @@ export async function collectStatus(serverId: string): Promise<ServerStatus> {
   // state instead of pretending to numbers.
   if (!canQueryServer(health)) return withLastKnownEnrichment(serverId, base);
 
-  try {
-    const list = await cachedList(server);
-    const online = parseInt(String(list.playerCount), 10);
-    const max = parseInt(String(list.maxPlayers), 10);
-    // `getList()` answers `{ playerCount: "0", maxPlayers: "?" }` when its own
-    // call failed, so an unparseable max is the tell that this is the sentinel
-    // rather than a real reading. Writing it through would replace a good
-    // ping-derived roster with a confident, invented "0 players".
-    if (Number.isFinite(online) && Number.isFinite(max)) {
-      base.players = {
-        online,
-        max,
-        names: list.players ?? [],
-        // The wrapper reads the real roster over RCON — not a sample.
-        sampled: false,
-      };
-    }
-  } catch {
-    return withLastKnownEnrichment(serverId, base);
+  const list = await cachedList(server);
+  if (!list.ok) return withLastKnownEnrichment(serverId, base);
+  const { online, max } = parsePlayerCounts(list.value);
+  // A count that cannot be read keeps the ping-derived roster instead of
+  // replacing it with an invented one.
+  if (online !== null && max !== null) {
+    base.players = {
+      online,
+      max,
+      names: list.value.players ?? [],
+      // The wrapper reads the real roster over RCON, not a sample.
+      sampled: false,
+    };
   }
 
   try {
@@ -192,7 +187,7 @@ function rememberEnrichment(serverId: string, status: ServerStatus): void {
  * `state`, `rcon`, `wrapper` and the ping's own player counts are deliberately
  * NOT taken from cache: those are live facts this poll just established, and
  * replacing them with old ones would be the failure this whole feature exists
- * to avoid — an interface asserting something it does not know.
+ * to avoid, an interface asserting something it does not know.
  *
  * Only the fields the wrapper alone can answer are restored, and `staleSince`
  * marks them so the card can say the metrics are from earlier.
@@ -221,15 +216,15 @@ function withLastKnownEnrichment(serverId: string, base: ServerStatus): ServerSt
  * What this server's wrapper says it can do.
  *
  * The dashboard has to ask the wrapper itself. `ServerInstance.capabilities`
- * is filled by `probeCapabilities()`, which only the BOT process calls — the
+ * is filled by `probeCapabilities()`, which only the BOT process calls, the
  * dashboard runs as its own process and shares nothing but config.json, so
  * reading that field here returns null forever and every feature-gated
  * control disappears. (That is exactly what happened: the Backups tab was
  * hidden on every host because this asked the wrong side.)
  *
  * Two sources, because they answer different questions:
- *   detectCapabilities  — which suite scripts exist on this host
- *   the manifest        — which ROUTES this wrapper serves, generated from
+ *   detectCapabilities , which suite scripts exist on this host
+ *   the manifest       , which ROUTES this wrapper serves, generated from
  *                         its real router, so it cannot claim a feature the
  *                         process does not have
  *
@@ -237,12 +232,12 @@ function withLastKnownEnrichment(serverId: string, base: ServerStatus): ServerSt
  * changes when the wrapper or the suite is redeployed.
  */
 const featureCache = new Map<string, { at: number; value: ServerStatus["features"] }>();
-const FEATURE_TTL_MS = 5 * 60_000;
+const FEATURE_TTL_MS = 5 * MS.minute;
 
 /**
  * Forget what the wrapper said it can do.
  *
- * Needed whenever a server's config changes under us — a new apiUrl or a
+ * Needed whenever a server's config changes under us, a new apiUrl or a
  * redeployed wrapper would otherwise keep answering from a five-minute-old
  * probe. Tests use it for isolation; `/config reload` should call it too.
  */
@@ -272,7 +267,7 @@ async function wrapperFeatures(server: {
       scripts: { ...caps.scripts },
       restore: caps.restore ?? false,
       backupFiles: manifest?.features?.["backup-files"] !== undefined,
-      // A v1 wrapper has the feature but not the DELETE route — the plain
+      // A v1 wrapper has the feature but not the DELETE route, the plain
       // `!== undefined` check above can't tell v1 from v2, so this needs
       // the version specifically (same reasoning host-info v2 gating uses).
       backupDelete: (manifest?.features?.["backup-files"]?.version ?? 0) >= 2,
@@ -294,7 +289,6 @@ export function unknownStatus(serverId: string): ServerStatus {
     rcon: RconState.Unknown,
     wrapper: WrapperState.Unreachable,
     source: HealthSource.None,
-    online: false,
     players: { online: 0, max: 0, names: [], sampled: false },
     tps: null,
     features: null,

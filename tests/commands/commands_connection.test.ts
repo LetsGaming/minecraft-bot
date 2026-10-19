@@ -6,12 +6,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── Shared mocks ──────────────────────────────────────────────────────────
-vi.mock("../../src/core/utils/stores/linkUtils.js", () => ({
+vi.mock("../../src/core/utils/stores/linkStore.js", () => ({
   LINK_CODE_TTL_MS: 5 * 60 * 1000,
   loadLinkedAccounts: vi.fn().mockResolvedValue({}),
   saveLinkedAccounts: vi.fn().mockResolvedValue(undefined),
-  loadLinkCodes: vi.fn().mockResolvedValue({}),
-  saveLinkCodes: vi.fn().mockResolvedValue(undefined),
   isLinked: vi.fn().mockResolvedValue(false),
   getLinkedAccount: vi.fn().mockResolvedValue(null),
   issueLinkCode: vi.fn(),
@@ -43,7 +41,6 @@ vi.mock("../../src/core/utils/logger.js", () => ({
 
 vi.mock("../../src/core/utils/time.js", () => ({
   nextMidnightEpoch: vi.fn().mockReturnValue(Date.now() + 3_600_000),
-  msUntilMidnight: vi.fn().mockReturnValue(3_600_000),
   formatDate: vi.fn(),
   formatDatetime: vi.fn().mockReturnValue("2025-01-01 00:00:00"),
   formatTime: vi.fn(),
@@ -83,7 +80,6 @@ vi.mock("../../src/core/config.js", () => ({
 vi.mock("../../src/bot/commands/middleware.js", () => ({
   withErrorHandling: vi.fn((fn) => fn),
   requireServerAdmin: vi.fn((fn) => fn),
-  isServerAdmin: vi.fn().mockReturnValue(true),
 }));
 
 vi.mock("../../src/core/utils/stores/uptimeTracker.js", () => ({
@@ -91,13 +87,12 @@ vi.mock("../../src/core/utils/stores/uptimeTracker.js", () => ({
 }));
 
 import {
-  loadLinkCodes,
   loadLinkedAccounts,
   saveLinkedAccounts,
   getLinkedAccount,
   issueLinkCode,
   unlinkAccount,
-} from "../../src/core/utils/stores/linkUtils.js";
+} from "../../src/core/utils/stores/linkStore.js";
 import type { ChatInputCommandInteraction } from "discord.js";
 
 /** Text of the embed the command last answered with through editReply. */
@@ -233,6 +228,11 @@ describe("/unlink command", () => {
     expect(repliedText(interaction)).toContain("not linked");
   });
 
+  it("lets a store failure surface instead of claiming the account is not linked", async () => {
+    vi.mocked(unlinkAccount).mockRejectedValue(new Error("db locked"));
+    await expect(execute(makeInteraction() as never)).rejects.toThrow("db locked");
+  });
+
   it("unlinks the account and replies with success", async () => {
     vi.mocked(unlinkAccount).mockResolvedValue(true);
     const interaction = makeInteraction();
@@ -308,14 +308,8 @@ describe("startTpsMonitor", () => {
       await import("../../src/bot/logWatcher/watchers/monitors/tpsMonitor.js"));
   });
 
-  it("returns null when server does not support TPS", () => {
-    const server = { id: "main", supportsTps: false } as never;
-    const result = startTpsMonitor(server, null as never, {});
-    expect(result).toBeNull();
-  });
-
   it("returns a timer when server supports TPS", () => {
-    const server = { id: "main", supportsTps: true, getTps: vi.fn() } as never;
+    const server = { id: "main", getTps: vi.fn() } as never;
     const timer = startTpsMonitor(server, null as never, {});
     expect(timer).toBeTruthy();
     timer!.stop();

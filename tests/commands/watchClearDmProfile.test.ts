@@ -23,10 +23,10 @@ vi.mock("../../src/core/utils/stores/whitelistAudit.js", () => ({
 }));
 
 const loadLinked = vi.fn();
-vi.mock("../../src/core/utils/stores/linkUtils.js", async () => {
+vi.mock("../../src/core/utils/stores/linkStore.js", async () => {
   const actual = await vi.importActual<
-    typeof import("../../src/core/utils/stores/linkUtils.js")
-  >("../../src/core/utils/stores/linkUtils.js");
+    typeof import("../../src/core/utils/stores/linkStore.js")
+  >("../../src/core/utils/stores/linkStore.js");
   return {
     ...actual,
     loadLinkedAccountsOrEmpty: () => loadLinked() as unknown,
@@ -39,7 +39,7 @@ import { execute as profileExecute } from "../../src/bot/commands/info/profile.j
 import { fireWatches } from "../../src/bot/logWatcher/watchers/watchFirer.js";
 import {
   loadWatchStore,
-  saveWatchStore,
+  updateWatchStore,
   MAX_WATCHES_PER_USER,
   type Watch,
 } from "../../src/core/utils/stores/watchStore.js";
@@ -98,7 +98,9 @@ function watch(overrides: Partial<Watch> = {}): Watch {
   };
 }
 const seedWatches = (...watches: Watch[]) =>
-  saveWatchStore({ version: 1, watches });
+  updateWatchStore((store) => {
+    store.watches = watches;
+  });
 
 describe("/watch", () => {
   it("server: subscribes once and refuses a duplicate", async () => {

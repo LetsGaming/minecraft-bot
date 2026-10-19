@@ -1,5 +1,5 @@
 /**
- * /console — admin console access.
+ * /console: admin console access.
  *
  *   tail lines:<n>          the last N log lines (ephemeral), on top of
  *                           the existing tailLog path
@@ -16,7 +16,7 @@ import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { createSuccessEmbed } from "../../utils/embeds/embedUtils.js";
 import { tailLog } from "@mcbot/core/utils/server/serverAccess.js";
-import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
+import { auditAdminAction } from "../shared/audit.js";
 import { loadConfig } from "@mcbot/core/config.js";
 import {
   setConsoleRelay,
@@ -25,8 +25,8 @@ import {
 import { t } from "@mcbot/core/utils/i18n.js";
 
 const MAX_TAIL_LINES = 100;
-/** Discord embed description cap is 4096; leave fence + margin. */
-const MAX_TAIL_CHARS = 3_800;
+/** The tail is sent as plain message content (2000 cap); leave room for the title line and code fence. */
+const MAX_TAIL_CHARS = 1_900;
 
 export const data = new SlashCommandBuilder()
   .setName("console")
@@ -84,14 +84,15 @@ export const execute = withErrorHandling(
         .map((l) => sanitizeLogLine(l))
         .filter(Boolean)
         .join("\n");
+      const title = `**${server.id}**: ${t("console.tailTitle", { lines })}\n`;
+      // The ellipsis line and the code fence (8 chars) come on top of the payload.
+      const budget = Math.min(MAX_TAIL_CHARS, 1_990 - title.length - 2 - 8);
       const clipped =
-        cleaned.length > MAX_TAIL_CHARS
-          ? `…\n${cleaned.slice(-MAX_TAIL_CHARS)}`
+        cleaned.length > budget
+          ? `…\n${cleaned.slice(-budget)}`
           : cleaned || t("console.emptyLog");
 
-      await interaction.editReply({
-        content: `**${server.id}** — ${t("console.tailTitle", { lines })}\n${codeBlock(clipped)}`,
-      });
+      await interaction.editReply({ content: `${title}${codeBlock(clipped)}` });
       return;
     }
 
@@ -107,12 +108,9 @@ export const execute = withErrorHandling(
     }
 
     await setConsoleRelay(interaction.guild.id, server.id, enable);
-    await recordAdminAction({
+    await auditAdminAction(interaction, {
       action: enable ? "console live on" : "console live off",
       server: server.id,
-      by: interaction.user.tag,
-      byId: interaction.user.id,
-      guildId: interaction.guild.id,
     });
 
     await interaction.editReply({

@@ -10,7 +10,6 @@ vi.mock("../../src/core/utils/time.js", () => ({
   formatDate: vi.fn(),
   formatTime: vi.fn(),
   nextMidnightEpoch: vi.fn(),
-  msUntilMidnight: vi.fn(),
 }));
 
 vi.mock("../../src/core/utils/logger.js", () => ({
@@ -19,7 +18,6 @@ vi.mock("../../src/core/utils/logger.js", () => ({
 
 import { closeDbForTesting } from "../../src/core/db/index.js";
 import {
-  loadAudit,
   recordAdd,
   recordRemove,
   getAuditEntry,
@@ -33,8 +31,8 @@ beforeEach(() => {
 describe("recordAdd", () => {
   it("stores the add under the lowercased username", async () => {
     await recordAdd("Alice", "admin#1", "100", "smp", "uuid-a");
-    const audit = await loadAudit();
-    expect(audit.alice).toEqual({
+    const entry = await getAuditEntry("alice");
+    expect(entry).toEqual({
       username: "Alice",
       uuid: "uuid-a",
       addedBy: "admin#1",
@@ -75,7 +73,7 @@ describe("recordRemove", () => {
   });
 });
 
-describe("getAuditEntry / loadAudit", () => {
+describe("getAuditEntry", () => {
   it("returns null for an unknown player", async () => {
     expect(await getAuditEntry("ghost")).toBeNull();
   });
@@ -92,12 +90,5 @@ describe("getAuditEntry / loadAudit", () => {
     const entry = await getAuditEntry("DAVE");
     expect(entry).not.toBeNull();
     expect(entry!.username).toBe("Dave");
-  });
-
-  it("loadAudit returns every entry keyed by lowercased name", async () => {
-    await recordAdd("Alice", "a", "1", "smp");
-    await recordRemove("Bob", "a", "1", "smp");
-    const audit = await loadAudit();
-    expect(Object.keys(audit).sort()).toEqual(["alice", "bob"]);
   });
 });

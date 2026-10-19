@@ -1,5 +1,5 @@
 /**
- * What each player has already been told about — single owner of
+ * What each player has already been told about, single owner of
  * kv_store["featureSuggestions"].
  *
  * Two things write here, and they are the same bookkeeping:
@@ -9,8 +9,8 @@
  *   follow-up hints  a button on a Discord reply offering the feature that
  *                  pairs with the one just used, keyed by Discord user ID
  *
- * Both need the same three answers — how often has this been offered, when
- * was the last time, and did they say no — so both use one ledger rather
+ * Both need the same three answers, how often has this been offered, when
+ * was the last time, and did they say no, so both use one ledger rather
  * than two stores that would drift.
  *
  * Subjects are namespaced (`mc:steve`, `discord:12345`) because the two
@@ -19,7 +19,8 @@
  * which carries a name, and re-offering to a renamed player is a trivial
  * cost against reading the usercache on every join.
  */
-import { kvGet, kvUpdate } from "../../db/kv.js";
+import { MS } from "@mcbot/schema/time.js";
+import { versionedStore } from "./versionedStore.js";
 
 /** Features a player can be told about, in funnel order. */
 export type NudgeKind = "link" | "daily";
@@ -33,7 +34,7 @@ export interface SuggestionRecord {
   /** Epoch ms of the most recent offer. */
   lastAt: number;
   /**
-   * They said no. Permanent — an explicit refusal outranks any count or
+   * They said no. Permanent, an explicit refusal outranks any count or
    * cooldown, and asking again after it is the exact behaviour that makes
    * these features feel like nagging.
    */
@@ -46,16 +47,13 @@ export interface SuggestionLedger {
   subjects: Record<string, Record<string, SuggestionRecord>>;
 }
 
-const KEY = "featureSuggestions";
-
 /**
- * Drop non-dismissed records nobody has touched in this long — they exist
+ * Drop non-dismissed records nobody has touched in this long, they exist
  * only to enforce the 48h nudge cooldown, so past this age they serve no
  * purpose and simply reset next time the subject is offered. `dismissed`
  * records are kept forever: a refusal must never be re-asked.
- * Storage audit: this ledger was previously never pruned at all.
  */
-const STALE_AFTER_MS = 90 * 24 * 60 * 60 * 1000;
+const STALE_AFTER_MS = 90 * MS.day;
 
 function pruneLedger(ledger: SuggestionLedger, now: number): SuggestionLedger {
   for (const subject of Object.keys(ledger.subjects)) {
@@ -76,23 +74,14 @@ export const mcSubject = (player: string): string =>
 /** Subject key for a Discord user. */
 export const discordSubject = (userId: string): string => `discord:${userId}`;
 
-function emptyLedger(): SuggestionLedger {
-  return { version: 1, subjects: {} };
-}
-
-function isLedger(raw: unknown): raw is SuggestionLedger {
-  return (
-    typeof raw === "object" &&
-    raw !== null &&
-    (raw as { version?: unknown }).version === 1 &&
-    typeof (raw as { subjects?: unknown }).subjects === "object" &&
-    (raw as { subjects?: unknown }).subjects !== null
-  );
-}
+const ledgerDoc = versionedStore<SuggestionLedger>(
+  "featureSuggestions",
+  { version: 1, container: "subjects" },
+  () => ({ version: 1, subjects: {} }),
+);
 
 export async function loadSuggestionLedger(): Promise<SuggestionLedger> {
-  const raw = kvGet<unknown>(KEY);
-  return isLedger(raw) ? raw : emptyLedger();
+  return ledgerDoc.load();
 }
 
 export function getSuggestionRecord(
@@ -109,8 +98,7 @@ export async function recordSuggestion(
   id: SuggestionId,
   at: number = Date.now(),
 ): Promise<void> {
-  kvUpdate<SuggestionLedger>(KEY, (current) => {
-    const ledger = isLedger(current) ? current : emptyLedger();
+  ledgerDoc.update((ledger) => {
     const forSubject = ledger.subjects[subject] ?? {};
     const existing = forSubject[id];
     forSubject[id] = {
@@ -119,7 +107,7 @@ export async function recordSuggestion(
       lastAt: at,
     };
     ledger.subjects[subject] = forSubject;
-    return pruneLedger(ledger, at);
+    pruneLedger(ledger, at);
   });
 }
 
@@ -128,8 +116,7 @@ export async function dismissSuggestion(
   subject: string,
   id: SuggestionId,
 ): Promise<void> {
-  kvUpdate<SuggestionLedger>(KEY, (current) => {
-    const ledger = isLedger(current) ? current : emptyLedger();
+  ledgerDoc.update((ledger) => {
     const forSubject = ledger.subjects[subject] ?? {};
     forSubject[id] = {
       count: forSubject[id]?.count ?? 0,
@@ -137,6 +124,5 @@ export async function dismissSuggestion(
       dismissed: true,
     };
     ledger.subjects[subject] = forSubject;
-    return ledger;
   });
 }

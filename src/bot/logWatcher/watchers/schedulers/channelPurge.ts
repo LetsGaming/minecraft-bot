@@ -1,5 +1,6 @@
 import type { Client, Message, TextChannel } from "discord.js";
-import { kvGet } from "@mcbot/core/db/kv.js";
+import { statusChannelsFor } from "@mcbot/core/utils/stores/statusMessagesStore.js";
+import { MS } from "@mcbot/schema";
 import { log } from "@mcbot/core/utils/logger.js";
 import { nextMidnightEpoch } from "@mcbot/core/utils/time.js";
 import { guildTimeZone } from "@mcbot/core/utils/config/timezones.js";
@@ -8,12 +9,12 @@ import {
   guildsWith,
   type GuildConfigSource,
 } from "../../../utils/guild/guildConfigs.js";
-import type { GuildConfig, StatusMessageState } from "@mcbot/core/types/index.js";
+import type { GuildConfig } from "@mcbot/core/types/index.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
 /**
  * Purge all messages in a channel except for:
- *  - The status embed message (tracked in kv_store["statusMessages"])
+ *  - The status embed message (tracked by the status messages store)
  *  - Any pinned messages
  */
 async function purgeChannel(
@@ -46,11 +47,10 @@ async function purgeChannel(
 
   // 1. Status embed message
   try {
-    const state = kvGet<StatusMessageState>("statusMessages") ?? {};
-    const entry = state[guildId];
+    const entry = statusChannelsFor(guildId);
     if (entry?.messageId) protectedIds.add(entry.messageId);
   } catch {
-    /* store not readable — protect nothing extra */
+    /* store not readable, protect nothing extra */
   }
 
   // 2. Pinned messages
@@ -81,13 +81,13 @@ async function purgeChannel(
     }
 
     if (toDelete.length === 0) {
-      // All remaining messages are protected — keep scanning
+      // All remaining messages are protected, keep scanning
       if (batch.size < 100) break;
       continue;
     }
 
     // Split into bulk-deletable (<14 days) and old messages
-    const fourteenDaysAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
+    const fourteenDaysAgo = Date.now() - 14 * MS.day;
     const bulkable = toDelete.filter(
       (m) => m.createdTimestamp > fourteenDaysAgo,
     );
@@ -145,7 +145,7 @@ export function startChannelPurge(
     );
   }
 
-  /** One timer per guild — each fires at *that guild's* midnight. */
+  /** One timer per guild, each fires at *that guild's* midnight. */
   const timers = new Map<string, LongTimer>();
 
   const purgeGuild = async (guildId: string): Promise<void> => {
@@ -207,5 +207,5 @@ export function startChannelPurge(
   // Re-check config on a slow tick as well: without it, a deployment with
   // no purge targets at boot would never arm anything, because the only
   // other reconcile point is the end of a run that never happens.
-  setInterval(syncTimers, 60 * 60 * 1000).unref();
+  setInterval(syncTimers, MS.hour).unref();
 }

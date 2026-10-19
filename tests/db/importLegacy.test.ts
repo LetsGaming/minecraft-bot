@@ -183,7 +183,7 @@ describe("importLegacyJson", () => {
     expect(log.warn).toHaveBeenCalled();
   });
 
-  it("skips the rows of a non-empty table but still retires the file", () => {
+  it("leaves the file in place and warns when its table already has rows", () => {
     getDb().prepare("INSERT INTO linked_accounts (discord_id, mc_name) VALUES ('9', 'Existing')").run();
     kvSet("polls", { version: 1, polls: ["existing"] });
 
@@ -196,9 +196,14 @@ describe("importLegacyJson", () => {
         expect.objectContaining({ discord_id: "9" }),
       ]);
       expect(kvGet("polls")).toEqual({ version: 1, polls: ["existing"] });
-      expect(exists("linkedAccounts.json")).toBe(false);
-      expect(exists("linkedAccounts.json.imported")).toBe(true);
-      expect(exists("polls.json.imported")).toBe(true);
+      expect(exists("linkedAccounts.json")).toBe(true);
+      expect(exists("linkedAccounts.json.imported")).toBe(false);
+      expect(exists("polls.json")).toBe(true);
+      expect(exists("polls.json.imported")).toBe(false);
+      expect(log.warn).toHaveBeenCalledWith(
+        "db",
+        expect.stringContaining("linkedAccounts.json not imported"),
+      );
     });
   });
 

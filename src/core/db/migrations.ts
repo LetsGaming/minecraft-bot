@@ -1,5 +1,5 @@
 /**
- * Schema migrations — ordered, embedded SQL, applied inside transactions
+ * Schema migrations, ordered, embedded SQL, applied inside transactions
  * and tracked in schema_migrations. Embedded (not .sql files) so tsc's
  * dist/ is self-contained with no asset-copy step.
  *
@@ -236,13 +236,25 @@ export const MIGRATIONS: readonly Migration[] = [
  * Fingerprint of a migration's SQL.
  *
  * Whitespace is collapsed before hashing so reindenting or reflowing an
- * embedded template literal — a formatter run, say — doesn't trip the
- * guard. Any change to the actual statements does.
+ * embedded template literal (a formatter run, say) doesn't trip the
+ * guard. `--` line comments are stripped too, so fixing a comment typo does
+ * not either. Any change to the actual statements does. No migration has a
+ * `--` inside a string literal; keep it that way.
  */
 function checksum(sql: string): string {
-  return createHash("sha256")
-    .update(sql.replace(/\s+/g, " ").trim())
-    .digest("hex");
+  return sha256(sql.replace(/--[^\n]*/g, "").replace(/\s+/g, " ").trim());
+}
+
+/**
+ * The hash written before comments were stripped. Databases created by an
+ * earlier build recorded it, so verification still accepts it.
+ */
+function legacyChecksum(sql: string): string {
+  return sha256(sql.replace(/\s+/g, " ").trim());
+}
+
+function sha256(text: string): string {
+  return createHash("sha256").update(text).digest("hex");
 }
 
 export function runMigrations(db: SqlDatabase): void {
@@ -261,7 +273,7 @@ export function runMigrations(db: SqlDatabase): void {
     `);
 
     // Databases created before checksums were tracked have no such column,
-    // and SQLite has no ADD COLUMN IF NOT EXISTS — probe, then add once.
+    // and SQLite has no ADD COLUMN IF NOT EXISTS, probe, then add once.
     const columns = mapRows(db.prepare("PRAGMA table_info(schema_migrations)"), (row) =>
       col.text(row, "name"),
     );
@@ -300,10 +312,18 @@ export function runMigrations(db: SqlDatabase): void {
           db.prepare(
             "UPDATE schema_migrations SET checksum = ? WHERE id = ?",
           ).run(sum, m.id);
+        } else if (recorded === legacyChecksum(m.sql)) {
+          // Recorded with the comment-sensitive hash: same statements, so
+          // upgrade the stored value to the current scheme.
+          if (recorded !== sum) {
+            db.prepare(
+              "UPDATE schema_migrations SET checksum = ? WHERE id = ?",
+            ).run(sum, m.id);
+          }
         } else if (recorded !== sum) {
           // A shipped migration was edited. The database still reflects the
           // OLD statements, so every later assumption about the schema is
-          // now unverified — refuse rather than run on an unknown shape.
+          // now unverified, refuse rather than run on an unknown shape.
           throw new Error(
             `Migration ${m.id} ("${m.name}") has changed since it was applied ` +
               `to this database (checksum ${recorded.slice(0, 12)} → ` +

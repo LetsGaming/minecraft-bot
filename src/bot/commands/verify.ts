@@ -1,4 +1,4 @@
-// Intentional alias of /whitelist — shared implementation in
+// Intentional alias of /whitelist, shared implementation in
 // commands/shared/whitelistAdd.ts
 import {
   buildWhitelistAddData,

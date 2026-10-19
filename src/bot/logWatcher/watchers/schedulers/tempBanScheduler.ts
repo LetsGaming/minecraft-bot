@@ -1,9 +1,9 @@
 /**
- * Timed-ban release — the runtime half of tempBanStore.
+ * Timed-ban release, the runtime half of tempBanStore.
  *
  * One timer per pending ban fires the `/pardon`. startTempBanScheduler
  * re-arms every entry at bot init, so a restart mid-ban still releases on
- * time — and a ban that expired while the bot was down is released on the
+ * time, and a ban that expired while the bot was down is released on the
  * next start instead of silently becoming permanent.
  *
  * setTimeout tops out at ~24.8 days, well under the durations this
@@ -23,16 +23,18 @@ import { getServerInstance } from "@mcbot/core/utils/server/server.js";
 import {
   loadLinkedAccountsOrEmpty,
   findDiscordIdByMcName,
-} from "@mcbot/core/utils/stores/linkUtils.js";
+} from "@mcbot/core/utils/stores/linkStore.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import type { Client } from "discord.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { scheduleAt, type LongTimer } from "@mcbot/core/utils/longTimer.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
+import { MS } from "@mcbot/schema";
+import { consoleCommand } from "@mcbot/core/utils/minecraft/serverMessages.js";
 
 /** How long to wait before retrying a pardon the server did not receive. */
-const PARDON_RETRY_MS = 60_000;
+const PARDON_RETRY_MS = MS.minute;
 
 const timers = new Map<string, LongTimer>();
 
@@ -54,7 +56,7 @@ export function cancelTempBanTimer(serverId: string, player: string): void {
  *
  * Best-effort: unlinked players, closed DMs, and deleted accounts are all
  * normal outcomes here, so nothing throws upward. The DM follows the
- * global language — like every other DM, there is no guild to resolve a
+ * global language, like every other DM, there is no guild to resolve a
  * locale from.
  */
 async function notifyPlayer(client: Client, ban: TempBan): Promise<void> {
@@ -100,7 +102,7 @@ export async function expireTempBan(
 ): Promise<void> {
   const server = getServerInstance(ban.serverId);
   if (!server) {
-    // Instance gone from config — nothing to pardon on, so stop tracking
+    // Instance gone from config, nothing to pardon on, so stop tracking
     // it rather than retrying forever.
     await removeTempBan(ban.serverId, ban.player);
     log.warn(
@@ -110,11 +112,21 @@ export async function expireTempBan(
     return;
   }
 
-  const outcome = await server.send(`/pardon ${ban.player}`);
+  let command: string;
+  try {
+    command = consoleCommand("/pardon", { player: ban.player });
+  } catch (err) {
+    // A name the console would reject can never be pardoned: stop tracking it.
+    await removeTempBan(ban.serverId, ban.player);
+    log.warn("tempban", `Dropping expired ban for ${ban.player}: ${errMsg(err)}`);
+    return;
+  }
+
+  const outcome = await server.send(command);
   if (outcome.kind === "unreachable") {
     log.warn(
       "tempban",
-      `Pardon for ${ban.player} on ${ban.serverId} not delivered (${outcome.reason}); retrying in ${PARDON_RETRY_MS / 1000}s`,
+      `Pardon for ${ban.player} on ${ban.serverId} not delivered (${outcome.reason}); retrying in ${PARDON_RETRY_MS / MS.second}s`,
     );
     armTempBan(client, ban, Date.now() + PARDON_RETRY_MS);
     return;

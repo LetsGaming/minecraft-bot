@@ -1,9 +1,10 @@
 /**
- * Dashboard entry point — an independent process from the bot
+ * Dashboard entry point, an independent process from the bot
  * (`npm run start:web`); either can restart without the other. Shares
  * the config file and the data dir (including the SQLite store); the
  * heartbeat file tells this process whether the bot is alive.
  */
+import { MS } from "@mcbot/schema";
 import { loadConfig } from "@mcbot/core/config.js";
 import { initServers } from "@mcbot/core/utils/server/server.js";
 import type { FastifyInstance } from "fastify";
@@ -45,7 +46,7 @@ if (cfg.webui?.enabled !== true) {
 }
 
 // The dashboard runs its own ServerInstance registry (RCON, status reads,
-// log tail) precisely so it works with the bot down — server operations
+// log tail) precisely so it works with the bot down, server operations
 // and config edits are most valuable when the bot is broken. Previously
 // this call was missing (4.0 finding F1): the registry stayed empty and
 // the dashboard reported every server offline.
@@ -93,7 +94,7 @@ startWebServer()
  * closed. A shutdown that hangs (a stuck stream) still ends after a grace
  * period.
  */
-const SHUTDOWN_GRACE_MS = 8_000;
+const SHUTDOWN_GRACE_MS = 8 * MS.second;
 let shuttingDown = false;
 async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return;

@@ -7,7 +7,7 @@ const LOG_DIR = path.resolve(process.cwd(), "logs");
 
 // File logging is best-effort: the process must never die because it
 // cannot write its own log file. A read-only or unwritable logs/ mount
-// (a real Docker failure mode — a named volume or bind mount the `node`
+// (a real Docker failure mode, a named volume or bind mount the `node`
 // user cannot write) previously crashed the process at import time, or
 // asynchronously via an unhandled stream 'error' event, producing an
 // exit-1 restart loop with no clear cause. If any step fails we fall
@@ -33,7 +33,7 @@ function rotate(): void {
     stream?.end();
     fs.renameSync(LOG_FILE, `${LOG_FILE}.1`);
   } catch {
-    // best-effort — a failed rotation just means bot.log keeps growing
+    // best-effort, a failed rotation just means bot.log keeps growing
   }
   try {
     stream = fs.createWriteStream(LOG_FILE, { flags: "a" });
@@ -73,7 +73,7 @@ function initFileLogging() {
         bytesWritten = size;
       }
     } catch {
-      // file doesn't exist yet — nothing to rotate
+      // file doesn't exist yet, nothing to rotate
     }
 
     const s = fs.createWriteStream(LOG_FILE, { flags: "a" });
@@ -86,12 +86,48 @@ function initFileLogging() {
   }
 }
 
-initFileLogging();
+/**
+ * Open the file sink on the first line that is actually logged, so merely
+ * importing this module (every test does) never touches the logs directory.
+ */
+let initialized = false;
+function ensureInitialized(): void {
+  if (initialized) return;
+  initialized = true;
+  initFileLogging();
+  // Surface the fallback once, so it lands in the same stdout stream Docker
+  // captures.
+  if (fileLoggingDisabledReason) {
+    process.stdout.write(
+      `[${timestamp()}] [WARN] [logger] File logging unavailable ` +
+        `(${fileLoggingDisabledReason}). Logging to stdout only. Check that ` +
+        "the logs/ directory is writable by the runtime user.\n",
+    );
+  }
+}
+
+/** One log argument as text: Errors with their cause, objects without throwing on cycles. */
+function formatArg(arg: unknown): string {
+  if (arg instanceof Error) return errMsg(arg);
+  if (typeof arg !== "object" || arg === null) return String(arg);
+  const seen = new WeakSet<object>();
+  try {
+    return JSON.stringify(arg, (_key, value: unknown) => {
+      if (value instanceof Error) return errMsg(value);
+      if (typeof value === "object" && value !== null) {
+        if (seen.has(value)) return "[Circular]";
+        seen.add(value);
+      }
+      return typeof value === "bigint" ? value.toString() : value;
+    });
+  } catch {
+    return Object.prototype.toString.call(arg);
+  }
+}
 
 function write(level: string, tag: string, ...args: unknown[]): void {
-  const msg = args
-    .map((a) => (typeof a === "object" ? JSON.stringify(a) : String(a)))
-    .join(" ");
+  ensureInitialized();
+  const msg = args.map(formatArg).join(" ");
   const line = `[${timestamp()}] [${level}] [${tag}] ${msg}`;
   process.stdout.write(line + "\n");
   if (stream) {
@@ -101,22 +137,12 @@ function write(level: string, tag: string, ...args: unknown[]): void {
         stream.write(line + "\n");
         bytesWritten += Buffer.byteLength(line) + 1;
       } catch {
-        // A synchronous throw after the stream broke — stdout already has
+        // A synchronous throw after the stream broke, stdout already has
         // the line, so just stop using the file sink.
         stream = null;
       }
     }
   }
-}
-
-// Surface the fallback once, after the log functions exist, so it lands
-// in the same stdout stream Docker captures.
-if (fileLoggingDisabledReason) {
-  process.stdout.write(
-    `[${timestamp()}] [WARN] [logger] File logging unavailable ` +
-      `(${fileLoggingDisabledReason}). Logging to stdout only — check that ` +
-      "the logs/ directory is writable by the runtime user.\n",
-  );
 }
 
 export const log = {

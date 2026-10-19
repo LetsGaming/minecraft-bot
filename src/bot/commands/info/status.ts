@@ -49,7 +49,6 @@ async function withinBudget<T>(work: Promise<T>): Promise<T | null> {
 }
 
 async function readTps(server: ServerInstance): Promise<string | null> {
-  if (!server.supportsTps) return null;
   const tps = await withinBudget(server.getTps());
   if (!tps) return null;
   return tps.tps1m.toLocaleString(resolveLanguage(), {
@@ -104,12 +103,11 @@ export const execute = withErrorHandling(async (interaction) => {
   const roundTrip = Date.now() - sent;
 
   // Only a responsive server can be asked for a player list. The other three
-  // states each need their own answer — "Offline", "up but not answering",
-  // and "we could not reach the API wrapper" are different facts, and this
-  // reply used to give all of them as "**Offline**".
+  // states each need their own answer, "Offline", "up but not answering",
+  // and "we could not reach the API wrapper" are different facts.
   if (!canQueryServer(health)) {
     // A direct ping can still supply counts with the wrapper down, so show
-    // them — "online, 4 players, controls unavailable" is the whole point.
+    // them, "online, 4 players, controls unavailable" is the whole point.
     const players = describePlayers(health);
     const offline = health.state === ServerState.Offline ? offlineLine(server) : null;
     const description = [players, display.hint, offline].filter(Boolean).join("\n");
@@ -128,12 +126,19 @@ export const execute = withErrorHandling(async (interaction) => {
     return;
   }
 
-  const [{ playerCount, maxPlayers, players }, tps, onlineFor, version] = await Promise.all([
+  const [list, tps, onlineFor, version] = await Promise.all([
     server.getList(),
     readTps(server),
     readOnlineFor(server),
     readVersion(server),
   ]);
+  const { playerCount, maxPlayers, players } = list.ok
+    ? list.value
+    : {
+        playerCount: String(health.players?.online ?? "?"),
+        maxPlayers: String(health.players?.max ?? "?"),
+        players: [] as string[],
+      };
   const embed = createEmbed({
     title: t("status.title", { server: server.id, label: display.label }),
     state: health.state,
@@ -166,11 +171,11 @@ export const execute = withErrorHandling(async (interaction) => {
   // Remote instances get these via the wrapper /info extension later;
   // any failure here must never break the status reply.
   try {
-    const host = await getHostResources(server);
+    const host = await getHostResources(server.config);
     if (host) {
       const lines: string[] = [];
 
-      // Machine first, then the process inside it — the old embed showed
+      // Machine first, then the process inside it, the old embed showed
       // only the Java process under a heading that said "Host", which read
       // as the machine being at 90% when it was idle.
       if (host.machine) {
@@ -230,7 +235,7 @@ export const execute = withErrorHandling(async (interaction) => {
       }
     }
   } catch {
-    /* host metrics are additive — never fail the status */
+    /* host metrics are additive, never fail the status */
   }
 
   await interaction.editReply({ embeds: [embed] });

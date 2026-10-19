@@ -2,7 +2,7 @@
  * mc-heads.net renders a Minecraft player's head from a name or a UUID. It
  * backs both the embed author icons and the chat-bridge webhook avatars, so
  * the host and path shape live here in one place rather than being rebuilt
- * at each call site (which had also drifted — one spot URL-encoded the
+ * at each call site (which had also drifted, one spot URL-encoded the
  * name, one didn't).
  *
  * Always by name. Heads used to go by UUID when the bot had one cached and by

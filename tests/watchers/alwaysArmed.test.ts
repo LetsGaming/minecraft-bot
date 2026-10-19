@@ -44,7 +44,7 @@ describe("startMilestoneWatcher", () => {
     expect(timer).toBeTruthy();
     await vi.advanceTimersByTimeAsync(2 * HOUR);
     expect(getAllInstances).not.toHaveBeenCalled();
-    clearInterval(timer);
+    timer.stop();
   });
 
   it("starts scanning once milestones appear in the live config", async () => {
@@ -55,7 +55,7 @@ describe("startMilestoneWatcher", () => {
     cfg.milestones = { playtime: [10] };
     await vi.advanceTimersByTimeAsync(HOUR);
     expect(getAllInstances).toHaveBeenCalled();
-    clearInterval(timer);
+    timer.stop();
   });
 });
 
@@ -66,7 +66,7 @@ describe("startUpdateNotifier", () => {
     expect(timer).toBeTruthy();
     await vi.advanceTimersByTimeAsync(2 * DAY);
     expect(fetchJson).not.toHaveBeenCalled();
-    clearInterval(timer);
+    timer.stop();
   });
 
   it("checks for releases once the live config enables it", async () => {
@@ -78,6 +78,6 @@ describe("startUpdateNotifier", () => {
     cfg.updateNotifier = { enabled: true };
     await vi.advanceTimersByTimeAsync(DAY);
     expect(fetchJson).toHaveBeenCalled();
-    clearInterval(timer);
+    timer.stop();
   });
 });

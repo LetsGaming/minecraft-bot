@@ -1,5 +1,5 @@
 /**
- * /daily-history — your recent daily claims on a server.
+ * /daily-history: your recent daily claims on a server.
  *
  * The claim path has stored the last 30 rewards per user all along
  * (UserClaimData.rewards); this is the read side that finally shows

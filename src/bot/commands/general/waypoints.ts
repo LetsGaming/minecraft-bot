@@ -1,19 +1,13 @@
 /**
- * /waypoints — read-only Discord view of a server's community waypoints.
- *
- * The Discord side doubles as the server's point-of-interest wiki: full
- * list, paginated with the existing pagination helper, one field per
- * waypoint with coordinates, dimension, author, and age.
+ * /waypoints: read-only Discord view of a server's community waypoints, one
+ * field per waypoint with coordinates, dimension, author, and age.
  */
 import { SlashCommandBuilder } from "discord.js";
 import type { EmbedBuilder } from "discord.js";
-import {
-  createEmbed,
-  createPaginationButtons,
-  handlePagination,
-} from "../../utils/embeds/embedUtils.js";
+import { createEmbed } from "../../utils/embeds/embedUtils.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { withErrorHandling } from "../middleware.js";
+import { pageBy, replyPaged } from "../shared/paged.js";
 import {
   loadWaypointStore,
   getServerWaypoints,
@@ -36,14 +30,11 @@ export const data = new SlashCommandBuilder()
   );
 
 function buildPages(waypoints: Waypoint[], serverId: string): EmbedBuilder[] {
-  const pages: EmbedBuilder[] = [];
-  for (let i = 0; i < waypoints.length; i += PER_PAGE) {
-    const slice = waypoints.slice(i, i + PER_PAGE);
-    const embed = createEmbed({
+  return pageBy(waypoints, PER_PAGE).map((slice) =>
+    createEmbed({
       title: t("waypoint.embedTitle", { server: serverId }),
       description: t("waypoint.count", { count: waypoints.length }),
-    });
-    embed.addFields(
+    }).addFields(
       slice.map((wp) => ({
         name: wp.category ? `${wp.name} (${wp.category})` : wp.name,
         value: t("waypoint.embedEntry", {
@@ -56,10 +47,8 @@ function buildPages(waypoints: Waypoint[], serverId: string): EmbedBuilder[] {
         }),
         inline: false,
       })),
-    );
-    pages.push(embed);
-  }
-  return pages;
+    ),
+  );
 }
 
 export const execute = withErrorHandling(async (interaction) => {
@@ -87,13 +76,5 @@ export const execute = withErrorHandling(async (interaction) => {
     return;
   }
 
-  const pages = buildPages(waypoints, server.id);
-  const message = await interaction.editReply({
-    embeds: [pages[0]!],
-    components:
-      pages.length > 1 ? [createPaginationButtons(0, pages.length)] : [],
-  });
-  if (pages.length > 1) {
-    await handlePagination(message, interaction, pages);
-  }
+  await replyPaged(interaction, buildPages(waypoints, server.id));
 });

@@ -2,7 +2,7 @@ import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embeds/embedUtils.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
 
-import { getLinkedAccount } from "@mcbot/core/utils/stores/linkUtils.js";
+import { getLinkedAccount } from "@mcbot/core/utils/stores/linkStore.js";
 import { buildChunkbaseUrl } from "@mcbot/core/utils/minecraft/chunkbaseUrl.js";
 import { withErrorHandling } from "../middleware.js";
 import { queryFailureText } from "../../logWatcher/queryMessages.js";

@@ -35,6 +35,20 @@ describe("parseVersionName", () => {
     expect(parseVersionName("1.21").minecraftVersion).toBe("1.21");
   });
 
+  it.each([
+    ["26.1", "26.1"],
+    ["26.1.2", "26.1.2"],
+    ["Fabric 26.3", "26.3"],
+    ["Paper 26.1.2", "26.1.2"],
+  ])("reads the year-based version in %s without cutting it to 1.x", (raw, version) => {
+    expect(parseVersionName(raw).minecraftVersion).toBe(version);
+  });
+
+  it("does not read a build or protocol number as a version", () => {
+    expect(parseVersionName("build 3.1.2").minecraftVersion).toBeNull();
+    expect(parseVersionName("Server 126.1.2").minecraftVersion).toBeNull();
+  });
+
   it("keeps the raw string and admits when it found nothing", () => {
     // Servers put marketing copy in this field; guessing would be worse.
     const parsed = parseVersionName("§cBest§f Server §aEU");

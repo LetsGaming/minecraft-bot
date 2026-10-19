@@ -5,13 +5,14 @@ import {
   REST,
   Routes,
   MessageFlags,
+  type ChatInputCommandInteraction,
   type Interaction,
 } from "discord.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import { loadConfig, getServerIds, watchConfig } from "@mcbot/core/config.js";
-import { beginConfigApply } from "@mcbot/core/utils/server/runtimeHeartbeat.js";
-import { summarizeConfigChanges } from "@mcbot/core/utils/config/configDiff.js";
+import { startRuntimeHeartbeat } from "@mcbot/core/utils/server/runtimeHeartbeat.js";
+import { verifyWrapperContract } from "@mcbot/core/utils/server/serverAccess.js";
 import { consumeToken, cooldownSeconds } from "@mcbot/core/utils/rateLimiter.js";
 import {
   resolveCommandPolicy,
@@ -20,36 +21,29 @@ import {
 import { t, runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
 import { recordCommandUsage } from "@mcbot/core/utils/commands/commandUsage.js";
 import { registerManifestCommands } from "@mcbot/core/utils/commands/commandManifest.js";
-import { getCommandFiles, categoryOf } from "./utils/commands/loadCommandFiles.js";
-
-/** Slash commands discovered at load, for the dashboard manifest. */
-const manifestSlash: Array<{
-  name: string;
-  description: string;
-  category?: string;
-}> = [];
 import {
-  isServerAdmin,
-  getMemberRoleIds,
-  replyDenied,
-  replyError,
-} from "./commands/middleware.js";
+  discoverModules,
+  manifestOf,
+  assertCommandsLoaded,
+} from "./utils/commands/loadCommandFiles.js";
+import { errorContentOf, replyDenied, replyError } from "./commands/middleware.js";
+import { isInvokerAdmin } from "./utils/guild/permissions.js";
+import { dispatchAutocomplete } from "./utils/autocomplete.js";
+import { applyConfig, markStartupConfigApplied } from "./utils/applyConfig.js";
 import { initServers, getAllInstances } from "@mcbot/core/utils/server/server.js";
-import { getDb } from "@mcbot/core/db/index.js";
+import { closeDb, getDb } from "@mcbot/core/db/index.js";
 import {
   capabilityCommandSkips,
   capabilitySummary,
 } from "@mcbot/core/utils/server/capabilities.js";
 import { migrateLegacySnapshots } from "@mcbot/core/utils/minecraft/snapshotUtils.js";
-import { tryResolveServer } from "./utils/guild/guildRouter.js";
-import { ALL_SERVERS } from "./utils/guild/serverOptions.js";
-import {
-  initMinecraftCommands,
-  reconcileServers,
-} from "./logWatcher/initMinecraftCommands.js";
+import { initMinecraftCommands } from "./logWatcher/initMinecraftCommands.js";
+import { currentVersion } from "./logWatcher/watchers/monitors/updateNotifier.js";
 import { log } from "@mcbot/core/utils/logger.js";
-import { flushUptimeHistory } from "@mcbot/core/utils/stores/uptimeTracker.js";
 import { invalidateStatusChannelCache } from "./logWatcher/watchers/schedulers/statusEmbed.js";
+import { handleWhitelistApplicationInteraction } from "./interactions/whitelistApplications.js";
+import { handleFollowUpHintInteraction } from "./interactions/followUpHints.js";
+import { handleConfirmInteraction } from "./interactions/confirmActions.js";
 import type { BotCommand, BotClient } from "@mcbot/core/types/index.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 import { installProcessGuards } from "./processGuards.js";
@@ -57,17 +51,13 @@ import { installProcessGuards } from "./processGuards.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const config = loadConfig();
 
-// ponytail: dev-only bypass. MCBOT_DEV_NO_DISCORD=1 skips the Discord
-// gateway login and global command registration (both need a real bot
-// token/application) so the rest of the bot — config/DB loading, server
-// capability probing, log watchers, RCON — can still be exercised in an
-// isolated dev session with no real Discord app. Discord-facing features
-// (slash commands, interactions, posting to channels) do not work in this
-// mode since there is no live gateway connection. Never set this in
-// production; only scripts/dev-up.mjs sets it.
+// MCBOT_DEV_NO_DISCORD=1 skips the Discord gateway login and global command
+// registration (both need a real bot token and application), so everything
+// else (config and DB loading, capability probing, log watchers, RCON) can
+// run in an isolated dev session. Slash commands, interactions and channel
+// posts do not work in this mode. Only scripts/dev-up.mjs sets it.
 const DEV_NO_DISCORD = process.env.MCBOT_DEV_NO_DISCORD === "1";
 
-// Initialize all server instances
 initServers(config.servers);
 // Open the SQLite store early: schema migrations and the one-time legacy
 // JSON import run here, before any command can touch a store.
@@ -87,29 +77,18 @@ for (const inst of getAllInstances()) {
 }
 
 // Remote instances: report once, per instance, where this bot and the
-// wrapper disagree about what exists — a missing feature otherwise only
+// wrapper disagree about what exists. A missing feature otherwise only
 // shows up as a command quietly doing nothing.
-{
-  const { verifyWrapperContract } = await import("@mcbot/core/utils/server/serverAccess.js");
-  const { currentVersion } = await import("./logWatcher/watchers/monitors/updateNotifier.js");
-  const botVersion = currentVersion();
-  await Promise.all(
-    getAllInstances().map((inst) =>
-      verifyWrapperContract(inst.config, botVersion),
-    ),
-  );
-}
+await Promise.all(
+  getAllInstances().map((inst) =>
+    verifyWrapperContract(inst.config, currentVersion()),
+  ),
+);
 
 // Heartbeat file for the (optional) dashboard process: a fresh
 // data/runtime.json means "bot alive", stale means banner in the UI.
-{
-  const { startRuntimeHeartbeat } = await import("@mcbot/core/utils/server/runtimeHeartbeat.js");
-  const { currentVersion } = await import(
-    "./logWatcher/watchers/monitors/updateNotifier.js"
-  );
-  beginConfigApply()([]);
-  startRuntimeHeartbeat(currentVersion());
-}
+markStartupConfigApplied(config);
+startRuntimeHeartbeat(currentVersion());
 
 // Move legacy loose snapshot files into the first server's directory
 // so existing baselines survive the per-server snapshot layout change.
@@ -120,7 +99,6 @@ if (firstServerId) {
   });
 }
 
-// Create client with intents for chat bridge
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -132,42 +110,16 @@ const client = new Client({
   // the intended one-time widening (see the BotClient interface).
 }) as BotClient;
 
-// Re-cache automatically when config.json is edited on disk.
-// Server additions/removals are reconciled live — instances and
-// watchers are created for added IDs and torn down for removed ones.
-// A reload that lands before the client is ready cannot be applied yet
-// (watchers are not wired); it is remembered and reconciled once at ready.
-let lastSeenConfig = config;
+// Re-cache automatically when config.json is edited on disk. Server
+// additions and removals are reconciled live. A reload that lands before
+// the client is ready cannot be applied yet (watchers are not wired); it is
+// remembered and applied once at ready.
 let reloadMissedBeforeReady = false;
 
-function applyConfigReload(fresh: typeof config): void {
-  const reportApplied = beginConfigApply();
-  const settingChanges = summarizeConfigChanges(lastSeenConfig, fresh);
-  lastSeenConfig = fresh;
-  for (const change of settingChanges) {
-    log.info("config", `Reload: ${change}`);
-  }
-  reconcileServers(client, fresh)
-    .then(({ added, removed, replaced, changed }) => {
-      reportApplied(changed);
-      if (
-        added.length > 0 ||
-        removed.length > 0 ||
-        replaced.length > 0 ||
-        changed.length > 0
-      ) {
-        log.info(
-          "config",
-          `Reload applied, added: [${added.join(", ")}], removed: [${removed.join(", ")}], rebuilt: [${replaced.join(", ")}]` +
-            (changed.length > 0
-              ? `; changed (restart required): [${changed.join(", ")}]`
-              : ""),
-        );
-      }
-    })
-    .catch((err) => {
-      log.error("config", `Reconciliation after reload failed: ${errMsg(err)}`);
-    });
+function applyConfigReload(fresh: ReturnType<typeof loadConfig>): void {
+  applyConfig(client, fresh).catch((err: unknown) => {
+    log.error("config", `Reconciliation after reload failed: ${errMsg(err)}`);
+  });
   void refreshSlashCommands();
 }
 
@@ -179,11 +131,7 @@ watchConfig((fresh) => {
   applyConfigReload(fresh);
 });
 
-/**
- * We store commands on the client instance for runtime access.
- * discord.js does not ship a typed `commands` property,
- * so we extend via a Collection on the prototype-less object.
- */
+/** The slash commands currently registered with Discord, by name. */
 const commands = new Collection<string, BotCommand>();
 
 /** Every slash command module found on disk, whether currently registered or not. */
@@ -218,62 +166,47 @@ async function refreshSlashCommands(): Promise<void> {
   await registerGlobalCommands();
 }
 
-// ── Load commands ──
-
 async function loadCommands(): Promise<void> {
   // Skip registering suite-dependent commands when NO configured
-  // server provides the capability ("/server" stays registered — see
+  // server provides the capability ("/server" stays registered, see
   // capabilityCommandSkips for why).
   const capabilitySkips = capabilityCommandSkips(getAllInstances());
 
   const commandsRoot = path.join(__dirname, "commands");
-  const files = getCommandFiles(commandsRoot);
-  for (const file of files) {
-    try {
+  const modules = await discoverModules<BotCommand>(
+    commandsRoot,
+    "slash",
+    (mod) => {
       // Command modules are loaded dynamically, so their shape isn't known at
-      // compile time: import as Partial<BotCommand> and validate the required
-      // members (data + execute) below before the module is used.
-      const cmd = (await import(path.resolve(file))) as Partial<BotCommand>;
-      if (!cmd.data || !cmd.execute) continue;
-      const name = cmd.data.name;
-      // Collect for the dashboard manifest BEFORE any skip, so disabled
-      // commands can still be re-enabled from the UI.
-      manifestSlash.push({
-        name,
+      // compile time: validate the required members (data + execute).
+      const cmd = mod as Partial<BotCommand>;
+      if (!cmd.data || !cmd.execute) return null;
+      return {
+        name: cmd.data.name,
         description: cmd.data.description ?? "",
-        // The folder under commands/ is the category, so the dashboard's
-        // sections mirror the repo. A command directly in commands/ (rare,
-        // and shared/ helpers aside) has no folder and falls back to "".
-        category: categoryOf(commandsRoot, file),
-      });
-      // Only a command disabled in EVERY scope (global + all guild
-      // overrides) is skipped entirely; anything else stays registered
-      // and is gated per guild at dispatch time.
-      const skipReason = capabilitySkips.get(name);
-      // data + execute were verified present above, so it's a complete command.
-      knownCommands.set(name, {
-        cmd: cmd as BotCommand,
-        capabilitySkip: skipReason,
-      });
-      if (!commandEnabledAnywhere(name)) {
-        log.info("commands", `Skipping disabled: /${name}`);
-        continue;
-      }
-      if (skipReason) {
-        log.info(
-          "commands",
-          `Skipping /${name}: ${skipReason} (see docs/admin/setup.md)`,
-        );
-      }
-    } catch (err) {
-      log.error("commands", `Failed to load ${file}: ${errMsg(err)}`);
+        value: cmd as BotCommand,
+      };
+    },
+  );
+  assertCommandsLoaded(modules.length, commandsRoot);
+
+  for (const { name, value } of modules) {
+    const skipReason = capabilitySkips.get(name);
+    knownCommands.set(name, { cmd: value, capabilitySkip: skipReason });
+    // Only a command disabled in EVERY scope (global + all guild
+    // overrides) is skipped entirely; anything else stays registered
+    // and is gated per guild at dispatch time.
+    if (!commandEnabledAnywhere(name)) {
+      log.info("commands", `Skipping disabled: /${name}`);
+    } else if (skipReason) {
+      log.info("commands", `Skipping /${name}: ${skipReason} (see docs/admin/setup.md)`);
     }
   }
-
   syncCommands();
 
-  // Dashboard manifest: the web process cannot discover commands itself.
-  registerManifestCommands("slash", manifestSlash);
+  // Dashboard manifest: the web process cannot discover commands itself. It
+  // lists disabled commands too, so they can be re-enabled from the UI.
+  registerManifestCommands("slash", manifestOf(modules));
 }
 
 async function registerGlobalCommands(): Promise<void> {
@@ -290,10 +223,121 @@ async function registerGlobalCommands(): Promise<void> {
   }
 }
 
+// ── Interaction routing ──
+
+/**
+ * Components with stable customIds, routed before the slash-command path so
+ * their buttons survive restarts (no collectors). The first handler that
+ * claims an interaction ends routing; one that throws also ends it.
+ */
+const COMPONENT_HANDLERS: ReadonlyArray<{
+  tag: string;
+  handle: (interaction: Interaction) => Promise<boolean>;
+}> = [
+  { tag: "wlapp", handle: handleWhitelistApplicationInteraction },
+  { tag: "hint", handle: handleFollowUpHintInteraction },
+  { tag: "confirm", handle: handleConfirmInteraction },
+];
+
+/** True when a component handler took the interaction (or failed on it). */
+async function routeComponent(interaction: Interaction): Promise<boolean> {
+  for (const { tag, handle } of COMPONENT_HANDLERS) {
+    try {
+      if (await handle(interaction)) return true;
+    } catch (err) {
+      log.error(tag, `Interaction failed: ${errMsg(err)}`);
+      return true;
+    }
+  }
+  return false;
+}
+
+async function dispatchSlash(interaction: ChatInputCommandInteraction): Promise<void> {
+  const command = commands.get(interaction.commandName);
+  if (!command) return;
+  const guildId = interaction.guild?.id;
+
+  // Effective per-command policy for THIS guild (guild override, then
+  // global block, then defaults), resolved at dispatch time so config
+  // reloads and dashboard edits apply without a restart. `adminOnly`
+  // uses the same check as requireServerAdmin; built-in admin
+  // commands additionally keep their own wrapper regardless.
+  const policy = resolveCommandPolicy(interaction.commandName, { guildId });
+  if (!policy.enabled) {
+    await interaction.reply({
+      content: t("command.disabledHere", { command: interaction.commandName }, guildId),
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+  if (policy.adminOnly && !isInvokerAdmin(interaction)) {
+    await replyDenied(interaction);
+    return;
+  }
+
+  let succeeded = false;
+  try {
+    // Per-user rate limit: prevents RCON pool exhaustion from command spam
+    if (!consumeToken(interaction.user.id)) {
+      await interaction.reply({
+        content: t(
+          "common.rateLimited",
+          { seconds: cooldownSeconds(interaction.user.id) },
+          guildId,
+        ),
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+    await runWithGuildLocale(guildId, () => command.execute(interaction));
+    succeeded = true;
+  } catch (err) {
+    log.error("command", `/${interaction.commandName}: ${errMsg(err)}`);
+    await runWithGuildLocale(guildId, () =>
+      replyError(interaction, errorContentOf(err)),
+    );
+  }
+
+  // Recorded here, for EVERY command, rather than inside an optional wrapper:
+  // not every command wraps its execute in withErrorHandling, so a wrapper
+  // would leave those uncounted. A failed invocation does not count, and a
+  // failure to record never changes the reply the user already got.
+  if (!succeeded) return;
+  try {
+    recordCommandUsage({
+      command: interaction.commandName,
+      surface: "slash",
+      userId: interaction.user.id,
+      guildId: guildId ?? null,
+    });
+  } catch (err) {
+    log.warn("command", `Usage not recorded for /${interaction.commandName}: ${errMsg(err)}`);
+  }
+}
+
+async function handleInteraction(interaction: Interaction): Promise<void> {
+  if (interaction.isAutocomplete()) {
+    await dispatchAutocomplete(interaction, commands.get(interaction.commandName));
+    return;
+  }
+  if (
+    (interaction.isButton() || interaction.isModalSubmit()) &&
+    (await routeComponent(interaction))
+  ) {
+    return;
+  }
+  if (interaction.isChatInputCommand()) await dispatchSlash(interaction);
+}
+
 // ── Main ──
 
 void (async () => {
-  await loadCommands();
+  try {
+    await loadCommands();
+  } catch (err) {
+    log.error("commands", `Startup aborted: ${errMsg(err)}`);
+    process.exit(1);
+  }
   if (!DEV_NO_DISCORD) await registerGlobalCommands();
 
   // Attach commands to client for help command access
@@ -320,178 +364,10 @@ void (async () => {
   // reconnect so stale TextChannel/VoiceChannel objects are not reused.
   client.on("shardResume", () => invalidateStatusChannelCache());
 
-  // AUD-008: an async listener's rejection is not caught by discord.js, and
-  // the process guard exits on any unhandled rejection. One slow
-  // autocomplete (an expired interaction makes respond() throw) must not
-  // take the bot down, so every rejection ends here.
-  const handleInteraction = async (interaction: Interaction): Promise<void> => {
-    // ── Autocomplete ──
-    if (interaction.isAutocomplete()) {
-      const autocomplete = interaction;
-      const focused = autocomplete.options.getFocused(true);
-
-      // Server autocomplete
-      if (focused.name === "server") {
-        // In multi-guild deployments, only suggest servers this
-        // guild may target — no cross-tenant server-ID disclosure.
-        const { getAllowedServerIds } = await import(
-          "./utils/guild/guildRouter.js"
-        );
-        const allowed = getAllowedServerIds(autocomplete.guild?.id ?? undefined);
-        const ids = getServerIds().filter(
-          (id) =>
-            (!allowed || allowed.has(id)) &&
-            id.startsWith(String(focused.value).toLowerCase()),
-        );
-        const choices = ids.slice(0, 25).map((id) => ({ name: id, value: id }));
-        if (
-          autocomplete.commandName === "uptime" &&
-          ALL_SERVERS.startsWith(String(focused.value).toLowerCase())
-        ) {
-          choices.unshift({ name: "all (overview)", value: ALL_SERVERS });
-        }
-        await autocomplete.respond(choices.slice(0, 25));
-        return;
-      }
-
-      // Player name autocomplete
-      if (["player", "player1", "player2"].includes(focused.name)) {
-        try {
-          const { getPlayerNames } = await import("@mcbot/core/utils/minecraft/playerUtils.js");
-          const server = tryResolveServer(autocomplete);
-          const names = server ? await getPlayerNames(server) : [];
-          const filtered = names.filter((n) =>
-            n.toLowerCase().startsWith(String(focused.value).toLowerCase()),
-          );
-          await autocomplete.respond(
-            filtered.slice(0, 25).map((n) => ({ name: n, value: n })),
-          );
-        } catch {
-          await autocomplete.respond([]).catch(() => {});
-        }
-        return;
-      }
-
-      await autocomplete.respond([]);
-      return;
-    }
-
-    // Whitelist-application buttons + modal use stable customIds so
-    // they survive restarts (no collectors). Routed before the
-    // slash-command path; a handled interaction ends here.
-    if (interaction.isButton() || interaction.isModalSubmit()) {
-      try {
-        const { handleWhitelistApplicationInteraction } = await import(
-          "./interactions/whitelistApplications.js"
-        );
-        if (await handleWhitelistApplicationInteraction(interaction)) return;
-      } catch (err) {
-        log.error("wlapp", `Interaction failed: ${errMsg(err)}`);
-        return;
-      }
-
-      // Follow-up hint buttons ("enable reminders?") use stable customIds
-      // for the same reason — an offer made before a restart still works.
-      try {
-        const { handleFollowUpHintInteraction } = await import(
-          "./interactions/followUpHints.js"
-        );
-        if (await handleFollowUpHintInteraction(interaction)) return;
-      } catch (err) {
-        log.error("hint", `Interaction failed: ${errMsg(err)}`);
-        return;
-      }
-
-      // Confirmation rows (stop, restart) carry their expiry in the customId.
-      try {
-        const { handleConfirmInteraction } = await import(
-          "./interactions/confirmActions.js"
-        );
-        if (await handleConfirmInteraction(interaction)) return;
-      } catch (err) {
-        log.error("confirm", `Interaction failed: ${errMsg(err)}`);
-        return;
-      }
-    }
-
-    if (!interaction.isChatInputCommand()) return;
-
-    const chatInteraction = interaction;
-    const command = commands.get(chatInteraction.commandName);
-    if (!command) return;
-
-    // Effective per-command policy for THIS guild (guild override →
-    // global block → defaults), resolved at dispatch time so config
-    // reloads and dashboard edits apply without a restart. `adminOnly`
-    // uses the same check as requireServerAdmin; built-in admin
-    // commands additionally keep their own wrapper regardless.
-    const policy = resolveCommandPolicy(chatInteraction.commandName, {
-      guildId: chatInteraction.guild?.id,
-    });
-    if (!policy.enabled) {
-      await chatInteraction.reply({
-        content: t(
-          "command.disabledHere",
-          { command: chatInteraction.commandName },
-          chatInteraction.guild?.id,
-        ),
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-    if (policy.adminOnly) {
-      const allowed = isServerAdmin(
-        chatInteraction.user.id,
-        getMemberRoleIds(chatInteraction),
-        chatInteraction.guild?.id,
-      );
-      if (!allowed) {
-        await replyDenied(chatInteraction);
-        return;
-      }
-    }
-
-    try {
-      // Per-user rate limit: prevents RCON pool exhaustion from command spam
-      if (!consumeToken(chatInteraction.user.id)) {
-        const secs = cooldownSeconds(chatInteraction.user.id);
-        await chatInteraction.reply({
-          content: t(
-            "common.rateLimited",
-            { seconds: secs },
-            chatInteraction.guild?.id,
-          ),
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-      await runWithGuildLocale(chatInteraction.guild?.id, () =>
-        command.execute(chatInteraction),
-      );
-
-      // Usage is recorded here, for EVERY command, rather than inside an
-      // optional wrapper. It used to live in withErrorHandling — but only
-      // some commands wrap their execute in that, so the fifteen that export
-      // execute raw (daily, stats, link, …) were never counted, and the
-      // dashboard reported "0 uses" for commands people ran daily. One
-      // dispatch path, one recording site: a command cannot opt out of being
-      // measured by choosing a different helper. After execute() returns
-      // without throwing, so a failed invocation still does not count.
-      recordCommandUsage({
-        command: chatInteraction.commandName,
-        surface: "slash",
-        userId: chatInteraction.user.id,
-        guildId: chatInteraction.guild?.id ?? null,
-      });
-    } catch (err) {
-      log.error("command", `/${chatInteraction.commandName}: ${errMsg(err)}`);
-      const guildId = chatInteraction.guild?.id;
-      await replyError(chatInteraction, {
-        problem: t("common.unexpectedError", {}, guildId),
-        recovery: t("common.unexpectedErrorRecovery", {}, guildId),
-      });
-    }
-  };
+  // An async listener's rejection is not caught by discord.js, and the
+  // process guard exits on any unhandled rejection. One slow autocomplete (an
+  // expired interaction makes respond() throw) must not take the bot down,
+  // so every rejection ends here.
   client.on("interactionCreate", (interaction) =>
     handleInteraction(interaction).catch((err: unknown) => {
       log.error("interaction", `Unhandled interaction failure: ${errMsg(err)}`);
@@ -501,7 +377,7 @@ void (async () => {
   if (DEV_NO_DISCORD) {
     log.warn(
       "bot",
-      "MCBOT_DEV_NO_DISCORD=1 — skipping Discord gateway login (dev only). " +
+      "MCBOT_DEV_NO_DISCORD=1: skipping Discord gateway login (dev only). " +
         "Slash commands, interactions, and Discord messages are unavailable " +
         "this run; running the clientReady init anyway so log watchers / " +
         "RCON / server monitoring can still be exercised.",
@@ -516,23 +392,24 @@ void (async () => {
   }
 })();
 
-// ── Graceful shutdown ──────────────────────────────────────────────────────
-// Flush the uptime tracker before the process exits so no polling data is lost.
+// ── Graceful shutdown ──
+
+let shuttingDown = false;
 
 async function shutdown(signal: string): Promise<void> {
-  log.info(
-    "bot",
-    `Received ${signal} — flushing uptime history and shutting down`,
-  );
+  if (shuttingDown) return;
+  shuttingDown = true;
+  log.info("bot", `Received ${signal}, shutting down`);
   try {
-    await flushUptimeHistory();
+    await client.destroy();
   } catch (err) {
-    log.error("bot", `Failed to flush uptime history on shutdown: ${errMsg(err)}`);
+    log.warn("bot", `Discord client did not close cleanly: ${errMsg(err)}`);
   }
+  closeDb();
   process.exit(0);
 }
 
-installProcessGuards(flushUptimeHistory);
+installProcessGuards(async () => closeDb());
 
 process.on("SIGTERM", () => {
   shutdown("SIGTERM").catch(() => process.exit(1));

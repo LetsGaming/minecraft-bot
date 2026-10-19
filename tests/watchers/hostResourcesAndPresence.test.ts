@@ -17,7 +17,7 @@ vi.mock("../../src/core/config.js", () => ({
 import { loadConfig } from "../../src/core/config.js";
 import { getHostResources } from "../../src/core/utils/server/hostResources.js";
 import { formatBytes } from "@mcbot/schema";
-import { updateBotPresence } from "../../src/bot/logWatcher/watchers/schedulers/statusEmbed.js";
+import { updateBotPresence } from "../../src/bot/logWatcher/watchers/schedulers/botPresence.js";
 import type { ServerInstance } from "../../src/core/utils/server/server.js";
 import type { Client } from "discord.js";
 
@@ -38,7 +38,7 @@ describe("getHostResources", () => {
       .spyOn(globalThis, "fetch")
       .mockRejectedValue(new Error("ECONNREFUSED"));
     expect(
-      await getHostResources(srv()),
+      await getHostResources(srv().config),
     ).toBeNull();
     fetchSpy.mockRestore();
   });
@@ -58,7 +58,7 @@ describe("getHostResources", () => {
       }),
     } as unknown as Response);
 
-    const host = await getHostResources(srv());
+    const host = await getHostResources(srv().config);
     expect(host).not.toBeNull();
     expect(host!.process).toEqual({ pid: 42, cpuPercent: 3.5, rssBytes: 2048 });
     expect(host!.disks).toHaveLength(1);

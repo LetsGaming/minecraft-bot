@@ -1,7 +1,6 @@
 /**
- * /daily-reminder — opt-in DM when the /daily cooldown expires.
- * The flag lives on the user's claim record in claimedDaily.json; the
- * actual DMs are sent by the dailyReminderScheduler watcher.
+ * /daily-reminder: opt-in DM when the /daily cooldown expires. The flag lives
+ * on the user's claim record; the DMs are sent by the dailyReminderScheduler watcher.
  */
 import { SlashCommandBuilder } from "discord.js";
 import {
@@ -11,6 +10,7 @@ import {
 import { withErrorHandling } from "../../middleware.js";
 import { resolveServer } from "../../../utils/guild/guildRouter.js";
 import { getAllInstances } from "@mcbot/core/utils/server/server.js";
+import { emptyClaim } from "@mcbot/core/utils/minecraft/dailyClaim.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 
 export const data = new SlashCommandBuilder()
@@ -43,18 +43,15 @@ export const execute = withErrorHandling(
       claimed[userId] = {
         // Users who never claimed get a zeroed record carrying just the
         // flag; the scheduler only DMs once a real claim exists.
-        lastClaim: existing?.lastClaim ?? 0,
-        currentStreak: existing?.currentStreak ?? 0,
-        bonusStreak: existing?.bonusStreak ?? 0,
-        longestStreak: existing?.longestStreak ?? 0,
-        rewards: existing?.rewards ?? [],
-        ...existing,
+        ...(existing ?? emptyClaim()),
         remind: enabled,
       };
     });
 
     const suffix =
-      getAllInstances().length > 1 ? ` (Server: **${server.id}**)` : "";
+      getAllInstances().length > 1
+        ? t("dailyReminder.serverSuffix", { server: server.id })
+        : "";
     await interaction.editReply(
       (enabled ? t("dailyReminder.enabled") : t("dailyReminder.disabled")) +
         suffix,

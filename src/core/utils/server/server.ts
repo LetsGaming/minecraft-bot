@@ -1,18 +1,15 @@
 /**
  * Multi-server communication layer.
  *
- * Every instance is reached through its API wrapper — this class holds no
- * connection of its own. Before 5.0.0 it also owned an RconClient and a
- * sudo/screen fallback, and each method chose between them and the wrapper
- * at call time; the command path even preferred RCON over the wrapper when
- * both were configured, so the two paths could disagree about what a
- * server had just been told.
+ * Every instance is reached through its API wrapper; this class holds no
+ * connection of its own.
  */
 import { log } from "../logger.js";
+import { MS } from "@mcbot/schema/time.js";
 import {
+  canQueryServer,
   serverIsUp,
   stateIsKnown,
-  unknownHealth,
   type ServerHealth,
 } from "@mcbot/schema/serverState.js";
 import {
@@ -21,6 +18,16 @@ import {
 } from "@mcbot/schema/commandOutcome.js";
 import type { ServerCapabilities } from "../../types/index.js";
 import { resolveDefaultServerId } from "./guildTargets.js";
+import {
+  detectCapabilities,
+  getHealth,
+  getList,
+  getTps,
+  pingServer,
+  sendCommandOutcome,
+  tailLog,
+} from "./serverAccess.js";
+import { parseVersionName } from "../minecraft/versionName.js";
 import type {
   ServerConfig,
   PlayerCoords,
@@ -28,6 +35,7 @@ import type {
   TpsResult,
 } from "../../types/index.js";
 import { errMsg } from "../error.js";
+import { ConsoleArgumentError, consoleCommand } from "../minecraft/serverMessages.js";
 import {
   queryFail,
   queryOk,
@@ -43,10 +51,31 @@ import {
 
 // ── ServerInstance ──
 
+const RETRY_DELAY_MS = MS.second / 2;
+
+/**
+ * Run `fn`; if it throws, or returns a value `accept` turns down, wait and
+ * run it once more. The second attempt's outcome stands, thrown or returned.
+ */
+async function retryOnce<T>(
+  fn: () => Promise<T>,
+  delayMs: number,
+  accept: (value: T) => boolean = () => true,
+): Promise<T> {
+  try {
+    const first = await fn();
+    if (accept(first)) return first;
+  } catch {
+    /* retried below */
+  }
+  await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+  return fn();
+}
+
 const SEED_PATTERN = /Seed:\s*\[(-?\d+)\]/;
-const SEED_MISS_TTL_MS = 60_000;
-const VERSION_TTL_MS = 10 * 60_000;
-const VERSION_MISS_TTL_MS = 60_000;
+const SEED_MISS_TTL_MS = MS.minute;
+const VERSION_TTL_MS = 10 * MS.minute;
+const VERSION_MISS_TTL_MS = MS.minute;
 const LOG_POLL_ATTEMPTS = 3;
 const LOG_POLL_INTERVAL_MS = 300;
 const LOG_TAIL_LINES = 10;
@@ -97,14 +126,13 @@ export class ServerInstance {
 
   /**
    * Setup-suite capabilities, probed at startup and re-probed on config
-   * reload. `null` means "not probed yet" — gates treat that as fully
+   * reload. `null` means "not probed yet"; gates treat that as fully
    * capable so callers that skip probing (tests) see no difference.
    */
   capabilities: ServerCapabilities | null = null;
 
   /** Probe and cache which setup-suite artifacts exist for this server. */
   async probeCapabilities(): Promise<ServerCapabilities> {
-    const { detectCapabilities } = await import("./serverAccess.js");
     this.capabilities = await detectCapabilities(this.config);
     return this.capabilities;
   }
@@ -123,7 +151,6 @@ export class ServerInstance {
   async send(command: string): Promise<CommandOutcome> {
     let outcome: CommandOutcome;
     try {
-      const { sendCommandOutcome } = await import("./serverAccess.js");
       outcome = await sendCommandOutcome(this.config, command);
     } catch (err) {
       outcome = {
@@ -142,7 +169,7 @@ export class ServerInstance {
   }
 
   /**
-   * What this server is doing, from whichever channel could tell — the API
+   * What this server is doing, from whichever channel could tell; the API
    * wrapper, or a direct server-list ping when the wrapper is down.
    *
    * Only `unknown` is retried, and reaching it means *both* channels failed.
@@ -153,28 +180,22 @@ export class ServerInstance {
    * failure gets one more chance.
    */
   async getHealth(): Promise<ServerHealth> {
-    const { getHealth } = await import("./serverAccess.js");
-    const RETRY_DELAY_MS = 500;
-    let last: ServerHealth = unknownHealth("no attempt made");
-    for (let attempt = 0; attempt < 2; attempt++) {
-      if (attempt > 0)
-        await new Promise<void>((r) => setTimeout(r, RETRY_DELAY_MS));
-      last = await getHealth(this.config);
-      if (stateIsKnown(last)) return last;
+    const health = await retryOnce(() => getHealth(this.config), RETRY_DELAY_MS, stateIsKnown);
+    if (!stateIsKnown(health)) {
+      log.debug(
+        this.id,
+        `neither the API wrapper nor a direct ping answered: ${health.reason ?? "unknown"}`,
+      );
     }
-    log.debug(
-      this.id,
-      `neither the API wrapper nor a direct ping answered: ${last.reason ?? "unknown"}`,
-    );
-    return last;
+    return health;
   }
 
   /**
-   * Up in some form — process running, whether or not it is answering.
+   * Up in some form; process running, whether or not it is answering.
    *
    * Deliberately false for `unknown`: we established nothing, and a
    * boolean has nowhere to put that. Callers that show state to a human, or
-   * decide whether to alert, must use getHealth() instead — this is for the
+   * decide whether to alert, must use getHealth() instead; this is for the
    * ones that only branch on "can I bother querying it".
    */
   async isRunning(): Promise<boolean> {
@@ -182,23 +203,29 @@ export class ServerInstance {
   }
 
   /**
-   * A single timeout/network blip here used to be indistinguishable from
-   * "server empty" — callers like /daily's online check would silently
-   * treat a flaky wrapper response as the player being offline. Retry once,
-   * same pattern as getHealth() above, before giving up.
+   * The online roster. A failure is reported as one, never as an empty
+   * server: a single timeout or network blip is retried once, and if the
+   * wrapper still cannot answer the result says so, so a caller cannot
+   * mistake "could not ask" for "nobody is online".
    */
-  async getList(): Promise<ServerListResult> {
-    const { getList } = await import("./serverAccess.js");
-    const RETRY_DELAY_MS = 500;
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        return await getList(this.config);
-      } catch {
-        if (attempt === 0)
-          await new Promise<void>((r) => setTimeout(r, RETRY_DELAY_MS));
-      }
+  async getList(): Promise<QueryResult<ServerListResult>> {
+    try {
+      return queryOk(await retryOnce(() => getList(this.config), RETRY_DELAY_MS));
+    } catch (err) {
+      log.debug(this.id, `player list unavailable: ${errMsg(err)}`);
+      return queryFail("unreachable");
     }
-    return { playerCount: "0", maxPlayers: "?", players: [] };
+  }
+
+  /**
+   * The roster, but only after health says the server can be queried. An
+   * unresponsive server, or a healthy one whose wrapper is down, answers a
+   * list with zeros that read as an empty server; callers that record or
+   * display the count use this so those moments become a gap instead.
+   */
+  async listIfQueryable(): Promise<QueryResult<ServerListResult>> {
+    if (!canQueryServer(await this.getHealth())) return queryFail("unreachable");
+    return this.getList();
   }
 
   /**
@@ -252,7 +279,6 @@ export class ServerInstance {
         : queryFail(classifyReply(outcome.output));
     }
 
-    const { tailLog } = await import("./serverAccess.js");
     for (let i = 0; i < LOG_POLL_ATTEMPTS; i++) {
       await new Promise<void>((resolve) =>
         setTimeout(resolve, LOG_POLL_INTERVAL_MS),
@@ -276,8 +302,6 @@ export class ServerInstance {
     if (this._versionCache && Date.now() < this._versionCache.until) {
       return this._versionCache.value;
     }
-    const { pingServer } = await import("./serverAccess.js");
-    const { parseVersionName } = await import("../minecraft/versionName.js");
     const ping = await pingServer(this.config);
     const value =
       ping?.kind === "status"
@@ -303,8 +327,15 @@ export class ServerInstance {
     nbtPath: string,
     parse: (text: string) => T | null,
   ): Promise<QueryResult<T>> {
+    let command: string;
+    try {
+      command = consoleCommand("/data", { text: "get entity" }, { player }, { text: nbtPath });
+    } catch (err) {
+      if (err instanceof ConsoleArgumentError) return Promise.resolve(queryFail("player-offline"));
+      throw err;
+    }
     return this.queryConsole(
-      `/data get entity ${player} ${nbtPath}`,
+      command,
       parse,
       entityDataPattern(player),
       (m) => m[1] ?? "",
@@ -332,26 +363,11 @@ export class ServerInstance {
   }
 
   /**
-   * Whether this instance can provide TPS data. Always true since 5.0.0 —
-   * the wrapper answers /tps for every instance. Kept because callers read
-   * it to decide whether to render a TPS field at all, and a wrapper that
-   * predates the route still degrades to null.
-   */
-  get supportsTps(): boolean {
-    return true;
-  }
-
-  /**
-   * TPS for this instance.
-   *
-   * The parsing lives in the wrapper now — it owns the RCON connection, so
-   * it is the only side that ever sees a `tps` response. This used to hold
-   * a second implementation with its own regexes and a `_hasTpsCommand`
-   * cache; both are gone with local mode.
+   * TPS for this instance, or null when the wrapper cannot say. The wrapper
+   * owns the RCON connection and does the parsing.
    */
   async getTps(): Promise<TpsResult | null> {
     try {
-      const { getTps } = await import("./serverAccess.js");
       return await getTps(this.config);
     } catch {
       return null;
@@ -383,8 +399,7 @@ export function addServerInstance(cfg: ServerConfig): ServerInstance {
 /**
  * Drop a server instance from the registry. Watcher teardown is the
  * caller's responsibility (see unwireServer in initMinecraftCommands.ts).
- * The instance itself holds nothing to tear down since 5.0.0 — the RCON
- * socket it used to own now lives in the wrapper.
+ * The instance itself holds nothing to tear down.
  */
 export function removeServerInstance(serverId: string): ServerInstance | null {
   const inst = instances.get(serverId) ?? null;
@@ -396,7 +411,7 @@ export function removeServerInstance(serverId: string): ServerInstance | null {
 
 /**
  * Strict lookup: the instance with exactly this ID, or null. No silent
- * fallback — a typo like `/server stop server:survvial` must fail, not
+ * fallback; a typo like `/server stop server:survvial` must fail, not
  * stop the first server. Callers that want "any server" semantics use
  * getFirstInstance() explicitly.
  */

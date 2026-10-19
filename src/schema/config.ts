@@ -2,6 +2,7 @@
 
 import type { LeaderboardInterval } from "./stats.js";
 import type { NotificationEvent } from "./notifications.js";
+import type { Language } from "./language.js";
 import type { CapabilityGrants } from "./capabilities.js";
 
 /**
@@ -11,7 +12,7 @@ import type { CapabilityGrants } from "./capabilities.js";
  * with it, instead of reporting a bare "apiUrl is required" at someone who
  * has a perfectly good config for the previous major. Every one of these
  * describes the machine the server runs on, and now belongs in the API
- * wrapper's own config — which lives on that machine.
+ * wrapper's own config, which lives on that machine.
  */
 export const REMOVED_LOCAL_SERVER_FIELDS = [
   "serverDir",
@@ -70,7 +71,7 @@ export interface RawServerConfig {
    * goes through it. Example: "http://192.168.1.10:3030" (trusted LAN) or
    * "https://mc-api.example.com" (anything beyond the LAN).
    *
-   * Plaintext http:// is only accepted for loopback/private/LAN hosts —
+   * Plaintext http:// is only accepted for loopback/private/LAN hosts, 
    * the x-api-key and all commands travel unencrypted. Public hosts
    * require https:// (or an explicit allowInsecureHttp override).
    * @title API URL
@@ -85,17 +86,12 @@ export interface RawServerConfig {
    * Opt-out for the plaintext-HTTP-to-public-host rejection.
    * Only for hosts that ARE on a trusted segment but can't be detected as
    * such (e.g. internal DNS names). The key and all commands still travel
-   * unencrypted — a loud warning is logged at startup.
+   * unencrypted, a loud warning is logged at startup.
    */
   allowInsecureHttp?: boolean;
   /**
-   * Per-server command overrides for IN-GAME !commands, merged
-   * field-by-field over the global `commands` block (see
-   * CommandOverrideConfig). Slash commands scope per guild instead.
-   */
-  /**
    * Host to send a direct Minecraft server-list ping to, when the API wrapper
-   * cannot be reached. Defaults to the hostname in `apiUrl` — the wrapper
+   * cannot be reached. Defaults to the hostname in `apiUrl`, the wrapper
    * runs on the Minecraft host, so that is already the right machine. Set
    * this only when the game server answers on a different address than the
    * wrapper (a proxy, or a split deployment).
@@ -140,6 +136,11 @@ export interface RawServerConfig {
     version?: string;
     url?: string;
   };
+  /**
+   * Per-server command overrides for IN-GAME !commands, merged
+   * field-by-field over the global `commands` block (see
+   * CommandOverrideConfig). Slash commands scope per guild instead.
+   */
   commands?: Record<string, CommandOverrideConfig>;
 }
 
@@ -152,47 +153,13 @@ export interface RawServerConfig {
  * bot's view of it. Keeping them here meant two implementations of one
  * contract and two places to fix every host-shaped bug.
  */
-export interface ServerConfig {
-  id: string;
-  apiUrl: string;
-  apiKey: string;
-  allowInsecureHttp?: boolean;
-  /** See RawServerConfig — the direct-ping fallback when the wrapper is down. */
-  pingHost?: string;
-  pingPort?: number;
-  disableDirectPing?: boolean;
-  /**
-   * The address players type into the Minecraft client, e.g. "mc.example.com"
-   * or "play.example.com:25566".
-   *
-   * Deliberately separate from `apiUrl` and `pingHost`: those are how the
-   * *bot* reaches the host, and on a normal deployment they are a LAN IP or
-   * an internal DNS name that nobody outside can connect to. Publishing
-   * either as the join address is how a member ends up trying to connect to
-   * 192.168.1.10. Unset means `/info` says the address is not published
-   * rather than guessing one.
-   */
-  publicAddress?: string;
-  /**
-   * The modpack players need, when this server runs one.
-   *
-   * `url` should point at whatever a member can actually install from
-   * (Modrinth, CurseForge, a launcher share link). Without this, the answer
-   * to "what do I need to join" is a mod list a person has to assemble by
-   * hand, which is why it was being answered by a human in chat every time.
-   */
-  modpack?: {
-    name: string;
-    version?: string;
-    url?: string;
-  };
-  commands?: Record<string, CommandOverrideConfig>;
-}
+export type ServerConfig = Required<Pick<RawServerConfig, "apiUrl" | "apiKey">> &
+  Omit<RawServerConfig, "id" | "apiUrl" | "apiKey"> & { id: string };
 
 /**
  * Server scoping for guild push features (notifications, TPS/downtime
- * alerts, leaderboard): a single server ID, an explicit list of IDs, or —
- * when omitted — every server this guild can see (all servers in
+ * alerts, leaderboard): a single server ID, an explicit list of IDs, or, 
+ * when omitted, every server this guild can see (all servers in
  * single-guild deployments, the guild's allowed set in multi-guild ones).
  */
 export type ServerScope = string | string[];
@@ -200,12 +167,11 @@ export type ServerScope = string | string[];
 export interface GuildNotificationConfig {
   channelId?: string;
   /**
-   * Which events to post. Omit to receive the default set (the dispatcher
-   * treats an absent list as DEFAULT_NOTIFICATION_EVENTS); an explicit empty
-   * list receives nothing.
+   * Which events to post. Omit to receive the default set of events; an
+   * explicit empty list receives nothing.
    */
   events?: NotificationEvent[];
-  /** Which server(s) to receive events from — see ServerScope. */
+  /** Which server(s) to receive events from, see ServerScope. */
   server?: ServerScope;
 }
 
@@ -232,25 +198,25 @@ export interface GuildLeaderboardConfig {
   channelId?: string;
   interval?: LeaderboardInterval;
   /**
-   * Which server instance(s) to post leaderboards for — one ID, a list
+   * Which server instance(s) to post leaderboards for, one ID, a list
    * (one leaderboard embed per server), or unset for the guild's default.
    */
   server?: ServerScope;
   /**
    * Which categories the scheduled post includes (one embed per entry).
-   * Any LEADERBOARD_STATS key plus "streak" / "longest_streak"; default
-   * ["playtime", "mined"] — the pre-configurable behaviour.
+   * Any `/leaderboard` stat key plus "streak" / "longest_streak"; default
+   * ["playtime", "mined"], the pre-configurable behaviour.
    */
   categories?: string[];
   /**
-   * Wall-clock anchor, "HH:MM" in the guild's timezone (see
-   * core/utils/config/timezones.ts's guildTimeZone). Unset here AND on the
+   * Wall-clock anchor, "HH:MM" in the guild's timezone (the global
+   * `timezone`, or UTC). Unset here AND on the
    * global default keeps the legacy behaviour: post whenever a full
    * interval has elapsed since the last post, with no fixed time or day.
    */
   postTime?: string;
   /**
-   * Which weekday a *weekly* board posts on — "SU".."SA". Ignored for
+   * Which weekday a *weekly* board posts on, "SU".."SA". Ignored for
    * "daily" (every day) and "monthly" (always the 1st of the month).
    * Defaults to "MO" when postTime is set but this isn't.
    */
@@ -258,7 +224,7 @@ export interface GuildLeaderboardConfig {
 }
 
 /**
- * The status embed feature is fully self-provisioning — the bot creates its
+ * The status embed feature is fully self-provisioning, the bot creates its
  * own category and channels. No channelId configuration is required.
  * Set `enabled: true` in your guild config to activate it.
  */
@@ -303,7 +269,7 @@ export interface GuildChannelPurgeConfig {
 /**
  * Button-based whitelist applications. Both channels are required for
  * the feature to arm: the prompt lives in channelId, applications queue
- * in adminChannelId (which should be admin-only — the decision buttons
+ * in adminChannelId (which should be admin-only, the decision buttons
  * enforce the admin check regardless).
  */
 export interface GuildWhitelistApplicationsConfig {
@@ -345,9 +311,9 @@ export interface GuildConfig {
    * strings and DMs follow the global language, since a server instance
    * can serve several guilds.
    */
-  language?: "en" | "de";
+  language?: Language;
   /**
-   * IANA timezone for THIS guild's wall-clock features — the nightly
+   * IANA timezone for THIS guild's wall-clock features, the nightly
    * channel purge, "busiest hour" in /activity, and anything else that
    * has to pick one local midnight. Falls back to the global `timezone`,
    * then UTC.
@@ -371,7 +337,7 @@ export interface GuildConfig {
    * target (including via the explicit `server:` option). When unset, the
    * allowed set is derived from the servers referenced in this guild's
    * config (defaultServer, chatBridge.server, notifications.server, …).
-   * Only enforced in multi-guild deployments — single-guild setups keep
+   * Only enforced in multi-guild deployments, single-guild setups keep
    * full access to every configured server, as before.
    */
   allowedServers?: string[];
@@ -386,7 +352,7 @@ export interface GuildConfig {
   /**
    * Role ID assigned to a member when they link their Minecraft account
    * (and removed again on unlink). Requires the bot to have Manage Roles
-   * and to sit above the role in the hierarchy — failures are written to
+   * and to sit above the role in the hierarchy, failures are written to
    * the admin audit log and never fail the link itself.
    */
   linkedRole?: string;
@@ -409,7 +375,7 @@ export interface GuildConfig {
  * per server (`servers.<id>.commands`, in-game !commands). Resolution is
  * FIELD-BY-FIELD: a scope override only changes the fields it sets and
  * inherits the rest, so future fields added here automatically get the
- * same scoped fallback (see common/utils/commandPolicy.ts).
+ * same scoped fallback.
  */
 export interface CommandOverrideConfig {
   /**
@@ -418,8 +384,8 @@ export interface CommandOverrideConfig {
    */
   enabled?: boolean;
   /**
-   * Arbitrary per-command settings (see COMMAND_OPTIONS for which commands
-   * expose what, and the dashboard's Commands tab for editing them). Stored
+   * Arbitrary per-command settings (the dashboard's Commands tab lists which commands
+   * expose what). Stored
    * as simple scalars, e.g. `{ url: "https://map.example.com" }` for /map.
    */
   options?: Record<string, string | number | boolean>;
@@ -427,7 +393,7 @@ export interface CommandOverrideConfig {
    * Gate this command behind the admin check. For slash commands that
    * is the global adminUsers list or the issuing guild's adminUsers;
    * for in-game commands the player's LINKED Discord account must be a
-   * global admin. This can only ADD a restriction — built-in admin
+   * global admin. This can only ADD a restriction, built-in admin
    * commands (/server, /config, …) stay admin-gated regardless of what
    * is configured here.
    */
@@ -438,7 +404,7 @@ export interface CommandOverrideConfig {
  * Bot presence in the Discord member list, updated on the status-embed
  * cadence. `format` supports {online}, {max} and {server} placeholders.
  * With `server` unset the counts aggregate across every configured
- * instance ({server} then reads "N servers") — a multi-tenant process has
+ * instance ({server} then reads "N servers") a multi-tenant process has
  * a single presence, so aggregate/first-server is the honest default.
  */
 export interface PresenceConfig {
@@ -503,7 +469,6 @@ export interface ServerRestartSchedule {
   warnMinutes?: PositiveNumber[];
 }
 
-/** Per-server schedule entries, keyed by server ID at the top level. */
 /**
  * In-game nudges that tell players `/link` and `/daily` exist.
  *
@@ -527,6 +492,7 @@ export interface FeatureNudgeConfig {
   cooldownHours?: number;
 }
 
+/** Per-server schedule entries, keyed by server ID at the top level. */
 export interface ServerScheduleConfig {
   restart?: ServerRestartSchedule;
   /**
@@ -558,7 +524,7 @@ export interface WebUiConfig {
    * @default 8130
    */
   port?: number;
-  /** Bind address (default 127.0.0.1 — put a reverse proxy in front). */
+  /** Bind address (default 127.0.0.1, put a reverse proxy in front). */
   host?: string;
   /**
    * Discord application client ID for the OAuth2 login. Falls back to
@@ -623,7 +589,7 @@ export interface WebUiConfig {
 export interface WebUiConsoleConfig {
   /**
    * Commands refused by the console, matched on the first word after any
-   * leading slashes, case-insensitively — so one entry covers `stop`, `/stop`
+   * leading slashes, case-insensitively, so one entry covers `stop`, `/stop`
    * and `STOP`.
    *
    * Omit the key to use the defaults (`stop`, `op`, `deop`). An explicit empty
@@ -640,7 +606,7 @@ export interface UpdateNotifierConfig {
   enabled?: boolean;
   /**
    * DM operator-level admins (user-ID entries in the global adminUsers
-   * list) once per newer release. Off by default — the log line alone is
+   * list) once per newer release. Off by default, the log line alone is
    * the default behaviour.
    */
   dmAdmins?: boolean;
@@ -665,8 +631,6 @@ export interface HostAlertsConfig {
    * Alert (once, with hysteresis) when a monitored path's disk usage
    * reaches this percentage. Default 90; alerts go to each guild's
    * downtimeAlerts channel. Set to 0 to disable.
-   */
-  /**
    * @minimum 0
    * @maximum 100
    */
@@ -678,8 +642,8 @@ export interface HostAlertsConfig {
    * channel and clear automatically when a fresh backup appears. Only
    * servers whose capability probe found the suite backup layout are
    * checked.
+   * @minimum 0
    */
-  /** @minimum 0 */
   backupMaxAgeHours?: number;
 }
 
@@ -733,7 +697,7 @@ export interface RawBotConfig {
   language?: string;
   /**
    * Default IANA timezone for wall-clock features, used when a guild or a
-   * schedule does not set its own. Default UTC — the zone everything is
+   * schedule does not set its own. Default UTC, the zone everything is
    * stored in, so an unconfigured deployment is coherent rather than
    * dependent on the container's clock.
    *
@@ -745,7 +709,6 @@ export interface RawBotConfig {
   timezone?: string;
   /** @title Command overrides */
   commands?: Record<string, CommandOverrideConfig>;
-  leaderboard?: Record<string, unknown>;
   /**
    * TPS below this triggers an alert (default 15).
    * @title TPS warning threshold
@@ -761,7 +724,7 @@ export interface RawBotConfig {
   /** @title Leaderboard interval */
   leaderboardInterval?: LeaderboardInterval;
   /**
-   * Global default for GuildLeaderboardConfig.postTime — a guild-level
+   * Global default for GuildLeaderboardConfig.postTime, a guild-level
    * postTime wins when set. Unset on both keeps the legacy drift-based
    * scheduling (no anchor).
    * @title Leaderboard post time
@@ -805,7 +768,7 @@ export interface RawBotConfig {
   /**
    * Milestone announcement thresholds per leaderboard stat key, in the
    * stat's NATIVE unit (playtime = ticks, distances = cm, counters =
-   * counts). First activation seeds silently; see milestoneWatcher.
+   * counts). First activation seeds silently.
    * @title Milestones
    */
   milestones?: Record<string, PositiveNumber[]>;
@@ -816,41 +779,28 @@ export interface RawBotConfig {
   webui?: WebUiConfig;
 }
 
-export interface BotConfig {
-  /** Format version of the file this was loaded from, after migration. */
-  configVersion?: number;
-  token: string;
-  clientId: string;
-  servers: Record<string, ServerConfig>;
-  guilds: Record<string, GuildConfig>;
-  /** May contain Discord user IDs and/or role IDs. */
-  adminUsers: string[];
-  /** Locale for user-visible bot strings. */
-  language: "en" | "de";
-  commands: Record<string, CommandOverrideConfig>;
-  leaderboard: Record<string, unknown>;
-  tpsWarningThreshold: number;
-  tpsPollIntervalMs: number;
-  leaderboardInterval: LeaderboardInterval;
-  /** Optional on the RESOLVED config too — "absent everywhere" must
-   *  reproduce the pre-existing drift-based behaviour exactly. */
-  leaderboardPostTime?: string;
-  leaderboardPostDay?: string;
-  embedColors?: Record<string, string>;
-  presence?: PresenceConfig;
-  deathCoords?: DeathCoordsConfig;
-  hostAlerts?: HostAlertsConfig;
-  waypoints?: WaypointsConfig;
-  limits?: LimitsConfig;
-  updateNotifier?: UpdateNotifierConfig;
-  /** In-game discoverability nudges (see FeatureNudgeConfig). */
-  featureNudges?: FeatureNudgeConfig;
-  schedules?: Record<string, ServerScheduleConfig>;
-  milestones?: Record<string, number[]>;
-  webui?: WebUiConfig;
-  /** Default IANA timezone for wall-clock features. Default UTC. */
-  timezone?: string;
-}
-
-/** Variables.txt key-value map */
-export type VariablesMap = Record<string, string>;
+export type BotConfig = Omit<
+  RawBotConfig,
+  | "servers"
+  | "guilds"
+  | "adminUsers"
+  | "language"
+  | "commands"
+  | "tpsWarningThreshold"
+  | "tpsPollIntervalMs"
+  | "leaderboardInterval"
+> &
+  Required<
+    Pick<
+      RawBotConfig,
+      | "adminUsers"
+      | "commands"
+      | "tpsWarningThreshold"
+      | "tpsPollIntervalMs"
+      | "leaderboardInterval"
+    >
+  > & {
+    servers: Record<string, ServerConfig>;
+    guilds: Record<string, GuildConfig>;
+    language: Language;
+  };

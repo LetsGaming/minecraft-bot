@@ -3,6 +3,7 @@
  * files, the whitelist/usercache name map and the bot's session store.
  * No I/O, so the ordering rules are unit-testable.
  */
+import { MS } from "@mcbot/schema/time.js";
 import type { PlayerSessionEntry } from "../stores/sessionStore.js";
 import { isOnlineNow } from "../stores/sessionStore.js";
 
@@ -28,7 +29,7 @@ export interface RosterInput {
   sessions: Record<string, PlayerSessionEntry>;
 }
 
-const DAY_MS = 86_400_000;
+const DAY_MS = MS.day;
 
 export function normalizeUuid(uuid: string): string {
   return uuid.replace(/-/g, "").toLowerCase();

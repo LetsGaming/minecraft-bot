@@ -7,11 +7,7 @@ import { loadConfig } from "../../config.js";
 import type { GuildConfig } from "../../types/index.js";
 
 import { t } from "@mcbot/core/utils/i18n.js";
-function scopeToList(scope: string | string[] | undefined): string[] {
-  if (typeof scope === "string") return [scope];
-  if (Array.isArray(scope)) return scope;
-  return [];
-}
+import { guildServerScopes } from "./guildScopes.js";
 
 /**
  * Derive the set of server IDs a guild's config references.
@@ -19,23 +15,8 @@ function scopeToList(scope: string | string[] | undefined): string[] {
  */
 export function referencedServerIds(guild: GuildConfig): Set<string> {
   const ids = new Set<string>();
-  if (guild.defaultServer) ids.add(guild.defaultServer);
-  for (const scope of [
-    guild.notifications?.server,
-    guild.leaderboard?.server,
-    guild.tpsAlerts?.server,
-    guild.downtimeAlerts?.server,
-    guild.reports?.server,
-  ]) {
-    for (const id of scopeToList(scope)) ids.add(id);
-  }
-  const bridges = Array.isArray(guild.chatBridge)
-    ? guild.chatBridge
-    : guild.chatBridge
-      ? [guild.chatBridge]
-      : [];
-  for (const bridge of bridges) {
-    if (bridge.server) ids.add(bridge.server);
+  for (const scope of guildServerScopes(guild)) {
+    for (const id of scope.ids) ids.add(id);
   }
   return ids;
 }
@@ -71,14 +52,16 @@ export function allowedServerIdsIn(
   const guild = guilds[guildId];
   if (!guild) return new Set(); // unconfigured guild in a multi-guild deployment
 
-  const allowed = guild.allowedServers
+  const explicit = guild.allowedServers !== undefined;
+  const allowed = explicit
     ? new Set(guild.allowedServers)
     : referencedServerIds(guild);
   // The guild's own default must always be reachable, even if the operator
   // set an explicit allowedServers list that forgot to repeat it.
   if (guild.defaultServer) allowed.add(guild.defaultServer);
 
-  if (allowed.size === 0) return null; // guild references nothing (legacy)
+  // An explicit empty list denies; only an unset one falls back to legacy.
+  if (allowed.size === 0 && !explicit) return null;
   return allowed;
 }
 

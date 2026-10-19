@@ -7,15 +7,16 @@
  * Every map here has a maximum size and an age cap, so cycling through
  * versions, users or job ids cannot grow memory.
  */
+import { MS } from "@mcbot/schema";
 import type { ModCompatJob } from "@mcbot/core/utils/server/serverAccess.js";
 
 export const MAX_ACTIVE_PER_SERVER = 2;
 export const MAX_ACTIVE_PER_TENANT = 2;
 /** Backstop only: roughly three tenants' worth, so it trips under real overload, not under one tenant. */
 export const MAX_ACTIVE_GLOBAL = 6;
-export const REFRESH_MIN_INTERVAL_MS = 30_000;
-export const ACTIVE_MAX_AGE_MS = 20 * 60_000;
-export const JOB_MEMORY_MAX_AGE_MS = 15 * 60_000;
+export const REFRESH_MIN_INTERVAL_MS = 30 * MS.second;
+export const ACTIVE_MAX_AGE_MS = 20 * MS.minute;
+export const JOB_MEMORY_MAX_AGE_MS = 15 * MS.minute;
 export const JOB_MEMORY_MAX_ENTRIES = 100;
 /** A running job is re-read from the wrapper at most this often, however many tabs poll it. */
 export const RUNNING_REUSE_MS = 800;

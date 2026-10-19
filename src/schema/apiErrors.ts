@@ -19,3 +19,13 @@ export const ApiErrorCode = {
   DiscordTokenRejected: "DISCORD_TOKEN_REJECTED",
 } as const;
 export type ApiErrorCode = (typeof ApiErrorCode)[keyof typeof ApiErrorCode];
+
+/**
+ * The body of every error response: the human-readable message, the stable
+ * code when the failure has one, and whatever extra fields the route attached
+ * (a validation list, the hash a conflicting write lost to).
+ */
+export interface ApiErrorBody {
+  error: string;
+  code?: ApiErrorCode;
+}

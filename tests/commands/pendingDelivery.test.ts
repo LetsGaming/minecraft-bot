@@ -14,7 +14,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../../src/core/utils/stores/linkUtils.js", () => ({
+vi.mock("../../src/core/utils/stores/linkStore.js", () => ({
   isLinked: vi.fn(),
   getLinkedAccount: vi.fn(),
 }));
@@ -172,6 +172,42 @@ describe("deliverPendingRewards", () => {
     const remaining = getServerPending(after, "smp")["alice"]!;
     expect(remaining).toHaveLength(1);
     expect(remaining[0]!.items).toEqual([{ item: "cursed_item", amount: 1 }]);
+  });
+
+  it("re-queues the in-flight item and everything not yet attempted when give throws", async () => {
+    kvSet(
+      "pendingRewards",
+      pendingStore({
+        smp: {
+          alice: [
+            {
+              discordId: "1",
+              queuedAt: 1,
+              items: [
+                { item: "diamond", amount: 1 },
+                { item: "bread", amount: 1 },
+                { item: "gold", amount: 1 },
+              ],
+            },
+            { discordId: "1", queuedAt: 2, items: [{ item: "iron", amount: 1 }] },
+          ],
+        },
+      }),
+    );
+    const server = fakeServer({});
+    server.send.mockImplementation((cmd: string) =>
+      cmd.includes("bread")
+        ? Promise.reject(new Error("boom"))
+        : Promise.resolve({ kind: "delivered", output: "Gave 1 [x] to Alice" }),
+    );
+
+    await expect(deliverPendingRewards(server, "Alice")).rejects.toThrow("boom");
+
+    const remaining = getServerPending(await loadPendingRewards(), "smp")["alice"]!;
+    expect(remaining.map((e) => e.items.map((i) => i.item))).toEqual([
+      ["bread", "gold"],
+      ["iron"],
+    ]);
   });
 
   it("clears the queue when the wrapper has no output channel", async () => {

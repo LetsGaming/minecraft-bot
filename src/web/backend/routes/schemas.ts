@@ -1,5 +1,5 @@
 /**
- * Route contracts — one TypeBox definition per shape, consumed by every
+ * Route contracts, one TypeBox definition per shape, consumed by every
  * route via the Fastify TypeBox type provider (fastify.md: "define the shape
  * once, get validation + serialization + typing from it").
  *
@@ -7,13 +7,13 @@
  * source: Fastify validates the request at the boundary (a malformed body is a
  * 400 before the handler runs), the response is serialized from the compiled
  * schema (so a route can't leak a field the schema doesn't list), and the
- * handler's `request.params/query/body` are typed — no `as` cast at the edge,
+ * handler's `request.params/query/body` are typed, no `as` cast at the edge,
  * which is exactly the "don't force-cast parsed input" rule from
  * types-and-contracts.md.
  *
  * What is NOT schematised here: the *contents* of a config write body. The
  * config object is schema-driven and validated in depth by
- * configService.validateCandidate against the generated JSON Schema — the one
+ * configService.validateCandidate against the generated JSON Schema, the one
  * place that knows the full shape. So the body schema below only asserts the
  * envelope ("an object with a string baseHash and an object config"); the deep
  * validation stays where it belongs.
@@ -25,6 +25,15 @@ import { MAX_CONSOLE_COMMAND_LENGTH } from "@mcbot/schema/consoleCommands.js";
  *  non-objects (a null / array / scalar body) at the boundary; the deep check
  *  is configService.validateCandidate. */
 const AnyObject = Type.Object({}, { additionalProperties: true });
+
+/** Ids are 22 base64url chars, produced by the wrapper's index (config files, backup archives). */
+export const FILE_ID_RE = /^[A-Za-z0-9_-]{22}$/;
+
+/** A stored prune plan id. */
+const PLAN_ID_PATTERN = "^[a-f0-9]{16}$";
+
+/** A wrapper job id (a UUID). */
+const JOB_ID_PATTERN = "^[a-f0-9-]{36}$";
 
 // ── Params ──────────────────────────────────────────────────────────────────
 
@@ -46,7 +55,7 @@ export type ConfigFileParams = Static<typeof ConfigFileParams>;
  * document that is itself the value (a JSON file holding a bare array), and a
  * segment may be empty because JSON allows an empty key.
  */
-export const ConfigKeyPath = Type.Array(Type.String({ maxLength: 512 }), {
+const ConfigKeyPath = Type.Array(Type.String({ maxLength: 512 }), {
   minItems: 0,
   maxItems: 32,
 });
@@ -63,15 +72,15 @@ export type ConfigReadQuery = Static<typeof ConfigReadQuery>;
  * The client never posts a whole file: the server re-reads the current text
  * and splices these in, so the writer's guards stay meaningful.
  */
+export const ConfigEditBody = Type.Object({
+  path: ConfigKeyPath,
+  value: Type.Unknown(),
+});
+export type ConfigEditBody = Static<typeof ConfigEditBody>;
+
 export const ModConfigWriteBody = Type.Object({
   etag: Type.String({ minLength: 1 }),
-  edits: Type.Array(
-    Type.Object({
-      path: ConfigKeyPath,
-      value: Type.Unknown(),
-    }),
-    { minItems: 1, maxItems: 500 },
-  ),
+  edits: Type.Array(ConfigEditBody, { minItems: 1, maxItems: 500 }),
 });
 export type ModConfigWriteBody = Static<typeof ModConfigWriteBody>;
 
@@ -229,7 +238,7 @@ export const ModIconQuery = Type.Object({ url: Type.String({ maxLength: 512 }) }
 export type ModIconQuery = Static<typeof ModIconQuery>;
 
 /** Same shape the wrapper accepts for a Minecraft version (letters, digits, `.`, `_`, `-`). */
-export const MC_VERSION_PATTERN = "^[A-Za-z0-9_.-]{1,20}$";
+const MC_VERSION_PATTERN = "^[A-Za-z0-9_.-]{1,20}$";
 
 export const ModCompatBody = Type.Object({
   mcVersion: Type.String({ pattern: MC_VERSION_PATTERN, maxLength: 20 }),
@@ -239,7 +248,7 @@ export type ModCompatBody = Static<typeof ModCompatBody>;
 
 export const ModCompatJobParams = Type.Object({
   id: Type.String(),
-  jobId: Type.String({ pattern: "^[a-f0-9-]{36}$" }),
+  jobId: Type.String({ pattern: JOB_ID_PATTERN }),
 });
 export type ModCompatJobParams = Static<typeof ModCompatJobParams>;
 
@@ -251,7 +260,7 @@ export const UpgradeStartBody = Type.Object({
   ),
   countdownSeconds: Type.Optional(Type.Integer({ minimum: 0, maximum: 600 })),
   /** A stored prune plan to apply after the install, before the first start. */
-  prunePlan: Type.Optional(Type.String({ pattern: "^[a-f0-9]{16}$" })),
+  prunePlan: Type.Optional(Type.String({ pattern: PLAN_ID_PATTERN })),
 });
 export type UpgradeStartBody = Static<typeof UpgradeStartBody>;
 
@@ -281,19 +290,19 @@ export const PruneParamsBody = Type.Object({
 export type PruneParamsBody = Static<typeof PruneParamsBody>;
 
 export const PruneApplyBody = Type.Object({
-  planId: Type.String({ pattern: "^[a-f0-9]{16}$" }),
+  planId: Type.String({ pattern: PLAN_ID_PATTERN }),
   countdownSeconds: Type.Optional(Type.Integer({ minimum: 0, maximum: 600 })),
 });
 export type PruneApplyBody = Static<typeof PruneApplyBody>;
 
 export const PruneScanParams = Type.Object({
   id: Type.String(),
-  jobId: Type.String({ pattern: "^[a-f0-9-]{36}$" }),
+  jobId: Type.String({ pattern: JOB_ID_PATTERN }),
 });
 
 export const PruneMapParams = Type.Object({
   id: Type.String(),
-  planId: Type.String({ pattern: "^[a-f0-9]{16}$" }),
+  planId: Type.String({ pattern: PLAN_ID_PATTERN }),
   index: Type.String({ pattern: "^\\d{1,3}$" }),
 });
 
@@ -312,12 +321,12 @@ export const PruneTileParams = Type.Object({
 
 export const PrunePlanParams = Type.Object({
   id: Type.String(),
-  planId: Type.String({ pattern: "^[a-f0-9]{16}$" }),
+  planId: Type.String({ pattern: PLAN_ID_PATTERN }),
 });
 
 export const UpgradeJobParams = Type.Object({
   id: Type.String(),
-  jobId: Type.String({ pattern: "^[a-f0-9-]{36}$" }),
+  jobId: Type.String({ pattern: JOB_ID_PATTERN }),
 });
 export type UpgradeJobParams = Static<typeof UpgradeJobParams>;
 

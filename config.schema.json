@@ -55,7 +55,7 @@
         },
         "timezone": {
           "type": "string",
-          "description": "Default IANA timezone for wall-clock features, used when a guild or a schedule does not set its own. Default UTC — the zone everything is stored in, so an unconfigured deployment is coherent rather than dependent on the container's clock.\n\nThis replaces the TZ environment variable, which forced one zone on the whole process: a bot serving guilds in Berlin and Denver purged both at Berlin midnight.",
+          "description": "Default IANA timezone for wall-clock features, used when a guild or a schedule does not set its own. Default UTC, the zone everything is stored in, so an unconfigured deployment is coherent rather than dependent on the container's clock.\n\nThis replaces the TZ environment variable, which forced one zone on the whole process: a bot serving guilds in Berlin and Denver purged both at Berlin midnight.",
           "title": "Time zone"
         },
         "commands": {
@@ -64,10 +64,6 @@
             "$ref": "#/definitions/CommandOverrideConfig"
           },
           "title": "Command overrides"
-        },
-        "leaderboard": {
-          "type": "object",
-          "additionalProperties": {}
         },
         "tpsWarningThreshold": {
           "type": "number",
@@ -87,7 +83,7 @@
         },
         "leaderboardPostTime": {
           "type": "string",
-          "description": "Global default for GuildLeaderboardConfig.postTime — a guild-level postTime wins when set. Unset on both keeps the legacy drift-based scheduling (no anchor).",
+          "description": "Global default for GuildLeaderboardConfig.postTime, a guild-level postTime wins when set. Unset on both keeps the legacy drift-based scheduling (no anchor).",
           "title": "Leaderboard post time"
         },
         "leaderboardPostDay": {
@@ -149,7 +145,7 @@
               "$ref": "#/definitions/PositiveNumber"
             }
           },
-          "description": "Milestone announcement thresholds per leaderboard stat key, in the stat's NATIVE unit (playtime = ticks, distances = cm, counters = counts). First activation seeds silently; see milestoneWatcher.",
+          "description": "Milestone announcement thresholds per leaderboard stat key, in the stat's NATIVE unit (playtime = ticks, distances = cm, counters = counts). First activation seeds silently.",
           "title": "Milestones"
         },
         "webui": {
@@ -172,7 +168,7 @@
         },
         "apiUrl": {
           "type": "string",
-          "description": "Base URL of the API wrapper on the Minecraft host. **Required** since 5.0.0: every filesystem, shell and RCON operation for this instance goes through it. Example: \"http://192.168.1.10:3030\" (trusted LAN) or \"https://mc-api.example.com\" (anything beyond the LAN).\n\nPlaintext http:// is only accepted for loopback/private/LAN hosts — the x-api-key and all commands travel unencrypted. Public hosts require https:// (or an explicit allowInsecureHttp override).",
+          "description": "Base URL of the API wrapper on the Minecraft host. **Required** since 5.0.0: every filesystem, shell and RCON operation for this instance goes through it. Example: \"http://192.168.1.10:3030\" (trusted LAN) or \"https://mc-api.example.com\" (anything beyond the LAN).\n\nPlaintext http:// is only accepted for loopback/private/LAN hosts,  the x-api-key and all commands travel unencrypted. Public hosts require https:// (or an explicit allowInsecureHttp override).",
           "title": "API URL"
         },
         "apiKey": {
@@ -182,11 +178,11 @@
         },
         "allowInsecureHttp": {
           "type": "boolean",
-          "description": "Opt-out for the plaintext-HTTP-to-public-host rejection. Only for hosts that ARE on a trusted segment but can't be detected as such (e.g. internal DNS names). The key and all commands still travel unencrypted — a loud warning is logged at startup."
+          "description": "Opt-out for the plaintext-HTTP-to-public-host rejection. Only for hosts that ARE on a trusted segment but can't be detected as such (e.g. internal DNS names). The key and all commands still travel unencrypted, a loud warning is logged at startup."
         },
         "pingHost": {
           "type": "string",
-          "description": "Host to send a direct Minecraft server-list ping to, when the API wrapper cannot be reached. Defaults to the hostname in `apiUrl` — the wrapper runs on the Minecraft host, so that is already the right machine. Set this only when the game server answers on a different address than the wrapper (a proxy, or a split deployment)."
+          "description": "Host to send a direct Minecraft server-list ping to, when the API wrapper cannot be reached. Defaults to the hostname in `apiUrl`, the wrapper runs on the Minecraft host, so that is already the right machine. Set this only when the game server answers on a different address than the wrapper (a proxy, or a split deployment)."
         },
         "pingPort": {
           "type": "number",
@@ -223,7 +219,8 @@
           "type": "object",
           "additionalProperties": {
             "$ref": "#/definitions/CommandOverrideConfig"
-          }
+          },
+          "description": "Per-server command overrides for IN-GAME !commands, merged field-by-field over the global `commands` block (see CommandOverrideConfig). Slash commands scope per guild instead."
         }
       },
       "additionalProperties": false
@@ -244,15 +241,15 @@
               "boolean"
             ]
           },
-          "description": "Arbitrary per-command settings (see COMMAND_OPTIONS for which commands expose what, and the dashboard's Commands tab for editing them). Stored as simple scalars, e.g. `{ url: \"https://map.example.com\" }` for /map."
+          "description": "Arbitrary per-command settings (the dashboard's Commands tab lists which commands expose what). Stored as simple scalars, e.g. `{ url: \"https://map.example.com\" }` for /map."
         },
         "adminOnly": {
           "type": "boolean",
-          "description": "Gate this command behind the admin check. For slash commands that is the global adminUsers list or the issuing guild's adminUsers; for in-game commands the player's LINKED Discord account must be a global admin. This can only ADD a restriction — built-in admin commands (/server, /config, …) stay admin-gated regardless of what is configured here."
+          "description": "Gate this command behind the admin check. For slash commands that is the global adminUsers list or the issuing guild's adminUsers; for in-game commands the player's LINKED Discord account must be a global admin. This can only ADD a restriction, built-in admin commands (/server, /config, …) stay admin-gated regardless of what is configured here."
         }
       },
       "additionalProperties": false,
-      "description": "Per-command settings, resolvable at three scopes: globally (`commands`), per guild (`guilds.<id>.commands`, slash commands), and per server (`servers.<id>.commands`, in-game !commands). Resolution is FIELD-BY-FIELD: a scope override only changes the fields it sets and inherits the rest, so future fields added here automatically get the same scoped fallback (see common/utils/commandPolicy.ts)."
+      "description": "Per-command settings, resolvable at three scopes: globally (`commands`), per guild (`guilds.<id>.commands`, slash commands), and per server (`servers.<id>.commands`, in-game !commands). Resolution is FIELD-BY-FIELD: a scope override only changes the fields it sets and inherits the rest, so future fields added here automatically get the same scoped fallback."
     },
     "GuildConfig": {
       "type": "object",
@@ -261,16 +258,12 @@
           "type": "string"
         },
         "language": {
-          "type": "string",
-          "enum": [
-            "en",
-            "de"
-          ],
+          "$ref": "#/definitions/Language",
           "description": "Locale for user-visible bot strings in THIS guild (\"en\" | \"de\"). Falls back to the global `language` when unset. Applies to slash command replies and per-guild notifications; in-game (!command) strings and DMs follow the global language, since a server instance can serve several guilds."
         },
         "timezone": {
           "type": "string",
-          "description": "IANA timezone for THIS guild's wall-clock features — the nightly channel purge, \"busiest hour\" in /activity, and anything else that has to pick one local midnight. Falls back to the global `timezone`, then UTC.\n\nTimestamps in embeds do not need this: those are sent as Discord `<t:…>` markers and render in each reader's own zone.\n\nExample: \"Europe/Berlin\"."
+          "description": "IANA timezone for THIS guild's wall-clock features, the nightly channel purge, \"busiest hour\" in /activity, and anything else that has to pick one local midnight. Falls back to the global `timezone`, then UTC.\n\nTimestamps in embeds do not need this: those are sent as Discord `<t:…>` markers and render in each reader's own zone.\n\nExample: \"Europe/Berlin\"."
         },
         "adminUsers": {
           "type": "array",
@@ -284,7 +277,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Which server instances commands issued from this guild may target (including via the explicit `server:` option). When unset, the allowed set is derived from the servers referenced in this guild's config (defaultServer, chatBridge.server, notifications.server, …). Only enforced in multi-guild deployments — single-guild setups keep full access to every configured server, as before."
+          "description": "Which server instances commands issued from this guild may target (including via the explicit `server:` option). When unset, the allowed set is derived from the servers referenced in this guild's config (defaultServer, chatBridge.server, notifications.server, …). Only enforced in multi-guild deployments, single-guild setups keep full access to every configured server, as before."
         },
         "notifications": {
           "$ref": "#/definitions/GuildNotificationConfig"
@@ -320,7 +313,7 @@
         },
         "linkedRole": {
           "type": "string",
-          "description": "Role ID assigned to a member when they link their Minecraft account (and removed again on unlink). Requires the bot to have Manage Roles and to sit above the role in the hierarchy — failures are written to the admin audit log and never fail the link itself."
+          "description": "Role ID assigned to a member when they link their Minecraft account (and removed again on unlink). Requires the bot to have Manage Roles and to sit above the role in the hierarchy, failures are written to the admin audit log and never fail the link itself."
         },
         "reports": {
           "$ref": "#/definitions/GuildReportsConfig",
@@ -344,6 +337,13 @@
       },
       "additionalProperties": false
     },
+    "Language": {
+      "type": "string",
+      "enum": [
+        "en",
+        "de"
+      ]
+    },
     "GuildNotificationConfig": {
       "type": "object",
       "properties": {
@@ -355,11 +355,11 @@
           "items": {
             "$ref": "#/definitions/NotificationEvent"
           },
-          "description": "Which events to post. Omit to receive the default set (the dispatcher treats an absent list as DEFAULT_NOTIFICATION_EVENTS); an explicit empty list receives nothing."
+          "description": "Which events to post. Omit to receive the default set of events; an explicit empty list receives nothing."
         },
         "server": {
           "$ref": "#/definitions/ServerScope",
-          "description": "Which server(s) to receive events from — see ServerScope."
+          "description": "Which server(s) to receive events from, see ServerScope."
         }
       },
       "additionalProperties": false
@@ -391,7 +391,7 @@
           }
         }
       ],
-      "description": "Server scoping for guild push features (notifications, TPS/downtime alerts, leaderboard): a single server ID, an explicit list of IDs, or — when omitted — every server this guild can see (all servers in single-guild deployments, the guild's allowed set in multi-guild ones)."
+      "description": "Server scoping for guild push features (notifications, TPS/downtime alerts, leaderboard): a single server ID, an explicit list of IDs, or,  when omitted, every server this guild can see (all servers in single-guild deployments, the guild's allowed set in multi-guild ones)."
     },
     "GuildChatBridgeConfig": {
       "type": "object",
@@ -421,22 +421,22 @@
         },
         "server": {
           "$ref": "#/definitions/ServerScope",
-          "description": "Which server instance(s) to post leaderboards for — one ID, a list (one leaderboard embed per server), or unset for the guild's default."
+          "description": "Which server instance(s) to post leaderboards for, one ID, a list (one leaderboard embed per server), or unset for the guild's default."
         },
         "categories": {
           "type": "array",
           "items": {
             "type": "string"
           },
-          "description": "Which categories the scheduled post includes (one embed per entry). Any LEADERBOARD_STATS key plus \"streak\" / \"longest_streak\"; default [\"playtime\", \"mined\"] — the pre-configurable behaviour."
+          "description": "Which categories the scheduled post includes (one embed per entry). Any `/leaderboard` stat key plus \"streak\" / \"longest_streak\"; default [\"playtime\", \"mined\"], the pre-configurable behaviour."
         },
         "postTime": {
           "type": "string",
-          "description": "Wall-clock anchor, \"HH:MM\" in the guild's timezone (see core/utils/config/timezones.ts's guildTimeZone). Unset here AND on the global default keeps the legacy behaviour: post whenever a full interval has elapsed since the last post, with no fixed time or day."
+          "description": "Wall-clock anchor, \"HH:MM\" in the guild's timezone (the global `timezone`, or UTC). Unset here AND on the global default keeps the legacy behaviour: post whenever a full interval has elapsed since the last post, with no fixed time or day."
         },
         "postDay": {
           "type": "string",
-          "description": "Which weekday a *weekly* board posts on — \"SU\"..\"SA\". Ignored for \"daily\" (every day) and \"monthly\" (always the 1st of the month). Defaults to \"MO\" when postTime is set but this isn't."
+          "description": "Which weekday a *weekly* board posts on, \"SU\"..\"SA\". Ignored for \"daily\" (every day) and \"monthly\" (always the 1st of the month). Defaults to \"MO\" when postTime is set but this isn't."
         }
       },
       "additionalProperties": false
@@ -457,7 +457,7 @@
         }
       },
       "additionalProperties": false,
-      "description": "The status embed feature is fully self-provisioning — the bot creates its own category and channels. No channelId configuration is required. Set `enabled: true` in your guild config to activate it."
+      "description": "The status embed feature is fully self-provisioning, the bot creates its own category and channels. No channelId configuration is required. Set `enabled: true` in your guild config to activate it."
     },
     "GuildDowntimeAlertsConfig": {
       "type": "object",
@@ -560,7 +560,7 @@
         }
       },
       "additionalProperties": false,
-      "description": "Button-based whitelist applications. Both channels are required for the feature to arm: the prompt lives in channelId, applications queue in adminChannelId (which should be admin-only — the decision buttons enforce the admin check regardless)."
+      "description": "Button-based whitelist applications. Both channels are required for the feature to arm: the prompt lives in channelId, applications queue in adminChannelId (which should be admin-only, the decision buttons enforce the admin check regardless)."
     },
     "PresenceConfig": {
       "type": "object",
@@ -582,7 +582,7 @@
         }
       },
       "additionalProperties": false,
-      "description": "Bot presence in the Discord member list, updated on the status-embed cadence. `format` supports {online}, {max} and {server} placeholders. With `server` unset the counts aggregate across every configured instance ({server} then reads \"N servers\") — a multi-tenant process has a single presence, so aggregate/first-server is the honest default."
+      "description": "Bot presence in the Discord member list, updated on the status-embed cadence. `format` supports {online}, {max} and {server} placeholders. With `server` unset the counts aggregate across every configured instance ({server} then reads \"N servers\") a multi-tenant process has a single presence, so aggregate/first-server is the honest default."
     },
     "DeathCoordsConfig": {
       "type": "object",
@@ -600,11 +600,13 @@
       "properties": {
         "diskWarnPercent": {
           "type": "number",
+          "description": "Alert (once, with hysteresis) when a monitored path's disk usage reaches this percentage. Default 90; alerts go to each guild's downtimeAlerts channel. Set to 0 to disable.",
           "minimum": 0,
           "maximum": 100
         },
         "backupMaxAgeHours": {
           "type": "number",
+          "description": "Alert when the NEWEST backup of a server is older than this many hours (stale backups are the failure nobody notices until it matters). Off by default; alerts go to each guild's downtimeAlerts channel and clear automatically when a fresh backup appears. Only servers whose capability probe found the suite backup layout are checked.",
           "minimum": 0
         }
       },
@@ -658,7 +660,7 @@
         },
         "dmAdmins": {
           "type": "boolean",
-          "description": "DM operator-level admins (user-ID entries in the global adminUsers list) once per newer release. Off by default — the log line alone is the default behaviour."
+          "description": "DM operator-level admins (user-ID entries in the global adminUsers list) once per newer release. Off by default, the log line alone is the default behaviour."
         }
       },
       "additionalProperties": false,
@@ -696,7 +698,8 @@
           "description": "IANA timezone the times in this block are written in.\n\nServer-scoped rather than guild-scoped on purpose: a 04:00 restart belongs to the machine's operator, and when two guilds watch one server there is no guild answer to give. Falls back to the global `timezone`, then UTC."
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "description": "Per-server schedule entries, keyed by server ID at the top level."
     },
     "ServerRestartSchedule": {
       "type": "object",
@@ -749,7 +752,7 @@
         },
         "host": {
           "type": "string",
-          "description": "Bind address (default 127.0.0.1 — put a reverse proxy in front)."
+          "description": "Bind address (default 127.0.0.1, put a reverse proxy in front)."
         },
         "clientId": {
           "type": "string",
@@ -837,7 +840,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Commands refused by the console, matched on the first word after any leading slashes, case-insensitively — so one entry covers `stop`, `/stop` and `STOP`.\n\nOmit the key to use the defaults (`stop`, `op`, `deop`). An explicit empty array is not \"use defaults\", it is \"block nothing\": the console then accepts anything RCON does, which is a deliberate choice an operator can make and should have to make on purpose."
+          "description": "Commands refused by the console, matched on the first word after any leading slashes, case-insensitively, so one entry covers `stop`, `/stop` and `STOP`.\n\nOmit the key to use the defaults (`stop`, `op`, `deop`). An explicit empty array is not \"use defaults\", it is \"block nothing\": the console then accepts anything RCON does, which is a deliberate choice an operator can make and should have to make on purpose."
         }
       },
       "additionalProperties": false,

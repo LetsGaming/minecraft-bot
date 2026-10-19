@@ -52,6 +52,7 @@ import {
   type JsonSchemaNode,
   type Definitions,
 } from "./schemaField.js";
+import { anyValueProp } from "./anyValueProp.js";
 import { SchemaFormKey } from "../../composables/useSchemaForm.js";
 import { t } from "../../i18n.js";
 
@@ -73,7 +74,7 @@ export default defineComponent({
       required: false,
       default: undefined,
     },
-    modelValue: { type: null as unknown as PropType<unknown>, required: false },
+    modelValue: anyValueProp,
     path: { type: Array as PropType<string[]>, required: false, default: () => [] },
     keyPath: { type: Array as PropType<string[]>, required: false, default: () => [] },
   },
@@ -185,8 +186,5 @@ export default defineComponent({
 .map-add :deep(.p-inputtext) { flex: 1 1 180px; min-width: 0; }
 @media (max-width: 760px) {
   .group { margin: var(--space-2) 0; padding: var(--space-2) var(--space-1) var(--space-3); }
-}
-@media (pointer: coarse), (max-width: 760px) {
-  .tap { min-height: var(--touch-min); }
 }
 </style>

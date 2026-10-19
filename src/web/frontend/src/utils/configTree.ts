@@ -3,6 +3,8 @@
  * its mod, and how a file's fields split into sections.
  */
 
+import { t } from "../i18n";
+
 /** Roots the wrapper lists files under; the segment(s) after one are the mod's own. */
 const ROOTS = ["world/serverconfig", "defaultconfigs", "config", "plugins"];
 
@@ -79,7 +81,7 @@ export function sectionsOf<T extends FieldLike>(fields: readonly T[]): FieldSect
     const id = pathKey(parent);
     const section = out.get(id) ?? {
       id,
-      title: parent.length === 0 ? "General" : parent.join(" › "),
+      title: parent.length === 0 ? t("modconfig.sectionGeneral") : parent.join(" › "),
       fields: [],
     };
     section.fields.push(field);

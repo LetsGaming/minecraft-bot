@@ -13,7 +13,14 @@
  */
 import type { ConfigFormat, ConfigNode, ConfigValueKind, ParsedConfig } from "./types.js";
 import { ConfigEditError } from "./types.js";
-import { CommentBlock, inferScalar, markDuplicates, numberLiteral, scanLines } from "./lines.js";
+import {
+  CommentBlock,
+  inferScalar,
+  integerFlag,
+  markDuplicates,
+  scalarLiteral,
+  scanLines,
+} from "./lines.js";
 
 const KEY_LINE = /^( *)("[^"]*"|'[^']*'|[A-Za-z0-9_][A-Za-z0-9_.\- /]*?)[ ]*:(?:[ ]+(.*))?$/;
 const RESERVED_WORDS = new Set(["yes", "no", "on", "off", "y", "n", "null", "~", "true", "false"]);
@@ -22,12 +29,13 @@ function unquoteKey(raw: string): string {
   return raw.startsWith('"') || raw.startsWith("'") ? raw.slice(1, -1) : raw;
 }
 
-interface Value {
-  node: Pick<ConfigNode, "kind" | "value" | "valueSpan" | "hint" | "readOnly">;
-}
+type ParsedValue = Pick<
+  ConfigNode,
+  "kind" | "value" | "valueSpan" | "hint" | "readOnly" | "integer"
+>;
 
 /** Parse the text after `key: `; null when the line has no value this adapter exposes. */
-function parseValue(rest: string, offset: number): Value["node"] | null {
+function parseValue(rest: string, offset: number): ParsedValue | null {
   const lead = rest.length - rest.trimStart().length;
   const body = rest.slice(lead);
   const at = offset + lead;
@@ -83,6 +91,7 @@ function parseValue(rest: string, offset: number): Value["node"] | null {
     value: scalar.value,
     valueSpan: span,
     hint: scalar.kind === "string" ? "plain" : scalar.float ? "float" : undefined,
+    ...integerFlag(scalar),
   };
 }
 
@@ -106,6 +115,7 @@ export const yamlFormat: ConfigFormat = {
     const stack: { indent: number; key: string }[] = [];
     let skipIndent: number | null = null;
     let blockIndent: number | null = null;
+    let continuation: { indent: number; node: ConfigNode } | null = null;
 
     for (const { line, start } of scanLines(text)) {
       const trimmed = line.trim();
@@ -115,12 +125,24 @@ export const yamlFormat: ConfigFormat = {
         if (trimmed === "" || indent > blockIndent) continue;
         blockIndent = null;
       }
+      // A scalar continued on deeper-indented lines folds into one value.
+      // Only its first line is visible here, so an edit would change just that
+      // line and leave the continuation folded onto the new text: the node is
+      // read-only, and the continuation lines are not keys.
+      if (continuation) {
+        if (trimmed === "") continue;
+        if (indent > continuation.indent && !trimmed.startsWith("#")) {
+          continuation.node.readOnly = true;
+          continue;
+        }
+        continuation = null;
+      }
       if (trimmed === "") {
         comments.reset();
         continue;
       }
       if (trimmed.startsWith("#")) {
-        comments.add(trimmed.replace(/^#+\s?/, ""));
+        comments.addLine(trimmed);
         continue;
       }
       if (trimmed === "---" || trimmed === "...") {
@@ -165,7 +187,7 @@ export const yamlFormat: ConfigFormat = {
       const restStart = start + line.length - rest.length;
       const value = parseValue(rest, restStart);
       if (value) {
-        nodes.push({
+        const node: ConfigNode = {
           path,
           key,
           kind: value.kind,
@@ -173,28 +195,35 @@ export const yamlFormat: ConfigFormat = {
           comments: comments.take(),
           valueSpan: value.valueSpan,
           ...(value.hint ? { hint: value.hint } : {}),
+          ...(value.integer ? { integer: true } : {}),
           ...(value.readOnly ? { readOnly: true } : {}),
-        });
+        };
+        nodes.push(node);
+        continuation = { indent, node };
       } else {
         comments.reset();
-        if (/^\s*[[{&*!]/.test(rest)) skipIndent = indent;
+        // An unclosed quote, a flow collection or an anchor continues on the
+        // deeper-indented lines below; none of them are keys.
+        if (/^\s*[[{&*!"']/.test(rest)) skipIndent = indent;
       }
     }
     return { nodes: markDuplicates(nodes) };
   },
 
   literal(value: unknown, kind: ConfigValueKind, node?: ConfigNode): string {
-    if (kind === "boolean") return value ? "true" : "false";
-    if (kind === "number") return numberLiteral(value, node?.hint === "float");
-    if (kind !== "string") {
-      throw new ConfigEditError("This value has a layout the editor cannot rewrite safely.");
-    }
-    const text = String(value ?? "");
-    if (node?.hint === "single") {
-      if (/[\r\n]/.test(text)) throw new ConfigEditError("A single-quoted value cannot contain a line break.");
-      return `'${text.replace(/'/g, "''")}'`;
-    }
-    if (node?.hint === "plain" && safePlain(text)) return text;
-    return JSON.stringify(text);
+    return scalarLiteral(value, kind, node, {
+      rejectOther: true,
+      lineBreaks: "handled",
+      text: (text) => {
+        if (node?.hint === "single") {
+          if (/[\r\n]/.test(text)) {
+            throw new ConfigEditError("A single-quoted value cannot contain a line break.");
+          }
+          return `'${text.replace(/'/g, "''")}'`;
+        }
+        if (node?.hint === "plain" && safePlain(text)) return text;
+        return JSON.stringify(text);
+      },
+    });
   },
 };

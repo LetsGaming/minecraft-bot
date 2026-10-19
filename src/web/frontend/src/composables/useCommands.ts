@@ -1,6 +1,6 @@
 import { computed, ref } from "vue";
 import { isRecord } from "../utils/isRecord";
-import { useToast } from "primevue/usetoast";
+import { useNotify } from "./useNotify";
 import { ApiError, apiGet, apiSend } from "../api";
 import type { ConfigResponse } from "../api";
 import { useEditableDocument, type DocUnits } from "./useEditableDocument";
@@ -95,6 +95,9 @@ const overrideUnits: DocUnits<OverrideDoc> = {
 
 const emptyDoc = (): OverrideDoc => ({ global: {}, guilds: {}, servers: {} });
 
+/** What reading an unset scope returns; frozen so nothing writes into it by mistake. */
+const NO_OVERRIDES: OverrideMap = Object.freeze({});
+
 /**
  * All the Commands-view business logic: loading the manifest + override
  * matrix, tracking edits per scope (global / a guild / a server), and saving
@@ -103,9 +106,11 @@ const emptyDoc = (): OverrideDoc => ({ global: {}, guilds: {}, servers: {} });
  * conflict handling come from useEditableDocument.
  */
 export function useCommands() {
-  const toast = useToast();
+  const notify = useNotify();
 
   const scope = ref("global");
+  /** Scopes whose overrides the last save could not place because the configuration has no such guild or server. */
+  let skippedScopes: string[] = [];
   /** HTTP status of the last failed load; 0 when the last load worked or never reached the server. */
   const loadStatus = ref(0);
 
@@ -140,15 +145,22 @@ export function useCommands() {
         // config.guilds / config.servers are maps of per-scope config objects
         // in the schema-driven config; assert that nested shape to edit
         // `.commands` in place. Each entry is guard-checked before it's touched.
+        skippedScopes = [];
         const guilds = (config.guilds ?? {}) as Record<string, Record<string, unknown>>;
         for (const [gid, block] of Object.entries(draft.guilds)) {
-          if (!guilds[gid]) continue;
+          if (!guilds[gid]) {
+            if (Object.keys(block).length > 0) skippedScopes.push(`guild:${gid}`);
+            continue;
+          }
           if (Object.keys(block).length > 0) guilds[gid].commands = block;
           else delete guilds[gid].commands;
         }
         const servers = (config.servers ?? {}) as Record<string, Record<string, unknown>>;
         for (const [sid, block] of Object.entries(draft.servers)) {
-          if (!servers[sid]) continue;
+          if (!servers[sid]) {
+            if (Object.keys(block).length > 0) skippedScopes.push(`server:${sid}`);
+            continue;
+          }
           if (Object.keys(block).length > 0) servers[sid].commands = block;
           else delete servers[sid].commands;
         }
@@ -212,19 +224,26 @@ export function useCommands() {
    */
   function resetScope(): void {
     const block = currentBlock();
+    if (block === NO_OVERRIDES) return;
     for (const name of Object.keys(block)) delete block[name];
+    dropIfEmpty(block);
   }
 
-  /** The mutable override block for the currently selected scope. */
+  /** The override block of the selected scope for reading; an unset scope reads as empty and is not created. */
   function currentBlock(): OverrideMap {
     const doc = editor.draft.value;
+    if (!doc) return NO_OVERRIDES;
+    if (scope.value.startsWith("guild:")) return doc.guilds[scope.value.slice(6)] ?? NO_OVERRIDES;
+    if (scope.value.startsWith("server:")) return doc.servers[scope.value.slice(7)] ?? NO_OVERRIDES;
+    return doc.global;
+  }
+
+  /** The override block of the selected scope for editing; created on first use. */
+  function blockForWrite(): OverrideMap {
+    const doc = editor.draft.value;
     if (!doc) return {};
-    if (scope.value.startsWith("guild:")) {
-      return (doc.guilds[scope.value.slice(6)] ??= {});
-    }
-    if (scope.value.startsWith("server:")) {
-      return (doc.servers[scope.value.slice(7)] ??= {});
-    }
+    if (scope.value.startsWith("guild:")) return (doc.guilds[scope.value.slice(6)] ??= {});
+    if (scope.value.startsWith("server:")) return (doc.servers[scope.value.slice(7)] ??= {});
     return doc.global;
   }
 
@@ -234,11 +253,31 @@ export function useCommands() {
   }
 
   function setField(name: string, field: "enabled" | "adminOnly", raw: string): void {
-    const block = currentBlock();
+    if (raw === "inherit" && currentBlock()[name]?.[field] === undefined) return;
+    const block = blockForWrite();
     const entry = (block[name] ??= {});
     if (raw === "inherit") delete entry[field];
     else entry[field] = raw === "true";
     if (Object.keys(entry).length === 0) delete block[name];
+    dropIfEmpty(block);
+  }
+
+  /**
+   * A guild or server block that was not in the loaded document and has no overrides left is
+   * removed again, so undoing every edit leaves nothing to save. A block that was loaded stays,
+   * empty, so saving still clears it.
+   */
+  function dropIfEmpty(block: OverrideMap): void {
+    const doc = editor.draft.value;
+    if (!doc || Object.keys(block).length > 0) return;
+    const base = editor.baseline.value;
+    if (scope.value.startsWith("guild:")) {
+      const id = scope.value.slice(6);
+      if (base?.guilds[id] === undefined) delete doc.guilds[id];
+    } else if (scope.value.startsWith("server:")) {
+      const id = scope.value.slice(7);
+      if (base?.servers[id] === undefined) delete doc.servers[id];
+    }
   }
 
   /** The resolved policy for a command at the current scope, or null. */
@@ -264,7 +303,7 @@ export function useCommands() {
     raw: string,
     type: "string" | "number" | "boolean",
   ): void {
-    const block = currentBlock();
+    const block = blockForWrite();
     const entry = (block[name] ??= {});
     const opts = (entry.options ??= {});
     const trimmed = raw.trim();
@@ -280,19 +319,19 @@ export function useCommands() {
     }
     if (Object.keys(opts).length === 0) delete entry.options;
     if (Object.keys(entry).length === 0) delete block[name];
+    dropIfEmpty(block);
   }
 
   async function save(): Promise<boolean> {
+    skippedScopes = [];
     const ok = await editor.save();
-    if (ok) {
-      toast.add({
-        severity: "success",
-        summary: t("commands.savedToast"),
-        detail: t("commands.savedToastDetail"),
-        life: 3000,
-      });
+    if (!ok) return false;
+    if (skippedScopes.length > 0) {
+      notify.warn(t("commands.savedSkipped"), t("commands.savedSkippedDetail", { scopes: skippedScopes.join(", ") }));
+    } else {
+      notify.ok(t("commands.savedToast"), t("commands.savedToastDetail"));
     }
-    return ok;
+    return true;
   }
 
   return {

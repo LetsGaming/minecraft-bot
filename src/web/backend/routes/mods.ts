@@ -22,9 +22,9 @@
  * installed and compat rows carry no icon, so they get one from a cached bulk
  * project lookup (lookupProjectIcons) and the same proxy.
  */
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
-import { getServerInstance } from "@mcbot/core/utils/server/server.js";
+import { MS } from "@mcbot/schema";
 import {
   listInstalledMods,
   addMod,
@@ -48,17 +48,15 @@ import {
   type ModSearchResult,
   type ModProjectDetail,
 } from "@mcbot/core/utils/modrinth.js";
-import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
-import { logFields } from "@mcbot/core/utils/logSafe.js";
 import { fetchReleaseVersions } from "@mcbot/core/utils/minecraft/mojang.js";
 import { readThrough } from "@mcbot/core/utils/wrapper/lastKnown.js";
 import { cached, invalidate } from "@mcbot/core/utils/cache.js";
 import { fetchIcon, type IconImage } from "../iconProxy.js";
 import { CompatLimitError, createCompatGuard } from "./compatGuard.js";
-import { isSysadmin, sessionFromRequest, type Session } from "../auth/auth.js";
-import { BadRequest, NotFound, HttpError } from "../errors.js";
+import { currentSession, isSysadmin, type Session } from "../auth/auth.js";
+import { BadGateway, BadRequest, HttpError, NotFound } from "../errors.js";
 import {
   IdParams,
   ModSlugParams,
@@ -70,27 +68,34 @@ import {
   ModUpdatesQuery,
   ModIconQuery,
 } from "./schemas.js";
+import { bustMods, ttlKey, lastKnownKey } from "./cacheKeys.js";
+import { capabilityProbe } from "./capabilityProbe.js";
+import { clampIntParam, flagParam } from "./query.js";
+import {
+  OPERATION_FAILED,
+  auditedAction,
+  requireServer,
+  wrapperCall,
+  type ConfiguredServer,
+} from "./support.js";
 
-// The dashboard is what surfaces these; its logs are the web container's, not
-// the bot's. (For docker: `docker compose logs web`.)
-const OPERATION_FAILED =
-  "The operation failed unexpectedly. Check the dashboard (web) logs for details.";
+const TTL_INSTALLED = 15 * MS.second;
+const TTL_UPDATES = 2 * MS.minute;
+const TTL_RELEASE_VERSIONS = 6 * MS.hour;
+const TTL_SEARCH = MS.minute;
+const TTL_CATALOG = 5 * MS.minute;
+const ICON_BROWSER_CACHE_SECONDS = MS.day / MS.second;
 
-const TTL_INSTALLED = 15_000;
-const TTL_UPDATES = 120_000;
-const TTL_COMPAT_SUPPORT = 60_000;
-const TTL_RELEASE_VERSIONS = 6 * 60 * 60 * 1000;
-const TTL_SEARCH = 60_000;
-const TTL_CATALOG = 300_000;
+const SEARCH_LIMIT = { def: 20, min: 1, max: 50 };
+const SEARCH_OFFSET = { def: 0, min: 0, max: 10_000 };
 
 const MODRINTH_ICON_HOST = "cdn.modrinth.com";
 const ICON_UA = "LetsGaming/minecraft-bot dashboard (icon proxy)";
 
-function requireServer(id: string): NonNullable<ReturnType<typeof getServerInstance>> {
-  const server = getServerInstance(id);
-  if (!server) throw new NotFound(`No server named "${id}" is configured.`);
-  return server;
-}
+const compatProbe = capabilityProbe(
+  (cfg) => supportsModCompat(cfg),
+  "This server's API wrapper cannot check another Minecraft version. Update the wrapper.",
+);
 
 /**
  * The tenant a start request is counted against: a sysadmin is their own
@@ -103,19 +108,13 @@ function compatTenant(session: Session): string {
   return `user:${session.uid}`;
 }
 
-function clampInt(raw: string | undefined, def: number, min: number, max: number): number {
-  const n = parseInt(raw ?? "", 10);
-  if (Number.isNaN(n)) return def;
-  return Math.min(Math.max(n, min), max);
-}
-
 function throwModrinth(err: unknown, where: string): never {
   if (err instanceof ModrinthError) {
     if (err.kind === "not-found") throw new NotFound("No such Modrinth project.");
-    throw new HttpError(502, "Modrinth is unavailable right now. Try again shortly.");
+    throw new BadGateway("Modrinth is unavailable right now. Try again shortly.");
   }
   log.error("web", `${where} failed: ${errMsg(err)}`);
-  throw new HttpError(502, OPERATION_FAILED);
+  throw new BadGateway(OPERATION_FAILED);
 }
 
 /** Rewrite a Modrinth icon URL to the same-origin proxy the CSP allows. */
@@ -133,7 +132,10 @@ async function withIcons<T extends { slug: string }>(
   rows: readonly T[],
 ): Promise<Array<T & { iconUrl?: string }>> {
   if (rows.length === 0) return [...rows];
-  const icons = await lookupProjectIcons(rows.map((r) => r.slug)).catch(() => new Map<string, string>());
+  const icons = await lookupProjectIcons(rows.map((r) => r.slug)).catch((err: unknown) => {
+    log.debug("web", `Icon lookup for ${serverId} failed, rows go without icons: ${errMsg(err)}`);
+    return new Map<string, string>();
+  });
   return rows.map((r) => {
     const icon = proxyIcon(serverId, icons.get(r.slug.toLowerCase()) ?? null);
     return icon ? { ...r, iconUrl: icon } : r;
@@ -156,27 +158,50 @@ export function registerModRoutes(app: FastifyInstance): void {
     id: string,
     cfg: Parameters<typeof listInstalledMods>[0],
   ): Promise<{ value: InstalledMods; stale: unknown }> {
-    return readThrough(id, "modsInstalled", () =>
-      cached(`mods:installed:${id}`, TTL_INSTALLED, () => listInstalledMods(cfg)),
+    return readThrough(id, lastKnownKey.modsInstalled, () =>
+      cached(ttlKey.modsInstalled(id), TTL_INSTALLED, () => listInstalledMods(cfg)),
     );
   }
 
-  function invalidateServer(id: string): void {
-    invalidate(`mods:installed:${id}`);
-    invalidate(`mods:updates:${id}`);
+  /** The installed list, or null (logged) when it cannot be read: search then loses its installed flags and filters. */
+  async function installedOrNull(
+    id: string,
+    cfg: Parameters<typeof listInstalledMods>[0],
+  ): Promise<InstalledMods | null> {
+    try {
+      return (await loadInstalled(id, cfg)).value;
+    } catch (err) {
+      log.warn(
+        "web",
+        `Installed mods lookup for ${id} failed, so mod search is not narrowed to this server: ${errMsg(err)}`,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * One mutation of the installed mods: audited before it runs, proxied to the
+   * wrapper, and followed by dropping every cached copy of what it changed.
+   */
+  async function mutateMod(
+    req: FastifyRequest,
+    serverId: string,
+    mutation: {
+      verb: string;
+      detail: string;
+      run: (cfg: ConfiguredServer["config"]) => Promise<unknown>;
+    },
+  ): Promise<unknown> {
+    const server = requireServer(serverId);
+    await auditedAction(req, { action: `mod ${mutation.verb}`, server: serverId, detail: mutation.detail });
+    return wrapperCall(`Mod ${mutation.verb}`, { server: serverId }, async () => {
+      const result = await mutation.run(server.config);
+      bustMods(serverId);
+      return result;
+    });
   }
 
   const compatGuard = createCompatGuard();
-
-  /** Whether the wrapper can run the compatibility check; false when it cannot be asked. */
-  function compatSupported(
-    id: string,
-    cfg: Parameters<typeof supportsModCompat>[0],
-  ): Promise<boolean> {
-    return cached(`mods:compat-support:${id}`, TTL_COMPAT_SUPPORT, () =>
-      supportsModCompat(cfg),
-    );
-  }
 
   // ── Compatibility with another Minecraft version (background job) ─────────
   api.post(
@@ -187,14 +212,9 @@ export function registerModRoutes(app: FastifyInstance): void {
     },
     async (req) => {
       const server = requireServer(req.params.id);
-      if (!(await compatSupported(req.params.id, server.config))) {
-        throw new HttpError(
-          501,
-          "This server's API wrapper cannot check another Minecraft version. Update the wrapper.",
-        );
-      }
+      await compatProbe.requireSupport(server.config);
       const refresh = req.body.refresh === true;
-      const session = sessionFromRequest(req)!;
+      const session = currentSession(req);
       let reservation;
       try {
         reservation = compatGuard.reserve(
@@ -208,19 +228,22 @@ export function registerModRoutes(app: FastifyInstance): void {
         if (err instanceof CompatLimitError) throw new HttpError(err.statusCode, err.message);
         throw err;
       }
-      try {
-        if (reservation.kind === "existing") return await reservation.settled;
-        const started = await startModCompat(server.config, req.body.mcVersion, refresh);
-        reservation.commit(started.jobId);
-        return started;
-      } catch (err) {
-        if (reservation.kind === "new") reservation.rollback(err);
-        log.error(
-          "web",
-          `Mod compat start failed ${logFields({ server: req.params.id, mcVersion: req.body.mcVersion, detail: errMsg(err) })}`,
-        );
-        throw new HttpError(502, OPERATION_FAILED);
-      }
+      const held = reservation;
+      return wrapperCall(
+        "Mod compat start",
+        { server: req.params.id, mcVersion: req.body.mcVersion },
+        async () => {
+          try {
+            if (held.kind === "existing") return await held.settled;
+            const started = await startModCompat(server.config, req.body.mcVersion, refresh);
+            held.commit(started.jobId);
+            return started;
+          } catch (err) {
+            if (held.kind === "new") held.rollback(err);
+            throw err;
+          }
+        },
+      );
     },
   );
 
@@ -237,7 +260,10 @@ export function registerModRoutes(app: FastifyInstance): void {
         const list = await fetchReleaseVersions();
         if (!list) throw new Error("Mojang version manifest unavailable");
         return list;
-      }).catch(() => [] as string[]);
+      }).catch((err: unknown) => {
+        log.warn("web", `Release versions unavailable, the version picker will be empty: ${errMsg(err)}`);
+        return [] as string[];
+      });
       return { versions };
     },
   );
@@ -252,16 +278,11 @@ export function registerModRoutes(app: FastifyInstance): void {
       const server = requireServer(req.params.id);
       const remembered = compatGuard.recall(req.params.id, req.params.jobId);
       if (remembered) return compatWithIcons(req.params.id, remembered);
-      let job;
-      try {
-        job = await getModCompat(server.config, req.params.jobId);
-      } catch (err) {
-        log.error(
-          "web",
-          `Mod compat poll failed ${logFields({ server: req.params.id, job: req.params.jobId, detail: errMsg(err) })}`,
-        );
-        throw new HttpError(502, OPERATION_FAILED);
-      }
+      const job = await wrapperCall(
+        "Mod compat poll",
+        { server: req.params.id, job: req.params.jobId },
+        () => getModCompat(server.config, req.params.jobId),
+      );
       if (!job) {
         compatGuard.forget(req.params.id, req.params.jobId);
         throw new NotFound("This check expired. Start it again.");
@@ -280,17 +301,14 @@ export function registerModRoutes(app: FastifyInstance): void {
     },
     async (req) => {
       const server = requireServer(req.params.id);
-      try {
+      return wrapperCall("Installed mods", { server: req.params.id }, async () => {
         const { value, stale } = await loadInstalled(req.params.id, server.config);
         const [mods, compat] = await Promise.all([
           withIcons(req.params.id, value.mods),
-          compatSupported(req.params.id, server.config),
+          compatProbe.supported(server.config),
         ]);
         return { ...value, mods, stale, compat };
-      } catch (err) {
-        log.error("web", `Installed mods for ${req.params.id} failed: ${errMsg(err)}`);
-        throw new HttpError(502, OPERATION_FAILED);
-      }
+      });
     },
   );
 
@@ -303,14 +321,11 @@ export function registerModRoutes(app: FastifyInstance): void {
     },
     async (req) => {
       const server = requireServer(req.params.id);
-      const key = `mods:updates:${req.params.id}`;
-      if (req.query.refresh === "true") invalidate(key);
-      try {
-        return await cached(key, TTL_UPDATES, () => checkModUpdates(server.config));
-      } catch (err) {
-        log.error("web", `Mod update check on ${req.params.id} failed: ${errMsg(err)}`);
-        throw new HttpError(502, OPERATION_FAILED);
-      }
+      const key = ttlKey.modsUpdates(req.params.id);
+      if (flagParam(req.query.refresh)) invalidate(key);
+      return wrapperCall("Mod update check", { server: req.params.id }, () =>
+        cached(key, TTL_UPDATES, () => checkModUpdates(server.config)),
+      );
     },
   );
 
@@ -321,25 +336,12 @@ export function registerModRoutes(app: FastifyInstance): void {
       schema: { params: IdParams, body: ModAddBody },
       config: { capability: "mods:write", scope: "server", param: "id" },
     },
-    async (req) => {
-      const server = requireServer(req.params.id);
-      const session = sessionFromRequest(req)!;
-      await recordAdminAction({
-        action: "mod install (dashboard)",
-        server: req.params.id,
-        by: session.tag,
-        byId: session.uid,
+    async (req) =>
+      mutateMod(req, req.params.id, {
+        verb: "install",
         detail: req.body.slug,
-      });
-      try {
-        const result = await addMod(server.config, req.body);
-        invalidateServer(req.params.id);
-        return result;
-      } catch (err) {
-        log.error("web", `Mod install on ${req.params.id} failed: ${errMsg(err)}`);
-        throw new HttpError(502, OPERATION_FAILED);
-      }
-    },
+        run: (cfg) => addMod(cfg, req.body),
+      }),
   );
 
   // ── Update one mod ────────────────────────────────────────────────────────
@@ -349,25 +351,12 @@ export function registerModRoutes(app: FastifyInstance): void {
       schema: { params: ModSlugParams },
       config: { capability: "mods:write", scope: "server", param: "id" },
     },
-    async (req) => {
-      const server = requireServer(req.params.id);
-      const session = sessionFromRequest(req)!;
-      await recordAdminAction({
-        action: "mod update (dashboard)",
-        server: req.params.id,
-        by: session.tag,
-        byId: session.uid,
+    async (req) =>
+      mutateMod(req, req.params.id, {
+        verb: "update",
         detail: req.params.slug,
-      });
-      try {
-        const result = await updateMod(server.config, req.params.slug);
-        invalidateServer(req.params.id);
-        return result;
-      } catch (err) {
-        log.error("web", `Mod update on ${req.params.id} failed: ${errMsg(err)}`);
-        throw new HttpError(502, OPERATION_FAILED);
-      }
-    },
+        run: (cfg) => updateMod(cfg, req.params.slug),
+      }),
   );
 
   // ── Disable (without uninstalling) ────────────────────────────────────────
@@ -377,25 +366,12 @@ export function registerModRoutes(app: FastifyInstance): void {
       schema: { params: ModSlugParams },
       config: { capability: "mods:write", scope: "server", param: "id" },
     },
-    async (req) => {
-      const server = requireServer(req.params.id);
-      const session = sessionFromRequest(req)!;
-      await recordAdminAction({
-        action: "mod disable (dashboard)",
-        server: req.params.id,
-        by: session.tag,
-        byId: session.uid,
+    async (req) =>
+      mutateMod(req, req.params.id, {
+        verb: "disable",
         detail: req.params.slug,
-      });
-      try {
-        const result = await disableMod(server.config, req.params.slug);
-        invalidateServer(req.params.id);
-        return result;
-      } catch (err) {
-        log.error("web", `Mod disable on ${req.params.id} failed: ${errMsg(err)}`);
-        throw new HttpError(502, OPERATION_FAILED);
-      }
-    },
+        run: (cfg) => disableMod(cfg, req.params.slug),
+      }),
   );
 
   // ── Enable ─────────────────────────────────────────────────────────────────
@@ -405,25 +381,12 @@ export function registerModRoutes(app: FastifyInstance): void {
       schema: { params: ModSlugParams },
       config: { capability: "mods:write", scope: "server", param: "id" },
     },
-    async (req) => {
-      const server = requireServer(req.params.id);
-      const session = sessionFromRequest(req)!;
-      await recordAdminAction({
-        action: "mod enable (dashboard)",
-        server: req.params.id,
-        by: session.tag,
-        byId: session.uid,
+    async (req) =>
+      mutateMod(req, req.params.id, {
+        verb: "enable",
         detail: req.params.slug,
-      });
-      try {
-        const result = await enableMod(server.config, req.params.slug);
-        invalidateServer(req.params.id);
-        return result;
-      } catch (err) {
-        log.error("web", `Mod enable on ${req.params.id} failed: ${errMsg(err)}`);
-        throw new HttpError(502, OPERATION_FAILED);
-      }
-    },
+        run: (cfg) => enableMod(cfg, req.params.slug),
+      }),
   );
 
   // ── Remove ────────────────────────────────────────────────────────────────
@@ -433,25 +396,12 @@ export function registerModRoutes(app: FastifyInstance): void {
       schema: { params: ModSlugParams },
       config: { capability: "mods:write", scope: "server", param: "id" },
     },
-    async (req) => {
-      const server = requireServer(req.params.id);
-      const session = sessionFromRequest(req)!;
-      await recordAdminAction({
-        action: "mod remove (dashboard)",
-        server: req.params.id,
-        by: session.tag,
-        byId: session.uid,
+    async (req) =>
+      mutateMod(req, req.params.id, {
+        verb: "remove",
         detail: req.params.slug,
-      });
-      try {
-        const result = await removeMod(server.config, req.params.slug);
-        invalidateServer(req.params.id);
-        return result;
-      } catch (err) {
-        log.error("web", `Mod remove on ${req.params.id} failed: ${errMsg(err)}`);
-        throw new HttpError(502, OPERATION_FAILED);
-      }
-    },
+        run: (cfg) => removeMod(cfg, req.params.slug),
+      }),
   );
 
   // ── Apply all updates ─────────────────────────────────────────────────────
@@ -461,25 +411,12 @@ export function registerModRoutes(app: FastifyInstance): void {
       schema: { params: IdParams, body: ModUpdatesBody },
       config: { capability: "mods:write", scope: "server", param: "id" },
     },
-    async (req) => {
-      const server = requireServer(req.params.id);
-      const session = sessionFromRequest(req)!;
-      await recordAdminAction({
-        action: "mod update (dashboard)",
-        server: req.params.id,
-        by: session.tag,
-        byId: session.uid,
+    async (req) =>
+      mutateMod(req, req.params.id, {
+        verb: "update-all",
         detail: req.body.mcVersion ? `mc ${req.body.mcVersion}` : "all",
-      });
-      try {
-        const result = await applyModUpdates(server.config, req.body.mcVersion);
-        invalidateServer(req.params.id);
-        return result;
-      } catch (err) {
-        log.error("web", `Mod update-all on ${req.params.id} failed: ${errMsg(err)}`);
-        throw new HttpError(502, OPERATION_FAILED);
-      }
-    },
+        run: (cfg) => applyModUpdates(cfg, req.body.mcVersion),
+      }),
   );
 
   // ── Icon proxy (Modrinth CDN → same-origin, so the CSP allows it) ─────────
@@ -498,7 +435,7 @@ export function registerModRoutes(app: FastifyInstance): void {
       } catch {
         throw new BadRequest("Invalid icon url.");
       }
-      // Only Modrinth's CDN is proxied — this must never become an open relay.
+      // Only Modrinth's CDN is proxied, this must never become an open relay.
       if (target.protocol !== "https:" || target.hostname !== MODRINTH_ICON_HOST) {
         throw new BadRequest("Only Modrinth CDN icons are proxied.");
       }
@@ -508,11 +445,11 @@ export function registerModRoutes(app: FastifyInstance): void {
         img = await fetchIcon(target.href, ICON_UA);
       } catch (err) {
         if (err instanceof HttpError) throw err;
-        throw new HttpError(502, "Icon fetch failed.");
+        throw new BadGateway("Icon fetch failed.");
       }
 
       reply.header("content-type", img.contentType);
-      reply.header("cache-control", "public, max-age=86400, immutable");
+      reply.header("cache-control", `public, max-age=${ICON_BROWSER_CACHE_SECONDS}, immutable`);
       reply.header("content-security-policy", "default-src 'none'; sandbox");
       return reply.send(img.body);
     },
@@ -529,15 +466,10 @@ export function registerModRoutes(app: FastifyInstance): void {
       const server = requireServer(req.params.id);
       const q = req.query;
 
-      let installed: InstalledMods | null = null;
-      try {
-        installed = (await loadInstalled(req.params.id, server.config)).value;
-      } catch {
-        installed = null;
-      }
+      const installed = await installedOrNull(req.params.id, server.config);
       const installedSet = new Set(installed?.mods.map((m) => m.slug) ?? []);
 
-      const restrict = q.compatible !== "false";
+      const restrict = flagParam(q.compatible, true);
       const categories = (q.categories ?? "")
         .split(",")
         .map((c) => c.trim())
@@ -545,13 +477,13 @@ export function registerModRoutes(app: FastifyInstance): void {
 
       const params = {
         query: q.query ?? "",
-        limit: clampInt(q.limit, 20, 1, 50),
-        offset: clampInt(q.offset, 0, 0, 10_000),
+        limit: clampIntParam(q.limit, SEARCH_LIMIT),
+        offset: clampIntParam(q.offset, SEARCH_OFFSET),
         sort: q.sort ?? "relevance",
         categories,
         ...(restrict && installed?.modLoader ? { loader: installed.modLoader } : {}),
         ...(restrict && installed?.gameVersion ? { gameVersion: installed.gameVersion } : {}),
-        hideClientOnly: q.hideClientOnly !== "false",
+        hideClientOnly: flagParam(q.hideClientOnly, true),
       };
 
       try {
@@ -583,12 +515,7 @@ export function registerModRoutes(app: FastifyInstance): void {
     async (req) => {
       const server = requireServer(req.params.id);
 
-      let installed: InstalledMods | null = null;
-      try {
-        installed = (await loadInstalled(req.params.id, server.config)).value;
-      } catch {
-        installed = null;
-      }
+      const installed = await installedOrNull(req.params.id, server.config);
 
       const loader = installed?.modLoader ?? "";
       try {

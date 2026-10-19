@@ -7,7 +7,7 @@
  * another player may want to report it. Neither will go looking, and a tip
  * arriving at any other moment is noise.
  *
- * Adding one is a `EVENT_TIPS` entry — see docs/admin/automated-features.md.
+ * Adding one is a `EVENT_TIPS` entry, see docs/admin/automated-features.md.
  * Nothing else needs changing: the ledger, the give-up rule and the
  * disabled-command check are handled here for every tip.
  *
@@ -16,12 +16,9 @@
  * anyway is worse than never mentioning it, because the player follows the
  * advice and gets told the command does not exist.
  *
- * Delivery is in game, always. The first version of this appended the
- * `!deathpos` tip to the death-coordinates DM, which put a tip about an
- * in-game command behind a Discord link — so it reached only the players
- * who had already linked, and never the ones who had not. An unlinked
- * player is exactly who needs to be told that `!deathpos` exists. A tip
- * nobody can receive is not a tip.
+ * Delivery is in game, always. A tip about an in-game command sent through
+ * Discord would reach only players who have linked, and an unlinked player
+ * is exactly who needs to be told that `!deathpos` exists.
  */
 import { resolveCommandPolicy } from "../commands/commandPolicy.js";
 import {
@@ -29,6 +26,7 @@ import {
   getSuggestionRecord,
   recordSuggestion,
   mcSubject,
+  type SuggestionRecord,
 } from "../stores/suggestionLedger.js";
 import { t } from "../i18n.js";
 import { log } from "../logger.js";
@@ -40,17 +38,10 @@ import { whisper } from "./serverMessages.js";
 export type GameEvent = "death" | "death-by-player";
 
 export interface EventTip {
-  /** Stable id — the ledger key. Not the command name: a command can be
+  /** Stable id, the ledger key. Not the command name: a command can be
    *  advertised by more than one event, and each should stop separately. */
   id: string;
   event: GameEvent;
-  /**
-   * Where the advertised command is typed. Both are whispered in game —
-   * that is where the player is standing when the event fires — but the
-   * distinction is worth recording, because a tip about a slash command
-   * has to explain that Discord is involved and an in-game one does not.
-   */
-  surface: "ingame" | "slash";
   /**
    * The command this tip points at. Checked against command policy before
    * the tip is shown, so a disabled command is never advertised.
@@ -68,7 +59,6 @@ export const EVENT_TIPS: EventTip[] = [
   {
     id: "deathpos",
     event: "death",
-    surface: "ingame",
     advertises: "deathpos",
     textKey: "deathpos.hint",
   },
@@ -79,14 +69,13 @@ export const EVENT_TIPS: EventTip[] = [
     // spending one of their deathpos mentions on it.
     id: "report-pvp",
     event: "death-by-player",
-    surface: "ingame",
     advertises: "report",
     textKey: "report.hint",
   },
 ];
 
 export interface EventTipContext {
-  /** Minecraft name — the ledger subject. */
+  /** Minecraft name, the ledger subject. */
   player: string;
   serverId: string;
 }
@@ -110,6 +99,44 @@ export function isAdvertisable(
 }
 
 /**
+ * May this player be told about a suggestion once more?
+ *
+ * The give-up rule shared by tips and nudges: an explicit dismissal always
+ * wins, then the mention cap, then (when given) the minimum gap since the
+ * last mention. No record means nothing has been said yet.
+ */
+export function ledgerAllows(
+  record: SuggestionRecord | null | undefined,
+  limits: { maxMentions: number; cooldownMs?: number; now?: number },
+): boolean {
+  if (!record) return true;
+  if (record.dismissed) return false;
+  if (record.count >= limits.maxMentions) return false;
+  if (
+    limits.cooldownMs !== undefined &&
+    (limits.now ?? Date.now()) - record.lastAt < limits.cooldownMs
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Whisper `text` and, only when it reached the server, run `record`. A failed
+ * send must not spend one of the player's mentions.
+ */
+export async function whisperAndRecord(
+  server: Pick<ServerInstance, "send">,
+  player: string,
+  text: string,
+  record: () => Promise<void>,
+): Promise<boolean> {
+  if (!(await whisper(server, player, text))) return false;
+  await record();
+  return true;
+}
+
+/**
  * The line to append for this event, or null.
  *
  * Returns the text rather than sending it: the caller owns the delivery
@@ -128,8 +155,7 @@ export async function tipForEvent(
       if (!isAdvertisable(tip.advertises, { serverId: ctx.serverId })) continue;
 
       const record = getSuggestionRecord(ledger, mcSubject(ctx.player), tip.id);
-      if (record?.dismissed) continue;
-      if ((record?.count ?? 0) >= (tip.maxMentions ?? DEFAULT_MAX_MENTIONS)) {
+      if (!ledgerAllows(record, { maxMentions: tip.maxMentions ?? DEFAULT_MAX_MENTIONS })) {
         continue;
       }
       return { tip, text: t(tip.textKey) };
@@ -150,7 +176,7 @@ export async function markEventTipSent(
 }
 
 /**
- * Select, whisper, and record — the whole thing, for callers that have a
+ * Select, whisper, and record, the whole thing, for callers that have a
  * server to talk through.
  *
  * Whispered rather than broadcast: the tip is about what *this* player just
@@ -172,9 +198,10 @@ export async function deliverEventTip(
     const selected = await tipForEvent(event, ctx);
     if (!selected) return null;
 
-    if (!(await whisper(server, player, selected.text))) return null;
-    await markEventTipSent(selected.tip, ctx);
-    return selected.tip;
+    const sent = await whisperAndRecord(server, player, selected.text, () =>
+      markEventTipSent(selected.tip, ctx),
+    );
+    return sent ? selected.tip : null;
   } catch (err) {
     log.debug("tip", `Delivering ${event} tip to ${player} failed: ${errMsg(err)}`);
     return null;

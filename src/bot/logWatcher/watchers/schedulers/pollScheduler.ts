@@ -1,5 +1,5 @@
 /**
- * Poll lifecycle — close timers, Discord button collectors, and the
+ * Poll lifecycle, close timers, Discord button collectors, and the
  * both-directions result announcement.
  *
  * State lives in pollStore; this module owns the runtime side:
@@ -12,7 +12,7 @@
  *    server.
  *
  * startPollScheduler runs at bot init and re-arms every open poll from
- * the store — a restart mid-poll loses no votes and still closes on
+ * the store, a restart mid-poll loses no votes and still closes on
  * time (or immediately, when endsAt passed while the bot was down).
  */
 import {
@@ -38,8 +38,9 @@ import { t } from "@mcbot/core/utils/i18n.js";
 import { tellraw } from "@mcbot/core/utils/minecraft/serverMessages.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
+import { MAX_TIMEOUT_MS } from "@mcbot/core/utils/longTimer.js";
+import { MS } from "@mcbot/schema";
 
-const MAX_TIMEOUT_MS = 2 ** 31 - 1; // setTimeout cap; poll durations are far below
 
 const closeTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -104,14 +105,14 @@ export function attachCollectorToMessage(
 ): void {
   const collector = message.createMessageComponentCollector({
     componentType: ComponentType.Button,
-    time: Math.min(Math.max(endsAt - Date.now(), 1_000), MAX_TIMEOUT_MS),
+    time: Math.min(Math.max(endsAt - Date.now(), MS.second), MAX_TIMEOUT_MS),
     filter: (i) => i.customId.startsWith(`poll:${pollId}:`),
   });
 
   collector.on("collect", async (interaction: ButtonInteraction) => {
     try {
       const idx = Number(interaction.customId.split(":")[2]);
-      // Read and written in one transaction (AUD-005), so two clicks at
+      // Read and written in one transaction, so two clicks at
       // once can't each save a copy without the other's vote.
       const result = await updatePollStore((store) => {
         const poll = getPollById(store, pollId);

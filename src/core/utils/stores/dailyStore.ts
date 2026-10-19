@@ -1,19 +1,22 @@
 /**
- * Single owner of daily-reward persistence (claim data, plus the rewards
- * config re-exported from rewardsConfig.ts);
- * commands never touch loadJson/saveJson for these files directly.
+ * Single owner of daily-reward persistence: claim data in
+ * kv_store["claimedDaily"], the offline-delivery queue in
+ * kv_store["pendingRewards"], plus the rewards config re-exported from
+ * rewardsConfig.ts. Commands never open-code these keys.
  *
  * Claims are stored per server:
  *
  *   { "version": 2, "servers": { "<serverId>": { "<discordUserId>": {…} } } }
  *
  * so cooldowns, streaks, and reminder opt-ins are independent between
- * servers. Old flat files (one userId→claim map) are migrated on first
- * load — everything moves under the first configured server.
+ * servers. An old flat store (one userId→claim map) is migrated on first
+ * load: everything moves under the first configured server.
  */
-import { kvGet, kvSet, kvUpdate } from "../../db/kv.js";
 import { log } from "../logger.js";
 import type { DailyRewardItem, UserClaimData } from "../../types/index.js";
+import { kvGet } from "../../db/kv.js";
+import { isVersionedDoc, versionedStore } from "./versionedStore.js";
+import { createRecord, ownGet, ownSet, toRecord } from "./safeRecord.js";
 
 // The reward documents themselves (shared pool, per-server overrides) live
 // in rewardsConfig.ts; re-exported here so callers keep one import.
@@ -35,22 +38,20 @@ export interface ClaimedDailyStore {
 // Load errors are deliberately not swallowed here: turning a corrupt store
 // into {} would wipe everyone's streaks on the next save.
 
-function isV2Store(raw: unknown): raw is ClaimedDailyStore {
-  return (
-    typeof raw === "object" &&
-    raw !== null &&
-    (raw as { version?: unknown }).version === 2 &&
-    typeof (raw as { servers?: unknown }).servers === "object" &&
-    (raw as { servers?: unknown }).servers !== null
-  );
-}
+const CLAIMED_SHAPE = { version: 2, container: "servers" } as const;
+
+const claimedDoc = versionedStore<ClaimedDailyStore>(
+  "claimedDaily",
+  CLAIMED_SHAPE,
+  () => ({ version: 2, servers: {} }),
+);
 
 export async function loadClaimedStore(): Promise<ClaimedDailyStore> {
   const raw = kvGet<Record<string, unknown>>("claimedDaily") ?? {};
 
-  if (isV2Store(raw)) return raw;
+  if (isVersionedDoc<ClaimedDailyStore>(raw, CLAIMED_SHAPE)) return raw;
 
-  const legacyEntries = Object.entries(raw ?? {});
+  const legacyEntries = Object.entries(raw);
   if (legacyEntries.length === 0) {
     return { version: 2, servers: {} };
   }
@@ -62,19 +63,19 @@ export async function loadClaimedStore(): Promise<ClaimedDailyStore> {
   const target = getServerIds()[0] ?? "default";
   log.warn(
     "daily",
-    `Migrating claimedDaily.json to the per-server format (v2): ` +
+    `Migrating the claim store to the per-server format (v2): ` +
       `${legacyEntries.length} user record(s) → server "${target}". ` +
       `Streaks and cooldowns are now tracked per server.`,
   );
 
   const store: ClaimedDailyStore = {
     version: 2,
-    // Legacy migration: the pre-v2 on-disk format was exactly a userId→claim
-    // map, i.e. a ClaimedDailyMap, so reinterpreting the flat `raw` as one is
-    // the format upgrade. This path runs once and is then persisted.
+    // The pre-v2 format was exactly a userId→claim map, i.e. a
+    // ClaimedDailyMap, so reinterpreting the flat `raw` as one is the
+    // format upgrade. This path runs once and is then persisted.
     servers: { [target]: raw as ClaimedDailyMap },
   };
-  await saveClaimedStore(store); // persist so the migration never re-runs
+  claimedDoc.save(store); // persist so the migration never re-runs
   return store;
 }
 
@@ -86,45 +87,31 @@ export function getServerClaims(
   return (store.servers[serverId] ??= {});
 }
 
-export async function saveClaimedStore(
-  store: ClaimedDailyStore,
-): Promise<void> {
-  kvSet("claimedDaily", store);
-}
-
 /**
- * AUD-005: change the claim store in one transaction. `fn` gets the store
- * as it is on disk right now, mutates only what it means to change, and
- * its return value is handed back. Use this instead of load → await → save,
- * which writes a stale snapshot over every change made during the await
- * (another user's claim, a reminder flag).
+ * Change the claim store in one transaction. `fn` gets the store as it is
+ * stored right now, mutates only what it means to change, and its return
+ * value is handed back. Use this instead of load, await, save, which writes a
+ * stale snapshot over every change made during the await (another user's
+ * claim, a reminder flag).
  */
 export async function updateClaimedStore<T>(
   fn: (store: ClaimedDailyStore) => T,
 ): Promise<T> {
   await loadClaimedStore(); // runs the one-time v1 → v2 migration first
-  let out!: T;
-  kvUpdate<unknown>("claimedDaily", (raw) => {
-    const store: ClaimedDailyStore = isV2Store(raw) ? raw : { version: 2, servers: {} };
-    out = fn(store);
-    return store;
-  });
-  return out;
+  return claimedDoc.update(fn);
 }
 
 // ── Offline-claim delivery queue ──────────────────────────────────────────
 //
-// /daily used to reject offline claims outright, which broke streaks for
-// exactly the audience streaks are for (people checking Discord away from
-// their PC). Offline claims now record the claim (streak logic untouched),
-// roll the reward, and queue it here; the joinLeave watcher delivers on
-// the next join through daily.ts's give(), removing entries on confirmed
-// success and keeping them on failure.
+// Offline claims record the claim (streak logic untouched), roll the reward,
+// and queue it here; the joinLeave watcher delivers on the next join through
+// the give() path, removing entries on confirmed success and keeping them on
+// failure.
 
 /**
  * Queue cap per player and server, so the queue cannot become free item
  * storage. A full queue rejects further offline claims WITHOUT consuming
- * the cooldown — the user can claim online or after the next delivery.
+ * the cooldown: the user can claim online or after the next delivery.
  */
 export const MAX_PENDING_PER_PLAYER = 3;
 
@@ -143,39 +130,29 @@ export interface PendingRewardsStore {
   servers: Record<string, ServerPendingMap>;
 }
 
-function isPendingV1(raw: unknown): raw is PendingRewardsStore {
-  return (
-    typeof raw === "object" &&
-    raw !== null &&
-    (raw as { version?: unknown }).version === 1 &&
-    typeof (raw as { servers?: unknown }).servers === "object" &&
-    (raw as { servers?: unknown }).servers !== null
-  );
-}
+// Player names key these maps, so they have no prototype (see safeRecord).
+const pendingDoc = versionedStore<PendingRewardsStore>(
+  "pendingRewards",
+  { version: 1, container: "servers" },
+  () => ({ version: 1, servers: createRecord() }),
+  (doc) => {
+    doc.servers = toRecord(doc.servers);
+    for (const serverId of Object.keys(doc.servers)) {
+      doc.servers[serverId] = toRecord(doc.servers[serverId]!);
+    }
+    return doc;
+  },
+);
 
 export async function loadPendingRewards(): Promise<PendingRewardsStore> {
-  const raw = kvGet<unknown>("pendingRewards");
-  if (isPendingV1(raw)) return raw;
-  return { version: 1, servers: {} };
+  return pendingDoc.load();
 }
 
-export async function savePendingRewards(
-  store: PendingRewardsStore,
-): Promise<void> {
-  kvSet("pendingRewards", store);
-}
-
-/** AUD-005: change the pending-rewards queue in one transaction; see updateClaimedStore. */
+/** Change the pending-rewards queue in one transaction; see updateClaimedStore. */
 export async function updatePendingRewards<T>(
   fn: (store: PendingRewardsStore) => T,
 ): Promise<T> {
-  let out!: T;
-  kvUpdate<unknown>("pendingRewards", (raw) => {
-    const store: PendingRewardsStore = isPendingV1(raw) ? raw : { version: 1, servers: {} };
-    out = fn(store);
-    return store;
-  });
-  return out;
+  return pendingDoc.update(fn);
 }
 
 /** Pending entries for one server; created lazily so callers can mutate. */
@@ -183,5 +160,83 @@ export function getServerPending(
   store: PendingRewardsStore,
   serverId: string,
 ): ServerPendingMap {
-  return (store.servers[serverId] ??= {});
+  let map = ownGet(store.servers, serverId);
+  if (!map) {
+    map = createRecord<PendingRewardEntry[]>();
+    ownSet(store.servers, serverId, map);
+  }
+  return map;
+}
+
+/** Whether anything is queued for the player; a read that stays off the write lock. */
+export async function hasPending(
+  serverId: string,
+  player: string,
+): Promise<boolean> {
+  const queue = ownGet(pendingDoc.load().servers, serverId);
+  return (ownGet(queue ?? {}, player.toLowerCase())?.length ?? 0) > 0;
+}
+
+/**
+ * Queue an entry for the player's next join. With `cap`, a full queue
+ * refuses (returns null) and nothing is written. Returns the new queue length.
+ */
+export async function enqueuePending(
+  serverId: string,
+  player: string,
+  entry: PendingRewardEntry,
+  options: { cap?: number } = {},
+): Promise<number | null> {
+  const key = player.toLowerCase();
+  return updatePendingRewards((store) => {
+    const queue = getServerPending(store, serverId);
+    const list = ownGet(queue, key) ?? [];
+    if (options.cap !== undefined && list.length >= options.cap) return null;
+    list.push(entry);
+    ownSet(queue, key, list);
+    return list.length;
+  });
+}
+
+/** Drop the player's queued entries that `match` selects (e.g. to undo an enqueue). */
+export async function removePending(
+  serverId: string,
+  player: string,
+  match: (entry: PendingRewardEntry) => boolean,
+): Promise<void> {
+  const key = player.toLowerCase();
+  await updatePendingRewards((store) => {
+    const queue = getServerPending(store, serverId);
+    const kept = (ownGet(queue, key) ?? []).filter((e) => !match(e));
+    if (kept.length > 0) ownSet(queue, key, kept);
+    else delete queue[key];
+  });
+}
+
+/** Remove and return everything queued for the player, oldest first. */
+export async function takePending(
+  serverId: string,
+  player: string,
+): Promise<PendingRewardEntry[]> {
+  const key = player.toLowerCase();
+  return updatePendingRewards((store) => {
+    const queue = getServerPending(store, serverId);
+    const taken = ownGet(queue, key) ?? [];
+    delete queue[key];
+    return taken;
+  });
+}
+
+/** Put entries back ahead of anything queued since (they are older). */
+export async function requeuePending(
+  serverId: string,
+  player: string,
+  entries: PendingRewardEntry[],
+): Promise<void> {
+  if (entries.length === 0) return;
+  const key = player.toLowerCase();
+  await updatePendingRewards((store) => {
+    const queue = getServerPending(store, serverId);
+    ownSet(queue, key, [...entries, ...(ownGet(queue, key) ?? [])]);
+  });
 }

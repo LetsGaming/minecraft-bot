@@ -1,39 +1,31 @@
-import { ref } from "vue";
-import { errorMessage } from "../utils/errorMessage";
-import { loadFailure, type LoadFailure } from "../utils/loadFailure";
+import { computed } from "vue";
 import { apiGet } from "../api";
-import type { StatusResponse, ServerStatus } from "../api";
+import type { StatusResponse } from "../api";
+import { useLoader } from "./useLoader";
 
-// Server-status fetch as a composable. A factory (not a singleton): each
-// caller gets its own reactive state, so views can poll independently.
-// Centralises the endpoint + shape so the fetch isn't re-implemented.
+/**
+ * Server-status fetch as a composable. A factory (not a singleton): each
+ * caller gets its own reactive state, so views can poll independently.
+ * `botAlive` is null until the first answer, so a request that has not
+ * answered is never reported as a healthy or a dead bot.
+ */
 export function useServerStatus() {
-  const servers = ref<ServerStatus[]>([]);
-  const botAlive = ref(true);
-  const loading = ref(false);
-  /** False until the first answer, success or failure, has arrived. */
-  const loaded = ref(false);
-  const error = ref("");
-  const failure = ref<LoadFailure | null>(null);
+  const loader = useLoader(() => apiGet<StatusResponse>("/api/status"), { keepDataOnError: true });
+  const servers = computed(() => loader.data.value?.servers ?? []);
+  const botAlive = computed<boolean | null>(() => loader.data.value?.bot.alive ?? null);
 
   async function refresh(): Promise<StatusResponse | null> {
-    loading.value = true;
-    error.value = "";
-    failure.value = null;
-    try {
-      const res = await apiGet<StatusResponse>("/api/status");
-      servers.value = res.servers;
-      botAlive.value = res.bot.alive;
-      return res;
-    } catch (err) {
-      error.value = errorMessage(err);
-      failure.value = loadFailure(err);
-      return null;
-    } finally {
-      loading.value = false;
-      loaded.value = true;
-    }
+    const ok = await loader.load();
+    return ok ? loader.data.value : null;
   }
 
-  return { servers, botAlive, loading, loaded, error, failure, refresh };
+  return {
+    servers,
+    botAlive,
+    loading: loader.loading,
+    loaded: loader.loaded,
+    error: loader.error,
+    failure: loader.failure,
+    refresh,
+  };
 }

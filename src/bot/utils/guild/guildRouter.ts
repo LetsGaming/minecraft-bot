@@ -1,5 +1,5 @@
 /**
- * Guild router — resolves the target ServerInstance for a Discord interaction.
+ * Guild router, resolves the target ServerInstance for a Discord interaction.
  *
  * All commands must use resolveServer() instead of calling getServerInstance()
  * or getGuildServer() directly. This centralizes resolution logic and makes
@@ -11,8 +11,11 @@
  * so every resolved server is checked against the issuing guild's allowed set.
  */
 import { getServerInstance, getGuildServer } from "@mcbot/core/utils/server/server.js";
-import { getAllowedServerIds } from "@mcbot/core/utils/server/guildTargets.js";
-import { isServerAdmin } from "../../commands/middleware.js";
+import {
+  getAllowedServerIds,
+  visibleServerIdsForGuild,
+} from "@mcbot/core/utils/server/guildTargets.js";
+import { isServerAdmin } from "./permissions.js";
 import type {
   ChatInputCommandInteraction,
   AutocompleteInteraction,
@@ -36,7 +39,7 @@ type ServerContextInteraction =
 /**
  * Does `serverId` fall inside a feature's server scope for this guild?
  * String → exact match, list → membership, unset → every server this
- * guild can see (all servers single-guild, the allowed set multi-guild —
+ * guild can see (all servers single-guild, the allowed set multi-guild :
  * so an omitted scope can never leak another tenant's events).
  */
 export function serverInScope(
@@ -52,10 +55,10 @@ export function serverInScope(
 
 /**
  * Throw unless the issuing context may target this server.
- * Global admins (config.adminUsers) are exempt — they are the operator.
+ * Global admins (config.adminUsers) are exempt, they are the operator.
  */
 function assertGuildMayTarget(
-  interaction: ServerContextInteraction,
+  interaction: Pick<ServerContextInteraction, "guild" | "user">,
   server: ServerInstance,
 ): void {
   const allowed = getAllowedServerIds(interaction.guild?.id);
@@ -63,7 +66,7 @@ function assertGuildMayTarget(
 
   // Operator-level admins may target any server from anywhere. Role-based
   // global admin entries can't be resolved without a guild member object,
-  // so DMs match on user ID only — which is exactly the operator case.
+  // so DMs match on user ID only, which is exactly the operator case.
   if (isServerAdmin(interaction.user.id)) return;
 
   if (!interaction.guild) {
@@ -73,19 +76,34 @@ function assertGuildMayTarget(
 }
 
 /**
- * Assert that the issuing context may target the server with this ID —
+ * Assert that the issuing context may target the server with this ID :
  * the same tenant-isolation rule resolveServer applies, exposed for
  * commands that take an explicit LIST of servers (span polls). Throws on
  * unknown IDs and on IDs outside the guild's allowed set.
  */
 export function assertMayTargetServerId(
-  interaction: ServerContextInteraction,
+  interaction: Pick<ServerContextInteraction, "guild" | "user">,
   serverId: string,
 ): ServerInstance {
   const server = getServerInstance(serverId);
   if (!server) throw new Error(t("router.serverNotFound", { server: serverId }));
   assertGuildMayTarget(interaction, server);
   return server;
+}
+
+/**
+ * The running server with this ID, only if the guild may target it. For
+ * actions that carry a stored server ID (no interaction option to resolve),
+ * so a server hidden from the guild since the ID was stored is not reachable.
+ * The operator exemption of resolveServer does not apply: the stored ID acts
+ * on behalf of the guild, not of a person.
+ */
+export function getGuildScopedServer(
+  guildId: string | undefined,
+  serverId: string,
+): ServerInstance | null {
+  if (visibleServerIdsForGuild(guildId, [serverId]).length === 0) return null;
+  return getServerInstance(serverId);
 }
 
 /**

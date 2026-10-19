@@ -1,7 +1,13 @@
 /**
  * Helpers shared by the line-oriented adapters.
  */
-import { ConfigEditError, pathId, type ConfigNode } from "./types.js";
+import {
+  ConfigEditError,
+  EDIT_ERRORS,
+  pathId,
+  type ConfigNode,
+  type ConfigValueKind,
+} from "./types.js";
 
 export interface ScannedLine {
   /** The line without its newline or a trailing carriage return. */
@@ -39,11 +45,45 @@ export function markDuplicates(nodes: ConfigNode[]): ConfigNode[] {
   });
 }
 
-/** Collects the `#` comment block directly above the next entry. */
+/**
+ * Walk `text` from `from`, calling `visit` for every character that sits
+ * outside a quoted string. `"..."` honours backslash escapes, `'...'` does
+ * not; the quote characters themselves and everything between them are not
+ * visited. `visit` returns true to stop; the result is the index it stopped
+ * at, or -1 when the scan ran to the end.
+ */
+export function scanOutsideQuotes(
+  text: string,
+  visit: (ch: string, index: number) => boolean | void,
+  from = 0,
+): number {
+  let quote: string | null = null;
+  for (let i = from; i < text.length; i++) {
+    const ch = text[i]!;
+    if (quote) {
+      if (ch === "\\" && quote === '"') i++;
+      else if (ch === quote) quote = null;
+    } else if (ch === '"' || ch === "'") {
+      quote = ch;
+    } else if (visit(ch, i) === true) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+/** Collects the comment block directly above the next entry. */
 export class CommentBlock {
   private lines: string[] = [];
-  add(line: string): void {
-    this.lines.push(line);
+  /**
+   * Add one trimmed comment line. Leading `markers` characters (any of them,
+   * repeated) and one following space are stripped.
+   */
+  addLine(trimmed: string, markers = "#"): void {
+    let i = 0;
+    while (i < trimmed.length && markers.includes(trimmed[i]!)) i++;
+    if (/\s/.test(trimmed[i] ?? "")) i++;
+    this.lines.push(trimmed.slice(i));
   }
   reset(): void {
     this.lines = [];
@@ -66,8 +106,71 @@ export function inferScalar(
   return { kind: "string", value: raw, float: false };
 }
 
-export function numberLiteral(value: unknown, float: boolean): string {
+/** `{ integer: true }` for a scalar written as a whole number, to spread into a node. */
+export function integerFlag(scalar: {
+  kind: string;
+  float?: boolean;
+}): { integer?: true } {
+  return scalar.kind === "number" && !scalar.float ? { integer: true } : {};
+}
+
+/** Throws unless `n` can be written into a setting of this numeric shape. */
+export function assertWritableNumber(n: unknown, integer: boolean): asserts n is number {
+  if (typeof n !== "number" || !Number.isFinite(n)) {
+    throw new ConfigEditError(EDIT_ERRORS.numberRequired);
+  }
+  if (integer && !Number.isInteger(n)) throw new ConfigEditError(EDIT_ERRORS.wholeNumber);
+  if (Number.isInteger(n) && !Number.isSafeInteger(n)) {
+    throw new ConfigEditError(EDIT_ERRORS.integerTooLarge);
+  }
+}
+
+export interface NumberShape {
+  /** Keep a whole number looking like a float (`5` becomes `5.0`). */
+  float?: boolean;
+  /** Reject anything but a safe integer. */
+  integer?: boolean;
+}
+
+export function numberLiteral(value: unknown, shape: NumberShape = {}): string {
   const n = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(n)) throw new ConfigEditError("A number is required.");
-  return float && Number.isInteger(n) ? `${n}.0` : String(n);
+  assertWritableNumber(n, shape.integer === true);
+  return shape.float && Number.isInteger(n) ? `${n}.0` : String(n);
+}
+
+export interface ScalarOptions {
+  /** Render a string value; defaults to the text itself. */
+  text?: (text: string) => string;
+  /** The adapter handles line breaks in `text` itself (escapes them or refuses). */
+  lineBreaks?: "reject" | "handled";
+  /** Kinds other than boolean, number and string are not editable. */
+  rejectOther?: boolean;
+}
+
+/**
+ * The boolean, number and string branches every single-value adapter shares.
+ * Integer-ness comes from the node's parse-time `integer` flag and float-ness
+ * from its `float` hint.
+ */
+export function scalarLiteral(
+  value: unknown,
+  kind: ConfigValueKind,
+  node: ConfigNode | undefined,
+  opts: ScalarOptions = {},
+): string {
+  if (kind === "boolean") return value ? "true" : "false";
+  if (kind === "number") {
+    return numberLiteral(value, {
+      float: node?.hint === "float",
+      integer: node?.integer === true,
+    });
+  }
+  if (opts.rejectOther && kind !== "string") {
+    throw new ConfigEditError(EDIT_ERRORS.unsafeLayout);
+  }
+  const text = String(value ?? "");
+  if (opts.lineBreaks !== "handled" && /[\r\n]/.test(text)) {
+    throw new ConfigEditError(EDIT_ERRORS.lineBreak);
+  }
+  return opts.text ? opts.text(text) : text;
 }

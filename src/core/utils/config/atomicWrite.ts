@@ -1,11 +1,12 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { MS } from "@mcbot/schema/time.js";
 
 /** Owner-only: the config holds the Discord token and wrapper API keys. */
 export const SECRET_FILE_MODE = 0o600;
 
-const STALE_TEMP_MS = 10 * 60_000;
+const STALE_TEMP_MS = 10 * MS.minute;
 const TEMP_NAME = /\.\d+\.[0-9a-f]{12}\.tmp$/;
 
 /**
@@ -67,6 +68,31 @@ export function writeFileAtomicSync(filePath: string, data: string): void {
     fs.renameSync(tmp, filePath);
   } catch (err) {
     fs.rmSync(tmp, { force: true });
+    throw err;
+  }
+}
+
+/**
+ * Async `writeFileAtomicSync`. `beforeRename` runs once the temp file is
+ * fully written and before it replaces `filePath`: the place to keep a backup
+ * of the old content, since a failure there leaves the original untouched.
+ */
+export async function writeFileAtomic(
+  filePath: string,
+  data: string,
+  beforeRename?: () => Promise<void>,
+): Promise<void> {
+  sweepStaleTemps(filePath);
+  const tmp = tempSiblingPath(filePath);
+  try {
+    await fs.promises.writeFile(tmp, data, {
+      mode: existingFileMode(filePath),
+      flag: "wx",
+    });
+    await beforeRename?.();
+    await fs.promises.rename(tmp, filePath);
+  } catch (err) {
+    await fs.promises.rm(tmp, { force: true }).catch(() => {});
     throw err;
   }
 }

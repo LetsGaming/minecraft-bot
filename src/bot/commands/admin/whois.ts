@@ -1,8 +1,7 @@
 /**
- * /whois <username> (admin) — shows the whitelist audit trail for a
+ * /whois <username> (admin), shows the whitelist audit trail for a
  * Minecraft username (who added/removed it, when, on which server) and the
- * linked Discord account, in one place. Wires up the previously unused
- * getAuditEntry().
+ * linked Discord account, in one place.
  */
 import { SlashCommandBuilder } from "discord.js";
 import { formatLastSeen } from "../../utils/discordTime.js";
@@ -12,8 +11,8 @@ import { getAuditEntry } from "@mcbot/core/utils/stores/whitelistAudit.js";
 import {
   loadLinkedAccountsOrEmpty,
   findDiscordIdByMcName,
-} from "@mcbot/core/utils/stores/linkUtils.js";
-import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
+} from "@mcbot/core/utils/stores/linkStore.js";
+import { requireMcName } from "../shared/mcName.js";
 import {
   loadSessionStore,
   isOnlineNow,
@@ -91,11 +90,7 @@ export const data = new SlashCommandBuilder()
 
 export const execute = withErrorHandling(
   requireServerAdmin(async (interaction) => {
-    const username = interaction.options.getString("username", true);
-
-    if (!isValidMcName(username)) {
-      throw new Error(t("common.invalidUsername", { username }));
-    }
+    const username = requireMcName(interaction, "username");
 
     const [audit, linked, sessions, notesStore] = await Promise.all([
       getAuditEntry(username),
@@ -126,8 +121,8 @@ export const execute = withErrorHandling(
           value: `${audit.addedBy} (<@${audit.addedById}>)`,
           inline: true,
         },
-        { name: t("whois.addedAt"), value: audit.addedAt ?? "—", inline: true },
-        { name: t("whois.server"), value: audit.server ?? "—", inline: true },
+        { name: t("whois.addedAt"), value: audit.addedAt ?? t("common.unknownValue"), inline: true },
+        { name: t("whois.server"), value: audit.server ?? t("common.unknownValue"), inline: true },
       );
     }
     if (audit?.uuid) {
@@ -146,7 +141,7 @@ export const execute = withErrorHandling(
         },
         {
           name: t("whois.removedAt"),
-          value: audit.removedAt ?? "—",
+          value: audit.removedAt ?? t("common.unknownValue"),
           inline: true,
         },
       );

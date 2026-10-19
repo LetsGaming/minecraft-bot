@@ -7,7 +7,7 @@
  *
  * New should mean "added since you last looked". So we snapshot the set of
  * feature keys the user has already seen, persisted in localStorage, and read
- * New against that snapshot — frozen once per app load so a badge does not
+ * New against that snapshot, frozen once per app load so a badge does not
  * vanish mid-session. Visiting the editor commits the current keys, so on the
  * next load they are no longer new and only genuinely new schema additions
  * light up. The very first visit has an empty snapshot, so everything shows as
@@ -17,6 +17,8 @@
  * feature whether it appears globally or per guild, so seeing it once is enough.
  */
 
+import { safeStorage } from "../utils/safeStorage";
+
 const STORAGE_KEY = "mcbot.config.seenFeatures.v1";
 
 /** Frozen at first read, so a badge is stable for the whole session. */
@@ -24,7 +26,7 @@ let snapshot: Set<string> | null = null;
 
 function loadStore(): Set<string> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = safeStorage.get(STORAGE_KEY);
     return new Set(raw ? (JSON.parse(raw) as string[]) : []);
   } catch {
     return new Set();
@@ -32,11 +34,7 @@ function loadStore(): Set<string> {
 }
 
 function saveStore(seen: Set<string>): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([...seen]));
-  } catch {
-    /* private mode / storage disabled: New simply never persists. */
-  }
+  safeStorage.set(STORAGE_KEY, JSON.stringify([...seen]));
 }
 
 /** Has this feature key not been seen before this app load? */

@@ -30,11 +30,17 @@ interface RawCatalog {
 let loading: Promise<ItemCatalog> | null = null;
 
 export function loadItemCatalog(): Promise<ItemCatalog> {
-  loading ??= import("../data/minecraftItems.json").then((mod) => {
-    const raw = (mod.default ?? mod) as unknown as RawCatalog;
-    const items = raw.items.map(([id, name, stackSize]) => ({ id, name, stackSize }));
-    return { version: raw.version, items, byId: new Map(items.map((i) => [i.id, i])) };
-  });
+  loading ??= import("../data/minecraftItems.json")
+    .then((mod) => {
+      const raw = (mod.default ?? mod) as unknown as RawCatalog;
+      const items = raw.items.map(([id, name, stackSize]) => ({ id, name, stackSize }));
+      return { version: raw.version, items, byId: new Map(items.map((i) => [i.id, i])) };
+    })
+    .catch((err: unknown) => {
+      // A failed chunk load must not stick: the next call tries again.
+      loading = null;
+      throw err;
+    });
   return loading;
 }
 

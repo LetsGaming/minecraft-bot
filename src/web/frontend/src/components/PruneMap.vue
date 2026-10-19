@@ -31,16 +31,14 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
-import { createTileStore } from "../composables/pruneTiles";
+import { REGION_CHUNKS } from "@mcbot/schema";
 import type { PruneZone } from "@mcbot/schema/wire/index.js";
+import { createTileStore } from "../composables/pruneTiles";
 import { CELL, type DecodedMap, type DecodedRegion } from "../composables/usePrune";
 import {
-  chunkAt,
   fitBounds,
-  panBy,
   regionBoundsToChunks,
   visibleRegions,
-  worldToScreen,
   zoomAt,
   type Camera,
   type ViewSize,
@@ -51,14 +49,13 @@ import {
   buildRegionPixels,
   buildSelectionPixels,
   heatMinutes,
-  isManualCell,
-  type Palette,
   type Rgba,
 } from "../composables/pruneMapRender";
+import { css, drawOverlay, regionRect, type MapTheme } from "../composables/pruneMapOverlay";
+import { regionKey, regionOf, slotOf, type Rect } from "../composables/pruneRegion";
 import type { SelectionModel } from "../composables/pruneSelection";
+import { usePruneMapInput, type MapTool } from "../composables/usePruneMapInput";
 import { t } from "../i18n";
-
-export type MapTool = "pan" | "select" | "deselect" | "zone" | "inspect";
 
 const props = withDefaults(
   defineProps<{
@@ -83,8 +80,8 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
-  zone: [rect: { x1: number; z1: number; x2: number; z2: number }];
-  select: [rect: { mode: "add" | "remove"; x1: number; z1: number; x2: number; z2: number }];
+  zone: [rect: Rect];
+  select: [rect: Rect & { mode: "add" | "remove" }];
   camera: [info: { zoom: number; cx: number; cz: number }];
   undo: [];
   redo: [];
@@ -101,20 +98,18 @@ let dpr = 1;
 let fitted = false;
 let lastDimension = "";
 
-const hover = ref<{ cx: number; cz: number; cell: number; heat: number; selected: boolean } | null>(null);
-
 // ── Theme colours ─────────────────────────────────────────────────────────
 
 let colourProbe: CanvasRenderingContext2D | null = null;
 
 /** Any CSS colour to RGBA, by letting a 1x1 canvas parse it. */
-function toRgba(css: string, fallback: Rgba): Rgba {
+function toRgba(colour: string, fallback: Rgba): Rgba {
   if (typeof document === "undefined") return fallback;
   colourProbe ??= document.createElement("canvas").getContext("2d", { willReadFrequently: true });
-  if (!colourProbe || !css) return fallback;
+  if (!colourProbe || !colour) return fallback;
   colourProbe.clearRect(0, 0, 1, 1);
   colourProbe.fillStyle = "rgb(0, 0, 0)";
-  colourProbe.fillStyle = css;
+  colourProbe.fillStyle = colour;
   colourProbe.fillRect(0, 0, 1, 1);
   const d = colourProbe.getImageData(0, 0, 1, 1).data;
   return [d[0]!, d[1]!, d[2]!, d[3]!];
@@ -125,21 +120,9 @@ function token(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-const css = (rgba: Rgba, alpha = rgba[3] / 255): string => `rgba(${rgba[0]}, ${rgba[1]}, ${rgba[2]}, ${alpha})`;
+let themeCache: MapTheme | null = null;
 
-interface Theme {
-  palette: Palette;
-  surface: string;
-  grid: string;
-  zone: string;
-  selection: Rgba;
-  text: string;
-  remove: string;
-}
-
-let themeCache: Theme | null = null;
-
-function theme(): Theme {
+function theme(): MapTheme {
   if (themeCache) return themeCache;
   const role = (r: string): Rgba => toRgba(token(`--st-${r}`), [128, 128, 128, 255]);
   const cell: Record<number, Rgba> = {};
@@ -148,10 +131,12 @@ function theme(): Theme {
     palette: { cell, heat: role("degraded"), unknown: [128, 128, 128, 255] },
     surface: token("--surface") || "canvas",
     grid: css(toRgba(token("--border-strong"), [128, 128, 128, 255]), 0.6),
+    chunkGrid: css(toRgba(token("--border"), [128, 128, 128, 255]), 0.4),
     zone: css(role("info")),
     selection: toRgba(token("--text"), [255, 255, 255, 255]),
     text: token("--text") || "canvastext",
     remove: css(role("offline")),
+    removeFill: css(toRgba(token("--st-offline"), [200, 60, 60, 255]), 0.12),
   };
   return themeCache;
 }
@@ -160,7 +145,7 @@ function theme(): Theme {
 
 const regionIndex = computed(() => {
   const m = new Map<string, { rx: number; rz: number } & DecodedRegion>();
-  for (const r of props.map.regions) m.set(`${r.rx},${r.rz}`, r);
+  for (const r of props.map.regions) m.set(regionKey(r.rx, r.rz), r);
   return m;
 });
 
@@ -169,9 +154,9 @@ const selectionBitmaps = new Map<string, HTMLCanvasElement>();
 
 function canvasOf(pixels: Uint8ClampedArray): HTMLCanvasElement {
   const c = document.createElement("canvas");
-  c.width = 32;
-  c.height = 32;
-  c.getContext("2d")!.putImageData(new ImageData(pixels as Uint8ClampedArray<ArrayBuffer>, 32, 32), 0, 0);
+  c.width = REGION_CHUNKS;
+  c.height = REGION_CHUNKS;
+  c.getContext("2d")!.putImageData(new ImageData(pixels as Uint8ClampedArray<ArrayBuffer>, REGION_CHUNKS, REGION_CHUNKS), 0, 0);
   return c;
 }
 
@@ -182,12 +167,23 @@ const terrainActive = (): boolean => props.view === "terrain" && !!props.tileLoa
 
 function bitmapFor(r: { rx: number; rz: number } & DecodedRegion, overTerrain = false): HTMLCanvasElement {
   const opacity = overTerrain ? props.overlayOpacity : 1;
-  const key = `${r.rx},${r.rz}@${opacity}`;
+  const key = `${regionKey(r.rx, r.rz)}@${opacity}`;
   let bmp = bitmaps.get(key);
   if (!bmp) {
     const view = props.view === "heat" ? "heat" : "class";
     bmp = canvasOf(buildRegionPixels(r.cell, r.heat, view, theme().palette, opacity));
     bitmaps.set(key, bmp);
+  }
+  return bmp;
+}
+
+function selectionBitmap(rx: number, rz: number, bits: Uint32Array): HTMLCanvasElement {
+  const key = regionKey(rx, rz);
+  let bmp = selectionBitmaps.get(key);
+  if (!bmp) {
+    const [r, g, b] = theme().selection;
+    bmp = canvasOf(buildSelectionPixels(bits, [r, g, b, 140]));
+    selectionBitmaps.set(key, bmp);
   }
   return bmp;
 }
@@ -205,8 +201,8 @@ function wantTiles(v: { rx0: number; rx1: number; rz0: number; rz1: number }): v
     tiles.want([]);
     return;
   }
-  const midX = camera.value.cx / 32;
-  const midZ = camera.value.cz / 32;
+  const midX = camera.value.cx / REGION_CHUNKS;
+  const midZ = camera.value.cz / REGION_CHUNKS;
   const wanted = [];
   for (const r of regionIndex.value.values()) {
     if (r.rx < v.rx0 || r.rx > v.rx1 || r.rz < v.rz0 || r.rz > v.rz1) continue;
@@ -238,15 +234,6 @@ function requestDraw(): void {
   });
 }
 
-/** Pixel-aligned rectangle of a region, so neighbours never leave a seam. */
-function regionRect(rx: number, rz: number): { x: number; y: number; w: number; h: number } {
-  const a = worldToScreen(camera.value, size, rx * 32, rz * 32);
-  const b = worldToScreen(camera.value, size, rx * 32 + 32, rz * 32 + 32);
-  const x = Math.floor(a.sx);
-  const y = Math.floor(a.sz);
-  return { x, y, w: Math.max(1, Math.floor(b.sx) - x), h: Math.max(1, Math.floor(b.sz) - y) };
-}
-
 function prepare(canvas: HTMLCanvasElement): CanvasRenderingContext2D | null {
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
@@ -267,7 +254,7 @@ function drawBase(): void {
   wantTiles(v);
   for (const r of regionIndex.value.values()) {
     if (r.rx < v.rx0 || r.rx > v.rx1 || r.rz < v.rz0 || r.rz > v.rz1) continue;
-    const { x, y, w, h } = regionRect(r.rx, r.rz);
+    const { x, y, w, h } = regionRect(camera.value, size, r.rx, r.rz);
     const picture = terrain ? tiles.get(r.rx, r.rz) : null;
     const hasPicture = !!picture && picture !== "none";
     if (hasPicture) {
@@ -282,177 +269,30 @@ function drawBase(): void {
   }
 }
 
-function drawOverlay(): void {
+function drawOver(): void {
   const el = overCanvas.value;
   const ctx = el && prepare(el);
   if (!ctx) return;
-  const th = theme();
-  const cam = camera.value;
-  const v = visibleRegions(cam, size);
-  const inView = (rx: number, rz: number): boolean => rx >= v.rx0 && rx <= v.rx1 && rz >= v.rz0 && rz <= v.rz1;
-  const dimension = props.map.dimension;
-
-  // What is chosen by hand, before it has been previewed.
-  ctx.imageSmoothingEnabled = cam.zoom < 1;
-  props.selection.forEachRegion(dimension, (rx, rz, bits) => {
-    if (!inView(rx, rz)) return;
-    const key = `${rx},${rz}`;
-    let bmp = selectionBitmaps.get(key);
-    if (!bmp) {
-      bmp = canvasOf(buildSelectionPixels(bits, [th.selection[0], th.selection[1], th.selection[2], 140]));
-      selectionBitmaps.set(key, bmp);
-    }
-    const { x, y, w, h } = regionRect(rx, rz);
-    ctx.drawImage(bmp, x, y, w, h);
+  drawOverlay(ctx, {
+    camera: camera.value,
+    size,
+    theme: theme(),
+    dimension: props.map.dimension,
+    selection: props.selection,
+    selectionBitmap,
+    regions: regionIndex.value.values(),
+    zones: props.zones,
+    showGrid: props.showGrid,
+    dragRect: dragRect(),
+    inspected: props.inspected,
+    hover: isDragging() ? null : hover.value,
   });
-
-  // Shapes, so the states are not told apart by colour alone.
-  if (cam.zoom >= 8) drawChunkMarks(ctx, th, v, inView);
-
-  if (props.showGrid) {
-    ctx.strokeStyle = th.grid;
-    ctx.lineWidth = 1;
-    ctx.setLineDash([]);
-    if (cam.zoom >= 0.4) {
-      for (let rz = v.rz0; rz <= v.rz1 + 1; rz++) {
-        const y = Math.floor(worldToScreen(cam, size, 0, rz * 32).sz) + 0.5;
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(size.width, y);
-        ctx.stroke();
-      }
-      for (let rx = v.rx0; rx <= v.rx1 + 1; rx++) {
-        const x = Math.floor(worldToScreen(cam, size, rx * 32, 0).sx) + 0.5;
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, size.height);
-        ctx.stroke();
-      }
-    }
-    if (cam.zoom >= 12) {
-      ctx.strokeStyle = css(toRgba(token("--border"), [128, 128, 128, 255]), 0.4);
-      const a = chunkAt(cam, size, 0, 0);
-      const b = chunkAt(cam, size, size.width, size.height);
-      ctx.beginPath();
-      for (let cx = a.cx; cx <= b.cx + 1; cx++) {
-        const x = Math.floor(worldToScreen(cam, size, cx, 0).sx) + 0.5;
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, size.height);
-      }
-      for (let cz = a.cz; cz <= b.cz + 1; cz++) {
-        const y = Math.floor(worldToScreen(cam, size, 0, cz).sz) + 0.5;
-        ctx.moveTo(0, y);
-        ctx.lineTo(size.width, y);
-      }
-      ctx.stroke();
-    }
-  }
-
-  // Protected zones: dashed, so they differ from the protected fill in more than hue.
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = th.zone;
-  ctx.setLineDash([6, 4]);
-  for (const z of props.zones) {
-    if (z.dimension !== dimension) continue;
-    const a = worldToScreen(cam, size, z.x1, z.z1);
-    const b = worldToScreen(cam, size, z.x2 + 1, z.z2 + 1);
-    ctx.strokeRect(a.sx, a.sz, b.sx - a.sx, b.sz - a.sz);
-  }
-  ctx.setLineDash([]);
-
-  if (drag?.kind === "rect") {
-    const x1 = Math.min(drag.from.cx, drag.to.cx);
-    const z1 = Math.min(drag.from.cz, drag.to.cz);
-    const x2 = Math.max(drag.from.cx, drag.to.cx);
-    const z2 = Math.max(drag.from.cz, drag.to.cz);
-    const a = worldToScreen(cam, size, x1, z1);
-    const b = worldToScreen(cam, size, x2 + 1, z2 + 1);
-    ctx.lineWidth = 2;
-    ctx.setLineDash([4, 3]);
-    ctx.strokeStyle = drag.mode === "remove" ? th.remove : drag.mode === "zone" ? th.zone : css(th.selection);
-    ctx.fillStyle = drag.mode === "remove" ? css(toRgba(token("--st-offline"), [200, 60, 60, 255]), 0.12) : css(th.selection, 0.15);
-    ctx.fillRect(a.sx, a.sz, b.sx - a.sx, b.sz - a.sz);
-    ctx.strokeRect(a.sx, a.sz, b.sx - a.sx, b.sz - a.sz);
-    ctx.setLineDash([]);
-  }
-
-  const open = props.inspected;
-  if (open) {
-    const a = worldToScreen(cam, size, open.cx, open.cz);
-    const px = Math.max(cam.zoom, 4);
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = th.surface;
-    ctx.strokeRect(a.sx - 2, a.sz - 2, px + 4, px + 4);
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = th.text;
-    ctx.setLineDash([5, 3]);
-    ctx.strokeRect(a.sx - 2, a.sz - 2, px + 4, px + 4);
-    ctx.setLineDash([]);
-  }
-
-  const h = hover.value;
-  if (h && !drag) {
-    const a = worldToScreen(cam, size, h.cx, h.cz);
-    const px = Math.max(cam.zoom, 3);
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = th.surface;
-    ctx.strokeRect(a.sx - 1, a.sz - 1, px + 2, px + 2);
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = th.text;
-    ctx.strokeRect(a.sx - 0.5, a.sz - 0.5, px + 1, px + 1);
-  }
-}
-
-/** Per-chunk marks at high zoom: a diagonal for chosen chunks, an inset frame for manual deletions. */
-function drawChunkMarks(
-  ctx: CanvasRenderingContext2D,
-  th: Theme,
-  v: { rx0: number; rx1: number; rz0: number; rz1: number },
-  inView: (rx: number, rz: number) => boolean,
-): void {
-  const cam = camera.value;
-  const z = cam.zoom;
-  ctx.lineWidth = 1;
-  ctx.setLineDash([]);
-
-  ctx.strokeStyle = css(th.selection, 0.9);
-  ctx.beginPath();
-  props.selection.forEachRegion(props.map.dimension, (rx, rz, bits) => {
-    if (!inView(rx, rz)) return;
-    for (let cz = 0; cz < 32; cz++) {
-      const row = bits[cz]!;
-      if (row === 0) continue;
-      for (let cx = 0; cx < 32; cx++) {
-        if (((row >>> cx) & 1) === 0) continue;
-        const a = worldToScreen(cam, size, rx * 32 + cx, rz * 32 + cz);
-        if (a.sx + z < 0 || a.sz + z < 0 || a.sx > size.width || a.sz > size.height) continue;
-        ctx.moveTo(a.sx + 2, a.sz + z - 2);
-        ctx.lineTo(a.sx + z - 2, a.sz + 2);
-      }
-    }
-  });
-  ctx.stroke();
-
-  ctx.strokeStyle = css(th.palette.cell[CELL.MANUAL_SOFT] ?? [255, 255, 255, 255], 1);
-  ctx.setLineDash([3, 2]);
-  ctx.beginPath();
-  for (const r of regionIndex.value.values()) {
-    if (r.rx < v.rx0 || r.rx > v.rx1 || r.rz < v.rz0 || r.rz > v.rz1) continue;
-    for (let slot = 0; slot < 1024; slot++) {
-      if (!isManualCell(r.cell[slot]!)) continue;
-      const a = worldToScreen(cam, size, r.rx * 32 + (slot & 31), r.rz * 32 + (slot >> 5));
-      if (a.sx + z < 0 || a.sz + z < 0 || a.sx > size.width || a.sz > size.height) continue;
-      ctx.rect(a.sx + 1.5, a.sz + 1.5, z - 3, z - 3);
-    }
-  }
-  ctx.stroke();
-  ctx.setLineDash([]);
 }
 
 function draw(): void {
   if (size.width === 0 || size.height === 0) return;
   drawBase();
-  drawOverlay();
+  drawOver();
   emit("camera", { zoom: camera.value.zoom, cx: camera.value.cx, cz: camera.value.cz });
 }
 
@@ -498,237 +338,45 @@ defineExpose({ fit, zoomIn: () => zoomBy(1.5), zoomOut: () => zoomBy(1 / 1.5), c
 
 // ── Pointer and keyboard ──────────────────────────────────────────────────
 
-type Drag =
-  | { kind: "pan"; x: number; y: number }
-  | { kind: "click"; x: number; y: number; at: { cx: number; cz: number } }
-  | { kind: "rect"; from: { cx: number; cz: number }; to: { cx: number; cz: number }; mode: "add" | "remove" | "zone" }
-  | { kind: "pinch"; distance: number };
-
-let drag: Drag | null = null;
-const pointers = new Map<number, { x: number; y: number }>();
-const spaceHeld = ref(false);
-
-const cursorClass = computed(() => ({
-  "is-pan": props.tool === "pan" || spaceHeld.value,
-  "is-grabbing": drag?.kind === "pan",
-  "is-draw": props.tool !== "pan" && !spaceHeld.value,
-}));
-
-function local(ev: PointerEvent | WheelEvent): { x: number; y: number } {
-  const rect = overCanvas.value!.getBoundingClientRect();
-  return { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
-}
-
 function lookup(cx: number, cz: number): { cell: number; heat: number } {
-  const r = regionIndex.value.get(`${Math.floor(cx / 32)},${Math.floor(cz / 32)}`);
+  const r = regionIndex.value.get(regionKey(regionOf(cx), regionOf(cz)));
   if (!r) return { cell: CELL.EMPTY, heat: 0 };
-  const slot = (cx & 31) + (cz & 31) * 32;
+  const slot = slotOf(cx, cz);
   return { cell: r.cell[slot]!, heat: r.heat[slot]! };
 }
 
-function updateHover(p: { x: number; y: number }): void {
-  cursor.value = null; // a pointer in use takes over from the keyboard cursor
-  const { cx, cz } = chunkAt(camera.value, size, p.x, p.y);
-  const prev = hover.value;
-  if (prev && prev.cx === cx && prev.cz === cz) return;
-  hover.value = { cx, cz, ...lookup(cx, cz), selected: props.selection.has(props.map.dimension, cx, cz) };
-  requestDraw();
-}
-
-function onDown(ev: PointerEvent): void {
-  overCanvas.value!.setPointerCapture(ev.pointerId);
-  host.value?.focus({ preventScroll: true });
-  const p = local(ev);
-  pointers.set(ev.pointerId, p);
-  if (pointers.size === 2) {
-    const [a, b] = [...pointers.values()] as [{ x: number; y: number }, { x: number; y: number }];
-    drag = { kind: "pinch", distance: Math.hypot(a.x - b.x, a.y - b.y) };
-    return;
-  }
-  const wantsPan = props.tool === "pan" || spaceHeld.value || ev.button === 1 || ev.button === 2;
-  if (wantsPan) {
-    drag = { kind: "pan", x: p.x, y: p.y };
-    return;
-  }
-  if (props.tool === "inspect" && ev.button === 0) {
-    // A click inspects; a drag still moves the view.
-    drag = { kind: "click", x: p.x, y: p.y, at: chunkAt(camera.value, size, p.x, p.y) };
-    return;
-  }
-  if (ev.button !== 0) return;
-  const at = chunkAt(camera.value, size, p.x, p.y);
-  const mode = props.tool === "zone" ? "zone" : props.tool === "deselect" || ev.altKey ? "remove" : "add";
-  drag = { kind: "rect", from: at, to: at, mode };
-  requestDraw();
-}
-
-function onMove(ev: PointerEvent): void {
-  const p = local(ev);
-  if (pointers.has(ev.pointerId)) pointers.set(ev.pointerId, p);
-  if (drag?.kind === "pinch" && pointers.size >= 2) {
-    const [a, b] = [...pointers.values()] as [{ x: number; y: number }, { x: number; y: number }];
-    const distance = Math.hypot(a.x - b.x, a.y - b.y);
-    if (drag.distance > 0 && distance > 0) {
-      camera.value = zoomAt(camera.value, size, distance / drag.distance, (a.x + b.x) / 2, (a.y + b.y) / 2);
-    }
-    drag.distance = distance;
-    requestDraw();
-    return;
-  }
-  if (drag?.kind === "click" && Math.hypot(p.x - drag.x, p.y - drag.y) > 4) {
-    drag = { kind: "pan", x: drag.x, y: drag.y };
-  }
-  if (drag?.kind === "pan") {
-    camera.value = panBy(camera.value, p.x - drag.x, p.y - drag.y);
-    drag.x = p.x;
-    drag.y = p.y;
-    requestDraw();
-    return;
-  }
-  if (drag?.kind === "rect") {
-    drag.to = chunkAt(camera.value, size, p.x, p.y);
-    requestDraw();
-  }
-  updateHover(p);
-}
-
-function onUp(ev: PointerEvent): void {
-  pointers.delete(ev.pointerId);
-  const finished = drag;
-  if (finished?.kind === "pinch") {
-    if (pointers.size < 2) drag = null;
-    return;
-  }
-  drag = null;
-  if (finished?.kind === "click") emit("inspect", finished.at);
-  if (finished?.kind === "rect") {
-    const rect = {
-      x1: Math.min(finished.from.cx, finished.to.cx),
-      z1: Math.min(finished.from.cz, finished.to.cz),
-      x2: Math.max(finished.from.cx, finished.to.cx),
-      z2: Math.max(finished.from.cz, finished.to.cz),
-    };
-    if (finished.mode === "zone") emit("zone", rect);
-    else emit("select", { mode: finished.mode, ...rect });
-  }
-  requestDraw();
-}
-
-function onCancel(ev: PointerEvent): void {
-  pointers.delete(ev.pointerId);
-  drag = null;
-  requestDraw();
-}
-
-function onLeave(): void {
-  if (drag || cursor.value) return;
-  hover.value = null;
-  requestDraw();
-}
-
-function onWheel(ev: WheelEvent): void {
-  ev.preventDefault();
-  const p = local(ev);
-  const factor = Math.exp(-ev.deltaY * (ev.ctrlKey ? 0.01 : 0.0015));
-  camera.value = zoomAt(camera.value, size, factor, p.x, p.y);
-  requestDraw();
-}
-
-
-/** The chunk the keyboard cursor is on, or null while the map is only used with a pointer. */
-const cursor = ref<{ cx: number; cz: number } | null>(null);
-
-function moveCursor(dx: number, dz: number): void {
-  const from = cursor.value ?? chunkAt(camera.value, size, size.width / 2, size.height / 2);
-  const to = { cx: from.cx + dx, cz: from.cz + dz };
-  cursor.value = to;
-  // Keep it on screen: pan just far enough to bring it back inside a small margin.
-  const a = worldToScreen(camera.value, size, to.cx, to.cz);
-  const margin = 24;
-  let moveX = 0;
-  let moveZ = 0;
-  if (a.sx < margin) moveX = margin - a.sx;
-  else if (a.sx + camera.value.zoom > size.width - margin) moveX = size.width - margin - (a.sx + camera.value.zoom);
-  if (a.sz < margin) moveZ = margin - a.sz;
-  else if (a.sz + camera.value.zoom > size.height - margin) moveZ = size.height - margin - (a.sz + camera.value.zoom);
-  if (moveX !== 0 || moveZ !== 0) camera.value = panBy(camera.value, moveX, moveZ);
-  hover.value = { ...to, ...lookup(to.cx, to.cz), selected: props.selection.has(props.map.dimension, to.cx, to.cz) };
-}
-
-/** Keyboard stand-in for a click: choose or unchoose the chunk under the cursor. */
-function toggleAtCursor(): void {
-  const at = cursor.value;
-  if (!at) return;
-  const mode = props.selection.has(props.map.dimension, at.cx, at.cz) ? "remove" : "add";
-  emit("select", { mode, x1: at.cx, z1: at.cz, x2: at.cx, z2: at.cz });
-}
-
-function onKey(ev: KeyboardEvent): void {
-  if (ev.ctrlKey || ev.metaKey) {
-    const key = ev.key.toLowerCase();
-    if (key === "z" && !ev.shiftKey) emit("undo");
-    else if (key === "y" || (key === "z" && ev.shiftKey)) emit("redo");
-    else return;
-    ev.preventDefault();
-    return;
-  }
-  // Arrows move a cursor from chunk to chunk (Shift jumps eight); the view follows it.
-  const step = ev.shiftKey ? 8 : 1;
-  switch (ev.key) {
-    case "ArrowLeft":
-      moveCursor(-step, 0);
-      break;
-    case "ArrowRight":
-      moveCursor(step, 0);
-      break;
-    case "ArrowUp":
-      moveCursor(0, -step);
-      break;
-    case "ArrowDown":
-      moveCursor(0, step);
-      break;
-    case "PageUp":
-      camera.value = panBy(camera.value, 0, size.height * 0.8);
-      break;
-    case "PageDown":
-      camera.value = panBy(camera.value, 0, -size.height * 0.8);
-      break;
-    case "Enter": {
-      const at = cursor.value;
-      if (!at) return;
-      emit("inspect", at);
-      break;
-    }
-    case "+":
-    case "=":
-      zoomBy(1.25);
-      break;
-    case "-":
-    case "_":
-      zoomBy(0.8);
-      break;
-    case "0":
-      fit();
-      break;
-    case " ":
-      if (cursor.value) toggleAtCursor();
-      else spaceHeld.value = true;
-      break;
-    case "Escape":
-      drag = null;
-      cursor.value = null;
-      hover.value = null;
-      break;
-    default:
-      return;
-  }
-  ev.preventDefault();
-  requestDraw();
-}
-
-function onKeyUp(ev: KeyboardEvent): void {
-  if (ev.key === " ") spaceHeld.value = false;
-}
+const {
+  hover,
+  cursor,
+  cursorClass,
+  dragRect,
+  isDragging,
+  onDown,
+  onMove,
+  onUp,
+  onCancel,
+  onLeave,
+  onWheel,
+  onKey,
+  onKeyUp,
+} = usePruneMapInput({
+  camera,
+  size,
+  tool: () => props.tool,
+  dimension: () => props.map.dimension,
+  selection: () => props.selection,
+  canvas: () => overCanvas.value,
+  host: () => host.value,
+  lookup,
+  requestDraw,
+  fit,
+  zoomBy,
+  onZone: (rect) => emit("zone", rect),
+  onSelect: (rect) => emit("select", rect),
+  onInspect: (at) => emit("inspect", at),
+  onUndo: () => emit("undo"),
+  onRedo: () => emit("redo"),
+});
 
 // ── Hover text ────────────────────────────────────────────────────────────
 

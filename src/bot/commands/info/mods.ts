@@ -11,8 +11,6 @@ import { SlashCommandBuilder, type APIEmbedField } from "discord.js";
 import {
   chunkLines,
   createEmbed,
-  createPaginationButtons,
-  handlePagination,
   paginateFields,
   reservedLength,
 } from "../../utils/embeds/embedUtils.js";
@@ -20,7 +18,8 @@ import { getModList, type ModInfo, type ModList } from "@mcbot/core/utils/minecr
 import { loaderDisplayName } from "@mcbot/core/utils/minecraft/versionName.js";
 import { readThrough } from "@mcbot/core/utils/wrapper/lastKnown.js";
 import { withErrorHandling } from "../middleware.js";
-import { relativeTimestamp } from "../../utils/discordTime.js";
+import { replyPaged } from "../shared/paged.js";
+import { formatLastSeen } from "../../utils/discordTime.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { requireCapability } from "@mcbot/core/utils/server/capabilities.js";
 import { t } from "@mcbot/core/utils/i18n.js";
@@ -82,7 +81,7 @@ export const execute = withErrorHandling(async (interaction) => {
   const description = [
     summaryLine(modList, total),
     ...(stale
-      ? [t("mods.stale", { age: relativeTimestamp(new Date(stale.asOf).getTime()) })]
+      ? [t("mods.stale", { age: formatLastSeen(new Date(stale.asOf).getTime()) })]
       : []),
   ].join("\n");
 
@@ -95,9 +94,5 @@ export const execute = withErrorHandling(async (interaction) => {
     reserved: reservedLength({ title, description }),
   }).map((page) => createEmbed({ title, description }).addFields(page));
 
-  const message = await interaction.editReply({
-    embeds: [embeds[0]!],
-    components: embeds.length > 1 ? [createPaginationButtons(0, embeds.length)] : [],
-  });
-  if (embeds.length > 1) await handlePagination(message, interaction, embeds);
+  await replyPaged(interaction, embeds);
 });

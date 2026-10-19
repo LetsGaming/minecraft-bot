@@ -3,7 +3,7 @@
  * `/status` can say who took an offline server down and when, also after a
  * bot restart.
  */
-import { kvGet, kvUpdate } from "../../db/kv.js";
+import { kvGet, kvMutate } from "../../db/kv.js";
 import { lastOnlineStreakStart } from "./uptimeTracker.js";
 
 export type ControlKind = "stop" | "restart";
@@ -21,12 +21,22 @@ type ControlRecordStore = Record<string, ControlRecord>;
 
 const KEY = "serverControl";
 
+// Not a versioned document: the row is a bare serverId → record map.
+function normalize(raw: unknown): ControlRecordStore {
+  return typeof raw === "object" && raw !== null && !Array.isArray(raw)
+    ? (raw as ControlRecordStore)
+    : {};
+}
+
 export function recordControlAction(serverId: string, record: ControlRecord): void {
-  kvUpdate<ControlRecordStore>(KEY, (current) => ({ ...(current ?? {}), [serverId]: record }));
+  kvMutate(KEY, normalize, (store) => {
+    store[serverId] = record;
+  });
 }
 
 export function lastControlAction(serverId: string): ControlRecord | null {
-  return kvGet<ControlRecordStore>(KEY)?.[serverId] ?? null;
+  const store = normalize(kvGet<unknown>(KEY));
+  return Object.hasOwn(store, serverId) ? (store[serverId] ?? null) : null;
 }
 
 /**

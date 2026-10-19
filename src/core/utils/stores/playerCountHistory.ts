@@ -1,33 +1,33 @@
 /**
- * Player-count history — a compact per-hour series answering "when is the
- * server busy". Single owner of the player_count_hours table.
+ * Player-count history: a compact per-hour series answering "when is the
+ * server busy". Single owner of the player_count_hours table, which holds
+ * one aggregate row per server per hour bucket (`h` is the bucket's hour
+ * start, `sum`/`max`/`samples` the sampled online counts).
  *
- * Storage: one aggregate per server per hour bucket
- *
- *   { "version": 1, "servers": { "<id>": [{ "h": epochMs, "sum": n,
- *     "max": n, "samples": n }] } }
- *
- * where `h` is the bucket's hour start. Samples come for free from the
- * status pass when it runs (60 s cadence); deployments without the status
- * embed or presence get a standalone 5-minute sampler that no-ops while
- * fresh samples keep arriving from elsewhere.
+ * Samples come for free from the status pass when it runs (60 s cadence);
+ * deployments without the status embed or presence get a standalone
+ * 5-minute sampler that no-ops while fresh samples keep arriving from
+ * elsewhere.
  *
  * Retention is RETENTION_HOURS buckets per server (14 days), enough for a
- * stable hour-of-day average without the file growing forever.
+ * stable hour-of-day average without the table growing forever.
  */
 import { getDb, withTransaction } from "../../db/index.js";
 import { mapRows, col } from "../../db/rows.js";
 import { log } from "../logger.js";
-import { canQueryServer } from "@mcbot/schema/serverState.js";
+import { parsePlayerCounts } from "../minecraft/playerCounts.js";
 import { localHourOfDay, UTC } from "../time.js";
 import type { ServerInstance } from "../server/server.js";
 import { errMsg } from "../error.js";
+import { ANALYTICS_CAP_HOURS } from "@mcbot/schema/analytics.js";
+import { MS } from "@mcbot/schema/time.js";
+import { renderSparkline } from "../sparkline.js";
 
-export const RETENTION_HOURS = 14 * 24;
-const SAMPLER_INTERVAL_MS = 5 * 60_000;
+export const RETENTION_HOURS = ANALYTICS_CAP_HOURS.activity;
+const SAMPLER_INTERVAL_MS = 5 * MS.minute;
 /** The standalone sampler stands down while other samples are fresher. */
-const FRESH_SAMPLE_MS = 4 * 60_000;
-const HOUR_MS = 60 * 60_000;
+const FRESH_SAMPLE_MS = 4 * MS.minute;
+const HOUR_MS = MS.hour;
 
 export interface HourBucket {
   /** Bucket start (epoch ms, aligned to the hour). */
@@ -91,19 +91,10 @@ export function loadPlayerCountSeries(
 /** serverId → epoch ms of the last recorded sample (any source). */
 const lastSampleAt = new Map<string, number>();
 
-/** Exposed for tests. */
-export function _resetSamplerStateForTesting(): void {
-  lastSampleAt.clear();
-}
-
 /**
- * Record one online-count sample into the server's current hour bucket —
- * one UPSERT plus a retention trim, atomically. (Storage audit: this used
- * to load the whole table, mutate it in memory, then DELETE-ALL and
- * re-INSERT every row on every 60s sample — ~1440x write amplification a
- * day for a table that never exceeds a couple hundred rows. The migration
- * comment for this table already called for "one atomic UPSERT".)
- * Called from the status pass (free ride) and the standalone sampler.
+ * Record one online-count sample into the server's current hour bucket:
+ * one UPSERT plus a retention trim, atomically. Called from the status pass
+ * (free ride) and the standalone sampler.
  */
 export async function recordPlayerCountSample(
   serverId: string,
@@ -142,15 +133,14 @@ export function startPlayerCountSampler(
       const last = lastSampleAt.get(server.id) ?? 0;
       if (Date.now() - last < FRESH_SAMPLE_MS) continue;
       try {
-        // Queryable, not merely up. A server that is unresponsive — or one
-        // that is fine but whose wrapper is down — answers getList() with
-        // zeros, and a zero here is indistinguishable from a genuinely empty
-        // server. Sampling either would draw the incident as a player exodus
-        // on the activity chart. Skipping leaves a gap, which is honest.
-        if (!canQueryServer(await server.getHealth())) continue;
-        const list = await server.getList();
-        const online = parseInt(String(list.playerCount), 10) || 0;
-        await recordPlayerCountSample(server.id, online);
+        // Queryable, not merely up: an unresponsive server, or one whose
+        // wrapper is down, would otherwise be sampled as empty and drawn as a
+        // player exodus on the activity chart. Skipping leaves a gap, which
+        // is honest.
+        const list = await server.listIfQueryable();
+        if (!list.ok) continue;
+        const online = parsePlayerCounts(list.value).online;
+        if (online !== null) await recordPlayerCountSample(server.id, online);
       } catch (err) {
         log.warn("activity", `Sample failed for ${server.id}: ${errMsg(err)}`);
       }
@@ -167,7 +157,6 @@ export function buildActivitySparkline(
   now: number,
   hours = 24,
 ): { line: string; peak: number } {
-  const LEVELS = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
   const start = Math.floor((now - (hours - 1) * HOUR_MS) / HOUR_MS) * HOUR_MS;
 
   const byHour = new Map(series.map((b) => [b.h, b] as const));
@@ -185,13 +174,7 @@ export function buildActivitySparkline(
   }
 
   const scale = Math.max(peak, 1);
-  const line = avgs
-    .map((a) =>
-      a === null
-        ? "·"
-        : LEVELS[Math.min(LEVELS.length - 1, Math.round((a / scale) * (LEVELS.length - 1)))]!,
-    )
-    .join("");
+  const line = renderSparkline(avgs.map((a) => (a === null ? null : a / scale)));
   return { line, peak };
 }
 

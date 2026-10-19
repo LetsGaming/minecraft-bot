@@ -4,6 +4,20 @@
  * Kept apart from serverAccess so route code can test `instanceof` without
  * importing the whole wrapper client.
  */
+
+/** The wrapper's size limit for a config file, in the words the editor shows. */
+const CONFIG_SIZE_LIMIT_LABEL = "1 MB";
+
+/** The statuses the wrapper uses to explain a config call, by what each means. */
+const STATUS = {
+  notFound: 404,
+  stale: 412,
+  tooLarge: 413,
+  preconditionRequired: 428,
+  rejected: 400,
+  protected: 403,
+} as const;
+
 export type ConfigAccessErrorKind =
   | "too-large"
   | "not-found"
@@ -31,31 +45,31 @@ export function configAccessErrorFor(
   wrapperMessage: string,
 ): ConfigAccessError | null {
   switch (status) {
-    case 404:
+    case STATUS.notFound:
       return new ConfigAccessError("not-found", "That config file no longer exists on the server.", status);
-    case 412:
+    case STATUS.stale:
       return new ConfigAccessError(
         "stale",
         "This file changed since you opened it. Reload and re-apply your changes.",
         status,
       );
-    case 413:
+    case STATUS.tooLarge:
       return new ConfigAccessError(
         "too-large",
         action === "read"
-          ? "This file is larger than the 1 MB limit for the config editor."
-          : "The saved file would be larger than the 1 MB limit for the config editor.",
+          ? `This file is larger than the ${CONFIG_SIZE_LIMIT_LABEL} limit for the config editor.`
+          : `The saved file would be larger than the ${CONFIG_SIZE_LIMIT_LABEL} limit for the config editor.`,
         status,
       );
-    case 428:
+    case STATUS.preconditionRequired:
       return new ConfigAccessError(
         "precondition-required",
         "The save did not say which version it replaces. Reload and try again.",
         status,
       );
-    case 400:
+    case STATUS.rejected:
       return new ConfigAccessError("rejected", `The wrapper rejected the request: ${wrapperMessage}`, status);
-    case 403:
+    case STATUS.protected:
       // Wrapper mod-configs v2: a server.properties key that decides who may
       // join or command the server changed without allowProtected.
       return new ConfigAccessError(

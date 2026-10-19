@@ -20,7 +20,6 @@ vi.mock("../../src/core/utils/logger.js", () => ({
 import {
   nextMidnightEpoch,
   nextTimeOfDayEpoch,
-  msUntilMidnight,
   localDayOfWeek,
   localHourOfDay,
   isValidTimeZone,
@@ -63,12 +62,6 @@ describe("nextMidnightEpoch", () => {
     // Berlin is UTC+2 in June, Denver UTC-6: midnights are 8h apart.
     expect(berlin).not.toBe(denver);
     expect(denver - berlin).toBe(8 * 3_600_000);
-  });
-
-  it("msUntilMidnight is positive and under 24h", () => {
-    const ms = msUntilMidnight("Europe/Berlin", Date.parse("2026-03-10T23:30:00Z"));
-    expect(ms).toBeGreaterThan(0);
-    expect(ms).toBeLessThanOrEqual(24 * 3_600_000);
   });
 });
 

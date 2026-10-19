@@ -1,22 +1,15 @@
 /**
  * Daily-reward domain rules: streaks, the weighted pool draw, and getting
- * items into a player's inventory.
- *
- * These lived inside the `/daily` slash command, which meant two log
- * watchers (advancements, joinLeave) imported `give` and
- * `deliverPendingRewards` *from a Discord interaction handler* — a
- * watcher depending on a command, and the reward rules sitting on the
- * presentation side of the seam. Nothing here knows about Discord: the
- * command formats the embed, the watchers fire on log lines, and both
- * call these.
+ * items into a player's inventory. Nothing here knows about Discord.
  */
 import {
-  loadPendingRewards,
-  updatePendingRewards,
-  getServerPending,
+  hasPending,
+  takePending,
+  requeuePending,
 } from "../stores/dailyStore.js";
 import type { ServerInstance } from "../server/server.js";
-import { tellraw } from "./serverMessages.js";
+import { consoleCommand, tellraw } from "./serverMessages.js";
+import { errMsg } from "../error.js";
 import { formatItemList } from "./itemNames.js";
 import type {
   DailyRewardsConfig,
@@ -26,11 +19,15 @@ import type {
 } from "../../types/index.js";
 import { t } from "../i18n.js";
 import { RewardRarity, REWARD_RARITIES } from "@mcbot/schema/embedCategories.js";
-import { rarityOf, milestoneDays } from "@mcbot/schema/dailyRewards.js";
+import { rarityOf, milestoneDays, splitItem } from "@mcbot/schema/dailyRewards.js";
 import { log } from "../logger.js";
+import { MS } from "@mcbot/schema/time.js";
 
-/** One claim per 24h; a gap of more than two cooldowns breaks the streak. */
-export const DAILY_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+/** One claim per 24h. */
+export const DAILY_COOLDOWN_MS = MS.day;
+
+/** A gap of more than this since the last claim (two cooldowns) breaks the streak. */
+export const STREAK_GRACE_MS = 2 * DAILY_COOLDOWN_MS;
 
 /** Streak cycle length when the config defines no streakBonuses. */
 export const DEFAULT_MAX_STREAK = 35;
@@ -51,7 +48,7 @@ export function liveStreak(
   data: Pick<UserClaimData, "currentStreak" | "lastClaim">,
   now = Date.now(),
 ): number {
-  if (!data.lastClaim || now - data.lastClaim > 2 * DAILY_COOLDOWN_MS) return 0;
+  if (!data.lastClaim || now - data.lastClaim > STREAK_GRACE_MS) return 0;
   return data.currentStreak ?? 0;
 }
 
@@ -64,7 +61,7 @@ export function calcStreak(
   delta: number,
   cycleMax: number = DEFAULT_MAX_STREAK,
 ): StreakResult {
-  const broken = delta > 2 * DAILY_COOLDOWN_MS;
+  const broken = delta > STREAK_GRACE_MS;
   const cs = broken ? 1 : currentStreak + 1;
 
   let bs: number;
@@ -125,9 +122,17 @@ export async function give(
     );
     return false;
   }
-  const name = item.includes(":") ? item : `minecraft:${item}`;
+  const { id, suffix } = splitItem(item);
+  const name = `${id.includes(":") ? id : `minecraft:${id}`}${suffix}`;
 
-  const outcome = await server.send(`give ${player} ${name} ${amount}`);
+  let command: string;
+  try {
+    command = consoleCommand("give", { player }, { item: name }, { count: amount });
+  } catch (err) {
+    log.error("daily", `Refused to give ${item} x${amount} to ${player}: ${errMsg(err)}`);
+    return false;
+  }
+  const outcome = await server.send(command);
 
   // The command may never have reached the server. Report failure so the
   // reward stays queued and is retried, rather than being marked delivered.
@@ -155,7 +160,7 @@ export async function give(
 }
 
 /**
- * Deliver queued offline claims for a player who just joined — called by
+ * Deliver queued offline claims for a player who just joined, called by
  * the joinLeave watcher. Entries are removed once ALL their items are
  * confirmed delivered; on partial failure the entry stays with only the
  * undelivered items, so the next join retries exactly what's missing
@@ -167,43 +172,37 @@ export async function deliverPendingRewards(
   server: ServerInstance,
   player: string,
 ): Promise<number> {
-  // AUD-005: take the entries out in one transaction before giving
-  // anything, so two joins close together can't both deliver them, and put
-  // back only what failed. Holding a loaded copy across the gives used to
-  // write it back over entries queued (or delivered) in the meantime.
-  const key = player.toLowerCase();
-  // Most joins have nothing queued: a plain read keeps them off the write lock.
-  const peek = await loadPendingRewards();
-  if (!peek.servers[server.id]?.[key]?.length) return 0;
+  // Taken in one transaction before giving anything, so two joins close
+  // together cannot both deliver them; only what failed is put back.
+  // Most joins have nothing queued: the plain read keeps them off the write lock.
+  if (!(await hasPending(server.id, player))) return 0;
 
-  const list = await updatePendingRewards((store) => {
-    const queue = getServerPending(store, server.id);
-    const taken = queue[key] ?? [];
-    delete queue[key];
-    return taken;
-  });
+  const list = await takePending(server.id, player);
   if (list.length === 0) return 0;
 
   const delivered: DailyRewardItem[] = [];
-  const remaining: typeof list = [];
+  const work = list.map((entry) => ({
+    entry,
+    todo: [...entry.items],
+    failed: [] as DailyRewardItem[],
+  }));
 
-  for (const entry of list) {
-    const undelivered: DailyRewardItem[] = [];
-    for (const item of entry.items) {
-      if (await give(server, player, item)) delivered.push(item);
-      else undelivered.push(item);
+  try {
+    for (const w of work) {
+      while (w.todo.length > 0) {
+        const item = w.todo[0]!;
+        if (await give(server, player, item)) delivered.push(item);
+        else w.failed.push(item);
+        w.todo.shift();
+      }
     }
-    if (undelivered.length > 0) {
-      remaining.push({ ...entry, items: undelivered });
-    }
-  }
-
-  if (remaining.length > 0) {
-    await updatePendingRewards((store) => {
-      const queue = getServerPending(store, server.id);
-      // Ahead of anything queued while we were giving: these are older.
-      queue[key] = [...remaining, ...(queue[key] ?? [])];
-    });
+  } finally {
+    // If give throws, the item in flight and everything not yet attempted
+    // stay in `todo` and are re-queued with the failed ones.
+    const remaining = work
+      .map((w) => ({ ...w.entry, items: [...w.failed, ...w.todo] }))
+      .filter((e) => e.items.length > 0);
+    await requeuePending(server.id, player, remaining);
   }
 
   if (delivered.length > 0) {
@@ -237,4 +236,16 @@ export function nextMilestone(
   const day = milestoneDays(streakBonuses).find((d) => d > bonusStreak);
   if (day === undefined) return null;
   return { day, items: streakBonuses?.[String(day)] ?? [] };
+}
+
+/**
+ * The bonus streak as `/streak` should show it: past the same grace window
+ * `liveStreak` uses (two cooldowns), the stored value is stale and reads as 0.
+ */
+export function liveBonusStreak(
+  data: Pick<UserClaimData, "bonusStreak" | "lastClaim">,
+  now = Date.now(),
+): number {
+  if (!data.lastClaim || now - data.lastClaim > STREAK_GRACE_MS) return 0;
+  return data.bonusStreak ?? 0;
 }

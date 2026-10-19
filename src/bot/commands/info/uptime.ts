@@ -10,11 +10,12 @@ import {
 } from "@mcbot/core/utils/server/server.js";
 import {
   resolveServer,
-  getAllowedServerIds,
+  filterTargetableServerIds,
 } from "../../utils/guild/guildRouter.js";
-import { ALL_SERVERS } from "../../utils/guild/serverOptions.js";
+import { ALL_SERVERS_OPTION } from "../../utils/guild/serverOptions.js";
 import { getUptimeStats } from "@mcbot/core/utils/stores/uptimeTracker.js";
 import { withErrorHandling } from "../middleware.js";
+import { optionAutocomplete, serverCompleter } from "../../utils/autocomplete.js";
 
 import { t } from "@mcbot/core/utils/i18n.js";
 function uptimeBar(pct: number | null, width = 10): string {
@@ -41,15 +42,19 @@ export const data = new SlashCommandBuilder()
     o
       .setName("server")
       .setDescription(
-        `Server instance, or "${ALL_SERVERS}" for an overview of every server`,
+        `Server instance, or "${ALL_SERVERS_OPTION}" for an overview of every server`,
       )
       .setAutocomplete(true),
   );
 
+export const autocomplete = optionAutocomplete({
+  server: serverCompleter({ includeAll: true }),
+});
+
 export const execute = withErrorHandling(async (interaction) => {
   const requested = interaction.options.getString("server");
   const wantsOverview =
-    requested === ALL_SERVERS && !getServerInstance(ALL_SERVERS);
+    requested === ALL_SERVERS_OPTION && !getServerInstance(ALL_SERVERS_OPTION);
 
   if (!wantsOverview) {
     const server = resolveServer(interaction);
@@ -58,14 +63,12 @@ export const execute = withErrorHandling(async (interaction) => {
     return;
   }
 
-  // In multi-guild deployments the overview only includes servers this
-  // guild may target, so no cross-tenant uptime is disclosed.
-  const allowed = getAllowedServerIds(interaction.guild?.id);
-  const instances = getAllInstances().filter(
-    (inst) => !allowed || allowed.has(inst.id),
-  );
+  // The overview only includes servers the caller may target, so no
+  // cross-tenant uptime is disclosed.
+  const all = getAllInstances();
+  const visible = new Set(filterTargetableServerIds(interaction, all.map((inst) => inst.id)));
+  const instances = all.filter((inst) => visible.has(inst.id));
 
-  // Multi-server overview
   const embed = createEmbed({
     title: t("uptime.overviewTitle"),
     color: EmbedColor.Info,

@@ -7,7 +7,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("../../src/bot/commands/middleware.js", () => ({
   withErrorHandling: vi.fn((fn) => fn),
   requireServerAdmin: vi.fn((fn) => fn),
-  isServerAdmin: vi.fn().mockReturnValue(true),
 }));
 
 vi.mock("../../src/bot/utils/guild/guildRouter.js", () => ({
@@ -36,7 +35,6 @@ vi.mock("../../src/core/utils/stores/whitelistAudit.js", () => ({
   recordAdd: vi.fn().mockResolvedValue(undefined),
   recordRemove: vi.fn().mockResolvedValue(undefined),
   getAuditEntry: vi.fn().mockResolvedValue(null),
-  loadAudit: vi.fn().mockResolvedValue({}),
 }));
 
 vi.mock("../../src/core/utils/jsonStore.js", () => ({

@@ -1,7 +1,7 @@
 /**
  * Centralised time helpers.
  *
- * Everything the bot *stores* is UTC epoch milliseconds — samples, audit
+ * Everything the bot *stores* is UTC epoch milliseconds, samples, audit
  * rows, cooldowns, ban expiries. Timezones exist only at the edges, where a
  * human reads a time or a wall-clock schedule fires, and every helper here
  * takes that zone explicitly.
@@ -9,7 +9,7 @@
  * It used to come from a single `TZ` environment variable, which made the
  * whole process live in one zone: a bot serving guilds in Berlin and Denver
  * purged both their channels at Berlin midnight. The zone is now a parameter,
- * resolved per guild (Discord-facing) or per schedule (server-facing) — see
+ * resolved per guild (Discord-facing) or per schedule (server-facing) see
  * timezones.ts. UTC is the default everywhere, so anything that forgets to
  * pass one is merely zone-neutral rather than silently wrong for someone.
  *
@@ -123,7 +123,7 @@ function localDateParts(
 /**
  * The UTC epoch of the next `hour:minute` in `tz`, strictly after `fromMs`.
  *
- * Built from Intl and Date.UTC only — never `new Date(y, m, d)`, which would
+ * Built from Intl and Date.UTC only, never `new Date(y, m, d)`, which would
  * quietly use the *system* zone and be off by the difference whenever the
  * container's zone is not the caller's. Date.UTC also normalises overflow
  * (Jan 32 → Feb 1), which the old midnight helper did not: it pasted
@@ -142,7 +142,10 @@ export function nextTimeOfDayEpoch(
 
   const candidateFor = (dayOffset: number): number => {
     const naive = Date.UTC(year, month - 1, day + dayOffset, hour, minute, 0);
-    return naive + getTzOffsetMs(naive, tz);
+    // The offset sampled at the naive instant is wrong within one offset of a
+    // DST transition; sampling again at the first result corrects it.
+    const first = naive + getTzOffsetMs(naive, tz);
+    return naive + getTzOffsetMs(first, tz);
   };
 
   const today = candidateFor(0);
@@ -155,14 +158,6 @@ export function nextMidnightEpoch(
   fromMs: number = Date.now(),
 ): number {
   return nextTimeOfDayEpoch(0, 0, tz, fromMs);
-}
-
-/** Milliseconds until the next local midnight in `tz`. */
-export function msUntilMidnight(
-  tz: string = UTC,
-  fromMs: number = Date.now(),
-): number {
-  return nextMidnightEpoch(tz, fromMs) - fromMs;
 }
 
 /** Day of week in `tz` for an epoch, 0–6 with Sunday = 0. */
@@ -188,4 +183,16 @@ export function localHourOfDay(epochMs: number, tz: string = UTC): number {
       hour12: false,
     }).format(new Date(epochMs)),
   );
+}
+
+/** "SU".."SA", Sunday first: indexed by `localDayOfWeek`. */
+export const DAY_CODES = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"] as const;
+
+/** Parse "HH:MM" into { hour, minute }, or null when malformed. */
+export function parseScheduleTime(
+  time: string,
+): { hour: number; minute: number } | null {
+  const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(time.trim());
+  if (!m) return null;
+  return { hour: Number(m[1]), minute: Number(m[2]) };
 }

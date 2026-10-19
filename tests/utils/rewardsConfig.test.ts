@@ -73,6 +73,7 @@ describe("writeRewardsDocument", () => {
 
     await writeRewardsDocument(scope, {}, hash);
     expect(existsSync(path.join(dir, "dailyRewards_smp.json"))).toBe(false);
+    expect(existsSync(path.join(dir, "dailyRewards_smp.json.bak"))).toBe(false);
     expect(await loadServerRewardsOverride("smp")).toBeUndefined();
   });
 

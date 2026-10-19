@@ -18,6 +18,8 @@ export interface StateDisplay {
   label: string;
   /** Embed accent for this state. */
   color: number;
+  /** How much attention the state needs; higher is worse. See `stateSeverity`. */
+  severity: number;
   /**
    * A sentence explaining a state a user would otherwise misread, or null
    * when the label speaks for itself.
@@ -37,6 +39,18 @@ export function statusCircle(state: ServerState): string {
   return CIRCLE[state];
 }
 
+const SEVERITY: Record<ServerState, number> = {
+  [ServerState.Online]: 0,
+  [ServerState.Unknown]: 1,
+  [ServerState.Unresponsive]: 2,
+  [ServerState.Offline]: 3,
+};
+
+/** Higher is worse: online, unknown, needs a look, offline. */
+export function stateSeverity(state: ServerState): number {
+  return SEVERITY[state];
+}
+
 const HINT_KEY: Partial<Record<ServerState, string>> = {
   [ServerState.Unresponsive]: "state.unresponsiveHint",
   [ServerState.Unknown]: "state.unknownHint",
@@ -47,6 +61,7 @@ export function describeState(state: ServerState): StateDisplay {
   return {
     emoji: statusCircle(state),
     color: statusEmbedColor(state),
+    severity: stateSeverity(state),
     label: t(`state.${state}`),
     hint: hintKey ? t(hintKey) : null,
   };
@@ -68,6 +83,7 @@ export function describeHealth(health: ServerHealth): StateDisplay {
   return {
     ...display,
     color: EmbedColor.Warning,
+    severity: Math.max(display.severity, stateSeverity(ServerState.Unresponsive)),
     hint: t("state.wrapperDownHint"),
   };
 }

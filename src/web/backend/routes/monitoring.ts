@@ -1,5 +1,5 @@
 /**
- * Phase 1 — read-only monitoring routes: live status, uptime stats,
+ * Phase 1, read-only monitoring routes: live status, uptime stats,
  * player-count activity series, and the admin audit log. Registered
  * inside the capability-gated host scope (see server.ts). Split out of
  * server.ts in the QUAL-01 refactor (2026-07 audit).
@@ -24,21 +24,17 @@ import {
 } from "@mcbot/core/utils/server/runtimeHeartbeat.js";
 import { loadPlayerCountStore } from "@mcbot/core/utils/stores/playerCountHistory.js";
 import { collectStatus, unknownStatus } from "../status/status.js";
-import { sessionFromRequest } from "../auth/auth.js";
+import { currentSession } from "../auth/auth.js";
 import { visibleServerIds } from "../auth/capabilities.js";
-import { NotFound } from "../errors.js";
 import { ServerIdParams, LimitQuery } from "./schemas.js";
+import { clampIntParam } from "./query.js";
+import { serverNotFound } from "./support.js";
 
-/** Clamp a caller-supplied "how many" query to [1, max], defaulting when absent
- *  or unparseable. A domain rule, so it lives here rather than in the schema. */
-function clampCount(raw: string | undefined, fallback: number, max: number): number {
-  return Math.min(Math.max(parseInt(raw ?? String(fallback), 10) || fallback, 1), max);
-}
+const AUDIT_LIMIT_DEFAULT = 100;
+const AUDIT_LIMIT_MAX = 500;
 
 function knownServer(serverId: string): void {
-  if (!getServerIds().includes(serverId)) {
-    throw new NotFound(`No server named "${serverId}" is configured.`);
-  }
+  if (!getServerIds().includes(serverId)) throw serverNotFound(serverId);
 }
 
 export function registerMonitoringRoutes(app: FastifyInstance): void {
@@ -51,7 +47,7 @@ export function registerMonitoringRoutes(app: FastifyInstance): void {
     { config: { capability: "server:read", scope: "any" } },
     async (req) => {
       const beat = await readRuntimeHeartbeat();
-      const session = sessionFromRequest(req)!;
+      const session = currentSession(req);
       const servers = await Promise.all(
         visibleServerIds(session, getServerIds()).map((id) =>
           collectStatus(id).catch(() => unknownStatus(id)),
@@ -106,7 +102,11 @@ export function registerMonitoringRoutes(app: FastifyInstance): void {
     },
     async (req) => {
       const entries = await loadAdminAudit();
-      const n = clampCount(req.query.limit, 100, 500);
+      const n = clampIntParam(req.query.limit, {
+        def: AUDIT_LIMIT_DEFAULT,
+        min: 1,
+        max: AUDIT_LIMIT_MAX,
+      });
       return { entries: entries.slice(-n).reverse() };
     },
   );

@@ -220,7 +220,8 @@ describe("monitoring routes", () => {
     expect(body.entries.map((e: { at: string }) => e.at)).toEqual(["599", "598"]);
 
     expect((await call("GET", "/api/audit?limit=99999")).json().entries).toHaveLength(500);
-    expect((await call("GET", "/api/audit?limit=0")).json().entries).toHaveLength(100);
+    expect((await call("GET", "/api/audit?limit=0")).json().entries).toHaveLength(1);
+    expect((await call("GET", "/api/audit?limit=abc")).json().entries).toHaveLength(100);
     expect((await call("GET", "/api/audit?limit=-5")).json().entries).toHaveLength(1);
   });
 
@@ -333,7 +334,7 @@ describe("log route", () => {
     expect(access.tailLog).toHaveBeenCalledWith({ id: "smp" }, 500);
 
     await call("GET", "/api/servers/smp/log?lines=0");
-    expect(access.tailLog).toHaveBeenLastCalledWith({ id: "smp" }, 50);
+    expect(access.tailLog).toHaveBeenLastCalledWith({ id: "smp" }, 1);
     await call("GET", "/api/servers/smp/log");
     expect(access.tailLog).toHaveBeenLastCalledWith({ id: "smp" }, 50);
   });
@@ -349,10 +350,11 @@ describe("log route", () => {
     });
   });
 
-  it("returns a fixed 500 message when there is nothing to fall back to", async () => {
+  it("returns a fixed 502 message when there is nothing to fall back to", async () => {
     access.tailLog.mockRejectedValue(new Error("secret /srv/path"));
     const res = await call("GET", "/api/servers/smp/log");
-    expect(res.statusCode).toBe(500);
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toMatchObject({ code: "BAD_GATEWAY" });
     expect(res.body).not.toContain("/srv/path");
   });
 });

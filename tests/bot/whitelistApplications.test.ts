@@ -25,15 +25,14 @@ const guildTargets = vi.hoisted(() => ({
 }));
 vi.mock("../../src/core/utils/server/guildTargets.js", () => guildTargets);
 
-const getServerInstance = vi.fn();
-vi.mock("../../src/core/utils/server/server.js", () => ({
-  getServerInstance: (id: string) => getServerInstance(id) as unknown,
+const getGuildScopedServer = vi.fn();
+vi.mock("../../src/bot/utils/guild/guildRouter.js", () => ({
+  getGuildScopedServer: (...a: unknown[]) => getGuildScopedServer(...a) as unknown,
 }));
 
-const isServerAdmin = vi.fn();
-vi.mock("../../src/bot/commands/middleware.js", () => ({
-  isServerAdmin: (...a: unknown[]) => isServerAdmin(...a) as unknown,
-  getMemberRoleIds: () => ["role-1"],
+const isInvokerAdmin = vi.fn();
+vi.mock("../../src/bot/utils/guild/permissions.js", () => ({
+  isInvokerAdmin: (...a: unknown[]) => isInvokerAdmin(...a) as unknown,
 }));
 
 const performWhitelistAdd = vi.fn();
@@ -52,6 +51,7 @@ import {
   type WhitelistApplication,
 } from "../../src/bot/interactions/whitelistApplications.js";
 import { kvGet, kvSet } from "../../src/core/db/kv.js";
+import { CLAIM_TTL_MS } from "../../src/core/utils/stores/whitelistApplicationStore.js";
 import { closeDbForTesting } from "../../src/core/db/index.js";
 import type { Client, Interaction } from "discord.js";
 
@@ -153,10 +153,10 @@ beforeEach(() => {
   mockConfig.serverIds = ["survival"];
   guildTargets.resolveDefaultServerId.mockReset().mockReturnValue("survival");
   guildTargets.visibleServerIdsForGuild.mockReset().mockReturnValue(["survival"]);
-  isServerAdmin.mockReset().mockReturnValue(true);
+  isInvokerAdmin.mockReset().mockReturnValue(true);
   performWhitelistAdd.mockReset().mockResolvedValue({ name: "Steve" });
   recordAdminAction.mockReset().mockResolvedValue(undefined);
-  getServerInstance.mockReset().mockReturnValue({ id: "survival" });
+  getGuildScopedServer.mockReset().mockReturnValue({ id: "survival" });
   queueSend.mockReset().mockResolvedValue({ id: "msg-1" });
   dmSend.mockReset().mockResolvedValue(undefined);
 });
@@ -321,11 +321,28 @@ describe("modal submit", () => {
     expect(kvGet("whitelistApplications")).toBeNull();
     expect(noSend.editReply).toHaveBeenCalledTimes(1);
   });
+
+  it("takes the stored application back out when the queue post fails", async () => {
+    queueSend.mockRejectedValue(new Error("Missing Access"));
+    seedApp({ id: "other", userId: "u2" });
+    await expect(handle(modalInteraction({ mcName: "Steve" }))).rejects.toThrow("Missing Access");
+    expect(store().applications.map((a) => a.id)).toEqual(["other"]);
+  });
+
+  it("stores the row before posting, so a refused second submit never posts", async () => {
+    let storedWhenPosted = 0;
+    queueSend.mockImplementation(() => {
+      storedWhenPosted = store().applications.length;
+      return Promise.resolve({ id: "msg-1" });
+    });
+    await handle(modalInteraction({ mcName: "Steve" }));
+    expect(storedWhenPosted).toBe(1);
+  });
 });
 
 describe("decision buttons", () => {
   it("refuses non-admins before touching the store", async () => {
-    isServerAdmin.mockReturnValue(false);
+    isInvokerAdmin.mockReturnValue(false);
     const app = seedApp();
     const i = buttonInteraction(`wlapp:approve:${app.id}`);
     expect(await handle(i)).toBe(true);
@@ -388,18 +405,62 @@ describe("decision buttons", () => {
     ]);
   });
 
-  it("answers stale when another admin decided during the approval (AUD-005)", async () => {
+  it("lets only one of two simultaneous approvals whitelist", async () => {
     const app = seedApp();
-    performWhitelistAdd.mockImplementation(async () => {
-      const cur = store();
-      cur.applications[0]!.status = "denied";
-      kvSet("whitelistApplications", cur);
-      return { name: "Steve" };
-    });
+    let release!: () => void;
+    performWhitelistAdd.mockImplementation(
+      () => new Promise((resolve) => { release = () => resolve({ name: "Steve" }); }),
+    );
+    const first = handle(buttonInteraction(`wlapp:approve:${app.id}`));
+    await vi.waitFor(() => expect(performWhitelistAdd).toHaveBeenCalledTimes(1));
+
+    const second = buttonInteraction(`wlapp:approve:${app.id}`);
+    await handle(second);
+    expect(second.followUp).toHaveBeenCalledTimes(1);
+    expect(performWhitelistAdd).toHaveBeenCalledTimes(1);
+
+    release();
+    await first;
+    expect(store().applications[0]!.status).toBe("approved");
+    expect(recordAdminAction).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a deny while an approval is in flight", async () => {
+    const app = seedApp();
+    let release!: () => void;
+    performWhitelistAdd.mockImplementation(
+      () => new Promise((resolve) => { release = () => resolve({ name: "Steve" }); }),
+    );
+    const approval = handle(buttonInteraction(`wlapp:approve:${app.id}`));
+    await vi.waitFor(() => expect(performWhitelistAdd).toHaveBeenCalledTimes(1));
+
+    const deny = buttonInteraction(`wlapp:deny:${app.id}`);
+    await handle(deny);
+    expect(deny.followUp).toHaveBeenCalledTimes(1);
+
+    release();
+    await approval;
+    expect(store().applications[0]!.status).toBe("approved");
+  });
+
+  it("takes over a claim abandoned past its expiry", async () => {
+    const app = seedApp({ claim: { by: "crashed", at: Date.now() - CLAIM_TTL_MS - 1 } });
+    await handle(buttonInteraction(`wlapp:deny:${app.id}`));
+    expect(store().applications[0]!.status).toBe("denied");
+  });
+
+  it("ignores a button from another guild's admin", async () => {
+    const app = seedApp({ guildId: "other-guild" });
     const i = buttonInteraction(`wlapp:approve:${app.id}`);
     await handle(i);
-    expect(store().applications[0]!.status).toBe("denied");
-    expect(recordAdminAction).not.toHaveBeenCalled();
+    expect(performWhitelistAdd).not.toHaveBeenCalled();
+    expect(store().applications[0]!.status).toBe("pending");
+  });
+
+  it("checks the stored server against what the guild may target", async () => {
+    const app = seedApp({ serverId: "hidden" });
+    await handle(buttonInteraction(`wlapp:approve:${app.id}`));
+    expect(getGuildScopedServer).toHaveBeenCalledWith(GUILD, "hidden");
   });
 
   it("denies without whitelisting", async () => {
@@ -416,12 +477,13 @@ describe("decision buttons", () => {
   });
 
   it("keeps the application pending when the server is gone", async () => {
-    getServerInstance.mockReturnValue(null);
+    getGuildScopedServer.mockReturnValue(null);
     const app = seedApp();
     const i = buttonInteraction(`wlapp:approve:${app.id}`);
     await handle(i);
     expect(i.followUp).toHaveBeenCalledTimes(1);
     expect(store().applications[0]!.status).toBe("pending");
+    expect(store().applications[0]).not.toHaveProperty("claim");
     expect(recordAdminAction).not.toHaveBeenCalled();
     expect(i.editReply).not.toHaveBeenCalled();
   });
@@ -433,6 +495,7 @@ describe("decision buttons", () => {
     await handle(i);
     expect(String(i.followUp.mock.calls[0]![0].content)).toContain("mojang down");
     expect(store().applications[0]!.status).toBe("pending");
+    expect(store().applications[0]).not.toHaveProperty("claim");
     expect(i.editReply).not.toHaveBeenCalled();
   });
 

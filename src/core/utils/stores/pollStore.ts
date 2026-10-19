@@ -1,5 +1,5 @@
 /**
- * Cross-platform polls — single owner of kv_store["polls"].
+ * Cross-platform polls, single owner of kv_store["polls"].
  *
  * One open poll per server at a time. A poll normally binds to exactly
  * one server instance (the guild-scoping semantics of resolveServer
@@ -12,10 +12,10 @@
  *   "m:<lower name>"  in-game !vote from an UNLINKED player
  *
  * In-game votes from linked players resolve to their `d:` key via
- * linkUtils, so nobody votes twice across platforms — the dedupe the
+ * linkStore, so nobody votes twice across platforms, the dedupe the
  * plan calls for. Re-voting overwrites (changing your mind is allowed).
  */
-import { kvGet, kvMutate, kvSet } from "../../db/kv.js";
+import { versionedStore } from "./versionedStore.js";
 
 /** Closed-poll history kept per store (open polls are never trimmed). */
 export const MAX_CLOSED_POLLS = 50;
@@ -30,7 +30,7 @@ export interface Poll {
   guildId: string | null;
   channelId: string;
   messageId: string;
-  /** Primary server (first participant) — kept for pre-span polls. */
+  /** Primary server (first participant) kept for pre-span polls. */
   serverId: string;
   /**
    * All participating servers of a span poll. Absent on single-server
@@ -52,19 +52,14 @@ export interface PollStore {
   polls: Poll[];
 }
 
-function isV1Store(raw: unknown): raw is PollStore {
-  return (
-    typeof raw === "object" &&
-    raw !== null &&
-    (raw as { version?: unknown }).version === 1 &&
-    Array.isArray((raw as { polls?: unknown }).polls)
-  );
-}
+const pollDoc = versionedStore<PollStore>(
+  "polls",
+  { version: 1, container: "polls", kind: "array" },
+  () => ({ version: 1, polls: [] }),
+);
 
 export async function loadPollStore(): Promise<PollStore> {
-  const raw = kvGet<unknown>("polls");
-  if (isV1Store(raw)) return raw;
-  return { version: 1, polls: [] };
+  return pollDoc.load();
 }
 
 function trimPolls(store: PollStore): void {
@@ -76,31 +71,22 @@ function trimPolls(store: PollStore): void {
   store.polls = [...closed, ...open].sort((a, b) => a.createdAt - b.createdAt);
 }
 
-export async function savePollStore(store: PollStore): Promise<void> {
-  trimPolls(store);
-  kvSet("polls", store);
-}
-
-/** Change the store in one transaction (AUD-005); see kvMutate. */
+/** Change the store in one transaction; see versionedStore. */
 export async function updatePollStore<T>(
   fn: (store: PollStore) => T,
 ): Promise<T> {
-  return kvMutate<PollStore, T>(
-    "polls",
-    (raw) => (isV1Store(raw) ? raw : { version: 1, polls: [] }),
-    (store) => {
-      const out = fn(store);
-      trimPolls(store);
-      return out;
-    },
-  );
+  return pollDoc.update((store) => {
+    const out = fn(store);
+    trimPolls(store);
+    return out;
+  });
 }
 
 export function getPollById(store: PollStore, id: string): Poll | null {
   return store.polls.find((p) => p.id === id) ?? null;
 }
 
-/** Every server a poll runs on — [serverId] for pre-span polls. */
+/** Every server a poll runs on, [serverId] for pre-span polls. */
 export function pollServerIds(poll: Poll): string[] {
   return poll.serverIds && poll.serverIds.length > 0
     ? poll.serverIds

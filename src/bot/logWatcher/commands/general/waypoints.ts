@@ -1,5 +1,5 @@
 /**
- * !waypoints — list this server's community waypoints in chat.
+ * !waypoints, list this server's community waypoints in chat.
  *
  * Chat is a narrow pipe, so the in-game list is capped; the Discord
  * `/waypoints` command renders the full paginated set.

@@ -86,7 +86,7 @@ See [daily-rewards.md](daily-rewards.md).
 
 `/server` (start/stop/restart/backup/status/prune-stats), `/whitelist`, `/verify`, `/unwhitelist`, `/config`, `/note` (admin notes on players, shown in `/whois`), `/challenge` (advancement challenges: first player to earn X wins), `/daily-admin` (move/reset/inspect daily-claim records per server), `/console` (log tail + live console relay), and the moderation shortcuts above are restricted to configured admins. They are documented in [../admin/permissions.md](../admin/permissions.md).
 
-`/server stop` and `/server restart` first ask for confirmation, visible only to you: the reply says how many players are online, and the action runs only after you press the red button. The buttons expire after 60 seconds. Once confirmed, a public message in the channel says who stopped or restarted the server and follows the progress. If you are not a bot admin, admin commands answer only to you, before anything is posted in the channel.
+`/server stop`, `/server restart` and `/server prune-stats` first ask for confirmation, visible only to you: the reply says how many players are online (or, for `prune-stats`, which stats files would be deleted), and the action runs only after you press the red button. The buttons expire after 60 seconds. Once confirmed, a public message in the channel says who stopped or restarted the server and follows the progress. If you are not a bot admin, admin commands answer only to you, before anything is posted in the channel.
 
 `/config show` replies only to you. It lists the servers by host, the current guild's features and counts, and never prints the bot token or admin IDs.
 

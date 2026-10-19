@@ -47,13 +47,13 @@ import { execute as noteExecute } from "../../src/bot/commands/admin/note.js";
 import { execute as challengeExecute } from "../../src/bot/commands/admin/challenge.js";
 import {
   loadNotesStore,
+  updateNotesStore,
   addNote,
-  saveNotesStore,
   MAX_NOTES_PER_PLAYER,
 } from "../../src/core/utils/stores/noteStore.js";
 import {
   loadChallengeStore,
-  saveChallengeStore,
+  updateChallengeStore,
   addChallenge,
   MAX_CHALLENGE_HISTORY,
   type Challenge,
@@ -103,16 +103,16 @@ beforeEach(() => {
 });
 
 async function seedNotes(count = 1, uuid = "uuid-1", name = "Steve") {
-  const store = await loadNotesStore();
-  for (let n = 1; n <= count; n++) {
-    addNote(store, uuid, name, {
-      text: `note ${n}`,
-      author: "mod#1",
-      authorId: "m1",
-      createdAt: "2026-01-01 10:00",
-    });
-  }
-  await saveNotesStore(store);
+  await updateNotesStore((store) => {
+    for (let n = 1; n <= count; n++) {
+      addNote(store, uuid, name, {
+        text: `note ${n}`,
+        author: "mod#1",
+        authorId: "m1",
+        createdAt: "2026-01-01 10:00",
+      });
+    }
+  });
 }
 
 describe("/note", () => {
@@ -138,7 +138,6 @@ describe("/note", () => {
     expect(recordAdminAction).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "note add",
-        server: null,
         detail: "Steve: griefed spawn",
       }),
     );
@@ -238,10 +237,10 @@ function challenge(overrides: Partial<Challenge> = {}): Challenge {
     ...overrides,
   };
 }
-async function seedChallenge(...list: Challenge[]) {
-  const store = await loadChallengeStore();
-  for (const c of list) addChallenge(store, "smp", c);
-  await saveChallengeStore(store);
+function seedChallenge(...list: Challenge[]) {
+  updateChallengeStore((store) => {
+    for (const c of list) addChallenge(store, "smp", c);
+  });
 }
 async function challenges(): Promise<Challenge[]> {
   return (await loadChallengeStore()).servers["smp"] ?? [];

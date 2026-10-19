@@ -39,7 +39,8 @@ import {
   type Challenge,
 } from "../../src/core/utils/stores/challengeStore.js";
 import {
-  savePollStore,
+  loadPollStore,
+  updatePollStore,
   getOpenPollForServer,
   voterKeyForMc,
   voterKeyForDiscord,
@@ -222,16 +223,17 @@ describe("pollStore", () => {
     expect(getOpenPollForServer(store, "other")).toBeNull();
   });
 
-  it("savePollStore trims closed history but never open polls", async () => {
-    const store: PollStore = { version: 1, polls: [] };
-    for (let i = 0; i < MAX_CLOSED_POLLS + 5; i++) {
-      store.polls.push(
-        mkPoll({ id: `closed${i}`, status: "closed", createdAt: i }),
-      );
-    }
-    store.polls.push(mkPoll({ id: "open1", createdAt: 0 }));
-
-    await savePollStore(store);
+  it("updatePollStore trims closed history but never open polls", async () => {
+    await updatePollStore((draft) => {
+      draft.polls = [];
+      for (let i = 0; i < MAX_CLOSED_POLLS + 5; i++) {
+        draft.polls.push(
+          mkPoll({ id: `closed${i}`, status: "closed", createdAt: i }),
+        );
+      }
+      draft.polls.push(mkPoll({ id: "open1", createdAt: 0 }));
+    });
+    const store = await loadPollStore();
     expect(store.polls).toHaveLength(MAX_CLOSED_POLLS + 1);
     expect(store.polls.some((p) => p.id === "open1")).toBe(true);
     expect(store.polls.some((p) => p.id === "closed0")).toBe(false);

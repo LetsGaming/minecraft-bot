@@ -1,40 +1,15 @@
 /**
- * Dashboard backend — one Fastify instance, built by buildServer() so
+ * Dashboard backend: one Fastify instance, built by buildServer() so
  * route tests can use fastify.inject without binding a port.
  *
- * This file is the ASSEMBLER (QUAL-01 refactor, 2026-07 audit): it owns
- * instance creation, the auth boundary, and registration order. The
- * behavior lives in focused modules — mirroring what the wrapper does
- * with its app.ts.
- *
- * Route map (docs/dev/webui-integration.md):
- *   /auth/login|callback|logout    Discord OAuth2        routes/auth.ts
- *   /api/me                        session probe         routes/auth.ts
- *   /api/status                    phase 1: live status  routes/monitoring.ts
- *   /api/uptime/:serverId          phase 1: uptime       routes/monitoring.ts
- *   /api/activity/:serverId        phase 1: activity     routes/monitoring.ts
- *   /api/audit                     phase 1: audit log    routes/monitoring.ts
- *   /api/config (+/schema, PUT)    phase 2: config edit  routes/config.ts
- *   /api/commands                  phase 2: policy view  routes/config.ts
- *   POST /api/servers/:id/:action  phase 3: scripts      routes/servers.ts
- *   GET  /api/servers/:id/log      phase 3: log tail     routes/servers.ts
- *   POST /api/servers/:id/prune-stats  phase 3           routes/servers.ts
- *   GET  /api/servers/:id/console/stream  live console SSE  routes/console.ts
- *   POST /api/servers/:id/command         console input     routes/console.ts
- *   GET  /api/servers/:id/backups/files   archive index     routes/backups.ts
- *   GET  .../backups/files/:fileId/download  streamed        routes/backups.ts
- *   POST .../backups/files/:fileId/restore   destructive     routes/backups.ts
- *   GET  /api/servers/:id/configs         mod config index  routes/modConfigs.ts
- *   PUT  .../configs/:fileId              spliced write     routes/modConfigs.ts
- *   GET  /api/setup/guilds         phase 4: bot guilds   routes/setup.ts
- *   GET  /api/setup/guilds/:id/channels  phase 4         routes/setup.ts
- *   GET  /api/setup/guilds/:id/roles     phase 4         routes/setup.ts
- *   /healthz, /metrics             unauthenticated       metrics.ts
- *   everything else                static Vue frontend   static.ts
+ * This file is the ASSEMBLER: it owns instance creation, the auth boundary,
+ * and registration order. The behavior lives in focused modules under
+ * routes/, each declaring its own paths and the capability it needs. The
+ * registered route table is `app.printRoutes()`.
  *
  * The web process may import @mcbot/core and @mcbot/schema only (ESLint boundary): status
  * comes from the same ServerInstance layer the bot uses, config writes
- * go through configService.writeConfig — never through the bot.
+ * go through configService.writeConfig, never through the bot.
  */
 import Fastify, { type FastifyInstance } from "fastify";
 import helmet from "@fastify/helmet";
@@ -142,7 +117,7 @@ export function buildServer(): FastifyInstance {
     // rather than serving unguarded (RBAC-03).
     assertCapabilitiesDeclared(api);
     // onRequest (not preHandler) so the auth gate fails closed BEFORE Fastify
-    // validates a route's body schema — an unauthenticated caller gets 401,
+    // validates a route's body schema, an unauthenticated caller gets 401,
     // never a 400 that would confirm the endpoint's body shape to a stranger.
     // Routing has already happened at this point, so req.params is populated
     // and a server-scoped rule can read it.
@@ -152,12 +127,12 @@ export function buildServer(): FastifyInstance {
     registerServerRoutes(api);     // start/stop/restart/backup, log tail
     registerConsoleRoutes(api);    // live console: SSE relay + command input
     registerBackupRoutes(api);     // archive index, streamed download, restore
-    registerModConfigRoutes(api);
-    registerRewardsRoutes(api);   // daily rewards: shared pool + per-server overrides
-    registerUpgradeRoutes(api);
-    registerPruneRoutes(api);
-    registerModRoutes(api);  // mod config editor: index, read, write, revert
-    registerAnalyticsRoutes(api);  // uptime, activity, command usage — bot history
+    registerModConfigRoutes(api);  // mod config editor: index, read, write, revert
+    registerRewardsRoutes(api);    // daily rewards: shared pool + per-server overrides
+    registerUpgradeRoutes(api);    // Minecraft version upgrade: start and progress
+    registerPruneRoutes(api);      // chunk pruning: scan, map, delete
+    registerModRoutes(api);        // mods: installed list, mutations, Modrinth browse
+    registerAnalyticsRoutes(api);  // uptime, activity, command usage: bot history
   });
 
   // ── Guild-manager API ── any logged-in Discord user; each route checks

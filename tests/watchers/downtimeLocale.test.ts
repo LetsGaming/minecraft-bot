@@ -68,7 +68,7 @@ describe("downtime alert language", () => {
 
     const timer = startDowntimeMonitor([server], client, guilds);
     for (let i = 0; i < 3; i++) await vi.advanceTimersByTimeAsync(TICK);
-    clearInterval(timer);
+    timer.stop();
 
     const titles = createEmbed.mock.calls.map(
       (c) => (c[0] as { title: string }).title,

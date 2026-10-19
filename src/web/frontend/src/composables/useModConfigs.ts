@@ -1,7 +1,9 @@
-import { ref, computed, getCurrentInstance, onBeforeUnmount } from "vue";
+import { ref, computed } from "vue";
 import { apiGet, apiSend } from "../api";
 import { errorMessage } from "../utils/errorMessage";
 import { confirmLeave, registerDirtySource } from "./useUnsavedGuard";
+import { latest } from "./useLoader";
+import type { EditConflict } from "./useEditableDocument";
 import { disambiguateLabels } from "../utils/fieldLabels";
 import type { StaleInfo, QueuedWriteResult } from "@mcbot/schema/contract.js";
 import type { ConfigFileInfo } from "@mcbot/schema";
@@ -22,18 +24,6 @@ import {
  * in, so the writer's guards (comment preservation, structure check, ETag)
  * stay meaningful instead of being decorative around a blob the browser sent.
  */
-
-/** A queued edit whose key moved on disk while it waited. */
-export interface EditConflict {
-  keyPath: string[];
-  queued: unknown;
-  base: unknown;
-  current: unknown;
-  queuedAt: number;
-  byTag: string | null;
-  /** Which file it belongs to. Present on preview results. */
-  fileId?: string;
-}
 
 export type { ConfigFileInfo };
 
@@ -171,8 +161,9 @@ export function useModConfigs(ask: () => Promise<boolean> = () => Promise.resolv
 
   const dirty = computed(() => Object.keys(pending.value).length > 0);
 
-  const unregisterDirty = registerDirtySource(() => dirty.value);
-  if (getCurrentInstance()) onBeforeUnmount(unregisterDirty);
+  registerDirtySource(() => dirty.value);
+  const fileListLoads = latest();
+  const fileLoads = latest();
 
   const filtering = computed(() => search.value.trim() !== "");
 
@@ -226,6 +217,8 @@ export function useModConfigs(ask: () => Promise<boolean> = () => Promise.resolv
   }
 
   async function loadFiles(id: string): Promise<void> {
+    const isCurrent = fileListLoads.begin();
+    fileLoads.cancel();
     serverId = id;
     loading.value = true;
     error.value = "";
@@ -238,16 +231,18 @@ export function useModConfigs(ask: () => Promise<boolean> = () => Promise.resolv
         truncated?: boolean;
         stale?: StaleInfo | null;
       }>(`/api/servers/${encodeURIComponent(id)}/configs`);
+      if (!isCurrent()) return;
       files.value = res.files;
       truncated.value = res.truncated ?? false;
       indexStale.value = res.stale ?? null;
     } catch (err) {
+      if (!isCurrent()) return;
       error.value = errorMessage(err);
       files.value = [];
       truncated.value = false;
       indexStale.value = null;
     } finally {
-      loading.value = false;
+      if (isCurrent()) loading.value = false;
     }
   }
 
@@ -258,6 +253,7 @@ export function useModConfigs(ask: () => Promise<boolean> = () => Promise.resolv
   }
 
   async function loadFile(fileId: string, withText = false): Promise<void> {
+    const isCurrent = fileLoads.begin();
     loading.value = true;
     error.value = "";
     pending.value = {};
@@ -266,17 +262,19 @@ export function useModConfigs(ask: () => Promise<boolean> = () => Promise.resolv
       const contents = await apiGet<FileContents>(
         `/api/servers/${encodeURIComponent(serverId)}/configs/${encodeURIComponent(fileId)}${withText ? "?text=1" : ""}`,
       );
+      if (!isCurrent()) return;
       current.value = {
         ...contents,
         fields: disambiguateLabels(contents.fields),
       };
       fileStale.value = contents.stale ?? null;
     } catch (err) {
+      if (!isCurrent()) return;
       error.value = errorMessage(err);
       current.value = null;
       fileStale.value = null;
     } finally {
-      loading.value = false;
+      if (isCurrent()) loading.value = false;
     }
   }
 

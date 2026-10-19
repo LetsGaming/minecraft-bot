@@ -1,3 +1,4 @@
+import { MS } from "@mcbot/schema";
 import { HttpError } from "./errors.js";
 
 export interface IconImage {
@@ -7,8 +8,8 @@ export interface IconImage {
 
 export const ICON_MAX_BYTES = 1024 * 1024;
 export const ICON_MAX_ENTRIES = 200;
-const ICON_TTL_MS = 24 * 60 * 60 * 1000;
-const ICON_FETCH_TIMEOUT_MS = 8_000;
+const ICON_TTL_MS = MS.day;
+const ICON_FETCH_TIMEOUT_MS = 8 * MS.second;
 
 /** Raster formats only: SVG served from our own origin can carry script. */
 const ALLOWED_CONTENT_TYPE = /^image\/(png|jpe?g|gif|webp|avif)$/i;

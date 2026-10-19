@@ -1,13 +1,13 @@
 /**
- * /note — admin notes on players (add | list | remove).
+ * /note: admin notes on players (add | list | remove).
  *
  * Moderation memory: "warned about lag machines on 2026-05-01" gets a
  * durable home instead of living in someone's head. Notes are keyed by
  * Minecraft UUID (resolved through playerUtils, so they survive name
- * changes), every mutation goes through recordAdminAction, and /whois
+ * changes), every mutation goes through auditAdminAction, and /whois
  * renders the same notes inline for admin callers.
  *
- * Deliberately thin — annotations only, no ban database.
+ * Deliberately thin, annotations only, no ban database.
  */
 import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embeds/embedUtils.js";
@@ -15,8 +15,8 @@ import { EmbedColor } from "../../utils/embeds/embedColors.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { findPlayer } from "@mcbot/core/utils/minecraft/playerUtils.js";
-import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
-import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
+import { requireMcName } from "../shared/mcName.js";
+import { auditAdminAction } from "../shared/audit.js";
 import { formatDatetime } from "@mcbot/core/utils/time.js";
 import {
   loadNotesStore,
@@ -134,10 +134,7 @@ async function resolveNotes(
 export const execute = withErrorHandling(
   requireServerAdmin(async (interaction) => {
     const sub = interaction.options.getSubcommand();
-    const playerName = interaction.options.getString("player", true);
-    if (!isValidMcName(playerName)) {
-      throw new Error(t("common.invalidUsername", { username: playerName }));
-    }
+    const playerName = requireMcName(interaction, "player");
 
     const store = await loadNotesStore();
     const resolved = await resolveNotes(interaction, playerName, store);
@@ -152,9 +149,7 @@ export const execute = withErrorHandling(
         .slice(0, MAX_NOTE_LENGTH);
       if (!text) throw new Error(t("note.emptyText"));
 
-      // Written against the current store: resolveNotes awaited a name
-      // lookup, and saving the copy loaded before it could drop a note
-      // another admin added meanwhile (AUD-005).
+      // Written against the current store: resolveNotes awaited a name lookup.
       const uuid = resolved.uuid;
       await updateNotesStore((current) =>
         addNote(current, uuid, resolved.name, {
@@ -165,12 +160,8 @@ export const execute = withErrorHandling(
         }),
       );
 
-      await recordAdminAction({
+      await auditAdminAction(interaction, {
         action: "note add",
-        server: null,
-        by: interaction.user.tag,
-        byId: interaction.user.id,
-        guildId: interaction.guild?.id ?? null,
         detail: `${resolved.name}: ${text.slice(0, 80)}`,
       });
 
@@ -196,12 +187,8 @@ export const execute = withErrorHandling(
         throw new Error(t("note.badIndex", { player: resolved.name }));
       }
 
-      await recordAdminAction({
+      await auditAdminAction(interaction, {
         action: "note remove",
-        server: null,
-        by: interaction.user.tag,
-        byId: interaction.user.id,
-        guildId: interaction.guild?.id ?? null,
         detail: `${resolved.name}: #${index}`,
       });
 

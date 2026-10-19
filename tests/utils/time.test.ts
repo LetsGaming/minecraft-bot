@@ -4,7 +4,6 @@ import {
   formatDate,
   formatTime,
   nextMidnightEpoch,
-  msUntilMidnight,
   isValidTimeZone,
 } from "../../src/core/utils/time.js";
 
@@ -115,24 +114,5 @@ describe("nextMidnightEpoch", () => {
     const b = nextMidnightEpoch();
     // Both calls are within 1 second of each other
     expect(Math.abs(a - b)).toBeLessThan(1000);
-  });
-});
-
-describe("msUntilMidnight", () => {
-  it("returns a positive number", () => {
-    expect(msUntilMidnight()).toBeGreaterThan(0);
-  });
-
-  it("returns at most 24 hours worth of milliseconds", () => {
-    const DAY_MS = 24 * 60 * 60 * 1000;
-    expect(msUntilMidnight()).toBeLessThanOrEqual(DAY_MS);
-  });
-
-  it("is consistent with nextMidnightEpoch", () => {
-    const ms = msUntilMidnight();
-    const epoch = nextMidnightEpoch();
-    const diff = Math.abs(epoch - Date.now() - ms);
-    // Should differ by less than 100ms (timing jitter between two calls)
-    expect(diff).toBeLessThan(100);
   });
 });

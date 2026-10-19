@@ -1,8 +1,7 @@
-import { ref } from "vue";
-import { errorMessage } from "../utils/errorMessage";
-import { loadFailure, type LoadFailure } from "../utils/loadFailure";
+import { computed } from "vue";
 import { apiGet } from "../api";
 import type { AuditEntry } from "../api";
+import { useLoader } from "./useLoader";
 
 /**
  * Loads the admin audit feed. Shared by the full Audit view (large limit) and
@@ -10,28 +9,22 @@ import type { AuditEntry } from "../api";
  * place of the list, so a failed read never looks like an empty log.
  */
 export function useAudit() {
-  const entries = ref<AuditEntry[]>([]);
-  const loading = ref(false);
-  /** False until the first answer, success or failure, has arrived. */
-  const loaded = ref(false);
-  const error = ref("");
-  const failure = ref<LoadFailure | null>(null);
+  const loader = useLoader(
+    async (limit: number) => (await apiGet<{ entries: AuditEntry[] }>(`/api/audit?limit=${limit}`)).entries,
+    { keepDataOnError: true },
+  );
+  const entries = computed<AuditEntry[]>(() => loader.data.value ?? []);
 
   async function load(limit = 200): Promise<void> {
-    loading.value = true;
-    error.value = "";
-    failure.value = null;
-    try {
-      const res = await apiGet<{ entries: AuditEntry[] }>(`/api/audit?limit=${limit}`);
-      entries.value = res.entries;
-    } catch (err) {
-      error.value = errorMessage(err);
-      failure.value = loadFailure(err);
-    } finally {
-      loading.value = false;
-      loaded.value = true;
-    }
+    await loader.load(limit);
   }
 
-  return { entries, loading, loaded, error, failure, load };
+  return {
+    entries,
+    loading: loader.loading,
+    loaded: loader.loaded,
+    error: loader.error,
+    failure: loader.failure,
+    load,
+  };
 }

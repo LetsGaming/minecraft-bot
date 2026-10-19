@@ -8,8 +8,8 @@
  *
  * Minecraft chat renders UTF-8 fine, so printable Unicode ("Grüße",
  * emoji) passes through. Only Unicode control/format characters are
- * dangerous — a \r or \n in input can inject a second command via the
- * screen `stuff` path — so strip exactly those.
+ * dangerous, a \r or \n in input can inject a second command via the
+ * screen `stuff` path, so strip exactly those.
  */
 
 const MAX_NAME_LENGTH = 32;
@@ -26,28 +26,11 @@ export interface SanitizedConsoleInput {
 }
 
 /**
- * Sanitize a display name + message pair for safe interpolation into a
- * console command such as `/say [name] message`.
- * Removes control characters, escapes double quotes in the message, and
- * caps lengths so the resulting command stays within Minecraft's
- * 256-char limit.
- */
-export function sanitizeForConsole(
-  name: string,
-  message: string,
-): SanitizedConsoleInput {
-  const safeName = stripControlChars(name).slice(0, MAX_NAME_LENGTH);
-  const safeMessage = stripControlChars(message)
-    .replace(/"/g, '\\"')
-    .slice(0, MAX_MESSAGE_LENGTH);
-  return { name: safeName, message: safeMessage };
-}
-
-/**
  * Sanitize a display name + message pair for a JSON text component
- * (`/tellraw`). Same control-character stripping and caps as
- * sanitizeForConsole, but quotes stay as typed: JSON.stringify escapes them,
- * and escaping here too would show the backslashes in game.
+ * (`/tellraw`): control characters are stripped and lengths capped so the
+ * resulting command stays within Minecraft's 256-char limit. Quotes stay as
+ * typed: JSON.stringify escapes them, and escaping here too would show the
+ * backslashes in game.
  */
 export function sanitizeForComponent(
   name: string,
@@ -67,7 +50,11 @@ export function sanitizeForComponent(
  * prefixes Bedrock players with ".", so dots are allowed and the
  * length cap is raised to 17 to cover the prefix.
  */
-const MC_NAME_REGEX = /^[\w.]{1,17}$/;
+const MC_NAME_CHARS = String.raw`[\w.]{1,17}`;
+const MC_NAME_REGEX = new RegExp(`^${MC_NAME_CHARS}$`);
+
+/** The same name rule as a regex source, for capture groups in log-line patterns. */
+export const PLAYER_NAME = MC_NAME_CHARS;
 
 export function isValidMcName(name: string): boolean {
   return MC_NAME_REGEX.test(name);
@@ -82,7 +69,7 @@ export const MAX_REASON_LENGTH = 160;
 /**
  * Sanitize a moderation reason (/kick, /ban) for the console.
  *
- * Lived in kick.ts and was imported from there by the sibling commands —
+ * Lived in kick.ts and was imported from there by the sibling commands, 
  * a shared console-input rule outside the one module that owns them.
  */
 export function sanitizeReason(raw: string | null): string {

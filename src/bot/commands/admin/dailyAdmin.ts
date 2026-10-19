@@ -1,10 +1,6 @@
 /**
- * /daily-admin — operator tooling for per-server daily-claim records.
- *
- * The v2 claim migration moved every existing streak under the FIRST
- * configured server: correct for single-server setups, arbitrary for
- * multi-server ones. This command fixes stranded data without hand-editing
- * claimedDaily.json:
+ * /daily-admin: operator tooling for per-server daily-claim records, to move,
+ * reset or inspect a user's streak without hand-editing the store:
  *
  *   /daily-admin move user:@x from:<server> to:<server> [overwrite]
  *   /daily-admin reset user:@x [server:<server>]
@@ -25,13 +21,12 @@ import {
   updateClaimedStore,
   getServerClaims,
 } from "@mcbot/core/utils/stores/dailyStore.js";
-import { getServerIds } from "@mcbot/core/config.js";
 import {
   assertMayTargetServerId,
   filterTargetableServerIds,
   resolveServer,
 } from "../../utils/guild/guildRouter.js";
-import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
+import { auditAdminAction } from "../shared/audit.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { formatDatetime } from "@mcbot/core/utils/time.js";
 
@@ -86,29 +81,15 @@ export const data = new SlashCommandBuilder()
       ),
   );
 
-function assertKnownServer(id: string): void {
-  if (!getServerIds().includes(id)) {
-    throw new Error(
-      t("dailyAdmin.unknownServer", {
-        server: id,
-        servers: getServerIds().join(", "),
-      }),
-    );
-  }
-}
-
 export const execute = withErrorHandling(
   requireServerAdmin(async (interaction) => {
     const sub = interaction.options.getSubcommand();
     const user = interaction.options.getUser("user", true);
-    const store = await loadClaimedStore();
 
     if (sub === "move") {
       const from = interaction.options.getString("from", true);
       const to = interaction.options.getString("to", true);
       const overwrite = interaction.options.getBoolean("overwrite") ?? false;
-      assertKnownServer(from);
-      assertKnownServer(to);
       assertMayTargetServerId(interaction, from);
       assertMayTargetServerId(interaction, to);
       if (from === to) throw new Error(t("dailyAdmin.samServer"));
@@ -133,12 +114,9 @@ export const execute = withErrorHandling(
         delete fromClaims[user.id];
       });
 
-      await recordAdminAction({
+      await auditAdminAction(interaction, {
         action: "daily-move",
         server: to,
-        by: interaction.user.tag,
-        byId: interaction.user.id,
-        guildId: interaction.guild?.id ?? null,
         detail: `${user.tag} (${user.id}): ${from} → ${to}`,
       });
 
@@ -153,8 +131,6 @@ export const execute = withErrorHandling(
     }
 
     if (sub === "reset") {
-      const explicit = interaction.options.getString("server");
-      if (explicit) assertKnownServer(explicit);
       const server = resolveServer(interaction).id;
 
       await updateClaimedStore((current) => {
@@ -167,12 +143,9 @@ export const execute = withErrorHandling(
         delete claims[user.id];
       });
 
-      await recordAdminAction({
+      await auditAdminAction(interaction, {
         action: "daily-reset",
         server,
-        by: interaction.user.tag,
-        byId: interaction.user.id,
-        guildId: interaction.guild?.id ?? null,
         detail: `${user.tag} (${user.id})`,
       });
 
@@ -187,6 +160,7 @@ export const execute = withErrorHandling(
     }
 
     // show
+    const store = await loadClaimedStore();
     const lines: string[] = [];
     const visible = filterTargetableServerIds(
       interaction,

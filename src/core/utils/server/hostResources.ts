@@ -1,10 +1,8 @@
 /**
- * Host resources — what the wrapper's `/info` reports about the machine a
+ * Host resources: what the wrapper's `/info` reports about the machine a
  * server runs on.
  *
- * The bot ran `ps` and `df` itself until 5.0.0, which only ever worked when
- * it shared a machine with the server. The wrapper is on that machine; it
- * measures. A wrapper that predates the host block yields null, and the
+ * The wrapper runs on the Minecraft host, so it does the measuring. A wrapper that predates the host block yields null, and the
  * status view / disk monitor skip the instance rather than guess.
  *
  * Two shapes arrive here. host-info v1 sent a Java-process block and flat
@@ -14,41 +12,14 @@
  * here, rather than in every renderer.
  */
 import { getRemoteInfo } from "./serverAccess.js";
-import type { ServerInstance } from "./server.js";
+import type { ServerConfig } from "../../types/index.js";
+import type { WireSchemas } from "@mcbot/schema/wire/index.js";
 
-export interface FilesystemUsage {
-  mountPoint: string;
-  usedPercent: number;
-  availableBytes: number;
-  totalBytes: number;
-}
-
-export interface DiskUsage {
-  /** The directory that was measured (world dir, backups dir). */
-  path: string;
-  /**
-   * The directory's own size. null from a v1 wrapper, which never measured
-   * it, and from a v2 wrapper whose `du` timed out.
-   */
-  sizeBytes: number | null;
-  filesystem: FilesystemUsage;
-}
-
-export interface ProcessUsage {
-  pid: number;
-  /** Sampled, not ps's lifetime average. Can exceed 100 on multiple cores. */
-  cpuPercent: number;
-  rssBytes: number;
-}
-
+export type DiskUsage = WireSchemas["DiskUsage"];
+export type FilesystemUsage = DiskUsage["filesystem"];
+export type ProcessUsage = WireSchemas["ProcessUsage"];
 /** The whole machine, as an operator means it. v2 wrappers on Linux only. */
-export interface MachineUsage {
-  cpuPercent: number;
-  cpuCount: number;
-  memTotalBytes: number;
-  memUsedBytes: number;
-  uptimeSeconds: number;
-}
+export type MachineUsage = WireSchemas["HostUsage"];
 
 export interface HostResources {
   process: ProcessUsage | null;
@@ -110,22 +81,52 @@ export function normaliseDisk(raw: unknown): DiskUsage | null {
   };
 }
 
+/** The Java process block, or null if it is missing or any figure is not a finite number. */
+export function normaliseProcess(raw: unknown): ProcessUsage | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const p = raw as Record<string, unknown>;
+  if (!isFiniteNumber(p.pid) || !isFiniteNumber(p.cpuPercent) || !isFiniteNumber(p.rssBytes)) {
+    return null;
+  }
+  return { pid: p.pid, cpuPercent: p.cpuPercent, rssBytes: p.rssBytes };
+}
+
+/** The whole-machine block, or null if it is missing or any figure is not a finite number. */
+export function normaliseMachine(raw: unknown): MachineUsage | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const m = raw as Record<string, unknown>;
+  if (
+    !isFiniteNumber(m.cpuPercent) ||
+    !isFiniteNumber(m.cpuCount) ||
+    !isFiniteNumber(m.memTotalBytes) ||
+    !isFiniteNumber(m.memUsedBytes) ||
+    !isFiniteNumber(m.uptimeSeconds)
+  ) {
+    return null;
+  }
+  return {
+    cpuPercent: m.cpuPercent,
+    cpuCount: m.cpuCount,
+    memTotalBytes: m.memTotalBytes,
+    memUsedBytes: m.memUsedBytes,
+    uptimeSeconds: m.uptimeSeconds,
+  };
+}
+
 /**
  * Host snapshot for an instance, from the wrapper's `/info`.
  *
- * null means the wrapper is unreachable or predates the host block — the
+ * null means the wrapper is unreachable or predates the host block; the
  * status view and the disk monitor skip the instance rather than guess.
  */
-export async function getHostResources(
-  server: ServerInstance,
-): Promise<HostResources | null> {
-  const info = await getRemoteInfo(server.config);
+export async function getHostResources(cfg: ServerConfig): Promise<HostResources | null> {
+  const info = await getRemoteInfo(cfg);
   const host = info?.host;
   if (!host || (!host.process && !host.host && !host.disks)) return null;
 
   return {
-    process: host.process ?? null,
-    machine: host.host ?? null,
+    process: normaliseProcess(host.process),
+    machine: normaliseMachine(host.host),
     disks: (host.disks ?? [])
       .map(normaliseDisk)
       .filter((d): d is DiskUsage => d !== null),

@@ -60,6 +60,39 @@ describe("useCommands", () => {
     expect(c.dirty.value).toBe(false);
   });
 
+  it("reading an unset scope creates nothing, so the page is not dirty after a look", async () => {
+    const c = useCommands();
+    await c.load();
+    c.scope.value = "guild:unknown";
+    expect(c.overriddenCount()).toBe(0);
+    expect(c.fieldValue("ping", "enabled")).toBe("inherit");
+    expect(c.isOverridden("ping")).toBe(false);
+    expect(c.dirty.value).toBe(false);
+    c.setField("ping", "enabled", "inherit");
+    expect(c.dirty.value).toBe(false);
+  });
+
+  it("undoing the only edit of a new scope leaves nothing to save", async () => {
+    const c = useCommands();
+    await c.load();
+    c.scope.value = "server:smp";
+    c.setField("ping", "enabled", "false");
+    expect(c.dirty.value).toBe(true);
+    c.setField("ping", "enabled", "inherit");
+    expect(c.dirty.value).toBe(false);
+  });
+
+  it("warns instead of reporting success when a scope has no entry in the configuration", async () => {
+    net.apiSend.mockResolvedValue({ ok: true, changed: true, warnings: [] });
+    const c = useCommands();
+    await c.load();
+    c.scope.value = "server:smp";
+    c.setField("ping", "enabled", "false");
+    expect(await c.save()).toBe(true);
+    expect(toastAdd).toHaveBeenCalledTimes(1);
+    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: "warn" }));
+  });
+
   it("saves with the hash from the load, not one fetched at save time", async () => {
     net.apiSend.mockResolvedValue({ ok: true, changed: true, warnings: [] });
     const c = useCommands();

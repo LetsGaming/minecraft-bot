@@ -61,7 +61,7 @@
 import Button from "primevue/button";
 import { relativeAge, timestampTitle } from "../../utils/time";
 import { t } from "../../i18n";
-import type { EditConflict } from "../../composables/useModConfigs";
+import type { EditConflict } from "../../composables/useEditableDocument";
 
 /**
  * Settling fields that changed underneath the user.
@@ -130,8 +130,5 @@ function show(value: unknown): string {
 .c-meta { grid-column: 1 / -1; color: var(--text-dim); font-size: var(--text-xs); }
 @media (max-width: 900px) {
   .c-row { grid-template-columns: minmax(0, 1fr); }
-}
-@media (pointer: coarse), (max-width: 760px) {
-  .tap { min-height: var(--touch-min); }
 }
 </style>

@@ -17,10 +17,10 @@ vi.mock("../../src/core/utils/stores/adminAudit.js", () => ({
 }));
 
 const loadLinkedAccounts = vi.fn();
-vi.mock("../../src/core/utils/stores/linkUtils.js", async () => {
+vi.mock("../../src/core/utils/stores/linkStore.js", async () => {
   const actual = await vi.importActual<
-    typeof import("../../src/core/utils/stores/linkUtils.js")
-  >("../../src/core/utils/stores/linkUtils.js");
+    typeof import("../../src/core/utils/stores/linkStore.js")
+  >("../../src/core/utils/stores/linkStore.js");
   return {
     ...actual,
     loadLinkedAccountsOrEmpty: () => loadLinkedAccounts() as unknown,

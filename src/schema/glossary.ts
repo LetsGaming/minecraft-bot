@@ -1,5 +1,3 @@
-import type { StatusRole } from "./status.js";
-
 export type GlossaryLanguage = "en" | "de";
 
 export interface GlossaryEntry {
@@ -43,10 +41,6 @@ export const GLOSSARY = {
 
 export type GlossaryKey = keyof typeof GLOSSARY;
 
-export function glossaryText(key: GlossaryKey, language: GlossaryLanguage = "en"): string {
-  return GLOSSARY[key][language];
-}
-
 /**
  * The label of a backup tier directory as the wrapper files it ("hourly",
  * "archives/daily", "archives/update"). An unknown leaf comes back
@@ -57,9 +51,4 @@ export function backupTierLabel(dir: string, language: GlossaryLanguage = "en"):
   const key = `tier.${leaf.toLowerCase()}`;
   if (key in GLOSSARY) return GLOSSARY[key as GlossaryKey][language];
   return leaf.charAt(0).toUpperCase() + leaf.slice(1);
-}
-
-/** The glossary key of the label for a status role. */
-export function statusRoleGlossaryKey(role: StatusRole): GlossaryKey {
-  return `status.${role}`;
 }

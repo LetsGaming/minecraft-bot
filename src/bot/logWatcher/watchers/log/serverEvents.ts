@@ -7,8 +7,7 @@ import { broadcastNotification } from "../notifyGuilds.js";
 import type { GuildConfigSource } from "../../../utils/guild/guildConfigs.js";
 import { serverEventRegex, registerServerEvent } from "./serverLine.js";
 import {
-  loadSessionStore,
-  saveSessionStore,
+  updateSessionStore,
   closeAllOpenSessions,
 } from "@mcbot/core/utils/stores/sessionStore.js";
 import { log } from "@mcbot/core/utils/logger.js";
@@ -18,26 +17,31 @@ import { t } from "@mcbot/core/utils/i18n.js";
 import { ServerState } from "@mcbot/schema/serverState.js";
 import { formatSpan } from "@mcbot/core/utils/duration.js";
 import { noteServerStopping } from "../monitors/downtimeMonitor.js";
-// SEC-01: anchored on the server thread tag — a chat message must not
-// forge start/stop (a forged stop closes every open play session).
+import { onServerRemoved } from "../../serverCleanup.js";
+// Anchored on the server thread tag: a chat message must not forge
+// start/stop (a forged stop closes every open play session).
 const START_REGEX = serverEventRegex(String.raw`Done \([\d.]+s\)!`);
 const STOP_REGEX = serverEventRegex(String.raw`Stopping server`);
 
 const startTimes = new Map<string, Date>();
 
+onServerRemoved((serverId) => {
+  startTimes.delete(serverId);
+});
+
 /**
  * A stopping server disconnects everyone without emitting per-player
- * leave lines, so every open session must be closed here — otherwise a
+ * leave lines, so every open session must be closed here, otherwise a
  * shutdown produces sessions that never end. Crashes (no "Stopping
  * server" line at all) are covered by the downtime monitor's offline
  * transition doing the same.
  */
-async function closeSessions(serverId: string): Promise<void> {
+function closeSessions(serverId: string): void {
   try {
-    const store = await loadSessionStore();
-    const closed = closeAllOpenSessions(store, serverId);
+    const closed = updateSessionStore((store) =>
+      closeAllOpenSessions(store, serverId),
+    );
     if (closed > 0) {
-      await saveSessionStore(store);
       log.info(
         "sessions",
         `Closed ${closed} open session(s) on ${serverId} (server stop)`,
@@ -55,9 +59,9 @@ export function registerServerEventWatcher(
 ): void {
   const serverId = logWatcher.server.id;
 
-  registerServerEvent(logWatcher, START_REGEX, async () => {
+  registerServerEvent(logWatcher, START_REGEX, () => {
     startTimes.set(serverId, new Date());
-    await notifyEvent(
+    void notifyEvent(
       client,
       guildConfigs,
       serverId,
@@ -68,16 +72,16 @@ export function registerServerEventWatcher(
     );
   });
 
-  registerServerEvent(logWatcher, STOP_REGEX, async () => {
+  registerServerEvent(logWatcher, STOP_REGEX, () => {
     noteServerStopping(serverId);
-    await closeSessions(serverId);
+    closeSessions(serverId);
     let uptime: string | null = null;
     const started = startTimes.get(serverId);
     if (started) {
       uptime = formatSpan(Date.now() - started.getTime());
       startTimes.delete(serverId);
     }
-    await notifyEvent(
+    void notifyEvent(
       client,
       guildConfigs,
       serverId,
@@ -91,7 +95,7 @@ export function registerServerEventWatcher(
   });
 }
 
-async function notifyEvent(
+function notifyEvent(
   client: Client,
   guildConfigs: GuildConfigSource,
   serverId: string,
@@ -100,7 +104,7 @@ async function notifyEvent(
   state: ServerState,
   description: () => string,
 ): Promise<void> {
-  await broadcastNotification(client, guildConfigs, {
+  return broadcastNotification(client, guildConfigs, {
     serverId,
     event,
     logTag: "serverEvents",

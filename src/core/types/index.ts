@@ -1,27 +1,23 @@
 /**
  * Central type re-export hub.
  *
- * No types are defined here — every type lives in its domain file, grouped
- * the same way `utils/` is. Always import from this file, never from a
- * sub-module directly; the grouping is free to change, this path is not.
+ * Types are defined in their domain files, grouped the same way `utils/` is;
+ * the one runtime value re-exported here is `allCapabilities`. Always import
+ * from this file, never from a sub-module directly; the grouping is free to
+ * change, this path is not.
  *
- *   minecraft/  the world and its players — whitelist, coords, TPS, stats
+ *   minecraft/  the world and its players: whitelist, coords, TPS, stats
  *               files, leaderboards, mods, backups
- *   server/     the instance and how we reach it — capabilities, RCON,
+ *   server/     the instance and how we reach it: capabilities, RCON,
  *               uptime, the log watcher interface
- *   stores/     shapes of persisted state — links, rewards and streaks,
+ *   stores/     shapes of persisted state: links, rewards and streaks,
  *               scheduler and downtime state
- *   discord/    Discord-facing shapes — managed channels, embed options
+ *   discord/    Discord-facing shapes: managed channels, embed options
  *   commands.ts the command system itself, used by both the slash and
  *               in-game surfaces
  *
  * Config and stat contracts are not here: they live in `@mcbot/schema`,
  * because the dashboard and its browser bundle need them too.
- *
- * (This header used to list every file, and had drifted — it still named
- * config.ts and stats.ts long after both moved to @mcbot/schema, and never
- * learned about capabilities.ts. Five group names go stale more slowly
- * than fifteen filenames, and the directory listing is now the index.)
  */
 
 export type {
@@ -49,10 +45,10 @@ export type {
   ServerScheduleConfig,
   RawBotConfig,
   BotConfig,
-  VariablesMap,
 } from "@mcbot/schema/config.js";
 
 export type {
+  AutocompleteHandler,
   BotCommand,
   BotClient,
   InGameCommandDefinition,
@@ -126,7 +122,7 @@ export type {
 } from "./stores/scheduler.js";
 
 export type {
-  BackupDirInfo,
+  BackupDirSummary,
   BackupSummary,
   BackupFileInfo,
   BackupFileIndex,

@@ -12,6 +12,7 @@ vi.mock("../../src/core/utils/logger.js", () => ({
 }));
 
 import { registerSleepWatcher } from "../../src/bot/logWatcher/watchers/log/sleepWatcher.js";
+import { flushSendQueues } from "../../src/bot/logWatcher/watchers/sendQueue.js";
 import type { ILogWatcher } from "../../src/bot/logWatcher/logWatcher.js";
 import type { ServerInstance } from "../../src/core/utils/server/server.js";
 import type { Client } from "discord.js";
@@ -135,6 +136,7 @@ describe("handler — non-sleep trigger messages", () => {
 
     const match = regex.exec("[12:00:00] [INFO]: <Steve> hello world")!;
     await handler(match, null as unknown as Client, server);
+    await flushSendQueues();
 
     expect(server.send).not.toHaveBeenCalled();
   });
@@ -151,6 +153,7 @@ describe("handler — non-sleep trigger messages", () => {
     const match = regex.exec("[12:00:00] [INFO]: <Steve> liege wie bitte")!;
     if (!match) return; // regex might not match, test still passes
     await handler(match, null as unknown as Client, server);
+    await flushSendQueues();
     // SleepTimer was never queried — the message wasn't "liege wie" exactly
     expect(server.send).not.toHaveBeenCalled();
   });
@@ -172,6 +175,7 @@ describe("handler — player not in bed", () => {
 
     const match = regex.exec("[12:00:00] [INFO]: <Steve> liege wie")!;
     await handler(match, null as unknown as Client, server);
+    await flushSendQueues();
 
     // sendCommand called once for SleepTimer check, but no /title commands
     const titleCalls = server.send.mock.calls.filter(([c]) =>
@@ -191,6 +195,7 @@ describe("handler — player not in bed", () => {
 
     const match = regex.exec("[12:00:00] [INFO]: <Steve> liege wie")!;
     await handler(match, null as unknown as Client, server);
+    await flushSendQueues();
 
     const titleCalls = server.send.mock.calls.filter(([c]) =>
       (c as string).includes("/title"),
@@ -205,9 +210,8 @@ describe("handler — player not in bed", () => {
     const server = makeServer({ id: "rcon-error", sendCommandError: true });
 
     const match = regex.exec("[12:00:00] [INFO]: <Steve> liege wie")!;
-    await expect(
-      handler(match, null as unknown as Client, server),
-    ).resolves.toBeUndefined();
+    await handler(match, null as unknown as Client, server);
+    await expect(flushSendQueues()).resolves.toBeUndefined();
   });
 });
 
@@ -229,6 +233,7 @@ describe("handler — isNight fallback", () => {
 
     const match = regex.exec("[12:00:00] [INFO]: <Steve> liege wie")!;
     await handler(match, null as unknown as Client, server);
+    await flushSendQueues();
 
     const titleCalls = server.send.mock.calls.filter(([c]) =>
       (c as string).startsWith("/title"),
@@ -249,6 +254,7 @@ describe("handler — isNight fallback", () => {
 
     const match = regex.exec("[12:00:00] [INFO]: <Steve> liege wie")!;
     await handler(match, null as unknown as Client, server);
+    await flushSendQueues();
 
     const titleCalls = server.send.mock.calls.filter(([c]) =>
       (c as string).startsWith("/title"),
@@ -278,6 +284,7 @@ describe("handler — in bed + nighttime → sends /title commands", () => {
 
     const match = regex.exec(`[12:00:00] [INFO]: <Steve> ${message}`)!;
     await handler(match, null as unknown as Client, server);
+    await flushSendQueues();
     return server;
   }
 
@@ -338,6 +345,7 @@ describe("handler — cooldown", () => {
     // First trigger — should fire
     const server1 = makeNightServer();
     await handler(match, null as unknown as Client, server1);
+    await flushSendQueues();
     const firstTitleCalls = server1.send.mock.calls.filter(([c]) =>
       (c as string).startsWith("/title"),
     ).length;
@@ -346,6 +354,7 @@ describe("handler — cooldown", () => {
     // Second trigger within cooldown — should be skipped
     const server2 = makeNightServer();
     await handler(match, null as unknown as Client, server2);
+    await flushSendQueues();
     const secondTitleCalls = server2.send.mock.calls.filter(([c]) =>
       (c as string).startsWith("/title"),
     ).length;
@@ -364,6 +373,7 @@ describe("handler: command outcomes", () => {
     const { regex, handler } = watcher._handlers[0]!;
     const match = regex.exec("[12:00:00] [INFO]: <Steve> liege wie")!;
     await handler(match, null as unknown as Client, server);
+    await flushSendQueues();
   }
   const titles = (server: ServerInstance) =>
     (server.send as unknown as ReturnType<typeof vi.fn>).mock.calls.filter(

@@ -1,4 +1,4 @@
-import { StatusRole } from "@mcbot/schema";
+import { StatusRole, classifyDiskUsage, classifyTps } from "@mcbot/schema";
 import { ServerState, WrapperState } from "../api";
 import type { ServerStatus } from "../api";
 import { t, type MessageKey } from "../i18n";
@@ -33,23 +33,16 @@ export function diskLabel(path: string): string {
   return t(DISK_LABEL[diskRole(path)]);
 }
 
-/**
- * Players as text, with "we don't know" kept distinct from "nobody".
- *
- * A null roster used to arrive here as 0/0 and render as a confident
- * "0 players online" during exactly the moments the interface had no idea.
- */
-export function playersLabel(
-  players: { online: number; max: number } | null,
-): string {
-  return players ? `${players.online}/${players.max}` : t("servers.playersUnknown");
-}
-
 /** TPS as a status role, so the chip reads like every other health signal. */
 export function tpsRole(tps: number): StatusRole {
-  if (tps >= 18) return StatusRole.Online;
-  if (tps >= 12) return StatusRole.Degraded;
-  return StatusRole.Offline;
+  switch (classifyTps(tps)) {
+    case "ok":
+      return StatusRole.Online;
+    case "warn":
+      return StatusRole.Degraded;
+    default:
+      return StatusRole.Offline;
+  }
 }
 
 /** A disk as the status payload reports it, plus the paths that resolved to it. */
@@ -104,36 +97,13 @@ export function mergeDisks(
 
 /** Fullness → a severity, so a meter warns at the same point the alert list does. */
 export function diskSeverity(usedPercent: number): "good" | "mid" | "bad" {
-  if (usedPercent >= 90) return "bad";
-  if (usedPercent >= 75) return "mid";
-  return "good";
-}
-
-/**
- * A backup tier as a person would say it.
- *
- * The wrapper names tiers by where it files them (`hourly`,
- * `archives/daily`, `archives/update`), and the table printed those paths
- * verbatim, so the retention tier arrived as a storage detail with a slash
- * in it.
- */
-export function tierLabel(tier: string): string {
-  const leaf = tier.split("/").pop() ?? tier;
-  switch (leaf.toLowerCase()) {
-    case "hourly":
-      return "Hourly";
-    case "daily":
-      return "Daily";
-    case "weekly":
-      return "Weekly";
-    case "monthly":
-      return "Monthly";
-    case "update":
-      return "Pre-update";
-    case "manual":
-      return "Manual";
+  switch (classifyDiskUsage(usedPercent)) {
+    case "critical":
+      return "bad";
+    case "warn":
+      return "mid";
     default:
-      return leaf.charAt(0).toUpperCase() + leaf.slice(1);
+      return "good";
   }
 }
 

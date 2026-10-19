@@ -89,12 +89,21 @@ describe("loadAllStats TTL cache", () => {
     expect(vi.mocked(serverAccess.readStats)).not.toHaveBeenCalled();
   });
 
-  it("falls back to the per-uuid path when the bulk route rejects (older wrapper)", async () => {
-    vi.mocked(serverAccess.readAllStats).mockRejectedValueOnce(new Error("404"));
+  it("falls back to the per-uuid path when the wrapper has no bulk route", async () => {
+    vi.mocked(serverAccess.readAllStats).mockResolvedValueOnce(null);
 
     await loadAllStats();
 
     expect(vi.mocked(serverAccess.listStatsUuids)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(serverAccess.readStats)).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports a failing bulk read instead of fanning out one request per player", async () => {
+    vi.mocked(serverAccess.readAllStats).mockRejectedValueOnce(new Error("timeout"));
+
+    await expect(loadAllStats()).rejects.toThrow("timeout");
+
+    expect(vi.mocked(serverAccess.listStatsUuids)).not.toHaveBeenCalled();
+    expect(vi.mocked(serverAccess.readStats)).not.toHaveBeenCalled();
   });
 });

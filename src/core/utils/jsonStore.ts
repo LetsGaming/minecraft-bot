@@ -6,9 +6,9 @@
  * dailyRewards.json, and the two small files the bot publishes for the
  * dashboard process (runtime.json, commandManifest.json).
  *
- * Split out of the old `utils.ts` grab-bag. The durability dance below —
+ * Split out of the old `utils.ts` grab-bag. The durability dance below, 
  * cache by mtime, write-then-rename, keep a .bak, refuse to silently
- * return `{}` for a corrupt file — is the reason this is a module rather
+ * return `{}` for a corrupt file, is the reason this is a module rather
  * than a `readFile`/`writeFile` at each call site.
  */
 import { promises as fsPromises } from "fs";
@@ -21,8 +21,13 @@ import { errMsg } from "./error.js";
 const jsonCache = new Map<string, JsonCacheEntry>();
 const writeLocks = new Map<string, Promise<void>>();
 
-function isEnoent(err: unknown): boolean {
+export function isEnoent(err: unknown): boolean {
   return err instanceof Error && "code" in err && err.code === "ENOENT";
+}
+
+/** The last-known-good copy kept beside `file`. */
+function backupPath(file: string): string {
+  return `${file}.bak`;
 }
 
 /**
@@ -30,7 +35,7 @@ function isEnoent(err: unknown): boolean {
  *
  * A missing file just means "first run" and yields an empty store. Anything
  * else (truncated file, bad permissions, corrupt JSON) must not be turned
- * into `{}` — the next save would overwrite what's left on disk and make
+ * into `{}`, the next save would overwrite what's left on disk and make
  * the loss permanent. So: log, try the `.bak` copy, throw if that fails too.
  */
 export async function loadJson(file: string): Promise<unknown> {
@@ -53,7 +58,7 @@ export async function loadJson(file: string): Promise<unknown> {
     );
 
     try {
-      const raw = await fsPromises.readFile(`${file}.bak`, "utf-8");
+      const raw = await fsPromises.readFile(backupPath(file), "utf-8");
       const data: unknown = JSON.parse(raw);
       log.warn(
         "storage",
@@ -89,7 +94,7 @@ export async function saveJson(
     const json = serialize(data);
 
     // Write-then-rename: an interrupted in-place write leaves a truncated
-    // file, while rename(2) is atomic — readers see old or new, never half.
+    // file, while rename(2) is atomic, readers see old or new, never half.
     const tmp = `${file}.tmp`;
     await fsPromises.writeFile(tmp, json);
     await fsPromises.rename(tmp, file);
@@ -98,11 +103,11 @@ export async function saveJson(
     jsonCache.set(file, { mtimeMs, data });
 
     // Last-known-good copy for loadJson's recovery path, same tmp+rename
-    // dance. Best-effort — a failed backup must not fail the save.
+    // dance. Best-effort, a failed backup must not fail the save.
     try {
-      const bakTmp = `${file}.bak.tmp`;
+      const bakTmp = `${backupPath(file)}.tmp`;
       await fsPromises.writeFile(bakTmp, json);
-      await fsPromises.rename(bakTmp, `${file}.bak`);
+      await fsPromises.rename(bakTmp, backupPath(file));
     } catch (bakErr) {
       const reason = errMsg(bakErr);
       log.warn(
@@ -110,6 +115,24 @@ export async function saveJson(
         `Could not write backup for ${path.basename(file)}: ${reason}`,
       );
     }
+  });
+  writeLocks.set(
+    file,
+    next.catch(() => {}),
+  );
+  return next;
+}
+
+/**
+ * Delete a JSON store and its backup, so loadJson cannot resurrect the file
+ * from the `.bak`. Missing files are fine.
+ */
+export async function removeJson(file: string): Promise<void> {
+  const prev = writeLocks.get(file) ?? Promise.resolve();
+  const next = prev.then(async () => {
+    jsonCache.delete(file);
+    await fsPromises.rm(file, { force: true });
+    await fsPromises.rm(backupPath(file), { force: true });
   });
   writeLocks.set(
     file,

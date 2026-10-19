@@ -20,7 +20,7 @@ import {
 import { guildConfigHash } from "@mcbot/core/utils/config/guildConfigHash.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { log } from "@mcbot/core/utils/logger.js";
-import { sessionFromRequest, isSysadmin, canManageGuild, guildScopeFresh } from "../auth/auth.js";
+import { currentSession, isSysadmin, canManageGuild, guildScopeFresh } from "../auth/auth.js";
 import { listBotGuilds, discordHttpError } from "../auth/discordRest.js";
 import { readConfigSchema } from "../config/configSchema.js";
 import { HttpError, Forbidden, Conflict, ValidationFailed, ServiceUnavailable } from "../errors.js";
@@ -122,12 +122,12 @@ export function registerGuildConfigRoutes(app: FastifyInstance): void {
 
   /**
    * The guilds the current user may configure, each flagged configured
-   * and with its enabled-feature keys — everything GuildsView and the
+   * and with its enabled-feature keys, everything GuildsView and the
    * overview need, without exposing the rest of the config. Sysadmins see
    * every guild the bot is in; managers see only the ones they manage.
    */
   api.get("/api/guilds", async (req) => {
-    const session = sessionFromRequest(req)!;
+    const session = currentSession(req);
     let botGuildIds: string[];
     try {
       botGuildIds = (await listBotGuilds()).map((g) => g.id);
@@ -154,7 +154,7 @@ export function registerGuildConfigRoutes(app: FastifyInstance): void {
   /** One guild's config block (+ a hash of that block for concurrency). */
   // Guild-managers (non-sysadmin) can't reach /api/config/schema, so expose
   // just the GuildConfig definition + all definitions (for $ref resolution)
-  // here. Structure only — no secrets. Path resolution mirrors
+  // here. Structure only, no secrets. Path resolution mirrors
   // /api/config/schema (same dir depth) so source + deployed trees both work.
   api.get("/api/guilds/config-schema", async () => {
     const full = readConfigSchema();
@@ -172,7 +172,7 @@ export function registerGuildConfigRoutes(app: FastifyInstance): void {
     "/api/guilds/:id/config",
     { schema: { params: IdParams } },
     async (req) => {
-      const session = sessionFromRequest(req)!;
+      const session = currentSession(req);
       if (!canManageGuild(session, req.params.id)) {
         throw new Forbidden("You don't manage that guild.");
       }
@@ -187,7 +187,7 @@ export function registerGuildConfigRoutes(app: FastifyInstance): void {
     "/api/guilds/:id/config",
     { schema: { params: IdParams, body: GuildConfigWriteBody, response: { 200: MutationResult } } },
     async (req) => {
-      const session = sessionFromRequest(req)!;
+      const session = currentSession(req);
       const guildId = req.params.id;
       if (!canManageGuild(session, guildId)) {
         throw new Forbidden("You don't manage that guild.");
@@ -263,7 +263,7 @@ export function registerGuildConfigRoutes(app: FastifyInstance): void {
           }));
         } catch (err) {
           // Surface the actionable write error (e.g. read-only config path),
-          // logged, mirroring the full-config PUT — not a generic 500.
+          // logged, mirroring the full-config PUT, not a generic 500.
           const msg =
             err instanceof Error ? err.message : "Failed to write guild config.";
           log.error("web", `Guild config write failed: ${msg}`);
@@ -276,7 +276,7 @@ export function registerGuildConfigRoutes(app: FastifyInstance): void {
               : "The config could not be saved. A bot administrator can find the reason in the dashboard log.",
           );
         }
-        // Only audit an actual change — a Save with no edits is a no-op.
+        // Only audit an actual change, a Save with no edits is a no-op.
         if (changed) {
           await recordAdminAction({
             action: "guild config write (dashboard)",

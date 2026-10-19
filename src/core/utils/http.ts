@@ -2,8 +2,8 @@
  * One resilient JSON fetch for every upstream (Mojang, Modrinth, GitHub,
  * Discord, the API wrapper).
  *
- * Each caller used to write the same four steps by hand — fetch,
- * AbortSignal.timeout, res.ok, res.json() — and they disagreed on the
+ * Each caller used to write the same four steps by hand, fetch,
+ * AbortSignal.timeout, res.ok, res.json() and they disagreed on the
  * details. The Modrinth call had no timeout at all, so an upstream that
  * accepted the connection and then stalled would hang `/mods` forever;
  * the others each picked their own number. Two of the three swallowed the
@@ -15,9 +15,10 @@
  * is what stops them collapsing it into null again.
  */
 import { errMsg } from "./error.js";
+import { MS } from "@mcbot/schema/time.js";
 
 /** Nothing upstream should take longer than this. */
-export const DEFAULT_TIMEOUT_MS = 10_000;
+export const DEFAULT_TIMEOUT_MS = 10 * MS.second;
 
 export type FetchFailure =
   /** No response at all: DNS, refused connection, TLS, timeout. */

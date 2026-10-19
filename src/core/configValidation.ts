@@ -1,28 +1,39 @@
 /**
- * Config validation — the pure runtime gate that turns an arbitrary parsed
+ * Config validation: the pure runtime gate that turns an arbitrary parsed
  * value into a verified config or a list of actionable errors/warnings, plus
  * the apiUrl transport check.
  *
- * Extracted from config.ts (QUAL-02, 2026-07 audit): a ~700-line validator is
- * its own concern, and this file is the seam configValidation.test.ts already
- * assumes. Deliberately free of module state and I/O so it can be called on
- * any candidate — the dashboard validates edits through it before writing, and
- * config.ts calls it at load time (see validateRawConfig).
+ * Free of module state and I/O so it can be called on any candidate: the
+ * dashboard validates edits through it before writing, and config.ts calls it
+ * at load time (see validateRawConfig).
  */
 import {
   NOTIFICATION_EVENTS,
   isNotificationEvent,
   REMOVED_LOCAL_SERVER_FIELDS,
+  LANGUAGES,
+  isLanguage,
 } from "@mcbot/schema";
-import { checkAgainstSchema } from "./configSchemaCheck.js";
+import { apiKeyEnvVar } from "./config.js";
+import {
+  bridgesOf,
+  guildServerScopes,
+  scopeToList,
+} from "./utils/server/guildScopes.js";
+import { checkAgainstSchema, type SchemaIssue } from "./configSchemaCheck.js";
 import { CURRENT_CONFIG_VERSION } from "./configMigrations.js";
 import type {
-  GuildChatBridgeConfig,
   GuildConfig,
   RawBotConfig,
 } from "./types/index.js";
 import { isSnowflake, SNOWFLAKE_DESCRIPTION } from "@mcbot/schema/discord.js";
 import { isEmbedColorKey, parseHexColor } from "@mcbot/schema/embedCategories.js";
+
+/**
+ * Longest server id that still leaves room in a 100-character component id
+ * for the prefix, action and a 20-digit user id around it.
+ */
+const SERVER_ID_MAX_LENGTH = 32;
 
 // ── Runtime schema validation ─────────────────────────────────────────────
 // TypeScript's type system only operates at compile time. A malformed
@@ -71,7 +82,7 @@ export type ApiUrlValidation =
 
 /**
  * Validate a server's apiUrl transport. The API wrapper has full
- * server-control authority behind a static x-api-key header — over plain
+ * server-control authority behind a static x-api-key header, over plain
  * HTTP on an untrusted network, key and commands are readable on-path.
  *
  *   https://…                → fine
@@ -140,30 +151,30 @@ export interface ConfigValidationResult {
 
 /**
  * Present and object-shaped. Only ever false on the schema-unavailable
- * path — when the schema ran, the shape is already guaranteed — so this
+ * path, when the schema ran, the shape is already guaranteed, so this
  * skips a check rather than reporting one.
  */
 const usable = <T>(v: T | undefined): v is T =>
   v !== undefined && v !== null && !Array.isArray(v) && typeof v === "object";
 
-/** Feature `server` fields accept a single ID or a list of them. */
-function scopeRefs(
-  field: string,
-  scope: string | string[] | undefined,
-): Array<[string, string]> {
-  if (typeof scope === "string") return [[field, scope]];
-  if (Array.isArray(scope)) return scope.map((id): [string, string] => [field, id]);
-  return [];
+/**
+ * A schema enum failure that is forward-compatibility rather than a broken
+ * config: an unrecognised `guilds.<id>.notifications.events[n]` or
+ * `guilds.<id>.language` (a file written for a newer bot). The semantic pass
+ * warns about these by name.
+ */
+function isForwardCompatEnum(issue: SchemaIssue): boolean {
+  if (issue.keyword !== "enum") return false;
+  const [root, , field, sub, index] = issue.path;
+  if (root !== "guilds") return false;
+  if (issue.path.length === 3) return field === "language";
+  return (
+    issue.path.length === 5 &&
+    field === "notifications" &&
+    sub === "events" &&
+    /^\d+$/.test(index ?? "")
+  );
 }
-
-/** Schema enum failure on a notifications.events entry — downgraded. */
-const UNKNOWN_EVENT_ERROR = /\.notifications\.events\.\d+: must be one of/;
-
-/** Schema enum failure on a guild language, downgraded to a locale warning. */
-const UNKNOWN_LANGUAGE_ERROR = /^ {2}- guilds\.[^.]+\.language: must be one of/;
-
-const hasScope = (scope: string | string[] | undefined): boolean =>
-  typeof scope === "string" || (Array.isArray(scope) && scope.length > 0);
 
 interface Findings {
   errors: string[];
@@ -223,6 +234,14 @@ function checkServers({ raw, errors, warnings }: SectionContext): void {
   if (!usable(raw.servers)) return;
 
   for (const [id, srv] of Object.entries(raw.servers)) {
+    if (id.includes(":") || id.length > SERVER_ID_MAX_LENGTH) {
+      errors.push(
+        `  - servers.${id}: the id must not contain ":" and must be at most ` +
+          `${SERVER_ID_MAX_LENGTH} characters, because Discord component ids ` +
+          `join it with other values using ":" and are capped at 100 characters.`,
+      );
+    }
+
     const stale = REMOVED_LOCAL_SERVER_FIELDS.filter(
       (f) => (srv as Record<string, unknown>)[f] !== undefined,
     );
@@ -247,9 +266,7 @@ function checkServers({ raw, errors, warnings }: SectionContext): void {
     } else if (typeof srv.apiKey !== "string" || srv.apiKey.trim() === "") {
       errors.push(
         `  - servers.${id}.apiKey: required — the wrapper's shared secret. ` +
-          `Set it here, or supply API_KEY_${id
-            .toUpperCase()
-            .replace(/[^A-Z0-9]/g, "_")} / API_KEY in the environment.`,
+          `Set it here, or supply ${apiKeyEnvVar(id)} / API_KEY in the environment.`,
       );
     }
 
@@ -264,11 +281,6 @@ function checkServers({ raw, errors, warnings }: SectionContext): void {
   }
 }
 
-function bridgesOf(guild: GuildConfig): GuildChatBridgeConfig[] {
-  if (Array.isArray(guild.chatBridge)) return guild.chatBridge;
-  return guild.chatBridge ? [guild.chatBridge] : [];
-}
-
 function checkGuildLocale(
   gid: string,
   guild: GuildConfig,
@@ -276,11 +288,11 @@ function checkGuildLocale(
 ): void {
   if (
     typeof guild.language === "string" &&
-    !["en", "de"].includes(guild.language)
+    !isLanguage(guild.language)
   ) {
     warnings.push(
       `guilds.${gid}.language "${guild.language}" is not a known ` +
-        `locale (en, de) — the global language will be used`,
+        `locale (${LANGUAGES.join(", ")}) — the global language will be used`,
     );
   }
 }
@@ -366,22 +378,18 @@ function checkGuildServerRefs(
   { warnings, knownServers }: SectionContext,
 ): void {
   if (!knownServers) return;
-  const refs: Array<[string, string]> = [
-    ...scopeRefs("defaultServer", guild.defaultServer),
-    ...bridgesOf(guild).flatMap((b) => scopeRefs("chatBridge.server", b?.server)),
-    ...scopeRefs("notifications.server", guild.notifications?.server),
-    ...scopeRefs("leaderboard.server", guild.leaderboard?.server),
-    ...scopeRefs("tpsAlerts.server", guild.tpsAlerts?.server),
-    ...scopeRefs("downtimeAlerts.server", guild.downtimeAlerts?.server),
-    ...scopeRefs("reports.server", guild.reports?.server),
-    ...scopeRefs("allowedServers", guild.allowedServers),
+  const scopes = [
+    ...guildServerScopes(guild),
+    { field: "allowedServers", ids: scopeToList(guild.allowedServers) },
   ];
-  for (const [field, ref] of refs) {
-    if (ref && !knownServers.has(ref)) {
-      warnings.push(
-        `guilds.${gid}.${field} references unknown server "${ref}" ` +
-          `(configured servers: ${[...knownServers].join(", ")})`,
-      );
+  for (const { field, ids } of scopes) {
+    for (const ref of ids) {
+      if (ref && !knownServers.has(ref)) {
+        warnings.push(
+          `guilds.${gid}.${field} references unknown server "${ref}" ` +
+            `(configured servers: ${[...knownServers].join(", ")})`,
+        );
+      }
     }
   }
 }
@@ -432,14 +440,13 @@ function checkTenantIsolation(
   { warnings }: Findings,
 ): void {
   if (guildCount <= 1) return;
-  const derived =
-    hasScope(guild.defaultServer) ||
-    bridgesOf(guild).some((b) => hasScope(b?.server)) ||
-    hasScope(guild.notifications?.server) ||
-    hasScope(guild.leaderboard?.server) ||
-    hasScope(guild.tpsAlerts?.server) ||
-    hasScope(guild.downtimeAlerts?.server) ||
-    hasScope(guild.reports?.server);
+  const derived = guildServerScopes(guild).some((s) => s.ids.length > 0);
+  if (guild.allowedServers?.length === 0 && !guild.defaultServer) {
+    warnings.push(
+      `guilds.${gid}: allowedServers is empty and no defaultServer is set: ` +
+        `this guild can target no server at all.`,
+    );
+  }
   if (!guild.allowedServers && !derived) {
     warnings.push(
       `guilds.${gid}: no allowedServers/defaultServer set — commands ` +
@@ -515,16 +522,16 @@ function checkSchedules({ raw, errors, warnings, knownServers }: SectionContext)
 }
 
 /**
- * Pure validation of a candidate raw config — collects every problem
+ * Pure validation of a candidate raw config, collects every problem
  * instead of throwing. This is the entry point for programmatic config
  * editing (the dashboard validates a candidate with this before writing
  * it via configService.writeConfig).
  *
  * Two passes, in order:
  *
- *   1. **Structure** — types, requiredness, enums and numeric bounds,
+ *   1. **Structure**, types, requiredness, enums and numeric bounds,
  *      checked against the generated JSON Schema (configSchemaCheck.ts).
- *   2. **Meaning** — everything a JSON Schema cannot express: does that
+ *   2. **Meaning**, everything a JSON Schema cannot express: does that
  *      server ID exist, is that string shaped like a Discord snowflake,
  *      is this chat bridge ambiguous, is this a 4.x config. One function
  *      per config section, below.
@@ -553,10 +560,10 @@ export function validateCandidateConfig(
   // An unrecognised notification event is forward-compatibility, not a
   // broken config: a file written for a newer bot must still boot. The
   // semantic pass below warns about it by name instead.
-  const errors: string[] = structural.errors.filter(
-    (line) => !UNKNOWN_EVENT_ERROR.test(line) && !UNKNOWN_LANGUAGE_ERROR.test(line),
-  );
-  const warnings: string[] = [...structural.warnings];
+  const errors: string[] = structural.errors
+    .filter((issue) => !isForwardCompatEnum(issue))
+    .map((issue) => issue.line);
+  const warnings: string[] = structural.warnings.map((issue) => issue.line);
 
   if (structural.unavailable) {
     warnings.push(

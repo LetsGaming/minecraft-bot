@@ -1,7 +1,7 @@
 import { computed, ref } from "vue";
 import { errorMessage } from "../utils/errorMessage";
 import { groupErrors } from "../utils/fieldErrors";
-import { useToast } from "primevue/usetoast";
+import { useNotify } from "./useNotify";
 import { apiGet, apiSend } from "../api";
 import type { JsonSchema } from "./useConfig";
 import { useEditableDocument } from "./useEditableDocument";
@@ -17,7 +17,7 @@ type GuildDoc = Record<string, unknown>;
  * useEditableDocument. Never exposes servers or other guilds.
  */
 export function useGuildConfig() {
-  const toast = useToast();
+  const notify = useNotify();
 
   const schema = ref<JsonSchema | null>(null); // the GuildConfig node
   const definitions = ref<Record<string, unknown> | undefined>(undefined);
@@ -72,12 +72,7 @@ export function useGuildConfig() {
   async function save(): Promise<boolean> {
     const ok = await editor.save();
     if (ok) {
-      toast.add({
-        severity: "success",
-        summary: t("guildEditor.savedToast"),
-        detail: t("guildEditor.savedToastDetail"),
-        life: 3000,
-      });
+      notify.ok(t("guildEditor.savedToast"), t("guildEditor.savedToastDetail"));
     }
     return ok;
   }

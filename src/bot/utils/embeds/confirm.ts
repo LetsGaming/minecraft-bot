@@ -17,9 +17,11 @@ import {
 import { t } from "@mcbot/core/utils/i18n.js";
 import { createEmbed } from "./embedUtils.js";
 import { EmbedCategory } from "@mcbot/schema/embedCategories.js";
+import { MS } from "@mcbot/schema/time.js";
+import { joinCustomId } from "./customId.js";
 
 export const CONFIRM_PREFIX = "confirm";
-export const CONFIRM_TTL_MS = 60_000;
+export const CONFIRM_TTL_MS = MS.minute;
 
 export interface ConfirmTarget {
   /** Registered action name, without ":" (e.g. "server-stop"). */
@@ -36,8 +38,8 @@ export interface ParsedConfirmId extends ConfirmTarget {
 }
 
 export function confirmCustomId(answer: "yes" | "no", target: ConfirmTarget): string {
-  const expires = Math.floor(target.expiresAt / 1000).toString(36);
-  return [CONFIRM_PREFIX, answer, target.action, target.serverId, target.userId, expires].join(":");
+  const expires = Math.floor(target.expiresAt / MS.second).toString(36);
+  return joinCustomId(CONFIRM_PREFIX, answer, target.action, target.serverId, target.userId, expires);
 }
 
 /** `confirm:yes:server-stop:smp:123:abc` to parts, or null if not ours. */
@@ -49,7 +51,7 @@ export function parseConfirmCustomId(customId: string): ParsedConfirmId | null {
   if (!action || !serverId || !userId || !expires) return null;
   const seconds = parseInt(expires, 36);
   if (!Number.isFinite(seconds)) return null;
-  return { answer, action, serverId, userId, expiresAt: seconds * 1000 };
+  return { answer, action, serverId, userId, expiresAt: seconds * MS.second };
 }
 
 /** Pending (violet) embed asking the question, with the expiry in the footer. */
@@ -64,7 +66,7 @@ export function createConfirmEmbed({
     title,
     description,
     category: EmbedCategory.Confirm,
-    footer: { text: t("confirm.expires", { seconds: CONFIRM_TTL_MS / 1000 }) },
+    footer: { text: t("confirm.expires", { seconds: CONFIRM_TTL_MS / MS.second }) },
   });
 }
 

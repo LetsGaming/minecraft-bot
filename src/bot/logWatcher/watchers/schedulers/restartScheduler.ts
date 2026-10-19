@@ -1,5 +1,5 @@
 /**
- * Scheduled restarts — a wall-clock restart per server with countdown
+ * Scheduled restarts, a wall-clock restart per server with countdown
  * warnings, the roadmap's highest-value operator item.
  *
  * Config (top level):
@@ -16,8 +16,8 @@
  *
  * Warnings go to the server via /say and to each guild's notifications
  * channel (event "scheduledRestart"). The restart itself takes the same
- * path as `/server restart` — the suite's smart_restart where the
- * capability probe found it — with downtime alerts suppressed around it
+ * path as `/server restart`, the suite's smart_restart where the
+ * capability probe found it, with downtime alerts suppressed around it
  * and an admin-audit entry. Timers are wall-clock scheduled with the
  * TZ-aware helpers and re-armed after each run (a fixed 24h interval
  * drifts across DST changes) and on every config reload.
@@ -30,10 +30,13 @@ import { getServerInstance } from "@mcbot/core/utils/server/server.js";
 import { runScript } from "@mcbot/core/utils/server/serverAccess.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import {
+  DAY_CODES,
+  parseScheduleTime,
   nextTimeOfDayEpoch,
   localDayOfWeek,
   formatTime,
 } from "@mcbot/core/utils/time.js";
+import { MS } from "@mcbot/schema";
 import { log } from "@mcbot/core/utils/logger.js";
 import { createEmbed } from "../../../utils/embeds/embedUtils.js";
 import { suppressAlerts } from "../monitors/downtimeMonitor.js";
@@ -47,22 +50,12 @@ import type {
 import { errMsg } from "@mcbot/core/utils/error.js";
 
 const DEFAULT_WARN_MINUTES = [15, 5, 1];
-const DAY_CODES = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"] as const;
-
-/** Parse "HH:MM" → { hour, minute }, or null when malformed. */
-export function parseScheduleTime(
-  time: string,
-): { hour: number; minute: number } | null {
-  const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(time.trim());
-  if (!m) return null;
-  return { hour: Number(m[1]), minute: Number(m[2]) };
-}
 
 /**
  * The next epoch at which this schedule fires: the next HH:MM in `tz` whose
  * local weekday is allowed. Exported for tests.
  *
- * The zone is the *schedule's*, not a guild's — a 04:00 restart belongs to
+ * The zone is the *schedule's*, not a guild's, a 04:00 restart belongs to
  * the machine's operator, and a server watched by two guilds has no guild
  * answer to give.
  */
@@ -134,6 +127,7 @@ async function performRestart(
 ): Promise<void> {
   const server = getServerInstance(serverId);
   if (!server) return;
+  let ok = false;
 
   if (server.capabilities && !server.capabilities.scripts.restart) {
     log.warn(
@@ -154,7 +148,8 @@ async function performRestart(
 
   try {
     const result = await runScript(server.config, "restart");
-    if (result.exitCode !== 0) {
+    ok = result.exitCode === 0;
+    if (!ok) {
       log.error(
         "schedule",
         `${serverId}: restart script exited ${result.exitCode}: ${result.stderr.slice(0, 300)}`,
@@ -169,9 +164,13 @@ async function performRestart(
     event: "scheduledRestart",
     buildEmbed: () =>
       createEmbed({
-        title: t("schedule.doneTitle", { server: serverId }),
-        description: t("schedule.done", { server: serverId }),
-        category: EmbedCategory.Recovery,
+        title: ok
+          ? t("schedule.doneTitle", { server: serverId })
+          : t("restart.failedTitle", { server: serverId }),
+        description: ok
+          ? t("schedule.done", { server: serverId })
+          : t("restart.failed", { server: serverId }),
+        category: ok ? EmbedCategory.Recovery : EmbedCategory.Error,
       }),
     logTag: "schedule",
   });
@@ -184,7 +183,7 @@ function armServer(
 ): void {
   clearServerTimers(serverId);
 
-  // The schedule's own zone — see timezones.ts for why this is not the
+  // The schedule's own zone, see timezones.ts for why this is not the
   // guild's.
   const tz = scheduleTimeZone(serverId);
   const runAt = nextScheduledRun(schedule, tz);
@@ -202,7 +201,7 @@ function armServer(
     .sort((a, b) => b - a);
 
   for (const minutes of warnMinutes) {
-    const warnAt = runAt - minutes * 60_000;
+    const warnAt = runAt - minutes * MS.minute;
     if (warnAt <= Date.now()) continue;
     chain.push(
       setTimeout(() => {
@@ -222,8 +221,10 @@ function armServer(
           log.error("schedule", `${serverId}: restart run failed: ${errMsg(err)}`);
         })
         .finally(() => {
-          // Wall-clock rescheduling after each run — see module docs.
-          armServer(client, serverId, schedule);
+          // Re-read the schedule: it may have been edited or removed while
+          // this timer was pending.
+          const current = loadConfig().schedules?.[serverId]?.restart;
+          if (current) armServer(client, serverId, current);
         });
     }, runAt - Date.now()),
   );

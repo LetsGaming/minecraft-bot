@@ -12,7 +12,7 @@ import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vite
 
 vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
 }));
-vi.mock("../../src/core/utils/stores/linkUtils.js", () => ({
+vi.mock("../../src/core/utils/stores/linkStore.js", () => ({
   isLinked: vi.fn(),
   getLinkedAccount: vi.fn(),
 }));
@@ -42,6 +42,8 @@ function embedOf(payload: unknown): { title?: string; description?: string } {
 vi.mock("../../src/core/utils/jsonStore.js", () => ({
   loadJson: vi.fn(),
   saveJson: vi.fn(),
+  removeJson: vi.fn(),
+  isEnoent: vi.fn().mockReturnValue(false),
 }));
 
 vi.mock("../../src/core/utils/paths.js", () => ({
@@ -232,12 +234,12 @@ describe("claimLock — concurrent claim prevention", () => {
   it("blocks a second concurrent execution for the same user", async () => {
     const utils = await import("../../src/core/utils/jsonStore.js");
     const paths = await import("../../src/core/utils/paths.js");
-    const linkUtils = await import("../../src/core/utils/stores/linkUtils.js");
+    const linkStore = await import("../../src/core/utils/stores/linkStore.js");
     const playerUtils = await import("../../src/core/utils/minecraft/playerUtils.js");
     const guildRouter = await import("../../src/bot/utils/guild/guildRouter.js");
 
-    vi.mocked(linkUtils.isLinked).mockResolvedValue(true);
-    vi.mocked(linkUtils.getLinkedAccount).mockResolvedValue("Steve");
+    vi.mocked(linkStore.isLinked).mockResolvedValue(true);
+    vi.mocked(linkStore.getLinkedAccount).mockResolvedValue("Steve");
     vi.mocked(playerUtils.getOnlinePlayers).mockResolvedValue(["Steve"]);
     // A give that never answers — keeps the first execution inside the lock
     // (claims persist synchronously to kv now, so the held awaitable has to
@@ -280,10 +282,10 @@ describe("claimLock — concurrent claim prevention", () => {
   });
 
   it("allows a second execution for a different user", async () => {
-    const linkUtils = await import("../../src/core/utils/stores/linkUtils.js");
+    const linkStore = await import("../../src/core/utils/stores/linkStore.js");
 
     // Fail fast after the lock check — we only care that neither user gets blocked.
-    vi.mocked(linkUtils.isLinked).mockResolvedValue(false);
+    vi.mocked(linkStore.getLinkedAccount).mockResolvedValue(null);
 
     const { execute } =
       await import("../../src/bot/commands/connection/daily/daily.js");
@@ -316,7 +318,7 @@ describe("claim persistence", () => {
   async function runClaim(existingUserData: Record<string, unknown>) {
     const utils = await import("../../src/core/utils/jsonStore.js");
     const paths = await import("../../src/core/utils/paths.js");
-    const linkUtils = await import("../../src/core/utils/stores/linkUtils.js");
+    const linkStore = await import("../../src/core/utils/stores/linkStore.js");
     const playerUtils = await import("../../src/core/utils/minecraft/playerUtils.js");
     const guildRouter = await import("../../src/bot/utils/guild/guildRouter.js");
 
@@ -326,8 +328,8 @@ describe("claim persistence", () => {
     vi.mocked(utils.saveJson).mockClear();
     vi.mocked(utils.loadJson).mockClear();
 
-    vi.mocked(linkUtils.isLinked).mockResolvedValue(true);
-    vi.mocked(linkUtils.getLinkedAccount).mockResolvedValue("Steve");
+    vi.mocked(linkStore.isLinked).mockResolvedValue(true);
+    vi.mocked(linkStore.getLinkedAccount).mockResolvedValue("Steve");
     vi.mocked(playerUtils.getOnlinePlayers).mockResolvedValue(["Steve"]);
     vi.mocked(guildRouter.resolveServer).mockReturnValue({
       id: "main",
@@ -425,15 +427,15 @@ describe("per-server claim independence", () => {
   it("a cooldown on one server does not block claiming on another", async () => {
     const utils = await import("../../src/core/utils/jsonStore.js");
     const paths = await import("../../src/core/utils/paths.js");
-    const linkUtils = await import("../../src/core/utils/stores/linkUtils.js");
+    const linkStore = await import("../../src/core/utils/stores/linkStore.js");
     const playerUtils = await import("../../src/core/utils/minecraft/playerUtils.js");
     const guildRouter = await import("../../src/bot/utils/guild/guildRouter.js");
 
     vi.mocked(utils.saveJson).mockClear();
     vi.mocked(utils.loadJson).mockClear();
 
-    vi.mocked(linkUtils.isLinked).mockResolvedValue(true);
-    vi.mocked(linkUtils.getLinkedAccount).mockResolvedValue("Steve");
+    vi.mocked(linkStore.isLinked).mockResolvedValue(true);
+    vi.mocked(linkStore.getLinkedAccount).mockResolvedValue("Steve");
     vi.mocked(playerUtils.getOnlinePlayers).mockResolvedValue(["Steve"]);
     // The user targets "main" — while "other" is mid-cooldown.
     vi.mocked(guildRouter.resolveServer).mockReturnValue({
@@ -512,14 +514,14 @@ describe("deferred replies", () => {
     pool?: unknown;
   }) {
     const utils = await import("../../src/core/utils/jsonStore.js");
-    const linkUtils = await import("../../src/core/utils/stores/linkUtils.js");
+    const linkStore = await import("../../src/core/utils/stores/linkStore.js");
     const playerUtils = await import("../../src/core/utils/minecraft/playerUtils.js");
     const guildRouter = await import("../../src/bot/utils/guild/guildRouter.js");
     const { closeDbForTesting } = await import("../../src/core/db/index.js");
     closeDbForTesting();
 
-    vi.mocked(linkUtils.isLinked).mockResolvedValue(true);
-    vi.mocked(linkUtils.getLinkedAccount).mockResolvedValue("Steve");
+    vi.mocked(linkStore.isLinked).mockResolvedValue(true);
+    vi.mocked(linkStore.getLinkedAccount).mockResolvedValue("Steve");
     vi.mocked(playerUtils.getOnlinePlayers).mockResolvedValue(
       opts.online ? ["Steve"] : [],
     );
@@ -632,7 +634,7 @@ describe("deferred replies", () => {
     expect(embedOf(interaction.followUp.mock.calls[0]![0]).title).toBe("⛔ Rewards waiting in game");
   });
 
-  it("uses the claim and queues what a failed give did not deliver (AUD-022)", async () => {
+  it("uses the claim and queues what a failed give did not deliver", async () => {
     const { execute, interaction } = await setup({
       online: true,
       send: { kind: "unreachable", reason: "timeout", detail: "x" },

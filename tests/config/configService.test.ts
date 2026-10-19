@@ -26,6 +26,7 @@ vi.mock("../../src/core/config.js", () => ({
   getConfigPath: mocks.getConfigPath,
   validateCandidateConfig: mocks.validateCandidateConfig,
   reloadConfig: mocks.reloadConfig,
+  loadConfig: () => ({ token: "old" }),
   getLoadedConfigRevision: () => ({ hash: "h", loadedAt: 0 }),
 }));
 
@@ -164,7 +165,9 @@ describe("applyConfig", () => {
     mocks.reloadConfig.mockReturnValue(fresh);
     mocks.reconcileServers.mockResolvedValue({
       added: ["new"],
+      failed: [],
       removed: [],
+      replaced: [],
       changed: ["old"],
     });
 

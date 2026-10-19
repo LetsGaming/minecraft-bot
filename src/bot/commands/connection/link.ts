@@ -2,7 +2,7 @@ import { SlashCommandBuilder } from "discord.js";
 import { createInfoEmbed } from "../../utils/embeds/embedUtils.js";
 import { withErrorHandling } from "../middleware.js";
 import { randomBytes } from "crypto";
-import { issueLinkCode } from "@mcbot/core/utils/stores/linkUtils.js";
+import { issueLinkCode } from "@mcbot/core/utils/stores/linkStore.js";
 
 import { t } from "@mcbot/core/utils/i18n.js";
 export const data = new SlashCommandBuilder()

@@ -36,7 +36,7 @@ anything new should go. The subdirectories are grouped by purpose, the same way
 |---|---|---|
 | `minecraft/` | statUtils, snapshotUtils, streakLeaderboard, playerUtils, whitelist, mojang, modUtils, slimeChunk, chunkbaseUrl | Reads or interprets the Minecraft world and its players |
 | `server/` | server, serverAccess, capabilities, hostResources, runtimeHeartbeat | The server instance, its host, and how we reach them |
-| `stores/` | adminAudit, linkUtils, dailyStore, pollStore, sessionStore, noteStore, watchStore, waypointStore, challengeStore, uptimeTracker, playerCountHistory, whitelistAudit | Owns a table or a `kv_store` key. One owner per key, no exceptions |
+| `stores/` | adminAudit, linkStore, dailyStore, pollStore, sessionStore, noteStore, watchStore, waypointStore, challengeStore, uptimeTracker, playerCountHistory, whitelistAudit | Owns a table or a `kv_store` key. One owner per key, no exceptions |
 | `config/` | configService, configDiff, configHistory | Reading, writing, diffing, and rolling back config |
 | `commands/` | commandManifest, commandPolicy | What commands exist and whether they're enabled |
 
@@ -63,7 +63,7 @@ split it before it becomes the next `utils.ts`.
 
 **Console sinks go through `sanitize.ts`.** Any user-supplied text that ends up
 in an RCON or screen command — `/say`, the chat bridge, whitelist, moderation,
-in-game `!commands` — passes `sanitizeForConsole`/`stripControlChars` first, and
+in-game `!commands` — passes `stripControlChars`/`sanitizeForComponent` first (or is built with `consoleCommand()`), and
 player names pass `isValidMcName`. A `\n` in a chat message is a second console
 command. There is one implementation, it is tested, and hand-rolling a second
 one is how the first hole gets opened.

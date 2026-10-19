@@ -19,7 +19,7 @@ vi.mock("../../src/core/utils/logger.js", () => ({
 }));
 vi.mock("../../src/core/config.js", () => ({ loadConfig: vi.fn(() => ({})) }));
 
-const getHealthMock = vi.fn();
+const { getHealthMock } = vi.hoisted(() => ({ getHealthMock: vi.fn() }));
 vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
   getHealth: getHealthMock,
 }));

@@ -1,9 +1,10 @@
 import path from "path";
 import { fileURLToPath } from "url";
 import { defineCommand } from "../../defineCommand.js";
-import { getCommandFiles } from "../../../utils/commands/loadCommandFiles.js";
+import { getCommandFiles, importCommandModule } from "../../../utils/commands/loadCommandFiles.js";
 import { resolveCommandPolicy } from "@mcbot/core/utils/commands/commandPolicy.js";
 import type { InGameCommandInfo } from "@mcbot/core/types/index.js";
+import { t } from "@mcbot/core/utils/i18n.js";
 import { whisper } from "@mcbot/core/utils/minecraft/serverMessages.js";
 
 const commandsDir = path.join(
@@ -24,7 +25,7 @@ async function loadAllCommandInfo(): Promise<ListedCommand[]> {
     const name = path.basename(file).replace(/\.[cm]?[jt]s$/, "");
     if (name === "commands") continue;
     try {
-      const mod = (await import(path.resolve(file))) as {
+      const mod = (await importCommandModule(file)) as {
         COMMAND_INFO?: InGameCommandInfo;
       };
       if (mod.COMMAND_INFO) commands.push({ name, info: mod.COMMAND_INFO });
@@ -45,9 +46,9 @@ const cmd = defineCommand({
     const commands = (await listed).filter(
       (c) => resolveCommandPolicy(c.name, { serverId: server.id }).enabled,
     );
-    await whisper(server, username, `Available commands:`);
+    await whisper(server, username, t("ingame.commands.header"));
     for (const c of commands) {
-      await whisper(server, username, ` ${c.info.command} - ${c.info.description}`);
+      await whisper(server, username, t("ingame.commands.entry", { command: c.info.command, description: c.info.description }));
     }
   },
 });

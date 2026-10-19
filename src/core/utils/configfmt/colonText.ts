@@ -17,8 +17,13 @@
  * listed read-only.
  */
 import type { ConfigFormat, ConfigNode, ConfigValueKind, ParsedConfig } from "./types.js";
-import { ConfigEditError } from "./types.js";
-import { inferScalar, markDuplicates, numberLiteral, scanLines } from "./lines.js";
+import {
+  inferScalar,
+  integerFlag,
+  markDuplicates,
+  scalarLiteral,
+  scanLines,
+} from "./lines.js";
 
 const KEY_LINE = /^([A-Za-z][A-Za-z0-9_]*):(.*)$/;
 
@@ -62,16 +67,13 @@ export const colonTextFormat: ConfigFormat = {
         comments: [],
         valueSpan: [valueStart, valueStart + raw.length],
         ...(scalar.float ? { hint: "float" } : {}),
+        ...integerFlag(scalar),
       });
     }
     return { nodes: markDuplicates(nodes) };
   },
 
   literal(value: unknown, kind: ConfigValueKind, node?: ConfigNode): string {
-    if (kind === "boolean") return value ? "true" : "false";
-    if (kind === "number") return numberLiteral(value, node?.hint === "float");
-    const text = String(value ?? "");
-    if (/[\r\n]/.test(text)) throw new ConfigEditError("A value cannot contain a line break.");
-    return text;
+    return scalarLiteral(value, kind, node);
   },
 };

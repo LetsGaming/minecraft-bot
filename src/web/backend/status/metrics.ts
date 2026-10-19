@@ -1,7 +1,7 @@
 /**
  * Unauthenticated probes: /healthz for load balancers and /metrics for
  * Prometheus. Split out of server.ts in the QUAL-01 refactor (2026-07
- * audit) — the exposition format lives here and nowhere else.
+ * audit) the exposition format lives here and nowhere else.
  */
 import type { FastifyInstance } from "fastify";
 import { getAllInstances } from "@mcbot/core/utils/server/server.js";
@@ -76,7 +76,7 @@ export function registerProbeRoutes(app: FastifyInstance): void {
           `mcbot_server_up${label} ${status.state === ServerState.Offline ? 0 : 1}`,
         );
       }
-      lines.push(`mcbot_server_online${label} ${status?.online ? 1 : 0}`);
+      lines.push(`mcbot_server_online${label} ${status?.state === ServerState.Online ? 1 : 0}`);
       // A gauge of 0 for "unknown" is indistinguishable from an empty
       // server and would draw a real dip on a dashboard. Absent is the
       // honest encoding, and Prometheus already handles a missing sample.

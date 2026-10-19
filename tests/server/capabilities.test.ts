@@ -200,7 +200,7 @@ describe("capabilitySummary", () => {
       }),
     );
     expect(s).toBe(
-      "scripts: start,stop — backups: no, mods: yes, variables.txt: no",
+      "scripts: start,stop; backups: no, restore: yes, mods: yes, variables.txt: no, upgrade: unknown, prune: unknown",
     );
   });
 });

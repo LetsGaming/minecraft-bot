@@ -1,5 +1,5 @@
 /**
- * !report <message> — in-game problem reports routed to Discord.
+ * !report <message>, in-game problem reports routed to Discord.
  *
  * Posts an embed (player head, server ID, timestamp, sanitized message)
  * to every guild that configured `reports.channelId` and whose report
@@ -7,13 +7,13 @@
  * The reporter gets a tellraw confirmation; if no guild is wired up for
  * this server they are told so instead of reporting into the void.
  *
- * First consumer of defineCommand's greedy last argument — report bodies
+ * First consumer of defineCommand's greedy last argument, report bodies
  * are free text, not single tokens. Aggressive per-player cooldown (120s)
  * keeps the channel spam-resistant.
  */
 import { defineCommand } from "../../defineCommand.js";
 import { loadConfig } from "@mcbot/core/config.js";
-import { serverInScope } from "../../../utils/guild/guildRouter.js";
+import { fetchSendable, guildTargets } from "../../watchers/notifyGuilds.js";
 import { createPlayerEmbed } from "../../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../../utils/embeds/embedColors.js";
 import { stripControlChars } from "@mcbot/core/utils/sanitize.js";
@@ -39,17 +39,16 @@ const cmd = defineCommand({
       return;
     }
 
-    const guilds = loadConfig().guilds;
     let delivered = 0;
 
-    for (const [guildId, gcfg] of Object.entries(guilds)) {
-      const reports = gcfg.reports;
-      if (!reports?.channelId) continue;
-      if (!serverInScope(reports.server, server.id, guildId)) continue;
-
+    for (const { guildId, target: reports } of guildTargets(
+      loadConfig().guilds,
+      (gcfg) => gcfg.reports,
+      server.id,
+    )) {
       try {
-        const channel = await client.channels.fetch(reports.channelId);
-        if (!channel || !("send" in channel)) continue;
+        const channel = await fetchSendable(client, reports.channelId);
+        if (!channel) continue;
 
         const embed = runWithGuildLocale(guildId, () =>
           createPlayerEmbed(username, {
@@ -69,9 +68,9 @@ const cmd = defineCommand({
 
     if (delivered > 0) {
       await tellraw(server, username, {
-          text: t("report.sent"),
-          color: "green",
-        });
+        text: t("report.sent"),
+        color: "green",
+      });
     } else {
       await whisper(server, username, t("report.noChannel"));
     }

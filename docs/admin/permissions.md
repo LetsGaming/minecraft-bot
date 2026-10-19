@@ -32,7 +32,7 @@ In a single-guild deployment the two behave identically. Once the bot serves sev
 | `/verify` | Identical to `/whitelist` (kept as an alias). |
 | `/unwhitelist` | Removes a player from the whitelist. |
 | `/config show` / `/config reload` | Inspect the running config (only you see it; servers by host, no token or admin IDs) or hot-reload it from disk. |
-| `/server prune-stats` | Lists (dry run) or deletes stats files of players no longer on the whitelist. |
+| `/server prune-stats` | Lists the stats files of players no longer on the whitelist and deletes them after you press the confirm button. |
 | `/whois` | Shows the whitelist audit entry (who added/removed a player, when, where) and the linked Discord account for a Minecraft username. |
 
 A non-admin running any of these gets a clean "You do not have permission to use this command" error. The `/clear` command is gated differently: Discord itself only shows it to members with the Manage Messages permission.

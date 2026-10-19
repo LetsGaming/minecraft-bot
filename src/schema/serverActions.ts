@@ -2,11 +2,9 @@
 // The management scripts the setup suite installs, named once for every layer
 // that reasons about them: capability detection, the RCON/script runner, the
 // bot's /server subcommands, the dashboard's action route, and the Vue view's
-// confirm step. Each of those used to carry its own copy — as a `Set` of
-// literals, a `Record<string, …>`, or a bare `sub === "stop"` — which is how
-// the dashboard's list quietly drifted out of sync with the runner's.
+// confirm step.
 
-import { ServerState } from "./serverState.js";
+import { ServerState, stateIsUp } from "./serverState.js";
 
 /** Every management script the suite exposes. */
 export const SERVER_SCRIPT_ACTIONS = [
@@ -25,15 +23,12 @@ export type ServerScriptAction = (typeof SERVER_SCRIPT_ACTIONS)[number];
  * `status` is deliberately absent: it's a read, served by the status
  * endpoints, not a state change.
  */
-export const SERVER_OPERATOR_ACTIONS = [
-  "start",
-  "stop",
-  "restart",
-  "rollback",
-  "backup",
-] as const satisfies readonly ServerScriptAction[];
+export type ServerOperatorAction = Exclude<ServerScriptAction, "status">;
 
-export type ServerOperatorAction = (typeof SERVER_OPERATOR_ACTIONS)[number];
+export const SERVER_OPERATOR_ACTIONS: readonly ServerOperatorAction[] =
+  SERVER_SCRIPT_ACTIONS.filter(
+    (action): action is ServerOperatorAction => action !== "status",
+  );
 
 /** Type guard: may this string be run as an operator action? */
 export function isServerOperatorAction(
@@ -73,6 +68,16 @@ export function isIrreversibleServerAction(value: string): boolean {
   return (IRREVERSIBLE_SERVER_ACTIONS as readonly string[]).includes(value);
 }
 
+/**
+ * The user capability an operator action needs: irreversible actions have a
+ * capability of their own, everything else rides on server:control.
+ */
+export function capabilityForServerAction(
+  action: ServerOperatorAction,
+): "server:rollback" | "server:control" {
+  return isIrreversibleServerAction(action) ? "server:rollback" : "server:control";
+}
+
 /** Does this action interrupt players, warranting a confirm step? */
 export function isDisruptiveServerAction(value: string): boolean {
   return (DISRUPTIVE_SERVER_ACTIONS as readonly string[]).includes(value);
@@ -83,7 +88,7 @@ export function isDisruptiveServerAction(value: string): boolean {
  *
  * The dashboard rendered every granted action as live regardless of state, so
  * a server sitting at 20 TPS still showed an enabled, primary-styled "Start"
- * — the one button on the card that could only fail. Offering an impossible
+ *, the one button on the card that could only fail. Offering an impossible
  * action is a state-visibility bug, not a permissions one: the operator reads
  * the button as an available choice and learns otherwise from an error toast.
  *
@@ -96,8 +101,7 @@ export function isActionApplicable(
   state: ServerState,
 ): boolean {
   if (state === ServerState.Unknown) return true;
-  const running =
-    state === ServerState.Online || state === ServerState.Unresponsive;
+  const running = stateIsUp(state);
   switch (action) {
     // Nothing to start when it is already up.
     case "start":

@@ -1986,7 +1986,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Rate limited */
+            /** @description Too many requests */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -2557,6 +2557,15 @@ export interface operations {
             };
             /** @description Precondition failed */
             412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Payload too large */
+            413: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3682,7 +3691,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Rate limited */
+            /** @description Too many requests */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -3916,6 +3925,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Payload too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Locked: another operation holds the instance */
             423: {
                 headers: {
@@ -4119,7 +4137,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Rate limited */
+            /** @description Too many requests */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -4205,7 +4223,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Rate limited */
+            /** @description Too many requests */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -4351,6 +4369,15 @@ export interface operations {
             };
             /** @description Not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Payload too large */
+            413: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4548,7 +4575,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Rate limited */
+            /** @description Too many requests */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -4629,6 +4656,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Payload too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Rate limited */
             429: {
                 headers: {
@@ -4697,7 +4733,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Rate limited */
+            /** @description Too many requests */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -4792,7 +4828,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Rate limited */
+            /** @description Too many requests */
             429: {
                 headers: {
                     [name: string]: unknown;

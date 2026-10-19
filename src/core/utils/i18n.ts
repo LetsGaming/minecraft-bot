@@ -6,7 +6,7 @@
  * {placeholders} from vars.
  *
  * Locale resolution order:
- *   1. `guilds.<guildId>.language` — per-guild override, when a guild
+ *   1. `guilds.<guildId>.language`, per-guild override, when a guild
  *      context is known (explicit third argument, or the ambient context
  *      set by the command middleware / per-guild broadcast loops),
  *   2. the global `language` from config.json,
@@ -18,7 +18,7 @@
  * threading a guildId parameter through layers that must stay
  * Discord-agnostic (statUtils, stores). An explicit guildId argument
  * always wins over the ambient one. In-game (!command) strings and DMs
- * deliberately stay on the global language — a server instance can serve
+ * deliberately stay on the global language, a server instance can serve
  * several guilds, so there is no single correct guild to borrow a locale
  * from (see docs/dev/decisions.md).
  *
@@ -32,11 +32,14 @@
  * fails when en and de diverge on keys.
  */
 import { AsyncLocalStorage } from "async_hooks";
-import { loadConfig } from "../config.js";
+import { tryLoadConfig } from "./config/configAccess.js";
 import { en } from "../locales/en.js";
 import { de } from "../locales/de.js";
+import { isLanguage, type Language } from "@mcbot/schema/language.js";
 
-const LOCALES: Record<string, Record<string, string>> = { en, de };
+const DEFAULT_LANGUAGE: Language = "en";
+
+const LOCALES: Record<Language, Record<string, string>> = { en, de };
 
 const guildLocaleContext = new AsyncLocalStorage<{
   guildId: string | undefined;
@@ -54,27 +57,36 @@ export function runWithGuildLocale<T>(
   return guildLocaleContext.run({ guildId }, fn);
 }
 
-/** Normalize any configured language string to a known locale, or null. */
-function knownLocale(lang: unknown): "en" | "de" | null {
-  return lang === "de" ? "de" : lang === "en" ? "en" : null;
-}
-
 /**
  * The effective locale for an optional guild context: the guild override
  * when set and valid, the global setting otherwise.
  */
-export function resolveLanguage(guildId?: string): "en" | "de" {
-  let global: "en" | "de" = "en";
-  let guildLang: "en" | "de" | null = null;
-  try {
-    const cfg = loadConfig();
-    global = cfg.language ?? "en";
-    const gid = guildId ?? guildLocaleContext.getStore()?.guildId;
-    if (gid) guildLang = knownLocale(cfg.guilds?.[gid]?.language);
-  } catch {
-    // config unavailable (early startup, some tests) — English fallback
-  }
-  return guildLang ?? global;
+export function resolveLanguage(guildId?: string): Language {
+  // Config unavailable (early startup, some tests): English.
+  const loaded = tryLoadConfig({ onError: "open" });
+  if (!loaded.ok) return DEFAULT_LANGUAGE;
+  const cfg = loaded.config;
+  const gid = guildId ?? guildLocaleContext.getStore()?.guildId;
+  const guildLang = gid ? cfg.guilds?.[gid]?.language : undefined;
+  if (isLanguage(guildLang)) return guildLang;
+  return isLanguage(cfg.language) ? cfg.language : DEFAULT_LANGUAGE;
+}
+
+/**
+ * A number in the effective language's convention ("1,234" or "1.234").
+ * `fixed` sets an exact number of decimals.
+ */
+export function formatNumber(
+  value: number,
+  options: { fixed?: number } = {},
+  guildId?: string,
+): string {
+  return value.toLocaleString(
+    resolveLanguage(guildId),
+    options.fixed === undefined
+      ? undefined
+      : { minimumFractionDigits: options.fixed, maximumFractionDigits: options.fixed },
+  );
 }
 
 export function t(
@@ -101,7 +113,7 @@ const PLURAL_PATTERN = /\{(\w+)\|([^|{}]*)\|([^|{}]*)\}/g;
 const pluralRules = new Map<string, Intl.PluralRules>();
 
 /** The CLDR plural category of `count` in `lang` ("one", "other", ...). */
-export function pluralCategory(count: number, lang: "en" | "de"): Intl.LDMLPluralRule {
+export function pluralCategory(count: number, lang: Language): Intl.LDMLPluralRule {
   let rules = pluralRules.get(lang);
   if (!rules) {
     rules = new Intl.PluralRules(lang);
@@ -110,11 +122,3 @@ export function pluralCategory(count: number, lang: "en" | "de"): Intl.LDMLPlura
   return rules.select(count);
 }
 
-/** Picks the singular or plural form for `count` in the effective language. */
-export function plural(
-  count: number,
-  forms: { one: string; other: string },
-  guildId?: string,
-): string {
-  return pluralCategory(count, resolveLanguage(guildId)) === "one" ? forms.one : forms.other;
-}

@@ -39,3 +39,60 @@ export function phaseRows(events: readonly { phase: string; status: string; msg:
   }
   return order.map((p) => latest.get(p)!);
 }
+
+/** The steps of a clean upgrade, in order; the progress bar counts these. */
+export const UPGRADE_PHASES = ["plan", "countdown", "stop", "backup", "apply", "start"] as const;
+
+/** The same for a prune-only job, which has no install. */
+export const PRUNE_PHASES = ["plan", "countdown", "stop", "backup", "prune", "start"] as const;
+
+/** Every top-level phase a job can report, including the ones off the happy path. */
+export const JOB_PHASES = [
+  "plan",
+  "countdown",
+  "stop",
+  "backup",
+  "apply",
+  "prune",
+  "start",
+  "mods",
+  "rollback",
+  "abort",
+] as const;
+
+/** Why a job failed, as the wrapper reports it. */
+export const JOB_FAILURE_REASONS = [
+  "plan_failed",
+  "mods_changed",
+  "stop_failed",
+  "backup_failed",
+  "apply_failed",
+  "prune_failed",
+  "prune_stale",
+  "prune_timeout",
+  "crash_loop",
+  "timeout",
+  "start_failed",
+  "rollback_failed",
+] as const;
+
+export type UpgradePhase = (typeof UPGRADE_PHASES)[number];
+export type PrunePhase = (typeof PRUNE_PHASES)[number];
+export type JobPhase = (typeof JOB_PHASES)[number];
+export type JobFailureReason = (typeof JOB_FAILURE_REASONS)[number];
+
+export function isUpgradePhase(value: unknown): value is UpgradePhase {
+  return (UPGRADE_PHASES as readonly unknown[]).includes(value);
+}
+
+export function isPrunePhase(value: unknown): value is PrunePhase {
+  return (PRUNE_PHASES as readonly unknown[]).includes(value);
+}
+
+export function isJobPhase(value: unknown): value is JobPhase {
+  return (JOB_PHASES as readonly unknown[]).includes(value);
+}
+
+export function isJobFailureReason(value: unknown): value is JobFailureReason {
+  return (JOB_FAILURE_REASONS as readonly unknown[]).includes(value);
+}

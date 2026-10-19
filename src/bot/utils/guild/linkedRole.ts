@@ -1,10 +1,10 @@
 /**
- * Auto-role on link — assign each guild's configured `linkedRole` when a
+ * Auto-role on link, assign each guild's configured `linkedRole` when a
  * member links their Minecraft account, remove it on unlink.
  *
  * Contract from the plan: role failures (missing Manage Roles, role above
  * the bot in the hierarchy, member not in the guild) go to the admin
- * audit log and NEVER fail the link itself — this function does not
+ * audit log and NEVER fail the link itself, this function does not
  * throw. Role validation happens at config time (validateCandidateConfig
  * checks the shape); the hierarchy can only be checked here at runtime.
  */
@@ -37,7 +37,7 @@ export async function syncLinkedRole(
         client.guilds.cache.get(guildId) ??
         (await client.guilds.fetch(guildId));
       const member = await guild.members.fetch(discordId).catch(() => null);
-      if (!member) continue; // linked user isn't in this guild — fine
+      if (!member) continue; // linked user isn't in this guild, fine
 
       if (action === "add") {
         if (member.roles.cache.has(roleId)) continue;

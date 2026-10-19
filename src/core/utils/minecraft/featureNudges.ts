@@ -3,7 +3,7 @@
  *
  * The problem this solves: the chat bridge is the only feature with real
  * traffic, because it needs no learning. Everything else starts with a
- * Discord command a player has never been shown, so it is invisible —
+ * Discord command a player has never been shown, so it is invisible, 
  * invisible enough that the operator of this bot did not know `!waypoint
  * del` existed either. Documentation does not fix that; nothing reads it at
  * the moment it would matter.
@@ -41,30 +41,30 @@ import {
   isLinked,
   findDiscordIdByMcName,
   loadLinkedAccountsOrEmpty,
-} from "../stores/linkUtils.js";
+} from "../stores/linkStore.js";
 import { loadClaimedStore, getServerClaims } from "../stores/dailyStore.js";
-import { isAdvertisable } from "./eventTips.js";
-import { loadConfig } from "../../config.js";
+import { isAdvertisable, ledgerAllows, whisperAndRecord } from "./eventTips.js";
+import { tryLoadConfig } from "../config/configAccess.js";
+import { MS } from "@mcbot/schema/time.js";
 import { t } from "../i18n.js";
 import { log } from "../logger.js";
 import { errMsg } from "../error.js";
 import type { ServerInstance } from "../server/server.js";
-import { whisper } from "./serverMessages.js";
 
 /** Stop after this many mentions of one feature, ever. */
 export const MAX_NUDGES_PER_FEATURE = 3;
 
 /** Minimum gap between two mentions of the same feature to one player. */
-export const NUDGE_COOLDOWN_MS = 48 * 60 * 60 * 1000;
+export const NUDGE_COOLDOWN_MS = 48 * MS.hour;
 
 /**
  * How long after joining to whisper.
  *
  * Long enough that the player has finished loading and the join spam has
- * scrolled past — a message delivered into a loading screen is a message
+ * scrolled past, a message delivered into a loading screen is a message
  * nobody read.
  */
-export const NUDGE_DELAY_MS = 45_000;
+export const NUDGE_DELAY_MS = 45 * MS.second;
 
 export interface NudgeSettings {
   enabled: boolean;
@@ -73,20 +73,20 @@ export interface NudgeSettings {
 }
 
 export function nudgeSettings(): NudgeSettings {
-  let cfg;
-  try {
-    cfg = loadConfig().featureNudges;
-  } catch {
+  // Config unreadable: say nothing rather than guess.
+  const loaded = tryLoadConfig({ onError: "closed" });
+  if (!loaded.ok) {
     return {
-      enabled: false, // config unreadable: say nothing rather than guess
+      enabled: false,
       maxPerFeature: MAX_NUDGES_PER_FEATURE,
       cooldownMs: NUDGE_COOLDOWN_MS,
     };
   }
+  const cfg = loaded.config.featureNudges;
   return {
     enabled: cfg?.enabled ?? true,
     maxPerFeature: cfg?.maxPerFeature ?? MAX_NUDGES_PER_FEATURE,
-    cooldownMs: (cfg?.cooldownHours ?? 48) * 60 * 60 * 1000,
+    cooldownMs: cfg?.cooldownHours === undefined ? NUDGE_COOLDOWN_MS : cfg.cooldownHours * MS.hour,
   };
 }
 
@@ -97,7 +97,7 @@ export interface PlayerProgress {
 }
 
 /**
- * Which nudge — if any — this player should get right now.
+ * Which nudge, if any, this player should get right now.
  *
  * Pure: every input is passed in, so the policy can be tested without a
  * server, a store, or a clock.
@@ -112,7 +112,7 @@ export function chooseNudge(
 ): NudgeKind | null {
   if (!settings.enabled) return null;
 
-  // Funnel order. The first unmet step is the only candidate — telling
+  // Funnel order. The first unmet step is the only candidate, telling
   // someone about /daily before they can use it is noise.
   const candidate: NudgeKind | null = !progress.linked
     ? "link"
@@ -127,12 +127,13 @@ export function chooseNudge(
   if (!isAdvertisable(candidate, { serverId })) return null;
 
   const record = getSuggestionRecord(ledger, mcSubject(player), candidate);
-  if (!record) return candidate;
-  // An explicit refusal outranks the count and the cooldown.
-  if (record.dismissed) return null;
-  if (record.count >= settings.maxPerFeature) return null;
-  if (now - record.lastAt < settings.cooldownMs) return null;
-  return candidate;
+  return ledgerAllows(record, {
+    maxMentions: settings.maxPerFeature,
+    cooldownMs: settings.cooldownMs,
+    now,
+  })
+    ? candidate
+    : null;
 }
 
 /** Read the two facts chooseNudge needs about a player. */
@@ -189,13 +190,13 @@ export async function maybeNudge(
       settings.maxPerFeature -
       ((getSuggestionRecord(ledger, mcSubject(player), kind)?.count ?? 0) + 1);
 
-    const reached = await whisper(
+    const reached = await whisperAndRecord(
       server,
       player,
       t(`nudge.${kind}`) + (remaining <= 0 ? ` ${t("nudge.lastTime")}` : ""),
+      () => recordSuggestion(mcSubject(player), kind, now),
     );
     if (!reached) return null;
-    await recordSuggestion(mcSubject(player), kind, now);
     log.debug("nudge", `${server.id}: told ${player} about ${kind}`);
     return kind;
   } catch (err) {

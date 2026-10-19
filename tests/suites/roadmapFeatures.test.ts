@@ -20,7 +20,7 @@ vi.mock("../../src/core/utils/minecraft/whitelist.js", () => ({
   loadKnownPlayers: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock("../../src/core/utils/stores/linkUtils.js", async (importOriginal) => ({
+vi.mock("../../src/core/utils/stores/linkStore.js", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   loadLinkedAccounts: vi.fn(async () => ({})),
   loadLinkedAccountsOrEmpty: vi.fn(async () => ({})),
@@ -42,10 +42,8 @@ import {
   type Poll,
   type PollStore,
 } from "../../src/core/utils/stores/pollStore.js";
-import {
-  parseScheduleTime,
-  nextScheduledRun,
-} from "../../src/bot/logWatcher/watchers/schedulers/restartScheduler.js";
+import { nextScheduledRun } from "../../src/bot/logWatcher/watchers/schedulers/restartScheduler.js";
+import { parseScheduleTime } from "../../src/core/utils/time.js";
 import {
   buildActivitySparkline,
   busiestHours,
@@ -348,7 +346,7 @@ describe("buildStreakLeaderboard", () => {
     vi.mocked(loadJson).mockResolvedValue({});
 
     const { loadLinkedAccountsOrEmpty } = await import(
-      "../../src/core/utils/stores/linkUtils.js"
+      "../../src/core/utils/stores/linkStore.js"
     );
     vi.mocked(loadLinkedAccountsOrEmpty).mockResolvedValue({ u1: "SteveMC" });
 

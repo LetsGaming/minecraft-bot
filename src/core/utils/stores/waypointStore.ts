@@ -1,5 +1,5 @@
 /**
- * Community waypoint persistence — single owner of kv_store["waypoints"];
+ * Community waypoint persistence, single owner of kv_store["waypoints"];
  * commands never touch loadJson/saveJson for this file directly (same
  * ownership pattern as dailyStore.ts).
  *
@@ -12,7 +12,7 @@
  * conservative character set the sanitize contract enforces for player
  * names applies here.
  */
-import { kvGet, kvMutate, kvSet } from "../../db/kv.js";
+import { versionedStore } from "./versionedStore.js";
 import { loadConfig } from "../../config.js";
 
 export interface Waypoint {
@@ -25,7 +25,7 @@ export interface Waypoint {
   author: string;
   createdAt: number;
   /**
-   * Optional flat category tag ("base", "farm", "shop", …) — same
+   * Optional flat category tag ("base", "farm", "shop", …) same
    * conservative character set as names, since it travels through
    * console commands and Discord embeds. Lowercased on write.
    */
@@ -55,7 +55,7 @@ export function waypointCap(): number {
       return max;
     }
   } catch {
-    /* config unavailable — default */
+    /* config unavailable, default */
   }
   return MAX_WAYPOINTS_PER_SERVER;
 }
@@ -71,20 +71,14 @@ export function isValidWaypointCategory(category: string): boolean {
   return WAYPOINT_CATEGORY_REGEX.test(category);
 }
 
-function isV1Store(raw: unknown): raw is WaypointStore {
-  return (
-    typeof raw === "object" &&
-    raw !== null &&
-    (raw as { version?: unknown }).version === 1 &&
-    typeof (raw as { servers?: unknown }).servers === "object" &&
-    (raw as { servers?: unknown }).servers !== null
-  );
-}
+const waypointDoc = versionedStore<WaypointStore>(
+  "waypoints",
+  { version: 1, container: "servers" },
+  () => ({ version: 1, servers: {} }),
+);
 
 export async function loadWaypointStore(): Promise<WaypointStore> {
-  const raw = kvGet<unknown>("waypoints");
-  if (isV1Store(raw)) return raw;
-  return { version: 1, servers: {} };
+  return waypointDoc.load();
 }
 
 /** Waypoints for one server; creates the map lazily so callers can mutate. */
@@ -95,17 +89,9 @@ export function getServerWaypoints(
   return (store.servers[serverId] ??= {});
 }
 
-export async function saveWaypointStore(store: WaypointStore): Promise<void> {
-  kvSet("waypoints", store);
-}
-
-/** Change the store in one transaction (AUD-005); see kvMutate. */
+/** Change the store in one transaction; see versionedStore. */
 export async function updateWaypointStore<T>(
   fn: (store: WaypointStore) => T,
 ): Promise<T> {
-  return kvMutate<WaypointStore, T>(
-    "waypoints",
-    (raw) => (isV1Store(raw) ? raw : { version: 1, servers: {} }),
-    fn,
-  );
+  return waypointDoc.update(fn);
 }

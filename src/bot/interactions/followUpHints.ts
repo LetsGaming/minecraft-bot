@@ -3,7 +3,7 @@
  *
  * customIds are stable (`hint:<yes|no>:<hintId>:<serverId>:<userId>`) rather
  * than collector-backed, so a hint offered before a restart still works
- * afterwards — the same reason the whitelist-application buttons are built
+ * afterwards, the same reason the whitelist-application buttons are built
  * this way. A dead button is worse than no button: it teaches people the
  * bot's offers do not work.
  */
@@ -49,7 +49,7 @@ export async function handleFollowUpHintInteraction(
   if (!parsed) return false;
 
   // The reply may be public, so anyone can see the button. Only the person
-  // it was offered to may press it — the action writes to their record.
+  // it was offered to may press it, the action writes to their record.
   if (interaction.user.id !== parsed.userId) {
     await interaction.reply({
       content: t("hint.notYours"),
@@ -60,7 +60,7 @@ export async function handleFollowUpHintInteraction(
 
   const hint = findHint(parsed.hintId);
   // Either removed from the registry between offer and press, or turned
-  // into a mention — neither has anything to apply, so retire the buttons.
+  // into a mention, neither has anything to apply, so retire the buttons.
   if (!hint || hint.kind !== "action") {
     await interaction.update({ components: [] });
     return true;

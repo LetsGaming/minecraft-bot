@@ -1,8 +1,8 @@
-import { computed, getCurrentInstance, onBeforeUnmount, ref } from "vue";
+import { computed, ref } from "vue";
 import { errorMessage } from "../utils/errorMessage";
 import { isRecord } from "../utils/isRecord";
 import { groupErrors } from "../utils/fieldErrors";
-import { useToast } from "primevue/usetoast";
+import { useNotify } from "./useNotify";
 import { apiGet, apiSend } from "../api";
 import type { ConfigResponse } from "../api";
 import { useEditableDocument } from "./useEditableDocument";
@@ -26,7 +26,7 @@ type ConfigDoc = Record<string, unknown>;
  * the raw-JSON view and the mapping of validation errors onto form sections.
  */
 export function useConfig() {
-  const toast = useToast();
+  const notify = useNotify();
 
   const placeholder = SECRET_PLACEHOLDER;
   const schema = ref<JsonSchema | null>(null);
@@ -62,8 +62,7 @@ export function useConfig() {
   });
   const dirty = computed(() => editor.dirty.value || rawDirty.value);
 
-  const unregisterRaw = registerDirtySource(() => rawDirty.value);
-  if (getCurrentInstance()) onBeforeUnmount(unregisterRaw);
+  registerDirtySource(() => rawDirty.value);
 
   function syncRawFromDraft(): void {
     rawText.value = JSON.stringify(editor.draft.value ?? {}, null, 2);
@@ -122,12 +121,7 @@ export function useConfig() {
     const ok = await editor.save();
     syncRawFromDraft();
     if (ok) {
-      toast.add({
-        severity: "success",
-        summary: t("config.savedToast"),
-        detail: t("config.savedToastDetail"),
-        life: 3000,
-      });
+      notify.ok(t("config.savedToast"), t("config.savedToastDetail"));
     }
     return ok;
   }

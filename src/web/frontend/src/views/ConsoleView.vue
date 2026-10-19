@@ -407,7 +407,6 @@ export default defineComponent({
   gap: var(--space-2);
   padding: var(--space-2) 2px 0;
 }
-.foot-count { color: var(--text-dim); font-size: var(--text-sm); }
 .foot-actions { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-left: auto; }
 .toggle { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--text-dim); font-size: var(--text-sm); cursor: pointer; }
 .toggle input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
@@ -419,7 +418,7 @@ export default defineComponent({
 .send-error { margin-top: var(--space-3); }
 
 @media (pointer: coarse), (max-width: 760px) {
-  .tap, .composer-input { min-height: var(--touch-min); }
+  .composer-input { min-height: var(--touch-min); }
   .pane-search :deep(input) { min-height: var(--touch-min); }
   .levels :deep(.p-togglebutton) { min-height: var(--touch-min); }
   .toggle { min-height: var(--touch-min); }

@@ -28,7 +28,7 @@ import {
 } from "../../src/bot/logWatcher/watchers/schedulers/pollScheduler.js";
 import {
   loadPollStore,
-  savePollStore,
+  updatePollStore,
   type Poll,
 } from "../../src/core/utils/stores/pollStore.js";
 import { closeDbForTesting } from "../../src/core/db/index.js";
@@ -52,7 +52,10 @@ function poll(overrides: Partial<Poll> = {}): Poll {
     ...overrides,
   };
 }
-const seed = (...polls: Poll[]) => savePollStore({ version: 1, polls });
+const seed = (...polls: Poll[]) =>
+  updatePollStore((store) => {
+    store.polls = polls;
+  });
 
 const send = vi.fn();
 const edit = vi.fn();

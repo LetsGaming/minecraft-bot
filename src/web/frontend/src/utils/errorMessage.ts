@@ -1,29 +1,29 @@
-// One place to turn a caught `unknown` into a display string, instead of the
-// unsafe `(err as Error).message` repeated across every catch block. A thrown
-// value isn't guaranteed to be an Error, so this narrows before reading.
+import { ApiError } from "../api";
 
-/** Extract a human-readable message from an unknown caught value. */
-export function errorMessage(err: unknown): string {
+function messageOfValue(err: unknown): string {
   if (err instanceof Error) return err.message;
   if (typeof err === "string") return err;
-  return String(err);
+  if (typeof err === "object" && err !== null) {
+    const message = (err as { message?: unknown }).message;
+    if (typeof message === "string") return message;
+  }
+  return "";
 }
 
 /**
- * The backend surfaces validation failures as a JSON array string (starting
- * with "["). Parse that into a string[], falling back to the raw message when
- * it isn't a clean array of strings — so a non-conforming payload is shown to
- * the user rather than throwing.
+ * A display string for a caught `unknown`. Reads Errors, strings and plain
+ * objects with a string `message`. When there is no usable text it returns
+ * `fallback`, or the stringified value if no fallback was given.
  */
-export function parseErrorList(message: string): string[] {
-  if (!message.startsWith("[")) return [message];
-  try {
-    const parsed: unknown = JSON.parse(message);
-    if (Array.isArray(parsed) && parsed.every((x) => typeof x === "string")) {
-      return parsed;
-    }
-  } catch {
-    /* not valid JSON — fall through to the raw message */
-  }
-  return [message];
+export function errorMessage(err: unknown, fallback?: string): string {
+  const text = messageOfValue(err);
+  if (text) return text;
+  if (fallback !== undefined) return fallback;
+  return err instanceof Error ? "" : String(err);
+}
+
+/** Like `errorMessage`, but a failed request keeps its HTTP status in front: "404: not found". */
+export function apiErrorText(err: unknown, fallback?: string): string {
+  if (err instanceof ApiError) return `${err.status}: ${err.message}`;
+  return errorMessage(err, fallback);
 }

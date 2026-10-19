@@ -4,7 +4,7 @@
  * Extracted from RemoteLogWatcher when the dashboard needed the same thing.
  * The watcher held the only working SSE client in the repo, but it lived in
  * `src/bot/` and carried a discord.js `Client`, and the ESLint boundary stops
- * `web` importing `bot` — so the dashboard's options were to duplicate the
+ * `web` importing `bot`, so the dashboard's options were to duplicate the
  * connect/backoff loop or to move it here. A second copy of reconnect logic is
  * exactly the kind of drift 5.0.0 spent a major version removing.
  *
@@ -21,11 +21,15 @@
  * consumer, so it stays with the consumer that has it.
  */
 import { log } from "./logger.js";
+import { errMsg } from "./error.js";
+import { MS } from "@mcbot/schema/time.js";
 
-const RECONNECT_BASE_MS = 5_000;
-const RECONNECT_MAX_MS = 60_000;
+const RECONNECT_BASE_MS = 5 * MS.second;
+const RECONNECT_MAX_MS = MS.minute;
 /** Budget for the initial handshake only, not for the stream's lifetime. */
-const CONNECT_TIMEOUT_MS = 10_000;
+const CONNECT_TIMEOUT_MS = 10 * MS.second;
+/** A frame longer than this without a delimiter is discarded. */
+const MAX_PARTIAL_FRAME_CHARS = 1_000_000;
 
 /**
  * Incremental SSE frame decoder.
@@ -38,18 +42,24 @@ const CONNECT_TIMEOUT_MS = 10_000;
  */
 export class SseFrameDecoder {
   private _buf = "";
+  private _overflows = 0;
 
   /** Push a decoded text chunk; get back every complete `data:` payload. */
   push(chunk: string): string[] {
     this._buf += chunk;
-    // Frames are delimited by a blank line. The tail after the last delimiter
-    // is a partial frame and stays buffered.
-    const frames = this._buf.split("\n\n");
+    // Frames are delimited by a blank line (LF or CRLF). The tail after the
+    // last delimiter is a partial frame and stays buffered, up to a cap: a
+    // peer that never sends a delimiter must not grow the buffer forever.
+    const frames = this._buf.split(/\r?\n\r?\n/);
     this._buf = frames.pop() ?? "";
+    if (this._buf.length > MAX_PARTIAL_FRAME_CHARS) {
+      this._buf = "";
+      this._overflows += 1;
+    }
 
     const out: string[] = [];
     for (const frame of frames) {
-      for (const rawLine of frame.split("\n")) {
+      for (const rawLine of frame.split(/\r?\n/)) {
         // `:` alone is a keep-alive comment; every other field (event:, id:,
         // retry:) is ignored because the wrapper does not send them.
         if (!rawLine.startsWith("data:")) continue;
@@ -63,6 +73,13 @@ export class SseFrameDecoder {
   /** Drop any partial frame. Call when a connection ends. */
   reset(): void {
     this._buf = "";
+  }
+
+  /** How many oversized partial frames were discarded since the last call. */
+  takeOverflows(): number {
+    const n = this._overflows;
+    this._overflows = 0;
+    return n;
   }
 }
 
@@ -88,7 +105,6 @@ export class SseLineStream {
   private readonly _opts: SseLineStreamOptions;
   private readonly _decoder = new SseFrameDecoder();
   private _state: SseStreamState = "stopped";
-  private _stopped = true;
   private _reconnectDelay = RECONNECT_BASE_MS;
   private _reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private _abort: AbortController | null = null;
@@ -105,15 +121,17 @@ export class SseLineStream {
     return this._state === "connected";
   }
 
+  private get _stopped(): boolean {
+    return this._state === "stopped";
+  }
+
   start(): void {
     if (!this._stopped) return; // already running; start() is idempotent
-    this._stopped = false;
     this._state = "connecting";
     void this._read();
   }
 
   stop(): void {
-    this._stopped = true;
     this._state = "stopped";
     if (this._reconnectTimer) {
       clearTimeout(this._reconnectTimer);
@@ -142,24 +160,26 @@ export class SseLineStream {
         signal: controller.signal,
       });
     } catch (err) {
-      this._scheduleReconnect(`connect failed: ${String(err)}`);
+      controller.abort();
+      this._scheduleReconnect(`connect failed: ${errMsg(err)}`);
       return;
     } finally {
       clearTimeout(handshake);
     }
 
     if (!res.ok || !res.body) {
+      controller.abort();
       this._scheduleReconnect(`bad response: ${res.status}`);
       return;
     }
 
     // stop() may have been called while the handshake was in flight. It aborts
-    // the controller, which usually rejects the fetch above — but not if the
+    // the controller, which usually rejects the fetch above, but not if the
     // response had already resolved, and in that window we would otherwise
     // announce a connection the caller has just cancelled and then read from
     // it. Re-check after every await rather than trusting the abort.
     if (this._stopped) {
-      void res.body.cancel();
+      controller.abort();
       return;
     }
 
@@ -171,27 +191,39 @@ export class SseLineStream {
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
+    let endedBy: string | null = null;
 
     try {
-      for (;;) {
-        if (this._stopped) {
-          void reader.cancel();
-          return;
-        }
+      while (!this._stopped) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          endedBy = "stream ended";
+          break;
+        }
         for (const payload of this._decoder.push(
           decoder.decode(value, { stream: true }),
         )) {
-          this._opts.onData(payload);
+          try {
+            this._opts.onData(payload);
+          } catch (err) {
+            // A throwing consumer must not take the connection down, or the
+            // reconnect would open a second stream next to this one.
+            log.error(this._opts.scope, `SSE data handler threw: ${errMsg(err)}`);
+          }
+        }
+        if (this._decoder.takeOverflows() > 0) {
+          log.warn(this._opts.scope, "SSE frame exceeded the size cap and was discarded");
         }
       }
     } catch (err) {
-      if (!this._stopped) this._scheduleReconnect(`stream error: ${String(err)}`);
-      return;
+      endedBy = `stream error: ${errMsg(err)}`;
+    } finally {
+      // Every way out of the read loop closes this connection before any
+      // reconnect opens the next one.
+      controller.abort();
     }
 
-    if (!this._stopped) this._scheduleReconnect("stream ended");
+    if (endedBy !== null) this._scheduleReconnect(endedBy);
   }
 
   private _scheduleReconnect(reason: string): void {

@@ -1,7 +1,7 @@
 import { SlashCommandBuilder } from "discord.js";
 import { createInfoEmbed, createSuccessEmbed } from "../../utils/embeds/embedUtils.js";
 import { withErrorHandling } from "../middleware.js";
-import { unlinkAccount } from "@mcbot/core/utils/stores/linkUtils.js";
+import { unlinkAccount } from "@mcbot/core/utils/stores/linkStore.js";
 import { syncLinkedRole } from "../../utils/guild/linkedRole.js";
 
 import { t } from "@mcbot/core/utils/i18n.js";
@@ -12,7 +12,7 @@ export const data = new SlashCommandBuilder()
 export const execute = withErrorHandling(
   async (interaction) => {
     const userId = interaction.user.id;
-    const removed = await unlinkAccount(userId).catch(() => false);
+    const removed = await unlinkAccount(userId);
     if (!removed) {
       await interaction.editReply({ embeds: [createInfoEmbed(t("link.notLinked"))] });
       return;

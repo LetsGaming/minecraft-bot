@@ -1,5 +1,5 @@
 /**
- * Whitelist audit trail — who added/removed which player, when, on which
+ * Whitelist audit trail, who added/removed which player, when, on which
  * server. One row per player (keyed by lowercased username), carrying the
  * latest add and the latest remove, exactly the shape the old JSON map had.
  *
@@ -9,8 +9,8 @@
  */
 import { formatDatetime } from "../time.js";
 import { getDb } from "../../db/index.js";
-import { mapRow, mapRows, col } from "../../db/rows.js";
-import type { WhitelistAuditEntry, WhitelistAuditMap } from "../../types/index.js";
+import { mapRow, col } from "../../db/rows.js";
+import type { WhitelistAuditEntry } from "../../types/index.js";
 
 interface AuditRow {
   username_lower: string;
@@ -61,17 +61,6 @@ function rowToEntry(r: AuditRow): WhitelistAuditEntry {
   if (r.removed_at !== null) e.removedAt = r.removed_at;
   if (r.removed_from_server !== null) e.removedFromServer = r.removed_from_server;
   return e;
-}
-
-/** Load the whole audit trail as the legacy map shape (lowercased keys). */
-export async function loadAudit(): Promise<WhitelistAuditMap> {
-  const rows = mapRows(
-    getDb().prepare(`SELECT ${AUDIT_COLUMNS} FROM whitelist_audit`),
-    toAuditRow,
-  );
-  const map: WhitelistAuditMap = {};
-  for (const r of rows) map[r.username_lower] = rowToEntry(r);
-  return map;
 }
 
 /** Record that a player was whitelisted. */

@@ -12,13 +12,15 @@ import type {
   ServerConfig,
 } from "./types/index.js";
 
-// Validation moved to its own module (QUAL-02); re-exported here so existing
-// callers keep importing it from @mcbot/core/config.
+// Re-exported so callers import validation from @mcbot/core/config.
 export { validateCandidateConfig, validateApiUrl };
 export type {
   ApiUrlValidation,
   ConfigValidationResult,
 } from "./configValidation.js";
+import { DEFAULT_TPS_ALERT_THRESHOLD } from "@mcbot/schema/thresholds.js";
+import { isLanguage } from "@mcbot/schema/language.js";
+import { MS } from "@mcbot/schema/time.js";
 import { errMsg } from "./utils/error.js";
 import {
   SECRET_FILE_MODE,
@@ -30,9 +32,20 @@ import {
   type MigrationResult,
 } from "./configMigrations.js";
 
+/** Values a loaded config falls back to when the file leaves a setting out. */
+export const CONFIG_DEFAULTS = {
+  language: "en",
+  tpsWarningThreshold: DEFAULT_TPS_ALERT_THRESHOLD,
+  tpsPollIntervalMs: MS.minute,
+  leaderboardInterval: "weekly",
+} as const satisfies Pick<
+  BotConfig,
+  "language" | "tpsWarningThreshold" | "tpsPollIntervalMs" | "leaderboardInterval"
+>;
+
 const PROJECT_ROOT = getRootDir();
 // The active config.json. Overridable via MCBOT_CONFIG_PATH so a deployment
-// can point it at a writable, process-owned location — in Docker that is the
+// can point it at a writable, process-owned location, in Docker that is the
 // shared data/ volume (/app/data/config.json), where the dashboard can rewrite
 // it atomically (temp+rename on one filesystem) and where the bot's fs watcher
 // picks the edit up. Defaults to <root>/config.json for local/non-container use.
@@ -57,10 +70,10 @@ export function getLoadedConfigRevision(): LoadedConfigRevision | null {
 
 // Storage audit (2026-09): config.json lives in the shared data/ volume the
 // dashboard writes to, so watchConfig() reloads (and re-validates) on every
-// save — including edits that touch a field unrelated to a standing warning.
+// save, including edits that touch a field unrelated to a standing warning.
 // Without this, a single stale warning (e.g. an http apiUrl) got re-logged in
 // full on every dashboard save forever; one deployment had ~2,800 identical
-// lines from this alone. Each distinct message is logged once per process —
+// lines from this alone. Each distinct message is logged once per process, 
 // a fresh warning still surfaces immediately, a repeat doesn't need saying
 // twice, and a restart naturally re-announces whatever is still wrong.
 const warnedConfigMessages = new Set<string>();
@@ -87,34 +100,21 @@ export function getConfigPath(): string {
 }
 
 
+// apiUrl and apiKey are present because validateRawConfig ran before this.
 function resolveServerConfig(
   raw: RawServerConfig & { id: string },
 ): ServerConfig {
-  // Nothing to derive: since 5.0.0 an instance is a wrapper URL and a key.
-  // This used to walk the setup suite's directory layout to find scriptDir,
-  // then parse {scriptDir}/common/variables.txt for SERVER_PATH, USER,
-  // RCON_* and friends — a second implementation of what the wrapper's own
-  // parseVars.ts does, against a file on a machine the bot may not even
-  // share. The wrapper reads it now, and reports what it found.
-  return {
-    id: raw.id,
-    apiUrl: raw.apiUrl!,
-    apiKey: raw.apiKey!,
-    ...(raw.allowInsecureHttp !== undefined
-      ? { allowInsecureHttp: raw.allowInsecureHttp }
-      : {}),
-    // Direct-ping overrides. All optional: the defaults (apiUrl's host, the
-    // wrapper-reported game port) are right for a normal single-host setup.
-    ...(raw.pingHost ? { pingHost: raw.pingHost } : {}),
-    ...(raw.pingPort !== undefined ? { pingPort: raw.pingPort } : {}),
-    ...(raw.disableDirectPing !== undefined
-      ? { disableDirectPing: raw.disableDirectPing }
-      : {}),
-    // Player-facing identity: how to join, and what to install first.
-    ...(raw.publicAddress ? { publicAddress: raw.publicAddress } : {}),
-    ...(raw.modpack ? { modpack: raw.modpack } : {}),
-    ...(raw.commands ? { commands: raw.commands } : {}),
-  };
+  return { ...raw, apiUrl: raw.apiUrl!, apiKey: raw.apiKey! };
+}
+
+/** ENV_VAR-safe form of a server id: "smp-1" -> "SMP_1". */
+function envSuffix(id: string): string {
+  return id.toUpperCase().replace(/[^A-Z0-9]/g, "_");
+}
+
+/** Name of the environment variable that overrides one server's apiKey. */
+export function apiKeyEnvVar(id: string): string {
+  return `API_KEY_${envSuffix(id)}`;
 }
 
 /**
@@ -125,23 +125,18 @@ function resolveServerConfig(
  *
  * Called BEFORE validation: a deployment may supply a required secret only
  * via the environment (the documented `.env` path), so an env-only token must
- * be in place before the required-field check runs — validating first would
+ * be in place before the required-field check runs, validating first would
  * reject the very value the override was about to fill in (BUG-01).
  */
-/** ENV_VAR-safe form of a server id: "smp-1" -> "SMP_1". */
-function envSuffix(id: string): string {
-  return id.toUpperCase().replace(/[^A-Z0-9]/g, "_");
-}
-
 function applyEnvOverrides(raw: RawBotConfig): void {
   if (process.env.DISCORD_TOKEN)     raw.token    = process.env.DISCORD_TOKEN;
   if (process.env.DISCORD_CLIENT_ID) raw.clientId = process.env.DISCORD_CLIENT_ID;
   if (raw.servers && typeof raw.servers === "object") {
     for (const [id, srv] of Object.entries(raw.servers)) {
       // API_KEY_<ID> beats API_KEY, matching the shape RCON_PASSWORD_<ID>
-      // had before 5.0.0 — the bot no longer speaks RCON, so the wrapper's
+      // had before 5.0.0, the bot no longer speaks RCON, so the wrapper's
       // key is the only per-server secret it holds.
-      const specific = `API_KEY_${envSuffix(id)}`;
+      const specific = apiKeyEnvVar(id);
       if (process.env[specific]) srv.apiKey = process.env[specific];
       else if (process.env.API_KEY) srv.apiKey = process.env.API_KEY;
     }
@@ -224,7 +219,7 @@ export function loadConfig(): BotConfig {
   let rawText: string;
   try {
     // Optimistically typed on parse; validateRawConfig() below is the actual
-    // runtime gate — it throws an actionable error if the shape doesn't match,
+    // runtime gate, it throws an actionable error if the shape doesn't match,
     // so a wrong config.json never reaches the resolution logic mis-typed.
     rawText = fs.readFileSync(CONFIG_PATH, "utf-8");
     raw = JSON.parse(rawText) as RawBotConfig;
@@ -244,7 +239,7 @@ export function loadConfig(): BotConfig {
   // instead of being rejected before the override applies (BUG-01).
   applyEnvOverrides(raw);
 
-  // Runtime validation — catches type mismatches that TypeScript cannot
+  // Runtime validation, catches type mismatches that TypeScript cannot
   validateRawConfig(raw, CONFIG_PATH);
 
   // ── Resolve servers ──
@@ -266,33 +261,15 @@ export function loadConfig(): BotConfig {
   };
 
   _config = Object.freeze({
-    configVersion:        raw.configVersion,
-    token:                raw.token,
-    clientId:             raw.clientId,
+    ...raw,
     servers,
     guilds,
-    adminUsers:           raw.adminUsers          ?? [],
-    // Locale for user-visible strings; anything but "de" → "en"
-    language:             raw.language === "de" ? "de" : "en",
-    commands:             raw.commands            ?? {},
-    leaderboard:          raw.leaderboard         ?? {},
-    tpsWarningThreshold:  raw.tpsWarningThreshold ?? 15,
-    tpsPollIntervalMs:    raw.tpsPollIntervalMs   ?? 60_000,
-    leaderboardInterval:  raw.leaderboardInterval ?? "weekly",
-    ...(raw.leaderboardPostTime ? { leaderboardPostTime: raw.leaderboardPostTime } : {}),
-    ...(raw.leaderboardPostDay  ? { leaderboardPostDay:  raw.leaderboardPostDay }  : {}),
-    ...(raw.embedColors ? { embedColors: raw.embedColors } : {}),
-    ...(raw.presence    ? { presence:    raw.presence }    : {}),
-    ...(raw.deathCoords ? { deathCoords: raw.deathCoords } : {}),
-    ...(raw.hostAlerts  ? { hostAlerts:  raw.hostAlerts }  : {}),
-    ...(raw.waypoints   ? { waypoints:   raw.waypoints }   : {}),
-    ...(raw.limits      ? { limits:      raw.limits }      : {}),
-    ...(raw.updateNotifier ? { updateNotifier: raw.updateNotifier } : {}),
-    ...(raw.schedules   ? { schedules:   raw.schedules }   : {}),
-    ...(raw.milestones  ? { milestones:  raw.milestones }  : {}),
-    ...(raw.webui       ? { webui:       raw.webui }       : {}),
-    ...(raw.timezone       ? { timezone:       raw.timezone }       : {}),
-    ...(raw.featureNudges  ? { featureNudges:  raw.featureNudges }  : {}),
+    adminUsers: raw.adminUsers ?? [],
+    language: isLanguage(raw.language) ? raw.language : CONFIG_DEFAULTS.language,
+    commands: raw.commands ?? {},
+    tpsWarningThreshold: raw.tpsWarningThreshold ?? CONFIG_DEFAULTS.tpsWarningThreshold,
+    tpsPollIntervalMs: raw.tpsPollIntervalMs ?? CONFIG_DEFAULTS.tpsPollIntervalMs,
+    leaderboardInterval: raw.leaderboardInterval ?? CONFIG_DEFAULTS.leaderboardInterval,
   });
 
   return _config;
@@ -321,7 +298,7 @@ let _reloadTimer: ReturnType<typeof setTimeout> | null = null;
 let _rearmTimer: ReturnType<typeof setTimeout> | null = null;
 
 const WATCH_DEBOUNCE_MS = 300;
-const WATCH_REARM_MS = 1_000;
+const WATCH_REARM_MS = MS.second;
 
 export interface WatchConfigOptions {
   debounceMs?: number;
@@ -394,7 +371,7 @@ export function watchConfig(
   arm(false);
 }
 
-/** Stop watching and drop any pending reload (shutdown and tests). */
+/** Test seam: stop watching and drop any pending reload. */
 export function stopWatchingConfig(): void {
   _watcher?.close();
   _watcher = null;

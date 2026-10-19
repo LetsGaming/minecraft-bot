@@ -22,8 +22,7 @@ vi.mock("../../../src/core/utils/stores/uptimeTracker.js", () => ({
 }));
 vi.mock("../../../src/core/utils/stores/sessionStore.js", async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  loadSessionStore: vi.fn().mockResolvedValue({}),
-  saveSessionStore: vi.fn().mockResolvedValue(undefined),
+  updateSessionStore: vi.fn((fn: (store: object) => unknown) => fn({})),
   closeAllOpenSessions: vi.fn().mockReturnValue(0),
 }));
 vi.mock("../../../src/bot/logWatcher/watchers/watchFirer.js", () => ({
@@ -77,7 +76,9 @@ describe("Discord snapshots: downtime alerts", () => {
     const server = {
       id: "smp",
       getHealth: vi.fn().mockResolvedValue(health("online")),
-      getList: vi.fn().mockResolvedValue({ playerCount: "3", maxPlayers: "20", players: [] }),
+      getList: vi
+        .fn()
+        .mockResolvedValue({ ok: true, value: { playerCount: "3", maxPlayers: "20", players: [] } }),
     };
 
     const timer = startDowntimeMonitor([server as never], client, guilds);
@@ -86,7 +87,7 @@ describe("Discord snapshots: downtime alerts", () => {
     for (let i = 0; i < 3; i++) await vi.advanceTimersByTimeAsync(TICK);
     server.getHealth.mockResolvedValue(health("online"));
     await vi.advanceTimersByTimeAsync(TICK);
-    clearInterval(timer);
+    timer.stop();
 
     await expect(stringify(sent)).toMatchFileSnapshot(fixturePath("downtime"));
   });

@@ -7,6 +7,7 @@ import {
   type ModCompatApi,
   type PageVisibility,
 } from "../../src/web/frontend/src/composables/useModCompat.js";
+import { DEFAULT_POLL_RETRIES } from "../../src/web/frontend/src/composables/usePolledJob.js";
 import type { ModCompatJob } from "../../src/web/frontend/src/api.js";
 
 function job(partial: Partial<ModCompatJob> = {}): ModCompatJob {
@@ -144,7 +145,7 @@ describe("polling", () => {
     expect(api.poll).not.toHaveBeenCalled();
   });
 
-  it("reports a poll error (for example an expired job) and stops", async () => {
+  it("reports a poll error (for example an expired job) after the retries and stops", async () => {
     const { compat, onError, api } = setup({
       poll: vi.fn(async () => {
         throw new Error("This check expired. Start it again.");
@@ -152,10 +153,12 @@ describe("polling", () => {
     });
     compat.selected.value = "1.21.5";
     await compat.check();
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * (DEFAULT_POLL_RETRIES + 1));
     expect(compat.checkingCompat.value).toBe(false);
+    expect(onError).toHaveBeenCalledTimes(1);
     expect(onError).toHaveBeenCalledWith("This check expired. Start it again.");
     await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3);
-    expect(api.poll).toHaveBeenCalledTimes(1);
+    expect(api.poll).toHaveBeenCalledTimes(DEFAULT_POLL_RETRIES + 1);
   });
 
   it("does not poll while the tab is hidden and resumes when it returns", async () => {

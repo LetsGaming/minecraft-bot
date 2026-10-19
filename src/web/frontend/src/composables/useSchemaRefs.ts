@@ -1,5 +1,6 @@
-import { reactive, type InjectionKey } from "vue";
-import { apiGet, type SetupChannel, type SetupRole } from "../api";
+import { computed, reactive, type InjectionKey } from "vue";
+import { ApiError, apiGet, type SetupChannel, type SetupRole } from "../api";
+import { errorMessage } from "../utils/errorMessage";
 
 export interface RefOption {
   id: string;
@@ -29,6 +30,20 @@ export interface SchemaRefs {
   roles: RefOption[];
   /** Why `channels`/`roles` are empty, when they are. */
   status: RefScopeStatus;
+}
+
+/**
+ * The configured Minecraft server names. The list is sysadmin-only, so a 403
+ * means "not yours to see" and yields none; any other failure propagates so it
+ * is not mistaken for an empty fleet.
+ */
+export async function fetchServerNames(): Promise<string[]> {
+  try {
+    return (await apiGet<{ servers: string[] }>("/api/setup/servers")).servers;
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 403) return [];
+    throw err;
+  }
 }
 
 export const SchemaRefsKey: InjectionKey<SchemaRefs> = Symbol("schemaRefs");
@@ -70,7 +85,8 @@ export const SchemaScopeKey: InjectionKey<SchemaScopeResolver> =
 const POSTABLE_CHANNEL_TYPES = new Set([0, 5, 15]);
 
 /** Frozen so a consumer cannot mutate the shared empty into something else. */
-const NO_OPTIONS = Object.freeze([]) as unknown as RefOption[];
+const NO_OPTIONS: RefOption[] = [];
+Object.freeze(NO_OPTIONS);
 
 interface GuildEntry {
   channels: RefOption[];
@@ -90,6 +106,7 @@ interface GuildEntry {
 const state = reactive({
   servers: [] as RefOption[],
   byGuild: {} as Record<string, GuildEntry>,
+  serversError: "",
 });
 
 /** One stable scope object per guild, so provide/inject identity holds. */
@@ -138,14 +155,17 @@ const globalScope: SchemaRefs = {
 };
 
 export function useSchemaRefs() {
-  /** Configured Minecraft servers (sysadmin-only; managers get a 403 → none). */
+  /**
+   * Configured Minecraft servers (sysadmin-only; managers get none). A real
+   * failure keeps the last list and is reported through `serversError`.
+   */
   async function loadServers(): Promise<void> {
     try {
-      const res = await apiGet<{ servers: string[] }>("/api/setup/servers");
       // Server keys are already human-readable (e.g. "smp"), so id == label.
-      state.servers = res.servers.map((id) => ({ id, label: id }));
-    } catch {
-      state.servers = [];
+      state.servers = (await fetchServerNames()).map((id) => ({ id, label: id }));
+      state.serversError = "";
+    } catch (err) {
+      state.serversError = errorMessage(err);
     }
   }
 
@@ -221,5 +241,6 @@ export function useSchemaRefs() {
   return {
     globalScope, guildScope, dynamicGuildScope, scopeForGuild,
     loadServers, loadGuildRefs,
+    serversError: computed(() => state.serversError),
   };
 }

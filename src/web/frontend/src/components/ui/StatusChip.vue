@@ -14,7 +14,6 @@ import { computed } from "vue";
 import {
   GLOSSARY,
   statusDefinition,
-  type GlossaryKey,
   type StatusInput,
 } from "@mcbot/schema";
 
@@ -36,7 +35,7 @@ const props = withDefaults(
 
 const def = computed(() => statusDefinition(props.state));
 const text = computed(
-  () => props.label || GLOSSARY[def.value.labelKey as GlossaryKey]?.en || def.value.name,
+  () => props.label || GLOSSARY[def.value.labelKey]?.en || def.value.name,
 );
 </script>
 
@@ -100,15 +99,4 @@ const text = computed(
   .busy .shape-spinner-circle { animation: none; border-right-color: var(--chip-fg); }
 }
 
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-  border: 0;
-}
 </style>

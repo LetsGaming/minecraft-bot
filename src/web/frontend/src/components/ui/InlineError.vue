@@ -72,7 +72,4 @@ const headingTag = computed(() => `h${props.headingLevel}`);
   overflow-wrap: anywhere;
 }
 .ie-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-1); }
-@media (pointer: coarse), (max-width: 760px) {
-  .tap { min-height: var(--touch-min); }
-}
 </style>

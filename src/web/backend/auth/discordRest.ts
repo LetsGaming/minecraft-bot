@@ -13,6 +13,7 @@
  * lightly cached (30s) so repeatedly opening the setup panel does not
  * hammer Discord's rate limits.
  */
+import { MS } from "@mcbot/schema";
 import { loadConfig } from "@mcbot/core/config.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { isRecord } from "@mcbot/core/utils/objects.js";
@@ -28,8 +29,8 @@ import { ApiErrorCode, DISCORD_API_V10_BASE } from "@mcbot/schema";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
 const API = DISCORD_API_V10_BASE;
-const TIMEOUT_MS = 10_000;
-const CACHE_TTL_MS = 30_000;
+const TIMEOUT_MS = 10 * MS.second;
+const CACHE_TTL_MS = 30 * MS.second;
 
 /** Why a Discord read failed: a typed discriminator so callers map failures
  *  to an HTTP status without parsing error strings (QUAL-11). */

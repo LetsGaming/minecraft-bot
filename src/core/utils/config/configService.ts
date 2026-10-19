@@ -1,5 +1,5 @@
 /**
- * Programmatic config editing — the layer a future WebUI talks to instead
+ * Programmatic config editing, the layer a future WebUI talks to instead
  * of hand-editing config.json.
  *
  *   readRawConfig()     raw on-disk JSON (secrets included; the HTTP layer
@@ -7,7 +7,7 @@
  *   validateCandidate() collect every error/warning instead of throwing
  *   writeConfig()       validate, then replace config.json atomically
  *
- * applyConfig() — reload + reconcile the RUNNING bot's instances — lives in
+ * applyConfig() reload + reconcile the RUNNING bot's instances, lives in
  * src/bot/utils/applyConfig.ts: it calls into the Discord process and is
  * therefore bot-only. The web backend never applies; it writes through
  * writeConfig() and the bot's fs watcher picks the change up (or, with the
@@ -25,11 +25,7 @@ import {
 } from "../../config.js";
 import { log } from "../logger.js";
 import { snapshotConfig, type SnapshotMeta } from "./configHistory.js";
-import {
-  existingFileMode,
-  sweepStaleTemps,
-  tempSiblingPath,
-} from "./atomicWrite.js";
+import { existingFileMode, writeFileAtomic } from "./atomicWrite.js";
 import type { RawBotConfig } from "../../types/index.js";
 import { errMsg } from "../error.js";
 import { stampConfigVersion } from "../../configMigrations.js";
@@ -45,7 +41,7 @@ export function readRawConfig(): RawBotConfig {
 }
 
 /**
- * sha256 of the on-disk config.json bytes — the optimistic-concurrency
+ * sha256 of the on-disk config.json bytes, the optimistic-concurrency
  * token for dashboard edits. Editors GET it, send it back with their PUT,
  * and a mismatch means someone (a second admin, the bot's /config command,
  * a hand edit) changed the file underneath them: reject with 409 instead
@@ -85,7 +81,7 @@ export function withConfigWriteLock<T>(fn: () => Promise<T>): Promise<T> {
  * The file is always written with the current configVersion.
  *
  * @throws {Error} listing every validation error when the candidate is
- *                 invalid — nothing is written in that case.
+ *                 invalid, nothing is written in that case.
  * @returns validation warnings (non-fatal issues worth surfacing in a UI).
  */
 export async function writeConfig(
@@ -109,11 +105,11 @@ export async function writeConfig(
   try {
     previous = await fsPromises.readFile(configPath, "utf-8");
   } catch {
-    // no existing config yet — nothing to compare or snapshot
+    // no existing config yet, nothing to compare or snapshot
   }
 
   // No-op guard: if the candidate is semantically identical to what's on disk,
-  // don't rewrite the file or snapshot history — so a "Save" with no actual
+  // don't rewrite the file or snapshot history, so a "Save" with no actual
   // edits doesn't create audit/rollback noise. Normalise both sides (parse +
   // re-stringify) so incidental formatting differences don't count as a change.
   if (previous !== null) {
@@ -130,26 +126,23 @@ export async function writeConfig(
 
   // Write-then-rename so a crash can never leave a truncated config.json.
   // This requires the config to live on a writable, process-owned path on a
-  // single filesystem — in Docker the data/ volume (see MCBOT_CONFIG_PATH).
+  // single filesystem, in Docker the data/ volume (see MCBOT_CONFIG_PATH).
   // A raw EACCES/EROFS/EXDEV here (e.g. a root-owned dir or a read-only
   // single-file bind mount) would otherwise surface to the dashboard as an
   // opaque 500, so map it to an actionable message and don't leave a stray
   // temp file behind.
-  sweepStaleTemps(configPath);
-  const tmp = tempSiblingPath(configPath);
   try {
-    await fsPromises.writeFile(tmp, json, {
-      mode: existingFileMode(configPath),
-      flag: "wx",
-    });
-    try {
-      await fsPromises.copyFile(configPath, `${configPath}.bak`);
-    } catch {
-      // no existing config yet — nothing to back up
-    }
-    await fsPromises.rename(tmp, configPath);
+    await writeFileAtomic(
+      configPath,
+      json,
+      previous === null
+        ? undefined
+        : () =>
+            fsPromises.writeFile(`${configPath}.bak`, previous, {
+              mode: existingFileMode(configPath),
+            }),
+    );
   } catch (err) {
-    await fsPromises.rm(tmp, { force: true }).catch(() => {});
     const reason = errMsg(err);
     throw new Error(
       `Failed to write config to ${configPath}: ${reason}. The config must ` +
@@ -159,7 +152,7 @@ export async function writeConfig(
     );
   }
 
-  // Record the replaced config into rollback history (best-effort — never
+  // Record the replaced config into rollback history (best-effort, never
   // fails the write). Skipped on the first write (no previous config).
   if (previous !== null) snapshotConfig(previous, meta);
 

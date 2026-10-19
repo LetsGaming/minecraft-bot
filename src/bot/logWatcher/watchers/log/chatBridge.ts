@@ -19,16 +19,19 @@ import { errMsg } from "@mcbot/core/utils/error.js";
 import { tellraw } from "@mcbot/core/utils/minecraft/serverMessages.js";
 import { safeMentions } from "../../../utils/embeds/alertUtils.js";
 import { chatLineRegex } from "./chatLine.js";
+import { enqueueSend, flushSendQueues } from "../sendQueue.js";
+import { fetchSendable } from "../notifyGuilds.js";
+import { isChannelGone, isUnknownWebhook } from "../discordErrors.js";
 
-// Anchored on the speaker (AUD-002): see chatLine.ts.
+// Anchored on the speaker: see chatLine.ts.
 const CHAT_REGEX = chatLineRegex(String.raw`\s+(.+)`);
 
 // The bridge listens on messageCreate, so the slash-command limiter never
-// sees it — it needs its own bucket or any member could flood the game
+// sees it, it needs its own bucket or any member could flood the game
 // console at Discord message speed. Burst of 8, ~0.8 msg/s sustained:
 // fine for lively chat, stops floods.
 // Capacity/window come from the `limits` config block (defaults 8/10s);
-// the limiter shape is fixed at module load — changing limits needs a
+// the limiter shape is fixed at module load, changing limits needs a
 // restart, same as the slash limiter.
 const bridgeLimiter = createRateLimiter(bridgeLimiterSettings());
 
@@ -53,7 +56,7 @@ export interface ResolvedBridge {
  * Deliberately strict: one channel ↔ exactly one server, both directions,
  * so conversations from different servers can never mix in one channel.
  * `server` may only be omitted when it's unambiguous (guild defaultServer,
- * or a single configured server); anything else is a problem — skipped,
+ * or a single configured server); anything else is a problem, skipped,
  * logged at setup, and rejected by config validation.
  */
 export function resolveGuildBridges(
@@ -101,10 +104,10 @@ export function resolveGuildBridges(
     if (!existing) {
       channelBinding.set(bridge.channelId, serverId);
       bridges.push({
-      channelId: bridge.channelId,
-      serverId,
-      ...(bridge.useWebhook === true ? { useWebhook: true } : {}),
-    });
+        channelId: bridge.channelId,
+        serverId,
+        ...(bridge.useWebhook === true ? { useWebhook: true } : {}),
+      });
     }
   }
 
@@ -147,7 +150,7 @@ export function invalidateWebhookCache(): void {
 /**
  * The bridge webhook for a channel: reuse ours if it exists, create it
  * once otherwise. Returns null (cached) when the channel doesn't support
- * webhooks or the bot lacks Manage Webhooks — callers fall back to the
+ * webhooks or the bot lacks Manage Webhooks, callers fall back to the
  * embed form.
  */
 function bridgeWebhook(
@@ -203,74 +206,15 @@ async function resolveWebhook(
   }
 }
 
-// ── Outbound send queue ────────────────────────────────────────────────────
-// One ordered queue per Discord channel, so a slow send delays only the
-// channel it is on.
-//
-// Why this exists: the handler used to await each send inline, and log
-// handlers run one at a time on the watcher's dispatch queue. So a chat line
-// held up every *other* watcher — joins, deaths, in-game commands — for the
-// duration of a Discord round-trip, and the next chat line waited for this
-// one. Webhook execution is the slow case (its own rate-limit bucket, plus
-// Discord fetching the mc-heads avatar it has not cached yet), which is
-// exactly why the lag showed up with useWebhook on and not without it.
-//
-// Ordering still matters within a channel — chat arriving out of order reads
-// as nonsense — so this serialises per channel rather than firing everything
-// in parallel.
-const sendQueues = new Map<string, Promise<void>>();
-const queueDepth = new Map<string, number>();
-
-/** Depth at which a channel is far enough behind to be worth logging. */
-const SEND_QUEUE_WARN_DEPTH = 25;
-
 /** Exposed for tests: drain every pending send. */
-export async function flushBridgeQueues(): Promise<void> {
-  await Promise.all([...sendQueues.values()]);
-}
-
-/**
- * Queue a send for one channel and return immediately.
- *
- * Errors are logged, never rethrown: a rejected link in the chain would
- * strand every message queued behind it on that channel.
- */
-function enqueueSend(
-  channelId: string,
-  send: () => Promise<void>,
-  describe: string,
-): void {
-  const depth = (queueDepth.get(channelId) ?? 0) + 1;
-  queueDepth.set(channelId, depth);
-  if (depth === SEND_QUEUE_WARN_DEPTH) {
-    log.warn(
-      "chatBridge",
-      `Channel ${channelId} is ${depth} messages behind — Discord sends are ` +
-        `slower than in-game chat`,
-    );
-  }
-
-  const previous = sendQueues.get(channelId) ?? Promise.resolve();
-  const next = previous
-    .then(send)
-    .catch((err: unknown) => {
-      log.error("chatBridge", `${describe}: ${errMsg(err)}`);
-    })
-    .finally(() => {
-      queueDepth.set(channelId, (queueDepth.get(channelId) ?? 1) - 1);
-      // Drop the entry once this was the last link, so channels removed from
-      // the config do not accumulate resolved promises forever.
-      if (sendQueues.get(channelId) === next) sendQueues.delete(channelId);
-    });
-  sendQueues.set(channelId, next);
-}
+export const flushBridgeQueues = flushSendQueues;
 
 /**
  * Resolve every configured bridge webhook up front.
  *
  * Called at setup and after a config reload. Without it the first in-game
  * message of a session pays a channels.fetch plus a fetchWebhooks (and
- * possibly a createWebhook) before anything reaches Discord — which is the
+ * possibly a createWebhook) before anything reaches Discord, which is the
  * one message an operator is most likely to be watching for after a restart.
  */
 export function prewarmBridgeWebhooks(
@@ -287,22 +231,42 @@ export function prewarmBridgeWebhooks(
   }
 }
 
+/**
+ * Guild-config sources whose bridges were already checked and prewarmed for a
+ * client. registerChatBridge runs once per server, but the checks are about
+ * the whole config, so only the first registration for a source does them (a
+ * config reload re-runs them explicitly).
+ */
+const checkedSources = new WeakMap<Client, WeakSet<object>>();
+
+function firstRegistrationFor(client: Client, source: GuildConfigSource): boolean {
+  let seen = checkedSources.get(client);
+  if (!seen) {
+    seen = new WeakSet();
+    checkedSources.set(client, seen);
+  }
+  if (seen.has(source)) return false;
+  seen.add(source);
+  return true;
+}
+
 export function registerChatBridge(
   logWatcher: ILogWatcher,
   client: Client,
   guildConfigs: GuildConfigSource,
   allServerIds: ServerIdSource = [],
 ): void {
-  reportBridgeProblems(
-    resolveGuildConfigs(guildConfigs),
-    resolveServerIds(allServerIds),
-    "chatBridge",
-  );
-
-  prewarmBridgeWebhooks(client, guildConfigs, allServerIds);
+  if (firstRegistrationFor(client, guildConfigs)) {
+    reportBridgeProblems(
+      resolveGuildConfigs(guildConfigs),
+      resolveServerIds(allServerIds),
+      "chatBridge",
+    );
+    prewarmBridgeWebhooks(client, guildConfigs, allServerIds);
+  }
 
   // Note the missing `async`: this handler queues and returns. It must not
-  // await Discord — the watcher dispatches handlers one at a time, so waiting
+  // await Discord QQ the watcher dispatches handlers one at a time, so waiting
   // here holds up every other watcher for this server as well as the next
   // chat line. Sends are ordered per channel by enqueueSend instead.
   logWatcher.register(CHAT_REGEX, (match) => {
@@ -327,10 +291,11 @@ export function registerChatBridge(
       for (const bridge of bridges) {
         if (bridge.serverId !== serverId) continue;
 
-        enqueueSend(
+        void enqueueSend(
           bridge.channelId,
           () => deliver(client, bridge, player, message),
           `Failed to send to guild ${guildId}`,
+          "chatBridge",
         );
       }
     }
@@ -353,9 +318,9 @@ async function deliver(
   if (bridge.useWebhook) {
     const hook = await bridgeWebhook(client, bridge.channelId);
     if (hook) {
-      // AUD-015: a webhook send that fails falls through to the embed form.
-      // Discord refuses some usernames ("discord", "clyde") outright; a
-      // deleted webhook (10015 / 404) is evicted so the next line resolves
+      // A webhook send that fails falls through to the embed form. Discord
+      // refuses some usernames ("discord", "clyde") outright; a deleted
+      // webhook (10015 / 404) or channel is evicted so the next line resolves
       // a fresh one instead of failing until a reload.
       try {
         await hook.send({
@@ -366,7 +331,9 @@ async function deliver(
         });
         return;
       } catch (err) {
-        if (isUnknownWebhook(err)) webhookCache.delete(bridge.channelId);
+        if (isUnknownWebhook(err) || isChannelGone(err)) {
+          webhookCache.delete(bridge.channelId);
+        }
         log.warn(
           "chatBridge",
           `Webhook send failed in channel ${bridge.channelId} (sending as embed): ${errMsg(err)}`,
@@ -375,8 +342,8 @@ async function deliver(
     }
   }
 
-  const channel = await client.channels.fetch(bridge.channelId);
-  if (!channel || !("send" in channel)) return;
+  const channel = await fetchSendable(client, bridge.channelId);
+  if (!channel) return;
 
   await channel.send({
     embeds: [
@@ -389,15 +356,9 @@ async function deliver(
   });
 }
 
-/** Discord's "Unknown Webhook": the webhook was deleted behind our back. */
-function isUnknownWebhook(err: unknown): boolean {
-  const e = err as { code?: unknown; status?: unknown } | null;
-  return e?.code === 10015 || e?.status === 404;
-}
-
 /**
  * Set up Discord → Minecraft bridges. The message's channel identifies the
- * one server it is bound to — replies always land where the conversation
+ * one server it is bound to, replies always land where the conversation
  * is happening.
  */
 export function setupDiscordToMc(
@@ -432,13 +393,13 @@ export function setupDiscordToMc(
     }
 
     // Strip control characters (incl. \r\n, which could inject extra
-    // commands via the screen fallback) and cap lengths — printable
+    // commands via the screen fallback) and cap lengths, printable
     // Unicode stays so umlauts and emoji survive the bridge.
     const { name: safeName, message: safeContent } = sanitizeForComponent(
       msg.author.displayName,
       msg.content,
     );
-    // AUD-002: tellraw, not /say. A /say line lands in the server log as
+    // tellraw, not /say. A /say line lands in the server log as
     // `[Server] [name] text`, where text a Discord user typed (`x]: <Admin>`)
     // could pose as a player to the log watchers; /say also expands
     // selectors like @a. A text component is shown verbatim and not logged.
@@ -451,8 +412,8 @@ export function setupDiscordToMc(
       msg.react("⚠️").catch(() => {});
     }
   };
-  // AUD-008: a rejection from an async listener would reach the process
-  // guard and exit the bot.
+  // A rejection from an async listener would reach the process guard and
+  // exit the bot.
   client.on("messageCreate", (msg) =>
     relay(msg).catch((err: unknown) => {
       log.error("chatBridge", `Discord → MC relay failed: ${errMsg(err)}`);

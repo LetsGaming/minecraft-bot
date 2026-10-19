@@ -17,7 +17,13 @@ vi.mock("../../src/core/config.js", () => ({
       survival: { apiUrl: "https://user:pw@mc.example.com:3030/secret/path?k=1" },
     },
     guilds: {
-      guild1: { defaultServer: "survival" },
+      guild1: {
+        defaultServer: "survival",
+        console: { channelId: "c1" },
+        statusEmbed: { enabled: false },
+        leaderboard: { channelId: "c2" },
+        chatBridge: [{ channelId: "c3" }, { channelId: "c4" }],
+      },
       otherGuild: { defaultServer: "survival" },
     },
     leaderboardInterval: "daily",
@@ -84,5 +90,17 @@ describe("/config show", () => {
     expect(json).not.toContain("otherGuild");
     expect(json).toContain("mc.example.com:3030");
     expect(json).toContain("guild1");
+  });
+
+  it("lists the guild's enabled features from the shared feature table, console included", async () => {
+    const i = makeInteraction();
+    await execute(i as never);
+    const reply = i.editReply.mock.calls[0]![0] as {
+      embeds: Array<{ toJSON(): unknown }>;
+    };
+    const json = JSON.stringify(reply.embeds[0]!.toJSON());
+    expect(json).toContain("leaderboard");
+    expect(json).toContain("console");
+    expect(json).toContain("chat bridge ×2");
   });
 });

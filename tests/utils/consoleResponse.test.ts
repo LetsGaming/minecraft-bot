@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { newestServerMatch, serverLineBodies } from "../../src/core/utils/minecraft/consoleResponse.js";
+import { entityDataPattern, newestServerMatch, serverLineBodies } from "../../src/core/utils/minecraft/consoleResponse.js";
 
 describe("consoleResponse", () => {
   it("reads console replies with and without the 26.3 System chat marker, newest first", () => {
@@ -19,5 +19,26 @@ describe("consoleResponse", () => {
       "[12:00:03] [Async Chat Thread - #0/INFO]: System chat: Seed: [666]",
     ].join("\n");
     expect(newestServerMatch(tail, /^Seed: \[(-?\d+)\]$/)).toBeNull();
+  });
+});
+
+describe("entityDataPattern", () => {
+  it("matches a Floodgate name with a leading dot", () => {
+    const m = entityDataPattern(".Steve").exec(
+      ".Steve has the following entity data: [1.0d, 64.0d, 2.0d]",
+    );
+    expect(m?.[1]).toBe("[1.0d, 64.0d, 2.0d]");
+  });
+
+  it("does not let the dot match any character", () => {
+    expect(
+      entityDataPattern(".Steve").test("xSteve has the following entity data: 1"),
+    ).toBe(false);
+  });
+
+  it("matches nothing for an invalid name instead of rewriting it", () => {
+    const pattern = entityDataPattern("Ste ve|");
+    expect(pattern.test("Steve has the following entity data: 1")).toBe(false);
+    expect(pattern.test("Ste ve| has the following entity data: 1")).toBe(false);
   });
 });

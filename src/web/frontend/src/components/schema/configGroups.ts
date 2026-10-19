@@ -16,7 +16,7 @@ const GROUPS: ReadonlyArray<{ id: string; titleKey: MessageKey; keys: readonly s
   { id: "servers", titleKey: "config.group.servers", keys: ["servers", "schedules"] },
   { id: "guilds", titleKey: "config.group.guilds", keys: ["guilds"] },
   { id: "alerts", titleKey: "config.group.alerts", keys: ["tpsWarningThreshold", "tpsPollIntervalMs", "hostAlerts", "updateNotifier"] },
-  { id: "leaderboard", titleKey: "config.group.leaderboard", keys: ["leaderboardInterval", "leaderboardPostTime", "leaderboardPostDay", "leaderboard", "milestones"] },
+  { id: "leaderboard", titleKey: "config.group.leaderboard", keys: ["leaderboardInterval", "leaderboardPostTime", "leaderboardPostDay", "milestones"] },
   { id: "features", titleKey: "config.group.features", keys: ["commands", "deathCoords", "waypoints", "featureNudges", "limits"] },
   { id: "web", titleKey: "config.group.web", keys: ["webui"] },
 ];

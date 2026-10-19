@@ -1,5 +1,5 @@
 /**
- * Command policy — ONE resolver for every per-command setting, at every
+ * Command policy. ONE resolver for every per-command setting, at every
  * scope. Slash commands scope per GUILD (they are issued in guilds),
  * in-game !commands scope per SERVER (they are issued on servers); the
  * global `commands` block is the shared fallback for both.
@@ -7,7 +7,7 @@
  *   effective = defaults ← commands[name] ← scope.commands[name]
  *
  * Resolution is FIELD-BY-FIELD: a scope override only changes the
- * fields it actually sets. That makes the mechanism future-proof — a
+ * fields it actually sets. That makes the mechanism future-proof, a
  * new field added to CommandOverrideConfig inherits the same scoped
  * fallback without touching this file's call sites.
  *
@@ -15,7 +15,7 @@
  * defineCommand for in-game), reading loadConfig() live, so `/config
  * reload` and dashboard edits apply immediately. Registration only
  * skips a command when it is disabled in EVERY scope
- * (commandEnabledAnywhere) — a command disabled globally but enabled
+ * (commandEnabledAnywhere) a command disabled globally but enabled
  * for one guild must stay registered to be dispatchable there.
  *
  * Two rules the resolver deliberately cannot express:
@@ -24,8 +24,8 @@
  * - `enabled: true` cannot force a capability-skipped command
  *   (e.g. /backup without the suite) into existence.
  */
-import { loadConfig } from "../../config.js";
-import type { CommandOverrideConfig } from "../../types/index.js";
+import { tryLoadConfig } from "../config/configAccess.js";
+import type { BotConfig, CommandOverrideConfig } from "../../types/index.js";
 
 export interface CommandPolicy {
   enabled: boolean;
@@ -33,13 +33,29 @@ export interface CommandPolicy {
 }
 
 export interface CommandScope {
-  /** Guild the interaction came from — slash commands. */
+  /** Guild the interaction came from, slash commands. */
   guildId?: string | undefined;
-  /** Server the chat line came from — in-game commands. */
+  /** Server the chat line came from, in-game commands. */
   serverId?: string | undefined;
 }
 
 const DEFAULT_POLICY: CommandPolicy = { enabled: true, adminOnly: false };
+
+/** What an unreadable config resolves to: nothing runs, so no restriction is silently dropped. */
+const LOCKED_POLICY: CommandPolicy = { enabled: false, adminOnly: true };
+
+/**
+ * Without a config file there are no overrides to honour. That is normal in
+ * isolated tests, where the defaults apply; anywhere else an unreadable config
+ * must not turn into "every command is open".
+ */
+const failOpen = (): boolean =>
+  process.env["VITEST"] !== undefined || process.env["NODE_ENV"] === "test";
+
+function readConfig(): BotConfig | null {
+  const loaded = tryLoadConfig({ onError: failOpen() ? "open" : "closed" });
+  return loaded.ok ? loaded.config : null;
+}
 
 function overlay(
   base: CommandPolicy,
@@ -57,12 +73,8 @@ export function resolveCommandPolicy(
   name: string,
   scope: CommandScope = {},
 ): CommandPolicy {
-  let cfg;
-  try {
-    cfg = loadConfig();
-  } catch {
-    return DEFAULT_POLICY; // isolated tests / schema generator
-  }
+  const cfg = readConfig();
+  if (!cfg) return failOpen() ? DEFAULT_POLICY : LOCKED_POLICY;
 
   let policy = overlay(DEFAULT_POLICY, cfg.commands?.[name]);
   if (scope.guildId) {
@@ -80,12 +92,8 @@ export function resolveCommandPolicy(
  * skipped entirely, everything else is gated per dispatch instead.
  */
 export function commandEnabledAnywhere(name: string): boolean {
-  let cfg;
-  try {
-    cfg = loadConfig();
-  } catch {
-    return true;
-  }
+  const cfg = readConfig();
+  if (!cfg) return failOpen();
 
   const globallyEnabled = cfg.commands?.[name]?.enabled ?? true;
   if (globallyEnabled) return true;

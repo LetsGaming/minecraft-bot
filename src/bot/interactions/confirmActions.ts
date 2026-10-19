@@ -23,11 +23,10 @@ import {
 import { createInfoEmbed } from "../utils/embeds/embedUtils.js";
 import {
   errorContentOf,
-  getMemberRoleIds,
-  isServerAdmin,
   replyDenied,
   replyError,
 } from "../commands/middleware.js";
+import { isInvokerAdmin } from "../utils/guild/permissions.js";
 
 export type ConfirmHandler = (
   interaction: ButtonInteraction,
@@ -129,10 +128,7 @@ export async function handleConfirmInteraction(
       await interaction.update({ components: [] });
       return;
     }
-    if (
-      entry.adminOnly &&
-      !isServerAdmin(interaction.user.id, getMemberRoleIds(interaction), guildId)
-    ) {
+    if (entry.adminOnly && !isInvokerAdmin(interaction)) {
       await replyDenied(interaction);
       return;
     }

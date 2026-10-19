@@ -61,7 +61,7 @@ vi.mock("../../src/core/utils/stores/adminAudit.js", () => ({
 vi.mock("../../src/bot/logWatcher/initMinecraftCommands.js", () => ({
   reconcileServers: vi
     .fn()
-    .mockResolvedValue({ added: [], removed: [], replaced: [], changed: [] }),
+    .mockResolvedValue({ added: [], failed: [], removed: [], replaced: [], changed: [] }),
 }));
 
 vi.mock("../../src/bot/logWatcher/logWatcher.js", () => ({
@@ -139,6 +139,7 @@ describe("/config admin command — reload subcommand", () => {
     );
     vi.mocked(reconcileServers).mockResolvedValue({
       added: ["creative"],
+      failed: ["broken"],
       removed: ["old"],
       replaced: ["moved"],
       changed: ["survival"],
@@ -154,6 +155,7 @@ describe("/config admin command — reload subcommand", () => {
     expect(msg).toContain("- Removed (live): old");
     expect(msg).toContain("Rebuilt (live): moved");
     expect(msg).toContain("require a restart: survival");
+    expect(msg).toContain("Could not start: broken");
   });
 });
 

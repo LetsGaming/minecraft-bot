@@ -2,41 +2,37 @@ import { type Client } from "discord.js";
 import { EmbedCategory, CATEGORY_STYLE } from "@mcbot/schema/embedCategories.js";
 import { createPlayerEmbed, createEmbed } from "../../../utils/embeds/embedUtils.js";
 import type { ILogWatcher } from "../../logWatcher.js";
-import { broadcastNotification, PLAYER_NAME } from "../notifyGuilds.js";
+import { broadcastNotification } from "../notifyGuilds.js";
+import { runDetached } from "../sendQueue.js";
+import { PLAYER_NAME } from "@mcbot/core/utils/sanitize.js";
 import type { GuildConfigSource } from "../../../utils/guild/guildConfigs.js";
 import { serverEventRegex, registerServerEvent } from "./serverLine.js";
 import {
-  loadChallengeStore,
-  saveChallengeStore,
+  updateChallengeStore,
   expireStale,
   getActiveChallenge,
 } from "@mcbot/core/utils/stores/challengeStore.js";
-import {
-  updatePendingRewards,
-  getServerPending,
-} from "@mcbot/core/utils/stores/dailyStore.js";
+import { enqueuePending } from "@mcbot/core/utils/stores/dailyStore.js";
 import { give } from "@mcbot/core/utils/minecraft/rewards.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { tellraw } from "@mcbot/core/utils/minecraft/serverMessages.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
-import { errMsg } from "@mcbot/core/utils/error.js";
 
-// Use PLAYER_NAME (not \w+) so Bedrock players with "."-prefixed
-// names get advancement notifications too.
-// SEC-01: anchored on the server thread tag via serverEventRegex — a
-// chat line must never forge an advancement (the challenge path pays
-// out a real item bonus through give()).
+// PLAYER_NAME (not \w+) so Bedrock players with "."-prefixed names get
+// advancement notifications too. Anchored on the server thread tag via
+// serverEventRegex: a chat line must never forge an advancement (the
+// challenge path pays out a real item bonus through give()).
 const ADV_REGEX = serverEventRegex(
-  String.raw`(${PLAYER_NAME}) has (?:made the advancement|completed the challenge|reached the goal) \[(.+?)\]`,
+  String.raw`(${PLAYER_NAME}) has (made the advancement|completed the challenge|reached the goal) \[(.+)\]\s*$`,
 );
 
 /**
  * First player to hit the active challenge's advancement wins: the
  * challenge closes, the result is announced in both directions, an audit
  * entry is written, and the optional item bonus goes out through the
- * daily give() path — falling back to the offline delivery queue when
+ * daily give() path, falling back to the offline delivery queue when
  * the give cannot be confirmed (the winner may log out immediately).
  * The queue cap deliberately does not apply here: a challenge bonus is a
  * one-time system grant, not a farmable claim.
@@ -48,22 +44,21 @@ async function handleChallenge(
   player: string,
   advancement: string,
 ): Promise<void> {
-  const store = await loadChallengeStore();
-  const changed = expireStale(store, server.id);
-  const active = getActiveChallenge(store, server.id);
-
-  if (
-    !active ||
-    active.advancement.toLowerCase() !== advancement.toLowerCase()
-  ) {
-    if (changed) await saveChallengeStore(store);
-    return;
-  }
-
-  active.status = "won";
-  active.wonBy = player;
-  active.wonAt = Date.now();
-  await saveChallengeStore(store);
+  const active = updateChallengeStore((store) => {
+    expireStale(store, server.id);
+    const current = getActiveChallenge(store, server.id);
+    if (
+      !current ||
+      current.advancement.toLowerCase() !== advancement.toLowerCase()
+    ) {
+      return null;
+    }
+    current.status = "won";
+    current.wonBy = player;
+    current.wonAt = Date.now();
+    return current;
+  });
+  if (!active) return;
 
   await recordAdminAction({
     action: "challenge won",
@@ -103,13 +98,10 @@ async function handleChallenge(
     const item = { item: active.item, amount: active.amount ?? 1 };
     const ok = await give(server, player, item);
     if (!ok) {
-      await updatePendingRewards((pending) => {
-        const queue = getServerPending(pending, server.id);
-        (queue[player.toLowerCase()] ??= []).push({
-          discordId: "",
-          items: [item],
-          queuedAt: Date.now(),
-        });
+      await enqueuePending(server.id, player, {
+        discordId: "",
+        items: [item],
+        queuedAt: Date.now(),
       });
       log.warn(
         "challenges",
@@ -126,13 +118,13 @@ export function registerAdvancementWatcher(
 ): void {
   const serverId = logWatcher.server.id;
 
-  registerServerEvent(logWatcher, ADV_REGEX, async (match) => {
-    const [, player, advancement] = match;
-    if (!player || !advancement) return;
+  registerServerEvent(logWatcher, ADV_REGEX, (match) => {
+    const [, player, verb, advancement] = match;
+    if (!player || !verb || !advancement) return;
 
-    const isChallenge = match[0].includes("completed the challenge");
+    const isChallenge = verb === "completed the challenge";
 
-    await broadcastNotification(client, guildConfigs, {
+    void broadcastNotification(client, guildConfigs, {
       serverId,
       event: "advancement",
       logTag: "advancements",
@@ -147,16 +139,8 @@ export function registerAdvancementWatcher(
         }),
     });
 
-    try {
-      await handleChallenge(
-        client,
-        guildConfigs,
-        logWatcher.server,
-        player,
-        advancement,
-      );
-    } catch (err) {
-      log.error("challenges", `Challenge handling failed: ${errMsg(err)}`);
-    }
+    void runDetached("challenges", "Challenge handling failed", () =>
+      handleChallenge(client, guildConfigs, logWatcher.server, player, advancement),
+    );
   });
 }

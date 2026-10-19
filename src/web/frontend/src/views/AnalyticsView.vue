@@ -553,7 +553,6 @@ export default defineComponent({
 
 <style scoped>
 .analytics-view { min-width: 0; }
-.stack-gap { display: flex; flex-direction: column; gap: var(--space-4); }
 .scope-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
 .ctl-label { color: var(--text-dim); font-size: var(--text-sm); }
 .scope-tag {
@@ -577,9 +576,8 @@ export default defineComponent({
   background: var(--surface-nav);
 }
 .panel h2 { margin: 0 0 var(--space-3); font-size: var(--text-lg); font-weight: 600; }
-.note { margin: 0; color: var(--text-dim); font-size: var(--text-sm); }
 .section-note { margin-top: var(--space-3); }
-.dim { color: var(--text-dim); font-size: var(--text-sm); }
+.dim { font-size: var(--text-sm); }
 
 .uptime-row { display: flex; flex-wrap: wrap; gap: var(--space-4) var(--space-6); }
 .u-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
@@ -615,7 +613,6 @@ export default defineComponent({
   .b-bar { display: none; }
 }
 @media (pointer: coarse), (max-width: 760px) {
-  .tap { min-height: var(--touch-min); }
   .ranges :deep(.p-togglebutton) { min-height: var(--touch-min); }
   .stat-picker { min-height: var(--touch-min); }
   .table :deep(.p-paginator button) { min-width: var(--touch-min); min-height: var(--touch-min); }

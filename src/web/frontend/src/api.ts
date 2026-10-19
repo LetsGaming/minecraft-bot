@@ -1,8 +1,8 @@
 /**
- * Thin fetch helpers — every call carries the session cookie, 401
+ * Thin fetch helpers, every call carries the session cookie, 401
  * surfaces as `unauthorized` so App.vue can show the login screen.
  */
-import { ApiErrorCode } from "@mcbot/schema";
+import { ApiErrorCode, type ApiErrorBody } from "@mcbot/schema";
 
 export class UnauthorizedError extends Error {
   constructor() {
@@ -52,7 +52,8 @@ async function handle<T>(res: Response): Promise<T> {
     let code: string | undefined;
     let parsed: unknown;
     try {
-      const body = await res.json();
+      // Older routes still answer with `message` or `detail` instead of `error`.
+      const body = (await res.json()) as Partial<ApiErrorBody> & { message?: string; detail?: string; errors?: unknown };
       parsed = body;
       // Prefer a human message; fall back to a validation list, then the body.
       detail =
@@ -68,7 +69,7 @@ async function handle<T>(res: Response): Promise<T> {
   }
   // Responses come from this app's own backend, whose payloads are the shared
   // contract types in @mcbot/schema (imported below). Asserting the caller's T
-  // reflects that contract — the frontend and backend share one definition, so
+  // reflects that contract, the frontend and backend share one definition, so
   // a drift is a compile error there, not a silent mis-shape here.
   return res.json() as Promise<T>;
 }
@@ -99,7 +100,7 @@ export function apiSend<T>(
   }).then((r) => handle<T>(r));
 }
 
-// ── Shapes shared with the backend (@mcbot/schema — one definition,
+// ── Shapes shared with the backend (@mcbot/schema, one definition,
 // both sides import it, drift is impossible) ──
 export type {
   BackupFileInfo,
@@ -132,7 +133,7 @@ export {
 } from "@mcbot/schema";
 export type { Capability, GrantableCapability } from "@mcbot/schema";
 // `export ... from` re-exports without binding locally, and MeResponse below
-// uses the name — so it needs a real import as well.
+// uses the name, so it needs a real import as well.
 import type {
   GrantableCapability,
   InstalledMod as BaseInstalledMod,
@@ -142,7 +143,7 @@ import type {
   StaleInfo,
 } from "@mcbot/schema";
 
-// ── Dashboard-specific shapes (not in @mcbot/schema — web-only) ──
+// ── Dashboard-specific shapes (not in @mcbot/schema, web-only) ──
 export interface MeResponse {
   uid: string;
   tag: string;
@@ -159,7 +160,7 @@ export interface InviteResponse {
   url: string;
 }
 
-// ── Guided guild setup (phase 4) — mirror discordRest.ts on the server ──
+// ── Guided guild setup (phase 4) mirror discordRest.ts on the server ──
 export interface SetupGuild {
   id: string;
   name: string;

@@ -10,31 +10,31 @@
         {
           "color": "#7cb4ff",
           "title": "Backups of smp",
-          "description": "18 backups, 61.20 GB in total. The newest was made <t:1791640860:R>.",
+          "description": "18 backups, 61.2 GB in total. The newest was made <t:1791640860:R>.",
           "fields": [
             {
               "name": "Hourly",
-              "value": "3 backups\nLatest <t:1791640860:R>, 3.81 GB",
+              "value": "3 backups\nLatest <t:1791640860:R>, 3.8 GB",
               "inline": true
             },
             {
               "name": "Daily",
-              "value": "7 backups\nLatest <t:1791603360:R>, 3.78 GB",
+              "value": "7 backups\nLatest <t:1791603360:R>, 3.8 GB",
               "inline": true
             },
             {
               "name": "Pre-update",
-              "value": "2 backups\nLatest <t:1791470160:R>, 3.65 GB",
+              "value": "2 backups\nLatest <t:1791470160:R>, 3.6 GB",
               "inline": true
             },
             {
               "name": "Manual",
-              "value": "1 backup\nLatest <t:1791210960:R>, 3.55 GB",
+              "value": "1 backup\nLatest <t:1791210960:R>, 3.5 GB",
               "inline": true
             },
             {
               "name": "Archive",
-              "value": "5 backups\nLatest <t:1791124560:R>, 3.40 GB",
+              "value": "5 backups\nLatest <t:1791124560:R>, 3.4 GB",
               "inline": true
             }
           ]
@@ -53,31 +53,31 @@
         {
           "color": "#7cb4ff",
           "title": "Backups von smp",
-          "description": "18 Backups, zusammen 61,20 GB. Das neueste wurde <t:1791640860:R> erstellt.",
+          "description": "18 Backups, zusammen 61.2 GB. Das neueste wurde <t:1791640860:R> erstellt.",
           "fields": [
             {
               "name": "Stündlich",
-              "value": "3 Backups\nNeuestes <t:1791640860:R>, 3,81 GB",
+              "value": "3 Backups\nNeuestes <t:1791640860:R>, 3.8 GB",
               "inline": true
             },
             {
               "name": "Täglich",
-              "value": "7 Backups\nNeuestes <t:1791603360:R>, 3,78 GB",
+              "value": "7 Backups\nNeuestes <t:1791603360:R>, 3.8 GB",
               "inline": true
             },
             {
               "name": "Vor Update",
-              "value": "2 Backups\nNeuestes <t:1791470160:R>, 3,65 GB",
+              "value": "2 Backups\nNeuestes <t:1791470160:R>, 3.6 GB",
               "inline": true
             },
             {
               "name": "Manuell",
-              "value": "1 Backup\nNeuestes <t:1791210960:R>, 3,55 GB",
+              "value": "1 Backup\nNeuestes <t:1791210960:R>, 3.5 GB",
               "inline": true
             },
             {
               "name": "Archiv",
-              "value": "5 Backups\nNeuestes <t:1791124560:R>, 3,40 GB",
+              "value": "5 Backups\nNeuestes <t:1791124560:R>, 3.4 GB",
               "inline": true
             }
           ]

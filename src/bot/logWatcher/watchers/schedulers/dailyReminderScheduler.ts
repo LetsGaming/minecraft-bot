@@ -6,7 +6,7 @@
  * expired, and sends each one a single DM per claim cycle.
  *
  * Dedupe: a reminder is only sent when lastReminderAt predates the current
- * lastClaim — claiming resets the cycle, so the next expiry triggers
+ * lastClaim, claiming resets the cycle, so the next expiry triggers
  * exactly one new DM. DM failures (closed DMs) still advance
  * lastReminderAt so the bot never hammers a user who blocks DMs.
  */
@@ -22,13 +22,11 @@ import { t } from "@mcbot/core/utils/i18n.js";
 import { createEmbed } from "../../../utils/embeds/embedUtils.js";
 import { EmbedCategory } from "@mcbot/schema/embedCategories.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
+import { MS } from "@mcbot/schema";
+import { startPoller, type Poller } from "../poller.js";
 
-const CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const CHECK_INTERVAL_MS = 5 * MS.minute;
 
-/**
- * One reminder pass. Exported for tests; the scheduler calls it on an
- * interval. Returns the number of reminders sent.
- */
 function isDue(data: UserClaimData, now: number): boolean {
   if (data.remind !== true) return false;
   if (!data.lastClaim || data.lastClaim <= 0) return false; // never claimed yet
@@ -36,6 +34,10 @@ function isDue(data: UserClaimData, now: number): boolean {
   return (data.lastReminderAt ?? 0) < data.lastClaim; // not yet reminded this cycle
 }
 
+/**
+ * One reminder pass. Exported for tests; the scheduler calls it on an
+ * interval. Returns the number of reminders sent.
+ */
 export async function processDailyReminders(
   client: Client,
   now = Date.now(),
@@ -47,11 +49,11 @@ export async function processDailyReminders(
   );
   if (!anyDue) return 0;
 
-  // AUD-005: pick the due reminders and mark them sent in one transaction,
+  // Pick the due reminders and mark them sent in one transaction,
   // then DM. Marking a loaded copy and saving it after the DMs wrote that
   // copy back over every claim made while the DMs went out.
   const { due, multiServer } = await updateClaimedStore((store) => {
-    // Claims are per server, so reminders are too — one DM per due server,
+    // Claims are per server, so reminders are too, one DM per due server,
     // naming the server when there's more than one.
     const serverEntries = Object.entries(store.servers);
     const picked: Array<{ serverId: string; userId: string }> = [];
@@ -82,7 +84,7 @@ export async function processDailyReminders(
       });
       sent++;
     } catch (err) {
-      // Closed DMs or unknown user — lastReminderAt is already advanced,
+      // Closed DMs or unknown user, lastReminderAt is already advanced,
       // so this user is skipped until their next claim.
       log.debug("dailyReminder", `DM to ${userId} failed: ${errMsg(err)}`);
     }
@@ -90,15 +92,18 @@ export async function processDailyReminders(
   return sent;
 }
 
-export function startDailyReminderScheduler(
-  client: Client,
-): ReturnType<typeof setInterval> {
-  const timer = setInterval(() => {
-    processDailyReminders(client).catch((err) => {
-      log.error("dailyReminder", `Reminder pass failed: ${errMsg(err)}`);
-    });
-  }, CHECK_INTERVAL_MS);
+export function startDailyReminderScheduler(client: Client): Poller {
+  const poller = startPoller(
+    "dailyReminder",
+    async () => {
+      await processDailyReminders(client);
+    },
+    CHECK_INTERVAL_MS,
+  );
 
-  log.info("dailyReminder", "Daily reminder scheduler active (5 min interval)");
-  return timer;
+  log.info(
+    "dailyReminder",
+    `Daily reminder scheduler active (${CHECK_INTERVAL_MS / MS.minute} min interval)`,
+  );
+  return poller;
 }

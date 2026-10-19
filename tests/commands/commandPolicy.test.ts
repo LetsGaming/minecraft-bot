@@ -48,6 +48,40 @@ beforeEach(() => {
   delete mockConfig.servers;
 });
 
+describe("unreadable config", () => {
+  async function unreadable(run: () => void): Promise<void> {
+    const { loadConfig } = await import("../../src/core/config.js");
+    vi.mocked(loadConfig).mockImplementationOnce(() => {
+      throw new Error("config.json is gone");
+    });
+    run();
+  }
+
+  it("falls back to the defaults under test", async () => {
+    await unreadable(() => {
+      expect(resolveCommandPolicy("backup")).toEqual({ enabled: true, adminOnly: false });
+    });
+  });
+
+  it("fails closed outside tests", async () => {
+    const saved = { vitest: process.env["VITEST"], env: process.env["NODE_ENV"] };
+    delete process.env["VITEST"];
+    process.env["NODE_ENV"] = "production";
+    try {
+      await unreadable(() => {
+        expect(resolveCommandPolicy("backup")).toEqual({ enabled: false, adminOnly: true });
+      });
+      await unreadable(() => {
+        expect(commandEnabledAnywhere("backup")).toBe(false);
+      });
+    } finally {
+      if (saved.vitest !== undefined) process.env["VITEST"] = saved.vitest;
+      if (saved.env === undefined) delete process.env["NODE_ENV"];
+      else process.env["NODE_ENV"] = saved.env;
+    }
+  });
+});
+
 describe("resolveCommandPolicy", () => {
   it("defaults to enabled + not admin-only", () => {
     expect(resolveCommandPolicy("backup")).toEqual({
@@ -141,6 +175,23 @@ describe("command manifest", () => {
     vi.mocked(loadJson).mockResolvedValue(written as never);
     const read = await readCommandManifest();
     expect(read?.slash).toHaveLength(2);
+  });
+
+  it("registering a kind again replaces its commands", async () => {
+    registerManifestCommands("slash", [{ name: "gone", description: "g" }]);
+    registerManifestCommands("slash", [{ name: "kept", description: "k" }]);
+    await flushCommandManifest();
+    const written = vi.mocked(saveJson).mock.calls.at(-1)![1] as { slash: Array<{ name: string }> };
+    expect(written.slash.map((c) => c.name)).toEqual(["kept"]);
+  });
+
+  it("readCommandManifest drops malformed entries", async () => {
+    vi.mocked(loadJson).mockResolvedValue({
+      slash: [{ name: "ok", description: "d" }, { description: "no name" }, 5],
+      ingame: [],
+    } as never);
+    const read = await readCommandManifest();
+    expect(read?.slash).toEqual([{ name: "ok", description: "d" }]);
   });
 
   it("readCommandManifest returns null when the bot never wrote one", async () => {

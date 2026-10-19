@@ -18,49 +18,30 @@ import {
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
 import type { UpgradeJob } from "@mcbot/schema/wire/index.js";
 import { EmbedCategory } from "@mcbot/schema/embedCategories.js";
-import { serverInScope } from "../../../utils/guild/guildRouter.js";
-import { guildsWith, type GuildConfigSource } from "../../../utils/guild/guildConfigs.js";
+import type { GuildConfigSource } from "../../../utils/guild/guildConfigs.js";
 import { createEmbed } from "../../../utils/embeds/embedUtils.js";
 import { EmbedColor, embedColorFor } from "../../../utils/embeds/embedColors.js";
 import { progressBar } from "../../../utils/embeds/gameDisplay.js";
-import { formatBytes } from "@mcbot/schema/format.js";
-import { phaseRows } from "@mcbot/schema/upgradePhases.js";
+import {
+  formatBytes,
+  phaseRows,
+  isJobPhase,
+  isJobFailureReason,
+  UPGRADE_PHASES,
+  PRUNE_PHASES,
+  MS,
+} from "@mcbot/schema";
 import { holdAlerts } from "./downtimeMonitor.js";
+import { fetchSendable, guildTargets } from "../notifyGuilds.js";
+import { isChannelGone, isUnknownMessage } from "../discordErrors.js";
+import { onServerRemoved } from "../../serverCleanup.js";
+import { startPoller, type Poller } from "../poller.js";
 
-const POLL_INTERVAL_MS = 15_000;
-const SUPPORT_CACHE_MS = 5 * 60_000;
+const POLL_INTERVAL_MS = 15 * MS.second;
 /** Downtime alerts stay quiet this long past the latest sign of life from the job. */
-const ALERT_HOLD_MS = 10 * 60_000;
+const ALERT_HOLD_MS = 10 * MS.minute;
 /** A job that finished longer ago than this is history, not news. */
 const FRESH_RESULT_SECONDS = 10 * 60;
-
-/** The steps of a clean upgrade, in order; the progress bar counts these. */
-export const UPGRADE_PHASES = ["plan", "countdown", "stop", "backup", "apply", "start"] as const;
-/** The same for a prune-only job, which has no install. */
-export const PRUNE_PHASES = ["plan", "countdown", "stop", "backup", "prune", "start"] as const;
-
-const KNOWN_PHASES = new Set<string>([
-  ...UPGRADE_PHASES,
-  "prune",
-  "mods",
-  "rollback",
-  "abort",
-]);
-
-const KNOWN_REASONS = new Set([
-  "plan_failed",
-  "mods_changed",
-  "stop_failed",
-  "backup_failed",
-  "apply_failed",
-  "prune_failed",
-  "prune_stale",
-  "prune_timeout",
-  "crash_loop",
-  "timeout",
-  "start_failed",
-  "rollback_failed",
-]);
 
 /** The latest status of each top-level phase, in the order they first appeared. */
 export const phaseViews = phaseRows;
@@ -72,7 +53,7 @@ function statusIcon(status: string): string {
 }
 
 function phaseName(phase: string): string {
-  return KNOWN_PHASES.has(phase) ? t(`upgrade.phase.${phase}`) : phase;
+  return isJobPhase(phase) ? t(`upgrade.phase.${phase}`) : phase;
 }
 
 function resultLines(job: UpgradeJob): string[] {
@@ -95,7 +76,7 @@ function resultLines(job: UpgradeJob): string[] {
   } else if (r.reason === "rollback_failed") {
     lines.push(t("upgrade.rollbackFailed"));
   } else {
-    const reason = r.reason && KNOWN_REASONS.has(r.reason) ? t(`upgrade.reason.${r.reason}`) : t("upgrade.reason.other");
+    const reason = isJobFailureReason(r.reason) ? t(`upgrade.reason.${r.reason}`) : t("upgrade.reason.other");
     lines.push(t("upgrade.failedBefore", { reason }));
   }
   if (typeof r.prunedChunks === "number") {
@@ -162,6 +143,16 @@ interface Tracked {
   finished: boolean;
 }
 
+interface ServerForgetter {
+  forget(serverId: string): void;
+}
+
+const liveMonitors = new Set<ServerForgetter>();
+
+onServerRemoved((serverId) => {
+  for (const monitor of liveMonitors) monitor.forget(serverId);
+});
+
 export interface UpgradeMonitorDeps {
   getCurrentUpgrade: typeof getCurrentUpgrade;
   supportsUpgrade: typeof supportsUpgrade;
@@ -182,36 +173,41 @@ export function createUpgradeMonitor(
   deps: UpgradeMonitorDeps = realDeps,
 ) {
   const tracked = new Map<string, Tracked>();
-  const supportCache = new Map<string, { value: boolean; at: number }>();
+
+  liveMonitors.add({
+    forget(serverId) {
+      tracked.delete(serverId);
+    },
+  });
 
   async function supported(server: ServerInstance): Promise<boolean> {
-    const hit = supportCache.get(server.id);
-    if (hit && deps.now() - hit.at < SUPPORT_CACHE_MS) return hit.value;
-    let value = false;
     try {
-      value = await deps.supportsUpgrade(server.config);
+      return await deps.supportsUpgrade(server.config);
     } catch {
-      value = false;
+      return false;
     }
-    supportCache.set(server.id, { value, at: deps.now() });
-    return value;
   }
 
   async function publish(serverId: string, job: UpgradeJob, track: Tracked): Promise<void> {
-    const channels = guildsWith(guildConfigs, (cfg) => !!cfg.downtimeAlerts?.channelId);
-    for (const [guildId, gcfg] of channels) {
-      const alert = gcfg.downtimeAlerts;
-      if (!alert?.channelId || !serverInScope(alert.server, serverId, guildId)) continue;
+    const targets = guildTargets(guildConfigs, (gcfg) => gcfg.downtimeAlerts, serverId);
+    for (const { guildId, target } of targets) {
       await runWithGuildLocale(guildId, async () => {
         const embed = renderUpgrade(serverId, job);
         try {
           const existing = track.messages.get(guildId);
           if (existing) {
-            await existing.edit({ embeds: [embed] });
-            return;
+            try {
+              await existing.edit({ embeds: [embed] });
+              return;
+            } catch (err) {
+              // A deleted message is posted again; any other failure is not
+              // evidence the message is gone.
+              if (!isUnknownMessage(err) && !isChannelGone(err)) throw err;
+              track.messages.delete(guildId);
+            }
           }
-          const channel = await client.channels.fetch(alert.channelId!);
-          if (!channel || !("send" in channel)) return;
+          const channel = await fetchSendable(client, target.channelId);
+          if (!channel) return;
           track.messages.set(guildId, await channel.send({ embeds: [embed] }));
         } catch (err) {
           log.warn("upgrade", `Could not post the upgrade for ${serverId}: ${errMsg(err)}`);
@@ -251,7 +247,7 @@ export function createUpgradeMonitor(
     // A job nobody here has seen. A running one is news; a finished one only
     // if it ended moments ago (the bot restarted mid-upgrade), not history.
     const lastTs = job.events.length > 0 ? job.events[job.events.length - 1]!.ts : 0;
-    const fresh = deps.now() / 1000 - lastTs < FRESH_RESULT_SECONDS;
+    const fresh = deps.now() / MS.second - lastTs < FRESH_RESULT_SECONDS;
     const alreadyDone = job.state !== "running" && !fresh;
     const track: Tracked = {
       jobId: job.jobId,
@@ -280,9 +276,9 @@ export function startUpgradeMonitor(
   servers: () => ServerInstance[],
   client: Client,
   guildConfigs: GuildConfigSource,
-): ReturnType<typeof setInterval> {
+): Poller {
   const monitor = createUpgradeMonitor(client, guildConfigs);
-  const timer = setInterval(() => void monitor.tick(servers()), POLL_INTERVAL_MS);
-  timer.unref();
-  return timer;
+  return startPoller("upgrade", () => monitor.tick(servers()), POLL_INTERVAL_MS, {
+    unref: true,
+  });
 }

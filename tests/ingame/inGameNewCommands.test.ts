@@ -21,7 +21,7 @@ vi.mock("../../src/core/config.js", () => ({
 vi.mock("../../src/bot/utils/guild/guildRouter.js", () => ({
   serverInScope: vi.fn().mockReturnValue(true),
 }));
-vi.mock("../../src/core/utils/stores/linkUtils.js", () => ({
+vi.mock("../../src/core/utils/stores/linkStore.js", () => ({
   loadLinkedAccounts: vi.fn().mockResolvedValue({}),
     loadLinkedAccountsOrEmpty: vi.fn().mockResolvedValue({}),
 }));
@@ -40,7 +40,7 @@ import { kvSet } from "../../src/core/db/kv.js";
 import { closeDbForTesting } from "../../src/core/db/index.js";
 import { loadWaypointStore } from "../../src/core/utils/stores/waypointStore.js";
 import { loadPollStore } from "../../src/core/utils/stores/pollStore.js";
-import { loadLinkedAccountsOrEmpty } from "../../src/core/utils/stores/linkUtils.js";
+import { loadLinkedAccountsOrEmpty } from "../../src/core/utils/stores/linkStore.js";
 import { defineCommand } from "../../src/bot/logWatcher/defineCommand.js";
 import { DELIVERED } from "../fixtures/outcomes.js";
 

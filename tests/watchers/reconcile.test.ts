@@ -138,7 +138,6 @@ function botCfg(servers: Record<string, ServerConfig>): BotConfig {
     guilds: {},
     adminUsers: [],
     commands: {},
-    leaderboard: {},
     tpsWarningThreshold: 15,
     tpsPollIntervalMs: 60_000,
     leaderboardInterval: "daily",
@@ -247,8 +246,60 @@ describe("reconcileServers", () => {
       botCfg({ survival: srvCfg("survival") }),
     );
 
-    expect(result).toEqual({ added: [], removed: [], replaced: [], changed: [] });
+    expect(result).toEqual({
+      added: [],
+      failed: [],
+      removed: [],
+      replaced: [],
+      changed: [],
+    });
     expect(createdWatchers).toHaveLength(0);
+  });
+
+  it("does not rebuild a server whose config only differs in key order", async () => {
+    initServers({ survival: srvCfg("survival", { apiUrl: "http://a:3030" }) });
+    const reordered = { apiKey: "k", apiUrl: "http://a:3030", id: "survival" } as ServerConfig;
+
+    const result = await reconcileServers(fakeClient, botCfg({ survival: reordered }));
+
+    expect(result.replaced).toEqual([]);
+    expect(createdWatchers).toHaveLength(0);
+  });
+
+  it("reports a server that fails to wire as failed and unregisters it", async () => {
+    const { RemoteLogWatcher } = await import("../../src/bot/logWatcher/RemoteLogWatcher.js");
+    vi.mocked(RemoteLogWatcher).mockImplementationOnce(function (server: { id: string }) {
+      const w = {
+        register: vi.fn(),
+        start: vi.fn().mockRejectedValue(new Error("stream refused")),
+        stop: vi.fn(),
+        serverId: server.id,
+      };
+      createdWatchers.push(w);
+      return w;
+    } as never);
+
+    const result = await reconcileServers(fakeClient, botCfg({ broken: srvCfg("broken") }));
+
+    expect(result.added).toEqual([]);
+    expect(result.failed).toEqual(["broken"]);
+    expect(getServerInstance("broken")).toBeNull();
+    expect(createdWatchers[0]!.stop).toHaveBeenCalled();
+
+    const retry = await reconcileServers(fakeClient, botCfg({ broken: srvCfg("broken") }));
+    expect(retry.added).toEqual(["broken"]);
+  });
+
+  it("runs the per-server cleanups when a server is removed", async () => {
+    const { onServerRemoved } = await import("../../src/bot/logWatcher/serverCleanup.js");
+    const cleanup = vi.fn();
+    onServerRemoved(cleanup);
+    await reconcileServers(fakeClient, botCfg({ a: srvCfg("a"), b: srvCfg("b") }));
+
+    await reconcileServers(fakeClient, botCfg({ a: srvCfg("a") }));
+
+    expect(cleanup).toHaveBeenCalledWith("b");
+    expect(cleanup).not.toHaveBeenCalledWith("a");
   });
 
   it("serializes concurrent reconciliations (reload command + file watcher)", async () => {

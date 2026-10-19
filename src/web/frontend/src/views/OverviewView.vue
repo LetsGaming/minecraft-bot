@@ -152,17 +152,18 @@
   </div>
 </template>
 
-<script lang="ts">
-import { defineComponent } from "vue";
+<script setup lang="ts">
+import { computed, onMounted } from "vue";
 import Button from "primevue/button";
 import { stateIsUp } from "@mcbot/schema/serverState.js";
 import { useServerStatus } from "../composables/useServerStatus";
 import { useGuilds } from "../composables/useGuilds";
 import { useMyGuilds } from "../composables/useMyGuilds";
 import { useAudit } from "../composables/useAudit";
+import { usePolling } from "../composables/usePolling";
 import { serverRole, serverRoleLabel, stateExplanation } from "../utils/format";
-import { fleetAlerts, type Alert } from "../utils/serverAlerts";
-import { failureCopy, signIn, type FailureCopy } from "../utils/loadFailure";
+import { fleetAlerts } from "../utils/serverAlerts";
+import { failureCopy, signIn } from "../utils/loadFailure";
 import { relativeAge, timestampTitle } from "../utils/time";
 import { errorMessage } from "../utils/errorMessage";
 import type { ServerStatus } from "../api";
@@ -173,145 +174,109 @@ import GuildAvatar from "../components/ui/GuildAvatar.vue";
 import AlertList from "../components/ui/AlertList.vue";
 import InlineError from "../components/ui/InlineError.vue";
 
+defineEmits<{ navigate: [id: string] }>();
+
 const REFRESH_MS = 20_000;
 const RECENT_LIMIT = 6;
 
-export default defineComponent({
-  name: "OverviewView",
-  components: { Button, ViewHeader, StatusChip, GuildAvatar, AlertList, InlineError },
-  emits: ["navigate"],
-  setup() {
-    const status = useServerStatus();
-    const { guildName, load: loadGuildNames } = useGuilds();
-    const myGuilds = useMyGuilds();
-    const audit = useAudit();
-    return {
-      servers: status.servers,
-      botAlive: status.botAlive,
-      loading: status.loading,
-      loaded: status.loaded,
-      failure: status.failure,
-      statusError: status.error,
-      refresh: status.refresh,
-      guildName,
-      loadGuildNames,
-      myGuilds: myGuilds.guilds,
-      guildsLoading: myGuilds.loading,
-      guildsLoaded: myGuilds.loaded,
-      guildsFailure: myGuilds.failure,
-      guildsError: myGuilds.error,
-      loadMyGuilds: myGuilds.load,
-      recent: audit.entries,
-      auditLoading: audit.loading,
-      auditLoaded: audit.loaded,
-      auditFailure: audit.failure,
-      auditError: audit.error,
-      loadRecent: audit.load,
-      serverRole,
-      serverRoleLabel,
-      relativeAge,
-      timestampTitle,
-      t,
-    };
-  },
-  data() {
-    return {
-      timer: 0 as ReturnType<typeof setInterval> | 0,
-    };
-  },
-  computed: {
-    guildIds(): string[] {
-      return this.myGuilds.filter((g) => g.configured).map((g) => g.id);
-    },
-    serversOnline(): number {
-      return this.servers.filter((s) => stateIsUp(s.state)).length;
-    },
-    totalPlayers(): number {
-      // Only servers that reported a roster contribute; an unknown roster is
-      // not zero players, and the per-server row says which one is unknown.
-      return this.servers.reduce((sum, s) => sum + (s.players?.online ?? 0), 0);
-    },
-    alerts(): Alert[] {
-      if (!this.loaded || this.failure) return [];
-      return fleetAlerts(this.servers, this.botAlive);
-    },
-    botLabel(): string {
-      return this.botAlive ? t("overview.botReporting") : t("overview.botSilent");
-    },
-    statusFailure(): FailureCopy {
-      return failureCopy(this.failure ?? "failed", {
-        failedTitle: t("overview.statusFailedTitle"),
-        failedText: t("overview.statusFailedText"),
-        forbiddenTitle: t("overview.statusForbiddenTitle"),
-        capability: "server:read",
-        request: "GET /api/status",
-        error: this.statusError,
-      });
-    },
-    guildsFailureCopy(): FailureCopy {
-      // The guild list is read from Discord, so "did not answer" here usually
-      // means the bot token, not the dashboard.
-      return failureCopy(this.guildsFailure ?? "failed", {
-        failedTitle: t("overview.guildsFailedTitle"),
-        failedText:
-          this.guildsFailure === "unreachable" ? t("overview.guildsDiscordText") : t("overview.guildsFailedText"),
-        forbiddenTitle: t("overview.guildsForbiddenTitle"),
-        capability: "guild",
-        forbiddenText: t("overview.guildsForbiddenText"),
-        request: "GET /api/guilds",
-        error: this.guildsError ? errorMessage(this.guildsError) : "",
-      });
-    },
-    auditFailureCopy(): FailureCopy {
-      return failureCopy(this.auditFailure ?? "failed", {
-        failedTitle: t("overview.activityFailedTitle"),
-        failedText: t("overview.activityFailedText"),
-        forbiddenTitle: t("overview.activityForbiddenTitle"),
-        capability: "audit:read",
-        request: "GET /api/audit",
-        error: this.auditError,
-      });
-    },
-  },
-  async mounted() {
-    await this.refreshAll();
-    this.timer = setInterval(() => void this.refresh(), REFRESH_MS);
-  },
-  unmounted() {
-    if (this.timer) clearInterval(this.timer);
-  },
-  methods: {
-    async refreshAll(): Promise<void> {
-      void this.loadGuildNames();
-      // Secondary panels report their own failure in place, never as a toast.
-      await Promise.all([this.refresh(), this.loadMyGuilds(true), this.loadRecent(RECENT_LIMIT)]);
-    },
-    serverMeta(s: ServerStatus): string {
-      if (!stateIsUp(s.state)) return stateExplanation(s.state);
-      const players = s.players
-        ? t("overview.players", { count: s.players.online })
-        : t("overview.playersUnknown");
-      return s.tps === null ? players : t("overview.playersTps", { players, tps: s.tps.toFixed(0) });
-    },
-    retryStatus(): void {
-      if (this.failure === "signedOut") signIn();
-      else void this.refresh();
-    },
-    retryGuilds(): void {
-      if (this.guildsFailure === "signedOut") signIn();
-      else void this.loadMyGuilds(true);
-    },
-    retryAudit(): void {
-      if (this.auditFailure === "signedOut") signIn();
-      else void this.loadRecent(RECENT_LIMIT);
-    },
-  },
-});
+const status = useServerStatus();
+const { servers, botAlive, loading, loaded, failure, error: statusError, refresh } = status;
+const { guildName, load: loadGuildNames } = useGuilds();
+const {
+  guilds: myGuilds,
+  loading: guildsLoading,
+  loaded: guildsLoaded,
+  failure: guildsFailure,
+  error: guildsError,
+  load: loadMyGuilds,
+} = useMyGuilds();
+const {
+  entries: recent,
+  loading: auditLoading,
+  loaded: auditLoaded,
+  failure: auditFailure,
+  error: auditError,
+  load: loadRecent,
+} = useAudit();
+
+usePolling(() => refresh(), REFRESH_MS);
+
+const guildIds = computed(() => myGuilds.value.filter((g) => g.configured).map((g) => g.id));
+const serversOnline = computed(() => servers.value.filter((s) => stateIsUp(s.state)).length);
+// Only servers that reported a roster contribute; an unknown roster is
+// not zero players, and the per-server row says which one is unknown.
+const totalPlayers = computed(() => servers.value.reduce((sum, s) => sum + (s.players?.online ?? 0), 0));
+const alerts = computed(() => (!loaded.value || failure.value ? [] : fleetAlerts(servers.value, botAlive.value)));
+const botLabel = computed(() => (botAlive.value ? t("overview.botReporting") : t("overview.botSilent")));
+
+const statusFailure = computed(() =>
+  failureCopy(failure.value ?? "failed", {
+    failedTitle: t("overview.statusFailedTitle"),
+    failedText: t("overview.statusFailedText"),
+    forbiddenTitle: t("overview.statusForbiddenTitle"),
+    capability: "server:read",
+    request: "GET /api/status",
+    error: statusError.value,
+  }),
+);
+
+// The guild list is read from Discord, so "did not answer" here usually
+// means the bot token, not the dashboard.
+const guildsFailureCopy = computed(() =>
+  failureCopy(guildsFailure.value ?? "failed", {
+    failedTitle: t("overview.guildsFailedTitle"),
+    failedText: guildsFailure.value === "unreachable" ? t("overview.guildsDiscordText") : t("overview.guildsFailedText"),
+    forbiddenTitle: t("overview.guildsForbiddenTitle"),
+    capability: "guild",
+    forbiddenText: t("overview.guildsForbiddenText"),
+    request: "GET /api/guilds",
+    error: guildsError.value ? errorMessage(guildsError.value) : "",
+  }),
+);
+
+const auditFailureCopy = computed(() =>
+  failureCopy(auditFailure.value ?? "failed", {
+    failedTitle: t("overview.activityFailedTitle"),
+    failedText: t("overview.activityFailedText"),
+    forbiddenTitle: t("overview.activityForbiddenTitle"),
+    capability: "audit:read",
+    request: "GET /api/audit",
+    error: auditError.value,
+  }),
+);
+
+async function refreshAll(): Promise<void> {
+  void loadGuildNames();
+  // Secondary panels report their own failure in place, never as a toast.
+  await Promise.all([refresh(), loadMyGuilds(true), loadRecent(RECENT_LIMIT)]);
+}
+
+function serverMeta(s: ServerStatus): string {
+  if (!stateIsUp(s.state)) return stateExplanation(s.state);
+  const players = s.players ? t("overview.players", { count: s.players.online }) : t("overview.playersUnknown");
+  return s.tps === null ? players : t("overview.playersTps", { players, tps: s.tps.toFixed(0) });
+}
+
+function retryStatus(): void {
+  if (failure.value === "signedOut") signIn();
+  else void refresh();
+}
+
+function retryGuilds(): void {
+  if (guildsFailure.value === "signedOut") signIn();
+  else void loadMyGuilds(true);
+}
+
+function retryAudit(): void {
+  if (auditFailure.value === "signedOut") signIn();
+  else void loadRecent(RECENT_LIMIT);
+}
+
+onMounted(() => void refreshAll());
 </script>
 
 <style scoped>
 .overview-view { min-width: 0; }
-.stack-gap { display: flex; flex-direction: column; gap: var(--space-4); }
 
 .tiles {
   display: grid;
@@ -362,7 +327,6 @@ export default defineComponent({
 .panel-title { margin: 0; font-size: var(--text-lg); font-weight: 600; }
 .panel-error { margin: var(--space-3) 0 var(--space-1); }
 .pad { padding: var(--space-3) 0; margin: 0; }
-.note { color: var(--text-dim); font-size: var(--text-sm); }
 
 .rows { list-style: none; margin: 0; padding: var(--space-1) 0; display: flex; flex-direction: column; gap: 2px; }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); padding: var(--space-2) 0; min-width: 0; }
@@ -383,7 +347,4 @@ export default defineComponent({
   font-size: var(--text-xs);
 }
 
-@media (pointer: coarse), (max-width: 760px) {
-  .tap { min-height: var(--touch-min); }
-}
 </style>

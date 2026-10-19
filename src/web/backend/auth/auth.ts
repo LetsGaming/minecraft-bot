@@ -1,5 +1,5 @@
 /**
- * Dashboard auth — hand-rolled Discord OAuth2 (identify + guilds scopes)
+ * Dashboard auth, hand-rolled Discord OAuth2 (identify + guilds scopes)
  * plus stateless HMAC-signed session cookies. No auth framework: the flow
  * is a few HTTP calls and a cookie.
  *
@@ -8,7 +8,7 @@
  *     server status/operations, host metrics, the whole config, audit.
  *   - Guild manager: any Discord user who has Manage Guild (or is owner/
  *     admin) on a guild the bot is in. May configure that guild's bot
- *     features and nothing else — never the Minecraft server, other
+ *     features and nothing else, never the Minecraft server, other
  *     guilds, or global settings.
  * Anyone can log in; what they can do is decided per route. The set of
  * guilds a user manages is captured at login (from the `guilds` scope,
@@ -31,6 +31,8 @@ import {
 } from "@mcbot/schema";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { isSnowflake } from "@mcbot/schema/discord.js";
+import { MS } from "@mcbot/schema/time.js";
+import { Unauthorized } from "../errors.js";
 
 // Dev-only auth bypass. MCBOT_DEV_NO_AUTH=1 skips Discord OAuth entirely and
 // treats every request as this fixed sysadmin, for local/agent dev sessions
@@ -48,14 +50,15 @@ const DEV_SESSION: Session = {
 
 export const SESSION_COOKIE = "mcbot_session";
 export const OAUTH_STATE_COOKIE = "mcbot_oauth_state";
-const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const STATE_TTL_MS = 10 * 60 * 1000;
+const SESSION_TTL_MS = MS.week;
+const STATE_TTL_MS = 10 * MS.minute;
+const DISCORD_FETCH_TIMEOUT_MS = 10 * MS.second;
 // Guild-manager permissions are captured at login and can't be re-derived
 // mid-session (the OAuth token isn't stored). Trust that captured scope for
 // writes only this long, so a demoted manager loses config-write access
 // within the window instead of for the full session TTL (SEC-03). Sysadmin
 // status is re-derived per request from config, so sysadmins are unaffected.
-const GUILD_SCOPE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
+const GUILD_SCOPE_TTL_MS = 2 * MS.hour;
 
 export interface Session {
   uid: string;
@@ -116,7 +119,7 @@ function sessionSecret(): string {
   return secret;
 }
 
-export function clientSecret(): string {
+function clientSecret(): string {
   const secret = process.env.WEBUI_CLIENT_SECRET;
   if (!secret) {
     throw new Error(
@@ -143,7 +146,7 @@ export function encodeSigned(data: object): string {
  * `===` on a token leaks its prefix through timing: it bails at the first
  * differing byte, so an attacker can recover the value byte by byte. Every
  * secret comparison in the dashboard goes through here. The length check is
- * safe to short-circuit (a length is not a secret) and is required —
+ * safe to short-circuit (a length is not a secret) and is required, 
  * timingSafeEqual throws on unequal-length buffers.
  */
 export function secretEquals(actual: string, expected: string): boolean {
@@ -161,7 +164,7 @@ export function decodeSigned<T>(token: string | undefined): T | null {
   if (!secretEquals(mac, sign(payload))) return null;
   try {
     // The HMAC check above proves *we* produced this payload, so its JSON is
-    // trusted data, not arbitrary input — a generic cast to the caller's T is
+    // trusted data, not arbitrary input, a generic cast to the caller's T is
     // the intended contract of a signed-token decoder. Malformed JSON (only
     // possible if our own signing changed) is caught and returns null.
     return JSON.parse(Buffer.from(payload, "base64url").toString()) as T;
@@ -206,7 +209,7 @@ export function canManageGuild(session: Session, guildId: string): boolean {
 /**
  * Is the caller's captured guild scope still fresh enough to authorize a
  * guild-config WRITE (SEC-03)? A missing gexp (cookie predates this check)
- * counts as stale — fail closed, prompting a re-login that re-derives current
+ * counts as stale, fail closed, prompting a re-login that re-derives current
  * membership. Reads keep using canManageGuild; only mutations require freshness.
  */
 export function guildScopeFresh(session: Session): boolean {
@@ -241,7 +244,7 @@ function parseDiscordGuilds(
   });
 }
 
-export function manageableGuildIds(
+function manageableGuildIds(
   guilds: Array<{ id: string; owner?: boolean; permissions?: string }>,
 ): string[] {
   const out: string[] = [];
@@ -264,7 +267,7 @@ export function manageableGuildIds(
 
 // ── OAuth2 endpoints ──────────────────────────────────────────────────────
 
-export function oauthClientId(): string {
+function oauthClientId(): string {
   const cfg = loadConfig();
   return cfg.webui?.clientId ?? cfg.clientId;
 }
@@ -282,7 +285,7 @@ export function publicBaseUrl(): string {
   return url.replace(/\/$/, "");
 }
 
-export function redirectUri(): string {
+function redirectUri(): string {
   return `${publicBaseUrl()}/auth/callback`;
 }
 
@@ -327,7 +330,7 @@ function cookieAttributes(maxAgeSeconds: number): string {
 export function setOAuthStateCookie(reply: FastifyReply, nonce: string): void {
   reply.header(
     "set-cookie",
-    `${OAUTH_STATE_COOKIE}=${nonce}; ${cookieAttributes(Math.floor(STATE_TTL_MS / 1000))}`,
+    `${OAUTH_STATE_COOKIE}=${nonce}; ${cookieAttributes(Math.floor(STATE_TTL_MS / MS.second))}`,
   );
 }
 
@@ -353,7 +356,7 @@ export async function exchangeCode(
       code,
       redirect_uri: redirectUri(),
     }),
-    signal: AbortSignal.timeout(10_000),
+    signal: AbortSignal.timeout(DISCORD_FETCH_TIMEOUT_MS),
   });
   if (!tokenRes.ok) return null;
   const tokenBody: unknown = await tokenRes.json();
@@ -365,7 +368,7 @@ export async function exchangeCode(
 
   const meRes = await fetch(DISCORD_USER_URL, {
     headers: { authorization: `Bearer ${accessToken}` },
-    signal: AbortSignal.timeout(10_000),
+    signal: AbortSignal.timeout(DISCORD_FETCH_TIMEOUT_MS),
   });
   if (!meRes.ok) return null;
   const meBody: unknown = await meRes.json();
@@ -380,14 +383,14 @@ export async function exchangeCode(
       ? `${username}#${discriminator}`
       : (username ?? id);
 
-  // The user's guilds (with their permissions there) — how we know which
+  // The user's guilds (with their permissions there) how we know which
   // guilds this person may configure. A failure here is non-fatal: they
   // can still log in, just with no guild-manager access until next login.
   let guildIds: string[] = [];
   try {
     const gRes = await fetch(DISCORD_USER_GUILDS_URL, {
       headers: { authorization: `Bearer ${accessToken}` },
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(DISCORD_FETCH_TIMEOUT_MS),
     });
     if (gRes.ok) {
       const list = parseDiscordGuilds(await gRes.json());
@@ -443,7 +446,7 @@ export function setSessionCookie(reply: FastifyReply, user: {
   reply.header(
     "set-cookie",
     `${SESSION_COOKIE}=${encodeSigned(session)}; Path=/; HttpOnly; SameSite=Lax` +
-      `; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}${secure}`,
+      `; Max-Age=${Math.floor(SESSION_TTL_MS / MS.second)}${secure}`,
   );
 }
 
@@ -454,18 +457,18 @@ export function clearSessionCookie(reply: FastifyReply): void {
   );
 }
 
-/** onRequest gate: every /api route requires a valid (any) logged-in session. */
-export async function requireSession(
-  req: FastifyRequest,
-  reply: FastifyReply,
-): Promise<void> {
+export const NOT_SIGNED_IN = "You're not signed in. Log in with Discord to continue.";
+
+/** The request's session, or a 401 for a handler that must have one. */
+export function currentSession(req: FastifyRequest): Session {
   const session = sessionFromRequest(req);
-  if (!session) {
-    await reply.code(401).send({
-      error: "You're not signed in. Log in with Discord to continue.",
-    });
-    return;
-  }
+  if (!session) throw new Unauthorized(NOT_SIGNED_IN);
+  return session;
+}
+
+/** onRequest gate: every /api route requires a valid (any) logged-in session. */
+export async function requireSession(req: FastifyRequest): Promise<void> {
+  currentSession(req);
 }
 
 // requireSysadmin lived here until the host API moved to per-route

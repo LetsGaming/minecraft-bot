@@ -22,8 +22,7 @@ vi.mock("../../../src/core/utils/server/server.js", async (importOriginal) => ({
 }));
 vi.mock("../../../src/core/utils/stores/sessionStore.js", async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  loadSessionStore: vi.fn().mockResolvedValue({}),
-  saveSessionStore: vi.fn().mockResolvedValue(undefined),
+  updateSessionStore: vi.fn((fn: (store: object) => unknown) => fn({})),
   openSession: vi.fn(),
   closeSession: vi.fn(),
 }));
@@ -42,8 +41,7 @@ vi.mock("../../../src/core/utils/minecraft/eventTips.js", () => ({
 }));
 vi.mock("../../../src/bot/logWatcher/watchers/watchFirer.js", () => ({ fireWatches: vi.fn() }));
 vi.mock("../../../src/core/utils/stores/challengeStore.js", () => ({
-  loadChallengeStore: vi.fn().mockResolvedValue({}),
-  saveChallengeStore: vi.fn().mockResolvedValue(undefined),
+  updateChallengeStore: vi.fn((fn: (store: object) => unknown) => fn({})),
   expireStale: vi.fn().mockReturnValue(false),
   getActiveChallenge: vi.fn(() => ({
     advancement: "How Did We Get Here?",
@@ -62,6 +60,7 @@ vi.mock("../../../src/core/utils/minecraft/serverMessages.js", async (importOrig
 import { registerJoinLeaveWatcher } from "../../../src/bot/logWatcher/watchers/log/joinLeave.js";
 import { registerDeathWatcher } from "../../../src/bot/logWatcher/watchers/log/deaths.js";
 import { registerAdvancementWatcher } from "../../../src/bot/logWatcher/watchers/log/advancements.js";
+import { flushSendQueues } from "../../../src/bot/logWatcher/watchers/sendQueue.js";
 
 beforeAll(() => {
   vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"], now: NOW });
@@ -86,7 +85,9 @@ describe("Discord snapshots: event notifications", () => {
       id: "smp",
       getLastDeathLocation: vi.fn().mockResolvedValue({ ok: false }),
       getSeed: vi.fn().mockResolvedValue({ ok: false }),
-      getList: vi.fn().mockResolvedValue({ playerCount: "1", maxPlayers: "20", players: [] }),
+      getList: vi
+        .fn()
+        .mockResolvedValue({ ok: true, value: { playerCount: "1", maxPlayers: "20", players: [] } }),
     };
     const watcher = {
       server,
@@ -119,6 +120,7 @@ describe("Discord snapshots: event notifications", () => {
         const match = line.match(regex);
         if (match) await handler(match, client, server);
       }
+      await flushSendQueues();
       out[event] = current;
     }
     await expect(stringify(out)).toMatchFileSnapshot(fixturePath("events"));

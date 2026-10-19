@@ -262,7 +262,4 @@ export default defineComponent({
 .gce-list li { overflow-wrap: anywhere; }
 .gce-fields { display: flex; flex-direction: column; min-width: 0; }
 .gce-bar { width: 100%; }
-@media (pointer: coarse), (max-width: 760px) {
-  .tap { min-height: var(--touch-min); }
-}
 </style>

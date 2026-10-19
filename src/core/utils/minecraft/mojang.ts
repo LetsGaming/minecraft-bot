@@ -1,5 +1,5 @@
 /**
- * Mojang API adapter — the one place the app talks to Mojang.
+ * Mojang API adapter, the one place the app talks to Mojang.
  *
  * Splits I/O from transformation (see external-integrations): `fetchMojangProfile`
  * does the network call behind a timeout, and `parseMojangProfile` narrows the
@@ -7,6 +7,7 @@
  * a changed upstream shape fails here at the boundary, not deep inside a command.
  */
 import { fetchJson } from "../http.js";
+import { MS } from "@mcbot/schema/time.js";
 import type { MojangProfile } from "../../types/index.js";
 import { isRecord } from "../objects.js";
 
@@ -14,7 +15,7 @@ const PROFILE_ENDPOINT =
   "https://api.mojang.com/users/profiles/minecraft";
 
 /** A hung third-party API must not stall a command or the poll loop. */
-const MOJANG_TIMEOUT_MS = 5_000;
+const MOJANG_TIMEOUT_MS = 5 * MS.second;
 
 /**
  * Narrow an unknown JSON body to a `MojangProfile`, or `null` if it doesn't
@@ -30,7 +31,7 @@ export function parseMojangProfile(raw: unknown): MojangProfile | null {
 /**
  * Look up a Minecraft account by username. Returns `null` when the name is
  * unknown (Mojang replies non-2xx), when the upstream is unreachable or times
- * out, or when the body is misshapen — callers surface their own "not found"
+ * out, or when the body is misshapen, callers surface their own "not found"
  * message. A `null` here is always "no usable profile", never a wrong one.
  */
 export async function fetchMojangProfile(

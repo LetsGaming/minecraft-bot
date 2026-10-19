@@ -1,3 +1,4 @@
+import { MS } from "@mcbot/schema/time.js";
 import path from "path";
 import zlib from "zlib";
 import { promises as fsPromises } from "fs";
@@ -11,31 +12,32 @@ import {
 } from "./statUtils.js";
 import { getDb, withTransaction } from "../../db/index.js";
 import { mapRow, mapRows, col } from "../../db/rows.js";
+import { blobOrNull } from "../blobColumn.js";
 import type { ServerInstance } from "../server/server.js";
 import { log } from "../logger.js";
 import type { SnapshotData } from "../../types/index.js";
 import { LONGEST_LEADERBOARD_INTERVAL_MS } from "@mcbot/schema/stats.js";
 import { errMsg } from "../error.js";
 
-// Snapshots live in the snapshots table keyed (server_id, ts) — the key
+// Snapshots live in the snapshots table keyed (server_id, ts) the key
 // the old per-server directories encoded in paths, and the one the
 // original flat files got wrong across servers. Legacy snapshot FILES
 // (both layouts) are imported once by migrateLegacySnapshots() below.
 const SNAPSHOTS_BASE_DIR = path.resolve(getRootDir(), "data", "snapshots");
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+const DAY_MS = MS.day;
 
 /**
  * How far back every snapshot is kept, unthinned. The daily lookups need
  * granularity on both sides of the 24h boundary, so the window is a day
  * plus a margin that comfortably exceeds one snapshot interval.
  */
-const FULL_RESOLUTION_MS = DAY_MS + 2 * 60 * 60 * 1000; // 26 h
+const FULL_RESOLUTION_MS = DAY_MS + 2 * MS.hour; // 26 h
 
 /**
  * Hard age cap. Derived from the longest period a board can ask for, plus
  * a day for the once-per-day thinning granularity beyond the full-
- * resolution window, plus a day of slack — so a monthly baseline is never
+ * resolution window, plus a day of slack, so a monthly baseline is never
  * evicted just before the board that needs it runs.
  */
 const MAX_AGE_MS = LONGEST_LEADERBOARD_INTERVAL_MS + 2 * DAY_MS; // 32 days
@@ -82,22 +84,26 @@ function tsList(serverId: string): number[] {
  * rows (and legacy imports) keep the plain JSON in payload. */
 function decodeSnapshotRow(row: {
   payload: string;
-  payload_gz: Buffer | Uint8Array | null;
+  payload_gz: Uint8Array | null;
 }): SnapshotData {
   const json = row.payload_gz
-    ? zlib.gunzipSync(Buffer.from(row.payload_gz)).toString("utf-8")
+    ? zlib.gunzipSync(row.payload_gz).toString("utf-8")
     : row.payload;
   return JSON.parse(json) as SnapshotData;
 }
 
 function loadPayload(serverId: string, ts: number): SnapshotData | null {
-  const row = getDb()
-    .prepare(
+  const row = mapRow(
+    getDb().prepare(
       "SELECT payload, payload_gz FROM snapshots WHERE server_id = ? AND ts = ?",
-    )
-    .get(serverId, ts) as
-    | { payload: string; payload_gz: Buffer | Uint8Array | null }
-    | undefined;
+    ),
+    (r) => ({
+      payload: col.text(r, "payload"),
+      payload_gz: blobOrNull(r, "payload_gz"),
+    }),
+    serverId,
+    ts,
+  );
   if (!row) return null;
   try {
     return decodeSnapshotRow(row);
@@ -132,12 +138,12 @@ export async function takeSnapshot(
     flatStats,
   };
 
-  // An empty snapshot is not "nobody has stats" — it is indistinguishable
+  // An empty snapshot is not "nobody has stats", it is indistinguishable
   // from "the stats could not be read", and recording it is worse than
   // recording nothing. Baselines are looked up by time and a missing player
   // reads as zero (statUtils: `baseline[uuid] ?? 0`), so one empty snapshot
   // in the window makes every period board subtract nothing and report
-  // all-time totals as the period's gains — labelled as the period, which is
+  // all-time totals as the period's gains, labelled as the period, which is
   // the part that makes it a lie.
   //
   // Skipping costs nothing: with no baseline the readers return null and the
@@ -152,7 +158,7 @@ export async function takeSnapshot(
         `directory is unreadable (check the API wrapper's serverPath, the ` +
         `world's level-name, and read permissions on <world>/stats).`,
     );
-    // Storage audit: pruning must not depend on a snapshot succeeding —
+    // Storage audit: pruning must not depend on a snapshot succeeding, 
     // a wrapper outage that never resolves would otherwise stop retention
     // entirely and let old rows accumulate forever.
     await cleanupSnapshots(server.id);
@@ -166,7 +172,7 @@ export async function takeSnapshot(
     )
     .run(server.id, timestamp, gz);
 
-  // Snapshot captures the current state — force fresh load on next leaderboard query
+  // Snapshot captures the current state, force fresh load on next leaderboard query
   invalidateAllStatsCache();
 
   log.info(
@@ -232,7 +238,7 @@ export async function getSnapshotClosestTo(
  * not what users expect from a "daily" stat.
  *
  * If no v2 snapshot exists in the [target, now] window (e.g. the bot
- * just started and hasn't taken its first snapshot yet), returns null —
+ * just started and hasn't taken its first snapshot yet), returns null, 
  * caller should treat this as "no baseline available, can't compute
  * diff".
  */
@@ -241,7 +247,7 @@ export async function getSnapshotForDailyDiff(
   targetTimestamp: number,
 ): Promise<SnapshotData | null> {
   // Walk snapshots oldest-first, skip anything older than the target
-  // (those would push the window past 24h). First v2 hit wins — that's
+  // (those would push the window past 24h). First v2 hit wins, that's
   // the oldest baseline still inside the 24h window, giving the largest
   // valid period. Payloads load one at a time: a day of snapshots can be
   // megabytes, and the first candidate almost always wins.
@@ -268,7 +274,7 @@ export async function getSnapshotForDailyDiff(
  *      getSnapshotForDailyDiff the oldest just *inside*. Nothing in this
  *      window is ever thinned.
  *   2. One per local day beyond it, which is all the weekly and monthly
- *      boards need — their baseline lands within a day of the boundary.
+ *      boards need, their baseline lands within a day of the boundary.
  *   3. Nothing past MAX_AGE_MS at all.
  *   4. The newest snapshot always survives, whatever its age, so a board
  *      on a long-idle server still has a baseline.
@@ -276,7 +282,7 @@ export async function getSnapshotForDailyDiff(
  * This replaces a calendar-day rule that thinned a whole day the moment
  * that day's *first* snapshot aged past 24h. Since yesterday's 00:00
  * snapshot is over 24h old at any time after midnight, yesterday always
- * collapsed to its last snapshot — punching a hole through the rolling
+ * collapsed to its last snapshot, punching a hole through the rolling
  * window right where every daily baseline is looked up. The daily board
  * then anchored on a 26–48h-old snapshot (on a young server: the oldest
  * one there was, i.e. effectively all-time), and /stats daily silently
@@ -308,7 +314,7 @@ export async function cleanupSnapshots(serverId: string): Promise<void> {
     if (ts < maxAge) toDelete.add(ts);
   }
 
-  // The newest snapshot is always a usable baseline — never drop it.
+  // The newest snapshot is always a usable baseline, never drop it.
   toDelete.delete(newestTimestamp);
 
   if (toDelete.size === 0) return;
@@ -327,7 +333,7 @@ export async function cleanupSnapshots(serverId: string): Promise<void> {
 }
 
 /**
- * One-time import: move legacy snapshot FILES into the snapshots table —
+ * One-time import: move legacy snapshot FILES into the snapshots table, 
  * both layouts, per-server directories (data/snapshots/<serverId>/<ts>.json)
  * and the ancient loose files (data/snapshots/<ts>.json, attributed to the
  * first configured server). The directory is then renamed to
