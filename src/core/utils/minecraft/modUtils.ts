@@ -1,12 +1,13 @@
 /**
  * Modrinth mod lookup service.
  *
- * Reads downloaded_versions.json (local) or fetches the slug list from the
- * API wrapper (remote), then hits the Modrinth API once for metadata.
+ * Fetches the installed slug list from the API wrapper, then asks the
+ * Modrinth API for their metadata in bounded chunks.
  * Cache is keyed by server ID + mtime so it invalidates automatically.
  */
 
 import { fetchJson, describeFailure } from "../http.js";
+import { MODRINTH_API, MODRINTH_USER_AGENT } from "../modrinth.js";
 import type { ServerInstance } from "../server/server.js";
 import type { ModSide, ModInfo, ModList } from "../../types/index.js";
 import { isRecord } from "../objects.js";
@@ -38,8 +39,6 @@ interface CacheEntry {
 }
 
 const cache = new Map<string, CacheEntry>();
-
-const MODRINTH_API = "https://api.modrinth.com/v2";
 
 // ── Side classification ───────────────────────────────────────────────────
 
@@ -109,22 +108,28 @@ function parseModrinthProjects(raw: unknown): ModrinthProject[] {
   });
 }
 
-async function fetchModrinthProjects(
-  slugs: string[],
-): Promise<ModrinthProject[]> {
-  const ids = JSON.stringify(slugs);
-  const url = `${MODRINTH_API}/projects?ids=${encodeURIComponent(ids)}`;
+/** Slugs per `GET /projects?ids=` request, keeping the URL well under common length limits. */
+const SLUGS_PER_REQUEST = 100;
+
+async function fetchProjectChunk(slugs: string[]): Promise<ModrinthProject[]> {
+  const url = `${MODRINTH_API}/projects?ids=${encodeURIComponent(JSON.stringify(slugs))}`;
   const result = await fetchJson(url, {
-    headers: {
-      "User-Agent": "minecraft-discord-bot (contact via server admin)",
-    },
+    headers: { "User-Agent": MODRINTH_USER_AGENT },
   });
-  // This one had no timeout before: a stalled Modrinth would hang /mods
-  // indefinitely. fetchJson always applies one.
   if (!result.ok) {
     throw new Error(`Modrinth API: ${describeFailure(result.failure)}`);
   }
   return parseModrinthProjects(result.value);
+}
+
+async function fetchModrinthProjects(
+  slugs: string[],
+): Promise<ModrinthProject[]> {
+  const chunks: string[][] = [];
+  for (let i = 0; i < slugs.length; i += SLUGS_PER_REQUEST) {
+    chunks.push(slugs.slice(i, i + SLUGS_PER_REQUEST));
+  }
+  return (await Promise.all(chunks.map(fetchProjectChunk))).flat();
 }
 
 function buildModList(projects: ModrinthProject[]): ModList {

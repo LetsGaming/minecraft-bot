@@ -15,14 +15,20 @@
  * shows them and refuses to rewrite them, which is the honest outcome:
  * mangling a value you did not understand is worse than declining to edit it.
  */
-import { ConfigEditError } from "./types.js";
 import type {
   ConfigFormat,
   ConfigNode,
   ConfigValueKind,
   ParsedConfig,
 } from "./types.js";
-import { CommentBlock, markDuplicates, numberLiteral, scanLines } from "./lines.js";
+import {
+  CommentBlock,
+  markDuplicates,
+  numberLiteral,
+  scalarLiteral,
+  scanLines,
+  scanOutsideQuotes,
+} from "./lines.js";
 
 const KEY_PART = String.raw`(?:"[^"]*"|'[^']*'|[A-Za-z0-9_\-]+)`;
 /** `key = value` with a bare, quoted or dotted key, capturing where the value starts. */
@@ -43,19 +49,13 @@ function unquotePart(raw: string): string {
 /** Split `a."b.c".d` into its parts, honouring quotes. */
 export function splitKeyPath(raw: string): string[] {
   const parts: string[] = [];
-  let quote: string | null = null;
   let start = 0;
-  for (let i = 0; i < raw.length; i++) {
-    const ch = raw[i]!;
-    if (quote) {
-      if (ch === "\\" && quote === '"') i++;
-      else if (ch === quote) quote = null;
-    } else if (ch === '"' || ch === "'") quote = ch;
-    else if (ch === ".") {
+  scanOutsideQuotes(raw, (ch, i) => {
+    if (ch === ".") {
       parts.push(raw.slice(start, i));
       start = i + 1;
     }
-  }
+  });
   parts.push(raw.slice(start));
   return parts.map((p) => unquotePart(p.trim()));
 }
@@ -66,38 +66,24 @@ export function splitKeyPath(raw: string): string[] {
  */
 function headerBody(trimmed: string, open: number): string | null {
   const close = "]".repeat(open);
-  let quote: string | null = null;
-  for (let i = open; i < trimmed.length; i++) {
-    const ch = trimmed[i]!;
-    if (quote) {
-      if (ch === "\\" && quote === '"') i++;
-      else if (ch === quote) quote = null;
-      continue;
-    }
-    if (ch === '"' || ch === "'") quote = ch;
-    else if (trimmed.startsWith(close, i)) {
+  let body: string | null = null;
+  scanOutsideQuotes(
+    trimmed,
+    (_ch, i) => {
+      if (!trimmed.startsWith(close, i)) return false;
       const rest = trimmed.slice(i + open).trim();
-      return rest === "" || rest.startsWith("#") ? trimmed.slice(open, i) : null;
-    }
-  }
-  return null;
+      body = rest === "" || rest.startsWith("#") ? trimmed.slice(open, i) : null;
+      return true;
+    },
+    open,
+  );
+  return body;
 }
 
 /** Strip a trailing `# comment` that sits outside any quoted string. */
 function splitTrailingComment(valueText: string): string {
-  let inDouble = false;
-  let inSingle = false;
-  for (let i = 0; i < valueText.length; i++) {
-    const ch = valueText[i];
-    if (ch === "\\" && inDouble) {
-      i++;
-      continue;
-    }
-    if (ch === '"' && !inSingle) inDouble = !inDouble;
-    else if (ch === "'" && !inDouble) inSingle = !inSingle;
-    else if (ch === "#" && !inDouble && !inSingle) return valueText.slice(0, i);
-  }
-  return valueText;
+  const at = scanOutsideQuotes(valueText, (ch) => ch === "#");
+  return at === -1 ? valueText : valueText.slice(0, at);
 }
 
 const SIMPLE_ESCAPES: Record<string, string> = {
@@ -175,22 +161,13 @@ function parseArray(
   if (body === "") return { value: [], kind: "stringList", float: false };
 
   const parts: string[] = [];
-  let inDouble = false;
-  let inSingle = false;
   let start = 0;
-  for (let i = 0; i < body.length; i++) {
-    const ch = body[i];
-    if (ch === "\\" && inDouble) {
-      i++;
-      continue;
-    }
-    if (ch === '"' && !inSingle) inDouble = !inDouble;
-    else if (ch === "'" && !inDouble) inSingle = !inSingle;
-    else if (ch === "," && !inDouble && !inSingle) {
+  scanOutsideQuotes(body, (ch, i) => {
+    if (ch === ",") {
       parts.push(body.slice(start, i));
       start = i + 1;
     }
-  }
+  });
   parts.push(body.slice(start));
   // A trailing comma leaves one empty part.
   if (parts.length > 1 && parts[parts.length - 1]!.trim() === "") parts.pop();
@@ -226,18 +203,10 @@ function escapeBasicString(s: string): string {
 /** Net count of opening minus closing brackets outside quoted strings. */
 function bracketDelta(text: string): number {
   let depth = 0;
-  let inDouble = false;
-  let inSingle = false;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (ch === "\\" && inDouble) i++;
-    else if (ch === '"' && !inSingle) inDouble = !inDouble;
-    else if (ch === "'" && !inDouble) inSingle = !inSingle;
-    else if (!inDouble && !inSingle) {
-      if (ch === "[" || ch === "{") depth++;
-      else if (ch === "]" || ch === "}") depth--;
-    }
-  }
+  scanOutsideQuotes(text, (ch) => {
+    if (ch === "[" || ch === "{") depth++;
+    else if (ch === "]" || ch === "}") depth--;
+  });
   return depth;
 }
 
@@ -283,7 +252,7 @@ export const tomlFormat: ConfigFormat = {
         continue;
       }
       if (trimmed.startsWith("#")) {
-        comments.add(trimmed.replace(/^#+\s?/, ""));
+        comments.addLine(trimmed);
         continue;
       }
       if (trimmed.startsWith("[[")) {
@@ -352,6 +321,7 @@ export const tomlFormat: ConfigFormat = {
       const parsed: Scalar = arr ?? parseScalar(trailingTrimmed);
       const looksArray = trailingTrimmed.startsWith("[");
       const float = arr ? arr.float : parsed.float === true;
+      const whole = arr ? arr.kind === "numberList" && !arr.float : parsed.kind === "number" && !float;
 
       nodes.push({
         path: [...section, ...keyPath],
@@ -361,6 +331,7 @@ export const tomlFormat: ConfigFormat = {
         comments: comments.take(),
         valueSpan: [valueStart, valueStart + trailingTrimmed.length],
         ...(float ? { hint: "float" } : {}),
+        ...(whole ? { integer: true } : {}),
         ...(inArrayTable || (looksArray && !arr) ? { readOnly: true } : {}),
       });
     }
@@ -369,23 +340,22 @@ export const tomlFormat: ConfigFormat = {
   },
 
   literal(value: unknown, kind: ConfigValueKind, node?: ConfigNode): string {
-    if (kind === "boolean") return value ? "true" : "false";
-    if (kind === "number") return numberLiteral(value, node?.hint === "float");
     if (kind === "stringList" || kind === "numberList") {
       const items = Array.isArray(value) ? value : [];
-      const float = node?.hint === "float";
+      const shape = { float: node?.hint === "float", integer: node?.integer === true };
       const rendered = items.map((v) =>
         typeof v === "number"
-          ? numberLiteral(v, float)
+          ? numberLiteral(v, shape)
           : typeof v === "boolean"
             ? String(v)
             : `"${escapeBasicString(String(v))}"`,
       );
       return `[${rendered.join(", ")}]`;
     }
-    if (kind === "unknown") {
-      throw new ConfigEditError("This value has a layout the editor cannot rewrite safely.");
-    }
-    return `"${escapeBasicString(String(value))}"`;
+    return scalarLiteral(value, kind, node, {
+      rejectOther: true,
+      lineBreaks: "handled",
+      text: (text) => `"${escapeBasicString(text)}"`,
+    });
   },
 };

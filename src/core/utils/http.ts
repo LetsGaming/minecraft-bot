@@ -15,9 +15,10 @@
  * is what stops them collapsing it into null again.
  */
 import { errMsg } from "./error.js";
+import { MS } from "@mcbot/schema/time.js";
 
 /** Nothing upstream should take longer than this. */
-export const DEFAULT_TIMEOUT_MS = 10_000;
+export const DEFAULT_TIMEOUT_MS = 10 * MS.second;
 
 export type FetchFailure =
   /** No response at all: DNS, refused connection, TLS, timeout. */

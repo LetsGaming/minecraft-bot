@@ -37,7 +37,6 @@ const SAMPLES: Record<string, unknown> = {
   language: "de",
   timezone: "Europe/Berlin",
   commands: { stats: { enabled: false } },
-  leaderboard: { enabled: true },
   tpsWarningThreshold: 11,
   tpsPollIntervalMs: 12_345,
   leaderboardInterval: "daily",

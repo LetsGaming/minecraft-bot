@@ -79,6 +79,12 @@ describe("relativeAge", () => {
     expect(relativeAge(NOW - 3 * DAY, NOW)).toBe("3 days ago");
   });
 
+  it("floors within a unit so a boundary never prints the next unit's number", () => {
+    expect(relativeAge(NOW - (59 * MINUTE + 40_000), NOW)).toBe("59 min ago");
+    expect(relativeAge(NOW - (23 * HOUR + 40 * MINUTE), NOW)).toBe("23 h ago");
+    expect(relativeAge(NOW - 50_000, NOW)).toBe("1 min ago");
+  });
+
   it("does not count past 24 hours in hours", () => {
     // Regression: the backups table printed "48 h ago" one row above
     // "3 days ago" for archives one day apart.

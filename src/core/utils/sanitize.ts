@@ -26,28 +26,11 @@ export interface SanitizedConsoleInput {
 }
 
 /**
- * Sanitize a display name + message pair for safe interpolation into a
- * console command such as `/say [name] message`.
- * Removes control characters, escapes double quotes in the message, and
- * caps lengths so the resulting command stays within Minecraft's
- * 256-char limit.
- */
-export function sanitizeForConsole(
-  name: string,
-  message: string,
-): SanitizedConsoleInput {
-  const safeName = stripControlChars(name).slice(0, MAX_NAME_LENGTH);
-  const safeMessage = stripControlChars(message)
-    .replace(/"/g, '\\"')
-    .slice(0, MAX_MESSAGE_LENGTH);
-  return { name: safeName, message: safeMessage };
-}
-
-/**
  * Sanitize a display name + message pair for a JSON text component
- * (`/tellraw`). Same control-character stripping and caps as
- * sanitizeForConsole, but quotes stay as typed: JSON.stringify escapes them,
- * and escaping here too would show the backslashes in game.
+ * (`/tellraw`): control characters are stripped and lengths capped so the
+ * resulting command stays within Minecraft's 256-char limit. Quotes stay as
+ * typed: JSON.stringify escapes them, and escaping here too would show the
+ * backslashes in game.
  */
 export function sanitizeForComponent(
   name: string,

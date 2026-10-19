@@ -8,6 +8,7 @@ import { forgeCfgFormat } from "./forgeCfg.js";
 import { iniFormat } from "./ini.js";
 import { yamlFormat } from "./yaml.js";
 import { colonTextFormat } from "./colonText.js";
+import { assertWritableNumber } from "./lines.js";
 import {
   ConfigEditError,
   pathId,
@@ -196,6 +197,9 @@ function checkValueKind(node: ConfigNode, value: unknown): void {
       `${dotted(node.path)} expects a ${KIND_NAMES[node.kind]}.`,
     );
   }
+  const numbers =
+    node.kind === "number" ? [value] : node.kind === "numberList" ? (value as unknown[]) : [];
+  for (const n of numbers) assertWritableNumber(n, node.integer === true);
 }
 
 const KIND_NAMES: Record<ConfigValueKind, string> = {

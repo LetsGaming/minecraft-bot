@@ -12,15 +12,16 @@ import type {
   ServerConfig,
 } from "./types/index.js";
 
-// Validation moved to its own module (QUAL-02); re-exported here so existing
-// callers keep importing it from @mcbot/core/config.
+// Re-exported so callers import validation from @mcbot/core/config.
 export { validateCandidateConfig, validateApiUrl };
 export type {
   ApiUrlValidation,
   ConfigValidationResult,
 } from "./configValidation.js";
+export { tryLoadConfig, type ConfigLoadResult } from "./utils/config/configAccess.js";
 import { DEFAULT_TPS_ALERT_THRESHOLD } from "@mcbot/schema/thresholds.js";
 import { isLanguage } from "@mcbot/schema/language.js";
+import { MS } from "@mcbot/schema/time.js";
 import { errMsg } from "./utils/error.js";
 import {
   SECRET_FILE_MODE,
@@ -31,6 +32,17 @@ import {
   runConfigMigrations,
   type MigrationResult,
 } from "./configMigrations.js";
+
+/** Values a loaded config falls back to when the file leaves a setting out. */
+export const CONFIG_DEFAULTS = {
+  language: "en",
+  tpsWarningThreshold: DEFAULT_TPS_ALERT_THRESHOLD,
+  tpsPollIntervalMs: MS.minute,
+  leaderboardInterval: "weekly",
+} as const satisfies Pick<
+  BotConfig,
+  "language" | "tpsWarningThreshold" | "tpsPollIntervalMs" | "leaderboardInterval"
+>;
 
 const PROJECT_ROOT = getRootDir();
 // The active config.json. Overridable via MCBOT_CONFIG_PATH so a deployment
@@ -89,34 +101,11 @@ export function getConfigPath(): string {
 }
 
 
+// apiUrl and apiKey are present because validateRawConfig ran before this.
 function resolveServerConfig(
   raw: RawServerConfig & { id: string },
 ): ServerConfig {
-  // Nothing to derive: since 5.0.0 an instance is a wrapper URL and a key.
-  // This used to walk the setup suite's directory layout to find scriptDir,
-  // then parse {scriptDir}/common/variables.txt for SERVER_PATH, USER,
-  // RCON_* and friends — a second implementation of what the wrapper's own
-  // parseVars.ts does, against a file on a machine the bot may not even
-  // share. The wrapper reads it now, and reports what it found.
-  return {
-    id: raw.id,
-    apiUrl: raw.apiUrl!,
-    apiKey: raw.apiKey!,
-    ...(raw.allowInsecureHttp !== undefined
-      ? { allowInsecureHttp: raw.allowInsecureHttp }
-      : {}),
-    // Direct-ping overrides. All optional: the defaults (apiUrl's host, the
-    // wrapper-reported game port) are right for a normal single-host setup.
-    ...(raw.pingHost ? { pingHost: raw.pingHost } : {}),
-    ...(raw.pingPort !== undefined ? { pingPort: raw.pingPort } : {}),
-    ...(raw.disableDirectPing !== undefined
-      ? { disableDirectPing: raw.disableDirectPing }
-      : {}),
-    // Player-facing identity: how to join, and what to install first.
-    ...(raw.publicAddress ? { publicAddress: raw.publicAddress } : {}),
-    ...(raw.modpack ? { modpack: raw.modpack } : {}),
-    ...(raw.commands ? { commands: raw.commands } : {}),
-  };
+  return { ...raw, apiUrl: raw.apiUrl!, apiKey: raw.apiKey! };
 }
 
 /** ENV_VAR-safe form of a server id: "smp-1" -> "SMP_1". */
@@ -273,33 +262,15 @@ export function loadConfig(): BotConfig {
   };
 
   _config = Object.freeze({
-    configVersion:        raw.configVersion,
-    token:                raw.token,
-    clientId:             raw.clientId,
+    ...raw,
     servers,
     guilds,
-    adminUsers:           raw.adminUsers          ?? [],
-    // Locale for user-visible strings; anything but "de" → "en"
-    language:             isLanguage(raw.language) ? raw.language : "en",
-    commands:             raw.commands            ?? {},
-    leaderboard:          raw.leaderboard         ?? {},
-    tpsWarningThreshold:  raw.tpsWarningThreshold ?? DEFAULT_TPS_ALERT_THRESHOLD,
-    tpsPollIntervalMs:    raw.tpsPollIntervalMs   ?? 60_000,
-    leaderboardInterval:  raw.leaderboardInterval ?? "weekly",
-    ...(raw.leaderboardPostTime ? { leaderboardPostTime: raw.leaderboardPostTime } : {}),
-    ...(raw.leaderboardPostDay  ? { leaderboardPostDay:  raw.leaderboardPostDay }  : {}),
-    ...(raw.embedColors ? { embedColors: raw.embedColors } : {}),
-    ...(raw.presence    ? { presence:    raw.presence }    : {}),
-    ...(raw.deathCoords ? { deathCoords: raw.deathCoords } : {}),
-    ...(raw.hostAlerts  ? { hostAlerts:  raw.hostAlerts }  : {}),
-    ...(raw.waypoints   ? { waypoints:   raw.waypoints }   : {}),
-    ...(raw.limits      ? { limits:      raw.limits }      : {}),
-    ...(raw.updateNotifier ? { updateNotifier: raw.updateNotifier } : {}),
-    ...(raw.schedules   ? { schedules:   raw.schedules }   : {}),
-    ...(raw.milestones  ? { milestones:  raw.milestones }  : {}),
-    ...(raw.webui       ? { webui:       raw.webui }       : {}),
-    ...(raw.timezone       ? { timezone:       raw.timezone }       : {}),
-    ...(raw.featureNudges  ? { featureNudges:  raw.featureNudges }  : {}),
+    adminUsers: raw.adminUsers ?? [],
+    language: isLanguage(raw.language) ? raw.language : CONFIG_DEFAULTS.language,
+    commands: raw.commands ?? {},
+    tpsWarningThreshold: raw.tpsWarningThreshold ?? CONFIG_DEFAULTS.tpsWarningThreshold,
+    tpsPollIntervalMs: raw.tpsPollIntervalMs ?? CONFIG_DEFAULTS.tpsPollIntervalMs,
+    leaderboardInterval: raw.leaderboardInterval ?? CONFIG_DEFAULTS.leaderboardInterval,
   });
 
   return _config;
@@ -322,44 +293,13 @@ export function reloadConfig(): BotConfig {
   }
 }
 
-export type ConfigLoadResult =
-  | { ok: true; config: BotConfig }
-  | { ok: false; error: string; failOpen: boolean };
-
-let _lastLoadFailure: string | null = null;
-
-/**
- * loadConfig() for callers that must keep running when the config cannot be
- * read. The caller states which way a failure resolves: `"open"` (carry on as
- * if nothing was restricted) or `"closed"` (refuse). The result carries that
- * as `failOpen`, so the decision is visible at the call site instead of
- * hiding in an empty catch.
- *
- * A failure is logged once; the same failure repeating stays quiet until a
- * load succeeds or the message changes.
- */
-export function tryLoadConfig(opts: { onError: "open" | "closed" }): ConfigLoadResult {
-  try {
-    const config = loadConfig();
-    _lastLoadFailure = null;
-    return { ok: true, config };
-  } catch (err) {
-    const error = errMsg(err);
-    if (error !== _lastLoadFailure) {
-      _lastLoadFailure = error;
-      log.warn("config", `Config could not be loaded (failing ${opts.onError}): ${error}`);
-    }
-    return { ok: false, error, failOpen: opts.onError === "open" };
-  }
-}
-
 // ── Config file watcher ───────────────────────────────────────────────────
 let _watcher: fs.FSWatcher | null = null;
 let _reloadTimer: ReturnType<typeof setTimeout> | null = null;
 let _rearmTimer: ReturnType<typeof setTimeout> | null = null;
 
 const WATCH_DEBOUNCE_MS = 300;
-const WATCH_REARM_MS = 1_000;
+const WATCH_REARM_MS = MS.second;
 
 export interface WatchConfigOptions {
   debounceMs?: number;

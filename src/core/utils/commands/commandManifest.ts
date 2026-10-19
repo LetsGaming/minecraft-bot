@@ -11,6 +11,7 @@ import { loadJson, saveJson } from "../jsonStore.js";
 import { getRootDir } from "../paths.js";
 import { log } from "../logger.js";
 import { errMsg } from "../error.js";
+import { isRecord } from "../objects.js";
 
 const MANIFEST_PATH = path.resolve(
   getRootDir(),
@@ -42,14 +43,15 @@ export interface CommandManifest {
 
 // Accumulated during startup: bot/index contributes the slash half,
 // initMinecraftCommands the in-game half, then one flush writes the file.
-const pending: { slash: CommandManifestEntry[]; ingame: CommandManifestEntry[] } =
+const pending: Record<"slash" | "ingame", CommandManifestEntry[]> =
   { slash: [], ingame: [] };
 
+/** Set the commands of one kind. A later call replaces them, so a reload never keeps a removed command. */
 export function registerManifestCommands(
   kind: "slash" | "ingame",
   entries: CommandManifestEntry[],
 ): void {
-  pending[kind].push(...entries);
+  pending[kind] = [...entries];
 }
 
 export async function flushCommandManifest(): Promise<void> {
@@ -73,15 +75,24 @@ export async function flushCommandManifest(): Promise<void> {
 
 /** Read side for the dashboard; null when the bot never wrote one. */
 export async function readCommandManifest(): Promise<CommandManifest | null> {
-  const raw = (await loadJson(MANIFEST_PATH).catch(() => null)) as
-    | Partial<CommandManifest>
-    | null;
-  if (!raw || !Array.isArray(raw.slash) || !Array.isArray(raw.ingame)) {
+  const raw: unknown = await loadJson(MANIFEST_PATH).catch(() => null);
+  if (!isRecord(raw) || !Array.isArray(raw["slash"]) || !Array.isArray(raw["ingame"])) {
     return null;
   }
   return {
-    slash: raw.slash,
-    ingame: raw.ingame,
-    updatedAt: typeof raw.updatedAt === "number" ? raw.updatedAt : 0,
+    slash: raw["slash"].flatMap(toEntry),
+    ingame: raw["ingame"].flatMap(toEntry),
+    updatedAt: typeof raw["updatedAt"] === "number" ? raw["updatedAt"] : 0,
   };
+}
+
+function toEntry(value: unknown): CommandManifestEntry[] {
+  if (!isRecord(value) || typeof value["name"] !== "string") return [];
+  return [
+    {
+      name: value["name"],
+      description: typeof value["description"] === "string" ? value["description"] : "",
+      ...(typeof value["category"] === "string" ? { category: value["category"] } : {}),
+    },
+  ];
 }

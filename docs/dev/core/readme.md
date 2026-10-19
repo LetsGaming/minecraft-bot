@@ -63,7 +63,7 @@ split it before it becomes the next `utils.ts`.
 
 **Console sinks go through `sanitize.ts`.** Any user-supplied text that ends up
 in an RCON or screen command — `/say`, the chat bridge, whitelist, moderation,
-in-game `!commands` — passes `sanitizeForConsole`/`stripControlChars` first, and
+in-game `!commands` — passes `stripControlChars`/`sanitizeForComponent` first (or is built with `consoleCommand()`), and
 player names pass `isValidMcName`. A `\n` in a chat message is a second console
 command. There is one implementation, it is tested, and hand-rolling a second
 one is how the first hole gets opened.

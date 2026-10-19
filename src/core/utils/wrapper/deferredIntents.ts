@@ -32,8 +32,10 @@
  * saying yes to it by reflex is exactly the accident this design avoids.
  */
 
+import { MS } from "@mcbot/schema/time.js";
+
 /** Past this, an intent is no longer something anyone is still thinking about. */
-const INTENT_TTL_MS = 30 * 60 * 1000;
+const INTENT_TTL_MS = 30 * MS.minute;
 
 export interface DeferredIntent {
   serverId: string;

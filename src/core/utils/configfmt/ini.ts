@@ -13,8 +13,9 @@ import { ConfigEditError } from "./types.js";
 import {
   CommentBlock,
   inferScalar,
+  integerFlag,
   markDuplicates,
-  numberLiteral,
+  scalarLiteral,
   scanLines,
 } from "./lines.js";
 
@@ -54,7 +55,7 @@ export const iniFormat: ConfigFormat = {
         continue;
       }
       if (isComment(trimmed)) {
-        comments.add(trimmed.replace(/^[;#]+\s?/, ""));
+        comments.addLine(trimmed, ";#");
         continue;
       }
       const sec = SECTION.exec(line);
@@ -84,20 +85,21 @@ export const iniFormat: ConfigFormat = {
         comments: comments.take(),
         valueSpan: [valueStart, valueStart + value.length],
         ...(quoted ? { hint: "quoted" } : scalar.float ? { hint: "float" } : {}),
+        ...integerFlag(scalar),
       });
     }
     return { nodes: markDuplicates(nodes) };
   },
 
   literal(value: unknown, kind: ConfigValueKind, node?: ConfigNode): string {
-    if (kind === "boolean") return value ? "true" : "false";
-    if (kind === "number") return numberLiteral(value, node?.hint === "float");
-    const text = String(value ?? "");
-    if (/[\r\n]/.test(text)) throw new ConfigEditError("A value cannot contain a line break.");
-    if (node?.hint === "quoted") {
-      if (text.includes('"')) throw new ConfigEditError("A quoted value cannot contain a double quote.");
-      return `"${text}"`;
-    }
-    return text;
+    return scalarLiteral(value, kind, node, {
+      text: (text) => {
+        if (node?.hint !== "quoted") return text;
+        if (text.includes('"')) {
+          throw new ConfigEditError("A quoted value cannot contain a double quote.");
+        }
+        return `"${text}"`;
+      },
+    });
   },
 };

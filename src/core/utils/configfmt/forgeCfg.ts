@@ -20,8 +20,13 @@
  * in some other layout falls through to the INI adapter or stays plain text.
  */
 import type { ConfigFormat, ConfigNode, ConfigValueKind, ParsedConfig } from "./types.js";
-import { ConfigEditError } from "./types.js";
-import { CommentBlock, markDuplicates, numberLiteral, scanLines } from "./lines.js";
+import {
+  CommentBlock,
+  markDuplicates,
+  numberLiteral,
+  scalarLiteral,
+  scanLines,
+} from "./lines.js";
 
 const BLOCK_OPEN = /^("[^"]*"|[^\s{}=<>#:]+)\s*\{$/;
 const ENTRY = /^([BIDS]):("[^"]*"|[^\s=<>"]+)=(.*)$/;
@@ -64,7 +69,7 @@ function scan(text: string): Scan {
       continue;
     }
     if (t.startsWith("#")) {
-      comments.add(t.replace(/^#+\s?/, ""));
+      comments.addLine(t);
       continue;
     }
     const open = BLOCK_OPEN.exec(t);
@@ -118,6 +123,7 @@ function scan(text: string): Scan {
       comments: comments.take(),
       valueSpan: [valueStart, valueStart + raw.length],
       hint: type,
+      ...(type === "I" ? { integer: true } : {}),
       ...(readOnly ? { readOnly: true } : {}),
     });
   }
@@ -139,17 +145,12 @@ export const forgeCfgFormat: ConfigFormat = {
   },
 
   literal(value: unknown, kind: ConfigValueKind, node?: ConfigNode): string {
-    if (kind === "boolean") return value ? "true" : "false";
     if (kind === "number") {
-      if (node?.hint === "I") {
-        const n = Number(value);
-        if (!Number.isInteger(n)) throw new ConfigEditError("This setting needs a whole number.");
-        return String(n);
-      }
-      return numberLiteral(value, true);
+      return numberLiteral(value, {
+        float: node?.hint !== "I",
+        integer: node?.integer === true,
+      });
     }
-    const text = String(value ?? "");
-    if (/[\r\n]/.test(text)) throw new ConfigEditError("A value cannot contain a line break.");
-    return text;
+    return scalarLiteral(value, kind, node);
   },
 };

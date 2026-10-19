@@ -1,3 +1,4 @@
+import { MS } from "@mcbot/schema/time.js";
 import path from "path";
 import zlib from "zlib";
 import { promises as fsPromises } from "fs";
@@ -11,6 +12,7 @@ import {
 } from "./statUtils.js";
 import { getDb, withTransaction } from "../../db/index.js";
 import { mapRow, mapRows, col } from "../../db/rows.js";
+import { blobOrNull } from "../blobColumn.js";
 import type { ServerInstance } from "../server/server.js";
 import { log } from "../logger.js";
 import type { SnapshotData } from "../../types/index.js";
@@ -23,14 +25,14 @@ import { errMsg } from "../error.js";
 // (both layouts) are imported once by migrateLegacySnapshots() below.
 const SNAPSHOTS_BASE_DIR = path.resolve(getRootDir(), "data", "snapshots");
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+const DAY_MS = MS.day;
 
 /**
  * How far back every snapshot is kept, unthinned. The daily lookups need
  * granularity on both sides of the 24h boundary, so the window is a day
  * plus a margin that comfortably exceeds one snapshot interval.
  */
-const FULL_RESOLUTION_MS = DAY_MS + 2 * 60 * 60 * 1000; // 26 h
+const FULL_RESOLUTION_MS = DAY_MS + 2 * MS.hour; // 26 h
 
 /**
  * Hard age cap. Derived from the longest period a board can ask for, plus
@@ -82,22 +84,26 @@ function tsList(serverId: string): number[] {
  * rows (and legacy imports) keep the plain JSON in payload. */
 function decodeSnapshotRow(row: {
   payload: string;
-  payload_gz: Buffer | Uint8Array | null;
+  payload_gz: Uint8Array | null;
 }): SnapshotData {
   const json = row.payload_gz
-    ? zlib.gunzipSync(Buffer.from(row.payload_gz)).toString("utf-8")
+    ? zlib.gunzipSync(row.payload_gz).toString("utf-8")
     : row.payload;
   return JSON.parse(json) as SnapshotData;
 }
 
 function loadPayload(serverId: string, ts: number): SnapshotData | null {
-  const row = getDb()
-    .prepare(
+  const row = mapRow(
+    getDb().prepare(
       "SELECT payload, payload_gz FROM snapshots WHERE server_id = ? AND ts = ?",
-    )
-    .get(serverId, ts) as
-    | { payload: string; payload_gz: Buffer | Uint8Array | null }
-    | undefined;
+    ),
+    (r) => ({
+      payload: col.text(r, "payload"),
+      payload_gz: blobOrNull(r, "payload_gz"),
+    }),
+    serverId,
+    ts,
+  );
   if (!row) return null;
   try {
     return decodeSnapshotRow(row);

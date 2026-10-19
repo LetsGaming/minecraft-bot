@@ -13,17 +13,15 @@
  * read against a log line or a filename, where an order that never means two
  * different dates to two people matters more than locale niceties.
  */
+import { MS } from "@mcbot/schema/time.js";
 
 /** What a timestamp can arrive as: epoch ms, an ISO string, or "YYYY-MM-DD HH:mm:ss" (UTC). */
 export type Timestamp = number | string;
 
-const MINUTE_MS = 60_000;
-const HOUR_MS = 3_600_000;
-const DAY_MS = 86_400_000;
 /** Under this, "ago" is noise: the thing effectively just happened. */
-const JUST_NOW_MS = 45_000;
+const JUST_NOW_MS = 45 * MS.second;
 /** Past this, a relative age stops being easier to read than a date. */
-const RELATIVE_LIMIT_MS = 7 * DAY_MS;
+const RELATIVE_LIMIT_MS = MS.week;
 
 /**
  * Parse the three shapes callers actually emit, or null if it is something
@@ -75,16 +73,18 @@ export function relativeAge(value: Timestamp, now: number = Date.now()): string 
   // A future stamp means clock skew between the host and the reader, not a
   // scheduled event. Counting up from it would print "-3 h ago".
   if (elapsed < JUST_NOW_MS) return "just now";
-  if (elapsed < HOUR_MS) {
-    const minutes = Math.round(elapsed / MINUTE_MS);
+  // Floor, not round: rounding turns 59.5 minutes into "60 min ago" when the
+  // ladder says the hour unit starts at 60.
+  if (elapsed < MS.hour) {
+    const minutes = Math.max(1, Math.floor(elapsed / MS.minute));
     return `${minutes} min ago`;
   }
-  if (elapsed < DAY_MS) {
-    const hours = Math.round(elapsed / HOUR_MS);
+  if (elapsed < MS.day) {
+    const hours = Math.floor(elapsed / MS.hour);
     return `${hours} h ago`;
   }
   if (elapsed < RELATIVE_LIMIT_MS) {
-    const days = Math.round(elapsed / DAY_MS);
+    const days = Math.floor(elapsed / MS.day);
     return days === 1 ? "1 day ago" : `${days} days ago`;
   }
   return absoluteStamp(date.getTime());

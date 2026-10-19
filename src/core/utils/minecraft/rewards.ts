@@ -16,7 +16,8 @@ import {
   getServerPending,
 } from "../stores/dailyStore.js";
 import type { ServerInstance } from "../server/server.js";
-import { tellraw } from "./serverMessages.js";
+import { consoleCommand, tellraw } from "./serverMessages.js";
+import { errMsg } from "../error.js";
 import { formatItemList } from "./itemNames.js";
 import type {
   DailyRewardsConfig,
@@ -26,7 +27,7 @@ import type {
 } from "../../types/index.js";
 import { t } from "../i18n.js";
 import { RewardRarity, REWARD_RARITIES } from "@mcbot/schema/embedCategories.js";
-import { rarityOf, milestoneDays } from "@mcbot/schema/dailyRewards.js";
+import { rarityOf, milestoneDays, splitItem } from "@mcbot/schema/dailyRewards.js";
 import { log } from "../logger.js";
 import { MS } from "@mcbot/schema/time.js";
 
@@ -129,9 +130,17 @@ export async function give(
     );
     return false;
   }
-  const name = item.includes(":") ? item : `minecraft:${item}`;
+  const { id, suffix } = splitItem(item);
+  const name = `${id.includes(":") ? id : `minecraft:${id}`}${suffix}`;
 
-  const outcome = await server.send(`give ${player} ${name} ${amount}`);
+  let command: string;
+  try {
+    command = consoleCommand("give", { player }, { item: name }, { count: amount });
+  } catch (err) {
+    log.error("daily", `Refused to give ${item} x${amount} to ${player}: ${errMsg(err)}`);
+    return false;
+  }
+  const outcome = await server.send(command);
 
   // The command may never have reached the server. Report failure so the
   // reward stays queued and is retried, rather than being marked delivered.

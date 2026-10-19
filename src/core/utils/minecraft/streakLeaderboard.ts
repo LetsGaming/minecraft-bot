@@ -14,9 +14,10 @@ import {
 } from "../stores/dailyStore.js";
 import { loadLinkedAccountsOrEmpty } from "../stores/linkUtils.js";
 import { liveStreak } from "./rewards.js";
+import { formatRankLine } from "./statUtils.js";
 import type { LeaderboardData } from "../../types/index.js";
 
-import { t } from "@mcbot/core/utils/i18n.js";
+import { t } from "../i18n.js";
 export const STREAK_STAT_KEYS = ["streak", "longest_streak"] as const;
 export type StreakStatKey = (typeof STREAK_STAT_KEYS)[number];
 
@@ -26,9 +27,14 @@ export function isStreakStatKey(key: string): key is StreakStatKey {
   return (STREAK_STAT_KEYS as readonly string[]).includes(key);
 }
 
+/** Read through the locale on each access, so a label follows the guild's language. */
 export const STREAK_STAT_LABELS: Record<StreakStatKey, string> = {
-  streak: "Current Daily Streak",
-  longest_streak: "Longest Daily Streak",
+  get streak(): string {
+    return t("leaderboard.stat.streak");
+  },
+  get longest_streak(): string {
+    return t("leaderboard.stat.longest_streak");
+  },
 };
 
 export async function buildStreakLeaderboard(
@@ -54,11 +60,9 @@ export async function buildStreakLeaderboard(
     .sort((a, b) => b.value - a.value)
     .slice(0, limit);
 
-  const medals = ["🥇", "🥈", "🥉"];
-  const lines = entries.map((e, i) => {
-    const rank = medals[i] ?? `**${i + 1}.**`;
-    return `${rank} **${e.name}**: 🔥 ${t("streak.days", { count: e.value })}`;
-  });
+  const lines = entries.map((e, i) =>
+    formatRankLine(i, e.name, `🔥 ${t("streak.days", { count: e.value })}`),
+  );
 
   return {
     entries: entries.map((e) => ({

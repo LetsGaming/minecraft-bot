@@ -69,6 +69,18 @@ describe("SseFrameDecoder", () => {
     ]);
   });
 
+  it("decodes CRLF framing", () => {
+    const d = new SseFrameDecoder();
+    expect(d.push("data: a\r\n\r\ndata: b\r\n\r\n")).toEqual(["a", "b"]);
+  });
+
+  it("discards a frame that never ends once it passes the cap", () => {
+    const d = new SseFrameDecoder();
+    expect(d.push("data: " + "x".repeat(1_100_000))).toEqual([]);
+    expect(d.takeOverflows()).toBe(1);
+    expect(d.push("data: ok\n\n")).toEqual(["ok"]);
+  });
+
   it("drops the partial frame on reset", () => {
     // Without the reset, the buffered "data: half" would fuse onto the next
     // chunk and emit a line that was never sent.
@@ -129,6 +141,48 @@ describe("SseLineStream", () => {
     expect(connected).toBe(1);
     stream.stop();
     expect(stream.state).toBe("stopped");
+  });
+
+  it("keeps the connection when the data handler throws", async () => {
+    const seen: string[] = [];
+    let disconnects = 0;
+    vi.stubGlobal("fetch", vi.fn(async () => okResponse("data: a\n\ndata: b\n\n")));
+    const stream = new SseLineStream({
+      url: "http://wrapper/stream",
+      scope: "smp",
+      onData: (p) => {
+        seen.push(p);
+        if (p === "a") throw new Error("handler bug");
+      },
+      onDisconnect: () => disconnects++,
+    });
+    stream.start();
+    await settle();
+
+    expect(seen).toEqual(["a", "b"]);
+    // Only the natural end of the body reconnects, not the thrown handler.
+    expect(disconnects).toBe(1);
+    stream.stop();
+  });
+
+  it("aborts the connection it just finished reading", async () => {
+    const signals: AbortSignal[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        signals.push(init.signal as AbortSignal);
+        return okResponse("data: a\n\n");
+      }),
+    );
+    const stream = new SseLineStream({
+      url: "http://wrapper/stream",
+      scope: "smp",
+      onData: () => {},
+    });
+    stream.start();
+    await settle();
+    expect(signals[0]?.aborted).toBe(true);
+    stream.stop();
   });
 
   it("sends the configured headers on every attempt", async () => {

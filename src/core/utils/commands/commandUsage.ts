@@ -21,6 +21,7 @@
  * Recording never throws. A failed metric must not fail the command it was
  * measuring — that would make the observability worse than none.
  */
+import { MS } from "@mcbot/schema/time.js";
 import { getDb } from "../../db/index.js";
 import { mapRows, col } from "../../db/rows.js";
 import { log } from "../logger.js";
@@ -33,9 +34,20 @@ export const USAGE_RETENTION_DAYS = ANALYTICS_RETENTION_DAYS.commands;
 /** Default window for "recently used" questions. */
 export const USAGE_WINDOW_DAYS = 30;
 
-const DAY_MS = 86_400_000;
+const DAY_MS = MS.day;
 
 export type CommandSurface = "slash" | "ingame";
+
+const toSurface = (raw: string): CommandSurface => (raw === "ingame" ? "ingame" : "slash");
+
+/** Read failures degrade to "no usage", but are visible: once per distinct message. */
+const reportedReadFailures = new Set<string>();
+function reportReadFailure(what: string, err: unknown): void {
+  const message = `${what} failed: ${errMsg(err)}`;
+  if (reportedReadFailures.has(message)) return;
+  reportedReadFailures.add(message);
+  log.warn("usage", message);
+}
 
 export interface UsageEvent {
   command: string;
@@ -110,7 +122,7 @@ export function usageByCommandSince(since: number): CommandUsageCount[] {
       ),
       (row) => ({
         command: col.text(row, "command"),
-        surface: col.text(row, "surface") as CommandSurface,
+        surface: toSurface(col.text(row, "surface")),
         count: col.int(row, "uses"),
         users: col.int(row, "users"),
         lastUsedAt: col.intOrNull(row, "last_ts"),
@@ -118,7 +130,7 @@ export function usageByCommandSince(since: number): CommandUsageCount[] {
       since,
     );
   } catch (err) {
-    log.debug("usage", `Usage query failed: ${errMsg(err)}`);
+    reportReadFailure("Usage query", err);
     return [];
   }
 }
@@ -139,7 +151,7 @@ export function commandsUsedBy(userId: string): Set<string> {
     );
     return new Set(rows);
   } catch (err) {
-    log.debug("usage", `Per-user usage query failed: ${errMsg(err)}`);
+    reportReadFailure("Per-user usage query", err);
     return new Set();
   }
 }

@@ -2,7 +2,7 @@
  * Compact config-change summary for reloads.
  *
  * reconcileServers already reports added/removed/changed SERVER ids;
- * everything else — guild blocks, feature blocks, top-level settings —
+ * everything else (guild blocks, feature blocks, top-level settings)
  * used to change invisibly on `/config reload`. This module diffs the
  * previous and fresh config at that layer and answers with lines like
  *
@@ -11,34 +11,28 @@
  *
  * Deliberately shallow-per-feature: a guild's feature block is reported
  * as one unit ("leaderboard changed"), except for scalar values where the
- * old → new transition fits on the line. Servers are excluded here —
- * the reconciler owns that report.
+ * old → new transition fits on the line. Servers are excluded here (the
+ * reconciler owns that report).
  */
 
 import type { GuildConfig } from "../../types/index.js";
+import { stableStringify } from "./stableStringify.js";
 
-/** Top-level keys worth reporting (servers excluded — reconciler's job). */
-const TOP_LEVEL_KEYS = [
-  "language",
-  "adminUsers",
-  "commands",
-  "leaderboard",
-  "leaderboardInterval",
-  "tpsWarningThreshold",
-  "tpsPollIntervalMs",
-  "presence",
-  "deathCoords",
-  "hostAlerts",
-] as const;
+/**
+ * Top-level keys that are not diffed: servers are the reconciler's job,
+ * guilds are diffed block by block below, and the token is a secret that
+ * must never reach a summary line.
+ */
+const EXCLUDED_TOP_LEVEL_KEYS: ReadonlySet<string> = new Set([
+  "servers",
+  "guilds",
+  "token",
+]);
 
 function isScalar(v: unknown): v is string | number | boolean {
   return (
     typeof v === "string" || typeof v === "number" || typeof v === "boolean"
   );
-}
-
-function stable(v: unknown): string {
-  return JSON.stringify(v) ?? "undefined";
 }
 
 /** Short form of a guild ID for display (full IDs bloat the embed). */
@@ -56,7 +50,7 @@ function diffKeys(
   for (const key of [...keys].sort()) {
     const b = before[key];
     const a = after[key];
-    if (stable(b) === stable(a)) continue;
+    if (stableStringify(b) === stableStringify(a)) continue;
     if (b === undefined) parts.push(`${key} added`);
     else if (a === undefined) parts.push(`${key} removed`);
     else if (isScalar(b) && isScalar(a)) parts.push(`${key}: ${b} → ${a}`);
@@ -69,6 +63,14 @@ export interface ConfigLike {
   guilds?: Record<string, GuildConfig>;
 }
 
+function topLevelEntries(cfg: object): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(cfg).filter(
+      ([key, value]) => !EXCLUDED_TOP_LEVEL_KEYS.has(key) && value !== undefined,
+    ),
+  );
+}
+
 /**
  * Summarize what changed between two loaded configs, excluding the
  * servers block. Returns [] when nothing (reportable) changed.
@@ -79,20 +81,7 @@ export function summarizeConfigChanges(
 ): string[] {
   const lines: string[] = [];
 
-  // ── Top level ──
-  const beforeTop: Record<string, unknown> = {};
-  const afterTop: Record<string, unknown> = {};
-  // before/after are always plain config objects; we widen them to an index
-  // type to read the declared TOP_LEVEL_KEYS generically. Interface types have
-  // no index signature, so reaching Record needs the `unknown as` step — safe
-  // here because the value is known to be an object, and every read is guarded.
-  const beforeRec = before as unknown as Record<string, unknown>;
-  const afterRec = after as unknown as Record<string, unknown>;
-  for (const key of TOP_LEVEL_KEYS) {
-    if (beforeRec[key] !== undefined) beforeTop[key] = beforeRec[key];
-    if (afterRec[key] !== undefined) afterTop[key] = afterRec[key];
-  }
-  lines.push(...diffKeys(beforeTop, afterTop));
+  lines.push(...diffKeys(topLevelEntries(before), topLevelEntries(after)));
 
   // ── Guilds ──
   const beforeGuilds = before.guilds ?? {};
@@ -113,11 +102,7 @@ export function summarizeConfigChanges(
       continue;
     }
     if (!b || !a) continue;
-    // Same known-object widening as above (see note) to diff a guild block.
-    const parts = diffKeys(
-      b as unknown as Record<string, unknown>,
-      a as unknown as Record<string, unknown>,
-    );
+    const parts = diffKeys(topLevelEntries(b), topLevelEntries(a));
     if (parts.length > 0) lines.push(`guild ${shortId(gid)}: ${parts.join(", ")}`);
   }
 

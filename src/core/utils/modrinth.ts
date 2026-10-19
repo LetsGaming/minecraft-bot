@@ -20,11 +20,15 @@
  * filtered out by default.
  */
 import { log } from "./logger.js";
+import { errMsg } from "./error.js";
+import { fetchJson, DEFAULT_TIMEOUT_MS, type FetchFailure } from "./http.js";
+import { MS } from "@mcbot/schema/time.js";
 
-const MODRINTH_API = "https://api.modrinth.com/v2";
-const USER_AGENT =
-  "LetsGaming/minecraft-bot dashboard (mod browser; contact via server admin)";
-const TIMEOUT_MS = 10_000;
+export const MODRINTH_API = "https://api.modrinth.com/v2";
+/** Modrinth can block by User-Agent, so every request this bot sends uses this one. */
+export const MODRINTH_USER_AGENT =
+  "LetsGaming/minecraft-bot (mod browser; contact via server admin)";
+const TIMEOUT_MS = DEFAULT_TIMEOUT_MS;
 
 // ── Environment ─────────────────────────────────────────────────────────────
 
@@ -146,29 +150,33 @@ function strArray(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 }
 
+function toModrinthError(failure: FetchFailure, url: string): ModrinthError {
+  switch (failure.kind) {
+    case "network":
+      log.warn("modrinth", `request failed: ${failure.message}`);
+      return new ModrinthError(`Modrinth unreachable: ${failure.message}`, "network");
+    case "status":
+      if (failure.status === 404) {
+        return new ModrinthError("Not found on Modrinth", "not-found", 404);
+      }
+      log.warn("modrinth", `HTTP ${failure.status} for ${url}`);
+      return new ModrinthError(
+        `Modrinth returned HTTP ${failure.status}`,
+        "upstream",
+        failure.status,
+      );
+    case "body":
+      return new ModrinthError(`Modrinth sent a malformed body: ${failure.message}`, "upstream");
+  }
+}
+
 async function getJson(url: string, timeoutMs = TIMEOUT_MS): Promise<unknown> {
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    log.warn("modrinth", `request failed: ${msg}`);
-    throw new ModrinthError(`Modrinth unreachable: ${msg}`, "network");
-  }
-  if (res.status === 404) throw new ModrinthError("Not found on Modrinth", "not-found", 404);
-  if (!res.ok) {
-    log.warn("modrinth", `HTTP ${res.status} for ${url}`);
-    throw new ModrinthError(`Modrinth returned HTTP ${res.status}`, "upstream", res.status);
-  }
-  try {
-    return await res.json();
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    throw new ModrinthError(`Modrinth sent a malformed body: ${msg}`, "upstream");
-  }
+  const result = await fetchJson(url, {
+    headers: { "User-Agent": MODRINTH_USER_AGENT, Accept: "application/json" },
+    timeoutMs,
+  });
+  if (!result.ok) throw toModrinthError(result.failure, url);
+  return result.value;
 }
 
 function parseHit(raw: unknown): ModSearchHit | null {
@@ -186,7 +194,7 @@ function parseHit(raw: unknown): ModSearchHit | null {
     author: str(raw.author),
     downloads: num(raw.downloads),
     follows: num(raw.follows),
-    iconUrl: typeof raw.icon_url === "string" && raw.icon_url ? raw.icon_url : null,
+    iconUrl: cdnIcon(raw.icon_url),
     categories: strArray(raw.categories),
     gameVersions: strArray(raw.versions),
     clientSide,
@@ -320,7 +328,7 @@ export async function getProjectDetail(
     clientSide,
     serverSide,
     environment: deriveEnvironment(clientSide, serverSide),
-    iconUrl: typeof project.icon_url === "string" && project.icon_url ? project.icon_url : null,
+    iconUrl: cdnIcon(project.icon_url),
     downloads: num(project.downloads),
     followers: num(project.followers),
     gameVersions: strArray(project.game_versions),
@@ -338,12 +346,12 @@ export const ICON_LOOKUP_BATCH = 50;
 export const ICON_LOOKUP_MAX_KEYS = 300;
 /** Entries the icon cache holds before the oldest is evicted. */
 export const ICON_CACHE_MAX_ENTRIES = 2000;
-const ICON_TTL_MS = 6 * 60 * 60 * 1000;
+const ICON_TTL_MS = 6 * MS.hour;
 /** A key Modrinth does not know (a jar from elsewhere) is asked again after this. */
-const ICON_MISS_TTL_MS = 60 * 60 * 1000;
+const ICON_MISS_TTL_MS = MS.hour;
 /** After a failed request the keys rest this long, so a polling view cannot hammer Modrinth. */
-const ICON_FAILURE_TTL_MS = 60 * 1000;
-const ICON_LOOKUP_TIMEOUT_MS = 4_000;
+const ICON_FAILURE_TTL_MS = MS.minute;
+const ICON_LOOKUP_TIMEOUT_MS = 4 * MS.second;
 const ICON_HOST = "cdn.modrinth.com";
 const PROJECT_KEY = /^[A-Za-z0-9_.-]{1,64}$/;
 
@@ -395,7 +403,7 @@ async function fetchIconBatch(keys: string[]): Promise<void> {
       else rememberIcon(key, null, ICON_MISS_TTL_MS);
     }
   } catch (err) {
-    log.warn("modrinth", `icon lookup failed for ${keys.length} projects: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn("modrinth", `icon lookup failed for ${keys.length} projects: ${errMsg(err)}`);
     for (const key of keys) rememberIcon(key, null, ICON_FAILURE_TTL_MS);
   }
 }
