@@ -11,7 +11,7 @@
  * relayed through `/say` (`[Server] [Bob] …`) worked the same way.
  *
  * CHAT_LINE_PREFIX anchors at line start and allows only the log's own
- * bracketed tags before the first `:` — `[time] [thread/LEVEL]`, Paper's
+ * bracketed tags before the first `:`, `[time] [thread/LEVEL]`, Paper's
  * `[time LEVEL]`, Forge's extra `[logger]`. None of those tags can contain
  * `]`, so nothing a player typed can sit between them. After the colon the
  * one marker vanilla 1.19+ inserts, `[Not Secure]`, is allowed, and then

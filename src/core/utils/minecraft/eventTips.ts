@@ -7,7 +7,7 @@
  * another player may want to report it. Neither will go looking, and a tip
  * arriving at any other moment is noise.
  *
- * Adding one is a `EVENT_TIPS` entry — see docs/admin/automated-features.md.
+ * Adding one is a `EVENT_TIPS` entry, see docs/admin/automated-features.md.
  * Nothing else needs changing: the ledger, the give-up rule and the
  * disabled-command check are handled here for every tip.
  *
@@ -38,7 +38,7 @@ import { whisper } from "./serverMessages.js";
 export type GameEvent = "death" | "death-by-player";
 
 export interface EventTip {
-  /** Stable id — the ledger key. Not the command name: a command can be
+  /** Stable id, the ledger key. Not the command name: a command can be
    *  advertised by more than one event, and each should stop separately. */
   id: string;
   event: GameEvent;
@@ -75,7 +75,7 @@ export const EVENT_TIPS: EventTip[] = [
 ];
 
 export interface EventTipContext {
-  /** Minecraft name — the ledger subject. */
+  /** Minecraft name, the ledger subject. */
   player: string;
   serverId: string;
 }
@@ -176,7 +176,7 @@ export async function markEventTipSent(
 }
 
 /**
- * Select, whisper, and record — the whole thing, for callers that have a
+ * Select, whisper, and record, the whole thing, for callers that have a
  * server to talk through.
  *
  * Whispered rather than broadcast: the tip is about what *this* player just

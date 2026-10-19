@@ -1,5 +1,5 @@
 /**
- * Command policy — ONE resolver for every per-command setting, at every
+ * Command policy. ONE resolver for every per-command setting, at every
  * scope. Slash commands scope per GUILD (they are issued in guilds),
  * in-game !commands scope per SERVER (they are issued on servers); the
  * global `commands` block is the shared fallback for both.
@@ -7,7 +7,7 @@
  *   effective = defaults ← commands[name] ← scope.commands[name]
  *
  * Resolution is FIELD-BY-FIELD: a scope override only changes the
- * fields it actually sets. That makes the mechanism future-proof — a
+ * fields it actually sets. That makes the mechanism future-proof, a
  * new field added to CommandOverrideConfig inherits the same scoped
  * fallback without touching this file's call sites.
  *
@@ -15,7 +15,7 @@
  * defineCommand for in-game), reading loadConfig() live, so `/config
  * reload` and dashboard edits apply immediately. Registration only
  * skips a command when it is disabled in EVERY scope
- * (commandEnabledAnywhere) — a command disabled globally but enabled
+ * (commandEnabledAnywhere) a command disabled globally but enabled
  * for one guild must stay registered to be dispatchable there.
  *
  * Two rules the resolver deliberately cannot express:
@@ -33,9 +33,9 @@ export interface CommandPolicy {
 }
 
 export interface CommandScope {
-  /** Guild the interaction came from — slash commands. */
+  /** Guild the interaction came from, slash commands. */
   guildId?: string | undefined;
-  /** Server the chat line came from — in-game commands. */
+  /** Server the chat line came from, in-game commands. */
   serverId?: string | undefined;
 }
 

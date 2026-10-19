@@ -3,7 +3,7 @@
  *
  * The problem this solves: the chat bridge is the only feature with real
  * traffic, because it needs no learning. Everything else starts with a
- * Discord command a player has never been shown, so it is invisible —
+ * Discord command a player has never been shown, so it is invisible, 
  * invisible enough that the operator of this bot did not know `!waypoint
  * del` existed either. Documentation does not fix that; nothing reads it at
  * the moment it would matter.
@@ -61,7 +61,7 @@ export const NUDGE_COOLDOWN_MS = 48 * MS.hour;
  * How long after joining to whisper.
  *
  * Long enough that the player has finished loading and the join spam has
- * scrolled past — a message delivered into a loading screen is a message
+ * scrolled past, a message delivered into a loading screen is a message
  * nobody read.
  */
 export const NUDGE_DELAY_MS = 45 * MS.second;
@@ -97,7 +97,7 @@ export interface PlayerProgress {
 }
 
 /**
- * Which nudge — if any — this player should get right now.
+ * Which nudge, if any, this player should get right now.
  *
  * Pure: every input is passed in, so the policy can be tested without a
  * server, a store, or a clock.
@@ -112,7 +112,7 @@ export function chooseNudge(
 ): NudgeKind | null {
   if (!settings.enabled) return null;
 
-  // Funnel order. The first unmet step is the only candidate — telling
+  // Funnel order. The first unmet step is the only candidate, telling
   // someone about /daily before they can use it is noise.
   const candidate: NudgeKind | null = !progress.linked
     ? "link"

@@ -8,8 +8,8 @@
  *
  * Minecraft chat renders UTF-8 fine, so printable Unicode ("Grüße",
  * emoji) passes through. Only Unicode control/format characters are
- * dangerous — a \r or \n in input can inject a second command via the
- * screen `stuff` path — so strip exactly those.
+ * dangerous, a \r or \n in input can inject a second command via the
+ * screen `stuff` path, so strip exactly those.
  */
 
 const MAX_NAME_LENGTH = 32;
@@ -69,7 +69,7 @@ export const MAX_REASON_LENGTH = 160;
 /**
  * Sanitize a moderation reason (/kick, /ban) for the console.
  *
- * Lived in kick.ts and was imported from there by the sibling commands —
+ * Lived in kick.ts and was imported from there by the sibling commands, 
  * a shared console-input rule outside the one module that owns them.
  */
 export function sanitizeReason(raw: string | null): string {

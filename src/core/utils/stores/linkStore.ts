@@ -7,7 +7,7 @@
  *   Map API (loadLinkedAccounts): a read view for the many readers
  *   (profile, whois, deaths, defineCommand, streak leaderboard, ...).
  *
- *   Atomic operations (issueLinkCode/confirmLinkCode/unlinkAccount) — what
+ *   Atomic operations (issueLinkCode/confirmLinkCode/unlinkAccount) what
  *   the three writers now use. Each wraps its whole read-modify-write in
  *   one IMMEDIATE transaction, closing the lost-update race the old
  *   load/mutate/save pattern had (two concurrent /link completions could
@@ -25,8 +25,8 @@ export const LINK_CODE_TTL_MS = 5 * MS.minute;
 /**
  * The link map, or an empty one if the read fails.
  *
- * Every reader of this map treats "no links" as a normal state — a
- * profile without a Discord account, a death without a DM — so a DB
+ * Every reader of this map treats "no links" as a normal state, a
+ * profile without a Discord account, a death without a DM, so a DB
  * error should degrade the feature, not throw through it. Seven callers
  * had each written the same `.catch(() => ({}))`, which meant seven
  * places silently swallowed a real database failure. Swallowing happens
@@ -45,7 +45,7 @@ export async function loadLinkedAccountsOrEmpty(): Promise<LinkedAccountsMap> {
  * Reverse lookup: which Discord account owns this Minecraft name?
  *
  * The map is keyed by Discord ID, so every reader that starts from a
- * player name has to scan it — case-insensitively, because the vanilla
+ * player name has to scan it, case-insensitively, because the vanilla
  * name casing a log line carries need not match what /link stored. That
  * scan existed as four hand-rolled copies (whois, profile, deaths,
  * defineCommand); this is the only one. Don't write a fifth.
@@ -98,8 +98,8 @@ export type IssueLinkCodeResult =
   | { status: "already-linked" };
 
 /**
- * /link: issue a fresh code for this Discord user — unless they are
- * already linked (linked_accounts is the source of truth — the old JSON
+ * /link: issue a fresh code for this Discord user, unless they are
+ * already linked (linked_accounts is the source of truth, the old JSON
  * flow inferred this from leftover confirmed codes, which unlink never
  * cleaned, so an unlinked user could never relink) or a still-valid code
  * is already pending (return it). Expired codes for this user are pruned
@@ -156,9 +156,9 @@ export type ConfirmLinkResult =
 
 /**
  * In-game `!link CODE`: validate the code, enforce the one-Minecraft-
- * account-one-Discord-account rule (case-insensitive — daily-reward
+ * account-one-Discord-account rule (case-insensitive, daily-reward
  * cooldowns are per Discord user, so a second link would double /daily
- * claims), write the link, and mark the code confirmed — all in one
+ * claims), write the link, and mark the code confirmed, all in one
  * transaction, so two players confirming simultaneously cannot interleave.
  */
 export async function confirmLinkCode(

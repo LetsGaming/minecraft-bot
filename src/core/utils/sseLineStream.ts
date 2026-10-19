@@ -4,7 +4,7 @@
  * Extracted from RemoteLogWatcher when the dashboard needed the same thing.
  * The watcher held the only working SSE client in the repo, but it lived in
  * `src/bot/` and carried a discord.js `Client`, and the ESLint boundary stops
- * `web` importing `bot` — so the dashboard's options were to duplicate the
+ * `web` importing `bot`, so the dashboard's options were to duplicate the
  * connect/backoff loop or to move it here. A second copy of reconnect logic is
  * exactly the kind of drift 5.0.0 spent a major version removing.
  *

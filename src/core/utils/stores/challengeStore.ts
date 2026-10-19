@@ -1,11 +1,11 @@
 /**
- * Advancement challenges — single owner of kv_store["challenges"] plus the
+ * Advancement challenges, single owner of kv_store["challenges"] plus the
  * pure active/won/expired/cancelled state machine.
  *
  * One challenge can be active per server at a time. Expiry is lazy: there
  * is no scheduler; stale challenges flip to "expired" whenever the store
  * is consulted (advancement hook, /challenge status|start). Detection is
- * nearly free — the advancements watcher already parses every
+ * nearly free, the advancements watcher already parses every
  * "X has made the advancement Y" line; this store only decides whether a
  * parsed advancement wins something.
  *

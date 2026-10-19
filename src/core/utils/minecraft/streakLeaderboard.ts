@@ -1,12 +1,12 @@
 /**
- * Streak leaderboards — current and longest daily streak per server,
+ * Streak leaderboards, current and longest daily streak per server,
  * from claimedDaily.json instead of the Minecraft stats files.
  *
  * Streaks are keyed by Discord user, not player UUID, so this lives
  * beside buildLeaderboard rather than as a LEADERBOARD_STATS category:
  * names resolve to the linked Minecraft account when there is one, and
  * fall back to a Discord mention (which renders in embeds) otherwise.
- * Period baselines don't apply — a streak IS its own running total.
+ * Period baselines don't apply, a streak IS its own running total.
  */
 import {
   loadClaimedStore,

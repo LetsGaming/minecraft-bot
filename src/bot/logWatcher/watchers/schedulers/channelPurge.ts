@@ -50,7 +50,7 @@ async function purgeChannel(
     const entry = statusChannelsFor(guildId);
     if (entry?.messageId) protectedIds.add(entry.messageId);
   } catch {
-    /* store not readable — protect nothing extra */
+    /* store not readable, protect nothing extra */
   }
 
   // 2. Pinned messages
@@ -81,7 +81,7 @@ async function purgeChannel(
     }
 
     if (toDelete.length === 0) {
-      // All remaining messages are protected — keep scanning
+      // All remaining messages are protected, keep scanning
       if (batch.size < 100) break;
       continue;
     }
@@ -145,7 +145,7 @@ export function startChannelPurge(
     );
   }
 
-  /** One timer per guild — each fires at *that guild's* midnight. */
+  /** One timer per guild, each fires at *that guild's* midnight. */
   const timers = new Map<string, LongTimer>();
 
   const purgeGuild = async (guildId: string): Promise<void> => {

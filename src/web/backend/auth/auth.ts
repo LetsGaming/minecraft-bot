@@ -1,5 +1,5 @@
 /**
- * Dashboard auth — hand-rolled Discord OAuth2 (identify + guilds scopes)
+ * Dashboard auth, hand-rolled Discord OAuth2 (identify + guilds scopes)
  * plus stateless HMAC-signed session cookies. No auth framework: the flow
  * is a few HTTP calls and a cookie.
  *
@@ -8,7 +8,7 @@
  *     server status/operations, host metrics, the whole config, audit.
  *   - Guild manager: any Discord user who has Manage Guild (or is owner/
  *     admin) on a guild the bot is in. May configure that guild's bot
- *     features and nothing else — never the Minecraft server, other
+ *     features and nothing else, never the Minecraft server, other
  *     guilds, or global settings.
  * Anyone can log in; what they can do is decided per route. The set of
  * guilds a user manages is captured at login (from the `guilds` scope,
@@ -146,7 +146,7 @@ export function encodeSigned(data: object): string {
  * `===` on a token leaks its prefix through timing: it bails at the first
  * differing byte, so an attacker can recover the value byte by byte. Every
  * secret comparison in the dashboard goes through here. The length check is
- * safe to short-circuit (a length is not a secret) and is required —
+ * safe to short-circuit (a length is not a secret) and is required, 
  * timingSafeEqual throws on unequal-length buffers.
  */
 export function secretEquals(actual: string, expected: string): boolean {
@@ -164,7 +164,7 @@ export function decodeSigned<T>(token: string | undefined): T | null {
   if (!secretEquals(mac, sign(payload))) return null;
   try {
     // The HMAC check above proves *we* produced this payload, so its JSON is
-    // trusted data, not arbitrary input — a generic cast to the caller's T is
+    // trusted data, not arbitrary input, a generic cast to the caller's T is
     // the intended contract of a signed-token decoder. Malformed JSON (only
     // possible if our own signing changed) is caught and returns null.
     return JSON.parse(Buffer.from(payload, "base64url").toString()) as T;
@@ -209,7 +209,7 @@ export function canManageGuild(session: Session, guildId: string): boolean {
 /**
  * Is the caller's captured guild scope still fresh enough to authorize a
  * guild-config WRITE (SEC-03)? A missing gexp (cookie predates this check)
- * counts as stale — fail closed, prompting a re-login that re-derives current
+ * counts as stale, fail closed, prompting a re-login that re-derives current
  * membership. Reads keep using canManageGuild; only mutations require freshness.
  */
 export function guildScopeFresh(session: Session): boolean {
@@ -383,7 +383,7 @@ export async function exchangeCode(
       ? `${username}#${discriminator}`
       : (username ?? id);
 
-  // The user's guilds (with their permissions there) — how we know which
+  // The user's guilds (with their permissions there) how we know which
   // guilds this person may configure. A failure here is non-fatal: they
   // can still log in, just with no guild-manager access until next login.
   let guildIds: string[] = [];

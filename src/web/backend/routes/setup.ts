@@ -6,13 +6,13 @@
  *
  * Registered in the requireSession scope in server.ts. On top of that base
  * login gate, the per-guild routes check canManageGuild, and the guild
- * LIST is filtered to what the caller may manage — so a guild manager only
+ * LIST is filtered to what the caller may manage, so a guild manager only
  * ever sees and reads their own guilds. The Minecraft server list is filtered
  * to the caller's host capabilities, so a guild manager sees none of it.
  *
  * A failed Discord read becomes a typed HTTP failure via discordHttpError
  * (which switches on the DiscordApiError discriminator, QUAL-11) and is
- * rendered by the one error handler — no per-route reply.code().send().
+ * rendered by the one error handler, no per-route reply.code().send().
  */
 import type { FastifyInstance } from "fastify";
 import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
@@ -54,7 +54,7 @@ export function registerSetupRoutes(app: FastifyInstance): void {
     }
   });
 
-  // Text/announcement channels for one guild — only if the caller manages it.
+  // Text/announcement channels for one guild, only if the caller manages it.
   api.get(
     "/api/setup/guilds/:id/channels",
     { schema: { params: IdParams } },
@@ -68,7 +68,7 @@ export function registerSetupRoutes(app: FastifyInstance): void {
     },
   );
 
-  // Assignable roles for one guild — only if the caller manages it.
+  // Assignable roles for one guild, only if the caller manages it.
   api.get(
     "/api/setup/guilds/:id/roles",
     { schema: { params: IdParams } },

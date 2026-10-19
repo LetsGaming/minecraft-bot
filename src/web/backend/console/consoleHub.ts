@@ -1,12 +1,12 @@
 /**
- * DSH-01 — the console's server side: one wrapper stream per Minecraft server,
+ * DSH-01, the console's server side: one wrapper stream per Minecraft server,
  * fanned out to every browser watching it.
  *
  * Why a hub and not one upstream per viewer: the wrapper caps concurrent
  * `/logs/stream` clients per instance (MC_SSE_MAX_CLIENTS, default 50), and the
  * bot's own RemoteLogWatcher already holds one of them. If every open browser
  * tab opened its own upstream, a handful of admins with the console open would
- * exhaust the cap and start starving the chat bridge — the dashboard would take
+ * exhaust the cap and start starving the chat bridge, the dashboard would take
  * the bot down by being used. From the wrapper's side this process is one
  * client no matter how many people are looking.
  *
@@ -39,7 +39,7 @@ export type ConsoleSubscriber = (event: ConsoleEvent) => void;
  *
  *   On the FIRST viewer the hub fetches the tail over HTTP, because the SSE
  *   stream only carries lines written after it connects. Without that, opening
- *   the console on a quiet server shows an empty box until something happens —
+ *   the console on a quiet server shows an empty box until something happens, 
  *   which reads as "broken", not "idle". The original version only seeded this
  *   from lines the hub had already seen, so it fixed the problem for the
  *   second viewer and left it in place for the first.
@@ -105,7 +105,7 @@ function createChannel(cfg: ServerConfig): Channel {
  * lines into the middle of new ones. The wait is one HTTP round trip.
  *
  * A failure here is not fatal. If the tail cannot be fetched the console just
- * starts empty, which is the old behaviour — far better than never opening the
+ * starts empty, which is the old behaviour, far better than never opening the
  * live stream at all.
  */
 async function primeAndStart(channel: Channel, cfg: ServerConfig): Promise<void> {
@@ -142,7 +142,7 @@ function deliver(subscriber: ConsoleSubscriber, event: ConsoleEvent): void {
   try {
     subscriber(event);
   } catch {
-    /* a dead response — it will be unsubscribed on close */
+    /* a dead response, it will be unsubscribed on close */
   }
 }
 
@@ -171,7 +171,7 @@ export function subscribe(
   channel.subscribers.add(subscriber);
 
   // Note: the stream is NOT started here. primeAndStart owns that, so the
-  // backlog is in before live lines begin — starting it per subscriber would
+  // backlog is in before live lines begin, starting it per subscriber would
   // race the priming fetch and interleave old lines into new ones.
 
   // Replay before reporting state, so the viewer sees context first and then

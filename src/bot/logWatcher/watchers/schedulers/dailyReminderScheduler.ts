@@ -6,7 +6,7 @@
  * expired, and sends each one a single DM per claim cycle.
  *
  * Dedupe: a reminder is only sent when lastReminderAt predates the current
- * lastClaim — claiming resets the cycle, so the next expiry triggers
+ * lastClaim, claiming resets the cycle, so the next expiry triggers
  * exactly one new DM. DM failures (closed DMs) still advance
  * lastReminderAt so the bot never hammers a user who blocks DMs.
  */
@@ -53,7 +53,7 @@ export async function processDailyReminders(
   // then DM. Marking a loaded copy and saving it after the DMs wrote that
   // copy back over every claim made while the DMs went out.
   const { due, multiServer } = await updateClaimedStore((store) => {
-    // Claims are per server, so reminders are too — one DM per due server,
+    // Claims are per server, so reminders are too, one DM per due server,
     // naming the server when there's more than one.
     const serverEntries = Object.entries(store.servers);
     const picked: Array<{ serverId: string; userId: string }> = [];
@@ -84,7 +84,7 @@ export async function processDailyReminders(
       });
       sent++;
     } catch (err) {
-      // Closed DMs or unknown user — lastReminderAt is already advanced,
+      // Closed DMs or unknown user, lastReminderAt is already advanced,
       // so this user is skipped until their next claim.
       log.debug("dailyReminder", `DM to ${userId} failed: ${errMsg(err)}`);
     }

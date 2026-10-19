@@ -148,7 +148,7 @@ export const DEFAULT_BRIDGE_WINDOW_MS = 10 * MS.second;
 
 /**
  * The configured `limits` block, read lazily so this module can load
- * before (or without) a valid config — tests and the schema generator do.
+ * before (or without) a valid config, tests and the schema generator do.
  * Limiter shape is fixed at first use; changing limits needs a restart
  * (buckets carry state, so live-resizing them would be lossy anyway).
  */
@@ -163,7 +163,7 @@ function configuredLimits(): {
     const cfgLimits = loadConfig().limits;
     if (isRecord(cfgLimits)) limits = cfgLimits;
   } catch {
-    /* config unavailable (isolated tests, schema generator) — defaults */
+    /* config unavailable (isolated tests, schema generator) defaults */
   }
   const num = (v: unknown, fallback: number, min: number): number =>
     typeof v === "number" && Number.isFinite(v) && v >= min ? v : fallback;

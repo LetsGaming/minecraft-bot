@@ -1,5 +1,5 @@
 /**
- * Cross-platform polls — single owner of kv_store["polls"].
+ * Cross-platform polls, single owner of kv_store["polls"].
  *
  * One open poll per server at a time. A poll normally binds to exactly
  * one server instance (the guild-scoping semantics of resolveServer
@@ -12,7 +12,7 @@
  *   "m:<lower name>"  in-game !vote from an UNLINKED player
  *
  * In-game votes from linked players resolve to their `d:` key via
- * linkStore, so nobody votes twice across platforms — the dedupe the
+ * linkStore, so nobody votes twice across platforms, the dedupe the
  * plan calls for. Re-voting overwrites (changing your mind is allowed).
  */
 import { versionedStore } from "./versionedStore.js";
@@ -30,7 +30,7 @@ export interface Poll {
   guildId: string | null;
   channelId: string;
   messageId: string;
-  /** Primary server (first participant) — kept for pre-span polls. */
+  /** Primary server (first participant) kept for pre-span polls. */
   serverId: string;
   /**
    * All participating servers of a span poll. Absent on single-server
@@ -86,7 +86,7 @@ export function getPollById(store: PollStore, id: string): Poll | null {
   return store.polls.find((p) => p.id === id) ?? null;
 }
 
-/** Every server a poll runs on — [serverId] for pre-span polls. */
+/** Every server a poll runs on, [serverId] for pre-span polls. */
 export function pollServerIds(poll: Poll): string[] {
   return poll.serverIds && poll.serverIds.length > 0
     ? poll.serverIds

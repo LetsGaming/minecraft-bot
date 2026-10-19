@@ -117,7 +117,7 @@ export function buildServer(): FastifyInstance {
     // rather than serving unguarded (RBAC-03).
     assertCapabilitiesDeclared(api);
     // onRequest (not preHandler) so the auth gate fails closed BEFORE Fastify
-    // validates a route's body schema — an unauthenticated caller gets 401,
+    // validates a route's body schema, an unauthenticated caller gets 401,
     // never a 400 that would confirm the endpoint's body shape to a stranger.
     // Routing has already happened at this point, so req.params is populated
     // and a server-scoped rule can read it.

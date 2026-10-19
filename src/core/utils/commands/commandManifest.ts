@@ -1,8 +1,8 @@
 /**
- * Command manifest — how the dashboard (a separate process) knows which
+ * Command manifest, how the dashboard (a separate process) knows which
  * commands exist. discord.js and the in-game command registry live in
  * the bot process only, so the bot writes data/commandManifest.json at
- * startup (ALL discovered commands, including currently disabled ones —
+ * startup (ALL discovered commands, including currently disabled ones, 
  * a command must be listable to be re-enabled from the UI) and the web
  * backend serves it read-only. Same pattern as the runtime heartbeat.
  */
@@ -25,7 +25,7 @@ export interface CommandManifestEntry {
   /**
    * The command's source folder under `commands/` (slash) or its declared
    * group (in-game), e.g. "connection", "moderation". The dashboard groups by
-   * this so its sections mirror the code's own organisation — the mental model
+   * this so its sections mirror the code's own organisation, the mental model
    * someone has from the repo is the one they get in the UI. Optional so an
    * older manifest on disk still loads; the dashboard treats a missing value
    * as an "Other" bucket rather than failing.

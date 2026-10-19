@@ -82,7 +82,7 @@ export type ApiUrlValidation =
 
 /**
  * Validate a server's apiUrl transport. The API wrapper has full
- * server-control authority behind a static x-api-key header — over plain
+ * server-control authority behind a static x-api-key header, over plain
  * HTTP on an untrusted network, key and commands are readable on-path.
  *
  *   https://…                → fine
@@ -151,7 +151,7 @@ export interface ConfigValidationResult {
 
 /**
  * Present and object-shaped. Only ever false on the schema-unavailable
- * path — when the schema ran, the shape is already guaranteed — so this
+ * path, when the schema ran, the shape is already guaranteed, so this
  * skips a check rather than reporting one.
  */
 const usable = <T>(v: T | undefined): v is T =>
@@ -522,16 +522,16 @@ function checkSchedules({ raw, errors, warnings, knownServers }: SectionContext)
 }
 
 /**
- * Pure validation of a candidate raw config — collects every problem
+ * Pure validation of a candidate raw config, collects every problem
  * instead of throwing. This is the entry point for programmatic config
  * editing (the dashboard validates a candidate with this before writing
  * it via configService.writeConfig).
  *
  * Two passes, in order:
  *
- *   1. **Structure** — types, requiredness, enums and numeric bounds,
+ *   1. **Structure**, types, requiredness, enums and numeric bounds,
  *      checked against the generated JSON Schema (configSchemaCheck.ts).
- *   2. **Meaning** — everything a JSON Schema cannot express: does that
+ *   2. **Meaning**, everything a JSON Schema cannot express: does that
  *      server ID exist, is that string shaped like a Discord snowflake,
  *      is this chat bridge ambiguous, is this a 4.x config. One function
  *      per config section, below.

@@ -1,5 +1,5 @@
 /**
- * RBAC-02/03 — the host-side authorization gate.
+ * RBAC-02/03, the host-side authorization gate.
  *
  * The dashboard used to gate the whole host-side API with one `requireSysadmin`
  * hook, which made "read the status page" and "restore a backup over the live
@@ -226,7 +226,7 @@ function deniedMessage(capability: Capability, serverId?: string): string {
 }
 
 /**
- * RBAC-03 — refuse to boot if a host-scope route declares no capability.
+ * RBAC-03, refuse to boot if a host-scope route declares no capability.
  *
  * Register this inside the host scope, before the routes. Fastify fires
  * `onRoute` synchronously as each route registers, so a missing rule throws

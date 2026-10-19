@@ -4,13 +4,13 @@
  * Lives in core so both consumers share one fallback: the dashboard's routes
  * and the bot's own commands. A `/status` in Discord and a status card in the
  * web UI should degrade the same way when the wrapper is away, because they
- * are answering the same question against the same wrapper — the only thing
+ * are answering the same question against the same wrapper, the only thing
  * that ever differed was which of them happened to cache the last good read.
  *
  * The wrapper is a separate process on the Minecraft host: it gets restarted,
  * updated, rate-limited, or briefly wedged. Every read that goes through it
  * used to answer with a hard failure in that window, so the caller simply lost
- * the data — at the exact moment someone was most likely trying to find out
+ * the data, at the exact moment someone was most likely trying to find out
  * what was wrong.
  *
  * The data was not gone. It had been read successfully thirty seconds earlier,
@@ -24,7 +24,7 @@
  *   1. A cache entry is only written after a *successful* read. Nothing here
  *      is ever inferred, defaulted, or reconstructed.
  *   2. A stale answer always carries `asOf`, and the UI always says so. Silent
- *      staleness would be worse than the 502 it replaces — an operator acting
+ *      staleness would be worse than the 502 it replaces, an operator acting
  *      on data they believe is live is the failure mode this must not create.
  *
  * Writes are deliberately NOT covered. Queuing a mutation until the wrapper
@@ -55,7 +55,7 @@ interface Entry {
 /**
  * Process-local and deliberately unbounded in time but bounded in keys: one
  * entry per (server, resource), so it grows with the deployment rather than
- * with traffic. Nothing here survives a restart, which is correct — a fresh
+ * with traffic. Nothing here survives a restart, which is correct, a fresh
  * process has never successfully read anything and should not pretend it has.
  */
 const entries = new Map<string, Entry>();
@@ -79,7 +79,7 @@ export interface Recalled<T> {
 /**
  * The last value we successfully read, if one is still within the window.
  *
- * Returns undefined when nothing was ever read or the entry has aged out —
+ * Returns undefined when nothing was ever read or the entry has aged out, 
  * both cases mean the caller should surface the real failure, because an
  * error is the honest answer when there is genuinely nothing to show.
  */

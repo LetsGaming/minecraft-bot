@@ -4,22 +4,22 @@
  * Written because the discoverability problem could not be measured. Every
  * argument about which features players ignore was a guess, and the fix for
  * an unused feature ("advertise it") is the opposite of the fix for an
- * unwanted one ("delete it") — so guessing wrong is expensive in both
+ * unwanted one ("delete it") so guessing wrong is expensive in both
  * directions.
  *
  * Raw events rather than a counter, because two different questions are
  * asked of the same data:
  *
- *   the dashboard  how often was each command used in the last N days —
+ *   the dashboard  how often was each command used in the last N days, 
  *                  an aggregate over commands
- *   /help          which commands has THIS user never run — a per-user set
+ *   /help          which commands has THIS user never run, a per-user set
  *
  * A counter answers the first and not the second. Events answer both, and
  * the volume is trivial: a busy server produces a few hundred rows a day,
  * pruned to a fixed window.
  *
  * Recording never throws. A failed metric must not fail the command it was
- * measuring — that would make the observability worse than none.
+ * measuring, that would make the observability worse than none.
  */
 import { MS } from "@mcbot/schema/time.js";
 import { getDb } from "../../db/index.js";
@@ -94,7 +94,7 @@ export function recordCommandUsage(
 /**
  * Usage per command over the window, busiest first.
  *
- * Commands with no rows are absent rather than zero — the caller knows the
+ * Commands with no rows are absent rather than zero, the caller knows the
  * full command list and a zero is more useful when it comes from there,
  * since a command can be missing here because it is new, disabled, or
  * genuinely unused, and only the caller can tell those apart.

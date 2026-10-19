@@ -1,17 +1,17 @@
 /**
- * Admin notes on players — single owner of kv_store["playerNotes"].
+ * Admin notes on players, single owner of kv_store["playerNotes"].
  *
  * Keyed by Minecraft UUID so notes survive name changes (playerUtils
  * already resolves UUIDs from the whitelist/usercache); each entry keeps
  * the last known name for display and name-based fallback lookups.
  *
- * Deliberately thin — annotations only, which respects the roadmap's
+ * Deliberately thin, annotations only, which respects the roadmap's
  * "no ban database of its own" boundary. Every mutation is audited by the
  * /note command via recordAdminAction.
  */
 import { versionedStore } from "./versionedStore.js";
 
-/** Keep the newest N notes per player — moderation memory, not a ledger. */
+/** Keep the newest N notes per player, moderation memory, not a ledger. */
 export const MAX_NOTES_PER_PLAYER = 25;
 
 export interface PlayerNote {

@@ -4,7 +4,7 @@
  * Callers want this from both sides: the dashboard's "Apply now" button, the
  * auto-flush that fires when a wrapper comes back, and (once wired) a bot
  * command doing the same. Having them share an implementation is
- * the whole point — a manual flush and an automatic one that merged by
+ * the whole point, a manual flush and an automatic one that merged by
  * different rules would be a genuinely dangerous divergence, since the thing
  * they differ on is which of an operator's edits get written to a live server.
  */

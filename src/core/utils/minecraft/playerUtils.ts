@@ -8,7 +8,7 @@ import type {
 
 /**
  * Find a player by name (case insensitive) among everyone the server
- * knows: whitelist first, then usercache — so lookups work on servers
+ * knows: whitelist first, then usercache, so lookups work on servers
  * that run without a whitelist. Searches a single list so a cache
  * invalidation mid-call can't produce a name/uuid mismatch.
  */
@@ -60,7 +60,7 @@ export function isPlayerOnline(
 }
 
 /**
- * Get player coordinates — delegates to ServerInstance which owns the
+ * Get player coordinates, delegates to ServerInstance which owns the
  * single canonical implementation of the coordinate regex.
  */
 export async function getPlayerCoords(
@@ -71,7 +71,7 @@ export async function getPlayerCoords(
 }
 
 /**
- * Get player dimension — delegates to ServerInstance which owns the
+ * Get player dimension, delegates to ServerInstance which owns the
  * single canonical implementation of the dimension regex.
  */
 export async function getPlayerDimension(

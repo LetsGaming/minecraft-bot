@@ -1,5 +1,5 @@
 /**
- * Web API contract — the DTOs exchanged between the web-ui backend and
+ * Web API contract, the DTOs exchanged between the web-ui backend and
  * its frontend. One definition, imported by both sides, so the shapes
  * can never drift again (they were previously hand-mirrored in the
  * frontend's api.ts).
@@ -72,7 +72,7 @@ export interface ServerStatus {
   id: string;
   /**
    * The three-way answer: what the server is doing, or that the API wrapper
-   * did not answer so we could not ask. Prefer this over `online` — it is the
+   * did not answer so we could not ask. Prefer this over `online`, it is the
    * only field that can tell "the server stopped" from "the wrapper is down".
    */
   state: ServerState;
@@ -84,12 +84,12 @@ export interface ServerStatus {
    * which means players are fine but every control is gone.
    */
   wrapper: WrapperState;
-  /** Which channel established `state` — the wrapper, or a direct ping. */
+  /** Which channel established `state`, the wrapper, or a direct ping. */
   source: HealthSource;
   /**
    * Null when no channel could establish a roster, which is not the same fact
    * as an empty server. It used to be flattened to `{ online: 0, max: 0 }`,
-   * so a wrapper blip rendered as a confident "0/0 players online" — the
+   * so a wrapper blip rendered as a confident "0/0 players online", the
    * interface asserting nobody is playing at the exact moment it has no idea.
    */
   players: {
@@ -105,7 +105,7 @@ export interface ServerStatus {
   tps: number | null;
   /**
    * Set when `tps`/`host` came from the last successful wrapper read rather
-   * than this poll. The liveness fields around them are always current — only
+   * than this poll. The liveness fields around them are always current, only
    * the wrapper-derived metrics are old.
    */
   metricsStale?: StaleInfo | null;
@@ -169,7 +169,7 @@ export interface AuditEntry {
   detail?: string;
 }
 
-/** GET /api/config — redacted config plus the optimistic-concurrency hash. */
+/** GET /api/config, redacted config plus the optimistic-concurrency hash. */
 export interface ConfigResponse {
   /** sha256 of the raw on-disk config.json this response was built from. */
   hash: string;

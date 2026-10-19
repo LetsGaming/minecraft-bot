@@ -187,7 +187,6 @@ export const en: Record<string, string> = {
   "challenge.cancelled": "Cancelled the challenge **{advancement}**.",
 
   // ── polls ──
-    'A poll is already open: "{question}". Close it before starting a new one.',
   "poll.noneActive": "No open poll on **{server}**.",
   "poll.noneInGame": "There is no open poll right now.",
   "poll.needChannel": "Polls must be created in a text channel.",

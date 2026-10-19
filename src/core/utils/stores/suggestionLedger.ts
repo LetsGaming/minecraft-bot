@@ -1,5 +1,5 @@
 /**
- * What each player has already been told about — single owner of
+ * What each player has already been told about, single owner of
  * kv_store["featureSuggestions"].
  *
  * Two things write here, and they are the same bookkeeping:
@@ -9,8 +9,8 @@
  *   follow-up hints  a button on a Discord reply offering the feature that
  *                  pairs with the one just used, keyed by Discord user ID
  *
- * Both need the same three answers — how often has this been offered, when
- * was the last time, and did they say no — so both use one ledger rather
+ * Both need the same three answers, how often has this been offered, when
+ * was the last time, and did they say no, so both use one ledger rather
  * than two stores that would drift.
  *
  * Subjects are namespaced (`mc:steve`, `discord:12345`) because the two
@@ -34,7 +34,7 @@ export interface SuggestionRecord {
   /** Epoch ms of the most recent offer. */
   lastAt: number;
   /**
-   * They said no. Permanent — an explicit refusal outranks any count or
+   * They said no. Permanent, an explicit refusal outranks any count or
    * cooldown, and asking again after it is the exact behaviour that makes
    * these features feel like nagging.
    */
@@ -48,7 +48,7 @@ export interface SuggestionLedger {
 }
 
 /**
- * Drop non-dismissed records nobody has touched in this long — they exist
+ * Drop non-dismissed records nobody has touched in this long, they exist
  * only to enforce the 48h nudge cooldown, so past this age they serve no
  * purpose and simply reset next time the subject is offered. `dismissed`
  * records are kept forever: a refusal must never be re-asked.

@@ -6,9 +6,9 @@
  * dailyRewards.json, and the two small files the bot publishes for the
  * dashboard process (runtime.json, commandManifest.json).
  *
- * Split out of the old `utils.ts` grab-bag. The durability dance below —
+ * Split out of the old `utils.ts` grab-bag. The durability dance below, 
  * cache by mtime, write-then-rename, keep a .bak, refuse to silently
- * return `{}` for a corrupt file — is the reason this is a module rather
+ * return `{}` for a corrupt file, is the reason this is a module rather
  * than a `readFile`/`writeFile` at each call site.
  */
 import { promises as fsPromises } from "fs";
@@ -35,7 +35,7 @@ function backupPath(file: string): string {
  *
  * A missing file just means "first run" and yields an empty store. Anything
  * else (truncated file, bad permissions, corrupt JSON) must not be turned
- * into `{}` — the next save would overwrite what's left on disk and make
+ * into `{}`, the next save would overwrite what's left on disk and make
  * the loss permanent. So: log, try the `.bak` copy, throw if that fails too.
  */
 export async function loadJson(file: string): Promise<unknown> {
@@ -94,7 +94,7 @@ export async function saveJson(
     const json = serialize(data);
 
     // Write-then-rename: an interrupted in-place write leaves a truncated
-    // file, while rename(2) is atomic — readers see old or new, never half.
+    // file, while rename(2) is atomic, readers see old or new, never half.
     const tmp = `${file}.tmp`;
     await fsPromises.writeFile(tmp, json);
     await fsPromises.rename(tmp, file);
@@ -103,7 +103,7 @@ export async function saveJson(
     jsonCache.set(file, { mtimeMs, data });
 
     // Last-known-good copy for loadJson's recovery path, same tmp+rename
-    // dance. Best-effort — a failed backup must not fail the save.
+    // dance. Best-effort, a failed backup must not fail the save.
     try {
       const bakTmp = `${backupPath(file)}.tmp`;
       await fsPromises.writeFile(bakTmp, json);

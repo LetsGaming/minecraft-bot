@@ -1,14 +1,14 @@
 /**
  * Rate limiting for the dashboard HTTP surface, reusing the bot's token-bucket
- * limiter (core/utils/rateLimiter.ts) — the one shared utility, not a
+ * limiter (core/utils/rateLimiter.ts) the one shared utility, not a
  * per-route copy (backend-apis.md; SEC-02, 2026-07 audit).
  *
- * Scope — only the expensive/abusable surface is limited:
+ * Scope, only the expensive/abusable surface is limited:
  *   /auth/*            keyed by client IP. No session exists yet at login, and
  *                      the OAuth callback fans out to three Discord calls per
  *                      hit, so unauthenticated login/callback traffic is capped.
- *   mutating /api/*    (POST/PUT/PATCH/DELETE) keyed by the session uid — a
- *                      logged-in user — falling back to IP when unauthenticated.
+ *   mutating /api/*    (POST/PUT/PATCH/DELETE) keyed by the session uid, a
+ *                      logged-in user, falling back to IP when unauthenticated.
  *
  * Read-only GETs are left unlimited. Buckets self-prune. This is per-process:
  * the dashboard is a single instance bound to loopback behind a reverse proxy
@@ -28,7 +28,7 @@ const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 export function registerRateLimiting(app: FastifyInstance): void {
   // Limiters are created per server instance (not module-level) so their
-  // lifecycle matches the server's — in production one buildServer() means one
+  // lifecycle matches the server's, in production one buildServer() means one
   // set of buckets; in tests each instance starts fresh.
   //
   // Interactive login is rare per human; keep it generous but bounded so the

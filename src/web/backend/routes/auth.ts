@@ -1,5 +1,5 @@
 /**
- * Discord OAuth2 login flow + the session probe — the only routes that
+ * Discord OAuth2 login flow + the session probe, the only routes that
  * live OUTSIDE the capability and session gates (they are how you get a
  * session in the first place). The crypto and cookie mechanics stay in
  * ../auth.ts; this module is just the route wiring. Split out of
@@ -32,7 +32,7 @@ import { DISCORD_OAUTH_AUTHORIZE_URL } from "@mcbot/schema";
 
 // Permissions the bot needs when joining a new guild. This is the
 // integer Discord bakes into the invite URL and pre-checks on the
-// authorize screen. Kept deliberately modest — the features the bot
+// authorize screen. Kept deliberately modest, the features the bot
 // actually uses: read/send messages + embeds, manage messages (purge),
 // manage webhooks (chat bridge), manage roles (linked role), read
 // message history, add reactions, view channels. Admins can still tick
@@ -69,7 +69,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
 
       // Any Discord user may log in (like a normal bot dashboard). Their
       // guild-manager access is the intersection of the guilds they manage
-      // with the guilds the bot is actually in — so the session only ever
+      // with the guilds the bot is actually in, so the session only ever
       // grants control over guilds that both parties share. Sysadmin status
       // is derived from config per request, not stored here.
       let guildIds: string[];
@@ -118,7 +118,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
   // bot into a new guild. Built server-side so the client ID and the
   // permission set live in one place (config + INVITE_PERMISSIONS) and
   // are never hardcoded in the frontend. Session-gated like the rest of
-  // /api — you must be a dashboard admin to see it.
+  // /api, you must be a dashboard admin to see it.
   api.get("/api/invite", async (req) => {
     currentSession(req);
     const cfg = loadConfig();

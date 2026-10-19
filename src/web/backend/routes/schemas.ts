@@ -1,5 +1,5 @@
 /**
- * Route contracts — one TypeBox definition per shape, consumed by every
+ * Route contracts, one TypeBox definition per shape, consumed by every
  * route via the Fastify TypeBox type provider (fastify.md: "define the shape
  * once, get validation + serialization + typing from it").
  *
@@ -7,13 +7,13 @@
  * source: Fastify validates the request at the boundary (a malformed body is a
  * 400 before the handler runs), the response is serialized from the compiled
  * schema (so a route can't leak a field the schema doesn't list), and the
- * handler's `request.params/query/body` are typed — no `as` cast at the edge,
+ * handler's `request.params/query/body` are typed, no `as` cast at the edge,
  * which is exactly the "don't force-cast parsed input" rule from
  * types-and-contracts.md.
  *
  * What is NOT schematised here: the *contents* of a config write body. The
  * config object is schema-driven and validated in depth by
- * configService.validateCandidate against the generated JSON Schema — the one
+ * configService.validateCandidate against the generated JSON Schema, the one
  * place that knows the full shape. So the body schema below only asserts the
  * envelope ("an object with a string baseHash and an object config"); the deep
  * validation stays where it belongs.

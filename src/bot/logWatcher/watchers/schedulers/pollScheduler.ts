@@ -1,5 +1,5 @@
 /**
- * Poll lifecycle — close timers, Discord button collectors, and the
+ * Poll lifecycle, close timers, Discord button collectors, and the
  * both-directions result announcement.
  *
  * State lives in pollStore; this module owns the runtime side:
@@ -12,7 +12,7 @@
  *    server.
  *
  * startPollScheduler runs at bot init and re-arms every open poll from
- * the store — a restart mid-poll loses no votes and still closes on
+ * the store, a restart mid-poll loses no votes and still closes on
  * time (or immediately, when endsAt passed while the bot was down).
  */
 import {

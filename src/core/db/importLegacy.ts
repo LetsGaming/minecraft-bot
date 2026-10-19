@@ -4,7 +4,7 @@
  * Runs at every startup (both processes) and is idempotent by
  * construction: each store imports only when its table is empty AND its
  * legacy file exists. The check and the inserts share one IMMEDIATE
- * transaction, so two processes booting at once serialize — the loser
+ * transaction, so two processes booting at once serialize, the loser
  * finds a non-empty table and skips.
  *
  * After a successful import the source file is renamed to
@@ -29,10 +29,10 @@ import { errMsg } from "../utils/error.js";
 
 // Deliberately NOT the public kv API (db/kv.ts): that module resolves the
 // connection through getDb(), and this importer runs INSIDE getDb() before
-// the singleton is assigned — importing it would re-enter initialization
+// the singleton is assigned, importing it would re-enter initialization
 // recursively. The importer only ever touches the handle it was given.
 function kvGetRaw(db: SqlDatabase, key: string): unknown {
-  // rows.ts (mapRow/col) is safe to use here — unlike db/kv.ts it doesn't
+  // rows.ts (mapRow/col) is safe to use here, unlike db/kv.ts it doesn't
   // resolve the connection through getDb(), so there's no re-entrancy.
   const value = mapRow(
     db.prepare("SELECT value FROM kv_store WHERE key = ?"),
@@ -67,7 +67,7 @@ function readLegacy(file: string): unknown | null {
   try {
     return JSON.parse(fs.readFileSync(p, "utf-8"));
   } catch (err) {
-    // A corrupt legacy file must not brick startup — but it also must
+    // A corrupt legacy file must not brick startup, but it also must
     // not be silently skipped-and-renamed. Leave it in place and warn. It is
     // retried on every start, but only imports while its table is still
     // empty, so rows the bot writes meanwhile block a later repair.
@@ -82,7 +82,7 @@ function retireLegacy(file: string): void {
     try {
       if (fs.existsSync(p)) fs.renameSync(p, `${p}.imported`);
     } catch {
-      /* best effort — a failed rename only risks a no-op re-check */
+      /* best effort, a failed rename only risks a no-op re-check */
     }
   }
 }

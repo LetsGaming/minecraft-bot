@@ -7,7 +7,7 @@
  * Segments may be concatenated ("1d12h"); `mo` (month) is matched before
  * the bare `m` (minute) so "2mo" never reads as two minutes.
  *
- * Months and years are the calendar averages (30.44 d / 365.25 d) — a
+ * Months and years are the calendar averages (30.44 d / 365.25 d) a
  * ban that ends "in a month" is a rough promise, not a calendar event,
  * and treating them as fixed spans keeps the whole thing pure arithmetic.
  */
@@ -52,7 +52,7 @@ const SEGMENT = new RegExp(
 
 /**
  * Parse a duration string. Returns null when the input is not a valid
- * duration or falls outside [MIN_DURATION_MS, MAX_DURATION_MS] — callers
+ * duration or falls outside [MIN_DURATION_MS, MAX_DURATION_MS], callers
  * decide how to surface that (errors-as-values, no throwing parser).
  */
 export function parseDuration(raw: string): number | null {

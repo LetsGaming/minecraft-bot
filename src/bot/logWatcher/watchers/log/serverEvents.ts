@@ -31,7 +31,7 @@ onServerRemoved((serverId) => {
 
 /**
  * A stopping server disconnects everyone without emitting per-player
- * leave lines, so every open session must be closed here — otherwise a
+ * leave lines, so every open session must be closed here, otherwise a
  * shutdown produces sessions that never end. Crashes (no "Stopping
  * server" line at all) are covered by the downtime monitor's offline
  * transition doing the same.

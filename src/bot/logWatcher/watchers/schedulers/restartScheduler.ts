@@ -1,5 +1,5 @@
 /**
- * Scheduled restarts — a wall-clock restart per server with countdown
+ * Scheduled restarts, a wall-clock restart per server with countdown
  * warnings, the roadmap's highest-value operator item.
  *
  * Config (top level):
@@ -16,8 +16,8 @@
  *
  * Warnings go to the server via /say and to each guild's notifications
  * channel (event "scheduledRestart"). The restart itself takes the same
- * path as `/server restart` — the suite's smart_restart where the
- * capability probe found it — with downtime alerts suppressed around it
+ * path as `/server restart`, the suite's smart_restart where the
+ * capability probe found it, with downtime alerts suppressed around it
  * and an admin-audit entry. Timers are wall-clock scheduled with the
  * TZ-aware helpers and re-armed after each run (a fixed 24h interval
  * drifts across DST changes) and on every config reload.
@@ -55,7 +55,7 @@ const DEFAULT_WARN_MINUTES = [15, 5, 1];
  * The next epoch at which this schedule fires: the next HH:MM in `tz` whose
  * local weekday is allowed. Exported for tests.
  *
- * The zone is the *schedule's*, not a guild's — a 04:00 restart belongs to
+ * The zone is the *schedule's*, not a guild's, a 04:00 restart belongs to
  * the machine's operator, and a server watched by two guilds has no guild
  * answer to give.
  */
@@ -183,7 +183,7 @@ function armServer(
 ): void {
   clearServerTimers(serverId);
 
-  // The schedule's own zone — see timezones.ts for why this is not the
+  // The schedule's own zone, see timezones.ts for why this is not the
   // guild's.
   const tz = scheduleTimeZone(serverId);
   const runAt = nextScheduledRun(schedule, tz);

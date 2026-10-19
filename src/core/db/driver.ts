@@ -3,7 +3,7 @@
  *
  * The store code above this file speaks a four-method interface
  * (prepare/exec/close + statement run/get/all) that two drivers satisfy
- * identically — both are synchronous C-backed SQLite bindings with the
+ * identically, both are synchronous C-backed SQLite bindings with the
  * same SQL, the same transaction semantics, and the same parameter
  * binding:
  *
@@ -14,13 +14,13 @@
  *                              toolchain).
  *   node:sqlite     (fallback) The built-in module, selected with
  *                              MCBOT_SQLITE_DRIVER=node. Zero native
- *                              build — the escape hatch for hosts without
+ *                              build, the escape hatch for hosts without
  *                              a compiler toolchain. Requires Node >=
  *                              22.13 (stable in 24; harmless experimental
  *                              warning on 22.x).
  *
  * The seam is deliberately tiny (~40 lines of adapter): it exists so the
- * driver is a deployment detail, not an architecture decision — swapping
+ * driver is a deployment detail, not an architecture decision, swapping
  * costs an env var, and the test suite runs against whichever driver the
  * environment can load.
  */
@@ -69,8 +69,8 @@ export function openDatabase(path: string): SqlDatabase {
     return new DatabaseSync(path);
   }
 
-  // Note: v12 loads its native binding lazily — at construction, not at
-  // require — so the constructor call must sit inside the same guard.
+  // Note: v12 loads its native binding lazily, at construction, not at
+  // require, so the constructor call must sit inside the same guard.
   try {
     // `require` (CommonJS interop for the native module) is untyped; assert the
     // constructor signature we call. See the note above on why it's lazy.

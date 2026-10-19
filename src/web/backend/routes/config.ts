@@ -1,9 +1,9 @@
 /**
- * Phase 2 — schema-driven config editing plus the Commands view payload.
+ * Phase 2, schema-driven config editing plus the Commands view payload.
  * Registered inside the capability-gated host scope (see server.ts).
  *
  * Write bodies are validated at the boundary from the shared TypeBox schema
- * (envelope only — the config's deep shape is validateCandidate's job), and
+ * (envelope only, the config's deep shape is validateCandidate's job), and
  * every failure is a typed error rendered by the one error handler. The
  * config *object* is still hand-validated in depth because it is generated,
  * not statically known.
@@ -50,7 +50,7 @@ import { auditAction } from "./support.js";
 /**
  * Every route in this file reads or writes config.json, which carries the
  * Discord token and every RCON password. `bot:config` is therefore sysadmin by
- * definition and can never appear in a grant (schema/capabilities.ts) — named
+ * definition and can never appear in a grant (schema/capabilities.ts) named
  * once here rather than repeated per route.
  */
 const BOT_CONFIG = {
@@ -146,8 +146,8 @@ export function registerConfigRoutes(app: FastifyInstance): void {
       // The check and the write happen under one lock (AUD-014).
       return withConfigWriteLock(async () => {
         // Optimistic concurrency: the edit must be based on the config that
-        // is on disk right now. Two dashboard admins — or an admin racing
-        // the bot's own /config command — get a 409 instead of a silent
+        // is on disk right now. Two dashboard admins, or an admin racing
+        // the bot's own /config command, get a 409 instead of a silent
         // last-write-wins clobber.
         const currentHash = configFileHash();
         if (baseHash !== currentHash) {
@@ -225,7 +225,7 @@ export function registerConfigRoutes(app: FastifyInstance): void {
       const result = validateCandidate(candidate);
       if (!result.valid) {
         // A snapshot that no longer validates (e.g. it references a server
-        // since removed) — surface why rather than a bare 422.
+        // since removed) surface why rather than a bare 422.
         throw new HttpError(
           422,
           "The snapshot is no longer valid against the current schema.",

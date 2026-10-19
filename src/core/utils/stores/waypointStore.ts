@@ -1,5 +1,5 @@
 /**
- * Community waypoint persistence — single owner of kv_store["waypoints"];
+ * Community waypoint persistence, single owner of kv_store["waypoints"];
  * commands never touch loadJson/saveJson for this file directly (same
  * ownership pattern as dailyStore.ts).
  *
@@ -25,7 +25,7 @@ export interface Waypoint {
   author: string;
   createdAt: number;
   /**
-   * Optional flat category tag ("base", "farm", "shop", …) — same
+   * Optional flat category tag ("base", "farm", "shop", …) same
    * conservative character set as names, since it travels through
    * console commands and Discord embeds. Lowercased on write.
    */
@@ -55,7 +55,7 @@ export function waypointCap(): number {
       return max;
     }
   } catch {
-    /* config unavailable — default */
+    /* config unavailable, default */
   }
   return MAX_WAYPOINTS_PER_SERVER;
 }

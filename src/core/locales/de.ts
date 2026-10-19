@@ -183,7 +183,6 @@ export const de: Record<string, string> = {
   "challenge.cancelled": "Challenge **{advancement}** abgebrochen.",
 
   // ── polls ──
-    'Es läuft bereits eine Umfrage: "{question}". Schließe sie, bevor du eine neue startest.',
   "poll.noneActive": "Keine offene Umfrage auf **{server}**.",
   "poll.noneInGame": "Gerade läuft keine Umfrage.",
   "poll.needChannel": "Umfragen müssen in einem Textkanal erstellt werden.",

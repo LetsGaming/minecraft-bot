@@ -37,7 +37,7 @@ const FAILURES_BEFORE_ALERT = 3;
 /**
  * The wrapper gets a longer fuse than the server. Restarting it, redeploying
  * it, or a brief network hiccup is routine and self-healing, and it says
- * nothing about the Minecraft server — which is usually still up with players
+ * nothing about the Minecraft server, which is usually still up with players
  * on it. Five minutes of silence is worth mentioning; one is noise.
  */
 const UNREACHABLE_BEFORE_ALERT = 5;
@@ -124,7 +124,7 @@ async function countPlayers(server: ServerInstance, health: ServerHealth): Promi
  * Start the downtime monitor.
  *
  * Accepts either a fixed array (legacy/tests) or a provider
- * function that is consulted on every tick — pass getAllInstances so
+ * function that is consulted on every tick, pass getAllInstances so
  * servers added/removed by config-reload reconciliation are picked up
  * without restarting the monitor.
  */
@@ -175,7 +175,7 @@ async function checkServer(server: ServerInstance, ctx: AlertContext): Promise<v
     health = await server.getHealth();
   } catch (err) {
     // getHealth() encodes its failures in the value, so reaching this is a bug
-    // in the call path rather than an outage — but it is still not evidence
+    // in the call path rather than an outage, but it is still not evidence
     // about the server, so it degrades to the same "we don't know".
     health = unknownHealth(errMsg(err), now);
   }
@@ -278,7 +278,7 @@ async function checkServer(server: ServerInstance, ctx: AlertContext): Promise<v
   }
 
   // ── The server ──────────────────────────────────────────────────────────
-  // Nothing established what the server is doing — neither the wrapper nor a
+  // Nothing established what the server is doing, neither the wrapper nor a
   // direct ping. That takes both channels failing at once, and it is the one
   // case where the bot genuinely cannot say. Record nothing: uptime is a
   // measurement, and a missing sample is honest where a fabricated `false` is
@@ -286,7 +286,7 @@ async function checkServer(server: ServerInstance, ctx: AlertContext): Promise<v
   if (!stateIsKnown(health)) return;
 
   // `unresponsive` counts as up: the process is running, it is just not
-  // answering RCON — a lag spike, or a server still loading its world. TPS
+  // answering RCON, a lag spike, or a server still loading its world. TPS
   // alerting is the right tool for that, not a downtime page.
   const isOnline = health.state !== ServerState.Offline;
 

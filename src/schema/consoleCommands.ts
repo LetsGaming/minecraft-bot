@@ -10,7 +10,7 @@
 //
 // The normalisation is the part worth keeping from the old implementation. Its
 // first version compared the raw string, so a deny entry of `stop` was bypassed
-// by typing `/stop` — Minecraft accepts both. Leading slashes come off and the
+// by typing `/stop`. Minecraft accepts both. Leading slashes come off and the
 // comparison is lowercase, so one entry covers every spelling.
 
 /**
@@ -78,7 +78,7 @@ export function consoleCommandVerbs(raw: string): string[] {
  *
  * Matching is on the verb, not a prefix. A prefix match (the old behaviour)
  * meant blocking `op` also blocked `opendoor`, and blocking `stop` also
- * blocked a plugin's `stopwatch` — surprising in a way that gets the deny-list
+ * blocked a plugin's `stopwatch`, surprising in a way that gets the deny-list
  * disabled rather than corrected. Entries are normalised too, so a deny-list
  * written as `["/stop", "OP"]` behaves the same as `["stop", "op"]`.
  *

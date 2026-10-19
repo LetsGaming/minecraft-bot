@@ -1,5 +1,5 @@
 /**
- * Phase 1 — read-only monitoring routes: live status, uptime stats,
+ * Phase 1, read-only monitoring routes: live status, uptime stats,
  * player-count activity series, and the admin audit log. Registered
  * inside the capability-gated host scope (see server.ts). Split out of
  * server.ts in the QUAL-01 refactor (2026-07 audit).

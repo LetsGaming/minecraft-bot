@@ -7,7 +7,7 @@
  *
  * New should mean "added since you last looked". So we snapshot the set of
  * feature keys the user has already seen, persisted in localStorage, and read
- * New against that snapshot — frozen once per app load so a badge does not
+ * New against that snapshot, frozen once per app load so a badge does not
  * vanish mid-session. Visiting the editor commits the current keys, so on the
  * next load they are no longer new and only genuinely new schema additions
  * light up. The very first visit has an empty snapshot, so everything shows as

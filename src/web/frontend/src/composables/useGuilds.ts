@@ -39,7 +39,7 @@ function load(force = false): Promise<void> {
 /**
  * Human name for a guild ID. Falls back to a short, friendly label when
  * the name isn't known yet (list still loading, Discord unreachable, or
- * the bot was removed from that guild) — never a raw snowflake.
+ * the bot was removed from that guild) never a raw snowflake.
  */
 function guildName(id: string): string {
   const hit = guilds.value.find((g) => g.id === id);

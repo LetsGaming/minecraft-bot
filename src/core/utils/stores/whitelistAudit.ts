@@ -1,5 +1,5 @@
 /**
- * Whitelist audit trail — who added/removed which player, when, on which
+ * Whitelist audit trail, who added/removed which player, when, on which
  * server. One row per player (keyed by lowercased username), carrying the
  * latest add and the latest remove, exactly the shape the old JSON map had.
  *

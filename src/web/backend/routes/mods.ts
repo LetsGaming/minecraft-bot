@@ -435,7 +435,7 @@ export function registerModRoutes(app: FastifyInstance): void {
       } catch {
         throw new BadRequest("Invalid icon url.");
       }
-      // Only Modrinth's CDN is proxied — this must never become an open relay.
+      // Only Modrinth's CDN is proxied, this must never become an open relay.
       if (target.protocol !== "https:" || target.hostname !== MODRINTH_ICON_HOST) {
         throw new BadRequest("Only Modrinth CDN icons are proxied.");
       }

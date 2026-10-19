@@ -67,15 +67,15 @@ export type {
 } from "./wire/index.js";
 // Runtime values (the leaderboard-interval contract) alongside the stat
 // shapes, so the scheduler and the snapshot retention policy size periods
-// from one definition — hence a value re-export rather than `export type *`.
+// from one definition, hence a value re-export rather than `export type *`.
 export * from "./stats.js";
 // Runtime values (the notification-event contract), so the dispatcher, the
-// setup wizard, and the validator import one shared definition — hence a
+// setup wizard, and the validator import one shared definition, hence a
 // value re-export rather than `export type *`.
 export * from "./notifications.js";
 export * from "./commandOptions.js";
 export * from "./discord.js";
-// Runtime values (formatBytes), shared by the bot embeds and the dashboard —
+// Runtime values (formatBytes), shared by the bot embeds and the dashboard, 
 // the two had drifting copies before.
 export * from "./format.js";
 // Millisecond unit lengths (MS), shared by core duration parsing and the dashboard.
@@ -83,13 +83,13 @@ export * from "./time.js";
 export * from "./serverActions.js";
 // Runtime values (the capability contract), shared by the dashboard's route
 // declarations, its authorization gate, and the frontend that renders from
-// /api/me — one definition rather than three sets of literals.
+// /api/me, one definition rather than three sets of literals.
 export * from "./capabilities.js";
 // Runtime values (the console deny-list contract), so the route that enforces
 // it and the editor that greys a command out share one matching rule.
 export * from "./consoleCommands.js";
 // Runtime values (the ServerState / RconState contract), shared by the bot's
-// status paths, the web backend, and the Vue frontend — a value re-export so
+// status paths, the web backend, and the Vue frontend, a value re-export so
 // all three switch on one definition rather than three sets of literals.
 export * from "./serverState.js";
 export * from "./commandOutcome.js";

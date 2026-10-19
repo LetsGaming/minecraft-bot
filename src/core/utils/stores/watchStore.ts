@@ -1,5 +1,5 @@
 /**
- * /watch subscriptions — one-shot personal DMs, single owner of
+ * /watch subscriptions, one-shot personal DMs, single owner of
  * kv_store["watches"] (data/bot.db).
  *
  *   kind "server": DM when the server comes back online (fired by the

@@ -6,7 +6,7 @@
  * {placeholders} from vars.
  *
  * Locale resolution order:
- *   1. `guilds.<guildId>.language` — per-guild override, when a guild
+ *   1. `guilds.<guildId>.language`, per-guild override, when a guild
  *      context is known (explicit third argument, or the ambient context
  *      set by the command middleware / per-guild broadcast loops),
  *   2. the global `language` from config.json,
@@ -18,7 +18,7 @@
  * threading a guildId parameter through layers that must stay
  * Discord-agnostic (statUtils, stores). An explicit guildId argument
  * always wins over the ambient one. In-game (!command) strings and DMs
- * deliberately stay on the global language — a server instance can serve
+ * deliberately stay on the global language, a server instance can serve
  * several guilds, so there is no single correct guild to borrow a locale
  * from (see docs/dev/decisions.md).
  *

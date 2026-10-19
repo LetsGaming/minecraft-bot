@@ -46,7 +46,7 @@ export const CONFIG_DEFAULTS = {
 
 const PROJECT_ROOT = getRootDir();
 // The active config.json. Overridable via MCBOT_CONFIG_PATH so a deployment
-// can point it at a writable, process-owned location — in Docker that is the
+// can point it at a writable, process-owned location, in Docker that is the
 // shared data/ volume (/app/data/config.json), where the dashboard can rewrite
 // it atomically (temp+rename on one filesystem) and where the bot's fs watcher
 // picks the edit up. Defaults to <root>/config.json for local/non-container use.
@@ -71,10 +71,10 @@ export function getLoadedConfigRevision(): LoadedConfigRevision | null {
 
 // Storage audit (2026-09): config.json lives in the shared data/ volume the
 // dashboard writes to, so watchConfig() reloads (and re-validates) on every
-// save — including edits that touch a field unrelated to a standing warning.
+// save, including edits that touch a field unrelated to a standing warning.
 // Without this, a single stale warning (e.g. an http apiUrl) got re-logged in
 // full on every dashboard save forever; one deployment had ~2,800 identical
-// lines from this alone. Each distinct message is logged once per process —
+// lines from this alone. Each distinct message is logged once per process, 
 // a fresh warning still surfaces immediately, a repeat doesn't need saying
 // twice, and a restart naturally re-announces whatever is still wrong.
 const warnedConfigMessages = new Set<string>();
@@ -126,7 +126,7 @@ export function apiKeyEnvVar(id: string): string {
  *
  * Called BEFORE validation: a deployment may supply a required secret only
  * via the environment (the documented `.env` path), so an env-only token must
- * be in place before the required-field check runs — validating first would
+ * be in place before the required-field check runs, validating first would
  * reject the very value the override was about to fill in (BUG-01).
  */
 function applyEnvOverrides(raw: RawBotConfig): void {
@@ -135,7 +135,7 @@ function applyEnvOverrides(raw: RawBotConfig): void {
   if (raw.servers && typeof raw.servers === "object") {
     for (const [id, srv] of Object.entries(raw.servers)) {
       // API_KEY_<ID> beats API_KEY, matching the shape RCON_PASSWORD_<ID>
-      // had before 5.0.0 — the bot no longer speaks RCON, so the wrapper's
+      // had before 5.0.0, the bot no longer speaks RCON, so the wrapper's
       // key is the only per-server secret it holds.
       const specific = apiKeyEnvVar(id);
       if (process.env[specific]) srv.apiKey = process.env[specific];
@@ -220,7 +220,7 @@ export function loadConfig(): BotConfig {
   let rawText: string;
   try {
     // Optimistically typed on parse; validateRawConfig() below is the actual
-    // runtime gate — it throws an actionable error if the shape doesn't match,
+    // runtime gate, it throws an actionable error if the shape doesn't match,
     // so a wrong config.json never reaches the resolution logic mis-typed.
     rawText = fs.readFileSync(CONFIG_PATH, "utf-8");
     raw = JSON.parse(rawText) as RawBotConfig;
@@ -240,7 +240,7 @@ export function loadConfig(): BotConfig {
   // instead of being rejected before the override applies (BUG-01).
   applyEnvOverrides(raw);
 
-  // Runtime validation — catches type mismatches that TypeScript cannot
+  // Runtime validation, catches type mismatches that TypeScript cannot
   validateRawConfig(raw, CONFIG_PATH);
 
   // ── Resolve servers ──

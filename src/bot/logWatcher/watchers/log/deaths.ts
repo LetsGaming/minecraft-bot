@@ -121,7 +121,7 @@ async function dmDeathCoords(
  * the message alone cannot say. Y being online right now is the practical
  * test: a player kill requires the killer to be on the server, and a mob
  * name will not appear in the player list. Wrong only in the harmless
- * direction — a mob named after an online player suppresses one tip.
+ * direction, a mob named after an online player suppresses one tip.
  *
  * Any failure reads as "not PvP": the plain death tip is the safe default.
  */

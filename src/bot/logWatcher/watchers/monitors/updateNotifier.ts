@@ -1,5 +1,5 @@
 /**
- * Update notifier — a daily GitHub releases check.
+ * Update notifier, a daily GitHub releases check.
  *
  * Compares the newest release tag of the upstream repo with the running
  * version (package.json), logs when a newer one exists, and optionally
@@ -84,7 +84,7 @@ async function notifyAdmins(client: Client, latest: string): Promise<void> {
         }),
       );
     } catch {
-      // closed DMs or unknown user — a missed nudge is not an error
+      // closed DMs or unknown user, a missed nudge is not an error
     }
   }
 }

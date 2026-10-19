@@ -122,7 +122,7 @@ export function registerGuildConfigRoutes(app: FastifyInstance): void {
 
   /**
    * The guilds the current user may configure, each flagged configured
-   * and with its enabled-feature keys — everything GuildsView and the
+   * and with its enabled-feature keys, everything GuildsView and the
    * overview need, without exposing the rest of the config. Sysadmins see
    * every guild the bot is in; managers see only the ones they manage.
    */
@@ -154,7 +154,7 @@ export function registerGuildConfigRoutes(app: FastifyInstance): void {
   /** One guild's config block (+ a hash of that block for concurrency). */
   // Guild-managers (non-sysadmin) can't reach /api/config/schema, so expose
   // just the GuildConfig definition + all definitions (for $ref resolution)
-  // here. Structure only — no secrets. Path resolution mirrors
+  // here. Structure only, no secrets. Path resolution mirrors
   // /api/config/schema (same dir depth) so source + deployed trees both work.
   api.get("/api/guilds/config-schema", async () => {
     const full = readConfigSchema();
@@ -263,7 +263,7 @@ export function registerGuildConfigRoutes(app: FastifyInstance): void {
           }));
         } catch (err) {
           // Surface the actionable write error (e.g. read-only config path),
-          // logged, mirroring the full-config PUT — not a generic 500.
+          // logged, mirroring the full-config PUT, not a generic 500.
           const msg =
             err instanceof Error ? err.message : "Failed to write guild config.";
           log.error("web", `Guild config write failed: ${msg}`);
@@ -276,7 +276,7 @@ export function registerGuildConfigRoutes(app: FastifyInstance): void {
               : "The config could not be saved. A bot administrator can find the reason in the dashboard log.",
           );
         }
-        // Only audit an actual change — a Save with no edits is a no-op.
+        // Only audit an actual change, a Save with no edits is a no-op.
         if (changed) {
           await recordAdminAction({
             action: "guild config write (dashboard)",

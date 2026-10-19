@@ -1,9 +1,9 @@
 /**
- * Timed bans — single owner of kv_store["tempBans"].
+ * Timed bans, single owner of kv_store["tempBans"].
  *
  * Vanilla Minecraft has no temp-ban: `/ban` is forever and the ban list
  * carries no expiry. So the *ban* stays vanilla (the server enforces it
- * even while the bot is down) and only the *release* lives here — one
+ * even while the bot is down) and only the *release* lives here, one
  * entry per pending expiry, which the scheduler turns into a `/pardon`
  * when its time comes.
  *
@@ -12,7 +12,7 @@
  * nothing; /note still carries the per-player "why".
  *
  * Keyed by `<serverId>:<lowercased name>` because the vanilla ban list is
- * name-based — there is no UUID to hang this on at ban time, and a
+ * name-based, there is no UUID to hang this on at ban time, and a
  * re-ban of the same name on the same server should replace the pending
  * release rather than stack a second one.
  */
@@ -24,9 +24,9 @@ export interface TempBan {
   serverId: string;
   /** Epoch ms at which the pardon fires. */
   expiresAt: number;
-  /** Epoch ms the ban was issued — display only. */
+  /** Epoch ms the ban was issued, display only. */
   bannedAt: number;
-  /** Discord tag of the issuing admin — display only. */
+  /** Discord tag of the issuing admin, display only. */
   by: string;
   reason: string;
 }

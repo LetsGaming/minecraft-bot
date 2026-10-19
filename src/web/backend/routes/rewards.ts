@@ -33,7 +33,7 @@ import { Conflict, HttpError, ValidationFailed } from "../errors.js";
 import { IdParams, RewardsWriteBody } from "./schemas.js";
 import { auditedAction, requireServer } from "./support.js";
 
-/** "12 items, 13 streak days, bonus 5 %" — what the saved document holds, for the audit log. */
+/** "12 items, 13 streak days, bonus 5 %", what the saved document holds, for the audit log. */
 function describePool(pool: RewardPool): string {
   const parts: string[] = [];
   if (pool.default) parts.push(`${pool.default.length} items`);

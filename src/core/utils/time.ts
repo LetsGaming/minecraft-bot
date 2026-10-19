@@ -1,7 +1,7 @@
 /**
  * Centralised time helpers.
  *
- * Everything the bot *stores* is UTC epoch milliseconds — samples, audit
+ * Everything the bot *stores* is UTC epoch milliseconds, samples, audit
  * rows, cooldowns, ban expiries. Timezones exist only at the edges, where a
  * human reads a time or a wall-clock schedule fires, and every helper here
  * takes that zone explicitly.
@@ -9,7 +9,7 @@
  * It used to come from a single `TZ` environment variable, which made the
  * whole process live in one zone: a bot serving guilds in Berlin and Denver
  * purged both their channels at Berlin midnight. The zone is now a parameter,
- * resolved per guild (Discord-facing) or per schedule (server-facing) — see
+ * resolved per guild (Discord-facing) or per schedule (server-facing) see
  * timezones.ts. UTC is the default everywhere, so anything that forgets to
  * pass one is merely zone-neutral rather than silently wrong for someone.
  *
@@ -123,7 +123,7 @@ function localDateParts(
 /**
  * The UTC epoch of the next `hour:minute` in `tz`, strictly after `fromMs`.
  *
- * Built from Intl and Date.UTC only — never `new Date(y, m, d)`, which would
+ * Built from Intl and Date.UTC only, never `new Date(y, m, d)`, which would
  * quietly use the *system* zone and be off by the difference whenever the
  * container's zone is not the caller's. Date.UTC also normalises overflow
  * (Jan 32 → Feb 1), which the old midnight helper did not: it pasted

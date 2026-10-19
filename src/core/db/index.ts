@@ -1,8 +1,8 @@
 /**
- * SQLite data layer — the store backend for machine-written state.
+ * SQLite data layer, the store backend for machine-written state.
  *
  * Built on better-sqlite3 (synchronous C bindings) behind a tiny driver
- * seam (driver.ts) whose fallback is the built-in node:sqlite — same SQL,
+ * seam (driver.ts) whose fallback is the built-in node:sqlite, same SQL,
  * same transaction semantics, selected per environment.
  *
  * Ownership rule (docs/dev/data-storage.md): human-authored, machine-read
@@ -10,7 +10,7 @@
  * lives here. The database file sits in data/ next to the remaining JSON
  * stores, inside the same bot_data volume.
  *
- * Concurrency model — why this exists at all:
+ * Concurrency model, why this exists at all:
  *   - WAL journal: the bot and the web-ui open the same file; readers
  *     never block the writer, and the single-writer lock is arbitrated by
  *     SQLite itself (busy_timeout absorbs the rare collision). This is
@@ -21,7 +21,7 @@
  *
  * Both processes call getDb() at startup; migrations and the one-time
  * legacy-JSON import run there, idempotently, so whichever process starts
- * first — or alone — has a current schema. Neither process ever requires
+ * first, or alone, has a current schema. Neither process ever requires
  * the other.
  */
 import path from "path";
@@ -79,7 +79,7 @@ function initialize(db: SqlDatabase, dbPath: string): void {
   runMigrations(db);
 
   // VACUUM reclaims pages the retention prunes above freed to SQLite's
-  // internal freelist but never returned to the filesystem — bot.db is
+  // internal freelist but never returned to the filesystem, bot.db is
   // otherwise monotonically non-shrinking (storage audit, 2026-09). It
   // takes an exclusive lock and rewrites the whole file, so it is opt-in
   // rather than automatic: an operator runs it during a maintenance
@@ -91,7 +91,7 @@ function initialize(db: SqlDatabase, dbPath: string): void {
   }
 
   // Never import (and retire!) legacy JSON into an in-memory database:
-  // the store is ephemeral, the renamed source files would not be — a
+  // the store is ephemeral, the renamed source files would not be, a
   // throwaway DB must not destroy real data. Tests run on ":memory:";
   // real deployments never do.
   if (dbPath !== ":memory:") {
@@ -102,7 +102,7 @@ function initialize(db: SqlDatabase, dbPath: string): void {
 /**
  * Run fn atomically. BEGIN IMMEDIATE takes the write lock up front, so the
  * enclosed reads see a stable snapshot and the writes can't interleave with
- * another process — the read-modify-write is one unit or nothing.
+ * another process, the read-modify-write is one unit or nothing.
  *
  * Not re-entrant by design: nesting indicates a store calling another
  * store mid-transaction, which is a layering smell we'd rather surface.
@@ -125,7 +125,7 @@ export function withTransaction<T>(fn: () => T): T {
     try {
       db.exec("ROLLBACK");
     } catch {
-      /* connection-level failure — nothing left to roll back */
+      /* connection-level failure, nothing left to roll back */
     }
     throw err;
   } finally {

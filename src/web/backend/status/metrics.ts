@@ -1,7 +1,7 @@
 /**
  * Unauthenticated probes: /healthz for load balancers and /metrics for
  * Prometheus. Split out of server.ts in the QUAL-01 refactor (2026-07
- * audit) — the exposition format lives here and nowhere else.
+ * audit) the exposition format lives here and nowhere else.
  */
 import type { FastifyInstance } from "fastify";
 import { getAllInstances } from "@mcbot/core/utils/server/server.js";

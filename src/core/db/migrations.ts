@@ -1,5 +1,5 @@
 /**
- * Schema migrations — ordered, embedded SQL, applied inside transactions
+ * Schema migrations, ordered, embedded SQL, applied inside transactions
  * and tracked in schema_migrations. Embedded (not .sql files) so tsc's
  * dist/ is self-contained with no asset-copy step.
  *
@@ -273,7 +273,7 @@ export function runMigrations(db: SqlDatabase): void {
     `);
 
     // Databases created before checksums were tracked have no such column,
-    // and SQLite has no ADD COLUMN IF NOT EXISTS — probe, then add once.
+    // and SQLite has no ADD COLUMN IF NOT EXISTS, probe, then add once.
     const columns = mapRows(db.prepare("PRAGMA table_info(schema_migrations)"), (row) =>
       col.text(row, "name"),
     );
@@ -323,7 +323,7 @@ export function runMigrations(db: SqlDatabase): void {
         } else if (recorded !== sum) {
           // A shipped migration was edited. The database still reflects the
           // OLD statements, so every later assumption about the schema is
-          // now unverified — refuse rather than run on an unknown shape.
+          // now unverified, refuse rather than run on an unknown shape.
           throw new Error(
             `Migration ${m.id} ("${m.name}") has changed since it was applied ` +
               `to this database (checksum ${recorded.slice(0, 12)} → ` +

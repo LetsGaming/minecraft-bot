@@ -1,5 +1,5 @@
 /**
- * Phase 3 — server operations: script actions (start/stop/restart/
+ * Phase 3, server operations: script actions (start/stop/restart/
  * backup), log tail, and stats pruning. Registered inside the
  * capability-gated host scope (see server.ts).
  *
@@ -52,12 +52,12 @@ async function runServerAction(
 ): Promise<ScriptResultBody> {
   const server = requireServer(id);
   // Kept as a guard (not a schema enum) so the "unknown server" 404 still
-  // precedes the "unknown action" 400 — the order the API has always had.
+  // precedes the "unknown action" 400, the order the API has always had.
   if (!isServerOperatorAction(action)) {
     throw new BadRequest(`unknown action "${action}"`);
   }
   // `action` is now a ServerScriptAction, so the capability lookup below
-  // needs no cast — the guard is what proves the key is real.
+  // needs no cast, the guard is what proves the key is real.
   if (server.capabilities && !server.capabilities.scripts[action]) {
     throw new Conflict(`server has no ${action} script (suite not installed?)`);
   }

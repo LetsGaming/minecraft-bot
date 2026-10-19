@@ -2,14 +2,14 @@
  * One way to say "how long ago", shared by every surface.
  *
  * This began as a frontend util, which meant the dashboard and the bot would
- * have formatted the same instant differently — the web card saying "3 h ago"
+ * have formatted the same instant differently, the web card saying "3 h ago"
  * while a Discord embed said something else, for the same fact from the same
  * source. That is the exact class of divergence this move exists to remove, so
  * the pure formatting lives here and both sides import it.
  *
  * Framework-free and dependency-free: no `Intl` locale, no timezone. The rules
- * are fixed on purpose — relative for the recent past, a stable
- * `YYYY-MM-DD HH:mm` absolute below that — because the value is usually being
+ * are fixed on purpose, relative for the recent past, a stable
+ * `YYYY-MM-DD HH:mm` absolute below that, because the value is usually being
  * read against a log line or a filename, where an order that never means two
  * different dates to two people matters more than locale niceties.
  */
@@ -63,8 +63,8 @@ export function absoluteStamp(value: Timestamp, withSeconds = false): string {
  * "just now" · "12 min ago" · "3 h ago" · "2 days ago", then the absolute
  * stamp once relative stops being the more useful reading.
  *
- * The unit ladder escalates at its own boundary — 24 hours becomes days, not
- * 48 — so two rows in the same table can't express the same age two ways.
+ * The unit ladder escalates at its own boundary, 24 hours becomes days, not
+ * 48, so two rows in the same table can't express the same age two ways.
  */
 export function relativeAge(value: Timestamp, now: number = Date.now()): string {
   const date = parseStamp(value);
@@ -91,7 +91,7 @@ export function relativeAge(value: Timestamp, now: number = Date.now()): string 
 }
 
 /**
- * The full moment, seconds included — for a hover title on a relative label,
+ * The full moment, seconds included, for a hover title on a relative label,
  * or anywhere a relative string should never hide the detail behind it.
  */
 export function timestampTitle(value: Timestamp): string {

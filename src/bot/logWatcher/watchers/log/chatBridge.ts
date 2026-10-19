@@ -27,11 +27,11 @@ import { isChannelGone, isUnknownWebhook } from "../discordErrors.js";
 const CHAT_REGEX = chatLineRegex(String.raw`\s+(.+)`);
 
 // The bridge listens on messageCreate, so the slash-command limiter never
-// sees it — it needs its own bucket or any member could flood the game
+// sees it, it needs its own bucket or any member could flood the game
 // console at Discord message speed. Burst of 8, ~0.8 msg/s sustained:
 // fine for lively chat, stops floods.
 // Capacity/window come from the `limits` config block (defaults 8/10s);
-// the limiter shape is fixed at module load — changing limits needs a
+// the limiter shape is fixed at module load, changing limits needs a
 // restart, same as the slash limiter.
 const bridgeLimiter = createRateLimiter(bridgeLimiterSettings());
 
@@ -56,7 +56,7 @@ export interface ResolvedBridge {
  * Deliberately strict: one channel ↔ exactly one server, both directions,
  * so conversations from different servers can never mix in one channel.
  * `server` may only be omitted when it's unambiguous (guild defaultServer,
- * or a single configured server); anything else is a problem — skipped,
+ * or a single configured server); anything else is a problem, skipped,
  * logged at setup, and rejected by config validation.
  */
 export function resolveGuildBridges(
@@ -150,7 +150,7 @@ export function invalidateWebhookCache(): void {
 /**
  * The bridge webhook for a channel: reuse ours if it exists, create it
  * once otherwise. Returns null (cached) when the channel doesn't support
- * webhooks or the bot lacks Manage Webhooks — callers fall back to the
+ * webhooks or the bot lacks Manage Webhooks, callers fall back to the
  * embed form.
  */
 function bridgeWebhook(
@@ -214,7 +214,7 @@ export const flushBridgeQueues = flushSendQueues;
  *
  * Called at setup and after a config reload. Without it the first in-game
  * message of a session pays a channels.fetch plus a fetchWebhooks (and
- * possibly a createWebhook) before anything reaches Discord — which is the
+ * possibly a createWebhook) before anything reaches Discord, which is the
  * one message an operator is most likely to be watching for after a restart.
  */
 export function prewarmBridgeWebhooks(
@@ -358,7 +358,7 @@ async function deliver(
 
 /**
  * Set up Discord → Minecraft bridges. The message's channel identifies the
- * one server it is bound to — replies always land where the conversation
+ * one server it is bound to, replies always land where the conversation
  * is happening.
  */
 export function setupDiscordToMc(
@@ -393,7 +393,7 @@ export function setupDiscordToMc(
     }
 
     // Strip control characters (incl. \r\n, which could inject extra
-    // commands via the screen fallback) and cap lengths — printable
+    // commands via the screen fallback) and cap lengths, printable
     // Unicode stays so umlauts and emoji survive the bridge.
     const { name: safeName, message: safeContent } = sanitizeForComponent(
       msg.author.displayName,

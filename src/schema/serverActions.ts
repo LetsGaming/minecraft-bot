@@ -88,7 +88,7 @@ export function isDisruptiveServerAction(value: string): boolean {
  *
  * The dashboard rendered every granted action as live regardless of state, so
  * a server sitting at 20 TPS still showed an enabled, primary-styled "Start"
- * — the one button on the card that could only fail. Offering an impossible
+ *, the one button on the card that could only fail. Offering an impossible
  * action is a state-visibility bug, not a permissions one: the operator reads
  * the button as an available choice and learns otherwise from an error toast.
  *

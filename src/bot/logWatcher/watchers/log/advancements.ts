@@ -32,7 +32,7 @@ const ADV_REGEX = serverEventRegex(
  * First player to hit the active challenge's advancement wins: the
  * challenge closes, the result is announced in both directions, an audit
  * entry is written, and the optional item bonus goes out through the
- * daily give() path — falling back to the offline delivery queue when
+ * daily give() path, falling back to the offline delivery queue when
  * the give cannot be confirmed (the winner may log out immediately).
  * The queue cap deliberately does not apply here: a challenge bonus is a
  * one-time system grant, not a farmable claim.

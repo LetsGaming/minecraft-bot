@@ -1,22 +1,22 @@
 /**
- * The dashboard's Modrinth client — the browse/search half of mod management.
+ * The dashboard's Modrinth client, the browse/search half of mod management.
  *
  * This lives in the dashboard, not the wrapper: searching Modrinth touches no
  * files and needs no privilege, and routing every keystroke through a
  * Minecraft host would only add a hop and a failure mode. The wrapper's job is
- * the host — install, update, remove, the installed manifest; this reaches out
+ * the host, install, update, remove, the installed manifest; this reaches out
  * to the catalogue.
  *
  * Modrinth is a third party, so every field is narrowed at the boundary: a
  * malformed hit is dropped rather than surfaced as undefined three layers up.
- * The three failure modes are kept distinct — a missing project (404) is not
- * an outage (5xx / refused) — because the route maps them to different statuses
+ * The three failure modes are kept distinct, a missing project (404) is not
+ * an outage (5xx / refused) because the route maps them to different statuses
  * and an outage must never read as a bad slug.
  *
  * One derived field the raw API does not give directly: `environment`. Modrinth
  * reports client_side and server_side each as required | optional | unsupported;
  * we collapse that pair into the four labels the UI shows, and the reason the
- * whole thing matters — we install on a *server*, so a client-only mod is
+ * whole thing matters, we install on a *server*, so a client-only mod is
  * filtered out by default.
  */
 import { log } from "./logger.js";
@@ -38,8 +38,8 @@ export type ModEnvironment = "server" | "client" | "both" | "optional" | "unknow
 /**
  * Collapse Modrinth's (client_side, server_side) pair into one label.
  *
- *   both      required on both sides — the normal server+client mod
- *   server    server-required, client-unsupported — a pure server mod
+ *   both      required on both sides, the normal server+client mod
+ *   server    server-required, client-unsupported, a pure server mod
  *   client    server-unsupported with a client that supports it; filtered
  *             out by default, because it does nothing on a server
  *   optional  needed on one side, optional on the other; safe to install,
@@ -76,7 +76,7 @@ export interface ModSearchHit {
   clientSide: string;
   serverSide: string;
   environment: ModEnvironment;
-  /** https://modrinth.com/mod/<slug> — the "look further" link. */
+  /** https://modrinth.com/mod/<slug>, the "look further" link. */
   pageUrl: string;
 }
 

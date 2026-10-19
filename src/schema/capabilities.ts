@@ -66,7 +66,7 @@ export type GrantableCapability = (typeof GRANTABLE_CAPABILITIES)[number];
 /**
  * Capabilities whose effect cannot be undone from the dashboard. Both
  * front-ends require a typed confirmation (the server's name, not an OK
- * button) before invoking one — the same reason DISRUPTIVE_SERVER_ACTIONS
+ * button) before invoking one, the same reason DISRUPTIVE_SERVER_ACTIONS
  * exists in serverActions.ts, one step further along.
  */
 export const IRREVERSIBLE_CAPABILITIES = [
@@ -165,7 +165,7 @@ export function resolveCapabilities(
 /**
  * Does `userId` hold `capability`, under the lookup rules above?
  *
- * A capability that can never be granted is always false here — the web layer
+ * A capability that can never be granted is always false here, the web layer
  * grants it to sysadmins by short-circuiting before this is reached.
  */
 export function hasCapability(

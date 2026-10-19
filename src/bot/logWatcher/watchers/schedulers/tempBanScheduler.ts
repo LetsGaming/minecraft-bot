@@ -1,9 +1,9 @@
 /**
- * Timed-ban release — the runtime half of tempBanStore.
+ * Timed-ban release, the runtime half of tempBanStore.
  *
  * One timer per pending ban fires the `/pardon`. startTempBanScheduler
  * re-arms every entry at bot init, so a restart mid-ban still releases on
- * time — and a ban that expired while the bot was down is released on the
+ * time, and a ban that expired while the bot was down is released on the
  * next start instead of silently becoming permanent.
  *
  * setTimeout tops out at ~24.8 days, well under the durations this
@@ -56,7 +56,7 @@ export function cancelTempBanTimer(serverId: string, player: string): void {
  *
  * Best-effort: unlinked players, closed DMs, and deleted accounts are all
  * normal outcomes here, so nothing throws upward. The DM follows the
- * global language — like every other DM, there is no guild to resolve a
+ * global language, like every other DM, there is no guild to resolve a
  * locale from.
  */
 async function notifyPlayer(client: Client, ban: TempBan): Promise<void> {
@@ -102,7 +102,7 @@ export async function expireTempBan(
 ): Promise<void> {
   const server = getServerInstance(ban.serverId);
   if (!server) {
-    // Instance gone from config — nothing to pardon on, so stop tracking
+    // Instance gone from config, nothing to pardon on, so stop tracking
     // it rather than retrying forever.
     await removeTempBan(ban.serverId, ban.player);
     log.warn(

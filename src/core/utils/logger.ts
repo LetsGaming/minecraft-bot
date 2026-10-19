@@ -7,7 +7,7 @@ const LOG_DIR = path.resolve(process.cwd(), "logs");
 
 // File logging is best-effort: the process must never die because it
 // cannot write its own log file. A read-only or unwritable logs/ mount
-// (a real Docker failure mode — a named volume or bind mount the `node`
+// (a real Docker failure mode, a named volume or bind mount the `node`
 // user cannot write) previously crashed the process at import time, or
 // asynchronously via an unhandled stream 'error' event, producing an
 // exit-1 restart loop with no clear cause. If any step fails we fall
@@ -33,7 +33,7 @@ function rotate(): void {
     stream?.end();
     fs.renameSync(LOG_FILE, `${LOG_FILE}.1`);
   } catch {
-    // best-effort — a failed rotation just means bot.log keeps growing
+    // best-effort, a failed rotation just means bot.log keeps growing
   }
   try {
     stream = fs.createWriteStream(LOG_FILE, { flags: "a" });
@@ -73,7 +73,7 @@ function initFileLogging() {
         bytesWritten = size;
       }
     } catch {
-      // file doesn't exist yet — nothing to rotate
+      // file doesn't exist yet, nothing to rotate
     }
 
     const s = fs.createWriteStream(LOG_FILE, { flags: "a" });
@@ -137,7 +137,7 @@ function write(level: string, tag: string, ...args: unknown[]): void {
         stream.write(line + "\n");
         bytesWritten += Buffer.byteLength(line) + 1;
       } catch {
-        // A synchronous throw after the stream broke — stdout already has
+        // A synchronous throw after the stream broke, stdout already has
         // the line, so just stop using the file sink.
         stream = null;
       }

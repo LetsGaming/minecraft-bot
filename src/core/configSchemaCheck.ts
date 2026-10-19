@@ -3,15 +3,15 @@
  *
  * The repo had two descriptions of the same shape: `config.schema.json`,
  * generated from `RawBotConfig`, and ~700 lines of hand-written `typeof`
- * checks in configValidation.ts. They drifted — the hand copy missed
- * whole blocks — and each gap had to be found by a user hitting it.
+ * checks in configValidation.ts. They drifted, the hand copy missed
+ * whole blocks, and each gap had to be found by a user hitting it.
  * Types, requiredness and bounds now come from the schema; only the
  * checks a JSON Schema genuinely cannot express stay hand-written
  * (see configValidation.ts).
  *
  * The schema is read from disk once and compiled once. That is I/O, so
  * it lives here rather than in configValidation.ts, which stays a pure
- * function of its argument — the schema is a constant of the program,
+ * function of its argument, the schema is a constant of the program,
  * not an input.
  */
 import fs from "fs";
@@ -51,7 +51,7 @@ export interface SchemaCheckResult {
   /**
    * True when the schema file could not be read or compiled. Callers
    * fall back to the semantic checks alone rather than refusing to
-   * start — a missing generated artifact is a packaging fault, and
+   * start, a missing generated artifact is a packaging fault, and
    * bricking the bot over it would be the worse failure.
    */
   unavailable: boolean;
@@ -79,7 +79,7 @@ function getValidator(): ValidateFunction | null {
     const schema = JSON.parse(
       fs.readFileSync(schemaPath, "utf-8"),
     ) as AnySchemaObject;
-    // allErrors: report every problem in one pass — an operator fixing a
+    // allErrors: report every problem in one pass, an operator fixing a
     // config wants the whole list, not one error per restart.
     const ajv = new Ajv({ allErrors: true, strict: false });
     compiled = ajv.compile(schema);
@@ -159,7 +159,7 @@ export function checkAgainstSchema(candidate: unknown): SchemaCheckResult {
   }
 
   // Strip tool-only keys before validating, rather than teaching the
-  // schema about them — `$schema` is written by the setup wizard for
+  // schema about them, `$schema` is written by the setup wizard for
   // editor autocompletion and is not part of the config contract.
   const subject =
     typeof candidate === "object" && candidate !== null && !Array.isArray(candidate)

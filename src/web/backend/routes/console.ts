@@ -1,5 +1,5 @@
 /**
- * DSH-01/DSH-02 — the dashboard console: a relayed log stream and a command
+ * DSH-01/DSH-02, the dashboard console: a relayed log stream and a command
  * input. Registered inside the capability-gated host scope (see server.ts).
  *
  * These are the two halves of what the server manager's WebSocket terminal

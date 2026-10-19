@@ -2,6 +2,10 @@ import { recordCommandUsage } from "@mcbot/core/utils/commands/commandUsage.js";
 import { registerLogCommand } from "./logWatcher.js";
 import { chatLineRegex } from "./watchers/log/chatLine.js";
 import { resolveCommandPolicy } from "@mcbot/core/utils/commands/commandPolicy.js";
+import {
+  loadLinkedAccountsOrEmpty,
+  findDiscordIdByMcName,
+} from "@mcbot/core/utils/stores/linkStore.js";
 import { isLinkedPlayerAdmin } from "../utils/guild/permissions.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { whisper } from "@mcbot/core/utils/minecraft/serverMessages.js";

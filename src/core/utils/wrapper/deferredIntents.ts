@@ -11,7 +11,7 @@
  * context the operator could see: who was online, what they had just changed,
  * whether they were watching. A restart that fires by itself three hours later
  * kicks players nobody warned, for a reason nobody remembers. `rollback` and a
- * backup restore are worse again — both destroy world state, and a rollback
+ * backup restore are worse again, both destroy world state, and a rollback
  * queued at 14:00 and applied at 17:00 discards three hours of play that the
  * operator never intended to lose. A console command is worse still: "say
  * restarting in 5 minutes" replayed at 03:00 is a lie the bot tells on your
@@ -19,8 +19,8 @@
  *
  * So the intent is remembered and the *action is not*. When the wrapper comes
  * back the dashboard offers a one-click retry, with a person present to decide
- * whether it is still what they want. That keeps the thing worth keeping — you
- * do not have to remember what you were doing — without ever firing a
+ * whether it is still what they want. That keeps the thing worth keeping, you
+ * do not have to remember what you were doing, without ever firing a
  * destructive operation into an empty room.
  *
  * ── Why in memory, and why it expires ──
