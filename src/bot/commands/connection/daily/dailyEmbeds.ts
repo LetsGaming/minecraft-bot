@@ -21,7 +21,7 @@ import {
 import { createEmbed, createPlayerEmbed } from "../../../utils/embeds/embedUtils.js";
 import { EmbedColor, embedColorFor } from "../../../utils/embeds/embedColors.js";
 import { progressBar } from "../../../utils/embeds/gameDisplay.js";
-import { clockTimestamp, relativeTimestamp } from "../../../utils/discordTime.js";
+import { clockTimestamp, formatLastSeen } from "../../../utils/discordTime.js";
 
 export interface ClaimView {
   player: string;
@@ -108,7 +108,7 @@ export function buildClaimEmbed(view: ClaimView): EmbedBuilder {
       },
       {
         name: `⏰ ${t("daily.nextField")}`,
-        value: relativeTimestamp(view.claimedAt + DAILY_COOLDOWN_MS),
+        value: formatLastSeen(view.claimedAt + DAILY_COOLDOWN_MS),
         inline: true,
       },
     );
@@ -123,7 +123,7 @@ export function buildCooldownEmbed(opts: {
   const readyAt = opts.lastClaim + DAILY_COOLDOWN_MS;
   const deadline = opts.lastClaim + STREAK_GRACE_MS;
   const lines = [
-    t("daily.cooldown", { relative: relativeTimestamp(readyAt), time: clockTimestamp(readyAt) }),
+    t("daily.cooldown", { relative: formatLastSeen(readyAt), time: clockTimestamp(readyAt) }),
     progressBar(opts.now - opts.lastClaim, DAILY_COOLDOWN_MS, 10),
   ];
   if (opts.currentStreak > 1) {
@@ -166,7 +166,7 @@ export function buildQueuedEmbed(opts: {
     },
     {
       name: `⏰ ${t("daily.nextField")}`,
-      value: relativeTimestamp(opts.claimedAt + DAILY_COOLDOWN_MS),
+      value: formatLastSeen(opts.claimedAt + DAILY_COOLDOWN_MS),
       inline: true,
     },
   );

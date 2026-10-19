@@ -17,7 +17,6 @@ vi.mock("../../src/core/utils/logger.js", () => ({
 import {
   recordCheck,
   getUptimeStats,
-  flushUptimeHistory,
 } from "../../src/core/utils/stores/uptimeTracker.js";
 import { getDb } from "../../src/core/db/index.js";
 
@@ -150,20 +149,16 @@ describe("getUptimeStats return shape", () => {
   });
 });
 
-// ── flushUptimeHistory ─────────────────────────────────────────────────────
+// ── recordCheck persistence ────────────────────────────────────────────────
 
-describe("flushUptimeHistory", () => {
-  it("recordCheck persists immediately — no flush needed", async () => {
+describe("recordCheck persistence", () => {
+  it("persists immediately", async () => {
     const sid = nextServerId();
     await recordCheck(sid, true);
     const row = getDb()
       .prepare("SELECT COUNT(*) AS n FROM uptime_checks WHERE server_id = ?")
       .get(sid) as { n: number };
     expect(row.n).toBe(1);
-  });
-
-  it("resolves without error (kept as a compatibility no-op)", async () => {
-    await expect(flushUptimeHistory()).resolves.toBeUndefined();
   });
 });
 

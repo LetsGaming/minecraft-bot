@@ -19,7 +19,7 @@ import { loaderDisplayName } from "@mcbot/core/utils/minecraft/versionName.js";
 import { readThrough } from "@mcbot/core/utils/wrapper/lastKnown.js";
 import { withErrorHandling } from "../middleware.js";
 import { replyPaged } from "../shared/paged.js";
-import { relativeTimestamp } from "../../utils/discordTime.js";
+import { formatLastSeen } from "../../utils/discordTime.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { requireCapability } from "@mcbot/core/utils/server/capabilities.js";
 import { t } from "@mcbot/core/utils/i18n.js";
@@ -81,7 +81,7 @@ export const execute = withErrorHandling(async (interaction) => {
   const description = [
     summaryLine(modList, total),
     ...(stale
-      ? [t("mods.stale", { age: relativeTimestamp(new Date(stale.asOf).getTime()) })]
+      ? [t("mods.stale", { age: formatLastSeen(new Date(stale.asOf).getTime()) })]
       : []),
   ].join("\n");
 

@@ -1,13 +1,11 @@
 /**
- * Config validation — the pure runtime gate that turns an arbitrary parsed
+ * Config validation: the pure runtime gate that turns an arbitrary parsed
  * value into a verified config or a list of actionable errors/warnings, plus
  * the apiUrl transport check.
  *
- * Extracted from config.ts (QUAL-02, 2026-07 audit): a ~700-line validator is
- * its own concern, and this file is the seam configValidation.test.ts already
- * assumes. Deliberately free of module state and I/O so it can be called on
- * any candidate — the dashboard validates edits through it before writing, and
- * config.ts calls it at load time (see validateRawConfig).
+ * Free of module state and I/O so it can be called on any candidate: the
+ * dashboard validates edits through it before writing, and config.ts calls it
+ * at load time (see validateRawConfig).
  */
 import {
   NOTIFICATION_EVENTS,
@@ -30,6 +28,12 @@ import type {
 } from "./types/index.js";
 import { isSnowflake, SNOWFLAKE_DESCRIPTION } from "@mcbot/schema/discord.js";
 import { isEmbedColorKey, parseHexColor } from "@mcbot/schema/embedCategories.js";
+
+/**
+ * Longest server id that still leaves room in a 100-character component id
+ * for the prefix, action and a 20-digit user id around it.
+ */
+const SERVER_ID_MAX_LENGTH = 32;
 
 // ── Runtime schema validation ─────────────────────────────────────────────
 // TypeScript's type system only operates at compile time. A malformed
@@ -230,6 +234,14 @@ function checkServers({ raw, errors, warnings }: SectionContext): void {
   if (!usable(raw.servers)) return;
 
   for (const [id, srv] of Object.entries(raw.servers)) {
+    if (id.includes(":") || id.length > SERVER_ID_MAX_LENGTH) {
+      errors.push(
+        `  - servers.${id}: the id must not contain ":" and must be at most ` +
+          `${SERVER_ID_MAX_LENGTH} characters, because Discord component ids ` +
+          `join it with other values using ":" and are capped at 100 characters.`,
+      );
+    }
+
     const stale = REMOVED_LOCAL_SERVER_FIELDS.filter(
       (f) => (srv as Record<string, unknown>)[f] !== undefined,
     );

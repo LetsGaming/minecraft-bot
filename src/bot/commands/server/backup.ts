@@ -2,7 +2,7 @@ import { SlashCommandBuilder } from "discord.js";
 import { createEmbed, createInfoEmbed } from "../../utils/embeds/embedUtils.js";
 import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { withErrorHandling } from "../middleware.js";
-import { relativeTimestamp } from "../../utils/discordTime.js";
+import { formatLastSeen } from "../../utils/discordTime.js";
 import * as serverAccess from "@mcbot/core/utils/server/serverAccess.js";
 import { requireCapability } from "@mcbot/core/utils/server/capabilities.js";
 import { resolveLanguage, t } from "@mcbot/core/utils/i18n.js";
@@ -61,6 +61,6 @@ export const execute = withErrorHandling(async (interaction) => {
 });
 
 function since(date: Date): string {
-  return relativeTimestamp(date.getTime());
+  return formatLastSeen(date.getTime());
 }
 

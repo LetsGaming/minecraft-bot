@@ -60,11 +60,6 @@ export async function recordCheck(
   });
 }
 
-/** Writes are immediate, so there is nothing to flush; kept for the shutdown path. */
-export async function flushUptimeHistory(): Promise<void> {
-  /* no-op */
-}
-
 /**
  * Render an hourly sparkline from raw check entries.
  * Buckets the last `hours` hours (oldest first); each bucket becomes one

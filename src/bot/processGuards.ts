@@ -1,10 +1,15 @@
 import { log } from "@mcbot/core/utils/logger.js";
 import { logSafe } from "@mcbot/core/utils/logSafe.js";
+import { MS } from "@mcbot/schema/time.js";
 
-const FLUSH_BUDGET_MS = 3_000;
+const FLUSH_BUDGET_MS = 3 * MS.second;
+const FAULT_LOG_MAX_CHARS = 2000;
 
 function describeFault(fault: unknown): string {
-  return logSafe(fault instanceof Error ? (fault.stack ?? fault.message) : fault, 2_000);
+  return logSafe(
+    fault instanceof Error ? (fault.stack ?? fault.message) : fault,
+    FAULT_LOG_MAX_CHARS,
+  );
 }
 
 /**

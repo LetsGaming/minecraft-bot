@@ -1,5 +1,5 @@
 import { type APIEmbedField, type Client } from "discord.js";
-import { relativeTimestamp } from "../../../utils/discordTime.js";
+import { formatLastSeen } from "../../../utils/discordTime.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import {
   guildsWith,
@@ -374,7 +374,7 @@ async function checkServer(server: ServerInstance, ctx: AlertContext): Promise<v
       await alertGuilds(ctx, server.id, [before, "error"], () => {
         const fields: APIEmbedField[] = [];
         if (lastUpAt !== undefined) {
-          fields.push({ name: t("downtime.lastSeen"), value: relativeTimestamp(lastUpAt), inline: true });
+          fields.push({ name: t("downtime.lastSeen"), value: formatLastSeen(lastUpAt), inline: true });
         }
         if (lastKnownPlayers !== undefined) {
           fields.push({ name: t("downtime.playersHit"), value: String(lastKnownPlayers), inline: true });

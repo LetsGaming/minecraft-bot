@@ -84,7 +84,7 @@ The `/daily` family is the reference for a gamified reply
   window). No "Requested by", no page number (the pager shows it). A server id only where several servers share a channel (the event
   broadcaster adds it when more than one server is configured).
 - **Timestamp**: only on live data (status, uptime, TPS, alerts). Times inside
-  text are Discord timestamps (`relativeTimestamp`, `clockTimestamp` in
+  text are Discord timestamps (`formatLastSeen`, `clockTimestamp` in
   [`discordTime.ts`](../../../src/bot/utils/discordTime.ts)), so every reader
   sees their own time zone.
 
