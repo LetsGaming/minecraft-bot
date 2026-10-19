@@ -131,7 +131,7 @@ export function formatRankLine(index: number, name: string, detail: string): str
 }
 
 /**
- * Shared leaderboard builder used by /leaderboard, /top, and the scheduled poster.
+ * Shared leaderboard builder used by /leaderboard and the scheduled poster.
  * Returns plain data; callers should use buildLeaderboardEmbed() from statEmbeds.ts
  * to convert it to a Discord embed.
  */

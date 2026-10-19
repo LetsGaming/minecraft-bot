@@ -194,6 +194,26 @@ export async function listBotGuilds(): Promise<DiscordGuild[]> {
   });
 }
 
+const SNOWFLAKE = /^\d{15,25}$/;
+
+/**
+ * A Discord user's display name (global name, else username), or null when
+ * Discord cannot be asked or does not know the id. Never throws: the callers
+ * show the raw id instead.
+ */
+export async function fetchDiscordUserName(userId: string): Promise<string | null> {
+  if (!SNOWFLAKE.test(userId)) return null;
+  try {
+    const raw = await discordGet(`/users/${userId}`, `user:${userId}`);
+    if (!isRecord(raw)) return null;
+    const { global_name, username } = raw;
+    if (typeof global_name === "string" && global_name) return global_name;
+    return typeof username === "string" ? username : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Text + announcement channels of a guild, sorted for display. */
 export async function listGuildChannels(guildId: string): Promise<DiscordChannel[]> {
   const raw = await discordGet(`/guilds/${guildId}/channels`, `channels:${guildId}`);

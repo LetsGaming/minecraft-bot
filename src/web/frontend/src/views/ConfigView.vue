@@ -86,35 +86,14 @@
       </template>
 
       <template #toolbar>
-        <div class="cv-tabs" role="tablist" :aria-label="t('config.viewTabs')" @keydown="onTabKey">
-          <button
-            id="cfg-tab-form"
-            ref="tabForm"
-            type="button"
-            role="tab"
-            class="cv-tab"
-            :aria-selected="rawMode ? 'false' : 'true'"
-            :tabindex="rawMode ? -1 : 0"
-            aria-controls="cfg-panel"
-            :disabled="schemaFailed"
-            @click="selectTab(false)"
-          >
-            {{ t("config.tabForm") }}
-          </button>
-          <button
-            id="cfg-tab-raw"
-            ref="tabRaw"
-            type="button"
-            role="tab"
-            class="cv-tab"
-            :aria-selected="rawMode ? 'true' : 'false'"
-            :tabindex="rawMode ? 0 : -1"
-            aria-controls="cfg-panel"
-            @click="selectTab(true)"
-          >
-            {{ t("config.tabRaw") }}
-          </button>
-        </div>
+        <TabList
+          :tabs="viewTabs"
+          :model-value="rawMode ? 'raw' : 'form'"
+          :label="t('config.viewTabs')"
+          id-prefix="cfg"
+          panel-id="cfg-panel"
+          @select="selectTab($event === 'raw')"
+        />
         <p v-if="rawLeaveBlocked" class="cv-blocked" role="alert">{{ t("config.rawLeaveBlocked") }}</p>
       </template>
 
@@ -251,6 +230,7 @@ import ViewHeader from "../components/ui/ViewHeader.vue";
 import EditorShell from "../components/ui/EditorShell.vue";
 import EditBar from "../components/ui/EditBar.vue";
 import InlineBanner from "../components/ui/InlineBanner.vue";
+import TabList from "../components/ui/TabList.vue";
 import InlineError from "../components/ui/InlineError.vue";
 import EmptyState from "../components/ui/EmptyState.vue";
 import ConfigStatusChip from "../components/ui/ConfigStatusChip.vue";
@@ -346,8 +326,10 @@ const formContext = form.context;
 const reviewOpen = ref(false);
 const currentGroup = ref("");
 const rawLeaveBlocked = ref(false);
-const tabForm = ref<HTMLElement | null>(null);
-const tabRaw = ref<HTMLElement | null>(null);
+const viewTabs = computed(() => [
+  { id: "form", label: t("config.tabForm"), disabled: schemaFailed.value },
+  { id: "raw", label: t("config.tabRaw") },
+]);
 
 const groups = computed<ConfigGroup[]>(() => configGroups(Object.keys(topLevelProps.value)));
 const shownGroups = computed<ConfigGroup[]>(() => {
@@ -438,17 +420,6 @@ function selectTab(raw: boolean): void {
   rawLeaveBlocked.value = !raw && rawMode.value;
 }
 
-function onTabKey(event: KeyboardEvent): void {
-  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-  event.preventDefault();
-  const toRaw = !rawMode.value;
-  if (!toRaw && schemaFailed.value) return;
-  selectTab(toRaw);
-  void nextTick(() => {
-    (rawMode.value ? tabRaw.value : tabForm.value)?.focus();
-  });
-}
-
 function jumpToGroup(id: string): void {
   currentGroup.value = id;
   const section = document.getElementById(`cfg-group-${id}`);
@@ -513,21 +484,6 @@ onMounted(async () => {
 .cv-list { margin: 0; padding-left: 18px; }
 .cv-list li { overflow-wrap: anywhere; }
 
-.cv-tabs { display: flex; gap: var(--space-1); border-bottom: 1px solid var(--border); overflow-x: auto; }
-.cv-tab {
-  min-height: var(--control-h);
-  padding: 0 var(--space-4);
-  background: none;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  color: var(--text-dim);
-  font: inherit;
-  font-weight: 500;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.cv-tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
-.cv-tab:disabled { cursor: default; opacity: 0.6; }
 .cv-blocked { margin: var(--space-2) 0 0; color: var(--danger); font-size: var(--text-sm); }
 
 .cv-groupnav { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }

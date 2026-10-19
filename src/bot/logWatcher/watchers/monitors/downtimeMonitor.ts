@@ -12,7 +12,6 @@ import { alertMention, type AlertLevel } from "../../../utils/embeds/alertUtils.
 import { fireWatches } from "../watchFirer.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import {
-  updateSessionStore,
   closeAllOpenSessions,
 } from "@mcbot/core/utils/stores/sessionStore.js";
 import {
@@ -348,9 +347,7 @@ async function checkServer(server: ServerInstance, ctx: AlertContext): Promise<v
       // wrongly ending everyone's sessions. Fire-and-forget: session
       // bookkeeping must never delay or break the alert itself.
       try {
-        const closed = updateSessionStore((sessions) =>
-          closeAllOpenSessions(sessions, server.id),
-        );
+        const closed = closeAllOpenSessions(server.id);
         if (closed > 0) {
           log.info(
             "sessions",

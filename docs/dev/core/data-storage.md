@@ -17,9 +17,10 @@ Built on better-sqlite3 behind a small driver seam (`src/core/db/driver.ts`); `M
 | `whitelist_audit` | `/whitelist`, `/unwhitelist` | Latest add/remove per player, keyed by lowercased username |
 | `linked_accounts` | `/link` flow, dashboard-free | `discord_id → mc_name`; case-insensitive index backs the "name already owned" rule |
 | `link_codes` | `/link`, `!link` | Pending codes with expiry; the whole confirm flow is one transaction |
-| `kv_store` | many single-owner stores | Versioned-blob stores, one row each, keyed by the legacy filename stem: `watches`, `playerNotes`, `waypoints`, `sessions`, `challenges`, `polls`, `claimedDaily`, `pendingRewards`, `statusMessages`, `leaderboardSchedule`, `updateNotifier`, `consoleRelay`, `milestones`, `whitelistApplications`. Each keeps its load/save API; `kvUpdate()` makes read-modify-write one transaction. |
+| `kv_store` | many single-owner stores | Versioned-blob stores, one row each, keyed by the legacy filename stem: `watches`, `playerNotes`, `waypoints`, `challenges`, `polls`, `claimedDaily`, `pendingRewards`, `statusMessages`, `leaderboardSchedule`, `updateNotifier`, `consoleRelay`, `milestones`, `whitelistApplications`. Each keeps its load/save API; `kvUpdate()` makes read-modify-write one transaction. |
 | `uptime_checks` | downtime monitor | One row per check (`server_id`, `t`, `up`), capped at 43,200 per server (30 days at one check/minute). One INSERT per check — the JSON version rewrote the whole array. |
-| `player_count_hours` | status pass / sampler | One row per server per hour (`sum`, `max`, `samples`); recording is a single UPSERT. 14-day retention. |
+| `player_count_hours` | status pass / sampler | One row per server per hour (`sum`, `max`, `samples`); recording is a single UPSERT. 90-day retention (`ANALYTICS_RETENTION_DAYS.activity`). |
+| `player_sessions` | join/leave watcher, server stop, downtime monitor | One row per join (`server_id`, `name_lower`, `name`, `joined_at`, `left_at`; `left_at` is NULL while open). Closed sessions are pruned after 365 days (`ANALYTICS_RETENTION_DAYS.sessions`); open ones never are. The old `kv_store["sessions"]` document is moved in once at startup and kept as `sessions.migrated`. |
 | `snapshots` | leaderboard scheduler | Hourly full stat snapshots, keyed `(server_id, ts)` — see the snapshots section below |
 | `schema_migrations` | migration runner | Applied migration ids, plus each one's SQL checksum |
 

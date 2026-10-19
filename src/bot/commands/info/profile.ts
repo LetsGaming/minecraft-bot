@@ -17,12 +17,7 @@ import {
   findDiscordIdByMcName,
 } from "@mcbot/core/utils/stores/linkStore.js";
 import { getAuditEntry } from "@mcbot/core/utils/stores/whitelistAudit.js";
-import {
-  loadSessionStore,
-  getServerSessions,
-  isOnlineNow,
-  totalPlaytimeMs,
-} from "@mcbot/core/utils/stores/sessionStore.js";
+import { getPlayerSummary } from "@mcbot/core/utils/stores/sessionStore.js";
 import {
   loadClaimedStore,
   getServerClaims,
@@ -54,14 +49,10 @@ export const execute = withErrorHandling(async (interaction) => {
 
   // Reverse link lookup: which Discord account owns this MC name?
   const ownerId = findDiscordIdByMcName(linked, player);
-  const lowerPlayer = player.toLowerCase(); // session store is keyed lowercase
 
   const [audit, sessions, claims] = await Promise.all([
     getAuditEntry(player).catch(() => null),
-    loadSessionStore().then((s) => {
-      const entry = getServerSessions(s, server.id)[lowerPlayer];
-      return entry ?? null;
-    }),
+    Promise.resolve(getPlayerSummary(server.id, player)),
     ownerId
       ? loadClaimedStore().then(
           (s) => getServerClaims(s, server.id)[ownerId] ?? null,
@@ -89,16 +80,16 @@ export const execute = withErrorHandling(async (interaction) => {
   }
 
   if (sessions) {
-    const playtime = totalPlaytimeMs(sessions);
+    const playtime = sessions.playtimeMs;
     if (playtime > 0) {
       lines.push(
         t("profile.playtime", {
           playtime: formatSpan(playtime),
-          sessions: sessions.sessions.length,
+          sessions: sessions.sessions,
         }),
       );
     }
-    if (isOnlineNow(sessions)) {
+    if (sessions.online) {
       lines.push(t("profile.onlineNow"));
     } else if (sessions.lastSeen) {
       lines.push(

@@ -29,7 +29,7 @@ Right after the bot is installed there is no baseline yet, so the command asks y
 
 ## Leaderboards
 
-`/leaderboard` (or `/top`, same thing) ranks the top 10 players. Pick a stat from the dropdown:
+`/leaderboard` ranks the top 10 players. Pick a stat from the dropdown:
 
 | Stat | Sorted |
 |---|---|
@@ -47,17 +47,27 @@ If your server has a leaderboard channel, the bot posts playtime and blocks-mine
 
 ## The dashboard Analytics page
 
-The Analytics page has one range control (24h to 90d) that applies to every panel. Each panel can only look as far back as the history behind it, so a longer range is clamped and the panel says how far it actually reached:
+Analytics has two tabs. **Players** (the default) shows the activity chart, the leaderboard and the players who are active, have gone quiet or are new. **Server** shows uptime and command usage.
+
+One range control (24h to 90d) applies to every panel. Each panel can only look as far back as the history behind it, so a longer range is clamped, and every panel title says how far it actually reached ("last 30d, all that is kept" when that is shorter than asked):
 
 | Panel | History kept |
 |---|---|
-| Uptime | about 30 days (next to the fixed 24h, 7d and 30d figures, the selected range is shown) |
-| Players over time and busiest hours | 14 days |
+| Players online and busiest hours | 90 days. Up to 14 days one bar is one hour; longer ranges draw one bar per day. The bar is the average, the tick above it the peak |
 | Leaderboard | 32 days |
+| Players | 365 days of sessions |
+| Uptime | about 30 days (next to the fixed 24h, 7d and 30d figures, the selected range is shown) |
 | Command usage | 90 days |
-| Players table | the last 20 sessions of each player |
 
-The leaderboard for a range is the stat gained in that range, measured against the nearest hourly or daily snapshot, like the scheduled boards. On a young bot the snapshots may not reach back far enough; the panel then says from when the numbers start (or that they are all-time totals when there is no snapshot yet). The players table only lists players with a session inside the range and counts only the time played inside it.
+Click a name in the leaderboard or the players list to open that player on the Players page.
+
+The leaderboard for a range is the stat gained in that range, measured against the nearest hourly or daily snapshot, like the scheduled boards. On a young bot the snapshots may not reach back far enough; the panel then says from when the numbers start (or that they are all-time totals when there is no snapshot yet). The players list counts only the time played inside the range. "Gone quiet" lists players who are not online and were last seen at least 7, 14, 30, 60 or 90 days ago; "New" lists players whose first recorded session falls inside the range.
+
+## The dashboard Players page
+
+Players lists everyone the bot has recorded a session for on the server, with a search box, the same filters (active in the window, online now, gone quiet, new) and a sort. Opening a player shows when they joined and were last seen, time played per day for the last 90 days, recent sessions and their stats. With the audit permission on that server it also shows the linked Discord account, whitelist history, applications, any temporary ban, moderation notes and the daily streak (see [capabilities](../admin/capabilities.md)). The page is read-only; notes, bans and the whitelist are still managed from Discord.
+
+Sessions are recorded since the bot started tracking them and kept for 365 days, so a player's first-seen date and playtime cover that history, not the whole life of the server.
 
 ## Where the numbers come from
 

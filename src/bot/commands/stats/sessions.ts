@@ -13,10 +13,8 @@ import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { withErrorHandling } from "../middleware.js";
 import { requireMcName } from "../shared/mcName.js";
 import {
-  loadSessionStore,
-  getServerSessions,
-  isOnlineNow,
-  totalPlaytimeMs,
+  getPlayerSummary,
+  listSessions,
 } from "@mcbot/core/utils/stores/sessionStore.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 
@@ -40,16 +38,15 @@ export const execute = withErrorHandling(async (interaction) => {
   const playerName = requireMcName(interaction, "player");
 
   const server = resolveServer(interaction);
-  const store = await loadSessionStore();
-  const entry = getServerSessions(store, server.id)[playerName.toLowerCase()];
+  const entry = getPlayerSummary(server.id, playerName);
 
-  if (!entry || entry.sessions.length === 0) {
+  if (!entry || entry.sessions === 0) {
     throw new Error(
       t("sessions.none", { player: playerName, server: server.id }),
     );
   }
 
-  const online = isOnlineNow(entry);
+  const online = entry.online;
   const statusLine = online
     ? t("sessions.onlineNow")
     : entry.lastSeen
@@ -66,13 +63,13 @@ export const execute = withErrorHandling(async (interaction) => {
   embed.addFields({
     name: t("sessions.playtime"),
     value: t("sessions.playtimeValue", {
-      duration: formatSpan(totalPlaytimeMs(entry)),
-      count: entry.sessions.length,
+      duration: formatSpan(entry.playtimeMs),
+      count: entry.sessions,
     }),
     inline: false,
   });
 
-  const recent = entry.sessions.slice(-SHOWN_SESSIONS).reverse();
+  const recent = listSessions(server.id, playerName, { limit: SHOWN_SESSIONS });
   const lines = recent.map((s) => {
     const start = `<t:${Math.floor(s.joinedAt / 1000)}:f>`;
     if (s.leftAt === null) {

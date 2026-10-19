@@ -11,7 +11,7 @@ vi.mock("../../src/core/utils/minecraft/whitelist.js", () => ({
 }));
 vi.mock("../../src/core/utils/stores/sessionStore.js", async (orig) => ({
   ...(await orig<typeof import("../../src/core/utils/stores/sessionStore.js")>()),
-  loadSessionStore: vi.fn(),
+  getServerSummaries: vi.fn(),
 }));
 vi.mock("../../src/bot/utils/guild/guildRouter.js", () => ({
   resolveServer: vi.fn(),
@@ -27,7 +27,7 @@ vi.mock("../../src/core/utils/logger.js", () => ({
 
 import { loadAllStats } from "../../src/core/utils/minecraft/statUtils.js";
 import { loadKnownPlayers } from "../../src/core/utils/minecraft/whitelist.js";
-import { loadSessionStore } from "../../src/core/utils/stores/sessionStore.js";
+import { getServerSummaries } from "../../src/core/utils/stores/sessionStore.js";
 import { resolveServer } from "../../src/bot/utils/guild/guildRouter.js";
 import { handlePagination } from "../../src/bot/utils/embeds/embedUtils.js";
 import { describeRoster, execute } from "../../src/bot/commands/stats/players.js";
@@ -69,10 +69,7 @@ function setup(count: number, sessions = {}) {
   }
   vi.mocked(loadAllStats).mockResolvedValue(stats as never);
   vi.mocked(loadKnownPlayers).mockResolvedValue(known as never);
-  vi.mocked(loadSessionStore).mockResolvedValue({
-    version: 1,
-    servers: { smp: sessions },
-  });
+  vi.mocked(getServerSummaries).mockReturnValue(sessions);
 }
 
 beforeEach(() => {
@@ -83,11 +80,14 @@ beforeEach(() => {
 describe("/players", () => {
   it("renders online, last-seen and before-tracking lines", async () => {
     setup(3, {
-      p000: { name: "P000", lastSeen: null, sessions: [{ joinedAt: NOW, leftAt: null }] },
+      p000: { name: "P000", online: true, lastSeen: null, firstSeen: NOW, sessions: 1, playtimeMs: 0 },
       p001: {
         name: "P001",
+        online: false,
         lastSeen: NOW - 1000,
-        sessions: [{ joinedAt: NOW - 2000, leftAt: NOW - 1000 }],
+        firstSeen: NOW - 2000,
+        sessions: 1,
+        playtimeMs: 1000,
       },
     });
     const i = makeInteraction();

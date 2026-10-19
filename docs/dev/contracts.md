@@ -31,6 +31,7 @@ pure functions — `@mcbot/schema` used to be types-only, and no longer is
 | `serverActions.ts` | The management-script action names, which are operator-triggerable, which are disruptive, and which are irreversible |
 | `capabilities.ts` | Dashboard capabilities, the grant shape, and the resolution rules the gate and the UI both use |
 | `analytics.ts` | The dashboard analytics response DTOs and `ANALYTICS_CAP_HOURS`, the per-section retention ceilings the routes clamp to and the view labels with |
+| `players.ts` | The player audit DTOs: the paged player list, the per-player detail, and the `audit:read`-gated sensitive part |
 | `status.ts` | The seven status roles (shape, colour, tint, Discord colour, label key) and the mappings from `ServerState` and `ConfigApplyState` onto them |
 | `glossary.ts` | Terms and status labels in English and German, so the bot and the dashboard name things alike |
 | `consoleCommands.ts` | The console deny-list: normalisation and matching, shared by the route that enforces it and the editor that greys a command out |

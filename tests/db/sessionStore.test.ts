@@ -1,154 +1,215 @@
 /**
- * Session store — the open/close state machine and its crash edges.
- *
- * The plan calls the lifecycle edges "the critical part": crashes emit no
- * leave lines, restarts can orphan open sessions, and a join with a
- * session already open means the leave was missed. All covered here on
- * pure store objects; persistence (kv_store["sessions"]) is exercised via
- * the load fallback test against the real in-memory database.
+ * Session store: the open/close state machine, its crash edges, and the
+ * range queries behind the dashboard. Sessions live in the player_sessions
+ * table (in-memory database per test).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../../src/core/utils/jsonStore.js", () => ({
-  loadJson: vi.fn(),
-  saveJson: vi.fn().mockResolvedValue(undefined),
+vi.mock("../../src/core/utils/logger.js", () => ({
+  log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("../../src/core/utils/paths.js", () => ({
-  getRootDir: vi.fn().mockReturnValue("/tmp"),
-}));
-
-import { kvSet } from "../../src/core/db/kv.js";
-import { closeDbForTesting } from "../../src/core/db/index.js";
+import { closeDbForTesting, getDb } from "../../src/core/db/index.js";
 import {
-  loadSessionStore,
-  getServerSessions,
   openSession,
   closeSession,
   closeAllOpenSessions,
-  isOnlineNow,
-  totalPlaytimeMs,
-  MAX_SESSIONS_PER_PLAYER,
-  type SessionStore,
+  getPlayerSummary,
+  getServerSummaries,
+  listPlayerSummaries,
+  listSessions,
+  presenceAcrossServers,
+  pruneSessions,
+  SESSION_RETENTION_DAYS,
 } from "../../src/core/utils/stores/sessionStore.js";
 
-const fresh = (): SessionStore => ({ version: 1, servers: {} });
+const DAY = 86_400_000;
 
 beforeEach(() => {
-  vi.clearAllMocks();
-  closeDbForTesting(); // fresh in-memory DB per test
-});
-
-describe("loadSessionStore", () => {
-  it("returns an empty v1 store for missing/invalid data", async () => {
-    expect(await loadSessionStore()).toEqual({ version: 1, servers: {} });
-
-    kvSet("sessions", { bogus: true });
-    expect(await loadSessionStore()).toEqual({ version: 1, servers: {} });
-  });
-
-  it("passes a valid v1 store through", async () => {
-    const store = fresh();
-    openSession(store, "smp", "Alice", 1000);
-    kvSet("sessions", store);
-    // Round-trips through JSON in the kv table — equality, not identity.
-    expect(await loadSessionStore()).toEqual(store);
-  });
+  closeDbForTesting();
 });
 
 describe("open/close lifecycle", () => {
   it("join then leave records one closed session and lastSeen", () => {
-    const store = fresh();
-    openSession(store, "smp", "Alice", 1_000);
-    expect(closeSession(store, "smp", "Alice", 5_000)).toBe(true);
+    openSession("smp", "Alice", 1000);
+    expect(closeSession("smp", "Alice", 5000)).toBe(true);
 
-    const entry = getServerSessions(store, "smp")["alice"]!;
-    expect(entry.sessions).toEqual([{ joinedAt: 1_000, leftAt: 5_000 }]);
-    expect(entry.lastSeen).toBe(5_000);
-    expect(isOnlineNow(entry)).toBe(false);
-  });
-
-  it("lookups are case-insensitive but keep the latest casing", () => {
-    const store = fresh();
-    openSession(store, "smp", "ALICE", 1_000);
-    expect(closeSession(store, "smp", "alice", 2_000)).toBe(true);
-    openSession(store, "smp", "Alice", 3_000);
-
-    const entry = getServerSessions(store, "smp")["alice"]!;
-    expect(entry.name).toBe("Alice");
-    expect(entry.sessions).toHaveLength(2);
-  });
-
-  it("closeSession returns false when nothing is open", () => {
-    const store = fresh();
-    expect(closeSession(store, "smp", "Ghost")).toBe(false);
-    openSession(store, "smp", "Alice", 1);
-    closeSession(store, "smp", "Alice", 2);
-    expect(closeSession(store, "smp", "Alice", 3)).toBe(false);
-  });
-
-  it("discards a stale open session when a join arrives on top (missed leave)", () => {
-    const store = fresh();
-    openSession(store, "smp", "Alice", 1_000); // leave never seen
-    openSession(store, "smp", "Alice", 9_000); // bot restarted meanwhile
-
-    const entry = getServerSessions(store, "smp")["alice"]!;
-    // The unreliable stale session is gone, not closed with an invented end.
-    expect(entry.sessions).toEqual([{ joinedAt: 9_000, leftAt: null }]);
-    expect(isOnlineNow(entry)).toBe(true);
-  });
-
-  it("keeps servers isolated", () => {
-    const store = fresh();
-    openSession(store, "smp", "Alice", 1_000);
-    openSession(store, "creative", "Alice", 2_000);
-    expect(closeSession(store, "smp", "Alice", 3_000)).toBe(true);
-    expect(isOnlineNow(getServerSessions(store, "creative")["alice"]!)).toBe(
-      true,
-    );
-  });
-});
-
-describe("closeAllOpenSessions (stop/crash)", () => {
-  it("closes every open session at the given time and reports the count", () => {
-    const store = fresh();
-    openSession(store, "smp", "Alice", 1_000);
-    openSession(store, "smp", "Bob", 2_000);
-    openSession(store, "smp", "Cara", 3_000);
-    closeSession(store, "smp", "Cara", 4_000); // already left
-
-    expect(closeAllOpenSessions(store, "smp", 10_000)).toBe(2);
-    const players = getServerSessions(store, "smp");
-    expect(players["alice"]!.sessions[0]).toEqual({
-      joinedAt: 1_000,
-      leftAt: 10_000,
+    expect(listSessions("smp", "alice")).toEqual([{ joinedAt: 1000, leftAt: 5000 }]);
+    expect(getPlayerSummary("smp", "ALICE", { now: 9000 })).toMatchObject({
+      name: "Alice",
+      online: false,
+      lastSeen: 5000,
+      firstSeen: 1000,
+      sessions: 1,
+      playtimeMs: 4000,
     });
-    expect(players["bob"]!.lastSeen).toBe(10_000);
-    // Cara's closed session untouched.
-    expect(players["cara"]!.sessions[0]!.leftAt).toBe(4_000);
-    // Idempotent.
-    expect(closeAllOpenSessions(store, "smp", 11_000)).toBe(0);
+  });
+
+  it("an open session counts to now and marks the player online", () => {
+    openSession("smp", "Alice", 1000);
+    const s = getPlayerSummary("smp", "Alice", { now: 4000 });
+    expect(s).toMatchObject({ online: true, lastSeen: null, playtimeMs: 3000 });
+  });
+
+  it("closing with nothing open returns false", () => {
+    expect(closeSession("smp", "Ghost", 10)).toBe(false);
+  });
+
+  it("a join while a session is open discards the stale one", () => {
+    openSession("smp", "Alice", 1000);
+    openSession("smp", "Alice", 2000);
+    expect(listSessions("smp", "alice")).toEqual([{ joinedAt: 2000, leftAt: null }]);
+  });
+
+  it("keeps the casing of the latest join", () => {
+    openSession("smp", "alice", 1);
+    closeSession("smp", "alice", 2);
+    openSession("smp", "ALICE", 3);
+    expect(getPlayerSummary("smp", "alice")?.name).toBe("ALICE");
+  });
+
+  it("closeAllOpenSessions closes only that server's open sessions", () => {
+    openSession("smp", "A", 1);
+    openSession("smp", "B", 1);
+    openSession("other", "C", 1);
+    closeSession("smp", "B", 2);
+    openSession("smp", "B", 3);
+
+    expect(closeAllOpenSessions("smp", 10)).toBe(2);
+    expect(getPlayerSummary("smp", "A")).toMatchObject({ online: false, lastSeen: 10 });
+    expect(getPlayerSummary("other", "C")?.online).toBe(true);
+  });
+
+  it.each(["__proto__", "constructor", "hasOwnProperty"])("tracks a player named %s", (name) => {
+    openSession("smp", name, 10);
+    closeSession("smp", name, 20);
+    expect(listSessions("smp", name)).toEqual([{ joinedAt: 10, leftAt: 20 }]);
+    expect(Object.keys(getServerSummaries("smp"))).toEqual([name.toLowerCase()]);
+  });
+
+  it("keeps far more than 20 sessions per player", () => {
+    for (let i = 0; i < 60; i++) {
+      openSession("smp", "Grinder", i * 100);
+      closeSession("smp", "Grinder", i * 100 + 50);
+    }
+    expect(getPlayerSummary("smp", "Grinder", { now: 1e9 })?.sessions).toBe(60);
   });
 });
 
-describe("ring buffer + playtime", () => {
-  it("keeps only the newest MAX_SESSIONS_PER_PLAYER sessions", () => {
-    const store = fresh();
-    for (let i = 0; i < MAX_SESSIONS_PER_PLAYER + 7; i++) {
-      openSession(store, "smp", "Alice", i * 100);
-      closeSession(store, "smp", "Alice", i * 100 + 50);
-    }
-    const entry = getServerSessions(store, "smp")["alice"]!;
-    expect(entry.sessions).toHaveLength(MAX_SESSIONS_PER_PLAYER);
-    expect(entry.sessions[0]!.joinedAt).toBe(700); // oldest 7 trimmed
+describe("range summaries", () => {
+  it("counts only the part of a session inside the window", () => {
+    openSession("smp", "Alice", 0);
+    closeSession("smp", "Alice", 10_000);
+    const s = getPlayerSummary("smp", "Alice", { sinceMs: 6000, now: 20_000 });
+    expect(s).toMatchObject({ sessions: 1, playtimeMs: 4000 });
   });
 
-  it("totalPlaytimeMs sums closed sessions and counts open ones to now", () => {
-    const store = fresh();
-    openSession(store, "smp", "Alice", 0);
-    closeSession(store, "smp", "Alice", 1_000);
-    openSession(store, "smp", "Alice", 2_000);
-    const entry = getServerSessions(store, "smp")["alice"]!;
-    expect(totalPlaytimeMs(entry, 2_500)).toBe(1_000 + 500);
+  it("a session that ended before the window does not count", () => {
+    openSession("smp", "Alice", 0);
+    closeSession("smp", "Alice", 1000);
+    expect(getPlayerSummary("smp", "Alice", { sinceMs: 5000, now: 20_000 })).toMatchObject({
+      sessions: 0,
+      playtimeMs: 0,
+    });
+  });
+});
+
+describe("listPlayerSummaries", () => {
+  const now = 100 * DAY;
+
+  function seed(): void {
+    // Active: played yesterday, first seen long ago.
+    openSession("smp", "Active", now - 50 * DAY);
+    closeSession("smp", "Active", now - 50 * DAY + 1000);
+    openSession("smp", "Active", now - DAY);
+    closeSession("smp", "Active", now - DAY + 3600_000);
+    // Quiet: last seen 40 days ago.
+    openSession("smp", "Quiet", now - 41 * DAY);
+    closeSession("smp", "Quiet", now - 40 * DAY);
+    // Newbie: first session this week.
+    openSession("smp", "Newbie", now - 2 * DAY);
+    closeSession("smp", "Newbie", now - 2 * DAY + 600_000);
+    // Online right now.
+    openSession("smp", "Here", now - 1000);
+  }
+
+  it("all: players with a session inside the window, longest playtime first", () => {
+    seed();
+    const { rows, total } = listPlayerSummaries("smp", { sinceMs: now - 7 * DAY, now });
+    expect(rows.map((r) => r.name)).toEqual(["Active", "Newbie", "Here"]);
+    expect(total).toBe(3);
+  });
+
+  it("quiet: not online and last seen before the cutoff, window ignored", () => {
+    seed();
+    const { rows } = listPlayerSummaries("smp", {
+      sinceMs: now - 7 * DAY,
+      now,
+      status: "quiet",
+      quietBeforeMs: now - 30 * DAY,
+    });
+    expect(rows.map((r) => r.name)).toEqual(["Quiet"]);
+  });
+
+  it("new: first session starts inside the window", () => {
+    seed();
+    const { rows } = listPlayerSummaries("smp", { sinceMs: now - 7 * DAY, now, status: "new" });
+    expect(rows.map((r) => r.name).sort()).toEqual(["Here", "Newbie"]);
+  });
+
+  it("online: only connected players", () => {
+    seed();
+    const { rows } = listPlayerSummaries("smp", { sinceMs: 0, now, status: "online" });
+    expect(rows.map((r) => r.name)).toEqual(["Here"]);
+  });
+
+  it("searches by substring and treats % and _ literally", () => {
+    seed();
+    openSession("smp", "a_b", now - 10);
+    expect(listPlayerSummaries("smp", { sinceMs: 0, now, q: "ctiv" }).rows.map((r) => r.name)).toEqual(["Active"]);
+    expect(listPlayerSummaries("smp", { sinceMs: 0, now, q: "_" }).rows.map((r) => r.name)).toEqual(["a_b"]);
+    expect(listPlayerSummaries("smp", { sinceMs: 0, now, q: "%" }).total).toBe(0);
+  });
+
+  it("pages and reports the full total", () => {
+    seed();
+    const page = listPlayerSummaries("smp", { sinceMs: 0, now, sort: "name", order: "asc", limit: 2, offset: 2 });
+    expect(page.rows.map((r) => r.name)).toEqual(["Newbie", "Quiet"]);
+    expect(page.total).toBe(4);
+  });
+
+  it("is scoped to one server", () => {
+    seed();
+    openSession("other", "Elsewhere", 1);
+    expect(listPlayerSummaries("smp", { sinceMs: 0, now }).rows.map((r) => r.name)).not.toContain("Elsewhere");
+  });
+});
+
+describe("presenceAcrossServers", () => {
+  it("reports each server where the name was seen", () => {
+    openSession("a", "Alice", 1);
+    closeSession("a", "Alice", 5);
+    openSession("b", "alice", 10);
+    const p = presenceAcrossServers("ALICE").sort((x, y) => x.serverId.localeCompare(y.serverId));
+    expect(p).toEqual([
+      { serverId: "a", online: false, lastSeen: 5 },
+      { serverId: "b", online: true, lastSeen: null },
+    ]);
+  });
+});
+
+describe("pruneSessions", () => {
+  it("drops closed sessions past retention but never an open one", () => {
+    const now = 1000 * DAY;
+    const old = now - (SESSION_RETENTION_DAYS + 5) * DAY;
+    openSession("smp", "Old", old);
+    closeSession("smp", "Old", old + 1000);
+    openSession("smp", "Stuck", old); // never closed
+    openSession("smp", "Recent", now - DAY);
+    closeSession("smp", "Recent", now - DAY + 1000);
+
+    expect(pruneSessions(now)).toBe(1);
+    const n = getDb().prepare("SELECT COUNT(*) AS n FROM player_sessions").get() as { n: number };
+    expect(Number(n.n)).toBe(2);
   });
 });

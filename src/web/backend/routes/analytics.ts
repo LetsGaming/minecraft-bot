@@ -27,7 +27,6 @@ import {
   type AnalyticsCaps,
   type CommandUsageResponse,
   type LeaderboardResponse,
-  type PlayersResponse,
   type ServerAnalyticsResponse,
 } from "@mcbot/schema/analytics.js";
 import { getUptimeStats } from "@mcbot/core/utils/stores/uptimeTracker.js";
@@ -35,10 +34,6 @@ import {
   loadPlayerCountSeries,
   busiestHours,
 } from "@mcbot/core/utils/stores/playerCountHistory.js";
-import {
-  loadSessionStore,
-  MAX_SESSIONS_PER_PLAYER,
-} from "@mcbot/core/utils/stores/sessionStore.js";
 import {
   LEADERBOARD_STATS,
   buildLeaderboard,
@@ -55,8 +50,6 @@ import { requireServer } from "./support.js";
 
 const ACTIVITY_HOURS_DEFAULT = ANALYTICS_CAP_HOURS.activity;
 const COMMAND_HOURS_DEFAULT = 30 * 24;
-/** Sessions are not retained by age, so the players range only needs an upper bound. */
-const PLAYERS_HOURS_MAX = ANALYTICS_CAP_HOURS.commands;
 
 const CAPS: AnalyticsCaps = { ...ANALYTICS_CAP_HOURS };
 
@@ -122,72 +115,8 @@ export function registerAnalyticsRoutes(app: FastifyInstance): void {
   );
 
   /**
-   * Who plays, and how much, inside the range.
-   *
-   * Sessions are a ring buffer of the last MAX_SESSIONS_PER_PLAYER per player,
-   * so a very active player's early sessions inside a long range may already
-   * be gone: playtime and session counts cover the retained sessions only.
-   */
-  api.get(
-    "/api/servers/:id/analytics/players",
-    {
-      schema: { params: IdParams, querystring: AnalyticsRangeQuery },
-      config: { capability: "server:read", scope: "server", param: "id" },
-    },
-    async (req): Promise<PlayersResponse> => {
-      const serverId = req.params.id;
-      requireServer(serverId);
-      try {
-        const hours = clampHours(
-          req.query.hours,
-          PLAYERS_HOURS_MAX,
-          PLAYERS_HOURS_MAX,
-        );
-        const store = await loadSessionStore();
-        const entries = Object.values(store.servers[serverId] ?? {});
-        const now = Date.now();
-        const since = now - hours * MS.hour;
-
-        const players: PlayersResponse["players"] = [];
-        for (const entry of entries) {
-          let playtimeMs = 0;
-          let sessions = 0;
-          for (const session of entry.sessions) {
-            // An open session counts up to now, so someone mid-session is not
-            // reported as having played less than they have.
-            const end = session.leftAt ?? now;
-            if (end <= since || session.joinedAt >= now) continue;
-            sessions++;
-            playtimeMs += end - Math.max(session.joinedAt, since);
-          }
-          if (sessions === 0) continue;
-          players.push({
-            name: entry.name,
-            playtimeMs,
-            sessions,
-            lastSeen: entry.lastSeen,
-            online: entry.sessions.some((session) => session.leftAt === null),
-            firstSeen: entry.sessions[0]?.joinedAt ?? null,
-          });
-        }
-        players.sort((a, b) => b.playtimeMs - a.playtimeMs);
-
-        return {
-          players,
-          totalPlayers: players.length,
-          rangeHours: hours,
-          sessionsKeptPerPlayer: MAX_SESSIONS_PER_PLAYER,
-        };
-      } catch (err) {
-        log.error("web", `Player analytics for ${serverId} failed: ${errMsg(err)}`);
-        throw new HttpError(500, "Could not read session history.");
-      }
-    },
-  );
-
-  /**
-   * A stat leaderboard, built by the same function `/leaderboard` and `/top`
-   * use, so a board in the dashboard and a board in Discord cannot rank the
+   * A stat leaderboard, built by the same function `/leaderboard`
+   * uses, so a board in the dashboard and a board in Discord cannot rank the
    * same players differently. With `hours` it is a delta against the snapshot
    * closest to the start of the range, like the scheduled boards.
    */

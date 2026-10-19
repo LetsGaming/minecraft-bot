@@ -33,10 +33,10 @@ beforeEach(() => {
 });
 
 describe("nav model", () => {
-  it("lists fifteen views in three groups, each with its own icon", () => {
+  it("lists sixteen views in three groups, each with its own icon", () => {
     expect(NAV_GROUPS.map((g) => g.id)).toEqual(["monitor", "manage", "admin"]);
-    expect(NAV_ENTRIES).toHaveLength(15);
-    expect(new Set(NAV_ENTRIES.map((e) => e.icon)).size).toBe(15);
+    expect(NAV_ENTRIES).toHaveLength(16);
+    expect(new Set(NAV_ENTRIES.map((e) => e.icon)).size).toBe(16);
   });
 
   it("puts the server into server scoped locations only", async () => {

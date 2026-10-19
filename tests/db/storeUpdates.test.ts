@@ -23,14 +23,6 @@ import {
   toRecord,
 } from "../../src/core/utils/stores/safeRecord.js";
 import {
-  loadSessionStore,
-  updateSessionStore,
-  getServerSessions,
-  openSession,
-  closeSession,
-  closeAllOpenSessions,
-} from "../../src/core/utils/stores/sessionStore.js";
-import {
   loadChallengeStore,
   updateChallengeStore,
   addChallenge,
@@ -156,62 +148,6 @@ describe("safeRecord", () => {
     expect(ownGet(copy, "__proto__")).toBe(1);
     expect(ownGet(copy, "a")).toBe(2);
   });
-});
-
-describe("sessionStore updates", () => {
-  it("keeps every write when several handlers interleave their awaits", async () => {
-    const players = Array.from({ length: 25 }, (_, n) => `Player${n}`);
-    await Promise.all(
-      players.map(async (player) => {
-        await tick();
-        updateSessionStore((store) => openSession(store, "smp", player, 1000));
-        await tick();
-        updateSessionStore((store) => closeSession(store, "smp", player, 2000));
-      }),
-    );
-    const store = await loadSessionStore();
-    const entries = Object.values(getServerSessions(store, "smp"));
-    expect(entries).toHaveLength(players.length);
-    for (const entry of entries) {
-      expect(entry.sessions).toEqual([{ joinedAt: 1000, leftAt: 2000 }]);
-    }
-  });
-
-  it("a join racing a server stop is not overwritten", async () => {
-    updateSessionStore((store) => openSession(store, "smp", "Early", 1));
-    await Promise.all([
-      (async () => {
-        await tick();
-        updateSessionStore((store) => closeAllOpenSessions(store, "smp", 5));
-      })(),
-      (async () => {
-        await tick();
-        updateSessionStore((store) => openSession(store, "smp", "Late", 6));
-      })(),
-    ]);
-    const sessions = getServerSessions(await loadSessionStore(), "smp");
-    expect(sessions["early"]!.sessions[0]!.leftAt).toBe(5);
-    expect(sessions["late"]!.sessions[0]!.leftAt).toBeNull();
-  });
-
-  it.each(["__proto__", "constructor", "hasOwnProperty"])(
-    "tracks a player named %s",
-    async (name) => {
-      updateSessionStore((store) => openSession(store, "smp", name, 10));
-      updateSessionStore((store) => closeSession(store, "smp", name, 20));
-
-      const store = await loadSessionStore();
-      const players = getServerSessions(store, "smp");
-      expect(Object.keys(players)).toEqual([name.toLowerCase()]);
-      expect(ownGet(players, name.toLowerCase())).toMatchObject({
-        name,
-        lastSeen: 20,
-        sessions: [{ joinedAt: 10, leftAt: 20 }],
-      });
-      expect(({} as { sessions?: unknown }).sessions).toBeUndefined();
-      expect(Object.getPrototypeOf(players)).toBeNull();
-    },
-  );
 });
 
 describe("challengeStore updates", () => {

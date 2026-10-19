@@ -7,7 +7,6 @@ import { broadcastNotification } from "../notifyGuilds.js";
 import type { GuildConfigSource } from "../../../utils/guild/guildConfigs.js";
 import { serverEventRegex, registerServerEvent } from "./serverLine.js";
 import {
-  updateSessionStore,
   closeAllOpenSessions,
 } from "@mcbot/core/utils/stores/sessionStore.js";
 import { log } from "@mcbot/core/utils/logger.js";
@@ -38,9 +37,7 @@ onServerRemoved((serverId) => {
  */
 function closeSessions(serverId: string): void {
   try {
-    const closed = updateSessionStore((store) =>
-      closeAllOpenSessions(store, serverId),
-    );
+    const closed = closeAllOpenSessions(serverId);
     if (closed > 0) {
       log.info(
         "sessions",

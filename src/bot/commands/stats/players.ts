@@ -19,10 +19,7 @@ import {
   ticksToMs,
 } from "@mcbot/core/utils/minecraft/statUtils.js";
 import { loadKnownPlayers } from "@mcbot/core/utils/minecraft/whitelist.js";
-import {
-  loadSessionStore,
-  getServerSessions,
-} from "@mcbot/core/utils/stores/sessionStore.js";
+import { getServerSummaries } from "@mcbot/core/utils/stores/sessionStore.js";
 import {
   buildRoster,
   filterInactive,
@@ -128,10 +125,9 @@ export const execute = withErrorHandling(async (interaction) => {
   const inactiveDays = interaction.options.getInteger("inactive");
   const includeUnknown = interaction.options.getBoolean("include_unknown") ?? false;
 
-  const [allStats, known, sessionStore] = await Promise.all([
+  const [allStats, known] = await Promise.all([
     loadAllStats(server),
     loadKnownPlayers(server),
-    loadSessionStore(),
   ]);
 
   const statsPlaytime: Record<string, number> = {};
@@ -142,7 +138,7 @@ export const execute = withErrorHandling(async (interaction) => {
   let roster = buildRoster({
     statsPlaytime,
     known,
-    sessions: getServerSessions(sessionStore, server.id),
+    sessions: getServerSummaries(server.id),
   });
   const knownCount = roster.length;
   if (inactiveDays !== null) {

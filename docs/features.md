@@ -138,6 +138,23 @@ Optional and running as its own process, the dashboard provides:
 - A live console: the server's log streamed as it happens, with a command line
   into it and a configurable deny-list.
 - Backups: every archive listed, downloadable, and restorable.
+- Analytics: the player-count history (90 days) with each hour's peak, the
+  leaderboard, a list of who is active, has gone quiet or is new, and a Server
+  tab with uptime and command usage.
+- Players: a searchable list of everyone the bot has recorded, and a read-only
+  page per player with activity, recent sessions and stats. With the audit
+  permission it also shows the linked Discord account, whitelist history,
+  applications, bans and notes.
+- Mods: installed mods, a Modrinth catalogue, bulk updates and a version check
+  before upgrading, plus an editor for mod config files.
+- Daily rewards: the shared reward pool and per-server overrides, edited with
+  an item picker.
+- Server upgrade: moves a server to another Minecraft version as one
+  supervised job with a rollback to its own backup.
+- Prune chunks: scans a world for chunks nobody used and deletes them from a
+  map, with protection for built areas.
+- Appearance: the colour of every embed category and rarity tier, with a
+  preview.
 - A schema-driven config editor with server-side validation and optimistic
   concurrency, so two editors cannot silently overwrite each other.
 - A per-command policy view for enabling, disabling, or gating commands per

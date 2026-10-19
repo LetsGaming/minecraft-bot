@@ -121,6 +121,26 @@ export const AnalyticsRangeQuery = Type.Object({
 });
 export type AnalyticsRangeQuery = Static<typeof AnalyticsRangeQuery>;
 
+/** A server plus one of its players, addressed by Minecraft name (validated in the handler). */
+export const PlayerParams = Type.Object({
+  id: Type.String(),
+  name: Type.String({ maxLength: 32 }),
+});
+export type PlayerParams = Static<typeof PlayerParams>;
+
+/** The searchable player list. Numbers stay strings and are clamped in the handler. */
+export const PlayerListQuery = Type.Object({
+  q: Type.Optional(Type.String({ maxLength: 32 })),
+  status: Type.Optional(Type.String({ maxLength: 16 })),
+  quietDays: Type.Optional(Type.String()),
+  hours: Type.Optional(Type.String()),
+  sort: Type.Optional(Type.String({ maxLength: 16 })),
+  order: Type.Optional(Type.String({ maxLength: 4 })),
+  limit: Type.Optional(Type.String()),
+  offset: Type.Optional(Type.String()),
+});
+export type PlayerListQuery = Static<typeof PlayerListQuery>;
+
 /** A server plus one of its backup archives, addressed by opaque id. */
 export const BackupFileParams = Type.Object({
   id: Type.String(),

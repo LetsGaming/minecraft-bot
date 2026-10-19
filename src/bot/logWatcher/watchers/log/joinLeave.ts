@@ -6,7 +6,6 @@ import { broadcastNotification } from "../notifyGuilds.js";
 import type { GuildConfigSource } from "../../../utils/guild/guildConfigs.js";
 import { serverEventRegex, registerServerEvent } from "./serverLine.js";
 import {
-  updateSessionStore,
   openSession,
   closeSession,
 } from "@mcbot/core/utils/stores/sessionStore.js";
@@ -38,10 +37,8 @@ const DELIVERY_DELAY_MS = 2 * MS.second;
 
 function recordSession(serverId: string, player: string, event: "join" | "leave"): void {
   try {
-    updateSessionStore((store) => {
-      if (event === "join") openSession(store, serverId, player);
-      else closeSession(store, serverId, player);
-    });
+    if (event === "join") openSession(serverId, player);
+    else closeSession(serverId, player);
   } catch (err) {
     log.warn("sessions", `Failed to record ${event} for ${player}: ${errMsg(err)}`);
   }

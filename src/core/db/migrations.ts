@@ -230,6 +230,31 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE snapshots ADD COLUMN payload_gz BLOB;
     `,
   },
+  {
+    id: 7,
+    name: "player sessions table",
+    sql: `
+      -- One row per join. Sessions used to live in a single kv_store
+      -- document (newest 20 per player) that was loaded and rewritten whole
+      -- on every join and leave; as rows they can be kept by age and queried
+      -- per player or per range. left_at is NULL while the session is open.
+      -- name keeps the casing seen on that join, name_lower is the lookup key.
+      CREATE TABLE player_sessions (
+        id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        server_id TEXT NOT NULL,
+        name_lower TEXT NOT NULL,
+        name      TEXT NOT NULL,
+        joined_at INTEGER NOT NULL,
+        left_at   INTEGER
+      );
+      CREATE INDEX player_sessions_player
+        ON player_sessions (server_id, name_lower, joined_at);
+      CREATE INDEX player_sessions_joined
+        ON player_sessions (server_id, joined_at);
+      CREATE INDEX player_sessions_open
+        ON player_sessions (server_id) WHERE left_at IS NULL;
+    `,
+  },
 ];
 
 /**

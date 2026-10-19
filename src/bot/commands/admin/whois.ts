@@ -13,11 +13,7 @@ import {
   findDiscordIdByMcName,
 } from "@mcbot/core/utils/stores/linkStore.js";
 import { requireMcName } from "../shared/mcName.js";
-import {
-  loadSessionStore,
-  isOnlineNow,
-  type SessionStore,
-} from "@mcbot/core/utils/stores/sessionStore.js";
+import { presenceAcrossServers } from "@mcbot/core/utils/stores/sessionStore.js";
 import {
   loadNotesStore,
   getNotesByUuid,
@@ -30,21 +26,19 @@ import { t } from "@mcbot/core/utils/i18n.js";
  * Most recent activity for a name across every server's session data:
  * "online now on <id>" wins, otherwise the newest lastSeen.
  */
-function crossServerLastSeen(
-  store: SessionStore,
-  username: string,
-): { text: string } | null {
-  const lower = username.toLowerCase();
+function crossServerLastSeen(username: string): { text: string } | null {
   let latest: { server: string; at: number } | null = null;
-  for (const [serverId, players] of Object.entries(store.servers)) {
-    const entry = players[lower];
-    if (!entry) continue;
-    if (isOnlineNow(entry)) {
-      return { text: t("whois.onlineNow", { server: serverId }) };
+  try {
+    for (const p of presenceAcrossServers(username)) {
+      if (p.online) {
+        return { text: t("whois.onlineNow", { server: p.serverId }) };
+      }
+      if (p.lastSeen && (!latest || p.lastSeen > latest.at)) {
+        latest = { server: p.serverId, at: p.lastSeen };
+      }
     }
-    if (entry.lastSeen && (!latest || entry.lastSeen > latest.at)) {
-      latest = { server: serverId, at: entry.lastSeen };
-    }
+  } catch {
+    return null;
   }
   if (!latest) return null;
   return {
@@ -92,12 +86,9 @@ export const execute = withErrorHandling(
   requireServerAdmin(async (interaction) => {
     const username = requireMcName(interaction, "username");
 
-    const [audit, linked, sessions, notesStore] = await Promise.all([
+    const [audit, linked, notesStore] = await Promise.all([
       getAuditEntry(username),
       loadLinkedAccountsOrEmpty(),
-      loadSessionStore().catch(
-        (): SessionStore => ({ version: 1, servers: {} }),
-      ),
       loadNotesStore().catch(
         (): PlayerNotesStore => ({ version: 1, players: {} }),
       ),
@@ -152,7 +143,7 @@ export const execute = withErrorHandling(
       inline: false,
     });
 
-    const lastSeen = crossServerLastSeen(sessions, username);
+    const lastSeen = crossServerLastSeen(username);
     if (lastSeen) {
       embed.addFields({
         name: t("whois.lastSeen"),

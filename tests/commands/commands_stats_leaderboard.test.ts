@@ -1,5 +1,5 @@
 /**
- * Batch tests for stats-leaderboard commands: /leaderboard, /top, /playtime
+ * Batch tests for stats-leaderboard commands: /leaderboard, /playtime
  * and the leaderboard scheduler (startLeaderboardScheduler).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -161,25 +161,6 @@ describe("/leaderboard command", () => {
     expect(interaction.editReply).toHaveBeenCalledWith(
       expect.objectContaining({ embeds: expect.any(Array) }),
     );
-  });
-});
-
-// ══════════════════════════════════════════════════════════════════════════════
-// /top
-// ══════════════════════════════════════════════════════════════════════════════
-
-describe("/top command", () => {
-  let execute: (i: never) => Promise<void>;
-  beforeEach(async () => {
-    ({ execute } = await import("../../src/bot/commands/stats/top.js"));
-  });
-
-  it("calls buildLeaderboard with the selected stat", async () => {
-    const interaction = makeInteraction({
-      options: { getString: vi.fn().mockReturnValue("mined") },
-    });
-    await execute(interaction);
-    expect(buildLeaderboard).toHaveBeenCalledWith("mined", expect.any(Object));
   });
 });
 

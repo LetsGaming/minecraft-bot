@@ -371,4 +371,82 @@ export function importLegacyJson(db: SqlDatabase): void {
       log.info("db", `Imported ${n} player-count hour buckets`);
     });
   }
+
+  moveKvSessionsToTable(db);
+}
+
+interface KvSessionsDoc {
+  servers?: Record<
+    string,
+    Record<
+      string,
+      {
+        name?: unknown;
+        sessions?: Array<{ joinedAt?: unknown; leftAt?: unknown }>;
+      }
+    >
+  >;
+}
+
+/**
+ * kv_store["sessions"] (a whole document, newest 20 sessions per player)
+ * becomes rows in player_sessions. Runs once: only while the table is empty,
+ * and the kv row is renamed to "sessions.migrated" rather than deleted so a
+ * rollback to the previous build still has its data.
+ */
+export function moveKvSessionsToTable(db: SqlDatabase): void {
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const doc = kvGetRaw(db, "sessions") as KvSessionsDoc | null;
+    if (doc === null) {
+      db.exec("COMMIT");
+      return;
+    }
+    const count = mapRow(
+      db.prepare("SELECT COUNT(*) AS n FROM player_sessions"),
+      (r) => col.int(r, "n"),
+    );
+    if (count !== 0) {
+      db.exec("COMMIT");
+      log.warn(
+        "db",
+        'kv_store["sessions"] not moved: player_sessions already has rows.',
+      );
+      return;
+    }
+    const ins = db.prepare(
+      `INSERT INTO player_sessions (server_id, name_lower, name, joined_at, left_at)
+       VALUES (?, ?, ?, ?, ?)`,
+    );
+    let n = 0;
+    const servers = doc.servers && typeof doc.servers === "object" ? doc.servers : {};
+    for (const [serverId, players] of Object.entries(servers)) {
+      if (!players || typeof players !== "object") continue;
+      for (const [lower, entry] of Object.entries(players)) {
+        if (!entry || !Array.isArray(entry.sessions)) continue;
+        const name = typeof entry.name === "string" ? entry.name : lower;
+        for (const s of entry.sessions) {
+          if (typeof s?.joinedAt !== "number") continue;
+          const leftAt = typeof s.leftAt === "number" ? s.leftAt : null;
+          if (
+            insertOrSkip(ins, "sessions", `${serverId}/${lower}`,
+              serverId, lower.toLowerCase(), name, s.joinedAt, leftAt)
+          ) {
+            n++;
+          }
+        }
+      }
+    }
+    db.prepare("DELETE FROM kv_store WHERE key = 'sessions.migrated'").run();
+    db.prepare("UPDATE kv_store SET key = 'sessions.migrated' WHERE key = 'sessions'").run();
+    db.exec("COMMIT");
+    log.info("db", `Moved ${n} player sessions into player_sessions`);
+  } catch (err) {
+    try {
+      db.exec("ROLLBACK");
+    } catch {
+      /* the original error is the one worth reporting */
+    }
+    throw err;
+  }
 }

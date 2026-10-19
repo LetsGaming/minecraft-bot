@@ -151,12 +151,11 @@ describe("loadOrFail", () => {
 });
 
 describe("buildLeaderboardData", () => {
-  it("gives /top and /leaderboard the same definition under their own names", () => {
-    const top = buildLeaderboardData("top").toJSON();
-    const board = buildLeaderboardData("leaderboard").toJSON();
-    expect(top.name).toBe("top");
-    expect(board.name).toBe("leaderboard");
-    expect({ ...top, name: "x" }).toEqual({ ...board, name: "x" });
-    expect(buildLeaderboardData("top")).toBeInstanceOf(SlashCommandBuilder);
+  it("defines /leaderboard with a stat and a server option", () => {
+    const data = buildLeaderboardData();
+    expect(data).toBeInstanceOf(SlashCommandBuilder);
+    const json = data.toJSON();
+    expect(json.name).toBe("leaderboard");
+    expect((json.options ?? []).map((o) => o.name)).toEqual(["stat", "server"]);
   });
 });
