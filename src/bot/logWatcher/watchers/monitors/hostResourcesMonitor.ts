@@ -1,5 +1,5 @@
 /**
- * Host resources monitor — early warning before backups fill the disk.
+ * Host resources monitor: early warning before backups fill the disk.
  *
  * Polls disk usage of each instance's monitored paths (world dir + suite
  * backups; remote instances report theirs through the wrapper's `/info`)
@@ -9,34 +9,35 @@
  * below the threshold, and a short all-clear is sent.
  *
  * Remote instances with a wrapper older than 1.2.0 (no /info host block)
- * are skipped — exactly the previous behaviour.
+ * are skipped.
  */
-import { formatBytes } from "@mcbot/schema";
+import { formatBytes, MS } from "@mcbot/schema";
 import { type Client } from "discord.js";
 import { log } from "@mcbot/core/utils/logger.js";
-import { serverInScope } from "../../../utils/guild/guildRouter.js";
 import {
   guildsWith,
   type GuildConfigSource,
 } from "../../../utils/guild/guildConfigs.js";
 import { createEmbed } from "../../../utils/embeds/embedUtils.js";
 import { EmbedColor } from "../../../utils/embeds/embedColors.js";
-import { loadConfig } from "@mcbot/core/config.js";
+import { tryLoadConfig } from "@mcbot/core/utils/config/configAccess.js";
 import { readBackups } from "@mcbot/core/utils/server/serverAccess.js";
+import { getHostResources } from "@mcbot/core/utils/server/hostResources.js";
 import {
-  getHostResources,
-} from "@mcbot/core/utils/server/hostResources.js";
-import { DEFAULT_DISK_ALERT_PERCENT } from "@mcbot/schema/thresholds.js";
+  classifyDiskUsage,
+  DEFAULT_DISK_ALERT_PERCENT,
+} from "@mcbot/schema/thresholds.js";
 import type { DiskUsage } from "@mcbot/core/utils/server/hostResources.js";
-import { t, runWithGuildLocale } from "@mcbot/core/utils/i18n.js";
+import { t } from "@mcbot/core/utils/i18n.js";
 import { alertMention, type AlertLevel } from "../../../utils/embeds/alertUtils.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
-import type { GuildConfig } from "@mcbot/core/types/index.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
+import { onServerRemoved } from "../../serverCleanup.js";
+import { sendToGuildChannels } from "../notifyGuilds.js";
+import { startPoller, type Poller } from "../poller.js";
 
-const CHECK_INTERVAL_MS = 5 * 60 * 1000; // disks fill slowly
+const CHECK_INTERVAL_MS = 5 * MS.minute; // disks fill slowly
 const HYSTERESIS_PERCENT = 5;
-export const DEFAULT_DISK_WARN_PERCENT: number = DEFAULT_DISK_ALERT_PERCENT;
 
 /** serverId:path → currently in alert state */
 const alertState = new Map<string, boolean>();
@@ -44,75 +45,68 @@ const alertState = new Map<string, boolean>();
 /** serverId → backup-age alert currently active */
 const backupAlertState = new Map<string, boolean>();
 
+onServerRemoved((serverId) => {
+  for (const key of alertState.keys()) {
+    if (key.startsWith(`${serverId}:`)) alertState.delete(key);
+  }
+  backupAlertState.delete(serverId);
+});
+
 /** Exposed for tests. */
 export function _resetStateForTesting(): void {
   alertState.clear();
   backupAlertState.clear();
 }
 
+interface AlertContext {
+  client: Client;
+  guildConfigs: GuildConfigSource;
+}
+
 export function startHostResourcesMonitor(
   servers: ServerInstance[] | (() => ServerInstance[]),
   client: Client,
   guildConfigs: GuildConfigSource,
-): ReturnType<typeof setInterval> | null {
+): Poller {
   const getServers = typeof servers === "function" ? servers : () => servers;
+  const ctx: AlertContext = { client, guildConfigs };
 
-  const timer = setInterval(async () => {
-    // Same freshness rule as the threshold below: read the guild list per
-    // tick so a reload can add an alert target without a restart.
-    const guildsWithAlerts = guildsWith(
-      guildConfigs,
-      (cfg) => !!cfg.downtimeAlerts?.channelId,
-    );
-    // Threshold is read fresh each tick so /config reload applies live;
-    // 0 disables without restarting the timer.
-    let threshold = DEFAULT_DISK_WARN_PERCENT;
-    try {
-      threshold =
-        loadConfig().hostAlerts?.diskWarnPercent ?? DEFAULT_DISK_WARN_PERCENT;
-    } catch {
-      /* keep default */
-    }
-    let backupMaxAgeHours = 0;
-    try {
-      backupMaxAgeHours = loadConfig().hostAlerts?.backupMaxAgeHours ?? 0;
-    } catch {
-      /* keep disabled */
-    }
-    if (threshold <= 0 && backupMaxAgeHours <= 0) return;
+  const poller = startPoller(
+    "hostAlerts",
+    async () => {
+      // Read fresh each tick so /config reload applies live; a threshold of 0
+      // disables a check without stopping the poller.
+      const loaded = tryLoadConfig({ onError: "open" });
+      const hostAlerts = loaded.ok ? loaded.config.hostAlerts : undefined;
+      const threshold = hostAlerts?.diskWarnPercent ?? DEFAULT_DISK_ALERT_PERCENT;
+      const backupMaxAgeHours = hostAlerts?.backupMaxAgeHours ?? 0;
+      if (threshold <= 0 && backupMaxAgeHours <= 0) return;
 
-    for (const server of getServers()) {
-      try {
-        if (threshold > 0) {
-          await checkServer(server, client, guildsWithAlerts, threshold);
+      for (const server of getServers()) {
+        try {
+          if (threshold > 0) await checkServer(server, ctx, threshold);
+          if (backupMaxAgeHours > 0) await checkBackupAge(server, ctx, backupMaxAgeHours);
+        } catch (err) {
+          log.error("hostAlerts", `Check error for ${server.id}: ${errMsg(err)}`);
         }
-        if (backupMaxAgeHours > 0) {
-          await checkBackupAge(
-            server,
-            client,
-            guildsWithAlerts,
-            backupMaxAgeHours,
-          );
-        }
-      } catch (err) {
-        log.error("hostAlerts", `Check error for ${server.id}: ${errMsg(err)}`);
       }
-    }
-  }, CHECK_INTERVAL_MS);
+    },
+    CHECK_INTERVAL_MS,
+  );
 
   log.info(
     "hostAlerts",
     `Disk monitor active, alerting ` +
       `${guildsWith(guildConfigs, (c) => !!c.downtimeAlerts?.channelId).length} guild(s)`,
   );
-  return timer;
+  return poller;
 }
 
 /**
  * Disk usages for one instance, one entry per *filesystem*.
  *
  * The alert is about a filesystem filling up, and the server directory and
- * the backups directory usually share one — so reporting both meant two
+ * the backups directory usually share one, so reporting both meant two
  * identical alerts for one disk. Deduped by mount point where the wrapper
  * names it (host-info v2); an older wrapper sends no mount point, and
  * per-path alerts are the best that can be done with what it says.
@@ -133,8 +127,7 @@ async function collectUsages(server: ServerInstance): Promise<DiskUsage[]> {
 
 async function checkServer(
   server: ServerInstance,
-  client: Client,
-  guildsWithAlerts: Array<[string, GuildConfig]>,
+  ctx: AlertContext,
   threshold: number,
 ): Promise<void> {
   for (const usage of await collectUsages(server)) {
@@ -142,34 +135,33 @@ async function checkServer(
     // keying on the path would re-fire when the monitored dirs change.
     const key = `${server.id}:${usage.filesystem.mountPoint || usage.path}`;
     const alerted = alertState.get(key) ?? false;
+    const percent = usage.filesystem.usedPercent;
 
-    if (!alerted && usage.filesystem.usedPercent >= threshold) {
+    if (!alerted && percent >= threshold) {
       alertState.set(key, true);
       log.warn(
         "hostAlerts",
-        `${server.id}: ${usage.path} at ${usage.filesystem.usedPercent}% (threshold ${threshold}%)`,
+        `${server.id}: ${usage.path} at ${percent}% (threshold ${threshold}%)`,
       );
-      await broadcast(client, guildsWithAlerts, server.id, ["ok", "error"], () => ({
+      const level: AlertLevel = classifyDiskUsage(percent) === "critical" ? "error" : "warning";
+      await alertGuilds(ctx, server.id, ["ok", level], () => ({
         title: t("hostAlerts.diskFullTitle", { server: server.id }),
         description: t("hostAlerts.diskFull", {
           server: server.id,
           path: usage.path,
-          percent: usage.filesystem.usedPercent,
+          percent,
           free: formatBytes(usage.filesystem.availableBytes),
         }),
-        color: EmbedColor.Error,
+        color: level === "error" ? EmbedColor.Error : EmbedColor.Warning,
       }));
-    } else if (
-      alerted &&
-      usage.filesystem.usedPercent <= threshold - HYSTERESIS_PERCENT
-    ) {
+    } else if (alerted && percent <= threshold - HYSTERESIS_PERCENT) {
       alertState.set(key, false);
-      await broadcast(client, guildsWithAlerts, server.id, ["error", "ok"], () => ({
+      await alertGuilds(ctx, server.id, ["error", "ok"], () => ({
         title: t("hostAlerts.diskOkTitle", { server: server.id }),
         description: t("hostAlerts.diskOk", {
           server: server.id,
           path: usage.path,
-          percent: usage.filesystem.usedPercent,
+          percent,
         }),
         color: EmbedColor.Success,
       }));
@@ -180,13 +172,12 @@ async function checkServer(
 /**
  * Backup staleness: alert once when the newest backup exceeds the age
  * threshold, all-clear (and re-arm) as soon as a fresh backup appears.
- * Servers without the suite backup layout are skipped — no layout means
+ * Servers without the suite backup layout are skipped: no layout means
  * nothing meaningful to measure, not a stale backup.
  */
 async function checkBackupAge(
   server: ServerInstance,
-  client: Client,
-  guildsWithAlerts: Array<[string, GuildConfig]>,
+  ctx: AlertContext,
   maxAgeHours: number,
 ): Promise<void> {
   // capabilities === null means "not probed" (treated as capable, same
@@ -200,11 +191,11 @@ async function checkBackupAge(
       newestMs = Math.max(newestMs, dir.latestMtime.getTime());
     }
   } catch {
-    return; // unreadable backups dir — the disk alert covers real trouble
+    return; // unreadable backups dir: the disk alert covers real trouble
   }
-  if (newestMs === 0) return; // no backups at all — setup issue, not staleness
+  if (newestMs === 0) return; // no backups at all: setup issue, not staleness
 
-  const ageHours = (Date.now() - newestMs) / 3_600_000;
+  const ageHours = (Date.now() - newestMs) / MS.hour;
   const alerted = backupAlertState.get(server.id) ?? false;
 
   if (!alerted && ageHours >= maxAgeHours) {
@@ -213,7 +204,7 @@ async function checkBackupAge(
       "hostAlerts",
       `${server.id}: newest backup is ${ageHours.toFixed(1)}h old (threshold ${maxAgeHours}h)`,
     );
-    await broadcast(client, guildsWithAlerts, server.id, ["ok", "error"], () => ({
+    await alertGuilds(ctx, server.id, ["ok", "error"], () => ({
       title: t("backupAlert.staleTitle", { server: server.id }),
       description: t("backupAlert.stale", {
         server: server.id,
@@ -224,7 +215,7 @@ async function checkBackupAge(
     }));
   } else if (alerted && ageHours < maxAgeHours) {
     backupAlertState.set(server.id, false);
-    await broadcast(client, guildsWithAlerts, server.id, ["error", "ok"], () => ({
+    await alertGuilds(ctx, server.id, ["error", "ok"], () => ({
       title: t("backupAlert.freshTitle", { server: server.id }),
       description: t("backupAlert.fresh", {
         server: server.id,
@@ -235,31 +226,18 @@ async function checkBackupAge(
   }
 }
 
-export async function broadcast(
-  client: Client,
-  guildsWithAlerts: Array<[string, GuildConfig]>,
+function alertGuilds(
+  { client, guildConfigs }: AlertContext,
   serverId: string,
   levels: [AlertLevel, AlertLevel],
   buildEmbedOpts: () => { title: string; description: string; color: number },
-  logTag = "hostAlerts",
 ): Promise<void> {
-  for (const [guildId, gcfg] of guildsWithAlerts) {
-    const alertCfg = gcfg.downtimeAlerts;
-    if (!alertCfg?.channelId) continue;
-    if (!serverInScope(alertCfg.server, serverId, guildId)) continue;
-
-    try {
-      const channel = await client.channels.fetch(alertCfg.channelId);
-      if (!channel || !("send" in channel)) continue;
-      // Build per guild inside its locale context so t() calls in the
-      // factory resolve this guild's language.
-      const embedOpts = runWithGuildLocale(guildId, buildEmbedOpts);
-      await channel.send({
-        embeds: [createEmbed({ ...embedOpts, timestamp: true })],
-        ...alertMention(alertCfg.mentionRole, alertCfg.mentionPolicy, ...levels),
-      });
-    } catch (err) {
-      log.error(logTag, `Failed to send alert: ${errMsg(err)}`);
-    }
-  }
+  return sendToGuildChannels(client, guildConfigs, {
+    pick: (gcfg) => gcfg.downtimeAlerts,
+    serverId,
+    logTag: "hostAlerts",
+    describe: "Failed to send alert",
+    build: () => ({ embeds: [createEmbed({ ...buildEmbedOpts(), timestamp: true })] }),
+    mention: (target) => alertMention(target.mentionRole, target.mentionPolicy, ...levels),
+  });
 }

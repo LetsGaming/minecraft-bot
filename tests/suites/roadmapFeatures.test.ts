@@ -42,10 +42,8 @@ import {
   type Poll,
   type PollStore,
 } from "../../src/core/utils/stores/pollStore.js";
-import {
-  parseScheduleTime,
-  nextScheduledRun,
-} from "../../src/bot/logWatcher/watchers/schedulers/restartScheduler.js";
+import { nextScheduledRun } from "../../src/bot/logWatcher/watchers/schedulers/restartScheduler.js";
+import { parseScheduleTime } from "../../src/core/utils/time.js";
 import {
   buildActivitySparkline,
   busiestHours,

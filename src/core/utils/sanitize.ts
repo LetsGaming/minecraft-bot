@@ -50,7 +50,11 @@ export function sanitizeForComponent(
  * prefixes Bedrock players with ".", so dots are allowed and the
  * length cap is raised to 17 to cover the prefix.
  */
-const MC_NAME_REGEX = /^[\w.]{1,17}$/;
+const MC_NAME_CHARS = String.raw`[\w.]{1,17}`;
+const MC_NAME_REGEX = new RegExp(`^${MC_NAME_CHARS}$`);
+
+/** The same name rule as a regex source, for capture groups in log-line patterns. */
+export const PLAYER_NAME = MC_NAME_CHARS;
 
 export function isValidMcName(name: string): boolean {
   return MC_NAME_REGEX.test(name);

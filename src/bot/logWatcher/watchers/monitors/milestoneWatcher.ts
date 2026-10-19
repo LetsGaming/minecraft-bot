@@ -1,7 +1,7 @@
 /**
- * Milestone posts — "X just passed 1,000 hours" style announcements.
+ * Milestone posts: "X just passed 1,000 hours" style announcements.
  *
- * Config (top level; values in the stat's native unit — playtime is
+ * Config (top level; values in the stat's native unit: playtime is
  * ticks, distances are cm, counters are counts):
  *
  *   "milestones": {
@@ -17,10 +17,10 @@
  * First activation would otherwise blast every veteran's whole history
  * at once, so the first pass per server+stat SEEDS silently: current
  * values are recorded as already-announced, and only crossings after
- * that get posted. data/milestones.json is the single owner of that
- * state.
+ * that get posted. The milestone store is the single owner of that state.
  */
 import { EmbedCategory } from "@mcbot/schema/embedCategories.js";
+import { MS } from "@mcbot/schema";
 import { type Client } from "discord.js";
 import { loadConfig } from "@mcbot/core/config.js";
 import { getAllInstances } from "@mcbot/core/utils/server/server.js";
@@ -30,30 +30,22 @@ import {
   flattenStats,
 } from "@mcbot/core/utils/minecraft/statUtils.js";
 import { loadKnownPlayers } from "@mcbot/core/utils/minecraft/whitelist.js";
-import { kvGet, kvSet } from "@mcbot/core/db/kv.js";
+import {
+  loadMilestoneState,
+  updateMilestoneState,
+} from "@mcbot/core/utils/stores/milestoneStore.js";
 import { createEmbed } from "../../../utils/embeds/embedUtils.js";
 import { broadcastNotification } from "../notifyGuilds.js";
+import { startPoller, type Poller } from "../poller.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { announce as sayInGame } from "@mcbot/core/utils/minecraft/serverMessages.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
-const CHECK_INTERVAL_MS = 60 * 60_000;
-const INITIAL_DELAY_MS = 5 * 60_000;
+const CHECK_INTERVAL_MS = MS.hour;
+const INITIAL_DELAY_MS = 5 * MS.minute;
 /** Cap announcements per pass so a config change can't flood channels. */
 const MAX_ANNOUNCEMENTS_PER_PASS = 10;
-
-interface MilestoneState {
-  /** serverId → statKey → uuid → highest announced (or seeded) value */
-  servers: Record<string, Record<string, Record<string, number>>>;
-  /** serverId → statKey → seeded flag */
-  seeded: Record<string, Record<string, boolean>>;
-}
-
-async function loadState(): Promise<MilestoneState> {
-  const raw = kvGet<Partial<MilestoneState>>("milestones");
-  return { servers: raw?.servers ?? {}, seeded: raw?.seeded ?? {} };
-}
 
 /** The highest configured threshold that `value` has reached, if any. */
 export function highestCrossed(
@@ -67,6 +59,13 @@ export function highestCrossed(
   return best;
 }
 
+interface Recorded {
+  serverId: string;
+  statKey: string;
+  uuid: string;
+  value: number;
+}
+
 async function runPass(client: Client): Promise<void> {
   const config = loadConfig();
   const milestones = config.milestones ?? {};
@@ -75,9 +74,10 @@ async function runPass(client: Client): Promise<void> {
   );
   if (statKeys.length === 0) return;
 
-  const state = await loadState();
+  const state = loadMilestoneState();
+  const recorded: Recorded[] = [];
+  const seeded: Array<{ serverId: string; statKey: string }> = [];
   let announced = 0;
-  let dirty = false;
 
   for (const server of getAllInstances()) {
     let allStats: Awaited<ReturnType<typeof loadAllStats>>;
@@ -91,14 +91,15 @@ async function runPass(client: Client): Promise<void> {
       continue;
     }
 
-    const serverState = (state.servers[server.id] ??= {});
-    const serverSeeded = (state.seeded[server.id] ??= {});
+    // An empty map means the stats were unreadable, not that nobody has
+    // played: seeding from it would later announce every veteran's history.
+    if (Object.keys(allStats).length === 0) continue;
 
     for (const statKey of statKeys) {
       const def = LEADERBOARD_STATS[statKey]!;
       const thresholds = milestones[statKey]!;
-      const statState = (serverState[statKey] ??= {});
-      const seeding = serverSeeded[statKey] !== true;
+      const known = state.servers[server.id]?.[statKey] ?? {};
+      const seeding = state.seeded[server.id]?.[statKey] !== true;
 
       for (const [uuid, statsFile] of Object.entries(allStats)) {
         const name = names[uuid];
@@ -106,31 +107,40 @@ async function runPass(client: Client): Promise<void> {
         const value = def.extract(flattenStats(statsFile));
         const crossed = highestCrossed(thresholds, value);
         if (crossed === null) continue;
+        if (crossed <= (known[uuid] ?? 0)) continue;
 
-        const previous = statState[uuid] ?? 0;
-        if (crossed <= previous) continue;
+        if (seeding) {
+          recorded.push({ serverId: server.id, statKey, uuid, value: crossed });
+          continue; // first pass: record silently
+        }
 
-        statState[uuid] = crossed;
-        dirty = true;
-        if (seeding) continue; // first pass: record silently
-
+        // Left unrecorded past the cap, so the next pass announces it.
         if (announced >= MAX_ANNOUNCEMENTS_PER_PASS) continue;
         announced += 1;
+        recorded.push({ serverId: server.id, statKey, uuid, value: crossed });
         await announce(client, server.id, name, def.label, def.format(crossed));
       }
 
       if (seeding) {
-        serverSeeded[statKey] = true;
-        dirty = true;
+        seeded.push({ serverId: server.id, statKey });
         log.info(
           "milestones",
-          `${server.id}/${statKey}: baseline seeded — announcements start with the next crossing`,
+          `${server.id}/${statKey}: baseline seeded, announcements start with the next crossing`,
         );
       }
     }
   }
 
-  if (dirty) kvSet("milestones", state);
+  if (recorded.length === 0 && seeded.length === 0) return;
+  updateMilestoneState((current) => {
+    for (const { serverId, statKey, uuid, value } of recorded) {
+      const serverState = (current.servers[serverId] ??= {});
+      (serverState[statKey] ??= {})[uuid] = value;
+    }
+    for (const { serverId, statKey } of seeded) {
+      (current.seeded[serverId] ??= {})[statKey] = true;
+    }
+  });
 }
 
 async function announce(
@@ -172,16 +182,10 @@ async function announce(
  * Always armed: each pass reads the live config and does nothing while no
  * milestones are configured, so adding some later needs no restart.
  */
-export function startMilestoneWatcher(
-  client: Client,
-): ReturnType<typeof setInterval> {
-  const tick = (): void => {
-    runPass(client).catch((err: unknown) => {
-      log.error("milestones", `Pass failed: ${errMsg(err)}`);
-    });
-  };
-  setTimeout(tick, INITIAL_DELAY_MS);
-  const timer = setInterval(tick, CHECK_INTERVAL_MS);
+export function startMilestoneWatcher(client: Client): Poller {
+  const poller = startPoller("milestones", () => runPass(client), CHECK_INTERVAL_MS, {
+    initialDelayMs: INITIAL_DELAY_MS,
+  });
   log.info("milestones", "Milestone watcher active (hourly)");
-  return timer;
+  return poller;
 }
