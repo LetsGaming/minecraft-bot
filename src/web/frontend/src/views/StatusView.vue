@@ -10,7 +10,7 @@
           outlined
           size="small"
           :loading="refreshing"
-          @click="refreshAll"
+          @click="reloadNow"
         />
       </template>
     </ViewHeader>
@@ -18,11 +18,11 @@
     <div class="stack-gap">
       <InlineError
         v-if="failure"
-        :title="failureCopy.title"
-        :recovery="failureCopy.recovery"
-        :detail="failureCopy.detail"
-        :retryable="failureCopy.retryable"
-        :retry-label="failureCopy.retryLabel"
+        :title="statusFailure.title"
+        :recovery="statusFailure.recovery"
+        :detail="statusFailure.detail"
+        :retryable="statusFailure.retryable"
+        :retry-label="statusFailure.retryLabel"
         :busy="refreshing"
         :heading-level="2"
         @retry="onRetry"
@@ -197,8 +197,8 @@
   </div>
 </template>
 
-<script lang="ts">
-import { defineComponent, ref } from "vue";
+<script setup lang="ts">
+import { computed, ref } from "vue";
 import Button from "primevue/button";
 import {
   formatBytes,
@@ -221,7 +221,7 @@ import { relativeAge } from "../utils/time";
 import { apiGet, apiSend } from "../api";
 import type { ServerStatus } from "../api";
 import { serverAlerts, type Alert } from "../utils/serverAlerts";
-import { failureCopy, signIn, type FailureCopy } from "../utils/loadFailure";
+import { failureCopy, signIn } from "../utils/loadFailure";
 import { useServerStatus } from "../composables/useServerStatus";
 import { useServerActions } from "../composables/useServerActions";
 import { useCapabilities } from "../composables/useCapabilities";
@@ -255,176 +255,162 @@ const ACTION_ICON: Record<ServerOperatorAction, string> = {
 /** Alerts this card does not already state in its own wrapper and state lines. */
 const CARD_ALERT_KINDS = new Set<Alert["kind"]>(["lowTps", "diskFull"]);
 
-export default defineComponent({
-  name: "StatusView",
-  components: { Button, ViewHeader, StatusChip, EmptyState, AlertList, InlineError, JobBlock },
-  props: {
-    activeServer: { type: String, default: "" },
-  },
-  emits: ["bot-state", "servers"],
-  setup(_props, { emit }) {
-    const status = useServerStatus();
+withDefaults(defineProps<{ activeServer?: string }>(), { activeServer: "" });
+const emit = defineEmits<{
+  "bot-state": [alive: boolean, lastBeat: number | null];
+  servers: [servers: ServerStatus[]];
+}>();
 
-    // Pull status, then inform the shell (switcher + bot status line).
-    async function refresh(): Promise<void> {
-      const res = await status.refresh();
-      if (res) {
-        emit("bot-state", res.bot.alive, res.bot.lastBeat);
-        emit("servers", res.servers);
-      }
-    }
+const status = useServerStatus();
+const { servers, loading: refreshing, loaded, failure, error: statusError } = status;
 
-    const actions = useServerActions(refresh);
-    const { can } = useCapabilities();
+// Pull status, then inform the shell (switcher + bot status line).
+async function refresh(): Promise<void> {
+  const res = await status.refresh();
+  if (res) {
+    emit("bot-state", res.bot.alive, res.bot.lastBeat);
+    emit("servers", res.servers);
+  }
+}
 
-    /**
-     * The operator actions this user may run on THIS server, filtered per
-     * server because a grant is per server: someone may restart smp and only
-     * read creative.
-     */
-    function actionsFor(server: ServerStatus): readonly ServerOperatorAction[] {
-      // Rollback is irreversible and has its own capability; everything else
-      // rides on server:control.
-      const granted = SERVER_OPERATOR_ACTIONS.filter((a) => can(capabilityForServerAction(a), server.id));
-      // Gated on what the wrapper advertised: a suite without rollback.sh
-      // should not offer a Rollback button that 409s. A wrapper too old to
-      // report features gets the full set.
-      const scripts = server.features?.scripts;
-      if (!scripts) return granted;
-      return granted.filter((a) => scripts[a] !== false);
-    }
+const { jobs, isRunning, runAction, dismiss } = useServerActions(refresh);
+const { can } = useCapabilities();
 
-    const pendingIntents = ref<Record<string, PendingIntent[]>>({});
+/**
+ * The operator actions this user may run on THIS server, filtered per
+ * server because a grant is per server: someone may restart smp and only
+ * read creative.
+ */
+function actionsFor(server: ServerStatus): readonly ServerOperatorAction[] {
+  // Rollback is irreversible and has its own capability; everything else
+  // rides on server:control.
+  const granted = SERVER_OPERATOR_ACTIONS.filter((a) => can(capabilityForServerAction(a), server.id));
+  // Gated on what the wrapper advertised: a suite without rollback.sh
+  // should not offer a Rollback button that 409s. A wrapper too old to
+  // report features gets the full set.
+  const scripts = server.features?.scripts;
+  if (!scripts) return granted;
+  return granted.filter((a) => scripts[a] !== false);
+}
 
-    /**
-     * Poll alongside status. Intents expire server-side, so a stale list here
-     * corrects itself rather than offering a retry nobody still wants. Only
-     * servers this user can act on are asked, and a failed read keeps the
-     * last known list for that server.
-     */
-    async function loadIntents(): Promise<void> {
-      const asked = status.servers.value.filter((server) => actionsFor(server).length > 0);
-      const results = await Promise.all(
-        asked.map(async (server) => {
-          try {
-            const res = await apiGet<{ intents: PendingIntent[] }>(
-              `/api/servers/${encodeURIComponent(server.id)}/pending-actions`,
-            );
-            return [server.id, res.intents] as const;
-          } catch {
-            return [server.id, pendingIntents.value[server.id] ?? []] as const;
-          }
-        }),
-      );
-      pendingIntents.value = Object.fromEntries(results);
-    }
+const pendingIntents = ref<Record<string, PendingIntent[]>>({});
 
-    async function refreshAll(): Promise<void> {
-      await refresh();
-      await loadIntents();
-    }
-
-    const polling = usePolling(refreshAll, REFRESH_MS, { immediate: true });
-
-    return {
-      pendingIntents,
-      loadIntents,
-      refreshAll: polling.tick,
-      servers: status.servers,
-      refreshing: status.loading,
-      loaded: status.loaded,
-      failure: status.failure,
-      statusError: status.error,
-      refresh,
-      ...actions,
-      actionsFor,
-      isActionApplicable,
-      formatBytes, mergeDisks, diskSeverity, tpsRole, stateIsUp,
-      serverRole, serverRoleLabel, stateExplanation, wrapperNote,
-      t,
-      ACTION_ICON,
-    };
-  },
-  computed: {
-    failureCopy(): FailureCopy {
-      // Cards from the last good poll stay up, so a failed refresh says the
-      // numbers are old rather than that nothing loaded.
-      const stale = this.servers.length > 0;
-      return failureCopy(this.failure ?? "failed", {
-        failedTitle: stale ? t("servers.staleTitle") : t("servers.failedTitle"),
-        failedText: stale ? t("servers.staleText") : t("servers.failedText"),
-        forbiddenTitle: t("servers.forbiddenTitle"),
-        capability: "server:read",
-        request: "GET /api/status",
-        error: this.statusError,
-      });
-    },
-  },
-  methods: {
-    onRetry(): void {
-      if (this.failure === "signedOut") {
-        signIn();
-        return;
-      }
-      void this.refreshAll();
-    },
-    intentsFor(serverId: string): PendingIntent[] {
-      return this.pendingIntents[serverId] ?? [];
-    },
-    cardAlerts(server: ServerStatus): Alert[] {
-      return serverAlerts(server).filter((a) => CARD_ALERT_KINDS.has(a.kind));
-    },
-    async dismissIntent(serverId: string, action: string): Promise<void> {
+/**
+ * Poll alongside status. Intents expire server-side, so a stale list here
+ * corrects itself rather than offering a retry nobody still wants. Only
+ * servers this user can act on are asked, and a failed read keeps the
+ * last known list for that server.
+ */
+async function loadIntents(): Promise<void> {
+  const asked = servers.value.filter((server) => actionsFor(server).length > 0);
+  const results = await Promise.all(
+    asked.map(async (server) => {
       try {
-        await apiSend(
-          "DELETE",
-          `/api/servers/${encodeURIComponent(serverId)}/pending-actions/${encodeURIComponent(action)}`,
+        const res = await apiGet<{ intents: PendingIntent[] }>(
+          `/api/servers/${encodeURIComponent(server.id)}/pending-actions`,
         );
-      } finally {
-        await this.loadIntents();
+        return [server.id, res.intents] as const;
+      } catch {
+        return [server.id, pendingIntents.value[server.id] ?? []] as const;
       }
-    },
-    intentTip(intent: PendingIntent): string {
-      return t("servers.intentTip", {
-        age: relativeAge(intent.attemptedAt),
-        who: intent.byTag,
-        reason: intent.reason,
-      });
-    },
-    actionLabel(action: ServerOperatorAction): string {
-      return t(`servers.action.${action}`);
-    },
-    jobTitle(serverId: string): string {
-      const job = this.jobs[serverId];
-      if (!job) return "";
-      return job.state === "running"
-        ? t(`servers.job.running.${job.action}`, { server: serverId })
-        : t(`servers.job.failed.${job.action}`, { server: serverId });
-    },
-    /**
-     * Exactly one filled button per card, and it is whichever action the
-     * server's state invites. A permanently filled "Start" on a running
-     * server made the one impossible action the loudest one.
-     */
-    isPrimaryAction(action: ServerOperatorAction, server: ServerStatus): boolean {
-      if (!isActionApplicable(action, server.state)) return false;
-      return server.state === ServerState.Offline ? action === "start" : action === "restart";
-    },
-    /** The primary action is the accent fill; the two that take the server away read as danger. */
-    actionSeverity(action: ServerOperatorAction, server: ServerStatus): string | undefined {
-      if (this.isPrimaryAction(action, server)) return undefined;
-      return action === "stop" || action === "rollback" ? "danger" : "secondary";
-    },
-    /** Why a disabled button is disabled, so it reads as information, not a bug. */
-    unavailableReason(action: ServerOperatorAction, server: ServerStatus): string {
-      if (this.isRunning(server.id)) return t("servers.busyReason");
-      if (isActionApplicable(action, server.state)) return "";
-      return action === "start"
-        ? t("servers.alreadyRunning", { server: server.id })
-        : t("servers.notRunning", { server: server.id });
-    },
-  },
+    }),
+  );
+  pendingIntents.value = Object.fromEntries(results);
+}
+
+async function refreshAll(): Promise<void> {
+  await refresh();
+  await loadIntents();
+}
+
+const polling = usePolling(refreshAll, REFRESH_MS, { immediate: true });
+const reloadNow = polling.tick;
+
+const statusFailure = computed(() => {
+  // Cards from the last good poll stay up, so a failed refresh says the
+  // numbers are old rather than that nothing loaded.
+  const stale = servers.value.length > 0;
+  return failureCopy(failure.value ?? "failed", {
+    failedTitle: stale ? t("servers.staleTitle") : t("servers.failedTitle"),
+    failedText: stale ? t("servers.staleText") : t("servers.failedText"),
+    forbiddenTitle: t("servers.forbiddenTitle"),
+    capability: "server:read",
+    request: "GET /api/status",
+    error: statusError.value,
+  });
 });
+
+function onRetry(): void {
+  if (failure.value === "signedOut") {
+    signIn();
+    return;
+  }
+  void reloadNow();
+}
+
+function intentsFor(serverId: string): PendingIntent[] {
+  return pendingIntents.value[serverId] ?? [];
+}
+
+function cardAlerts(server: ServerStatus): Alert[] {
+  return serverAlerts(server).filter((a) => CARD_ALERT_KINDS.has(a.kind));
+}
+
+async function dismissIntent(serverId: string, action: string): Promise<void> {
+  try {
+    await apiSend(
+      "DELETE",
+      `/api/servers/${encodeURIComponent(serverId)}/pending-actions/${encodeURIComponent(action)}`,
+    );
+  } finally {
+    await loadIntents();
+  }
+}
+
+function intentTip(intent: PendingIntent): string {
+  return t("servers.intentTip", {
+    age: relativeAge(intent.attemptedAt),
+    who: intent.byTag,
+    reason: intent.reason,
+  });
+}
+
+function actionLabel(action: ServerOperatorAction): string {
+  return t(`servers.action.${action}`);
+}
+
+function jobTitle(serverId: string): string {
+  const job = jobs.value[serverId];
+  if (!job) return "";
+  return job.state === "running"
+    ? t(`servers.job.running.${job.action}`, { server: serverId })
+    : t(`servers.job.failed.${job.action}`, { server: serverId });
+}
+
+/**
+ * Exactly one filled button per card, and it is whichever action the
+ * server's state invites. A permanently filled "Start" on a running
+ * server made the one impossible action the loudest one.
+ */
+function isPrimaryAction(action: ServerOperatorAction, server: ServerStatus): boolean {
+  if (!isActionApplicable(action, server.state)) return false;
+  return server.state === ServerState.Offline ? action === "start" : action === "restart";
+}
+
+/** The primary action is the accent fill; the two that take the server away read as danger. */
+function actionSeverity(action: ServerOperatorAction, server: ServerStatus): string | undefined {
+  if (isPrimaryAction(action, server)) return undefined;
+  return action === "stop" || action === "rollback" ? "danger" : "secondary";
+}
+
+/** Why a disabled button is disabled, so it reads as information, not a bug. */
+function unavailableReason(action: ServerOperatorAction, server: ServerStatus): string {
+  if (isRunning(server.id)) return t("servers.busyReason");
+  if (isActionApplicable(action, server.state)) return "";
+  return action === "start"
+    ? t("servers.alreadyRunning", { server: server.id })
+    : t("servers.notRunning", { server: server.id });
+}
 </script>
 
 <style scoped>
