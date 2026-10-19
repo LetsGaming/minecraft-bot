@@ -35,6 +35,7 @@ import type {
   TpsResult,
 } from "../../types/index.js";
 import { errMsg } from "../error.js";
+import { ConsoleArgumentError, consoleCommand } from "../minecraft/serverMessages.js";
 import {
   queryFail,
   queryOk,
@@ -326,8 +327,15 @@ export class ServerInstance {
     nbtPath: string,
     parse: (text: string) => T | null,
   ): Promise<QueryResult<T>> {
+    let command: string;
+    try {
+      command = consoleCommand("/data", { text: "get entity" }, { player }, { text: nbtPath });
+    } catch (err) {
+      if (err instanceof ConsoleArgumentError) return Promise.resolve(queryFail("player-offline"));
+      throw err;
+    }
     return this.queryConsole(
-      `/data get entity ${player} ${nbtPath}`,
+      command,
       parse,
       entityDataPattern(player),
       (m) => m[1] ?? "",
