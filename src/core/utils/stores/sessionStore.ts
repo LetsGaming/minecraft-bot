@@ -22,6 +22,7 @@ import {
   ANALYTICS_RETENTION_DAYS,
 } from "@mcbot/schema/analytics.js";
 import { MS } from "@mcbot/schema/time.js";
+import type { PlayerSortField, PlayerStatusFilter } from "@mcbot/schema/players.js";
 
 export const SESSION_RETENTION_DAYS = ANALYTICS_RETENTION_DAYS.sessions;
 
@@ -110,14 +111,6 @@ export function pruneSessions(now: number = Date.now()): number {
     .run(now - SESSION_RETENTION_DAYS * MS.day);
   return Number(result.changes);
 }
-
-export type PlayerStatusFilter = "all" | "online" | "quiet" | "new";
-export type PlayerSortField =
-  | "name"
-  | "playtimeMs"
-  | "sessions"
-  | "lastSeen"
-  | "firstSeen";
 
 export interface PlayerListOptions {
   /** Window start (epoch ms); sessions and playtime are counted from here. */

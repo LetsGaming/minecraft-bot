@@ -40,6 +40,7 @@ import { registerModRoutes } from "./routes/mods.js";
 import { registerUpgradeRoutes } from "./routes/upgrades.js";
 import { registerPruneRoutes } from "./routes/prune.js";
 import { registerAnalyticsRoutes } from "./routes/analytics.js";
+import { registerPlayerRoutes } from "./routes/players.js";
 import { registerSetupRoutes } from "./routes/setup.js";
 import { registerGuildConfigRoutes } from "./routes/guildConfig.js";
 import { registerProbeRoutes } from "./status/metrics.js";
@@ -133,6 +134,7 @@ export function buildServer(): FastifyInstance {
     registerPruneRoutes(api);      // chunk pruning: scan, map, delete
     registerModRoutes(api);        // mods: installed list, mutations, Modrinth browse
     registerAnalyticsRoutes(api);  // uptime, activity, command usage: bot history
+    registerPlayerRoutes(api);     // player audit: searchable list, per-player detail
   });
 
   // ── Guild-manager API ── any logged-in Discord user; each route checks
