@@ -52,7 +52,7 @@ export function buildStatsEmbeds(
   for (const [category, entries] of Object.entries(groupByCategory(stats))) {
     const lines = entries.map((s) => {
       const key = s.key.toLowerCase();
-      const isTime = /(_time|Time)$/.test(key);
+      const isTime = /(_time|Time)$/.test(s.key);
       const isDistance = /one_cm$/.test(key);
       const displayValue = isTime
         ? formatSpan(ticksToMs(s.value))

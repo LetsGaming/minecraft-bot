@@ -2,7 +2,7 @@
  * Reusable helpers for provisioning bot-managed Discord channels.
  *
  * The bot creates and owns a private category containing whatever channels
- * it needs. Users never have to configure channel IDs manually — the bot
+ * it needs. Users never have to configure channel IDs manually, the bot
  * finds or recreates its category and child channels on every startup.
  *
  * Permissions model:
@@ -10,7 +10,7 @@
  *   - bot itself →  allow all
  *
  * Voice channels are used for display-only counters because their names
- * accept unicode, spaces, and emoji — unlike text channels which only allow
+ * accept unicode, spaces, and emoji, unlike text channels which only allow
  * lowercase letters, numbers, and hyphens.
  */
 
@@ -70,7 +70,7 @@ function buildBotOnlyPermissions(
 
 /**
  * Find an existing category the bot owns, or create a new one.
- * Matched by exact name — call with a consistent, unique name per feature.
+ * Matched by exact name, call with a consistent, unique name per feature.
  */
 export async function ensureManagedCategory(
   guild: Guild,
@@ -120,7 +120,7 @@ export async function ensureTextChannel(
     type: ChannelType.GuildText,
     parent: categoryId,
     topic,
-    // Inherit category permissions — Discord does this by default when
+    // Inherit category permissions, Discord does this by default when
     // parent is set, but we set it explicitly to be certain.
     permissionOverwrites: [],
   });
@@ -134,7 +134,7 @@ export async function ensureTextChannel(
  * Find an existing voice channel by name inside a category, or create it.
  *
  * Voice channels are used for display counters because they accept unicode,
- * spaces, and emoji in their names — unlike text channels.
+ * spaces, and emoji in their names, unlike text channels.
  */
 export async function ensureVoiceChannel(
   guild: Guild,

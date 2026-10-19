@@ -17,7 +17,8 @@ import type {
 } from "@mcbot/core/types/index.js";
 import { log } from "@mcbot/core/utils/logger.js";
 import { playerAvatarUrl } from "../mcHeads.js";
-import { relativeTimestamp } from "../discordTime.js";
+import { formatLastSeen } from "../discordTime.js";
+import { MS } from "@mcbot/schema/time.js";
 import { EmbedColor, embedColorFor } from "./embedColors.js";
 import { CATEGORY_STYLE, EmbedCategory } from "@mcbot/schema/embedCategories.js";
 import { statusCircle } from "./serverStateDisplay.js";
@@ -96,17 +97,6 @@ export function createEmbed({
   return embed;
 }
 
-/**
- * Adds multiple fields to an embed from a plain array.
- */
-export function addFieldsBulk(
-  embed: EmbedBuilder,
-  fields: APIEmbedField[] = [],
-): EmbedBuilder {
-  if (!Array.isArray(fields)) return embed;
-  return embed.addFields(fields);
-}
-
 /** Problem, then recovery, as one or two lines. */
 export function errorText(content: string | ErrorContent): string {
   if (typeof content === "string") return content;
@@ -168,7 +158,7 @@ export function createProgressEmbed({
   description?: string;
   startedAt?: number;
 }): EmbedBuilder {
-  const started = t("progress.started", { time: relativeTimestamp(startedAt) });
+  const started = t("progress.started", { time: formatLastSeen(startedAt) });
   return createEmbed({
     title,
     description: description ? `${description}\n${started}` : started,
@@ -188,10 +178,13 @@ export function createEmbedWithThumbnail({
   return embed;
 }
 
+/**
+ * An embed headed by the player's avatar: as the author icon, or as the
+ * thumbnail with `asThumbnail`.
+ */
 export function createPlayerEmbed(
   player: string,
-  options: Omit<EmbedOptions, "author">,
-  asThumbnail: boolean = false,
+  { asThumbnail = false, ...options }: Omit<EmbedOptions, "author"> & { asThumbnail?: boolean },
 ): EmbedBuilder {
   const head = playerAvatarUrl(player);
   if (asThumbnail) {
@@ -300,7 +293,7 @@ export function reservedLength(parts: {
 // ── Pager ────────────────────────────────────────────────────────────────────
 
 /** How long pager buttons answer before they are switched off. */
-export const PAGINATION_TIMEOUT_MS = 3 * 60_000;
+export const PAGINATION_TIMEOUT_MS = 3 * MS.minute;
 
 /** The page indicator: a disabled button between Previous and Next. */
 export function pageFooter(page: number, totalPages: number, guildId?: string): ButtonBuilder {

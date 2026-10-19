@@ -1,13 +1,13 @@
 /**
  * Guild-config source for long-lived watchers, monitors and schedulers.
  *
- * Everything under logWatcher/ is wired exactly once — at startup, or when
- * reconciliation adds a server — and then runs for the lifetime of the
+ * Everything under logWatcher/ is wired exactly once, at startup, or when
+ * reconciliation adds a server, and then runs for the lifetime of the
  * process. Handing those functions a plain `Record<string, GuildConfig>`
  * froze a SNAPSHOT of `config.guilds` taken at wiring time, and
  * `reconcileServers` only reconciles the `servers` block. So a guild added
  * (or a chatBridge/notifications block edited) after startup never reached
- * the handlers and the feature stayed dead until a full process restart —
+ * the handlers and the feature stayed dead until a full process restart :
  * which in a two-guild deployment reads as "it only works for one of my
  * guilds".
  *

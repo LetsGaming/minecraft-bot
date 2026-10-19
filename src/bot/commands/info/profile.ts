@@ -132,8 +132,8 @@ export const execute = withErrorHandling(async (interaction) => {
       title: t("profile.title", { player, server: server.id }),
       description: lines.join("\n"),
       color: EmbedColor.Info,
+      asThumbnail: true,
     },
-    true,
   );
 
   await interaction.editReply({ embeds: [embed] });

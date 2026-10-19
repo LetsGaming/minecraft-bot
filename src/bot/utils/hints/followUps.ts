@@ -5,7 +5,7 @@
  * at the moment someone *uses* a feature, the related one stops being an
  * abstract item on a list and becomes an obvious next step. Someone who has
  * just claimed a daily reward is exactly the person who wants a reminder
- * when the next one is ready — and they will never go looking for
+ * when the next one is ready, and they will never go looking for
  * `/daily-reminder` on their own, because they do not know it exists.
  *
  * Three properties make this cheap for the player rather than more noise:
@@ -57,7 +57,8 @@ import {
 } from "@mcbot/core/utils/server/server.js";
 import { resolveServer } from "../guild/guildRouter.js";
 import { isAdvertisable } from "@mcbot/core/utils/minecraft/eventTips.js";
-import { isServerAdmin, getMemberRoleIds } from "../../commands/middleware.js";
+import { isInvokerAdmin } from "../guild/permissions.js";
+import { joinCustomId } from "../embeds/customId.js";
 import { loadConfig } from "@mcbot/core/config.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { log } from "@mcbot/core/utils/logger.js";
@@ -66,13 +67,13 @@ import { errMsg } from "@mcbot/core/utils/error.js";
 /** Offers of one hint to one user before it stops being mentioned. */
 export const MAX_HINT_OFFERS = 2;
 
-/** customId prefix, stable across restarts — these outlive any collector. */
+/** customId prefix, stable across restarts, these outlive any collector. */
 export const HINT_PREFIX = "hint";
 
 export interface HintContext {
   userId: string;
   serverId: string;
-  /** For the command-policy check — a guild may disable what global allows. */
+  /** For the command-policy check, a guild may disable what global allows. */
   guildId?: string | null;
   /** Admin-only companions are only offered to admins. */
   isAdmin?: boolean;
@@ -85,7 +86,7 @@ export interface HintContext {
  *            user, so the hint is a button that does it. One tap, no
  *            command to learn. Use this whenever it is possible.
  *
- *   mention  The companion is just another command — nothing to toggle.
+ *   mention  The companion is just another command, nothing to toggle.
  *            A button that silently ran a second command would be a
  *            surprise, so this appends one sentence naming it instead.
  *            Weaker, and only worth it where the second command genuinely
@@ -98,13 +99,13 @@ interface HintBase {
   after: string;
   /**
    * The command this hint points at. Checked against command policy, so a
-   * companion the operator disabled is never offered — pressing the button
+   * companion the operator disabled is never offered, pressing the button
    * or following the tip would otherwise fail.
    */
   advertises: string;
   /**
    * Is this worth offering right now? Returns false when the companion is
-   * already on, or when the reply did not raise the question — offering
+   * already on, or when the reply did not raise the question, offering
    * something already enabled reads as the bot not knowing its own state.
    */
   applies: (ctx: HintContext) => Promise<boolean>;
@@ -132,7 +133,7 @@ export const HINTS: FollowUpHint[] = [
   {
     kind: "action",
     // Their reminder only ever fired for people who had already claimed AND
-    // found /daily-reminder — so the people most likely to want it were the
+    // found /daily-reminder, so the people most likely to want it were the
     // least likely to hear about it. This closes that loop.
     id: "daily-reminder",
     after: "daily",
@@ -183,14 +184,17 @@ export const HINTS: FollowUpHint[] = [
       );
     },
     apply: ({ userId, serverId }) => {
-      addWatch({
+      const { status } = addWatch({
         id: newWatchId(),
         userId,
         kind: "server",
         serverId,
         createdAt: Date.now(),
       });
-      return Promise.resolve();
+      // A duplicate means they are already waiting, which is what they asked for.
+      return status === "limit"
+        ? Promise.reject(new Error("watch limit reached"))
+        : Promise.resolve();
     },
   },
   {
@@ -204,7 +208,7 @@ export const HINTS: FollowUpHint[] = [
     applies: () => Promise.resolve(true),
   },
   {
-    // /playtime says how long; /activity says when — the natural
+    // /playtime says how long; /activity says when, the natural
     // follow-up for anyone trying to find other players online.
     kind: "mention",
     id: "playtime-activity",
@@ -228,7 +232,7 @@ export function findHint(id: string): FollowUpHint | null {
   return HINTS.find((h) => h.id === id) ?? null;
 }
 
-/** Follow-up hints share the featureNudges switch — one setting, one idea. */
+/** Follow-up hints share the featureNudges switch, one setting, one idea. */
 function hintsEnabled(): boolean {
   try {
     return loadConfig().featureNudges?.enabled ?? true;
@@ -284,21 +288,20 @@ export async function selectHint(
  * The button pair for a hint.
  *
  * The user id is baked into the customId so a bystander cannot press
- * someone else's button — these replies are not always ephemeral, and the
+ * someone else's button, these replies are not always ephemeral, and the
  * action writes to the invoker's record.
  */
 export function buildHintRow(
   hint: ActionHint,
   ctx: HintContext,
 ): ActionRowBuilder<ButtonBuilder> {
-  const suffix = `${hint.id}:${ctx.serverId}:${ctx.userId}`;
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
-      .setCustomId(`${HINT_PREFIX}:yes:${suffix}`)
+      .setCustomId(joinCustomId(HINT_PREFIX, "yes", hint.id, ctx.serverId, ctx.userId))
       .setLabel(t(hint.labelKey))
       .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
-      .setCustomId(`${HINT_PREFIX}:no:${suffix}`)
+      .setCustomId(joinCustomId(HINT_PREFIX, "no", hint.id, ctx.serverId, ctx.userId))
       .setLabel(t("hint.noThanks"))
       .setStyle(ButtonStyle.Secondary),
   );
@@ -317,7 +320,7 @@ export async function attachFollowUpHint(
   try {
     // Which server the reply was about. Commands that take no server still
     // get a context, because the ledger and most `applies` checks only
-    // need the user — the default instance is a reasonable stand-in and
+    // need the user, the default instance is a reasonable stand-in and
     // hints that truly depend on the server check it themselves.
     let serverId: string;
     try {
@@ -334,11 +337,7 @@ export async function attachFollowUpHint(
       userId: interaction.user.id,
       serverId,
       guildId: interaction.guild?.id ?? null,
-      isAdmin: isServerAdmin(
-        interaction.user.id,
-        getMemberRoleIds(interaction),
-        interaction.guild?.id,
-      ),
+      isAdmin: isInvokerAdmin(interaction),
     };
     const hint = await selectHint(interaction.commandName, ctx);
     if (!hint) return;

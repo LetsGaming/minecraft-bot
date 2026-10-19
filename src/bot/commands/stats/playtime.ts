@@ -52,7 +52,8 @@ export const execute = withErrorHandling(async (interaction) => {
       createPlayerEmbed(playerName, {
         title: t("playtime.title", { player: playerName }),
         description: t("playtime.total", { time: formatSpan(ticksToMs(totalPlaytime)) }),
-      }, true),
+        asThumbnail: true,
+      }),
     ],
   });
 });

@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import { EmbedBuilder } from "discord.js";
 import {
   createEmbed,
-  addFieldsBulk,
   createErrorEmbed,
   createSuccessEmbed,
   createInfoEmbed,
@@ -114,35 +113,6 @@ describe("createEmbed", () => {
     expect(
       createEmbed({ description: "only desc" }).toJSON().title,
     ).toBeUndefined();
-  });
-});
-
-// ── addFieldsBulk ────────────────────────────────────────────────────────────
-
-describe("addFieldsBulk", () => {
-  it("adds provided fields to the embed", () => {
-    const embed = new EmbedBuilder();
-    addFieldsBulk(embed, [
-      { name: "Field A", value: "Value A" },
-      { name: "Field B", value: "Value B", inline: true },
-    ]);
-    const fields = embed.toJSON().fields ?? [];
-    expect(fields).toHaveLength(2);
-    expect(fields[0]?.name).toBe("Field A");
-    expect(fields[1]?.inline).toBe(true);
-  });
-
-  it("returns the embed unchanged when fields array is empty", () => {
-    const embed = new EmbedBuilder();
-    const result = addFieldsBulk(embed, []);
-    expect(result).toBe(embed);
-    expect(result.toJSON().fields ?? []).toHaveLength(0);
-  });
-
-  it("returns the embed unchanged when fields is omitted", () => {
-    const embed = new EmbedBuilder();
-    const result = addFieldsBulk(embed);
-    expect(result).toBe(embed);
   });
 });
 
@@ -335,7 +305,7 @@ describe("createPlayerEmbed", () => {
   });
 
   it("uses thumbnail mode when asThumbnail=true", () => {
-    const embed = createPlayerEmbed("Alex", { description: "Hi" }, true);
+    const embed = createPlayerEmbed("Alex", { description: "Hi", asThumbnail: true });
     const json = embed.toJSON();
     expect(json.thumbnail?.url).toContain("Alex");
     expect(json.author).toBeUndefined();
