@@ -1,5 +1,5 @@
 /**
- * /poll — cross-platform polls (admin).
+ * /poll: cross-platform polls (admin).
  *
  *   create   question + "options: A | B | C" + duration → posts a button
  *            embed in this channel and announces the poll in-game.
@@ -13,7 +13,7 @@
  * broadcasts tellraw to the whole server.
  *
  * Span mode: `servers:"smp, creative"` (or `servers:all`) runs ONE poll
- * across several instances — merged tally, announcements on each
+ * across several instances, merged tally, announcements on each
  * instance, `!vote` resolves it from any participant. The one-open-poll
  * invariant holds per participating server: creation fails while any
  * listed instance already has an open poll.
@@ -208,7 +208,7 @@ export const execute = withErrorHandling(
       const counts = tallyPoll(open);
       const total = counts.reduce((a, b) => a + b, 0);
       const lines = open.options.map(
-        (o, i) => `**${i + 1}.** ${o} — ${counts[i]}`,
+        (o, i) => `**${i + 1}.** ${o}: ${counts[i]}`,
       );
       await interaction.editReply({
         embeds: [
@@ -320,7 +320,7 @@ export const execute = withErrorHandling(
       detail: question.slice(0, 80),
     });
 
-    // In-game announcement on every participating instance — a span
+    // In-game announcement on every participating instance, a span
     // poll that only tells one server about itself defeats the point.
     for (const inst of participants) {
       const reached = await tellraw(inst, "@a", {

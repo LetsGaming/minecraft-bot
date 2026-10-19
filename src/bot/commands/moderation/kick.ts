@@ -1,9 +1,9 @@
 /**
- * /kick — moderation shortcut (admin).
+ * /kick: moderation shortcut (admin).
  *
  * Deliberately thin: the reason is forwarded to the console and written
  * to the admin audit log, nothing more. There is no ban database of its
- * own — `/note` already carries the per-player "why" memory.
+ * own, `/note` already carries the per-player "why" memory.
  */
 import { SlashCommandBuilder } from "discord.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";

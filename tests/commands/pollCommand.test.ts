@@ -284,6 +284,22 @@ describe("/poll create", () => {
     expect(poll.serverId).toBe("smp");
   });
 
+  it("refuses and takes its reply back when another poll opened while the reply went out", async () => {
+    const i = Object.assign(interaction({ sub: "create" }), {
+      deleteReply: vi.fn().mockResolvedValue(undefined),
+    });
+    i.editReply.mockImplementation(async () => {
+      await seed(openPoll({ id: "won-the-race" }));
+      return { id: "msg-1" };
+    });
+
+    await expect(run(i)).rejects.toThrow();
+
+    expect((await loadPollStore()).polls.map((p) => p.id)).toEqual(["won-the-race"]);
+    expect(i.deleteReply).toHaveBeenCalled();
+    expect(scheduler.armPoll).not.toHaveBeenCalled();
+  });
+
   it("uses a null guild id outside guilds", async () => {
     await run(interaction({ sub: "create", guildId: null }));
     expect((await loadPollStore()).polls[0]!.guildId).toBeNull();

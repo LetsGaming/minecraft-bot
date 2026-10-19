@@ -67,6 +67,7 @@ vi.mock("../../../src/core/utils/stores/dailyStore.js", async (importOriginal) =
   getServerPending: vi.fn(() => ({})),
 }));
 
+import { closeDbForTesting } from "../../../src/core/db/index.js";
 import { getLinkedAccount } from "../../../src/core/utils/stores/linkUtils.js";
 import { getOnlinePlayers } from "../../../src/core/utils/minecraft/playerUtils.js";
 
@@ -81,6 +82,7 @@ describe("Discord snapshots: /daily", () => {
   it("claimed, queued, cooldown and not linked", async () => {
     const { execute } = await import("../../../src/bot/commands/connection/daily/daily.js");
     const run = async (language: Language) => {
+      closeDbForTesting();
       const { interaction, sent } = recordingInteraction(language, { commandName: "daily" });
       await execute(interaction as never);
       return sent;

@@ -25,7 +25,10 @@ vi.mock("../../../src/core/config.js", async (importOriginal) => ({
 vi.mock("../../../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock("../../../src/bot/utils/guild/guildRouter.js", () => ({ resolveServer: vi.fn() }));
+vi.mock("../../../src/bot/utils/guild/guildRouter.js", () => ({
+  resolveServer: vi.fn(),
+  assertMayTargetServerId: vi.fn(),
+}));
 vi.mock("../../../src/bot/utils/hints/followUps.js", () => ({
   attachFollowUpHint: vi.fn().mockResolvedValue(undefined),
 }));
@@ -74,7 +77,10 @@ vi.mock("../../../src/bot/logWatcher/watchers/monitors/downtimeMonitor.js", () =
   suppressAlerts: vi.fn(),
 }));
 
-import { resolveServer } from "../../../src/bot/utils/guild/guildRouter.js";
+import {
+  assertMayTargetServerId,
+  resolveServer,
+} from "../../../src/bot/utils/guild/guildRouter.js";
 import * as serverAccess from "../../../src/core/utils/server/serverAccess.js";
 import { getModList } from "../../../src/core/utils/minecraft/modUtils.js";
 import { loadAllStats } from "../../../src/core/utils/minecraft/statUtils.js";
@@ -193,10 +199,9 @@ describe("Discord snapshots: slash commands", () => {
       "../../../src/bot/interactions/confirmActions.js"
     );
     const { confirmCustomId } = await import("../../../src/bot/utils/embeds/confirm.js");
-    const serverModule = await import("../../../src/core/utils/server/server.js");
     const server = fakeServer();
     vi.mocked(resolveServer).mockReturnValue(server as never);
-    vi.spyOn(serverModule, "getServerInstance").mockReturnValue(server as never);
+    vi.mocked(assertMayTargetServerId).mockReturnValue(server as never);
     vi.mocked(serverAccess.runScript).mockResolvedValue({
       exitCode: 0,
       output: "",

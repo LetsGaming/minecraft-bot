@@ -1,5 +1,5 @@
 /**
- * /whois <username> (admin) — shows the whitelist audit trail for a
+ * /whois <username> (admin), shows the whitelist audit trail for a
  * Minecraft username (who added/removed it, when, on which server) and the
  * linked Discord account, in one place.
  */
@@ -121,8 +121,8 @@ export const execute = withErrorHandling(
           value: `${audit.addedBy} (<@${audit.addedById}>)`,
           inline: true,
         },
-        { name: t("whois.addedAt"), value: audit.addedAt ?? "—", inline: true },
-        { name: t("whois.server"), value: audit.server ?? "—", inline: true },
+        { name: t("whois.addedAt"), value: audit.addedAt ?? t("common.unknownValue"), inline: true },
+        { name: t("whois.server"), value: audit.server ?? t("common.unknownValue"), inline: true },
       );
     }
     if (audit?.uuid) {
@@ -141,7 +141,7 @@ export const execute = withErrorHandling(
         },
         {
           name: t("whois.removedAt"),
-          value: audit.removedAt ?? "—",
+          value: audit.removedAt ?? t("common.unknownValue"),
           inline: true,
         },
       );

@@ -1,5 +1,5 @@
 /**
- * /challenge — advancement challenges (admin).
+ * /challenge: advancement challenges (admin).
  *
  *   start   advancement:<name in chat> [reward:<text>] [item:<id>]
  *           [amount:<n>] [duration:<hours>] [server:<id>]

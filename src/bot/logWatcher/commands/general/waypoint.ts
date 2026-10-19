@@ -1,5 +1,5 @@
 /**
- * !waypoint — community waypoints, in-game side.
+ * !waypoint, community waypoints, in-game side.
  *
  *   !waypoint <name>                  look up a waypoint
  *   !waypoint set <name> [category]   save your position (optional tag)
@@ -10,11 +10,11 @@
  * ServerInstance helpers (RCON-authoritative with the screen log-poll
  * fallback), storage goes through waypointStore (atomic saveJson).
  *
- * Overwrite is restricted to the original author — everyone can read,
+ * Overwrite is restricted to the original author, everyone can read,
  * nobody can stomp someone else's point. Delete allows the author *or* a
  * server admin: a waypoint outlives its creator leaving the server, and
  * with author-only deletion the only way to remove one was to edit the
- * store by hand. Admin here is the same check `adminOnly` commands use —
+ * store by hand. Admin here is the same check `adminOnly` commands use ,
  * the player's linked Discord account against the global admin list.
  * `!waypoints` (separate command) lists everything.
  */

@@ -155,7 +155,7 @@ export function defineCommand({
         // path captured `<([^>]+)>` raw. A log line can't smuggle a
         // newline (lines are pre-split) so this wasn't exploitable, but
         // handlers interpolate the name into /msg, /tellraw and
-        // `/data get entity …` — enforce the same contract here for
+        // `/data get entity …`, enforce the same contract here for
         // parity and future-proofing.
         if (!isValidMcName(username)) {
           log.warn(
@@ -247,7 +247,7 @@ export function defineCommand({
             return;
           }
           // After the handler, so a command that threw is not counted.
-          // The Discord id may be absent — plenty of players use !commands
+          // The Discord id may be absent, plenty of players use !commands
           // without ever linking, and those uses still count for the
           // dashboard even though they cannot count for /help.
           recordCommandUsage({

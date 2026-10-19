@@ -1,5 +1,5 @@
 /**
- * /note — admin notes on players (add | list | remove).
+ * /note: admin notes on players (add | list | remove).
  *
  * Moderation memory: "warned about lag machines on 2026-05-01" gets a
  * durable home instead of living in someone's head. Notes are keyed by
@@ -7,7 +7,7 @@
  * changes), every mutation goes through auditAdminAction, and /whois
  * renders the same notes inline for admin callers.
  *
- * Deliberately thin — annotations only, no ban database.
+ * Deliberately thin, annotations only, no ban database.
  */
 import { SlashCommandBuilder } from "discord.js";
 import { createEmbed } from "../../utils/embeds/embedUtils.js";

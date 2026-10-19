@@ -60,14 +60,14 @@ export const execute = withErrorHandling(
 
     if (sub === "reload") {
       // Snapshot the previous (cached) config before the reload so guild
-      // and feature level edits can be summarized in the reply — the
+      // and feature level edits can be summarized in the reply, the
       // reconciler below only reports server additions/removals.
       const before = loadConfig();
       const cfg = reloadConfig();
       const after = Object.keys(cfg.servers);
       const settingChanges = summarizeConfigChanges(before, cfg);
 
-      // Apply server additions/removals to the running bot —
+      // Apply server additions/removals to the running bot ,
       // create instances + watchers for added IDs, stop watchers and drop
       // instances for removed ones, rebuild those whose settings changed.
       // Only a failed rebuild is reported as restart-required.

@@ -1,5 +1,5 @@
 /**
- * /console — admin console access.
+ * /console: admin console access.
  *
  *   tail lines:<n>          the last N log lines (ephemeral), on top of
  *                           the existing tailLog path

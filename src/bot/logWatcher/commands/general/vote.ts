@@ -1,5 +1,5 @@
 /**
- * !vote <number> — in-game side of cross-platform polls.
+ * !vote <number>, in-game side of cross-platform polls.
  *
  * Votes land in the same store as the Discord buttons; linked players
  * resolve to their Discord voter key (pollStore.voterKeyForMc) so one

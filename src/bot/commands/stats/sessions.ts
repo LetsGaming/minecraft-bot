@@ -1,5 +1,5 @@
 /**
- * /sessions — a player's recent sessions and last-seen on one server.
+ * /sessions: a player's recent sessions and last-seen on one server.
  *
  * "When was X last online" is the question /whois couldn't answer; this
  * is the full view (per-server session list + recent playtime), while
@@ -76,9 +76,9 @@ export const execute = withErrorHandling(async (interaction) => {
   const lines = recent.map((s) => {
     const start = `<t:${Math.floor(s.joinedAt / 1000)}:f>`;
     if (s.leftAt === null) {
-      return `${start} — ${t("sessions.stillOnline")}`;
+      return `${start} · ${t("sessions.stillOnline")}`;
     }
-    return `${start} — ${formatSpan(s.leftAt - s.joinedAt)}`;
+    return `${start} · ${formatSpan(s.leftAt - s.joinedAt)}`;
   });
   embed.addFields({
     name: t("sessions.recent", { count: recent.length }),

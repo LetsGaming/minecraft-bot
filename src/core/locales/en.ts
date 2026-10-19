@@ -42,6 +42,7 @@ export const en: Record<string, string> = {
   "dailyReminder.enabled": "Reminder on. You get a DM when your next /daily is ready. Your DMs need to be open for that.",
   "dailyReminder.disabled": "✅ Daily reminders disabled.",
   "dailyReminder.serverSuffix": " (Server: **{server}**)",
+  "common.unknownValue": "unknown",
   "config.feat.notifications": "notifications",
   "config.feat.chatBridge": "chat bridge",
   "config.feat.leaderboard": "leaderboard",

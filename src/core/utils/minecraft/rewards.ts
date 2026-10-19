@@ -160,7 +160,7 @@ export async function give(
 }
 
 /**
- * Deliver queued offline claims for a player who just joined — called by
+ * Deliver queued offline claims for a player who just joined, called by
  * the joinLeave watcher. Entries are removed once ALL their items are
  * confirmed delivered; on partial failure the entry stays with only the
  * undelivered items, so the next join retries exactly what's missing

@@ -1,5 +1,5 @@
 /**
- * /watch — one-shot personal notifications.
+ * /watch: one-shot personal notifications.
  *
  *   /watch server [server]          DM me when this server is back online
  *   /watch player player:<name>     DM me when this player joins
@@ -7,7 +7,7 @@
  *   /watch remove id:<id>           drop one
  *
  * Watches fire once and remove themselves (watchStore); the downtime
- * monitor and the join watcher do the firing. DMs must be open — the
+ * monitor and the join watcher do the firing. DMs must be open, the
  * reply says so, since a watch that can't deliver is worthless.
  */
 import { SlashCommandBuilder } from "discord.js";

@@ -38,6 +38,7 @@ export const de: Record<string, string> = {
   "dailyReminder.enabled": "Erinnerung aktiv. Du bekommst eine DM, sobald dein nächstes /daily bereit ist. Deine DMs müssen dafür offen sein.",
   "dailyReminder.disabled": "✅ Tägliche Erinnerungen deaktiviert.",
   "dailyReminder.serverSuffix": " (Server: **{server}**)",
+  "common.unknownValue": "unbekannt",
   "config.feat.notifications": "Benachrichtigungen",
   "config.feat.chatBridge": "Chat-Brücke",
   "config.feat.leaderboard": "Bestenliste",

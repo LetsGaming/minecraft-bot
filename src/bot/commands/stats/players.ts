@@ -12,7 +12,6 @@ import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { formatLastSeen } from "../../utils/discordTime.js";
 import { withErrorHandling } from "../middleware.js";
 import { pageBy, replyPaged } from "../shared/paged.js";
-import { loadOrFail } from "../shared/loadOrFail.js";
 import {
   loadAllStats,
   flattenStats,
@@ -129,9 +128,11 @@ export const execute = withErrorHandling(async (interaction) => {
   const inactiveDays = interaction.options.getInteger("inactive");
   const includeUnknown = interaction.options.getBoolean("include_unknown") ?? false;
 
-  const [allStats, known, sessionStore] = await loadOrFail("players", t("stats.failed"), () =>
-    Promise.all([loadAllStats(server), loadKnownPlayers(server), loadSessionStore()]),
-  );
+  const [allStats, known, sessionStore] = await Promise.all([
+    loadAllStats(server),
+    loadKnownPlayers(server),
+    loadSessionStore(),
+  ]);
 
   const statsPlaytime: Record<string, number> = {};
   for (const [uuid, file] of Object.entries(allStats)) {

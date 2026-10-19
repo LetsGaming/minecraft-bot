@@ -1,5 +1,5 @@
 /**
- * /pardon — moderation shortcut (admin).
+ * /pardon: moderation shortcut (admin).
  *
  * Removes a player from the vanilla ban list; the action lands in the
  * admin audit log like /kick and /ban. A pending timed-ban release for

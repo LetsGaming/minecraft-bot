@@ -19,6 +19,7 @@ vi.mock("../../src/bot/commands/middleware.js", () => ({
 
 vi.mock("../../src/bot/utils/guild/guildRouter.js", () => ({
   resolveServer: vi.fn(),
+  assertMayTargetServerId: vi.fn(),
 }));
 
 vi.mock("../../src/bot/utils/embeds/embedUtils.js", async (importOriginal) => ({
@@ -60,7 +61,10 @@ vi.mock("../../src/bot/logWatcher/watchers/monitors/downtimeMonitor.js", () => (
   suppressAlerts: vi.fn(),
 }));
 
-import { resolveServer } from "../../src/bot/utils/guild/guildRouter.js";
+import {
+  assertMayTargetServerId,
+  resolveServer,
+} from "../../src/bot/utils/guild/guildRouter.js";
 import * as serverAccess from "../../src/core/utils/server/serverAccess.js";
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -467,7 +471,7 @@ describe("/server control command", () => {
 
     vi.useFakeTimers();
     try {
-      vi.mocked(serverAccess.getList).mockReturnValueOnce(new Promise(() => {}));
+      server.getList.mockReturnValueOnce(new Promise(() => {}));
       const pending = ask();
       await vi.advanceTimersByTimeAsync(1_600);
       const hung = await pending;
@@ -476,7 +480,7 @@ describe("/server control command", () => {
       vi.useRealTimers();
     }
 
-    vi.mocked(serverAccess.getList).mockRejectedValueOnce(new Error("timeout"));
+    server.getList.mockResolvedValueOnce({ ok: false, reason: "unreachable" });
     expect(embedOf(await ask())).toMatch(/not available/);
   });
 
@@ -514,8 +518,7 @@ describe("/server control command", () => {
 
   it("stops after the confirm button: audit, alert suppression, public progress", async () => {
     const server = makeServer();
-    const serverModule = await import("../../src/core/utils/server/server.js");
-    vi.spyOn(serverModule, "getServerInstance").mockReturnValue(server as never);
+    vi.mocked(assertMayTargetServerId).mockReturnValue(server as never);
     vi.mocked(serverAccess.runScript).mockResolvedValue({
       exitCode: 0,
       output: "Server stopped",

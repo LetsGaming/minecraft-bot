@@ -1,10 +1,10 @@
 /**
- * /profile — one player card from data the bot already keeps.
+ * /profile: one player card from data the bot already keeps.
  *
  * Pure presentation: player head, linked Discord account, whitelisted-by
  * (whitelist audit), playtime + last-seen (session store), and daily
  * streak (claim store, via the linked Discord user). No new stores, no
- * writes — everything here exists because some other feature tracked it.
+ * writes, everything here exists because some other feature tracked it.
  */
 import { SlashCommandBuilder, time as discordTime } from "discord.js";
 import { createPlayerEmbed } from "../../utils/embeds/embedUtils.js";
@@ -77,7 +77,7 @@ export const execute = withErrorHandling(async (interaction) => {
       : t("profile.notLinked"),
   );
 
-  // An entry with removedBy means the player was later un-whitelisted —
+  // An entry with removedBy means the player was later un-whitelisted ,
   // showing "whitelisted by X" for them would be wrong, so skip it.
   if (audit?.addedBy && audit.addedAt && !audit.removedBy) {
     lines.push(

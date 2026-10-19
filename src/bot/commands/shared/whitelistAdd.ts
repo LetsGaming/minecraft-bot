@@ -79,7 +79,7 @@ export async function performWhitelistAdd(
   await recordAdd(canonicalName, by.tag, by.id, server.id, profile.id);
 
   // The whitelist cache would otherwise serve the stale (pre-add)
-  // list until restart — making the new player invisible to /whitelisted,
+  // list until restart, making the new player invisible to /whitelisted,
   // autocomplete, findPlayer, and leaderboards.
   invalidateWhitelistCache(server.id);
 

@@ -1,9 +1,9 @@
 /**
- * /ban — moderation shortcut (admin).
+ * /ban: moderation shortcut (admin).
  *
  * Deliberately thin: the reason is forwarded to the console (vanilla ban
  * list) and written to the admin audit log, nothing more. There is no
- * ban database of its own — `/note` already carries the per-player
+ * ban database of its own, `/note` already carries the per-player
  * "why" memory, and `/pardon` reverses this.
  *
  * The optional `duration` ("30m", "3d", "1.5y") makes it a timed ban.
@@ -55,7 +55,7 @@ export const data = new SlashCommandBuilder()
     o
       .setName("duration")
       .setDescription(
-        "How long, e.g. 30m, 2h, 3d, 1w, 2mo, 1.5y — omit for permanent",
+        "How long, e.g. 30m, 2h, 3d, 1w, 2mo, 1.5y. Omit for permanent",
       ),
   )
   .addStringOption((o) =>
