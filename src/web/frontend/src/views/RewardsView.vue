@@ -384,8 +384,8 @@
   </div>
 </template>
 
-<script lang="ts">
-import { defineComponent } from "vue";
+<script setup lang="ts">
+import { computed, onMounted, ref, watch } from "vue";
 import Button from "primevue/button";
 import InputNumber from "primevue/inputnumber";
 import InputText from "primevue/inputtext";
@@ -437,240 +437,247 @@ interface PoolRow {
 const objectKeys = new WeakMap<object, number>();
 let nextKey = 1;
 
-export default defineComponent({
-  name: "RewardsView",
-  components: {
-    Button, InputNumber, InputText, Select, SelectButton,
-    ViewHeader, EmptyState, EditorShell, EditBar, InlineBanner, InlineError, ConflictPicker,
-    ItemPicker, OverrideToggle,
-  },
-  props: {
-    serverIds: { type: Array as () => string[], default: () => [] },
+const props = withDefaults(
+  defineProps<{
+    serverIds?: string[];
     /** The server the URL names; empty is the shared pool. */
-    server: { type: String, default: "" },
-  },
-  emits: ["update-route"],
-  setup() {
-    const confirm = useConfirm();
-    return {
-      ...useDailyRewards(),
-      ...useCapabilities(),
-      ask: discardPrompt(confirm),
-      notify: useNotify(),
-      t,
-      weightOf,
-      MAX_REWARD_AMOUNT,
-      MAX_SHARE_PERCENT,
-      SHARED,
-    };
-  },
-  data() {
-    return {
-      catalog: null as ItemCatalog | null,
-      filter: "",
-      mode: "percent" as "percent" | "weight",
-      showAll: false,
-      newDay: null as number | null,
-    };
-  },
-  computed: {
-    canReadShared(): boolean {
-      return this.can("config:read");
-    },
-    scopes(): Array<{ label: string; value: string }> {
-      const out: Array<{ label: string; value: string }> = [];
-      if (this.canReadShared) out.push({ label: t("rewards.scopeShared"), value: SHARED });
-      for (const id of this.serversWith("config:read", this.serverIds)) {
-        out.push({ label: t("rewards.scopeServer", { server: id }), value: id });
-      }
-      return out;
-    },
-    canWrite(): boolean {
-      return this.isShared ? this.can("config:write") : this.can("config:write", this.scope);
-    },
-    editorState(): EditorState {
-      if (!this.canWrite) return "readonly";
-      if (this.saving) return "saving";
-      if (this.conflicts.length > 0) return "conflict";
-      if (this.dirty) return "dirty";
-      return "clean";
-    },
-    modeOptions(): Array<{ label: string; value: string }> {
-      return [
-        { label: t("rewards.pool.modePercent"), value: "percent" },
-        { label: t("rewards.pool.modeWeight"), value: "weight" },
-      ];
-    },
-    problems(): string[] {
-      return [...(this.meta?.problems ?? []), ...(this.isShared ? [] : (this.meta?.sharedProblems ?? []).map((p) => t("rewards.sharedProblem", { problem: p })))];
-    },
-    saveFailure(): string[] {
-      if (this.conflicts.length > 0) return [];
-      return [...(this.saveError ? [this.saveError] : []), ...this.fieldErrors];
-    },
-    poolEditable(): boolean {
-      return this.canWrite && (this.isShared || this.overrides("default"));
-    },
-    streakEditable(): boolean {
-      return this.canWrite && (this.isShared || this.overrides("streakBonuses"));
-    },
-    bonusEditable(): boolean {
-      return this.canWrite && (this.isShared || this.overrides("bonusChance"));
-    },
-    /** The pool in effect: this document's, or the inherited one. */
-    shownPool(): DailyRewardItem[] {
-      return this.effective("default") ?? [];
-    },
-    poolTotal(): number {
-      return totalWeight(this.shownPool);
-    },
-    filteredRows(): PoolRow[] {
-      const q = this.filter.trim().toLowerCase();
-      const rows = this.shownPool.map((item, index) => ({ item, index }));
-      if (!q) return rows;
-      return rows.filter(({ item }) =>
-        item.item.toLowerCase().includes(q) || this.nameOf(item.item).toLowerCase().includes(q),
-      );
-    },
-    visibleRows(): PoolRow[] {
-      return this.showAll ? this.filteredRows : this.filteredRows.slice(0, ROWS_SHOWN);
-    },
-    hiddenRows(): number {
-      return this.filteredRows.length - this.visibleRows.length;
-    },
-    bonusMap(): Record<string, DailyRewardItem[]> {
-      return this.effective("streakBonuses") ?? {};
-    },
-    bonusDays(): string[] {
-      return milestoneDays(this.bonusMap).map(String);
-    },
-    cycle(): number {
-      const days = milestoneDays(this.bonusMap);
-      return days.length > 0 ? days[days.length - 1]! : 35;
-    },
-    bonusChance(): number {
-      return this.effective("bonusChance") ?? 0;
-    },
-    /** A shared pool with no items cannot be saved: every server falls back to it. */
-    poolValid(): boolean {
-      const ownBonuses = this.draft?.streakBonuses;
-      if (ownBonuses && Object.values(ownBonuses).some((list) => list.length === 0)) return false;
-      if (this.isShared) return this.items.length > 0;
-      return !this.overrides("default") || this.items.length > 0;
-    },
-  },
-  watch: {
-    server() {
-      void this.syncScope();
-    },
-    serverIds() {
-      void this.syncScope();
-    },
-    scopes() {
-      void this.syncScope();
-    },
-  },
-  async mounted() {
-    void this.syncScope();
-    try {
-      this.catalog = await loadItemCatalog();
-    } catch {
-      // The editor works without names; ids are shown instead.
-    }
-  },
-  methods: {
-    round(value: number, digits: number): number {
-      const f = 10 ** digits;
-      return Math.round(value * f) / f;
-    },
-    keyOf(obj: object): number {
-      let key = objectKeys.get(obj);
-      if (key === undefined) {
-        key = nextKey++;
-        objectKeys.set(obj, key);
-      }
-      return key;
-    },
-    nameOf(item: string): string {
-      return lookupItem(this.catalog, item)?.name ?? nameFromId(item);
-    },
-    /** Vanilla items are checked against the list; a modded id is taken on trust. */
-    isKnown(item: string): boolean {
-      if (!this.catalog || vanillaId(item) === null) return true;
-      return lookupItem(this.catalog, item) !== undefined;
-    },
-    stackNote(item: DailyRewardItem): string {
-      const stack = lookupItem(this.catalog, item.item)?.stackSize;
-      if (!stack || item.amount <= stack) return "";
-      return t("rewards.stacks", { count: Math.ceil(item.amount / stack) });
-    },
-    percentOf(item: DailyRewardItem): number {
-      return sharePercent(weightOf(item), this.poolTotal);
-    },
-    formatPercent(value: number): string {
-      return value >= 10 ? value.toFixed(1) : value >= 1 ? value.toFixed(2) : value.toPrecision(2);
-    },
-    oneIn(item: DailyRewardItem): string {
-      const p = this.percentOf(item);
-      return p > 0 ? t("rewards.oneIn", { count: Math.max(1, Math.round(100 / p)) }) : "";
-    },
-    rarityLabel(item: DailyRewardItem): string {
-      const rarity = rarityOf(item, this.shownPool);
-      return `${RARITY_STYLE[rarity].icon} ${t(`appearance.key.rarity.${rarity}` as MessageKey)}`;
-    },
-    bonusItems(day: string): DailyRewardItem[] {
-      return this.bonusMap[day] ?? [];
-    },
-    setAmount(item: DailyRewardItem, value: number | null): void {
-      if (value !== null && Number.isInteger(value) && value >= 1) item.amount = Math.min(value, MAX_REWARD_AMOUNT);
-    },
-    setBonusChance(value: number | null): void {
-      if (this.draft && value !== null) this.setField("bonusChance", Math.min(Math.max(value, 0), 100));
-    },
-    onAddDay(): void {
-      if (this.newDay && this.addBonusDay(this.newDay)) this.newDay = null;
-    },
-    /**
-     * Open the scope the URL names, or the first one this user may see. An
-     * unknown or forbidden server in the URL is replaced, never shown empty.
-     */
-    async syncScope(): Promise<void> {
-      if (this.scopes.length === 0) return;
-      const wanted = this.server || SHARED;
-      const allowed = this.scopes.some((s) => s.value === wanted);
-      const first = this.scopes[0]!.value;
-      const target = allowed ? this.server : first === SHARED ? "" : first;
-      if (target !== this.server) {
-        // Server ids arrive with the status poll; wait for them before
-        // calling a server in the URL unknown.
-        if (this.server && this.serverIds.length === 0) return;
-        this.$emit("update-route", { params: { server: target || undefined } });
-        return;
-      }
-      if (this.ready && this.scope === target) return;
-      if (this.loading && this.scope === target) return;
-      this.filter = "";
-      this.showAll = false;
-      await this.open(target);
-    },
-    async onScopePick(picked: string): Promise<void> {
-      const value = picked === SHARED ? "" : picked;
-      if (value === this.scope) return;
-      if (!(await confirmLeave(this.ask))) return;
-      this.discard();
-      this.$emit("update-route", { params: { server: value || undefined } });
-    },
-    async reload(): Promise<void> {
-      await this.open(this.scope);
-    },
-    async onSave(): Promise<void> {
-      const ok = await this.save();
-      if (ok) {
-        this.notify.ok(t("rewards.savedToast"), t("rewards.savedToastDetail"));
-      }
-    },
-  },
+    server?: string;
+  }>(),
+  { serverIds: () => [], server: "" },
+);
+const emit = defineEmits<{
+  "update-route": [patch: { params?: Record<string, string | undefined> }];
+}>();
+
+const {
+  draft,
+  meta,
+  ready,
+  loading,
+  loadError,
+  saving,
+  saveError,
+  fieldErrors,
+  conflicts,
+  dirty,
+  dirtyKeys,
+  stale,
+  discard,
+  save,
+  resolveConflict,
+  reloadDiscardingMine,
+  setField,
+  scope,
+  isShared,
+  open,
+  overrides,
+  effective,
+  setOverride,
+  items,
+  addItem,
+  removeItem,
+  setPercent,
+  setWeight,
+  normalizeWeights,
+  addBonusDay,
+  removeBonusDay,
+  addBonusItem,
+  removeBonusItem,
+  applyShippedDefaults,
+} = useDailyRewards();
+const { can, serversWith } = useCapabilities();
+const ask = discardPrompt(useConfirm());
+const notify = useNotify();
+
+const catalog = ref<ItemCatalog | null>(null);
+const filter = ref("");
+const mode = ref<"percent" | "weight">("percent");
+const showAll = ref(false);
+const newDay = ref<number | null>(null);
+
+const canReadShared = computed(() => can("config:read"));
+const scopes = computed(() => {
+  const out: Array<{ label: string; value: string }> = [];
+  if (canReadShared.value) out.push({ label: t("rewards.scopeShared"), value: SHARED });
+  for (const id of serversWith("config:read", props.serverIds)) {
+    out.push({ label: t("rewards.scopeServer", { server: id }), value: id });
+  }
+  return out;
 });
+const canWrite = computed(() => (isShared.value ? can("config:write") : can("config:write", scope.value)));
+const editorState = computed<EditorState>(() => {
+  if (!canWrite.value) return "readonly";
+  if (saving.value) return "saving";
+  if (conflicts.value.length > 0) return "conflict";
+  if (dirty.value) return "dirty";
+  return "clean";
+});
+const modeOptions = computed(() => [
+  { label: t("rewards.pool.modePercent"), value: "percent" },
+  { label: t("rewards.pool.modeWeight"), value: "weight" },
+]);
+const problems = computed<string[]>(() => [
+  ...(meta.value?.problems ?? []),
+  ...(isShared.value ? [] : (meta.value?.sharedProblems ?? []).map((p) => t("rewards.sharedProblem", { problem: p }))),
+]);
+const saveFailure = computed<string[]>(() => {
+  if (conflicts.value.length > 0) return [];
+  return [...(saveError.value ? [saveError.value] : []), ...fieldErrors.value];
+});
+const poolEditable = computed(() => canWrite.value && (isShared.value || overrides("default")));
+const streakEditable = computed(() => canWrite.value && (isShared.value || overrides("streakBonuses")));
+const bonusEditable = computed(() => canWrite.value && (isShared.value || overrides("bonusChance")));
+/** The pool in effect: this document's, or the inherited one. */
+const shownPool = computed<DailyRewardItem[]>(() => effective("default") ?? []);
+const poolTotal = computed(() => totalWeight(shownPool.value));
+const filteredRows = computed<PoolRow[]>(() => {
+  const q = filter.value.trim().toLowerCase();
+  const rows = shownPool.value.map((item, index) => ({ item, index }));
+  if (!q) return rows;
+  return rows.filter(({ item }) => item.item.toLowerCase().includes(q) || nameOf(item.item).toLowerCase().includes(q));
+});
+const visibleRows = computed(() => (showAll.value ? filteredRows.value : filteredRows.value.slice(0, ROWS_SHOWN)));
+const hiddenRows = computed(() => filteredRows.value.length - visibleRows.value.length);
+const bonusMap = computed<Record<string, DailyRewardItem[]>>(() => effective("streakBonuses") ?? {});
+const bonusDays = computed(() => milestoneDays(bonusMap.value).map(String));
+const cycle = computed(() => {
+  const days = milestoneDays(bonusMap.value);
+  return days.length > 0 ? days[days.length - 1]! : 35;
+});
+const bonusChance = computed(() => effective("bonusChance") ?? 0);
+/** A shared pool with no items cannot be saved: every server falls back to it. */
+const poolValid = computed(() => {
+  const ownBonuses = draft.value?.streakBonuses;
+  if (ownBonuses && Object.values(ownBonuses).some((list) => list.length === 0)) return false;
+  if (isShared.value) return items.value.length > 0;
+  return !overrides("default") || items.value.length > 0;
+});
+
+watch(
+  () => props.server,
+  () => void syncScope(),
+);
+watch(
+  () => props.serverIds,
+  () => void syncScope(),
+);
+watch(scopes, () => void syncScope());
+
+onMounted(async () => {
+  void syncScope();
+  try {
+    catalog.value = await loadItemCatalog();
+  } catch {
+    // The editor works without names; ids are shown instead.
+  }
+});
+
+function round(value: number, digits: number): number {
+  const f = 10 ** digits;
+  return Math.round(value * f) / f;
+}
+
+function keyOf(obj: object): number {
+  let key = objectKeys.get(obj);
+  if (key === undefined) {
+    key = nextKey++;
+    objectKeys.set(obj, key);
+  }
+  return key;
+}
+
+function nameOf(item: string): string {
+  return lookupItem(catalog.value, item)?.name ?? nameFromId(item);
+}
+
+/** Vanilla items are checked against the list; a modded id is taken on trust. */
+function isKnown(item: string): boolean {
+  if (!catalog.value || vanillaId(item) === null) return true;
+  return lookupItem(catalog.value, item) !== undefined;
+}
+
+function stackNote(item: DailyRewardItem): string {
+  const stack = lookupItem(catalog.value, item.item)?.stackSize;
+  if (!stack || item.amount <= stack) return "";
+  return t("rewards.stacks", { count: Math.ceil(item.amount / stack) });
+}
+
+function percentOf(item: DailyRewardItem): number {
+  return sharePercent(weightOf(item), poolTotal.value);
+}
+
+function formatPercent(value: number): string {
+  return value >= 10 ? value.toFixed(1) : value >= 1 ? value.toFixed(2) : value.toPrecision(2);
+}
+
+function oneIn(item: DailyRewardItem): string {
+  const p = percentOf(item);
+  return p > 0 ? t("rewards.oneIn", { count: Math.max(1, Math.round(100 / p)) }) : "";
+}
+
+function rarityLabel(item: DailyRewardItem): string {
+  const rarity = rarityOf(item, shownPool.value);
+  return `${RARITY_STYLE[rarity].icon} ${t(`appearance.key.rarity.${rarity}` as MessageKey)}`;
+}
+
+function bonusItems(day: string): DailyRewardItem[] {
+  return bonusMap.value[day] ?? [];
+}
+
+function setAmount(item: DailyRewardItem, value: number | null): void {
+  if (value !== null && Number.isInteger(value) && value >= 1) item.amount = Math.min(value, MAX_REWARD_AMOUNT);
+}
+
+function setBonusChance(value: number | null): void {
+  if (draft.value && value !== null) setField("bonusChance", Math.min(Math.max(value, 0), 100));
+}
+
+function onAddDay(): void {
+  if (newDay.value && addBonusDay(newDay.value)) newDay.value = null;
+}
+
+/**
+ * Open the scope the URL names, or the first one this user may see. An
+ * unknown or forbidden server in the URL is replaced, never shown empty.
+ */
+async function syncScope(): Promise<void> {
+  if (scopes.value.length === 0) return;
+  const wanted = props.server || SHARED;
+  const allowed = scopes.value.some((s) => s.value === wanted);
+  const first = scopes.value[0]!.value;
+  const target = allowed ? props.server : first === SHARED ? "" : first;
+  if (target !== props.server) {
+    // Server ids arrive with the status poll; wait for them before
+    // calling a server in the URL unknown.
+    if (props.server && props.serverIds.length === 0) return;
+    emit("update-route", { params: { server: target || undefined } });
+    return;
+  }
+  if (ready.value && scope.value === target) return;
+  if (loading.value && scope.value === target) return;
+  filter.value = "";
+  showAll.value = false;
+  await open(target);
+}
+
+async function onScopePick(picked: string): Promise<void> {
+  const value = picked === SHARED ? "" : picked;
+  if (value === scope.value) return;
+  if (!(await confirmLeave(ask))) return;
+  discard();
+  emit("update-route", { params: { server: value || undefined } });
+}
+
+async function reload(): Promise<void> {
+  await open(scope.value);
+}
+
+async function onSave(): Promise<void> {
+  const ok = await save();
+  if (ok) {
+    notify.ok(t("rewards.savedToast"), t("rewards.savedToastDetail"));
+  }
+}
 </script>
 
 <style scoped>
