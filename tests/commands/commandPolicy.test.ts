@@ -48,6 +48,40 @@ beforeEach(() => {
   delete mockConfig.servers;
 });
 
+describe("unreadable config", () => {
+  async function unreadable(run: () => void): Promise<void> {
+    const { loadConfig } = await import("../../src/core/config.js");
+    vi.mocked(loadConfig).mockImplementationOnce(() => {
+      throw new Error("config.json is gone");
+    });
+    run();
+  }
+
+  it("falls back to the defaults under test", async () => {
+    await unreadable(() => {
+      expect(resolveCommandPolicy("backup")).toEqual({ enabled: true, adminOnly: false });
+    });
+  });
+
+  it("fails closed outside tests", async () => {
+    const saved = { vitest: process.env["VITEST"], env: process.env["NODE_ENV"] };
+    delete process.env["VITEST"];
+    process.env["NODE_ENV"] = "production";
+    try {
+      await unreadable(() => {
+        expect(resolveCommandPolicy("backup")).toEqual({ enabled: false, adminOnly: true });
+      });
+      await unreadable(() => {
+        expect(commandEnabledAnywhere("backup")).toBe(false);
+      });
+    } finally {
+      if (saved.vitest !== undefined) process.env["VITEST"] = saved.vitest;
+      if (saved.env === undefined) delete process.env["NODE_ENV"];
+      else process.env["NODE_ENV"] = saved.env;
+    }
+  });
+});
+
 describe("resolveCommandPolicy", () => {
   it("defaults to enabled + not admin-only", () => {
     expect(resolveCommandPolicy("backup")).toEqual({

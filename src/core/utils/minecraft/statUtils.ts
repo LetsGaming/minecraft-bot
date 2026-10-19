@@ -17,121 +17,122 @@ import type {
   LeaderboardData,
 } from "../../types/index.js";
 
-import { t } from "@mcbot/core/utils/i18n.js";
+import { t, formatNumber } from "../i18n.js";
+import { errMsg } from "../error.js";
+import { MS } from "@mcbot/schema/time.js";
+import { humanizeId } from "./itemNames.js";
 export type { BuildLeaderboardOptions, LeaderboardData };
+
+/** A leaderboard stat. Zero values are skipped unless `includeZero` is set. */
+export interface StatDefinition extends LeaderboardStatDefinition {
+  includeZero?: boolean;
+}
+
+type StatBody = Omit<StatDefinition, "label">;
+
+/** The value of one stat key, or 0 when the player has none. */
+const statByKey =
+  (key: string) =>
+  (flat: FlattenedStat[]): number =>
+    flat.find((s) => s.key === key)?.value ?? 0;
+
+/** The sum of every stat in a category, optionally limited to some keys. */
+const sumCategory =
+  (category: string, keys?: readonly string[]) =>
+  (flat: FlattenedStat[]): number =>
+    flat
+      .filter((s) => s.category === category && (!keys || keys.includes(s.key)))
+      .reduce((sum, s) => sum + s.value, 0);
+
+const count = (v: number): string => formatNumber(v);
+
+/** The label is read through the locale each time, so it follows the guild's language. */
+function defineStat(key: string, body: StatBody): StatDefinition {
+  return {
+    ...body,
+    get label(): string {
+      return t(`leaderboard.stat.${key}`);
+    },
+  };
+}
 
 /**
  * Available leaderboard stat definitions.
  * Each entry defines how to extract and format a stat from flattened player data.
  */
-export const LEADERBOARD_STATS: Record<string, LeaderboardStatDefinition> = {
-  playtime: {
-    label: "Playtime",
+export const LEADERBOARD_STATS: Record<string, StatDefinition> = {
+  playtime: defineStat("playtime", {
     extract: (flat) => findPlayTimeStat(flat),
     format: (v) => formatSpan(ticksToMs(v)),
     sortAscending: false,
-  },
-  mob_kills: {
-    label: "Mob Kills",
-    extract: (flat) =>
-      flat
-        .filter((s) => s.category === "minecraft:killed")
-        .reduce((sum, s) => sum + s.value, 0),
-    format: (v) => v.toLocaleString(),
+  }),
+  mob_kills: defineStat("mob_kills", {
+    extract: sumCategory("minecraft:killed"),
+    format: count,
     sortAscending: false,
-  },
-  deaths: {
-    label: "Deaths",
-    extract: (flat) => {
-      const d = flat.find((s) => s.key === "minecraft:deaths");
-      return d?.value ?? 0;
-    },
-    format: (v) => v.toLocaleString(),
+  }),
+  deaths: defineStat("deaths", {
+    extract: statByKey("minecraft:deaths"),
+    format: count,
     sortAscending: true,
-  },
-  mined: {
-    label: "Blocks Mined",
-    extract: (flat) =>
-      flat
-        .filter((s) => s.category === "minecraft:mined")
-        .reduce((sum, s) => sum + s.value, 0),
-    format: (v) => v.toLocaleString(),
+    includeZero: true,
+  }),
+  mined: defineStat("mined", {
+    extract: sumCategory("minecraft:mined"),
+    format: count,
     sortAscending: false,
-  },
-  walked: {
-    label: "Distance Walked",
-    extract: (flat) => {
-      const w = flat.find((s) => s.key === "minecraft:walk_one_cm");
-      return w?.value ?? 0;
-    },
+  }),
+  walked: defineStat("walked", {
+    extract: statByKey("minecraft:walk_one_cm"),
     format: (v) => formatDistance(v),
     sortAscending: false,
-  },
-  crafted: {
-    label: "Items Crafted",
-    extract: (flat) =>
-      flat
-        .filter((s) => s.category === "minecraft:crafted")
-        .reduce((sum, s) => sum + s.value, 0),
-    format: (v) => v.toLocaleString(),
+  }),
+  crafted: defineStat("crafted", {
+    extract: sumCategory("minecraft:crafted"),
+    format: count,
     sortAscending: false,
-  },
-  player_kills: {
-    label: "Player Kills",
-    extract: (flat) => {
-      const k = flat.find((s) => s.key === "minecraft:player_kills");
-      return k?.value ?? 0;
-    },
-    format: (v) => v.toLocaleString(),
+  }),
+  player_kills: defineStat("player_kills", {
+    extract: statByKey("minecraft:player_kills"),
+    format: count,
     sortAscending: false,
-  },
-  jumps: {
-    label: "Jumps",
-    extract: (flat) => {
-      const j = flat.find((s) => s.key === "minecraft:jump");
-      return j?.value ?? 0;
-    },
-    format: (v) => v.toLocaleString(),
+  }),
+  jumps: defineStat("jumps", {
+    extract: statByKey("minecraft:jump"),
+    format: count,
     sortAscending: false,
-  },
-  animals_bred: {
-    label: "Animals Bred",
-    extract: (flat) => {
-      const a = flat.find((s) => s.key === "minecraft:animals_bred");
-      return a?.value ?? 0;
-    },
-    format: (v) => v.toLocaleString(),
+  }),
+  animals_bred: defineStat("animals_bred", {
+    extract: statByKey("minecraft:animals_bred"),
+    format: count,
     sortAscending: false,
-  },
-  fish_caught: {
-    label: "Fish Caught",
-    extract: (flat) => {
-      const f = flat.find((s) => s.key === "minecraft:fish_caught");
-      return f?.value ?? 0;
-    },
-    format: (v) => v.toLocaleString(),
+  }),
+  fish_caught: defineStat("fish_caught", {
+    extract: statByKey("minecraft:fish_caught"),
+    format: count,
     sortAscending: false,
-  },
-  diamonds: {
-    label: "Diamond Ore Mined",
-    extract: (flat) =>
-      flat
-        .filter(
-          (s) =>
-            s.category === "minecraft:mined" &&
-            (s.key === "minecraft:diamond_ore" ||
-              s.key === "minecraft:deepslate_diamond_ore"),
-        )
-        .reduce((sum, s) => sum + s.value, 0),
-    format: (v) => v.toLocaleString(),
+  }),
+  diamonds: defineStat("diamonds", {
+    extract: sumCategory("minecraft:mined", [
+      "minecraft:diamond_ore",
+      "minecraft:deepslate_diamond_ore",
+    ]),
+    format: count,
     sortAscending: false,
-  },
+  }),
 };
 
+const MEDALS = ["🥇", "🥈", "🥉"];
+
+/** One leaderboard row: a medal for the top three, the rank number after that. */
+export function formatRankLine(index: number, name: string, detail: string): string {
+  const rank = MEDALS[index] ?? `**${index + 1}.**`;
+  return `${rank} **${name}**: ${detail}`;
+}
 
 /**
  * Shared leaderboard builder used by /leaderboard, /top, and the scheduled poster.
- * Returns plain data — callers should use buildLeaderboardEmbed() from statEmbeds.ts
+ * Returns plain data; callers should use buildLeaderboardEmbed() from statEmbeds.ts
  * to convert it to a Discord embed.
  */
 export async function buildLeaderboard(
@@ -159,7 +160,7 @@ export async function buildLeaderboard(
   for (const [uuid, statsFile] of Object.entries(allStats)) {
     const name = uuidToName[uuid];
 
-    // A leaderboard is a read — it must never delete player data.
+    // A leaderboard is a read: it must never delete player data.
     // Cleanup of departed players is an explicit admin action
     // (/server prune-stats); UUIDs neither source can name are skipped.
     if (!name) continue;
@@ -173,8 +174,7 @@ export async function buildLeaderboard(
       value = value - base;
     }
 
-    // For deaths include zero values, for everything else skip them
-    if (statKey !== "deaths" && value <= 0) continue;
+    if (!def.includeZero && value <= 0) continue;
 
     entries.push({ name, value, formatted: def.format(value) });
   }
@@ -184,11 +184,7 @@ export async function buildLeaderboard(
   );
 
   const top = entries.slice(0, limit);
-  const medals = ["🥇", "🥈", "🥉"];
-  const lines = top.map((e, i) => {
-    const prefix = medals[i] ?? `**${i + 1}.**`;
-    return `${prefix} **${e.name}** — ${e.formatted}`;
-  });
+  const lines = top.map((e, i) => formatRankLine(i, e.name, e.formatted));
 
   const titlePeriod = periodLabel ? ` (${periodLabel})` : "";
 
@@ -200,12 +196,8 @@ export async function buildLeaderboard(
   };
 }
 
-export function humanizeKey(rawKey: string): string {
-  return rawKey
-    .replace(/^minecraft:/, "")
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-}
+/** A stat key as readable text: "minecraft:walk_one_cm" becomes "Walk One Cm". */
+export const humanizeKey = humanizeId;
 
 /** Minecraft counts playtime in game ticks, 20 per second. */
 export const MS_PER_TICK = 50;
@@ -236,9 +228,9 @@ export function findPlayTimeStat(flattenedStats: FlattenedStat[]): number {
 export function formatDistance(value: number): string {
   const totalMeters = value / 100;
   const kilometers = Math.floor(totalMeters / 1000);
-  const meters = (totalMeters % 1000).toFixed(2);
+  const meters = formatNumber(totalMeters % 1000, { fixed: 2 });
 
-  return `${kilometers}km ${meters}m`;
+  return t("leaderboard.distance", { km: kilometers, m: meters });
 }
 
 /**
@@ -267,11 +259,11 @@ export async function loadStats(
  * Load all stats files for a server.
  * Cached per-server for 30 s. Call invalidateAllStatsCache() after writes.
  */
-const ALL_STATS_TTL_MS = 30_000;
+const ALL_STATS_TTL_MS = 30 * MS.second;
 const ALL_STATS_CACHE_PREFIX = "stats:all:";
 
 // Above the wrapper's own per-request concurrency (8), this is only the
-// fallback path taken against a wrapper too old to serve /stats/bulk — the
+// fallback path taken against a wrapper too old to serve /stats/bulk. The
 // bound that matters lives server-side once bulk is available.
 const STATS_FALLBACK_CONCURRENCY = 6;
 
@@ -287,7 +279,16 @@ async function loadAllStatsUncached(
   // the per-uuid fan-out below unnecessary; try it first and only fall back
   // when it 404s (older wrapper) so a lifetime player count of a few hundred
   // does not become a few hundred simultaneous requests.
-  const bulk = await serverAccess.readAllStats(cfg).catch(() => null);
+  // readAllStats returns null for a wrapper without the route. Any other
+  // failure (timeout, 5xx, auth) means the wrapper is unwell, so it is
+  // reported instead of being answered with one request per player.
+  let bulk;
+  try {
+    bulk = await serverAccess.readAllStats(cfg);
+  } catch (err) {
+    log.warn("stats", `Bulk stats read failed for ${cfg.id}: ${errMsg(err)}`);
+    throw err;
+  }
   if (bulk) return bulk;
 
   const uuids = await serverAccess.listStatsUuids(cfg);
@@ -318,7 +319,7 @@ export async function loadAllStats(
 /**
  * Delete a player's stats file, then drop the cached bundle for that
  * server so the next leaderboard read reflects the removal.
- * Admin-gated (/server prune-stats) — a read never calls this.
+ * Admin-gated (/server prune-stats); a read never calls this.
  */
 export async function deleteStats(
   uuid: string,

@@ -12,13 +12,13 @@ import type {
   ServerConfig,
 } from "./types/index.js";
 
-// Validation moved to its own module (QUAL-02); re-exported here so existing
-// callers keep importing it from @mcbot/core/config.
+// Re-exported so callers import validation from @mcbot/core/config.
 export { validateCandidateConfig, validateApiUrl };
 export type {
   ApiUrlValidation,
   ConfigValidationResult,
 } from "./configValidation.js";
+export { tryLoadConfig, type ConfigLoadResult } from "./utils/config/configAccess.js";
 import { DEFAULT_TPS_ALERT_THRESHOLD } from "@mcbot/schema/thresholds.js";
 import { isLanguage } from "@mcbot/schema/language.js";
 import { errMsg } from "./utils/error.js";
@@ -289,37 +289,6 @@ export function reloadConfig(): BotConfig {
   } catch (err) {
     _config = previous;
     throw err;
-  }
-}
-
-export type ConfigLoadResult =
-  | { ok: true; config: BotConfig }
-  | { ok: false; error: string; failOpen: boolean };
-
-let _lastLoadFailure: string | null = null;
-
-/**
- * loadConfig() for callers that must keep running when the config cannot be
- * read. The caller states which way a failure resolves: `"open"` (carry on as
- * if nothing was restricted) or `"closed"` (refuse). The result carries that
- * as `failOpen`, so the decision is visible at the call site instead of
- * hiding in an empty catch.
- *
- * A failure is logged once; the same failure repeating stays quiet until a
- * load succeeds or the message changes.
- */
-export function tryLoadConfig(opts: { onError: "open" | "closed" }): ConfigLoadResult {
-  try {
-    const config = loadConfig();
-    _lastLoadFailure = null;
-    return { ok: true, config };
-  } catch (err) {
-    const error = errMsg(err);
-    if (error !== _lastLoadFailure) {
-      _lastLoadFailure = error;
-      log.warn("config", `Config could not be loaded (failing ${opts.onError}): ${error}`);
-    }
-    return { ok: false, error, failOpen: opts.onError === "open" };
   }
 }
 

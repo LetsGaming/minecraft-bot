@@ -24,8 +24,8 @@
  * - `enabled: true` cannot force a capability-skipped command
  *   (e.g. /backup without the suite) into existence.
  */
-import { loadConfig } from "../../config.js";
-import type { CommandOverrideConfig } from "../../types/index.js";
+import { tryLoadConfig } from "../config/configAccess.js";
+import type { BotConfig, CommandOverrideConfig } from "../../types/index.js";
 
 export interface CommandPolicy {
   enabled: boolean;
@@ -40,6 +40,22 @@ export interface CommandScope {
 }
 
 const DEFAULT_POLICY: CommandPolicy = { enabled: true, adminOnly: false };
+
+/** What an unreadable config resolves to: nothing runs, so no restriction is silently dropped. */
+const LOCKED_POLICY: CommandPolicy = { enabled: false, adminOnly: true };
+
+/**
+ * Without a config file there are no overrides to honour. That is normal in
+ * isolated tests, where the defaults apply; anywhere else an unreadable config
+ * must not turn into "every command is open".
+ */
+const failOpen = (): boolean =>
+  process.env["VITEST"] !== undefined || process.env["NODE_ENV"] === "test";
+
+function readConfig(): BotConfig | null {
+  const loaded = tryLoadConfig({ onError: failOpen() ? "open" : "closed" });
+  return loaded.ok ? loaded.config : null;
+}
 
 function overlay(
   base: CommandPolicy,
@@ -57,12 +73,8 @@ export function resolveCommandPolicy(
   name: string,
   scope: CommandScope = {},
 ): CommandPolicy {
-  let cfg;
-  try {
-    cfg = loadConfig();
-  } catch {
-    return DEFAULT_POLICY; // isolated tests / schema generator
-  }
+  const cfg = readConfig();
+  if (!cfg) return failOpen() ? DEFAULT_POLICY : LOCKED_POLICY;
 
   let policy = overlay(DEFAULT_POLICY, cfg.commands?.[name]);
   if (scope.guildId) {
@@ -80,12 +92,8 @@ export function resolveCommandPolicy(
  * skipped entirely, everything else is gated per dispatch instead.
  */
 export function commandEnabledAnywhere(name: string): boolean {
-  let cfg;
-  try {
-    cfg = loadConfig();
-  } catch {
-    return true;
-  }
+  const cfg = readConfig();
+  if (!cfg) return failOpen();
 
   const globallyEnabled = cfg.commands?.[name]?.enabled ?? true;
   if (globallyEnabled) return true;
