@@ -8,7 +8,7 @@ import { closeDbForTesting, getDb } from "../../../src/core/db/index.js";
 import {
   censorName,
   cleanLabel,
-  relayName,
+  relaySpeaker,
   relayTag,
   webhookUsername,
 } from "../../../src/bot/logWatcher/watchers/log/relay/identity.js";
@@ -98,13 +98,14 @@ describe("censorName and webhook username", () => {
 describe("relayName", () => {
   it("uses the linked Minecraft name when there is one", async () => {
     getDb().prepare("INSERT INTO linked_accounts (discord_id, mc_name) VALUES (?, ?)").run("u1", "Notch");
-    expect(await relayName("u1", "Someone", "main")).toBe("Notch");
+    expect(await relaySpeaker("u1", "Someone", "main")).toEqual({ name: "Notch", linked: true });
   });
 
   it("gives unlinked users a censored name and a stable tag that holds no id", async () => {
-    const a = await relayName("111111111111111111", "Steve", "main");
+    const a = (await relaySpeaker("111111111111111111", "Steve", "main")).name;
     expect(a).toMatch(/^S\*\*\*#[0-9a-f]{4}$/);
-    expect(await relayName("111111111111111111", "Steve", "main")).toBe(a);
+    expect((await relaySpeaker("111111111111111111", "Steve", "main")).name).toBe(a);
+    expect((await relaySpeaker("111111111111111111", "Steve", "main")).linked).toBe(false);
     expect(a).not.toContain("1111");
   });
 

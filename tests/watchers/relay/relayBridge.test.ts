@@ -98,7 +98,7 @@ beforeEach(async () => {
 });
 
 describe("relay fan-out", () => {
-  it("posts to the other bridges with a censored name, the label and no avatar or mentions", async () => {
+  it("posts to the other bridges with a censored name, the label and no avatar or mentions (unlinked speaker)", async () => {
     const t = await boot();
     await t.send(message({ content: "hi <@123456789012345678> @everyone" }));
     expect(t.hooks["ch1"]).toBeUndefined();
@@ -123,7 +123,10 @@ describe("relay fan-out", () => {
     const { getDb } = await import("../../../src/core/db/index.js");
     getDb().prepare("INSERT INTO linked_accounts (discord_id, mc_name) VALUES (?, ?)").run("u-linked", "Notch");
     await t.send(message({ author: { id: "u-linked", displayName: "Someone" } }));
-    expect((t.hooks["ch2"]!.send.mock.calls[0]![0] as { username: string }).username).toBe("Notch [Alpha]");
+    const payload = t.hooks["ch2"]!.send.mock.calls[0]![0] as { username: string; avatarURL?: string };
+    expect(payload.username).toBe("Notch [Alpha]");
+    expect(payload.avatarURL).toContain("Notch");
+    expect(payload.avatarURL).not.toMatch(/discord/i);
   });
 
   it("does not relay outside a group, to other servers, or from bot and webhook messages", async () => {

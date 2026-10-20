@@ -20,7 +20,10 @@ export interface RelayPlan {
 
 /** How a relayed line reaches Discord; the chat bridge implements it, tests fake it. */
 export interface RelaySender {
-  send(target: RelayTarget, post: { username: string; content: string }): Promise<RelayedCopy | null>;
+  send(
+    target: RelayTarget,
+    post: { username: string; content: string; avatarURL?: string },
+  ): Promise<RelayedCopy | null>;
   edit(copy: RelayedCopy, content: string): Promise<void>;
   remove(copy: RelayedCopy): Promise<void>;
 }
@@ -58,6 +61,8 @@ export interface RelayRequest {
   name: string;
   /** The source guild's label. */
   label: string;
+  /** The linked speaker's Minecraft head. Unlinked speakers get none, so the webhook's own avatar shows. */
+  avatarURL?: string;
   windowMs: number;
 }
 
@@ -76,7 +81,11 @@ export async function relayMessage(
   await Promise.all(
     plan.targets.map((target) =>
       enqueueSend(target.channelId, async () => {
-        const copy = await sender.send(target, { username, content });
+        const copy = await sender.send(target, {
+          username,
+          content,
+          ...(request.avatarURL ? { avatarURL: request.avatarURL } : {}),
+        });
         if (copy) copies.push(copy);
       }, "relayed message", TAG),
     ),

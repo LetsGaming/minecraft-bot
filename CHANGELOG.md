@@ -15,7 +15,7 @@ project follows [Semantic Versioning](https://semver.org/).
 ### Added
 
 - The Docker web profile works straight from the config template: the dashboard is enabled by default and shows its setup page until the OAuth secrets are set.
-- **Cross-server chat relay.** Chat bridges that name the same `relayGroup` and are bound to the same Minecraft server forward their Discord chat to each other, as `Name [Label]` with no avatar, Discord ID or pings.
+- **Cross-server chat relay.** Chat bridges that name the same `relayGroup` and are bound to the same Minecraft server forward their Discord chat to each other, as `Name [Label]` with no Discord avatar, Discord ID or pings (linked members show their Minecraft head).
 - **`/bridge optout` and `/bridge optin`.** A member keeps their messages in one Discord server out of the relay, per server; each relayed channel gets a pinned notice listing the other servers with an opt-out button.
 - The setup wizard's chat bridge step has a label field and shows the bridge's relay group (read-only).
 

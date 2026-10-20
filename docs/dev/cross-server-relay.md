@@ -51,7 +51,7 @@ Not allowed, or deliberately not done:
 | Data | Default |
 |---|---|
 | Discord user id | Never leaves the bot. Used in memory for rate limiting only. |
-| Avatar | Not sent. The webhook uses a generic avatar. |
+| Avatar | Never the Discord avatar. Unlinked speakers get the webhook's generic avatar; linked speakers get their Minecraft head from `mc-heads.net` (as Minecraft-originated messages already do), since the linked name is already shown. |
 | Name | Linked Minecraft name, otherwise a censored Discord display name. |
 | Mentions (`@everyone`, `@here`, roles, users, channels) | Sent with `allowed_mentions: { parse: [] }`, and the visible text is rewritten to plain words (section 6). |
 | Custom emoji | Replaced by their `:name:` text. |

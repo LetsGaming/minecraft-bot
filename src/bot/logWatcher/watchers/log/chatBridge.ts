@@ -25,7 +25,7 @@ import { chatLineRegex } from "./chatLine.js";
 import { enqueueSend, flushSendQueues } from "../sendQueue.js";
 import { fetchSendable } from "../notifyGuilds.js";
 import { isChannelGone, isUnknownMessage, isUnknownWebhook } from "../discordErrors.js";
-import { relayName } from "./relay/identity.js";
+import { relaySpeaker } from "./relay/identity.js";
 import {
   planRelay,
   relayDelete,
@@ -415,14 +415,19 @@ async function deliver(
  * unusable.
  */
 function relaySender(client: Client): RelaySender {
-  const relayEmbed = (username: string, content: string) =>
-    createEmbed({ description: content, category: EmbedCategory.Chat, author: { name: username } });
+  const relayEmbed = (username: string, content: string, iconURL?: string) =>
+    createEmbed({
+      description: content,
+      category: EmbedCategory.Chat,
+      author: { name: username, ...(iconURL ? { iconURL } : {}) },
+    });
   return {
-    send: (target: RelayTarget, post: { username: string; content: string }) =>
+    send: (target: RelayTarget, post: { username: string; content: string; avatarURL?: string }) =>
       postLine(client, target, {
         username: post.username,
+        ...(post.avatarURL ? { avatarURL: post.avatarURL } : {}),
         content: post.content,
-        embed: () => relayEmbed(post.username, post.content),
+        embed: () => relayEmbed(post.username, post.content, post.avatarURL),
       }),
     async edit(copy, content) {
       try {
@@ -438,7 +443,9 @@ function relaySender(client: Client): RelaySender {
         const message = await channel?.messages.fetch(copy.messageId);
         if (!message) return;
         await message.edit({
-          embeds: [relayEmbed(message.embeds[0]?.author?.name ?? "?", content)],
+          embeds: [
+            relayEmbed(message.embeds[0]?.author?.name ?? "?", content, message.embeds[0]?.author?.iconURL),
+          ],
           allowedMentions: safeMentions("none"),
         });
       } catch (err) {
@@ -530,9 +537,10 @@ export function setupDiscordToMc(
       guildId,
       channelId: msg.channel.id,
     });
-    const speaker = plan
-      ? await relayName(msg.author.id, msg.author.displayName, plan.group)
-      : msg.author.displayName;
+    const relaySpeakerOf = plan
+      ? await relaySpeaker(msg.author.id, msg.author.displayName, plan.group)
+      : null;
+    const speaker = relaySpeakerOf?.name ?? msg.author.displayName;
 
     // Strip control characters (incl. \r\n, which could inject extra
     // commands via the screen fallback) and cap lengths, printable
@@ -569,6 +577,7 @@ export function setupDiscordToMc(
         sourceMessageId: msg.id,
         input: relayInputOf(msg),
         name: speaker,
+        ...(relaySpeakerOf?.linked ? { avatarURL: playerAvatarUrl(speaker) } : {}),
         label: gcfg.bridgeLabel || msg.guild?.name || "?",
         windowMs: relaySyncWindowMs(),
       },

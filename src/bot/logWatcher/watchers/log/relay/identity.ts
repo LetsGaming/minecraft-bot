@@ -32,15 +32,21 @@ export function relayTag(userId: string, secret: string): string {
   return createHmac("sha256", secret).update(userId).digest("hex").slice(0, TAG_LENGTH);
 }
 
+export interface RelaySpeaker {
+  name: string;
+  /** True when `name` is the speaker's linked Minecraft name, so their head can stand in for an avatar. */
+  linked: boolean;
+}
+
 /**
- * The name a speaker goes by in a relay group: the Minecraft name when they
- * linked an account, otherwise a censored display name and a stable tag. Never
- * contains the Discord id.
+ * Who a speaker is in a relay group: the Minecraft name when they linked an
+ * account, otherwise a censored display name and a stable tag. Never contains
+ * the Discord id.
  */
-export async function relayName(userId: string, displayName: string, group: string): Promise<string> {
+export async function relaySpeaker(userId: string, displayName: string, group: string): Promise<RelaySpeaker> {
   const linked = await getLinkedAccount(userId);
-  if (linked) return linked;
-  return `${censorName(displayName)}#${relayTag(userId, relayGroupSecret(group))}`;
+  if (linked) return { name: linked, linked: true };
+  return { name: `${censorName(displayName)}#${relayTag(userId, relayGroupSecret(group))}`, linked: false };
 }
 
 /** A guild's label as shown after the name: no control characters or brackets, at most 24 characters. */

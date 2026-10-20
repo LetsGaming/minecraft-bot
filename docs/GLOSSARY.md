@@ -21,7 +21,7 @@ Terms specific to this project that are easy to misread.
 | Service user | The unprivileged Linux user the API wrapper runs as when `API_SERVER.SERVICE_USER` is set (`service_user.sh`): ACL grants on the instance files and a generated sudoers file naming exact scripts. |
 | Relay group | A name set as `relayGroup` on chat bridges by a bot admin. Bridges with the same group and the same Minecraft server forward Discord messages to each other. Never spans Minecraft servers, never chains. See `docs/dev/cross-server-relay.md`. |
 | Source label | The short name shown in brackets after a relayed sender (`Name [Label]`): the guild's `bridgeLabel`, or the Discord server's name. |
-| Relay identity | The name shown for a relayed Discord user: the linked Minecraft name, otherwise the first letter of the display name, `***` and a stable tag. Never an avatar or a Discord id. |
+| Relay identity | The name shown for a relayed Discord user: the linked Minecraft name, otherwise the first letter of the display name, `***` and a stable tag. Never a Discord avatar or id; a linked speaker also gets their Minecraft head as the avatar. |
 | Relay tag | The four hex characters after a censored name (`S***#a4f2`): an HMAC of the user id with the group's secret. Stable, and meaningless outside the group. |
 | Relay notice | The pinned message in a relayed channel that says messages are forwarded, names the other servers and carries the opt-out button. |
 | Relay opt-out | A member's choice, per Discord server, to keep their messages out of the relay (`/bridge optout` or the notice button). |
