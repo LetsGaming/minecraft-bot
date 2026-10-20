@@ -56,7 +56,7 @@
           option-label="label"
           option-value="value"
           show-clear
-          :placeholder="t('field.unsetChoice')"
+          :placeholder="unsetPlaceholder"
           :label-id="id"
           :aria-labelledby="labelId"
           :disabled="locked"
@@ -72,7 +72,7 @@
           option-value="id"
           show-clear
           filter
-          :placeholder="t('field.unsetChoice')"
+          :placeholder="unsetPlaceholder"
           :label-id="id"
           :aria-labelledby="labelId"
           :disabled="locked"
@@ -88,7 +88,7 @@
           option-value="id"
           display="chip"
           filter
-          :placeholder="t('field.noneChoice')"
+          :placeholder="unsetPlaceholder"
           :input-id="id"
           :aria-labelledby="labelId"
           :disabled="locked"
@@ -99,6 +99,7 @@
           v-else-if="kind === 'string'"
           :id="id"
           :model-value="(modelValue as string) ?? ''"
+          :placeholder="unsetPlaceholder"
           :aria-describedby="describedBy"
           :disabled="locked"
           :invalid="invalid"
@@ -108,6 +109,7 @@
 :locale="UI_LOCALE"
           v-else-if="kind === 'number'"
           :model-value="(modelValue as number) ?? null"
+          :placeholder="unsetPlaceholder"
           :input-id="id"
           :use-grouping="false"
           :max-fraction-digits="6"
@@ -124,7 +126,7 @@
           option-value="value"
           display="chip"
           filter
-          :placeholder="t('field.noneChoice')"
+          :placeholder="unsetPlaceholder"
           :input-id="id"
           :aria-labelledby="labelId"
           :disabled="locked"
@@ -180,17 +182,21 @@
     <!-- An object the editor already titles (a group with one section): its fields, no header. -->
     <div v-else-if="kind === 'object' && bare" class="sf-bare">
       <p v-if="error" class="sf-error sf-pad" role="alert">{{ error }}</p>
-      <SchemaField
-        v-for="(childSchema, key) in objectProps"
-        :key="key"
-        :name="String(key)"
-        :schema="childSchema"
-        :definitions="definitions"
-        :path="path"
-        :key-path="[...keyPath, String(key)]"
-        :model-value="objectValue[key]"
-        @update:model-value="setChild(String(key), $event)"
-      />
+      <div v-for="(childSchema, key) in objectProps" v-show="childShown(String(key))" :key="key">
+        <SchemaField
+          :name="String(key)"
+          :schema="childSchema"
+          :definitions="definitions"
+          :path="path"
+          :key-path="[...keyPath, String(key)]"
+          :model-value="objectValue[key]"
+          @update:model-value="setChild(String(key), $event)"
+        />
+      </div>
+      <button v-if="showRest" type="button" class="sf-rest" :aria-expanded="restOpen" @click="restOpen = !restOpen">
+        <i :class="['pi', restOpen ? 'pi-chevron-down' : 'pi-chevron-right']" aria-hidden="true" />
+        {{ restOpen ? t("config.restHide") : t("config.restShow", { count: hiddenChildCount }) }}
+      </button>
     </div>
 
     <!-- An object: a collapsible section. Its chip says On, Off, Configured or
@@ -208,6 +214,8 @@
           @click="expanded = !open"
         >
           <i class="pi section-caret" :class="open ? 'pi-chevron-down' : 'pi-chevron-right'" aria-hidden="true" />
+          <span v-if="error || problemInside" class="sf-dot is-invalid" aria-hidden="true" />
+          <span v-else-if="dirtyInside" class="sf-dot" aria-hidden="true" />
           <span class="section-meta">
             <span class="stitle-row">
               <span v-if="path.length" class="scrumb">{{ path.join(" › ") }} ›</span>
@@ -247,18 +255,23 @@
           />
           <span v-if="jsonError" class="sf-error">{{ jsonError }}</span>
         </template>
-        <SchemaField
-          v-for="(childSchema, key) in objectProps"
-          v-else
-          :key="key"
-          :name="String(key)"
-          :schema="childSchema"
-          :definitions="definitions"
-          :path="[...path, label]"
-          :key-path="[...keyPath, String(key)]"
-          :model-value="objectValue[key]"
-          @update:model-value="setChild(String(key), $event)"
-        />
+        <template v-else>
+          <div v-for="(childSchema, key) in objectProps" v-show="childShown(String(key))" :key="key">
+            <SchemaField
+              :name="String(key)"
+              :schema="childSchema"
+              :definitions="definitions"
+              :path="[...path, label]"
+              :key-path="[...keyPath, String(key)]"
+              :model-value="objectValue[key]"
+              @update:model-value="setChild(String(key), $event)"
+            />
+          </div>
+          <button v-if="showRest" type="button" class="sf-rest" :aria-expanded="restOpen" @click="restOpen = !restOpen">
+            <i :class="['pi', restOpen ? 'pi-chevron-down' : 'pi-chevron-right']" aria-hidden="true" />
+            {{ restOpen ? t("config.restHide") : t("config.restShow", { count: hiddenChildCount }) }}
+          </button>
+        </template>
       </div>
     </section>
 
@@ -376,7 +389,7 @@ export default defineComponent({
     };
   },
   data() {
-    return { jsonError: "", expanded: false, jsonMode: false, revealed: false };
+    return { jsonError: "", expanded: false, jsonMode: false, revealed: false, restOpen: false };
   },
   computed: {
     node(): JsonSchemaNode {
@@ -484,6 +497,24 @@ export default defineComponent({
     objectValue(): Record<string, unknown> {
       return isRecord(this.modelValue) ? this.modelValue : {};
     },
+    /** What an empty control tells the admin: the default that applies, or that nothing is set. */
+    unsetPlaceholder(): string {
+      return this.node.default === undefined
+        ? t("field.unsetChoice")
+        : t("field.defaultChoice", { value: shortValue(this.node.default) });
+    },
+    /** True while the saved object has a child, so a section with nothing saved still opens in full. */
+    baselineHasChild(): boolean {
+      if (!this.form) return true;
+      return Object.keys(this.objectProps).some((key) => this.childSaved(key));
+    },
+    hiddenChildCount(): number {
+      return Object.keys(this.objectProps).filter((key) => !this.childIsSet(key)).length;
+    },
+    showRest(): boolean {
+      if (!this.form || this.form.showAll() || this.form.filtering() || !this.baselineHasChild) return false;
+      return this.hiddenChildCount > 0;
+    },
     // An "X or X[]" union may hold a single value (ServerScope "smp"); show it as a one-item list.
     arrayModel(): unknown[] {
       const v = this.modelValue;
@@ -558,6 +589,23 @@ export default defineComponent({
       this.jsonMode = !this.jsonMode;
       if (this.jsonMode) this.expanded = true;
     },
+    childSaved(key: string): boolean {
+      const saved = this.form?.baselineAt([...this.keyPath, key]);
+      return !saved?.known || (saved.value !== undefined && saved.value !== null);
+    },
+    /** A child shows by default when it is saved, edited this session, or has a problem. */
+    childIsSet(key: string): boolean {
+      if (!this.form) return true;
+      const path = [...this.keyPath, key];
+      const saved = this.form.baselineAt(path);
+      if (!saved.known || (saved.value !== undefined && saved.value !== null)) return true;
+      if (!sameValue(this.objectValue[key], saved.value)) return true;
+      return !!this.form.errorFor(path) || this.form.hasProblemUnder(path);
+    },
+    childShown(key: string): boolean {
+      if (!this.form || this.form.showAll() || this.form.filtering() || this.restOpen) return true;
+      return !this.baselineHasChild || this.childIsSet(key);
+    },
     onJsonInput(raw: string) {
       this.jsonError = "";
       if (raw.trim() === "") return this.emitValue(undefined);
@@ -612,6 +660,24 @@ export default defineComponent({
 }
 .sf-reset:disabled { color: var(--text-dim); cursor: default; }
 .sf-bare { display: flex; flex-direction: column; }
+.sf-rest {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--control-h);
+  padding: 0 var(--space-4);
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.sf-rest:hover { color: var(--text); background: var(--surface-raised); }
+.sf-rest:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 
 .section {
   border: 1px solid var(--border);
@@ -622,8 +688,9 @@ export default defineComponent({
   scroll-margin-top: 112px;
 }
 .section.open { border-color: var(--border-strong); }
-.section.dirty { border-left: 3px solid var(--accent); }
-.section.has-error { border-left: 3px solid var(--danger); }
+.section.has-error { border-color: var(--danger); }
+.sf-dot { flex: none; width: 8px; height: 8px; border-radius: var(--radius-full); background: var(--accent); }
+.sf-dot.is-invalid { background: var(--danger); }
 .section-head-wrap { display: flex; align-items: stretch; }
 .section-head {
   flex: 1;

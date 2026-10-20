@@ -25,6 +25,8 @@ import type { EditConflict } from "./useEditableDocument";
 export interface SchemaFormContext {
   isVisible(path: readonly string[]): boolean;
   filtering(): boolean;
+  /** The editor's "show all settings" switch: reveal settings still at their default. */
+  showAll(): boolean;
   /** The value last saved, when the editor knows it. */
   baselineAt(path: readonly string[]): { known: boolean; value: unknown };
   errorFor(path: readonly string[]): string;
@@ -49,6 +51,7 @@ export interface SchemaFormSource {
   conflicts: () => readonly EditConflict[];
   query: () => string;
   locked: () => boolean;
+  showAll?: () => boolean;
   /** Maps a reported error path into the form's own paths. */
   stripPath?: (path: string[]) => string[];
   entryLabel?: (mapName: string, key: string) => string | undefined;
@@ -119,6 +122,7 @@ export function useSchemaForm(source: SchemaFormSource) {
   const context: SchemaFormContext = {
     isVisible: (path) => filter.value.isVisible(path),
     filtering: () => filter.value.active,
+    showAll: () => source.showAll?.() ?? false,
     baselineAt: (path) => {
       const base = source.baseline();
       return base ? { known: true, value: valueAt(base, path) } : { known: false, value: undefined };

@@ -63,7 +63,7 @@
             v-show="activeTab === entry.id"
             v-bind="viewProps(entry.id)"
             @navigate="goToNav"
-            @goto-config="goToNav('config')"
+            @goto-config="goToConfig"
             @bot-state="onBotState"
             @servers="onServers"
             @update-route="patchRoute"
@@ -300,6 +300,10 @@ export default defineComponent({
           : this.servers[0]!.id;
         void this.$router.replace(navLocation(entry, fallback));
       }
+    },
+    goToConfig(raw?: boolean): void {
+      if (raw === true) void this.$router.push({ name: "config", params: { mode: "raw" } });
+      else this.goToNav("config");
     },
     goToNav(id: string): void {
       const entry = NAV_ENTRIES.find((e) => e.id === id);
