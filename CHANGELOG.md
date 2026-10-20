@@ -6,11 +6,13 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [8.2.0] — 2026-10-20
+
 ### Added
 
 - The Docker web profile works straight from the config template: the dashboard is enabled by default and shows its setup page until the OAuth secrets are set.
-- **Cross-server chat relay.** Chat bridges that name the same `relayGroup` and are bound to the same Minecraft server forward their Discord chat to each other, as `Name [Label]` with no avatar, Discord ID or pings. The speaker is the linked Minecraft name, or a shortened display name with a stable tag; mentions, emoji, links, attachments and replies are rewritten to plain words; edits and deletes follow for an hour (`limits.relaySyncWindowMinutes`); a group has its own rate limit (`limits.relayCapacity`, `relayWindowMs`). Off unless a bot admin sets `relayGroup` (`chatBridge.ts`, `relay/`, `config.schema.json`).
-- **`/bridge optout` and `/bridge optin`.** A member keeps their messages in one Discord server out of the relay, per server; each relayed channel gets a pinned notice listing the other servers with an opt-out button. A guild can also list `bridgeBlocklist` user IDs and set a `bridgeLabel` (`bridge.ts`, `relayNotice.ts`).
+- **Cross-server chat relay.** Chat bridges that name the same `relayGroup` and are bound to the same Minecraft server forward their Discord chat to each other, as `Name [Label]` with no avatar, Discord ID or pings.
+- **`/bridge optout` and `/bridge optin`.** A member keeps their messages in one Discord server out of the relay, per server; each relayed channel gets a pinned notice listing the other servers with an opt-out button.
 - The setup wizard's chat bridge step has a label field and shows the bridge's relay group (read-only).
 
 ### Security
@@ -25,10 +27,10 @@ project follows [Semantic Versioning](https://semver.org/).
 - The Config page no longer repeats "the bot is not running" under the editor bar when the app-wide banner already says so; the "Saved, not applied" chip stays (`ConfigView.vue`).
 - **Mod config shows only the error when the file list cannot load.** The status bar, filter, empty file list and "Pick a file to edit" no longer sit around the failure; it names the likely cause (wrapper not answering, wrapper too old, dashboard error) and offers Retry (`ModConfigView.vue`).
 - **Prune says which half is too old.** The unsupported state now tells apart an API wrapper that does not report chunk pruning from a setup suite without the prune script, and what to update (`/api/servers/:id/prune/support` returns `missing`, `pruneSupportGap` in `access/prune.ts`).
-- **Prune chunks reads as three steps.** The rules (what counts as unused) come first and fold away once there is a result, the result and map follow, and Delete is its own section at the end. The select, unselect and protect tools, the chosen-by-hand counter and "Also allow selecting protected areas" sit behind "Adjust by hand". The per-dimension table shows Delete, Kept and Freed, with the other columns under "Why chunks were kept" (`PruneView.vue`).
-- Prune's Delete section ends with one summary (chunks deleted of the total, space freed, and the backup note) directly above the button, and says to scan again when the preview is out of date. Mods' search results now scroll inside their own column on wide screens instead of stretching the page, and Config's groups and sections get more room at the bottom (`PruneView.vue`, `ModsView.vue`, `ConfigView.vue`, `SchemaField.vue`).
+- **Prune chunks reads as three steps.** The rules (what counts as unused) come first and fold away once there is a result, the result and map follow, and Delete is its own section at the end.
+- Prune's Delete section ends with one summary (chunks deleted of the total, space freed, and the backup note) directly above the button, and says to scan again when the preview is out of date.
 - **Phone layouts are tighter.** The save bar at the bottom of Config, Daily rewards and the other editors is one status line when there is nothing to save (instead of a row of disabled buttons), Config's "Jump to group" list follows the group you scrolled to, item-pool rows in Daily rewards label their amount and chance and keep the delete button beside the name, and the Mods pager, Rewards inputs and chance toggle meet the 44 px touch size (`EditBar.vue`, `ConfigView.vue`, `RewardsView.vue`, `PagerNav.vue`).
-- **Numbers follow the dashboard's language, not the browser's.** A browser set to German no longer shows "1.400" next to English text or "283,7 Mio. downloads"; counts, the mod download totals and the number inputs all format as English (`utils/numberFormat.ts`). Headings balance their lines, and tables and inputs use tabular digits.
+- **Numbers follow the dashboard's language, not the browser's.** A browser set to German no longer shows "1.400" next to English text or "283,7 Mio.
 - Daily rewards shows each rarity as a square pip in that tier's own embed colour instead of an emoji circle, and the Prune chunk map sits on a faint block grid until regions are painted (`RewardsView.vue`, `PruneMap.vue`).
 - Config's "Saved, not applied" chip now reads "Saved, waiting for the bot"; Daily rewards' "Weights to 100" is "Rescale weights to 100" with its explanation shown under the toolbar instead of a hover title.
 - The Config schema description for feature nudges no longer names an internal type (`config.schema.json`).
