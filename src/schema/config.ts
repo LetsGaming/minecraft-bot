@@ -192,6 +192,17 @@ export interface GuildChatBridgeConfig {
    * than dropping chat.
    */
   useWebhook?: boolean;
+  /**
+   * Name of the relay group this bridge belongs to. Bridges that name the
+   * same group and are bound to the same Minecraft server forward their
+   * Discord chat to each other, under a source label and without Discord
+   * ids or avatars. Unset (the default) means nothing is relayed. Only a
+   * sysadmin can set it, so a guild can never be pulled into a group.
+   * @title Relay group
+   * @pattern ^[a-z0-9_-]{1,32}$
+   * @effect Applies on the next config reload.
+   */
+  relayGroup?: string;
 }
 
 export interface GuildLeaderboardConfig {
@@ -344,6 +355,20 @@ export interface GuildConfig {
   notifications?: GuildNotificationConfig;
   /** One bridge, or several (one Discord channel per server). */
   chatBridge?: GuildChatBridgeConfig | GuildChatBridgeConfig[];
+  /**
+   * How this guild is named on messages it relays to other Discord servers,
+   * shown as `Name [Label]`. Defaults to the Discord server's name. Only
+   * used when a chat bridge has a relay group.
+   * @title Relay label
+   * @maxLength 24
+   */
+  bridgeLabel?: string;
+  /**
+   * Discord user IDs whose messages are never relayed to other Discord
+   * servers from this guild. They still reach Minecraft.
+   * @title Relay blocklist
+   */
+  bridgeBlocklist?: string[];
   leaderboard?: GuildLeaderboardConfig;
   statusEmbed?: GuildStatusEmbedConfig;
   downtimeAlerts?: GuildDowntimeAlertsConfig;
@@ -452,6 +477,19 @@ export interface LimitsConfig {
   bridgeCapacity?: number;
   /** @minimum 1000 */
   bridgeWindowMs?: number;
+  /**
+   * Relayed messages per relay group per window (default 20 per 10s).
+   * @minimum 1
+   */
+  relayCapacity?: number;
+  /** @minimum 1000 */
+  relayWindowMs?: number;
+  /**
+   * How long an edit or delete in a relayed message still reaches the
+   * copies in the other Discord servers (default 60 minutes).
+   * @minimum 1
+   */
+  relaySyncWindowMinutes?: number;
 }
 
 /** One server's scheduled restart. */

@@ -16,10 +16,12 @@ import {
 } from "@mcbot/schema";
 import { apiKeyEnvVar } from "./config.js";
 import {
+  bridgeServerOf,
   bridgesOf,
   guildServerScopes,
   scopeToList,
 } from "./utils/server/guildScopes.js";
+import { allowedServerIdsIn } from "./utils/server/guildTargets.js";
 import { checkAgainstSchema, type SchemaIssue } from "./configSchemaCheck.js";
 import { CURRENT_CONFIG_VERSION } from "./configMigrations.js";
 import type {
@@ -456,6 +458,80 @@ function checkTenantIsolation(
   }
 }
 
+interface RelayMember {
+  gid: string;
+  channelId: string;
+  server: string;
+}
+
+// Bridges that name the same relayGroup forward chat to each other, so every
+// member must be bound to the same server and be allowed to reach it.
+function checkRelayGroups({ raw, errors, warnings, knownServers }: SectionContext): void {
+  if (!usable(raw.guilds)) return;
+  const guilds = raw.guilds;
+  const groups = new Map<string, RelayMember[]>();
+  for (const [gid, guild] of Object.entries(guilds)) {
+    for (const bridge of bridgesOf(guild)) {
+      if (!bridge?.channelId || typeof bridge.relayGroup !== "string" || !bridge.relayGroup) continue;
+      const server = bridgeServerOf(guild, bridge, knownServers);
+      if (!server) {
+        errors.push(
+          `  - guilds.${gid}.chatBridge (channel ${bridge.channelId}): ` +
+            `relayGroup "${bridge.relayGroup}" needs a bridge bound to one ` +
+            `server — set "server" on the bridge (or a guild "defaultServer").`,
+        );
+        continue;
+      }
+      const members = groups.get(bridge.relayGroup) ?? [];
+      members.push({ gid, channelId: bridge.channelId, server });
+      groups.set(bridge.relayGroup, members);
+    }
+  }
+
+  for (const [group, members] of groups) {
+    const servers = new Set(members.map((m) => m.server));
+    if (servers.size > 1) {
+      errors.push(
+        `  - relayGroup "${group}" spans several servers (${[...servers].join(", ")}) — ` +
+          `a group relays only between bridges bound to the same server.`,
+      );
+    }
+    const memberGuilds = [...new Set(members.map((m) => m.gid))];
+    if (memberGuilds.length < 2) {
+      warnings.push(`relayGroup "${group}" has only one Discord server — there is nothing to relay to.`);
+    }
+    for (const member of members) {
+      const allowed = allowedServerIdsIn(guilds, member.gid);
+      if (allowed && !allowed.has(member.server)) {
+        errors.push(
+          `  - guilds.${member.gid}.chatBridge (channel ${member.channelId}): relayGroup ` +
+            `"${group}" is bound to "${member.server}", which this guild's allowedServers does not include.`,
+        );
+      }
+    }
+    const labels = new Map<string, string[]>();
+    for (const gid of memberGuilds) {
+      const label = guilds[gid]?.bridgeLabel?.trim();
+      if (!label) {
+        warnings.push(
+          `guilds.${gid}.bridgeLabel is not set — relayed messages from this guild ` +
+            `(group "${group}") will use the Discord server's name.`,
+        );
+        continue;
+      }
+      labels.set(label.toLowerCase(), [...(labels.get(label.toLowerCase()) ?? []), gid]);
+    }
+    for (const [label, gids] of labels) {
+      if (gids.length > 1) {
+        warnings.push(
+          `relayGroup "${group}": guilds ${gids.join(", ")} share the label "${label}" — ` +
+            `readers cannot tell their messages apart.`,
+        );
+      }
+    }
+  }
+}
+
 function checkGuilds(ctx: SectionContext): void {
   if (!usable(ctx.raw.guilds)) return;
   const guilds = ctx.raw.guilds;
@@ -588,6 +664,7 @@ export function validateCandidateConfig(
   checkConfigVersion(ctx);
   checkServers(ctx);
   checkGuilds(ctx);
+  checkRelayGroups(ctx);
   checkPresence(ctx);
   checkEmbedColors(ctx);
   checkSchedules(ctx);

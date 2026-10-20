@@ -145,6 +145,9 @@ export const DEFAULT_SLASH_CAPACITY = 5;
 export const DEFAULT_SLASH_WINDOW_MS = 30 * MS.second;
 export const DEFAULT_BRIDGE_CAPACITY = 8;
 export const DEFAULT_BRIDGE_WINDOW_MS = 10 * MS.second;
+export const DEFAULT_RELAY_CAPACITY = 20;
+export const DEFAULT_RELAY_WINDOW_MS = 10 * MS.second;
+export const DEFAULT_RELAY_SYNC_WINDOW_MINUTES = 60;
 
 /**
  * The configured `limits` block, read lazily so this module can load
@@ -157,6 +160,9 @@ function configuredLimits(): {
   slashWindowMs: number;
   bridgeCapacity: number;
   bridgeWindowMs: number;
+  relayCapacity: number;
+  relayWindowMs: number;
+  relaySyncWindowMinutes: number;
 } {
   let limits: Record<string, unknown> = {};
   try {
@@ -172,6 +178,9 @@ function configuredLimits(): {
     slashWindowMs: num(limits.slashWindowMs, DEFAULT_SLASH_WINDOW_MS, 1000),
     bridgeCapacity: num(limits.bridgeCapacity, DEFAULT_BRIDGE_CAPACITY, 1),
     bridgeWindowMs: num(limits.bridgeWindowMs, DEFAULT_BRIDGE_WINDOW_MS, 1000),
+    relayCapacity: num(limits.relayCapacity, DEFAULT_RELAY_CAPACITY, 1),
+    relayWindowMs: num(limits.relayWindowMs, DEFAULT_RELAY_WINDOW_MS, 1000),
+    relaySyncWindowMinutes: num(limits.relaySyncWindowMinutes, DEFAULT_RELAY_SYNC_WINDOW_MINUTES, 1),
   };
 }
 
@@ -182,6 +191,17 @@ export function bridgeLimiterSettings(): {
 } {
   const l = configuredLimits();
   return { capacity: l.bridgeCapacity, windowMs: l.bridgeWindowMs };
+}
+
+/** Relay limiter settings: one bucket per relay group, on top of the per-author bridge limiter. */
+export function relayLimiterSettings(): { capacity: number; windowMs: number } {
+  const l = configuredLimits();
+  return { capacity: l.relayCapacity, windowMs: l.relayWindowMs };
+}
+
+/** How long an edit or delete in a relayed message still reaches its copies, in milliseconds. */
+export function relaySyncWindowMs(): number {
+  return configuredLimits().relaySyncWindowMinutes * 60_000;
 }
 
 let slashCommandLimiter: RateLimiter | null = null;

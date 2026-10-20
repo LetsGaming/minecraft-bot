@@ -17,6 +17,21 @@ export function bridgesOf(guild: GuildConfig): GuildChatBridgeConfig[] {
   return guild.chatBridge ? [guild.chatBridge] : [];
 }
 
+/**
+ * The one server a chat bridge is bound to: its own `server`, else the guild's
+ * `defaultServer`, else the only configured server. Undefined when none of
+ * those names it, which the validator reports as ambiguous.
+ */
+export function bridgeServerOf(
+  guild: GuildConfig,
+  bridge: GuildChatBridgeConfig,
+  knownServers?: ReadonlySet<string> | null,
+): string | undefined {
+  if (bridge.server) return bridge.server;
+  if (guild.defaultServer) return guild.defaultServer;
+  return knownServers && knownServers.size === 1 ? [...knownServers][0] : undefined;
+}
+
 export interface GuildServerScope {
   /** Config path under the guild, e.g. "notifications.server". */
   field: string;

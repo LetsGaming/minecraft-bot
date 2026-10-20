@@ -296,6 +296,20 @@
           ],
           "description": "One bridge, or several (one Discord channel per server)."
         },
+        "bridgeLabel": {
+          "type": "string",
+          "description": "How this guild is named on messages it relays to other Discord servers, shown as `Name [Label]`. Defaults to the Discord server's name. Only used when a chat bridge has a relay group.",
+          "title": "Relay label",
+          "maxLength": 24
+        },
+        "bridgeBlocklist": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Discord user IDs whose messages are never relayed to other Discord servers from this guild. They still reach Minecraft.",
+          "title": "Relay blocklist"
+        },
         "leaderboard": {
           "$ref": "#/definitions/GuildLeaderboardConfig"
         },
@@ -405,6 +419,13 @@
         "useWebhook": {
           "type": "boolean",
           "description": "Relay MC→Discord chat through a channel webhook so each line shows the player's name and head as the message author instead of a bot embed. Needs Manage Webhooks in the channel; when the webhook can't be created or used the bridge falls back to the embed form rather than dropping chat."
+        },
+        "relayGroup": {
+          "type": "string",
+          "description": "Name of the relay group this bridge belongs to. Bridges that name the same group and are bound to the same Minecraft server forward their Discord chat to each other, under a source label and without Discord ids or avatars. Unset (the default) means nothing is relayed. Only a sysadmin can set it, so a guild can never be pulled into a group.",
+          "title": "Relay group",
+          "pattern": "^[a-z0-9_-]{1,32}$",
+          "effect": "Applies on the next config reload."
         }
       },
       "additionalProperties": false,
@@ -646,6 +667,20 @@
         "bridgeWindowMs": {
           "type": "number",
           "minimum": 1000
+        },
+        "relayCapacity": {
+          "type": "number",
+          "description": "Relayed messages per relay group per window (default 20 per 10s).",
+          "minimum": 1
+        },
+        "relayWindowMs": {
+          "type": "number",
+          "minimum": 1000
+        },
+        "relaySyncWindowMinutes": {
+          "type": "number",
+          "description": "How long an edit or delete in a relayed message still reaches the copies in the other Discord servers (default 60 minutes).",
+          "minimum": 1
         }
       },
       "additionalProperties": false,
