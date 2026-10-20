@@ -21,36 +21,26 @@
     <div v-else class="mods-layout" :class="{ 'has-pending': pendingCount > 0 }">
       <div class="mods-main">
         <section class="summary" :aria-label="t('mods.summary.label')">
-          <div class="stat">
-            <span class="stat-icon" aria-hidden="true"><i class="pi pi-box" /></span>
+          <div v-for="tile in tiles" :key="tile.key" class="stat">
+            <span :class="['stat-icon', tile.tone]" aria-hidden="true"><i :class="tile.icon" /></span>
             <span class="stat-text">
-              <strong class="stat-n">{{ inst.mods.value.length }}</strong>
-              <span class="stat-l">{{ t("mods.summary.installed", { count: inst.mods.value.length }) }}</span>
+              <strong class="stat-n">
+                <template v-if="tile.value !== null">{{ tile.value }}</template>
+                <template v-else><span aria-hidden="true">{{ t("mods.summary.noValue") }}</span> {{ tile.name }}</template>
+              </strong>
+              <span class="stat-l">{{ tile.label }}</span>
             </span>
           </div>
-          <div class="stat">
-            <span class="stat-icon ok" aria-hidden="true"><i class="pi pi-check-circle" /></span>
-            <span class="stat-text">
-              <strong class="stat-n">{{ t("mods.summary.compatible") }}</strong>
-              <span class="stat-l">{{ compatibleWith }}</span>
-            </span>
+          <div v-if="canWrite" class="summary-add">
+            <Button
+              class="tap"
+              icon="pi pi-plus"
+              :label="t('mods.summary.add')"
+              :aria-describedby="serverOnline ? undefined : 'mods-add-note'"
+              @click="focusCatalog"
+            />
+            <span v-if="!serverOnline" id="mods-add-note" class="summary-add-note">{{ t("mods.summary.addNote") }}</span>
           </div>
-          <div class="stat">
-            <span :class="['stat-icon', pendingCount > 0 ? 'pending' : 'ok']" aria-hidden="true">
-              <i :class="pendingCount > 0 ? 'pi pi-clock' : 'pi pi-check'" />
-            </span>
-            <span class="stat-text">
-              <strong class="stat-n">{{ t("mods.summary.pending", { count: pendingCount }) }}</strong>
-              <span class="stat-l">{{ pendingCount > 0 ? t("mods.summary.needsRestart") : t("mods.summary.nothingPending") }}</span>
-            </span>
-          </div>
-          <Button
-            v-if="canWrite"
-            class="tap summary-add"
-            icon="pi pi-plus"
-            :label="t('mods.summary.add')"
-            @click="focusCatalog"
-          />
         </section>
 
         <InstalledModsPanel
@@ -168,12 +158,60 @@ const lede = computed(() => {
   return playersOnline.value > 0 ? `${base} ${t("mods.ledePlayers", { count: playersOnline.value })}` : base;
 });
 
+const serverOnline = computed(() => serverRole.value === StatusRole.Online);
+const serverOffline = computed(() => serverRole.value === StatusRole.Offline);
+const listKnown = computed(() => inst.installed.value !== null);
+const listFailed = computed(() => !listKnown.value && inst.loadError.value !== null);
+
+const unknownLabel = computed(() => {
+  if (serverOffline.value) return t("mods.summary.unknownOffline");
+  if (listFailed.value) return t("mods.summary.unknownListFailed");
+  return t("mods.summary.unknown");
+});
+const unknownTile = computed(() =>
+  listFailed.value && !serverOffline.value
+    ? { tone: "error", icon: "pi pi-exclamation-circle" }
+    : { tone: "unknown", icon: "pi pi-minus" },
+);
+
 const compatibleWith = computed(() => {
   const list = inst.installed.value;
   if (!list?.gameVersion) return t("mods.summary.versionUnknown");
   return list.modLoader
     ? t("mods.summary.withLoader", { version: list.gameVersion, loader: capitalise(list.modLoader) })
     : t("mods.summary.with", { version: list.gameVersion });
+});
+
+interface SummaryTile {
+  key: string;
+  tone: string;
+  icon: string;
+  /** Shown beside the dash so unanswered tiles stay tellable apart. */
+  name: string;
+  /** `null` renders the neutral dash: the page cannot say. */
+  value: string | number | null;
+  label: string;
+}
+
+/** Each tile is known, unknown or failed; an answer the page cannot back up is never drawn as OK. */
+const tiles = computed<SummaryTile[]>(() => {
+  const unknown = unknownTile.value;
+  const list = inst.installed.value;
+  const installed: SummaryTile = listKnown.value
+    ? { key: "installed", name: t("mods.summary.nameInstalled"), tone: "", icon: "pi pi-box", value: inst.mods.value.length, label: t("mods.summary.installed", { count: inst.mods.value.length }) }
+    : { key: "installed", name: t("mods.summary.nameInstalled"), ...unknown, value: null, label: unknownLabel.value };
+  const compatible: SummaryTile = list?.gameVersion
+    ? { key: "compatible", name: t("mods.summary.compatible"), tone: "ok", icon: "pi pi-check-circle", value: t("mods.summary.compatible"), label: compatibleWith.value }
+    : { key: "compatible", name: t("mods.summary.compatible"), ...unknown, value: null, label: listKnown.value ? t("mods.summary.versionUnknown") : unknownLabel.value };
+  let pending: SummaryTile;
+  if (pendingCount.value > 0) {
+    pending = { key: "pending", name: t("mods.summary.namePending"), tone: "pending", icon: "pi pi-clock", value: t("mods.summary.pending", { count: pendingCount.value }), label: t("mods.summary.needsRestart") };
+  } else if (serverOnline.value && listKnown.value) {
+    pending = { key: "pending", name: t("mods.summary.namePending"), tone: "ok", icon: "pi pi-check", value: t("mods.summary.pending", { count: 0 }), label: t("mods.summary.nothingPending") };
+  } else {
+    pending = { key: "pending", name: t("mods.summary.namePending"), ...unknown, value: null, label: unknownLabel.value };
+  }
+  return [installed, compatible, pending];
 });
 
 function focusCatalog(): void {
@@ -218,6 +256,14 @@ watch(
 .mods-main, .mods-catalog { display: grid; gap: var(--space-4); min-width: 0; align-content: start; }
 @container (min-width: 1100px) {
   .mods-layout { grid-template-columns: minmax(0, 1fr) minmax(380px, 460px); }
+  /* The search results run far longer than the installed list; they scroll inside the column instead of stretching the page. */
+  .mods-catalog {
+    position: sticky;
+    top: var(--space-3);
+    max-height: calc(100dvh - 11rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
 }
 
 .summary {
@@ -231,7 +277,6 @@ watch(
   background: var(--surface-nav);
 }
 .stat { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
-.stat + .stat { padding-inline-start: var(--space-5); border-inline-start: 1px solid var(--border); }
 .stat-icon {
   display: inline-flex;
   flex: none;
@@ -246,13 +291,15 @@ watch(
 }
 .stat-icon.ok { background: var(--accent-tint); color: var(--st-online); }
 .stat-icon.pending { background: var(--st-degraded-bg); color: var(--st-degraded); }
+.stat-icon.unknown { background: var(--st-unknown-bg); color: var(--st-unknown); }
+.stat-icon.error { background: var(--st-offline-bg); color: var(--st-offline); }
 .stat-text { display: grid; min-width: 0; line-height: var(--leading-tight); }
 .stat-n { font-size: var(--text-lg); font-weight: 600; font-variant-numeric: tabular-nums; }
 .stat-l { color: var(--text-dim); font-size: var(--text-sm); }
-.summary-add { margin-inline-start: auto; }
+.summary-add { display: grid; justify-items: end; gap: var(--space-1); margin-inline-start: auto; }
+.summary-add-note { color: var(--text-dim); font-size: var(--text-sm); }
 @container (max-width: 760px) {
-  .stat + .stat { padding-inline-start: 0; border-inline-start: 0; }
-  .summary-add { margin-inline-start: 0; width: 100%; }
+  .summary-add { margin-inline-start: 0; width: 100%; justify-items: stretch; }
 }
 
 .has-pending { padding-bottom: var(--space-2); }

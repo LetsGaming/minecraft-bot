@@ -6,6 +6,16 @@
       {{ t("modconfig.noServers") }}
     </EmptyState>
 
+    <InlineError
+      v-else-if="indexFailed"
+      :title="t('modconfig.loadFailed')"
+      :recovery="indexFailureRecovery"
+      :detail="indexFailureDetail"
+      :busy="loading"
+      :heading-level="2"
+      @retry="retry"
+    />
+
     <EditorShell
       v-else
       :state="editorState"
@@ -242,6 +252,7 @@
                     @update:model-value="setFromInput(field, $event)"
                   />
                   <InputNumber
+:locale="UI_LOCALE"
                     v-else-if="field.kind === 'number'"
                     :model-value="numberValue(field)"
                     :min="field.min"
@@ -332,7 +343,7 @@ import InlineError from "../components/ui/InlineError.vue";
 import StatusChip from "../components/ui/StatusChip.vue";
 import ReviewChanges, { type ReviewItem } from "../components/ui/ReviewChanges.vue";
 import type { EditorState } from "../components/ui/types";
-import { t } from "../i18n";
+import { t, UI_LOCALE } from "../i18n";
 
 const SHOWN_MAX = 80;
 /** Slower than the status view: the queue changes far less often than a live server does. */
@@ -365,6 +376,7 @@ const {
   loading,
   saving,
   error,
+  indexErrorStatus,
   search,
   pending,
   dirty,
@@ -409,6 +421,20 @@ const reviewOpen = ref(false);
 // open; without a poll here the banner would keep showing a count that was
 // already written.
 usePolling(() => (currentServer.value ? refreshPending() : undefined), QUEUE_POLL_MS);
+
+/** The file list itself failed: nothing to pick from, so the editor around it would only repeat the failure. */
+const indexFailed = computed(() => error.value !== "" && !current.value && files.value.length === 0 && !loading.value);
+const indexFailureRecovery = computed(() => {
+  const server = currentServer.value;
+  const status = indexErrorStatus.value;
+  if (status === 501) return t("modconfig.failedOldWrapper", { server });
+  if (status === 500) return t("modconfig.failedDashboard", { server });
+  return t("modconfig.failedUnreachable", { server });
+});
+const indexFailureDetail = computed(() => {
+  const outcome = indexErrorStatus.value !== null ? String(indexErrorStatus.value) : error.value || "no response";
+  return `GET /api/servers/${currentServer.value}/configs -> ${outcome}`;
+});
 
 const canWrite = computed(() => can("config:write", currentServer.value));
 const readonlyReason = computed(() => {

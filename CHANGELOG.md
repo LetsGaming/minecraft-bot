@@ -6,6 +6,21 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Mods summary strip no longer shows green checks it cannot back up.** When the server is offline or the mods list could not be read, the tiles show a neutral dash with "Unknown, server offline" (or "Unknown, mods list unavailable") instead of "Compatible" and "running server is up to date", and Add mods notes "Applies on next start" (`ModsView.vue`).
+- The Config page no longer repeats "the bot is not running" under the editor bar when the app-wide banner already says so; the "Saved, not applied" chip stays (`ConfigView.vue`).
+- **Mod config shows only the error when the file list cannot load.** The status bar, filter, empty file list and "Pick a file to edit" no longer sit around the failure; it names the likely cause (wrapper not answering, wrapper too old, dashboard error) and offers Retry (`ModConfigView.vue`).
+- **Prune says which half is too old.** The unsupported state now tells apart an API wrapper that does not report chunk pruning from a setup suite without the prune script, and what to update (`/api/servers/:id/prune/support` returns `missing`, `pruneSupportGap` in `access/prune.ts`).
+- **Prune chunks reads as three steps.** The rules (what counts as unused) come first and fold away once there is a result, the result and map follow, and Delete is its own section at the end. The select, unselect and protect tools, the chosen-by-hand counter and "Also allow selecting protected areas" sit behind "Adjust by hand". The per-dimension table shows Delete, Kept and Freed, with the other columns under "Why chunks were kept" (`PruneView.vue`).
+- Prune's Delete section ends with one summary (chunks deleted of the total, space freed, and the backup note) directly above the button, and says to scan again when the preview is out of date. Mods' search results now scroll inside their own column on wide screens instead of stretching the page, and Config's groups and sections get more room at the bottom (`PruneView.vue`, `ModsView.vue`, `ConfigView.vue`, `SchemaField.vue`).
+- **Phone layouts are tighter.** The save bar at the bottom of Config, Daily rewards and the other editors is one status line when there is nothing to save (instead of a row of disabled buttons), Config's "Jump to group" list follows the group you scrolled to, item-pool rows in Daily rewards label their amount and chance and keep the delete button beside the name, and the Mods pager, Rewards inputs and chance toggle meet the 44 px touch size (`EditBar.vue`, `ConfigView.vue`, `RewardsView.vue`, `PagerNav.vue`).
+- **Numbers follow the dashboard's language, not the browser's.** A browser set to German no longer shows "1.400" next to English text or "283,7 Mio. downloads"; counts, the mod download totals and the number inputs all format as English (`utils/numberFormat.ts`). Headings balance their lines, and tables and inputs use tabular digits.
+- Daily rewards shows each rarity as a square pip in that tier's own embed colour instead of an emoji circle, and the Prune chunk map sits on a faint block grid until regions are painted (`RewardsView.vue`, `PruneMap.vue`).
+- Config's "Saved, not applied" chip now reads "Saved, waiting for the bot"; Daily rewards' "Weights to 100" is "Rescale weights to 100" with its explanation shown under the toolbar instead of a hover title.
+- The Config schema description for feature nudges no longer names an internal type (`config.schema.json`).
+- Stale-data notices ("the bot last reported", "as of" on Mods and Mod config, an unfinished prune) say "3 weeks ago" or "2 months ago" instead of a raw timestamp once older than a week (`relativeAgeLong` in `relativeTime.ts`).
+
 ## [8.1.0] — 2026-10-19
 
 ### General

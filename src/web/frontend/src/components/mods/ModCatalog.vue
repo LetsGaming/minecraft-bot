@@ -25,6 +25,7 @@
         :aria-pressed="search.compatible.value"
         @click="search.toggleCompatible"
       >
+        <i v-if="search.compatible.value" class="pi pi-check chip-check" aria-hidden="true" />
         {{ compatibleLabel }}
       </button>
       <button
@@ -33,6 +34,7 @@
         :aria-pressed="search.hideClientOnly.value"
         @click="search.toggleClientOnly"
       >
+        <i v-if="search.hideClientOnly.value" class="pi pi-check chip-check" aria-hidden="true" />
         {{ t("mods.catalog.hideClientOnly") }}
       </button>
       <span class="sort">
@@ -160,7 +162,7 @@
         </li>
       </ul>
       <div class="foot">
-        <span class="foot-count">{{ t("mods.catalog.results", { count: search.total.value.toLocaleString() }) }}</span>
+        <span class="foot-count">{{ t("mods.catalog.results", { count: formatNumber(search.total.value) }) }}</span>
         <PagerNav
           v-if="search.total.value > CATALOG_PAGE"
           :page="search.page.value"
@@ -177,6 +179,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatCompact, formatNumber } from "../../utils/numberFormat";
 import { computed, nextTick, ref } from "vue";
 import Button from "primevue/button";
 import Select from "primevue/select";
@@ -227,9 +230,8 @@ const compatibleLabel = computed(() => {
   return version ? t("mods.catalog.compatible", { version }) : t("mods.catalog.compatibleAny");
 });
 
-const compactNumber = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 });
 function compact(n: number): string {
-  return compactNumber.format(n);
+  return formatCompact(n);
 }
 
 function pickerId(slug: string): string {

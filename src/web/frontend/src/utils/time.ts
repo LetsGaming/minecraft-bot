@@ -10,6 +10,7 @@ export {
   parseStamp,
   absoluteStamp,
   relativeAge,
+  relativeAgeLong,
   timestampTitle,
   type Timestamp,
 } from "@mcbot/core/utils/relativeTime.js";

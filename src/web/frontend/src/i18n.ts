@@ -37,12 +37,15 @@ export function createTranslator(table: Readonly<Record<string, string>>, locale
   };
 }
 
+/** The language the dashboard speaks and formats numbers in. */
+export const UI_LOCALE = "en";
+
 const translate = createTranslator(
   {
     ...Object.fromEntries(Object.entries(GLOSSARY).map(([key, entry]) => [key, entry.en])),
     ...en,
   },
-  "en",
+  UI_LOCALE,
 );
 
 export function t(key: MessageKey, vars?: MessageVars): string {

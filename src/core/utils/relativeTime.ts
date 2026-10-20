@@ -91,6 +91,26 @@ export function relativeAge(value: Timestamp, now: number = Date.now()): string 
 }
 
 /**
+ * `relativeAge` that never falls back to a date: "3 weeks ago", "2 months ago".
+ * For a sentence about how stale something is ("the bot last reported ..."),
+ * where the reader wants the size of the gap, not a stamp to compare to a log.
+ */
+export function relativeAgeLong(value: Timestamp, now: number = Date.now()): string {
+  const date = parseStamp(value);
+  if (!date) return typeof value === "string" ? value : "";
+  const elapsed = now - date.getTime();
+  if (elapsed < RELATIVE_LIMIT_MS) return relativeAge(value, now);
+  const days = Math.floor(elapsed / MS.day);
+  if (days < 60) {
+    const weeks = Math.floor(days / 7);
+    return weeks === 1 ? "1 week ago" : `${weeks} weeks ago`;
+  }
+  if (days < 365) return `${Math.floor(days / 30)} months ago`;
+  const years = Math.floor(days / 365);
+  return years === 1 ? "1 year ago" : `${years} years ago`;
+}
+
+/**
  * The full moment, seconds included, for a hover title on a relative label,
  * or anywhere a relative string should never hide the detail behind it.
  */

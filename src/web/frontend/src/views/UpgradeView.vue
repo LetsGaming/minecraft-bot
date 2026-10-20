@@ -113,8 +113,8 @@
             </div>
             <p v-if="prune.summary.value && prune.summaryCurrent.value" class="up-ok">
               {{ t("upgrade.prune.preview", {
-                delete: prune.summary.value.totals.delete.toLocaleString(),
-                chunks: prune.summary.value.totals.chunks.toLocaleString(),
+                delete: formatNumber(prune.summary.value.totals.delete),
+                chunks: formatNumber(prune.summary.value.totals.chunks),
                 size: formatBytes(prune.summary.value.totals.bytes),
               }) }}
             </p>
@@ -153,6 +153,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatNumber } from "../utils/numberFormat";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import Button from "primevue/button";
 import Checkbox from "primevue/checkbox";
@@ -279,7 +280,7 @@ async function confirmStart(): Promise<void> {
     facts.splice(1, 0, {
       term: t("upgrade.fact.prune"),
       detail: t("upgrade.fact.pruneDetail", {
-        count: prune.summary.value.totals.delete.toLocaleString(),
+        count: formatNumber(prune.summary.value.totals.delete),
         size: formatBytes(prune.summary.value.totals.bytes),
       }),
     });

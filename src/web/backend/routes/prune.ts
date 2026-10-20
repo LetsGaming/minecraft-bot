@@ -12,6 +12,7 @@ import type { FastifyInstance } from "fastify";
 import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
 import {
   supportsPrune,
+  pruneSupportGap,
   startPruneScan,
   getPruneScan,
   getPruneDimensions,
@@ -56,7 +57,8 @@ export function registerPruneRoutes(app: FastifyInstance): void {
     },
     async (req) => {
       const server = requireServer(req.params.id);
-      return { supported: await pruneProbe.supported(server.config) };
+      if (await pruneProbe.supported(server.config)) return { supported: true };
+      return { supported: false, missing: (await pruneSupportGap(server.config)) ?? undefined };
     },
   );
 

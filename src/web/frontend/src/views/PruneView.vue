@@ -14,15 +14,133 @@
       :title="t('prune.unsupportedTitle')"
       :heading-level="2"
     >
-      {{ t("prune.unsupportedText") }}
+      {{ unsupportedText }}
     </EmptyState>
 
     <UpgradeRun v-else-if="run.job.value" :upgrade="run" :server="activeServer" @again="clearRun" />
 
     <template v-else>
       <InlineBanner v-if="prune.unfinishedApply.value" tone="danger" :title="t('prune.unfinished.title')">
-        {{ t("prune.unfinished.text", { when: prune.unfinishedApply.value.startedAt }) }}
+        {{ t("prune.unfinished.text", { when: relativeAgeLong(prune.unfinishedApply.value.startedAt) }) }}
       </InlineBanner>
+
+      <section class="pv-step" aria-labelledby="pv-params">
+        <div class="pv-step-head">
+          <h2 id="pv-params">{{ t("prune.params.heading") }}</h2>
+          <Button
+            v-if="prune.summary.value"
+            class="tap"
+            severity="secondary"
+            text
+            :icon="defineOpen ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"
+            :label="defineOpen ? t('prune.step.hideRules') : t('prune.step.editRules')"
+            :aria-expanded="defineOpen"
+            aria-controls="pv-params-body"
+            @click="defineOpen = !defineOpen"
+          />
+        </div>
+        <div v-show="defineOpen || !prune.summary.value" id="pv-params-body" class="pv-card">
+          <div class="pv-grid">
+            <div class="pv-field">
+              <label class="pv-label" for="pv-threshold">{{ t("prune.params.threshold") }}</label>
+              <InputNumber :locale="UI_LOCALE" v-model="prune.params.value.thresholdMinutes" input-id="pv-threshold" :min="0" :max="100000" :max-fraction-digits="1" />
+              <span class="pv-help">{{ t("prune.params.thresholdHelp") }}</span>
+            </div>
+            <div class="pv-field">
+              <label class="pv-label" for="pv-spawn">{{ t("prune.params.spawn") }}</label>
+              <InputNumber :locale="UI_LOCALE" v-model="prune.params.value.spawnRadiusChunks" input-id="pv-spawn" :min="0" :max="512" show-buttons />
+              <span class="pv-help">{{ t("prune.params.spawnHelp") }}</span>
+            </div>
+            <div class="pv-field">
+              <label class="pv-label" for="pv-player">{{ t("prune.params.player") }}</label>
+              <InputNumber :locale="UI_LOCALE" v-model="prune.params.value.playerRadiusChunks" input-id="pv-player" :min="0" :max="512" show-buttons />
+              <span class="pv-help">{{ t("prune.params.playerHelp") }}</span>
+            </div>
+            <div class="pv-field">
+              <label class="pv-label" for="pv-buffer">{{ t("prune.params.buffer") }}</label>
+              <InputNumber :locale="UI_LOCALE" v-model="prune.params.value.bufferChunks" input-id="pv-buffer" :min="0" :max="32" show-buttons />
+              <span class="pv-help">{{ t("prune.params.bufferHelp") }}</span>
+            </div>
+            <div class="pv-field">
+              <label class="pv-check">
+                <Checkbox :model-value="buildProtected" binary input-id="pv-build" @update:model-value="setBuildProtection" />
+                {{ t("prune.params.build") }}
+              </label>
+              <span class="pv-help">{{ t("prune.params.buildHelp") }}</span>
+            </div>
+          </div>
+
+          <fieldset v-if="prune.dimensions.value.length > 1" class="pv-dims">
+            <legend>{{ t("prune.dimensions.heading") }}</legend>
+            <p class="pv-note">{{ t("prune.dimensions.help") }}</p>
+            <SelectButton
+              :model-value="prune.selectedDimensions.value"
+              :options="scanDimensionOptions"
+              option-label="label"
+              option-value="value"
+              multiple
+              :allow-empty="false"
+              :disabled="prune.scanning.value"
+              :aria-label="t('prune.dimensions.heading')"
+              @update:model-value="prune.setDimensions"
+            >
+              <template #option="{ option }">
+                <span class="pv-dim-label">
+                  <i :class="prune.selectedDimensions.value.includes(option.value) ? 'pi pi-check' : 'pi pi-minus'" aria-hidden="true" />
+                  {{ option.label }}
+                </span>
+              </template>
+            </SelectButton>
+          </fieldset>
+
+          <h3>{{ t("prune.zones.heading") }}</h3>
+          <p class="pv-note">{{ t("prune.zones.help") }}</p>
+          <ul v-if="prune.params.value.zones.length" class="pv-zones">
+            <li v-for="(zone, i) in prune.params.value.zones" :key="i">
+              <span class="pv-zone-name">{{ zone.name || t("prune.zones.unnamed") }}</span>
+              <span class="pv-zone-where">{{ zone.dimension }}: {{ zone.x1 }}, {{ zone.z1 }} to {{ zone.x2 }}, {{ zone.z2 }}</span>
+              <Button
+                class="tap"
+                icon="pi pi-trash"
+                severity="secondary"
+                text
+                :aria-label="t('prune.zones.remove', { name: zone.name || String(i + 1) })"
+                @click="prune.removeZone(i)"
+              />
+            </li>
+          </ul>
+          <div class="pv-add">
+            <InputText v-model="zoneName" :placeholder="t('prune.zones.name')" :aria-label="t('prune.zones.name')" maxlength="64" />
+            <InputText v-model="zoneDimension" :aria-label="t('prune.zones.dimension')" class="pv-dim" />
+            <InputNumber :locale="UI_LOCALE" v-model="zone.x1" :aria-label="'x1'" placeholder="x1" class="pv-coord" />
+            <InputNumber :locale="UI_LOCALE" v-model="zone.z1" :aria-label="'z1'" placeholder="z1" class="pv-coord" />
+            <InputNumber :locale="UI_LOCALE" v-model="zone.x2" :aria-label="'x2'" placeholder="x2" class="pv-coord" />
+            <InputNumber :locale="UI_LOCALE" v-model="zone.z2" :aria-label="'z2'" placeholder="z2" class="pv-coord" />
+            <Button class="tap" icon="pi pi-plus" :label="t('prune.zones.add')" severity="secondary" outlined :disabled="!zoneValid" @click="addZone" />
+          </div>
+
+          <div class="pv-actions">
+            <Button
+              class="tap"
+              icon="pi pi-search"
+              :label="prune.summary.value ? t('prune.scan.again') : t('prune.scan.button')"
+              :loading="prune.scanning.value"
+              @click="prune.scan"
+            />
+            <Button
+              class="tap"
+              icon="pi pi-save"
+              :label="t('prune.params.save')"
+              severity="secondary"
+              outlined
+              :disabled="!prune.dirty.value"
+              :loading="prune.savingSettings.value"
+              @click="saveSettings"
+            />
+          </div>
+          <p class="pv-note">{{ t("prune.scan.approximate") }}</p>
+        </div>
+      </section>
 
       <div v-if="prune.scanning.value" class="pv-progress" role="status">
         <p class="pv-note">{{ t("prune.scan.running") }}</p>
@@ -30,10 +148,10 @@
           <progress :max="prune.progress.value.total" :value="prune.progress.value.done" :aria-label="t('prune.scan.running')" />
           <p class="pv-note">
             {{ t("prune.scan.progress", {
-              done: prune.progress.value.done.toLocaleString(),
-              total: prune.progress.value.total.toLocaleString(),
-              chunks: prune.progress.value.chunks.toLocaleString(),
-              rate: prune.progress.value.chunksPerSecond.toLocaleString(),
+              done: formatNumber(prune.progress.value.done),
+              total: formatNumber(prune.progress.value.total),
+              chunks: formatNumber(prune.progress.value.chunks),
+              rate: formatNumber(prune.progress.value.chunksPerSecond),
             }) }}
             <template v-if="prune.progress.value.etaSeconds !== null">
               {{ t("prune.scan.eta", { seconds: prune.progress.value.etaSeconds }) }}
@@ -73,16 +191,69 @@
           </InlineBanner>
           <p class="pv-total">
             {{ t("prune.result.total", {
-              delete: prune.summary.value.totals.delete.toLocaleString(),
-              chunks: prune.summary.value.totals.chunks.toLocaleString(),
+              delete: formatNumber(prune.summary.value.totals.delete),
+              chunks: formatNumber(prune.summary.value.totals.chunks),
               size: formatBytes(prune.summary.value.totals.bytes),
             }) }}
           </p>
           <p class="pv-note">{{ t("prune.result.regions", { count: prune.summary.value.totals.regionsEmptied }) }}</p>
           <p v-if="breakdown.soft + breakdown.hard > 0" class="pv-note">
-            {{ t("prune.apply.breakdown", { auto: breakdown.auto.toLocaleString(), soft: breakdown.soft.toLocaleString(), hard: breakdown.hard.toLocaleString() }) }}
+            {{ t("prune.apply.breakdown", { auto: formatNumber(breakdown.auto), soft: formatNumber(breakdown.soft), hard: formatNumber(breakdown.hard) }) }}
           </p>
-          <p v-if="breakdown.blocked > 0" class="pv-note">{{ t("prune.apply.blocked", { count: breakdown.blocked.toLocaleString() }) }}</p>
+          <p v-if="breakdown.blocked > 0" class="pv-note">{{ t("prune.apply.blocked", { count: formatNumber(breakdown.blocked) }) }}</p>
+
+          <div class="pv-fold-body is-scroll">
+            <table class="pv-table">
+              <caption class="sr-only">{{ t("prune.result.perDimension") }}</caption>
+              <thead>
+                <tr>
+                  <th scope="col">{{ t("prune.table.dimension") }}</th>
+                  <th scope="col">{{ t("prune.table.delete") }}</th>
+                  <th scope="col">{{ t("prune.table.kept") }}</th>
+                  <th scope="col">{{ t("prune.table.size") }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="d in prune.summary.value.dimensions" :key="d.id">
+                  <th scope="row">{{ d.id }}</th>
+                  <td>{{ formatNumber(d.delete) }}</td>
+                  <td>{{ formatNumber(Math.max(0, d.chunks - d.delete)) }}</td>
+                  <td>{{ formatBytes(d.bytes) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <details class="pv-fold">
+            <summary>{{ t("prune.result.whyKept") }}</summary>
+            <div class="pv-fold-body is-scroll">
+              <table class="pv-table">
+                <thead>
+                  <tr>
+                    <th scope="col">{{ t("prune.table.dimension") }}</th>
+                    <th scope="col">{{ t("prune.table.active") }}</th>
+                    <th scope="col">{{ t("prune.table.protected") }}</th>
+                    <th scope="col">{{ t("prune.table.buffer") }}</th>
+                    <th scope="col">{{ t("prune.table.unreadable") }}</th>
+                    <th scope="col">{{ t("prune.table.uncertain") }}</th>
+                    <th scope="col">{{ t("prune.table.manual") }}</th>
+                    <th scope="col">{{ t("prune.table.blocked") }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="d in prune.summary.value.dimensions" :key="d.id">
+                    <th scope="row">{{ d.id }}</th>
+                    <td>{{ formatNumber(d.active) }}</td>
+                    <td>{{ formatNumber(d.protected) }}</td>
+                    <td>{{ formatNumber(d.buffer) }}</td>
+                    <td>{{ formatNumber(d.unreadable) }}</td>
+                    <td>{{ formatNumber((d.uncertain ?? 0)) }}</td>
+                    <td>{{ formatNumber(((d.manualSoft ?? 0) + (d.manualHard ?? 0))) }}</td>
+                    <td>{{ formatNumber((d.manualBlocked ?? 0)) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </details>
         </section>
 
         <section v-if="prune.summary.value.dimensions.length" class="pv-workspace" aria-labelledby="pv-map">
@@ -150,7 +321,7 @@
                   <li>
                     {{ prune.inspected.value.info.inhabitedMinutes == null
                       ? t("prune.inspect.unknownTime")
-                      : t("prune.inspect.used", { minutes: prune.inspected.value.info.inhabitedMinutes.toLocaleString(), threshold: prune.inspected.value.info.thresholdMinutes }) }}
+                      : t("prune.inspect.used", { minutes: formatNumber(prune.inspected.value.info.inhabitedMinutes), threshold: prune.inspected.value.info.thresholdMinutes }) }}
                   </li>
                   <li v-if="prune.inspected.value.info.status">
                     {{ t("prune.inspect.status", { status: prune.inspected.value.info.status, version: prune.inspected.value.info.dataVersion ?? "?" }) }}
@@ -177,198 +348,90 @@
                 </ul>
               </template>
             </section>
-            <div class="pv-panel" role="group" :aria-label="t('prune.selection.heading')">
-              <h3>{{ t("prune.selection.heading") }}</h3>
-              <p class="pv-note">{{ t("prune.selection.help") }}</p>
-              <p class="pv-total" role="status">
-                {{ selectedCount > 0 ? t("prune.selection.count", { count: selectedCount.toLocaleString(), dimension: currentDimension }) : t("prune.selection.none", { dimension: currentDimension }) }}
-              </p>
-              <div class="pv-actions">
-                <Button class="tap" icon="pi pi-undo" :label="t('prune.selection.undo')" severity="secondary" outlined :disabled="!canUndo" @click="undoSelection" />
-                <Button class="tap" icon="pi pi-refresh" :label="t('prune.selection.redo')" severity="secondary" outlined :disabled="!canRedo" @click="redoSelection" />
-                <Button class="tap" icon="pi pi-times" :label="t('prune.selection.clear')" severity="secondary" outlined :disabled="selectionOpCount === 0" @click="clearSelection" />
-                <Button class="tap" icon="pi pi-search" :label="t('prune.selection.update')" :loading="prune.scanning.value" :disabled="prune.summaryCurrent.value" @click="prune.scan" />
-              </div>
-              <label class="pv-check">
-                <Checkbox :model-value="allowProtected" binary input-id="pv-allow-protected" @update:model-value="toggleAllowProtected" />
-                {{ t("prune.selection.allowProtected") }}
-              </label>
-              <p class="pv-note">{{ t("prune.selection.allowProtectedHelp") }}</p>
-            </div>
-            <section class="pv-panel" aria-labelledby="pv-apply">
-              <h3 id="pv-apply">{{ t("prune.apply.heading") }}</h3>
-              <p class="pv-note">{{ t("prune.apply.text") }}</p>
-              <div class="pv-field">
-                <label class="pv-label" for="pv-countdown">{{ t("upgrade.options.countdown") }}</label>
-                <Select v-model="countdown" input-id="pv-countdown" :options="countdownOptions" option-label="label" option-value="value" />
-              </div>
+            <div class="pv-panel">
               <Button
-                class="tap"
-                icon="pi pi-trash"
-                severity="danger"
-                :label="t('prune.apply.button', { count: prune.summary.value.totals.delete.toLocaleString() })"
-                :disabled="!prune.summaryCurrent.value || !prune.hasDeletions.value || prune.starting.value"
-                :loading="prune.starting.value"
-                @click="confirmApply"
+                class="tap pv-adjust-toggle"
+                severity="secondary"
+                outlined
+                :icon="adjusting ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"
+                :label="selectionOpCount > 0 ? t('prune.adjust.labelCount', { count: formatNumber(selectedCount) }) : t('prune.adjust.label')"
+                :aria-expanded="adjusting"
+                aria-controls="pv-adjust-body"
+                @click="adjusting = !adjusting"
               />
-              <p v-if="!prune.hasDeletions.value" class="pv-note">{{ t("prune.apply.nothing") }}</p>
-            </section>
+              <div v-if="adjusting" id="pv-adjust-body" class="pv-adjust-body" role="group" :aria-label="t('prune.selection.heading')">
+                <p class="pv-note">{{ t("prune.selection.help") }}</p>
+                <p class="pv-total" role="status">
+                  {{ selectedCount > 0 ? t("prune.selection.count", { count: formatNumber(selectedCount), dimension: currentDimension }) : t("prune.selection.none", { dimension: currentDimension }) }}
+                </p>
+                <div class="pv-actions">
+                  <Button class="tap" icon="pi pi-undo" :label="t('prune.selection.undo')" severity="secondary" outlined :disabled="!canUndo" @click="undoSelection" />
+                  <Button class="tap" icon="pi pi-refresh" :label="t('prune.selection.redo')" severity="secondary" outlined :disabled="!canRedo" @click="redoSelection" />
+                  <Button class="tap" icon="pi pi-times" :label="t('prune.selection.clear')" severity="secondary" outlined :disabled="selectionOpCount === 0" @click="clearSelection" />
+                  <Button class="tap" icon="pi pi-search" :label="t('prune.selection.update')" :loading="prune.scanning.value" :disabled="prune.summaryCurrent.value" @click="prune.scan" />
+                </div>
+                <label class="pv-check">
+                  <Checkbox :model-value="allowProtected" binary input-id="pv-allow-protected" @update:model-value="toggleAllowProtected" />
+                  {{ t("prune.selection.allowProtected") }}
+                </label>
+                <p class="pv-note">{{ t("prune.selection.allowProtectedHelp") }}</p>
+              </div>
+            </div>
             <div class="pv-panel">
               <ul class="pv-legend">
                 <li v-for="item in legend" :key="item.cell"><span class="pv-swatch" :class="`is-${item.role}`" aria-hidden="true" /> {{ t(item.label) }}</li>
               </ul>
-              <p class="pv-note">{{ t("prune.legend.manual") }}</p>
+              <p v-if="adjusting" class="pv-note">{{ t("prune.legend.manual") }}</p>
               <p class="pv-note">{{ t("prune.map.keys") }}</p>
             </div>
           </aside>
         </section>
 
-        <details class="pv-card pv-fold">
-          <summary>{{ t("prune.result.perDimension") }}</summary>
-          <div class="pv-fold-body is-scroll">
-            <table class="pv-table">
-              <thead>
-                <tr>
-                  <th scope="col">{{ t("prune.table.dimension") }}</th>
-                  <th scope="col">{{ t("prune.table.delete") }}</th>
-                  <th scope="col">{{ t("prune.table.active") }}</th>
-                  <th scope="col">{{ t("prune.table.protected") }}</th>
-                  <th scope="col">{{ t("prune.table.buffer") }}</th>
-                  <th scope="col">{{ t("prune.table.unreadable") }}</th>
-                  <th scope="col">{{ t("prune.table.uncertain") }}</th>
-                  <th scope="col">{{ t("prune.table.manual") }}</th>
-                  <th scope="col">{{ t("prune.table.blocked") }}</th>
-                  <th scope="col">{{ t("prune.table.size") }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="d in prune.summary.value.dimensions" :key="d.id">
-                  <th scope="row">{{ d.id }}</th>
-                  <td>{{ d.delete.toLocaleString() }}</td>
-                  <td>{{ d.active.toLocaleString() }}</td>
-                  <td>{{ d.protected.toLocaleString() }}</td>
-                  <td>{{ d.buffer.toLocaleString() }}</td>
-                  <td>{{ d.unreadable.toLocaleString() }}</td>
-                  <td>{{ (d.uncertain ?? 0).toLocaleString() }}</td>
-                  <td>{{ ((d.manualSoft ?? 0) + (d.manualHard ?? 0)).toLocaleString() }}</td>
-                  <td>{{ (d.manualBlocked ?? 0).toLocaleString() }}</td>
-                  <td>{{ formatBytes(d.bytes) }}</td>
-                </tr>
-              </tbody>
-            </table>
+        <section class="pv-card" aria-labelledby="pv-apply">
+          <h2 id="pv-apply">{{ t("prune.apply.heading") }}</h2>
+          <p class="pv-note">{{ t("prune.apply.text") }}</p>
+          <div class="pv-field pv-countdown">
+            <label class="pv-label" for="pv-countdown">{{ t("upgrade.options.countdown") }}</label>
+            <Select v-model="countdown" input-id="pv-countdown" :options="countdownOptions" option-label="label" option-value="value" />
           </div>
-        </details>
-      </template>
-
-      <details class="pv-card pv-fold" :open="!prune.summary.value">
-        <summary><h2 id="pv-params">{{ t("prune.params.heading") }}</h2></summary>
-        <div class="pv-fold-body">
-          <div class="pv-grid">
-            <div class="pv-field">
-              <label class="pv-label" for="pv-threshold">{{ t("prune.params.threshold") }}</label>
-              <InputNumber v-model="prune.params.value.thresholdMinutes" input-id="pv-threshold" :min="0" :max="100000" :max-fraction-digits="1" />
-              <span class="pv-help">{{ t("prune.params.thresholdHelp") }}</span>
+          <dl v-if="prune.hasDeletions.value" class="pv-facts-row" :aria-label="t('prune.apply.summary')">
+            <div>
+              <dt>{{ t("prune.apply.factChunks") }}</dt>
+              <dd>
+                <strong>{{ formatNumber(prune.summary.value.totals.delete) }}</strong>
+                {{ t("prune.apply.factOf", { total: formatNumber(prune.summary.value.totals.chunks) }) }}
+              </dd>
             </div>
-            <div class="pv-field">
-              <label class="pv-label" for="pv-spawn">{{ t("prune.params.spawn") }}</label>
-              <InputNumber v-model="prune.params.value.spawnRadiusChunks" input-id="pv-spawn" :min="0" :max="512" show-buttons />
-              <span class="pv-help">{{ t("prune.params.spawnHelp") }}</span>
+            <div>
+              <dt>{{ t("prune.apply.factSize") }}</dt>
+              <dd><strong>{{ formatBytes(prune.summary.value.totals.bytes) }}</strong></dd>
             </div>
-            <div class="pv-field">
-              <label class="pv-label" for="pv-player">{{ t("prune.params.player") }}</label>
-              <InputNumber v-model="prune.params.value.playerRadiusChunks" input-id="pv-player" :min="0" :max="512" show-buttons />
-              <span class="pv-help">{{ t("prune.params.playerHelp") }}</span>
+            <div>
+              <dt>{{ t("prune.apply.factBackup") }}</dt>
+              <dd>{{ t("prune.apply.factBackupText") }}</dd>
             </div>
-            <div class="pv-field">
-              <label class="pv-label" for="pv-buffer">{{ t("prune.params.buffer") }}</label>
-              <InputNumber v-model="prune.params.value.bufferChunks" input-id="pv-buffer" :min="0" :max="32" show-buttons />
-              <span class="pv-help">{{ t("prune.params.bufferHelp") }}</span>
-            </div>
-            <div class="pv-field">
-              <label class="pv-check">
-                <Checkbox :model-value="buildProtected" binary input-id="pv-build" @update:model-value="setBuildProtection" />
-                {{ t("prune.params.build") }}
-              </label>
-              <span class="pv-help">{{ t("prune.params.buildHelp") }}</span>
-            </div>
-          </div>
-
-          <fieldset v-if="prune.dimensions.value.length > 1" class="pv-dims">
-            <legend>{{ t("prune.dimensions.heading") }}</legend>
-            <p class="pv-note">{{ t("prune.dimensions.help") }}</p>
-            <SelectButton
-              :model-value="prune.selectedDimensions.value"
-              :options="scanDimensionOptions"
-              option-label="label"
-              option-value="value"
-              multiple
-              :allow-empty="false"
-              :disabled="prune.scanning.value"
-              :aria-label="t('prune.dimensions.heading')"
-              @update:model-value="prune.setDimensions"
-            >
-              <template #option="{ option }">
-                <span class="pv-dim-label">
-                  <i :class="prune.selectedDimensions.value.includes(option.value) ? 'pi pi-check' : 'pi pi-minus'" aria-hidden="true" />
-                  {{ option.label }}
-                </span>
-              </template>
-            </SelectButton>
-          </fieldset>
-
-          <h3>{{ t("prune.zones.heading") }}</h3>
-          <p class="pv-note">{{ t("prune.zones.help") }}</p>
-          <ul v-if="prune.params.value.zones.length" class="pv-zones">
-            <li v-for="(zone, i) in prune.params.value.zones" :key="i">
-              <span class="pv-zone-name">{{ zone.name || t("prune.zones.unnamed") }}</span>
-              <span class="pv-zone-where">{{ zone.dimension }}: {{ zone.x1 }}, {{ zone.z1 }} to {{ zone.x2 }}, {{ zone.z2 }}</span>
-              <Button
-                class="tap"
-                icon="pi pi-trash"
-                severity="secondary"
-                text
-                :aria-label="t('prune.zones.remove', { name: zone.name || String(i + 1) })"
-                @click="prune.removeZone(i)"
-              />
-            </li>
-          </ul>
-          <div class="pv-add">
-            <InputText v-model="zoneName" :placeholder="t('prune.zones.name')" :aria-label="t('prune.zones.name')" maxlength="64" />
-            <InputText v-model="zoneDimension" :aria-label="t('prune.zones.dimension')" class="pv-dim" />
-            <InputNumber v-model="zone.x1" :aria-label="'x1'" placeholder="x1" class="pv-coord" />
-            <InputNumber v-model="zone.z1" :aria-label="'z1'" placeholder="z1" class="pv-coord" />
-            <InputNumber v-model="zone.x2" :aria-label="'x2'" placeholder="x2" class="pv-coord" />
-            <InputNumber v-model="zone.z2" :aria-label="'z2'" placeholder="z2" class="pv-coord" />
-            <Button class="tap" icon="pi pi-plus" :label="t('prune.zones.add')" severity="secondary" outlined :disabled="!zoneValid" @click="addZone" />
-          </div>
-
+          </dl>
+          <p v-if="!prune.summaryCurrent.value && prune.hasDeletions.value" class="pv-note" role="status">{{ t("prune.result.staleText") }}</p>
           <div class="pv-actions">
             <Button
               class="tap"
-              icon="pi pi-search"
-              :label="prune.summary.value ? t('prune.scan.again') : t('prune.scan.button')"
-              :loading="prune.scanning.value"
-              @click="prune.scan"
-            />
-            <Button
-              class="tap"
-              icon="pi pi-save"
-              :label="t('prune.params.save')"
-              severity="secondary"
-              outlined
-              :disabled="!prune.dirty.value"
-              :loading="prune.savingSettings.value"
-              @click="saveSettings"
+              icon="pi pi-trash"
+              severity="danger"
+              :label="t('prune.apply.button', { count: formatNumber(prune.summary.value.totals.delete) })"
+              :disabled="!prune.summaryCurrent.value || !prune.hasDeletions.value || prune.starting.value"
+              :loading="prune.starting.value"
+              @click="confirmApply"
             />
           </div>
-          <p class="pv-note">{{ t("prune.scan.approximate") }}</p>
-        </div>
-      </details>
+          <p v-if="!prune.hasDeletions.value" class="pv-note">{{ t("prune.apply.nothing") }}</p>
+        </section>
+      </template>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
+import { formatNumber } from "../utils/numberFormat";
 import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import Button from "primevue/button";
 import Checkbox from "primevue/checkbox";
@@ -391,7 +454,8 @@ import type { MapTool } from "../composables/usePruneMapInput";
 import { regionKey, regionOf, slotOf } from "../composables/pruneRegion";
 import { OVER_TERRAIN_OPACITY } from "../composables/pruneMapRender";
 import UpgradeRun from "../components/UpgradeRun.vue";
-import { t, type MessageKey } from "../i18n";
+import { relativeAgeLong } from "../utils/time";
+import { t, UI_LOCALE, type MessageKey } from "../i18n";
 
 const props = defineProps<{ activeServer: string }>();
 
@@ -403,6 +467,11 @@ const base = (): string => `/api/servers/${encodeURIComponent(server.value)}`;
 const prune = usePrune({
   api: usePruneApi(() => server.value),
   onError: (message) => (error.value = message),
+});
+
+const unsupportedText = computed(() => {
+  const gap = prune.missing.value;
+  return t(gap === "suite" ? "prune.unsupportedSuite" : gap === "wrapper" ? "prune.unsupportedWrapper" : "prune.unsupportedText");
 });
 
 /** The delete is an upgrade-style job: followed through the same routes. */
@@ -471,13 +540,32 @@ function onCamera(info: { zoom: number }): void {
   zoom.value = info.zoom;
 }
 
+/** The editing tools only exist while "Adjust by hand" is open; Move and Inspect are always there. */
+const MANUAL_TOOLS: readonly MapTool[] = ["select", "deselect", "zone"];
+const adjusting = ref(false);
 const toolOptions = computed(() => [
   { label: t("prune.tool.pan"), value: "pan" as const },
-  { label: t("prune.tool.select"), value: "select" as const },
-  { label: t("prune.tool.deselect"), value: "deselect" as const },
-  { label: t("prune.tool.zone"), value: "zone" as const },
+  ...(adjusting.value
+    ? [
+        { label: t("prune.tool.select"), value: "select" as const },
+        { label: t("prune.tool.deselect"), value: "deselect" as const },
+        { label: t("prune.tool.zone"), value: "zone" as const },
+      ]
+    : []),
   { label: t("prune.tool.inspect"), value: "inspect" as const },
 ]);
+watch(adjusting, (on) => {
+  if (!on && MANUAL_TOOLS.includes(tool.value)) tool.value = "pan";
+});
+
+/** The rules stay open until the first result exists, then fold away; the heading's button brings them back. */
+const defineOpen = ref(true);
+watch(
+  () => prune.summary.value?.id,
+  (id, previous) => {
+    if (id && !previous) defineOpen.value = false;
+  },
+);
 
 // ── Inspector and build protection ────────────────────────────────────────
 
@@ -615,7 +703,7 @@ const breakdown = computed(() => {
 });
 
 const scanDimensionOptions = computed(() =>
-  prune.dimensions.value.map((d) => ({ label: t("prune.dimensions.option", { id: d.id, regions: d.regions.toLocaleString() }), value: d.id })),
+  prune.dimensions.value.map((d) => ({ label: t("prune.dimensions.option", { id: d.id, regions: formatNumber(d.regions) }), value: d.id })),
 );
 
 const dimensionOptions = computed(() =>
@@ -683,10 +771,10 @@ async function confirmApply(): Promise<void> {
     header: t("prune.confirm.header", { server: name }),
     message: t("prune.confirm.message", {
       server: name,
-      count: summary.totals.delete.toLocaleString(),
+      count: formatNumber(summary.totals.delete),
       size: formatBytes(summary.totals.bytes),
     }) + (breakdown.value.soft + breakdown.value.hard > 0
-      ? " " + t("prune.apply.breakdown", { auto: breakdown.value.auto.toLocaleString(), soft: breakdown.value.soft.toLocaleString(), hard: breakdown.value.hard.toLocaleString() })
+      ? " " + t("prune.apply.breakdown", { auto: formatNumber(breakdown.value.auto), soft: formatNumber(breakdown.value.soft), hard: formatNumber(breakdown.value.hard) })
       : ""),
     acceptLabel: t("prune.confirm.accept", { server: name }),
     expected: name,
@@ -721,6 +809,8 @@ watch(server, () => {
   run.reset();
   selection.clear();
   allowProtected.value = false;
+  adjusting.value = false;
+  defineOpen.value = true;
   selectionVersion.value++;
   error.value = "";
   if (server.value) void load();
@@ -930,8 +1020,51 @@ onBeforeUnmount(() => {
   cursor: pointer;
   font-weight: 600;
 }
-.pv-fold > summary h2 {
-  display: inline;
+.pv-step {
+  display: grid;
+  gap: var(--space-3);
+}
+.pv-step-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.pv-step-head h2 {
+  margin: 0;
+  font-size: var(--text-xl);
+}
+.pv-adjust-toggle {
+  justify-content: flex-start;
+  width: 100%;
+}
+.pv-adjust-body {
+  display: grid;
+  gap: var(--space-2);
+}
+.pv-countdown {
+  max-width: 18rem;
+}
+.pv-facts-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--space-3) var(--space-5);
+  margin: var(--space-2) 0 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-surface);
+  background: var(--surface-raised);
+}
+.pv-facts-row dt {
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+}
+.pv-facts-row dd {
+  margin: var(--space-1) 0 0;
+}
+.pv-facts-row strong {
+  font-size: var(--text-lg);
+  font-variant-numeric: tabular-nums;
 }
 .pv-fold-body {
   display: grid;

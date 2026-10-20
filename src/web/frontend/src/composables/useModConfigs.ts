@@ -1,5 +1,5 @@
 import { ref, computed } from "vue";
-import { apiGet, apiSend } from "../api";
+import { ApiError, apiGet, apiSend } from "../api";
 import { errorMessage } from "../utils/errorMessage";
 import { confirmLeave, registerDirtySource } from "./useUnsavedGuard";
 import { latest } from "./useLoader";
@@ -154,6 +154,8 @@ export function useModConfigs(ask: () => Promise<boolean> = () => Promise.resolv
   const loading = ref(false);
   const saving = ref(false);
   const error = ref("");
+  /** HTTP status of the failed index load; null when the request got no answer. */
+  const indexErrorStatus = ref<number | null>(null);
   const search = ref("");
   /** Path key → new value, for the fields the user actually touched. */
   const pending = ref<Record<string, unknown>>({});
@@ -222,6 +224,7 @@ export function useModConfigs(ask: () => Promise<boolean> = () => Promise.resolv
     serverId = id;
     loading.value = true;
     error.value = "";
+    indexErrorStatus.value = null;
     current.value = null;
     pending.value = {};
     openState.value = {};
@@ -238,6 +241,7 @@ export function useModConfigs(ask: () => Promise<boolean> = () => Promise.resolv
     } catch (err) {
       if (!isCurrent()) return;
       error.value = errorMessage(err);
+      indexErrorStatus.value = err instanceof ApiError ? err.status : null;
       files.value = [];
       truncated.value = false;
       indexStale.value = null;
@@ -419,7 +423,7 @@ export function useModConfigs(ask: () => Promise<boolean> = () => Promise.resolv
   return {
     indexStale, fileStale, queued, pendingCount, conflicts,
     refreshPending, flushQueue, resolveConflict,
-    files, current, loading, saving, error, search, pending,
+    files, current, loading, saving, error, indexErrorStatus, search, pending,
     dirty, byMod, visibleFields, truncated, filtering, fileReadOnly,
     shownSections, hiddenFieldCount, showMoreFields, isOpen, toggleOpen,
     collapseGroups, collapseSections, loadSource,

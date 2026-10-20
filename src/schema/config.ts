@@ -756,7 +756,7 @@ export interface RawBotConfig {
   /** @title Update notifier */
   updateNotifier?: UpdateNotifierConfig;
   /**
-   * In-game discoverability nudges (see FeatureNudgeConfig).
+   * In-game tips that tell players `/link` and `/daily` exist, with limits so they never become spam.
    * @title Feature nudges
    */
   featureNudges?: FeatureNudgeConfig;

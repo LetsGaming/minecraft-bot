@@ -47,8 +47,14 @@ export const CELL = {
   UNCERTAIN: 8,
 } as const;
 
+/** `missing` names the half to update when pruning is unavailable. */
+export interface PruneSupport {
+  supported: boolean;
+  missing?: "wrapper" | "suite";
+}
+
 export interface PruneApi {
-  support(): Promise<{ supported: boolean }>;
+  support(): Promise<PruneSupport>;
   settings(): Promise<PruneParams>;
   save(params: PruneParamsRequest): Promise<PruneParams>;
   scan(params: PruneParamsRequest): Promise<{ jobId: string }>;
@@ -66,7 +72,7 @@ export interface PruneApi {
 export function usePruneApi(server: () => string): PruneApi {
   const base = (): string => `/api/servers/${encodeURIComponent(server())}/prune`;
   return {
-    support: () => apiGet<{ supported: boolean }>(`${base()}/support`),
+    support: () => apiGet<PruneSupport>(`${base()}/support`),
     settings: () => apiGet<PruneParams>(`${base()}/settings`),
     save: (p) => apiSend<PruneParams>("PUT", `${base()}/settings`, p),
     scan: (p) => apiSend<{ jobId: string }>("POST", `${base()}/scans`, p),
@@ -153,6 +159,7 @@ export function dimensionChoice(all: string[], selected: string[] | null): strin
 
 export function usePrune(options: UsePruneOptions) {
   const supported = ref<boolean | null>(null);
+  const missing = ref<PruneSupport["missing"]>(undefined);
   const params = ref<PruneParams>(emptyParams());
   const saved = ref<PruneParams>(emptyParams());
   const dimensions = ref<PruneDimensions["dimensions"]>([]);
@@ -217,9 +224,12 @@ export function usePrune(options: UsePruneOptions) {
 
   async function loadSupport(): Promise<void> {
     try {
-      supported.value = (await options.api.support()).supported;
+      const res = await options.api.support();
+      supported.value = res.supported;
+      missing.value = res.missing;
     } catch (err) {
       supported.value = false;
+      missing.value = undefined;
       options.onError(errorMessage(err, t("prune.error.supportCheck")));
     }
   }
@@ -451,6 +461,7 @@ export function usePrune(options: UsePruneOptions) {
 
   return {
     supported,
+    missing,
     params,
     saved,
     dirty,

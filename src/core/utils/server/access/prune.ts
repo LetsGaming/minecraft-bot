@@ -33,9 +33,18 @@ import { WRAPPER_TIMEOUTS_MS } from "./wrapperTimeouts.js";
  * or is unreachable, answers false so the dashboard hides the control.
  */
 export async function supportsPrune(cfg: ServerConfig): Promise<boolean> {
-  if (!(await featureAtLeast(cfg, "chunk-prune", 1))) return false;
+  return (await pruneSupportGap(cfg)) === null;
+}
+
+/**
+ * Which half is missing when pruning is unavailable: the API wrapper (it does
+ * not advertise `chunk-prune`, or could not be reached) or the setup suite on
+ * the host (no `world/prune-chunks.js`). Null when pruning is available.
+ */
+export async function pruneSupportGap(cfg: ServerConfig): Promise<"wrapper" | "suite" | null> {
+  if (!(await featureAtLeast(cfg, "chunk-prune", 1))) return "wrapper";
   const caps = await detectCapabilities(cfg);
-  return caps.prune !== false;
+  return caps.prune === false ? "suite" : null;
 }
 
 /** Start a read-only scan. Without parameters the saved settings are used. */

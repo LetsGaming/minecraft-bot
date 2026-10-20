@@ -3,6 +3,7 @@ import {
   parseStamp,
   absoluteStamp,
   relativeAge,
+  relativeAgeLong,
   timestampTitle,
 } from "../../src/core/utils/relativeTime.js";
 
@@ -104,5 +105,24 @@ describe("relativeAge", () => {
 describe("timestampTitle", () => {
   it("always carries seconds, so the relative label hides nothing", () => {
     expect(timestampTitle(NOW - 90 * MINUTE)).toBe(localStamp(NOW - 90 * MINUTE, true));
+  });
+});
+
+describe("relativeAgeLong", () => {
+  const ago = (days: number): number => NOW - days * 86_400_000;
+
+  it("matches relativeAge inside the first week", () => {
+    expect(relativeAgeLong(ago(2), NOW)).toBe(relativeAge(ago(2), NOW));
+  });
+
+  it("counts weeks, months and years instead of printing a date", () => {
+    expect(relativeAgeLong(ago(7), NOW)).toBe("1 week ago");
+    expect(relativeAgeLong(ago(27), NOW)).toBe("3 weeks ago");
+    expect(relativeAgeLong(ago(90), NOW)).toBe("3 months ago");
+    expect(relativeAgeLong(ago(400), NOW)).toBe("1 year ago");
+  });
+
+  it("returns an unparseable string unchanged", () => {
+    expect(relativeAgeLong("not a date", NOW)).toBe("not a date");
   });
 });

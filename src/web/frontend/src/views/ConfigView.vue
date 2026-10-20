@@ -80,7 +80,7 @@
         >
           <template v-if="!statusForbidden" #status>
             <ConfigStatusChip :status="applyStatus" />
-            <span class="cv-hint">{{ applyView.hint }}</span>
+            <span v-if="!botDownBannerShown" class="cv-hint">{{ applyView.hint }}</span>
           </template>
         </EditBar>
       </template>
@@ -211,11 +211,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, provide, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from "vue";
 import Button from "primevue/button";
 import InputText from "primevue/inputtext";
 import Textarea from "primevue/textarea";
-import { isSecretConfigPath } from "@mcbot/schema";
+import { ConfigApplyState, isSecretConfigPath } from "@mcbot/schema";
 import SchemaField from "../components/schema/SchemaField.vue";
 import ConflictPicker from "../components/schema/ConflictPicker.vue";
 import { classifyField, derefNode, countNewSections, topLevelSectionKeys } from "../components/schema/schemaField";
@@ -348,6 +348,8 @@ const groupStats = computed<Record<string, { count: number; problems: number }>>
   return out;
 });
 const applyState = computed(() => applyStatus.value?.state);
+// The app shell already announces a stopped bot to sysadmins, the only readers of this status.
+const botDownBannerShown = computed(() => applyState.value === ConfigApplyState.BotDown);
 const restartServers = computed(() => applyStatus.value?.restartRequired.join(", ") ?? "");
 const editorState = computed<EditorState>(() => {
   if (saving.value) return "saving";
@@ -427,6 +429,30 @@ function jumpToGroup(id: string): void {
   section?.focus({ preventScroll: true });
 }
 
+let groupObserver: IntersectionObserver | null = null;
+
+/** Keeps the jump list on the group nearest the top, so it never names a group the page has scrolled away from. */
+function observeGroups(): void {
+  groupObserver?.disconnect();
+  if (typeof IntersectionObserver === "undefined") return;
+  groupObserver = new IntersectionObserver(
+    (entries) => {
+      const topmost = entries
+        .filter((e) => e.isIntersecting)
+        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+      if (topmost) currentGroup.value = topmost.target.id.replace("cfg-group-", "");
+    },
+    { rootMargin: "-120px 0px -65% 0px" },
+  );
+  for (const group of shownGroups.value) {
+    const el = document.getElementById(`cfg-group-${group.id}`);
+    if (el) groupObserver.observe(el);
+  }
+}
+
+watch(shownGroups, () => void nextTick(observeGroups), { flush: "post" });
+onBeforeUnmount(() => groupObserver?.disconnect());
+
 function onGroupSelect(event: Event): void {
   jumpToGroup((event.target as HTMLSelectElement).value);
 }
@@ -468,6 +494,8 @@ onMounted(async () => {
   await Promise.all([load(), refsApi.loadServers(), loadGuildNames()]);
   applyRouteMode();
   currentGroup.value = groups.value[0]?.id ?? "";
+  await nextTick();
+  observeGroups();
   // With the schema loaded, mark its feature keys seen so a later visit only
   // flags genuinely new additions (this session's badges are held by the
   // frozen snapshot in useSeenFeatures).
@@ -542,6 +570,7 @@ onMounted(async () => {
   break-inside: avoid;
   scroll-margin-top: 96px;
   min-width: 0;
+  padding-bottom: var(--space-3);
 }
 .cv-group:focus { outline: none; }
 .cv-group:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -563,7 +592,7 @@ onMounted(async () => {
 }
 .cg-head h2 { margin: 0; font-size: var(--text-xl); font-weight: 600; }
 .cg-meta { color: var(--text-dim); font-size: var(--text-sm); }
-.cg-fields { padding: var(--space-1) 0 var(--space-2); min-width: 0; }
+.cg-fields { padding: var(--space-2) 0 var(--space-1); min-width: 0; }
 
 .cv-raw { display: flex; flex-direction: column; gap: var(--space-2); }
 .cv-raw-label { font-weight: 500; }

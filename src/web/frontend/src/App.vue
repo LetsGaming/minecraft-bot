@@ -102,7 +102,7 @@ import {
   type NavId,
   type RoutePatch,
 } from "./router";
-import { relativeAge } from "./utils/time";
+import { relativeAgeLong } from "./utils/time";
 import { t } from "./i18n";
 import OverviewView from "./views/OverviewView.vue";
 import StatusView from "./views/StatusView.vue";
@@ -236,7 +236,7 @@ export default defineComponent({
     },
     botDownText(): string {
       return this.lastBeat
-        ? t("shell.botDown", { age: relativeAge(this.lastBeat) })
+        ? t("shell.botDown", { age: relativeAgeLong(this.lastBeat) })
         : t("shell.botDownNever");
     },
   },

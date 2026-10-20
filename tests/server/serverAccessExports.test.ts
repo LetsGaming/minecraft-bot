@@ -91,6 +91,7 @@ const PUBLIC_RUNTIME_EXPORTS = [
   "parseManifest",
   "pingServer",
   "pingTarget",
+  "pruneSupportGap",
   "readAllStats",
   "readBackups",
   "readConfigFile",

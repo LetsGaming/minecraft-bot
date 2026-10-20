@@ -50,6 +50,7 @@ export {
 } from "./access/upgrade.js";
 export {
   supportsPrune,
+  pruneSupportGap,
   startPruneScan,
   getPruneScan,
   getPruneDimensions,

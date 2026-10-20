@@ -75,5 +75,8 @@ const items = computed<Array<number | "gap">>(() =>
 .pg.on { background: var(--accent-tint); border-color: var(--accent); }
 .pg:disabled { opacity: 0.45; cursor: default; }
 .pg.on:disabled { opacity: 1; }
+@media (pointer: coarse), (max-width: 760px) {
+  .pg { min-width: var(--touch-min); min-height: var(--touch-min); }
+}
 .pg-gap { display: inline-flex; align-items: center; padding: 0 var(--space-1); color: var(--text-dim); }
 </style>

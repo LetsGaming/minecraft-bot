@@ -3,7 +3,7 @@
     <span class="stale-text">
       <slot>
         Showing the last data we could read, from
-        <strong :title="timestampTitle(stale.asOf)">{{ relativeAge(stale.asOf) }}</strong>.
+        <strong :title="timestampTitle(stale.asOf)">{{ relativeAgeLong(stale.asOf) }}</strong>.
         The wrapper isn't answering, so this may have changed since.
       </slot>
       <span v-if="writeNote" class="stale-write">{{ writeNote }}</span>
@@ -19,7 +19,7 @@
 
 <script setup lang="ts">
 import InlineBanner from "./InlineBanner.vue";
-import { relativeAge, timestampTitle } from "../../utils/time";
+import { relativeAgeLong, timestampTitle } from "../../utils/time";
 import type { StaleInfo } from "@mcbot/schema/contract.js";
 
 /**

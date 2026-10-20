@@ -31,6 +31,7 @@ const mockConfig = {
 
 const {
   supportsPruneMock,
+  pruneSupportGapMock,
   startPruneScanMock,
   getPruneScanMock,
   getPruneDimensionsMock,
@@ -45,6 +46,7 @@ const {
   recordAdminActionMock,
 } = vi.hoisted(() => ({
   supportsPruneMock: vi.fn(),
+  pruneSupportGapMock: vi.fn(),
   startPruneScanMock: vi.fn(),
   getPruneScanMock: vi.fn(),
   getPruneDimensionsMock: vi.fn(),
@@ -68,6 +70,7 @@ vi.mock("../../src/core/utils/logger.js", () => ({
 }));
 vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
   supportsPrune: supportsPruneMock,
+  pruneSupportGap: pruneSupportGapMock,
   startPruneScan: startPruneScanMock,
   getPruneScan: getPruneScanMock,
   getPruneDimensions: getPruneDimensionsMock,
@@ -218,6 +221,13 @@ describe("capability and server scope", () => {
 });
 
 describe("unsupported wrapper", () => {
+  it("support names the half that is missing", async () => {
+    supportsPruneMock.mockResolvedValue(false);
+    pruneSupportGapMock.mockResolvedValue("suite");
+    const app = buildServer();
+    expect((await app.inject(req("GET", READER, "/prune/support"))).json()).toEqual({ supported: false, missing: "suite" });
+  });
+
   it("501s every action that would reach it", async () => {
     supportsPruneMock.mockResolvedValue(false);
     const app = buildServer();

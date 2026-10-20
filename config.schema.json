@@ -126,7 +126,7 @@
         },
         "featureNudges": {
           "$ref": "#/definitions/FeatureNudgeConfig",
-          "description": "In-game discoverability nudges (see FeatureNudgeConfig).",
+          "description": "In-game tips that tell players `/link` and `/daily` exist, with limits so they never become spam.",
           "title": "Feature nudges"
         },
         "schedules": {

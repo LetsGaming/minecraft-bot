@@ -44,6 +44,12 @@ body {
 
 a { color: var(--mc-accent); }
 
+/* Type details the browser does not default to. */
+h1, h2, h3 { text-wrap: balance; letter-spacing: -0.01em; }
+p, li, dd { text-wrap: pretty; }
+table, input { font-variant-numeric: tabular-nums; }
+.mono, code, pre { font-variant-ligatures: none; }
+
 /* Keyboard focus. Unlayered on purpose: it must win over the layered
    PrimeVue theme and over the plain buttons the shell renders itself. */
 :focus-visible {
@@ -118,6 +124,7 @@ a { color: var(--mc-accent); }
 }
 .chip:hover { border-color: var(--border-hover); background: var(--surface); }
 .chip.on { background: var(--accent-tint); border-color: var(--accent); }
+.chip-check { margin-inline-end: var(--space-1); font-size: 0.75em; }
 .chip-n { color: var(--text-dim); font-variant-numeric: tabular-nums; }
 .chip.on .chip-n { color: var(--text); }
 

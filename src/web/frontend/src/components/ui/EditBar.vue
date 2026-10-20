@@ -170,6 +170,11 @@ const saveText = computed(() => {
   }
   .docked .eb-actions { width: 100%; }
   .docked .eb-actions > * { flex: 1 1 auto; }
+  /* Nothing to save: the bar is only a status line, not a row of disabled buttons. */
+  .docked.is-clean .eb-save { display: none; }
+  .docked.is-clean .eb-actions { width: auto; margin-inline-start: auto; }
+  .docked.is-dirty .eb-hint,
+  .docked.is-saving .eb-hint { display: none; }
 }
 @media (pointer: coarse), (max-width: 760px) {
   .eb-link { min-height: var(--touch-min); }

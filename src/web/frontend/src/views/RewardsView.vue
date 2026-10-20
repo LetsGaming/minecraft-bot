@@ -143,10 +143,11 @@
                 severity="secondary"
                 text
                 :disabled="locked || shownPool.length === 0"
-                :title="t('rewards.pool.normalizeHint')"
+                aria-describedby="rw-normalize-hint"
                 @click="normalizeWeights"
               />
             </div>
+            <p v-if="poolEditable" id="rw-normalize-hint" class="rw-hint">{{ t("rewards.pool.normalizeHint") }}</p>
 
             <div class="rw-table-wrap">
               <table class="rw-table">
@@ -167,8 +168,9 @@
                       <span class="rw-item-id mono">{{ row.item.item }}</span>
                       <span v-if="!isKnown(row.item.item)" class="rw-item-warn">{{ t("rewards.notVanilla") }}</span>
                     </th>
-                    <td class="num">
+                    <td class="num" :data-label="t('rewards.col.amount')">
                       <InputNumber
+:locale="UI_LOCALE"
                         v-if="poolEditable"
                         :model-value="row.item.amount"
                         :min="1"
@@ -181,9 +183,10 @@
                       <span v-else>{{ row.item.amount }}</span>
                       <span v-if="stackNote(row.item)" class="rw-sub">{{ stackNote(row.item) }}</span>
                     </td>
-                    <td class="num">
+                    <td class="num" :data-label="mode === 'percent' ? t('rewards.col.chance') : t('rewards.col.weight')">
                       <template v-if="poolEditable">
                         <InputNumber
+:locale="UI_LOCALE"
                           v-if="mode === 'percent'"
                           :model-value="round(percentOf(row.item), 3)"
                           :min="0.001"
@@ -197,6 +200,7 @@
                           @update:model-value="setPercent(row.index, $event)"
                         />
                         <InputNumber
+:locale="UI_LOCALE"
                           v-else
                           :model-value="weightOf(row.item)"
                           :min="0.0001"
@@ -212,7 +216,7 @@
                       <span class="rw-sub">{{ mode === "percent" ? t("rewards.weightIs", { weight: weightOf(row.item) }) : `${formatPercent(percentOf(row.item))} %` }} · {{ oneIn(row.item) }}</span>
                     </td>
                     <td>
-                      <span class="rw-rarity">{{ rarityLabel(row.item) }}</span>
+                      <span class="rw-rarity" :style="{ '--rarity': rarityColor(row.item) }"><span class="rw-rarity-pip" aria-hidden="true" />{{ rarityLabel(row.item) }}</span>
                     </td>
                     <td v-if="poolEditable" class="rw-actions">
                       <Button
@@ -296,6 +300,7 @@
                       <span v-if="!isKnown(entry.item)" class="rw-item-warn">{{ t("rewards.notVanilla") }}</span>
                     </span>
                     <InputNumber
+:locale="UI_LOCALE"
                       v-if="streakEditable"
                       :model-value="entry.amount"
                       :min="1"
@@ -333,7 +338,7 @@
 
             <div v-if="streakEditable" class="rw-add-day">
               <label for="rw-new-day" class="rw-add-label">{{ t("rewards.streak.addDayLabel") }}</label>
-              <InputNumber v-model="newDay" input-id="rw-new-day" :min="1" :max="999999" :disabled="locked" class="rw-num" />
+              <InputNumber :locale="UI_LOCALE" v-model="newDay" input-id="rw-new-day" :min="1" :max="999999" :disabled="locked" class="rw-num" />
               <Button
                 class="tap"
                 icon="pi pi-plus"
@@ -365,6 +370,7 @@
             <div class="rw-bonus">
               <label for="rw-bonus" class="sr-only">{{ t("rewards.bonus.title") }}</label>
               <InputNumber
+:locale="UI_LOCALE"
                 input-id="rw-bonus"
                 :model-value="bonusChance"
                 :min="0"
@@ -419,7 +425,7 @@ import ConflictPicker from "../components/schema/ConflictPicker.vue";
 import ItemPicker from "../components/rewards/ItemPicker.vue";
 import OverrideToggle from "../components/rewards/OverrideToggle.vue";
 import type { EditorState } from "../components/ui/types";
-import { t, type MessageKey } from "../i18n";
+import { t, UI_LOCALE, type MessageKey } from "../i18n";
 
 /** The scope picker's value for the shared pool (a Select treats "" as nothing picked). */
 const SHARED = "\u0000shared";
@@ -617,7 +623,12 @@ function oneIn(item: DailyRewardItem): string {
 
 function rarityLabel(item: DailyRewardItem): string {
   const rarity = rarityOf(item, shownPool.value);
-  return `${RARITY_STYLE[rarity].icon} ${t(`appearance.key.rarity.${rarity}` as MessageKey)}`;
+  return t(`appearance.key.rarity.${rarity}` as MessageKey);
+}
+
+/** The tier's own colour, the one its Discord embed uses. */
+function rarityColor(item: DailyRewardItem): string {
+  return `#${RARITY_STYLE[rarityOf(item, shownPool.value)].color.toString(16).padStart(6, "0")}`;
 }
 
 function bonusItems(day: string): DailyRewardItem[] {
@@ -726,7 +737,16 @@ async function onSave(): Promise<void> {
 .rw-item-warn { font-size: var(--text-xs); color: var(--st-degraded); margin: 0; }
 .rw-sub { display: block; font-size: var(--text-xs); color: var(--text-dim); }
 .rw-num :deep(.p-inputnumber-input) { width: 9ch; text-align: right; }
-.rw-rarity { white-space: nowrap; font-size: var(--text-sm); }
+.rw-rarity { display: inline-flex; align-items: center; gap: var(--space-2); white-space: nowrap; font-size: var(--text-sm); }
+/* A square pip, like an item-frame corner, rather than a round status dot. */
+.rw-rarity-pip {
+  flex: none;
+  width: 0.7em;
+  height: 0.7em;
+  border-radius: 2px;
+  background: var(--rarity);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.35);
+}
 .rw-actions { width: 1%; white-space: nowrap; }
 .rw-more { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) 0; flex-wrap: wrap; }
 .rw-total { margin: 0; font-size: var(--text-sm); color: var(--text-dim); }
@@ -752,9 +772,27 @@ async function onSave(): Promise<void> {
 
 @media (max-width: 600px) {
   .rw-table thead { display: none; }
-  .rw-table tr { display: grid; grid-template-columns: 1fr auto; gap: var(--space-1) var(--space-2); padding: var(--space-2) 0; border-bottom: 1px solid var(--border); }
+  .rw-table tr { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); padding: var(--space-3) 0; border-bottom: 1px solid var(--border); }
   .rw-table th, .rw-table td { border: 0; padding: 0; }
-  .rw-table .rw-item { grid-column: 1 / -1; }
+  .rw-table .rw-item { grid-column: 1 / -1; grid-row: 1; }
+  .rw-table tr:has(.rw-actions) .rw-item { grid-column: 1; }
+  .rw-table td:nth-of-type(1) { grid-column: 1; grid-row: 2; }
+  .rw-table td:nth-of-type(2) { grid-column: 2; grid-row: 2; }
+  .rw-table td:nth-of-type(3) { grid-column: 1 / -1; grid-row: 3; }
   .rw-table .num { text-align: left; }
+  /* The header row is hidden here, so each number names itself. */
+  .rw-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-caps);
+    color: var(--text-dim);
+  }
+  .rw-table .rw-actions { grid-column: 2; grid-row: 1; justify-self: end; }
+}
+@media (pointer: coarse), (max-width: 760px) {
+  .rw-num :deep(.p-inputnumber-input),
+  .rw-mode :deep(.p-togglebutton) { min-height: var(--touch-min); }
 }
 </style>

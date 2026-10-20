@@ -67,7 +67,7 @@
         <template v-else-if="inst.installed.value">
           <div class="notices">
             <StaleBanner v-if="inst.installed.value.stale" :stale="inst.installed.value.stale">
-              {{ t("mods.installed.staleText", { age: relativeAge(inst.installed.value.stale.asOf), server }) }}
+              {{ t("mods.installed.staleText", { age: relativeAgeLong(inst.installed.value.stale.asOf), server }) }}
               <template #actions>
                 <Button class="tap" :label="t('mods.reload')" size="small" outlined :loading="inst.loading.value" @click="emit('reload')" />
               </template>
@@ -279,7 +279,7 @@ import InputText from "primevue/inputtext";
 import Select from "primevue/select";
 import { StatusRole, type StatusInput } from "@mcbot/schema";
 import { t, type MessageKey } from "../../i18n";
-import { relativeAge } from "../../utils/time";
+import { relativeAgeLong } from "../../utils/time";
 import { modrinthUrl } from "../../utils/modsFormat";
 import type { InstalledMod } from "../../api";
 import { useConfirmAction } from "../../composables/useConfirmAction";

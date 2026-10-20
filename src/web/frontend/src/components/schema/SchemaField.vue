@@ -105,6 +105,7 @@
           @update:model-value="onScalarInput($event ?? '')"
         />
         <InputNumber
+:locale="UI_LOCALE"
           v-else-if="kind === 'number'"
           :model-value="(modelValue as number) ?? null"
           :input-id="id"
@@ -321,7 +322,7 @@ import { fieldText, sameValue } from "./formIndex.js";
 import { isFeatureNew } from "../../composables/useSeenFeatures.js";
 import { SchemaRefsKey, type RefOption } from "../../composables/useSchemaRefs.js";
 import { SchemaFormKey } from "../../composables/useSchemaForm.js";
-import { t } from "../../i18n.js";
+import { t, UI_LOCALE } from "../../i18n.js";
 
 const SHOWN_MAX = 80;
 
@@ -371,6 +372,7 @@ export default defineComponent({
       schemaRefs: inject(SchemaRefsKey, undefined),
       form: inject(SchemaFormKey, undefined),
       t,
+      UI_LOCALE,
     };
   },
   data() {
@@ -686,7 +688,7 @@ export default defineComponent({
 }
 .sf-chip-on { background: var(--st-online-bg); color: var(--st-online); }
 .sf-chip-configured { background: var(--accent-tint); color: var(--accent); }
-.section-body { border-top: 1px solid var(--border); padding: var(--space-1) 0 var(--space-2); }
+.section-body { border-top: 1px solid var(--border); padding: var(--space-2) 0 var(--space-4); }
 .section-body > .sf-json { margin: var(--space-3) var(--space-4); width: calc(100% - 2 * var(--space-4)); }
 @media (max-width: 760px) {
   .section { margin: var(--space-2) 0; }

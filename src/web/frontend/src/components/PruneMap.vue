@@ -30,6 +30,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatNumber } from "../utils/numberFormat";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { REGION_CHUNKS } from "@mcbot/schema";
 import type { PruneZone } from "@mcbot/schema/wire/index.js";
@@ -397,7 +398,7 @@ const hoverText = computed(() => {
   const where = t("prune.map.chunk", { x: h.cx, z: h.cz, bx: h.cx * 16, bz: h.cz * 16 });
   if (h.cell === CELL.EMPTY) return `${where}: ${t("prune.cell.empty")}`;
   const parts = [t(CELL_LABEL[h.cell] as never)];
-  if (h.heat > 0) parts.push(t("prune.map.used", { minutes: heatMinutes(h.heat).toLocaleString() }));
+  if (h.heat > 0) parts.push(t("prune.map.used", { minutes: formatNumber(heatMinutes(h.heat)) }));
   if (h.selected) parts.push(t("prune.map.selected"));
   return `${where}: ${parts.join(", ")}`;
 });
@@ -465,7 +466,12 @@ watch(() => props.overlayOpacity, invalidateBase);
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--surface);
+  /* Unscanned ground reads as a block grid until the regions are painted over it. */
+  --pm-grid: color-mix(in srgb, var(--border) 55%, transparent);
+  background:
+    linear-gradient(var(--pm-grid) 1px, transparent 1px) 0 0 / 16px 16px,
+    linear-gradient(90deg, var(--pm-grid) 1px, transparent 1px) 0 0 / 16px 16px,
+    var(--surface);
   touch-action: none;
 }
 .pm-host:focus-visible {
