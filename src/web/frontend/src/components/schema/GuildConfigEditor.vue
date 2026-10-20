@@ -133,7 +133,7 @@
 </template>
 
 <script lang="ts">
-import { computed, defineComponent, nextTick, provide } from "vue";
+import { computed, defineComponent, nextTick, provide, ref } from "vue";
 import Button from "primevue/button";
 import ToggleSwitch from "primevue/toggleswitch";
 import ConfiguredFields from "./ConfiguredFields.vue";
@@ -171,6 +171,7 @@ export default defineComponent({
     provide(SchemaRefsKey, refsApi.dynamicGuildScope(() => props.guildId));
 
     const guild = useGuildConfig();
+    const showAllRef = ref(false);
     const topLevelProps = computed<Record<string, unknown>>(
       () => derefNode(guild.schema.value, guild.definitions.value).properties ?? {},
     );
@@ -183,6 +184,7 @@ export default defineComponent({
       conflicts: () => guild.conflicts.value,
       query: () => "",
       locked: () => guild.saving.value,
+      showAll: () => showAllRef.value,
       stripPath: (path) => (path[0] === "guilds" && path[1] === props.guildId ? path.slice(2) : path),
       isSecret: () => false,
       idPrefix: "gce",
@@ -191,6 +193,7 @@ export default defineComponent({
     return {
       ...guild,
       t,
+      showAll: showAllRef,
       topLevelProps,
       problems: form.problems,
       issues: form.issues,
@@ -203,7 +206,7 @@ export default defineComponent({
     };
   },
   data() {
-    return { savedCount: 0, currentGroup: "", showAll: false };
+    return { savedCount: 0, currentGroup: "" };
   },
   computed: {
     hasFields(): boolean {

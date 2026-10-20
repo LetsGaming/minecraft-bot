@@ -179,6 +179,7 @@ function contextWith(over: Partial<SchemaFormContext> = {}): SchemaFormContext {
   return {
     isVisible: () => true,
     filtering: () => false,
+    showAll: () => false,
     baselineAt: () => ({ known: false, value: undefined }),
     errorFor: () => "",
     hasProblemUnder: () => false,

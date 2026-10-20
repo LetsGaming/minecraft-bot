@@ -40,8 +40,22 @@ describe("FieldRow", () => {
     const w = row({ id: "f", keyPath: "servers.smp.apiUrl", error: "Not a URL" });
     expect(w.find("input").attributes("aria-describedby")).toBe("f-key f-error");
     expect(w.find("#f-error").attributes("role")).toBe("alert");
-    expect(w.find("#f-key").text()).toBe("servers.smp.apiUrl");
+    expect(w.find("#f-key").text()).toBe("apiUrl");
+    expect(w.find("button.fr-key").attributes("title")).toContain("servers.smp.apiUrl");
     expect(w.find("input").attributes("aria-invalid")).toBe("true");
+  });
+
+  it("clamps long help to one line behind a More toggle", async () => {
+    const w = row({ id: "h", help: "x".repeat(120) });
+    expect(w.find(".fr-help").classes()).toContain("clamped");
+    await w.find("button.fr-more").trigger("click");
+    expect(w.find(".fr-help").classes()).not.toContain("clamped");
+  });
+
+  it("marks a change, an error or a conflict with a dot before the label", () => {
+    expect(row({ id: "a" }).find(".fr-dot").exists()).toBe(false);
+    expect(row({ id: "b", dirty: true }).find(".fr-dot").classes()).toContain("is-dirty");
+    expect(row({ id: "c", error: "bad" }).find(".fr-dot").classes()).toContain("is-invalid");
   });
 
   it("marks a changed field", () => {

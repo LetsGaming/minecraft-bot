@@ -328,6 +328,8 @@ const topLevelProps = computed<Record<string, unknown>>(() => {
   return Object.fromEntries(Object.entries(all).filter(([key]) => !GUILD_OWNED_KEYS.has(key)));
 });
 
+const showAll = ref(false);
+
 const form = useSchemaForm({
   props: () => topLevelProps.value,
   definitions: () => schema.value?.definitions,
@@ -337,6 +339,7 @@ const form = useSchemaForm({
   conflicts: () => conflicts.value,
   query: () => query.value,
   locked: () => saving.value,
+  showAll: () => showAll.value,
   entryLabel: (mapName, key) => (mapName === "guilds" ? guildName(key) : undefined),
   idPrefix: "cfg",
 });
@@ -362,8 +365,6 @@ const displayGroups = computed<ConfigGroup[]>(() => {
   const current = groups.value.find((group) => group.id === currentGroup.value) ?? groups.value[0];
   return current ? [current] : [];
 });
-
-const showAll = ref(false);
 
 const baselineDoc = computed(() => (baseline.value ?? null) as Record<string, unknown> | null);
 const problemKeys = computed(() => new Set(issues.value.map((issue) => issue.path[0]!)));

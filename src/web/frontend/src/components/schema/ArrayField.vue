@@ -149,7 +149,7 @@ export default defineComponent({
   border-radius: var(--radius-surface);
   scroll-margin-top: 112px;
 }
-.group.has-error { border-left: 3px solid var(--danger); }
+.group.has-error { border-color: var(--danger); }
 .group legend {
   display: flex;
   flex-wrap: wrap;
