@@ -1,12 +1,21 @@
 <template>
-  <Dialog
-    :visible="visible"
-    modal
-    :header="t('guildEditor.title', { name: guildName || guildId })"
-    :style="{ width: 'min(760px, calc(100vw - 32px))' }"
-    :dismissable-mask="false"
-    @update:visible="onVisible"
-  >
+  <div class="gce-page">
+    <button type="button" class="gce-back tap" @click="$emit('close')">
+      <i class="pi pi-arrow-left" aria-hidden="true" /> {{ t("guildEditor.back") }}
+    </button>
+
+    <header class="gce-head">
+      <GuildAvatar :guild-id="guildId" :size="44" />
+      <div class="gce-title">
+        <h1 class="gce-name">{{ guildName || guildId }}</h1>
+        <span class="gce-id">
+          <span class="gce-id-label">{{ t("guildEditor.idLabel") }}</span>
+          <code class="mono">{{ guildId }}</code>
+        </span>
+      </div>
+    </header>
+    <p class="gce-hint">{{ t("guildEditor.hint") }}</p>
+
     <InlineError
       v-if="loadError && !ready"
       :title="t('guildEditor.loadFailed')"
@@ -18,9 +27,8 @@
       <i class="pi pi-spin pi-spinner" aria-hidden="true" /> {{ t("guildEditor.loading") }}
     </p>
 
-    <EditorShell v-else :state="editorState">
+    <EditorShell v-else :state="editorState" :nav-label="t('guildEditor.tabs')">
       <template #banners>
-        <p class="gce-hint">{{ t("guildEditor.hint") }}</p>
         <InlineBanner v-if="stale" tone="warn" :title="t('guildEditor.staleTitle')">
           {{ t("guildEditor.staleText") }}
         </InlineBanner>
@@ -59,58 +67,86 @@
         />
       </template>
 
-      <div v-if="model && hasFields" class="gce-fields">
-        <SchemaField
-          v-for="(propSchema, key) in topLevelProps"
-          :key="key"
-          :name="String(key)"
-          :schema="propSchema"
-          :definitions="definitions"
-          :key-path="[String(key)]"
-          :model-value="model[key]"
-          @update:model-value="setField(String(key), $event)"
-        />
+      <template #bar>
+        <EditBar
+          :state="editorState"
+          :change-count="changes.length"
+          :problem-count="problems.length"
+          :conflict-count="conflicts.length"
+          :can-save="canSave"
+          @save="onSave"
+          @discard="discard"
+          @first-problem="goToFirstProblem"
+        >
+          <template #status>
+            <ConfigStatusChip :refresh-key="savedCount" />
+          </template>
+        </EditBar>
+      </template>
+
+      <template #nav>
+        <ul class="gce-tabs">
+          <li v-for="group in groups" :key="group.id">
+            <button
+              type="button"
+              :aria-current="currentGroup === group.id ? 'true' : undefined"
+              @click="currentGroup = group.id"
+            >
+              <span class="gt-title">{{ t(group.titleKey) }}</span>
+              <span v-if="groupProblems(group)" class="gt-n gt-err">{{ t("config.groupProblems", { count: groupProblems(group) }) }}</span>
+            </button>
+          </li>
+        </ul>
+      </template>
+
+      <div v-if="model && hasFields" class="gce-panel">
+        <div class="gce-groupselect">
+          <label for="gce-groupselect" class="gce-caps">{{ t("config.jumpToGroup") }}</label>
+          <select id="gce-groupselect" v-model="currentGroup" class="gce-select">
+            <option v-for="group in groups" :key="group.id" :value="group.id">{{ t(group.titleKey) }}</option>
+          </select>
+        </div>
+        <div class="gce-showall">
+          <ToggleSwitch v-model="showAll" input-id="gce-showall" />
+          <label for="gce-showall">{{ t("config.showAll") }}</label>
+        </div>
+        <section v-if="activeGroup" :key="activeGroup.id" class="gce-group" :aria-labelledby="`gce-group-${activeGroup.id}-h`">
+          <header class="gg-head">
+            <h2 :id="`gce-group-${activeGroup.id}-h`">{{ t(activeGroup.titleKey) }}</h2>
+          </header>
+          <ConfiguredFields
+            :keys="activeGroup.keys"
+            :schemas="topLevelProps"
+            :definitions="definitions"
+            :model="model"
+            :baseline="baselineDoc"
+            :problem-keys="problemKeys"
+            :show-all="showAll"
+            :filter-active="false"
+            :is-visible="formContext.isVisible"
+            @update="setField"
+          />
+        </section>
       </div>
     </EditorShell>
-
-    <template #footer>
-      <EditBar
-        class="gce-bar"
-        :docked="false"
-        :state="editorState"
-        :change-count="changes.length"
-        :problem-count="problems.length"
-        :conflict-count="conflicts.length"
-        :can-save="canSave"
-        @save="onSave"
-        @discard="discard"
-        @first-problem="goToFirstProblem"
-      >
-        <template #status>
-          <ConfigStatusChip :refresh-key="savedCount" />
-        </template>
-        <template #extra>
-          <Button :label="t('guildEditor.close')" severity="secondary" text class="tap" @click="requestClose" />
-        </template>
-      </EditBar>
-    </template>
-  </Dialog>
+  </div>
 </template>
 
 <script lang="ts">
 import { computed, defineComponent, nextTick, provide } from "vue";
-import Dialog from "primevue/dialog";
 import Button from "primevue/button";
-import SchemaField from "./SchemaField.vue";
+import ToggleSwitch from "primevue/toggleswitch";
+import ConfiguredFields from "./ConfiguredFields.vue";
 import ConflictPicker from "./ConflictPicker.vue";
 import ConfigStatusChip from "../ui/ConfigStatusChip.vue";
 import EditorShell from "../ui/EditorShell.vue";
 import EditBar from "../ui/EditBar.vue";
+import GuildAvatar from "../ui/GuildAvatar.vue";
 import InlineBanner from "../ui/InlineBanner.vue";
 import InlineError from "../ui/InlineError.vue";
 import type { EditorState } from "../ui/types";
-import { useConfirm } from "primevue/useconfirm";
 import { derefNode, countNewSections, topLevelSectionKeys } from "./schemaField";
+import { guildConfigGroups, type ConfigGroup } from "./configGroups";
 import { isFeatureNew, commitSeenFeatures } from "../../composables/useSeenFeatures";
 import { useGuildConfig } from "../../composables/useGuildConfig";
 import { useSchemaRefs, SchemaRefsKey } from "../../composables/useSchemaRefs";
@@ -120,19 +156,17 @@ import { t } from "../../i18n";
 export default defineComponent({
   name: "GuildConfigEditor",
   components: {
-    Dialog, Button, SchemaField, ConflictPicker, ConfigStatusChip, EditorShell, EditBar,
-    InlineBanner, InlineError,
+    Button, ToggleSwitch, ConfiguredFields, ConflictPicker, ConfigStatusChip, EditorShell, EditBar,
+    GuildAvatar, InlineBanner, InlineError,
   },
   props: {
-    visible: { type: Boolean, required: true },
-    guildId: { type: String, default: "" },
+    guildId: { type: String, required: true },
     guildName: { type: String, default: "" },
   },
-  emits: ["update:visible", "saved"],
+  emits: ["close", "saved"],
   setup(props) {
     // Named-entity options (servers plus this guild's channels and roles) so
-    // ID fields render as name dropdowns. The scope follows the prop: this
-    // dialog is one instance reused for every guild.
+    // ID fields render as name dropdowns.
     const refsApi = useSchemaRefs();
     provide(SchemaRefsKey, refsApi.dynamicGuildScope(() => props.guildId));
 
@@ -164,17 +198,28 @@ export default defineComponent({
       generalErrors: form.generalErrors,
       reveal: form.reveal,
       formContext: form.context,
-      confirm: useConfirm(),
       loadServers: refsApi.loadServers,
       loadGuildRefs: refsApi.loadGuildRefs,
     };
   },
   data() {
-    return { savedCount: 0 };
+    return { savedCount: 0, currentGroup: "", showAll: false };
   },
   computed: {
     hasFields(): boolean {
       return Object.keys(this.topLevelProps).length > 0;
+    },
+    groups(): ConfigGroup[] {
+      return guildConfigGroups(Object.keys(this.topLevelProps));
+    },
+    activeGroup(): ConfigGroup | undefined {
+      return this.groups.find((group) => group.id === this.currentGroup) ?? this.groups[0];
+    },
+    baselineDoc(): Record<string, unknown> | null {
+      return (this.baseline ?? null) as Record<string, unknown> | null;
+    },
+    problemKeys(): Set<string> {
+      return new Set(this.issues.map((issue) => issue.path[0]!));
     },
     newFeatureCount(): number {
       if (!this.model) return 0;
@@ -194,29 +239,33 @@ export default defineComponent({
     },
   },
   watch: {
-    async visible(open: boolean): Promise<void> {
-      if (open && this.guildId) {
-        await Promise.all([
-          this.load(this.guildId),
-          this.loadServers(),
-          this.loadGuildRefs(this.guildId),
-        ]);
+    guildId: {
+      immediate: true,
+      async handler(id: string): Promise<void> {
+        if (!id) return;
+        this.currentGroup = "";
+        this.showAll = false;
+        await Promise.all([this.load(id), this.loadServers(), this.loadGuildRefs(id)]);
         commitSeenFeatures(topLevelSectionKeys(this.topLevelProps, this.definitions));
-      }
+        this.currentGroup = this.groups[0]?.id ?? "";
+      },
     },
   },
   methods: {
+    groupProblems(group: ConfigGroup): number {
+      return this.issues.filter((issue) => group.keys.includes(issue.path[0]!)).length;
+    },
     async onSave(): Promise<void> {
-      const ok = await this.save();
-      if (ok) {
+      if (await this.save()) {
         this.savedCount += 1;
         this.$emit("saved");
-        this.$emit("update:visible", false);
       }
     },
     async goToFirstProblem(): Promise<void> {
       const first = this.issues[0];
       if (!first) return;
+      const owner = this.groups.find((group) => group.keys.includes(first.path[0]!));
+      if (owner) this.currentGroup = owner.id;
       this.reveal(first.path);
       await nextTick();
       const el = document.getElementById(this.formContext.idFor(first.path));
@@ -226,40 +275,89 @@ export default defineComponent({
         : el?.querySelector<HTMLElement>("input, textarea, select, button");
       target?.focus({ preventScroll: true });
     },
-    onVisible(open: boolean): void {
-      if (open) this.$emit("update:visible", true);
-      else this.requestClose();
-    },
-    requestClose(): void {
-      const close = (): void => {
-        this.discard();
-        this.$emit("update:visible", false);
-      };
-      if (!this.dirty) {
-        close();
-        return;
-      }
-      this.confirm.require({
-        header: t("leave.header"),
-        message: t("guildEditor.discardMessage", { count: this.changes.length || 1 }),
-        icon: "pi pi-exclamation-triangle",
-        acceptLabel: t("editor.discard"),
-        rejectLabel: t("guildEditor.keepEditing"),
-        acceptProps: { severity: "danger" },
-        rejectProps: { severity: "secondary", outlined: true },
-        defaultFocus: "reject",
-        accept: close,
-      });
-    },
   },
 });
 </script>
 
 <style scoped>
+.gce-page { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.gce-back {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-h);
+  padding: 0 var(--space-2);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-control);
+  color: var(--text-dim);
+  font: inherit;
+  cursor: pointer;
+}
+.gce-back:hover { color: var(--text); background: var(--surface-raised); }
+.gce-head { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.gce-title { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.gce-name { margin: 0; font-size: var(--text-xl); font-weight: 600; overflow-wrap: anywhere; }
+.gce-id { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--text-dim); font-size: var(--text-xs); }
+.gce-id code { padding: 1px var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-raised); user-select: all; }
 .gce-note { display: flex; align-items: center; gap: var(--space-2); justify-content: center; padding: var(--space-6) 0; margin: 0; color: var(--text-dim); }
 .gce-hint { margin: 0; color: var(--text-dim); font-size: var(--text-sm); max-width: 64ch; }
 .gce-list { margin: 0; padding-left: 18px; }
 .gce-list li { overflow-wrap: anywhere; }
-.gce-fields { display: flex; flex-direction: column; min-width: 0; }
-.gce-bar { width: 100%; }
+
+.gce-tabs { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.gce-tabs button {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-h);
+  padding: 0 var(--space-3);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-control);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.gce-tabs button:hover { background: var(--surface-raised); }
+.gce-tabs button[aria-current="true"] { background: var(--accent-tint); color: var(--accent); font-weight: 600; }
+.gt-title { min-width: 0; overflow-wrap: anywhere; }
+.gt-n { flex: none; font-size: var(--text-xs); color: var(--text-dim); }
+.gt-err { color: var(--text); font-weight: 600; box-shadow: inset 0 -2px 0 var(--danger); }
+
+.gce-panel { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; max-width: 56rem; }
+.gce-showall { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
+.gce-showall label { cursor: pointer; }
+.gce-groupselect { display: none; }
+.gce-caps { display: block; margin-bottom: var(--space-1); font-size: var(--text-xs); color: var(--text-dim); text-transform: uppercase; letter-spacing: var(--tracking-caps); }
+.gce-select {
+  width: 100%;
+  min-height: var(--control-h);
+  padding: 0 var(--space-3);
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  font: inherit;
+}
+@media (max-width: 1099px) {
+  .gce-groupselect { display: block; }
+  .gce-page :deep(.es-nav) { display: none; }
+}
+.gce-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-surface);
+  background: var(--surface);
+  padding-bottom: var(--space-3);
+  min-width: 0;
+}
+.gg-head { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); }
+.gg-head h2 { margin: 0; font-size: var(--text-xl); font-weight: 600; }
+@media (pointer: coarse), (max-width: 760px) {
+  .gce-tabs button { min-height: var(--touch-min); }
+}
 </style>

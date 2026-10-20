@@ -194,30 +194,19 @@
                   <span class="cg-meta">{{ t("config.groupCount", { count: groupStats[group.id]!.count }) }}</span>
                 </header>
                 <div class="cg-fields">
-                  <p v-if="!filter.active && !showAll && !groupHasActive(group)" class="cg-default">
-                    {{ t("config.groupAllDefault") }}
-                  </p>
-                  <div v-for="key in group.keys" v-show="isKeyShown(group, key)" :key="key" class="cg-item">
-                    <SchemaField
-                      :name="key"
-                      :schema="topLevelProps[key]"
-                      :definitions="schema.definitions"
-                      :key-path="[key]"
-                      :bare="group.keys.length === 1 && isObjectKey(key)"
-                      :model-value="model[key]"
-                      @update:model-value="setTop(key, $event)"
-                    />
-                  </div>
-                  <button
-                    v-if="!filter.active && !showAll && hiddenCount(group) > 0"
-                    type="button"
-                    class="cg-rest"
-                    :aria-expanded="openGroups.has(group.id)"
-                    @click="toggleRest(group.id)"
-                  >
-                    <i :class="['pi', openGroups.has(group.id) ? 'pi-chevron-down' : 'pi-chevron-right']" aria-hidden="true" />
-                    {{ openGroups.has(group.id) ? t("config.restHide") : t("config.restShow", { count: hiddenCount(group) }) }}
-                  </button>
+                  <ConfiguredFields
+                    :keys="group.keys"
+                    :schemas="topLevelProps"
+                    :definitions="schema.definitions"
+                    :model="model"
+                    :baseline="baselineDoc"
+                    :problem-keys="problemKeys"
+                    :show-all="showAll"
+                    :filter-active="filter.active"
+                    :is-visible="filter.isVisible"
+                    :is-bare="(key) => group.keys.length === 1 && isObjectKey(key)"
+                    @update="setTop"
+                  />
                 </div>
               </section>
             </div>
@@ -242,11 +231,11 @@ import InputText from "primevue/inputtext";
 import ToggleSwitch from "primevue/toggleswitch";
 import Textarea from "primevue/textarea";
 import { ConfigApplyState, isSecretConfigPath } from "@mcbot/schema";
-import SchemaField from "../components/schema/SchemaField.vue";
 import ConflictPicker from "../components/schema/ConflictPicker.vue";
 import { classifyField, derefNode, countNewSections, topLevelSectionKeys } from "../components/schema/schemaField";
 import { configGroups, type ConfigGroup } from "../components/schema/configGroups";
-import { sameValue } from "../components/schema/formIndex";
+import ConfiguredFields from "../components/schema/ConfiguredFields.vue";
+import { isKeyActive } from "../components/schema/configuredFirst";
 import { isFeatureNew, commitSeenFeatures } from "../composables/useSeenFeatures";
 import { useSchemaRefs, SchemaRefsKey, MapKeyLabelKey, SchemaScopeKey } from "../composables/useSchemaRefs";
 import { useGuilds } from "../composables/useGuilds";
@@ -375,38 +364,13 @@ const displayGroups = computed<ConfigGroup[]>(() => {
 });
 
 const showAll = ref(false);
-const openGroups = ref<Set<string>>(new Set());
 
-/**
- * A setting shows by default when it is saved in config.json, edited in this
- * session, or has a problem. Everything else sits behind the group's "unset"
- * row. Hidden fields stay mounted so an edit never loses focus.
- */
-function isKeyActive(key: string): boolean {
-  const saved = (baseline.value as Record<string, unknown> | null | undefined)?.[key];
-  if (saved !== undefined && saved !== null) return true;
-  const draft = model.value?.[key];
-  if (!sameValue(draft, saved)) return true;
-  return issues.value.some((issue) => issue.path[0] === key);
-}
-function isKeyShown(group: ConfigGroup, key: string): boolean {
-  if (filter.value.active) return filter.value.isVisible([key]);
-  return showAll.value || openGroups.value.has(group.id) || isKeyActive(key);
-}
-function groupHasActive(group: ConfigGroup): boolean {
-  return group.keys.some(isKeyActive);
-}
-function hiddenCount(group: ConfigGroup): number {
-  return group.keys.filter((key) => !isKeyActive(key)).length;
-}
-function toggleRest(id: string): void {
-  const next = new Set(openGroups.value);
-  if (!next.delete(id)) next.add(id);
-  openGroups.value = next;
-}
+const baselineDoc = computed(() => (baseline.value ?? null) as Record<string, unknown> | null);
+const problemKeys = computed(() => new Set(issues.value.map((issue) => issue.path[0]!)));
 const setSummary = computed(() => {
   const keys = groups.value.flatMap((group) => group.keys);
-  return { set: keys.filter(isKeyActive).length, total: keys.length };
+  const set = keys.filter((key) => isKeyActive(key, model.value, baselineDoc.value, problemKeys.value));
+  return { set: set.length, total: keys.length };
 });
 const groupStats = computed<Record<string, { count: number; problems: number }>>(() => {
   const out: Record<string, { count: number; problems: number }> = {};
@@ -637,25 +601,6 @@ onMounted(async () => {
 .cg-head h2 { margin: 0; font-size: var(--text-xl); font-weight: 600; }
 .cg-meta { color: var(--text-dim); font-size: var(--text-sm); }
 .cg-fields { padding: var(--space-2) 0 var(--space-1); min-width: 0; }
-.cg-default { margin: 0; padding: var(--space-3) var(--space-4); color: var(--text-dim); font-size: var(--text-sm); }
-.cg-rest {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  width: 100%;
-  min-height: var(--control-h);
-  padding: 0 var(--space-4);
-  background: none;
-  border: 0;
-  border-top: 1px solid var(--border);
-  color: var(--text-dim);
-  font: inherit;
-  font-size: var(--text-sm);
-  text-align: left;
-  cursor: pointer;
-}
-.cg-rest:hover { color: var(--text); background: var(--surface-raised); }
-.cg-rest:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 
 .cv-raw { display: flex; flex-direction: column; gap: var(--space-2); }
 .cv-raw-label { font-weight: 500; }

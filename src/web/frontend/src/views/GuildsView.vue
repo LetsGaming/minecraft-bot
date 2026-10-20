@@ -1,5 +1,14 @@
 <template>
   <div class="guilds-view">
+    <GuildConfigEditor
+      v-if="guildId"
+      :guild-id="guildId"
+      :guild-name="guildName(guildId)"
+      @close="closeConfigEditor"
+      @saved="reload"
+    />
+
+    <template v-else>
     <ViewHeader :title="t('guilds.title')" :subtitle="t('guilds.lede')">
       <template v-if="ready && guildRows.length > 0" #actions>
         <Button class="tap" :label="t('guilds.setUp')" icon="pi pi-plus" @click="openWizard('')" />
@@ -100,24 +109,19 @@
             size="small"
             text
             severity="secondary"
-            @click="$emit('goto-config')"
+            @click="$emit('goto-config', true)"
           />
         </div>
       </article>
     </section>
+
+    </template>
 
     <SetupWizard
       v-model:visible="wizardOpen"
       :initial-guild-id="wizardGuildId"
       :sysadmin="sysadmin"
       @written="reload"
-    />
-
-    <GuildConfigEditor
-      v-model:visible="configEditorOpen"
-      :guild-id="configEditorGuildId"
-      :guild-name="guildName(configEditorGuildId)"
-      @saved="reload"
     />
   </div>
 </template>
@@ -150,7 +154,7 @@ export default defineComponent({
   components: { Button, SetupWizard, GuildConfigEditor, ViewHeader, GuildAvatar, EmptyState, InlineError },
   props: {
     sysadmin: { type: Boolean, default: false },
-    /** The guild whose config editor the URL (`#/guilds/<id>`) opens. */
+    /** The guild whose config page the URL (`#/guilds/<id>`) shows. */
     guildId: { type: String, default: "" },
   },
   emits: ["goto-config", "update-route"],
@@ -163,8 +167,6 @@ export default defineComponent({
     return {
       wizardOpen: false,
       wizardGuildId: "",
-      configEditorOpen: false,
-      configEditorGuildId: "",
       loadedOnce: false,
     };
   },
@@ -183,18 +185,8 @@ export default defineComponent({
       return this.guildRows.filter((g) => g.configured).map((g) => g.id);
     },
   },
-  watch: {
-    guildId(id: string) {
-      if (id && !this.configEditorOpen) this.openConfigEditor(id);
-    },
-    configEditorOpen(open: boolean) {
-      const id = open ? this.configEditorGuildId : "";
-      if (id !== this.guildId) this.$emit("update-route", { params: { guildId: id || undefined } });
-    },
-  },
   async mounted() {
     await this.reload();
-    if (this.guildId) this.openConfigEditor(this.guildId);
   },
   methods: {
     async reload() {
@@ -209,8 +201,10 @@ export default defineComponent({
       this.wizardOpen = true;
     },
     openConfigEditor(gid: string) {
-      this.configEditorGuildId = gid;
-      this.configEditorOpen = true;
+      this.$emit("update-route", { params: { guildId: gid } });
+    },
+    closeConfigEditor() {
+      this.$emit("update-route", { params: { guildId: undefined } });
     },
     enabledFeatures(gid: string): FeatureChip[] {
       const row = this.guildRows.find((g) => g.id === gid);
