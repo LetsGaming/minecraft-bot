@@ -101,7 +101,7 @@ jobs:
             src/schema/package.json src/core/package.json \
             src/bot/package.json src/web/package.json \
             package.json package-lock.json config.schema.json \
-            README.md docs data/dailyRewards.json ecosystem.config.cjs \
+            README.md docs data/dailyRewards.defaults.json ecosystem.config.cjs \
             .env.example
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
