@@ -6,6 +6,12 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **The Config page is easier to read.** It shows one group at a time in a single column and, by default, only the settings you have set in `config.json`; the rest sit behind "Show N more, at default", and a "Show all settings" switch reveals everything. A summary line says how many settings are configured (`ConfigView.vue`, `ConfiguredFields.vue`).
+- **Per-guild settings moved out of Config.** Edit a guild on its own page, `#/guilds/<guild id>`, with tabs for General, Chat bridge, Leaderboard, Alerts and status, Support and access, and Commands. It replaces the old dialog and keeps its own save (`GuildConfigEditor.vue`). Raw JSON still shows the whole `guilds` block, and "Advanced JSON config" on the Guilds page now opens it.
+- Fields are lighter: the config key is a small copy chip, long help is one line with More, empty inputs show the default that applies (or "Not set"), and a dot before the label marks a change or an error. The colored left edges on changed, error and section rows are gone.
+
 ## [8.3.0] — 2026-10-20
 
 - Internal updates and minor improvements.

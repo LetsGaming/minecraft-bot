@@ -201,7 +201,7 @@ chat bridges) as preserved.
 
 ## The editor frame
 
-Every editor (Config, Mod config, Commands, the guild config dialog) sits in
+Every editor (Config, Mod config, Commands, the guild config page) sits in
 `EditorShell.vue`: notices, the read-only or conflict banner, the `EditBar`
 (sticky at the top, docked to the bottom on phones), an optional toolbar, then
 the group list beside the fields. The view's composable owns the state
@@ -210,6 +210,14 @@ the group list beside the fields. The view's composable owns the state
 setting: the label bound to its control, the config key, help and effect lines,
 the old value with Reset, and the error under the control. `ReviewChanges`
 lists every pending change as was and now, and hides secret values.
+
+Config and the guild page show one group at a time (`configGroups.ts`, `guildConfigGroups`) and
+only the *configured* settings by default: `ConfiguredFields.vue` shows a top-level key when
+`isKeyActive` says it is saved, edited this session or has a problem, and `SchemaField` applies
+the same rule to the children of an object. Hidden fields stay mounted (`v-show`), so editing
+never moves a field or drops focus. A filter or the `showAll` flag in `SchemaFormContext`
+overrides it. The per-guild editor is `GuildConfigEditor.vue`, routed at `#/guilds/<id>` by
+`GuildsView`; `guilds` is excluded from the Config form and stays in Raw JSON.
 
 `SchemaField.vue` renders `config.schema.json`, the file generated from
 `RawBotConfig` (see [contracts.md](../contracts.md)). That is why doc comments
