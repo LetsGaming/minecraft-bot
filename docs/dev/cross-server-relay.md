@@ -1,6 +1,6 @@
-# Cross-server chat relay (plan)
+# Cross-server chat relay
 
-Status: planned, not implemented. This document records what is allowed, what is not, and how the feature fits the existing chat bridge. Build it after the current clean-code wave has merged, because both touch `chatBridge.ts` and the per-channel send queue.
+Status: implemented on `feat/cross-server-relay`. This document records what is allowed, what is not, and how the feature fits the existing chat bridge. Where the build differs from the plan, the amendments in section 14 win.
 
 ## 1. Goal
 
@@ -101,6 +101,8 @@ Rules:
 
 ## 9. Config and surfaces
 
+As built, who may set `relayGroup`, the label default, the blocklist and the pinned notice differ from the text below: see section 14.
+
 Schema (`src/schema/config.ts`, `GuildChatBridgeConfig`):
 - `relayGroup?: string`: group name. Absent means no relaying.
 - Guild level `bridgeLabel?: string`: the source label, defaults to the guild's configured name.
@@ -138,7 +140,9 @@ Other surfaces:
 
 ## 12. Build plan
 
-Phases, to run after the clean-code wave is merged:
+The phases are done. File locations are in the implementation map (section 15).
+
+Phases:
 
 | Phase | Work |
 |---|---|
@@ -161,3 +165,36 @@ Tests: transform unit tests (mentions, emoji, names with brackets, long names, n
 4. Decided: the opt-out is per guild. A user opts out in one Discord server and stays relayed in others.
 
 No open questions remain.
+
+## 14. Amendments to the plan (the build differs here)
+
+| Design text | As built |
+|---|---|
+| Section 9: `relayGroup` set by the guild's admin | `relayGroup` is **bot-admin-only**. A guild manager's dashboard write that adds, changes or removes a group is refused; a block that omits it keeps the on-disk value (`web/backend/routes/guildConfig.ts`, `keepRelayGroups`). Otherwise a manager could join another community's group by typing its name. |
+| Section 6: HMAC secret "local to the relay group" | A random 32-byte secret per group, created on first use and kept in `kv_store["relaySecrets"]`. Never in config or logs. |
+| Section 9: label defaults to "the guild's configured name" | There is no such config field. The default is the Discord server's name at send time; `bridgeLabel` overrides it. Both go through `cleanLabel` (control characters and brackets removed, 24 characters). |
+| Section 9: blocklist | `guilds.<id>.bridgeBlocklist: string[]` of Discord user ids, manager-editable. |
+| Section 8: `relay.syncWindowMinutes` | `limits.relaySyncWindowMinutes` (default 60). |
+| Section 7: "per-group rate limit" | `limits.relayCapacity` and `limits.relayWindowMs` (default 20 per 10 s), one bucket per group, on top of the per-author bridge limiter. |
+| Section 9: pinned notice | One message per relayed channel, pinned when the bot may, edited when the group's members change, deleted when the channel stops relaying. Carries an opt-out button (`relay:optout:<guildId>`). Tracked in `kv_store["relayNotices"]`. |
+| Section 7 step 2: "quiet marker" | 🚫 for opt-out and blocklist, ⏳ for the group rate limit (the same ⏳ also marks the per-author bridge limiter, which additionally keeps the message out of Minecraft). |
+
+Validation (`core/configValidation.ts`, `checkRelayGroups`): errors for a relay group on a bridge with no resolvable server, a group spanning servers, and a member whose `allowedServers` excludes the group's server; warnings for a group with one Discord server, a missing label and duplicate labels. The group name pattern (`^[a-z0-9_-]{1,32}$`) is part of the config schema.
+
+## 15. Implementation map
+
+| Piece | File |
+|---|---|
+| Config fields and JSDoc | `src/schema/config.ts` (`relayGroup`, `bridgeLabel`, `bridgeBlocklist`, `limits.relay*`) |
+| Validation | `src/core/configValidation.ts` (`checkRelayGroups`), `src/core/utils/server/guildScopes.ts` (`bridgeServerOf`; `allowedServerIdsIn` moved here so validation does not import the config loader) |
+| Group fan-out, edit and delete | `src/bot/logWatcher/watchers/log/relay/relayBridge.ts` (`planRelay`, `relayMessage`, `relayEdit`, `relayDelete`) |
+| Identity | `src/bot/logWatcher/watchers/log/relay/identity.ts` (`censorName`, `relayTag`, `relayName`, `webhookUsername`) |
+| Content transforms | `src/bot/logWatcher/watchers/log/relay/transform.ts` (`transformRelayContent`) |
+| Edit and delete map | `src/bot/logWatcher/watchers/log/relay/syncMap.ts` (`RelaySyncMap`, ids only, in memory) |
+| Wiring, delivery, listeners | `src/bot/logWatcher/watchers/log/chatBridge.ts` (`postLine`, `relaySender`, `resolveAllBridges`, `setupRelaySync`) |
+| Opt-out, secret and notice stores | `src/core/utils/stores/relayOptOutStore.ts`, `relaySecretStore.ts`, `relayNoticeStore.ts` |
+| Command and notice button | `src/bot/commands/general/bridge.ts`, `src/bot/interactions/relayNotice.ts` |
+| Dashboard | `src/web/frontend/src/composables/useGuildSetup.ts` and `src/web/frontend/src/components/SetupWizard.vue` (label, read-only group), `src/web/backend/routes/guildConfig.ts` (manager limits) |
+| Tests | `tests/watchers/relay/`, `tests/config/relayGroupValidation.test.ts`, `tests/web/webBackend.test.ts` (relayGroup cases), `tests/web/useGuildSetupRelay.test.ts` |
+
+Known limits: edits and deletes only reach messages discord.js still has cached (no `Partials.Message`), which covers the one-hour window for normal channels; a relayed copy is not re-sent if the target channel was unreachable at the time.

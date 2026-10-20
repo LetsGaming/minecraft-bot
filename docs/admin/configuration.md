@@ -1,6 +1,6 @@
 # Configuration
 
-All configuration lives in a single `config.json` in the project root. `config.template.json` is the starting point (replace its `${...}` placeholders with real values), and `config.schema.json` lists every available field with its type, bounds and description. Copy the template:
+All configuration lives in a single `config.json` in the project root (in Docker, the active copy is `/app/data/config.json` in the `bot_data` volume, see [docker.md](docker.md)). `config.template.json` is the starting point (replace its `${...}` placeholders with real values), and `config.schema.json` lists every available field with its type, bounds and description. Copy the template:
 
 ```bash
 cp config.template.json config.json
@@ -82,8 +82,12 @@ Note: the `/backup` overview and `/mods` assume a server installed with [minecra
 | `apiKey` | Yes | | Shared secret for that wrapper, sent as the `x-api-key` header. Can come from the environment instead — see below. |
 | `allowInsecureHttp` | No | `false` | Suppress the warning for a plaintext `apiUrl`. Only meaningful on a private network; for a public host the bot refuses to start regardless. |
 | `commands` | No | | Per-server command overrides. Same shape as the top-level `commands` block. |
+| `publicAddress` | No | | The address players type into the Minecraft client, e.g. `mc.example.com` or `play.example.com:25566`. Deliberately separate from `apiUrl`, which is how the bot reaches the host. Unset means `/info` says no address is published. |
+| `modpack` | No | | The modpack players need, when the server runs one: `{ "name": "...", "version": "...", "url": "..." }` (only `name` is required). |
+| `pingHost` / `pingPort` | No | host of `apiUrl` / the port the wrapper reported, else `25565` | Where the bot sends a direct server-list ping when the wrapper cannot be reached, so it can still report "online, 4 players". Set these only when the game server answers on a different address than the wrapper. |
+| `disableDirectPing` | No | | Turns that direct ping off entirely. Without it, an unreachable wrapper means "state unknown". |
 
-Since 5.0.0 that is the whole server block. Everything else that used to live here (`serverDir`, `scriptDir`, `linuxUser`, `screenSession`, `useRcon`, `rconHost`, `rconPort`, `rconPassword`) described the Minecraft host, and now lives in the wrapper's config on that host. Starting a pre-5.0.0 config removes them automatically once `apiUrl` and `apiKey` are set, and the bot tells you what is missing. See [migrating-to-7.md](migrating-to-7.md) and [migrating-to-5.md](migrating-to-5.md).
+Since 5.0.0 `apiUrl` and `apiKey` are the only connection settings. Everything else that used to live here (`serverDir`, `scriptDir`, `linuxUser`, `screenSession`, `useRcon`, `rconHost`, `rconPort`, `rconPassword`) described the Minecraft host, and now lives in the wrapper's config on that host. Starting a pre-5.0.0 config removes them automatically once `apiUrl` and `apiKey` are set, and the bot tells you what is missing. See [migrating-to-7.md](migrating-to-7.md) and [migrating-to-5.md](migrating-to-5.md).
 
 ### API keys from the environment
 
@@ -132,11 +136,14 @@ Each Discord server is configured independently. The key is the guild ID. Every 
 |---|---|---|
 | `defaultServer` | server ID | Used when a command is run without an explicit `server` option. It must name a configured server: a stale value is reported as a configuration error instead of silently falling back to another server. |
 | `adminUsers` | user/role IDs | Admins **scoped to this guild** — same semantics as the global list, but only valid for commands issued here, and only against servers this guild may target. The global `adminUsers` list remains operator-level. |
-| `allowedServers` | server IDs | Which servers commands from this guild may target, including via the explicit `server:` option. **Only enforced when more than one guild is configured.** When omitted, the allowed set is derived from the servers referenced in this guild's config (`defaultServer` plus any feature `server` fields). The guild's `defaultServer` is always allowed. |
+| `allowedServers` | server IDs | Which servers commands from this guild may target, including via the explicit `server:` option. **Only enforced when more than one guild is configured.** When omitted, the allowed set is derived from the servers referenced in this guild's config (`defaultServer` plus any feature `server` fields). The guild's `defaultServer` is always allowed. An explicit empty list is not treated as omitted: it allows only the `defaultServer`, if there is one. |
 | `language` | `"en"` / `"de"` | Per-guild language for embeds and replies; overrides the global `language`. |
-| `chatBridge` | one or more `{ channelId, server, useWebhook }` | Two-way chat between a Discord channel and **exactly one** server. Use an array for one channel per server. With `"useWebhook": true` MC→Discord lines appear as the player (name + head) via a channel webhook (bot needs Manage Webhooks; falls back to the embed form on any webhook problem). See [Chat bridges](#chat-bridges-one-channel--one-server). |
+| `timezone` | IANA zone, e.g. `"Europe/Berlin"` | Zone for this guild's wall-clock features: the nightly `channelPurge` and the busiest hours in `/activity`. Falls back to the global `timezone`, then UTC. |
+| `chatBridge` | one or more `{ channelId, server, useWebhook, relayGroup }` | Two-way chat between a Discord channel and **exactly one** server. Use an array for one channel per server. With `"useWebhook": true` MC→Discord lines appear as the player (name + head) via a channel webhook (bot needs Manage Webhooks; falls back to the embed form on any webhook problem). `relayGroup` forwards the channel's Discord chat to other servers' bridges, see [Relay between Discord servers](#relay-between-discord-servers). See [Chat bridges](#chat-bridges-one-channel--one-server). |
+| `bridgeLabel` | string, up to 24 characters | How this guild is named on messages it relays to other Discord servers, shown as `Name [Label]`. Defaults to the Discord server's name. Brackets and control characters are removed. Only used when a bridge has a `relayGroup`. |
+| `bridgeBlocklist` | array of Discord user IDs | Users whose messages this guild never relays to other Discord servers. They still reach Minecraft, and get a 🚫 reaction so they know it stayed local. Managers can edit it. |
 | `notifications` | `channelId`, `events`, `server` | Posts join/leave/death/advancement/start/stop events. Remove event names you do not want. `server` scopes the source (see [Server scoping](#server-scoping-one-several-or-all)); the source server is shown in the embed footer when more than one server is configured. |
-| `leaderboard` | `channelId`, `interval`, `server`, `categories` | Auto-posts period leaderboards. `interval` is `daily`, `weekly`, or `monthly`. With a `server` list, one set is posted per server. `categories` picks the boards (any `/leaderboard` stat key plus `"streak"` / `"longest_streak"`, max 10); default `["playtime", "mined"]`. |
+| `leaderboard` | `channelId`, `interval`, `server`, `categories`, `postTime`, `postDay` | Auto-posts period leaderboards. `interval` is `daily`, `weekly`, or `monthly`. `postTime` (`"HH:MM"` in the guild's timezone) anchors the post to a wall-clock time and `postDay` (`"SU"` to `"SA"`, default `"MO"` once `postTime` is set) picks the weekday of weekly boards; monthly boards post on the 1st. Without `postTime` a board posts whenever a full interval has passed since the last post. With a `server` list, one set is posted per server. `categories` picks the boards (any `/leaderboard` stat key plus `"streak"` / `"longest_streak"`, max 10); default `["playtime", "mined"]`. |
 | `tpsAlerts` | `channelId`, `server`, `mentionRole`, `mentionPolicy` | Warns when TPS drops below `tpsWarningThreshold` (repeated every 5 minutes while it stays low, at once when it drops below 10) and posts a recovery when it is back. `server` scopes which servers alert; `mentionRole` pings a role, `mentionPolicy` decides when (see below). |
 | `downtimeAlerts` | `channelId`, `server`, `mentionRole`, `mentionPolicy` | Alerts on unexpected downtime and recovery (host-disk and backup-age alerts use this channel too). `mentionRole` pings a role, `mentionPolicy` decides when (see below). |
 | `statusEmbed` | `enabled` | Self-provisioning live status display, see below. |
@@ -223,7 +230,40 @@ A chat bridge binds a Discord channel to **exactly one** server, in both directi
 
 `server` may only be omitted when it is unambiguous: the guild has a `defaultServer`, or only one server is configured. Anything else — and any channel bound to two different servers — is rejected at startup and by `/config reload` with a message naming the exact bridge to fix.
 
+To forward a bridge's Discord chat to other Discord servers that play on the same server, see [Relay between Discord servers](#relay-between-discord-servers).
+
 > **Upgrading from older versions:** an unpinned bridge used to *receive* chat from every server while *sending* replies to only one — the exact mixing this redesign removes. If your multi-server config relied on that, validation now tells you which bridge to pin; add `"server"` (or split into one channel per server) and reload.
+
+### Relay between Discord servers
+
+A relay group lets several Discord servers that share one Minecraft server see each other's bridge chat. It is off unless a bot admin sets `relayGroup` on a bridge. What members see is described in [chat-bridge.md](../user/chat-bridge.md#messages-forwarded-to-other-discord-servers).
+
+```json
+"guilds": {
+  "111111111111111111": {
+    "bridgeLabel": "Alpha",
+    "chatBridge": { "channelId": "100000000000000001", "server": "survival", "useWebhook": true, "relayGroup": "survival-network" }
+  },
+  "222222222222222222": {
+    "bridgeLabel": "Beta",
+    "chatBridge": { "channelId": "200000000000000001", "server": "survival", "useWebhook": true, "relayGroup": "survival-network" }
+  }
+}
+```
+
+Rules, enforced by config validation:
+
+- A group name is 1 to 32 characters of `a-z`, `0-9`, `_` and `-`.
+- Every bridge in a group must be bound to the **same** Minecraft server. A group never spans servers, and relays never chain from one group to another.
+- Every member guild must be allowed to reach that server (`allowedServers`).
+- A group with a single Discord server warns (nothing to relay to). A member without `bridgeLabel`, or two members with the same label, also warns.
+- Only a bot admin can set or change `relayGroup`. In the dashboard, a guild manager can edit the label and blocklist, but a write that adds or changes a group is refused, so nobody can join another community's group by typing its name.
+
+What crosses between servers: text only. User and role mentions become `@user` and `@role`, channel mentions `#channel`, `@everyone` and `@here` become plain words, custom emoji become `:name:`, Discord message links and invites become `[link]` and `[invite]`, attachments become `[image]` or `[file]`, stickers `[sticker]`, and a reply is marked `(reply)` and never quoted. Messages are posted with no pings. Nothing is stored except short-lived message ids for edit and delete sync.
+
+The speaker is shown as their linked Minecraft name, or as the first letter of their Discord name, `***` and a stable 4-character tag (for example `S***#a4f2`). The tag is an HMAC of the user id with a secret that belongs to the group (generated on first use, kept in the bot database, never in `config.json`). The same identity is used for the in-game `[Name]` prefix, so reading chat in game does not reveal more than Discord does.
+
+Each relayed channel gets a pinned notice listing the other servers, with a button to opt out. The bot needs **Manage Webhooks** (already needed for `useWebhook`), and **Manage Messages** to pin the notice (without it the notice is still posted).
 
 ### Multi-guild isolation
 
@@ -250,16 +290,19 @@ The bot needs the Manage Channels permission for this feature.
 | `tpsWarningThreshold` | `15` | TPS below this value triggers a warning. Normal is 20. |
 | `tpsPollIntervalMs` | `60000` | TPS polling interval in milliseconds. Minimum 1000. |
 | `leaderboardInterval` | `"weekly"` | Fallback interval for guilds without their own `leaderboard.interval`. |
+| `leaderboardPostTime` / `leaderboardPostDay` | unset | Global defaults for a guild's `leaderboard.postTime` / `postDay`; a guild value wins. |
+| `timezone` | `"UTC"` | Default IANA zone for wall-clock features (channel purge, `/activity`, scheduled restarts) when a guild or a schedule sets none. Replaces the old `TZ` environment variable. |
+| `featureNudges` | on | In-game tips about `/link` and `/daily`, see [automated-features.md](automated-features.md#feature-nudges). |
 | `presence` | off | Bot presence with live player count, e.g. "Playing 7 online @ smp". `{ "enabled": true }` aggregates across all servers; pin one with `"server": "smp"`. `format` supports `{online}`, `{max}`, `{server}`. While the pinned server is down (or, unpinned, while EVERY instance is down) the presence switches to the `downFormat` template (default `"⛔ {server} offline"`) with idle status. Updates on the status cadence (60 s); flipping presence on/off applies on config reload. |
 | `embedColors` | built-in | Side-bar colours of Discord embeds as `#rrggbb`, by category (`server`, `alert`, `recovery`, `presence`, `death`, `advancement`, `chat`, `milestone`, `reward`, `leaderboard`, `whitelist`, `confirm`, `info`, `error`) or rarity tier (`rarity.common` to `rarity.legendary`). Unknown keys are ignored with a warning. Applies to the next embed, no restart. |
 | `deathCoords` | off | `{ "dmLinked": true }` DMs a linked player their death coordinates plus a Chunkbase link whenever they die. The in-game `!deathpos` command works regardless of this flag. |
-| `hostAlerts` | `{ "diskWarnPercent": 90 }` | Disk-full early warning: when a monitored path reaches the threshold, each guild's `downtimeAlerts` channel gets one alert (with hysteresis and an all-clear). Remote instances are covered through the wrapper's `/info` (wrapper ≥ 1.2.0). `0` disables. Add `"backupMaxAgeHours": 26` to also alert when the NEWEST backup of a server is older than that (clears automatically when a fresh backup appears); off by default. |
+| `hostAlerts` | `{ "diskWarnPercent": 90 }` | Disk-full early warning: when a monitored path reaches the threshold, each guild's `downtimeAlerts` channel gets one alert (with hysteresis and an all-clear). Remote instances are covered through the wrapper's `/info` (needs the wrapper's `host-info` feature). `0` disables. Add `"backupMaxAgeHours": 26` to also alert when the NEWEST backup of a server is older than that (clears automatically when a fresh backup appears); off by default. |
 | `waypoints` | `{ "maxPerServer": 100 }` | Per-server cap on community waypoints. |
-| `limits` | defaults | Rate-limit overrides: `slashCapacity`/`slashWindowMs` (default 5 per 30 s) and `bridgeCapacity`/`bridgeWindowMs` (default 8 per 10 s). Applied at startup. |
+| `limits` | defaults | Rate-limit overrides: `slashCapacity`/`slashWindowMs` (default 5 per 30 s) and `bridgeCapacity`/`bridgeWindowMs` (default 8 per 10 s). For the cross-server relay: `relayCapacity`/`relayWindowMs` (default 20 per 10 s, window at least 1000 ms) is one bucket per relay group, and over the limit a message is dropped from the relay (not from Minecraft) and gets a ⏳ reaction; `relaySyncWindowMinutes` (default 60) is how long an edit or delete of a relayed message still reaches its copies (memory only, a restart ends every window). Applied at startup. |
 | `updateNotifier` | `{ "enabled": true }` | Daily GitHub release check; logs when a newer release exists. `"dmAdmins": true` additionally DMs the operator-level admins once per new version. `"enabled": false` opts out. |
 | `schedules` | off | Scheduled restarts per server: `"schedules": { "smp": { "restart": { "time": "04:00", "days": ["MO","TH"], "warnMinutes": [15, 5, 1] } } }`. Countdown warnings go in-game (`/say`) and to notification channels (event `scheduledRestart`); the restart uses the suite's restart script with downtime alerts suppressed, and is admin-audited. `days` omitted = daily. Applies live on config reload. |
 | `milestones` | off | Milestone announcements per leaderboard stat key, thresholds in the stat's native unit (playtime is ticks: 100 h = `7200000`): `"milestones": { "playtime": [7200000], "diamonds": [100, 1000] }`. Announced in-game and via the `milestone` notification event. First activation seeds silently so veterans' whole histories are not blasted at once. |
-| `webui` | off | Web dashboard (separate process, `npm run start:web`): `{ "enabled": true, "port": 8130, "host": "127.0.0.1", "publicUrl": "https://panel.example.com" }`. Secrets come from the environment (`WEBUI_CLIENT_SECRET`, `WEBUI_SESSION_SECRET`). Two sub-blocks below: `webui.grants` and `webui.console`. See [../dev/web/readme.md](../dev/web/readme.md). |
+| `webui` | off | Web dashboard (separate process, `npm run start:web`): `{ "enabled": true, "port": 8130, "host": "127.0.0.1", "publicUrl": "https://panel.example.com" }`. `clientId` is the Discord application ID used for the login and defaults to the bot's `clientId`. Secrets come from the environment (`WEBUI_CLIENT_SECRET`, `WEBUI_SESSION_SECRET`). Two sub-blocks below: `webui.grants` and `webui.console`. See [../dev/web/readme.md](../dev/web/readme.md). |
 | `webui.trustProxy` | `false` | Which proxies the dashboard trusts to report the real client address (`X-Forwarded-For`). `false`: none, the connecting address is used (right when you reach the dashboard directly). Behind a reverse proxy list its address, e.g. `["loopback"]` for a proxy on the same host, `["uniquelocal"]` or `["172.16.0.0/12"]` for a proxy container on a Docker network. Accepts IPs, CIDR ranges and the aliases `loopback`, `linklocal`, `uniquelocal`. A number n trusts the first n hops (only safe when every request must pass through exactly those proxies). `true` trusts every hop and lets any client spoof its address, so avoid it. Read on every request, so a change applies without restarting the dashboard. If requests from a private address carry `X-Forwarded-For` while this is unset, the dashboard logs one warning telling you what to set; it never trusts the header on its own. Details: [docker.md](docker.md#reverse-proxy-and-client-addresses). |
 | `webui.sessionEpoch` | `0` | Dashboard session version. Raise it (`1`, `2`, ...) to sign everyone out at once, for example after a leaked cookie. Sessions issued under another value are rejected on the next request, no restart needed. Removing someone from `adminUsers` or `webui.grants` already takes effect immediately without it. |
 | `webui.grants` | none | Host-side access for people who are not in `adminUsers`: Discord user ID → server id (or `"*"`) → capabilities, e.g. `{ "1234…": { "survival": ["config:read", "config:write"] } }`. Lets you hand out part of the dashboard without handing over the console, backups, and `config.json`. Re-read on every request, so revoking applies on the next click. Full list of capabilities and what each one allows: [capabilities.md](capabilities.md). |
@@ -279,13 +322,13 @@ Resolution is **field-by-field**: a scoped entry only changes the fields it sets
 
 ```json
 "commands": {
-  "map":  { "enabled": false, "url": "https://map.example.com" },
-  "say":  { "adminOnly": true }
+  "map":  { "enabled": false, "options": { "url": "https://map.example.com" } },
+  "seed": { "adminOnly": true }
 },
 "guilds": {
   "111222333444555666": {
     "commands": {
-      "say":  { "adminOnly": false },
+      "seed": { "adminOnly": false },
       "poll": { "enabled": false }
     }
   }
@@ -299,15 +342,15 @@ Resolution is **field-by-field**: a scoped entry only changes the fields it sets
 }
 ```
 
-In this example `/say` is admin-only everywhere except guild `1112…`, `/poll` is hidden in that one guild, and `!slime` doesn't respond on the creative server.
+In this example `/seed` is admin-only everywhere except guild `1112…`, `/poll` is hidden in that one guild, and `!slime` doesn't respond on the creative server.
 
 **Fields:**
 
 - `enabled` — `false` hides the command in the scope. Slash commands reply with an ephemeral "disabled here"; in-game commands behave as nonexistent (silent). Enforcement happens at dispatch time, so `/config reload` and dashboard edits apply immediately. One exception: a command disabled in **every** scope is not registered at all, so re-enabling it from that state needs one bot restart.
 - `adminOnly` — gates the command behind the admin check. For slash commands that is the global `adminUsers` or the issuing guild's `adminUsers`; for in-game commands the player's **linked Discord account** must pass the global admin check (game chat has no guild context, so guild-scoped admin lists don't apply there). `adminOnly` can only **add** a restriction: built-in admin commands (`/server`, `/config`, `/kick`, …) keep their own admin gate no matter what is configured here.
-- `url` — used by `/map` only, pointing at your Dynmap/Bluemap instance.
+- `options`: free-form per-command settings (strings, numbers, booleans). `/map` reads `options.url`, pointing at your Dynmap/Bluemap instance.
 
-The web dashboard has a **Commands** page that edits exactly these blocks with a scope selector and shows the effective value per scope. Note that `/say` and the chat bridge are also rate-limited per user (the bridge allows short bursts), so a flood cannot saturate the game console either way.
+The web dashboard has a **Commands** page that edits exactly these blocks with a scope selector and shows the effective value per scope. Note that slash commands and the chat bridge are also rate-limited per user (the bridge allows short bursts), so a flood cannot saturate the game console either way.
 
 ## Environment variable overrides
 
@@ -354,10 +397,10 @@ What applies live:
 
 - Channel IDs, admins, thresholds, and other settings read on each use.
 - **Adding a server entry**: the instance is created and its log watcher, notifications, TPS monitor, snapshots, and downtime checks start immediately.
-- **Removing a server entry**: its log watcher and TPS monitor are stopped, the RCON connection is closed, and the instance is dropped from routing.
+- **Removing a server entry**: its log watcher and TPS monitor are stopped and the instance is dropped from routing.
 - **Suite capabilities** (management scripts, backup layout, mod manifest) are re-detected for every server on each reload — installing the setup suite for an existing server takes effect immediately, except that a `/backup` or `/mods` command skipped at startup (because no server had the capability) is only registered after a restart.
 - **Presence / status embed** timers are armed or disarmed on reload, so flipping `presence.enabled` or a guild's `statusEmbed.enabled` no longer needs a restart.
 - **Restart schedules** are rebuilt from the fresh config on every reload.
 - The reload reply (and the file-watcher log) summarizes guild- and feature-level changes (`~ guild 1112…: chatBridge added`), so edits are visible even when no server was added or removed.
 
-One limitation remains: **changing the settings of an existing server entry** (e.g. its RCON host, port, or password) is not applied live, because the running instance keeps the connection it was built with. The reload reports such servers as restart-required. Workaround without a full restart: temporarily remove the entry, reload, re-add it with the new settings, and reload again.
+One limitation remains: **changing the settings of an existing server entry** (its `apiUrl` or `apiKey`) is not applied live, because the running instance keeps the connection it was built with. The reload reports such servers as restart-required. Workaround without a full restart: temporarily remove the entry, reload, re-add it with the new settings, and reload again.

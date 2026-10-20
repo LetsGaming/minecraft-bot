@@ -8,6 +8,7 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- The Docker web profile works straight from the config template: the dashboard is enabled by default and shows its setup page until the OAuth secrets are set.
 - **Cross-server chat relay.** Chat bridges that name the same `relayGroup` and are bound to the same Minecraft server forward their Discord chat to each other, as `Name [Label]` with no avatar, Discord ID or pings. The speaker is the linked Minecraft name, or a shortened display name with a stable tag; mentions, emoji, links, attachments and replies are rewritten to plain words; edits and deletes follow for an hour (`limits.relaySyncWindowMinutes`); a group has its own rate limit (`limits.relayCapacity`, `relayWindowMs`). Off unless a bot admin sets `relayGroup` (`chatBridge.ts`, `relay/`, `config.schema.json`).
 - **`/bridge optout` and `/bridge optin`.** A member keeps their messages in one Discord server out of the relay, per server; each relayed channel gets a pinned notice listing the other servers with an opt-out button. A guild can also list `bridgeBlocklist` user IDs and set a `bridgeLabel` (`bridge.ts`, `relayNotice.ts`).
 - The setup wizard's chat bridge step has a label field and shows the bridge's relay group (read-only).
@@ -18,6 +19,8 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Containers can reach a Minecraft API wrapper running on the Docker host through `host.docker.internal`, including on Linux.
+- The setup wizard's Docker instructions match the compose setup, and the obsolete RCON password and `say` command settings are gone from the example files.
 - **The Mods summary strip no longer shows green checks it cannot back up.** When the server is offline or the mods list could not be read, the tiles show a neutral dash with "Unknown, server offline" (or "Unknown, mods list unavailable") instead of "Compatible" and "running server is up to date", and Add mods notes "Applies on next start" (`ModsView.vue`).
 - The Config page no longer repeats "the bot is not running" under the editor bar when the app-wide banner already says so; the "Saved, not applied" chip stays (`ConfigView.vue`).
 - **Mod config shows only the error when the file list cannot load.** The status bar, filter, empty file list and "Pick a file to edit" no longer sit around the failure; it names the likely cause (wrapper not answering, wrapper too old, dashboard error) and offers Retry (`ModConfigView.vue`).

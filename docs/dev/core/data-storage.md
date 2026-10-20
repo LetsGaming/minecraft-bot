@@ -17,12 +17,25 @@ Built on better-sqlite3 behind a small driver seam (`src/core/db/driver.ts`); `M
 | `whitelist_audit` | `/whitelist`, `/unwhitelist` | Latest add/remove per player, keyed by lowercased username |
 | `linked_accounts` | `/link` flow, dashboard-free | `discord_id → mc_name`; case-insensitive index backs the "name already owned" rule |
 | `link_codes` | `/link`, `!link` | Pending codes with expiry; the whole confirm flow is one transaction |
-| `kv_store` | many single-owner stores | Versioned-blob stores, one row each, keyed by the legacy filename stem: `watches`, `playerNotes`, `waypoints`, `challenges`, `polls`, `claimedDaily`, `pendingRewards`, `statusMessages`, `leaderboardSchedule`, `updateNotifier`, `consoleRelay`, `milestones`, `whitelistApplications`. Each keeps its load/save API; `kvUpdate()` makes read-modify-write one transaction. |
+| `kv_store` | many single-owner stores | Versioned-blob stores, one row each, keyed by the legacy filename stem: `watches`, `playerNotes`, `waypoints`, `challenges`, `polls`, `claimedDaily`, `pendingRewards`, `statusMessages`, `leaderboardSchedule`, `updateNotifier`, `consoleRelay`, `milestones`, `whitelistApplications`, `tempBans`, `serverControl`, `featureSuggestions`, `relayOptOut`, `relaySecrets`, `relayNotices`. Each keeps its load/save API; `kvUpdate()` makes read-modify-write one transaction. |
 | `uptime_checks` | downtime monitor | One row per check (`server_id`, `t`, `up`), capped at 43,200 per server (30 days at one check/minute). One INSERT per check — the JSON version rewrote the whole array. |
 | `player_count_hours` | status pass / sampler | One row per server per hour (`sum`, `max`, `samples`); recording is a single UPSERT. 90-day retention (`ANALYTICS_RETENTION_DAYS.activity`). |
 | `player_sessions` | join/leave watcher, server stop, downtime monitor | One row per join (`server_id`, `name_lower`, `name`, `joined_at`, `left_at`; `left_at` is NULL while open). Closed sessions are pruned after 365 days (`ANALYTICS_RETENTION_DAYS.sessions`); open ones never are. The old `kv_store["sessions"]` document is moved in once at startup and kept as `sessions.migrated`. |
-| `snapshots` | leaderboard scheduler | Hourly full stat snapshots, keyed `(server_id, ts)` — see the snapshots section below |
+| `snapshots` | leaderboard scheduler | Hourly full stat snapshots, keyed `(server_id, ts)`, payload gzip-compressed (`payload_gz`); see the snapshots section below |
+| `config_history` | dashboard config writes | The config each write replaced, gzipped, kept 3 days (`RETENTION_DAYS` in `configHistory.ts`); backs the dashboard's rollback |
+| `command_usage` | slash and in-game command dispatch | One row per invocation (command, surface, user, guild, server); retention `ANALYTICS_RETENTION_DAYS.commands` (90 days) |
+| `queued_config_edits` | dashboard mod-config saves while the wrapper is down | One row per (server, file, key path), replayed when the wrapper answers again |
 | `schema_migrations` | migration runner | Applied migration ids, plus each one's SQL checksum |
+
+The cross-server relay uses three of those `kv_store` keys, each owned by one store under `core/utils/stores/`:
+
+| Key | Shape | Store | Content |
+|---|---|---|---|
+| `relayOptOut` | `{ guilds: { <guildId>: { <discordUserId>: true } } }` | `relayOptOutStore.ts` | Who opted out of the cross-server relay, per Discord server. Only id pairs; no names or messages. |
+| `relaySecrets` | `{ groups: { <relayGroup>: "<64 hex chars>" } }` | `relaySecretStore.ts` | The HMAC key of each relay group's identity tags. Created on first use. Treat like a secret: never log or export. |
+| `relayNotices` | `{ channels: { <channelId>: { messageId, key } } }` | `relayNoticeStore.ts` | The pinned relay notice per channel, with a fingerprint of what it says so it is edited only when it changes. |
+
+The relay's edit and delete map (source message id to copy ids) is **not** stored: it lives in memory in `RelaySyncMap` and expires after `limits.relaySyncWindowMinutes`.
 
 **Migrations** are embedded in `src/core/db/migrations.ts` (append-only) and run idempotently at startup of both processes — whichever starts first, or alone, has a current schema. "Append-only" is enforced rather than merely documented: each applied migration's SQL checksum is recorded, and a migration whose SQL changed after it was applied refuses to start, because the database still reflects the *old* statements while the code assumes the new ones. Whitespace is normalized before hashing, so reformatting is free and a real edit is not. Databases written before the checksum column existed adopt their current SQL as a baseline on the next start; there is nothing to compare against for those rows. On first start after upgrading, each store imports its legacy JSON file once (inside the same transaction that checks the target is empty) and renames the source to `*.imported`; the old `snapshots/` directory becomes `snapshots.imported/`. Inspect or delete at leisure — nothing is destroyed.
 
@@ -54,8 +67,7 @@ The rule from the guidelines follows from this: never `fs.writeFile` a state fil
 |---|---|---|---|
 | Whitelist + usercache per server | `minecraft/whitelist.ts` | 60 s TTL | `invalidateWhitelistCache(serverId)` — called by `/whitelist`, `/verify`, and `/unwhitelist`; the TTL covers edits made outside the bot |
 | All player stats per server | `minecraft/statUtils.ts`, via `cache.ts` | 30 s TTL | TTL, plus explicit invalidation after snapshots and stat deletion |
-| `/list` output per server | `minecraft/playerUtils.ts` | 500 ms | TTL |
-| Seed, TPS-command support | `ServerInstance` | process lifetime | none |
+| World seed (a miss is held for 1 min), game version (10 min, a miss 1 min) | `ServerInstance` | found seed: process lifetime; version: TTL | none |
 | Mod list per server | `minecraft/modUtils.ts` | keyed by file mtime | automatic when `downloaded_versions.json` changes |
 | Config | `config.ts` | until file change | `fs.watch` hot reload (debounced), `/config reload` |
 | Dashboard status: health/list (10 s), TPS (15 s), host info (60 s) | `web/backend/status/status.ts`, via `cache.ts` | see column 3 | `clearFeatureCache()` (also drops the `status:` prefix) |

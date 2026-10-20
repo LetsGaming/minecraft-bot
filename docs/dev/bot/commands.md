@@ -5,8 +5,11 @@ Commands are auto-discovered: any file under `src/bot/commands/` (except
 startup. There is no central registry to edit.
 
 Categories are directories: `admin/`, `info/`, `stats/`, `server/`,
-`moderation/`, `connection/`, `general/`, `communication/`, `shared/`. Put the
-file where a reader would look for it.
+`moderation/`, `connection/`, `general/`. `shared/` holds helpers several
+commands use, not commands. (`communication/` exists only for in-game
+commands; `whitelist`, `unwhitelist` and `verify` sit directly in `commands/`
+and show as "Other" in the dashboard.) Put the file where a reader would look
+for it.
 
 ## Writing one
 
@@ -61,6 +64,8 @@ What the pieces buy you:
 
 The command name is automatically a valid key for the `commands` config block,
 so an admin can disable it without a code change.
+
+`/bridge optout` and `/bridge optin` (`commands/general/bridge.ts`) are the reference for a small per-user preference command: ephemeral replies, state in `relayOptOutStore`. The notice button (`relay:optout:<guildId>`, `interactions/relayNotice.ts`) does the same as `optout`. See [watchers.md](watchers.md#relay-between-bridges).
 
 ## Errors that reach the user
 

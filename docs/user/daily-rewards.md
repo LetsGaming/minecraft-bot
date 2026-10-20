@@ -11,7 +11,7 @@ Claim a random in-game item once a day and build a streak for bonus loot.
 Requirements:
 
 - Your account is [linked](linking.md).
-- You are online on the Minecraft server at the moment you claim. The item lands directly in your inventory.
+- If you are online on the Minecraft server, the item lands directly in your inventory. If you are offline, the reward is queued and delivered the next time you join (up to 3 can be waiting), and your streak is safe either way.
 
 After a claim there is a 24-hour cooldown. If you try too early, the bot tells you exactly how long is left and at what time your next claim is ready.
 
@@ -38,4 +38,4 @@ Shows your current streak, your longest streak ever, and the next bonus mileston
 
 - The reward is drawn from a weighted pool: common items drop often, rare ones (think enchanted golden apples) rarely. Every claim is a small lottery.
 - Claim right when you log in for a play session, then it is done and your streak is safe.
-- If `/daily` says you must be online: join the server first, then run the command.
+- If `/daily` says rewards are already waiting for you in game, join the server to collect them before you claim again.

@@ -8,12 +8,14 @@ operators is [admin/configuration.md](../../admin/configuration.md).
 
 ```
 config.json ──┐
-              ├─▶ validate ─▶ env overrides ─▶ variables.txt ─▶ freeze ─▶ loadConfig()
+              ├─▶ migrate ─▶ env overrides ─▶ validate ─▶ freeze ─▶ loadConfig()
 defaults  ────┘
 ```
 
-- **`config.ts`** owns loading, the env overrides, the `variables.txt` merge,
-  the frozen cache, and the `fs.watch` hot reload.
+- **`config.ts`** owns loading, running the pending migrators from
+  `configMigrations.ts`, the env overrides, the frozen cache, and the
+  `fs.watch` hot reload. Env overrides run before validation so an env-only
+  secret satisfies the required-field check.
 - **`configValidation.ts`** owns the semantic checks — the ones a JSON Schema
   cannot express: does this guild's `defaultServer` name a server that exists,
   is a chat bridge ambiguous, does `linkedRole` look like a role ID.
@@ -28,10 +30,11 @@ regenerating — not writing a shape check by hand.
 ## Secrets
 
 `token` and `apiKey` are env-injectable and never committed.
-The dashboard masks them on read and merges the placeholders back on write
-(`web/backend/safeConfig.ts`). **A new secret field has to be added to
-`SERVER_SECRET_KEYS`**, or it leaves the process in a config GET the first time
-someone opens the editor.
+The dashboard masks `token` and each server's `rconPassword` and `apiKey` on
+read and merges the placeholders back on write
+(`web/backend/config/safeConfig.ts`). **A new per-server secret field has to be
+added to `SECRET_SERVER_KEYS`** (`src/schema/config.ts`), or it leaves the
+process in a config GET the first time someone opens the editor.
 
 ## Hot reload
 

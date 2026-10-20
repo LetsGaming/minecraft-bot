@@ -89,10 +89,10 @@ Commands do not reach the registry directly — they go through
 
 ## Timeouts and failure handling
 
-- Reads wait 8 s (`DEFAULT_GET_TIMEOUT_MS` in `access/apiClient.ts`). Mod
+- Reads wait 8 s (`WRAPPER_TIMEOUTS_MS.read` in `access/wrapperTimeouts.ts`).
+  The same table holds the ceiling for every other kind of request: mod
   install and update, backup download (header wait only, the body is streamed
-  without a limit), restore, delete and config writes each have their own
-  ceiling next to the function that makes the request.
+  without a limit), restore, delete, config writes, prune and upgrade calls.
 - A management script waits as long as the wrapper does. `access/manifest.ts`
   keeps the `scriptTimeoutsMs` table from `/manifest`; `wrapperContract.ts`
   clamps each value to 5 s to 15 min and falls back to a built-in table

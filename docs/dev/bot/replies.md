@@ -63,7 +63,7 @@ The `/daily` family is the reference for a gamified reply
 - **Cooldown** and **queued** replies use the Pending colour. The cooldown shows
   a time bar and the deadline that keeps the streak alive.
 - **Rarity** comes from `rarityOf` in
-  [`rewards.ts`](../../../src/core/utils/minecraft/rewards.ts): an item's share
+  [`dailyRewards.ts`](../../../src/schema/dailyRewards.ts): an item's share
   of the pool weight (legendary up to 2 %, epic 7 %, rare 20 %, uncommon 45 %).
   A pool with fewer than four distinct weights has no ladder; everything is
   common. The badge is text, so colour is never the only signal.
@@ -153,8 +153,7 @@ list that can outgrow them:
 
 - `paginateFields` splits fields into pages that stay under the field count and
   the 6000 character total, counting the embed's own title and description
-  (`reservedLength`). `chunkLines` packs lines into field values;
-  `paginateLines` splits lines into description pages.
+  (`reservedLength`). `chunkLines` packs lines into field values.
 - `createPaginationButtons` is Previous, a disabled "Page n/m" button, Next.
   `handlePagination` drives it and, after `PAGINATION_TIMEOUT_MS`, switches the
   row off instead of removing it, through the interaction so it also works on

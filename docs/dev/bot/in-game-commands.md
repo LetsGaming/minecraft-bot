@@ -14,6 +14,8 @@ Use the `defineCommand` framework. Never hand-roll the chat regex — the log li
 has more shapes than it looks (the `[AFK]` prefix, Bedrock names with a `.`
 prefix via Geyser/Floodgate), and every hand-rolled copy has missed at least one.
 
+Discord chat that the bridge shows in game carries a `[Name]` prefix. In a relay group that name is the relay identity (see [watchers.md](watchers.md#relay-between-bridges)), so reading chat in game does not reveal more than Discord does.
+
 ## Writing one
 
 ```ts
@@ -57,7 +59,7 @@ every command failed to reach the server releases the player's cooldown, so a
 wrapper outage does not lock them out of retrying.
 
 If your command needs startup work (loading state, registering a listener), wrap
-`init` — `logWatcher/commands/link.ts` is the example.
+`init`; `logWatcher/commands/connection/link.ts` is the example.
 
 ## Scoping and enablement
 

@@ -93,6 +93,9 @@ lives by feature under `src/core/utils/server/access/`. Callers keep importing
 | `capabilityProbe` | `detectCapabilities` |
 | `scripts` | `runScript`, `ScriptStillRunningError` |
 | `logs` | `tailLog`, log stream URL and `openLogStream` |
+| `prune` | chunk prune scans, saved settings, plan maps and the prune job |
+| `upgrade` | Minecraft version upgrade jobs and the server's lifecycle events |
+| `wrapperTimeouts` | `WRAPPER_TIMEOUTS_MS`, how long each kind of wrapper request may take |
 
 Dependencies point one way: every module may use `apiClient`; `manifest` uses
 `host`; `modCompat` and `scripts` use `manifest`. Nothing imports the barrel.
@@ -173,15 +176,16 @@ snapshot format are in [core/data-storage.md](core/data-storage.md).
 
 1. `loadConfig()`: read, validate, apply env overrides, freeze; `watchConfig()`
    arms hot reload.
-2. `getDb()`: open the store, apply pragmas, run pending migrations, import any
+2. `initServers()`: build one `ServerInstance` per config entry.
+3. `getDb()`: open the store, apply pragmas, run pending migrations, import any
    legacy JSON once. Both processes do this; whichever starts first applies the
    migrations and the other finds nothing to do.
-3. `initServers()`: build one `ServerInstance` per config entry.
 4. Load command files, skip disabled ones, register all globally with Discord.
 5. On `clientReady`: `initMinecraftCommands()` loads in-game commands, creates a
-   log watcher per server (via `wireServer`), and starts the schedulers (TPS,
-   leaderboard, status embed, downtime, uptime flush, channel purge).
-6. SIGTERM/SIGINT flush the uptime history before exit.
+   log watcher per server (via `wireServer`), and starts the schedulers and
+   monitors (TPS, leaderboard, status embed, downtime, upgrade, host resources,
+   polls, temp bans, channel purge, update notifier, milestones, and more).
+6. SIGTERM/SIGINT destroy the Discord client, close the database and exit.
 
 ## Config-reload reconciliation
 
@@ -210,8 +214,9 @@ diff.
 User-visible strings resolve through `t(key, vars)` in `core/utils/i18n.ts`.
 Locales are plain TS maps in `core/locales/` (`en.ts` is the default and
 fallback, `de.ts` overrides per key); `config.language` selects the active one,
-and missing keys fall back en → key. The layer is deliberately minimal — no
-plural rules, no nested keys, no runtime file loading. **All user-visible
+and missing keys fall back en → key. The layer is deliberately minimal: plurals
+are the inline `{count|one form|other form}` template only, with no nested keys
+and no runtime file loading. **All user-visible
 strings must go through `t()`**, with the key in both `en.ts` and `de.ts`.
 `npm run i18n:check` fails CI if the two files drift or if a Discord reply or
 embed gets a hard-coded English literal.

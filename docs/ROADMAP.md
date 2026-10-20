@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: October 2026, against **v8.0.0** plus the unreleased changes in
+Last updated: October 2026, against **v8.1.0** plus the unreleased changes in
 [CHANGELOG.md](../CHANGELOG.md).
 
 What shipped, version by version, is in the changelog; why things are built the
@@ -11,22 +11,14 @@ what is open, what is planned and what is deliberately not on the list.
 
 | Item | Status |
 |---|---|
-| Cross-server chat relay | designed, not built: [dev/cross-server-relay.md](dev/cross-server-relay.md) |
+| Cross-server chat relay | shipped ([user/chat-bridge.md](user/chat-bridge.md#messages-forwarded-to-other-discord-servers)) |
 | Dashboard phase 4 (public status and leaderboard pages) | open, only if there is demand |
 | A local break-glass login for the dashboard | deliberately not built |
 | Whitelist-application niceties (auto-role on approval) | open |
 | More locales | open; one file plus the parity check |
 | Mod config editor | shipped ([user/mod-config-editor.md](user/mod-config-editor.md)) |
-| Dashboard Players page and Analytics tabs | shipped, unreleased |
+| Dashboard Players page and Analytics tabs | shipped in 8.1.0 |
 | Everything on the 3.6.0 and 5.x lists | shipped |
-
-## Planned
-
-- **Cross-server chat relay.** A chat bridge relays to the other bridges that
-  share its `relayGroup` and the same Minecraft server, with censored names,
-  edit and delete sync and a per-guild opt-out. Never a default, and it never
-  spans Minecraft servers. The decisions and the Discord rules it has to
-  respect are in [dev/cross-server-relay.md](dev/cross-server-relay.md).
 
 ## Open, uncommitted
 

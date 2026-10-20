@@ -17,9 +17,7 @@ If the server has a chat bridge channel, you can also talk to in-game players fr
 Linking connects your Discord account to your Minecraft account. It takes one minute and unlocks:
 
 - `/daily` and `/streak`: daily item rewards with streak bonuses ([details](daily-rewards.md))
-- `/netherportal`: portal coordinates for your current in-game position
 - `/chunkbase`: the seed map centered on where you are standing
-- The button on `/playerhead` that delivers the head to your inventory
 
 How to link: [linking.md](linking.md).
 
@@ -35,4 +33,4 @@ If the bot manages several Minecraft servers, most commands have an optional `se
 
 - Replies that only concern you (link codes, errors, daily cooldowns) are ephemeral: only you see them.
 - There is a spam limit of 5 commands per 30 seconds per user.
-- Paginated answers (stats, whitelist) have arrow buttons that work for 60 seconds, only for the person who ran the command.
+- Paginated answers (stats, whitelist) have arrow buttons that work for 3 minutes, only for the person who ran the command.

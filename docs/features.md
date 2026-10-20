@@ -13,6 +13,10 @@ in Discord. The Discord side can render as a plain bot embed or, with webhooks
 enabled, as the player themselves (username and skin as the avatar), which reads
 far more naturally in a busy channel.
 
+**Cross-server relay.** Discord servers that play on the same Minecraft server
+can forward bridge chat to each other (opt-in, set by a bot admin): censored
+names, no avatars or pings, edit and delete sync, per-server opt-out.
+
 **Event notifications.** Joins and leaves, deaths, advancements, and server
 start/stop are posted to a configured channel. Each event type can be routed and
 toggled independently.

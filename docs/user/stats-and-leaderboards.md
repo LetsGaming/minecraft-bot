@@ -6,7 +6,7 @@ Minecraft tracks hundreds of statistics per player. The bot reads them straight 
 
 `/playtime player:Name` shows total playtime.
 
-`/stats player player:Name` shows everything, grouped by category (mined, killed, crafted, custom, ...). Long results are paginated; use the arrow buttons within 60 seconds.
+`/stats player player:Name` shows everything, grouped by category (mined, killed, crafted, custom, ...). Long results are paginated; use the arrow buttons (they stay active for 3 minutes).
 
 Filter with the `stat` option to avoid scrolling:
 
@@ -38,12 +38,19 @@ Right after the bot is installed there is no baseline yet, so the command asks y
 | Blocks mined | most first |
 | Distance walked | most first |
 | Deaths | fewest first |
+| Items crafted | most first |
+| Player kills | most first |
+| Jumps | most first |
+| Animals bred | most first |
+| Fish caught | most first |
+| Diamond ore | most first |
+| Current streak, longest streak (daily rewards) | most first |
 
 No stat picked means playtime.
 
 ## Scheduled leaderboards
 
-If your server has a leaderboard channel, the bot posts playtime and blocks-mined leaderboards there automatically (daily, weekly, or monthly, depending on configuration). These count only the stats gained during that period, not all-time totals, so newer players have a fair shot every period. The footer states the exact data window.
+If your server has a leaderboard channel, the bot posts leaderboards there automatically (playtime and blocks mined unless the admin picked others) (daily, weekly, or monthly, depending on configuration). These count only the stats gained during that period, not all-time totals, so newer players have a fair shot every period. The footer states the exact data window.
 
 ## The dashboard Analytics page
 
@@ -71,4 +78,4 @@ Sessions are recorded since the bot started tracking them and kept for 365 days,
 
 ## Where the numbers come from
 
-These are vanilla Minecraft statistics, the same ones you see on the in-game pause menu under Statistics. Stats start existing the first time you do the thing (your first death creates the deaths counter), and only whitelisted players appear in bot results.
+These are vanilla Minecraft statistics, the same ones you see on the in-game pause menu under Statistics. Stats start existing the first time you do the thing (your first death creates the deaths counter), and only players on the whitelist or in the server's `usercache.json` appear in bot results.

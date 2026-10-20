@@ -85,7 +85,7 @@ Optional, 0 to 100 (default 0). The chance, in percent, that a claim draws a sec
 
 ## How claiming works (rules enforced by the bot)
 
-- The player must have a [linked account](../user/linking.md) and be online on the server when claiming.
+- The player must have a [linked account](../user/linking.md). If they are offline, the reward is queued and delivered on their next join (at most 3 waiting per player); the claim and the streak count either way.
 - Cooldown is 24 hours from the previous claim.
 - A streak survives as long as claims are no more than 48 hours apart. Otherwise it restarts at 1.
 - Items are delivered via the server console (`give` command), so they work without any server-side plugin.
@@ -112,7 +112,7 @@ This file is never tracked in git, so per-server tuning never conflicts with an 
 
 > **Removed:** the older `servers.<id>` block inside `dailyRewards.json` is no longer read. If your shared file still has one, the bot logs a warning and ignores it, and the dashboard lists it as a problem. Move each entry to its own `data/dailyRewards_<id>.json` with the same contents.
 
-Claim state is stored in `data/claimedDaily.json`, keyed by server and Discord user. Deleting a user's entry under a server resets them there. Files from older bot versions (one flat user map, no server dimension) are migrated automatically on first start: all existing streaks move under the **first configured server** — exact for single-server setups; on multi-server setups the log names the target so you can move entries manually if needed.
+Claim state is stored in the database (`kv_store["claimedDaily"]` in `data/bot.db`), keyed by server and Discord user. `/daily-admin reset` clears a user's record on a server. Files from older bot versions (one flat user map, no server dimension) are migrated automatically on first start: all existing streaks move under the **first configured server** — exact for single-server setups; on multi-server setups the log names the target so you can move entries manually if needed.
 
 ## Tips
 
@@ -122,4 +122,4 @@ Claim state is stored in `data/claimedDaily.json`, keyed by server and Discord u
 
 ## Claim reminders
 
-Users can opt in to a DM reminder with `/daily-reminder enabled:true` — per server, like the claims themselves (`/daily-reminder enabled:true server:creative` on multi-server setups). The bot checks every 5 minutes for opted-in users whose 24-hour cooldown has expired and sends one DM per claim cycle (claiming again re-arms the reminder); when several servers have claim data, the DM names the server it is about. Users with closed DMs are skipped silently until their next claim. The opt-in flag and reminder bookkeeping live in `data/claimedDaily.json`.
+Users can opt in to a DM reminder with `/daily-reminder enabled:true` — per server, like the claims themselves (`/daily-reminder enabled:true server:creative` on multi-server setups). The bot checks every 5 minutes for opted-in users whose 24-hour cooldown has expired and sends one DM per claim cycle (claiming again re-arms the reminder); when several servers have claim data, the DM names the server it is about. Users with closed DMs are skipped silently until their next claim. The opt-in flag and reminder bookkeeping live in the same store.

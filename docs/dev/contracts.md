@@ -142,9 +142,9 @@ from the wire into that union — which is what removes the cast at the boundary
 Derive subsets with `satisfies` so they can't drift from the parent:
 
 ```ts
-export const SERVER_OPERATOR_ACTIONS = [
-  "start", "stop", "restart", "backup",
-] as const satisfies readonly ServerScriptAction[];
+export const DISRUPTIVE_SERVER_ACTIONS = [
+  "stop", "restart", "rollback",
+] as const satisfies readonly ServerOperatorAction[];
 ```
 
 Derive `Record`s from the union rather than restating the keys

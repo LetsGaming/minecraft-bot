@@ -10,7 +10,7 @@ Problems sorted by symptom. The bot's own log (`logs/bot.log`, or `docker compos
 
 ## "config.json validation failed at ..."
 
-The bot tells you exactly which field is wrong, e.g. `servers.survival.rconPort: must be an integer between 1 and 65535`. Fix the named field; `config.template.json` shows the expected shape and `config.schema.json` lists every field.
+The bot tells you exactly which field is wrong, e.g. `embedColors.death: must be a color like #4ade80`. Fix the named field; `config.template.json` shows the expected shape and `config.schema.json` lists every field.
 
 If the message is `Failed to load config.json`, the file is missing or not valid JSON. A trailing comma is the usual culprit; run it through a JSON validator.
 
@@ -70,7 +70,7 @@ Yes. Player names are resolved from the whitelist plus the server's `usercache.j
 
 Two things to know:
 
-- **Remote servers** need an API wrapper with the `/usercache` route (see [remote-setup.md](remote-setup.md#wrapper-version-notes)). With an older wrapper, names come only from the whitelist.
+- **Remote servers** need an API wrapper with the `/usercache` route (see [remote-setup.md](remote-setup.md#wrapper-feature-notes)). With an older wrapper, names come only from the whitelist.
 - **`/server prune-stats` refuses to run** when the whitelist is empty. It defines "orphaned" as "not on the whitelist", so without one it would consider every player's stats orphaned — the refusal is deliberate.
 
 ## /stats daily or scheduled leaderboards say "no snapshot available"
@@ -83,11 +83,11 @@ Snapshots are taken hourly starting from bot startup. Right after installation t
 
 ## A `data/*.json` file is corrupt
 
-Bot-owned JSON stores (`linkedAccounts.json`, `claimedDaily.json`, `whitelistAudit.json`, `adminAudit.json`, …) are written atomically and each save also refreshes a `<file>.bak` last-known-good copy next to it. If a file is ever corrupted (power loss, disk issues, manual edits), the bot logs an error and transparently recovers from the `.bak` — the next save repairs the main file. You only need to act if **both** copies are unusable: the affected feature then fails loudly (instead of silently starting from empty data) until you restore the file from a backup or delete both the file and its `.bak` to intentionally start fresh. The `.bak` and short-lived `.tmp` siblings in `data/` are part of this mechanism — do not commit or delete them while the bot runs.
+Most bot state (account links, daily claims, the audit trail, snapshots, sessions) lives in the SQLite database `data/bot.db`, not in JSON files. The JSON files that remain (`dailyRewards.json` and its per-server overrides, `runtime.json`, `commandManifest.json`) are written atomically and each save also refreshes a `<file>.bak` last-known-good copy next to it. If a file is ever corrupted (power loss, disk issues, manual edits), the bot logs an error and transparently recovers from the `.bak` — the next save repairs the main file. You only need to act if **both** copies are unusable: the affected feature then fails loudly (instead of silently starting from empty data) until you restore the file from a backup or delete both the file and its `.bak` to intentionally start fresh. The `.bak` and short-lived `.tmp` siblings in `data/` are part of this mechanism — do not commit or delete them while the bot runs.
 
 ## "Too many commands. Please wait Xs."
 
-Per-user rate limit: 5 commands per rolling 30 seconds. It protects the RCON connection; there is no config switch for it.
+Per-user rate limit: 5 commands per rolling 30 seconds by default. It protects the wrapper and the game console from spam. Tune it with `limits.slashCapacity` and `limits.slashWindowMs` ([configuration.md](configuration.md#global-settings)).
 
 ## Status embed channels keep coming back after I delete them
 

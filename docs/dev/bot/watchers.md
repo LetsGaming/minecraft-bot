@@ -21,9 +21,9 @@ Subscribe a regex to a per-server log watcher:
 ```ts
 // src/bot/logWatcher/watchers/log/villagerDeaths.ts
 import { type Client } from "discord.js";
-import { createEmbed } from "../../utils/embeds/embedUtils.js";
+import { createEmbed } from "../../../utils/embeds/embedUtils.js";
 import { log } from "@mcbot/core/utils/logger.js";
-import type { ILogWatcher } from "../logWatcher.js";
+import type { ILogWatcher } from "../../logWatcher.js";
 import type { GuildConfig } from "@mcbot/core/types/index.js";
 
 const REGEX = /\[.+?\].*:\s+Villager .+ died/;
@@ -42,10 +42,10 @@ export function registerVillagerDeathWatcher(
 Then wire it in `initMinecraftCommands.ts`, next to the existing `register*`
 calls inside the per-server loop.
 
-**Type it against `ILogWatcher`.** Local servers use file tailing, remote ones an
-SSE stream from the wrapper; the interface is identical, so watcher code never
-branches on local/remote — and the moment one does, remote servers have a silent
-gap.
+**Type it against `ILogWatcher`.** Every server is watched through
+`RemoteLogWatcher`, an SSE stream from the wrapper. Watcher code depends on the
+interface, not the class, so it never branches on how lines arrive and tests can
+substitute a stub.
 
 Conventions:
 
@@ -64,6 +64,18 @@ Conventions:
 - A module that keeps per-server state registers `onServerRemoved(...)` from
   `logWatcher/serverCleanup.ts` at load, so a removed and re-added server id
   starts clean.
+
+### Relay between bridges
+
+The chat bridge (`logWatcher/watchers/log/chatBridge.ts`) binds one Discord channel to one server in both directions (and, in a relay group, forwards Discord chat to the group's other bridges). `setupDiscordToMc` handles every Discord message in a bridged channel. After the existing guards (bots and webhooks ignored, per-author limiter) it asks `planRelay` (`relay/relayBridge.ts`) whether the channel's bridge has a `relayGroup` and who else is in it: same group, same server, other channels, one entry per channel. When there is a plan:
+
+1. The speaker's name comes from `relayName` (linked Minecraft name, else censored name plus tag). The same name is used for the in-game `tellraw` prefix.
+2. The Minecraft side is delivered first, as before.
+3. Opted-out users (`relayOptOutStore`) and blocklisted users (`bridgeBlocklist`) stop here with a 🚫 reaction. A group rate limit (`relayLimiter`, `limits.relay*`) drops the relay with a ⏳ reaction.
+4. `relayMessage` runs the text through `transformRelayContent` and sends one copy per target through `enqueueSend`, so order per channel holds. The copy goes out through the target's webhook as `Name [Label]` with no avatar, or as an embed when the webhook is unusable (`postLine`, shared with the Minecraft-to-Discord path).
+5. The copy ids go into `RelaySyncMap`. `messageUpdate` and `messageDelete` listeners (`setupRelaySync`) re-run the transform on edit and remove the copies on delete while the window is open.
+
+A relayed copy is a bot or webhook message, which the first guard of the listener ignores, so relays never chain. `ensureRelayNotices` (`interactions/relayNotice.ts`) posts, edits and removes the pinned notices at startup and on every config reload. Design and file map: [../cross-server-relay.md](../cross-server-relay.md).
 
 ## Notifications
 

@@ -56,7 +56,7 @@ staggered rollout is safe and shows nothing broken in the meantime.
 Check what a host is running:
 
 ```bash
-curl -s -H "x-api-key: $MC_API_KEY" http://127.0.0.1:3000/manifest | jq '.wrapper, .features | keys'
+curl -s -H "x-api-key: $MC_API_KEY" http://127.0.0.1:3000/manifest | jq '.wrapper, (.features | keys)'
 ```
 
 You want `backup-files` and `backup-restore` in that feature list.

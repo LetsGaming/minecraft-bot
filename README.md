@@ -46,7 +46,7 @@ docker compose logs -f
 
 That path expands `config.template.json` from your `.env` at startup. For
 multi-server or more involved setups, generate a full `config.json` with the
-wizard and mount it instead:
+wizard, point `MCBOT_CONFIG_FILE=./config.json` in `.env` at it, and start as above:
 
 ```bash
 npm run setup                 # interactive; writes config.json
@@ -85,7 +85,7 @@ for enabling and securing it.
 
 ## Documentation
 
-Everything is indexed in [`docs/readme.md`](docs/readme.md).
+Everything is indexed in [`docs/README.md`](docs/README.md).
 
 | Audience | Start here |
 |---|---|
@@ -105,7 +105,7 @@ shared packages.
 ```
 src/bot       the Discord bot (the product)
 src/web       the dashboard: one package, backend/ (Fastify) + frontend/ (Vue 3)
-src/core      process-agnostic core: config, data layer, server access, RCON
+src/core      process-agnostic core: config, data layer, server access
 src/schema    isomorphic contracts: config types + web API DTOs (browser-safe)
 ```
 

@@ -8,7 +8,7 @@ The bot has exactly two permission levels: regular users and admins. The `adminU
 "adminUsers": ["123456789012345678", "555555555555555555"]
 ```
 
-A user counts as admin if their own ID is listed **or** they carry any listed role — so you can manage admin access entirely through a Discord role without touching the config for each person. Role checks only apply inside guilds (DM'd commands match by user ID only). There are no per-command grants; if finer control matters to you, restrict who can see the commands via Discord's own server settings (Server Settings → Integrations → your bot → command permissions). One exception: any slash command can be gated behind the admin check with the `adminOnly` command toggle (see [configuration.md](configuration.md#command-toggles)) — handy for `/say`.
+A user counts as admin if their own ID is listed **or** they carry any listed role — so you can manage admin access entirely through a Discord role without touching the config for each person. Role checks only apply inside guilds (DM'd commands match by user ID only). There are no per-command grants; if finer control matters to you, restrict who can see the commands via Discord's own server settings (Server Settings → Integrations → your bot → command permissions). One exception: any slash command can be gated behind the admin check with the `adminOnly` command toggle (see [configuration.md](configuration.md#command-settings-per-command-three-scopes)) — handy for commands such as `/seed`.
 
 ### Two admin scopes
 
@@ -60,7 +60,7 @@ Any command can be gated behind the admin check via command settings — globall
 The web dashboard logs in via Discord OAuth2. Who gets what depends on which of three things you are:
 
 - **A user ID in the global `adminUsers`** — a sysadmin. Every capability on every server, plus `config.json`.
-- **Someone with Manage Guild on a guild the bot is in** — the guild-manager side. You can edit that guild's config block and nothing else. You never see the Minecraft host. Inside the block, `adminUsers` and `allowedServers` are the operator's: a guild manager's save keeps them as they are, and may only point features at servers the guild can already use (see [`guildConfig.ts`](../../src/web/backend/routes/guildConfig.ts)).
+- **Someone with Manage Guild on a guild the bot is in** — the guild-manager side. You can edit that guild's config block and nothing else. You never see the Minecraft host. Inside the block, `adminUsers` and `allowedServers` are the operator's: a guild manager's save keeps them as they are, and may only point features at servers the guild can already use (see [`guildConfig.ts`](../../src/web/backend/routes/guildConfig.ts)). The same goes for `chatBridge[].relayGroup`: it decides which other Discord servers see this guild's chat, so a write that adds, changes or removes a group is refused with "can only be changed by a bot admin", and a block that omits the field keeps the group on disk. The label (`bridgeLabel`) and the blocklist (`bridgeBlocklist`) stay editable by managers (see [configuration.md](configuration.md#relay-between-discord-servers)).
 - **Someone listed in `webui.grants`** — exactly the capabilities granted to you, per server. This is how you hand out part of the host API without handing over all of it. See [capabilities.md](capabilities.md).
 
 Role entries cannot be resolved for dashboard login (that would require guild member lookups), so roles remain a Discord-side permission. Removing a user ID from `adminUsers` or from `webui.grants` locks them out immediately: both are re-read on every request, so revoking applies on the next click rather than at the next login.
@@ -93,11 +93,11 @@ Note: the bot caches the whitelist in memory. If a freshly added player does not
 
 ## Audit trail
 
-Two audit stores exist under `data/`:
+Two audit stores exist in the bot database (`data/bot.db`, tables `admin_audit` and `whitelist_audit`):
 
-**Admin actions** — every admin-gated mutation is recorded in `data/adminAudit.json`: `/server start|stop|restart|backup|prune-stats` (including whether a prune was a dry run or confirmed) and `/config reload`. Each entry stores the timestamp, action, target server, the acting user's tag and ID, and the guild it was issued from. The log keeps the most recent 500 entries. Recording is best-effort: a failed audit write is logged but never blocks the action itself.
+**Admin actions** — every admin-gated mutation is recorded in the `admin_audit` table (read it on the dashboard's Audit log page): `/server start|stop|restart|backup|prune-stats` (including whether a prune was a dry run or confirmed) and `/config reload`. Each entry stores the timestamp, action, target server, the acting user's tag and ID, and the guild it was issued from. The log keeps the most recent 500 entries. Recording is best-effort: a failed audit write is logged but never blocks the action itself.
 
-**Whitelist changes** — every whitelist add and remove is recorded in `data/whitelistAudit.json`, keyed by lowercased username:
+**Whitelist changes** — every whitelist add and remove is recorded in the `whitelist_audit` table, one row per lowercased username (columns are the snake_case forms of the names below, for example `added_by`):
 
 | Field | Description |
 |---|---|
@@ -108,4 +108,4 @@ Two audit stores exist under `data/`:
 | `server` | Which server they were added to |
 | `removedBy` / `removedById` / `removedAt` / `removedFromServer` | Filled when the player is removed |
 
-The file is created automatically. There is no Discord command to query it yet; open `data/whitelistAudit.json` directly when you need to trace who whitelisted whom.
+The table is created automatically. `/whois` shows the entry for a Minecraft username, and the dashboard's Players page shows a player's whitelist history to anyone with `audit:read` on that server.

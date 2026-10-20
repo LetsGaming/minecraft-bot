@@ -14,9 +14,9 @@ so stats, leaderboards, and autocomplete keep working. Both are cached per
 server ID for 60 s, and bot-initiated edits invalidate directly.
 
 `playerUtils.ts` sits on top: `findPlayer` (case-insensitive), the autocomplete
-name list, and the online-player readers. The readers prefer
-`ServerInstance.getList()` and fall back to sending `/list` and polling the log
-tail for servers without RCON.
+name list, and the online-player readers. The readers use
+`ServerInstance.getList()` and return an empty list when the server cannot be
+reached.
 
 ## Stats
 
@@ -48,19 +48,19 @@ it. Period baselines do not apply to them — a streak *is* its own running tota
 Add an entry to `LEADERBOARD_STATS` in `statUtils.ts`:
 
 ```ts
-crafted: {
-  label: "Items Crafted",
-  extract: (flat) =>
-    flat.filter((s) => s.category === "minecraft:crafted")
-        .reduce((sum, s) => sum + s.value, 0),
-  format: (v) => v.toLocaleString(),
+crafted: defineStat("crafted", {
+  extract: sumCategory("minecraft:crafted"),
+  format: count,
   sortAscending: false,
-},
+}),
 ```
 
-`/leaderboard` picks it up automatically — its choice list is
-generated from this map — and hourly snapshots start recording it, so period
-boards work after one snapshot cycle. Nothing else to wire.
+`defineStat` reads the label through the locale, so also add
+`leaderboard.stat.crafted` to both `core/locales/en.ts` and `de.ts` (a stat
+without it shows the raw key). `/leaderboard` picks the stat up
+automatically (its choice list is generated from this map) and hourly
+snapshots start recording it, so period boards work after one snapshot cycle.
+Nothing else to wire.
 
 ## Snapshots
 

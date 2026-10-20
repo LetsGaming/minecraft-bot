@@ -90,6 +90,9 @@ Config validation failed:
 That is deliberate. Ignoring them silently would leave you with a config that
 looks like it configures RCON and a bot that does not use it.
 
+Since 7.0.0 the bot removes these fields itself once `apiUrl` and `apiKey` are
+set (see [migrating-to-7.md](migrating-to-7.md)).
+
 ### The single-server format is gone
 
 The pre-`servers` format, where the top-level object doubled as one server

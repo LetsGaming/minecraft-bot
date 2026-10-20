@@ -8,7 +8,7 @@ Options in `(parentheses)` are optional. Commands that act on a server accept an
 
 | Command | Options | Description |
 |---|---|---|
-| `/status` | (`server`) | Online/offline, player count, who is online, TPS, how long the server has been online, its version, and bot latency. An offline server says who stopped it and when (after a confirmed `/server stop` or `restart`) and how to start it. On locally managed servers also a **Host** section: RAM/CPU of the server process and disk usage of the world and backup paths. |
+| `/status` | (`server`) | Online/offline, player count, who is online, TPS, how long the server has been online, its version, and bot latency. An offline server says who stopped it and when (after a confirmed `/server stop` or `restart`) and how to start it. When the API wrapper reports host metrics, also a **Host** section: RAM/CPU of the server process and disk usage of the monitored paths. |
 | `/uptime` | (`server`) | Uptime history with 24h/7d/30d percentage bars and an hourly 24h sparkline for one server. Use `server:all` for an overview of every server your guild may use. |
 | `/info` | (`server`) | How to join: address, version, loader and required mods. |
 | `/seed` | (`server`) | The world seed. |
@@ -60,17 +60,19 @@ See [daily-rewards.md](daily-rewards.md).
 | Command | Options | Description |
 |---|---|---|
 | `/chunkbase` | (`dimension`), (`server`) | Chunkbase seed map link, pre-filled with the server seed. If you are linked and online, centered on your position. |
-| `/netherportal` | | The Nether coordinates matching your current Overworld position. Needs link + being online. |
-| `/playerhead` | `mcname` | Shows a player's head with a button that gives it to you in-game (link + online required to click). |
-| `/waypoints` | (`server`) | All community waypoints on a server, paginated — the Discord view of the in-game `!waypoint` system. |
+
+| `/waypoints` | (`server`), (`category`) | All community waypoints on a server (optionally only those with a category tag), paginated — the Discord view of the in-game `!waypoint` system. |
+
+Nether portal coordinates and player heads are in-game commands (`!netherportal`, `!playerhead`), not slash commands. See [in-game-commands.md](in-game-commands.md).
 
 ## Communication
 
 | Command | Options | Description |
 |---|---|---|
-| `/say` | `message`, (`server`) | Sends your message to the Minecraft chat as `[YourName] message`. |
+
 | `/poll` | `create` / `status` / `close` | Cross-platform polls (admin): votable via buttons on Discord and `!vote` in-game, with linked accounts counted once. Results are announced in both directions when the poll closes. `create` accepts `servers:"smp, creative"` (or `all`) to run ONE poll across several instances — merged tally, announcements on every participating server. |
 | `/watch` | `server` / `player` / `list` / `remove` | One-shot personal DMs: get pinged once when a server comes back online or when a specific player joins. Fired watches remove themselves; re-arm with the command. DMs must be open. |
+| `/bridge` | `optout` / `optin` | Keep your messages in this Discord server out of the cross-server relay (`optout`) or forward them again (`optin`). They still reach Minecraft either way. Applies to this server only. See [chat-bridge.md](chat-bridge.md#messages-forwarded-to-other-discord-servers). |
 
 ## Moderation
 

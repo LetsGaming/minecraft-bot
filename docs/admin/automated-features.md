@@ -38,9 +38,9 @@ A live status display the bot fully manages itself. On startup it creates (or fi
 - `#server-status`: a text channel with one embed showing, per server: online/offline, player count and names, and TPS. Edited every 60 seconds.
 - `👥 Players: X / Y`: a voice channel used purely as a counter display. Renamed only when the count changes, because Discord limits channel renames to 2 per 10 minutes.
 
-If someone deletes the channels or the message, the bot recreates them on the next cycle. State is persisted in `data/statusMessages.json`, so the same message keeps being edited across restarts.
+If someone deletes the channels or the message, the bot recreates them on the next cycle. State is persisted in the database (`kv_store["statusMessages"]`), so the same message keeps being edited across restarts.
 
-Enabled by default for every configured guild; turn it off with `"statusEmbed": { "enabled": false }`. Requires the Manage Channels permission.
+Opt-in: it runs only for a guild with `"statusEmbed": { "enabled": true }`. Requires the Manage Channels permission.
 
 ## TPS alerts
 
@@ -70,11 +70,11 @@ These checks also feed the `/uptime` command's history.
 
 **Config key:** `leaderboard`
 
-Auto-posts two leaderboards (playtime and blocks mined) at the configured interval: `daily`, `weekly`, or `monthly`. Names come from the whitelist plus the server's `usercache.json`, so the boards fill on servers that run without a whitelist too.
+Auto-posts the boards listed in `categories` (default: playtime and blocks mined) at the configured interval: `daily`, `weekly`, or `monthly`. `categories`, `postTime` and `postDay` are described in [configuration.md](configuration.md#guilds). Names come from the whitelist plus the server's `usercache.json`, so the boards fill on servers that run without a whitelist too.
 
 Unlike `/leaderboard` (all-time), scheduled posts show only stats gained during the period. The bot takes a stat snapshot every hour; when a post is due, it diffs current stats against the snapshot closest to the period start. The embed footer is honest about data quality: if the bot has been tracking for less than a full period, it says so, and with no snapshot at all it falls back to all-time values and labels them as such.
 
-Snapshots are pruned automatically: full hourly resolution for the last day, one per day after that, nothing older than 31 days (except the newest snapshot, which is always kept).
+Snapshots are pruned automatically: full hourly resolution for the last day, one per day after that, nothing older than 32 days (except the newest snapshot, which is always kept).
 
 ## Channel purge
 
@@ -92,7 +92,7 @@ A small community feature for German-speaking servers: when a player lying in be
 
 ## Milestone announcements
 
-With a `milestones` block, an hourly pass reads the same stats files the leaderboards use and announces when a player crosses a configured threshold — in-game (`/say`) and via the `milestone` notification event. Thresholds are in the stat's native unit (playtime is ticks). On first activation the current values are recorded **silently** (per server and stat), so enabling the feature never floods channels with every veteran's history; announcements start with the next real crossing. State lives in `data/milestones.json`; at most 10 announcements go out per pass.
+With a `milestones` block, an hourly pass reads the same stats files the leaderboards use and announces when a player crosses a configured threshold — in-game (`/say`) and via the `milestone` notification event. Thresholds are in the stat's native unit (playtime is ticks). On first activation the current values are recorded **silently** (per server and stat), so enabling the feature never floods channels with every veteran's history; announcements start with the next real crossing. State lives in the database (`kv_store["milestones"]`); at most 10 announcements go out per pass.
 
 ## Backup staleness alert
 
@@ -104,7 +104,7 @@ A daily check against the GitHub releases of this repository. When a newer versi
 
 ## Console relay
 
-`/console live enable` (admin) streams a server's raw log into the guild's configured `console.channelId` — batched every few seconds with a hard per-message size cap and a drop counter, so a busy server cannot flood the channel or the Discord rate limit. The toggle is persisted in `data/consoleRelay.json` and survives restarts. Treat the target channel as admin-only; the command requires admin either way.
+`/console live enable` (admin) streams a server's raw log into the guild's configured `console.channelId` — batched every few seconds with a hard per-message size cap and a drop counter, so a busy server cannot flood the channel or the Discord rate limit. The toggle is persisted in the database (`kv_store["consoleRelay"]`) and survives restarts. Treat the target channel as admin-only; the command requires admin either way.
 
 ## Whitelist applications
 

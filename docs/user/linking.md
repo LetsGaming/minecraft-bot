@@ -24,9 +24,7 @@ Want to switch to a different Minecraft account? `/unlink` first, then `/link` a
 | Command | Why it needs the link |
 |---|---|
 | `/daily`, `/streak` | Rewards are delivered to your Minecraft inventory. |
-| `/netherportal` | Reads your current in-game position. |
 | `/chunkbase` | Optionally centers the seed map on your position. |
-| `/playerhead` | The "give to me" button delivers the head to your character. |
 
 Running one of these without a link gets you a friendly error telling you to link first.
 
@@ -34,3 +32,7 @@ Running one of these without a link gets you a friendly error telling you to lin
 
 - One Minecraft account per Discord account. The link is per bot, not per Discord guild.
 - The code only works typed by you in the game chat; nobody can link your Discord account by guessing, since codes are random and short-lived, and repeated guesses in chat are rate-limited.
+
+## Linking and the cross-server relay
+
+If your Discord server is part of a relay group (see [chat-bridge.md](chat-bridge.md#messages-forwarded-to-other-discord-servers)), a linked account means your **Minecraft name** is shown on messages forwarded to the other Discord servers, instead of a shortened Discord name. That name is already public on the Minecraft server, but linking is what makes it appear in other communities' chat. If you do not want that, do not link, or opt out with `/bridge optout`.

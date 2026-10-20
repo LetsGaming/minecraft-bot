@@ -46,6 +46,9 @@
   },
   "tpsWarningThreshold": 15,
   "tpsPollIntervalMs": 60000,
+  "webui": {
+    "enabled": true
+  },
   "commands": {
     "map": {
       "enabled": false,
@@ -55,9 +58,6 @@
     },
     "seed": {
       "enabled": true
-    },
-    "say": {
-      "adminOnly": false
     }
   }
 }

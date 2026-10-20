@@ -14,8 +14,11 @@ The fastest path, if you just want it running:
    git clone <this repo> && cd minecraft-bot
    npm install
    npm run setup     # interactive wizard → writes config.json
+   cp .env.example .env   # then set MCBOT_CONFIG_FILE=./config.json in it
    docker compose up -d
    ```
+
+   Without `MCBOT_CONFIG_FILE` the container ignores the wizard's `config.json` and seeds its config from `config.template.json` and `.env` instead (see [docker.md](docker.md)).
 
 The wizard asks for the token, IDs, each server's wrapper URL and API key, and which optional features you want — nothing else. The bot validates the result on start and tells you exactly what to fix if something is off. Everything the wizard skipped can be added later in `config.json` ([full reference](configuration.md)); the file is hot-reloaded.
 
@@ -58,7 +61,7 @@ Three ways to proceed:
 
 - A Discord account and a Discord server (guild) where you have admin rights
 - A Minecraft Java Edition server you control
-- A machine to run the bot on. Either with Docker, or with Node.js 18+ installed
+- A machine to run the bot on. Either with Docker, or with Node.js 20+ installed
 
 ## Step 1: Create the Discord application
 
@@ -76,7 +79,25 @@ Three ways to proceed:
    - View Channels, Send Messages, Embed Links, Read Message History
    - Manage Messages (for `/clear` and the channel purge feature)
    - Manage Channels (only needed if you use the self-provisioning status embed)
+   - Manage Webhooks and Add Reactions (optional, for the chat bridge and the cross-server relay, see below)
 4. Open the generated URL, pick your server, and authorize.
+
+### Cross-server relay (optional)
+
+The relay needs no extra intent: it uses the Message Content intent the chat bridge already requires. It does need, in each relayed channel:
+
+- **Manage Webhooks**, so relayed messages show the speaker's name instead of the bot's. Without it the bridge falls back to an embed, and the relay still works.
+- **Manage Messages**, to pin the notice that tells members their messages are forwarded. Without it the notice is posted but not pinned (the log says so).
+- **Add Reactions**, for the 🚫 and ⏳ markers that tell an author a message stayed local.
+
+Operator responsibilities:
+
+- You decide the legal basis for forwarding messages between communities (for example consent through the pinned notice, or legitimate interest) and you inform members. The notice and the per-server opt-out are the consent mechanism the bot provides.
+- Members can ask for deletion. Deleting the source message deletes the copies while the sync window lasts (`limits.relaySyncWindowMinutes`, default 60). After that, copies in other servers are outside what the bot can remove.
+- Minecraft-originated messages keep using the player head from `mc-heads.net`, which receives the player name. There is no switch for it.
+- Removing the bot, unsetting `relayGroup` or deleting a channel stops relaying for that channel. When `relayGroup` is unset, the bot removes its pinned notice on the next config reload or start.
+
+Configuration is in [configuration.md](configuration.md#relay-between-discord-servers).
 
 ## Step 3: Collect your Discord IDs
 

@@ -15,7 +15,7 @@ Bot machine                 Minecraft machine
 └─────────────────┘         └──────────────────────────────┘
 ```
 
-Multiple Minecraft machines are supported: each gets its own wrapper, and the bot connects to each independently. You can also mix local and remote instances freely in one bot.
+Multiple Minecraft machines are supported: each gets its own wrapper, and the bot connects to each independently.
 
 What goes through the wrapper: **everything**. File reads (stats, whitelist, server.properties, mod list, backups), log streaming (SSE), console commands, script execution (start, stop, restart, rollback, backup, status), and backup download and restore. Since 5.0.0 there is no second path — no local filesystem access, no direct RCON from the bot, no `sudo`. One way in means one place for a bug, which is why the two-mode design was removed.
 
@@ -108,7 +108,7 @@ In the bot's `config.json`, add `apiUrl` and `apiKey` to each remote server. The
 }
 ```
 
-Both instances point at the same `apiUrl`; the wrapper routes by the instance ID in the URL path. Local instances simply omit `apiUrl`.
+Both instances point at the same `apiUrl`; the wrapper routes by the instance ID in the URL path. Every server entry needs its own `apiUrl` and `apiKey`, including a server on the same machine as the bot.
 
 ### Transport security
 
@@ -178,7 +178,7 @@ Older features, kept here for anyone upgrading from further back. Each is a mani
 
   ```json
   {
-    "version": "1.2.0",
+    "version": "4.3.0",
     "host": {
       "process": { "pid": 1234, "cpuPercent": 3.5, "rssBytes": 2147483648 },
       "disks": [
@@ -188,7 +188,7 @@ Older features, kept here for anyone upgrading from further back. Each is a mani
   }
   ```
 
-  With this route, `/status` shows the Host section for remote servers too, the disk-full alert monitors remote disks, and the bot warns at startup when the wrapper is older than it expects (`MIN_WRAPPER_VERSION`). Older wrappers without the route degrade exactly to the previous behaviour: no host section, no remote disk alerts, one startup warning.
+  With this route, `/status` shows the Host section for remote servers too, the disk-full alert monitors remote disks, and the bot reads the wrapper's version from it (`MIN_WRAPPER_VERSION` in `wrapperContract.ts` is only the floor for wrappers that predate the manifest). Older wrappers without the route degrade exactly to the previous behaviour: no host section, no remote disk alerts, one startup warning.
 
 Update the wrapper to get all of these; no bot-side configuration changes are needed.
 
@@ -197,7 +197,7 @@ Update the wrapper to get all of these; no bot-side configuration changes are ne
 ```bash
 # /health needs no API key
 curl http://192.168.1.10:3000/health
-# → {"ok":true}
+# → {"ok":true,"version":"..."}
 
 curl -H "x-api-key: your-secret" http://192.168.1.10:3000/instances/survival/running
 # → {"running":true}

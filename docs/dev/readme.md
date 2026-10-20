@@ -18,6 +18,7 @@ need to know it.
 | Running and writing tests | [testing.md](testing.md) |
 | Where to put a new command, watcher, or stat | [adding-features.md](adding-features.md) |
 | Why things are the way they are: the decision log | [decisions.md](decisions.md) |
+| The cross-server chat relay: rules, design, amendments and file map | [cross-server-relay.md](cross-server-relay.md) |
 | How Discord replies look: builders, colours, errors, confirm rows, paging, mentions | [bot/replies.md](bot/replies.md) |
 | Dashboard frontend: tokens, density, components, routes, `t()`, the hex and literal checks | [web/frontend.md](web/frontend.md) |
 

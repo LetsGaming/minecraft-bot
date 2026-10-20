@@ -10,7 +10,7 @@
  *                                     (e.g. one exported from a container)
  *
  * DOCKER: the wizard writes plain ./config.json — exactly the file the
- * compose setup's "Option B" mounts read-only into /app/config.json. In
+ * compose mounts read-only into /app/config.json when MCBOT_CONFIG_FILE is set. In
  * Docker deployments data/ is a NAMED VOLUME, so the command manifest is
  * not on the host; the wizard transparently tries
  * `docker compose cp bot:/app/data/commandManifest.json` when the local
@@ -1022,12 +1022,11 @@ async function main() {
     .some((f) => existsSync(resolve(ROOT, f)));
   if (composePresent) {
     console.log();
-    hint("Docker (compose config \"Option B\" — static config file):");
-    hint("  1. In docker-compose.yml, comment out the config.template.json");
-    hint("     mount and uncomment:  - ./config.json:/app/config.json:ro");
+    hint("Docker (use this config instead of the .env-driven template):");
+    hint("  1. In .env, set:  MCBOT_CONFIG_FILE=./config.json");
     hint("  2. docker compose up -d          (add --profile web for the dashboard)");
-    hint("  The entrypoint uses a mounted config.json as-is — no template");
-    hint("  substitution happens when the file already exists.");
+    hint("  The config is copied into the data/ volume as-is on first start.");
+    hint("  To re-seed later:  docker compose exec bot rm /app/data/config.json");
   }
   console.log();
 

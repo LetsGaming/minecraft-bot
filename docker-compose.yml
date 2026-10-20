@@ -25,7 +25,7 @@ services:
 
     # .env drives everything. env_file passes through EVERY var in .env — the
     # template's placeholders (substituted at seed time) and any extra
-    # like per-server RCON_PASSWORD_<ID>. The explicit entries below just
+    # like per-server API_KEY_<ID>. The explicit entries below just
     # document the common deployment knobs and give them defaults.
     env_file:
       - path: .env
@@ -36,6 +36,11 @@ services:
       # The active config lives in the writable data/ volume so the dashboard
       # can edit it and the bot sees the change (they share the volume).
       MCBOT_CONFIG_PATH: /app/data/config.json
+
+    # Lets MC_API_URL=http://host.docker.internal:<port> reach a wrapper on the
+    # Docker host (built in on Docker Desktop, needed explicitly on Linux).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
     volumes:
       # Config SEED (first run only; the active copy then lives in data/):
@@ -107,6 +112,9 @@ services:
 
     # Published on WEBUI_BIND_ADDR (default loopback only). Expose to the LAN
     # with WEBUI_BIND_ADDR=0.0.0.0 — only behind a TLS reverse proxy.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
     ports:
       - "${WEBUI_BIND_ADDR:-127.0.0.1}:${WEBUI_PORT:-8130}:${WEBUI_PORT:-8130}"
 

@@ -28,7 +28,7 @@ If a generator produces a partial file, complete it before committing. Every fil
 
 ### 3. TypeScript strictness stays on
 
-`tsconfig.json` runs `strict` plus `noUncheckedIndexedAccess`, `noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`. Do not weaken compiler options, do not sprinkle `any` or `@ts-ignore` to silence errors. Fix the types. `npm run typecheck` must be clean.
+`tsconfig.base.json` (extended by every workspace) runs `strict` plus `noUncheckedIndexedAccess`, `noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`. Do not weaken compiler options, do not sprinkle `any` or `@ts-ignore` to silence errors. Fix the types. `npm run typecheck` must be clean.
 
 ### 4. No `console.*` outside `logger.ts`
 
@@ -42,7 +42,7 @@ Colours come from `EmbedColor` in `bot/utils/embeds/embedColors.ts` — never a 
 
 ### 6. No shell string interpolation
 
-Never build shell command strings. Use `execSafe(cmd, args)` from `core/shell/execCommand.ts` or the helpers in `serverAccess.ts`; both pass argument arrays to `execFile`/`spawn` with no shell, so user-controlled strings cannot inject metacharacters.
+Never build shell command strings. The bot spawns no processes: everything that runs on the Minecraft host goes through the helpers in `serverAccess.ts` (`runScript` and friends), and the wrapper passes argument arrays with no shell, so user-controlled strings cannot inject metacharacters.
 
 Anything sent to the Minecraft console that contains user input goes through `core/utils/sanitize.ts` (`stripControlChars`, `sanitizeForComponent` for tellraw text, `isValidMcName` for names), or is built with `consoleCommand()` in `core/utils/minecraft/serverMessages.ts`, which applies those checks to every argument. Those are the single tested implementations; never hand-roll a second copy. A `\n` in a chat message is a second console command.
 
@@ -79,8 +79,7 @@ Rationale: rendering (Discord), game logic, and transport stay independently tes
 - **Time and dates**: anything user-facing or wall-clock-scheduled uses the helpers in `core/utils/time.ts` (TZ-aware, DST-safe). Raw epoch arithmetic with `Date.now()` is fine. A duration another layer also depends on is a contract, not a constant.
 - **Types** live in `src/core/types/` and are re-exported through `types/index.ts`; import from there. Contracts shared with another workspace live in `@mcbot/schema` instead.
 - **One command per file**, named after the command. New files follow the structure of an existing sibling.
-- **Comments** explain why, not what. Reference fix IDs (like the existing B-xx annotations) when a non-obvious guard exists to prevent a regression.
-- **A `utils.ts` is not a home.** Files go in the directory that names their purpose; a grab-bag module is drift, and this repo has already paid for one.
+- **Comments** explain why, not what.- **A `utils.ts` is not a home.** Files go in the directory that names their purpose; a grab-bag module is drift, and this repo has already paid for one.
 - **Line endings are LF.** `.gitattributes` enforces this on commit; configure your editor to match so diffs stay clean.
 
 ## Definition of done

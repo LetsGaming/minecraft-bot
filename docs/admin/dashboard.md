@@ -20,10 +20,13 @@ The sidebar groups the pages:
 | Manage | Servers | `#/servers` |
 | | Backups | `#/backups/<server>` |
 | | Mods | `#/mods/<server>` |
+| | Upgrade | `#/upgrade/<server>` |
+| | Prune chunks | `#/prune/<server>` |
 | | Mod config | `#/modconfig/<server>/<file>` |
 | | Daily rewards | `#/rewards` (shared pool), `#/rewards/<server>` |
 | Admin | Config | `#/config`, `#/config/raw` |
 | | Commands | `#/commands` |
+| | Appearance | `#/appearance` |
 | | Guilds | `#/guilds/<guild id>` |
 
 There is one server picker, in the sidebar. Pages that work on one server
@@ -109,7 +112,7 @@ it says what is unsaved, wrong, conflicting or saving, and otherwise whether
 the bot has applied the saved file. "Review changes" lists every change as was
 and now. Secrets (the bot token, API keys) are password fields: they stay empty
 with "Set. Type to replace.", and leaving one empty keeps the stored value.
-Details are in [configuration.md](configuration.md#editing-the-config-in-the-dashboard)
+Details are in [configuration.md](configuration.md#editing-config-in-the-dashboard)
 and [mod-configs.md](mod-configs.md).
 
 ## Language and theme

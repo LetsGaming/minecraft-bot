@@ -48,6 +48,8 @@ The enforceable rules derived from these decisions live in [coding-guidelines.md
 
 ## `RconClient` extracted from `ServerInstance`
 
+> **Superseded in 5.0.0.** The bot no longer opens RCON connections; commands go through the wrapper's `/command` route. See [migrating-to-5.md](../admin/migrating-to-5.md).
+
 **Problem:** `ServerInstance` mixed the RCON wire protocol (sockets, packet encoding, auth) with game logic (TPS, player lists, seeds). The protocol could not be unit-tested without a real socket.
 
 **Decision:** `rcon/RconClient.ts` owns everything protocol-level; `ServerInstance` composes it. Key invariant: `RconClient` imports only `net` and the logger. Tests inject a mock socket for the client and a mock client for the instance.
@@ -63,6 +65,8 @@ The enforceable rules derived from these decisions live in [coding-guidelines.md
 ---
 
 ## `serverAccess.ts` as the local/remote seam
+
+> **Superseded in 5.0.0.** Local mode is gone, so there is no local/remote seam. `serverAccess.ts` remains as the HTTP-only client for the wrapper. See [migrating-to-5.md](../admin/migrating-to-5.md).
 
 **Problem:** Supporting remote Minecraft hosts (and Docker, which is "remote" from the filesystem's perspective) would otherwise have meant `if (remote)` branches scattered across every feature.
 
@@ -105,6 +109,8 @@ The enforceable rules derived from these decisions live in [coding-guidelines.md
 ---
 
 ## Log watcher read cap (`MAX_DELTA_BYTES`)
+
+> **Superseded in 5.0.0.** The bot-side file tailer was removed; logs arrive through `RemoteLogWatcher` over the wrapper's SSE stream, and the read cap lives only in the wrapper.
 
 **Problem:** If the bot is down while the server keeps logging, the next read could be hundreds of MB, spiking heap and stalling the event loop.
 
@@ -782,3 +788,23 @@ The typed confirm stays on PrimeVue's `ConfirmDialog` (its container slot gives 
 **Decision:** The handlers a server's log watcher dispatches (joins, deaths, advancements, server events, the sleep prompt) put their Discord sends on a per-channel ordered queue (`watchers/sendQueue.ts`) and run lookups, tips and DMs detached, instead of awaiting them on the watcher's dispatch queue.
 
 **Why:** the dispatch queue runs one handler at a time per server, so one slow Discord channel or wrapper call delayed chat bridge messages and in-game commands behind it. Ordering is kept per channel, a slow channel delays only itself, and a failed send is logged per channel instead of aborting the handler.
+
+---
+
+## Relay groups are set by a bot admin, not by guild managers
+
+**Decision:** `relayGroup` on a chat bridge can only be set, changed or removed by a bot admin. The dashboard's guild-manager write path refuses a block that changes it and keeps the on-disk value when the block omits it.
+
+**Why:** A relay group decides which other Discord servers see this guild's chat. If a manager could write the field, anyone with Manage Guild in one community could type another community's group name and start receiving its messages, as long as both bridges are bound to the same Minecraft server. That would break the rule in `dev/cross-server-relay.md` that a guild is never pulled into a group (and the Discord Developer Policy point about acting on a server's behalf only with permission). It is the same tenant boundary as `adminUsers` and `allowedServers`.
+
+**Trade-off:** A manager cannot opt their own server into a relay without asking an operator. The label and the blocklist, which only affect their own guild, stay editable.
+
+---
+
+## The relay's identity tag uses a per-group secret kept in the database
+
+**Decision:** Unlinked speakers in a relay group are shown as `<first letter>***#<tag>`, where the tag is the first four hex characters of an HMAC-SHA256 of the Discord user id. The key is a random per-group secret, created on first use and stored in `kv_store["relaySecrets"]`.
+
+**Why:** The tag lets readers tell two speakers apart without exposing anything that can be reversed or linked outside the group. A per-group key means the same person has a different tag in each group. Keeping the key in the database rather than `config.json` means no operator setup, no secret in the dashboard's config editor and stable tags across restarts. Rotating it would change every tag, so it is not rotated automatically.
+
+**Trade-off:** Four hex characters (65,536 values) start to collide at roughly 300 distinct speakers in one group. Losing the database row changes everyone's tag, which is acceptable because nothing else depends on it.

@@ -14,7 +14,7 @@ printed card, a note on your phone.
 
 | | |
 |---|---|
-| Wrapper host and port | `___________________` (default `127.0.0.1:3000`) |
+| Wrapper host and port | `___________________` (default `0.0.0.0:3000`; `MC_BIND_HOST=127.0.0.1` restricts it to the host) |
 | API key location | `___________________` (e.g. `/opt/mc-api-server/.env`, `MC_API_KEY`) |
 | SSH target | `___________________` |
 | Instance ids | `___________________` |
@@ -42,7 +42,7 @@ someone holding it.
 
 ```bash
 export MC_API=http://127.0.0.1:3000
-export MC_KEY="$(sudo grep -oP '^API_KEY=\K.*' /opt/mc-api-server/.env)"
+export MC_KEY="$(sudo grep -oP '^MC_API_KEY=\K.*' /opt/mc-api-server/.env)"
 export MC_ID=survival    # the instance id
 ```
 
@@ -66,7 +66,7 @@ server, not a stopped one. Do not restart on that alone.
 
 ```bash
 curl -sS -H "x-api-key: $MC_KEY" \
-  "$MC_API/instances/$MC_ID/logs/tail?lines=200" | jq -r '.lines[]'
+  "$MC_API/instances/$MC_ID/logs/tail?lines=200" | jq -r '.output'
 ```
 
 Follow it live:
@@ -124,11 +124,16 @@ Once the immediate problem is handled:
 ```bash
 # Is the web process alive?
 sudo systemctl status minecraft-bot-web
-curl -sS http://127.0.0.1:8080/healthz
+curl -sS http://127.0.0.1:8130/healthz
 
 # Its own logs.
 sudo journalctl -u minecraft-bot-web -n 100 --no-pager
 ```
+
+The unit name and the port above are examples (8130 is the dashboard's default
+`webui.port`). With the Docker setup the dashboard is the `web` service
+(container `minecraft-bot-web`): `docker compose ps web` and
+`docker compose logs --tail=100 web`.
 
 Common causes, in the order they usually turn out to be:
 

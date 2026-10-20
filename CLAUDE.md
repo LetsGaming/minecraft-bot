@@ -110,11 +110,11 @@ implementation.
 
 - `npm run dev` — type-check-build `src/bot` + `src/web` in watch mode (no process is started;
   prefer `dev-up.mjs` above for actually running something).
-- `npm test` / `npm run test:watch` / `npm run test:coverage` — full test suite (vitest), mirrors
-  `src/*` under `tests/`. See `docs/dev/testing.md`.
+- `npm test` / `npm run test:watch` / `npm run test:coverage`: full test suite (vitest), grouped by
+  subject under `tests/`, not by workspace. See `docs/dev/testing.md`.
 - `npm run typecheck` / `npm run lint` — run before considering non-trivial work done.
 - `npm run schema:generate` / `npm run schema:check` — regenerate/verify `config.schema.json` from
-  the `RawBotConfig` type (`src/core/config.ts` and friends). Run `schema:generate` after changing
+  the `RawBotConfig` type (`src/schema/config.ts`). Run `schema:generate` after changing
   the shape of `config.json`; CI enforces `schema:check` stays in sync.
 - `npm run i18n:check` — verifies `src/core/locales/{en,de}.ts` stay in sync (no key present in one
   and missing in the other). Run after touching either locale file.

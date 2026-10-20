@@ -51,6 +51,7 @@ You use the bot as a Discord member or Minecraft player.
 |---|---|
 | See the full feature list, grouped and explained | [features.md](features.md) |
 | See what is planned and what could come next | [ROADMAP.md](ROADMAP.md) |
+| Look up a project-specific term | [GLOSSARY.md](GLOSSARY.md) |
 
 ## Developers (`docs/dev/`)
 

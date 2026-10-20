@@ -13,14 +13,14 @@ send a message from `core`, the code belongs in `bot`.
 ```
 src/core/
 ├── config.ts             Load, freeze, env overrides, fs-watch hot reload
+├── configMigrations.ts   Ordered migrators that bring an old config.json forward
+├── configSchemaCheck.ts  Validates a config against the generated JSON Schema
 ├── configValidation.ts   The semantic checks config.ts runs before accepting
 ├── db/                   SQLite: driver seam, connection, migrations,
 │                         legacy import, kv blob store, row mappers
 ├── locales/              en.ts / de.ts string tables
-├── rcon/RconClient.ts    Pure RCON protocol: TCP, packets, auth, dispatch
-├── shell/execCommand.ts  execFile wrapper (no shell), sudo error detection
 ├── types/                Shared interfaces, grouped like utils/ below and
-│                         re-exported via types/index.ts — import from there
+│                         re-exported via types/index.ts; import from there
 └── utils/                See below
 ```
 
@@ -35,13 +35,16 @@ anything new should go. The subdirectories are grouped by purpose, the same way
 | Directory | Holds | Rule of thumb |
 |---|---|---|
 | `minecraft/` | statUtils, snapshotUtils, streakLeaderboard, playerUtils, whitelist, mojang, modUtils, slimeChunk, chunkbaseUrl | Reads or interprets the Minecraft world and its players |
-| `server/` | server, serverAccess, capabilities, hostResources, runtimeHeartbeat | The server instance, its host, and how we reach them |
-| `stores/` | adminAudit, linkStore, dailyStore, pollStore, sessionStore, noteStore, watchStore, waypointStore, challengeStore, uptimeTracker, playerCountHistory, whitelistAudit | Owns a table or a `kv_store` key. One owner per key, no exceptions |
-| `config/` | configService, configDiff, configHistory | Reading, writing, diffing, and rolling back config |
-| `commands/` | commandManifest, commandPolicy | What commands exist and whether they're enabled |
+| `server/` | server, serverAccess (barrel) and `access/`, capabilities, circuitBreaker, hostResources, runtimeHeartbeat, wrapperContract | The server instance, its host, and how we reach them |
+| `stores/` | adminAudit, linkStore, dailyStore, pollStore, sessionStore, noteStore, watchStore, waypointStore, challengeStore, uptimeTracker, playerCountHistory, whitelistAudit, and more | Owns a table or a `kv_store` key. One owner per key, no exceptions |
+| `config/` | configService, configDiff, configHistory, configAccess, configApplyStatus | Reading, writing, diffing, and rolling back config |
+| `commands/` | commandManifest, commandPolicy, commandUsage, commandsView | What commands exist and whether they're enabled |
+| `wrapper/` | lastKnown, deferredIntents, queueFlush | Behaviour while the API wrapper is unreachable |
+| `configfmt/` | formats, toml, ini, yaml, forgeCfg, colonText | Reading and splicing mod config file formats |
 
-The eight files still at the root — `logger`, `time`, `i18n`, `objects`,
-`sanitize`, `rateLimiter`, `paths`, `jsonStore` — are there on purpose. They are
+Most of what is left at the root (`logger`, `time`, `i18n`, `objects`,
+`sanitize`, `rateLimiter`, `paths`, `jsonStore`, `cache`, `error`, `http`,
+`duration`, `concurrency` and a few more) is there on purpose. They are
 the primitives every group uses and none of them owns; pushing them into a
 subdirectory would just mean every subdirectory imports that one.
 
@@ -56,7 +59,7 @@ split it before it becomes the next `utils.ts`.
 |---|---|
 | Config loading, validation, env overrides, hot reload | [config.md](config.md) |
 | SQLite, the JSON that stays JSON, caches, snapshots | [data-storage.md](data-storage.md) |
-| `ServerInstance`, `serverAccess`, RCON, capabilities | [server-access.md](server-access.md) |
+| `ServerInstance`, `serverAccess`, the wrapper transport, capabilities | [server-access.md](server-access.md) |
 | Stats, leaderboards, players, whitelist | [minecraft.md](minecraft.md) |
 
 ## The two rules that catch people

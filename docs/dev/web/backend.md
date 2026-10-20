@@ -11,7 +11,8 @@ a framework would be more surface than solution.
 | `index.ts` | Entry: the `webui.enabled` gate, the server registry, opening the store |
 | `server.ts` | Building the Fastify instance: helmet, CSP, rate limiting, static, route registration |
 | `errors.ts` | Typed HTTP failures and the single error handler |
-| `rateLimit.ts`, `static.ts`, `requiredEnv.ts` | The rest of the app plumbing `server.ts` wires |
+| `rateLimit.ts`, `static.ts`, `requiredEnv.ts`, `csrf.ts`, `trustProxy.ts` | The rest of the app plumbing `server.ts` wires: rate limiting, static files, required env, the cross-site write guard, the trusted-proxy setting |
+| `iconProxy.ts` | Proxying icon images to the browser |
 | `auth/auth.ts` | Sessions, OAuth, roles, `secretEquals` |
 | `auth/capabilities.ts` | The host-scope gate, the boot assertion, capability resolution |
 | `auth/discordRest.ts` | The Discord REST client |
@@ -162,11 +163,12 @@ decision right before writing the handler.
 
 ## Secrets
 
-`safeConfig.ts` masks `token` and `apiKey` on read and merges
-the placeholders back on write, so the browser never receives a real secret and
-an edit round-trip cannot blank one out.
+`safeConfig.ts` masks `token` and each server's `rconPassword` and `apiKey` on
+read and merges the placeholders back on write, so the browser never receives a
+real secret and an edit round-trip cannot blank one out.
 
-**A new secret field must be added to `SERVER_SECRET_KEYS`.** Nothing else
+**A new per-server secret field must be added to `SECRET_SERVER_KEYS`**
+(`src/schema/config.ts`; `isSecretConfigPath` there covers `token`). Nothing else
 enforces this; the first time it is forgotten, the secret ships to the browser
 in the config GET.
 

@@ -34,6 +34,10 @@ npx vitest run -t "streak"
   | `web/` | Dashboard backend and frontend logic; `web/components/` mounts views and components in jsdom |
   | `bot/` | Interactions, process guards, and the Discord reply snapshots (`bot/discordSnapshots/`) |
   | `utils/` | The framework-free primitives |
+  | `core/` | Core modules without a home above: mod config formats, wrapper-outage helpers, locales, player roster |
+  | `schema/` | The `@mcbot/schema` contracts |
+  | `scripts/` | The repo's own scripts (`scripts/lib/`, argument parsing, template rendering) |
+  | `fixtures/` | Shared test data and builders (config formats, Discord snapshots, `outcomes.ts`); no tests |
   | `suites/` | Thematic sets that span everything — regressions, audit fixes |
 
   `setup.ts` stays at the root; `vitest.config.ts` names it directly. The `include` glob is already recursive, so a new subdirectory needs no config change.
@@ -74,7 +78,7 @@ Assert on what was sent: `expect(interaction.editReply).toHaveBeenCalledWith(exp
 
 **Time**: use `vi.useFakeTimers()` plus `vi.setSystemTime()` for cooldowns, streak math, and schedulers. Restore with `vi.useRealTimers()` in `afterEach`.
 
-**Module state**: several modules hold module-level caches (whitelist cache, stats TTL cache, link state). Use the exported invalidate/reset helpers (`invalidateAllStatsCache()`, `invalidateWhitelistCache()`, `_resetStateForTesting()` in the link command) or `vi.resetModules()` between tests so order does not matter.
+**Module state**: several modules hold module-level caches (whitelist cache, stats TTL cache, scheduler state, circuit breakers). Use the exported invalidate/reset helpers (`invalidateAllStatsCache()`, `invalidateWhitelistCache()`, `resetBreakersForTesting()`, and the `_reset…ForTesting()` functions in the poll, temp-ban and host-resources modules) or `vi.resetModules()` between tests so order does not matter.
 
 ## What a good test for this repo looks like
 
@@ -82,7 +86,7 @@ Assert on what was sent: `expect(interaction.editReply).toHaveBeenCalledWith(exp
 2. Act: call the exported function (commands export `execute`; pure logic like `calcStreak`, `flattenStats` is exported directly so it can be tested without Discord).
 3. Assert on observable behavior: what was replied, what command was sent to the server, what was written to disk. Avoid asserting internals.
 
-When fixing a bug, write the failing test first and keep it as the regression guard. The existing B-xx fixes in the code each have one; follow that pattern.
+When fixing a bug, write the failing test first and keep it as the regression guard.
 
 ## Mock the seam, not the thing you are testing
 

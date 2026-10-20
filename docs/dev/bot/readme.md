@@ -16,10 +16,11 @@ src/bot/
 ├── commands/             Slash commands, one file per command
 │   ├── middleware.ts     withErrorHandling(), requireServerAdmin()
 │   └── <category>/<name>.ts   exports `data` (builder) and `execute`
-├── interactions/         Stable-customId flows (whitelist applications)
+├── interactions/         Stable-customId flows (confirm rows, follow-up hints,
+│                         whitelist applications)
 ├── logWatcher/
-│   ├── logWatcher.ts     Local file tailing (fs.watch + 1s polling fallback)
-│   ├── RemoteLogWatcher.ts   SSE stream from the API wrapper, same interface
+│   ├── logWatcher.ts     The in-game command registry and the ILogWatcher type
+│   ├── RemoteLogWatcher.ts   SSE stream from the API wrapper; the only watcher
 │   ├── defineCommand.ts  Declarative framework for in-game !commands
 │   ├── initMinecraftCommands.ts   Wires watchers + schedulers per server
 │   ├── commands/<category>/<name>.ts   In-game !commands, same categories
@@ -28,17 +29,23 @@ src/bot/
 │       ├── log/          React to a log line (register*)
 │       ├── monitors/     Poll something, alert on a condition (start*)
 │       ├── schedulers/   Do a thing on a clock (start*/reconcile*)
-│       └── notifyGuilds.ts, watchFirer.ts   Used by more than one group
+│       └── notifyGuilds.ts, watchFirer.ts, poller.ts, sendQueue.ts,
+│           discordErrors.ts   Used by more than one group
+├── processGuards.ts      Unhandled-fault handling and the final database flush
 └── utils/
-    ├── embeds/           embedUtils, embedColors, statEmbeds, alertUtils
-    ├── guild/            guildRouter, discordChannel, linkedRole
+    ├── embeds/           embedUtils, embedColors, statEmbeds, alertUtils, confirm, ...
+    ├── guild/            guildRouter, discordChannel, linkedRole, permissions, ...
+    ├── commands/         loadCommandFiles: finding command modules on disk
+    ├── hints/            followUps: suggesting the paired feature after a command
     ├── applyConfig.ts    Apply a fresh config to the running client
+    ├── autocomplete.ts   Shared autocomplete completers
+    ├── discordTime.ts    Discord timestamp formatting
     └── mcHeads.ts        Player-head avatar URLs
 ```
 
 `utils/` is grouped the same way `commands/` is. `embeds/` is everything that
 builds something Discord renders; `guild/` is everything that resolves a guild
-to a server, a channel, or a role. The two files at the root belong to neither
+to a server, a channel, or a role. The files at the root belong to neither
 and are used by both.
 
 ## The pieces
