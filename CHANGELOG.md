@@ -6,6 +6,16 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Cross-server chat relay.** Chat bridges that name the same `relayGroup` and are bound to the same Minecraft server forward their Discord chat to each other, as `Name [Label]` with no avatar, Discord ID or pings. The speaker is the linked Minecraft name, or a shortened display name with a stable tag; mentions, emoji, links, attachments and replies are rewritten to plain words; edits and deletes follow for an hour (`limits.relaySyncWindowMinutes`); a group has its own rate limit (`limits.relayCapacity`, `relayWindowMs`). Off unless a bot admin sets `relayGroup` (`chatBridge.ts`, `relay/`, `config.schema.json`).
+- **`/bridge optout` and `/bridge optin`.** A member keeps their messages in one Discord server out of the relay, per server; each relayed channel gets a pinned notice listing the other servers with an opt-out button. A guild can also list `bridgeBlocklist` user IDs and set a `bridgeLabel` (`bridge.ts`, `relayNotice.ts`).
+- The setup wizard's chat bridge step has a label field and shows the bridge's relay group (read-only).
+
+### Security
+
+- **Only a bot admin can set a relay group.** A guild manager's dashboard write that adds, changes or removes `relayGroup` is refused, and a block that omits it keeps the group on disk, so nobody can join another community's group by typing its name (`guildConfig.ts`).
+
 ### Fixed
 
 - **The Mods summary strip no longer shows green checks it cannot back up.** When the server is offline or the mods list could not be read, the tiles show a neutral dash with "Unknown, server offline" (or "Unknown, mods list unavailable") instead of "Compatible" and "running server is up to date", and Add mods notes "Applies on next start" (`ModsView.vue`).
