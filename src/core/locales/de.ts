@@ -903,4 +903,15 @@ export const de: Record<string, string> = {
   "sleep.allcaps.14.subtitle": "{player} UND ICH SIND FERTIG MIT DIR. SCHLAFEN.",
   "sleep.allcaps.15.title": "KEINE CHANCE.",
   "sleep.allcaps.15.subtitle": "DU KOMMST HIER NICHT LEBEND RAUS. OHNE SCHLAF.",
+
+  // ── bridge (cross-server relay) ──
+  "bridge.title": "Chat-Weiterleitung",
+  "bridge.noticeTitle": "Nachrichten hier werden weitergeleitet",
+  "bridge.noticeBody": "Der Chat in diesem Kanal wird auch in den Brücken-Kanälen von {servers} angezeigt. Verknüpfte Mitglieder erscheinen mit ihrem Minecraft-Namen, alle anderen mit einem gekürzten Namen und einem kurzen Kürzel. Es werden keine Avatare oder Discord-IDs gesendet. Damit deine Nachrichten auf diesem Server bleiben, drücke den Button oder nutze `/bridge optout`.",
+  "bridge.optOutButton": "Meine Nachrichten nicht weiterleiten",
+  "bridge.optedOut": "Deine Nachrichten auf diesem Server werden nicht mehr an andere Discord-Server weitergeleitet. Sie erreichen weiterhin den Minecraft-Server. Mit `/bridge optin` schaltest du es wieder ein.",
+  "bridge.alreadyOptedOut": "Du hattest dich auf diesem Server bereits abgemeldet. Mit `/bridge optin` wird wieder weitergeleitet.",
+  "bridge.optedIn": "Deine Nachrichten auf diesem Server werden wieder an andere Discord-Server weitergeleitet.",
+  "bridge.alreadyOptedIn": "Du warst nicht abgemeldet, es hat sich nichts geändert.",
+  "bridge.guildOnly": "Nutze das auf einem Discord-Server.",
 };

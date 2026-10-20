@@ -756,6 +756,48 @@ describe("guild-manager write limits (AUD-001)", () => {
     expect(res.body).not.toContain("/srv/bot");
   });
 
+  describe("relayGroup", () => {
+    const withGroup = {
+      ...mockConfig,
+      guilds: {
+        [G1]: {
+          adminUsers: ["333333333333333333"],
+          chatBridge: { channelId: "100000000000000001", server: "smp", relayGroup: "main" },
+        },
+      },
+    };
+
+    it("refuses a manager joining or changing a relay group", async () => {
+      const join = await put(mgr(), { adminUsers: ["333333333333333333"], chatBridge: { channelId: "100000000000000002", server: "smp", relayGroup: "someone-elses" } }, withGroup);
+      expect(join.statusCode).toBe(422);
+      expect(join.json().errors.join(" ")).toMatch(/relayGroup can only be changed by a bot admin/);
+
+      const change = await put(mgr(), { adminUsers: ["333333333333333333"], chatBridge: { channelId: "100000000000000001", server: "smp", relayGroup: "other" } }, withGroup);
+      expect(change.statusCode).toBe(422);
+      expect(await written()).toBeUndefined();
+    });
+
+    it("keeps the on-disk relay group when a manager's block omits it", async () => {
+      const res = await put(mgr(), { chatBridge: { channelId: "100000000000000001", server: "smp" }, bridgeLabel: "Mine" }, withGroup);
+      expect(res.statusCode).toBe(200);
+      expect((await written())?.guilds?.[G1]?.chatBridge).toEqual({
+        channelId: "100000000000000001",
+        server: "smp",
+        relayGroup: "main",
+      });
+    });
+
+    it("lets a sysadmin set a relay group", async () => {
+      const res = await put(adminCookie(), { chatBridge: { channelId: "100000000000000003", server: "smp", relayGroup: "main" } });
+      expect(res.statusCode).toBe(200);
+      expect((await written())?.guilds?.[G1]?.chatBridge).toEqual({
+        channelId: "100000000000000003",
+        server: "smp",
+        relayGroup: "main",
+      });
+    });
+  });
+
   it("lets a sysadmin change adminUsers", async () => {
     const res = await put(adminCookie(), { adminUsers: ["555555555555555555"] });
     expect(res.statusCode).toBe(200);

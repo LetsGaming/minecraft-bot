@@ -75,6 +75,10 @@ vi.mock("../../src/bot/logWatcher/watchers/log/chatBridge.js", () => ({
   setupDiscordToMc: vi.fn(),
 }));
 
+vi.mock("../../src/bot/interactions/relayNotice.js", () => ({
+  ensureRelayNotices: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("../../src/bot/logWatcher/watchers/log/joinLeave.js", () => ({
   registerJoinLeaveWatcher: vi.fn(),
 }));

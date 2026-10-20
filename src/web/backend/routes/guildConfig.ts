@@ -28,6 +28,7 @@ import {
   allowedServerIdsIn,
   referencedServerIds,
 } from "@mcbot/core/utils/server/guildTargets.js";
+import { bridgesOf } from "@mcbot/core/utils/server/guildScopes.js";
 import type { RawBotConfig, GuildConfig } from "@mcbot/core/types/index.js";
 import { GUILD_FEATURE_KEYS } from "@mcbot/schema";
 import { IdParams, GuildConfigWriteBody, MutationResult } from "./schemas.js";
@@ -51,6 +52,38 @@ function enabledFeatures(block: Record<string, unknown> | undefined): string[] {
  * themselves admin commands against any server (AUD-001).
  */
 const SYSADMIN_ONLY_GUILD_KEYS = ["adminUsers", "allowedServers"] as const;
+
+/**
+ * The relay group of each bridge channel. A group decides which other Discord
+ * servers see this guild's chat, so a manager cannot join, change or leave one
+ * by editing the block: whoever names a group first would otherwise receive
+ * another community's messages.
+ */
+function relayGroupsByChannel(guild: GuildConfig | undefined): Map<string, string> {
+  const groups = new Map<string, string>();
+  for (const bridge of guild ? bridgesOf(guild) : []) {
+    if (bridge?.channelId && bridge.relayGroup) groups.set(bridge.channelId, bridge.relayGroup);
+  }
+  return groups;
+}
+
+function keepRelayGroups(
+  guildId: string,
+  before: GuildConfig | undefined,
+  block: GuildConfig,
+  errors: string[],
+): void {
+  const kept = relayGroupsByChannel(before);
+  for (const bridge of bridgesOf(block)) {
+    if (!bridge?.channelId) continue;
+    const onDisk = kept.get(bridge.channelId);
+    if (bridge.relayGroup === undefined) {
+      if (onDisk !== undefined) bridge.relayGroup = onDisk;
+    } else if (bridge.relayGroup !== onDisk) {
+      errors.push(`guilds.${guildId}.chatBridge.relayGroup can only be changed by a bot admin.`);
+    }
+  }
+}
 
 /**
  * Apply what a non-sysadmin may not change in their own guild block. Returns
@@ -81,6 +114,9 @@ function applyManagerLimits(
       errors.push(`guilds.${guildId}.${key} can only be changed by a bot admin.`);
     }
   }
+
+  if (block.chatBridge !== undefined) block.chatBridge = structuredClone(block.chatBridge);
+  keepRelayGroups(guildId, before, block, errors);
 
   const known = new Set(Object.keys(current.servers ?? {}));
   const scope = allowedServerIdsIn(current.guilds, guildId);

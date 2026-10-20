@@ -91,6 +91,8 @@ describe("guild feature list", () => {
       "adminUsers",
       "allowedServers",
       "commands",
+      "bridgeLabel",
+      "bridgeBlocklist",
     ]);
     const expected = guildProps.filter((k) => !notFeatures.has(k)).sort();
     expect([...GUILD_FEATURE_KEYS].sort()).toEqual(expected);

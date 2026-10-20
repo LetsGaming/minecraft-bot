@@ -186,6 +186,19 @@
                 <ToggleSwitch v-model="model[f.key].useWebhook" :input-id="`wiz-wh-${f.key}`" />
                 <label :for="`wiz-wh-${f.key}`">{{ t("wizard.useWebhook") }}</label>
               </div>
+              <div v-if="f.input === 'channel+webhook' && !model[f.key].preserved" class="sub-field">
+                <label :for="`wiz-label-${f.key}`" class="hint">{{ t("wizard.relayLabel") }}</label>
+                <InputText
+                  :id="`wiz-label-${f.key}`"
+                  v-model="model[f.key].bridgeLabel"
+                  maxlength="24"
+                  :placeholder="t('wizard.relayLabelPlaceholder')"
+                  class="w-full"
+                />
+                <p v-if="model[f.key].relayGroup" class="hint">
+                  {{ t("wizard.relayGroupSet", { group: model[f.key].relayGroup ?? "" }) }}
+                </p>
+              </div>
 
               <Select
                 v-if="f.input === 'channel+interval'"
@@ -289,6 +302,7 @@
 import { defineComponent } from "vue";
 import Dialog from "primevue/dialog";
 import Select from "primevue/select";
+import InputText from "primevue/inputtext";
 import ToggleSwitch from "primevue/toggleswitch";
 import Button from "primevue/button";
 import InlineError from "./ui/InlineError.vue";
@@ -298,7 +312,7 @@ import { t } from "../i18n";
 
 export default defineComponent({
   name: "SetupWizard",
-  components: { Dialog, Select, ToggleSwitch, Button, InlineError },
+  components: { Dialog, Select, InputText, ToggleSwitch, Button, InlineError },
   props: {
     visible: { type: Boolean, default: false },
     initialGuildId: { type: String, default: "" },
@@ -490,6 +504,7 @@ export default defineComponent({
 .preserved-note { margin: var(--space-2) 0 0; }
 .feature-inputs { margin-top: var(--space-3); padding-left: 45px; display: flex; flex-direction: column; gap: var(--space-2); }
 .sub-toggle { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
+.sub-field { display: grid; gap: var(--space-1); margin-top: var(--space-2); }
 .interval-select { max-width: 180px; }
 .role-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 7px; vertical-align: middle; }
 

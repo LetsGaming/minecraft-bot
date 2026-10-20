@@ -66,6 +66,7 @@ import {
 import { reconcileRestartSchedules } from "./watchers/schedulers/restartScheduler.js";
 import { startMilestoneWatcher } from "./watchers/monitors/milestoneWatcher.js";
 import { ensureApplicationPrompts } from "../interactions/whitelistApplications.js";
+import { ensureRelayNotices } from "../interactions/relayNotice.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -294,6 +295,9 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
     log.warn("wlapp", `Prompt setup failed: ${errMsg(err)}`);
   });
 
+  // ── 14. Relay notices (only for channels in a relay group) ──
+  await ensureRelayNotices(client, liveGuildConfigs, getServerIds);
+
   log.info(
     "init",
     `${instances.length} server(s) initialized with all watchers`,
@@ -437,6 +441,9 @@ async function doReconcile(
   // New/changed whitelistApplications blocks get their prompt posted.
   await safe("Application-prompt reconcile", () =>
     ensureApplicationPrompts(client, liveGuildConfigs),
+  );
+  await safe("Relay-notice reconcile", () =>
+    ensureRelayNotices(client, liveGuildConfigs, Object.keys(freshConfig.servers)),
   );
 
   if (changed.length > 0) {

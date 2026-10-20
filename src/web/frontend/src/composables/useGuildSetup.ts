@@ -69,6 +69,10 @@ export interface FeatureModel {
   preserved: boolean;
   /** Was the feature on in the block the wizard started from? */
   wasEnabled: boolean;
+  /** How this guild is named on relayed messages (chat bridge only). */
+  bridgeLabel: string;
+  /** The bridge's relay group, shown but never edited here: only a bot admin sets it. */
+  relayGroup: string | null;
 }
 
 function blankModel(): Record<string, FeatureModel> {
@@ -83,6 +87,8 @@ function blankModel(): Record<string, FeatureModel> {
       interval: "weekly",
       preserved: false,
       wasEnabled: false,
+      bridgeLabel: "",
+      relayGroup: null,
     };
   }
   return m;
@@ -109,7 +115,9 @@ export function seedModel(block: Record<string, unknown>): Record<string, Featur
       if (typeof val.adminChannelId === "string") m.adminChannelId = val.adminChannelId;
       if (typeof val.useWebhook === "boolean") m.useWebhook = val.useWebhook;
       if (typeof val.interval === "string") m.interval = val.interval;
+      if (typeof val.relayGroup === "string") m.relayGroup = val.relayGroup;
     }
+    if (f.key === "chatBridge" && typeof block.bridgeLabel === "string") m.bridgeLabel = block.bridgeLabel;
     m.wasEnabled = m.enabled;
   }
   return model;
@@ -153,6 +161,9 @@ export function buildGuildBlock(
       block.statusEmbed = { ...priorRecord, enabled: true };
     } else if (f.input === "channel+webhook") {
       block[f.key] = { ...priorRecord, channelId: m.channelId, useWebhook: m.useWebhook };
+      const label = m.bridgeLabel.trim();
+      if (label) block.bridgeLabel = label;
+      else delete block.bridgeLabel;
     } else if (f.input === "channel+interval") {
       block[f.key] = { ...priorRecord, channelId: m.channelId, interval: m.interval };
     } else if (f.input === "channel+admin") {

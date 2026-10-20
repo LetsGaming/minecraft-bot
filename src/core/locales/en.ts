@@ -911,4 +911,15 @@ export const en: Record<string, string> = {
   "sleep.allcaps.14.subtitle": "{player} AND I ARE DONE WITH YOU. SLEEP.",
   "sleep.allcaps.15.title": "NO CHANCE.",
   "sleep.allcaps.15.subtitle": "YOU AREN'T GETTING OUT OF HERE ALIVE. NOT WITHOUT SLEEP.",
+
+  // ── bridge (cross-server relay) ──
+  "bridge.title": "Chat relay",
+  "bridge.noticeTitle": "Messages here are forwarded",
+  "bridge.noticeBody": "Chat in this channel is also posted in the bridge channels of: {servers}. Linked members appear under their Minecraft name, everyone else under a shortened name and a short tag. No avatars or Discord IDs are sent. To keep your messages in this server, press the button or use `/bridge optout`.",
+  "bridge.optOutButton": "Don't forward my messages",
+  "bridge.optedOut": "Your messages in this server are no longer forwarded to other Discord servers. They still reach the Minecraft server. `/bridge optin` turns it back on.",
+  "bridge.alreadyOptedOut": "You had already opted out in this server. `/bridge optin` turns forwarding back on.",
+  "bridge.optedIn": "Your messages in this server are forwarded to other Discord servers again.",
+  "bridge.alreadyOptedIn": "You had not opted out, so nothing changed.",
+  "bridge.guildOnly": "Use this in a Discord server.",
 };

@@ -43,6 +43,7 @@ import { log } from "@mcbot/core/utils/logger.js";
 import { invalidateStatusChannelCache } from "./logWatcher/watchers/schedulers/statusEmbed.js";
 import { handleWhitelistApplicationInteraction } from "./interactions/whitelistApplications.js";
 import { handleFollowUpHintInteraction } from "./interactions/followUpHints.js";
+import { handleRelayInteraction } from "./interactions/relayNotice.js";
 import { handleConfirmInteraction } from "./interactions/confirmActions.js";
 import type { BotCommand, BotClient } from "@mcbot/core/types/index.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
@@ -236,6 +237,7 @@ const COMPONENT_HANDLERS: ReadonlyArray<{
 }> = [
   { tag: "wlapp", handle: handleWhitelistApplicationInteraction },
   { tag: "hint", handle: handleFollowUpHintInteraction },
+  { tag: "relay", handle: handleRelayInteraction },
   { tag: "confirm", handle: handleConfirmInteraction },
 ];
 

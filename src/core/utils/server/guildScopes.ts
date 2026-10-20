@@ -58,3 +58,44 @@ export function guildServerScopes(guild: GuildConfig): GuildServerScope[] {
     { field: "reports.server", ids: scopeToList(guild.reports?.server) },
   ];
 }
+
+/**
+ * Derive the set of server IDs a guild's config references.
+ * Used as the default allowed set when `allowedServers` is not explicit.
+ */
+export function referencedServerIds(guild: GuildConfig): Set<string> {
+  const ids = new Set<string>();
+  for (const scope of guildServerScopes(guild)) {
+    for (const id of scope.ids) ids.add(id);
+  }
+  return ids;
+}
+
+/**
+ * getAllowedServerIds over an explicit `guilds` map instead of the loaded
+ * config, so a candidate config (e.g. a dashboard write that hasn't landed
+ * yet) can be checked with exactly the rule the bot will apply to it.
+ */
+export function allowedServerIdsIn(
+  guildMap: Record<string, GuildConfig> | undefined,
+  guildId: string | undefined,
+): Set<string> | null {
+  const guilds = guildMap ?? {};
+  if (Object.keys(guilds).length <= 1) return null; // single-tenant
+
+  if (!guildId) return new Set(); // DM in a multi-guild deployment
+  const guild = guilds[guildId];
+  if (!guild) return new Set(); // unconfigured guild in a multi-guild deployment
+
+  const explicit = guild.allowedServers !== undefined;
+  const allowed = explicit
+    ? new Set(guild.allowedServers)
+    : referencedServerIds(guild);
+  // The guild's own default must always be reachable, even if the operator
+  // set an explicit allowedServers list that forgot to repeat it.
+  if (guild.defaultServer) allowed.add(guild.defaultServer);
+
+  // An explicit empty list denies; only an unset one falls back to legacy.
+  if (allowed.size === 0 && !explicit) return null;
+  return allowed;
+}

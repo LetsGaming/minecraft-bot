@@ -475,7 +475,7 @@ function relayInputOf(msg: Message): RelayInput {
 }
 
 /** Every guild's resolved bridges, for working out who a relayed message goes to. */
-function bridgesByGuild(
+export function resolveAllBridges(
   guildConfigs: GuildConfigSource,
   allServerIds: ServerIdSource,
 ): Record<string, ResolvedBridge[]> {
@@ -526,7 +526,7 @@ export function setupDiscordToMc(
 
     // In a relay group the speaker goes by one identity everywhere, so the
     // censoring cannot be bypassed by reading chat in game.
-    const plan = planRelay(bridgesByGuild(guildConfigs, allServerIds), {
+    const plan = planRelay(resolveAllBridges(guildConfigs, allServerIds), {
       guildId,
       channelId: msg.channel.id,
     });

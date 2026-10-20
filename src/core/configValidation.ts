@@ -16,12 +16,12 @@ import {
 } from "@mcbot/schema";
 import { apiKeyEnvVar } from "./config.js";
 import {
+  allowedServerIdsIn,
   bridgeServerOf,
   bridgesOf,
   guildServerScopes,
   scopeToList,
 } from "./utils/server/guildScopes.js";
-import { allowedServerIdsIn } from "./utils/server/guildTargets.js";
 import { checkAgainstSchema, type SchemaIssue } from "./configSchemaCheck.js";
 import { CURRENT_CONFIG_VERSION } from "./configMigrations.js";
 import type {
