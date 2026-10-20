@@ -30,6 +30,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import readline from "node:readline";
+import { summarizeUnreleasedBlock } from "./lib/summarizeUnreleased.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -74,91 +75,6 @@ function resolveVersion(cur, arg) {
 
 const version = resolveVersion(current, bumpArg);
 const tag = `v${version}`;
-
-// ── Helper: Summarize Unreleased Section ──────────────────────────────────
-function summarizeUnreleasedBlock(rawUnreleasedText) {
-  const categories = {};
-  let currentCategory = "General";
-
-  const lines = rawUnreleasedText.split("\n");
-  let currentItemRaw = "";
-
-  const processAndFlushItem = () => {
-    if (!currentItemRaw.trim()) return;
-
-    if (!categories[currentCategory]) {
-      categories[currentCategory] = [];
-    }
-
-    // Normalisiert Leerzeichen und Umbrüche
-    const cleanedText = currentItemRaw.replace(/\s+/g, " ").trim();
-
-    // Extrahiert **Titel** und den folgenden Text
-    const match = cleanedText.match(/^(\*\*[^*]+\*\*)\s*(.*)$/);
-
-    if (match) {
-      const [, title, description] = match;
-      if (description) {
-        // Findet das Ende des ersten Satzes (. ! ?)
-        const sentenceEndMatch = description.match(/^([^.!?]*[.!?])/);
-        const firstSentence = sentenceEndMatch ? sentenceEndMatch[1].trim() : description.trim();
-        categories[currentCategory].push(`${title} ${firstSentence}`);
-      } else {
-        categories[currentCategory].push(title);
-      }
-    } else {
-      // Falls kein **Titel** vorhanden ist, nimmt er den ersten Satz des Eintrags
-      const sentenceEndMatch = cleanedText.match(/^([^.!?]*[.!?])/);
-      const firstSentence = sentenceEndMatch ? sentenceEndMatch[1].trim() : cleanedText.trim();
-      categories[currentCategory].push(firstSentence);
-    }
-
-    currentItemRaw = "";
-  };
-
-  for (const line of lines) {
-    const categoryHeader = line.match(/^###\s+(.+)$/);
-    if (categoryHeader) {
-      processAndFlushItem();
-      currentCategory = categoryHeader[1].trim();
-      continue;
-    }
-
-    // Neuer Haupt-Stichpunkt
-    const bulletMatch = line.match(/^[-*]\s+(.+)$/);
-    if (bulletMatch) {
-      processAndFlushItem();
-      currentItemRaw = bulletMatch[1].trim();
-      continue;
-    }
-
-    // Unterpunkte überspringen
-    if (/^\s+[-*]\s+/.test(line)) {
-      continue;
-    }
-
-    // Folgezeilen des aktuellen Stichpunkts anhängen
-    if (currentItemRaw && line.trim().length > 0) {
-      currentItemRaw += " " + line.trim();
-    }
-  }
-
-  processAndFlushItem();
-
-  const outputLines = [];
-  for (const [category, items] of Object.entries(categories)) {
-    if (items.length === 0) continue;
-    outputLines.push(`### ${category}\n`);
-    for (const item of items) {
-      outputLines.push(`- ${item}`);
-    }
-    outputLines.push("");
-  }
-
-  return outputLines.length > 0
-    ? outputLines.join("\n").trim()
-    : "- Internal updates and minor improvements.";
-}
 
 // ── Collect the edits (compute first, write once) ─────────────────────────
 const workspaces = rootPkg.workspaces ?? [];
