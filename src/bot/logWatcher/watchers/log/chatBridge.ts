@@ -1,7 +1,7 @@
 import { type Client, type Message, type Webhook } from "discord.js";
 import { EmbedCategory } from "@mcbot/schema/embedCategories.js";
 import { log } from "@mcbot/core/utils/logger.js";
-import { createPlayerEmbed } from "../../../utils/embeds/embedUtils.js";
+import { createEmbed, createPlayerEmbed } from "../../../utils/embeds/embedUtils.js";
 import { playerAvatarUrl } from "../../../utils/mcHeads.js";
 import type { ILogWatcher } from "../../logWatcher.js";
 import type { ServerInstance } from "@mcbot/core/utils/server/server.js";
@@ -10,7 +10,10 @@ import { sanitizeForComponent } from "@mcbot/core/utils/sanitize.js";
 import {
   createRateLimiter,
   bridgeLimiterSettings,
+  relayLimiterSettings,
+  relaySyncWindowMs,
 } from "@mcbot/core/utils/rateLimiter.js";
+import { isRelayOptedOut } from "@mcbot/core/utils/stores/relayOptOutStore.js";
 import {
   resolveGuildConfigs,
   type GuildConfigSource,
@@ -21,7 +24,18 @@ import { safeMentions } from "../../../utils/embeds/alertUtils.js";
 import { chatLineRegex } from "./chatLine.js";
 import { enqueueSend, flushSendQueues } from "../sendQueue.js";
 import { fetchSendable } from "../notifyGuilds.js";
-import { isChannelGone, isUnknownWebhook } from "../discordErrors.js";
+import { isChannelGone, isUnknownMessage, isUnknownWebhook } from "../discordErrors.js";
+import { relayName } from "./relay/identity.js";
+import {
+  planRelay,
+  relayDelete,
+  relayEdit,
+  relayMessage,
+  type RelaySender,
+  type RelayTarget,
+} from "./relay/relayBridge.js";
+import { RelaySyncMap, type RelayedCopy } from "./relay/syncMap.js";
+import type { RelayInput } from "./relay/transform.js";
 
 // Anchored on the speaker: see chatLine.ts.
 const CHAT_REGEX = chatLineRegex(String.raw`\s+(.+)`);
@@ -35,6 +49,13 @@ const CHAT_REGEX = chatLineRegex(String.raw`\s+(.+)`);
 // restart, same as the slash limiter.
 const bridgeLimiter = createRateLimiter(bridgeLimiterSettings());
 
+// One bucket per relay group on top of the per-author one, so several chatty
+// servers cannot turn a group into a flood in each other's channels.
+const relayLimiter = createRateLimiter(relayLimiterSettings());
+
+// Source message id to its copies in other servers (ids only, in memory).
+const relaySync = new RelaySyncMap();
+
 /** The configured server ids, fixed or resolved per event. */
 export type ServerIdSource = string[] | (() => string[]);
 
@@ -47,6 +68,8 @@ export interface ResolvedBridge {
   channelId: string;
   serverId: string;
   useWebhook?: boolean;
+  /** Bridges with the same group and server forward chat to each other. */
+  relayGroup?: string;
 }
 
 /**
@@ -107,6 +130,7 @@ export function resolveGuildBridges(
         channelId: bridge.channelId,
         serverId,
         ...(bridge.useWebhook === true ? { useWebhook: true } : {}),
+        ...(bridge.relayGroup ? { relayGroup: bridge.relayGroup } : {}),
       });
     }
   }
@@ -302,19 +326,26 @@ export function registerChatBridge(
   });
 }
 
+/** What one post looks like in the webhook form and, when that fails, as an embed. */
+interface Post {
+  username: string;
+  /** Webhook avatar; omitted, Discord shows the webhook's own. */
+  avatarURL?: string;
+  content: string;
+  embed: () => ReturnType<typeof createEmbed>;
+}
+
 /**
- * Put one in-game line into one Discord channel.
- *
- * Webhook form: the player IS the message author (name + head), which reads
- * like a real conversation. Any webhook problem degrades to the embed form
- * rather than losing the message.
+ * Post one line to a bridged channel and say where it landed. Any webhook
+ * problem degrades to the embed form rather than losing the message.
+ * Null when Discord gave no message id back or the channel cannot take
+ * messages.
  */
-async function deliver(
+async function postLine(
   client: Client,
-  bridge: ResolvedBridge,
-  player: string,
-  message: string,
-): Promise<void> {
+  bridge: { channelId: string; useWebhook?: boolean },
+  post: Post,
+): Promise<RelayedCopy | null> {
   if (bridge.useWebhook) {
     const hook = await bridgeWebhook(client, bridge.channelId);
     if (hook) {
@@ -323,13 +354,15 @@ async function deliver(
       // webhook (10015 / 404) or channel is evicted so the next line resolves
       // a fresh one instead of failing until a reload.
       try {
-        await hook.send({
-          username: player.slice(0, 80),
-          avatarURL: playerAvatarUrl(player),
-          content: message.slice(0, 2000),
+        const sent = (await hook.send({
+          username: post.username.slice(0, 80),
+          ...(post.avatarURL ? { avatarURL: post.avatarURL } : {}),
+          content: post.content.slice(0, 2000),
           allowedMentions: safeMentions("none"),
-        });
-        return;
+        })) as { id?: string } | undefined;
+        return sent?.id
+          ? { channelId: bridge.channelId, messageId: sent.id, viaWebhook: true }
+          : null;
       } catch (err) {
         if (isUnknownWebhook(err) || isChannelGone(err)) {
           webhookCache.delete(bridge.channelId);
@@ -343,17 +376,116 @@ async function deliver(
   }
 
   const channel = await fetchSendable(client, bridge.channelId);
-  if (!channel) return;
+  if (!channel) return null;
 
-  await channel.send({
-    embeds: [
+  const sent = (await channel.send({
+    embeds: [post.embed()],
+    allowedMentions: safeMentions("none"),
+  })) as { id?: string } | undefined;
+  return sent?.id ? { channelId: bridge.channelId, messageId: sent.id, viaWebhook: false } : null;
+}
+
+/**
+ * Put one in-game line into one Discord channel.
+ *
+ * Webhook form: the player IS the message author (name + head), which reads
+ * like a real conversation.
+ */
+async function deliver(
+  client: Client,
+  bridge: ResolvedBridge,
+  player: string,
+  message: string,
+): Promise<void> {
+  await postLine(client, bridge, {
+    username: player,
+    avatarURL: playerAvatarUrl(player),
+    content: message,
+    embed: () =>
       createPlayerEmbed(player, {
         description: message,
         category: EmbedCategory.Chat,
       }),
-    ],
-    allowedMentions: safeMentions("none"),
   });
+}
+
+/**
+ * How relayed Discord messages are posted, edited and removed. A copy carries
+ * no avatar (the webhook's own shows) and is only an embed when the webhook is
+ * unusable.
+ */
+function relaySender(client: Client): RelaySender {
+  const relayEmbed = (username: string, content: string) =>
+    createEmbed({ description: content, category: EmbedCategory.Chat, author: { name: username } });
+  return {
+    send: (target: RelayTarget, post: { username: string; content: string }) =>
+      postLine(client, target, {
+        username: post.username,
+        content: post.content,
+        embed: () => relayEmbed(post.username, post.content),
+      }),
+    async edit(copy, content) {
+      try {
+        if (copy.viaWebhook) {
+          const hook = await bridgeWebhook(client, copy.channelId);
+          await hook?.editMessage(copy.messageId, {
+            content,
+            allowedMentions: safeMentions("none"),
+          });
+          return;
+        }
+        const channel = await fetchSendable(client, copy.channelId);
+        const message = await channel?.messages.fetch(copy.messageId);
+        if (!message) return;
+        await message.edit({
+          embeds: [relayEmbed(message.embeds[0]?.author?.name ?? "?", content)],
+          allowedMentions: safeMentions("none"),
+        });
+      } catch (err) {
+        if (!isUnknownMessage(err)) {
+          log.warn("chatBridge", `Relayed edit failed in channel ${copy.channelId}: ${errMsg(err)}`);
+        }
+      }
+    },
+    async remove(copy) {
+      try {
+        if (copy.viaWebhook) {
+          const hook = await bridgeWebhook(client, copy.channelId);
+          await hook?.deleteMessage(copy.messageId);
+          return;
+        }
+        const channel = await fetchSendable(client, copy.channelId);
+        await channel?.messages.delete(copy.messageId);
+      } catch (err) {
+        if (!isUnknownMessage(err)) {
+          log.warn("chatBridge", `Relayed delete failed in channel ${copy.channelId}: ${errMsg(err)}`);
+        }
+      }
+    },
+  };
+}
+
+function relayInputOf(msg: Message): RelayInput {
+  return {
+    content: msg.content,
+    attachments: [...msg.attachments.values()].map((a) => a.contentType),
+    stickers: msg.stickers.size,
+    isReply: Boolean(msg.reference?.messageId),
+  };
+}
+
+/** Every guild's resolved bridges, for working out who a relayed message goes to. */
+function bridgesByGuild(
+  guildConfigs: GuildConfigSource,
+  allServerIds: ServerIdSource,
+): Record<string, ResolvedBridge[]> {
+  const serverIds = resolveServerIds(allServerIds);
+  return Object.fromEntries(
+    Object.entries(resolveGuildConfigs(guildConfigs)).map(([guildId, gcfg]) => [
+      guildId,
+      resolveGuildBridges(gcfg, serverIds).bridges,
+    ]),
+  );
 }
 
 /**
@@ -392,11 +524,21 @@ export function setupDiscordToMc(
       return;
     }
 
+    // In a relay group the speaker goes by one identity everywhere, so the
+    // censoring cannot be bypassed by reading chat in game.
+    const plan = planRelay(bridgesByGuild(guildConfigs, allServerIds), {
+      guildId,
+      channelId: msg.channel.id,
+    });
+    const speaker = plan
+      ? await relayName(msg.author.id, msg.author.displayName, plan.group)
+      : msg.author.displayName;
+
     // Strip control characters (incl. \r\n, which could inject extra
     // commands via the screen fallback) and cap lengths, printable
     // Unicode stays so umlauts and emoji survive the bridge.
     const { name: safeName, message: safeContent } = sanitizeForComponent(
-      msg.author.displayName,
+      speaker,
       msg.content,
     );
     // tellraw, not /say. A /say line lands in the server log as
@@ -411,6 +553,28 @@ export function setupDiscordToMc(
     if (!(await tellraw(server, "@a", relayed))) {
       msg.react("⚠️").catch(() => {});
     }
+
+    if (!plan) return;
+    if (isRelayOptedOut(guildId, msg.author.id) || gcfg.bridgeBlocklist?.includes(msg.author.id)) {
+      msg.react("🚫").catch(() => {});
+      return;
+    }
+    if (!relayLimiter.consumeToken(plan.group)) {
+      msg.react("⏳").catch(() => {});
+      return;
+    }
+    await relayMessage(
+      plan,
+      {
+        sourceMessageId: msg.id,
+        input: relayInputOf(msg),
+        name: speaker,
+        label: gcfg.bridgeLabel || msg.guild?.name || "?",
+        windowMs: relaySyncWindowMs(),
+      },
+      relaySender(client),
+      relaySync,
+    );
   };
   // A rejection from an async listener would reach the process guard and
   // exit the bot.
@@ -419,4 +583,27 @@ export function setupDiscordToMc(
       log.error("chatBridge", `Discord → MC relay failed: ${errMsg(err)}`);
     }),
   );
+  setupRelaySync(client);
+}
+
+const relaySyncAttached = new WeakSet<Client>();
+
+/** Edits and deletes of a relayed message reach its copies for as long as the sync window lasts. */
+function setupRelaySync(client: Client): void {
+  if (relaySyncAttached.has(client)) return;
+  relaySyncAttached.add(client);
+  const sender = relaySender(client);
+  const guarded = (what: string, run: () => Promise<void>): void => {
+    run().catch((err: unknown) => {
+      log.error("chatBridge", `Relay ${what} sync failed: ${errMsg(err)}`);
+    });
+  };
+  client.on("messageUpdate", (_old, updated) => {
+    if (updated.partial || updated.author?.bot || !relaySync.copiesOf(updated.id)) return;
+    guarded("edit", () => relayEdit(updated.id, relayInputOf(updated), sender, relaySync));
+  });
+  client.on("messageDelete", (deleted) => {
+    if (!relaySync.copiesOf(deleted.id)) return;
+    guarded("delete", () => relayDelete(deleted.id, sender, relaySync));
+  });
 }
