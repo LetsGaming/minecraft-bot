@@ -14,7 +14,6 @@ export interface ConfigGroup {
 const GROUPS: ReadonlyArray<{ id: string; titleKey: MessageKey; keys: readonly string[] }> = [
   { id: "bot", titleKey: "config.group.bot", keys: ["token", "clientId", "adminUsers", "language", "timezone", "presence", "configVersion"] },
   { id: "servers", titleKey: "config.group.servers", keys: ["servers", "schedules"] },
-  { id: "guilds", titleKey: "config.group.guilds", keys: ["guilds"] },
   { id: "alerts", titleKey: "config.group.alerts", keys: ["tpsWarningThreshold", "tpsPollIntervalMs", "hostAlerts", "updateNotifier"] },
   { id: "leaderboard", titleKey: "config.group.leaderboard", keys: ["leaderboardInterval", "leaderboardPostTime", "leaderboardPostDay", "milestones"] },
   { id: "features", titleKey: "config.group.features", keys: ["commands", "deathCoords", "waypoints", "featureNudges", "limits"] },

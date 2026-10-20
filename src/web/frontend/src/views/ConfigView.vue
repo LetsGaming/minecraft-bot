@@ -116,7 +116,7 @@
       </template>
 
       <template #default="{ locked }">
-        <div id="cfg-panel" role="tabpanel" :aria-labelledby="rawMode ? 'cfg-tab-raw' : 'cfg-tab-form'" class="cv-panel">
+        <div id="cfg-panel" role="tabpanel" :aria-labelledby="rawMode ? 'cfg-tab-raw' : 'cfg-tab-form'" class="cv-panel" :class="{ 'cv-panel-raw': rawMode }">
           <div v-if="rawMode" class="cv-raw">
             <label class="cv-raw-label" for="cfg-raw"><code class="mono">config.json</code></label>
             <p id="cfg-raw-help" class="cv-hint">{{ t("config.rawHelp", { placeholder }) }}</p>
@@ -148,18 +148,30 @@
               </select>
             </div>
 
-            <div class="cv-filter">
-              <i class="pi pi-search" aria-hidden="true" />
-              <label class="sr-only" for="cfg-filter">{{ t("config.filterLabel") }}</label>
-              <InputText
-                id="cfg-filter"
-                v-model="query"
-                type="search"
-                autocomplete="off"
-                :placeholder="t('config.filterPlaceholder')"
-              />
+            <div class="cv-tools">
+              <div class="cv-filter">
+                <i class="pi pi-search" aria-hidden="true" />
+                <label class="sr-only" for="cfg-filter">{{ t("config.filterLabel") }}</label>
+                <InputText
+                  id="cfg-filter"
+                  v-model="query"
+                  type="search"
+                  autocomplete="off"
+                  :placeholder="t('config.filterPlaceholder')"
+                />
+              </div>
+              <div class="cv-showall">
+                <ToggleSwitch v-model="showAll" input-id="cfg-showall" />
+                <label for="cfg-showall">{{ t("config.showAll") }}</label>
+              </div>
             </div>
-            <p class="cv-count" aria-live="polite">{{ t("config.shownCount", { count: filter.count }) }}</p>
+            <p class="cv-count" aria-live="polite">
+              {{
+                filter.active || showAll
+                  ? t("config.shownCount", { count: filter.count })
+                  : t("config.configuredSummary", setSummary)
+              }}
+            </p>
 
             <EmptyState v-if="filter.active && filter.count === 0" icon="pi pi-search">
               {{ t("config.filterEmpty") }}
@@ -170,7 +182,7 @@
 
             <div class="cv-groups">
               <section
-                v-for="group in shownGroups"
+                v-for="group in displayGroups"
                 :id="`cfg-group-${group.id}`"
                 :key="group.id"
                 class="cv-group"
@@ -182,17 +194,30 @@
                   <span class="cg-meta">{{ t("config.groupCount", { count: groupStats[group.id]!.count }) }}</span>
                 </header>
                 <div class="cg-fields">
-                  <SchemaField
-                    v-for="key in group.keys"
-                    :key="key"
-                    :name="key"
-                    :schema="topLevelProps[key]"
-                    :definitions="schema.definitions"
-                    :key-path="[key]"
-                    :bare="group.keys.length === 1 && isObjectKey(key)"
-                    :model-value="model[key]"
-                    @update:model-value="setTop(key, $event)"
-                  />
+                  <p v-if="!filter.active && !showAll && !groupHasActive(group)" class="cg-default">
+                    {{ t("config.groupAllDefault") }}
+                  </p>
+                  <div v-for="key in group.keys" v-show="isKeyShown(group, key)" :key="key" class="cg-item">
+                    <SchemaField
+                      :name="key"
+                      :schema="topLevelProps[key]"
+                      :definitions="schema.definitions"
+                      :key-path="[key]"
+                      :bare="group.keys.length === 1 && isObjectKey(key)"
+                      :model-value="model[key]"
+                      @update:model-value="setTop(key, $event)"
+                    />
+                  </div>
+                  <button
+                    v-if="!filter.active && !showAll && hiddenCount(group) > 0"
+                    type="button"
+                    class="cg-rest"
+                    :aria-expanded="openGroups.has(group.id)"
+                    @click="toggleRest(group.id)"
+                  >
+                    <i :class="['pi', openGroups.has(group.id) ? 'pi-chevron-down' : 'pi-chevron-right']" aria-hidden="true" />
+                    {{ openGroups.has(group.id) ? t("config.restHide") : t("config.restShow", { count: hiddenCount(group) }) }}
+                  </button>
                 </div>
               </section>
             </div>
@@ -211,15 +236,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from "vue";
+import { computed, nextTick, onMounted, provide, ref, watch } from "vue";
 import Button from "primevue/button";
 import InputText from "primevue/inputtext";
+import ToggleSwitch from "primevue/toggleswitch";
 import Textarea from "primevue/textarea";
 import { ConfigApplyState, isSecretConfigPath } from "@mcbot/schema";
 import SchemaField from "../components/schema/SchemaField.vue";
 import ConflictPicker from "../components/schema/ConflictPicker.vue";
 import { classifyField, derefNode, countNewSections, topLevelSectionKeys } from "../components/schema/schemaField";
 import { configGroups, type ConfigGroup } from "../components/schema/configGroups";
+import { sameValue } from "../components/schema/formIndex";
 import { isFeatureNew, commitSeenFeatures } from "../composables/useSeenFeatures";
 import { useSchemaRefs, SchemaRefsKey, MapKeyLabelKey, SchemaScopeKey } from "../composables/useSchemaRefs";
 import { useGuilds } from "../composables/useGuilds";
@@ -304,9 +331,13 @@ const {
 } = status;
 const query = ref(props.q);
 
-const topLevelProps = computed<Record<string, unknown>>(
-  () => derefNode(schema.value, schema.value?.definitions).properties ?? {},
-);
+/** Per-guild settings are edited on the Guilds page; Raw JSON still carries them. */
+const GUILD_OWNED_KEYS = new Set(["guilds"]);
+
+const topLevelProps = computed<Record<string, unknown>>(() => {
+  const all = derefNode(schema.value, schema.value?.definitions).properties ?? {};
+  return Object.fromEntries(Object.entries(all).filter(([key]) => !GUILD_OWNED_KEYS.has(key)));
+});
 
 const form = useSchemaForm({
   props: () => topLevelProps.value,
@@ -335,6 +366,47 @@ const groups = computed<ConfigGroup[]>(() => configGroups(Object.keys(topLevelPr
 const shownGroups = computed<ConfigGroup[]>(() => {
   if (!filter.value.active) return groups.value;
   return groups.value.filter((group) => group.keys.some((key) => filter.value.isVisible([key])));
+});
+/** One group at a time; a filter lists every group that has a match. */
+const displayGroups = computed<ConfigGroup[]>(() => {
+  if (filter.value.active) return shownGroups.value;
+  const current = groups.value.find((group) => group.id === currentGroup.value) ?? groups.value[0];
+  return current ? [current] : [];
+});
+
+const showAll = ref(false);
+const openGroups = ref<Set<string>>(new Set());
+
+/**
+ * A setting shows by default when it is saved in config.json, edited in this
+ * session, or has a problem. Everything else sits behind the group's "unset"
+ * row. Hidden fields stay mounted so an edit never loses focus.
+ */
+function isKeyActive(key: string): boolean {
+  const saved = (baseline.value as Record<string, unknown> | null | undefined)?.[key];
+  if (saved !== undefined && saved !== null) return true;
+  const draft = model.value?.[key];
+  if (!sameValue(draft, saved)) return true;
+  return issues.value.some((issue) => issue.path[0] === key);
+}
+function isKeyShown(group: ConfigGroup, key: string): boolean {
+  if (filter.value.active) return filter.value.isVisible([key]);
+  return showAll.value || openGroups.value.has(group.id) || isKeyActive(key);
+}
+function groupHasActive(group: ConfigGroup): boolean {
+  return group.keys.some(isKeyActive);
+}
+function hiddenCount(group: ConfigGroup): number {
+  return group.keys.filter((key) => !isKeyActive(key)).length;
+}
+function toggleRest(id: string): void {
+  const next = new Set(openGroups.value);
+  if (!next.delete(id)) next.add(id);
+  openGroups.value = next;
+}
+const setSummary = computed(() => {
+  const keys = groups.value.flatMap((group) => group.keys);
+  return { set: keys.filter(isKeyActive).length, total: keys.length };
 });
 const groupStats = computed<Record<string, { count: number; problems: number }>>(() => {
   const out: Record<string, { count: number; problems: number }> = {};
@@ -422,36 +494,13 @@ function selectTab(raw: boolean): void {
   rawLeaveBlocked.value = !raw && rawMode.value;
 }
 
-function jumpToGroup(id: string): void {
+async function jumpToGroup(id: string): Promise<void> {
   currentGroup.value = id;
+  await nextTick();
   const section = document.getElementById(`cfg-group-${id}`);
   section?.scrollIntoView({ block: "start" });
   section?.focus({ preventScroll: true });
 }
-
-let groupObserver: IntersectionObserver | null = null;
-
-/** Keeps the jump list on the group nearest the top, so it never names a group the page has scrolled away from. */
-function observeGroups(): void {
-  groupObserver?.disconnect();
-  if (typeof IntersectionObserver === "undefined") return;
-  groupObserver = new IntersectionObserver(
-    (entries) => {
-      const topmost = entries
-        .filter((e) => e.isIntersecting)
-        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
-      if (topmost) currentGroup.value = topmost.target.id.replace("cfg-group-", "");
-    },
-    { rootMargin: "-120px 0px -65% 0px" },
-  );
-  for (const group of shownGroups.value) {
-    const el = document.getElementById(`cfg-group-${group.id}`);
-    if (el) groupObserver.observe(el);
-  }
-}
-
-watch(shownGroups, () => void nextTick(observeGroups), { flush: "post" });
-onBeforeUnmount(() => groupObserver?.disconnect());
 
 function onGroupSelect(event: Event): void {
   jumpToGroup((event.target as HTMLSelectElement).value);
@@ -465,6 +514,8 @@ async function goToFirstProblem(): Promise<void> {
   const first = issues.value[0];
   if (!first) return;
   if (!filter.value.isVisible(first.path)) query.value = "";
+  const owner = groups.value.find((group) => group.keys.includes(first.path[0]!));
+  if (owner) currentGroup.value = owner.id;
   reveal(first.path);
   await nextTick();
   const el = document.getElementById(formContext.idFor(first.path));
@@ -494,8 +545,6 @@ onMounted(async () => {
   await Promise.all([load(), refsApi.loadServers(), loadGuildNames()]);
   applyRouteMode();
   currentGroup.value = groups.value[0]?.id ?? "";
-  await nextTick();
-  observeGroups();
   // With the schema loaded, mark its feature keys seen so a later visit only
   // flags genuinely new additions (this session's badges are held by the
   // frozen snapshot in useSeenFeatures).
@@ -525,7 +574,6 @@ onMounted(async () => {
   padding: 0 var(--space-3);
   background: none;
   border: 0;
-  border-left: 3px solid transparent;
   border-radius: var(--radius-control);
   color: var(--text);
   font: inherit;
@@ -533,12 +581,13 @@ onMounted(async () => {
   cursor: pointer;
 }
 .cv-groupnav button:hover { background: var(--surface-raised); }
-.cv-groupnav button[aria-current="true"] { border-left-color: var(--accent); background: var(--accent-tint); font-weight: 500; }
+.cv-groupnav button[aria-current="true"] { background: var(--accent-tint); color: var(--accent); font-weight: 600; }
 .gn-title { min-width: 0; overflow-wrap: anywhere; }
 .gn-n { flex: none; font-size: var(--text-xs); color: var(--text-dim); }
 .gn-err { color: var(--text); font-weight: 600; box-shadow: inset 0 -2px 0 var(--danger); }
 
-.cv-panel { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.cv-panel { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; max-width: 56rem; }
+.cv-panel-raw { max-width: none; }
 .cv-groupselect { display: none; }
 .cv-caps { display: block; margin-bottom: var(--space-1); font-size: var(--text-xs); color: var(--text-dim); text-transform: uppercase; letter-spacing: var(--tracking-caps); }
 .cv-select {
@@ -556,7 +605,10 @@ onMounted(async () => {
   .cv-groupselect { display: block; }
   .config-view :deep(.es-nav) { display: none; }
 }
-.cv-filter { position: relative; }
+.cv-tools { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; }
+.cv-showall { display: flex; align-items: center; gap: var(--space-2); color: var(--text); font-size: var(--text-sm); }
+.cv-showall label { cursor: pointer; }
+.cv-filter { position: relative; flex: 1 1 16rem; }
 .cv-filter .pi { position: absolute; left: var(--space-3); top: 50%; transform: translateY(-50%); color: var(--text-dim); pointer-events: none; }
 .cv-filter :deep(.p-inputtext) { width: 100%; padding-left: 36px; }
 .cv-count { margin: 0; color: var(--text-dim); font-size: var(--text-sm); }
@@ -567,20 +619,12 @@ onMounted(async () => {
   border: 1px solid var(--border);
   border-radius: var(--radius-surface);
   background: var(--surface);
-  break-inside: avoid;
   scroll-margin-top: 96px;
   min-width: 0;
   padding-bottom: var(--space-3);
 }
 .cv-group:focus { outline: none; }
 .cv-group:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-@media (min-width: 1800px) {
-  .cv-groups { columns: 2; column-gap: var(--space-5); }
-  .cv-group { margin-bottom: var(--space-5); }
-}
-@media (min-width: 2400px) {
-  .cv-groups { columns: 3; }
-}
 .cg-head {
   display: flex;
   flex-wrap: wrap;
@@ -593,6 +637,25 @@ onMounted(async () => {
 .cg-head h2 { margin: 0; font-size: var(--text-xl); font-weight: 600; }
 .cg-meta { color: var(--text-dim); font-size: var(--text-sm); }
 .cg-fields { padding: var(--space-2) 0 var(--space-1); min-width: 0; }
+.cg-default { margin: 0; padding: var(--space-3) var(--space-4); color: var(--text-dim); font-size: var(--text-sm); }
+.cg-rest {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--control-h);
+  padding: 0 var(--space-4);
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.cg-rest:hover { color: var(--text); background: var(--surface-raised); }
+.cg-rest:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 
 .cv-raw { display: flex; flex-direction: column; gap: var(--space-2); }
 .cv-raw-label { font-weight: 500; }
