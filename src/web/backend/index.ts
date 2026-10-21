@@ -9,6 +9,7 @@ import { loadConfig } from "@mcbot/core/config.js";
 import { initServers } from "@mcbot/core/utils/server/server.js";
 import type { FastifyInstance } from "fastify";
 import { getDb, closeDb } from "@mcbot/core/db/index.js";
+import { runRewardsMigration } from "@mcbot/core/rewardsMigration.js";
 import { startWebServer } from "./server.js";
 import { startLiveConfig } from "./config/liveConfig.js";
 import { closeAllConsoles } from "./console/consoleHub.js";
@@ -78,7 +79,8 @@ try {
 startLiveConfig();
 
 let server: FastifyInstance | null = null;
-startWebServer()
+runRewardsMigration()
+  .then(() => startWebServer())
   .then((app) => {
     server = app;
   })

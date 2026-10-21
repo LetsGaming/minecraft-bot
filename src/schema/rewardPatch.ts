@@ -303,6 +303,31 @@ export function convertLegacyOverride(shared: RewardPool, legacy: RewardPool): O
   return out;
 }
 
+/**
+ * What an old override resolved to: each field it set replaced the shared one
+ * whole (an empty item list counted as unset).
+ */
+export function legacyResolve(shared: RewardPool, legacy: RewardPool): RewardPool {
+  const out: RewardPool = {};
+  const items = legacy.default && legacy.default.length > 0 ? legacy.default : shared.default;
+  if (items) out.default = items;
+  const streak = legacy.streakBonuses ?? shared.streakBonuses;
+  if (streak) out.streakBonuses = streak;
+  const chance = legacy.bonusChance ?? shared.bonusChance;
+  if (chance !== undefined) out.bonusChance = chance;
+  return out;
+}
+
+/**
+ * Convert an old override and prove the patch resolves to the same rewards.
+ * Null means the proof failed, so the caller must not use or write the patch.
+ */
+export function convertLegacyVerified(shared: RewardPool, legacy: RewardPool): OverridePool | null {
+  const patch = compactOverride(convertLegacyOverride(shared, legacy));
+  const resolved = resolvePool(shared, patch);
+  return resolved.problems.length === 0 && samePool(resolved.pool, legacyResolve(shared, legacy)) ? patch : null;
+}
+
 // ── What a shared edit does to servers ───────────────────────────────────────
 
 function diffLists(

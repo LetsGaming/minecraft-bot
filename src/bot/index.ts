@@ -32,6 +32,7 @@ import { dispatchAutocomplete } from "./utils/autocomplete.js";
 import { applyConfig, markStartupConfigApplied } from "./utils/applyConfig.js";
 import { initServers, getAllInstances } from "@mcbot/core/utils/server/server.js";
 import { closeDb, getDb } from "@mcbot/core/db/index.js";
+import { runRewardsMigration } from "@mcbot/core/rewardsMigration.js";
 import {
   capabilityCommandSkips,
   capabilitySummary,
@@ -63,6 +64,9 @@ initServers(config.servers);
 // Open the SQLite store early: schema migrations and the one-time legacy
 // JSON import run here, before any command can touch a store.
 getDb();
+// Reward files from before entry ids and exceptions are upgraded here; a file
+// that cannot be proven equal is left alone and still read correctly.
+await runRewardsMigration();
 
 // Probe which setup-suite artifacts each server provides. The result
 // gates command registration below and per-invocation checks in the

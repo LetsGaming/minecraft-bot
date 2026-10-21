@@ -4,7 +4,7 @@
  *
  *   data/dailyRewards.defaults.json   shipped with the bot, git-tracked, never written
  *   data/dailyRewards.json            the shared pool, copied from the defaults on first use
- *   data/dailyRewards_<serverId>.json one server's override, field by field
+ *   data/dailyRewards_<serverId>.json one server's exceptions to the shared pool
  *
  * The shared pool is a copy rather than the tracked file itself so that
  * editing it, by hand or from the dashboard, never collides with an update
@@ -17,15 +17,22 @@ import { createHash } from "crypto";
 import { constants as fsConstants, promises as fsPromises } from "fs";
 import path from "path";
 import {
+  assignIds,
+  isLegacyOverride,
+  parseOverridePool,
   parseRewardPool,
+  type DailyRewardItem,
+  type ListPatch,
+  type OverridePool,
   type RewardPool,
   type RewardPoolField,
 } from "@mcbot/schema/dailyRewards.js";
+import { compactOverride, convertLegacyVerified, resolvePool } from "@mcbot/schema/rewardPatch.js";
 import { isEnoent, loadJson, removeJson, saveJson } from "../jsonStore.js";
 import { getRootDir } from "../paths.js";
 import { log } from "../logger.js";
 import { errMsg } from "../error.js";
-import type { DailyRewardItem, DailyRewardsConfig } from "../../types/index.js";
+import type { DailyRewardsConfig } from "../../types/index.js";
 
 function dataDir(): string {
   return path.resolve(getRootDir(), "data");
@@ -36,7 +43,7 @@ function dataDir(): string {
  * data/ (dev-up.mjs points it at the session's own folder, so a dev session
  * never edits the repo's real pool); the shipped defaults stay in data/.
  */
-function editableDir(): string {
+export function editableDir(): string {
   const override = process.env.MCBOT_REWARDS_DIR;
   return override ? path.resolve(override) : dataDir();
 }
@@ -102,16 +109,54 @@ export async function loadDailyRewardsConfig(): Promise<DailyRewardsConfig> {
   return { ...pool, default: pool.default ?? [] };
 }
 
-/** A server's override, or undefined when it has none. */
-export async function loadServerRewardsOverride(
-  serverId: string,
-): Promise<RewardPool | undefined> {
+/** The shared pool with every entry carrying the id it resolves to. */
+export function withEntryIds(pool: RewardPool): RewardPool {
+  const out: RewardPool = { ...pool };
+  if (pool.default) out.default = assignIds(pool.default);
+  if (pool.streakBonuses) {
+    out.streakBonuses = Object.fromEntries(
+      Object.entries(pool.streakBonuses).map(([day, list]) => [day, assignIds(list)]),
+    );
+  }
+  return out;
+}
+
+/**
+ * Read an override file's content as exceptions. A file still in the old form
+ * (whole fields) is converted here, so every state between "upgraded" and
+ * "migrated" resolves to the rewards the server had before. The conversion is
+ * proven against the old meaning; when it cannot be, the override is left out
+ * rather than guessed.
+ */
+function overrideFromRaw(
+  raw: unknown,
+  shared: RewardPool,
+  file: string,
+): { pool: OverridePool | undefined; errors: string[] } {
+  if (isLegacyOverride(raw)) {
+    const legacy = parseRewardPool(raw, "override");
+    if (legacy.errors.length > 0) return { pool: undefined, errors: legacy.errors };
+    const patch = convertLegacyVerified(withEntryIds(shared), legacy.pool);
+    if (!patch) {
+      log.error("daily", `${path.basename(file)}: could not read the old override format safely, using the shared rewards.`);
+      return { pool: undefined, errors: [] };
+    }
+    log.warn("daily", `${path.basename(file)} is in the old format; it is read as exceptions. Restart to migrate it.`);
+    return { pool: patch, errors: [] };
+  }
+  const { pool, errors } = parseOverridePool(raw);
+  return { pool: compactOverride(pool), errors };
+}
+
+/** A server's exceptions to the shared pool, or undefined when it has none. */
+export async function loadServerRewardsOverride(serverId: string): Promise<OverridePool | undefined> {
   const file = serverRewardsPath(serverId);
   const raw = await loadJson(file);
   if (typeof raw === "object" && raw !== null && Object.keys(raw).length === 0) return undefined;
-  const { pool, errors } = parseRewardPool(raw, "override");
+  const shared = isLegacyOverride(raw) ? await loadDailyRewardsConfig() : {};
+  const { pool, errors } = overrideFromRaw(raw, shared, file);
   reportProblems(file, errors);
-  return Object.keys(pool).length > 0 ? pool : undefined;
+  return pool && Object.keys(pool).length > 0 ? pool : undefined;
 }
 
 /** The pool one server draws from. */
@@ -122,22 +167,17 @@ export interface ResolvedRewardPool {
 }
 
 /**
- * Resolve the pool a server draws from: each field the server's override
- * sets wins, every other field comes from the shared pool. So a server can
- * override just its items and keep the shared streak bonuses, or the other
- * way round.
+ * Resolve the pool a server draws from: the shared pool with the server's
+ * exceptions applied. An override that leaves no item at all falls back to the
+ * shared items, so a hand-edited file cannot switch /daily off for a server.
  */
-export function rewardPoolForServer(
-  cfg: DailyRewardsConfig,
-  override?: RewardPool,
-): ResolvedRewardPool {
-  const items = override?.default && override.default.length > 0 ? override.default : cfg.default;
-  const streakBonuses = override?.streakBonuses ?? cfg.streakBonuses;
-  const bonusChance = override?.bonusChance ?? cfg.bonusChance;
+export function rewardPoolForServer(cfg: DailyRewardsConfig, override?: OverridePool): ResolvedRewardPool {
+  const { pool } = resolvePool(cfg, override);
+  const items = pool.default && pool.default.length > 0 ? pool.default : cfg.default;
   return {
     default: items,
-    ...(streakBonuses ? { streakBonuses } : {}),
-    ...(bonusChance !== undefined ? { bonusChance } : {}),
+    ...(pool.streakBonuses ? { streakBonuses: pool.streakBonuses } : {}),
+    ...(pool.bonusChance !== undefined ? { bonusChance: pool.bonusChance } : {}),
   };
 }
 
@@ -152,9 +192,9 @@ function scopePath(scope: RewardsScope): string {
 /** Concurrency token of a file that does not exist. */
 const ABSENT = "absent";
 
-export interface RewardsDocument {
+export interface RewardsDocument<P = RewardPool> {
   /** The document as stored, invalid entries kept out. */
-  pool: RewardPool;
+  pool: P;
   /** Problems found in the file as stored; a save must fix them. */
   problems: string[];
   /** Hash of the file's bytes, the token a save is checked against. */
@@ -162,7 +202,7 @@ export interface RewardsDocument {
   exists: boolean;
 }
 
-async function readText(file: string): Promise<string | null> {
+export async function readText(file: string): Promise<string | null> {
   try {
     return await fsPromises.readFile(file, "utf-8");
   } catch (err) {
@@ -171,14 +211,14 @@ async function readText(file: string): Promise<string | null> {
   }
 }
 
-function hashOf(text: string | null): string {
+export function hashOf(text: string | null): string {
   return text === null ? ABSENT : createHash("sha256").update(text).digest("hex");
 }
 
-/** Read one reward document straight from disk, with its concurrency token. */
-export async function readRewardsDocument(scope: RewardsScope): Promise<RewardsDocument> {
-  if (scope.kind === "shared") await ensureSharedRewardsFile();
-  const text = await readText(scopePath(scope));
+/** Read the shared document straight from disk, with its concurrency token. */
+export async function readSharedDocument(): Promise<RewardsDocument> {
+  await ensureSharedRewardsFile();
+  const text = await readText(sharedRewardsPath());
   if (text === null) return { pool: {}, problems: [], hash: ABSENT, exists: false };
   let raw: unknown;
   try {
@@ -186,8 +226,24 @@ export async function readRewardsDocument(scope: RewardsScope): Promise<RewardsD
   } catch (err) {
     return { pool: {}, problems: [`the file is not valid JSON (${errMsg(err)})`], hash: hashOf(text), exists: true };
   }
-  const { pool, errors } = parseRewardPool(raw, scope.kind === "shared" ? "shared" : "override");
+  const { pool, errors } = parseRewardPool(raw, "shared");
   return { pool, problems: errors, hash: hashOf(text), exists: true };
+}
+
+/** Read one server's exceptions straight from disk, with their concurrency token. */
+export async function readServerDocument(serverId: string): Promise<RewardsDocument<OverridePool>> {
+  const file = serverRewardsPath(serverId);
+  const text = await readText(file);
+  if (text === null) return { pool: {}, problems: [], hash: ABSENT, exists: false };
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch (err) {
+    return { pool: {}, problems: [`the file is not valid JSON (${errMsg(err)})`], hash: hashOf(text), exists: true };
+  }
+  const shared = isLegacyOverride(raw) ? (await readSharedDocument()).pool : {};
+  const { pool, errors } = overrideFromRaw(raw, shared, file);
+  return { pool: pool ?? {}, problems: errors, hash: hashOf(text), exists: true };
 }
 
 /** The shipped defaults, for "start over from the defaults". */
@@ -215,10 +271,11 @@ export class RewardsWriteError extends Error {
 /** Fields in a fixed order, so a save never reshuffles the file. */
 const FIELD_ORDER: readonly RewardPoolField[] = ["default", "streakBonuses", "bonusChance"];
 
+const items = (list: readonly DailyRewardItem[], indent: string): string =>
+  list.length === 0 ? "[]" : `[\n${list.map((i) => `${indent}  ${JSON.stringify(i)}`).join(",\n")}\n${indent}]`;
+
 /** One reward per line: the file stays readable and diffable by hand. */
 export function formatRewardsDocument(pool: RewardPool): string {
-  const items = (list: DailyRewardItem[], indent: string): string =>
-    list.length === 0 ? "[]" : `[\n${list.map((i) => `${indent}  ${JSON.stringify(i)}`).join(",\n")}\n${indent}]`;
   const parts: string[] = [];
   for (const field of FIELD_ORDER) {
     const value = pool[field];
@@ -238,10 +295,43 @@ export function formatRewardsDocument(pool: RewardPool): string {
   return parts.length === 0 ? "{}\n" : `{\n${parts.join(",\n")}\n}\n`;
 }
 
+function listPatchLines(patch: ListPatch, indent: string): string {
+  const inner = `${indent}  `;
+  const parts: string[] = [];
+  if (patch.add?.length) parts.push(`${inner}"add": ${items(patch.add, inner)}`);
+  if (patch.remove?.length) parts.push(`${inner}"remove": ${JSON.stringify(patch.remove)}`);
+  if (patch.set && Object.keys(patch.set).length > 0) {
+    const sets = Object.entries(patch.set).map(([id, value]) => `${inner}  ${JSON.stringify(id)}: ${JSON.stringify(value)}`);
+    parts.push(`${inner}"set": {\n${sets.join(",\n")}\n${inner}}`);
+  }
+  return `{\n${parts.join(",\n")}\n${indent}}`;
+}
+
+/** The override as readable JSON: one entry or set per line. */
+export function formatOverrideDocument(override: OverridePool): string {
+  const parts: string[] = [];
+  if (override.default) parts.push(`  "default": ${listPatchLines(override.default, "  ")}`);
+  const streak = override.streakBonuses;
+  if (streak) {
+    const inner: string[] = [];
+    if (streak.removeDays?.length) inner.push(`    "removeDays": ${JSON.stringify(streak.removeDays)}`);
+    const days = Object.entries(streak.days ?? {}).sort(([a], [b]) => Number(a) - Number(b));
+    if (days.length > 0) {
+      const body = days.map(([day, patch]) => `      ${JSON.stringify(day)}: ${listPatchLines(patch, "      ")}`);
+      inner.push(`    "days": {\n${body.join(",\n")}\n    }`);
+    }
+    parts.push(`  "streakBonuses": {\n${inner.join(",\n")}\n  }`);
+  }
+  if (override.bonusChance !== undefined) parts.push(`  "bonusChance": ${JSON.stringify(override.bonusChance)}`);
+  return parts.length === 0 ? "{}\n" : `{\n${parts.join(",\n")}\n}\n`;
+}
+
 /**
  * Write one reward document, refusing when the file changed since `baseHash`
- * was read or when the document does not validate. An override with no
- * fields left is removed, which is the same as "inherit everything".
+ * was read or when the document does not validate. An override with nothing
+ * left to say is removed, which is the same as "inherit everything". A shared
+ * document is saved with an id on every entry, so a server's exceptions keep
+ * pointing at the same entries when the list is reordered.
  *
  * Returns the new hash.
  */
@@ -274,20 +364,26 @@ async function writeChecked(
       "The rewards changed since you opened them. Reload and re-apply your changes.",
     );
   }
-  const { pool, errors } = parseRewardPool(doc, scope.kind === "shared" ? "shared" : "override");
-  if (errors.length > 0) {
-    throw new RewardsWriteError("invalid", "The reward pool is not valid.", errors);
+
+  if (scope.kind === "shared") {
+    const { pool, errors } = parseRewardPool(doc, "shared");
+    if (errors.length > 0) throw new RewardsWriteError("invalid", "The reward pool is not valid.", errors);
+    const ordered = withEntryIds(pool);
+    await saveJson(file, ordered, (d) => formatRewardsDocument(d as RewardPool));
+    return hashOf(await readText(file));
   }
 
-  if (scope.kind === "server" && Object.keys(pool).length === 0) {
+  const { pool: parsed, errors } = parseOverridePool(doc);
+  if (errors.length > 0) throw new RewardsWriteError("invalid", "The reward pool is not valid.", errors);
+  const override = compactOverride(parsed);
+  const problems = resolvePool((await readSharedDocument()).pool, override).problems;
+  if (problems.length > 0) {
+    throw new RewardsWriteError("invalid", "This server would be left without rewards.", problems);
+  }
+  if (Object.keys(override).length === 0) {
     await removeJson(file);
     return ABSENT;
   }
-
-  const ordered: RewardPool = {};
-  for (const field of FIELD_ORDER) {
-    if (pool[field] !== undefined) (ordered as Record<string, unknown>)[field] = pool[field];
-  }
-  await saveJson(file, ordered, (d) => formatRewardsDocument(d as RewardPool));
+  await saveJson(file, override, (d) => formatOverrideDocument(d as OverridePool));
   return hashOf(await readText(file));
 }
