@@ -8,13 +8,24 @@
 
     <template v-else>
       <div class="rw-scope">
-        <label for="rw-scope" class="rw-scope-label">{{ t("rewards.scopeLabel") }}</label>
-        <Select
-          input-id="rw-scope"
+        <span id="rw-scope-label" class="rw-scope-label">{{ t("rewards.scopeLabel") }}</span>
+        <SelectButton
+          v-if="scopes.length <= MAX_SEGMENTED"
           :model-value="scope || SHARED"
           :options="scopes"
           option-label="label"
           option-value="value"
+          :allow-empty="false"
+          aria-labelledby="rw-scope-label"
+          @update:model-value="onScopePick"
+        />
+        <Select
+          v-else
+          :model-value="scope || SHARED"
+          :options="scopes"
+          option-label="label"
+          option-value="value"
+          aria-labelledby="rw-scope-label"
           class="rw-scope-select"
           @update:model-value="onScopePick"
         />
@@ -47,6 +58,11 @@
               <li v-for="(line, i) in saveFailure" :key="i">{{ line }}</li>
             </ul>
           </InlineBanner>
+          <InlineBanner v-if="dirty && poolProblems.length" tone="warn" :title="t('rewards.invalidTitle')">
+            <ul class="rw-list">
+              <li v-for="(line, i) in poolProblems" :key="i">{{ line }}</li>
+            </ul>
+          </InlineBanner>
         </template>
 
         <template #conflict>
@@ -67,12 +83,14 @@
         <template #bar>
           <EditBar
             :state="editorState"
-            :change-count="dirtyKeys.length"
+            :change-count="editCount"
             :conflict-count="conflicts.length"
-            :can-save="!stale && poolValid"
-            :save-hint="t('rewards.saveHint')"
+            :can-save="!stale && poolProblems.length === 0"
+            :save-hint="summaryText"
+            reviewable
             @save="onSave"
-            @discard="discard"
+            @discard="discardAll"
+            @review="reviewOpen = true"
           >
             <template v-if="isShared && meta?.shipped" #extra>
               <Button
@@ -83,365 +101,132 @@
                 severity="secondary"
                 outlined
                 :disabled="editorState === 'saving'"
-                @click="applyShippedDefaults"
+                @click="askShipped"
               />
             </template>
           </EditBar>
         </template>
 
-        <template #default="{ locked }">
-          <!-- ── Item pool ─────────────────────────────────────────── -->
-          <section class="rw-card" aria-labelledby="rw-pool-title">
-            <header class="rw-head">
-              <div class="rw-head-text">
-                <h2 id="rw-pool-title">{{ t("rewards.pool.title") }}</h2>
-                <p class="rw-hint">{{ t("rewards.pool.lede") }}</p>
-              </div>
-              <OverrideToggle
-                v-if="!isShared"
-                id="rw-own-pool"
-                :model-value="overrides('default')"
-                :label="t('rewards.pool.own')"
-                :disabled="locked"
-                @update:model-value="setOverride('default', $event)"
-              />
-            </header>
+        <template #default>
+          <div class="rw-body">
+            <OutcomeStrip />
 
-            <p v-if="!isShared && !overrides('default')" class="rw-inherited">
-              <i class="pi pi-link" aria-hidden="true" /> {{ t("rewards.inheritedPool", { count: shownPool.length }) }}
-            </p>
+            <TabList
+              :tabs="tabs"
+              :model-value="tab"
+              :label="t('rewards.tabsLabel')"
+              id-prefix="rw"
+              panel-id="rw-panel"
+              @select="tab = $event as RewardsTab"
+            />
 
-            <div class="rw-tools">
-              <div class="rw-filter">
-                <i class="pi pi-search" aria-hidden="true" />
-                <label class="sr-only" for="rw-filter">{{ t("rewards.pool.filterLabel") }}</label>
-                <InputText
-                  id="rw-filter"
-                  v-model="filter"
-                  type="search"
-                  autocomplete="off"
-                  :placeholder="t('rewards.pool.filterPlaceholder')"
-                />
-              </div>
-              <div class="rw-mode">
-                <span id="rw-mode-label" class="rw-hint">{{ t("rewards.pool.modeLabel") }}</span>
-                <SelectButton
-                  v-model="mode"
-                  :options="modeOptions"
-                  option-label="label"
-                  option-value="value"
-                  :allow-empty="false"
-                  aria-labelledby="rw-mode-label"
-                />
-              </div>
-              <Button
-                v-if="poolEditable"
-                class="tap"
-                :label="t('rewards.pool.normalize')"
-                icon="pi pi-percentage"
-                size="small"
-                severity="secondary"
-                text
-                :disabled="locked || shownPool.length === 0"
-                aria-describedby="rw-normalize-hint"
-                @click="normalizeWeights"
-              />
-            </div>
-            <p v-if="poolEditable" id="rw-normalize-hint" class="rw-hint">{{ t("rewards.pool.normalizeHint") }}</p>
-
-            <div class="rw-table-wrap">
-              <table class="rw-table">
-                <caption class="sr-only">{{ t("rewards.pool.title") }}</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">{{ t("rewards.col.item") }}</th>
-                    <th scope="col" class="num">{{ t("rewards.col.amount") }}</th>
-                    <th scope="col" class="num">{{ mode === "percent" ? t("rewards.col.chance") : t("rewards.col.weight") }}</th>
-                    <th scope="col">{{ t("rewards.col.rarity") }}</th>
-                    <th v-if="poolEditable" scope="col"><span class="sr-only">{{ t("rewards.col.actions") }}</span></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="row in visibleRows" :key="keyOf(row.item)">
-                    <th scope="row" class="rw-item">
-                      <span class="rw-item-name">{{ nameOf(row.item.item) }}</span>
-                      <span class="rw-item-id mono">{{ row.item.item }}</span>
-                      <span v-if="!isKnown(row.item.item)" class="rw-item-warn">{{ t("rewards.notVanilla") }}</span>
-                    </th>
-                    <td class="num" :data-label="t('rewards.col.amount')">
-                      <InputNumber
-:locale="UI_LOCALE"
-                        v-if="poolEditable"
-                        :model-value="row.item.amount"
-                        :min="1"
-                        :max="MAX_REWARD_AMOUNT"
-                        :disabled="locked"
-                        :aria-label="t('rewards.amountOf', { item: nameOf(row.item.item) })"
-                        class="rw-num"
-                        @update:model-value="setAmount(row.item, $event)"
-                      />
-                      <span v-else>{{ row.item.amount }}</span>
-                      <span v-if="stackNote(row.item)" class="rw-sub">{{ stackNote(row.item) }}</span>
-                    </td>
-                    <td class="num" :data-label="mode === 'percent' ? t('rewards.col.chance') : t('rewards.col.weight')">
-                      <template v-if="poolEditable">
-                        <InputNumber
-:locale="UI_LOCALE"
-                          v-if="mode === 'percent'"
-                          :model-value="round(percentOf(row.item), 3)"
-                          :min="0.001"
-                          :max="shownPool.length > 1 ? MAX_SHARE_PERCENT : 100"
-                          :min-fraction-digits="0"
-                          :max-fraction-digits="3"
-                          suffix=" %"
-                          :disabled="locked || shownPool.length < 2"
-                          :aria-label="t('rewards.chanceOf', { item: nameOf(row.item.item) })"
-                          class="rw-num"
-                          @update:model-value="setPercent(row.index, $event)"
-                        />
-                        <InputNumber
-:locale="UI_LOCALE"
-                          v-else
-                          :model-value="weightOf(row.item)"
-                          :min="0.0001"
-                          :min-fraction-digits="0"
-                          :max-fraction-digits="4"
-                          :disabled="locked"
-                          :aria-label="t('rewards.weightOf', { item: nameOf(row.item.item) })"
-                          class="rw-num"
-                          @update:model-value="setWeight(row.index, $event)"
-                        />
-                      </template>
-                      <span v-else>{{ mode === "percent" ? `${formatPercent(percentOf(row.item))} %` : weightOf(row.item) }}</span>
-                      <span class="rw-sub">{{ mode === "percent" ? t("rewards.weightIs", { weight: weightOf(row.item) }) : `${formatPercent(percentOf(row.item))} %` }} · {{ oneIn(row.item) }}</span>
-                    </td>
-                    <td>
-                      <span class="rw-rarity" :style="{ '--rarity': rarityColor(row.item) }"><span class="rw-rarity-pip" aria-hidden="true" />{{ rarityLabel(row.item) }}</span>
-                    </td>
-                    <td v-if="poolEditable" class="rw-actions">
-                      <Button
-                        class="tap"
-                        icon="pi pi-trash"
-                        severity="danger"
-                        text
-                        :disabled="locked"
-                        :aria-label="t('rewards.removeItem', { item: nameOf(row.item.item) })"
-                        @click="removeItem(row.index)"
-                      />
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-              <EmptyState v-if="visibleRows.length === 0" icon="pi pi-box">
-                {{ filter ? t("rewards.pool.noMatch", { query: filter }) : t("rewards.pool.empty") }}
-              </EmptyState>
-              <div v-if="hiddenRows > 0" class="rw-more">
-                <span class="rw-hint">{{ t("rewards.pool.moreHidden", { count: hiddenRows }) }}</span>
-                <Button :label="t('rewards.pool.showAll')" size="small" severity="secondary" text class="tap" @click="showAll = true" />
-              </div>
-            </div>
-
-            <p class="rw-total">
-              {{ t("rewards.pool.total", { count: shownPool.length, total: round(poolTotal, 3) }) }}
-            </p>
-
-            <div v-if="poolEditable" class="rw-add">
-              <label for="rw-add-item" class="rw-add-label">{{ t("rewards.pool.addLabel") }}</label>
-              <ItemPicker input-id="rw-add-item" :catalog="catalog" :disabled="locked" @pick="addItem($event)" />
-            </div>
-          </section>
-
-          <!-- ── Streak bonuses ────────────────────────────────────── -->
-          <section class="rw-card" aria-labelledby="rw-streak-title">
-            <header class="rw-head">
-              <div class="rw-head-text">
-                <h2 id="rw-streak-title">{{ t("rewards.streak.title") }}</h2>
-                <p class="rw-hint">{{ t("rewards.streak.lede", { cycle }) }}</p>
-              </div>
-              <OverrideToggle
-                v-if="!isShared"
-                id="rw-own-streak"
-                :model-value="overrides('streakBonuses')"
-                :label="t('rewards.streak.own')"
-                :disabled="locked"
-                @update:model-value="setOverride('streakBonuses', $event)"
-              />
-            </header>
-
-            <p v-if="!isShared && !overrides('streakBonuses')" class="rw-inherited">
-              <i class="pi pi-link" aria-hidden="true" /> {{ t("rewards.inheritedStreak", { count: bonusDays.length }) }}
-            </p>
-
-            <EmptyState v-if="bonusDays.length === 0" icon="pi pi-calendar">
-              {{ t("rewards.streak.empty") }}
-            </EmptyState>
-
-            <ol class="rw-days">
-              <li v-for="day in bonusDays" :key="day" class="rw-day">
-                <div class="rw-day-head">
-                  <h3>{{ t("rewards.streak.day", { day }) }}</h3>
+            <div id="rw-panel" role="tabpanel" :aria-labelledby="`rw-tab-${tab}`" class="rw-panel">
+              <section v-if="tab === 'pool'" class="rw-section">
+                <header class="rw-head">
+                  <p class="rw-hint">{{ t("rewards.pool.lede") }}</p>
                   <Button
-                    v-if="streakEditable"
+                    v-if="editable && !isShared && overrides('default')"
                     class="tap"
-                    icon="pi pi-trash"
-                    severity="danger"
-                    text
+                    icon="pi pi-undo"
+                    :label="t('rewards.resetPool')"
+                    severity="secondary"
+                    outlined
                     size="small"
-                    :disabled="locked"
-                    :aria-label="t('rewards.streak.removeDay', { day })"
-                    @click="removeBonusDay(day)"
+                    @click="rewards.resetField('default')"
                   />
+                </header>
+                <PoolTable />
+              </section>
+
+              <section v-else-if="tab === 'streaks'" class="rw-section">
+                <header class="rw-head">
+                  <p class="rw-hint">{{ t("rewards.streak.lede", { cycle: trackLength }) }}</p>
+                  <Button
+                    v-if="editable && !isShared && overrides('streakBonuses')"
+                    class="tap"
+                    icon="pi pi-undo"
+                    :label="t('rewards.resetStreaks')"
+                    severity="secondary"
+                    outlined
+                    size="small"
+                    @click="rewards.resetField('streakBonuses')"
+                  />
+                </header>
+                <div class="rw-streaks" :class="{ 'has-day': selectedDay !== null }">
+                  <StreakTimeline :selected="selectedDay" @select="selectedDay = $event" />
+                  <DayPanel :selected="selectedDay" @close="selectedDay = null" @select="selectedDay = $event" />
                 </div>
-                <ul class="rw-day-items">
-                  <li v-for="(entry, index) in bonusItems(day)" :key="keyOf(entry)" class="rw-day-item">
-                    <span class="rw-item">
-                      <span class="rw-item-name">{{ nameOf(entry.item) }}</span>
-                      <span class="rw-item-id mono">{{ entry.item }}</span>
-                      <span v-if="!isKnown(entry.item)" class="rw-item-warn">{{ t("rewards.notVanilla") }}</span>
-                    </span>
-                    <InputNumber
-:locale="UI_LOCALE"
-                      v-if="streakEditable"
-                      :model-value="entry.amount"
-                      :min="1"
-                      :max="MAX_REWARD_AMOUNT"
-                      :disabled="locked"
-                      :aria-label="t('rewards.amountOf', { item: nameOf(entry.item) })"
-                      class="rw-num"
-                      @update:model-value="setAmount(entry, $event)"
-                    />
-                    <span v-else class="rw-amount">× {{ entry.amount }}</span>
-                    <Button
-                      v-if="streakEditable"
-                      class="tap"
-                      icon="pi pi-times"
-                      severity="secondary"
-                      text
-                      size="small"
-                      :disabled="locked"
-                      :aria-label="t('rewards.removeItem', { item: nameOf(entry.item) })"
-                      @click="removeBonusItem(day, index)"
-                    />
-                  </li>
-                </ul>
-                <p v-if="bonusItems(day).length === 0" class="rw-item-warn">{{ t("rewards.streak.dayEmpty") }}</p>
-                <ItemPicker
-                  v-if="streakEditable"
-                  :input-id="`rw-day-${day}`"
-                  :catalog="catalog"
-                  :disabled="locked"
-                  :placeholder="t('rewards.streak.addItemPlaceholder')"
-                  @pick="addBonusItem(day, $event)"
-                />
-              </li>
-            </ol>
+              </section>
 
-            <div v-if="streakEditable" class="rw-add-day">
-              <label for="rw-new-day" class="rw-add-label">{{ t("rewards.streak.addDayLabel") }}</label>
-              <InputNumber :locale="UI_LOCALE" v-model="newDay" input-id="rw-new-day" :min="1" :max="999999" :disabled="locked" class="rw-num" />
-              <Button
-                class="tap"
-                icon="pi pi-plus"
-                :label="t('rewards.streak.addDay')"
-                severity="secondary"
-                outlined
-                :disabled="locked || !newDay || bonusDays.includes(String(newDay))"
-                @click="onAddDay"
-              />
-            </div>
-          </section>
-
-          <!-- ── Bonus chance ──────────────────────────────────────── -->
-          <section class="rw-card" aria-labelledby="rw-bonus-title">
-            <header class="rw-head">
-              <div class="rw-head-text">
-                <h2 id="rw-bonus-title">{{ t("rewards.bonus.title") }}</h2>
+              <section v-else class="rw-section">
                 <p class="rw-hint">{{ t("rewards.bonus.lede") }}</p>
-              </div>
-              <OverrideToggle
-                v-if="!isShared"
-                id="rw-own-bonus"
-                :model-value="overrides('bonusChance')"
-                :label="t('rewards.bonus.own')"
-                :disabled="locked"
-                @update:model-value="setOverride('bonusChance', $event)"
-              />
-            </header>
-            <div class="rw-bonus">
-              <label for="rw-bonus" class="sr-only">{{ t("rewards.bonus.title") }}</label>
-              <InputNumber
-:locale="UI_LOCALE"
-                input-id="rw-bonus"
-                :model-value="bonusChance"
-                :min="0"
-                :max="100"
-                :max-fraction-digits="2"
-                suffix=" %"
-                :disabled="locked || !bonusEditable"
-                class="rw-num"
-                @update:model-value="setBonusChance"
-              />
-              <span v-if="!isShared && !overrides('bonusChance')" class="rw-hint">{{ t("rewards.inheritedValue") }}</span>
+                <BonusPanel />
+              </section>
             </div>
-          </section>
+          </div>
         </template>
       </EditorShell>
+
+      <ReviewChanges v-model:visible="reviewOpen" :changes="reviewItems" :can-save="editorState === 'dirty' && poolProblems.length === 0" @save="onReviewSave" />
+      <SharedImpactDialog
+        v-model:visible="impactOpen"
+        :servers="impact"
+        :catalog="catalog"
+        :saving="saving"
+        @confirm="onImpactConfirm"
+      />
+      <UndoBar
+        :token="undoToken"
+        :message="undoMessage"
+        :action-label="t('rewards.undo.action')"
+        @undo="rewards.undo()"
+      />
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, provide, ref, watch } from "vue";
 import Button from "primevue/button";
-import InputNumber from "primevue/inputnumber";
-import InputText from "primevue/inputtext";
 import Select from "primevue/select";
 import SelectButton from "primevue/selectbutton";
 import { useConfirm } from "primevue/useconfirm";
 import { useNotify } from "../composables/useNotify";
-import {
-  MAX_REWARD_AMOUNT,
-  MAX_SHARE_PERCENT,
-  milestoneDays,
-  rarityOf,
-  sharePercent,
-  totalWeight,
-  weightOf,
-  type DailyRewardItem,
-} from "@mcbot/schema/dailyRewards.js";
-import { RARITY_STYLE } from "@mcbot/schema/embedCategories.js";
+import type { ServerImpact, ServerSelection, SharedChange } from "@mcbot/schema/dailyRewards.js";
 import { useDailyRewards } from "../composables/useDailyRewards";
+import { REWARDS_CONTEXT } from "../composables/rewardsContext";
 import { useCapabilities } from "../composables/useCapabilities";
 import { confirmLeave } from "../composables/useUnsavedGuard";
 import { discardPrompt } from "../composables/useDiscardPrompt";
-import { loadItemCatalog, lookupItem, nameFromId, vanillaId, type ItemCatalog } from "../utils/minecraftItems";
+import { loadItemCatalog, type ItemCatalog } from "../utils/minecraftItems";
+import { itemName, stackText } from "../utils/rewardDisplay";
 import ViewHeader from "../components/ui/ViewHeader.vue";
 import EmptyState from "../components/ui/EmptyState.vue";
 import EditorShell from "../components/ui/EditorShell.vue";
 import EditBar from "../components/ui/EditBar.vue";
 import InlineBanner from "../components/ui/InlineBanner.vue";
 import InlineError from "../components/ui/InlineError.vue";
+import ReviewChanges, { type ReviewItem } from "../components/ui/ReviewChanges.vue";
+import TabList, { type TabItem } from "../components/ui/TabList.vue";
 import ConflictPicker from "../components/schema/ConflictPicker.vue";
-import ItemPicker from "../components/rewards/ItemPicker.vue";
-import OverrideToggle from "../components/rewards/OverrideToggle.vue";
+import OutcomeStrip from "../components/rewards/OutcomeStrip.vue";
+import PoolTable from "../components/rewards/PoolTable.vue";
+import StreakTimeline from "../components/rewards/StreakTimeline.vue";
+import DayPanel from "../components/rewards/DayPanel.vue";
+import BonusPanel from "../components/rewards/BonusPanel.vue";
+import SharedImpactDialog from "../components/rewards/SharedImpactDialog.vue";
+import UndoBar from "../components/rewards/UndoBar.vue";
 import type { EditorState } from "../components/ui/types";
-import { t, UI_LOCALE, type MessageKey } from "../i18n";
+import { t, type MessageKey } from "../i18n";
 
 /** The scope picker's value for the shared pool (a Select treats "" as nothing picked). */
 const SHARED = "\u0000shared";
+/** Up to this many scopes sit side by side; more become a dropdown. */
+const MAX_SEGMENTED = 4;
+const TAB_KEY = "mcbot.rewards.tab";
 
-/** Rows rendered before "Show all", so a 200-item pool opens quickly. */
-const ROWS_SHOWN = 60;
-
-interface PoolRow {
-  item: DailyRewardItem;
-  /** Position in the pool, which the edits address. */
-  index: number;
-}
-
-// Stable v-for keys for objects that have no id of their own.
-const objectKeys = new WeakMap<object, number>();
-let nextKey = 1;
+type RewardsTab = "pool" | "streaks" | "bonus";
+const TABS: readonly RewardsTab[] = ["pool", "streaks", "bonus"];
 
 const props = withDefaults(
   defineProps<{
@@ -455,8 +240,8 @@ const emit = defineEmits<{
   "update-route": [patch: { params?: Record<string, string | undefined> }];
 }>();
 
+const rewards = useDailyRewards();
 const {
-  draft,
   meta,
   ready,
   loading,
@@ -472,34 +257,51 @@ const {
   save,
   resolveConflict,
   reloadDiscardingMine,
-  setField,
   scope,
   isShared,
   open,
   overrides,
-  effective,
-  setOverride,
-  items,
-  addItem,
-  removeItem,
-  setPercent,
-  setWeight,
-  normalizeWeights,
-  addBonusDay,
-  removeBonusDay,
-  addBonusItem,
-  removeBonusItem,
-  applyShippedDefaults,
-} = useDailyRewards();
+  poolProblems,
+  summary,
+  entryChanges,
+  trackLength,
+  undoToken,
+  lastUndo,
+} = rewards;
 const { can, serversWith } = useCapabilities();
 const ask = discardPrompt(useConfirm());
+const confirm = useConfirm();
 const notify = useNotify();
 
 const catalog = ref<ItemCatalog | null>(null);
-const filter = ref("");
 const mode = ref<"percent" | "weight">("percent");
-const showAll = ref(false);
-const newDay = ref<number | null>(null);
+const selectedDay = ref<string | null>(null);
+const reviewOpen = ref(false);
+const impactOpen = ref(false);
+const impact = ref<ServerImpact[]>([]);
+
+function storedTab(): RewardsTab {
+  try {
+    const value = localStorage.getItem(TAB_KEY);
+    return TABS.includes(value as RewardsTab) ? (value as RewardsTab) : "pool";
+  } catch {
+    return "pool";
+  }
+}
+const tab = ref<RewardsTab>(storedTab());
+watch(tab, (value) => {
+  try {
+    localStorage.setItem(TAB_KEY, value);
+  } catch {
+    // A remembered tab is a convenience; the editor works without it.
+  }
+});
+
+const tabs = computed<TabItem[]>(() => [
+  { id: "pool", label: t("rewards.tab.pool") },
+  { id: "streaks", label: t("rewards.tab.streaks") },
+  { id: "bonus", label: t("rewards.tab.bonus") },
+]);
 
 const canReadShared = computed(() => can("config:read"));
 const scopes = computed(() => {
@@ -510,18 +312,14 @@ const scopes = computed(() => {
   }
   return out;
 });
-const canWrite = computed(() => (isShared.value ? can("config:write") : can("config:write", scope.value)));
+const editable = computed(() => (isShared.value ? can("config:write") : can("config:write", scope.value)));
 const editorState = computed<EditorState>(() => {
-  if (!canWrite.value) return "readonly";
+  if (!editable.value) return "readonly";
   if (saving.value) return "saving";
   if (conflicts.value.length > 0) return "conflict";
   if (dirty.value) return "dirty";
   return "clean";
 });
-const modeOptions = computed(() => [
-  { label: t("rewards.pool.modePercent"), value: "percent" },
-  { label: t("rewards.pool.modeWeight"), value: "weight" },
-]);
 const problems = computed<string[]>(() => [
   ...(meta.value?.problems ?? []),
   ...(isShared.value ? [] : (meta.value?.sharedProblems ?? []).map((p) => t("rewards.sharedProblem", { problem: p }))),
@@ -530,34 +328,62 @@ const saveFailure = computed<string[]>(() => {
   if (conflicts.value.length > 0) return [];
   return [...(saveError.value ? [saveError.value] : []), ...fieldErrors.value];
 });
-const poolEditable = computed(() => canWrite.value && (isShared.value || overrides("default")));
-const streakEditable = computed(() => canWrite.value && (isShared.value || overrides("streakBonuses")));
-const bonusEditable = computed(() => canWrite.value && (isShared.value || overrides("bonusChance")));
-/** The pool in effect: this document's, or the inherited one. */
-const shownPool = computed<DailyRewardItem[]>(() => effective("default") ?? []);
-const poolTotal = computed(() => totalWeight(shownPool.value));
-const filteredRows = computed<PoolRow[]>(() => {
-  const q = filter.value.trim().toLowerCase();
-  const rows = shownPool.value.map((item, index) => ({ item, index }));
-  if (!q) return rows;
-  return rows.filter(({ item }) => item.item.toLowerCase().includes(q) || nameOf(item.item).toLowerCase().includes(q));
+
+/** Edits as the admin counts them (an item, a day), never fewer than the fields touched. */
+const editCount = computed(() => {
+  const s = summary.value;
+  if (!s) return 0;
+  const edits =
+    s.items.added + s.items.removed + s.items.changed +
+    s.dayItems.added + s.dayItems.removed + s.dayItems.changed +
+    s.daysAdded + s.daysRemoved + (s.bonusChanged ? 1 : 0);
+  return dirty.value ? Math.max(edits, dirtyKeys.value.length) : 0;
 });
-const visibleRows = computed(() => (showAll.value ? filteredRows.value : filteredRows.value.slice(0, ROWS_SHOWN)));
-const hiddenRows = computed(() => filteredRows.value.length - visibleRows.value.length);
-const bonusMap = computed<Record<string, DailyRewardItem[]>>(() => effective("streakBonuses") ?? {});
-const bonusDays = computed(() => milestoneDays(bonusMap.value).map(String));
-const cycle = computed(() => {
-  const days = milestoneDays(bonusMap.value);
-  return days.length > 0 ? days[days.length - 1]! : 35;
+
+const summaryText = computed(() => {
+  const s = summary.value;
+  if (!s || !dirty.value) return t("rewards.saveHint");
+  const added = s.items.added + s.dayItems.added;
+  const removed = s.items.removed + s.dayItems.removed;
+  const changed = s.items.changed + s.dayItems.changed;
+  const parts: string[] = [];
+  if (added) parts.push(t("rewards.summary.added", { count: added }));
+  if (removed) parts.push(t("rewards.summary.removed", { count: removed }));
+  if (changed) parts.push(t("rewards.summary.changed", { count: changed }));
+  if (s.daysAdded) parts.push(t("rewards.summary.daysAdded", { count: s.daysAdded }));
+  if (s.daysRemoved) parts.push(t("rewards.summary.daysRemoved", { count: s.daysRemoved }));
+  if (s.bonusChanged) parts.push(t("rewards.summary.bonus"));
+  return parts.length > 0 ? parts.join(" · ") : t("rewards.summary.kept");
 });
-const bonusChance = computed(() => effective("bonusChance") ?? 0);
-/** A shared pool with no items cannot be saved: every server falls back to it. */
-const poolValid = computed(() => {
-  const ownBonuses = draft.value?.streakBonuses;
-  if (ownBonuses && Object.values(ownBonuses).some((list) => list.length === 0)) return false;
-  if (isShared.value) return items.value.length > 0;
-  return !overrides("default") || items.value.length > 0;
-});
+
+const UNDO_KEYS: Record<string, MessageKey> = {
+  remove: "rewards.undo.remove",
+  removeDay: "rewards.undo.removeDay",
+  keep: "rewards.undo.keep",
+  defaults: "rewards.undo.defaults",
+  rescale: "rewards.undo.rescale",
+  reset: "rewards.undo.reset",
+};
+const undoMessage = computed(() => t(UNDO_KEYS[lastUndo.value ?? ""] ?? "rewards.undo.remove"));
+
+function whereText(where: SharedChange["where"]): string {
+  return where === "default" ? t("rewards.impact.inPool") : t("rewards.impact.inDay", { day: where.slice("streakBonuses.".length) });
+}
+
+const reviewItems = computed<ReviewItem[]>(() =>
+  entryChanges.value.map((change) => {
+    const entry = (change.after ?? change.before)!;
+    const text = (e: SharedChange["before"]): string | undefined =>
+      e ? `${stackText(catalog.value, e)}${change.where === "default" ? `, ${t("rewards.weightIs", { weight: e.weight ?? 1 })}` : ""}` : undefined;
+    return {
+      key: `${itemName(catalog.value, entry.item)} (${whereText(change.where)})`,
+      before: text(change.before),
+      after: text(change.after),
+    };
+  }),
+);
+
+provide(REWARDS_CONTEXT, { rewards, catalog, editable, mode });
 
 watch(
   () => props.server,
@@ -568,6 +394,9 @@ watch(
   () => void syncScope(),
 );
 watch(scopes, () => void syncScope());
+watch(scope, () => {
+  selectedDay.value = null;
+});
 
 onMounted(async () => {
   void syncScope();
@@ -577,75 +406,6 @@ onMounted(async () => {
     // The editor works without names; ids are shown instead.
   }
 });
-
-function round(value: number, digits: number): number {
-  const f = 10 ** digits;
-  return Math.round(value * f) / f;
-}
-
-function keyOf(obj: object): number {
-  let key = objectKeys.get(obj);
-  if (key === undefined) {
-    key = nextKey++;
-    objectKeys.set(obj, key);
-  }
-  return key;
-}
-
-function nameOf(item: string): string {
-  return lookupItem(catalog.value, item)?.name ?? nameFromId(item);
-}
-
-/** Vanilla items are checked against the list; a modded id is taken on trust. */
-function isKnown(item: string): boolean {
-  if (!catalog.value || vanillaId(item) === null) return true;
-  return lookupItem(catalog.value, item) !== undefined;
-}
-
-function stackNote(item: DailyRewardItem): string {
-  const stack = lookupItem(catalog.value, item.item)?.stackSize;
-  if (!stack || item.amount <= stack) return "";
-  return t("rewards.stacks", { count: Math.ceil(item.amount / stack) });
-}
-
-function percentOf(item: DailyRewardItem): number {
-  return sharePercent(weightOf(item), poolTotal.value);
-}
-
-function formatPercent(value: number): string {
-  return value >= 10 ? value.toFixed(1) : value >= 1 ? value.toFixed(2) : value.toPrecision(2);
-}
-
-function oneIn(item: DailyRewardItem): string {
-  const p = percentOf(item);
-  return p > 0 ? t("rewards.oneIn", { count: Math.max(1, Math.round(100 / p)) }) : "";
-}
-
-function rarityLabel(item: DailyRewardItem): string {
-  const rarity = rarityOf(item, shownPool.value);
-  return t(`appearance.key.rarity.${rarity}` as MessageKey);
-}
-
-/** The tier's own colour, the one its Discord embed uses. */
-function rarityColor(item: DailyRewardItem): string {
-  return `#${RARITY_STYLE[rarityOf(item, shownPool.value)].color.toString(16).padStart(6, "0")}`;
-}
-
-function bonusItems(day: string): DailyRewardItem[] {
-  return bonusMap.value[day] ?? [];
-}
-
-function setAmount(item: DailyRewardItem, value: number | null): void {
-  if (value !== null && Number.isInteger(value) && value >= 1) item.amount = Math.min(value, MAX_REWARD_AMOUNT);
-}
-
-function setBonusChance(value: number | null): void {
-  if (draft.value && value !== null) setField("bonusChance", Math.min(Math.max(value, 0), 100));
-}
-
-function onAddDay(): void {
-  if (newDay.value && addBonusDay(newDay.value)) newDay.value = null;
-}
 
 /**
  * Open the scope the URL names, or the first one this user may see. An
@@ -666,8 +426,6 @@ async function syncScope(): Promise<void> {
   }
   if (ready.value && scope.value === target) return;
   if (loading.value && scope.value === target) return;
-  filter.value = "";
-  showAll.value = false;
   await open(target);
 }
 
@@ -683,11 +441,53 @@ async function reload(): Promise<void> {
   await open(scope.value);
 }
 
-async function onSave(): Promise<void> {
+function discardAll(): void {
+  discard();
+  selectedDay.value = null;
+}
+
+function askShipped(): void {
+  confirm.require({
+    header: t("rewards.defaults.title"),
+    message: t("rewards.defaults.message"),
+    icon: "pi pi-exclamation-triangle",
+    acceptLabel: t("rewards.defaults.accept"),
+    rejectLabel: t("rewards.defaults.cancel"),
+    accept: () => rewards.applyShippedDefaults(),
+  });
+}
+
+async function persist(): Promise<void> {
   const ok = await save();
-  if (ok) {
-    notify.ok(t("rewards.savedToast"), t("rewards.savedToastDetail"));
+  if (ok) notify.ok(t("rewards.savedToast"), t("rewards.savedToastDetail"));
+}
+
+/** Saving the shared pool first asks what it does to the servers that inherit it. */
+async function onSave(): Promise<void> {
+  if (isShared.value && editable.value) {
+    try {
+      const affected = await rewards.loadImpact();
+      if (affected.length > 0) {
+        impact.value = affected;
+        impactOpen.value = true;
+        return;
+      }
+    } catch {
+      // Without the check the save still works; the servers just are not asked about.
+    }
   }
+  await persist();
+}
+
+async function onImpactConfirm(selections: Record<string, ServerSelection>): Promise<void> {
+  rewards.setSelections(selections);
+  await persist();
+  impactOpen.value = false;
+}
+
+async function onReviewSave(): Promise<void> {
+  reviewOpen.value = false;
+  await onSave();
 }
 </script>
 
@@ -700,99 +500,12 @@ async function onSave(): Promise<void> {
 .rw-scope .rw-hint { flex-basis: 100%; }
 .rw-list { margin: 0; padding-left: var(--space-4); overflow-wrap: anywhere; }
 .rw-banner-text { margin: 0 0 var(--space-2); }
-
-.rw-card {
-  min-width: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-surface);
-  background: var(--surface);
-  padding: var(--space-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-.rw-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: var(--space-3); }
-.rw-head-text { min-width: 0; flex: 1 1 280px; }
-.rw-head h2 { margin: 0 0 var(--space-1); font-size: var(--text-xl); }
-.rw-inherited {
-  margin: 0; padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-control); background: var(--surface-raised);
-  color: var(--text-dim); font-size: var(--text-sm);
-}
-
-.rw-tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }
-.rw-filter { position: relative; flex: 1 1 220px; min-width: 0; }
-.rw-filter .pi { position: absolute; left: var(--space-3); top: 50%; transform: translateY(-50%); color: var(--text-dim); pointer-events: none; }
-.rw-filter :deep(.p-inputtext) { width: 100%; padding-left: 36px; }
-.rw-mode { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
-
-.rw-table-wrap { min-width: 0; overflow-x: auto; }
-.rw-table { width: 100%; border-collapse: collapse; }
-.rw-table th, .rw-table td { padding: var(--space-2); border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; }
-.rw-table thead th { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-caps); color: var(--text-dim); font-weight: 600; }
-.rw-table .num { text-align: right; }
-.rw-item { display: flex; flex-direction: column; min-width: 0; font-weight: normal; }
-.rw-item-name { font-weight: 600; overflow-wrap: anywhere; }
-.rw-item-id { font-size: var(--text-xs); color: var(--text-dim); overflow-wrap: anywhere; }
-.rw-item-warn { font-size: var(--text-xs); color: var(--st-degraded); margin: 0; }
-.rw-sub { display: block; font-size: var(--text-xs); color: var(--text-dim); }
-.rw-num :deep(.p-inputnumber-input) { width: 9ch; text-align: right; }
-.rw-rarity { display: inline-flex; align-items: center; gap: var(--space-2); white-space: nowrap; font-size: var(--text-sm); }
-/* A square pip, like an item-frame corner, rather than a round status dot. */
-.rw-rarity-pip {
-  flex: none;
-  width: 0.7em;
-  height: 0.7em;
-  border-radius: 2px;
-  background: var(--rarity);
-  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.35);
-}
-.rw-actions { width: 1%; white-space: nowrap; }
-.rw-more { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) 0; flex-wrap: wrap; }
-.rw-total { margin: 0; font-size: var(--text-sm); color: var(--text-dim); }
-.rw-add, .rw-add-day { display: flex; flex-direction: column; gap: var(--space-1); max-width: 560px; }
-.rw-add-day { flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-.rw-add-label { font-weight: 600; font-size: var(--text-sm); }
-
-.rw-days {
-  list-style: none; margin: 0; padding: 0;
-  display: grid; gap: var(--space-3);
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
-}
-.rw-day {
-  border: 1px solid var(--border); border-radius: var(--radius-control);
-  padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-2); min-width: 0;
-}
-.rw-day-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); }
-.rw-day-head h3 { margin: 0; font-size: var(--text-md); }
-.rw-day-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-1); }
-.rw-day-item { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-2); }
-.rw-amount { color: var(--text-dim); }
-.rw-bonus { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
-
-@media (max-width: 600px) {
-  .rw-table thead { display: none; }
-  .rw-table tr { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); padding: var(--space-3) 0; border-bottom: 1px solid var(--border); }
-  .rw-table th, .rw-table td { border: 0; padding: 0; }
-  .rw-table .rw-item { grid-column: 1 / -1; grid-row: 1; }
-  .rw-table tr:has(.rw-actions) .rw-item { grid-column: 1; }
-  .rw-table td:nth-of-type(1) { grid-column: 1; grid-row: 2; }
-  .rw-table td:nth-of-type(2) { grid-column: 2; grid-row: 2; }
-  .rw-table td:nth-of-type(3) { grid-column: 1 / -1; grid-row: 3; }
-  .rw-table .num { text-align: left; }
-  /* The header row is hidden here, so each number names itself. */
-  .rw-table td[data-label]::before {
-    content: attr(data-label);
-    display: block;
-    font-size: var(--text-xs);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-caps);
-    color: var(--text-dim);
-  }
-  .rw-table .rw-actions { grid-column: 2; grid-row: 1; justify-self: end; }
-}
-@media (pointer: coarse), (max-width: 760px) {
-  .rw-num :deep(.p-inputnumber-input),
-  .rw-mode :deep(.p-togglebutton) { min-height: var(--touch-min); }
+.rw-body { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.rw-panel { min-width: 0; }
+.rw-section { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.rw-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-4); }
+.rw-streaks { display: grid; gap: var(--space-4); min-width: 0; }
+@media (min-width: 1100px) {
+  .rw-streaks.has-day { grid-template-columns: minmax(0, 1fr) minmax(320px, 420px); align-items: start; }
 }
 </style>

@@ -20,11 +20,13 @@ import {
   type ServerImpact,
   type ServerRewardsResponse,
   type ServerSelection,
+  type SharedChange,
   type SharedRewardsResponse,
 } from "@mcbot/schema/dailyRewards.js";
 import {
   compactOverride,
   detachEntries,
+  diffShared,
   reattachEntry,
   resolvePool,
   summarizeChanges,
@@ -192,6 +194,12 @@ export function useDailyRewards() {
   const summary = computed<ChangeSummary | null>(() => {
     if (!editor.baseline.value || !editor.draft.value) return null;
     return summarizeChanges(resolved(editor.baseline.value), resolved(editor.draft.value));
+  });
+
+  /** Every entry whose effective values differ from what was loaded, for the review dialog. */
+  const entryChanges = computed<SharedChange[]>(() => {
+    if (!editor.baseline.value || !editor.draft.value) return [];
+    return diffShared(resolved(editor.baseline.value), resolved(editor.draft.value));
   });
 
   // ── Undo ─────────────────────────────────────────────────────────────────
@@ -499,7 +507,7 @@ export function useDailyRewards() {
 
   function removeDay(day: string): void {
     if (!editor.draft.value) return;
-    remember("remove day");
+    remember("removeDay");
     if (isShared.value) {
       delete sharedDraft()!.streakBonuses?.[day];
       return;
@@ -535,7 +543,7 @@ export function useDailyRewards() {
   function resetField(field: RewardPoolField): void {
     const pool = patchDraft();
     if (!pool) return;
-    remember(`reset ${field}`);
+    remember("reset");
     delete pool[field];
   }
 
@@ -598,6 +606,7 @@ export function useDailyRewards() {
     items,
     total,
     summary,
+    entryChanges,
     bonusChance,
     poolRows,
     dayRows,
