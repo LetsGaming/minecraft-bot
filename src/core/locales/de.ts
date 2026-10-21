@@ -577,7 +577,8 @@ export const de: Record<string, string> = {
   "daily.dataError": "Für diesen Server sind keine Daily-Belohnungen eingerichtet.",
   "daily.cooldown": "Die nächste Belohnung gibt es {relative} (um {time}).",
   "daily.bonus": "Bonus für {days} Tage Serie: {rewards}",
-  "daily.randomBonus": "Glücksbonus: {reward}",
+  "daily.luckyField": "Glücksbonus",
+  "daily.luckyFooter": "Glückstreffer: Du hast eine Extra-Belohnung bekommen!",
   // ── server events, leaderboard, console relay ──
   "serverEvent.startedTitle": "{server} gestartet",
   "serverEvent.startedBody": "Der Server ist online und bereit für Spieler.",

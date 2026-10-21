@@ -663,7 +663,7 @@ describe("deferred replies", () => {
     expect(interaction.reply).not.toHaveBeenCalled();
   });
 
-  it("shows the main reward as the daily reward and the random bonus on its own line", async () => {
+  it("shows the main reward as the daily reward and the random bonus in its own field", async () => {
     // Order of Math.random calls: pick main, bonus-chance roll, pick bonus.
     vi.spyOn(Math, "random")
       .mockReturnValueOnce(0.1)
@@ -681,8 +681,28 @@ describe("deferred replies", () => {
       },
     });
     await execute(interaction as never);
-    const text = embedOf(interaction.editReply.mock.calls[0]![0]).description ?? "";
-    expect(text).toContain("1 × Apple");
-    expect(text).toContain("Lucky bonus: 1 × Bread");
+    const embed = embedOf(interaction.editReply.mock.calls[0]![0]);
+    expect(embed.description).toContain("1 × Apple");
+    expect(embed.description).not.toContain("Bread");
+    const lucky = embed.fields?.find((f) => f.name.includes("Lucky bonus"));
+    expect(lucky?.value).toContain("1 × Bread");
+    expect(lucky?.inline).toBe(false);
+    expect(embed.footer?.text).toContain("Lucky draw");
+  });
+
+  it("leaves the embed without a lucky field when the bonus draw misses", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.99);
+    const { execute, interaction } = await setup({
+      online: true,
+      pool: {
+        default: [{ item: "minecraft:apple", amount: 1, weight: 1 }],
+        bonusChance: 10,
+        streakBonuses: {},
+      },
+    });
+    await execute(interaction as never);
+    const embed = embedOf(interaction.editReply.mock.calls[0]![0]);
+    expect(embed.fields?.some((f) => f.name.includes("Lucky bonus"))).toBe(false);
+    expect(embed.footer?.text).not.toContain("Lucky draw");
   });
 });

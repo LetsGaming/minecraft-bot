@@ -585,7 +585,8 @@ export const en: Record<string, string> = {
   "daily.dataError": "No daily rewards are set up for this server.",
   "daily.cooldown": "The next reward is ready {relative} (at {time}).",
   "daily.bonus": "{days}-day streak bonus: {rewards}",
-  "daily.randomBonus": "Lucky bonus: {reward}",
+  "daily.luckyField": "Lucky bonus",
+  "daily.luckyFooter": "Lucky draw: you got an extra reward!",
   // ── server events, leaderboard, console relay ──
   "serverEvent.startedTitle": "{server} started",
   "serverEvent.startedBody": "The server is online and ready for players.",

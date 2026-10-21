@@ -97,8 +97,13 @@
               "icon_url": "https://mc-heads.net/avatar/ikarus_77/64"
             },
             "title": "🎁 Daily reward claimed",
-            "description": "**3 × Diamond**  ⚪ Common\n🍀 Lucky bonus: 3 × Diamond\n🎉 6-day streak bonus: 16 × Cooked Beef",
+            "description": "**3 × Diamond**  ⚪ Common\n🎉 6-day streak bonus: 16 × Cooked Beef",
             "fields": [
+              {
+                "name": "🍀 Lucky bonus",
+                "value": "**3 × Diamond**  ⚪ Common",
+                "inline": false
+              },
               {
                 "name": "🔥 Streak",
                 "value": "▰▰▰▰▰▰▰\n6 days",
@@ -116,7 +121,7 @@
               }
             ],
             "footer": {
-              "text": "Come back within 48 hours to keep your streak going."
+              "text": "🍀 Lucky draw: you got an extra reward! Come back within 48 hours to keep your streak going."
             }
           }
         ]
@@ -137,8 +142,13 @@
               "icon_url": "https://mc-heads.net/avatar/ikarus_77/64"
             },
             "title": "🎁 Tägliche Belohnung abgeholt",
-            "description": "**3 × Diamond**  ⚪ Gewöhnlich\n🍀 Glücksbonus: 3 × Diamond\n🎉 Bonus für 6 Tage Serie: 16 × Cooked Beef",
+            "description": "**3 × Diamond**  ⚪ Gewöhnlich\n🎉 Bonus für 6 Tage Serie: 16 × Cooked Beef",
             "fields": [
+              {
+                "name": "🍀 Glücksbonus",
+                "value": "**3 × Diamond**  ⚪ Gewöhnlich",
+                "inline": false
+              },
               {
                 "name": "🔥 Serie",
                 "value": "▰▰▰▰▰▰▰\n6 Tage",
@@ -156,7 +166,7 @@
               }
             ],
             "footer": {
-              "text": "Komm innerhalb von 48 Stunden wieder, damit deine Serie weiterläuft."
+              "text": "🍀 Glückstreffer: Du hast eine Extra-Belohnung bekommen! Komm innerhalb von 48 Stunden wieder, damit deine Serie weiterläuft."
             }
           }
         ]

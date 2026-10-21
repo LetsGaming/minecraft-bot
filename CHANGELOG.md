@@ -12,6 +12,15 @@ project follows [Semantic Versioning](https://semver.org/).
 - **Per-guild settings moved out of Config.** Edit a guild on its own page, `#/guilds/<guild id>`, with tabs for General, Chat bridge, Leaderboard, Alerts and status, Support and access, and Commands. It replaces the old dialog and keeps its own save (`GuildConfigEditor.vue`). Raw JSON still shows the whole `guilds` block, and "Advanced JSON config" on the Guilds page now opens it.
 - Fields are lighter: the config key is a small copy chip, long help is one line with More, empty inputs show the default that applies (or "Not set"), and a dot before the label marks a change or an error. The colored left edges on changed, error and section rows are gone.
 
+### Added
+
+- **A lucky bonus (the extra draw from `bonusChance`) now stands out in the `/daily` embed.** It gets its own full-width "Lucky bonus" field with the item and its rarity, the embed turns the success colour (a streak milestone keeps its milestone colour), and the footer says "Lucky draw: you got an extra reward!". The queued embed for an offline claim shows the same field (`dailyEmbeds.ts`, `en.ts`, `de.ts`; the old `daily.randomBonus` text is replaced by `daily.luckyField` and `daily.luckyFooter`).
+
+### Fixed
+
+- **`/daily` no longer refuses an offline claim because of unrelated queued items.** The cap of 3 waiting rewards counted every entry queued for the player, including items still owed from an online claim that could not all be handed over and challenge bonuses that failed to deliver. Only offline daily claims use up a slot now (`dailyClaim.ts`, `dailyStore.ts`).
+- **The Daily rewards editor no longer reports unsaved changes after you only click into a chance or weight field.** Leaving a field without typing used to rewrite that item's weight from its rounded display value (for example 10 became 10.002) and light up the save bar (`useDailyRewards.ts`).
+
 ## [8.3.0] — 2026-10-20
 
 - Internal updates and minor improvements.
