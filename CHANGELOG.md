@@ -25,6 +25,8 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **A relayed speaker whose Discord name starts with a bracket or symbol is no longer shown as `[***`.** The cross-server chat bridge now skips a leading `[tag]` or `(tag)` and any leading punctuation, so `[AK] Nussy (Pablo Escobar)` appears as `N***#2b51` (`relay/identity.ts`).
+- **The "Add item" dialog on the Daily rewards page no longer loses its fields behind an ad blocker.** Its CSS classes were named `ad-*`, which ad blockers hide; they are renamed (`AddItemDialog.vue`).
 - **`/daily` no longer refuses an offline claim because of unrelated queued items.** The cap of 3 waiting rewards counted every entry queued for the player, including items still owed from an online claim that could not all be handed over and challenge bonuses that failed to deliver. Only offline daily claims use up a slot now (`dailyClaim.ts`, `dailyStore.ts`).
 - **The Daily rewards editor no longer reports unsaved changes after you only click into a chance or weight field.** Leaving a field without typing used to rewrite that item's weight from its rounded display value (for example 10 became 10.002) and light up the save bar (`useDailyRewards.ts`).
 

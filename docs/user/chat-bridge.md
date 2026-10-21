@@ -44,7 +44,7 @@ Some servers are connected: what you write in the bridge channel also appears in
 
 What the other servers see:
 
-- **Your name.** If you linked your account with `/link`, your Minecraft name. Otherwise the first letter of your Discord name, `***` and a short tag, for example `S***#a4f2`. The tag stays the same every time, so people can tell two speakers apart, and means nothing outside the group.
+- **Your name.** If you linked your account with `/link`, your Minecraft name. Otherwise the first letter of your Discord name (a leading `[tag]` or symbols are skipped), `***` and a short tag, for example `S***#a4f2`. The tag stays the same every time, so people can tell two speakers apart, and means nothing outside the group.
 - **The server it came from**, in brackets after the name: `S***#a4f2 [Alpha]`.
 - **Plain text only.** Mentions become `@user`, `@role` or `#channel`, `@everyone` becomes the word "everyone", custom emoji show as `:name:`, Discord links and invites become `[link]` and `[invite]`, files and images become `[image]` or `[file]`, and a reply is shown as `(reply)` without the text you replied to. Nobody gets pinged.
 - **Your avatar.** If you linked your account, your Minecraft head (from `mc-heads.net`, the same one Minecraft chat uses). Otherwise a generic avatar. Your Discord avatar and Discord ID are never sent.

@@ -7,13 +7,13 @@
     @update:visible="(open) => !open && emit('close')"
     @show="focusAmount"
   >
-    <form id="rw-add-form" class="ad" @submit.prevent="confirm">
-      <p class="ad-id mono">{{ item }}</p>
-      <p v-if="item && !isKnownItem(catalog, item)" class="ad-note">{{ t("rewards.notVanilla") }}</p>
-      <p v-if="duplicate" class="ad-note">{{ t("rewards.add.duplicate", { item: name }) }}</p>
+    <form id="rw-add-form" class="ai" @submit.prevent="confirm">
+      <p class="ai-id mono">{{ item }}</p>
+      <p v-if="item && !isKnownItem(catalog, item)" class="ai-note">{{ t("rewards.notVanilla") }}</p>
+      <p v-if="duplicate" class="ai-note">{{ t("rewards.add.duplicate", { item: name }) }}</p>
 
-      <div class="ad-field">
-        <label for="rw-add-amount" class="ad-label">{{ t("rewards.col.amount") }}</label>
+      <div class="ai-field">
+        <label for="rw-add-amount" class="ai-label">{{ t("rewards.col.amount") }}</label>
         <InputNumber
           ref="amountInput"
           v-model="amount"
@@ -21,13 +21,13 @@
           :locale="UI_LOCALE"
           :min="1"
           :max="MAX_REWARD_AMOUNT"
-          class="ad-num"
+          class="ai-num"
         />
-        <span v-if="stack" class="ad-hint">{{ stack }}</span>
+        <span v-if="stack" class="ai-hint">{{ stack }}</span>
       </div>
 
-      <div v-if="withChance" class="ad-field">
-        <label for="rw-add-chance" class="ad-label">{{ mode === "percent" ? t("rewards.col.chance") : t("rewards.col.weight") }}</label>
+      <div v-if="withChance" class="ai-field">
+        <label for="rw-add-chance" class="ai-label">{{ mode === "percent" ? t("rewards.col.chance") : t("rewards.col.weight") }}</label>
         <InputNumber
           v-if="mode === 'percent'"
           v-model="percent"
@@ -39,7 +39,7 @@
           :max-fraction-digits="3"
           suffix=" %"
           :disabled="!hasOthers"
-          class="ad-num"
+          class="ai-num"
         />
         <InputNumber
           v-else
@@ -49,9 +49,9 @@
           :min="0.0001"
           :min-fraction-digits="0"
           :max-fraction-digits="4"
-          class="ad-num"
+          class="ai-num"
         />
-        <span class="ad-hint">{{ chanceHint }}</span>
+        <span class="ai-hint">{{ chanceHint }}</span>
       </div>
     </form>
 
@@ -140,12 +140,12 @@ function confirm(): void {
 </script>
 
 <style scoped>
-.ad { display: grid; gap: var(--space-3); }
-.ad-id { margin: 0; color: var(--text-dim); font-size: var(--text-sm); overflow-wrap: anywhere; }
-.ad-note { margin: 0; font-size: var(--text-sm); color: var(--text); padding: var(--space-2) var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius-control); }
-.ad-field { display: grid; gap: var(--space-1); }
-.ad-label { font-weight: 600; font-size: var(--text-sm); }
-.ad-num { width: 14ch; }
-.ad-num :deep(input) { width: 100%; }
-.ad-hint { color: var(--text-dim); font-size: var(--text-sm); }
+.ai { display: grid; gap: var(--space-3); }
+.ai-id { margin: 0; color: var(--text-dim); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.ai-note { margin: 0; font-size: var(--text-sm); color: var(--text); padding: var(--space-2) var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius-control); }
+.ai-field { display: grid; gap: var(--space-1); }
+.ai-label { font-weight: 600; font-size: var(--text-sm); }
+.ai-num { width: 14ch; }
+.ai-num :deep(input) { width: 100%; }
+.ai-hint { color: var(--text-dim); font-size: var(--text-sm); }
 </style>

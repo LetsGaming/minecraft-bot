@@ -10,20 +10,27 @@ const LABEL_MAX = 24;
 const MASK = "***";
 const TAG_LENGTH = 4;
 const TRAILING_BRACKETS = /\s*[[(][^\])]*[\])]\s*$/u;
+const LEADING_BRACKETS = /^\s*[[(][^\])]*[\])]\s*/u;
+/** What a name may start with: a letter, a digit or an emoji, never a bracket or other punctuation. */
+const NAME_START = /[\p{L}\p{N}\p{Extended_Pictographic}]/u;
 
 /**
- * `S***`: the first code point of a display name and a fixed mask. Works on
- * code points so emoji and non-Latin names are not cut in half, strips control
- * and format characters first, and drops trailing `[..]` or `(..)` so a name
- * cannot imitate a source label.
+ * `S***`: the first letter, digit or emoji of a display name and a fixed
+ * mask. Works on code points so emoji and non-Latin names are not cut in half,
+ * strips control and format characters first, and drops leading and trailing
+ * `[..]` or `(..)` groups so a tag such as `[AK] Steve` or a suffix cannot
+ * stand in for the name or imitate a source label. A name that is nothing but
+ * a bracketed group uses the first letter inside it.
  */
 export function censorName(displayName: string): string {
-  let name = stripControlChars(displayName).trim();
+  const original = stripControlChars(displayName).trim();
+  let name = original;
   for (let previous = ""; previous !== name; ) {
     previous = name;
-    name = name.replace(TRAILING_BRACKETS, "").trim();
+    name = name.replace(TRAILING_BRACKETS, "").replace(LEADING_BRACKETS, "").trim();
   }
-  const first = [...name][0] ?? "?";
+  const source = [...(name || original)];
+  const first = source.find((ch) => NAME_START.test(ch)) ?? source[0] ?? "?";
   return `${first}${MASK}`;
 }
 

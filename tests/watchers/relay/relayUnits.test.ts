@@ -67,18 +67,24 @@ describe("transformRelayContent", () => {
 });
 
 describe("censorName and webhook username", () => {
-  it("keeps the first code point and a fixed mask", () => {
+  it("keeps the first letter, digit or emoji and a fixed mask", () => {
     expect(censorName("Steve")).toBe("S***");
     expect(censorName("Al")).toBe("A***");
     expect(censorName("😀Party")).toBe("😀***");
     expect(censorName("山田太郎")).toBe("山***");
     expect(censorName("")).toBe("?***");
+    expect(censorName("[Tag]")).toBe("T***");
+    expect(censorName("[Nussy")).toBe("N***");
+    expect(censorName("_-.Nova")).toBe("N***");
+    expect(censorName("!!!")).toBe("!***");
   });
 
-  it("drops trailing brackets so a name cannot imitate a label", () => {
+  it("drops bracketed tags at either end so a name cannot imitate a label", () => {
     expect(censorName("Eve [Alpha]")).toBe("E***");
+    expect(censorName("[AK] Nussy (Pablo Escobar)")).toBe("N***");
+    expect(censorName("(Pablo Escobar) Nussy")).toBe("N***");
     expect(censorName("Eve (Admin) [Mod]")).toBe("E***");
-    expect(censorName("[Admin] Eve")).toBe("[***");
+    expect(censorName("[Admin] Eve")).toBe("E***");
   });
 
   it("builds Name [Label] within 80 characters, shortening the name first", () => {
