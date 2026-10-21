@@ -22,7 +22,7 @@ const mockConfig = {
   token: "t",
   clientId: "123456789012345678",
   adminUsers: [SYSADMIN],
-  servers: { smp: { id: "smp", apiKey: "k-1" } },
+  servers: { smp: { id: "smp", apiKey: "k-1" }, cre: { id: "cre", apiKey: "k-2" } },
   guilds: {},
   webui: {
     enabled: true,
@@ -57,7 +57,7 @@ const {
 
 vi.mock("../../src/core/config.js", () => ({
   loadConfig: vi.fn(() => mockConfig),
-  getServerIds: vi.fn(() => ["smp"]),
+  getServerIds: vi.fn(() => ["smp", "cre"]),
 }));
 
 vi.mock("../../src/core/utils/server/serverAccess.js", () => ({
@@ -83,10 +83,10 @@ vi.mock("../../src/core/utils/server/server.js", () => ({
   // without it falls through to unknownStatus, which reports features: null
   // and would make these tests pass or fail for the wrong reason.
   getServerInstance: vi.fn((id: string) =>
-    id === "smp"
+    id === "smp" || id === "cre"
       ? {
-          id: "smp",
-          config: { id: "smp", apiKey: "k-1" },
+          id,
+          config: { id, apiKey: "k-1" },
           capabilities: null,
           getHealth: async () => ({
             state: "online",
@@ -138,6 +138,7 @@ vi.mock("../../src/core/utils/commands/commandManifest.js", () => ({
   readCommandManifest: vi.fn(async () => ({ slash: [], ingame: [], updatedAt: 1 })),
 }));
 
+import { entryIds, type RewardPool } from "@mcbot/schema/dailyRewards.js";
 import { encodeSigned, SESSION_COOKIE } from "../../src/web/backend/auth/auth.js";
 import { buildServer } from "../../src/web/backend/server.js";
 
@@ -168,6 +169,12 @@ afterEach(() => {
 });
 
 const get = (uid: string, url: string) => ({ method: "GET" as const, url, headers: { cookie: cookieFor(uid) } });
+const post = (uid: string, url: string, payload: unknown) => ({
+  method: "POST" as const,
+  url,
+  headers: { cookie: cookieFor(uid), "content-type": "application/json" },
+  payload,
+});
 const put = (uid: string, url: string, payload: unknown) => ({
   method: "PUT" as const,
   url,
@@ -239,5 +246,94 @@ describe("a server's override", () => {
   it("is a 404 for a server that is not configured", async () => {
     const app = buildServer();
     expect((await app.inject(get(SYSADMIN, "/api/servers/nope/rewards"))).statusCode).toBe(404);
+  });
+});
+
+describe("saving the shared pool with the servers that inherit from it", () => {
+  async function sharedNow(app: ReturnType<typeof buildServer>): Promise<{ pool: RewardPool; hash: string; ids: string[] }> {
+    const { shared } = (await app.inject(get(SYSADMIN, "/api/rewards"))).json();
+    return { pool: shared.pool, hash: shared.hash, ids: entryIds(shared.pool.default) };
+  }
+
+  function without(pool: RewardPool, id: string): RewardPool {
+    const ids = entryIds(pool.default);
+    return { ...pool, default: pool.default!.filter((_, i) => ids[i] !== id) };
+  }
+
+  it("tells every inheriting server what a removal would take away", async () => {
+    const app = buildServer();
+    const { pool, ids } = await sharedNow(app);
+    const res = await app.inject(post(FLEET, "/api/rewards/impact", { pool: without(pool, ids[0]!) }));
+    expect(res.statusCode).toBe(200);
+    const { servers } = res.json();
+    expect(servers.map((s: { serverId: string }) => s.serverId)).toEqual(["smp", "cre"]);
+    expect(servers[0]).toMatchObject({ hasOverride: false, canEdit: true, changes: [{ kind: "removed", id: ids[0] }] });
+  });
+
+  it("leaves out a server that already removed the entry, and needs a fleet-wide write", async () => {
+    const app = buildServer();
+    const { pool, ids } = await sharedNow(app);
+    const own = await app.inject(put(EDITOR, "/api/servers/smp/rewards", { baseHash: "absent", pool: { default: { remove: [ids[0]] } } }));
+    expect(own.statusCode).toBe(200);
+    const proposed = { pool: without(pool, ids[0]!) };
+    const { servers } = (await app.inject(post(FLEET, "/api/rewards/impact", proposed))).json();
+    expect(servers.map((s: { serverId: string }) => s.serverId)).toEqual(["cre"]);
+    expect((await app.inject(post(EDITOR, "/api/rewards/impact", proposed))).statusCode).toBe(403);
+  });
+
+  it("keeps an entry on the chosen server, writes that file first, and audits both", async () => {
+    const app = buildServer();
+    const { pool, hash, ids } = await sharedNow(app);
+    const res = await app.inject(
+      put(FLEET, "/api/rewards", {
+        baseHash: hash,
+        pool: without(pool, ids[0]!),
+        servers: { smp: { keep: { pool: [ids[0]] } } },
+      }),
+    );
+    expect(res.statusCode).toBe(200);
+    expect(Object.keys(res.json().servers)).toEqual(["smp"]);
+
+    const smp = (await app.inject(get(SYSADMIN, "/api/servers/smp/rewards"))).json();
+    expect(smp.override.pool.default.add[0]).toMatchObject({ detachedFrom: ids[0] });
+    const cre = (await app.inject(get(SYSADMIN, "/api/servers/cre/rewards"))).json();
+    expect(cre.override.exists).toBe(false);
+
+    const calls = recordAdminActionMock.mock.calls.map(([entry]) => entry as { server?: string; detail: string });
+    expect(calls.map((c) => c.server)).toEqual(["smp", undefined]);
+    expect(calls[1]!.detail).toContain("shared pool");
+  });
+
+  it("writes nothing when a server cannot take its change", async () => {
+    const app = buildServer();
+    const { pool, hash, ids } = await sharedNow(app);
+    const res = await app.inject(
+      put(FLEET, "/api/rewards", {
+        baseHash: hash,
+        pool: without(pool, ids[0]!),
+        servers: { smp: { exclude: { pool: ids } } },
+      }),
+    );
+    expect(res.statusCode).toBe(422);
+    expect(res.json().errors.join()).toContain("smp");
+    expect((await sharedNow(app)).hash).toBe(hash);
+    expect(existsSync(path.join(dir, "dailyRewards_smp.json"))).toBe(false);
+  });
+
+  it("refuses a stale shared save before touching any server", async () => {
+    const app = buildServer();
+    const { pool, ids } = await sharedNow(app);
+    const res = await app.inject(
+      put(FLEET, "/api/rewards", { baseHash: "stale", pool, servers: { smp: { exclude: { pool: [ids[0]] } } } }),
+    );
+    expect(res.statusCode).toBe(409);
+    expect(existsSync(path.join(dir, "dailyRewards_smp.json"))).toBe(false);
+  });
+
+  it("is a 404 for a server in the selection that is not configured", async () => {
+    const app = buildServer();
+    const { pool, hash } = await sharedNow(app);
+    const res = await app.inject(put(SYSADMIN, "/api/rewards", { baseHash: hash, pool, servers: { nope: { keep: { pool: ["x"] } } } }));
+    expect(res.statusCode).toBe(404);
   });
 });

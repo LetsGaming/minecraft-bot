@@ -262,6 +262,8 @@ export class RewardsWriteError extends Error {
     readonly kind: "conflict" | "invalid",
     message: string,
     readonly errors: string[] = [],
+    /** The server whose file caused it, when a save touched several files. */
+    readonly serverId?: string,
   ) {
     super(message);
     this.name = "RewardsWriteError";

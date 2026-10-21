@@ -362,10 +362,32 @@ export type ModUpdatesQuery = Static<typeof ModUpdatesQuery>;
 
 // ── Daily rewards ───────────────────────────────────────────────────────────
 
-/** A reward document save. The pool's contents are checked by parseRewardPool
+/** A server's reward save. The pool's contents are checked by parseOverridePool
  *  (@mcbot/schema/dailyRewards.ts), the validator the bot loads it with. */
 export const RewardsWriteBody = Type.Object({
   baseHash: Type.String({ maxLength: 128 }),
   pool: AnyObject,
 });
 export type RewardsWriteBody = Static<typeof RewardsWriteBody>;
+
+const EntryIds = Type.Array(Type.String({ maxLength: 64 }), { maxItems: 2000 });
+const ListSelection = Type.Object({
+  pool: Type.Optional(EntryIds),
+  days: Type.Optional(Type.Record(Type.String({ maxLength: 8 }), EntryIds)),
+});
+const ServerSelection = Type.Object({
+  keep: Type.Optional(ListSelection),
+  exclude: Type.Optional(ListSelection),
+});
+
+/** The shared pool's save: the document plus, per server, entries to keep or exclude. */
+export const SharedRewardsWriteBody = Type.Object({
+  baseHash: Type.String({ maxLength: 128 }),
+  pool: AnyObject,
+  servers: Type.Optional(Type.Record(Type.String({ maxLength: 128 }), ServerSelection)),
+});
+export type SharedRewardsWriteBody = Static<typeof SharedRewardsWriteBody>;
+
+/** A proposed shared pool, to ask what saving it would change per server. */
+export const RewardsImpactBody = Type.Object({ pool: AnyObject });
+export type RewardsImpactBody = Static<typeof RewardsImpactBody>;
