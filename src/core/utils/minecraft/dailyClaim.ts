@@ -14,20 +14,24 @@ import {
   enqueuePending,
   removePending,
   MAX_PENDING_PER_PLAYER,
+  type PendingRewardEntry,
   type ResolvedRewardPool,
 } from "../stores/dailyStore.js";
 import { getLinkedAccount } from "../stores/linkStore.js";
 import type { ServerInstance } from "../server/server.js";
 import type { DailyRewardItem, UserClaimData } from "../../types/index.js";
 import { getOnlinePlayers, isPlayerOnline } from "./playerUtils.js";
-import {
-  give,
-  calcStreak,
-  deriveMaxStreak,
-  pick,
-  DAILY_COOLDOWN_MS,
-  STREAK_GRACE_MS,
-} from "./rewards.js";
+import { give, calcStreak, DAILY_COOLDOWN_MS, STREAK_GRACE_MS } from "./rewards.js";
+import { deriveMaxStreak, rollRewards } from "@mcbot/schema/rewardRoll.js";
+
+/**
+ * Only claims made while offline use up the queue cap. Items owed from an
+ * online claim and system rewards (challenge bonuses, no Discord user) wait in
+ * the same queue but are not daily slots.
+ */
+function isQueuedClaim(entry: PendingRewardEntry): boolean {
+  return entry.discordId !== "" && !entry.owed;
+}
 
 /** Per-claim history kept per user; streaks live in their own counters. */
 const MAX_REWARD_HISTORY = 30;
@@ -76,10 +80,7 @@ export function rollClaim(
   );
   const lostStreak = delta > STREAK_GRACE_MS ? userData.currentStreak : 0;
 
-  const main = pick(pool.default);
-  const randomBonus =
-    pool.bonusChance && Math.random() * 100 < pool.bonusChance ? pick(pool.default) : null;
-  const streakBonus = pool.streakBonuses?.[String(bonusStreak)] ?? [];
+  const { main, randomBonus, streakBonus } = rollRewards(pool, bonusStreak);
 
   return {
     currentStreak,
@@ -108,6 +109,8 @@ export type ClaimOutcome =
       claimedAt: number;
       /** The items waiting: the whole roll offline, only the failed ones online. */
       rewards: DailyRewardItem[];
+      /** The bonus-chance draw, when it hit and is among `rewards`. */
+      lucky: DailyRewardItem | null;
       /** True when the player was online and only some items failed to arrive. */
       partial: boolean;
     }
@@ -197,6 +200,7 @@ export async function claimDaily(
     // next join. A full queue rejects WITHOUT consuming the cooldown.
     const queued = await enqueuePending(server.id, player, entry, {
       cap: MAX_PENDING_PER_PLAYER,
+      counts: isQueuedClaim,
     });
     if (queued === null) return { kind: "queue-full", max: MAX_PENDING_PER_PLAYER };
 
@@ -216,6 +220,7 @@ export async function claimDaily(
       currentStreak: roll.currentStreak,
       claimedAt: now,
       rewards: roll.items,
+      lucky: roll.granted.randomBonus,
       partial: false,
     };
   }
@@ -232,7 +237,11 @@ export async function claimDaily(
 
   if (undelivered.length > 0) {
     // Not capped: the claim is already used, so these items are owed.
-    const queued = await enqueuePending(server.id, player, { ...entry, items: undelivered });
+    const queued = await enqueuePending(server.id, player, {
+      ...entry,
+      items: undelivered,
+      owed: true,
+    });
     return {
       kind: "queued",
       player,
@@ -241,6 +250,10 @@ export async function claimDaily(
       currentStreak: roll.currentStreak,
       claimedAt: now,
       rewards: undelivered,
+      lucky:
+        roll.granted.randomBonus && undelivered.includes(roll.granted.randomBonus)
+          ? roll.granted.randomBonus
+          : null,
       partial: true,
     };
   }

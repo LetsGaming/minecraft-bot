@@ -1,6 +1,7 @@
 <template>
   <div class="item-picker">
     <AutoComplete
+      ref="auto"
       v-model="query"
       :suggestions="suggestions"
       option-label="name"
@@ -11,6 +12,7 @@
       :min-length="1"
       fluid
       complete-on-focus
+      :show-empty-message="false"
       :pt="{ pcInputText: { root: { 'aria-describedby': hintId } } }"
       @complete="onComplete"
       @option-select="onSelect"
@@ -39,7 +41,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, nextTick, ref } from "vue";
 import AutoComplete, { type AutoCompleteCompleteEvent, type AutoCompleteOptionSelectEvent } from "primevue/autocomplete";
 import Button from "primevue/button";
 import { itemProblem } from "@mcbot/schema/dailyRewards.js";
@@ -65,6 +67,7 @@ const emit = defineEmits<{ pick: [item: string] }>();
 
 const query = ref<string | CatalogItem>("");
 const suggestions = ref<CatalogItem[]>([]);
+const auto = ref<{ hide: (focus?: boolean) => void } | null>(null);
 const hintId = computed(() => `${props.inputId}-hint`);
 
 /** What pressing Add would add: a picked item's id, or the typed text as an id. */
@@ -88,13 +91,23 @@ const problem = computed(() => {
 });
 
 function onComplete(event: AutoCompleteCompleteEvent): void {
+  // A search that was still pending when the text was picked or cleared is stale.
+  if (query.value === "") {
+    suggestions.value = [];
+    return;
+  }
   suggestions.value = props.catalog ? searchItems(props.catalog, event.query) : [];
 }
 
 function pick(item: string): void {
   if (!item || itemProblem(item)) return;
-  emit("pick", item);
   query.value = "";
+  // The list would otherwise stay open over whatever the pick opens next, and
+  // a box that keeps focus opens it again as soon as that appears.
+  suggestions.value = [];
+  auto.value?.hide();
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  void nextTick(() => emit("pick", item));
 }
 
 function onSelect(event: AutoCompleteOptionSelectEvent): void {

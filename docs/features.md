@@ -56,7 +56,7 @@ never block the link itself.
 including streak bonuses. Claiming while offline queues the reward for the next
 join instead of breaking the streak. The reward pool is defined in
 [`dailyRewards.json`](admin/daily-rewards.md), editable from the dashboard's Daily
-rewards page (items picked by name, chances in percent, per-server overrides).
+rewards page (items picked by name, chances in percent, per-server exceptions).
 
 ## Whitelisting
 
@@ -151,8 +151,8 @@ Optional and running as its own process, the dashboard provides:
   applications, bans and notes.
 - Mods: installed mods, a Modrinth catalogue, bulk updates and a version check
   before upgrading, plus an editor for mod config files.
-- Daily rewards: the shared reward pool and per-server overrides, edited with
-  an item picker.
+- Daily rewards: the shared reward pool and per-server exceptions to it, edited
+  with an item picker, a streak timeline and a preview of what a claim gives.
 - Server upgrade: moves a server to another Minecraft version as one
   supervised job with a rollback to its own backup.
 - Prune chunks: scans a world for chunks nobody used and deletes them from a

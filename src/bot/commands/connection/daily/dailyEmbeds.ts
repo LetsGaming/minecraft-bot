@@ -40,6 +40,21 @@ function rarityLabel(rarity: RewardRarity): string {
   return `${icon} ${t(`daily.rarity.${rarity}`)}`;
 }
 
+/** The extra reward from the bonus-chance draw, set apart from the main reward. */
+function luckyField(
+  item: DailyRewardItem,
+  pool: readonly DailyRewardItem[],
+): { name: string; value: string; inline: false } {
+  return {
+    name: `🍀 ${t("daily.luckyField")}`,
+    value: t("daily.headline", {
+      reward: formatItemStack(item),
+      rarity: rarityLabel(rarityOf(item, pool)),
+    }),
+    inline: false,
+  };
+}
+
 /** The rarest tier among the rolled items; a streak bonus counts as a milestone. */
 function claimRarity(view: ClaimView): RewardRarity {
   const items = view.pool.default ?? [];
@@ -62,9 +77,6 @@ export function buildClaimEmbed(view: ClaimView): EmbedBuilder {
       rarity: rarityLabel(mainRarity),
     }),
   ];
-  if (granted.randomBonus) {
-    lines.push(`🍀 ${t("daily.randomBonus", { reward: formatItemStack(granted.randomBonus) })}`);
-  }
   if (hitMilestone) {
     lines.push(
       `${CATEGORY_STYLE[EmbedCategory.Milestone].icon} ${t("daily.bonus", {
@@ -78,22 +90,27 @@ export function buildClaimEmbed(view: ClaimView): EmbedBuilder {
   }
   if (view.note) lines.push(view.note);
 
+  const lucky = granted.randomBonus;
   const color = hitMilestone
     ? embedColorFor(EmbedCategory.Milestone)
-    : embedColorFor(`rarity.${claimRarity(view)}`);
+    : lucky
+      ? EmbedColor.Success
+      : embedColorFor(`rarity.${claimRarity(view)}`);
 
   const cycle = deriveMaxStreak(pool.streakBonuses);
   const next = nextMilestone(granted.bonusStreak, pool.streakBonuses);
   const barMax = next?.day ?? cycle;
 
+  const tip = t("daily.footerTip", { hours: streakWindowHours() });
   return createPlayerEmbed(view.player, {
     title: t("daily.claimedTitle"),
     description: lines.join("\n"),
     category: EmbedCategory.Reward,
     color,
-    footer: { text: t("daily.footerTip", { hours: streakWindowHours() }) },
+    footer: { text: lucky ? `🍀 ${t("daily.luckyFooter")} ${tip}` : tip },
   })
     .addFields(
+      ...(lucky ? [luckyField(lucky, pool.default ?? [])] : []),
       {
         name: `🔥 ${t("daily.streakField")}`,
         value: `${progressBar(granted.bonusStreak, barMax)}\n${t("streak.days", { count: view.currentStreak })}`,
@@ -147,6 +164,8 @@ export function buildQueuedEmbed(opts: {
   currentStreak: number;
   claimedAt: number;
   rewards: readonly DailyRewardItem[];
+  /** The bonus-chance draw, when it hit and is among the queued items. */
+  lucky?: DailyRewardItem | null;
   /** Replaces the "you are offline" line, e.g. for items a give could not deliver. */
   notice?: string;
 }): EmbedBuilder {
@@ -159,6 +178,9 @@ export function buildQueuedEmbed(opts: {
     ].join("\n"),
     color: EmbedColor.Pending,
   }).addFields(
+    ...(opts.lucky
+      ? [{ name: `🍀 ${t("daily.luckyField")}`, value: formatItemStack(opts.lucky), inline: false }]
+      : []),
     {
       name: `🔥 ${t("daily.streakField")}`,
       value: t("streak.days", { count: opts.currentStreak }),

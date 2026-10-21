@@ -130,8 +130,8 @@ describe("highestCrossed", () => {
 
 describe("rewardPoolForServer", () => {
   const cfg: DailyRewardsConfig = {
-    default: [{ item: "stone", amount: 1 }],
-    streakBonuses: { "7": [{ item: "diamond", amount: 1 }] },
+    default: [{ id: "s", item: "stone", amount: 1 }],
+    streakBonuses: { "7": [{ id: "d7", item: "diamond", amount: 1 }] },
   };
 
   it("falls back to the shared pool without an override", () => {
@@ -140,16 +140,19 @@ describe("rewardPoolForServer", () => {
     expect(pool.streakBonuses?.["7"]).toBeDefined();
   });
 
-  it("overrides field-by-field", () => {
-    const creative = rewardPoolForServer(cfg, { default: [{ item: "glass", amount: 64 }] });
-    expect(creative.default[0]!.item).toBe("glass");
-    // items overridden, bonuses inherited
+  it("applies a server's exceptions to the shared pool", () => {
+    const creative = rewardPoolForServer(cfg, {
+      default: { remove: ["s"], add: [{ id: "g", item: "glass", amount: 64 }] },
+    });
+    expect(creative.default.map((e) => e.item)).toEqual(["glass"]);
+    // items changed, bonuses inherited
     expect(creative.streakBonuses?.["7"]).toBeDefined();
 
     const hardcore = rewardPoolForServer(cfg, {
-      default: [{ item: "totem", amount: 1 }],
-      streakBonuses: { "3": [{ item: "gapple", amount: 1 }] },
+      default: { add: [{ id: "t", item: "totem", amount: 1 }] },
+      streakBonuses: { removeDays: ["7"], days: { "3": { add: [{ id: "x", item: "gapple", amount: 1 }] } } },
     });
+    expect(hardcore.default.map((e) => e.item)).toEqual(["stone", "totem"]);
     expect(hardcore.streakBonuses?.["3"]).toBeDefined();
     expect(hardcore.streakBonuses?.["7"]).toBeUndefined();
   });
@@ -160,8 +163,8 @@ describe("rewardPoolForServer", () => {
     expect(pool.default[0]!.item).toBe("stone");
   });
 
-  it("an empty override item list counts as inherited", () => {
-    expect(rewardPoolForServer(cfg, { default: [] }).default[0]!.item).toBe("stone");
+  it("an override that removes every item falls back to the shared items", () => {
+    expect(rewardPoolForServer(cfg, { default: { remove: ["s"] } }).default[0]!.item).toBe("stone");
   });
 });
 

@@ -45,7 +45,7 @@ The relay's edit and delete map (source message id to copy ids) is **not** store
 
 | File | Written by | Content |
 |---|---|---|
-| `dailyRewards.json`, `dailyRewards_<serverId>.json` | admin (by hand or the dashboard's Daily rewards page) | Shared reward pool and per-server overrides; read-only for the bot. Hand-editable, which is exactly why it stays JSON. Created from the git-tracked `dailyRewards.defaults.json`, which is never written. Writes go through `core/utils/stores/rewardsConfig.ts` (hash-checked, validated, one reward per line) |
+| `dailyRewards.json`, `dailyRewards_<serverId>.json` | admin (by hand or the dashboard's Daily rewards page) | Shared reward pool and per-server exceptions to it (add, remove and set per entry id, see `src/schema/rewardPatch.ts`); read-only for the bot. Hand-editable, which is exactly why it stays JSON. Created from the git-tracked `dailyRewards.defaults.json`, which is never written. Writes go through `core/utils/stores/rewardsConfig.ts` (hash-checked, validated, one reward per line); a shared save that also writes servers' files goes through `rewardsSave.ts` (server files first, shared last). Files from before entry ids are upgraded at startup by `core/rewardsMigration.ts`, which keeps `<file>.pre-exceptions.bak` and only rewrites a file after proving it resolves to the same rewards |
 | `runtime.json` | bot heartbeat | Liveness beacon the dashboard reads. A process contract file, not a store: it must stay readable with `cat` when everything else is broken |
 | `commandManifest.json` | bot at startup | Discovered commands for the dashboard's policy editor. Regenerated every boot — a handoff artifact, not state |
 
