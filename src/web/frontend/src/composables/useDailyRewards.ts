@@ -4,6 +4,7 @@ import { useEditableDocument } from "./useEditableDocument";
 import {
   normalizedWeights,
   roundWeight,
+  sharePercent,
   totalWeight,
   weightForPercent,
   weightOf,
@@ -13,6 +14,11 @@ import {
   type ServerRewardsResponse,
   type SharedRewardsResponse,
 } from "@mcbot/schema/dailyRewards.js";
+
+const roundTo = (value: number, digits: number): number => {
+  const f = 10 ** digits;
+  return Math.round(value * f) / f;
+};
 
 /** "" is the shared pool, anything else a server id. */
 export type RewardsScope = string;
@@ -135,6 +141,9 @@ export function useDailyRewards() {
     const pool = draft.value?.default;
     const row = pool?.[index];
     if (!pool || !row || percent === null) return;
+    // The field shows the share rounded to 3 digits and PrimeVue re-emits it on
+    // blur; converting that rounded figure back would nudge the stored weight.
+    if (roundTo(sharePercent(weightOf(row), totalWeight(pool)), 3) === percent) return;
     const others = totalWeight(pool) - weightOf(row);
     const weight = weightForPercent(percent, others);
     if (weight !== null) row.weight = weight;
@@ -142,7 +151,9 @@ export function useDailyRewards() {
 
   function setWeight(index: number, weight: number | null): void {
     const row = draft.value?.default?.[index];
-    if (row && weight !== null && weight > 0) row.weight = roundWeight(weight);
+    if (!row || weight === null || weight <= 0) return;
+    if (roundTo(weightOf(row), 4) === weight) return;
+    row.weight = roundWeight(weight);
   }
 
   /** Rescale all weights to add up to 100; every item keeps its chance. */

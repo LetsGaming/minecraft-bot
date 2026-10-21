@@ -91,6 +91,16 @@ describe("useDailyRewards", () => {
     });
   });
 
+  it("stays clean when a field re-emits the value it displays", async () => {
+    const r = useDailyRewards();
+    await r.open("");
+    const row = r.items.value[0]!;
+    const shown = Math.round(sharePercent(row.weight!, r.total.value) * 1000) / 1000;
+    r.setPercent(0, shown);
+    r.setWeight(0, row.weight!);
+    expect(r.dirty.value).toBe(false);
+  });
+
   it("rescales weights to 100 without moving any chance", async () => {
     const r = useDailyRewards();
     await r.open("");
