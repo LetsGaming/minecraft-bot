@@ -191,6 +191,21 @@ describe("claimDaily outcomes", () => {
     expect(getServerPending(await loadPendingRewards(), "smp")["steve"]).toHaveLength(MAX_PENDING_PER_PLAYER);
   });
 
+  it("does not count owed items or system rewards toward the offline claim cap", async () => {
+    seedClaim();
+    vi.mocked(getOnlinePlayers).mockResolvedValue([]);
+    const waiting = [
+      { discordId: "u1", items: [DIAMOND], queuedAt: 1, owed: true },
+      { discordId: "", items: [DIAMOND], queuedAt: 2 },
+      { discordId: "u1", items: [DIAMOND], queuedAt: 3, owed: true },
+    ];
+    kvSet("pendingRewards", { version: 1, servers: { smp: { steve: waiting } } });
+
+    const outcome = await claimDaily(fakeServer(), "u1", NOW);
+    expect(outcome).toMatchObject({ kind: "queued", partial: false, queued: waiting.length + 1 });
+    expect((await storedClaim()).lastClaim).toBe(NOW);
+  });
+
   it("queues only the items that could not be delivered, beyond the cap", async () => {
     seedClaim();
     pool.cfg = { default: [DIAMOND], streakBonuses: { "4": [{ item: "minecraft:emerald", amount: 2 }] } };

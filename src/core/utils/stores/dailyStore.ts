@@ -120,6 +120,8 @@ export interface PendingRewardEntry {
   discordId: string;
   items: DailyRewardItem[];
   queuedAt: number;
+  /** Items from a claim that was already consumed but could not all be handed over. */
+  owed?: boolean;
 }
 
 /** serverId → lowercased MC name → queued entries (oldest first) */
@@ -179,19 +181,21 @@ export async function hasPending(
 
 /**
  * Queue an entry for the player's next join. With `cap`, a full queue
- * refuses (returns null) and nothing is written. Returns the new queue length.
+ * refuses (returns null) and nothing is written; `counts` narrows which
+ * waiting entries use up the cap (default: all). Returns the new queue length.
  */
 export async function enqueuePending(
   serverId: string,
   player: string,
   entry: PendingRewardEntry,
-  options: { cap?: number } = {},
+  options: { cap?: number; counts?: (entry: PendingRewardEntry) => boolean } = {},
 ): Promise<number | null> {
   const key = player.toLowerCase();
   return updatePendingRewards((store) => {
     const queue = getServerPending(store, serverId);
     const list = ownGet(queue, key) ?? [];
-    if (options.cap !== undefined && list.length >= options.cap) return null;
+    const used = options.counts ? list.filter(options.counts).length : list.length;
+    if (options.cap !== undefined && used >= options.cap) return null;
     list.push(entry);
     ownSet(queue, key, list);
     return list.length;
