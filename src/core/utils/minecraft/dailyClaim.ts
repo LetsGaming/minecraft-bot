@@ -21,14 +21,8 @@ import { getLinkedAccount } from "../stores/linkStore.js";
 import type { ServerInstance } from "../server/server.js";
 import type { DailyRewardItem, UserClaimData } from "../../types/index.js";
 import { getOnlinePlayers, isPlayerOnline } from "./playerUtils.js";
-import {
-  give,
-  calcStreak,
-  deriveMaxStreak,
-  pick,
-  DAILY_COOLDOWN_MS,
-  STREAK_GRACE_MS,
-} from "./rewards.js";
+import { give, calcStreak, DAILY_COOLDOWN_MS, STREAK_GRACE_MS } from "./rewards.js";
+import { deriveMaxStreak, rollRewards } from "@mcbot/schema/rewardRoll.js";
 
 /**
  * Only claims made while offline use up the queue cap. Items owed from an
@@ -86,10 +80,7 @@ export function rollClaim(
   );
   const lostStreak = delta > STREAK_GRACE_MS ? userData.currentStreak : 0;
 
-  const main = pick(pool.default);
-  const randomBonus =
-    pool.bonusChance && Math.random() * 100 < pool.bonusChance ? pick(pool.default) : null;
-  const streakBonus = pool.streakBonuses?.[String(bonusStreak)] ?? [];
+  const { main, randomBonus, streakBonus } = rollRewards(pool, bonusStreak);
 
   return {
     currentStreak,

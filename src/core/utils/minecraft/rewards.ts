@@ -12,7 +12,6 @@ import { consoleCommand, tellraw } from "./serverMessages.js";
 import { errMsg } from "../error.js";
 import { formatItemList } from "./itemNames.js";
 import type {
-  DailyRewardsConfig,
   DailyRewardItem,
   RewardPool,
   UserClaimData,
@@ -20,6 +19,7 @@ import type {
 import { t } from "../i18n.js";
 import { RewardRarity, REWARD_RARITIES } from "@mcbot/schema/embedCategories.js";
 import { rarityOf, milestoneDays, splitItem } from "@mcbot/schema/dailyRewards.js";
+import { DEFAULT_MAX_STREAK, deriveMaxStreak, pick } from "@mcbot/schema/rewardRoll.js";
 import { log } from "../logger.js";
 import { MS } from "@mcbot/schema/time.js";
 
@@ -28,9 +28,6 @@ export const DAILY_COOLDOWN_MS = MS.day;
 
 /** A gap of more than this since the last claim (two cooldowns) breaks the streak. */
 export const STREAK_GRACE_MS = 2 * DAILY_COOLDOWN_MS;
-
-/** Streak cycle length when the config defines no streakBonuses. */
-export const DEFAULT_MAX_STREAK = 35;
 
 interface StreakResult {
   currentStreak: number;
@@ -80,25 +77,8 @@ export function calcStreak(
   };
 }
 
-export function deriveMaxStreak(
-  streakBonuses: DailyRewardsConfig["streakBonuses"],
-): number {
-  if (!streakBonuses) return DEFAULT_MAX_STREAK;
-  const keys = Object.keys(streakBonuses)
-    .map((k) => parseInt(k, 10))
-    .filter((n) => !isNaN(n) && n > 0);
-  return keys.length > 0 ? Math.max(...keys) : DEFAULT_MAX_STREAK;
-}
-
-export function pick(pool: DailyRewardItem[]): DailyRewardItem {
-  const total = pool.reduce((sum, { weight = 1 }) => sum + weight, 0);
-  let r = Math.random() * total;
-  for (const item of pool) {
-    r -= item.weight ?? 1;
-    if (r < 0) return item;
-  }
-  return pool[0]!;
-}
+// The draw lives in the schema so the dashboard's claim preview rolls the same way.
+export { DEFAULT_MAX_STREAK, deriveMaxStreak, pick };
 
 /**
  * Give a reward item to a player. IDs get a "minecraft:" prefix only when
