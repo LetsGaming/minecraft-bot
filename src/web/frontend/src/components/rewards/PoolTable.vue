@@ -2,7 +2,8 @@
   <div class="pt">
     <div v-if="editable" class="pt-add">
       <label class="pt-add-label" for="rw-pool-add">{{ t("rewards.pool.addLabel") }}</label>
-      <ItemPicker input-id="rw-pool-add" :catalog="catalog" @pick="rewards.addEntry('default', $event, 1)" />
+      <ItemPicker input-id="rw-pool-add" :catalog="catalog" @pick="pending = $event" />
+      <AddItemDialog :item="pending" where="default" @close="pending = null" />
     </div>
 
     <div class="pt-tools">
@@ -233,6 +234,7 @@ import {
   roundTo,
   stackNote,
 } from "../../utils/rewardDisplay";
+import AddItemDialog from "./AddItemDialog.vue";
 import ItemPicker from "./ItemPicker.vue";
 import RowStateChip from "./RowStateChip.vue";
 import PagerNav from "../mods/PagerNav.vue";
@@ -257,6 +259,8 @@ interface PoolView extends ListRow {
 const PAGE_SIZE = 50;
 const rarities = REWARD_RARITIES;
 
+/** The item picked in the search box, waiting in the add dialog. */
+const pending = ref<string | null>(null);
 const filter = ref("");
 const rarityFilter = ref<RewardRarity | null>(null);
 const diffOnly = ref(false);

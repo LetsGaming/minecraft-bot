@@ -10,7 +10,8 @@
 
       <div v-if="editable && day.state !== 'removed'" class="dp-add">
         <label class="dp-label" for="rw-day-add">{{ t("rewards.streak.addItemPlaceholder") }}</label>
-        <ItemPicker input-id="rw-day-add" :catalog="catalog" @pick="rewards.addEntry(where, $event, 1)" />
+        <ItemPicker input-id="rw-day-add" :catalog="catalog" @pick="pending = $event" />
+        <AddItemDialog :item="pending" :where="where" @close="pending = null" />
       </div>
 
       <p v-if="liveRows.length === 0 && day.state !== 'removed'" class="dp-warn" role="alert">
@@ -115,6 +116,7 @@ import { useRewardsContext } from "../../composables/rewardsContext";
 import { dayWhere } from "../../composables/useDailyRewards";
 import { itemName } from "../../utils/rewardDisplay";
 import SidePanel from "../ui/SidePanel.vue";
+import AddItemDialog from "./AddItemDialog.vue";
 import ItemPicker from "./ItemPicker.vue";
 import RowStateChip from "./RowStateChip.vue";
 import { t, UI_LOCALE } from "../../i18n";
@@ -129,11 +131,14 @@ const day = computed(() => rewards.dayRows.value.find((d) => d.day === props.sel
 const where = computed(() => dayWhere(props.selected ?? "0"));
 const liveRows = computed(() => day.value?.rows.filter((r) => r.state !== "removed") ?? []);
 const copyTarget = ref<number | null>(null);
+/** The item picked in the search box, waiting in the add dialog. */
+const pending = ref<string | null>(null);
 
 watch(
   () => props.selected,
   () => {
     copyTarget.value = null;
+    pending.value = null;
   },
 );
 

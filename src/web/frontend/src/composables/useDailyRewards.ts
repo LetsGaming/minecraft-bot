@@ -338,15 +338,17 @@ export function useDailyRewards() {
     return new Set(listRows(where).map((r) => r.id));
   }
 
-  /** New items start at the pool's average weight, so they are neither rare nor flooding. */
-  function addEntry(where: ListWhere, item: string, amount = 1): string | null {
+  /** What a new item weighs unless told otherwise: the pool's average, so it is neither rare nor flooding. */
+  function defaultWeight(where: ListWhere = "default"): number {
+    const live = listRows(where).filter((r) => r.state !== "removed");
+    return live.length > 0 ? roundWeight(totalWeight(live.map((r) => r.entry)) / live.length) : 1;
+  }
+
+  function addEntry(where: ListWhere, item: string, amount = 1, weight?: number): string | null {
     if (!editor.draft.value) return null;
     const id = newEntryId(takenIds(where));
     const entry: DailyRewardItem = { id, item, amount };
-    if (weightedList(where)) {
-      const live = listRows(where).filter((r) => r.state !== "removed");
-      entry.weight = live.length > 0 ? roundWeight(totalWeight(live.map((r) => r.entry)) / live.length) : 1;
-    }
+    if (weightedList(where)) entry.weight = weight !== undefined ? roundWeight(weight) : defaultWeight(where);
     if (isShared.value) sharedList(where, true)!.push(entry);
     else (patchOf(where, true)!.add ??= []).push(entry);
     return id;
@@ -612,6 +614,7 @@ export function useDailyRewards() {
     dayRows,
     trackLength,
     listRows,
+    defaultWeight,
     addEntry,
     removeEntry,
     restoreEntry,

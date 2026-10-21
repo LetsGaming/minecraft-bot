@@ -19,6 +19,7 @@ project follows [Semantic Versioning](https://semver.org/).
 ### Added
 
 - **Saving the shared reward pool shows what it does to each server.** A dialog lists, per server, the entries it would remove, change or add, and lets you keep an entry as it is on a server or leave a new one out of it; those choices are written into the servers' files first and the shared pool last, and nothing is saved if a server's file cannot take its change (`SharedImpactDialog.vue`, `rewardsSave.ts`, `POST /api/rewards/impact`).
+- **Adding an item opens a small dialog first.** After picking an item (in the pool or on a streak day) you set its amount, and for the pool its chance, with the defaults pre-filled, before it joins the list (`AddItemDialog.vue`).
 - **Keep as it is on this server.** A server can hold its own copy of a shared entry, so later edits to the shared one no longer reach it, and follow the shared entry again later.
 - **A lucky bonus (the extra draw from `bonusChance`) now stands out in the `/daily` embed.** It gets its own full-width "Lucky bonus" field with the item and its rarity, the embed turns the success colour (a streak milestone keeps its milestone colour), and the footer says "Lucky draw: you got an extra reward!". The queued embed for an offline claim shows the same field (`dailyEmbeds.ts`, `en.ts`, `de.ts`; the old `daily.randomBonus` text is replaced by `daily.luckyField` and `daily.luckyFooter`).
 

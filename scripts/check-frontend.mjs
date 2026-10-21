@@ -30,6 +30,7 @@ const IMPORT = /(?:\bfrom\s*|\bimport\s*\(?\s*)(["'])([^"'\n]+)\1/g;
 const TRANSLATED = new Set([
   "App.vue",
   "components/rewards/ItemPicker.vue",
+  "components/rewards/AddItemDialog.vue",
   "components/rewards/BonusPanel.vue",
   "components/rewards/ClaimPreview.vue",
   "components/rewards/DayPanel.vue",

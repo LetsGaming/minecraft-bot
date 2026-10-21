@@ -70,6 +70,14 @@ describe("the shared pool", () => {
     expect(r.items.value.at(-1)).toEqual({ id, item: "golden_apple", amount: 2, weight: 25 });
   });
 
+  it("adds an item with the weight it was given, or the average", async () => {
+    const r = await shared();
+    expect(r.defaultWeight()).toBe(25);
+    r.addEntry("default", "apple", 3, 7);
+    r.addEntry("default", "bread", 1);
+    expect(r.items.value.slice(-2)).toMatchObject([{ item: "apple", amount: 3, weight: 7 }, { item: "bread", weight: expect.closeTo(21.4, 1) }]);
+  });
+
   it("removes one of two entries for the same item and leaves the other", async () => {
     const r = await shared();
     r.removeEntry("default", "d1");

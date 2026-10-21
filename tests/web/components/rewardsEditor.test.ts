@@ -22,6 +22,9 @@ import StreakTimeline from "../../../src/web/frontend/src/components/rewards/Str
 import DayPanel from "../../../src/web/frontend/src/components/rewards/DayPanel.vue";
 import ClaimPreview from "../../../src/web/frontend/src/components/rewards/ClaimPreview.vue";
 import OutcomeStrip from "../../../src/web/frontend/src/components/rewards/OutcomeStrip.vue";
+import AddItemDialog from "../../../src/web/frontend/src/components/rewards/AddItemDialog.vue";
+import ItemPicker from "../../../src/web/frontend/src/components/rewards/ItemPicker.vue";
+import { sharePercent, totalWeight } from "@mcbot/schema/dailyRewards.js";
 import SharedImpactDialog from "../../../src/web/frontend/src/components/rewards/SharedImpactDialog.vue";
 import RewardsView from "../../../src/web/frontend/src/views/RewardsView.vue";
 import { uiGlobal } from "./mountUi";
@@ -174,6 +177,85 @@ describe("StreakTimeline and DayPanel", () => {
     await wrapper.get("button[aria-label='Remove Golden Apple']").trigger("click");
     expect(ctx.rewards.effectivePool.value.streakBonuses!["14"]).toEqual([]);
     expect(wrapper.get("[role='alert']").text()).toContain("No items on this day");
+  });
+});
+
+function submitAdd(): void {
+  document.getElementById("rw-add-form")!.dispatchEvent(new Event("submit", { cancelable: true }));
+}
+
+describe("adding an item", () => {
+  it("opens a dialog with the defaults filled in and adds nothing yet", async () => {
+    const { wrapper, ctx } = await mountWith(PoolTable);
+    wrapper.findComponent(ItemPicker).vm.$emit("pick", "golden_apple");
+    await flushPromises();
+    expect(ctx.rewards.items.value).toHaveLength(4);
+    const inputs = wrapper.findComponent(AddItemDialog).findAllComponents(InputNumber);
+    expect(inputs[0]!.props("modelValue")).toBe(1);
+    // The average weight (25) next to a total of 100 is a 20 % share.
+    expect(inputs[1]!.props("modelValue")).toBe(20);
+    expect(document.body.textContent).toContain("Add Golden Apple");
+  });
+
+  it("adds the item with the amount and chance that were chosen", async () => {
+    const { wrapper, ctx } = await mountWith(PoolTable);
+    wrapper.findComponent(ItemPicker).vm.$emit("pick", "golden_apple");
+    await flushPromises();
+    const inputs = wrapper.findComponent(AddItemDialog).findAllComponents(InputNumber);
+    inputs[0]!.vm.$emit("update:modelValue", 16);
+    inputs[1]!.vm.$emit("update:modelValue", 50);
+    await flushPromises();
+    submitAdd();
+    await flushPromises();
+
+    const added = ctx.rewards.items.value.at(-1)!;
+    expect(added).toMatchObject({ item: "golden_apple", amount: 16 });
+    expect(sharePercent(added.weight!, totalWeight(ctx.rewards.items.value))).toBeCloseTo(50, 2);
+    expect(wrapper.findComponent(AddItemDialog).props("item")).toBeNull();
+  });
+
+  it("asks for a weight in weight mode", async () => {
+    const { wrapper, ctx } = await mountWith(PoolTable);
+    ctx.mode.value = "weight";
+    wrapper.findComponent(ItemPicker).vm.$emit("pick", "golden_apple");
+    await flushPromises();
+    const inputs = wrapper.findComponent(AddItemDialog).findAllComponents(InputNumber);
+    expect(inputs[1]!.props("modelValue")).toBe(25);
+    inputs[1]!.vm.$emit("update:modelValue", 7);
+    await flushPromises();
+    submitAdd();
+    await flushPromises();
+    expect(ctx.rewards.items.value.at(-1)).toMatchObject({ item: "golden_apple", weight: 7 });
+  });
+
+  it("adds nothing when cancelled", async () => {
+    const { wrapper, ctx } = await mountWith(PoolTable);
+    wrapper.findComponent(ItemPicker).vm.$emit("pick", "golden_apple");
+    await flushPromises();
+    [...document.body.querySelectorAll("button")].find((b) => b.textContent?.includes("Cancel"))!.click();
+    await flushPromises();
+    expect(ctx.rewards.items.value).toHaveLength(4);
+    expect(wrapper.findComponent(AddItemDialog).props("item")).toBeNull();
+  });
+
+  it("warns when the item is already in the list", async () => {
+    const { wrapper } = await mountWith(PoolTable);
+    wrapper.findComponent(ItemPicker).vm.$emit("pick", "diamond");
+    await flushPromises();
+    expect(document.body.textContent).toContain("Diamond is already in this list");
+  });
+
+  it("asks only for an amount when adding to a streak day", async () => {
+    const { wrapper, ctx } = await mountWith(DayPanel, { selected: "14" });
+    wrapper.findComponent(ItemPicker).vm.$emit("pick", "bread");
+    await flushPromises();
+    const inputs = wrapper.findComponent(AddItemDialog).findAllComponents(InputNumber);
+    expect(inputs).toHaveLength(1);
+    inputs[0]!.vm.$emit("update:modelValue", 5);
+    await flushPromises();
+    submitAdd();
+    await flushPromises();
+    expect(ctx.rewards.effectivePool.value.streakBonuses!["14"]!.at(-1)).toMatchObject({ item: "bread", amount: 5 });
   });
 });
 
