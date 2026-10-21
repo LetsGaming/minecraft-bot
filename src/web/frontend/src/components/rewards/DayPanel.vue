@@ -168,5 +168,6 @@ function removeDay(): void {
 .dp-amount-text { color: var(--text-dim); }
 .dp-actions { white-space: nowrap; }
 .dp-row.is-removed .dp-item { text-decoration: line-through; color: var(--text-dim); }
-.dp-copy { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-right: auto; }
+.dp-copy { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); flex: 1 1 100%; }
+.sp-foot :deep(button) { white-space: nowrap; }
 </style>

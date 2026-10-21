@@ -116,7 +116,7 @@ watch(
 .sp-close { background: none; border: 0; color: var(--text-dim); border-radius: var(--radius-control); min-width: var(--control-h); min-height: var(--control-h); cursor: pointer; }
 .sp-close:hover { color: var(--text); }
 .sp-body { padding: var(--space-4); overflow-y: auto; min-height: 0; }
-.sp-foot { padding: var(--space-3) var(--space-4); border-top: 1px solid var(--border); display: flex; gap: var(--space-2); justify-content: flex-end; }
+.sp-foot { padding: var(--space-3) var(--space-4); border-top: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); align-items: center; justify-content: space-between; }
 
 @media (min-width: 1100px) {
   .sp-wrap { position: sticky; top: var(--space-4); align-self: start; max-height: calc(100dvh - var(--space-6)); display: flex; }

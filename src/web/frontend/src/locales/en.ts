@@ -348,7 +348,6 @@ export const en = {
   "rewards.state.changed": "Changed here",
   "rewards.state.detached": "Kept from shared",
   "rewards.state.removed": "Not used here",
-  "rewards.state.notUsed": "Not used here",
   "rewards.rarityFilter": "Filter by rarity",
   "rewards.sort.label": "Sort by",
   "rewards.sort.default": "Default order",

@@ -121,7 +121,7 @@ function onKey(event: KeyboardEvent): void {
 .st-list { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
 .st-chip {
   display: grid;
-  gap: 2px;
+  gap: 2px var(--space-3);
   justify-items: start;
   min-width: 112px;
   padding: var(--space-2) var(--space-3);

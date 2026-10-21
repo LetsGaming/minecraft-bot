@@ -93,7 +93,7 @@
             <span class="rw-item-id mono">{{ row.entry.item }}</span>
             <span v-if="!isKnownItem(catalog, row.entry.item)" class="rw-item-warn">{{ t("rewards.notVanilla") }}</span>
           </th>
-          <td class="num" :data-label="t('rewards.col.amount')">
+          <td class="num rw-amount-cell" :data-label="t('rewards.col.amount')">
             <InputNumber
               v-if="editable && !row.removed"
               :locale="UI_LOCALE"
@@ -110,7 +110,7 @@
               {{ t("rewards.was", { value: row.shared.amount }) }}
             </span>
           </td>
-          <td class="num" :data-label="mode === 'percent' ? t('rewards.col.chance') : t('rewards.col.weight')">
+          <td class="num rw-chance-cell" :data-label="mode === 'percent' ? t('rewards.col.chance') : t('rewards.col.weight')">
             <template v-if="editable && !row.removed">
               <InputNumber
                 v-if="mode === 'percent'"
@@ -138,13 +138,13 @@
                 @update:model-value="rewards.setWeight(row.id, $event)"
               />
             </template>
-            <span v-else-if="row.removed">{{ t("rewards.state.notUsed") }}</span>
+            <span v-else-if="row.removed" aria-hidden="true">–</span>
             <span v-else>{{ mode === "percent" ? `${formatPercent(row.percent)} %` : weightOf(row.entry) }}</span>
             <span v-if="!row.removed" class="rw-sub">
               {{ mode === "percent" ? t("rewards.weightIs", { weight: weightOf(row.entry) }) : `${formatPercent(row.percent)} %` }} · {{ oneInText(row.percent) }}
             </span>
           </td>
-          <td :data-label="t('rewards.col.rarity')">
+          <td class="rw-rarity-cell" :data-label="t('rewards.col.rarity')">
             <span v-if="!row.removed" class="rw-rarity" :style="{ '--rarity': rarityColor(row.rarity) }">
               <span class="rw-rarity-pip" aria-hidden="true" />{{ rarityLabel(row.rarity) }}
             </span>
@@ -371,21 +371,36 @@ watch(pages, (count) => {
 .rw-item-id { grid-column: 1 / -1; color: var(--text-dim); font-size: var(--text-xs); }
 .rw-item-warn { grid-column: 1 / -1; color: var(--text-dim); font-size: var(--text-xs); }
 .rw-sub { display: block; color: var(--text-dim); font-size: var(--text-xs); }
-.rw-num { width: 9ch; }
+.rw-num { width: 11ch; }
 .rw-num :deep(input) { width: 100%; }
+@media (min-width: 761px) {
+  .rw-num :deep(input) { min-height: 32px; padding-top: var(--space-1); padding-bottom: var(--space-1); }
+}
 .rw-rarity { display: inline-flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
 .rw-rarity-pip { width: 8px; height: 8px; border-radius: 2px; background: var(--rarity); }
 .rw-actions { white-space: nowrap; text-align: right; }
 tr.is-removed .rw-item-name, tr.is-removed .rw-item-id { text-decoration: line-through; color: var(--text-dim); }
 
 @media (max-width: 760px) {
-  .rw-table, .rw-table tbody, .rw-table tr, .rw-table th, .rw-table td { display: block; }
+  /* A row becomes a two-line card: the item and its actions, then amount and chance side by side. */
+  .rw-table, .rw-table tbody { display: block; }
   .rw-table thead { display: none; }
-  .rw-table tr { padding: var(--space-2) 0; border-bottom: 1px solid var(--border); }
-  .rw-table th, .rw-table td { border: 0; padding: var(--space-1) 0; }
-  .rw-table td[data-label] { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
-  .rw-table td[data-label]::before { content: attr(data-label); color: var(--text-dim); font-size: var(--text-sm); }
-  .rw-actions { display: flex; justify-content: flex-end; }
+  .rw-table tr {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: var(--space-1) var(--space-3);
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .rw-table th, .rw-table td { display: block; border: 0; padding: 0; min-width: 0; }
+  .rw-table .rw-item { grid-column: 1 / 3; grid-row: 1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--space-2); }
+  .rw-table .rw-item-id { flex-basis: 100%; }
+  .rw-table .rw-actions { grid-column: 3; grid-row: 1 / 3; display: flex; align-self: start; }
+  .rw-table td.rw-amount-cell { grid-column: 1; grid-row: 2; }
+  .rw-table td.rw-chance-cell { grid-column: 2; grid-row: 2; }
+  .rw-table td[data-label]::before { content: attr(data-label); display: block; color: var(--text-dim); font-size: var(--text-xs); }
+  .rw-table td.rw-rarity-cell { grid-column: 1 / -1; grid-row: 3; display: flex; align-items: center; gap: var(--space-2); }
+  .rw-table td.rw-rarity-cell::before { display: inline; }
   .pt-filter { min-width: 0; width: 100%; }
   .pt-field { width: 100%; }
 }
