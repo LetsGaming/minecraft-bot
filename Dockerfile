@@ -109,6 +109,10 @@ COPY --from=builder /app/config.schema.json ./
 # Ownership is fixed at container start (bind mounts arrive as root).
 RUN mkdir -p logs data
 
+# The package manager CLIs are unused at runtime and bundle their own vulnerable dependencies.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+    /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
+
 COPY docker-entrypoint.sh ./
 COPY scripts/render-config-template.mjs ./scripts/
 RUN chmod +x docker-entrypoint.sh
