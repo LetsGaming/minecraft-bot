@@ -6,6 +6,8 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [8.5.1] — 2026-11-19
+
 ### Changed
 
 - **8.5.1 is the first published build of the 8.5.0 changes.** The 8.5.0 tag was never published: its release check hit a daily test that depended on random numbers. That test now fixes every draw. Read the 8.5.0 section below for what changed.
