@@ -668,10 +668,13 @@ describe("deferred replies", () => {
   });
 
   it("shows the main reward as the daily reward and the random bonus in its own field", async () => {
-    // Order of Math.random calls: pick main, bonus-chance roll, pick bonus.
+    // Order of Math.random calls: main tier, main entry, bonus-chance roll,
+    // bonus tier, bonus entry.
     vi.spyOn(Math, "random")
       .mockReturnValueOnce(0.1)
       .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0.5)
       .mockReturnValueOnce(0.9);
     const { execute, interaction } = await setup({
       online: true,
