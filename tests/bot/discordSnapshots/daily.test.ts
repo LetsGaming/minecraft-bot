@@ -22,7 +22,7 @@ vi.mock("../../../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock("../../../src/bot/utils/guild/guildRouter.js", () => ({
-  resolveServer: vi.fn(() => ({ id: "smp", config: { id: "smp" } })),
+  resolveServer: vi.fn(() => ({ id: "smp", config: { id: "smp" }, getMinecraftVersion: async () => null })),
 }));
 vi.mock("../../../src/bot/utils/hints/followUps.js", () => ({
   attachFollowUpHint: vi.fn().mockResolvedValue(undefined),
@@ -37,7 +37,7 @@ vi.mock("../../../src/core/utils/minecraft/playerUtils.js", async (importOrigina
 }));
 vi.mock("../../../src/core/utils/minecraft/rewards.js", async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  give: vi.fn().mockResolvedValue(true),
+  give: vi.fn().mockResolvedValue("delivered"),
 }));
 
 const HOUR = 3_600_000;

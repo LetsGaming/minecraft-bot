@@ -18,7 +18,7 @@
       <li class="cp-line">
         <span class="cp-kind">{{ t("rewards.preview.main") }}</span>
         <strong>{{ stackText(catalog, result.main) }}</strong>
-        <span class="cp-rarity">{{ rarityLabel(rarityOf(result.main, pool.default)) }}</span>
+        <span class="cp-rarity">{{ rarityLabel(rarityOf(result.main)) }}</span>
       </li>
       <li v-if="result.randomBonus" class="cp-line">
         <span class="cp-kind">{{ t("rewards.preview.lucky") }}</span>

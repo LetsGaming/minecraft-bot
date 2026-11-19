@@ -48,7 +48,9 @@ import { closeDbForTesting } from "../../src/core/db/index.js";
 import {
   loadPendingRewards,
   getServerPending,
+  getServerFailed,
   MAX_PENDING_PER_PLAYER,
+  MAX_DELIVERY_ATTEMPTS,
   type PendingRewardsStore,
 } from "../../src/core/utils/stores/dailyStore.js";
 import { deliverPendingRewards } from "../../src/core/utils/minecraft/rewards.js";
@@ -161,10 +163,10 @@ describe("deliverPendingRewards", () => {
       },
     });
     kvSet("pendingRewards", store);
-    // diamond confirmed, cursed_item errors server-side (no "Gave").
+    // diamond confirmed, cursed_item gets an unrecognised reply (no "Gave").
     const server = fakeServer({
       diamond: "Gave 1 [Diamond] to Alice",
-      cursed_item: "Unknown item 'minecraft:cursed_item'",
+      cursed_item: "No player was found",
     });
 
     expect(await deliverPendingRewards(server, "Alice")).toBe(1);
@@ -172,6 +174,100 @@ describe("deliverPendingRewards", () => {
     const remaining = getServerPending(after, "smp")["alice"]!;
     expect(remaining).toHaveLength(1);
     expect(remaining[0]!.items).toEqual([{ item: "cursed_item", amount: 1 }]);
+    expect(remaining[0]!.attempts).toBe(1);
+  });
+
+  it("moves an item the server rejects to the failed list and tells the player", async () => {
+    kvSet(
+      "pendingRewards",
+      pendingStore({
+        smp: {
+          alice: [
+            {
+              discordId: "1",
+              queuedAt: 7,
+              items: [
+                { item: "diamond", amount: 1 },
+                { item: "cursed_item", amount: 1 },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+    const server = fakeServer({
+      diamond: "Gave 1 [Diamond] to Alice",
+      cursed_item: "Unknown item 'minecraft:cursed_item'",
+    });
+
+    expect(await deliverPendingRewards(server, "Alice")).toBe(1);
+
+    const after = await loadPendingRewards();
+    expect(getServerPending(after, "smp")["alice"]).toBeUndefined();
+    const failed = getServerFailed(after, "smp")["alice"]!;
+    expect(failed).toHaveLength(1);
+    expect(failed[0]).toMatchObject({
+      discordId: "1",
+      queuedAt: 7,
+      items: [{ item: "cursed_item", amount: 1 }],
+      reason: "rejected",
+    });
+    expect(
+      server.send.mock.calls.some(([c]: [string]) => c.startsWith("/tellraw Alice") && c.includes("could not be delivered")),
+    ).toBe(true);
+  });
+
+  it("gives up after the attempt limit and keeps the items in the failed list", async () => {
+    kvSet(
+      "pendingRewards",
+      pendingStore({
+        smp: {
+          alice: [
+            {
+              discordId: "1",
+              queuedAt: 1,
+              attempts: MAX_DELIVERY_ATTEMPTS - 1,
+              items: [{ item: "stubborn", amount: 1 }],
+            },
+          ],
+        },
+      }),
+    );
+    const server = fakeServer({ stubborn: "No player was found" });
+
+    expect(await deliverPendingRewards(server, "Alice")).toBe(0);
+
+    const after = await loadPendingRewards();
+    expect(getServerPending(after, "smp")["alice"]).toBeUndefined();
+    expect(getServerFailed(after, "smp")["alice"]![0]).toMatchObject({
+      items: [{ item: "stubborn", amount: 1 }],
+      reason: "attempts",
+    });
+  });
+
+  it("does not use up an attempt while the wrapper is unreachable", async () => {
+    kvSet(
+      "pendingRewards",
+      pendingStore({
+        smp: {
+          alice: [
+            {
+              discordId: "1",
+              queuedAt: 1,
+              attempts: MAX_DELIVERY_ATTEMPTS - 1,
+              items: [{ item: "gold", amount: 1 }],
+            },
+          ],
+        },
+      }),
+    );
+    const server = fakeServer({ gold: new Error("ECONNREFUSED") });
+
+    await deliverPendingRewards(server, "Alice");
+
+    const queue = getServerPending(await loadPendingRewards(), "smp")["alice"]!;
+    expect(queue).toHaveLength(1);
+    expect(queue[0]!.attempts).toBe(MAX_DELIVERY_ATTEMPTS - 1);
   });
 
   it("re-queues the in-flight item and everything not yet attempted when give throws", async () => {
@@ -292,7 +388,7 @@ describe("deliverPendingRewards under concurrency (AUD-005)", () => {
         smp: { alice: [{ discordId: "1", queuedAt: 1, items: [{ item: "cursed_item", amount: 1 }] }] },
       }),
     );
-    const server = fakeServer({ cursed_item: "Unknown item" });
+    const server = fakeServer({ cursed_item: "No player was found" });
     const { updatePendingRewards } = await import(
       "../../src/core/utils/stores/dailyStore.js"
     );
@@ -305,7 +401,7 @@ describe("deliverPendingRewards under concurrency (AUD-005)", () => {
           items: [{ item: "bread", amount: 1 }],
         });
       });
-      return { kind: "delivered", output: "Unknown item" };
+      return { kind: "delivered", output: "No player was found" };
     });
     await deliverPendingRewards(server, "Alice");
     const after = getServerPending(await loadPendingRewards(), "smp");

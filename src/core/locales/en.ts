@@ -125,7 +125,8 @@ export const en: Record<string, string> = {
   "report.noChannel": "Reports are not set up for this server yet. Please contact an admin directly.",
   // ── daily delivery queue ──
   "daily.queueFull": "{max} rewards are already waiting for you in game. Join the server and collect them before claiming the next one.",
-  "daily.partlyQueued": "Not everything could be handed over on **{server}** right now. The rest is queued and delivered the next time you join. Your claim is used and your streak is safe.",
+  "daily.undeliverable": "{count|# reward item|# reward items} could not be delivered. An admin can see why with /daily-admin queue.",
+  "daily.partlyQueued":"Not everything could be handed over on **{server}** right now. The rest is queued and delivered the next time you join. Your claim is used and your streak is safe.",
   "daily.queued": "You are offline on **{server}** right now, so the reward is queued and delivered the next time you join. Your streak is safe.",
   "daily.delivered": "📦 Delivered {count|# queued daily reward|# queued daily rewards}: {items}. Enjoy!",
   // ── sessions ──
@@ -252,6 +253,20 @@ export const en: Record<string, string> = {
   "dailyAdmin.showLine":
     "**{server}**: streak {streak} (longest {longest}), last claim {last}",
   "dailyAdmin.showNone": "No claim records on any server.",
+  "dailyAdmin.queueNeedsTarget": "Pass a `user` or a `player` name.",
+  "dailyAdmin.queueNotLinked": "**{user}** has no linked Minecraft account. Use the `player` option instead.",
+  "dailyAdmin.queueTitle": "Reward queue of {player} on {server}",
+  "dailyAdmin.queueEmpty": "Nothing is queued and nothing failed for **{player}** on **{server}**.",
+  "dailyAdmin.queuePending": "Queued ({count}), delivered on the next join:",
+  "dailyAdmin.queueFailed": "Failed ({count}), not retried:",
+  "dailyAdmin.queueReason.rejected": "the server rejected the item",
+  "dailyAdmin.queueReason.attempts": "delivery kept failing",
+  "dailyAdmin.queueCleared": "Cleared {count|# entry|# entries} for **{player}** on **{server}**.",
+  "dailyAdmin.queueRetried": "Moved {count|# failed entry|# failed entries} of **{player}** on **{server}** back to the queue. They are delivered on the next join.",
+  "dailyAdmin.queueRetryNone": "**{player}** has no failed entries on **{server}**.",
+  "dailyAdmin.queueClearedTitle": "Reward queue cleared",
+  "dailyAdmin.queueRetriedTitle": "Failed rewards requeued",
+  "challenge.badItem": "The bonus item is not valid: {problem}",
   "control.stillRunning": "This is taking longer than the bot waits for, so the script may still be running. Check with `/server status` before running it again.",
   // ── waypoint categories ──
   "waypoint.invalidCategory":
@@ -751,6 +766,8 @@ export const en: Record<string, string> = {
   "statusEmbed.fetchFailed": "Could not read the status.",
   "statusEmbed.onlineNames": "Online: {names}",
   "daily.headline": "**{reward}**  {rarity}",
+  "daily.rarity.dirt": "Dirt",
+  "daily.dirtLine": "The pool has a sense of humor. Tomorrow will be better.",
   "daily.rarity.common": "Common",
   "daily.rarity.uncommon": "Uncommon",
   "daily.rarity.rare": "Rare",

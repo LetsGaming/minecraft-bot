@@ -4,7 +4,7 @@
  * of the editor says the same thing the same way.
  */
 import { REWARD_RARITIES, RARITY_STYLE, type RewardRarity } from "@mcbot/schema/embedCategories.js";
-import { type DailyRewardItem } from "@mcbot/schema/dailyRewards.js";
+import { CHANCE_SUM_TOLERANCE, type DailyRewardItem } from "@mcbot/schema/dailyRewards.js";
 import { lookupItem, nameFromId, vanillaId, type ItemCatalog } from "./minecraftItems";
 import { t, type MessageKey } from "../i18n";
 
@@ -53,9 +53,19 @@ export function rarityColor(rarity: RewardRarity): string {
   return `#${RARITY_STYLE[rarity].color.toString(16).padStart(6, "0")}`;
 }
 
-/** 0 for common up to 4 for legendary, for sorting. */
+/** The tier's place in the draw order (dirt first), for sorting. */
 export function rarityRank(rarity: RewardRarity): number {
   return REWARD_RARITIES.indexOf(rarity);
+}
+
+export function tierTotal(chances: Readonly<Record<RewardRarity, number>>): number {
+  return roundTo(REWARD_RARITIES.reduce((sum, tier) => sum + (chances[tier] ?? 0), 0), 4);
+}
+
+/** Why the tier chances cannot be saved, or null when they add up to 100. */
+export function tierChancesProblem(chances: Readonly<Record<RewardRarity, number>>): string | null {
+  const total = tierTotal(chances);
+  return Math.abs(total - 100) > CHANCE_SUM_TOLERANCE ? t("rewards.tiers.problem", { total }) : null;
 }
 
 export { REWARD_RARITIES };

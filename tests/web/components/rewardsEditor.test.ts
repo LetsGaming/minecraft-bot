@@ -4,6 +4,8 @@ import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
 import { ref } from "vue";
 import InputNumber from "primevue/inputnumber";
 import Checkbox from "primevue/checkbox";
+import Select from "primevue/select";
+import InputText from "primevue/inputtext";
 
 const net = vi.hoisted(() => ({ apiGet: vi.fn(), apiSend: vi.fn() }));
 vi.mock("../../../src/web/frontend/src/api", async (importOriginal) => {
@@ -23,6 +25,7 @@ import DayPanel from "../../../src/web/frontend/src/components/rewards/DayPanel.
 import ClaimPreview from "../../../src/web/frontend/src/components/rewards/ClaimPreview.vue";
 import OutcomeStrip from "../../../src/web/frontend/src/components/rewards/OutcomeStrip.vue";
 import AddItemDialog from "../../../src/web/frontend/src/components/rewards/AddItemDialog.vue";
+import TierChancesPanel from "../../../src/web/frontend/src/components/rewards/TierChancesPanel.vue";
 import ItemPicker from "../../../src/web/frontend/src/components/rewards/ItemPicker.vue";
 import { sharePercent, totalWeight } from "@mcbot/schema/dailyRewards.js";
 import SharedImpactDialog from "../../../src/web/frontend/src/components/rewards/SharedImpactDialog.vue";
@@ -263,7 +266,7 @@ describe("OutcomeStrip and ClaimPreview", () => {
   it("shows the chance of each rarity as text as well as a bar", async () => {
     const { wrapper } = await mountWith(OutcomeStrip);
     expect(wrapper.find(".sb-bar").exists()).toBe(true);
-    expect(wrapper.findAll(".sb-item")).toHaveLength(5);
+    expect(wrapper.findAll(".sb-item")).toHaveLength(6);
     expect(wrapper.text()).toContain("4 items in the pool");
     expect(wrapper.text()).toContain("a second draw on about 1 in 10 claims");
   });
@@ -336,7 +339,7 @@ describe("RewardsView", () => {
     const wrapper = mount(RewardsView, { props: { serverIds: ["smp"], server: "" }, attachTo: document.body, global: uiGlobal });
     await flushPromises();
     expect(wrapper.text()).toContain("What players get");
-    expect(wrapper.findAll("[role='tab']").map((t) => t.text())).toEqual(["Item pool", "Streak milestones", "Bonus chance"]);
+    expect(wrapper.findAll("[role='tab']").map((t) => t.text())).toEqual(["Item pool", "Streak milestones", "Tiers and bonus"]);
     expect(wrapper.find(".edit-bar").classes()).toContain("is-clean");
     expect(names(wrapper)).toHaveLength(4);
   });
@@ -358,5 +361,122 @@ describe("RewardsView", () => {
     expect(wrapper.find(".st-list").exists()).toBe(true);
     expect(localStorage.getItem("mcbot.rewards.tab")).toBe("streaks");
     localStorage.removeItem("mcbot.rewards.tab");
+  });
+});
+
+const tierSelect = (wrapper: VueWrapper, item: string) =>
+  wrapper.findAllComponents(Select).find((c) => c.props("ariaLabel") === `Tier of ${item}`)!;
+
+describe("tiers", () => {
+  it("writes the tier on a shared pool entry", async () => {
+    const { wrapper, ctx } = await mountWith(PoolTable);
+    tierSelect(wrapper, "Stone").vm.$emit("update:modelValue", "rare");
+    await flushPromises();
+    expect(ctx.rewards.items.value[0]).toMatchObject({ item: "stone", tier: "rare" });
+    expect(wrapper.findAll("tbody tr")[0]!.text()).toContain("Rare");
+  });
+
+  it("writes a set.tier patch on an inherited row of a server override", async () => {
+    const { wrapper, ctx } = await mountWith(PoolTable, {}, "smp");
+    tierSelect(wrapper, "Stone").vm.$emit("update:modelValue", "epic");
+    await flushPromises();
+    expect((ctx.rewards.draft.value as { default?: { set?: unknown } }).default?.set).toEqual({ st: { item: "stone", tier: "epic" } });
+    expect(wrapper.findAll("tbody tr")[0]!.classes()).toContain("is-changed");
+    expect(ctx.rewards.dirty.value).toBe(true);
+
+    tierSelect(wrapper, "Stone").vm.$emit("update:modelValue", "common");
+    await flushPromises();
+    expect(ctx.rewards.dirty.value).toBe(false);
+  });
+
+  it("shows the share inside the tier and the overall chance", async () => {
+    const { wrapper, ctx } = await mountWith(PoolTable);
+    ctx.rewards.setTier("st", "dirt");
+    await flushPromises();
+    const row = wrapper.findAll("tbody tr")[0]!;
+    expect(row.text()).toContain("5.21 % of all claims");
+    expect(wrapper.findAll("tbody tr")[1]!.text()).toContain("of all claims");
+  });
+
+  it("filters by the dirt tier", async () => {
+    const { wrapper, ctx } = await mountWith(PoolTable);
+    ctx.rewards.setTier("st", "dirt");
+    await flushPromises();
+    const chip = wrapper.findAll(".pt-chip").find((c) => c.text().includes("Dirt"))!;
+    await chip.trigger("click");
+    expect(names(wrapper)).toEqual(["Stone"]);
+  });
+
+  it("shows a since badge", async () => {
+    const { wrapper, ctx } = await mountWith(PoolTable);
+    ctx.rewards.addEntry("default", "copper_horn", 1, 5, "rare", "1.21.6");
+    await flushPromises();
+    expect(wrapper.text()).toContain("since 1.21.6");
+  });
+
+  it("renders six outcome segments from the tier odds", async () => {
+    const { wrapper, ctx } = await mountWith(OutcomeStrip);
+    ctx.rewards.setTier("st", "dirt");
+    await flushPromises();
+    expect(wrapper.findAll(".sb-item")).toHaveLength(6);
+    expect(wrapper.findAll(".sb-item")[0]!.text()).toContain("Dirt");
+    expect(wrapper.findAll(".sb-item")[0]!.text()).toContain("5.21 %");
+    expect(wrapper.findAll(".sb-item")[1]!.text()).toContain("94.8 %");
+  });
+
+  it("adds an item with its tier and version", async () => {
+    const { wrapper, ctx } = await mountWith(PoolTable);
+    wrapper.findComponent(ItemPicker).vm.$emit("pick", "golden_apple");
+    await flushPromises();
+    const dialog = wrapper.findComponent(AddItemDialog);
+    dialog.findComponent(Select).vm.$emit("update:modelValue", "rare");
+    const since = dialog.findAllComponents(InputText).at(-1)!;
+    since.vm.$emit("update:modelValue", "nonsense");
+    await flushPromises();
+    expect(document.body.textContent).toContain("must be a Minecraft version");
+    since.vm.$emit("update:modelValue", "1.21.6");
+    await flushPromises();
+    submitAdd();
+    await flushPromises();
+    expect(ctx.rewards.items.value.at(-1)).toMatchObject({ item: "golden_apple", tier: "rare", since: "1.21.6" });
+  });
+});
+
+describe("TierChancesPanel", () => {
+  it("blocks saving while the total is not 100 and recovers on reset", async () => {
+    const { wrapper, ctx } = await mountWith(TierChancesPanel);
+    const inputs = wrapper.findAllComponents(InputNumber);
+    expect(inputs).toHaveLength(6);
+    expect(wrapper.text()).toContain("Total: 100 %");
+
+    inputs[1]!.vm.$emit("update:modelValue", 60);
+    await flushPromises();
+    expect(wrapper.text()).toContain("They must add up to 100 %");
+    expect(ctx.rewards.poolProblems.value.join(" ")).toContain("tierChances");
+    expect(ctx.rewards.summary.value?.tierChancesChanged).toBe(true);
+
+    const reset = wrapper.findAll("button").find((b) => b.text().includes("Reset to defaults"))!;
+    await reset.trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("Total: 100 %");
+    expect(ctx.rewards.poolProblems.value).toEqual([]);
+  });
+
+  it("notes the tiers without items", async () => {
+    const { wrapper } = await mountWith(TierChancesPanel);
+    expect(wrapper.findAll(".tp-note")).toHaveLength(5);
+  });
+
+  it("follows the shared chances on a server until it replaces them", async () => {
+    const { wrapper, ctx } = await mountWith(TierChancesPanel, {}, "smp");
+    expect(wrapper.text()).toContain("From the shared pool");
+    const inputs = wrapper.findAllComponents(InputNumber);
+    inputs[1]!.vm.$emit("update:modelValue", 50);
+    inputs[2]!.vm.$emit("update:modelValue", 22);
+    await flushPromises();
+    expect((ctx.rewards.draft.value as { tierChances?: unknown }).tierChances).toBeDefined();
+    expect(wrapper.text()).not.toContain("From the shared pool");
+    await wrapper.findAll("button").find((b) => b.text().includes("Reset to shared"))!.trigger("click");
+    expect(ctx.rewards.dirty.value).toBe(false);
   });
 });

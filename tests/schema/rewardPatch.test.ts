@@ -298,6 +298,51 @@ describe("summarizeChanges", () => {
       daysAdded: 1,
       daysRemoved: 1,
       bonusChanged: true,
+      tierChancesChanged: false,
     });
+  });
+
+  it("reports changed tier chances", () => {
+    const after: RewardPool = { ...SHARED, tierChances: { common: 60, legendary: 40 } };
+    expect(summarizeChanges(SHARED, after).tierChancesChanged).toBe(true);
+  });
+});
+
+describe("tiers in overrides", () => {
+  const TIERED: RewardPool = {
+    default: [
+      { id: "a", item: "minecraft:bread", amount: 8, weight: 3, tier: "common" },
+      { id: "b", item: "minecraft:elytra", amount: 1, weight: 1, tier: "legendary", since: "1.21.4" },
+    ],
+    tierChances: { common: 70, legendary: 30 },
+  };
+
+  it("applies a patched tier and since to an inherited entry", () => {
+    const { pool } = resolvePool(TIERED, { default: { set: { a: { item: "minecraft:bread", tier: "rare", since: "26.1" } } } });
+    expect(pool.default![0]).toMatchObject({ id: "a", tier: "rare", since: "26.1", weight: 3 });
+    expect(pool.default![1]).toMatchObject({ id: "b", tier: "legendary" });
+  });
+
+  it("replaces the tier chances as one value and inherits them otherwise", () => {
+    const own = { common: 90, legendary: 10 };
+    expect(resolvePool(TIERED, { tierChances: own }).pool.tierChances).toEqual(own);
+    expect(resolvePool(TIERED, undefined).pool.tierChances).toEqual(TIERED.tierChances);
+    expect(compactOverride({ tierChances: own })).toEqual({ tierChances: own });
+  });
+
+  it("counts a changed tier as a change of the entry and keeps a pinned one off the server", () => {
+    const after: RewardPool = {
+      ...TIERED,
+      default: [{ ...TIERED.default![0]!, tier: "uncommon" }, TIERED.default![1]!],
+    };
+    expect(diffShared(TIERED, after)).toMatchObject([{ kind: "changed", id: "a" }]);
+    const pinned = { default: { set: { a: { item: "minecraft:bread", tier: "rare" as const } } } };
+    expect(serverImpact(TIERED, after, pinned).changes).toEqual([]);
+    expect(serverImpact(TIERED, after, undefined).changes).toHaveLength(1);
+  });
+
+  it("keeps the tier and since on a detached copy", () => {
+    const patch = detachEntries(TIERED.default, undefined, ["b"], true);
+    expect(patch?.add?.[0]).toMatchObject({ item: "minecraft:elytra", tier: "legendary", since: "1.21.4", detachedFrom: "b" });
   });
 });

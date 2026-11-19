@@ -251,6 +251,7 @@ describe("claimLock — concurrent claim prevention", () => {
     vi.mocked(guildRouter.resolveServer).mockReturnValue({
       id: "main",
       config: { apiUrl: "http://w:3030", apiKey: "k" },
+      getMinecraftVersion: vi.fn().mockResolvedValue(null),
       send: vi.fn().mockReturnValue(sendPending),
     } as never);
     vi.mocked(paths.getRootDir).mockReturnValue("/tmp");
@@ -334,6 +335,7 @@ describe("claim persistence", () => {
     vi.mocked(guildRouter.resolveServer).mockReturnValue({
       id: "main",
       config: { apiUrl: "http://w:3030", apiKey: "k" },
+      getMinecraftVersion: vi.fn().mockResolvedValue(null),
       send: vi
         .fn()
         .mockResolvedValue({ kind: "delivered", output: "Gave 1 [Diamond] to Steve" }),
@@ -441,6 +443,7 @@ describe("per-server claim independence", () => {
     vi.mocked(guildRouter.resolveServer).mockReturnValue({
       id: "main",
       config: { apiUrl: "http://w:3030", apiKey: "k" },
+      getMinecraftVersion: vi.fn().mockResolvedValue(null),
       send: vi
         .fn()
         .mockResolvedValue({ kind: "delivered", output: "Gave 1 [Diamond] to Steve" }),
@@ -533,6 +536,7 @@ describe("deferred replies", () => {
       vi.mocked(guildRouter.resolveServer).mockReturnValue({
         id: "main",
         config: { apiUrl: "http://w:3030", apiKey: "k" },
+        getMinecraftVersion: vi.fn().mockResolvedValue(null),
         send: vi
           .fn()
           .mockResolvedValue(

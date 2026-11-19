@@ -8,14 +8,27 @@
  * weights like 10 and 1 and a file written by the dashboard read the same
  * way, and the draw in `pick()` never has to know which one it got.
  */
-import { RewardRarity } from "./embedCategories.js";
+import { REWARD_RARITIES, RewardRarity } from "./embedCategories.js";
 
 export interface DailyRewardItem {
   /** Item id, `minecraft:` optional. May carry an item-components or NBT suffix. */
   item: string;
   amount: number;
-  /** Relative draw weight in the main pool. Ignored in streak bonuses. */
+  /**
+   * Relative draw weight among the entries of the same tier. Ignored in
+   * streak bonuses.
+   */
   weight?: number;
+  /**
+   * The tier a claim must roll before this entry can be drawn. A pool entry
+   * without one is common. Ignored in streak bonuses.
+   */
+  tier?: RewardRarity;
+  /**
+   * Oldest Minecraft version that has this item ("1.21.6", "26.1"). A server
+   * on an older version never rolls it; an unknown server version rolls it.
+   */
+  since?: string;
   /**
    * Stable identity inside its list. The same item may appear several times
    * with different amounts or weights, so the item string cannot name an
@@ -36,7 +49,26 @@ export interface RewardPool {
   streakBonuses?: Record<string, DailyRewardItem[]>;
   /** Chance (0-100) of a second draw from the pool on any claim. */
   bonusChance?: number;
+  /** Chance (percent, adding up to 100) that a claim rolls each tier. */
+  tierChances?: TierChances;
 }
+
+/** Percent per tier. A tier left out has no chance. */
+export type TierChances = Partial<Record<RewardRarity, number>>;
+
+/**
+ * What a pool without `tierChances` uses. A tier with no entries gives its
+ * share to the others in proportion, so a pool that only fills some tiers
+ * still draws every claim.
+ */
+export const DEFAULT_TIER_CHANCES: Readonly<Record<RewardRarity, number>> = {
+  dirt: 2.42,
+  common: 44,
+  uncommon: 28,
+  rare: 16,
+  epic: 7.58,
+  legendary: 2,
+};
 
 /** New values for one inherited entry. Only the fields it names are replaced. */
 export interface EntrySet {
@@ -44,6 +76,8 @@ export interface EntrySet {
   item: string;
   amount?: number;
   weight?: number;
+  tier?: RewardRarity;
+  since?: string;
 }
 
 /** What one list (the pool, or one streak day) changes against its shared list. */
@@ -71,10 +105,11 @@ export interface OverridePool {
   default?: ListPatch;
   streakBonuses?: StreakPatch;
   bonusChance?: number;
+  tierChances?: TierChances;
 }
 
 /** The fields an override can take over from the shared document, one by one. */
-export const REWARD_POOL_FIELDS = ["default", "streakBonuses", "bonusChance"] as const;
+export const REWARD_POOL_FIELDS = ["default", "streakBonuses", "bonusChance", "tierChances"] as const;
 export type RewardPoolField = (typeof REWARD_POOL_FIELDS)[number];
 
 /** Where in a document a list lives: the pool, or a streak day. */
@@ -116,6 +151,54 @@ export function itemProblem(item: unknown): string | null {
   }
   if (suffix && !SUFFIX_RE.test(suffix)) return `the components after "${id}" are malformed`;
   return null;
+}
+
+/** A release number as Minecraft writes it: 1.21, 1.21.6, or year-based 26.1, 26.1.2. */
+const SINCE_RE = /^(?:1|[2-9]\d)\.\d{1,2}(?:\.\d{1,2})?$/;
+
+/** Why `since` is not a Minecraft version, or null when it is. */
+export function sinceProblem(since: unknown): string | null {
+  return typeof since === "string" && SINCE_RE.test(since)
+    ? null
+    : 'must be a Minecraft version like "1.21.6" or "26.1"';
+}
+
+function isTier(value: unknown): value is RewardRarity {
+  return typeof value === "string" && (REWARD_RARITIES as readonly string[]).includes(value);
+}
+
+/** Tolerance when the chances are added up, so 33.33 + 33.33 + 33.34 passes. */
+export const CHANCE_SUM_TOLERANCE = 0.01;
+
+/** The tier chances of a document, or undefined (with errors reported) when invalid. */
+function parseTierChances(raw: unknown, errors: string[]): TierChances | undefined {
+  if (!isRecord(raw)) {
+    errors.push("tierChances: must map tier names to percentages");
+    return undefined;
+  }
+  const out: TierChances = {};
+  let sum = 0;
+  for (const [tier, value] of Object.entries(raw)) {
+    if (!isTier(tier)) {
+      errors.push(`tierChances.${tier}: unknown tier (use ${REWARD_RARITIES.join(", ")})`);
+      continue;
+    }
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 100) {
+      errors.push(`tierChances.${tier}: must be a number from 0 to 100`);
+      continue;
+    }
+    out[tier] = value;
+    sum += value;
+  }
+  if (Object.keys(out).length === 0) {
+    errors.push("tierChances: needs at least one tier");
+    return undefined;
+  }
+  if (Math.abs(sum - 100) > CHANCE_SUM_TOLERANCE) {
+    errors.push(`tierChances: the chances add up to ${roundWeight(sum)}, they must add up to 100`);
+    return undefined;
+  }
+  return out;
 }
 
 export interface RewardPoolParse {
@@ -170,6 +253,21 @@ function parseItems(
         return;
       }
       if (entry.weight !== undefined) item.weight = weight;
+      if (entry.tier !== undefined) {
+        if (!isTier(entry.tier)) {
+          errors.push(`${at}.tier: must be one of ${REWARD_RARITIES.join(", ")}`);
+          return;
+        }
+        item.tier = entry.tier;
+      }
+      if (entry.since !== undefined) {
+        const sinceError = sinceProblem(entry.since);
+        if (sinceError) {
+          errors.push(`${at}.since: ${sinceError}`);
+          return;
+        }
+        item.since = entry.since as string;
+      }
     }
     for (const key of ["id", "detachedFrom"] as const) {
       const value = entry[key];
@@ -271,6 +369,21 @@ function parseListPatch(raw: unknown, where: string, max: number, weighted: bool
           }
           next.weight = w;
         }
+        if (weighted && value.tier !== undefined) {
+          if (!isTier(value.tier)) {
+            errors.push(`${at}.tier: must be one of ${REWARD_RARITIES.join(", ")}`);
+            continue;
+          }
+          next.tier = value.tier;
+        }
+        if (weighted && value.since !== undefined) {
+          const sinceError = sinceProblem(value.since);
+          if (sinceError) {
+            errors.push(`${at}.since: ${sinceError}`);
+            continue;
+          }
+          next.since = value.since as string;
+        }
         set[id] = next;
       }
       if (Object.keys(set).length > 0) patch.set = set;
@@ -335,6 +448,11 @@ export function parseRewardPool(raw: unknown, kind: "shared" | "override"): Rewa
     } else {
       pool.bonusChance = chance;
     }
+  }
+
+  if (raw.tierChances !== undefined) {
+    const chances = parseTierChances(raw.tierChances, errors);
+    if (chances) pool.tierChances = chances;
   }
 
   return { pool, errors };
@@ -422,6 +540,11 @@ export function parseOverridePool(raw: unknown): OverridePoolParse {
     } else {
       pool.bonusChance = chance;
     }
+  }
+
+  if (raw.tierChances !== undefined) {
+    const chances = parseTierChances(raw.tierChances, errors);
+    if (chances) pool.tierChances = chances;
   }
 
   return { pool, errors };
@@ -624,38 +747,17 @@ export function normalizedWeights(items: readonly Pick<DailyRewardItem, "weight"
 
 // ── Rarity ───────────────────────────────────────────────────────────────────
 
-/**
- * Share of the pool's total weight at or below which an item counts as that
- * rarity. Checked from rarest to most common.
- */
-const RARITY_MAX_SHARE: ReadonlyArray<readonly [RewardRarity, number]> = [
-  [RewardRarity.Legendary, 0.02],
-  [RewardRarity.Epic, 0.07],
-  [RewardRarity.Rare, 0.2],
-  [RewardRarity.Uncommon, 0.45],
-];
+/** The tier of a pool entry; one without a tier is common. */
+export function rarityOf(item: Pick<DailyRewardItem, "tier">): RewardRarity {
+  return item.tier ?? RewardRarity.Common;
+}
 
-/** Pools with fewer distinct weights than this carry no rarity signal. */
-const MIN_DISTINCT_WEIGHTS_FOR_RARITY = 4;
-
-/**
- * How rare an item is within its pool, from its share of the total weight.
- * A pool whose weights barely differ (for example all equal) has no real
- * rarity ladder, so every item in it is common.
- */
-export function rarityOf(
-  item: Pick<DailyRewardItem, "weight">,
-  pool: readonly Pick<DailyRewardItem, "weight">[],
-): RewardRarity {
-  const weights = pool.map(weightOf);
-  if (new Set(weights).size < MIN_DISTINCT_WEIGHTS_FOR_RARITY) return RewardRarity.Common;
-  const total = weights.reduce((a, b) => a + b, 0);
-  if (total <= 0) return RewardRarity.Common;
-  const share = weightOf(item) / total;
-  for (const [rarity, max] of RARITY_MAX_SHARE) {
-    if (share <= max) return rarity;
-  }
-  return RewardRarity.Common;
+/** The chances every tier has in a pool, with the defaults when it sets none. */
+export function tierChancesOf(pool: Pick<RewardPool, "tierChances">): Record<RewardRarity, number> {
+  if (!pool.tierChances) return { ...DEFAULT_TIER_CHANCES };
+  return Object.fromEntries(
+    REWARD_RARITIES.map((tier) => [tier, pool.tierChances?.[tier] ?? 0]),
+  ) as Record<RewardRarity, number>;
 }
 
 /** The streak days that carry a bonus, ascending. */

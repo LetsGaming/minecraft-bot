@@ -52,6 +52,7 @@ function describePool(pool: RewardPool): string {
   if (pool.default) parts.push(`${pool.default.length} items`);
   if (pool.streakBonuses) parts.push(`${Object.keys(pool.streakBonuses).length} streak days`);
   if (pool.bonusChance !== undefined) parts.push(`bonus ${pool.bonusChance} %`);
+  if (pool.tierChances !== undefined) parts.push("custom tier chances");
   return parts.length > 0 ? parts.join(", ") : "inherits everything";
 }
 
@@ -73,6 +74,7 @@ function describeOverride(pool: OverridePool): string {
   if (days > 0) parts.push(`${days} streak days changed`);
   if (removed > 0) parts.push(`${removed} streak days removed`);
   if (pool.bonusChance !== undefined) parts.push(`bonus ${pool.bonusChance} %`);
+  if (pool.tierChances !== undefined) parts.push("custom tier chances");
   return parts.length > 0 ? parts.join(", ") : "inherits everything";
 }
 

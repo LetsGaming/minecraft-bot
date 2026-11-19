@@ -26,6 +26,7 @@ import {
   type OverridePool,
   type RewardPool,
   type RewardPoolField,
+  type TierChances,
 } from "@mcbot/schema/dailyRewards.js";
 import { compactOverride, convertLegacyVerified, resolvePool } from "@mcbot/schema/rewardPatch.js";
 import { isEnoent, loadJson, removeJson, saveJson } from "../jsonStore.js";
@@ -164,6 +165,7 @@ export interface ResolvedRewardPool {
   default: DailyRewardItem[];
   streakBonuses?: Record<string, DailyRewardItem[]>;
   bonusChance?: number;
+  tierChances?: TierChances;
 }
 
 /**
@@ -178,6 +180,7 @@ export function rewardPoolForServer(cfg: DailyRewardsConfig, override?: Override
     default: items,
     ...(pool.streakBonuses ? { streakBonuses: pool.streakBonuses } : {}),
     ...(pool.bonusChance !== undefined ? { bonusChance: pool.bonusChance } : {}),
+    ...(pool.tierChances !== undefined ? { tierChances: pool.tierChances } : {}),
   };
 }
 
@@ -271,7 +274,7 @@ export class RewardsWriteError extends Error {
 }
 
 /** Fields in a fixed order, so a save never reshuffles the file. */
-const FIELD_ORDER: readonly RewardPoolField[] = ["default", "streakBonuses", "bonusChance"];
+const FIELD_ORDER: readonly RewardPoolField[] = ["default", "streakBonuses", "bonusChance", "tierChances"];
 
 const items = (list: readonly DailyRewardItem[], indent: string): string =>
   list.length === 0 ? "[]" : `[\n${list.map((i) => `${indent}  ${JSON.stringify(i)}`).join(",\n")}\n${indent}]`;
@@ -325,6 +328,7 @@ export function formatOverrideDocument(override: OverridePool): string {
     parts.push(`  "streakBonuses": {\n${inner.join(",\n")}\n  }`);
   }
   if (override.bonusChance !== undefined) parts.push(`  "bonusChance": ${JSON.stringify(override.bonusChance)}`);
+  if (override.tierChances !== undefined) parts.push(`  "tierChances": ${JSON.stringify(override.tierChances)}`);
   return parts.length === 0 ? "{}\n" : `{\n${parts.join(",\n")}\n}\n`;
 }
 

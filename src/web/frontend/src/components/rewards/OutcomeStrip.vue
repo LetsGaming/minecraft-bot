@@ -28,8 +28,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import Button from "primevue/button";
-import { rarityOf, totalWeight, weightOf } from "@mcbot/schema/dailyRewards.js";
-import type { Rng } from "@mcbot/schema/rewardRoll.js";
+import { tierOdds, type Rng } from "@mcbot/schema/rewardRoll.js";
 import { useRewardsContext } from "../../composables/rewardsContext";
 import { REWARD_RARITIES, formatPercent, rarityColor, rarityLabel } from "../../utils/rewardDisplay";
 import StackedBar, { type BarSegment } from "../ui/StackedBar.vue";
@@ -49,12 +48,9 @@ const previewOpen = ref(false);
 const items = computed(() => rewards.effectivePool.value.default ?? []);
 
 const segments = computed<BarSegment[]>(() => {
-  const total = totalWeight(items.value);
+  const odds = tierOdds({ tierChances: rewards.effectivePool.value.tierChances, default: items.value });
   return REWARD_RARITIES.map((rarity) => {
-    const weight = items.value
-      .filter((item) => rarityOf(item, items.value) === rarity)
-      .reduce((sum, item) => sum + weightOf(item), 0);
-    const share = total > 0 ? (weight / total) * 100 : 0;
+    const share = odds[rarity];
     return {
       key: rarity,
       label: rarityLabel(rarity),

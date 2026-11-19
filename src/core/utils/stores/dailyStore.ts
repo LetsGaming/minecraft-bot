@@ -115,6 +115,15 @@ export async function updateClaimedStore<T>(
  */
 export const MAX_PENDING_PER_PLAYER = 3;
 
+/**
+ * Join-time delivery runs an entry may fail without the server rejecting its
+ * items before the rest of it moves to the failed list.
+ */
+export const MAX_DELIVERY_ATTEMPTS = 5;
+
+/** Failed entries kept per player; the oldest drop first. */
+export const MAX_FAILED_PER_PLAYER = 20;
+
 export interface PendingRewardEntry {
   /** Discord user the claim belongs to ("" for system rewards, e.g. challenge bonuses). */
   discordId: string;
@@ -122,14 +131,31 @@ export interface PendingRewardEntry {
   queuedAt: number;
   /** Items from a claim that was already consumed but could not all be handed over. */
   owed?: boolean;
+  /** Delivery runs that left items undelivered without the server rejecting them. */
+  attempts?: number;
+}
+
+/** Items that will not be retried: the server rejected them, or delivery kept failing. */
+export interface FailedRewardEntry {
+  discordId: string;
+  items: DailyRewardItem[];
+  queuedAt: number;
+  failedAt: number;
+  /** `rejected`: the server refused the item. `attempts`: delivery kept failing. */
+  reason: "rejected" | "attempts";
 }
 
 /** serverId → lowercased MC name → queued entries (oldest first) */
 export type ServerPendingMap = Record<string, PendingRewardEntry[]>;
 
+/** serverId → lowercased MC name → failed entries (oldest first) */
+export type ServerFailedMap = Record<string, FailedRewardEntry[]>;
+
 export interface PendingRewardsStore {
   version: 1;
   servers: Record<string, ServerPendingMap>;
+  /** Created on the first failure, so a store without one stays as it was. */
+  failed?: Record<string, ServerFailedMap>;
 }
 
 // Player names key these maps, so they have no prototype (see safeRecord).
@@ -141,6 +167,12 @@ const pendingDoc = versionedStore<PendingRewardsStore>(
     doc.servers = toRecord(doc.servers);
     for (const serverId of Object.keys(doc.servers)) {
       doc.servers[serverId] = toRecord(doc.servers[serverId]!);
+    }
+    if (doc.failed) {
+      doc.failed = toRecord(doc.failed);
+      for (const serverId of Object.keys(doc.failed)) {
+        doc.failed[serverId] = toRecord(doc.failed[serverId]!);
+      }
     }
     return doc;
   },
@@ -170,6 +202,20 @@ export function getServerPending(
   return map;
 }
 
+/** Failed entries for one server; created lazily so callers can mutate. */
+export function getServerFailed(
+  store: PendingRewardsStore,
+  serverId: string,
+): ServerFailedMap {
+  const failed = (store.failed ??= createRecord());
+  let map = ownGet(failed, serverId);
+  if (!map) {
+    map = createRecord<FailedRewardEntry[]>();
+    ownSet(failed, serverId, map);
+  }
+  return map;
+}
+
 /** Whether anything is queued for the player; a read that stays off the write lock. */
 export async function hasPending(
   serverId: string,
@@ -182,7 +228,8 @@ export async function hasPending(
 /**
  * Queue an entry for the player's next join. With `cap`, a full queue
  * refuses (returns null) and nothing is written; `counts` narrows which
- * waiting entries use up the cap (default: all). Returns the new queue length.
+ * waiting entries use up the cap (default: all). Returns how many entries now
+ * wait, counted the same way as the cap, so a shown "n/cap" matches the cap.
  */
 export async function enqueuePending(
   serverId: string,
@@ -198,7 +245,7 @@ export async function enqueuePending(
     if (options.cap !== undefined && used >= options.cap) return null;
     list.push(entry);
     ownSet(queue, key, list);
-    return list.length;
+    return options.counts ? list.filter(options.counts).length : list.length;
   });
 }
 
@@ -228,6 +275,76 @@ export async function takePending(
     const taken = ownGet(queue, key) ?? [];
     delete queue[key];
     return taken;
+  });
+}
+
+/**
+ * Move entries to the player's failed list so nothing retries them. Keeps the
+ * newest MAX_FAILED_PER_PLAYER.
+ */
+export async function recordFailed(
+  serverId: string,
+  player: string,
+  entries: FailedRewardEntry[],
+): Promise<void> {
+  if (entries.length === 0) return;
+  const key = player.toLowerCase();
+  await updatePendingRewards((store) => {
+    const failed = getServerFailed(store, serverId);
+    const all = [...(ownGet(failed, key) ?? []), ...entries];
+    ownSet(failed, key, all.slice(-MAX_FAILED_PER_PLAYER));
+  });
+}
+
+/** What waits for the player and what gave up, read without the write lock. */
+export function peekPlayerQueue(
+  serverId: string,
+  player: string,
+): { pending: PendingRewardEntry[]; failed: FailedRewardEntry[] } {
+  const key = player.toLowerCase();
+  const doc = pendingDoc.load();
+  return {
+    pending: ownGet(ownGet(doc.servers, serverId) ?? {}, key) ?? [],
+    failed: ownGet(ownGet(doc.failed ?? {}, serverId) ?? {}, key) ?? [],
+  };
+}
+
+/** Drop everything queued or failed for the player; returns how many entries went. */
+export async function clearPlayerQueue(
+  serverId: string,
+  player: string,
+): Promise<number> {
+  const key = player.toLowerCase();
+  return updatePendingRewards((store) => {
+    const queue = getServerPending(store, serverId);
+    const failed = getServerFailed(store, serverId);
+    const count = (ownGet(queue, key)?.length ?? 0) + (ownGet(failed, key)?.length ?? 0);
+    delete queue[key];
+    delete failed[key];
+    return count;
+  });
+}
+
+/**
+ * Put the player's failed entries back in the queue with a fresh attempt
+ * count. Returns how many entries moved.
+ */
+export async function retryFailed(
+  serverId: string,
+  player: string,
+): Promise<number> {
+  const key = player.toLowerCase();
+  return updatePendingRewards((store) => {
+    const failed = getServerFailed(store, serverId);
+    const moved = ownGet(failed, key) ?? [];
+    if (moved.length === 0) return 0;
+    delete failed[key];
+    const queue = getServerPending(store, serverId);
+    const entries: PendingRewardEntry[] = moved.map(
+      ({ discordId, items, queuedAt }) => ({ discordId, items, queuedAt, owed: true }),
+    );
+    ownSet(queue, key, [...entries, ...(ownGet(queue, key) ?? [])]);
+    return moved.length;
   });
 }
 

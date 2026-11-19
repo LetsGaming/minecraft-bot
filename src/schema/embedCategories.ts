@@ -26,8 +26,12 @@ export type EmbedCategory = (typeof EmbedCategory)[keyof typeof EmbedCategory];
 
 export const EMBED_CATEGORIES: readonly EmbedCategory[] = Object.values(EmbedCategory);
 
-/** Daily reward rarity, derived from an item's share of its pool's weight. */
+/**
+ * Daily reward tier, from the joke tier up to legendary. The order is the
+ * order of rarity: a claim rolls a tier first, then an item inside it.
+ */
 export const RewardRarity = {
+  Dirt: "dirt",
   Common: "common",
   Uncommon: "uncommon",
   Rare: "rare",
@@ -68,6 +72,7 @@ export const CATEGORY_STYLE: Readonly<Record<EmbedCategory, EmbedStyle>> = {
 export const RARITY_STYLE: Readonly<
   Record<RewardRarity, EmbedStyle & { badge: string }>
 > = {
+  dirt: { icon: "🟤", color: 0x8b6b4a, badge: "DIRT" },
   common: { icon: "⚪", color: 0x9aa1ac, badge: "COMMON" },
   uncommon: { icon: "🟢", color: 0x4ade80, badge: "UNCOMMON" },
   rare: { icon: "🔵", color: 0x60a5fa, badge: "RARE" },

@@ -40,7 +40,12 @@ import {
   loadPendingRewards,
   getServerPending,
   updatePendingRewards,
+  recordFailed,
+  retryFailed,
+  clearPlayerQueue,
+  peekPlayerQueue,
   MAX_PENDING_PER_PLAYER,
+  MAX_FAILED_PER_PLAYER,
 } from "../../src/core/utils/stores/dailyStore.js";
 
 const record = (lastClaim: number) => ({
@@ -251,5 +256,74 @@ describe("pending reward queue helpers", () => {
       (store) => getServerPending(store, "smp")["alex"]!.length,
     );
     expect(length).toBe(1);
+  });
+
+  it("reports the count the cap uses when `counts` is given", async () => {
+    const isClaim = (e: { discordId: string; owed?: boolean }) => e.discordId !== "" && !e.owed;
+    await enqueuePending("smp", "steve", { ...entry(1, ""), owed: false });
+    await enqueuePending("smp", "steve", { ...entry(2), owed: true });
+    expect(await enqueuePending("smp", "steve", entry(3), { counts: isClaim })).toBe(1);
+  });
+});
+
+describe("failed reward entries", () => {
+  const failedEntry = (failedAt: number) => ({
+    discordId: "u1",
+    items: [{ item: "stick", amount: 1 }],
+    queuedAt: 1,
+    failedAt,
+    reason: "rejected" as const,
+  });
+
+  it("keeps a store without failures free of a failed key", async () => {
+    await enqueuePending("smp", "steve", { discordId: "u1", items: [], queuedAt: 1 });
+    expect(kvGet("pendingRewards")).not.toHaveProperty("failed");
+    expect(peekPlayerQueue("smp", "steve").failed).toEqual([]);
+  });
+
+  it("records failures under the lowercased name and keeps only the newest", async () => {
+    for (let n = 0; n < MAX_FAILED_PER_PLAYER + 3; n++) {
+      await recordFailed("smp", "Steve", [failedEntry(n)]);
+    }
+    const failed = peekPlayerQueue("smp", "STEVE").failed;
+    expect(failed).toHaveLength(MAX_FAILED_PER_PLAYER);
+    expect(failed[0]!.failedAt).toBe(3);
+    expect(failed.at(-1)!.failedAt).toBe(MAX_FAILED_PER_PLAYER + 2);
+  });
+
+  it("survives a JSON round trip as ordinary keys", async () => {
+    await recordFailed("smp", "__proto__", [failedEntry(1)]);
+    kvSet("pendingRewards", JSON.parse(JSON.stringify(kvGet("pendingRewards"))));
+    expect(peekPlayerQueue("smp", "__proto__").failed).toEqual([failedEntry(1)]);
+    expect(peekPlayerQueue("smp", "someoneelse").failed).toEqual([]);
+  });
+
+  it("retry moves failed entries back to the front of the queue with a fresh attempt count", async () => {
+    await enqueuePending("smp", "steve", { discordId: "u1", items: [], queuedAt: 50 });
+    await recordFailed("smp", "steve", [failedEntry(5)]);
+
+    expect(await retryFailed("smp", "Steve")).toBe(1);
+    expect(await retryFailed("smp", "steve")).toBe(0);
+
+    const { pending, failed } = peekPlayerQueue("smp", "steve");
+    expect(failed).toEqual([]);
+    expect(pending.map((e) => e.queuedAt)).toEqual([1, 50]);
+    expect(pending[0]).toEqual({
+      discordId: "u1",
+      items: [{ item: "stick", amount: 1 }],
+      queuedAt: 1,
+      owed: true,
+    });
+  });
+
+  it("clear drops queued and failed entries and counts them", async () => {
+    await enqueuePending("smp", "steve", { discordId: "u1", items: [], queuedAt: 1 });
+    await recordFailed("smp", "steve", [failedEntry(2), failedEntry(3)]);
+    await enqueuePending("smp", "alex", { discordId: "u2", items: [], queuedAt: 1 });
+
+    expect(await clearPlayerQueue("smp", "Steve")).toBe(3);
+
+    expect(peekPlayerQueue("smp", "steve")).toEqual({ pending: [], failed: [] });
+    expect(peekPlayerQueue("smp", "alex").pending).toHaveLength(1);
   });
 });

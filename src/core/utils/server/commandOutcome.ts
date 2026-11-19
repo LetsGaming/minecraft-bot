@@ -8,7 +8,7 @@ import { wasAccepted, type CommandOutcome } from "@mcbot/schema/commandOutcome.j
 import { t } from "../i18n.js";
 
 /** Output the vanilla console gives for a command it did not run. */
-const COMMAND_NOT_RUN = /^(Unknown or incomplete command|Incorrect argument)/i;
+export const COMMAND_NOT_RUN =/^(Unknown or incomplete command|Incorrect argument)/i;
 
 export interface AcceptOptions {
   /** Console replies, beyond the generic ones, that mean the change did not happen. */

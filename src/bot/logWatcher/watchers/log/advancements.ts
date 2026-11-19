@@ -12,8 +12,8 @@ import {
   expireStale,
   getActiveChallenge,
 } from "@mcbot/core/utils/stores/challengeStore.js";
-import { enqueuePending } from "@mcbot/core/utils/stores/dailyStore.js";
-import { give } from "@mcbot/core/utils/minecraft/rewards.js";
+import { enqueuePending, recordFailed } from "@mcbot/core/utils/stores/dailyStore.js";
+import { give, tellUndeliverable } from "@mcbot/core/utils/minecraft/rewards.js";
 import { recordAdminAction } from "@mcbot/core/utils/stores/adminAudit.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { tellraw } from "@mcbot/core/utils/minecraft/serverMessages.js";
@@ -96,8 +96,18 @@ async function handleChallenge(
 
   if (active.item) {
     const item = { item: active.item, amount: active.amount ?? 1 };
-    const ok = await give(server, player, item);
-    if (!ok) {
+    const status = await give(server, player, item);
+    if (status === "rejected") {
+      const now = Date.now();
+      await recordFailed(server.id, player, [
+        { discordId: "", items: [item], queuedAt: now, failedAt: now, reason: "rejected" },
+      ]);
+      log.error(
+        "challenges",
+        `Bonus item ${item.item} for ${player} was rejected by the server; see /daily-admin queue`,
+      );
+      await tellUndeliverable(server, player, 1);
+    } else if (status !== "delivered") {
       await enqueuePending(server.id, player, {
         discordId: "",
         items: [item],
@@ -105,7 +115,7 @@ async function handleChallenge(
       });
       log.warn(
         "challenges",
-        `Bonus give for ${player} not confirmed — queued for next join`,
+        `Bonus give for ${player} not confirmed, queued for next join`,
       );
     }
   }

@@ -13,6 +13,7 @@ import {
   updateClaimedStore,
   enqueuePending,
   removePending,
+  recordFailed,
   MAX_PENDING_PER_PLAYER,
   type PendingRewardEntry,
   type ResolvedRewardPool,
@@ -21,7 +22,17 @@ import { getLinkedAccount } from "../stores/linkStore.js";
 import type { ServerInstance } from "../server/server.js";
 import type { DailyRewardItem, UserClaimData } from "../../types/index.js";
 import { getOnlinePlayers, isPlayerOnline } from "./playerUtils.js";
-import { give, calcStreak, DAILY_COOLDOWN_MS, STREAK_GRACE_MS } from "./rewards.js";
+import {
+  give,
+  calcStreak,
+  deliverPendingRewards,
+  tellUndeliverable,
+  DAILY_COOLDOWN_MS,
+  STREAK_GRACE_MS,
+} from "./rewards.js";
+import { formatItemList } from "./itemNames.js";
+import { errMsg } from "../error.js";
+import { log } from "../logger.js";
 import { deriveMaxStreak, rollRewards } from "@mcbot/schema/rewardRoll.js";
 
 /**
@@ -62,7 +73,8 @@ export function emptyClaim(): UserClaimData {
 /**
  * Roll one claim: advance the streak and draw the main reward, the optional
  * random bonus (`bonusChance` is a percentage) and the streak milestone bonus.
- * Pure apart from `Math.random`.
+ * `version` is the server's Minecraft version; an entry newer than it is not
+ * rolled. Pure apart from `Math.random`.
  */
 export function rollClaim(
   pool: ResolvedRewardPool,
@@ -71,6 +83,7 @@ export function rollClaim(
     "lastClaim" | "currentStreak" | "bonusStreak" | "longestStreak"
   >,
   now: number,
+  version: string | null = null,
 ): ClaimRoll {
   const delta = now - userData.lastClaim;
   const { currentStreak, bonusStreak, longestStreak } = calcStreak(
@@ -80,7 +93,7 @@ export function rollClaim(
   );
   const lostStreak = delta > STREAK_GRACE_MS ? userData.currentStreak : 0;
 
-  const { main, randomBonus, streakBonus } = rollRewards(pool, bonusStreak);
+  const { main, randomBonus, streakBonus } = rollRewards(pool, bonusStreak, Math.random, { version });
 
   return {
     currentStreak,
@@ -187,7 +200,7 @@ export async function claimDaily(
   }
 
   const online = isPlayerOnline(await getOnlinePlayers(server), player);
-  const roll = rollClaim(pool, userData, now);
+  const roll = rollClaim(pool, userData, now, await server.getMinecraftVersion());
   const entry = { discordId: userId, items: roll.items, queuedAt: now };
   const alreadyClaimed: ClaimOutcome = {
     kind: "already-claimed",
@@ -231,17 +244,33 @@ export async function claimDaily(
   if (!(await recordClaim(server.id, userId, userData, roll, now))) return alreadyClaimed;
 
   const undelivered: DailyRewardItem[] = [];
+  const rejected: DailyRewardItem[] = [];
   for (const reward of roll.items) {
-    if (!(await give(server, player, reward))) undelivered.push(reward);
+    const status = await give(server, player, reward);
+    if (status === "rejected") rejected.push(reward);
+    else if (status !== "delivered") undelivered.push(reward);
+  }
+
+  if (rejected.length > 0) {
+    // The server refuses these items, so queueing them would only fail again.
+    log.error(
+      "daily",
+      `Server ${server.id} rejected ${rejected.length} reward item(s) for ${player}: ${formatItemList(rejected)}`,
+    );
+    await recordFailed(server.id, player, [
+      { discordId: userId, queuedAt: now, failedAt: now, items: rejected, reason: "rejected" },
+    ]);
+    await tellUndeliverable(server, player, rejected.length);
   }
 
   if (undelivered.length > 0) {
     // Not capped: the claim is already used, so these items are owed.
-    const queued = await enqueuePending(server.id, player, {
-      ...entry,
-      items: undelivered,
-      owed: true,
-    });
+    const queued = await enqueuePending(
+      server.id,
+      player,
+      { ...entry, items: undelivered, owed: true },
+      { counts: isQueuedClaim },
+    );
     return {
       kind: "queued",
       player,
@@ -257,6 +286,12 @@ export async function claimDaily(
       partial: true,
     };
   }
+
+  // The player is online and took everything: entries a missed join left
+  // behind (owed items, system rewards) go out now instead of at the next join.
+  await deliverPendingRewards(server, player).catch((err: unknown) => {
+    log.warn("daily", `Could not flush the queue for ${player}: ${errMsg(err)}`);
+  });
 
   return {
     kind: "claimed",

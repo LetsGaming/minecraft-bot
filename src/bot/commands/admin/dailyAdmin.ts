@@ -5,11 +5,12 @@
  *   /daily-admin move user:@x from:<server> to:<server> [overwrite]
  *   /daily-admin reset user:@x [server:<server>]
  *   /daily-admin show user:@x
+ *   /daily-admin queue action:show|clear|retry [user:@x | player:<name>] [server:<server>]
  *
  * Servers outside the issuing guild's allowed set are refused. Every
  * mutation lands in the admin audit log.
  */
-import { SlashCommandBuilder } from "discord.js";
+import { SlashCommandBuilder, type ChatInputCommandInteraction } from "discord.js";
 import { withErrorHandling, requireServerAdmin } from "../middleware.js";
 import {
   createSuccessEmbed,
@@ -20,7 +21,12 @@ import {
   loadClaimedStore,
   updateClaimedStore,
   getServerClaims,
+  peekPlayerQueue,
+  clearPlayerQueue,
+  retryFailed,
 } from "@mcbot/core/utils/stores/dailyStore.js";
+import { getLinkedAccount } from "@mcbot/core/utils/stores/linkStore.js";
+import { formatItemList } from "@mcbot/core/utils/minecraft/itemNames.js";
 import {
   assertMayTargetServerId,
   filterTargetableServerIds,
@@ -79,11 +85,137 @@ export const data = new SlashCommandBuilder()
       .addUserOption((o) =>
         o.setName("user").setDescription("The Discord user").setRequired(true),
       ),
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName("queue")
+      .setDescription("Show, clear or retry a player's queued and failed rewards")
+      .addStringOption((o) =>
+        o
+          .setName("action")
+          .setDescription("What to do with the queue")
+          .setRequired(true)
+          .addChoices(
+            { name: "show", value: "show" },
+            { name: "clear", value: "clear" },
+            { name: "retry", value: "retry" },
+          ),
+      )
+      .addUserOption((o) => o.setName("user").setDescription("The Discord user"))
+      .addStringOption((o) =>
+        o
+          .setName("player")
+          .setDescription("Minecraft name, for rewards without a Discord user"),
+      )
+      .addStringOption((o) =>
+        o
+          .setName("server")
+          .setDescription("Server to look at")
+          .setAutocomplete(true),
+      ),
   );
+
+/** Lines shown per list; the rest are summarised so the embed stays under Discord's limit. */
+const QUEUE_LINES_SHOWN = 15;
+
+async function runQueue(interaction: ChatInputCommandInteraction): Promise<void> {
+  const action = interaction.options.getString("action", true);
+  const user = interaction.options.getUser("user");
+  let player = interaction.options.getString("player")?.trim();
+  if (!player) {
+    if (!user) throw new Error(t("dailyAdmin.queueNeedsTarget"));
+    const linked = await getLinkedAccount(user.id);
+    if (!linked) throw new Error(t("dailyAdmin.queueNotLinked", { user: user.tag }));
+    player = linked;
+  }
+  const server = resolveServer(interaction).id;
+
+  if (action === "clear") {
+    const count = await clearPlayerQueue(server, player);
+    await auditAdminAction(interaction, {
+      action: "daily-queue-clear",
+      server,
+      detail: `${player}: ${count} entries`,
+    });
+    await interaction.editReply({
+      embeds: [
+        createSuccessEmbed(t("dailyAdmin.queueCleared", { count, player, server }), {
+          title: t("dailyAdmin.queueClearedTitle"),
+        }),
+      ],
+    });
+    return;
+  }
+
+  if (action === "retry") {
+    const count = await retryFailed(server, player);
+    if (count === 0) throw new Error(t("dailyAdmin.queueRetryNone", { player, server }));
+    await auditAdminAction(interaction, {
+      action: "daily-queue-retry",
+      server,
+      detail: `${player}: ${count} entries`,
+    });
+    await interaction.editReply({
+      embeds: [
+        createSuccessEmbed(t("dailyAdmin.queueRetried", { count, player, server }), {
+          title: t("dailyAdmin.queueRetriedTitle"),
+        }),
+      ],
+    });
+    return;
+  }
+
+  const { pending, failed } = peekPlayerQueue(server, player);
+  const sections: string[] = [];
+  const cut = (lines: string[]): string[] =>
+    lines.length > QUEUE_LINES_SHOWN
+      ? [...lines.slice(0, QUEUE_LINES_SHOWN), `… +${lines.length - QUEUE_LINES_SHOWN}`]
+      : lines;
+  if (pending.length > 0) {
+    sections.push(
+      [
+        t("dailyAdmin.queuePending", { count: pending.length }),
+        ...cut(
+          pending.map((e) => `• ${formatItemList(e.items)} · ${formatDatetime(e.queuedAt)}`),
+        ),
+      ].join("\n"),
+    );
+  }
+  if (failed.length > 0) {
+    sections.push(
+      [
+        t("dailyAdmin.queueFailed", { count: failed.length }),
+        ...cut(
+          failed.map(
+            (e) =>
+              `• ${formatItemList(e.items)} · ${t(`dailyAdmin.queueReason.${e.reason}`)} · ${formatDatetime(e.failedAt)}`,
+          ),
+        ),
+      ].join("\n"),
+    );
+  }
+
+  await interaction.editReply({
+    embeds: [
+      createEmbed({
+        title: t("dailyAdmin.queueTitle", { player, server }),
+        description:
+          sections.length > 0
+            ? sections.join("\n\n")
+            : t("dailyAdmin.queueEmpty", { player, server }),
+        color: EmbedColor.Info,
+      }),
+    ],
+  });
+}
 
 export const execute = withErrorHandling(
   requireServerAdmin(async (interaction) => {
     const sub = interaction.options.getSubcommand();
+    if (sub === "queue") {
+      await runQueue(interaction);
+      return;
+    }
     const user = interaction.options.getUser("user", true);
 
     if (sub === "move") {

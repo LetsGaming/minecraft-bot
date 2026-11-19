@@ -161,6 +161,8 @@
               <section v-else class="rw-section">
                 <p class="rw-hint">{{ t("rewards.bonus.lede") }}</p>
                 <BonusPanel />
+                <p class="rw-hint">{{ t("rewards.tiers.lede") }}</p>
+                <TierChancesPanel />
               </section>
             </div>
           </div>
@@ -214,6 +216,7 @@ import PoolTable from "../components/rewards/PoolTable.vue";
 import StreakTimeline from "../components/rewards/StreakTimeline.vue";
 import DayPanel from "../components/rewards/DayPanel.vue";
 import BonusPanel from "../components/rewards/BonusPanel.vue";
+import TierChancesPanel from "../components/rewards/TierChancesPanel.vue";
 import SharedImpactDialog from "../components/rewards/SharedImpactDialog.vue";
 import UndoBar from "../components/rewards/UndoBar.vue";
 import type { EditorState } from "../components/ui/types";
@@ -336,7 +339,7 @@ const editCount = computed(() => {
   const edits =
     s.items.added + s.items.removed + s.items.changed +
     s.dayItems.added + s.dayItems.removed + s.dayItems.changed +
-    s.daysAdded + s.daysRemoved + (s.bonusChanged ? 1 : 0);
+    s.daysAdded + s.daysRemoved + (s.bonusChanged ? 1 : 0) + (s.tierChancesChanged ? 1 : 0);
   return dirty.value ? Math.max(edits, dirtyKeys.value.length) : 0;
 });
 
@@ -353,6 +356,7 @@ const summaryText = computed(() => {
   if (s.daysAdded) parts.push(t("rewards.summary.daysAdded", { count: s.daysAdded }));
   if (s.daysRemoved) parts.push(t("rewards.summary.daysRemoved", { count: s.daysRemoved }));
   if (s.bonusChanged) parts.push(t("rewards.summary.bonus"));
+  if (s.tierChancesChanged) parts.push(t("rewards.summary.tierChances"));
   return parts.length > 0 ? parts.join(" · ") : t("rewards.summary.kept");
 });
 

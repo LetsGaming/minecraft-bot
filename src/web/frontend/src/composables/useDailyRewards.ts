@@ -5,17 +5,21 @@ import {
   entryIds,
   newEntryId,
   normalizedWeights,
+  rarityOf,
   roundWeight,
   sharePercent,
+  tierChancesOf,
   totalWeight,
   weightForPercent,
   weightOf,
   type DailyRewardItem,
+  type EntrySet,
   type ListPatch,
   type ListWhere,
   type OverridePool,
   type RewardPool,
   type RewardPoolField,
+  type TierChances,
   type RewardsImpactResponse,
   type ServerImpact,
   type ServerRewardsResponse,
@@ -32,6 +36,8 @@ import {
   summarizeChanges,
   type ChangeSummary,
 } from "@mcbot/schema/rewardPatch.js";
+import { REWARD_RARITIES, RewardRarity } from "@mcbot/schema/embedCategories.js";
+import { tierChancesProblem } from "../utils/rewardDisplay";
 
 const roundTo = (value: number, digits: number): number => {
   const f = 10 ** digits;
@@ -181,11 +187,14 @@ export function useDailyRewards() {
       for (const [day, list] of Object.entries(pool.streakBonuses ?? {})) {
         if (list.length === 0) out.push(`streakBonuses.${day}: the day has no items`);
       }
+      const chances = tierChancesProblem(tierChancesOf(pool));
+      if (chances) out.push(`tierChances: ${chances}`);
       return out;
     }
-    const problems = resolvePool(editor.meta.value?.shared ?? {}, d as OverridePool).problems;
+    const resolvedPool = resolvePool(editor.meta.value?.shared ?? {}, d as OverridePool);
+    const chances = tierChancesProblem(tierChancesOf(resolvedPool.pool));
     // A day the admin just started is empty on purpose until it gets an item.
-    return problems;
+    return chances ? [...resolvedPool.problems, `tierChances: ${chances}`] : resolvedPool.problems;
   });
 
   const items = computed<DailyRewardItem[]>(() => effectivePool.value.default ?? []);
@@ -289,6 +298,8 @@ export function useDailyRewards() {
       const entry: DailyRewardItem = { ...shared };
       if (set.amount !== undefined) entry.amount = set.amount;
       if (weighted && set.weight !== undefined) entry.weight = set.weight;
+      if (weighted && set.tier !== undefined) entry.tier = set.tier;
+      if (weighted && set.since !== undefined) entry.since = set.since;
       return { id, state: "changed" as const, entry, shared };
     });
     for (const add of patch?.add ?? []) {
@@ -339,16 +350,27 @@ export function useDailyRewards() {
   }
 
   /** What a new item weighs unless told otherwise: the pool's average, so it is neither rare nor flooding. */
-  function defaultWeight(where: ListWhere = "default"): number {
-    const live = listRows(where).filter((r) => r.state !== "removed");
+  function defaultWeight(where: ListWhere = "default", tier?: RewardRarity): number {
+    const live = listRows(where).filter((r) => r.state !== "removed" && (tier === undefined || rarityOf(r.entry) === tier));
     return live.length > 0 ? roundWeight(totalWeight(live.map((r) => r.entry)) / live.length) : 1;
   }
 
-  function addEntry(where: ListWhere, item: string, amount = 1, weight?: number): string | null {
+  function addEntry(
+    where: ListWhere,
+    item: string,
+    amount = 1,
+    weight?: number,
+    tier?: RewardRarity,
+    since?: string,
+  ): string | null {
     if (!editor.draft.value) return null;
     const id = newEntryId(takenIds(where));
     const entry: DailyRewardItem = { id, item, amount };
-    if (weightedList(where)) entry.weight = weight !== undefined ? roundWeight(weight) : defaultWeight(where);
+    if (weightedList(where)) {
+      entry.weight = weight !== undefined ? roundWeight(weight) : defaultWeight(where, tier ?? RewardRarity.Common);
+      if (tier !== undefined) entry.tier = tier;
+      if (since) entry.since = since;
+    }
     if (isShared.value) sharedList(where, true)!.push(entry);
     else (patchOf(where, true)!.add ??= []).push(entry);
     return id;
@@ -389,10 +411,12 @@ export function useDailyRewards() {
   }
 
   /** Change one field of an entry: in place if it is this document's own, else as an exception. */
-  function editField(where: ListWhere, id: string, field: "amount" | "weight", value: number): void {
+  function editField(where: ListWhere, id: string, field: "amount" | "weight", value: number): void;
+  function editField(where: ListWhere, id: string, field: "tier", value: RewardRarity): void;
+  function editField(where: ListWhere, id: string, field: "amount" | "weight" | "tier", value: number | RewardRarity): void {
     const own = entryRef(where, id);
     if (own) {
-      own[field] = value;
+      (own as unknown as Record<string, unknown>)[field] = value;
       return;
     }
     const base = baseList(where);
@@ -400,12 +424,12 @@ export function useDailyRewards() {
     if (!shared) return;
     const patch = patchOf(where, true)!;
     const set = (patch.set ??= {});
-    const next = { ...(set[id] ?? { item: shared.item }) };
-    const baseValue = field === "amount" ? shared.amount : weightOf(shared);
+    const next: Record<string, unknown> = { ...(set[id] ?? { item: shared.item }) };
+    const baseValue = field === "amount" ? shared.amount : field === "weight" ? weightOf(shared) : rarityOf(shared);
     if (value === baseValue) delete next[field];
     else next[field] = value;
-    if (next.amount === undefined && next.weight === undefined) delete set[id];
-    else set[id] = next;
+    if (["amount", "weight", "tier", "since"].every((key) => next[key] === undefined)) delete set[id];
+    else set[id] = next as unknown as EntrySet;
   }
 
   function currentEntry(where: ListWhere, id: string): DailyRewardItem | undefined {
@@ -426,11 +450,18 @@ export function useDailyRewards() {
     editField("default", id, "weight", roundWeight(weight));
   }
 
+  function setTier(id: string, tier: RewardRarity): void {
+    const row = currentEntry("default", id);
+    if (!row || rarityOf(row) === tier) return;
+    editField("default", id, "tier", tier);
+  }
+
+  /** The percent is the entry's share of its own tier; the tiers' chances are set apart. */
   function setPercent(id: string, percent: number | null): void {
     const live = listRows("default").filter((r) => r.state !== "removed");
     const row = live.find((r) => r.id === id);
     if (!row || percent === null) return;
-    const all = live.map((r) => r.entry);
+    const all = live.filter((r) => rarityOf(r.entry) === rarityOf(row.entry)).map((r) => r.entry);
     // The field shows the share rounded to 3 digits and PrimeVue re-emits it on
     // blur; converting that rounded figure back would nudge the stored weight.
     if (roundTo(sharePercent(weightOf(row.entry), totalWeight(all)), 3) === percent) return;
@@ -439,14 +470,17 @@ export function useDailyRewards() {
     if (weight !== null) editField("default", id, "weight", weight);
   }
 
-  /** Rescale all weights to add up to 100; every item keeps its chance. */
+  /** Rescale the weights inside each tier to add up to 100; every item keeps its chance. */
   function normalizeWeights(): void {
     remember("rescale");
     const live = listRows("default").filter((r) => r.state !== "removed");
-    normalizedWeights(live.map((r) => r.entry)).forEach((w, i) => {
-      const row = live[i]!;
-      if (weightOf(row.entry) !== w) editField("default", row.id, "weight", w);
-    });
+    for (const tier of REWARD_RARITIES) {
+      const rows = live.filter((r) => rarityOf(r.entry) === tier);
+      normalizedWeights(rows.map((r) => r.entry)).forEach((w, i) => {
+        const row = rows[i]!;
+        if (weightOf(row.entry) !== w) editField("default", row.id, "weight", w);
+      });
+    }
   }
 
   /** Keep these inherited entries as they are for this server. */
@@ -570,13 +604,28 @@ export function useDailyRewards() {
     }
   }
 
+  const tierChances = computed(() => tierChancesOf(effectivePool.value));
+
+  function setTierChances(value: Record<RewardRarity, number>): void {
+    if (!editor.draft.value) return;
+    const next: TierChances = { ...value };
+    if (JSON.stringify(next) === JSON.stringify(tierChances.value)) return;
+    if (isShared.value) {
+      sharedDraft()!.tierChances = next;
+    } else if (JSON.stringify(next) === JSON.stringify(tierChancesOf(editor.meta.value?.shared ?? {}))) {
+      delete patchDraft()!.tierChances;
+    } else {
+      patchDraft()!.tierChances = next;
+    }
+  }
+
   /** Shared scope: replace the draft with the pool shipped with the bot. */
   function applyShippedDefaults(): void {
     const shipped = editor.meta.value?.shipped;
     const pool = sharedDraft();
     if (!shipped || !pool) return;
     remember("defaults");
-    for (const field of ["default", "streakBonuses", "bonusChance"] as const) {
+    for (const field of ["default", "streakBonuses", "bonusChance", "tierChances"] as const) {
       if (shipped[field] === undefined) delete pool[field];
       else (pool as Record<string, unknown>)[field] = clone(shipped[field]);
     }
@@ -610,6 +659,7 @@ export function useDailyRewards() {
     summary,
     entryChanges,
     bonusChance,
+    tierChances,
     poolRows,
     dayRows,
     trackLength,
@@ -620,6 +670,7 @@ export function useDailyRewards() {
     restoreEntry,
     setAmount,
     setWeight,
+    setTier,
     setPercent,
     normalizeWeights,
     detach,
@@ -631,6 +682,7 @@ export function useDailyRewards() {
     resetField,
     overrides,
     setBonusChance,
+    setTierChances,
     applyShippedDefaults,
     loadImpact,
     setSelections,

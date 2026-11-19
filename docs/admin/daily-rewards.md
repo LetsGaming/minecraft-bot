@@ -25,12 +25,12 @@ In Docker, `dailyRewards.defaults.json` is copied into the `bot_data` volume on 
 
 The **Daily rewards** page is listed under *Manage*. Pick what you're editing at the top: the **Shared pool (all servers)** or a single server.
 
-Above the settings, **What players get** shows the chance of each rarity as one bar, with the same numbers as text. **Preview a claim** rolls one claim from the pool as it is now, unsaved changes included, with the same draw the bot uses: pick a streak day and press *Roll* to see the reward, a lucky bonus if the bonus chance hits, and that day's milestone items. The settings are in three tabs:
+Above the settings, **What players get** shows the chance of each tier as one bar, with the same numbers as text. A tier with no entries gives its chance to the other tiers, and the bar shows the result. **Preview a claim** rolls one claim from the pool as it is now, unsaved changes included, with the same draw the bot uses: pick a streak day and press *Roll* to see the reward, a lucky bonus if the bonus chance hits, and that day's milestone items. The settings are in three tabs:
 
-- **Item pool.** One line per entry with its name and id, the amount, its chance and the rarity tier `/daily` will show for it. Filter by text or rarity, and sort by name, amount, chance or rarity. Switch **Edit chance as** between *Percent* and *Weight*. Changing one item's percentage only changes that item's weight; the other items keep their proportions to each other, so their percentages shrink or grow together to make room. In weight mode, **Rescale weights to 100** rescales all weights so they add up to 100 without changing any chance, after which each weight reads as its percent. The same item may appear several times with different amounts and weights.
-- **Adding items.** Search by name ("golden apple", "bottle o' enchanting") and pick from the list, or type any item id. Modded ids such as `create:brass_ingot` are accepted; the name list only covers vanilla items, so a modded item shows its id and a note that it isn't a vanilla item.
+- **Item pool.** One line per entry with its name and id, the amount, its share of its tier, its overall chance (read only) and its tier, which you change with the select in the row. Filter by text or tier, and sort by name, amount, chance or tier. Switch **Edit chance as** between *Percent* and *Weight*. An entry's percent is its share of its own tier. Changing it only changes that entry's weight; the other entries of the tier keep their proportions to each other. In weight mode, **Rescale weights to 100** rescales the weights of each tier so they add up to 100 without changing any chance. The same item may appear several times with different amounts and weights. An entry with a "since" badge is only rolled on servers that run that Minecraft version or newer.
+- **Adding items.** Search by name ("golden apple", "bottle o' enchanting") and pick from the list, or type any item id. Modded ids such as `create:brass_ingot` are accepted; the name list only covers vanilla items, so a modded item shows its id and a note that it isn't a vanilla item. The dialog sets the amount, the tier, the weight in that tier and, optionally, the oldest Minecraft version that has the item.
 - **Streak milestones.** The milestone days as a strip, with a thin track above showing where they fall in the cycle. Click a day to edit its items in the panel beside it (a sheet on phones); add a day, copy a day's items to another day, or remove it. The highest day sets the cycle length, see [the `streakBonuses` map](#the-streakbonuses-map).
-- **Bonus chance.** The chance of a second, extra draw from the item pool on any claim, said in plain words ("about 1 in 20 claims").
+- **Tiers and bonus.** The chance that a claim rolls each tier (the six values must add up to 100; the page shows the total and blocks the save until it is right), and the chance of a second, extra draw from the item pool on any claim, said in plain words ("about 1 in 20 claims").
 
 Removing an item, a day or a reset shows an **Undo** for a few seconds. The bar at the top of the editor counts what you changed ("3 unsaved changes, 2 added, 1 removed") and **Review changes** lists each one as it was and as it will be.
 
@@ -61,8 +61,10 @@ Every save is checked by the same rules the bot uses when it reads the files, an
 ```json
 {
   "default": [
-    { "item": "experience_bottle", "amount": 16, "weight": 10 },
-    { "item": "enchanted_golden_apple", "amount": 1, "weight": 1 }
+    { "item": "stick", "amount": 1, "weight": 1, "tier": "dirt" },
+    { "item": "experience_bottle", "amount": 16, "weight": 10, "tier": "common" },
+    { "item": "enchanted_golden_apple", "amount": 1, "weight": 1, "tier": "legendary" },
+    { "item": "copper_bulb", "amount": 16, "weight": 9, "tier": "common", "since": "1.21" }
   ],
   "streakBonuses": {
     "3":  [{ "item": "experience_bottle", "amount": 32 }],
@@ -70,22 +72,35 @@ Every save is checked by the same rules the bot uses when it reads the files, an
       { "item": "diamond_block", "amount": 2 },
       { "item": "experience_bottle", "amount": 64 }
     ]
-  }
+  },
+  "tierChances": { "dirt": 2.42, "common": 44, "uncommon": 28, "rare": 16, "epic": 7.58, "legendary": 2 }
 }
 ```
 
 ### The `default` pool
 
-Every claim grants exactly one item from this pool, picked by weighted random:
+Every claim grants exactly one item from this pool. The claim first rolls a tier (see [Tiers](#tiers)), then picks an entry of that tier by weighted random:
 
 | Field | Required | Description |
 |---|---|---|
 | `item` | Yes | Minecraft item ID. The `minecraft:` prefix is optional; the bot adds it. An item-components (`[...]`) or NBT (`{...}`) suffix is allowed. |
 | `amount` | No (default 1) | How many to give, 1 to 6400. |
-| `weight` | No (default 1) | Relative draw probability. An item with weight 10 is drawn ten times as often as one with weight 1. Fractional weights like `0.4` work. |
+| `weight` | No (default 1) | Relative draw probability among the entries of the same tier. An entry with weight 10 is drawn ten times as often as one with weight 1 in its tier. Fractional weights like `0.4` work. |
+| `tier` | No (default `common`) | `dirt`, `common`, `uncommon`, `rare`, `epic` or `legendary`. |
+| `since` | No | The oldest Minecraft version that has the item, such as `1.21.6` or `26.1`. A server on an older version never rolls the entry. When the bot cannot read the server's version, every entry is rolled. |
 | `id` | No | A short stable name for the entry, unique within its list. The dashboard writes one on every entry when it saves. The same item may be listed several times with different amounts and weights, so the item can't name an entry; the id is what a server's exceptions point at. An entry without one is identified by a name derived from its item and its place among the entries for that item. |
 
-The chance of a specific item is its weight divided by the sum of all weights. Keep common filler at high weights and rare prizes at low ones.
+The chance of a specific entry is its tier's chance times its weight divided by the sum of the weights in that tier. Adding entries to one tier never changes the chance of another tier.
+
+### Tiers
+
+The six tiers, from the joke tier up: **dirt**, **common**, **uncommon**, **rare**, **epic**, **legendary**. The `dirt` tier is for troll items: one stick, one piece of gravel. `/daily` shows the tier of the reward as a badge.
+
+`tierChances` is the chance, in percent, that a claim rolls each tier. The values must add up to 100. A tier you leave out has no chance. Without `tierChances` the defaults apply (dirt 2.42, common 44, uncommon 28, rare 16, epic 7.58, legendary 2). A tier that has no entries gives its chance to the other tiers in proportion, so a claim always draws something.
+
+An entry without a `tier` is common. A pool from an older version has no tiers, so it has one filled tier and draws by weight, exactly as before. To use the tiers, assign them in the dashboard, or press **Start from the defaults** to take the shipped pool (this replaces your pool). The shipped pool keeps the items that skip a step of Vanilla progression (elytra, nether star, totem of undying, conduit, dragon egg, heavy core, netherite upgrade template) in the legendary tier.
+
+Item ids and Minecraft versions: new items appear in new versions. Set `since` on an item so older servers skip it. If a server still rejects an item, see [Queue and delivery](#queue-and-delivery).
 
 ### The `streakBonuses` map
 
@@ -106,10 +121,34 @@ Optional, 0 to 100 (default 0). The chance, in percent, that a claim draws a sec
 
 ## How claiming works (rules enforced by the bot)
 
-- The player must have a [linked account](../user/linking.md). If they are offline, the reward is queued and delivered on their next join (at most 3 waiting per player); the claim and the streak count either way.
+- The player must have a [linked account](../user/linking.md). If they are offline, the reward is queued and delivered on their next join (at most 3 waiting per player); the claim and the streak count either way. The "Waiting in game: n/3" line counts only these offline claims.
 - Cooldown is 24 hours from the previous claim.
 - A streak survives as long as claims are no more than 48 hours apart. Otherwise it restarts at 1.
 - Items are delivered via the server console (`give` command), so they work without any server-side plugin.
+
+### Queue and delivery
+
+A reward waits in a queue when the player is offline, or when the server did not confirm the `give`. The queue is delivered when the player joins, and also right after a successful online claim.
+
+The bot sorts a failed `give` into one of three kinds:
+
+| Kind | Example | What happens |
+|---|---|---|
+| Wrapper not reachable | The wrapper is down. | The entry stays queued. This never counts as an attempt. |
+| Not confirmed | `No player was found`, an unknown reply. | The entry stays queued. After 5 joins without delivery it moves to the failed list. |
+| Rejected | `Unknown item ...`, `Incorrect argument ...`, an invalid component. | The item moves to the failed list at once. Retrying cannot fix it. |
+
+Failed items are logged at `ERROR` level with the player and the item, and the player gets one in-game line that an admin can see why. They are not retried, so a bad item id can no longer block a player's queue.
+
+Admins manage the queue with `/daily-admin queue`:
+
+| Command | Effect |
+|---|---|
+| `/daily-admin queue action:show user:@x` (or `player:<name>`) | Lists the queued entries and the failed items, with the reason. |
+| `/daily-admin queue action:clear ...` | Deletes both lists for that player. |
+| `/daily-admin queue action:retry ...` | Moves the failed items back to the queue with a fresh attempt count. Use it after you fixed the item id or updated the server. |
+
+`player:<name>` works for rewards without a Discord user, such as `/challenge` bonuses. Add `server:<id>` on a multi-server setup. Every `clear` and `retry` is written to the audit log. `/challenge start` now refuses an item id that is not valid.
 
 **Claims are per server.** Cooldown, streaks, and claim history are tracked independently for every server instance: claiming on `survival` does not consume the daily on `creative`, and each server builds its own streak. On multi-server setups players pick the target with `/daily server:<id>` (their guild's default server is used otherwise), and `/streak` shows the streak for the resolved server.
 
@@ -124,13 +163,14 @@ To give one server a different pool without touching the shared `dailyRewards.js
   "default": {
     "add":    [{ "item": "totem_of_undying", "amount": 1, "weight": 1, "id": "k3f9" }],
     "remove": ["1bqqade#1"],
-    "set":    { "1a5ohxd#1": { "item": "blaze_rod", "weight": 5 } }
+    "set":    { "1a5ohxd#1": { "item": "blaze_rod", "weight": 5, "tier": "rare" } }
   },
   "streakBonuses": {
     "removeDays": ["3"],
     "days": { "14": { "add": [{ "item": "diamond", "amount": 3, "id": "m81" }] } }
   },
-  "bonusChance": 5
+  "bonusChance": 5,
+  "tierChances": { "common": 60, "uncommon": 30, "rare": 10 }
 }
 ```
 
@@ -138,10 +178,11 @@ To give one server a different pool without touching the shared `dailyRewards.js
 |---|---|
 | `add` | Entries only this server has. Each needs an `id`. |
 | `remove` | Ids of shared entries this server does not use. |
-| `set` | Shared entry id to the new `amount` and/or `weight` this server uses. `item` records which entry it is about. Only the fields named are replaced. |
+| `set` | Shared entry id to the new `amount`, `weight`, `tier` and/or `since` this server uses. `item` records which entry it is about. Only the fields named are replaced. |
 | `streakBonuses.days` | The same `add` / `remove` / `set` per milestone day; a day not in the shared pool is new. |
 | `streakBonuses.removeDays` | Shared milestone days this server does not have. |
 | `bonusChance` | This server's own bonus chance (a single value, so it replaces the shared one). |
+| `tierChances` | This server's own tier chances (one set of values, so it replaces the shared set). |
 
 Anything not mentioned follows the shared pool, so a new item added to the shared pool reaches the server. A server can't be left without items, nor a milestone day without items; such a file is refused when saved from the dashboard and falls back to the shared items when read. A `remove` or `set` whose entry no longer exists in the shared pool is ignored (the editor warns about a customised entry that was deleted). Because ids are what exceptions point at, edit the shared pool in the dashboard when servers have exceptions: it keeps every entry's id and shows what a change does to each server. If you edit it by hand, keep the `id` of every entry you keep.
 
@@ -164,7 +205,7 @@ Claim state is stored in the database (`kv_store["claimedDaily"]` in `data/bot.d
 ## Tips
 
 - Validate the JSON after editing (`python3 -m json.tool data/dailyRewards.json` or any JSON linter). If the file is unreadable, `/daily` answers "Daily rewards data unavailable" instead of crashing. Entries that are readable but invalid (an item id with spaces, an amount of 0, a negative weight) are skipped and logged once; the dashboard lists them too.
-- Item IDs must exist in your server's Minecraft version; an invalid ID makes the `give` command fail silently on the server side, with the claim still consumed.
+- Item IDs must exist in your server's Minecraft version. The claim is used either way. An ID the server rejects goes to the failed list and is logged, see [Queue and delivery](#queue-and-delivery). Set `since` on items that are new, so older servers do not roll them.
 - Modded item IDs (e.g. `create:brass_ingot`) are supported: any ID that already contains a namespace (`:`) is passed through unchanged; only bare IDs like `diamond` get the `minecraft:` prefix.
 
 ## Claim reminders

@@ -145,7 +145,7 @@ describe("daily give() item prefixing", () => {
     expect(send).toHaveBeenLastCalledWith("give Steve create:brass_ingot 1");
   });
 
-  it("fails the claim when the console does not confirm the give", async () => {
+  it("classifies a give the console does not confirm", async () => {
     const { give } = await import(
       "../../src/core/utils/minecraft/rewards.js"
     );
@@ -160,20 +160,20 @@ describe("daily give() item prefixing", () => {
       kind: "delivered",
       output: "Unknown item 'minecraft:not_an_item'",
     });
-    expect(await give(srv, "Steve", { item: "not_an_item" })).toBe(false);
+    expect(await give(srv, "Steve", { item: "not_an_item" })).toBe("rejected");
 
     send.mockResolvedValue({
       kind: "delivered",
       output: "Gave 1 [Diamond] to Steve",
     });
-    expect(await give(srv, "Steve", { item: "diamond" })).toBe(true);
+    expect(await give(srv, "Steve", { item: "diamond" })).toBe("delivered");
 
     send.mockResolvedValue({
       kind: "unreachable",
       reason: "wrapper-down",
       detail: "x",
     });
-    expect(await give(srv, "Steve", { item: "diamond" })).toBe(false);
+    expect(await give(srv, "Steve", { item: "diamond" })).toBe("unreachable");
   });
 });
 

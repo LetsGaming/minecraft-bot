@@ -2,13 +2,19 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import path from "path";
 import {
+  DEFAULT_TIER_CHANCES,
   itemProblem,
   normalizedWeights,
+  parseOverridePool,
   parseRewardPool,
   sharePercent,
+  sinceProblem,
+  tierChancesOf,
   totalWeight,
   weightForPercent,
 } from "@mcbot/schema/dailyRewards.js";
+import { REWARD_RARITIES } from "@mcbot/schema/embedCategories.js";
+import { compareMcVersions, itemChances } from "@mcbot/schema/rewardRoll.js";
 
 describe("itemProblem", () => {
   it.each(["diamond", "minecraft:diamond", "create:brass_ingot", "minecraft:diamond_sword[minecraft:damage=5]", 'stone{display:{Name:"x"}}'])(
@@ -99,5 +105,130 @@ describe("weights and percentages", () => {
     expect(normalizedWeights(pool)).toEqual([10, 30, 60]);
     expect(normalizedWeights([{ weight: 1 }, { weight: 3 }])).toEqual([25, 75]);
     expect(normalizedWeights([{}, {}])).toEqual([50, 50]);
+  });
+});
+
+describe("tiers, since and tier chances", () => {
+  it("keeps a valid tier and since on pool entries", () => {
+    const { pool, errors } = parseRewardPool(
+      { default: [{ item: "stick", tier: "dirt", since: "1.21.4" }, { item: "bread" }] },
+      "shared",
+    );
+    expect(errors).toEqual([]);
+    expect(pool.default).toEqual([
+      { item: "stick", amount: 1, tier: "dirt", since: "1.21.4" },
+      { item: "bread", amount: 1 },
+    ]);
+  });
+
+  it("refuses an unknown tier and a bad version, naming where", () => {
+    const { pool, errors } = parseRewardPool(
+      { default: [{ item: "a", tier: "mythic" }, { item: "b", since: "latest" }, { item: "c" }] },
+      "shared",
+    );
+    expect(pool.default).toEqual([{ item: "c", amount: 1 }]);
+    expect(errors.map((e) => e.split(":")[0])).toEqual(["default[0].tier", "default[1].since"]);
+  });
+
+  it("ignores tier and since in streak bonuses", () => {
+    const { pool } = parseRewardPool(
+      { default: [{ item: "a" }], streakBonuses: { "3": [{ item: "b", tier: "rare" }] } },
+      "shared",
+    );
+    expect(pool.streakBonuses?.["3"]).toEqual([{ item: "b", amount: 1 }]);
+  });
+
+  it.each(["1.21", "1.21.6", "26.1", "26.3.1"])("accepts the version %s", (v) => expect(sinceProblem(v)).toBeNull());
+  it.each(["", "latest", "1", "1.21.6.2", "v1.21", 26.1])("refuses the version %j", (v) =>
+    expect(sinceProblem(v)).not.toBeNull(),
+  );
+
+  it("accepts tier chances that add up to 100 and fills missing tiers with 0", () => {
+    const { pool, errors } = parseRewardPool(
+      { default: [{ item: "a" }], tierChances: { common: 70, rare: 30 } },
+      "shared",
+    );
+    expect(errors).toEqual([]);
+    expect(tierChancesOf(pool)).toEqual({ dirt: 0, common: 70, uncommon: 0, rare: 30, epic: 0, legendary: 0 });
+  });
+
+  it("uses the defaults when a pool sets no chances, and the defaults add up to 100", () => {
+    expect(tierChancesOf({})).toEqual(DEFAULT_TIER_CHANCES);
+    const sum = Object.values(DEFAULT_TIER_CHANCES).reduce((a, b) => a + b, 0);
+    expect(sum).toBeCloseTo(100, 6);
+  });
+
+  it.each([
+    [{ common: 50 }, "add up to"],
+    [{ common: 120, rare: -20 }, "from 0 to 100"],
+    [{ mythic: 100 }, "unknown tier"],
+    [{}, "at least one"],
+    [[1, 2], "map tier names"],
+  ])("refuses tier chances %j", (chances, text) => {
+    const { pool, errors } = parseRewardPool({ default: [{ item: "a" }], tierChances: chances }, "shared");
+    expect(pool.tierChances).toBeUndefined();
+    expect(errors.join("\n")).toContain(text);
+  });
+
+  it("reads tier chances, tier and since in a server override", () => {
+    const { pool, errors } = parseOverridePool({
+      tierChances: { common: 100 },
+      default: { set: { a: { item: "stick", tier: "dirt", since: "1.20.5" } } },
+    });
+    expect(errors).toEqual([]);
+    expect(pool.tierChances).toEqual({ common: 100 });
+    expect(pool.default?.set?.["a"]).toEqual({ item: "stick", tier: "dirt", since: "1.20.5" });
+  });
+});
+
+describe("shipped default pool", () => {
+  const file = path.resolve(__dirname, "../../data/dailyRewards.defaults.json");
+  const { pool, errors } = parseRewardPool(JSON.parse(readFileSync(file, "utf8")), "shared");
+  const items = pool.default ?? [];
+  const byTier = (tier: string) => items.filter((i) => i.tier === tier);
+
+  it("has no problems and gives every entry a tier", () => {
+    expect(errors).toEqual([]);
+    expect(items.every((i) => i.tier !== undefined)).toBe(true);
+  });
+
+  it("fills every tier and sets chances that add up to 100", () => {
+    for (const tier of REWARD_RARITIES) expect(byTier(tier).length).toBeGreaterThan(0);
+    const sum = Object.values(tierChancesOf(pool)).reduce((a, b) => a + b, 0);
+    expect(sum).toBeCloseTo(100, 6);
+    expect(pool.tierChances).toEqual(DEFAULT_TIER_CHANCES);
+  });
+
+  it("never lists the same item with the same amount twice", () => {
+    const keys = items.map((i) => `${i.item}|${i.amount}`);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it("keeps the dirt tier to single items of equal weight", () => {
+    const dirt = byTier("dirt");
+    expect(dirt.every((i) => i.amount === 1 && (i.weight ?? 1) === 1)).toBe(true);
+  });
+
+  it("keeps every progression skip in the legendary tier", () => {
+    const skips = [
+      "elytra",
+      "nether_star",
+      "totem_of_undying",
+      "conduit",
+      "dragon_egg",
+      "heavy_core",
+      "netherite_upgrade_smithing_template",
+    ];
+    for (const id of skips) {
+      expect(items.filter((i) => i.item === id).map((i) => i.tier)).toEqual(["legendary"]);
+    }
+  });
+
+  it("rolls no entry newer than the server and still adds up to 100", () => {
+    const chances = itemChances({ default: items, tierChances: pool.tierChances }, { version: "1.20.1" });
+    expect(chances.reduce((a, b) => a + b, 0)).toBeCloseTo(100, 6);
+    items.forEach((i, n) => {
+      if (i.since && compareMcVersions("1.20.1", i.since) < 0) expect(chances[n]).toBe(0);
+    });
   });
 });

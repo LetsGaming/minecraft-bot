@@ -6,8 +6,13 @@ import {
   hasPending,
   takePending,
   requeuePending,
+  recordFailed,
+  MAX_DELIVERY_ATTEMPTS,
+  type FailedRewardEntry,
+  type PendingRewardEntry,
 } from "../stores/dailyStore.js";
 import type { ServerInstance } from "../server/server.js";
+import { COMMAND_NOT_RUN } from "../server/commandOutcome.js";
 import { consoleCommand, tellraw } from "./serverMessages.js";
 import { errMsg } from "../error.js";
 import { formatItemList } from "./itemNames.js";
@@ -17,7 +22,7 @@ import type {
   UserClaimData,
 } from "../../types/index.js";
 import { t } from "../i18n.js";
-import { RewardRarity, REWARD_RARITIES } from "@mcbot/schema/embedCategories.js";
+import { type RewardRarity, REWARD_RARITIES } from "@mcbot/schema/embedCategories.js";
 import { rarityOf, milestoneDays, splitItem } from "@mcbot/schema/dailyRewards.js";
 import { DEFAULT_MAX_STREAK, deriveMaxStreak, pick } from "@mcbot/schema/rewardRoll.js";
 import { log } from "../logger.js";
@@ -81,26 +86,38 @@ export function calcStreak(
 export { DEFAULT_MAX_STREAK, deriveMaxStreak, pick };
 
 /**
+ * How a /give ended, which tells a retry from a dead end:
+ * - `delivered`: the RCON reply says "Gave ...". Servers with no reply
+ *   channel give no signal and are assumed successful.
+ * - `unreachable`: the command did not reach the server. Retry; this says
+ *   nothing about the item.
+ * - `unconfirmed`: the server answered with something else (a player that is
+ *   not online yet, an unknown reply). Retry, but only a few times.
+ * - `rejected`: the server or the command builder refused the item itself
+ *   (unknown id, bad components). No retry can fix that.
+ */
+export type GiveStatus = "delivered" | "unreachable" | "unconfirmed" | "rejected";
+
+/** Replies to /give that name a problem with the item, not with the moment. */
+const GIVE_REJECTED = /^(Unknown item|Unknown component|Expected|Invalid)/i;
+
+/**
  * Give a reward item to a player. IDs get a "minecraft:" prefix only when
  * they have no namespace, so modded IDs like "create:brass_ingot" pass
- * through unchanged.
- *
- * Returns false when delivery could not be confirmed: the command did not
- * reach the server, or the RCON reply lacks the "Gave ..." confirmation
- * (logged raw so bad item IDs surface). Servers with no reply channel give
- * no signal and are assumed successful.
+ * through unchanged. The raw reply of a failed give is logged so bad item
+ * IDs surface.
  */
 export async function give(
   server: ServerInstance,
   player: string,
   { item, amount = 1 }: DailyRewardItem,
-): Promise<boolean> {
+): Promise<GiveStatus> {
   if (!player || !item) {
     log.error(
       "daily",
       `Invalid reward params for player=${player} item=${item}`,
     );
-    return false;
+    return "rejected";
   }
   const { id, suffix } = splitItem(item);
   const name = `${id.includes(":") ? id : `minecraft:${id}`}${suffix}`;
@@ -110,41 +127,47 @@ export async function give(
     command = consoleCommand("give", { player }, { item: name }, { count: amount });
   } catch (err) {
     log.error("daily", `Refused to give ${item} x${amount} to ${player}: ${errMsg(err)}`);
-    return false;
+    return "rejected";
   }
   const outcome = await server.send(command);
 
-  // The command may never have reached the server. Report failure so the
-  // reward stays queued and is retried, rather than being marked delivered.
+  // The command may never have reached the server. Report it so the reward
+  // stays queued and is retried, rather than being marked delivered.
   if (outcome.kind === "unreachable") {
     log.error(
       "daily",
       `Give failed for ${player} (item=${name}): ${outcome.reason}: ${outcome.detail}`,
     );
-    return false;
+    return "unreachable";
   }
 
   // Sent over a channel with no reply: the command reached the server but its
   // outcome cannot be read. Reporting failure here would re-queue a reward
   // the player already holds and re-give it on every join.
-  if (outcome.kind === "sent") return true;
+  if (outcome.kind === "sent") return "delivered";
 
-  if (!/\bGave\b/i.test(outcome.output)) {
-    log.error(
-      "daily",
-      `Give not confirmed for ${player} (item=${name}): ${outcome.output}`,
-    );
-    return false;
-  }
-  return true;
+  if (/\bGave\b/i.test(outcome.output)) return "delivered";
+
+  const output = outcome.output.trim();
+  log.error(
+    "daily",
+    `Give not confirmed for ${player} (item=${name}): ${output}`,
+  );
+  return COMMAND_NOT_RUN.test(output) || GIVE_REJECTED.test(output)
+    ? "rejected"
+    : "unconfirmed";
 }
 
 /**
  * Deliver queued offline claims for a player who just joined, called by
  * the joinLeave watcher. Entries are removed once ALL their items are
  * confirmed delivered; on partial failure the entry stays with only the
- * undelivered items, so the next join retries exactly what's missing
- * (give() already parses the RCON response for errors).
+ * undelivered items, so the next join retries exactly what's missing.
+ *
+ * An item the server rejects moves to the failed list at once. An entry that
+ * stays unconfirmed for MAX_DELIVERY_ATTEMPTS runs moves there too, so one bad
+ * entry cannot sit in the queue forever. A run where the wrapper is
+ * unreachable does not count as an attempt.
  *
  * Returns the number of items delivered.
  */
@@ -164,25 +187,55 @@ export async function deliverPendingRewards(
   const work = list.map((entry) => ({
     entry,
     todo: [...entry.items],
-    failed: [] as DailyRewardItem[],
+    retry: [] as DailyRewardItem[],
+    rejected: [] as DailyRewardItem[],
+    unconfirmed: false,
   }));
 
+  let failedCount = 0;
   try {
     for (const w of work) {
       while (w.todo.length > 0) {
         const item = w.todo[0]!;
-        if (await give(server, player, item)) delivered.push(item);
-        else w.failed.push(item);
+        const status = await give(server, player, item);
+        if (status === "delivered") delivered.push(item);
+        else if (status === "rejected") w.rejected.push(item);
+        else {
+          w.retry.push(item);
+          if (status === "unconfirmed") w.unconfirmed = true;
+        }
         w.todo.shift();
       }
     }
   } finally {
     // If give throws, the item in flight and everything not yet attempted
-    // stay in `todo` and are re-queued with the failed ones.
-    const remaining = work
-      .map((w) => ({ ...w.entry, items: [...w.failed, ...w.todo] }))
-      .filter((e) => e.items.length > 0);
-    await requeuePending(server.id, player, remaining);
+    // stay in `todo` and are re-queued with the ones that need a retry.
+    const now = Date.now();
+    const requeue: PendingRewardEntry[] = [];
+    const failed: FailedRewardEntry[] = [];
+    for (const w of work) {
+      const { discordId, queuedAt } = w.entry;
+      if (w.rejected.length > 0) {
+        failed.push({ discordId, queuedAt, failedAt: now, items: w.rejected, reason: "rejected" });
+      }
+      const left = [...w.retry, ...w.todo];
+      if (left.length === 0) continue;
+      const attempts = (w.entry.attempts ?? 0) + (w.unconfirmed ? 1 : 0);
+      if (attempts >= MAX_DELIVERY_ATTEMPTS) {
+        failed.push({ discordId, queuedAt, failedAt: now, items: left, reason: "attempts" });
+      } else {
+        requeue.push({ ...w.entry, items: left, attempts });
+      }
+    }
+    for (const f of failed) {
+      failedCount += f.items.length;
+      log.error(
+        "daily",
+        `Gave up on ${f.items.length} reward item(s) for ${player} (${f.reason}): ${formatItemList(f.items)}`,
+      );
+    }
+    await requeuePending(server.id, player, requeue);
+    await recordFailed(server.id, player, failed);
   }
 
   if (delivered.length > 0) {
@@ -194,17 +247,30 @@ export async function deliverPendingRewards(
       color: "green",
     });
   }
+  if (failedCount > 0) await tellUndeliverable(server, player, failedCount);
   return delivered.length;
+}
+
+/** Tells a player that reward items could not be delivered and an admin can see why. */
+export async function tellUndeliverable(
+  server: ServerInstance,
+  player: string,
+  count: number,
+): Promise<void> {
+  await tellraw(server, player, {
+    text: t("daily.undeliverable", { count }),
+    color: "red",
+  });
 }
 
 // Rarity and the milestone list are shared with the dashboard's editor.
 export { rarityOf, milestoneDays };
 
-/** The rarest of a set of tiers, in the order common < ... < legendary. */
+/** The rarest of a set of tiers, in the order dirt < common < ... < legendary. */
 export function rarest(tiers: readonly RewardRarity[]): RewardRarity {
   return tiers.reduce<RewardRarity>(
     (best, tier) => (REWARD_RARITIES.indexOf(tier) > REWARD_RARITIES.indexOf(best) ? tier : best),
-    RewardRarity.Common,
+    REWARD_RARITIES[0]!,
   );
 }
 

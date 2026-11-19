@@ -327,7 +327,7 @@ describe("advancement watcher — challenge win", () => {
         // give NOT confirmed:
         send: vi.fn(async (c: string) =>
           c.startsWith("give ")
-            ? { kind: "delivered", output: "Unknown item" }
+            ? { kind: "delivered", output: "No player was found" }
             : DELIVERED,
         ),
       },

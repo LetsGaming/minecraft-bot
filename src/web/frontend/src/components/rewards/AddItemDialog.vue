@@ -27,7 +27,12 @@
       </div>
 
       <div v-if="withChance" class="ai-field">
-        <label for="rw-add-chance" class="ai-label">{{ mode === "percent" ? t("rewards.col.chance") : t("rewards.col.weight") }}</label>
+        <label for="rw-add-tier" class="ai-label">{{ t("rewards.col.rarity") }}</label>
+        <Select v-model="tier" input-id="rw-add-tier" :options="tierOptions" option-label="label" option-value="value" class="ai-select" />
+      </div>
+
+      <div v-if="withChance" class="ai-field">
+        <label for="rw-add-chance" class="ai-label">{{ mode === "percent" ? t("rewards.col.tierShare") : t("rewards.col.weight") }}</label>
         <InputNumber
           v-if="mode === 'percent'"
           v-model="percent"
@@ -53,6 +58,12 @@
         />
         <span class="ai-hint">{{ chanceHint }}</span>
       </div>
+
+      <div v-if="withChance" class="ai-field">
+        <label for="rw-add-since" class="ai-label">{{ t("rewards.since.label") }}</label>
+        <InputText v-model="since" id="rw-add-since" class="ai-since" placeholder="1.21.6" :invalid="sinceError !== null" />
+        <span class="ai-hint">{{ sinceError ?? t("rewards.since.hint") }}</span>
+      </div>
     </form>
 
     <template #footer>
@@ -67,9 +78,21 @@ import { computed, ref, watch } from "vue";
 import Button from "primevue/button";
 import Dialog from "primevue/dialog";
 import InputNumber from "primevue/inputnumber";
-import { MAX_REWARD_AMOUNT, MAX_SHARE_PERCENT, roundWeight, sharePercent, weightForPercent, type ListWhere } from "@mcbot/schema/dailyRewards.js";
+import InputText from "primevue/inputtext";
+import Select from "primevue/select";
+import {
+  MAX_REWARD_AMOUNT,
+  MAX_SHARE_PERCENT,
+  rarityOf,
+  roundWeight,
+  sharePercent,
+  sinceProblem,
+  weightForPercent,
+  type ListWhere,
+} from "@mcbot/schema/dailyRewards.js";
+import { RewardRarity } from "@mcbot/schema/embedCategories.js";
 import { useRewardsContext } from "../../composables/rewardsContext";
-import { formatPercent, isKnownItem, itemName, oneInText, roundTo, stackNote } from "../../utils/rewardDisplay";
+import { REWARD_RARITIES, formatPercent, isKnownItem, itemName, oneInText, rarityLabel, roundTo, stackNote } from "../../utils/rewardDisplay";
 import { t, UI_LOCALE } from "../../i18n";
 
 /**
@@ -88,15 +111,24 @@ const { rewards, catalog, mode } = useRewardsContext();
 
 const withChance = computed(() => props.where === "default");
 const amount = ref<number | null>(1);
+const tier = ref<RewardRarity>(RewardRarity.Common);
+const since = ref("");
 const percent = ref<number | null>(null);
 const weight = ref<number | null>(null);
 const amountInput = ref<{ $el: HTMLElement } | null>(null);
 
-const live = computed(() => rewards.listRows(props.where).filter((r) => r.state !== "removed"));
+const tierOptions = computed(() => REWARD_RARITIES.map((value) => ({ label: rarityLabel(value), value })));
+const live = computed(() =>
+  rewards
+    .listRows(props.where)
+    .filter((r) => r.state !== "removed" && (!withChance.value || rarityOf(r.entry) === tier.value)),
+);
+const duplicateRows = computed(() => rewards.listRows(props.where).filter((r) => r.state !== "removed"));
 const hasOthers = computed(() => live.value.length > 0);
 const totalOthers = computed(() => live.value.reduce((sum, r) => sum + (r.entry.weight ?? 1), 0));
+const sinceError = computed(() => (since.value.trim() === "" ? null : sinceProblem(since.value.trim())));
 const name = computed(() => (props.item ? itemName(catalog.value, props.item) : ""));
-const duplicate = computed(() => live.value.some((r) => r.entry.item === props.item));
+const duplicate = computed(() => duplicateRows.value.some((r) => r.entry.item === props.item));
 const stack = computed(() => (props.item && amount.value ? stackNote(catalog.value, { item: props.item, amount: amount.value }) : ""));
 
 /** The weight the new entry will get, from whichever of the two fields is shown. */
@@ -113,19 +145,26 @@ const chosenPercent = computed(() => {
 
 const chanceHint = computed(() => `${mode.value === "percent" ? t("rewards.weightIs", { weight: chosenWeight.value ?? 0 }) : `${formatPercent(chosenPercent.value)} %`} · ${oneInText(chosenPercent.value)}`);
 
-const valid = computed(() => !!amount.value && amount.value >= 1 && (!withChance.value || (chosenWeight.value !== null && chosenWeight.value > 0)));
+const valid = computed(() => !!amount.value && amount.value >= 1 && sinceError.value === null && (!withChance.value || (chosenWeight.value !== null && chosenWeight.value > 0)));
 
 watch(
   () => props.item,
   (item) => {
     if (item === null) return;
     amount.value = 1;
-    const w = rewards.defaultWeight(props.where);
-    weight.value = w;
-    percent.value = roundTo(sharePercent(w, totalOthers.value + w), 3);
+    tier.value = RewardRarity.Common;
+    since.value = "";
+    resetChance();
   },
   { immediate: true },
 );
+watch(tier, resetChance);
+
+function resetChance(): void {
+  const w = rewards.defaultWeight(props.where, withChance.value ? tier.value : undefined);
+  weight.value = w;
+  percent.value = roundTo(sharePercent(w, totalOthers.value + w), 3);
+}
 
 function focusAmount(): void {
   // After the dialog has placed its own initial focus.
@@ -134,7 +173,14 @@ function focusAmount(): void {
 
 function confirm(): void {
   if (!props.item || !valid.value || !amount.value) return;
-  rewards.addEntry(props.where, props.item, amount.value, withChance.value && chosenWeight.value !== null ? roundWeight(chosenWeight.value) : undefined);
+  rewards.addEntry(
+    props.where,
+    props.item,
+    amount.value,
+    withChance.value && chosenWeight.value !== null ? roundWeight(chosenWeight.value) : undefined,
+    withChance.value ? tier.value : undefined,
+    withChance.value && since.value.trim() !== "" ? since.value.trim() : undefined,
+  );
   emit("close");
 }
 </script>
@@ -147,5 +193,6 @@ function confirm(): void {
 .ai-label { font-weight: 600; font-size: var(--text-sm); }
 .ai-num { width: 14ch; }
 .ai-num :deep(input) { width: 100%; }
+.ai-select, .ai-since { width: 18ch; }
 .ai-hint { color: var(--text-dim); font-size: var(--text-sm); }
 </style>

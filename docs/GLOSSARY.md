@@ -6,7 +6,7 @@ Terms specific to this project that are easy to misread.
 |---|---|
 | Embed category | What a Discord message is about (`reward`, `death`, `presence`, ...). Gives the embed a title icon and a default colour. Defined in `src/schema/embedCategories.ts`; recolourable with `embedColors`. Not the same as a status role. |
 | Status role | How something is doing (online, degraded, offline, ...). Shared by the dashboard chips and server-state embeds (`src/schema/status.ts`). |
-| Rarity tier | Daily reward rarity (common to legendary), derived from an item's share of its pool's total weight by `rarityOf`. Not stored in `dailyRewards.json`. |
+| Rarity tier | Daily reward tier (dirt, common, uncommon, rare, epic, legendary), stored as `tier` on each pool entry (a missing one is common). A claim rolls a tier by `tierChances`, then an entry of that tier by weight. `rarityOf` reads the stored tier. |
 | Entry id | The stable name of one entry in a reward list (`id` in `dailyRewards.json`). The same item may appear several times with different amounts and weights, so the item string cannot name an entry; a server's exceptions point at ids. Without a stored one, `entryIds` derives `<hash of the item>#n` from the file order, and the dashboard stores it on the next save. |
 | Exception | What a server's `dailyRewards_<serverId>.json` holds: `add`, `remove` and `set` (per entry id), `removeDays`, and a `bonusChance`. Everything else follows the shared pool. Resolved by `resolvePool` in `src/schema/rewardPatch.ts`, which the bot, the dashboard and the editor share. |
 | Kept from shared (detach) | A server's own copy of a shared entry (`detachedFrom` names the original), with the shared one removed for that server. Later changes to the shared entry no longer reach it. |

@@ -808,3 +808,23 @@ The typed confirm stays on PrimeVue's `ConfirmDialog` (its container slot gives 
 **Why:** The tag lets readers tell two speakers apart without exposing anything that can be reversed or linked outside the group. A per-group key means the same person has a different tag in each group. Keeping the key in the database rather than `config.json` means no operator setup, no secret in the dashboard's config editor and stable tags across restarts. Rotating it would change every tag, so it is not rotated automatically.
 
 **Trade-off:** Four hex characters (65,536 values) start to collide at roughly 300 distinct speakers in one group. Losing the database row changes everyone's tag, which is acceptable because nothing else depends on it.
+
+---
+
+## Daily rewards roll the tier first, and an untiered pool is one common tier
+
+**Decision:** A pool entry stores its `tier`. A claim rolls a tier by `tierChances`, then picks an entry of that tier by weight. An entry without a tier is common. Existing pools are not rewritten: a pool with no tiers has one filled tier and draws by weight, as before. Admins adopt tiers in the dashboard or with "Start from the defaults". An entry may carry `since` (the oldest Minecraft version that has the item); the bot skips newer entries on an older server and rolls everything when the version is unknown.
+
+**Why:** The old tier was derived from an entry's share of the total weight. With a pool of about 200 entries every share is under 2 %, so every entry was legendary, and each new entry lowered the odds of all others. A stored tier with fixed tier chances makes the odds independent of the pool size. Mapping old weights to new tiers would be a guess, so existing files are left alone instead of being rewritten.
+
+**Trade-off:** An admin with a custom untiered pool sees no change until they assign tiers. Partly tiered pools give filled tiers the chance of empty ones in proportion, so the odds an admin typed are not the odds players get; the dashboard shows the effective odds.
+
+---
+
+## A reward the server rejects leaves the queue
+
+**Decision:** `give()` returns `delivered`, `unreachable`, `unconfirmed` or `rejected`. A rejected item moves at once to a bounded failed list in the same `pendingRewards` document. An entry that stays `unconfirmed` for 5 delivery runs moves there too. `unreachable` never counts as an attempt. `/daily-admin queue` shows, clears and retries both lists.
+
+**Why:** Delivery used to put every failed item back with no limit, so one bad item id stayed in a player's queue for good and the "waiting in game" count never went down. A server that refuses an item will refuse it every time. A wrapper outage says nothing about the item, so it must not use up attempts.
+
+**Trade-off:** A reply the bot does not recognise counts as `unconfirmed`, so a rejection with unusual wording takes 5 joins to leave the queue instead of one.

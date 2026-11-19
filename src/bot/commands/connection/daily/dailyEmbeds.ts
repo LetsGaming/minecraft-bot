@@ -41,15 +41,12 @@ function rarityLabel(rarity: RewardRarity): string {
 }
 
 /** The extra reward from the bonus-chance draw, set apart from the main reward. */
-function luckyField(
-  item: DailyRewardItem,
-  pool: readonly DailyRewardItem[],
-): { name: string; value: string; inline: false } {
+function luckyField(item: DailyRewardItem): { name: string; value: string; inline: false } {
   return {
     name: `🍀 ${t("daily.luckyField")}`,
     value: t("daily.headline", {
       reward: formatItemStack(item),
-      rarity: rarityLabel(rarityOf(item, pool)),
+      rarity: rarityLabel(rarityOf(item)),
     }),
     inline: false,
   };
@@ -57,18 +54,15 @@ function luckyField(
 
 /** The rarest tier among the rolled items; a streak bonus counts as a milestone. */
 function claimRarity(view: ClaimView): RewardRarity {
-  const items = view.pool.default ?? [];
   return rarest(
-    [view.granted.main, ...(view.granted.randomBonus ? [view.granted.randomBonus] : [])].map((i) =>
-      rarityOf(i, items),
-    ),
+    [view.granted.main, ...(view.granted.randomBonus ? [view.granted.randomBonus] : [])].map(rarityOf),
   );
 }
 
 /** The public embed for a successful (or queued) claim. */
 export function buildClaimEmbed(view: ClaimView): EmbedBuilder {
   const { granted, pool } = view;
-  const mainRarity = rarityOf(granted.main, pool.default ?? []);
+  const mainRarity = rarityOf(granted.main);
   const hitMilestone = granted.streakBonus.length > 0;
 
   const lines = [
@@ -77,6 +71,7 @@ export function buildClaimEmbed(view: ClaimView): EmbedBuilder {
       rarity: rarityLabel(mainRarity),
     }),
   ];
+  if (mainRarity === "dirt") lines.push(t("daily.dirtLine"));
   if (hitMilestone) {
     lines.push(
       `${CATEGORY_STYLE[EmbedCategory.Milestone].icon} ${t("daily.bonus", {
@@ -110,7 +105,7 @@ export function buildClaimEmbed(view: ClaimView): EmbedBuilder {
     footer: { text: lucky ? `🍀 ${t("daily.luckyFooter")} ${tip}` : tip },
   })
     .addFields(
-      ...(lucky ? [luckyField(lucky, pool.default ?? [])] : []),
+      ...(lucky ? [luckyField(lucky)] : []),
       {
         name: `🔥 ${t("daily.streakField")}`,
         value: `${progressBar(granted.bonusStreak, barMax)}\n${t("streak.days", { count: view.currentStreak })}`,

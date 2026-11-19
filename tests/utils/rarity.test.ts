@@ -1,33 +1,42 @@
 import { describe, it, expect } from "vitest";
 import { rarityOf, rarest, milestoneDays, nextMilestone } from "@mcbot/core/utils/minecraft/rewards.js";
+import { REWARD_RARITIES } from "@mcbot/schema/embedCategories.js";
 
 const pool = [
-  { item: "minecraft:bread", amount: 1, weight: 60 },
-  { item: "minecraft:iron_ingot", amount: 1, weight: 25 },
-  { item: "minecraft:gold_ingot", amount: 1, weight: 10 },
-  { item: "minecraft:diamond", amount: 1, weight: 4 },
-  { item: "minecraft:netherite_ingot", amount: 1, weight: 1 },
+  { item: "minecraft:stick", amount: 1, tier: "dirt" as const },
+  { item: "minecraft:bread", amount: 1 },
+  { item: "minecraft:iron_ingot", amount: 1, tier: "uncommon" as const },
+  { item: "minecraft:gold_ingot", amount: 1, tier: "rare" as const },
+  { item: "minecraft:diamond", amount: 1, tier: "epic" as const },
+  { item: "minecraft:netherite_ingot", amount: 1, tier: "legendary" as const },
 ];
 
 describe("rarityOf", () => {
-  it("ranks by weight share", () => {
-    expect(rarityOf(pool[0]!, pool)).toBe("common");
-    expect(rarityOf(pool[1]!, pool)).toBe("uncommon");
-    expect(rarityOf(pool[2]!, pool)).toBe("rare");
-    expect(rarityOf(pool[3]!, pool)).toBe("epic");
-    expect(rarityOf(pool[4]!, pool)).toBe("legendary");
+  it("reads the stored tier", () => {
+    expect(rarityOf(pool[0]!)).toBe("dirt");
+    expect(rarityOf(pool[2]!)).toBe("uncommon");
+    expect(rarityOf(pool[3]!)).toBe("rare");
+    expect(rarityOf(pool[4]!)).toBe("epic");
+    expect(rarityOf(pool[5]!)).toBe("legendary");
   });
 
-  it("treats a flat pool as common", () => {
-    const flat = pool.map((p) => ({ ...p, weight: 1 }));
-    expect(rarityOf(flat[4]!, flat)).toBe("common");
+  it("reads an entry without a tier as common", () => {
+    expect(rarityOf(pool[1]!)).toBe("common");
+  });
+
+  it("orders the tiers from dirt to legendary", () => {
+    expect(REWARD_RARITIES).toEqual(["dirt", "common", "uncommon", "rare", "epic", "legendary"]);
   });
 });
 
 describe("rarest", () => {
   it("picks the highest tier", () => {
     expect(rarest(["common", "epic", "rare"])).toBe("epic");
-    expect(rarest([])).toBe("common");
+  });
+
+  it("ranks dirt below common", () => {
+    expect(rarest(["dirt", "common"])).toBe("common");
+    expect(rarest(["dirt"])).toBe("dirt");
   });
 });
 

@@ -63,10 +63,12 @@ The `/daily` family is the reference for a gamified reply
 - **Cooldown** and **queued** replies use the Pending colour. The cooldown shows
   a time bar and the deadline that keeps the streak alive.
 - **Rarity** comes from `rarityOf` in
-  [`dailyRewards.ts`](../../../src/schema/dailyRewards.ts): an item's share
-  of the pool weight (legendary up to 2 %, epic 7 %, rare 20 %, uncommon 45 %).
-  A pool with fewer than four distinct weights has no ladder; everything is
-  common. The badge is text, so colour is never the only signal.
+  [`dailyRewards.ts`](../../../src/schema/dailyRewards.ts): the `tier` stored
+  on the pool entry (dirt, common, uncommon, rare, epic, legendary; a missing
+  tier is common). The claim rolls the tier first
+  ([`rewardRoll.ts`](../../../src/schema/rewardRoll.ts)), so the badge says
+  which tier was rolled. A dirt roll adds one playful line. The badge is text,
+  so colour is never the only signal.
 - Widgets (`progressBar`, `milestoneTrack`) live in
   [`gameDisplay.ts`](../../../src/bot/utils/embeds/gameDisplay.ts).
 

@@ -13,7 +13,9 @@
  */
 import {
   entryIds,
+  rarityOf,
   shortHash,
+  tierChancesOf,
   weightOf,
   type DailyRewardItem,
   type EntrySet,
@@ -37,7 +39,9 @@ function dayKeys(...maps: Array<Record<string, unknown> | undefined>): string[] 
 }
 
 function entryKey(entry: DailyRewardItem, weighted: boolean): string {
-  return weighted ? `${entry.item}|${entry.amount}|${weightOf(entry)}` : `${entry.item}|${entry.amount}`;
+  return weighted
+    ? `${entry.item}|${entry.amount}|${weightOf(entry)}|${rarityOf(entry)}|${entry.since ?? ""}`
+    : `${entry.item}|${entry.amount}`;
 }
 
 /** Whether two lists hold the same entries, ignoring order and ids. */
@@ -64,6 +68,7 @@ export function sameEntries(
 export function samePool(a: RewardPool, b: RewardPool): boolean {
   if (!sameEntries(a.default, b.default, true)) return false;
   if ((a.bonusChance ?? 0) !== (b.bonusChance ?? 0)) return false;
+  if (JSON.stringify(tierChancesOf(a)) !== JSON.stringify(tierChancesOf(b))) return false;
   const days = dayKeys(a.streakBonuses, b.streakBonuses);
   return days.every((day) => sameEntries(a.streakBonuses?.[day], b.streakBonuses?.[day], false));
 }
@@ -108,6 +113,8 @@ export function resolveList(
     if (set) {
       if (set.amount !== undefined) next.amount = set.amount;
       if (weighted && set.weight !== undefined) next.weight = set.weight;
+      if (weighted && set.tier !== undefined) next.tier = set.tier;
+      if (weighted && set.since !== undefined) next.since = set.since;
     }
     items.push(next);
   });
@@ -172,6 +179,8 @@ export function resolvePool(shared: RewardPool, override: OverridePool | undefin
 
   const bonusChance = override?.bonusChance ?? shared.bonusChance;
   if (bonusChance !== undefined) pool.bonusChance = bonusChance;
+  const tierChances = override?.tierChances ?? shared.tierChances;
+  if (tierChances !== undefined) pool.tierChances = tierChances;
   return { pool, orphans, problems };
 }
 
@@ -205,6 +214,7 @@ export function compactOverride(override: OverridePool): OverridePool {
   if (override.streakBonuses?.removeDays?.length) streak.removeDays = override.streakBonuses.removeDays;
   if (Object.keys(streak).length > 0) out.streakBonuses = streak;
   if (override.bonusChance !== undefined) out.bonusChance = override.bonusChance;
+  if (override.tierChances !== undefined) out.tierChances = override.tierChances;
   return out;
 }
 
@@ -315,6 +325,7 @@ export function legacyResolve(shared: RewardPool, legacy: RewardPool): RewardPoo
   if (streak) out.streakBonuses = streak;
   const chance = legacy.bonusChance ?? shared.bonusChance;
   if (chance !== undefined) out.bonusChance = chance;
+  if (shared.tierChances !== undefined) out.tierChances = shared.tierChances;
   return out;
 }
 
@@ -384,7 +395,9 @@ function inherits(change: SharedChange, override: OverridePool | undefined): boo
     const itemSame = before.item === after.item;
     const amountPinned = before.amount === after.amount || set?.amount !== undefined;
     const weightPinned = !weighted || weightOf(before) === weightOf(after) || set?.weight !== undefined;
-    if (set && itemSame && amountPinned && weightPinned) return false;
+    const tierPinned = !weighted || rarityOf(before) === rarityOf(after) || set?.tier !== undefined;
+    const sincePinned = !weighted || before.since === after.since || set?.since !== undefined;
+    if (set && itemSame && amountPinned && weightPinned && tierPinned && sincePinned) return false;
   }
   return true;
 }
@@ -475,6 +488,7 @@ export interface ChangeSummary {
   daysAdded: number;
   daysRemoved: number;
   bonusChanged: boolean;
+  tierChancesChanged: boolean;
 }
 
 /** Counts of what differs between two pools, for the edit bar. */
@@ -485,6 +499,7 @@ export function summarizeChanges(before: RewardPool, after: RewardPool): ChangeS
     daysAdded: 0,
     daysRemoved: 0,
     bonusChanged: (before.bonusChance ?? 0) !== (after.bonusChance ?? 0),
+    tierChancesChanged: JSON.stringify(tierChancesOf(before)) !== JSON.stringify(tierChancesOf(after)),
   };
   const oldDays = new Set(Object.keys(before.streakBonuses ?? {}));
   const newDays = new Set(Object.keys(after.streakBonuses ?? {}));

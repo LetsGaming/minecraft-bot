@@ -81,7 +81,7 @@
         <tr>
           <th scope="col">{{ t("rewards.col.item") }}</th>
           <th scope="col" class="num">{{ t("rewards.col.amount") }}</th>
-          <th scope="col" class="num">{{ mode === "percent" ? t("rewards.col.chance") : t("rewards.col.weight") }}</th>
+          <th scope="col" class="num">{{ mode === "percent" ? t("rewards.col.tierShare") : t("rewards.col.weight") }}</th>
           <th scope="col">{{ t("rewards.col.rarity") }}</th>
           <th v-if="editable" scope="col"><span class="sr-only">{{ t("rewards.col.actions") }}</span></th>
         </tr>
@@ -92,6 +92,7 @@
             <span class="rw-item-name">{{ row.name }}</span>
             <RowStateChip :state="row.state" />
             <span class="rw-item-id mono">{{ row.entry.item }}</span>
+            <span v-if="row.entry.since" class="rw-since">{{ t("rewards.since", { version: row.entry.since }) }}</span>
             <span v-if="!isKnownItem(catalog, row.entry.item)" class="rw-item-warn">{{ t("rewards.notVanilla") }}</span>
           </th>
           <td class="num rw-amount-cell" :data-label="t('rewards.col.amount')">
@@ -111,18 +112,18 @@
               {{ t("rewards.was", { value: row.shared.amount }) }}
             </span>
           </td>
-          <td class="num rw-chance-cell" :data-label="mode === 'percent' ? t('rewards.col.chance') : t('rewards.col.weight')">
+          <td class="num rw-chance-cell" :data-label="mode === 'percent' ? t('rewards.col.tierShare') : t('rewards.col.weight')">
             <template v-if="editable && !row.removed">
               <InputNumber
                 v-if="mode === 'percent'"
                 :locale="UI_LOCALE"
-                :model-value="roundTo(row.percent, 3)"
+                :model-value="roundTo(row.tierPercent, 3)"
                 :min="0.001"
-                :max="liveCount > 1 ? MAX_SHARE_PERCENT : 100"
+                :max="row.tierCount > 1 ? MAX_SHARE_PERCENT : 100"
                 :min-fraction-digits="0"
                 :max-fraction-digits="3"
                 suffix=" %"
-                :disabled="liveCount < 2"
+                :disabled="row.tierCount < 2"
                 :aria-label="t('rewards.chanceOf', { item: row.name })"
                 class="rw-num"
                 @update:model-value="rewards.setPercent(row.id, $event)"
@@ -140,14 +141,32 @@
               />
             </template>
             <span v-else-if="row.removed" aria-hidden="true">–</span>
-            <span v-else>{{ mode === "percent" ? `${formatPercent(row.percent)} %` : weightOf(row.entry) }}</span>
+            <span v-else>{{ mode === "percent" ? `${formatPercent(row.tierPercent)} %` : weightOf(row.entry) }}</span>
             <span v-if="!row.removed" class="rw-sub">
-              {{ mode === "percent" ? t("rewards.weightIs", { weight: weightOf(row.entry) }) : `${formatPercent(row.percent)} %` }} · {{ oneInText(row.percent) }}
+              {{ mode === "percent" ? t("rewards.weightIs", { weight: weightOf(row.entry) }) : `${formatPercent(row.tierPercent)} %` }}
+            </span>
+            <span v-if="!row.removed" class="rw-sub rw-overall">
+              {{ t("rewards.overall", { percent: formatPercent(row.percent) }) }} · {{ oneInText(row.percent) }}
             </span>
           </td>
           <td class="rw-rarity-cell" :data-label="t('rewards.col.rarity')">
             <span v-if="!row.removed" class="rw-rarity" :style="{ '--rarity': rarityColor(row.rarity) }">
-              <span class="rw-rarity-pip" aria-hidden="true" />{{ rarityLabel(row.rarity) }}
+              <span class="rw-rarity-pip" aria-hidden="true" />
+              <Select
+                v-if="editable"
+                :model-value="row.rarity"
+                :options="tierOptions"
+                option-label="label"
+                option-value="value"
+                :aria-label="t('rewards.tierOf', { item: row.name })"
+                class="rw-tier"
+                size="small"
+                @update:model-value="rewards.setTier(row.id, $event)"
+              />
+              <template v-else>{{ rarityLabel(row.rarity) }}</template>
+            </span>
+            <span v-if="!row.removed && row.state === 'changed' && row.shared && rarityOf(row.shared) !== row.rarity" class="rw-sub">
+              {{ t("rewards.was", { value: rarityLabel(rarityOf(row.shared)) }) }}
             </span>
           </td>
           <td v-if="editable" class="rw-actions">
@@ -215,10 +234,12 @@ import {
   MAX_REWARD_AMOUNT,
   MAX_SHARE_PERCENT,
   rarityOf,
+  type DailyRewardItem,
   sharePercent,
   totalWeight,
   weightOf,
 } from "@mcbot/schema/dailyRewards.js";
+import { itemChances as poolItemChances } from "@mcbot/schema/rewardRoll.js";
 import type { RewardRarity } from "@mcbot/schema/embedCategories.js";
 import { useRewardsContext } from "../../composables/rewardsContext";
 import type { ListRow } from "../../composables/useDailyRewards";
@@ -251,7 +272,11 @@ type SortField = "default" | "name" | "amount" | "chance" | "rarity";
 
 interface PoolView extends ListRow {
   name: string;
+  /** The chance of this entry on any claim. */
   percent: number;
+  /** The entry's share of the weight in its own tier. */
+  tierPercent: number;
+  tierCount: number;
   rarity: RewardRarity;
   removed: boolean;
 }
@@ -272,6 +297,7 @@ const modeOptions = computed(() => [
   { label: t("rewards.pool.modePercent"), value: "percent" },
   { label: t("rewards.pool.modeWeight"), value: "weight" },
 ]);
+const tierOptions = computed(() => REWARD_RARITIES.map((tier) => ({ label: rarityLabel(tier), value: tier })));
 const sortOptions = computed(() => [
   { label: t("rewards.sort.default"), value: "default" },
   { label: t("rewards.sort.name"), value: "name" },
@@ -283,15 +309,21 @@ const sortOptions = computed(() => [
 const views = computed<PoolView[]>(() => {
   const rows = rewards.poolRows.value;
   const live = rows.filter((r) => r.state !== "removed").map((r) => r.entry);
-  const total = totalWeight(live);
+  const chances = poolItemChances({ tierChances: rewards.effectivePool.value.tierChances, default: live });
+  const tierRows = (tier: RewardRarity): DailyRewardItem[] => live.filter((e) => rarityOf(e) === tier);
+  let at = 0;
   return rows.map((row) => {
     const removed = row.state === "removed";
+    const rarity = rarityOf(row.entry);
+    const peers = tierRows(rarity);
     return {
       ...row,
       removed,
       name: itemName(catalog.value, row.entry.item),
-      percent: removed ? 0 : sharePercent(weightOf(row.entry), total),
-      rarity: rarityOf(row.entry, live),
+      percent: removed ? 0 : (chances[at++] ?? 0),
+      tierPercent: removed ? 0 : sharePercent(weightOf(row.entry), totalWeight(peers)),
+      tierCount: removed ? 0 : peers.length,
+      rarity,
     };
   });
 });
@@ -374,6 +406,8 @@ watch(pages, (count) => {
 .rw-item-name { font-weight: 600; }
 .rw-item-id { grid-column: 1 / -1; color: var(--text-dim); font-size: var(--text-xs); }
 .rw-item-warn { grid-column: 1 / -1; color: var(--text-dim); font-size: var(--text-xs); }
+.rw-since { color: var(--text-dim); font-size: var(--text-xs); border: 1px solid var(--border-strong); border-radius: var(--radius-full); padding: 0 var(--space-2); white-space: nowrap; }
+.rw-tier { min-width: 9ch; }
 .rw-sub { display: block; color: var(--text-dim); font-size: var(--text-xs); }
 .rw-num { width: 11ch; }
 .rw-num :deep(input) { width: 100%; }

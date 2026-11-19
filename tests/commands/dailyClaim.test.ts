@@ -37,6 +37,7 @@ import { getOnlinePlayers } from "../../src/core/utils/minecraft/playerUtils.js"
 import {
   loadPendingRewards,
   getServerPending,
+  getServerFailed,
   loadClaimedStore,
   updateClaimedStore,
   getServerClaims,
@@ -51,7 +52,7 @@ const DIAMOND = { item: "minecraft:diamond", amount: 1, weight: 1 };
 
 function fakeServer(give: (cmd: string) => unknown = () => ({ kind: "delivered", output: "Gave 1 [x] to Steve" })) {
   const send = vi.fn(async (cmd: string) => give(cmd));
-  return { id: "smp", config: { apiUrl: "http://w:3030", apiKey: "k" }, send } as unknown as
+  return { id: "smp", config: { apiUrl: "http://w:3030", apiKey: "k" }, send, getMinecraftVersion: async () => null } as unknown as
     ServerInstance & { send: ReturnType<typeof vi.fn> };
 }
 
@@ -202,7 +203,9 @@ describe("claimDaily outcomes", () => {
     kvSet("pendingRewards", { version: 1, servers: { smp: { steve: waiting } } });
 
     const outcome = await claimDaily(fakeServer(), "u1", NOW);
-    expect(outcome).toMatchObject({ kind: "queued", partial: false, queued: waiting.length + 1 });
+    // The shown count matches the cap: only this offline claim counts.
+    expect(outcome).toMatchObject({ kind: "queued", partial: false, queued: 1 });
+    expect(getServerPending(await loadPendingRewards(), "smp")["steve"]).toHaveLength(waiting.length + 1);
     expect((await storedClaim()).lastClaim).toBe(NOW);
   });
 
@@ -226,9 +229,49 @@ describe("claimDaily outcomes", () => {
       kind: "queued",
       partial: true,
       rewards: [{ item: "minecraft:emerald", amount: 2 }],
-      queued: MAX_PENDING_PER_PLAYER + 1,
+      queued: MAX_PENDING_PER_PLAYER,
     });
+    expect(getServerPending(await loadPendingRewards(), "smp")["steve"]).toHaveLength(MAX_PENDING_PER_PLAYER + 1);
     expect((await storedClaim()).lastClaim).toBe(NOW);
+  });
+
+  it("records a rejected item as failed instead of queueing it", async () => {
+    seedClaim();
+    pool.cfg = { default: [DIAMOND], streakBonuses: { "4": [{ item: "minecraft:not_an_item", amount: 2 }] } };
+    const server = fakeServer((cmd) =>
+      cmd.includes("not_an_item")
+        ? { kind: "delivered", output: "Unknown item 'minecraft:not_an_item'" }
+        : { kind: "delivered", output: "Gave 1 [Diamond] to Steve" },
+    );
+
+    expect(await claimDaily(server, "u1", NOW)).toMatchObject({ kind: "claimed" });
+
+    const store = await loadPendingRewards();
+    expect(getServerPending(store, "smp")["steve"]).toBeUndefined();
+    expect(getServerFailed(store, "smp")["steve"]).toEqual([
+      {
+        discordId: "u1",
+        queuedAt: NOW,
+        failedAt: NOW,
+        items: [{ item: "minecraft:not_an_item", amount: 2 }],
+        reason: "rejected",
+      },
+    ]);
+    expect((await storedClaim()).lastClaim).toBe(NOW);
+  });
+
+  it("delivers entries a missed join left behind once an online claim succeeds", async () => {
+    seedClaim();
+    kvSet("pendingRewards", {
+      version: 1,
+      servers: { smp: { steve: [{ discordId: "", items: [{ item: "minecraft:emerald", amount: 3 }], queuedAt: 1 }] } },
+    });
+    const server = fakeServer();
+
+    expect(await claimDaily(server, "u1", NOW)).toMatchObject({ kind: "claimed" });
+
+    expect(server.send.mock.calls.some(([c]: [string]) => c.includes("emerald"))).toBe(true);
+    expect(getServerPending(await loadPendingRewards(), "smp")["steve"]).toBeUndefined();
   });
 
   it("rolls back the queued entry by identity when a concurrent claim wins", async () => {

@@ -30,6 +30,7 @@ import {
 } from "@mcbot/core/utils/stores/challengeStore.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import { MS } from "@mcbot/schema/time.js";
+import { itemProblem } from "@mcbot/schema/dailyRewards.js";
 import { tellraw } from "@mcbot/core/utils/minecraft/serverMessages.js";
 import { formatItemStack, itemDisplayName } from "@mcbot/core/utils/minecraft/itemNames.js";
 
@@ -199,6 +200,8 @@ export const execute = withErrorHandling(
       .trim();
     const reward = interaction.options.getString("reward")?.trim();
     const item = interaction.options.getString("item")?.trim();
+    const itemError = item ? itemProblem(item) : null;
+    if (itemError) throw new Error(t("challenge.badItem", { problem: itemError }));
     const amount = interaction.options.getInteger("amount") ?? undefined;
     const duration = interaction.options.getInteger("duration");
 
