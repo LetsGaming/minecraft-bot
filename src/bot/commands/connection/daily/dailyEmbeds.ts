@@ -2,7 +2,7 @@ import type { EmbedBuilder } from "discord.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 import type { DailyRewardItem, RewardPool } from "@mcbot/core/types/index.js";
 import type { GrantedRewards } from "@mcbot/core/utils/minecraft/dailyClaim.js";
-import { formatItemList, formatItemStack } from "@mcbot/core/utils/minecraft/itemNames.js";
+import { formatItemStack } from "@mcbot/core/utils/minecraft/itemNames.js";
 import {
   DAILY_COOLDOWN_MS,
   STREAK_GRACE_MS,
@@ -12,15 +12,11 @@ import {
   rarityOf,
 } from "@mcbot/core/utils/minecraft/rewards.js";
 import { MS } from "@mcbot/schema/time.js";
-import {
-  CATEGORY_STYLE,
-  RARITY_STYLE,
-  EmbedCategory,
-  type RewardRarity,
-} from "@mcbot/schema/embedCategories.js";
+import { EmbedCategory, type RewardRarity } from "@mcbot/schema/embedCategories.js";
 import { createEmbed, createPlayerEmbed } from "../../../utils/embeds/embedUtils.js";
 import { EmbedColor, embedColorFor } from "../../../utils/embeds/embedColors.js";
 import { progressBar } from "../../../utils/embeds/gameDisplay.js";
+import { heroBlock, itemBullets, milestoneBlock, subtext, tierLabel } from "../../../utils/embeds/itemBlocks.js";
 import { clockTimestamp, formatLastSeen } from "../../../utils/discordTime.js";
 
 export interface ClaimView {
@@ -35,21 +31,9 @@ export interface ClaimView {
   note?: string;
 }
 
-function rarityLabel(rarity: RewardRarity): string {
-  const { icon } = RARITY_STYLE[rarity];
-  return `${icon} ${t(`daily.rarity.${rarity}`)}`;
-}
-
-/** The extra reward from the bonus-chance draw, set apart from the main reward. */
-function luckyField(item: DailyRewardItem): { name: string; value: string; inline: false } {
-  return {
-    name: `🍀 ${t("daily.luckyField")}`,
-    value: t("daily.headline", {
-      reward: formatItemStack(item),
-      rarity: rarityLabel(rarityOf(item)),
-    }),
-    inline: false,
-  };
+/** The extra reward from the bonus-chance draw, on its own line under the main reward. */
+function luckyLine(item: DailyRewardItem): string {
+  return `🍀 **${t("daily.luckyField")}**  ${formatItemStack(item)} · ${tierLabel(rarityOf(item))}`;
 }
 
 /** The rarest tier among the rolled items; a streak bonus counts as a milestone. */
@@ -65,25 +49,17 @@ export function buildClaimEmbed(view: ClaimView): EmbedBuilder {
   const mainRarity = rarityOf(granted.main);
   const hitMilestone = granted.streakBonus.length > 0;
 
-  const lines = [
-    t("daily.headline", {
-      reward: formatItemStack(granted.main),
-      rarity: rarityLabel(mainRarity),
-    }),
-  ];
-  if (mainRarity === "dirt") lines.push(t("daily.dirtLine"));
+  const find = heroBlock(granted.main);
+  if (mainRarity === "dirt") find.push(subtext(t("daily.dirtLine")));
+  const sections = [find.join("\n")];
+  if (granted.randomBonus) sections.push(luckyLine(granted.randomBonus));
   if (hitMilestone) {
-    lines.push(
-      `${CATEGORY_STYLE[EmbedCategory.Milestone].icon} ${t("daily.bonus", {
-        days: granted.bonusStreak,
-        rewards: formatItemList(granted.streakBonus),
-      })}`,
-    );
+    sections.push(milestoneBlock(t("daily.bonusHeading", { days: granted.bonusStreak }), granted.streakBonus));
   }
-  if (view.lostStreak > 1) {
-    lines.push(`💔 ${t("daily.streakLost", { previous: view.lostStreak })}`);
-  }
-  if (view.note) lines.push(view.note);
+  const notes: string[] = [];
+  if (view.lostStreak > 1) notes.push(`💔 ${t("daily.streakLost", { previous: view.lostStreak })}`);
+  if (view.note) notes.push(view.note);
+  if (notes.length > 0) sections.push(notes.join("\n"));
 
   const lucky = granted.randomBonus;
   const color = hitMilestone
@@ -99,13 +75,12 @@ export function buildClaimEmbed(view: ClaimView): EmbedBuilder {
   const tip = t("daily.footerTip", { hours: streakWindowHours() });
   return createPlayerEmbed(view.player, {
     title: t("daily.claimedTitle"),
-    description: lines.join("\n"),
+    description: sections.join("\n\n"),
     category: EmbedCategory.Reward,
     color,
     footer: { text: lucky ? `🍀 ${t("daily.luckyFooter")} ${tip}` : tip },
   })
     .addFields(
-      ...(lucky ? [luckyField(lucky)] : []),
       {
         name: `🔥 ${t("daily.streakField")}`,
         value: `${progressBar(granted.bonusStreak, barMax)}\n${t("streak.days", { count: view.currentStreak })}`,
@@ -114,7 +89,7 @@ export function buildClaimEmbed(view: ClaimView): EmbedBuilder {
       {
         name: `🎯 ${t("daily.nextMilestoneField")}`,
         value: next
-          ? t("daily.nextMilestoneValue", { day: next.day, rewards: formatItemList(next.items) })
+          ? `${t("daily.nextMilestoneValue", { day: next.day })}\n${itemBullets(next.items)}`
           : t("streak.na"),
         inline: true,
       },
@@ -159,23 +134,33 @@ export function buildQueuedEmbed(opts: {
   currentStreak: number;
   claimedAt: number;
   rewards: readonly DailyRewardItem[];
+  /** The main draw, when it is among the queued items. */
+  main?: DailyRewardItem | null;
   /** The bonus-chance draw, when it hit and is among the queued items. */
   lucky?: DailyRewardItem | null;
   /** Replaces the "you are offline" line, e.g. for items a give could not deliver. */
   notice?: string;
 }): EmbedBuilder {
+  const same = (a: DailyRewardItem, b: DailyRewardItem | null | undefined): boolean =>
+    b != null && (a === b || (a.item === b.item && a.amount === b.amount));
+  const main = opts.main ?? null;
+  const rest = opts.rewards.filter((item) => !same(item, main) && !same(item, opts.lucky));
+
+  const sections: string[] = [];
+  if (main) sections.push(heroBlock(main).join("\n"));
+  if (opts.lucky) sections.push(luckyLine(opts.lucky));
+  if (rest.length > 0) {
+    sections.push(main ? milestoneBlock(t("daily.bonusHeadingPlain"), rest) : itemBullets(rest));
+  }
+  sections.push(
+    `${opts.notice ?? t("daily.queued", { server: opts.server })}\n${subtext(t("daily.queueSize", { count: opts.queued, max: opts.max }))}`,
+  );
+
   return createPlayerEmbed(opts.player, {
     title: `📦 ${t("daily.queuedTitle")}`,
-    description: [
-      opts.notice ?? t("daily.queued", { server: opts.server }),
-      `📋 ${formatItemList(opts.rewards)}`,
-      t("daily.queueSize", { count: opts.queued, max: opts.max }),
-    ].join("\n"),
+    description: sections.join("\n\n"),
     color: EmbedColor.Pending,
   }).addFields(
-    ...(opts.lucky
-      ? [{ name: `🍀 ${t("daily.luckyField")}`, value: formatItemStack(opts.lucky), inline: false }]
-      : []),
     {
       name: `🔥 ${t("daily.streakField")}`,
       value: t("streak.days", { count: opts.currentStreak }),

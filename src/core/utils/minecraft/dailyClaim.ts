@@ -122,6 +122,8 @@ export type ClaimOutcome =
       claimedAt: number;
       /** The items waiting: the whole roll offline, only the failed ones online. */
       rewards: DailyRewardItem[];
+      /** The main draw, when it is among `rewards`. */
+      main: DailyRewardItem | null;
       /** The bonus-chance draw, when it hit and is among `rewards`. */
       lucky: DailyRewardItem | null;
       /** True when the player was online and only some items failed to arrive. */
@@ -233,6 +235,7 @@ export async function claimDaily(
       currentStreak: roll.currentStreak,
       claimedAt: now,
       rewards: roll.items,
+      main: roll.granted.main,
       lucky: roll.granted.randomBonus,
       partial: false,
     };
@@ -279,6 +282,7 @@ export async function claimDaily(
       currentStreak: roll.currentStreak,
       claimedAt: now,
       rewards: undelivered,
+      main: undelivered.includes(roll.granted.main) ? roll.granted.main : null,
       lucky:
         roll.granted.randomBonus && undelivered.includes(roll.granted.randomBonus)
           ? roll.granted.randomBonus

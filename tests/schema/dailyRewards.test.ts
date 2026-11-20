@@ -15,6 +15,7 @@ import {
 } from "@mcbot/schema/dailyRewards.js";
 import { REWARD_RARITIES } from "@mcbot/schema/embedCategories.js";
 import { compareMcVersions, itemChances } from "@mcbot/schema/rewardRoll.js";
+import { MINECRAFT_ITEMS } from "@mcbot/schema/minecraftItems.js";
 
 describe("itemProblem", () => {
   it.each(["diamond", "minecraft:diamond", "create:brass_ingot", "minecraft:diamond_sword[minecraft:damage=5]", 'stone{display:{Name:"x"}}'])(
@@ -235,11 +236,9 @@ describe("shipped default pool", () => {
 
 describe("shipped default pool amounts", () => {
   const poolFile = path.resolve(__dirname, "../../data/dailyRewards.defaults.json");
-  const catalogFile = path.resolve(__dirname, "../../src/web/frontend/src/data/minecraftItems.json");
   const { pool } = parseRewardPool(JSON.parse(readFileSync(poolFile, "utf8")), "shared");
   const items = pool.default ?? [];
-  const catalogJson = JSON.parse(readFileSync(catalogFile, "utf8")) as { items: Array<[string, ...unknown[]]> };
-  const catalog = new Set(catalogJson.items.map((row) => row[0]));
+  const catalog = new Set(MINECRAFT_ITEMS.map((row) => row[0]));
   const tierIndex = (tier: string | undefined) => REWARD_RARITIES.indexOf((tier ?? "common") as (typeof REWARD_RARITIES)[number]);
   const byItem = new Map<string, typeof items>();
   for (const entry of items) byItem.set(entry.item, [...(byItem.get(entry.item) ?? []), entry]);

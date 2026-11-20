@@ -55,20 +55,34 @@ use, so Discord and the dashboard cannot drift apart:
 The `/daily` family is the reference for a gamified reply
 ([`dailyEmbeds.ts`](../../../src/bot/commands/connection/daily/dailyEmbeds.ts)):
 
-- **Claim** (public): player head and name as author, `reward` icon, the
-  headline reward in bold with its rarity badge, optional lucky-bonus and
-  milestone lines, a streak progress bar toward the next milestone, the next
-  milestone and the next claim time. The bar colour is the rarest tier rolled,
-  or the gold `milestone` colour when a streak bonus fired.
-- **Cooldown** and **queued** replies use the Pending colour. The cooldown shows
-  a time bar and the deadline that keeps the streak alive.
+- **Claim** (public): player head and name as author and the `reward` icon.
+  The description is the shared item block from
+  [`itemBlocks.ts`](../../../src/bot/utils/embeds/itemBlocks.ts): the main
+  reward as a `##` header, and under it one `-#` line with the tier, its rank
+  out of five, a diamond meter and, for items that stack to 64, the stack count
+  ("2 stacks", "1 stack + 20"). A lucky bonus is one line under it. A milestone
+  is a `###` heading with one bullet per item. Below the description come the
+  streak bar, the next milestone (its items as bullets) and the next claim
+  time. The bar colour is the rarest tier rolled, or the gold `milestone`
+  colour when a streak bonus fired.
+- **Queued** uses the same item block, then the reason it waits and the waiting
+  count as subtext. `/streak` shows the items of the next bonus as bullets
+  under the progress bar, and `/daily-history` puts the tier icon in front of
+  each tiered item.
+- **Cooldown** replies use the Pending colour, with a time bar and the deadline
+  that keeps the streak alive.
+- **Headers and subtext** (`##`, `###`, `-#`) belong in an embed description
+  only. A field value gets bullets, and a title or footer gets plain text. A
+  client that does not render them shows the characters as they are, so the
+  markers live in `itemBlocks.ts` and nowhere else.
 - **Rarity** comes from `rarityOf` in
   [`dailyRewards.ts`](../../../src/schema/dailyRewards.ts): the `tier` stored
   on the pool entry (dirt, common, uncommon, rare, epic, legendary; a missing
   tier is common). The claim rolls the tier first
-  ([`rewardRoll.ts`](../../../src/schema/rewardRoll.ts)), so the badge says
-  which tier was rolled. A dirt roll adds one playful line. The badge is text,
-  so colour is never the only signal.
+  ([`rewardRoll.ts`](../../../src/schema/rewardRoll.ts)), so the tier line says
+  which tier was rolled. A dirt roll adds one playful line. The tier is always
+  text and a number, and the meter is decoration, so colour is never the only
+  signal.
 - Widgets (`progressBar`, `milestoneTrack`) live in
   [`gameDisplay.ts`](../../../src/bot/utils/embeds/gameDisplay.ts).
 

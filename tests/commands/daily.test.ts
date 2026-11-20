@@ -667,7 +667,7 @@ describe("deferred replies", () => {
     expect(interaction.reply).not.toHaveBeenCalled();
   });
 
-  it("shows the main reward as the daily reward and the random bonus in its own field", async () => {
+  it("shows the main reward as the header and the random bonus as its own line under it", async () => {
     // Order of Math.random calls: main tier, main entry, bonus-chance roll,
     // bonus tier, bonus entry.
     vi.spyOn(Math, "random")
@@ -689,11 +689,12 @@ describe("deferred replies", () => {
     });
     await execute(interaction as never);
     const embed = embedOf(interaction.editReply.mock.calls[0]![0]);
-    expect(embed.description).toContain("1 × Apple");
-    expect(embed.description).not.toContain("Bread");
-    const lucky = embed.fields?.find((f) => f.name.includes("Lucky bonus"));
-    expect(lucky?.value).toContain("1 × Bread");
-    expect(lucky?.inline).toBe(false);
+    const lines = String(embed.description).split("\n");
+    expect(lines[0]).toBe("## 1 × Apple");
+    expect(lines.slice(1).join("\n")).not.toContain("1 × Apple");
+    const lucky = lines.find((line) => line.includes("Lucky bonus"));
+    expect(lucky).toContain("1 × Bread");
+    expect(embed.fields?.some((f) => f.name.includes("Lucky bonus"))).toBe(false);
     expect(embed.footer?.text).toContain("Lucky draw");
   });
 

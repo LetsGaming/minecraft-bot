@@ -41,14 +41,27 @@ vi.mock("../../../src/core/utils/minecraft/rewards.js", async (importOriginal) =
 }));
 
 const HOUR = 3_600_000;
-const claims = vi.hoisted(() => ({ lastClaim: 0, bonusChance: 0 }));
+interface PoolEntry {
+  item: string;
+  amount: number;
+  weight?: number;
+  tier?: string;
+}
+const BASE_POOL = vi.hoisted(() => ({
+  default: [{ item: "minecraft:diamond", amount: 3, weight: 1 }] as PoolEntry[],
+  streakBonuses: { "6": [{ item: "minecraft:cooked_beef", amount: 16 }] } as Record<string, PoolEntry[]>,
+}));
+const claims = vi.hoisted(() => ({
+  lastClaim: 0,
+  bonusChance: 0,
+  pool: null as { default: PoolEntry[]; streakBonuses: Record<string, PoolEntry[]> } | null,
+}));
 vi.mock("../../../src/core/utils/stores/dailyStore.js", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   loadDailyRewardsConfig: vi.fn().mockResolvedValue({}),
   loadServerRewardsOverride: vi.fn().mockResolvedValue(null),
   rewardPoolForServer: vi.fn(() => ({
-    default: [{ item: "minecraft:diamond", amount: 3, weight: 1 }],
-    streakBonuses: { "6": [{ item: "minecraft:cooked_beef", amount: 16 }] },
+    ...(claims.pool ?? BASE_POOL),
     bonusChance: claims.bonusChance,
   })),
   loadClaimedStore: vi.fn(async () => ({})),
@@ -87,6 +100,7 @@ describe("Discord snapshots: /daily", () => {
       await execute(interaction as never);
       return sent;
     };
+    let random: ReturnType<typeof vi.spyOn> | undefined;
     const cases: Record<string, () => void> = {
       "claimed, online": () => {
         vi.mocked(getLinkedAccount).mockResolvedValue("ikarus_77");
@@ -105,6 +119,46 @@ describe("Discord snapshots: /daily", () => {
         vi.mocked(getOnlinePlayers).mockResolvedValue([]);
         claims.lastClaim = NOW - 25 * HOUR;
       },
+      "claimed, epic stack with a lucky bonus and a milestone": () => {
+        vi.mocked(getLinkedAccount).mockResolvedValue("ikarus_77");
+        vi.mocked(getOnlinePlayers).mockResolvedValue(["ikarus_77"]);
+        claims.lastClaim = NOW - 25 * HOUR;
+        claims.bonusChance = 100;
+        claims.pool = {
+          default: [
+            { item: "minecraft:oak_log", amount: 128, weight: 1, tier: "epic" },
+            { item: "minecraft:iron_ingot", amount: 4, weight: 1, tier: "common" },
+          ],
+          streakBonuses: BASE_POOL.streakBonuses,
+        };
+        // main tier, main entry, bonus-chance roll, bonus tier, bonus entry
+        random = vi.spyOn(Math, "random");
+        for (const value of [0.9, 0, 0, 0.1, 0]) random.mockReturnValueOnce(value);
+      },
+      "claimed, dirt roll": () => {
+        vi.mocked(getLinkedAccount).mockResolvedValue("ikarus_77");
+        vi.mocked(getOnlinePlayers).mockResolvedValue(["ikarus_77"]);
+        claims.lastClaim = NOW - 25 * HOUR;
+        claims.pool = { default: [{ item: "minecraft:stick", amount: 1, weight: 1, tier: "dirt" }], streakBonuses: {} };
+      },
+      "claimed, a stack and a remainder": () => {
+        vi.mocked(getLinkedAccount).mockResolvedValue("ikarus_77");
+        vi.mocked(getOnlinePlayers).mockResolvedValue(["ikarus_77"]);
+        claims.lastClaim = NOW - 25 * HOUR;
+        claims.pool = {
+          default: [{ item: "minecraft:cobblestone", amount: 84, weight: 1, tier: "rare" }],
+          streakBonuses: {},
+        };
+      },
+      "claimed, offline so queued, epic with a milestone": () => {
+        vi.mocked(getLinkedAccount).mockResolvedValue("ikarus_77");
+        vi.mocked(getOnlinePlayers).mockResolvedValue([]);
+        claims.lastClaim = NOW - 25 * HOUR;
+        claims.pool = {
+          default: [{ item: "minecraft:oak_log", amount: 128, weight: 1, tier: "epic" }],
+          streakBonuses: BASE_POOL.streakBonuses,
+        };
+      },
       cooldown: () => {
         vi.mocked(getLinkedAccount).mockResolvedValue("ikarus_77");
         claims.lastClaim = NOW - 9 * HOUR;
@@ -117,8 +171,12 @@ describe("Discord snapshots: /daily", () => {
     for (const [name, arrange] of Object.entries(cases)) {
       const perLanguage: Record<string, unknown> = {};
       for (const language of LANGUAGES) {
+        claims.pool = null;
+        claims.bonusChance = 0;
         arrange();
         perLanguage[language] = await run(language);
+        random?.mockRestore();
+        random = undefined;
       }
       out[name] = perLanguage;
     }

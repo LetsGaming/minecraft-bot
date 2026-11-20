@@ -9,6 +9,7 @@ import {
 import { resolveServer } from "../../../utils/guild/guildRouter.js";
 import { createPlayerEmbed } from "../../../utils/embeds/embedUtils.js";
 import { milestoneTrack, progressBar } from "../../../utils/embeds/gameDisplay.js";
+import { itemBullets } from "../../../utils/embeds/itemBlocks.js";
 import { getLinkedAccount } from "@mcbot/core/utils/stores/linkStore.js";
 import { liveStreak, liveBonusStreak, milestoneDays, nextMilestone } from "@mcbot/core/utils/minecraft/rewards.js";
 import { EmbedCategory } from "@mcbot/schema/embedCategories.js";
@@ -60,7 +61,7 @@ export const execute = withErrorHandling(
     if (nextBonus) {
       embed.addFields({
         name: t("streak.barField"),
-        value: `${progressBar(bonusStreak, nextBonus.day, 10)} ${bonusStreak}/${nextBonus.day}`,
+        value: `${progressBar(bonusStreak, nextBonus.day, 10)} ${bonusStreak}/${nextBonus.day}\n${itemBullets(nextBonus.items)}`,
       });
     }
     if (days.length > 0) {

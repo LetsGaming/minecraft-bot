@@ -14,7 +14,7 @@ import { resolveServer } from "../../../utils/guild/guildRouter.js";
 import { createEmbed } from "../../../utils/embeds/embedUtils.js";
 import { EmbedCategory } from "@mcbot/schema/embedCategories.js";
 import { withErrorHandling } from "../../middleware.js";
-import { formatItemList } from "@mcbot/core/utils/minecraft/itemNames.js";
+import { itemWithTier } from "../../../utils/embeds/itemBlocks.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 
 const MAX_SHOWN = 15;
@@ -42,7 +42,7 @@ export const execute = withErrorHandling(
     const recent = [...record.rewards].reverse().slice(0, MAX_SHOWN);
     const lines = recent.map((claim) => {
       const when = `<t:${Math.floor(claim.date / 1000)}:d>`;
-      const items = formatItemList(claim.items);
+      const items = claim.items.map(itemWithTier).join(", ");
       return t("dailyHistory.line", {
         when,
         streak: claim.streak,

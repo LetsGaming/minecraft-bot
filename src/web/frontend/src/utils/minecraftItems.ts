@@ -2,7 +2,7 @@
  * The vanilla item list the reward editor searches, so nobody has to know
  * that a "Bottle o' Enchanting" is `experience_bottle`.
  *
- * Loaded on demand (it is ~70 KB) from data/minecraftItems.json, which
+ * Loaded on demand (it is ~70 KB) from @mcbot/schema/minecraftItems.ts, which
  * scripts/sync-minecraft-items.mjs generates. It is a search aid, never a
  * gate: any item id is accepted, so modded items and items newer than the
  * list still save, they just show their id instead of a name.
@@ -22,19 +22,13 @@ export interface ItemCatalog {
   byId: Map<string, CatalogItem>;
 }
 
-interface RawCatalog {
-  version: string;
-  items: Array<[string, string, number]>;
-}
-
 let loading: Promise<ItemCatalog> | null = null;
 
 export function loadItemCatalog(): Promise<ItemCatalog> {
-  loading ??= import("../data/minecraftItems.json")
+  loading ??= import("@mcbot/schema/minecraftItems.js")
     .then((mod) => {
-      const raw = (mod.default ?? mod) as unknown as RawCatalog;
-      const items = raw.items.map(([id, name, stackSize]) => ({ id, name, stackSize }));
-      return { version: raw.version, items, byId: new Map(items.map((i) => [i.id, i])) };
+      const items = mod.MINECRAFT_ITEMS.map(([id, name, stackSize]) => ({ id, name, stackSize }));
+      return { version: mod.MINECRAFT_ITEMS_VERSION, items, byId: new Map(items.map((i) => [i.id, i])) };
     })
     .catch((err: unknown) => {
       // A failed chunk load must not stick: the next call tries again.
