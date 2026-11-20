@@ -100,6 +100,10 @@ The six tiers, from the joke tier up: **dirt**, **common**, **uncommon**, **rare
 
 An entry without a `tier` is common. A pool from an older version has no tiers, so it has one filled tier and draws by weight, exactly as before. To use the tiers, assign them in the dashboard, or press **Start from the defaults** to take the shipped pool (this replaces your pool). The shipped pool keeps the items that skip a step of Vanilla progression (elytra, nether star, totem of undying, conduit, dragon egg, heavy core, netherite upgrade template) in the legendary tier.
 
+**Amount ladders.** The shipped pool lists most staple items at several tiers with a growing amount. Oak log is 16 in common, 32 in uncommon, 64 in rare and 128 in epic; iron ingot is 4, 8, 16 and 32; diamond is 2 in rare, 4 in epic and 8 in legendary. So the same item can be a small find or a big one, and the big amounts are rare. It is a convention of the shipped file, not a rule: you can list an item at any amount in any tier.
+
+The shipped pool has about 900 entries: building blocks (all wood types, 16 colors of wool, concrete, terracotta and glass, stone, nether, end and ocean blocks), lights and decoration, plants, food, ingots, dusts, mob drops, redstone parts and the single trophies (heads, discs, sherds, banner patterns, trims). Tools, weapons and armor are not in it.
+
 Item ids and Minecraft versions: new items appear in new versions. Set `since` on an item so older servers skip it. If a server still rejects an item, see [Queue and delivery](#queue-and-delivery).
 
 ### The `streakBonuses` map

@@ -232,3 +232,62 @@ describe("shipped default pool", () => {
     });
   });
 });
+
+describe("shipped default pool amounts", () => {
+  const poolFile = path.resolve(__dirname, "../../data/dailyRewards.defaults.json");
+  const catalogFile = path.resolve(__dirname, "../../src/web/frontend/src/data/minecraftItems.json");
+  const { pool } = parseRewardPool(JSON.parse(readFileSync(poolFile, "utf8")), "shared");
+  const items = pool.default ?? [];
+  const catalogJson = JSON.parse(readFileSync(catalogFile, "utf8")) as { items: Array<[string, ...unknown[]]> };
+  const catalog = new Set(catalogJson.items.map((row) => row[0]));
+  const tierIndex = (tier: string | undefined) => REWARD_RARITIES.indexOf((tier ?? "common") as (typeof REWARD_RARITIES)[number]);
+  const byItem = new Map<string, typeof items>();
+  for (const entry of items) byItem.set(entry.item, [...(byItem.get(entry.item) ?? []), entry]);
+
+  it("uses only item ids the vanilla catalog knows", () => {
+    expect([...byItem.keys()].filter((id) => !catalog.has(id))).toEqual([]);
+  });
+
+  it("has one entry per tier for an item, and a bigger amount in a higher tier", () => {
+    for (const [item, list] of byItem) {
+      const tiers = list.map((e) => e.tier);
+      expect(new Set(tiers).size, `${item} twice in one tier`).toBe(tiers.length);
+      const sorted = [...list].sort((a, b) => tierIndex(a.tier) - tierIndex(b.tier));
+      for (let i = 1; i < sorted.length; i++) {
+        expect(sorted[i]!.amount, `${item} ${sorted[i]!.tier}`).toBeGreaterThan(sorted[i - 1]!.amount);
+      }
+    }
+  });
+
+  it("ladders a staple item from 16 in common to 128 in epic", () => {
+    const amounts = (id: string) =>
+      Object.fromEntries((byItem.get(id) ?? []).map((e) => [e.tier, e.amount]));
+    expect(amounts("oak_log")).toEqual({ common: 16, uncommon: 32, rare: 64, epic: 128 });
+    expect(amounts("iron_ingot")).toEqual({ common: 4, uncommon: 8, rare: 16, epic: 32 });
+    expect(amounts("diamond")).toEqual({ rare: 2, epic: 4, legendary: 8 });
+  });
+
+  it("keeps amounts small in the low tiers and the legendary tier", () => {
+    const max = (tier: string) => Math.max(...items.filter((e) => e.tier === tier).map((e) => e.amount));
+    expect(max("dirt")).toBe(1);
+    expect(max("common")).toBeLessThanOrEqual(16);
+    expect(max("uncommon")).toBeLessThanOrEqual(32);
+    expect(max("rare")).toBeLessThanOrEqual(64);
+    expect(max("epic")).toBeLessThanOrEqual(128);
+    expect(max("legendary")).toBeLessThanOrEqual(8);
+  });
+
+  it("fills every tier with a real choice of items", () => {
+    for (const tier of REWARD_RARITIES) {
+      const count = items.filter((e) => e.tier === tier).length;
+      expect(count, tier).toBeGreaterThanOrEqual(tier === "legendary" ? 20 : 24);
+    }
+  });
+
+  it("never adds netherite, beacons or mending-style progression items below the legendary tier", () => {
+    const banned = ["netherite_ingot", "netherite_block", "beacon", "ancient_debris", "shulker_shell"];
+    for (const id of banned) {
+      for (const entry of byItem.get(id) ?? []) expect(["epic", "legendary"], `${id} in ${entry.tier}`).toContain(entry.tier);
+    }
+  });
+});

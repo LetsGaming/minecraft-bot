@@ -6,6 +6,10 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **The shipped reward pool is much wider and lists items at several amounts.** It has 907 entries (dirt 24, common 218, uncommon 247, rare 251, epic 129, legendary 38). A staple item appears in several tiers with a growing amount: oak log is 16 in common, 32 in uncommon, 64 in rare and 128 in epic, iron ingot is 4 to 32, diamond is 2, 4 and 8. New kinds of rewards: all wood types, 16 colors of wool, concrete, terracotta and glass, stone, nether, end and ocean blocks, lights, plants, food, ingots, dusts, mob drops and redstone parts. The progression skips stay single items in the legendary tier. Existing pools are not changed; press "Start from the defaults" on the Daily rewards page to use it (`data/dailyRewards.defaults.json`).
+
 ## [8.5.1] — 2026-11-19
 
 ### Changed
