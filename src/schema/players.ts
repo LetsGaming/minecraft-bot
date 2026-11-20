@@ -148,3 +148,15 @@ export interface PlayerDetail {
   sensitiveAccess: boolean;
   sensitive: PlayerSensitive | null;
 }
+
+/** The head image the bot and the dashboard use for one player, and how fresh mc-heads' copy is. */
+export interface PlayerHeadInfo {
+  /** The `?v=` of the head URL now: the UTC day, plus the refresh token after a manual refresh. */
+  version: string;
+  /** False when mc-heads did not answer with an image. */
+  reachable: boolean;
+  /** Seconds mc-heads' CDN has held the image; null when it reports no age. */
+  cacheAgeSeconds: number | null;
+  /** When someone last refreshed the head by hand, or null. */
+  refreshedAt: number | null;
+}

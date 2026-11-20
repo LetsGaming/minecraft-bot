@@ -19,6 +19,16 @@ live in the code linked here, not in this page.
 | A player event | `createPlayerEmbed`: the player's head and name as the author |
 | A confirmation | `createConfirmEmbed` and `createConfirmRow` in [`confirm.ts`](../../../src/bot/utils/embeds/confirm.ts) (below) |
 
+**Player heads** come from one function, `playerHeadUrl` in
+[`playerHead.ts`](../../../src/core/utils/minecraft/playerHead.ts) (bot code reaches it
+through `playerAvatarUrl`). Embed author icons, bridge webhook avatars, leaderboard
+thumbnails and the dashboard all use it, so a player has one URL everywhere. The URL
+ends in `?v=`: the UTC day, plus a token that `/skin refresh` or the dashboard button
+stores in [`headStore.ts`](../../../src/core/utils/stores/headStore.ts). Discord keeps
+an image under its URL, so a new version makes it fetch again. mc-heads' own CDN ignores
+the query and keeps an image up to six hours (`probeHead` reports its age), so a version
+cannot clear a stale image on that side. Never build a head URL anywhere else.
+
 No naked `new EmbedBuilder()` and no colour literals (both are lint errors). Pass `category` to `createEmbed` to say what a message is about (below).
 
 ## Colour is status, icon and hue are category

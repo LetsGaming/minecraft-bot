@@ -76,6 +76,8 @@ Players lists everyone the bot has recorded a session for on the server, with a 
 
 Sessions are recorded since the bot started tracking them and kept for 365 days, so a player's first-seen date and playtime cover that history, not the whole life of the server.
 
+The head next to the name is the same image Discord shows. A line under the name says how old the copy at mc-heads is. Admins with the right to update the server also get a Refresh head button; it makes Discord fetch the head again (a copy held by mc-heads clears itself within 6 hours).
+
 ## Where the numbers come from
 
 These are vanilla Minecraft statistics, the same ones you see on the in-game pause menu under Statistics. Stats start existing the first time you do the thing (your first death creates the deaths counter), and only players on the whitelist or in the server's `usercache.json` appear in bot results.

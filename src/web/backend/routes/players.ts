@@ -17,6 +17,7 @@ import {
   PLAYER_SORT_FIELDS,
   PLAYER_STATUS_FILTERS,
   type PlayerDetail,
+  type PlayerHeadInfo,
   type PlayerListResponse,
   type PlayerSortField,
   type PlayerStatusFilter,
@@ -26,6 +27,13 @@ import {
   SESSION_RETENTION_DAYS,
 } from "@mcbot/core/utils/stores/sessionStore.js";
 import { buildPlayerDetail } from "@mcbot/core/utils/minecraft/playerDetail.js";
+import {
+  headVersion,
+  playerHeadUrl,
+  probeHead,
+  type HeadProbe,
+} from "@mcbot/core/utils/minecraft/playerHead.js";
+import { headInfo, refreshHead } from "@mcbot/core/utils/stores/headStore.js";
 import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 import { log } from "@mcbot/core/utils/logger.js";
@@ -44,9 +52,17 @@ const MAX_QUIET_DAYS = SESSION_RETENTION_DAYS;
 const PAGE_LIMIT = { def: 20, min: 1, max: 50 } as const;
 const OFFSET = { def: 0, min: 0, max: 100_000 } as const;
 
-const HEAD_HOST = "https://mc-heads.net";
 const HEAD_UA = "LetsGaming/minecraft-bot dashboard (head proxy)";
 const HEAD_BROWSER_CACHE_SECONDS = 3600;
+
+function headInfoOf(name: string, probe: HeadProbe): PlayerHeadInfo {
+  return {
+    version: headVersion(name),
+    reachable: probe.ok,
+    cacheAgeSeconds: probe.ageSeconds,
+    refreshedAt: headInfo(name)?.refreshedAt ?? null,
+  };
+}
 
 function oneOf<T extends string>(raw: string | undefined, allowed: readonly T[], def: T, what: string): T {
   if (raw === undefined || raw === "") return def;
@@ -156,7 +172,9 @@ export function registerPlayerRoutes(app: FastifyInstance): void {
       requireServer(req.params.id);
       const name = requireMcName(req.params.name);
       try {
-        const img = await fetchIcon(`${HEAD_HOST}/avatar/${encodeURIComponent(name)}/64`, HEAD_UA);
+        // The page adds its own ?v= to get past the browser cache; the upstream
+        // address is always the one Discord uses, never taken from the request.
+        const img = await fetchIcon(playerHeadUrl(name), HEAD_UA);
         reply.header("content-type", img.contentType);
         reply.header("cache-control", `private, max-age=${HEAD_BROWSER_CACHE_SECONDS}`);
         reply.header("content-security-policy", "default-src 'none'; sandbox");
@@ -165,6 +183,36 @@ export function registerPlayerRoutes(app: FastifyInstance): void {
         if (err instanceof HttpError) throw err;
         throw new BadGateway("Head fetch failed.");
       }
+    },
+  );
+
+  api.get(
+    "/api/servers/:id/players/:name/head/info",
+    {
+      schema: { params: PlayerParams },
+      config: { capability: "server:read", scope: "server", param: "id" },
+    },
+    async (req): Promise<PlayerHeadInfo> => {
+      requireServer(req.params.id);
+      const name = requireMcName(req.params.name);
+      return headInfoOf(name, await probeHead(name));
+    },
+  );
+
+  // Makes the next head URL differ from every earlier one, so Discord fetches
+  // the image again. It cannot clear mc-heads' own copy (see `probeHead`).
+  api.post(
+    "/api/servers/:id/players/:name/head/refresh",
+    {
+      schema: { params: PlayerParams },
+      config: { capability: "server:update", scope: "server", param: "id" },
+    },
+    async (req): Promise<PlayerHeadInfo> => {
+      requireServer(req.params.id);
+      const name = requireMcName(req.params.name);
+      refreshHead(name, currentSession(req)?.uid ?? "dashboard");
+      log.info("web", `Head of ${name} refreshed from the dashboard.`);
+      return headInfoOf(name, await probeHead(name));
     },
   );
 }

@@ -94,7 +94,7 @@ Operator responsibilities:
 
 - You decide the legal basis for forwarding messages between communities (for example consent through the pinned notice, or legitimate interest) and you inform members. The notice and the per-server opt-out are the consent mechanism the bot provides.
 - Members can ask for deletion. Deleting the source message deletes the copies while the sync window lasts (`limits.relaySyncWindowMinutes`, default 60). After that, copies in other servers are outside what the bot can remove.
-- Minecraft-originated messages keep using the player head from `mc-heads.net`, which receives the player name. There is no switch for it.
+- Minecraft-originated messages keep using the player head from `mc-heads.net`, which receives the player name. There is no switch for it. A wrong or default head is fixed with `/skin refresh` or the Refresh button on the dashboard's Players page.
 - Removing the bot, unsetting `relayGroup` or deleting a channel stops relaying for that channel. When `relayGroup` is unset, the bot removes its pinned notice on the next config reload or start.
 
 Configuration is in [configuration.md](configuration.md#relay-between-discord-servers).

@@ -41,6 +41,7 @@ Player name options autocomplete with whitelisted players. More detail in [stats
 | `/link` | Gives you an 8-character code. Type `!link CODE` in Minecraft chat within 5 minutes to complete the link. |
 | `/linkstatus` | Shows which Minecraft account your Discord is linked to. |
 | `/unlink` | Removes the link. |
+| `/skin show` / `/skin refresh` | The head image the bot uses for you (in `/daily`, the chat bridge, leaderboards). `show` also says how old the copy at mc-heads is; `refresh` makes Discord fetch the head again. Without a name it is your linked account. Another player's head is for bot admins. |
 
 See [linking.md](linking.md) for the walkthrough and what linking unlocks.
 

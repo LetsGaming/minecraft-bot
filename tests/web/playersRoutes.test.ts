@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   buildPlayerDetail: vi.fn(),
   sessionHolds: vi.fn(),
   fetchIcon: vi.fn(),
+  probeHead: vi.fn(),
 }));
 
 vi.mock("../../src/core/utils/logger.js", () => ({
@@ -40,8 +41,13 @@ vi.mock("../../src/web/backend/auth/discordRest.js", () => ({
 vi.mock("../../src/web/backend/iconProxy.js", () => ({
   fetchIcon: mocks.fetchIcon,
 }));
+vi.mock("../../src/core/utils/minecraft/playerHead.js", async (orig) => ({
+  ...(await orig<typeof import("../../src/core/utils/minecraft/playerHead.js")>()),
+  probeHead: mocks.probeHead,
+}));
 
 import Fastify from "fastify";
+import { closeDbForTesting } from "../../src/core/db/index.js";
 import { registerErrorHandler } from "../../src/web/backend/errors.js";
 import { registerPlayerRoutes } from "../../src/web/backend/routes/players.js";
 
@@ -57,11 +63,13 @@ async function get(url: string) {
 }
 
 beforeEach(() => {
+  closeDbForTesting();
   vi.clearAllMocks();
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
   mocks.listPlayerSummaries.mockReturnValue({ rows: [], total: 0 });
   mocks.sessionHolds.mockReturnValue(false);
+  mocks.probeHead.mockResolvedValue({ ok: true, status: 200, bytes: 337, ageSeconds: 6087, cache: "HIT" });
 });
 
 describe("GET /api/servers/:id/players", () => {
@@ -185,7 +193,7 @@ describe("GET /api/servers/:id/players/:name/head", () => {
     expect(res.headers["content-type"]).toBe("image/png");
     expect(res.headers["content-security-policy"]).toContain("default-src 'none'");
     expect(mocks.fetchIcon).toHaveBeenCalledWith(
-      "https://mc-heads.net/avatar/Steve/64",
+      `https://mc-heads.net/avatar/Steve/64?v=${Math.floor(NOW / 86_400_000)}`,
       expect.any(String),
     );
   });
@@ -199,5 +207,53 @@ describe("GET /api/servers/:id/players/:name/head", () => {
   it("answers 502 when the upstream fails", async () => {
     mocks.fetchIcon.mockRejectedValue(new Error("boom"));
     expect((await get("/api/servers/smp/players/Steve/head")).statusCode).toBe(502);
+  });
+});
+
+describe("player head info and refresh", () => {
+  const day = String(Math.floor(NOW / 86_400_000));
+
+  async function post(url: string) {
+    return app().inject({ method: "POST", url });
+  }
+
+  it("reports the version, the mc-heads copy age and that nobody refreshed it", async () => {
+    const res = await get("/api/servers/smp/players/Steve/head/info");
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ version: day, reachable: true, cacheAgeSeconds: 6087, refreshedAt: null });
+  });
+
+  it("says when mc-heads returned no image", async () => {
+    mocks.probeHead.mockResolvedValue({ ok: false, status: 502, bytes: null, ageSeconds: null, cache: null });
+    const body = (await get("/api/servers/smp/players/Steve/head/info")).json();
+    expect(body).toMatchObject({ reachable: false, cacheAgeSeconds: null });
+  });
+
+  it("refreshes: the version gains a token and the head is fetched under it", async () => {
+    const res = await post("/api/servers/smp/players/Steve/head/refresh");
+    expect(res.statusCode).toBe(200);
+    const info = res.json() as { version: string; refreshedAt: number };
+    expect(info.version).toMatch(new RegExp(`^${day}\.`));
+    expect(info.refreshedAt).toBe(NOW);
+
+    mocks.fetchIcon.mockResolvedValue({ contentType: "image/png", body: Buffer.from("png") });
+    await get("/api/servers/smp/players/Steve/head?v=anything-the-page-sends");
+    expect(mocks.fetchIcon).toHaveBeenCalledWith(
+      `https://mc-heads.net/avatar/Steve/64?v=${info.version}`,
+      expect.any(String),
+    );
+  });
+
+  it("never lets the request choose the upstream address", async () => {
+    mocks.fetchIcon.mockResolvedValue({ contentType: "image/png", body: Buffer.from("png") });
+    await get("/api/servers/smp/players/Steve/head?v=1&url=https://evil.example/x.png");
+    expect(mocks.fetchIcon.mock.calls[0]![0]).toBe(`https://mc-heads.net/avatar/Steve/64?v=${day}`);
+  });
+
+  it("404s an unknown server and 400s an invalid name, for both routes", async () => {
+    expect((await post("/api/servers/nope/players/Steve/head/refresh")).statusCode).toBe(404);
+    expect((await post("/api/servers/smp/players/..%2Fx/head/refresh")).statusCode).toBe(400);
+    expect((await get("/api/servers/nope/players/Steve/head/info")).statusCode).toBe(404);
+    expect((await get("/api/servers/smp/players/..%2Fx/head/info")).statusCode).toBe(400);
   });
 });

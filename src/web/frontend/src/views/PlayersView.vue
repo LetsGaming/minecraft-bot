@@ -60,6 +60,18 @@
               <StatusChip v-if="detail.activity.online" state="online" variant="dot" :label="t('players.onlineNow')" />
             </h2>
             <p class="note mono" v-if="detail.uuid">{{ detail.uuid }}</p>
+            <p class="note" v-if="headNote">{{ headNote }}</p>
+            <div class="head-actions" v-if="canRefreshHead">
+              <Button
+                class="tap"
+                size="small"
+                outlined
+                :label="t('players.head.refresh')"
+                :loading="headBusy"
+                @click="refreshHeadNow"
+              />
+              <p class="note">{{ t("players.head.refreshHint") }}</p>
+            </div>
           </div>
         </section>
 
@@ -347,7 +359,8 @@ import Button from "primevue/button";
 import InputText from "primevue/inputtext";
 import Select from "primevue/select";
 import SelectButton from "primevue/selectbutton";
-import type { PlayerRow, PlayerSessionDto, PlayerSortField } from "@mcbot/schema";
+import { MS } from "@mcbot/schema";
+import type { PlayerHeadInfo, PlayerRow, PlayerSessionDto, PlayerSortField } from "@mcbot/schema";
 import { formatSpan } from "@mcbot/core/utils/duration.js";
 import ViewHeader from "../components/ui/ViewHeader.vue";
 import StatusChip from "../components/ui/StatusChip.vue";
@@ -357,7 +370,11 @@ import InlineBanner from "../components/ui/InlineBanner.vue";
 import ResponsiveTable from "../components/ui/ResponsiveTable.vue";
 import PagerNav from "../components/mods/PagerNav.vue";
 import type { ResponsiveColumn } from "../components/ui/types";
+import { apiGet, apiSend } from "../api";
+import { useCapabilities } from "../composables/useCapabilities";
+import { useNotify } from "../composables/useNotify";
 import {
+  playerHeadApiUrl,
   playerHeadUrl,
   usePlayers,
   PLAYER_RANGE_HOURS,
@@ -422,7 +439,50 @@ const sessionColumns = computed<ResponsiveColumn[]>(() => [
   { key: "duration", label: t("players.col.duration") },
 ]);
 
-const headUrl = computed(() => (props.player ? playerHeadUrl(props.activeServer, props.player) : ""));
+const { can } = useCapabilities();
+const notify = useNotify();
+const headInfo = ref<PlayerHeadInfo | null>(null);
+const headBusy = ref(false);
+const canRefreshHead = computed(() => can("server:update", props.activeServer));
+const headUrl = computed(() =>
+  props.player ? playerHeadUrl(props.activeServer, props.player, headInfo.value?.version) : "",
+);
+const headNote = computed(() => {
+  const info = headInfo.value;
+  if (!info) return "";
+  if (!info.reachable) return t("players.head.unreachable");
+  if (info.cacheAgeSeconds === null || info.cacheAgeSeconds === 0) return t("players.head.fresh");
+  return t("players.head.cacheAge", { age: formatSpan(info.cacheAgeSeconds * MS.second) });
+});
+
+/** The head note is optional: a failed lookup just leaves it out. */
+async function loadHeadInfo(server: string, name: string): Promise<void> {
+  headInfo.value = null;
+  try {
+    const info = await apiGet<PlayerHeadInfo>(playerHeadApiUrl(server, name, "info"));
+    if (server === props.activeServer && name === props.player) headInfo.value = info;
+  } catch {
+    headInfo.value = null;
+  }
+}
+
+async function refreshHeadNow(): Promise<void> {
+  const server = props.activeServer;
+  const name = props.player;
+  headBusy.value = true;
+  try {
+    const info = await apiSend<PlayerHeadInfo>("POST", playerHeadApiUrl(server, name, "refresh"));
+    if (server === props.activeServer && name === props.player) {
+      headInfo.value = info;
+      headFailed.value = false;
+    }
+    notify.ok(t("players.head.refreshed"));
+  } catch (err) {
+    notify.fail(t("players.head.refreshFailed"), err);
+  } finally {
+    headBusy.value = false;
+  }
+}
 
 const emptyText = computed(() => {
   if (status.value === "quiet") return t("players.empty.quiet", { days: quietDays.value });
@@ -514,7 +574,9 @@ watch(
     if (!server) return;
     if (name) {
       void loadDetail(server, name);
+      void loadHeadInfo(server, name);
     } else {
+      headInfo.value = null;
       closeDetail();
       if (!list.value && !listLoading.value) void loadList(server);
     }
@@ -565,6 +627,8 @@ watch(
 .head { border-radius: var(--radius-control); image-rendering: pixelated; background: var(--surface-raised); }
 .id-text { min-width: 0; }
 .id-text .note { margin-top: var(--space-1); overflow-wrap: anywhere; }
+.head-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-2); }
+.head-actions .note { margin: 0; }
 
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-3); margin: 0; }
 .tile { margin: 0; padding: var(--space-3); border-radius: var(--radius-control); background: var(--surface-raised); }

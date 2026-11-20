@@ -40,7 +40,7 @@ editor lists them in.
 | `backup:restore` | restoring the world from an archive |
 | `backup:delete` | permanently deleting an archive |
 | `server:rollback` | rolling the world back (`server:control` alone does not cover it) |
-| `server:update` | upgrading the Minecraft version and [pruning unused chunks](chunk-pruning.md) (both stop the server, change the world and restore the backup if it does not come up) |
+| `server:update` | upgrading the Minecraft version and [pruning unused chunks](chunk-pruning.md) (both stop the server, change the world and restore the backup if it does not come up), and refreshing a player's head image on the Players page (harmless, but it changes what Discord shows) |
 
 Two are easy to get wrong:
 

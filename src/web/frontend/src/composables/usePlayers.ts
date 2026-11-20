@@ -48,8 +48,14 @@ export function playerListUrl(
   return `/api/servers/${encodeURIComponent(serverId)}/players?${params}`;
 }
 
-export function playerHeadUrl(serverId: string, name: string): string {
-  return `/api/servers/${encodeURIComponent(serverId)}/players/${encodeURIComponent(name)}/head`;
+/** `version` only has to change when the image should be fetched again; the server ignores it. */
+export function playerHeadUrl(serverId: string, name: string, version?: string): string {
+  const base = `/api/servers/${encodeURIComponent(serverId)}/players/${encodeURIComponent(name)}/head`;
+  return version ? `${base}?v=${encodeURIComponent(version)}` : base;
+}
+
+export function playerHeadApiUrl(serverId: string, name: string, action: "info" | "refresh"): string {
+  return `/api/servers/${encodeURIComponent(serverId)}/players/${encodeURIComponent(name)}/head/${action}`;
 }
 
 /**
