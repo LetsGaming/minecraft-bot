@@ -56,11 +56,11 @@ export const CATEGORY_STYLE: Readonly<Record<EmbedCategory, EmbedStyle>> = {
   server: { icon: "🖥️", color: 0x7cb4ff },
   alert: { icon: "🚨", color: 0xf87171 },
   recovery: { icon: "💚", color: 0x34d399 },
-  presence: { icon: "👋", color: 0x5eead4 },
+  presence: { icon: "👋", color: 0x45dac3 },
   death: { icon: "💀", color: 0x94a3b8 },
   advancement: { icon: "🏅", color: 0xfbbf24 },
   chat: { icon: "💬", color: 0xa5b4fc },
-  milestone: { icon: "🎉", color: 0xffd700 },
+  milestone: { icon: "🎉", color: 0xe0c500 },
   reward: { icon: "🎁", color: 0xf472b6 },
   leaderboard: { icon: "🏆", color: 0xfb923c },
   whitelist: { icon: "📋", color: 0xb7a1ff },
@@ -73,11 +73,11 @@ export const RARITY_STYLE: Readonly<
   Record<RewardRarity, EmbedStyle & { badge: string }>
 > = {
   dirt: { icon: "🟤", color: 0x8b6b4a, badge: "DIRT" },
-  common: { icon: "⚪", color: 0x9aa1ac, badge: "COMMON" },
-  uncommon: { icon: "🟢", color: 0x4ade80, badge: "UNCOMMON" },
+  common: { icon: "⚪", color: 0xb3c5c6, badge: "COMMON" },
+  uncommon: { icon: "🟢", color: 0x1ecc58, badge: "UNCOMMON" },
   rare: { icon: "🔵", color: 0x60a5fa, badge: "RARE" },
   epic: { icon: "🟣", color: 0xa855f7, badge: "EPIC" },
-  legendary: { icon: "🟡", color: 0xfbbf24, badge: "LEGENDARY" },
+  legendary: { icon: "🟡", color: 0xd89b00, badge: "LEGENDARY" },
 };
 
 export function isEmbedColorKey(key: string): key is EmbedColorKey {

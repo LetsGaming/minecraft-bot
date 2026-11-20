@@ -34,6 +34,16 @@ category list, icons and defaults live in
 categories and rarity tiers with `embedColors`; state is never carried by colour
 alone (icon and text stay).
 
+Plain events take the hue of their category, not a status colour: joins and
+leaves are teal (`presence`), deaths slate, advancements amber, a won challenge
+gold (`milestone`), rewards pink. A rarity tier never shares a colour with a
+category or a status role, and every default stays visible on both Discord
+themes (contrast at least 1.5); `embedCategories.test.ts` checks both. In an
+event embed the author line is the subject (the avatar and the name), so the
+description starts with the verb ("joined smp", "was blown up by Creeper") and
+never repeats the name. Text taken from the server's log (a death message, an
+advancement title) keeps the server's own wording and language.
+
 ### Status roles
 
 `EmbedColor` in [`embedColors.ts`](../../../src/bot/utils/embeds/embedColors.ts)
@@ -43,11 +53,11 @@ use, so Discord and the dashboard cannot drift apart:
 
 | `EmbedColor` | Status role | Use |
 |---|---|---|
-| `Online`, `Success` | online, applied | Running, done; also the only celebration colour (a won challenge) |
+| `Online`, `Success` | online, applied | Running, done |
 | `Warning` | degraded | Not responding, low TPS, wrapper down while the server is fine |
 | `Error` | offline | Stopped, failed, denied |
-| `Neutral` | unknown | No data, and plain events: join, leave, death, advancement |
-| `Pending` | pending | Waiting for someone: confirmations, whitelist applications |
+| `Neutral` | unknown | No data |
+| `Pending` | pending | Waiting for someone: confirmations, whitelist applications, a daily cooldown |
 | `Info` | info | Answers and running jobs (the default) |
 
 ## Daily rewards
@@ -63,10 +73,12 @@ The `/daily` family is the reference for a gamified reply
   ("2 stacks", "1 stack + 20"). A lucky bonus is one line under it. A milestone
   is a `###` heading with one bullet per item. Below the description come the
   streak bar, the next milestone (its items as bullets) and the next claim
-  time. The bar colour is the rarest tier rolled, or the gold `milestone`
-  colour when a streak bonus fired.
-- **Queued** uses the same item block, then the reason it waits and the waiting
-  count as subtext. `/streak` shows the items of the next bonus as bullets
+  time. The bar colour is the rarest tier rolled, whatever else the claim
+  holds: a lucky bonus or a milestone is a block in the description and never
+  repaints the bar.
+- **Queued** uses the same item block and the tier colour of the main reward
+  (the Pending colour when the main reward is not among the queued items),
+  then the reason it waits and the waiting count as subtext. `/streak` shows the items of the next bonus as bullets
   under the progress bar, and `/daily-history` puts the tier icon in front of
   each tiered item.
 - **Cooldown** replies use the Pending colour, with a time bar and the deadline

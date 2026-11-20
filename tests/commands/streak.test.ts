@@ -122,7 +122,7 @@ describe("streak execute", () => {
 
     const interaction = makeInteraction();
     await execute(interaction);
-    expect(repliedText(interaction)).toContain("None");
+    expect(repliedText(interaction)).toContain("Cycle complete");
   });
 
   it("does not show a stale bonus streak next to a lapsed live streak", async () => {

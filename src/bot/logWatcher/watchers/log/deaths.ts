@@ -200,7 +200,7 @@ export function registerDeathWatcher(
     const player = match[1]!;
     const verb = match[2]!;
     const rest = match[3] ?? "";
-    const deathMessage = `${player} ${verb}${rest}`.trim();
+    const deathMessage = `${verb}${rest}`.trim();
 
     void broadcastNotification(client, guildConfigs, {
       serverId,

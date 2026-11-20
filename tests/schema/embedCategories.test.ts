@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   CATEGORY_STYLE,
+  DISCORD_EMBED_BACKGROUND,
+  MIN_BAR_CONTRAST,
+  contrastRatio,
   EMBED_CATEGORIES,
   REWARD_RARITIES,
   RARITY_STYLE,
@@ -8,6 +11,7 @@ import {
   isEmbedColorKey,
   parseHexColor,
 } from "@mcbot/schema/embedCategories.js";
+import { StatusRole, statusEmbedColor } from "@mcbot/schema/status.js";
 
 describe("embed categories", () => {
   it("gives every category an icon and a distinct colour", () => {
@@ -55,5 +59,30 @@ describe("colour helpers", () => {
     );
     expect(contrastRatio(0x2b2d31, DISCORD_EMBED_BACKGROUND.dark)).toBeLessThan(MIN_BAR_CONTRAST);
     expect(contrastRatio(0xfbbf24, DISCORD_EMBED_BACKGROUND.dark)).toBeGreaterThan(MIN_BAR_CONTRAST);
+  });
+});
+
+describe("default bar colours", () => {
+  const all = [
+    ...EMBED_CATEGORIES.map((c) => [c, CATEGORY_STYLE[c].color] as const),
+    ...REWARD_RARITIES.map((r) => [`rarity.${r}`, RARITY_STYLE[r].color] as const),
+  ];
+
+  it("keeps every default visible on both Discord themes", () => {
+    for (const [key, color] of all) {
+      for (const background of Object.values(DISCORD_EMBED_BACKGROUND)) {
+        expect(contrastRatio(color, background), key).toBeGreaterThanOrEqual(MIN_BAR_CONTRAST);
+      }
+    }
+  });
+
+  it("gives no rarity tier a colour that a category or a status role already uses", () => {
+    const others = [
+      ...EMBED_CATEGORIES.map((c) => CATEGORY_STYLE[c].color),
+      ...Object.values(StatusRole).map((role) => statusEmbedColor(role)),
+    ];
+    for (const tier of REWARD_RARITIES) {
+      expect(others, tier).not.toContain(RARITY_STYLE[tier].color);
+    }
   });
 });

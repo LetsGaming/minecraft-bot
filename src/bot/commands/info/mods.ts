@@ -24,12 +24,13 @@ import { resolveServer } from "../../utils/guild/guildRouter.js";
 import { requireCapability } from "@mcbot/core/utils/server/capabilities.js";
 import { t } from "@mcbot/core/utils/i18n.js";
 
-/** One or more fields per group; continuation fields repeat the group name. */
+/** One or more fields per group; a group split over several fields numbers them ("... 2/3"). */
 function groupFields(label: string, mods: ModInfo[]): APIEmbedField[] {
   if (mods.length === 0) return [];
   const name = t("mods.group", { label, count: mods.length });
-  return chunkLines(mods.map((m) => `[${m.name}](${m.url})`)).map((value) => ({
-    name,
+  const chunks = chunkLines(mods.map((m) => `[${m.name}](${m.url})`));
+  return chunks.map((value, i) => ({
+    name: chunks.length > 1 ? `${name} · ${i + 1}/${chunks.length}` : name,
     value,
     inline: false,
   }));

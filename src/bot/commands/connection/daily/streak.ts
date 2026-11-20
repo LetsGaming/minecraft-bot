@@ -54,7 +54,7 @@ export const execute = withErrorHandling(
       { name: `🏅 ${t("streak.longest")}`, value: t("streak.days", { count: longestStreak }), inline: true },
       {
         name: `🎯 ${t("streak.nextBonus")}`,
-        value: nextBonus ? t("streak.days", { count: nextBonus.day }) : t("streak.na"),
+        value: nextBonus ? t("streak.days", { count: nextBonus.day }) : t("daily.cycleDone"),
         inline: true,
       },
     );

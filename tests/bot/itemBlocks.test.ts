@@ -90,11 +90,11 @@ describe("itemBullets and itemWithTier", () => {
         { item: "diamond_block", amount: 2 },
         { item: "experience_bottle", amount: 64 },
       ]),
-    ).toBe("- 2 × Diamond Block\n- 64 × Experience Bottle");
+    ).toBe("- 2 × Block of Diamond\n- 64 × Bottle o' Enchanting");
   });
 
   it("puts the tier icon in front of a tiered item only", () => {
     expect(itemWithTier({ item: "oak_log", amount: 128, tier: "epic" })).toBe("🟣 128 × Oak Log");
-    expect(itemWithTier({ item: "cooked_beef", amount: 16 })).toBe("16 × Cooked Beef");
+    expect(itemWithTier({ item: "cooked_beef", amount: 16 })).toBe("16 × Steak");
   });
 });

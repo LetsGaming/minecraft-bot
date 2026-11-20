@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { EmbedBuilder } from "discord.js";
+import { CATEGORY_STYLE } from "@mcbot/schema/embedCategories.js";
 import {
   createEmbed,
   createErrorEmbed,
@@ -363,7 +364,7 @@ describe("createEmbed category", () => {
   it("prefixes the category icon and uses its default colour", () => {
     const json = createEmbed({ title: "Moved", category: "presence" }).toJSON();
     expect(json.title).toBe("👋 Moved");
-    expect(json.color).toBe(0x5eead4);
+    expect(json.color).toBe(CATEGORY_STYLE.presence.color);
   });
 
   it("does not stack an icon on a title that already starts with an emoji", () => {

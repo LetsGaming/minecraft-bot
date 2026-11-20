@@ -601,7 +601,7 @@ describe("deferred replies", () => {
     expect(interaction.followUp).toHaveBeenCalledWith(
       expect.objectContaining({ flags: 64 }),
     );
-    expect(embedOf(interaction.followUp.mock.calls[0]![0]).title).toBe("⏳ Already claimed");
+    expect(embedOf(interaction.followUp.mock.calls[0]![0]).title).toBe("⏳ Not ready yet");
   });
 
   it("edits the reply with the queued note on an offline claim", async () => {
@@ -695,7 +695,7 @@ describe("deferred replies", () => {
     const lucky = lines.find((line) => line.includes("Lucky bonus"));
     expect(lucky).toContain("1 × Bread");
     expect(embed.fields?.some((f) => f.name.includes("Lucky bonus"))).toBe(false);
-    expect(embed.footer?.text).toContain("Lucky draw");
+    expect(embed.footer?.text).not.toContain("Lucky draw");
   });
 
   it("leaves the embed without a lucky field when the bonus draw misses", async () => {

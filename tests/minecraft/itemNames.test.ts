@@ -6,8 +6,8 @@ import {
 } from "../../src/core/utils/minecraft/itemNames.js";
 
 describe("itemDisplayName", () => {
-  it("title-cases the id without its namespace", () => {
-    expect(itemDisplayName("minecraft:cooked_beef")).toBe("Cooked Beef");
+  it("names a vanilla item as the game does and a modded id from the id", () => {
+    expect(itemDisplayName("minecraft:cooked_beef")).toBe("Steak");
     expect(itemDisplayName("diamond")).toBe("Diamond");
     expect(itemDisplayName("create:brass_ingot")).toBe("Brass Ingot");
   });
@@ -26,6 +26,6 @@ describe("formatItemStack and formatItemList", () => {
         { item: "minecraft:diamond", amount: 3 },
         { item: "cooked_beef", amount: 16 },
       ]),
-    ).toBe("3 × Diamond, 16 × Cooked Beef");
+    ).toBe("3 × Diamond, 16 × Steak");
   });
 });

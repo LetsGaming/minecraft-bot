@@ -61,12 +61,7 @@ export function buildClaimEmbed(view: ClaimView): EmbedBuilder {
   if (view.note) notes.push(view.note);
   if (notes.length > 0) sections.push(notes.join("\n"));
 
-  const lucky = granted.randomBonus;
-  const color = hitMilestone
-    ? embedColorFor(EmbedCategory.Milestone)
-    : lucky
-      ? EmbedColor.Success
-      : embedColorFor(`rarity.${claimRarity(view)}`);
+  const color = embedColorFor(`rarity.${claimRarity(view)}`);
 
   const cycle = deriveMaxStreak(pool.streakBonuses);
   const next = nextMilestone(granted.bonusStreak, pool.streakBonuses);
@@ -78,7 +73,7 @@ export function buildClaimEmbed(view: ClaimView): EmbedBuilder {
     description: sections.join("\n\n"),
     category: EmbedCategory.Reward,
     color,
-    footer: { text: lucky ? `🍀 ${t("daily.luckyFooter")} ${tip}` : tip },
+    footer: { text: tip },
   })
     .addFields(
       {
@@ -90,7 +85,7 @@ export function buildClaimEmbed(view: ClaimView): EmbedBuilder {
         name: `🎯 ${t("daily.nextMilestoneField")}`,
         value: next
           ? `${t("daily.nextMilestoneValue", { day: next.day })}\n${itemBullets(next.items)}`
-          : t("streak.na"),
+          : t("daily.cycleDone"),
         inline: true,
       },
       {
@@ -159,7 +154,7 @@ export function buildQueuedEmbed(opts: {
   return createPlayerEmbed(opts.player, {
     title: `📦 ${t("daily.queuedTitle")}`,
     description: sections.join("\n\n"),
-    color: EmbedColor.Pending,
+    color: main ? embedColorFor(`rarity.${rarityOf(main)}`) : EmbedColor.Pending,
   }).addFields(
     {
       name: `🔥 ${t("daily.streakField")}`,

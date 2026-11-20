@@ -342,7 +342,7 @@ describe("/challenge status", () => {
     await seedChallenge(challenge({ item: "minecraft:cooked_beef" }));
     const i = interaction("status");
     await run(challengeExecute, i);
-    expect(replyText(i)).toContain("Item bonus: Cooked Beef\n");
+    expect(replyText(i)).toContain("Item bonus: Steak\n");
     expect(replyText(i)).not.toContain("cooked_beef");
   });
 

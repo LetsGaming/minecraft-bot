@@ -125,7 +125,7 @@ Optional, 0 to 100 (default 0). The chance, in percent, that a claim draws a sec
 
 ## How claiming works (rules enforced by the bot)
 
-- The player must have a [linked account](../user/linking.md). If they are offline, the reward is queued and delivered on their next join (at most 3 waiting per player); the claim and the streak count either way. The "Waiting in game: n/3" line counts only these offline claims.
+- The player must have a [linked account](../user/linking.md). If they are offline, the reward is queued and delivered on their next join (at most 3 waiting per player); the claim and the streak count either way. The "Offline claims waiting: n of 3" line counts only these offline claims.
 - Cooldown is 24 hours from the previous claim.
 - A streak survives as long as claims are no more than 48 hours apart. Otherwise it restarts at 1.
 - Items are delivered via the server console (`give` command), so they work without any server-side plugin.
