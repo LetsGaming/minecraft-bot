@@ -76,13 +76,15 @@ The `/daily` family is the reference for a gamified reply
   time. The bar colour is the rarest tier rolled, whatever else the claim
   holds: a lucky bonus or a milestone is a block in the description and never
   repaints the bar.
-- **Queued** uses the same item block and the tier colour of the main reward
-  (the Pending colour when the main reward is not among the queued items),
-  then the reason it waits and the waiting count as subtext. `/streak` shows the items of the next bonus as bullets
+- **Queued** starts with the reason it waits and the waiting count as subtext,
+  so the state reads before the find, then the same item block. The bar is the
+  tier colour of the main reward (the Pending colour when the main reward is
+  not among the queued items). `/streak` shows the items of the next bonus as bullets
   under the progress bar, and `/daily-history` puts the tier icon in front of
   each tiered item.
 - **Cooldown** replies use the Pending colour, with a time bar and the deadline
-  that keeps the streak alive.
+  that keeps the streak alive. "Ready" shows a clock time, and the deadline,
+  up to 48 hours away, shows the date as well, so the two never look alike.
 - **Headers and subtext** (`##`, `###`, `-#`) belong in an embed description
   only. A field value gets bullets, and a title or footer gets plain text. A
   client that does not render them shows the characters as they are, so the

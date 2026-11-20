@@ -17,7 +17,7 @@ import { createEmbed, createPlayerEmbed } from "../../../utils/embeds/embedUtils
 import { EmbedColor, embedColorFor } from "../../../utils/embeds/embedColors.js";
 import { progressBar } from "../../../utils/embeds/gameDisplay.js";
 import { heroBlock, itemBullets, milestoneBlock, subtext, tierLabel } from "../../../utils/embeds/itemBlocks.js";
-import { clockTimestamp, formatLastSeen } from "../../../utils/discordTime.js";
+import { clockTimestamp, dateTimeStamp, formatLastSeen } from "../../../utils/discordTime.js";
 
 export interface ClaimView {
   player: string;
@@ -33,7 +33,7 @@ export interface ClaimView {
 
 /** The extra reward from the bonus-chance draw, on its own line under the main reward. */
 function luckyLine(item: DailyRewardItem): string {
-  return `🍀 **${t("daily.luckyField")}**  ${formatItemStack(item)} · ${tierLabel(rarityOf(item))}`;
+  return `🍀 **${t("daily.luckyField")}:** ${formatItemStack(item)} · ${tierLabel(rarityOf(item))}`;
 }
 
 /** The rarest tier among the rolled items; a streak bonus counts as a milestone. */
@@ -78,7 +78,7 @@ export function buildClaimEmbed(view: ClaimView): EmbedBuilder {
     .addFields(
       {
         name: `🔥 ${t("daily.streakField")}`,
-        value: `${progressBar(granted.bonusStreak, barMax)}\n${t("streak.days", { count: view.currentStreak })}`,
+        value: `${progressBar(granted.bonusStreak, barMax)} ${granted.bonusStreak}/${barMax}\n${t("streak.days", { count: view.currentStreak })}`,
         inline: true,
       },
       {
@@ -110,7 +110,7 @@ export function buildCooldownEmbed(opts: {
   ];
   if (opts.currentStreak > 1) {
     lines.push(
-      `⚠️ ${t("daily.streakDeadline", { time: clockTimestamp(deadline), streak: opts.currentStreak })}`,
+      `⚠️ ${t("daily.streakDeadline", { time: dateTimeStamp(deadline), streak: opts.currentStreak })}`,
     );
   }
   return createEmbed({
@@ -141,15 +141,14 @@ export function buildQueuedEmbed(opts: {
   const main = opts.main ?? null;
   const rest = opts.rewards.filter((item) => !same(item, main) && !same(item, opts.lucky));
 
-  const sections: string[] = [];
+  const sections: string[] = [
+    `${opts.notice ?? t("daily.queued", { server: opts.server })}\n${subtext(t("daily.queueSize", { count: opts.queued, max: opts.max }))}`,
+  ];
   if (main) sections.push(heroBlock(main).join("\n"));
   if (opts.lucky) sections.push(luckyLine(opts.lucky));
   if (rest.length > 0) {
     sections.push(main ? milestoneBlock(t("daily.bonusHeadingPlain"), rest) : itemBullets(rest));
   }
-  sections.push(
-    `${opts.notice ?? t("daily.queued", { server: opts.server })}\n${subtext(t("daily.queueSize", { count: opts.queued, max: opts.max }))}`,
-  );
 
   return createPlayerEmbed(opts.player, {
     title: `📦 ${t("daily.queuedTitle")}`,
