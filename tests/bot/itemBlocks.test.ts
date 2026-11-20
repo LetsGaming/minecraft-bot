@@ -10,6 +10,7 @@ vi.mock("../../src/core/utils/logger.js", () => ({
 
 import {
   heroBlock,
+  historyEntry,
   itemBullets,
   itemWithTier,
   stackHint,
@@ -96,5 +97,53 @@ describe("itemBullets and itemWithTier", () => {
   it("puts the tier icon in front of a tiered item only", () => {
     expect(itemWithTier({ item: "oak_log", amount: 128, tier: "epic" })).toBe("🟣 128 × Oak Log");
     expect(itemWithTier({ item: "cooked_beef", amount: 16 })).toBe("16 × Steak");
+  });
+});
+
+describe("historyEntry", () => {
+  it("puts the main reward first and the lucky bonus and milestone items on a second line", () => {
+    expect(
+      historyEntry([
+        { item: "oak_log", amount: 128, tier: "epic" },
+        { item: "iron_ingot", amount: 4, tier: "common" },
+        { item: "cooked_beef", amount: 16 },
+        { item: "diamond_block", amount: 2 },
+      ]),
+    ).toEqual({
+      main: "🟣 128 × Oak Log",
+      extras: "↳ 🍀 ⚪ 4 × Iron Ingot · 🎉 16 × Steak · 🎉 2 × Block of Diamond",
+    });
+  });
+
+  it("shows a lucky bonus without a milestone, and a milestone without a lucky bonus", () => {
+    expect(
+      historyEntry([
+        { item: "oak_log", amount: 64, tier: "rare" },
+        { item: "iron_ingot", amount: 4, tier: "common" },
+      ]).extras,
+    ).toBe("↳ 🍀 ⚪ 4 × Iron Ingot");
+    expect(
+      historyEntry([
+        { item: "oak_log", amount: 64, tier: "rare" },
+        { item: "cooked_beef", amount: 16 },
+      ]).extras,
+    ).toBe("↳ 🎉 16 × Steak");
+  });
+
+  it("has no second line for a claim with only a main reward", () => {
+    expect(historyEntry([{ item: "oak_log", amount: 64, tier: "rare" }])).toEqual({
+      main: "🔵 64 × Oak Log",
+      extras: null,
+    });
+  });
+
+  it("keeps a claim from before tiers as one plain list", () => {
+    expect(
+      historyEntry([
+        { item: "diamond", amount: 3 },
+        { item: "cooked_beef", amount: 16 },
+      ]),
+    ).toEqual({ main: "3 × Diamond, 16 × Steak", extras: null });
+    expect(historyEntry([])).toEqual({ main: "", extras: null });
   });
 });

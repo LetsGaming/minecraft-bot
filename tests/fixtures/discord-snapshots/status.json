@@ -38,13 +38,8 @@
                 "inline": true
               },
               {
-                "name": "Bot Ping",
-                "value": "42ms",
-                "inline": true
-              },
-              {
-                "name": "Round Trip",
-                "value": "0ms",
+                "name": "Response time",
+                "value": "Discord 42 ms · server check 0 ms",
                 "inline": true
               }
             ],
@@ -91,13 +86,8 @@
                 "inline": true
               },
               {
-                "name": "Bot-Ping",
-                "value": "42ms",
-                "inline": true
-              },
-              {
-                "name": "Roundtrip",
-                "value": "0ms",
+                "name": "Antwortzeit",
+                "value": "Discord 42 ms · Serverabfrage 0 ms",
                 "inline": true
               }
             ],
@@ -120,18 +110,6 @@
             "color": "#fbbf24",
             "title": "🟡 smp: Not responding",
             "description": "The server process is running but is not answering commands. It may be starting up or under heavy load.",
-            "fields": [
-              {
-                "name": "Bot Ping",
-                "value": "42ms",
-                "inline": true
-              },
-              {
-                "name": "Round Trip",
-                "value": "0ms",
-                "inline": true
-              }
-            ],
             "timestamp": "2026-10-10T14:36:00.000Z"
           }
         ]
@@ -149,18 +127,6 @@
             "color": "#fbbf24",
             "title": "🟡 smp: Antwortet nicht",
             "description": "Der Server-Prozess läuft, antwortet aber nicht auf Befehle. Vielleicht startet er gerade oder ist stark ausgelastet.",
-            "fields": [
-              {
-                "name": "Bot-Ping",
-                "value": "42ms",
-                "inline": true
-              },
-              {
-                "name": "Roundtrip",
-                "value": "0ms",
-                "inline": true
-              }
-            ],
             "timestamp": "2026-10-10T14:36:00.000Z"
           }
         ]
@@ -180,18 +146,6 @@
             "color": "#f87171",
             "title": "🔴 smp: Offline",
             "description": "The server is not running. Start it with /server start.",
-            "fields": [
-              {
-                "name": "Bot Ping",
-                "value": "42ms",
-                "inline": true
-              },
-              {
-                "name": "Round Trip",
-                "value": "0ms",
-                "inline": true
-              }
-            ],
             "timestamp": "2026-10-10T14:36:00.000Z"
           }
         ]
@@ -209,18 +163,6 @@
             "color": "#f87171",
             "title": "🔴 smp: Offline",
             "description": "Der Server läuft nicht. Starte ihn mit /server start.",
-            "fields": [
-              {
-                "name": "Bot-Ping",
-                "value": "42ms",
-                "inline": true
-              },
-              {
-                "name": "Roundtrip",
-                "value": "0ms",
-                "inline": true
-              }
-            ],
             "timestamp": "2026-10-10T14:36:00.000Z"
           }
         ]
@@ -240,18 +182,6 @@
             "color": "#9aa1ac",
             "title": "⚪ smp: State unknown",
             "description": "Neither the API wrapper nor the server answered, so the state is unknown. Check that the host is reachable.",
-            "fields": [
-              {
-                "name": "Bot Ping",
-                "value": "42ms",
-                "inline": true
-              },
-              {
-                "name": "Round Trip",
-                "value": "0ms",
-                "inline": true
-              }
-            ],
             "timestamp": "2026-10-10T14:36:00.000Z"
           }
         ]
@@ -269,18 +199,6 @@
             "color": "#9aa1ac",
             "title": "⚪ smp: Zustand unbekannt",
             "description": "Weder der API-Wrapper noch der Server hat geantwortet, der Zustand ist deshalb unbekannt. Prüfe, ob der Host erreichbar ist.",
-            "fields": [
-              {
-                "name": "Bot-Ping",
-                "value": "42ms",
-                "inline": true
-              },
-              {
-                "name": "Roundtrip",
-                "value": "0ms",
-                "inline": true
-              }
-            ],
             "timestamp": "2026-10-10T14:36:00.000Z"
           }
         ]
@@ -298,20 +216,8 @@
         "embeds": [
           {
             "color": "#fbbf24",
-            "title": "🟢 smp: Online",
+            "title": "🟢 smp: Online, wrapper unreachable",
             "description": "3/20 players: Marlene_B, TheRedstoneKid, ikarus_77\nThe server is reachable, but its API wrapper is not. Server controls, the chat bridge, stats and log watching are unavailable until the wrapper answers again.",
-            "fields": [
-              {
-                "name": "Bot Ping",
-                "value": "42ms",
-                "inline": true
-              },
-              {
-                "name": "Round Trip",
-                "value": "0ms",
-                "inline": true
-              }
-            ],
             "timestamp": "2026-10-10T14:36:00.000Z"
           }
         ]
@@ -327,20 +233,8 @@
         "embeds": [
           {
             "color": "#fbbf24",
-            "title": "🟢 smp: Online",
+            "title": "🟢 smp: Online, Wrapper nicht erreichbar",
             "description": "3/20 Spieler: Marlene_B, TheRedstoneKid, ikarus_77\nDer Server ist erreichbar, sein API-Wrapper nicht. Steuerung, Chat-Bridge, Statistiken und Log-Überwachung fallen aus, bis der Wrapper wieder antwortet.",
-            "fields": [
-              {
-                "name": "Bot-Ping",
-                "value": "42ms",
-                "inline": true
-              },
-              {
-                "name": "Roundtrip",
-                "value": "0ms",
-                "inline": true
-              }
-            ],
             "timestamp": "2026-10-10T14:36:00.000Z"
           }
         ]
@@ -360,18 +254,6 @@
             "color": "#f87171",
             "title": "🔴 smp: Offline",
             "description": "Stopped by marlene at <t:1791637080:t>. Start it with /server start.",
-            "fields": [
-              {
-                "name": "Bot Ping",
-                "value": "42ms",
-                "inline": true
-              },
-              {
-                "name": "Round Trip",
-                "value": "0ms",
-                "inline": true
-              }
-            ],
             "timestamp": "2026-10-10T14:36:00.000Z"
           }
         ]
@@ -389,18 +271,6 @@
             "color": "#f87171",
             "title": "🔴 smp: Offline",
             "description": "marlene hat den Server um <t:1791637080:t> gestoppt. Starte ihn mit /server start.",
-            "fields": [
-              {
-                "name": "Bot-Ping",
-                "value": "42ms",
-                "inline": true
-              },
-              {
-                "name": "Roundtrip",
-                "value": "0ms",
-                "inline": true
-              }
-            ],
             "timestamp": "2026-10-10T14:36:00.000Z"
           }
         ]
@@ -420,18 +290,6 @@
             "color": "#f87171",
             "title": "🔴 smp: Offline",
             "description": "Stopped by marlene at <t:1791637080:t>.",
-            "fields": [
-              {
-                "name": "Bot Ping",
-                "value": "42ms",
-                "inline": true
-              },
-              {
-                "name": "Round Trip",
-                "value": "0ms",
-                "inline": true
-              }
-            ],
             "timestamp": "2026-10-10T14:36:00.000Z"
           }
         ]
@@ -449,18 +307,6 @@
             "color": "#f87171",
             "title": "🔴 smp: Offline",
             "description": "marlene hat den Server um <t:1791637080:t> gestoppt.",
-            "fields": [
-              {
-                "name": "Bot-Ping",
-                "value": "42ms",
-                "inline": true
-              },
-              {
-                "name": "Roundtrip",
-                "value": "0ms",
-                "inline": true
-              }
-            ],
             "timestamp": "2026-10-10T14:36:00.000Z"
           }
         ]

@@ -86,3 +86,47 @@ describe("default bar colours", () => {
     }
   });
 });
+
+describe("default colours are far enough apart", () => {
+  const linear = (value: number): number => {
+    const c = value / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  /** CIE76 colour distance: the Euclidean distance between two colours in CIELAB (D65). */
+  function deltaE(a: number, b: number): number {
+    const lab = (color: number): [number, number, number] => {
+      const r = linear((color >> 16) & 255);
+      const g = linear((color >> 8) & 255);
+      const bl = linear(color & 255);
+      const x = (0.4124 * r + 0.3576 * g + 0.1805 * bl) / 0.95047;
+      const y = 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+      const z = (0.0193 * r + 0.1192 * g + 0.9505 * bl) / 1.08883;
+      const f = (t: number): number => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+      return [116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z))];
+    };
+    const [l1, a1, b1] = lab(a);
+    const [l2, a2, b2] = lab(b);
+    return Math.hypot(l1 - l2, a1 - a2, b1 - b2);
+  }
+
+  it("keeps every rarity colour at least 12 away from every category and status colour", () => {
+    const others: Array<[string, number]> = [
+      ...EMBED_CATEGORIES.map((c): [string, number] => [c, CATEGORY_STYLE[c].color]),
+      ...Object.values(StatusRole).map((role): [string, number] => [`status.${role}`, statusEmbedColor(role)]),
+    ];
+    for (const tier of REWARD_RARITIES) {
+      for (const [name, color] of others) {
+        expect(deltaE(RARITY_STYLE[tier].color, color), `${tier} against ${name}`).toBeGreaterThanOrEqual(12);
+      }
+    }
+  });
+
+  it("keeps the six rarity colours at least 25 apart from each other", () => {
+    for (const a of REWARD_RARITIES) {
+      for (const b of REWARD_RARITIES) {
+        if (a >= b) continue;
+        expect(deltaE(RARITY_STYLE[a].color, RARITY_STYLE[b].color), `${a} against ${b}`).toBeGreaterThanOrEqual(25);
+      }
+    }
+  });
+});

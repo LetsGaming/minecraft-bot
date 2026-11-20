@@ -1,0 +1,34 @@
+{
+  "en": [
+    {
+      "via": "deferReply",
+      "ephemeral": true
+    },
+    {
+      "via": "editReply",
+      "embeds": [
+        {
+          "color": "#f472b6",
+          "title": "🎁 Your daily claims on smp",
+          "description": "<t:1791556560:d> · 🔥 Day 6: 🟣 128 × Oak Log\n↳ 🍀 ⚪ 4 × Iron Ingot · 🎉 16 × Steak · 🎉 2 × Block of Diamond\n<t:1791470160:d> · 🔥 Day 5: 🔵 64 × Oak Log\n<t:1791383760:d> · 🔥 Day 1: 16 × Steak\n\nShowing 3 of 3 stored claims."
+        }
+      ]
+    }
+  ],
+  "de": [
+    {
+      "via": "deferReply",
+      "ephemeral": true
+    },
+    {
+      "via": "editReply",
+      "embeds": [
+        {
+          "color": "#f472b6",
+          "title": "🎁 Deine Daily-Abholungen auf smp",
+          "description": "<t:1791556560:d> · 🔥 Tag 6: 🟣 128 × Eichenstamm\n↳ 🍀 ⚪ 4 × Eisenbarren · 🎉 16 × Steak · 🎉 2 × Diamantblock\n<t:1791470160:d> · 🔥 Tag 5: 🔵 64 × Eichenstamm\n<t:1791383760:d> · 🔥 Tag 1: 16 × Steak\n\n3 von 3 gespeicherten Abholungen."
+        }
+      ]
+    }
+  ]
+}

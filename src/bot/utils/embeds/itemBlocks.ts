@@ -74,3 +74,25 @@ export function itemWithTier(item: DailyRewardItem): string {
 export function milestoneBlock(heading: string, items: readonly DailyRewardItem[]): string {
   return `### ${CATEGORY_STYLE[EmbedCategory.Milestone].icon} ${heading}\n${itemBullets(items)}`;
 }
+
+/**
+ * The lines of one `/daily-history` entry. A claim stores `[main, lucky?, ...milestone]`: the
+ * main and lucky stacks carry a tier and milestone items do not, so the roles can be read back
+ * without a stored marker. The main reward is the first line; the lucky bonus and the milestone
+ * items follow on a second line. A claim whose first item has no tier (from before tiers
+ * existed) stays one plain list.
+ */
+export function historyEntry(items: readonly DailyRewardItem[]): { main: string; extras: string | null } {
+  const [first, ...rest] = items;
+  if (first === undefined || first.tier === undefined) {
+    return { main: items.map(itemWithTier).join(", "), extras: null };
+  }
+  const lucky = rest[0]?.tier !== undefined ? rest[0] : undefined;
+  const milestone = lucky === undefined ? rest : rest.slice(1);
+  const milestoneIcon = CATEGORY_STYLE[EmbedCategory.Milestone].icon;
+  const parts = [
+    ...(lucky === undefined ? [] : [`🍀 ${itemWithTier(lucky)}`]),
+    ...milestone.map((item) => `${milestoneIcon} ${formatItemStack(item)}`),
+  ];
+  return { main: itemWithTier(first), extras: parts.length > 0 ? `↳ ${parts.join(" · ")}` : null };
+}

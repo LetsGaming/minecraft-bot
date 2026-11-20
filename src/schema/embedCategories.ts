@@ -75,7 +75,7 @@ export const RARITY_STYLE: Readonly<
   dirt: { icon: "🟤", color: 0x8b6b4a, badge: "DIRT" },
   common: { icon: "⚪", color: 0xb3c5c6, badge: "COMMON" },
   uncommon: { icon: "🟢", color: 0x1ecc58, badge: "UNCOMMON" },
-  rare: { icon: "🔵", color: 0x60a5fa, badge: "RARE" },
+  rare: { icon: "🔵", color: 0x3d9afe, badge: "RARE" },
   epic: { icon: "🟣", color: 0xa855f7, badge: "EPIC" },
   legendary: { icon: "🟡", color: 0xd89b00, badge: "LEGENDARY" },
 };

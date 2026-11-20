@@ -118,10 +118,6 @@ export const execute = withErrorHandling(async (interaction) => {
       timestamp: true,
       ...(description ? { description } : {}),
     });
-    embed.addFields(
-      { name: t("status.botPing"), value: `${botPing}ms`, inline: true },
-      { name: t("status.roundTrip"), value: `${roundTrip}ms`, inline: true },
-    );
     await interaction.editReply({ embeds: [embed] });
     return;
   }
@@ -162,10 +158,15 @@ export const execute = withErrorHandling(async (interaction) => {
     embed.addFields({ name: t("status.onlineFor"), value: onlineFor, inline: true });
   }
   if (version) embed.addFields({ name: t("status.version"), value: version, inline: true });
-  embed.addFields(
-    { name: t("status.botPing"), value: `${botPing}ms`, inline: true },
-    { name: t("status.roundTrip"), value: `${roundTrip}ms`, inline: true },
-  );
+  embed.addFields({
+    name: t("status.latency"),
+    // The gateway has no ping yet right after a start, and reports -1.
+    value:
+      botPing >= 0
+        ? t("status.latencyValue", { bot: botPing, query: roundTrip })
+        : t("status.latencyServerOnly", { query: roundTrip }),
+    inline: true,
+  });
 
   // Host section: process RAM/CPU + disk usage for local instances.
   // Remote instances get these via the wrapper /info extension later;

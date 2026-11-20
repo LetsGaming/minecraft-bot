@@ -82,6 +82,8 @@ export function describeHealth(health: ServerHealth): StateDisplay {
   }
   return {
     ...display,
+    // The title carries the second fact too, so a skim sees it without the hint.
+    label: health.state === ServerState.Online ? t("state.onlineWrapperDown") : display.label,
     color: EmbedColor.Warning,
     severity: Math.max(display.severity, stateSeverity(ServerState.Unresponsive)),
     hint: t("state.wrapperDownHint"),

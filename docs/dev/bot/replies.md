@@ -36,9 +36,10 @@ alone (icon and text stay).
 
 Plain events take the hue of their category, not a status colour: joins and
 leaves are teal (`presence`), deaths slate, advancements amber, a won challenge
-gold (`milestone`), rewards pink. A rarity tier never shares a colour with a
-category or a status role, and every default stays visible on both Discord
-themes (contrast at least 1.5); `embedCategories.test.ts` checks both. In an
+gold (`milestone`), rewards pink. A rarity tier is at least 12 apart (CIE76
+colour distance) from every category and status colour, and at least 25 apart
+from the other tiers, and every default stays visible on both Discord themes
+(contrast at least 1.5); `embedCategories.test.ts` checks all three. In an
 event embed the author line is the subject (the avatar and the name), so the
 description starts with the verb ("joined smp", "was blown up by Creeper") and
 never repeats the name. Text taken from the server's log (a death message, an
@@ -60,6 +61,14 @@ use, so Discord and the dashboard cannot drift apart:
 | `Pending` | pending | Waiting for someone: confirmations, whitelist applications, a daily cooldown |
 | `Info` | info | Answers and running jobs (the default) |
 
+`/status` shows a number only where it means something. The online reply has one
+"Response time" field (the bot's Discord latency and how long the status check
+took); offline, unresponsive and unknown replies have none, just the state and
+what to do. A server that is online while its API wrapper is down keeps the
+green circle and gets the amber bar, and its title names the second fact:
+"smp: Online, wrapper unreachable"
+([`serverStateDisplay.ts`](../../../src/bot/utils/embeds/serverStateDisplay.ts)).
+
 ## Daily rewards
 
 The `/daily` family is the reference for a gamified reply
@@ -80,8 +89,12 @@ The `/daily` family is the reference for a gamified reply
   so the state reads before the find, then the same item block. The bar is the
   tier colour of the main reward (the Pending colour when the main reward is
   not among the queued items). `/streak` shows the items of the next bonus as bullets
-  under the progress bar, and `/daily-history` puts the tier icon in front of
-  each tiered item.
+  under the progress bar. `/daily-history` shows each claim as its main reward
+  (with the tier icon) and, on a second line starting with `↳`, the lucky bonus
+  (🍀) and the milestone items (🎉). The roles are read from the stored items
+  (the first item with a tier is the main one, a second tiered item the lucky
+  bonus, the rest the milestone), and a claim from before tiers stays one plain
+  list. That line uses no `##` or `-#` marker.
 - **Cooldown** replies use the Pending colour, with a time bar and the deadline
   that keeps the streak alive. "Ready" shows a clock time, and the deadline,
   up to 48 hours away, shows the date as well, so the two never look alike.
