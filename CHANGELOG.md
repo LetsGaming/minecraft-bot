@@ -6,14 +6,16 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [8.6.1] — 2026-11-21
+
 ### Added
 
-- **New `/skin show` and `/skin refresh`.** `show` shows the head and how old the mc-heads copy is; `refresh` makes Discord fetch the head again. Players use it on their own linked account; another player's head needs a bot admin (`skin.ts`).
-- **The dashboard Players page shows the head's cache age and has a Refresh head button.** The button needs `server:update` on that server. New routes `GET /api/servers/:id/players/:name/head/info` and `POST .../head/refresh` (`players.ts`).
+- **New `/skin show` and `/skin refresh`.** `show` shows the head and how old the mc-heads copy is; `refresh` makes Discord fetch the head again.
+- **The dashboard Players page shows the head's cache age and has a Refresh head button.** The button needs `server:update` on that server.
 
 ### Fixed
 
-- **Player heads are one image everywhere, and you can see and refresh them.** The head in `/daily`, the chat bridge, leaderboards and the dashboard now comes from one function and carries a version: the UTC day, plus a token after a manual refresh. Discord keeps an image under its URL, so a default head it cached once used to stay for good; now it is fetched again at the latest the next day. The bot keeps no skin cache of its own. The copy at mc-heads is cached up to six hours by its CDN, which ignores the version, and that cannot be cleared from here (`playerHead.ts`, `headStore.ts`, `mcHeads.ts`).
+- **Player heads are one image everywhere, and you can see and refresh them.** The head in `/daily`, the chat bridge, leaderboards and the dashboard now comes from one function and carries a version: the UTC day, plus a token after a manual refresh.
 
 ## [8.6.0] — 2026-11-20
 
