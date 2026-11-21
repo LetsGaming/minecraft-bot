@@ -6,6 +6,10 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import { NOW, SNAPSHOT_CONFIG, fixturePath, renderMessage, stringify } from "./render.js";
 
+vi.mock("../../../src/core/utils/minecraft/skinResolver.js", () => ({
+  skinIsFresh: () => true,
+  ensureFreshSkin: vi.fn().mockResolvedValue({ kind: "skipped" }),
+}));
 vi.mock("../../../src/core/config.js", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   loadConfig: () => SNAPSHOT_CONFIG,

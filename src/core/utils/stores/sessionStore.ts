@@ -318,3 +318,21 @@ export function presenceAcrossServers(player: string): PlayerPresence[] {
     player.toLowerCase(),
   );
 }
+
+/**
+ * Players with a session that started or ended since `since`, or one still open,
+ * across every server, most recently seen first. The name keeps the casing of
+ * the player's latest join.
+ */
+export function recentPlayerNames(since: number): string[] {
+  return mapRows(
+    getDb().prepare(
+      `SELECT name, MAX(joined_at) AS last_join FROM player_sessions
+       WHERE joined_at >= ? OR left_at >= ? OR left_at IS NULL
+       GROUP BY name_lower ORDER BY last_join DESC`,
+    ),
+    (r) => col.text(r, "name"),
+    since,
+    since,
+  );
+}

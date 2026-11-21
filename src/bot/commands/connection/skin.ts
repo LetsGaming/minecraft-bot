@@ -7,7 +7,8 @@ import { SlashCommandBuilder, type ChatInputCommandInteraction } from "discord.j
 import { t } from "@mcbot/core/utils/i18n.js";
 import { formatSpan } from "@mcbot/core/utils/duration.js";
 import { getLinkedAccount } from "@mcbot/core/utils/stores/linkStore.js";
-import { headInfo, refreshHead } from "@mcbot/core/utils/stores/headStore.js";
+import { getSkin, headInfo, refreshHead } from "@mcbot/core/utils/stores/headStore.js";
+import { resolveSkin, type ResolveOutcome } from "@mcbot/core/utils/minecraft/skinResolver.js";
 import { probeHead, type HeadProbe } from "@mcbot/core/utils/minecraft/playerHead.js";
 import { MS } from "@mcbot/schema/time.js";
 import { createPlayerEmbed } from "../../utils/embeds/embedUtils.js";
@@ -60,6 +61,29 @@ function cacheLine(probe: HeadProbe): string {
   return t("skin.cacheAge", { age: formatSpan(probe.ageSeconds * MS.second), bytes });
 }
 
+function outcomeLine(outcome: ResolveOutcome): string {
+  switch (outcome.kind) {
+    case "changed":
+      return t("skin.outcomeChanged");
+    case "unchanged":
+      return t("skin.outcomeUnchanged");
+    case "unknown-account":
+      return t("skin.outcomeUnknown");
+    case "rejected":
+      return t("skin.outcomeRejected");
+    case "unavailable":
+      return t("skin.outcomeUnavailable");
+  }
+}
+
+/** How the head URL is keyed: by the skin's hash once Mojang was asked, else by the name. */
+function keyLine(player: string): string {
+  const skin = getSkin(player);
+  if (skin === null || skin.checkedAt === 0) return t("skin.keyedByName");
+  const when = formatLastSeen(skin.checkedAt);
+  return skin.hash === null ? t("skin.keyedDefault", { when }) : t("skin.keyedBySkin", { hash: skin.hash.slice(0, 8), when });
+}
+
 function refreshLine(player: string): string {
   const last = headInfo(player);
   if (!last) return t("skin.neverRefreshed");
@@ -73,11 +97,16 @@ export const execute = withErrorHandling(
     if (player === null) return;
 
     const refreshing = interaction.options.getSubcommand() === "refresh";
-    if (refreshing) refreshHead(player, interaction.user.id);
+    let outcome: ResolveOutcome | null = null;
+    if (refreshing) {
+      outcome = await resolveSkin(player);
+      refreshHead(player, interaction.user.id);
+    }
     const probe = await probeHead(player);
 
     const lines = [
-      refreshing ? t("skin.refreshed") : t("skin.hint"),
+      outcome ? `${t("skin.refreshed")} ${outcomeLine(outcome)}` : t("skin.hint"),
+      keyLine(player),
       cacheLine(probe),
       refreshLine(player),
     ];

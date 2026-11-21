@@ -52,6 +52,7 @@ import { startChannelPurge } from "./watchers/schedulers/channelPurge.js";
 import { startHostResourcesMonitor } from "./watchers/monitors/hostResourcesMonitor.js";
 import { startPollScheduler } from "./watchers/schedulers/pollScheduler.js";
 import { startTempBanScheduler } from "./watchers/schedulers/tempBanScheduler.js";
+import { startSkinScheduler } from "./watchers/schedulers/skinScheduler.js";
 import { pruneCommandUsage } from "@mcbot/core/utils/commands/commandUsage.js";
 import { pruneSessions } from "@mcbot/core/utils/stores/sessionStore.js";
 import { registerSleepWatcher } from "./watchers/log/sleepWatcher.js";
@@ -255,6 +256,9 @@ export async function initMinecraftCommands(client: Client): Promise<void> {
 
   // Re-arm timed bans; anything that expired during downtime is pardoned now.
   startTempBanScheduler(client);
+
+  // Current skin hash of every known player, so heads show the skin worn now.
+  startSkinScheduler();
 
   // Usage rows past the retention window. Once at startup and once a day
   // after. The table only grows by a few hundred rows a day, so this is

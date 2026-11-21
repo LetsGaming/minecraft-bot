@@ -11,7 +11,14 @@ vi.mock("../../src/core/utils/logger.js", () => ({
 import { closeDbForTesting } from "../../src/core/db/index.js";
 import { kvSet } from "../../src/core/db/kv.js";
 import { headVersion, playerHeadUrl, probeHead } from "../../src/core/utils/minecraft/playerHead.js";
-import { headInfo, refreshHead } from "../../src/core/utils/stores/headStore.js";
+import {
+  getSkin,
+  headInfo,
+  markSkinFailed,
+  pruneSkins,
+  refreshHead,
+  setSkin,
+} from "../../src/core/utils/stores/headStore.js";
 
 const DAY = 86_400_000;
 const NOON = Date.UTC(2026, 10, 21, 12, 0, 0);
@@ -158,5 +165,88 @@ describe("probeHead", () => {
       ageSeconds: null,
       cache: null,
     });
+  });
+});
+
+describe("playerHeadUrl with a stored skin hash", () => {
+  const HASH = "c".repeat(64);
+
+  it("names the skin by its hash instead of the player", () => {
+    setSkin("Steve", HASH, NOON);
+    expect(playerHeadUrl("Steve", NOON)).toBe(`https://mc-heads.net/avatar/${HASH}/64?v=${dayOf(NOON)}`);
+    expect(playerHeadUrl("STEVE", NOON)).toBe(playerHeadUrl("Steve", NOON));
+  });
+
+  it("changes with the skin, so a new skin is a new image", () => {
+    setSkin("Steve", HASH, NOON);
+    const first = playerHeadUrl("Steve", NOON);
+    setSkin("Steve", "d".repeat(64), NOON);
+    expect(playerHeadUrl("Steve", NOON)).not.toBe(first);
+  });
+
+  it("falls back to the name for a default skin, an unchecked player or a failed check", () => {
+    const byName = `https://mc-heads.net/avatar/Steve/64?v=${dayOf(NOON)}`;
+    expect(playerHeadUrl("Steve", NOON)).toBe(byName);
+    setSkin("Steve", null, NOON);
+    expect(playerHeadUrl("Steve", NOON)).toBe(byName);
+    markSkinFailed("Steve", NOON);
+    expect(playerHeadUrl("Steve", NOON)).toBe(byName);
+  });
+
+  it("keeps the manual refresh token in the version of a hash URL", () => {
+    setSkin("Steve", HASH, NOON);
+    refreshHead("Steve", "u1", NOON);
+    expect(playerHeadUrl("Steve", NOON)).toMatch(new RegExp(`/avatar/${HASH}/64\\?v=${dayOf(NOON)}\\.`));
+  });
+
+  it("keeps the refresh token across a new skin check", () => {
+    setSkin("Steve", HASH, NOON);
+    refreshHead("Steve", "u1", NOON);
+    setSkin("Steve", HASH, NOON + 1);
+    expect(headVersion("Steve", NOON)).toContain(".");
+  });
+});
+
+describe("skin entries in the store", () => {
+  it("keeps the old hash when a check fails, and clears the failure on the next answer", () => {
+    setSkin("Steve", "e".repeat(64), NOON);
+    markSkinFailed("Steve", NOON + 5);
+    expect(getSkin("steve")).toEqual({ hash: "e".repeat(64), checkedAt: NOON, failedAt: NOON + 5 });
+    setSkin("Steve", "e".repeat(64), NOON + 10);
+    expect(getSkin("Steve")).toEqual({ hash: "e".repeat(64), checkedAt: NOON + 10 });
+  });
+
+  it("notes a failure for a player never checked, without inventing a hash", () => {
+    markSkinFailed("Steve", NOON);
+    expect(getSkin("Steve")).toEqual({ hash: null, checkedAt: 0, failedAt: NOON });
+  });
+
+  it("prunes players that are no longer kept, ignoring case", () => {
+    setSkin("Steve", null, NOON);
+    setSkin("Alex", null, NOON);
+    setSkin("Gone", null, NOON);
+    expect(pruneSkins(["steve", "ALEX"])).toBe(1);
+    expect(getSkin("Gone")).toBeNull();
+    expect(getSkin("Steve")).not.toBeNull();
+    expect(getSkin("Alex")).not.toBeNull();
+  });
+
+  it("stores a __proto__ name without touching Object.prototype, and drops malformed skin entries", () => {
+    setSkin("__proto__", "f".repeat(64), NOON);
+    expect(getSkin("__proto__")?.hash).toBe("f".repeat(64));
+    expect(({} as { hash?: string }).hash).toBeUndefined();
+    kvSet("playerHeads", {
+      players: {},
+      skins: { bad: { hash: 5, checkedAt: 1 }, worse: "x", good: { hash: null, checkedAt: 2 } },
+    });
+    expect(getSkin("bad")).toBeNull();
+    expect(getSkin("worse")).toBeNull();
+    expect(getSkin("good")).toEqual({ hash: null, checkedAt: 2 });
+  });
+
+  it("still reads a document written before skin entries existed", () => {
+    kvSet("playerHeads", { players: { steve: { bump: "x", refreshedAt: 1, by: "u" } } });
+    expect(headInfo("Steve")?.bump).toBe("x");
+    expect(getSkin("Steve")).toBeNull();
   });
 });

@@ -149,6 +149,9 @@ export interface PlayerDetail {
   sensitive: PlayerSensitive | null;
 }
 
+/** What reading a player's skin from Mojang found. */
+export type SkinOutcomeKind = "changed" | "unchanged" | "unknown-account" | "unavailable" | "rejected";
+
 /** The head image the bot and the dashboard use for one player, and how fresh mc-heads' copy is. */
 export interface PlayerHeadInfo {
   /** The `?v=` of the head URL now: the UTC day, plus the refresh token after a manual refresh. */
@@ -159,4 +162,13 @@ export interface PlayerHeadInfo {
   cacheAgeSeconds: number | null;
   /** When someone last refreshed the head by hand, or null. */
   refreshedAt: number | null;
+  /** "skin" when the head URL names the skin by its hash, "name" when it falls back to the name. */
+  keyedBy: "skin" | "name";
+  /** When Mojang last answered for this player, or null. */
+  skinCheckedAt: number | null;
+}
+
+/** The answer to a head refresh: the head info plus what Mojang said. */
+export interface PlayerHeadRefresh extends PlayerHeadInfo {
+  outcome: SkinOutcomeKind;
 }

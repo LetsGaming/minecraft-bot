@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   sessionHolds: vi.fn(),
   fetchIcon: vi.fn(),
   probeHead: vi.fn(),
+  resolveSkin: vi.fn(),
 }));
 
 vi.mock("../../src/core/utils/logger.js", () => ({
@@ -41,6 +42,10 @@ vi.mock("../../src/web/backend/auth/discordRest.js", () => ({
 vi.mock("../../src/web/backend/iconProxy.js", () => ({
   fetchIcon: mocks.fetchIcon,
 }));
+vi.mock("../../src/core/utils/minecraft/skinResolver.js", async (orig) => ({
+  ...(await orig<typeof import("../../src/core/utils/minecraft/skinResolver.js")>()),
+  resolveSkin: mocks.resolveSkin,
+}));
 vi.mock("../../src/core/utils/minecraft/playerHead.js", async (orig) => ({
   ...(await orig<typeof import("../../src/core/utils/minecraft/playerHead.js")>()),
   probeHead: mocks.probeHead,
@@ -48,6 +53,7 @@ vi.mock("../../src/core/utils/minecraft/playerHead.js", async (orig) => ({
 
 import Fastify from "fastify";
 import { closeDbForTesting } from "../../src/core/db/index.js";
+import { setSkin } from "../../src/core/utils/stores/headStore.js";
 import { registerErrorHandler } from "../../src/web/backend/errors.js";
 import { registerPlayerRoutes } from "../../src/web/backend/routes/players.js";
 
@@ -70,6 +76,7 @@ beforeEach(() => {
   mocks.listPlayerSummaries.mockReturnValue({ rows: [], total: 0 });
   mocks.sessionHolds.mockReturnValue(false);
   mocks.probeHead.mockResolvedValue({ ok: true, status: 200, bytes: 337, ageSeconds: 6087, cache: "HIT" });
+  mocks.resolveSkin.mockResolvedValue({ kind: "unchanged", hash: null });
 });
 
 describe("GET /api/servers/:id/players", () => {
@@ -220,7 +227,14 @@ describe("player head info and refresh", () => {
   it("reports the version, the mc-heads copy age and that nobody refreshed it", async () => {
     const res = await get("/api/servers/smp/players/Steve/head/info");
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ version: day, reachable: true, cacheAgeSeconds: 6087, refreshedAt: null });
+    expect(res.json()).toEqual({
+      version: day,
+      reachable: true,
+      cacheAgeSeconds: 6087,
+      refreshedAt: null,
+      keyedBy: "name",
+      skinCheckedAt: null,
+    });
   });
 
   it("says when mc-heads returned no image", async () => {
@@ -255,5 +269,62 @@ describe("player head info and refresh", () => {
     expect((await post("/api/servers/smp/players/..%2Fx/head/refresh")).statusCode).toBe(400);
     expect((await get("/api/servers/nope/players/Steve/head/info")).statusCode).toBe(404);
     expect((await get("/api/servers/smp/players/..%2Fx/head/info")).statusCode).toBe(400);
+  });
+});
+
+describe("player head and the skin hash", () => {
+  const HASH = "d".repeat(64);
+  const day = String(Math.floor(NOW / 86_400_000));
+
+  async function post(url: string) {
+    return app().inject({ method: "POST", url });
+  }
+
+  it("serves the head under the stored skin hash", async () => {
+    setSkin("Steve", HASH, NOW - 5 * 60_000);
+    mocks.fetchIcon.mockResolvedValue({ contentType: "image/png", body: Buffer.from("png") });
+    await get("/api/servers/smp/players/Steve/head");
+    expect(mocks.fetchIcon).toHaveBeenCalledWith(
+      `https://mc-heads.net/avatar/${HASH}/64?v=${day}`,
+      expect.any(String),
+    );
+  });
+
+  it("reports how the head is keyed and when Mojang was last asked", async () => {
+    setSkin("Steve", HASH, NOW - 5 * 60_000);
+    const body = (await get("/api/servers/smp/players/Steve/head/info")).json();
+    expect(body).toMatchObject({ keyedBy: "skin", skinCheckedAt: NOW - 5 * 60_000 });
+    setSkin("Steve", null, NOW - 60_000);
+    expect((await get("/api/servers/smp/players/Steve/head/info")).json()).toMatchObject({
+      keyedBy: "name",
+      skinCheckedAt: NOW - 60_000,
+    });
+  });
+
+  it("reads the skin from Mojang on refresh and reports what it found", async () => {
+    mocks.resolveSkin.mockImplementation(async () => {
+      setSkin("Steve", HASH, NOW);
+      return { kind: "changed", hash: HASH, previous: null };
+    });
+    const res = await post("/api/servers/smp/players/Steve/head/refresh");
+    expect(res.statusCode).toBe(200);
+    expect(mocks.resolveSkin).toHaveBeenCalledWith("Steve");
+    expect(res.json()).toMatchObject({ outcome: "changed", keyedBy: "skin", skinCheckedAt: NOW });
+  });
+
+  it("still bumps the head and says so when Mojang does not answer", async () => {
+    mocks.resolveSkin.mockResolvedValue({ kind: "unavailable", rateLimited: true });
+    const body = (await post("/api/servers/smp/players/Steve/head/refresh")).json() as {
+      outcome: string;
+      version: string;
+    };
+    expect(body.outcome).toBe("unavailable");
+    expect(body.version).toMatch(new RegExp(`^${day}\\.`));
+  });
+
+  it("does not ask Mojang for an invalid name or an unknown server", async () => {
+    await post("/api/servers/smp/players/..%2Fx/head/refresh");
+    await post("/api/servers/nope/players/Steve/head/refresh");
+    expect(mocks.resolveSkin).not.toHaveBeenCalled();
   });
 });

@@ -61,6 +61,7 @@
             </h2>
             <p class="note mono" v-if="detail.uuid">{{ detail.uuid }}</p>
             <p class="note" v-if="headNote">{{ headNote }}</p>
+            <p class="note" v-if="keyNote">{{ keyNote }}</p>
             <div class="head-actions" v-if="canRefreshHead">
               <Button
                 class="tap"
@@ -360,7 +361,14 @@ import InputText from "primevue/inputtext";
 import Select from "primevue/select";
 import SelectButton from "primevue/selectbutton";
 import { MS } from "@mcbot/schema";
-import type { PlayerHeadInfo, PlayerRow, PlayerSessionDto, PlayerSortField } from "@mcbot/schema";
+import type {
+  PlayerHeadInfo,
+  PlayerHeadRefresh,
+  PlayerRow,
+  PlayerSessionDto,
+  PlayerSortField,
+  SkinOutcomeKind,
+} from "@mcbot/schema";
 import { formatSpan } from "@mcbot/core/utils/duration.js";
 import ViewHeader from "../components/ui/ViewHeader.vue";
 import StatusChip from "../components/ui/StatusChip.vue";
@@ -455,6 +463,29 @@ const headNote = computed(() => {
   return t("players.head.cacheAge", { age: formatSpan(info.cacheAgeSeconds * MS.second) });
 });
 
+const keyNote = computed(() => {
+  const info = headInfo.value;
+  // An older backend does not report the key yet: say nothing rather than guess.
+  if (!info || info.keyedBy === undefined) return "";
+  if (info.keyedBy === "name" || typeof info.skinCheckedAt !== "number") return t("players.head.keyedName");
+  return t("players.head.keyedSkin", { age: relativeAge(info.skinCheckedAt) });
+});
+
+function outcomeText(outcome: SkinOutcomeKind): string {
+  switch (outcome) {
+    case "changed":
+      return t("players.head.outcome.changed");
+    case "unchanged":
+      return t("players.head.outcome.unchanged");
+    case "unknown-account":
+      return t("players.head.outcome.unknown");
+    case "rejected":
+      return t("players.head.outcome.rejected");
+    case "unavailable":
+      return t("players.head.outcome.unavailable");
+  }
+}
+
 /** The head note is optional: a failed lookup just leaves it out. */
 async function loadHeadInfo(server: string, name: string): Promise<void> {
   headInfo.value = null;
@@ -471,12 +502,14 @@ async function refreshHeadNow(): Promise<void> {
   const name = props.player;
   headBusy.value = true;
   try {
-    const info = await apiSend<PlayerHeadInfo>("POST", playerHeadApiUrl(server, name, "refresh"));
+    const info = await apiSend<PlayerHeadRefresh>("POST", playerHeadApiUrl(server, name, "refresh"));
     if (server === props.activeServer && name === props.player) {
       headInfo.value = info;
       headFailed.value = false;
     }
-    notify.ok(t("players.head.refreshed"));
+    const good = info.outcome === "changed" || info.outcome === "unchanged";
+    if (good) notify.ok(t("players.head.refreshed"), outcomeText(info.outcome));
+    else notify.warn(t("players.head.refreshed"), outcomeText(info.outcome));
   } catch (err) {
     notify.fail(t("players.head.refreshFailed"), err);
   } finally {

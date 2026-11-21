@@ -22,12 +22,25 @@ live in the code linked here, not in this page.
 **Player heads** come from one function, `playerHeadUrl` in
 [`playerHead.ts`](../../../src/core/utils/minecraft/playerHead.ts) (bot code reaches it
 through `playerAvatarUrl`). Embed author icons, bridge webhook avatars, leaderboard
-thumbnails and the dashboard all use it, so a player has one URL everywhere. The URL
-ends in `?v=`: the UTC day, plus a token that `/skin refresh` or the dashboard button
-stores in [`headStore.ts`](../../../src/core/utils/stores/headStore.ts). Discord keeps
-an image under its URL, so a new version makes it fetch again. mc-heads' own CDN ignores
-the query and keeps an image up to six hours (`probeHead` reports its age), so a version
-cannot clear a stale image on that side. Never build a head URL anywhere else.
+thumbnails and the dashboard all use it, so a player has one URL everywhere.
+
+The URL names the player's skin, not the player. mc-heads keeps stale data under a
+name and under a UUID: a default head it once failed to render, and an old skin kept
+after a change (both seen on this server). So the skin resolver
+([`skinResolver.ts`](../../../src/core/utils/minecraft/skinResolver.ts)) reads each
+player's current skin hash from Mojang, and the URL is `/avatar/<hash>/64`. A hash names
+the exact image, so it cannot be stale; a changed skin is a new hash and a new URL.
+[`skinScheduler.ts`](../../../src/bot/logWatcher/watchers/schedulers/skinScheduler.ts)
+refreshes every known player about once an hour, a join checks sooner (and waits at most
+3 seconds for it), and `/skin refresh` or the dashboard button checks at once. The hash is
+stored in [`headStore.ts`](../../../src/core/utils/stores/headStore.ts). A player whose hash
+is not known (never checked, an unknown account, a default skin) falls back to the name URL.
+The resolver checks each new hash against mc-heads' default head, and keeps the name URL
+(with one warning) if mc-heads stops serving hashes.
+
+The URL also ends in `?v=`: the UTC day, plus a token from a manual refresh. Discord keeps
+an image under its URL, so a new version makes it fetch again. mc-heads' own CDN ignores the
+query (`probeHead` reports the age of its copy). Never build a head URL anywhere else.
 
 No naked `new EmbedBuilder()` and no colour literals (both are lint errors). Pass `category` to `createEmbed` to say what a message is about (below).
 

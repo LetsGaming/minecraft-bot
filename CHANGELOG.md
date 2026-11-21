@@ -6,6 +6,10 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Heads show the skin a player wears now, not what mc-heads remembers.** mc-heads keeps stale data under a name and under a UUID: one player got its default Steve head although their skin is custom, another kept an old skin after changing it. The bot now reads each player's current skin hash from Mojang and the head URL names that exact skin, so it cannot be stale. Every known player is checked about once an hour, a join checks sooner (waiting at most 3 seconds), and `/skin refresh` or the dashboard button checks at once. A player whose skin cannot be read keeps the name-based head. If mc-heads stops rendering hashes, the bot keeps the name URLs and logs a warning (`skinResolver.ts`, `skinScheduler.ts`, `playerHead.ts`, `headStore.ts`, `mojang.ts`, `joinLeave.ts`).
+
 ## [8.6.1] — 2026-11-21
 
 ### Added

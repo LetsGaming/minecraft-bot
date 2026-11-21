@@ -10,6 +10,7 @@ import {
   closeSession,
 } from "@mcbot/core/utils/stores/sessionStore.js";
 import { deliverPendingRewards } from "@mcbot/core/utils/minecraft/rewards.js";
+import { ensureFreshSkin, skinIsFresh } from "@mcbot/core/utils/minecraft/skinResolver.js";
 import {
   maybeNudge,
   NUDGE_DELAY_MS,
@@ -94,8 +95,13 @@ export function registerJoinLeaveWatcher(
   });
 }
 
+/** A join checks the skin when the stored check is older than this, so a skin changed minutes ago shows on the join message. */
+const JOIN_SKIN_MAX_AGE_MS = 10 * MS.minute;
+/** Mojang answering slowly must not delay the join message by more than this. */
+const JOIN_SKIN_TIMEOUT_MS = 3 * MS.second;
+
 /** Queues the embed per channel and returns once it has been sent; callers on the dispatch queue drop it. */
-function notify(
+async function notify(
   client: Client,
   guildConfigs: GuildConfigSource,
   serverId: string,
@@ -103,6 +109,11 @@ function notify(
   event: "join" | "leave",
 ): Promise<void> {
   const isJoin = event === "join";
+  if (isJoin && !skinIsFresh(player, JOIN_SKIN_MAX_AGE_MS)) {
+    await ensureFreshSkin(player, { maxAgeMs: JOIN_SKIN_MAX_AGE_MS, timeoutMs: JOIN_SKIN_TIMEOUT_MS }).catch(
+      () => undefined,
+    );
+  }
   return broadcastNotification(client, guildConfigs, {
     serverId,
     event,

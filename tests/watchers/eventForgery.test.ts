@@ -15,6 +15,10 @@
  */
 import { describe, it, expect, vi } from "vitest";
 
+vi.mock("../../src/core/utils/minecraft/skinResolver.js", () => ({
+  skinIsFresh: () => true,
+  ensureFreshSkin: vi.fn().mockResolvedValue({ kind: "skipped" }),
+}));
 vi.mock("../../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));

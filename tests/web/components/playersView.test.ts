@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { mount, type VueWrapper } from "@vue/test-utils";
 import PlayersView from "../../../src/web/frontend/src/views/PlayersView.vue";
 import { uiGlobal, settle } from "./mountUi";
+import { setCapabilities } from "../../../src/web/frontend/src/composables/useCapabilities";
 
 // PrimeVue Select listens for orientation changes; jsdom has no matchMedia.
 window.matchMedia ??= ((query: string) => ({
@@ -181,5 +182,106 @@ describe("PlayersView detail", () => {
     await settle(40);
     await w.findAll("button").find((b) => b.text().includes("All players"))!.trigger("click");
     expect(w.emitted("update-route")?.[0]).toEqual([{ params: { player: undefined } }]);
+  });
+});
+
+describe("PlayersView head", () => {
+  const methods: string[] = [];
+
+  function installTracked(route: Route): void {
+    methods.length = 0;
+    install(route);
+    const base = globalThis.fetch;
+    vi.stubGlobal("fetch", (input: string, init?: RequestInit) => {
+      methods.push(`${init?.method ?? "GET"} ${String(input)}`);
+      return base(input, init);
+    });
+  }
+
+  const DETAIL = {
+    serverId: "smp",
+    name: "Steve",
+    uuid: null,
+    activity: ACTIVITY,
+    stats: null,
+    sensitiveAccess: false,
+    sensitive: null,
+  };
+
+  const INFO = {
+    version: "20778",
+    reachable: true,
+    cacheAgeSeconds: 7_200,
+    refreshedAt: null,
+    keyedBy: "skin",
+    skinCheckedAt: Date.now() - 600_000,
+  };
+
+  function routes(info: unknown, refresh?: unknown): Route {
+    return (url) => {
+      if (url.endsWith("/head/info")) return { body: info };
+      if (url.endsWith("/head/refresh")) return { body: refresh };
+      if (url === "/api/servers/smp/players/Steve") return { body: DETAIL };
+      return undefined;
+    };
+  }
+
+  const headSrc = (w: VueWrapper): string => w.find("img.head").attributes("src") ?? "";
+
+  afterEach(() => setCapabilities({}));
+
+  it("shows the age of the mc-heads copy and that the head follows the skin", async () => {
+    installTracked(routes(INFO));
+    const w = mountView({ player: "Steve" });
+    await settle(40);
+    expect(w.text()).toContain("mc-heads copy is 2 h old.");
+    expect(w.text()).toContain("Head follows the skin read from Mojang");
+    expect(headSrc(w)).toContain("/players/Steve/head?v=20778");
+  });
+
+  it("says the head is looked up by name before Mojang was asked", async () => {
+    installTracked(routes({ ...INFO, keyedBy: "name", skinCheckedAt: null }));
+    const w = mountView({ player: "Steve" });
+    await settle(40);
+    expect(w.text()).toContain("Head is looked up by name");
+  });
+
+  it("says nothing about the key when an older backend does not report it", async () => {
+    const { keyedBy: _keyedBy, skinCheckedAt: _checked, ...older } = INFO;
+    installTracked(routes(older));
+    const w = mountView({ player: "Steve" });
+    await settle(40);
+    expect(w.text()).toContain("mc-heads copy is 2 h old.");
+    expect(w.text()).not.toContain("looked up by name");
+    expect(w.text()).not.toContain("follows the skin");
+  });
+
+  it("has no Refresh head button without server:update", async () => {
+    setCapabilities({ smp: ["server:read"] });
+    installTracked(routes(INFO));
+    const w = mountView({ player: "Steve" });
+    await settle(40);
+    expect(w.text()).not.toContain("Refresh head");
+  });
+
+  it("refreshes through the backend and shows the new head address", async () => {
+    setCapabilities({ smp: ["server:read", "server:update"] });
+    installTracked(
+      routes(
+        { ...INFO, keyedBy: "name", skinCheckedAt: null },
+        { ...INFO, version: "20778.abc", keyedBy: "skin", outcome: "changed" },
+      ),
+    );
+    const w = mountView({ player: "Steve" });
+    await settle(40);
+    expect(w.text()).toContain("Head is looked up by name");
+
+    const button = w.findAll("button").find((b) => b.text().includes("Refresh head"))!;
+    await button.trigger("click");
+    await settle(40);
+
+    expect(methods).toContain("POST /api/servers/smp/players/Steve/head/refresh");
+    expect(headSrc(w)).toContain("/players/Steve/head?v=20778.abc");
+    expect(w.text()).toContain("Head follows the skin read from Mojang");
   });
 });

@@ -18,6 +18,7 @@ import {
   PLAYER_STATUS_FILTERS,
   type PlayerDetail,
   type PlayerHeadInfo,
+  type PlayerHeadRefresh,
   type PlayerListResponse,
   type PlayerSortField,
   type PlayerStatusFilter,
@@ -33,7 +34,8 @@ import {
   probeHead,
   type HeadProbe,
 } from "@mcbot/core/utils/minecraft/playerHead.js";
-import { headInfo, refreshHead } from "@mcbot/core/utils/stores/headStore.js";
+import { getSkin, headInfo, refreshHead } from "@mcbot/core/utils/stores/headStore.js";
+import { resolveSkin } from "@mcbot/core/utils/minecraft/skinResolver.js";
 import { isValidMcName } from "@mcbot/core/utils/sanitize.js";
 import { errMsg } from "@mcbot/core/utils/error.js";
 import { log } from "@mcbot/core/utils/logger.js";
@@ -56,11 +58,14 @@ const HEAD_UA = "LetsGaming/minecraft-bot dashboard (head proxy)";
 const HEAD_BROWSER_CACHE_SECONDS = 3600;
 
 function headInfoOf(name: string, probe: HeadProbe): PlayerHeadInfo {
+  const skin = getSkin(name);
   return {
     version: headVersion(name),
     reachable: probe.ok,
     cacheAgeSeconds: probe.ageSeconds,
     refreshedAt: headInfo(name)?.refreshedAt ?? null,
+    keyedBy: skin?.hash ? "skin" : "name",
+    skinCheckedAt: skin !== null && skin.checkedAt > 0 ? skin.checkedAt : null,
   };
 }
 
@@ -199,20 +204,21 @@ export function registerPlayerRoutes(app: FastifyInstance): void {
     },
   );
 
-  // Makes the next head URL differ from every earlier one, so Discord fetches
-  // the image again. It cannot clear mc-heads' own copy (see `probeHead`).
+  // Reads the skin from Mojang, then makes the next head URL differ from every
+  // earlier one, so Discord fetches the image again.
   api.post(
     "/api/servers/:id/players/:name/head/refresh",
     {
       schema: { params: PlayerParams },
       config: { capability: "server:update", scope: "server", param: "id" },
     },
-    async (req): Promise<PlayerHeadInfo> => {
+    async (req): Promise<PlayerHeadRefresh> => {
       requireServer(req.params.id);
       const name = requireMcName(req.params.name);
+      const outcome = await resolveSkin(name);
       refreshHead(name, currentSession(req)?.uid ?? "dashboard");
-      log.info("web", `Head of ${name} refreshed from the dashboard.`);
-      return headInfoOf(name, await probeHead(name));
+      log.info("web", `Head of ${name} refreshed from the dashboard (${outcome.kind}).`);
+      return { ...headInfoOf(name, await probeHead(name)), outcome: outcome.kind };
     },
   );
 }

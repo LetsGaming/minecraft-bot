@@ -7,6 +7,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── Logger mock ────────────────────────────────────────────────────────────
+const skin = vi.hoisted(() => ({ isFresh: vi.fn(() => true), ensure: vi.fn() }));
+vi.mock("../../src/core/utils/minecraft/skinResolver.js", () => ({
+  skinIsFresh: skin.isFresh,
+  ensureFreshSkin: skin.ensure,
+}));
 vi.mock("../../src/core/utils/logger.js", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -142,6 +147,73 @@ describe("joinLeave watcher — regex patterns", () => {
     registerJoinLeaveWatcher(watcher, makeClient(makeChannel()), {});
     const joinRegex = watcher._handlers[0]!.regex;
     expect(joinRegex.exec("[12:00:00]: Steve left the game")).toBeNull();
+  });
+});
+
+describe("joinLeave watcher: the skin check on a join", () => {
+  const JOIN = "[12:00:00] [Server thread/INFO]: Steve joined the game";
+  const LEAVE = "[12:00:05] [Server thread/INFO]: Steve left the game";
+
+  function setup() {
+    const channel = makeChannel();
+    const client = makeClient(channel);
+    const watcher = makeLogWatcher("srv1");
+    registerJoinLeaveWatcher(watcher, client, guildConfigsWithNotifs);
+    const fire = async (line: string, index: number) => {
+      const handler = watcher._handlers[index]!;
+      await handler.handler(handler.regex.exec(line)!, client, watcher.server);
+    };
+    return { channel, fire };
+  }
+
+  beforeEach(() => {
+    skin.isFresh.mockReset().mockReturnValue(true);
+    skin.ensure.mockReset().mockResolvedValue({ kind: "skipped" });
+  });
+
+  it("holds the join embed until the skin check is done", async () => {
+    skin.isFresh.mockReturnValue(false);
+    let finish: (v: { kind: string }) => void = () => undefined;
+    skin.ensure.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    const { channel, fire } = setup();
+
+    await fire(JOIN, 0);
+    await flushSendQueues();
+    expect(channel.send).not.toHaveBeenCalled();
+
+    finish({ kind: "changed" });
+    await vi.waitFor(() => expect(skin.ensure).toHaveBeenCalledTimes(1));
+    await new Promise((resolve) => setImmediate(resolve));
+    await flushSendQueues();
+    expect(channel.send).toHaveBeenCalledOnce();
+    expect(skin.ensure).toHaveBeenCalledWith("Steve", { maxAgeMs: 600_000, timeoutMs: 3_000 });
+  });
+
+  it("still sends the embed when the skin check fails", async () => {
+    skin.isFresh.mockReturnValue(false);
+    skin.ensure.mockRejectedValue(new Error("store down"));
+    const { channel, fire } = setup();
+    await fire(JOIN, 0);
+    await new Promise((resolve) => setImmediate(resolve));
+    await flushSendQueues();
+    expect(channel.send).toHaveBeenCalledOnce();
+  });
+
+  it("does not wait at all when the skin was checked recently", async () => {
+    const { channel, fire } = setup();
+    await fire(JOIN, 0);
+    await flushSendQueues();
+    expect(skin.ensure).not.toHaveBeenCalled();
+    expect(channel.send).toHaveBeenCalledOnce();
+  });
+
+  it("never checks a skin on a leave", async () => {
+    skin.isFresh.mockReturnValue(false);
+    const { channel, fire } = setup();
+    await fire(LEAVE, 1);
+    await flushSendQueues();
+    expect(skin.ensure).not.toHaveBeenCalled();
+    expect(channel.send).toHaveBeenCalledOnce();
   });
 });
 
